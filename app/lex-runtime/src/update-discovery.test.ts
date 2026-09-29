@@ -172,5 +172,36 @@ describe(
         ).toBeUndefined();
       }
     );
+  
+    it(
+      "reports why discovery is unavailable: no stable release, GitHub refusal or no network",
+      async () => {
+        const repo = "michaleiatrak-star/Lex-Machina";
+        const only = await new GitHubReleaseUpdateDiscovery(
+          "0.1.10",
+          repo,
+          fakeFetch([
+            { tag_name: "v0.1.10-hotfix7", html_url: `https://github.com/${repo}/releases/tag/v0.1.10-hotfix7`, draft: false, prerelease: true, assets: [] }
+          ])
+        ).check();
+        expect(only).toMatchObject({ status: "NO_RELEASE", repository: repo });
+
+        const refused = await new GitHubReleaseUpdateDiscovery(
+          "0.1.10",
+          repo,
+          (async () => new Response("", { status: 403 })) as typeof fetch
+        ).check();
+        expect(refused).toMatchObject({ status: "UNAVAILABLE", unavailableReason: "HTTP_403" });
+
+        const offline = await new GitHubReleaseUpdateDiscovery(
+          "0.1.10",
+          repo,
+          (async () => {
+            throw new Error("ENOTFOUND");
+          }) as typeof fetch
+        ).check();
+        expect(offline).toMatchObject({ status: "UNAVAILABLE", unavailableReason: "NETWORK_ERROR" });
+      }
+    );
   }
 );

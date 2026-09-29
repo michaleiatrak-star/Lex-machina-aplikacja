@@ -14,6 +14,7 @@ import {
   type McpSearchTool,
   type McpToolInputProperty
 } from "./api.js";
+import { fieldLabel, toolLabel } from "./mcp-search-labels.js";
 
 type FieldValue = string | boolean;
 
@@ -70,7 +71,9 @@ function toArgument(
   if (property.type === "integer" || property.type === "number") return Number(text);
   if (property.type === "array") {
     const items = text.split(",").map((item) => item.trim()).filter(Boolean);
-    return property.items?.type === "integer" || property.items?.type === "number"
+    return property.items?.type === "integer" ||
+      property.items?.type === "number" ||
+      items.every((item) => /^\d+$/.test(item))
       ? items.map(Number)
       : items;
   }
@@ -127,8 +130,14 @@ export function McpSearchPanel() {
     void getMcpSearchTools(sourceId)
       .then((next) => {
         if (cancelled) return;
-        setTools(next.tools);
-        setToolName(next.tools[0]?.name ?? "");
+        // Wyszukiwanie po słowie kluczowym lub fragmencie tekstu na początku listy.
+        const sorted = [...next.tools].sort(
+          (a, b) =>
+            Number(Boolean(toolLabel(b.name).fullText)) -
+            Number(Boolean(toolLabel(a.name).fullText))
+        );
+        setTools(sorted);
+        setToolName(sorted[0]?.name ?? "");
       })
       .catch((failure) => {
         if (!cancelled) setError(failureText(failure));
@@ -241,59 +250,68 @@ export function McpSearchPanel() {
                   onChange={(event) => setToolName(event.target.value)}
                 >
                   {tools.map((item) => (
-                    <option key={item.name} value={item.name}>
-                      {item.name}
+                    <option key={item.name} value={item.name} title={item.name}>
+                      {toolLabel(item.name, item.description).label}
                     </option>
                   ))}
                 </select>
               </label>
             ) : null}
 
-            {tool?.description ? (
-              <p className="field-help">{tool.description}</p>
+            {tool && toolLabel(tool.name, tool.description).help ? (
+              <p className="field-help">{toolLabel(tool.name, tool.description).help}</p>
             ) : null}
 
-            {properties.map(([name, property]) => (
-              property.type === "boolean" ? (
-                <label key={name} className="chat-toggle-row field-help">
-                  <input
-                    type="checkbox"
-                    checked={values[name] === true}
-                    disabled={busy}
-                    onChange={(event) => setValues({ ...values, [name]: event.target.checked })}
-                  />
+            {properties.map(([name, property]) => {
+              const field = fieldLabel(name);
+              const options = field.options ??
+                (property.enum ? Object.fromEntries(property.enum.map((value) => [value, value])) : undefined);
+              if (property.type === "boolean") {
+                return (
+                  <label key={name} className="chat-toggle-row field-help" title={name}>
+                    <input
+                      type="checkbox"
+                      checked={values[name] === true}
+                      disabled={busy}
+                      onChange={(event) => setValues({ ...values, [name]: event.target.checked })}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                );
+              }
+              return (
+                <label key={name} title={name}>
                   <span>
-                    <code>{name}</code>
-                    {property.description ? ` — ${property.description}` : ""}
-                  </span>
-                </label>
-              ) : (
-                <label key={name}>
-                  <span>
-                    <code>{name}</code>
+                    {field.label}
                     {required.has(name) ? " *" : ""}
-                    {property.description ? (
-                      <small className="field-help"> — {property.description}</small>
+                    {field.help ? (
+                      <small className="field-help"> — {field.help}</small>
                     ) : null}
                   </span>
-                  {property.enum ? (
+                  {options ? (
                     <select
                       value={String(values[name] ?? "")}
                       disabled={busy}
                       onChange={(event) => setValues({ ...values, [name]: event.target.value })}
                     >
-                      <option value="">—</option>
-                      {property.enum.map((option) => (
-                        <option key={option} value={option}>{option}</option>
+                      <option value="">{required.has(name) ? "— wybierz —" : "dowolna"}</option>
+                      {Object.entries(options).map(([value, text]) => (
+                        <option key={value} value={value}>{text}</option>
                       ))}
                     </select>
                   ) : (
                     <input
-                      type={property.type === "integer" || property.type === "number" ? "number" : "text"}
+                      type={
+                        field.date
+                          ? "date"
+                          : property.type === "integer" || property.type === "number"
+                            ? "number"
+                            : "text"
+                      }
                       min={property.minimum}
                       max={property.maximum}
                       value={String(values[name] ?? "")}
-                      placeholder={property.type === "array" ? "wartości rozdzielone przecinkami" : undefined}
+                      placeholder={field.placeholder}
                       disabled={busy}
                       onChange={(event) => setValues({ ...values, [name]: event.target.value })}
                       onKeyDown={(event) => {
@@ -302,8 +320,8 @@ export function McpSearchPanel() {
                     />
                   )}
                 </label>
-              )
-            ))}
+              );
+            })}
 
             {tool ? (
               <div className="chat-form-row compact">
@@ -326,7 +344,7 @@ export function McpSearchPanel() {
       {response ? (
         <article className="chat-card">
           <p className="eyebrow">
-            {response.source} · {response.tool}
+            {toolLabel(response.tool).label}
           </p>
           <h2>
             {status ? STATUS_TEXT[status] ?? status : response.ok ? "Wynik" : "Błąd"}

@@ -381,9 +381,27 @@ export function MaintenancePanel({
               </small>
             </div>
             <span>
-              {skillStatus?.status ?? "—"}
+              {skillStatus?.status === "UNAVAILABLE"
+                ? "niedostępne"
+                : skillStatus?.status === "AVAILABLE"
+                  ? "dostępna aktualizacja"
+                  : skillStatus?.status === "UP_TO_DATE"
+                    ? "aktualne"
+                    : "—"}
             </span>
           </div>
+
+          {skillStatus?.status === "UNAVAILABLE" ? (
+            <small className="maintenance-trust-warning">
+              {skillStatus.unavailableReason === "NO_RELEASE"
+                ? `W repozytorium ${skillStatus.repository ?? "Lex Machina"} nie ma wydania skilli (pre-release i tagi inne niż x.y.z są pomijane).`
+                : skillStatus.unavailableReason === "HTTP_403" || skillStatus.unavailableReason === "HTTP_429"
+                  ? "GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę."
+                  : skillStatus.unavailableReason === "NETWORK_ERROR"
+                    ? "Brak połączenia z GitHub — nie sprawdzono aktualizacji skilli."
+                    : `Nie udało się sprawdzić aktualizacji skilli${skillStatus.unavailableReason ? ` (${skillStatus.unavailableReason})` : ""}.`}
+            </small>
+          ) : null}
 
           {skillStatus?.signatureMode === "UNSIGNED_ALLOWED" ? (
             <small className="maintenance-trust-warning">

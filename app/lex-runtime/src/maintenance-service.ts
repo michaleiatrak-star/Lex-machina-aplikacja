@@ -67,6 +67,9 @@ export type SkillUpdateStatus = {
     | "INDEX_MISSING"
     | "SIGNED_INDEX_MISSING"
     | "SIGNER_POLICY_MISSING";
+  // Przy UNAVAILABLE: NO_RELEASE (brak wydania w repozytorium) albo błąd GitHub API.
+  unavailableReason?: string;
+  repository?: string;
   signatureMode:
     | "SIGNED_REQUIRED"
     | "UNSIGNED_ALLOWED";
@@ -961,6 +964,12 @@ export class MaintenanceService {
             ? "AVAILABLE"
             : "UP_TO_DATE",
       ...(latestVersion ? { latestVersion } : {}),
+      ...(status.status === "NO_RELEASE"
+        ? { unavailableReason: "NO_RELEASE" }
+        : status.unavailableReason
+          ? { unavailableReason: status.unavailableReason }
+          : {}),
+      ...(status.repository ? { repository: status.repository } : {}),
       checkedAt: status.checkedAt,
       bundleReady:
         indexAssetsReady &&

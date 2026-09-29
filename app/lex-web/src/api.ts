@@ -870,6 +870,8 @@ export type SkillUpdateStatusResponse = {
     | "INDEX_MISSING"
     | "SIGNED_INDEX_MISSING"
     | "SIGNER_POLICY_MISSING";
+  unavailableReason?: string;
+  repository?: string;
 };
 
 export type SkillUpdateApplyResponse = {

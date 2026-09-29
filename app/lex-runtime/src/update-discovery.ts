@@ -1,5 +1,5 @@
 export const CURRENT_APPLICATION_VERSION =
-  "0.1.3";
+  "0.1.10";
 
 export type UpdateAvailability =
   | "NO_RELEASE"
@@ -18,6 +18,9 @@ export type UpdateDiscoveryResult = {
   currentVersion: string;
   status: UpdateAvailability;
   checkedAt: string;
+  // Przy UNAVAILABLE: HTTP_<kod> z GitHub API, INVALID_RESPONSE albo NETWORK_ERROR.
+  unavailableReason?: string;
+  repository?: string;
   latestVersion?: string;
   releaseUrl?: string;
   releaseName?: string;
@@ -237,7 +240,9 @@ implements UpdateDiscovery {
         return {
           currentVersion: this.currentVersion,
           status: "UNAVAILABLE",
-          checkedAt
+          checkedAt,
+          unavailableReason: `HTTP_${response.status}`,
+          repository: this.repository
         };
       }
 
@@ -246,7 +251,9 @@ implements UpdateDiscovery {
         return {
           currentVersion: this.currentVersion,
           status: "UNAVAILABLE",
-          checkedAt
+          checkedAt,
+          unavailableReason: "INVALID_RESPONSE",
+          repository: this.repository
         };
       }
 
@@ -390,6 +397,7 @@ implements UpdateDiscovery {
             this.currentVersion,
           status: "NO_RELEASE",
           checkedAt,
+          repository: this.repository,
           ...modelPackAssets
         };
       }
@@ -430,7 +438,9 @@ implements UpdateDiscovery {
       return {
         currentVersion: this.currentVersion,
         status: "UNAVAILABLE",
-        checkedAt
+        checkedAt,
+        unavailableReason: "NETWORK_ERROR",
+        repository: this.repository
       };
     }
   }

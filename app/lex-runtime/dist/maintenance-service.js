@@ -529,6 +529,12 @@ export class MaintenanceService {
                     ? "AVAILABLE"
                     : "UP_TO_DATE",
             ...(latestVersion ? { latestVersion } : {}),
+            ...(status.status === "NO_RELEASE"
+                ? { unavailableReason: "NO_RELEASE" }
+                : status.unavailableReason
+                    ? { unavailableReason: status.unavailableReason }
+                    : {}),
+            ...(status.repository ? { repository: status.repository } : {}),
             checkedAt: status.checkedAt,
             bundleReady: indexAssetsReady &&
                 verificationReady,
