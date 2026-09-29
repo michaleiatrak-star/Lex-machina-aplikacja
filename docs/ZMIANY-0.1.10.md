@@ -10,7 +10,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 7 | `fec4967` | konektory i Wyszukiwanie na desktopie, `.docx` bez fałszywych blokad |
 | hotfix 8 | `6fd11d1` | ELI dla wszystkich aktów, RAG tylko przy awarii ELI, kopia KK/KW |
 | hotfix 9 | `8b86baa` | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
-| hotfix 10 | budowany | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
+| hotfix 10 | `403c3d7` | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
 
 ---
 
@@ -69,6 +69,10 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 - hotfix 4: długi limit proxy desktopu dla generowania pisma; G14 dopuszcza `localStorage` tylko dla ostatnio użytego modelu.
 
 ---
+
+## Po hotfix 10 (następne wydanie)
+
+- Czat: odpowiedź `BLOCKED` pokazuje przyczynę (stan, `audit.violations`, brakujące zasoby workflow, `audit.blockedEvents` z bramką i kodem) zamiast samej „blokady wykonania”.
 
 ## Znane ograniczenia po hotfix 10
 
