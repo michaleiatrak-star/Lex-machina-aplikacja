@@ -2288,3 +2288,26 @@ mark.restored {
 .mcp-connector-list button {
   flex: none;
 }
+
+.mcp-search-form {
+  display: grid;
+  gap: 12px;
+}
+
+.mcp-search-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.mcp-search-result {
+  max-height: 60vh;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

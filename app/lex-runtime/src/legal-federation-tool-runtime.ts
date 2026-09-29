@@ -981,6 +981,74 @@ export class LegalFederationToolRuntime {
     );
   }
 
+  // Karta „Wyszukiwanie": te same bramki co narzędzia modelu (instalacja, zgodność
+  // narzędzia ze źródłem, ochrona danych sprawy), ale wywołanie wprost, bez modelu.
+  // Bez `tool` zwraca listę narzędzi źródła ze schematami parametrów.
+  async direct(
+    request: {
+      source: string;
+      tool?: string;
+      arguments?: Record<string, unknown>;
+    }
+  ): Promise<{
+    ok: boolean;
+    result: unknown;
+  }> {
+    const [reply] =
+      await this.runTools([
+        request.tool
+          ? {
+              id: "direct",
+              name: CALL_TOOL,
+              input: {
+                source:
+                  request.source,
+                tool:
+                  request.tool,
+                arguments:
+                  request.arguments ??
+                  {}
+              }
+            }
+          : {
+              id: "direct",
+              name: LIST_TOOL,
+              input: {
+                source:
+                  request.source
+              }
+            }
+      ]);
+    // Instancja karty nie należy do żadnej sesji — jej zdarzenia nie trafiają do audytu sesji.
+    this.events.splice(0);
+    let result: unknown;
+    try {
+      result =
+        JSON.parse(
+          reply!.content
+        );
+    } catch {
+      result = {
+        content:
+          reply!.content
+      };
+    }
+    const status =
+      result &&
+      typeof result ===
+        "object"
+        ? (result as { status?: unknown }).status
+        : undefined;
+    return {
+      ok:
+        status !==
+          "SOURCE_UNAVAILABLE" &&
+        status !==
+          "POLICY_BLOCKED",
+      result
+    };
+  }
+
   async runTools(
     calls:
       NormalizedToolCall[]

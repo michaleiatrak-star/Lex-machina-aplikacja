@@ -720,7 +720,13 @@ export async function startLocalServer(options?: {
     {
       authService,
       connectors:
-        mcpConnectors
+        mcpConnectors,
+      search:
+        new LegalFederationToolRuntime(
+          undefined,
+          undefined,
+          mcpConnectors
+        )
     }
   );
   app.use(coreApp);

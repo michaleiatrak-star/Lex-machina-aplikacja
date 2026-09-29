@@ -4,6 +4,7 @@ import {
   caseScheduleStartLabel
 } from "./case-calendar.js";
 import { CalendarPanel } from "./CalendarPanel.js";
+import { McpSearchPanel } from "./McpSearchPanel.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -175,6 +176,7 @@ type TabId =
   | "skills"
   | "case"
   | "firm"
+  | "search"
   | "settings";
 
 export type SettingsSection =
@@ -3450,6 +3452,7 @@ export default function MatterChatApp({
             ["skills", "Skille"],
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
+            ["search", "Wyszukiwanie"],
             ["settings", "Ustawienia"]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
@@ -3736,7 +3739,9 @@ export default function MatterChatApp({
                     ? "Sprawa i dokumenty"
                     : activeTab === "firm"
                       ? "Know-how i wzory kancelarii"
-                      : "Ustawienia"}
+                      : activeTab === "search"
+                        ? "Wyszukiwanie w źródłach MCP"
+                        : "Ustawienia"}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -5278,6 +5283,10 @@ export default function MatterChatApp({
             }}
             onNewCase={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa").catch(() => undefined)}
           />
+        ) : null}
+
+        {activeTab === "search" ? (
+          <McpSearchPanel />
         ) : null}
 
         {activeTab === "calendar" ? (

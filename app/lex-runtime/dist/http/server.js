@@ -350,7 +350,8 @@ export async function startLocalServer(options) {
     });
     registerMcpConnectorRoutes(app, {
         authService,
-        connectors: mcpConnectors
+        connectors: mcpConnectors,
+        search: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
     app.use(coreApp);
     return new Promise((resolve, reject) => {

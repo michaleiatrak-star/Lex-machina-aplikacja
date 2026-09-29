@@ -3,6 +3,9 @@ import {
   AuthError,
   type AuthService
 } from "../auth/service.js";
+import type {
+  LegalFederationToolRuntime
+} from "../legal-federation-tool-runtime.js";
 import {
   isLexMcpServerId,
   type LexMcpConnectorStore
@@ -13,11 +16,28 @@ function requireAdmin(
   res: Response,
   authService: AuthService
 ): boolean {
+  return authorize(req, res, authService, true);
+}
+
+function requireUser(
+  req: Request,
+  res: Response,
+  authService: AuthService
+): boolean {
+  return authorize(req, res, authService, false);
+}
+
+function authorize(
+  req: Request,
+  res: Response,
+  authService: AuthService,
+  adminOnly: boolean
+): boolean {
   try {
     const actor = authService.authenticateAuthorization(
       req.get("authorization")
     );
-    if (actor.user.appRole !== "ADMIN") {
+    if (adminOnly && actor.user.appRole !== "ADMIN") {
       res.status(403).json({
         error: "AUTHORIZATION_DENIED"
       });
@@ -65,9 +85,11 @@ export function registerMcpConnectorRoutes(
   dependencies: {
     authService: AuthService;
     connectors: LexMcpConnectorStore;
+    // Osobna instancja dla karty „Wyszukiwanie” — nie ta, której audyt czytają sesje.
+    search: LegalFederationToolRuntime;
   }
 ): void {
-  const { authService, connectors } = dependencies;
+  const { authService, connectors, search } = dependencies;
 
   app.get(
     "/api/admin/mcp-connectors",
@@ -94,6 +116,20 @@ export function registerMcpConnectorRoutes(
       } catch (error) {
         sendConnectorError(res, error);
       }
+    }
+  );
+
+  app.post(
+    "/api/admin/mcp-connectors/:server/check",
+    async (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      const server = String(req.params.server ?? "");
+      if (!isLexMcpServerId(server)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      const check = await connectors.check(server);
+      res.json({ server, check, status: connectors.status() });
     }
   );
 
@@ -141,6 +177,68 @@ export function registerMcpConnectorRoutes(
       } catch (error) {
         sendConnectorError(res, error);
       }
+    }
+  );
+
+  // Karta „Wyszukiwanie” (każdy zalogowany użytkownik, tylko odczyt).
+  app.get(
+    "/api/mcp-search/sources",
+    (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const status = connectors.status();
+      res.json({
+        package: status.package,
+        sources: status.servers.map((server) => ({
+          id: server.id,
+          group: server.group,
+          label: server.label,
+          ready: server.ready,
+          ...(server.lastCheck ? { lastCheck: server.lastCheck } : {})
+        }))
+      });
+    }
+  );
+
+  app.get(
+    "/api/mcp-search/sources/:server/tools",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const server = String(req.params.server ?? "");
+      if (!isLexMcpServerId(server)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      const reply = await search.direct({ source: server });
+      if (!reply.ok) {
+        res.status(503).json({ error: "MCP_SOURCE_UNAVAILABLE", result: reply.result });
+        return;
+      }
+      const tools = (reply.result as { tools?: unknown }).tools;
+      res.json({ source: server, tools: Array.isArray(tools) ? tools : [] });
+    }
+  );
+
+  app.post(
+    "/api/mcp-search/query",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const source = typeof req.body?.source === "string" ? req.body.source : "";
+      const tool = typeof req.body?.tool === "string" ? req.body.tool.trim() : "";
+      const args = req.body?.arguments;
+      if (!isLexMcpServerId(source)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      if (!tool) {
+        res.status(400).json({ error: "MCP_TOOL_REQUIRED" });
+        return;
+      }
+      if (args !== undefined && (!args || typeof args !== "object" || Array.isArray(args))) {
+        res.status(400).json({ error: "MCP_ARGUMENTS_INVALID" });
+        return;
+      }
+      const reply = await search.direct({ source, tool, arguments: args ?? {} });
+      res.json({ source, tool, ok: reply.ok, result: reply.result });
     }
   );
 }

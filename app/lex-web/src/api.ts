@@ -2937,6 +2937,13 @@ export async function getPrivacyKey(
   return body.entries;
 }
 
+export type McpServerCheck = {
+  at: string;
+  ok: boolean;
+  tools?: string[];
+  error?: string;
+};
+
 export type McpServerStatus = {
   id: string;
   group: string;
@@ -2945,11 +2952,21 @@ export type McpServerStatus = {
   installed: boolean;
   ready: boolean;
   desktopInstalled: boolean;
+  lastCheck?: McpServerCheck;
+};
+
+export type McpPackageInfo = {
+  integrity: "MATCH" | "MISMATCH" | "UNVERIFIED" | "MISSING";
+  sha256?: string;
+  expectedSha256?: string;
+  version?: string;
+  skillVersion?: string;
 };
 
 export type McpConnectorStatusResponse = {
   packagePath: string;
   packageAvailable: boolean;
+  package: McpPackageInfo;
   ceidg: {
     keyConfigured: boolean;
     keyUrl: string;
@@ -2988,6 +3005,18 @@ export function installMcpConnector(
   );
 }
 
+export function checkMcpConnector(
+  server: string
+): Promise<{ server: string; check: McpServerCheck; status: McpConnectorStatusResponse }> {
+  return json(
+    `/api/admin/mcp-connectors/${encodeURIComponent(server)}/check`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
 export function uninstallMcpConnector(
   server: string,
   desktop: boolean
@@ -3018,6 +3047,67 @@ export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse
     "/api/admin/mcp-connectors/ceidg/key",
     {
       method: "DELETE"
+    }
+  );
+}
+
+export type McpSearchSource = {
+  id: string;
+  group: string;
+  label: string;
+  ready: boolean;
+  lastCheck?: McpServerCheck;
+};
+
+export type McpToolInputProperty = {
+  type?: string;
+  description?: string;
+  enum?: string[];
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  items?: {
+    type?: string;
+  };
+};
+
+export type McpSearchTool = {
+  name: string;
+  description?: string;
+  inputSchema: {
+    type?: string;
+    properties?: Record<string, McpToolInputProperty>;
+    required?: string[];
+  };
+};
+
+export type McpSearchQueryResponse = {
+  source: string;
+  tool: string;
+  ok: boolean;
+  result: unknown;
+};
+
+export function getMcpSearchSources(): Promise<{ package: McpPackageInfo; sources: McpSearchSource[] }> {
+  return json("/api/mcp-search/sources");
+}
+
+export function getMcpSearchTools(
+  source: string
+): Promise<{ source: string; tools: McpSearchTool[] }> {
+  return json(`/api/mcp-search/sources/${encodeURIComponent(source)}/tools`);
+}
+
+export function queryMcpSearch(
+  source: string,
+  tool: string,
+  args: Record<string, unknown>
+): Promise<McpSearchQueryResponse> {
+  return json<McpSearchQueryResponse>(
+    "/api/mcp-search/query",
+    {
+      method: "POST",
+      body: JSON.stringify({ source, tool, arguments: args })
     }
   );
 }
