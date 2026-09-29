@@ -518,7 +518,12 @@ export class SafeSessionExecutor {
             modelSelectsSkills: request.modelSelectsSkills === true
         });
         const reportTools = new ReportBlueprintToolRuntime();
-        const federationTools = this.legalFederationTools;
+        // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
+        // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
+        // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
+        const federationTools = request.model.startsWith("local/")
+            ? undefined
+            : this.legalFederationTools;
         const auxiliarySources = [];
         // References in the message are checked by the Gate I runtime prelude
         // (ELI); no model is asked to extract them.

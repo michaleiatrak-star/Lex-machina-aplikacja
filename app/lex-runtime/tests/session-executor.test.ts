@@ -20,6 +20,7 @@ import {
   publicEvidenceBundle,
   reconcileAuxiliarySourcesWithVerification
 } from "../src/session-executor.js";
+import { LegalFederationToolRuntime } from "../src/legal-federation-tool-runtime.js";
 
 const roots: string[] = [];
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -496,6 +497,41 @@ describe("SafeSessionExecutor", () => {
     expect(messages).toContain("Pismo wysłano na [PII:EMAIL:0002].");
     expect(messages).not.toContain("LMPII");
     expect(messages).not.toContain("anna.nowak");
+  });
+
+  it("does not give MCP federation tools to local models (context budget), only to hosted ones", async () => {
+    const seen: Record<string, string[]> = {};
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "capture",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        seen[params.model] = (params.tools ?? []).map((tool) => tool.function.name);
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(
+      fixture(),
+      new ProviderGateway(providers),
+      undefined,
+      undefined,
+      undefined,
+      new LegalFederationToolRuntime()
+    );
+    for (const model of ["local/bielik-test", "test"]) {
+      await executor.execute({
+        query: "Jaki jest termin przedawnienia roszczenia?",
+        provider: "openai",
+        model,
+        primarySkill: DR,
+        mode: "PRAWNIK"
+      }).catch(() => undefined);
+    }
+    expect(seen["test"]).toContain("search_federated_legal_sources");
+    expect(seen["local/bielik-test"]).toBeDefined();
+    expect(seen["local/bielik-test"]).not.toContain("search_federated_legal_sources");
   });
 
   it("sends the placeholder key with gender to the model, never the name", async () => {
