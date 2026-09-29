@@ -4,9 +4,32 @@ import {
   type AuthService
 } from "../auth/service.js";
 import {
+  LEX_MCP_CATALOG,
   isLexMcpServerId,
   type LexMcpConnectorStore
 } from "../lex-mcp-connectors.js";
+import type { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
+
+function requireUser(
+  req: Request,
+  res: Response,
+  authService: AuthService
+): boolean {
+  try {
+    authService.authenticateAuthorization(req.get("authorization"));
+    return true;
+  } catch (error) {
+    if (error instanceof AuthError) {
+      res.status(error.httpStatus).json({ error: error.code });
+      return false;
+    }
+    throw error;
+  }
+}
+
+function optionalText(value: unknown, max = 300): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined;
+}
 
 function requireAdmin(
   req: Request,
@@ -65,9 +88,114 @@ export function registerMcpConnectorRoutes(
   dependencies: {
     authService: AuthService;
     connectors: LexMcpConnectorStore;
+    federation?: Pick<LegalFederationToolRuntime, "runTools">;
   }
 ): void {
-  const { authService, connectors } = dependencies;
+  const { authService, connectors, federation } = dependencies;
+
+  // Gotowość jednego serwera: handshake MCP i lista narzędzi (bez zmiany instalacji).
+  app.post(
+    "/api/admin/mcp-connectors/:server/check",
+    async (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      const server = String(req.params.server ?? "");
+      if (!isLexMcpServerId(server)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      try {
+        const tools = await connectors.probe(server);
+        res.json({
+          server,
+          ready: true,
+          tools,
+          packageVersion: connectors.packageVersion(),
+          checkedAt: new Date().toISOString()
+        });
+      } catch (error) {
+        sendConnectorError(res, error);
+      }
+    }
+  );
+
+  // Wyszukiwarka (każdy zalogowany użytkownik): tylko zainstalowane źródła.
+  app.get(
+    "/api/mcp-search/sources",
+    (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const ready = new Set(connectors.readyServers());
+      res.json({
+        sources: LEX_MCP_CATALOG
+          .filter((server) => ready.has(server.id))
+          .map(({ id, group, label }) => ({ id, group, label }))
+      });
+    }
+  );
+
+  app.post(
+    "/api/mcp-search",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      if (!federation) {
+        res.status(503).json({ error: "LEX_MCP_SEARCH_UNAVAILABLE" });
+        return;
+      }
+      const source = String(req.body?.source ?? "");
+      const query = optionalText(req.body?.query);
+      if (!isLexMcpServerId(source)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      if (!query) {
+        res.status(400).json({ error: "MCP_SEARCH_QUERY_REQUIRED" });
+        return;
+      }
+      const limit = Number(req.body?.limit);
+      const [result] = await federation.runTools([
+        {
+          id: "mcp_search",
+          name: "search_federated_legal_sources",
+          input: {
+            source,
+            query,
+            ...(optionalText(req.body?.dateFrom, 10) ? { dateFrom: optionalText(req.body?.dateFrom, 10) } : {}),
+            ...(optionalText(req.body?.dateTo, 10) ? { dateTo: optionalText(req.body?.dateTo, 10) } : {}),
+            ...(Number.isInteger(limit) && limit >= 1 && limit <= 50 ? { limit } : {})
+          }
+        }
+      ]);
+      res.json({ source, content: result?.content ?? "" });
+    }
+  );
+
+  app.post(
+    "/api/mcp-search/document",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      if (!federation) {
+        res.status(503).json({ error: "LEX_MCP_SEARCH_UNAVAILABLE" });
+        return;
+      }
+      const source = String(req.body?.source ?? "");
+      const documentId = optionalText(req.body?.documentId, 200);
+      if (!isLexMcpServerId(source)) {
+        res.status(404).json({ error: "UNKNOWN_MCP_SERVER" });
+        return;
+      }
+      if (!documentId) {
+        res.status(400).json({ error: "MCP_DOCUMENT_ID_REQUIRED" });
+        return;
+      }
+      const [result] = await federation.runTools([
+        {
+          id: "mcp_document",
+          name: "get_federated_legal_document",
+          input: { source, documentId }
+        }
+      ]);
+      res.json({ source, content: result?.content ?? "" });
+    }
+  );
 
   app.get(
     "/api/admin/mcp-connectors",

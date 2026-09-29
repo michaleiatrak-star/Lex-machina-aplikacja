@@ -1485,11 +1485,21 @@ fn is_document_processing_route(path: &str) -> bool {
     }
 }
 
+// Generowanie pisma to pełna sesja modelu (router, weryfikacja, AST) — lokalny model
+// potrzebuje na nią tyle samo czasu co /api/sessions/execute, nie domyślnych 120 s.
+fn is_document_generation_route(path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    matches!(
+        segments.as_slice(),
+        ["api", "cases", case_id, "artifacts", "generate"] if !case_id.is_empty()
+    )
+}
+
 fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
     let method = request.method().as_str();
     let path = request.uri().path();
 
-    if method == "POST" && path == "/api/sessions/execute" {
+    if method == "POST" && (path == "/api/sessions/execute" || is_document_generation_route(path)) {
         return Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS);
     }
 
@@ -1958,6 +1968,25 @@ mod tests {
         assert_eq!(
             proxy_read_timeout(&session),
             Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS)
+        );
+
+        let generate = Request::builder()
+            .method("POST")
+            .uri("/api/cases/case_0123456789abcdef/artifacts/generate")
+            .body(Vec::new())
+            .expect("document generation request");
+        assert_eq!(
+            proxy_read_timeout(&generate),
+            Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS)
+        );
+        let empty_case = Request::builder()
+            .method("POST")
+            .uri("/api/cases//artifacts/generate")
+            .body(Vec::new())
+            .expect("empty case request");
+        assert_eq!(
+            proxy_read_timeout(&empty_case),
+            Duration::from_secs(DEFAULT_PROXY_READ_TIMEOUT_SECS)
         );
 
         let login = Request::builder()

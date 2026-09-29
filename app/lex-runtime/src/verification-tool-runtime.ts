@@ -33,6 +33,10 @@ import {
   type TemporalFreshnessResult
 } from "./temporal-source-freshness.js";
 import {
+  verifyFromCoreLaw,
+  type CoreLawVerificationIndex
+} from "./core-law-verification.js";
+import {
   VerificationLedger,
   type VerificationKind,
   type VerificationRecord
@@ -74,12 +78,17 @@ const TOOL_SCHEMA: NormalizedToolSchema = {
         act: {
           type: "string",
           description:
-            "Legal act identity or alias known to the runtime, e.g. KC, KPC, KPK or the full act title."
+            "Legal act identity or alias, e.g. KC, KPC, KPK, KK, KW, a Dz.U. reference (Dz.U. 2025 poz. 734), an ELI (DU/2025/734) or the full act title of an act from the DR act maps."
         },
         asOf: {
           type: "string",
           description:
             "Optional historical legal-state date in YYYY-MM-DD. Use only when the user asks for a past legal state. Omit for current law."
+        },
+        quote: {
+          type: "string",
+          description:
+            "Optional exact wording you intend to quote from the provision. It is checked against the official ELI text; a mismatch makes the reference UNVERIFIED."
         }
       }
     }
@@ -498,6 +507,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
   "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
+  "- Acts outside KC/KPC/KPK/KK (and these four when the network is unavailable) are verified offline against the local official ELI copy of the DR act maps. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
   "- Never invent a verification marker, source URL, or tool result.",
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
@@ -528,7 +538,9 @@ export class LegalVerificationToolRuntime {
     private readonly caseVerifier =
       new SupremeCourtCaseVerifier(),
     private readonly caseLawSearch =
-      new CaseLawSearchService()
+      new CaseLawSearchService(),
+    private readonly coreLaw:
+      CoreLawVerificationIndex | null = null
   ) {
     this.broker = new ToolBroker(
       new ToolPolicy({
@@ -1025,6 +1037,78 @@ export class LegalVerificationToolRuntime {
     return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
   }
 
+  private verifyWithCoreLaw(
+    call: NormalizedToolCall,
+    actInput: string,
+    asOf: string,
+    fallbackReason?: string
+  ): string {
+    const claim =
+      typeof call.input.claim === "string"
+        ? call.input.claim.trim()
+        : "";
+    const quote =
+      typeof call.input.quote === "string"
+        ? call.input.quote.trim()
+        : "";
+    const verificationKind = kind(call.input.kind);
+    if (!claim || !verificationKind || !this.coreLaw) {
+      return JSON.stringify({ status: "DENIED", error: "INVALID_VERIFICATION_INPUT" });
+    }
+    const outcome = verifyFromCoreLaw({
+      index: this.coreLaw,
+      claim,
+      kind: verificationKind,
+      act: actInput,
+      ...(quote ? { quote } : {}),
+      ...(asOf ? { asOf } : {}),
+      toolCallId: call.id
+    });
+    this.resolverAudit.push({
+      sequence: this.resolverAudit.length + 1,
+      tool: TOOL_NAME,
+      capability: "read",
+      decision: outcome.decision === "DENY" ? "DENY" : "ALLOW",
+      reason:
+        outcome.decision === "DENY"
+          ? outcome.reason
+          : "CORE_LAW_LOCAL_ELI_COPY" + (fallbackReason ? ":" + fallbackReason : "")
+    });
+    if (outcome.decision === "DENY") {
+      return JSON.stringify({ status: "DENIED", error: fallbackReason ?? outcome.reason, localCopy: outcome.reason });
+    }
+
+    const { record, act } = outcome;
+    this.ledger.add(record);
+    const verified = record.status === "VERIFIED";
+    return JSON.stringify({
+      claim: record.claim,
+      status: record.status,
+      act: {
+        eli: act.eli,
+        currentEli: act.currentEli,
+        title: act.title,
+        resolvedBy: act.resolvedBy,
+        sourceKind: "local_eli_copy"
+      },
+      freshness: {
+        textFetchedAt: record.fetchedAt,
+        relationsCheckedAt: act.relationsCheckedAt,
+        amendmentsAfter: 0
+      },
+      sourceUrl: record.sourceUrl ?? null,
+      sourceFormat: record.sourceFormat ?? null,
+      evidence: record.evidence ?? null,
+      fetchedAt: record.fetchedAt,
+      marker: verified
+        ? "✅ [VER: " + record.sourceUrl + ", " + record.fetchedAt.slice(0, 10) + "]"
+        : "⚠️ [NIEWERYFIKOWANE]",
+      instruction: verified
+        ? "Copy the marker verbatim onto the same line as this exact legal reference. Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
+        : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
+    });
+  }
+
   auditEvents(): readonly ToolAuditEvent[] {
     return [
       ...this.resolverAudit.map((event) => ({ ...event })),
@@ -1347,6 +1431,22 @@ export class LegalVerificationToolRuntime {
             ? error.code
             : "LEGAL_ACT_RESOLUTION_FAILED";
 
+        // Akty spoza rejestru: lokalna kopia ELI z map DR (A + RAG rdzeniowy).
+        if (
+          reason === "UNKNOWN_LEGAL_ACT" &&
+          this.coreLaw
+        ) {
+          results.push({
+            tool_use_id: call.id,
+            content: this.verifyWithCoreLaw(
+              call,
+              actInput,
+              asOf
+            )
+          });
+          continue;
+        }
+
         this.resolverAudit.push({
           sequence: this.resolverAudit.length + 1,
           tool: TOOL_NAME,
@@ -1400,6 +1500,24 @@ export class LegalVerificationToolRuntime {
             pdfTextStatus &&
             this.verifier.supportsPdf()
           );
+
+        // Bez sieci (Bielik offline): ta sama weryfikacja na lokalnej kopii ELI.
+        if (
+          !temporalStatusPermitsVerification &&
+          freshness.status === "SOURCE_METADATA_UNAVAILABLE" &&
+          this.coreLaw
+        ) {
+          results.push({
+            tool_use_id: call.id,
+            content: this.verifyWithCoreLaw(
+              call,
+              resolvedAct.title,
+              asOf,
+              "TEMPORAL_SOURCE_METADATA_UNAVAILABLE"
+            )
+          });
+          continue;
+        }
 
         if (!temporalStatusPermitsVerification) {
           const reason =
@@ -1468,6 +1586,19 @@ export class LegalVerificationToolRuntime {
               })
         }
       });
+
+      if (!result.ok && this.coreLaw) {
+        results.push({
+          tool_use_id: call.id,
+          content: this.verifyWithCoreLaw(
+            call,
+            resolvedAct.title,
+            asOf,
+            result.error ?? "TOOL_FAILED"
+          )
+        });
+        continue;
+      }
 
       results.push({
         tool_use_id: call.id,

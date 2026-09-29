@@ -283,7 +283,7 @@ export async function startLocalServer(options) {
     catch (error) {
         process.stderr.write(`LEX_CORE_LAW_UNAVAILABLE:${error instanceof Error ? error.message : String(error)}\n`);
     }
-    const sessionExecutor = new SafeSessionExecutor(registry, providerGateway, undefined, (ledger) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker()), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology);
+    const sessionExecutor = new SafeSessionExecutor(registry, providerGateway, undefined, (ledger) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)));
     const coreApp = createLexHttpApp({
@@ -350,7 +350,8 @@ export async function startLocalServer(options) {
     });
     registerMcpConnectorRoutes(app, {
         authService,
-        connectors: mcpConnectors
+        connectors: mcpConnectors,
+        federation: legalFederationTools
     });
     app.use(coreApp);
     return new Promise((resolve, reject) => {

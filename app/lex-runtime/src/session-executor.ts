@@ -1238,8 +1238,13 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     );
     const reportTools = new ReportBlueprintToolRuntime();
+    // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
+    // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
+    // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
     const federationTools =
-      this.legalFederationTools;
+      request.model.startsWith("local/")
+        ? undefined
+        : this.legalFederationTools;
     const auxiliarySources:
       PublicAuxiliarySourceItem[] =
       [];

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { LegalDocumentAstGenerator } from "../src/legal-document-ast-generator.js";
+import {
+  DocumentAstSessionBlockedError,
+  LegalDocumentAstGenerator
+} from "../src/legal-document-ast-generator.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionExecutor
@@ -95,6 +98,47 @@ describe("LegalDocumentAstGenerator", () => {
     expect(query).toContain("[PII:PERSON:0001] -> [LMPII:D01:PERSON:0001]");
     expect(query).not.toContain("Jan Kowalski");
     expect(result.aliasesUsed).toEqual(["[LMPII:D01:PERSON:0001]"]);
+  });
+
+  it("explains a blocked session without leaking the answer", async () => {
+    const sessions: Pick<SessionExecutor, "execute"> = {
+      execute: async () => ({
+        sessionId: "session_blocked",
+        status: "BLOCKED",
+        provider: "openai",
+        model: "test",
+        primarySkill: "prawny-router-v3",
+        answer: "TAJNA TREŚĆ ODPOWIEDZI",
+        finalization: "BLOCKED",
+        blockedReferences: [
+          { claim: "art. 51 § 1 KW", kind: "statute", line: 3, status: "UNVERIFIED" }
+        ],
+        verification: { records: 2, verified: 0, supported: 0, unverified: 2 },
+        evidence: [],
+        audit: { result: "BLOCKED", eventCount: 5, closed: true, violations: ["FINALIZATION_GATE"] }
+      })
+    };
+    const failure = await new LegalDocumentAstGenerator(sessions)
+      .generate({
+        query: "Wzór wezwania do zapłaty.",
+        provider: "openai",
+        model: "test",
+        primarySkill: "prawny-router-v3",
+        mode: "PRAWNIK",
+        documentType: "letter",
+        styleProfile: "lex-classic-clean-v1",
+        aliases: { schemaVersion: 1, entries: [] }
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(DocumentAstSessionBlockedError);
+    const blocked = failure as DocumentAstSessionBlockedError;
+    expect(blocked.message).toBe("DOCUMENT_AST_SESSION_BLOCKED");
+    expect(blocked.reason).toBe("status=BLOCKED; finalization=BLOCKED; audit=BLOCKED; answer=present");
+    expect(blocked.description).toContain("audit.violations: FINALIZATION_GATE");
+    expect(blocked.description).toContain("blockedReference[statute/UNVERIFIED]: art. 51 § 1 KW");
+    expect(blocked.description).toContain("unverified=2");
+    expect(`${blocked.reason}${blocked.description}`).not.toContain("TAJNA");
   });
 
   it("rejects an alias invented by the provider", async () => {

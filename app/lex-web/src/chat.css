@@ -2288,3 +2288,109 @@ mark.restored {
 .mcp-connector-list button {
   flex: none;
 }
+
+.mcp-connector-list li > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.mcp-connector-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.mcp-ready-ok {
+  color: #285132;
+  font-size: 12px;
+}
+
+.mcp-ready-fail {
+  color: #9a4035;
+  font-size: 12px;
+}
+
+.mcp-search-form {
+  display: grid;
+  gap: 12px;
+}
+
+.mcp-search-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.mcp-search-form input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #c7cec5;
+  border-radius: 12px;
+  font: inherit;
+}
+
+.mcp-search-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.mcp-search-results {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-search-results li {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mcp-search-results dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12px;
+  color: #657068;
+}
+
+.mcp-search-results dl div {
+  display: flex;
+  gap: 4px;
+}
+
+.mcp-search-results dt {
+  font-weight: 700;
+}
+
+.mcp-search-results dd {
+  margin: 0;
+}
+
+.mcp-search-results button {
+  justify-self: start;
+}
+
+.mcp-search-raw {
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f1f3ef;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mcp-search-document {
+  max-height: 640px;
+  font-size: 14px;
+  line-height: 1.55;
+}
