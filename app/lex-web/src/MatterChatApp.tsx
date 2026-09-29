@@ -181,6 +181,7 @@ export type SettingsSection =
   | "models"
   | "users"
   | "security"
+  | "mcp"
   | "maintenance";
 
 export type SettingsRequest = {
@@ -192,6 +193,7 @@ type SettingsPanels = {
   localAi?: ReactNode;
   users?: ReactNode;
   security?: ReactNode;
+  mcp?: ReactNode;
   maintenance?: ReactNode;
 };
 
@@ -5675,6 +5677,7 @@ export default function MatterChatApp({
                 ["models", "Modele i AI"],
                 ["users", "Użytkownicy i uprawnienia"],
                 ["security", "Hasło i bezpieczeństwo"],
+                ["mcp", "Konektory MCP"],
                 ["maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
                 [SettingsSection, string]
@@ -6205,6 +6208,21 @@ export default function MatterChatApp({
               ) : settingsSection === "security" ? (
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.security}
+                </div>
+              ) : settingsSection === "mcp" ? (
+                <div className="chat-settings-section-stack">
+                  {user.appRole === "ADMIN"
+                    ? settingsPanels?.mcp
+                    : (
+                      <article className="chat-card">
+                        <p className="eyebrow">
+                          Konektory MCP
+                        </p>
+                        <p>
+                          Instalacją konektorów MCP i kluczem CEIDG zarządza administrator aplikacji.
+                        </p>
+                      </article>
+                    )}
                 </div>
               ) : (
                 <div className="chat-settings-section-stack">

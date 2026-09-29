@@ -281,7 +281,7 @@ jobs:
       - name: Build runtime for local MCP fallback shims
         run: npm run build
 
-      - name: G40 — start aggregator and all ten connector families
+      - name: G40 — start Lex MCP connectors (lex-mcp.mjs) and list every server
         run: npm run validate:g40-live
 
   g30a-live-case-law:

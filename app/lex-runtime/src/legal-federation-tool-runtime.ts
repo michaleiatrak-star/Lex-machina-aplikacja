@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import {
   Client
 } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,6 +19,12 @@ import {
   SafeAuxiliarySourceFetcher
 } from "./auxiliary-source-fetcher.js";
 import {
+  LEX_MCP_CATALOG,
+  LEX_MCP_SERVER_IDS,
+  type LexMcpConnectorStore,
+  type LexMcpServerId
+} from "./lex-mcp-connectors.js";
+import {
   PublicWebSearch,
   WebSearchError,
   assertPublicWebSearchQuery,
@@ -28,32 +32,70 @@ import {
   type WebSearchProvider
 } from "./web-search.js";
 
-// 0.1.4 is the published build used by the release runtime.
- // The upstream main branch is newer, but installers must not depend on an
- // unpublished package version. Lex supplies the coverage contract locally,
- // while the four published unified proxy tools remain upstream.
-const AGGREGATOR_PACKAGE =
-  "prawo-pl-mcp==0.1.4";
+// Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers, dist/lex-mcp.mjs) zastępują
+// agregator prawo-pl-mcp i flotę @matematicsolutions/*. Które serwery działają, decyduje
+// instalator w Ustawieniach → Konektory MCP (LexMcpConnectorStore).
+const CONNECTOR_PACKAGE =
+  "lex-mcp.mjs (audyt-systemu-v4/mcp-servers)";
 
-const SOURCE_IDS = [
-  "saos",
-  "nsa",
-  "isap",
-  "krs",
-  "eureka",
-  "kio",
-  "uodo",
-  "eu-sparql",
-  "eu-compliance",
-  "legalize"
-] as const;
+const SOURCE_IDS =
+  LEX_MCP_SERVER_IDS;
 
 const SOURCE_ENUM = [
   ...SOURCE_IDS
 ];
 
 type SourceId =
-  (typeof SOURCE_IDS)[number];
+  LexMcpServerId;
+
+type NativeRequest = {
+  tool: string;
+  args: Record<string, unknown>;
+};
+
+type SearchInput = {
+  query?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
+};
+
+// Ujednolicone search/get → natywne narzędzie serwera lex-*. Źródło bez odpowiednika
+// (np. get w SAOS) mapuje się na najbliższe narzędzie odczytu; resztę daje call_federated_legal_source.
+const NATIVE_SEARCH: Record<
+  SourceId,
+  (input: SearchInput) => NativeRequest
+> = {
+  isap: (input) => ({ tool: "isap_lookup", args: { query: input.query } }),
+  eurlex: (input) => ({ tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } }),
+  saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
+  cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
+  krs: (input) => ({ tool: "krs_lookup", args: { numerKrs: input.query } }),
+  wl: (input) => ({ tool: "wl_sprawdz_nip", args: { nip: input.query, data: input.dateTo } }),
+  ceidg: (input) => ({ tool: "ceidg_szukaj_firmy", args: { nip: input.query } }),
+  nbp: (input) => ({ tool: "nbp_kurs_waluty", args: { kodWaluty: input.query, data: input.dateTo } }),
+  eureka: (input) => ({ tool: "eureka_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, rozmiar: input.limit } }),
+  sudop: (input) => ({ tool: "sudop_szukaj_pomocy", args: { nip: input.query } }),
+  uodo: (input) => ({ tool: "uodo_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } })
+};
+
+const NATIVE_GET: Record<
+  SourceId,
+  (documentId: string) => NativeRequest
+> = {
+  isap: (id) => ({ tool: "isap_tekst", args: { eli: id } }),
+  eurlex: (id) => ({ tool: "eurlex_lookup", args: { celex: id } }),
+  saos: (id) => ({ tool: "saos_search", args: { sygnatura: id } }),
+  cbosa: (id) => ({ tool: "cbosa_pobierz", args: { doc_id: id } }),
+  krs: (id) => ({ tool: "krs_lookup", args: { numerKrs: id } }),
+  wl: (id) => ({ tool: "wl_sprawdz_nip", args: { nip: id } }),
+  ceidg: (id) => ({ tool: "ceidg_szukaj_firmy", args: { nip: id } }),
+  nbp: (id) => ({ tool: "nbp_kurs_waluty", args: { kodWaluty: id } }),
+  eureka: (id) => ({ tool: "eureka_pobierz", args: { id } }),
+  sudop: (id) => ({ tool: "sudop_odbierz_wynik", args: { kolejka_id: id } }),
+  uodo: (id) => ({ tool: "uodo_pobierz", args: { urn_lub_sygnatura: id } })
+};
 
 const LOCAL_COVERAGE: Record<
   SourceId,
@@ -64,105 +106,71 @@ const LOCAL_COVERAGE: Record<
     fallback: string;
   }
 > = {
-  saos: {
-    family:
-      "case-law",
-    authority:
-      "SAOS",
-    role:
-      "discovery/support",
-    fallback:
-      "Native Lex SAOS discovery; SN citations still require the official SN verifier."
-  },
-  nsa: {
-    family:
-      "administrative-case-law",
-    authority:
-      "CBOSA",
-    role:
-      "discovery/retrieval",
-    fallback:
-      "Native Lex direct-CBOSA adapter and its fail-closed indexed fallback."
-  },
   isap: {
-    family:
-      "polish-legislation",
-    authority:
-      "Sejm ELI",
-    role:
-      "retrieval",
-    fallback:
-      "Native Lex legal-act resolver, temporal freshness gate and verify_legal_reference."
+    family: "polish-legislation",
+    authority: "Sejm ELI",
+    role: "retrieval",
+    fallback: "Native Lex legal-act resolver, temporal freshness gate and verify_legal_reference."
+  },
+  eurlex: {
+    family: "eu-law-and-cjeu",
+    authority: "EUR-Lex/CELLAR/CJEU",
+    role: "live official retrieval",
+    fallback: "Native EUR-Lex/CELLAR official-source verification path."
+  },
+  saos: {
+    family: "case-law",
+    authority: "SAOS",
+    role: "discovery/support",
+    fallback: "Native Lex SAOS discovery; SN citations still require the official SN verifier."
+  },
+  cbosa: {
+    family: "administrative-case-law",
+    authority: "CBOSA",
+    role: "snapshot 🟨 without promotion",
+    fallback: "Native Lex direct-CBOSA adapter; no exact match = OUT_OF_SCOPE, never NOT_FOUND."
   },
   krs: {
-    family:
-      "company-register",
-    authority:
-      "KRS Ministry of Justice API",
-    role:
-      "registry lookup",
-    fallback:
-      "Native official KRS API path used by the entity verification gate."
+    family: "company-register",
+    authority: "KRS Ministry of Justice API",
+    role: "registry lookup",
+    fallback: "Native official KRS API path used by the entity verification gate."
+  },
+  wl: {
+    family: "vat-register",
+    authority: "Wykaz podatników VAT (MF)",
+    role: "registry lookup",
+    fallback: "Official white-list API at wl-api.mf.gov.pl."
+  },
+  ceidg: {
+    family: "sole-trader-register",
+    authority: "CEIDG API v3",
+    role: "registry lookup (requires API key)",
+    fallback: "Companies are not in CEIDG — use KRS; without a key the source is unavailable, not empty."
+  },
+  nbp: {
+    family: "exchange-rates",
+    authority: "NBP table A",
+    role: "official data",
+    fallback: "Official NBP API."
   },
   eureka: {
-    family:
-      "tax-interpretations",
-    authority:
-      "EUREKA MF/KIS",
-    role:
-      "interpretive practice",
-    fallback:
-      "EUREKA web/source lookup; statutory propositions still require ELI verification."
+    family: "tax-interpretations",
+    authority: "EUREKA MF/KIS",
+    role: "interpretive practice",
+    fallback: "EUREKA web/source lookup; statutory propositions still require ELI verification."
   },
-  kio: {
-    family:
-      "public-procurement-case-law",
-    authority:
-      "KIO/UZP",
-    role:
-      "decisional practice",
-    fallback:
-      "Native official-source research path; do not infer non-existence from connector failure."
+  sudop: {
+    family: "state-aid-register",
+    authority: "SUDOP (UOKiK)",
+    role: "registry lookup",
+    fallback: "Official SUDOP search; asynchronous results may need sudop_odbierz_wynik."
   },
   uodo: {
-    family:
-      "data-protection-decisions",
-    authority:
-      "UODO",
-    role:
-      "decisional practice",
-    fallback:
-      "Native Lex official UODO API path."
-  },
-  "eu-sparql": {
-    family:
-      "eu-law-and-cjeu",
-    authority:
-      "EUR-Lex/CELLAR/CJEU",
-    role:
-      "live official retrieval",
-    fallback:
-      "Native EUR-Lex/CELLAR official-source verification path."
-  },
-  "eu-compliance": {
-    family:
-      "eu-compliance-offline-corpus",
-    authority:
-      "local corpus derived from EUR-Lex",
-    role:
-      "fast offline research",
-    fallback:
-      "Live EUR-Lex/CELLAR takes precedence for current-law verification."
-  },
-  legalize: {
-    family:
-      "multi-jurisdiction-law-as-git",
-    authority:
-      "legalize-dev corpus",
-    role:
-      "historical/comparative research",
-    fallback:
-      "Use the official source for the relevant jurisdiction for final current-law verification."
+    family: "data-protection-decisions",
+    authority: "UODO",
+    role: "decisional practice",
+    fallback: "Native Lex official UODO API path."
   }
 };
 
@@ -199,8 +207,8 @@ const LIST_SCHEMA:
     function: {
       name: LIST_TOOL,
       description:
-        "List the read-only Polish/EU legal source federation backed by prawo-pl-mcp. " +
-        "Use without sourceId for the ten-source catalog; provide sourceId to inspect live native tool schemas. " +
+        "List the read-only Polish/EU legal sources served by the Lex Machina MCP connectors (lex-mcp). " +
+        "Use without sourceId for the catalog with installation status; provide sourceId to inspect live native tool schemas. " +
         "This is research/discovery only and never replaces Lex Machina citation verification.",
       parameters: {
         type: "object",
@@ -228,8 +236,9 @@ const SEARCH_SCHEMA:
     function: {
       name: SEARCH_TOOL,
       description:
-        "Search one source in the prawo-pl-mcp federation. " +
-        "Sources: SAOS, NSA/CBOSA, ISAP/ELI, KRS, EUREKA/KIS, KIO, UODO, EUR-Lex/CJEU, EU compliance and Legalize. " +
+        "Search one Lex Machina MCP source. " +
+        "Sources: ISAP/ELI, EUR-Lex/CJEU, SAOS, NSA/WSA (cbosa), KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. " +
+        "Registry sources (krs, wl, ceidg, sudop) take the identifier (KRS number, NIP) as query; nbp takes the currency code. " +
         "Search results are discovery material; fetch the document before relying on its contents.",
       parameters: {
         type: "object",
@@ -315,7 +324,8 @@ const CALL_SCHEMA:
     function: {
       name: CALL_TOOL,
       description:
-        "Call a source-specific read-only tool through prawo-pl-mcp, e.g. SAOS citator, KIO article search, UODO statistics, KRS board, EUREKA categories or EU comparison. " +
+        "Call a source-specific read-only Lex MCP tool, e.g. saos_cytator, krs_reprezentacja, cbosa_sprawdz_sygnature, wl_sprawdz_rachunek or eureka_sprawdz_sygnature. " +
+        "The tool name must start with the source id and an underscore. " +
         "Inspect the source schema first. This tool cannot create Lex Machina VERIFIED markers.",
       parameters: {
         type: "object",
@@ -448,7 +458,7 @@ const COVERAGE_SCHEMA:
     function: {
       name: COVERAGE_TOOL,
       description:
-        "Return prawo-pl-mcp coverage and known gaps. Use after an empty search before claiming that a legal source or material does not exist.",
+        "Return Lex MCP connector coverage, installation status and known gaps. Use after an empty search before claiming that a legal source or material does not exist.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -456,30 +466,6 @@ const COVERAGE_SCHEMA:
       }
     }
   };
-
-function privateCommand(
-  relative: string[],
-  fallback: string
-): string {
-  const root =
-    process.env
-      .LEX_RUNTIME_ROOT;
-  if (root) {
-    const candidate =
-      path.join(
-        root,
-        ...relative
-      );
-    if (
-      fs.existsSync(
-        candidate
-      )
-    ) {
-      return candidate;
-    }
-  }
-  return fallback;
-}
 
 function guardOutboundPayload(
   value:
@@ -512,95 +498,6 @@ function guardOutboundPayload(
     );
   }
   return value;
-}
-
-function cleanEnvironment():
-  Record<string, string> {
-  const env:
-    Record<string, string> = {};
-
-  for (
-    const [
-      key,
-      value
-    ] of Object.entries(
-      process.env
-    )
-  ) {
-    if (
-      typeof value ===
-      "string"
-    ) {
-      env[key] = value;
-    }
-  }
-
-  const runtimeRoot =
-    env.LEX_RUNTIME_ROOT;
-  if (runtimeRoot) {
-    const privatePaths = [
-      path.join(
-        runtimeRoot,
-        "node"
-      ),
-      path.join(
-        runtimeRoot,
-        "python",
-        "Scripts"
-      )
-    ];
-    env.PATH =
-      privatePaths.join(
-        path.delimiter
-      ) +
-      path.delimiter +
-      (env.PATH ?? "");
-  }
-
-  return {
-    ...env,
-    PRAWO_PL_MCP_INIT_TIMEOUT:
-      env.PRAWO_PL_MCP_INIT_TIMEOUT ??
-      "180",
-    PRAWO_PL_MCP_TIMEOUT:
-      env.PRAWO_PL_MCP_TIMEOUT ??
-      "90",
-
-    // Pin the connector fleet where the upstream package version is
-    // published in the canonical repository. UODO is intentionally handled
-    // by a local read-only MCP sibling over the official UODO API because the
-    // upstream uodo-orzeczenia-mcp package currently closes during startup.
-    PRAWO_PL_MCP_CMD_SAOS:
-      env.PRAWO_PL_MCP_CMD_SAOS ??
-      "npx -y @matematicsolutions/mcp-saos@1.2.0",
-    PRAWO_PL_MCP_CMD_NSA:
-      env.PRAWO_PL_MCP_CMD_NSA ??
-      "npx -y @matematicsolutions/mcp-nsa@1.3.0",
-    PRAWO_PL_MCP_CMD_ISAP:
-      env.PRAWO_PL_MCP_CMD_ISAP ??
-      "npx -y @matematicsolutions/mcp-isap@1.3.0",
-    PRAWO_PL_MCP_CMD_KRS:
-      env.PRAWO_PL_MCP_CMD_KRS ??
-      "npx -y @matematicsolutions/mcp-krs@1.1.1",
-    PRAWO_PL_MCP_CMD_EUREKA:
-      env.PRAWO_PL_MCP_CMD_EUREKA ??
-      "npx -y @matematicsolutions/mcp-eureka@0.2.0",
-    PRAWO_PL_MCP_CMD_KIO:
-      env.PRAWO_PL_MCP_CMD_KIO ??
-      "uvx --from kio-orzeczenia-mcp==0.4.3 kio-orzeczenia-mcp",
-    PRAWO_PL_MCP_CMD_UODO:
-      env.PRAWO_PL_MCP_CMD_UODO ??
-      "node dist/uodo-official-mcp-server.js",
-    PRAWO_PL_MCP_CMD_EU_SPARQL:
-      env.PRAWO_PL_MCP_CMD_EU_SPARQL ??
-      "npx -y @matematicsolutions/mcp-eu-sparql@1.2.0",
-    PRAWO_PL_MCP_CMD_EU_COMPLIANCE:
-      env.PRAWO_PL_MCP_CMD_EU_COMPLIANCE ??
-      "npx -y @matematicsolutions/mcp-eu-compliance@0.4.0",
-    PRAWO_PL_MCP_CMD_LEGALIZE:
-      env.PRAWO_PL_MCP_CMD_LEGALIZE ??
-      "uvx --from legalize-mcp==0.2.4 legalize-mcp"
-  };
 }
 
 function sourceFrom(
@@ -760,51 +657,71 @@ export function annotateFederatedLegalContent(
   }
 }
 
-class PrawoPlMcpClient {
+class LexMcpClient {
   private client:
     Client | null = null;
   private connecting:
     Promise<Client> | null =
       null;
+  private revision = -1;
+  private servers = "";
+
+  constructor(
+    private readonly connectors:
+      LexMcpConnectorStore | undefined
+  ) {}
+
+  installed(): SourceId[] {
+    return this.connectors?.readyServers() ?? [];
+  }
 
   private async ensureClient():
     Promise<Client> {
+    const connectors =
+      this.connectors;
+    if (!connectors) {
+      throw new Error(
+        "LEX_MCP_CONNECTORS_NOT_CONFIGURED"
+      );
+    }
+    const servers =
+      connectors.readyServers().join(",");
+    if (
+      this.client &&
+      (
+        this.revision !==
+          connectors.revision ||
+        this.servers !==
+          servers
+      )
+    ) {
+      await this.close();
+    }
     if (this.client) {
       return this.client;
     }
     if (this.connecting) {
       return this.connecting;
     }
+    if (!servers) {
+      throw new Error(
+        "LEX_MCP_NO_SERVERS_INSTALLED"
+      );
+    }
 
     this.connecting =
       (async () => {
-        const command =
-          process.env
-            .LEX_LEGAL_MCP_UVX ??
-          privateCommand(
-            [
-              "python",
-              "Scripts",
-              process.platform ===
-                "win32"
-                ? "uvx.exe"
-                : "uvx"
-            ],
-            process.platform ===
-              "win32"
-              ? "uvx.exe"
-              : "uvx"
-          );
         const transport =
           new StdioClientTransport({
-            command,
+            command:
+              connectors.command,
+            // Lista po przecinku = jeden proces z narzędziami wszystkich wybranych serwerów.
             args: [
-              "--from",
-              AGGREGATOR_PACKAGE,
-              "prawo-pl-mcp"
+              connectors.packagePath,
+              servers
             ],
             env:
-              cleanEnvironment(),
+              connectors.serverEnvironment(),
             stderr: "pipe"
           });
         const client =
@@ -812,14 +729,17 @@ class PrawoPlMcpClient {
             name:
               "lex-machina-legal-federation",
             version:
-              "0.1.7"
+              "0.2.0"
           });
-
         await client.connect(
           transport
         );
         this.client =
           client;
+        this.revision =
+          connectors.revision;
+        this.servers =
+          servers;
         return client;
       })();
 
@@ -850,6 +770,29 @@ class PrawoPlMcpClient {
     }
   }
 
+  async tools(
+    source: SourceId
+  ): Promise<unknown[]> {
+    const client =
+      await this.ensureClient();
+    const listed =
+      await client.listTools();
+    return listed.tools
+      .filter(
+        (tool) =>
+          tool.name.startsWith(
+            `${source}_`
+          )
+      )
+      .map(
+        (tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema
+        })
+      );
+  }
+
   async call(
     name: string,
     args:
@@ -870,6 +813,14 @@ class PrawoPlMcpClient {
         result
       );
     } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith(
+          "FEDERATED_"
+        )
+      ) {
+        throw error;
+      }
       try {
         await client.close();
       } catch {
@@ -881,6 +832,33 @@ class PrawoPlMcpClient {
   }
 }
 
+function withoutUndefined(
+  value:
+    Record<string, unknown>
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([, item]) =>
+          item !== undefined
+      )
+  );
+}
+
+function extraFrom(
+  input:
+    Record<string, unknown>
+): Record<string, unknown> {
+  const extra =
+    input.extra;
+  return extra &&
+    typeof extra ===
+      "object" &&
+    !Array.isArray(extra)
+    ? extra as Record<string, unknown>
+    : {};
+}
+
 type AuxiliarySourceFetcher =
   Pick<
     SafeAuxiliarySourceFetcher,
@@ -888,8 +866,8 @@ type AuxiliarySourceFetcher =
   >;
 
 export class LegalFederationToolRuntime {
-  private readonly client =
-    new PrawoPlMcpClient();
+  private readonly client:
+    LexMcpClient;
 
   constructor(
     private readonly auxiliarySourceFetcher:
@@ -897,8 +875,31 @@ export class LegalFederationToolRuntime {
         new SafeAuxiliarySourceFetcher(),
     private readonly webSearch:
       WebSearchProvider =
-        new PublicWebSearch()
-  ) {}
+        new PublicWebSearch(),
+    connectors?:
+      LexMcpConnectorStore
+  ) {
+    this.client =
+      new LexMcpClient(
+        connectors
+      );
+  }
+
+  private assertInstalled(
+    source: SourceId
+  ): void {
+    if (
+      !this.client
+        .installed()
+        .includes(source)
+    ) {
+      throw new Error(
+        source === "ceidg"
+          ? "FEDERATED_SOURCE_NOT_INSTALLED:ceidg (klucz API CEIDG: Ustawienia → Konektory MCP)"
+          : `FEDERATED_SOURCE_NOT_INSTALLED:${source}`
+      );
+    }
+  }
   private readonly events:
     LegalFederationAuditEvent[] =
       [];
@@ -938,7 +939,8 @@ export class LegalFederationToolRuntime {
     string {
     return [
       "# FEDERATED LEGAL RESEARCH",
-      "Lex Machina has an optional read-only prawo-pl-mcp federation with ten source families: SAOS, NSA/CBOSA, ISAP/ELI, KRS, EUREKA/KIS, KIO, UODO, EUR-Lex/CJEU, EU compliance and Legalize.",
+      "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS, NSA/WSA (cbosa), KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
+      "NSA/WSA results from cbosa are a snapshot 🟨 and are never promoted to VERIFIED; no exact match is OUT_OF_SCOPE, not absence of the ruling.",
       "Use list_federated_legal_sources when you need source capabilities or a native schema. Search first, then fetch the actual document before relying on its contents.",
       "This federation is DISCOVERY/RESEARCH ONLY. It never creates a Lex Machina VERIFIED ledger entry and never bypasses Gate I.",
       "Every federated search/get/call result carries _lexSourcePolicy with sourceTier, provenance and verificationAuthority=LEX_NATIVE_ONLY. Preserve that metadata when reasoning about the result.",
@@ -947,10 +949,10 @@ export class LegalFederationToolRuntime {
       "Use web_search for general internet discovery (current events, non-legal facts, locating a page). Send only neutral public phrases, never case facts or PII tokens. Snippets are not evidence: verify R1/R2A hits with verify_legal_reference / verify_case_* and read R2B/R3 hits with fetch_auxiliary_legal_source before relying on them.",
       "For R3 material, check publication/update date. Missing date or material older than 24 months requires an explicit staleness warning.",
       "For Polish statutory citations and current legal wording, verify_legal_reference remains authoritative. For Sąd Najwyższy signatures/quotes/propositions, use verify_case_reference / verify_case_quote / verify_case_proposition.",
-      "SAOS, NSA and ISAP federation results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",
-      "EUREKA interpretations, KIO rulings, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law.",
+      "SAOS, CBOSA and ISAP connector results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",
+      "EUREKA interpretations, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law.",
       "After an empty federated search, call federated_legal_coverage before concluding that material is absent.",
-      "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the external MCP fleet. Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
+      "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the MCP connectors (they call public APIs). Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
       "If a federated result conflicts with a native official-source verifier, the native official verification path is authoritative; fail closed until the conflict is resolved.",
       "Do not expose connector implementation details or treat a source_unavailable error as absence of law."
     ].join(
@@ -1108,28 +1110,49 @@ export class LegalFederationToolRuntime {
         sourceFrom(
           call.input
         );
-      const group =
-        typeof call.input
-          .group ===
-          "string"
-          ? call.input.group
-          : undefined;
-      return this.client.call(
-        "pl_list_sources",
-        {
-          ...(source
-            ? {
-                source_id:
-                  source
-              }
-            : {}),
-          ...(group
-            ? {
-                group
-              }
-            : {})
-        }
-      );
+      if (source) {
+        this.assertInstalled(
+          source
+        );
+        return JSON.stringify({
+          status: "OK",
+          source,
+          tools:
+            await this.client.tools(
+              source
+            )
+        });
+      }
+      const installed =
+        new Set(
+          this.client.installed()
+        );
+      return JSON.stringify({
+        status: "OK",
+        connectorPackage:
+          CONNECTOR_PACKAGE,
+        sources:
+          LEX_MCP_CATALOG.map(
+            (server) => ({
+              source:
+                server.id,
+              group:
+                server.group,
+              label:
+                server.label,
+              installed:
+                installed.has(
+                  server.id
+                ),
+              ...(server.requiresKey
+                ? {
+                    requiresKey:
+                      server.requiresKey
+                  }
+                : {})
+            })
+          )
+      });
     }
 
     if (
@@ -1455,11 +1478,15 @@ export class LegalFederationToolRuntime {
       call.name ===
         COVERAGE_TOOL
     ) {
+      const installed =
+        new Set(
+          this.client.installed()
+        );
       return JSON.stringify({
         status:
           "OK",
-        aggregatorPackage:
-          AGGREGATOR_PACKAGE,
+        connectorPackage:
+          CONNECTOR_PACKAGE,
         sources:
           SOURCE_IDS.map(
             (source) => ({
@@ -1467,11 +1494,12 @@ export class LegalFederationToolRuntime {
               ...LOCAL_COVERAGE[
                 source
               ],
+              installed:
+                installed.has(
+                  source
+                ),
               transport:
-                source ===
-                  "uodo"
-                  ? "PRAWO_PL_MCP_LOCAL_OFFICIAL_MCP_OVERRIDE"
-                  : "PRAWO_PL_MCP_CHILD_CONNECTOR",
+                "LEX_MCP_STDIO",
               sourcePolicy:
                 federatedSourcePolicy(
                   source
@@ -1483,6 +1511,8 @@ export class LegalFederationToolRuntime {
             "LEX_NATIVE_ONLY",
           emptySearch:
             "OUT_OF_SCOPE_UNTIL_FALLBACK_CHECKED",
+          notInstalled:
+            "REPORT_AS_UNAVAILABLE_NEVER_AS_ABSENT",
           conflict:
             "REVERIFY_WITH_OFFICIAL_NATIVE_PATH_AND_FAIL_CLOSED",
           privacy:
@@ -1510,16 +1540,16 @@ export class LegalFederationToolRuntime {
         "FEDERATED_SOURCE_INVALID"
       );
     }
+    this.assertInstalled(
+      source
+    );
 
     if (
       call.name ===
         SEARCH_TOOL
     ) {
-      const content =
-        await this.client.call(
-          "pl_search",
-          {
-          source,
+      const request =
+        NATIVE_SEARCH[source]({
           ...(typeof call.input
             .query === "string"
             ? {
@@ -1531,7 +1561,7 @@ export class LegalFederationToolRuntime {
           ...(typeof call.input
             .dateFrom === "string"
             ? {
-                date_from:
+                dateFrom:
                   call.input
                     .dateFrom
               }
@@ -1539,7 +1569,7 @@ export class LegalFederationToolRuntime {
           ...(typeof call.input
             .dateTo === "string"
             ? {
-                date_to:
+                dateTo:
                   call.input
                     .dateTo
               }
@@ -1550,7 +1580,7 @@ export class LegalFederationToolRuntime {
             ? {
                 page:
                   call.input
-                    .page
+                    .page as number
               }
             : {}),
           ...(Number.isInteger(
@@ -1559,23 +1589,19 @@ export class LegalFederationToolRuntime {
             ? {
                 limit:
                   call.input
-                    .limit
-              }
-            : {}),
-          ...(call.input.extra &&
-          typeof call.input
-            .extra ===
-            "object" &&
-          !Array.isArray(
-            call.input.extra
-          )
-            ? {
-                extra:
-                  call.input
-                    .extra
+                    .limit as number
               }
             : {})
-          }
+        });
+      const content =
+        await this.client.call(
+          request.tool,
+          withoutUndefined({
+            ...request.args,
+            ...extraFrom(
+              call.input
+            )
+          })
         );
       return annotateFederatedLegalContent(
         source,
@@ -1600,36 +1626,19 @@ export class LegalFederationToolRuntime {
           "FEDERATED_DOCUMENT_ID_REQUIRED"
         );
       }
+      const request =
+        NATIVE_GET[source](
+          documentId
+        );
       const content =
         await this.client.call(
-          "pl_get_document",
-          {
-          source,
-          document_id:
-            documentId,
-          ...(Number.isInteger(
-            call.input.page
-          )
-            ? {
-                page:
-                  call.input
-                    .page
-              }
-            : {}),
-          ...(call.input.extra &&
-          typeof call.input
-            .extra ===
-            "object" &&
-          !Array.isArray(
-            call.input.extra
-          )
-            ? {
-                extra:
-                  call.input
-                    .extra
-              }
-            : {})
-          }
+          request.tool,
+          withoutUndefined({
+            ...request.args,
+            ...extraFrom(
+              call.input
+            )
+          })
         );
       return annotateFederatedLegalContent(
         source,
@@ -1653,6 +1662,15 @@ export class LegalFederationToolRuntime {
           "FEDERATED_NATIVE_TOOL_REQUIRED"
         );
       }
+      if (
+        !tool.startsWith(
+          `${source}_`
+        )
+      ) {
+        throw new Error(
+          "FEDERATED_NATIVE_TOOL_SOURCE_MISMATCH"
+        );
+      }
       const args =
         call.input.arguments &&
         typeof call.input
@@ -1670,13 +1688,8 @@ export class LegalFederationToolRuntime {
           : {};
       const content =
         await this.client.call(
-          "pl_call",
-          {
-            source,
-            tool,
-            arguments:
-              args
-          }
+          tool,
+          args
         );
       return annotateFederatedLegalContent(
         source,

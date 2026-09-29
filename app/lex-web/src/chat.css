@@ -2265,3 +2265,26 @@ mark.restored {
   font-size: 10px;
   line-height: 16px;
 }
+
+.mcp-connector-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-connector-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mcp-connector-list button {
+  flex: none;
+}

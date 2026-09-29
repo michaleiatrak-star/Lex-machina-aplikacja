@@ -7,6 +7,7 @@ import express, {
   type Response
 } from "express";
 import helmet from "helmet";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLexHttpApp } from "./app.js";
@@ -14,6 +15,11 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
+import {
+  LexMcpConnectorStore,
+  lexMcpPackagePath
+} from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import {
@@ -528,8 +534,26 @@ export async function startLocalServer(options?: {
       undefined,
       new LocalPdfTextExtractor()
     );
+  // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
+  const mcpConnectors =
+    new LexMcpConnectorStore(
+      [
+        runtimeRoot,
+        baseRuntimeRoot,
+        bundledRuntimeRoot()
+      ].find(
+        (root) =>
+          fs.existsSync(
+            lexMcpPackagePath(root)
+          )
+      ) ?? runtimeRoot
+    );
   const legalFederationTools =
-    new LegalFederationToolRuntime();
+    new LegalFederationToolRuntime(
+      undefined,
+      undefined,
+      mcpConnectors
+    );
 
   // Morfeusz2/SGJP person-name morphology in the payload Python.
   const personMorphology =
@@ -689,6 +713,14 @@ export async function startLocalServer(options?: {
       authService,
       localModels,
       maintenance
+    }
+  );
+  registerMcpConnectorRoutes(
+    app,
+    {
+      authService,
+      connectors:
+        mcpConnectors
     }
   );
   app.use(coreApp);

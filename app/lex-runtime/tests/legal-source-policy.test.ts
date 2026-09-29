@@ -204,7 +204,7 @@ describe(
         });
         expect(
           federatedSourcePolicy(
-            "eu-sparql"
+            "eurlex"
           )
             .requiresDocumentTierClassification
         ).toBe(true);

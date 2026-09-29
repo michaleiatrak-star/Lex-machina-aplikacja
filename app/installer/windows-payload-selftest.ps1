@@ -136,26 +136,19 @@ if ($bielikTemplateText -notmatch "LEX_WEB_GROUNDED_POLICY_V1" -or
 }
 
 $llamaConfiguratorText = Get-Content -Raw -LiteralPath $llamaWebConfigurator
-foreach ($pin in @(
-  "@matematicsolutions/mcp-saos@1.2.0",
-  "@matematicsolutions/mcp-nsa@1.3.0",
-  "@matematicsolutions/mcp-isap@1.3.0",
-  "@matematicsolutions/mcp-krs@1.1.1",
-  "@matematicsolutions/mcp-eureka@0.2.0",
-  "kio-orzeczenia-mcp==0.4.3",
-  "@matematicsolutions/mcp-eu-sparql@1.2.0",
-  "@matematicsolutions/mcp-eu-compliance@0.4.0",
-  "legalize-mcp==0.2.4",
-  "prawo-pl-mcp==0.1.4"
-)) {
-  if ($llamaConfiguratorText -notmatch [Regex]::Escape($pin)) {
-    throw "SELFTEST_LLAMA_DIRECT_MCP_PIN_MISSING:$pin"
-  }
+if ($llamaConfiguratorText -notmatch [Regex]::Escape("audyt-systemu-v4\mcp-servers\dist\lex-mcp.mjs")) {
+  throw "SELFTEST_LLAMA_LEX_MCP_PACKAGE_MISSING"
 }
-foreach ($server in @("saos","nsa","isap","krs","eureka","kio","uodo","eu_sparql","eu_compliance","legalize")) {
-  if ($llamaConfiguratorText -notmatch ("(?m)^\s{4}" + [Regex]::Escape($server) + "\s*=\s*\[ordered\]@\{")) {
+if ($llamaConfiguratorText -match "matematicsolutions|prawo-pl-mcp") {
+  throw "SELFTEST_LLAMA_FOREIGN_MCP_PRESENT"
+}
+foreach ($server in @("isap","eurlex","saos","cbosa","krs","wl","nbp","eureka","sudop","uodo")) {
+  if ($llamaConfiguratorText -notmatch ('"' + [Regex]::Escape($server) + '"')) {
     throw "SELFTEST_LLAMA_DIRECT_MCP_SERVER_MISSING:$server"
   }
+}
+if ($llamaConfiguratorText -notmatch "(?m)^\s{4}uodo_official\s*=\s*\[ordered\]@\{") {
+  throw "SELFTEST_LLAMA_DIRECT_MCP_SERVER_MISSING:uodo_official"
 }
 
 # Keep native ML stacks in separate interpreter processes. Paddle/PaddleX and

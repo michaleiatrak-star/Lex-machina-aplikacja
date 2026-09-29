@@ -2936,3 +2936,88 @@ export async function getPrivacyKey(
   );
   return body.entries;
 }
+
+export type McpServerStatus = {
+  id: string;
+  group: string;
+  label: string;
+  requiresKey?: string;
+  installed: boolean;
+  ready: boolean;
+  desktopInstalled: boolean;
+};
+
+export type McpConnectorStatusResponse = {
+  packagePath: string;
+  packageAvailable: boolean;
+  ceidg: {
+    keyConfigured: boolean;
+    keyUrl: string;
+  };
+  desktop: {
+    configPath: string;
+    available: boolean;
+  };
+  servers: McpServerStatus[];
+};
+
+export type CeidgKeyResponse = {
+  verification:
+    | "VERIFIED"
+    | "RATE_LIMITED"
+    | "UNREACHABLE";
+  httpStatus?: number;
+  containsPersonalData: boolean;
+  status: McpConnectorStatusResponse;
+};
+
+export function getMcpConnectors(): Promise<McpConnectorStatusResponse> {
+  return json<McpConnectorStatusResponse>("/api/admin/mcp-connectors");
+}
+
+export function installMcpConnector(
+  server: string,
+  desktop: boolean
+): Promise<{ server: string; tools: string[]; status: McpConnectorStatusResponse }> {
+  return json(
+    `/api/admin/mcp-connectors/${encodeURIComponent(server)}/install`,
+    {
+      method: "POST",
+      body: JSON.stringify({ desktop })
+    }
+  );
+}
+
+export function uninstallMcpConnector(
+  server: string,
+  desktop: boolean
+): Promise<{ server: string; status: McpConnectorStatusResponse }> {
+  return json(
+    `/api/admin/mcp-connectors/${encodeURIComponent(server)}/uninstall`,
+    {
+      method: "POST",
+      body: JSON.stringify({ desktop })
+    }
+  );
+}
+
+export function setCeidgApiKey(
+  key: string
+): Promise<CeidgKeyResponse> {
+  return json<CeidgKeyResponse>(
+    "/api/admin/mcp-connectors/ceidg/key",
+    {
+      method: "PUT",
+      body: JSON.stringify({ key })
+    }
+  );
+}
+
+export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse }> {
+  return json(
+    "/api/admin/mcp-connectors/ceidg/key",
+    {
+      method: "DELETE"
+    }
+  );
+}

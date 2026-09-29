@@ -204,14 +204,14 @@ const FEDERATED_POLICIES = {
         crossCheckRequired: true,
         note: "SAOS is discovery/cross-check material. It does not replace the court-family authoritative verifier."
     },
-    nsa: {
+    cbosa: {
         sourceTier: "R2A",
         provenance: "EXTERNAL_MCP",
         transport: "FEDERATED_MCP",
         verificationAuthority: "LEX_NATIVE_ONLY",
         verificationEligible: false,
         crossCheckRequired: true,
-        note: "CBOSA material remains subject to exact-match and channel provenance rules before any verified use."
+        note: "CBOSA material is a snapshot 🟨 without promotion: exact-match and channel provenance rules apply; no exact match is OUT_OF_SCOPE."
     },
     krs: {
         sourceTier: "R2A",
@@ -231,15 +231,6 @@ const FEDERATED_POLICIES = {
         crossCheckRequired: true,
         note: "Interpretations establish the authority's position; statutory propositions still require R1 verification."
     },
-    kio: {
-        sourceTier: "R2A",
-        provenance: "EXTERNAL_MCP",
-        transport: "FEDERATED_MCP",
-        verificationAuthority: "LEX_NATIVE_ONLY",
-        verificationEligible: false,
-        crossCheckRequired: true,
-        note: "KIO decisions are R2A decisional material and are not statutory text."
-    },
     uodo: {
         sourceTier: "R2A",
         provenance: "EXTERNAL_MCP",
@@ -249,7 +240,7 @@ const FEDERATED_POLICIES = {
         crossCheckRequired: true,
         note: "UODO decisions are R2A decisional material and are not statutory text."
     },
-    "eu-sparql": {
+    eurlex: {
         sourceTier: "R2A",
         provenance: "EXTERNAL_MCP",
         transport: "FEDERATED_MCP",
@@ -259,23 +250,41 @@ const FEDERATED_POLICIES = {
         crossCheckRequired: true,
         note: "This mixed EUR-Lex/CJEU connector is conservatively labelled R2A at transport level. Individual legislative documents may be R1 and must be classified by their official URL/type before final use."
     },
-    "eu-compliance": {
-        sourceTier: "R1",
-        provenance: "LOCAL_DERIVED_CORPUS",
-        transport: "FEDERATED_MCP",
-        verificationAuthority: "LEX_NATIVE_ONLY",
-        verificationEligible: false,
-        crossCheckRequired: true,
-        note: "Derived EUR-Lex corpus inherits R1 subject matter but cannot prove current official wording; live EUR-Lex verification takes precedence."
-    },
-    legalize: {
-        sourceTier: "R3",
+    wl: {
+        sourceTier: "R2A",
         provenance: "EXTERNAL_MCP",
         transport: "FEDERATED_MCP",
         verificationAuthority: "LEX_NATIVE_ONLY",
         verificationEligible: false,
         crossCheckRequired: true,
-        note: "Third-party law-as-git corpus is research-only R3 material. It requires current official-source cross-check before use."
+        note: "Official VAT white-list material establishes registry facts (VAT status, accounts), not statutory wording."
+    },
+    ceidg: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official CEIDG registry material establishes registry facts about sole traders, not statutory wording."
+    },
+    nbp: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official NBP exchange-rate data; the applicable rate rule must come from the statute."
+    },
+    sudop: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official SUDOP state-aid register material establishes registry facts, not statutory wording."
     }
 };
 export function federatedSourcePolicy(sourceId) {

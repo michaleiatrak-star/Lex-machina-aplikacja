@@ -51,6 +51,15 @@ The application MUST NOT duplicate or silently rewrite legal skill instructions.
 - **G34E — Recovery / Password Lifecycle:** recovery envelope for the same UMK, password change/recovery without case re-encryption.
 - **G34F1 — Transaction Reauthorization Foundation:** exact artifact-bound password step-up and one-use deanonymization grants; full G34F remains open until DOCX/ODT integration.
 
+## Konektory MCP (lex-mcp)
+
+Źródła prawa (federacja w czacie, konfiguracja llama.cpp, `.mcp.json`) korzystają wyłącznie z serwerów MCP Lex Machina z korpusu skilli: `audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs` — `isap`, `eurlex`, `saos`, `cbosa`, `krs`, `wl`, `ceidg`, `nbp`, `eureka`, `sudop`, `uodo`. Agregator `prawo-pl-mcp` i pakiety `@matematicsolutions/*` (w tym KIO, Legalize i EU-compliance, które nie mają odpowiednika) zostały usunięte.
+
+- **Ustawienia → Konektory MCP** (ADMIN): instalacja (handshake MCP `tools/list`) i deinstalacja każdego serwera; opcjonalnie te same wpisy `lex-<serwer>` w `claude_desktop_config.json` Claude Desktop (kopia zapasowa `*.kopia-przed-lex`).
+- **CEIDG**: link do wniosku o klucz (https://dane.biznes.gov.pl/pl/portal/034872), pole na token i „Zatwierdź klucz” — kontrola kształtu JWT, próba API v3 (401/403 = odrzucony), zapis lokalny z uprawnieniami 600 (`%LOCALAPPDATA%\LexMachina\mcp\ceidg.token` albo `~/.lex-machina/mcp/`). Token zawiera PESEL właściciela — nigdy nie trafia do repozytorium.
+- Zmienne: `LEX_MCP_PACKAGE`, `LEX_MCP_STATE_DIR`, `LEX_CLAUDE_DESKTOP_CONFIG`, `CEIDG_API_KEY` (ma pierwszeństwo przed zapisanym kluczem).
+- Test na żywo: `npm run validate:g40-live` (lista narzędzi każdego serwera + zapytanie EUREKA).
+
 ## Current scope
 
 G0-G29 plus G27A/G28A, G31A/G31B/**G31C1**, G32, **G34A-G34E + G34F1 and G35A/G35B** are implemented on `feature/local-runtime`. G31A/G31B provide the storage/archive foundation. G34A/G34B add local identity/login/session controls. G34C/G34D add explicit case ownership, ACL-filtered case access, independent per-case CDKs, per-user envelopes and revoke-with-key-rotation. The workbench now lists ACL-visible cases and requires explicit selection/creation rather than creating a case on every mount. Heavy OCR/NER model weights are intentionally installed locally rather than downloaded in every CI run; CI verifies adapters, worker syntax, completeness contracts and fail-closed behavior.

@@ -19,12 +19,13 @@ $sourceTemplate = Join-Path $bootstrapRoot "mistral-nemo-web-grounded.jinja"
 $sourceBielikTemplate = Join-Path $bootstrapRoot "bielik-web-grounded.jinja"
 $pythonExe = Join-Path $runtime "python\python.exe"
 $pythonScripts = Join-Path $runtime "python\Scripts"
-$uvxExe = Join-Path $pythonScripts "uvx.exe"
 $nodeDir = Join-Path $runtime "node"
 $nodeExe = Join-Path $nodeDir "node.exe"
-$npxCmd = Join-Path $nodeDir "npx.cmd"
 $uodoServer = Join-Path $runtime "app\dist\uodo-official-mcp-server.js"
 $skillsRoot = Join-Path $runtime "corpus"
+# Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers) — jedyne źródłowe MCP prawne w konfiguracji llama.
+$lexMcp = Join-Path $skillsRoot "audyt-systemu-v4\mcp-servers\dist\lex-mcp.mjs"
+$lexMcpServers = @("isap","eurlex","saos","cbosa","krs","wl","nbp","eureka","sudop","uodo")
 $privacyVaultRoot = Join-Path $localRoot "privacy-vaults"
 
 if (-not (Test-Path -LiteralPath $pythonExe -PathType Leaf)) {
@@ -39,7 +40,7 @@ if (-not (Test-Path -LiteralPath $sourceLegalMcp -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $sourceDocumentsMcp -PathType Leaf)) {
   throw "LLAMA_NATIVE_DOCUMENTS_MCP_SOURCE_MISSING:$sourceDocumentsMcp"
 }
-foreach ($requiredRuntimeTool in @($uvxExe, $nodeExe, $npxCmd, $uodoServer)) {
+foreach ($requiredRuntimeTool in @($nodeExe, $uodoServer, $lexMcp)) {
   if (-not (Test-Path -LiteralPath $requiredRuntimeTool -PathType Leaf)) {
     throw "LLAMA_NATIVE_MCP_RUNTIME_TOOL_MISSING:$requiredRuntimeTool"
   }
@@ -112,87 +113,6 @@ $mcpConfig = [ordered]@{
         PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = "True"
       }
     }
-    prawo = [ordered]@{
-      command = $uvxExe
-      args = @("--from", "prawo-pl-mcp==0.1.4", "prawo-pl-mcp")
-      timeout_ms = 180000
-      env = [ordered]@{
-        PATH = $connectorPath
-        PYTHONUTF8 = "1"
-        PRAWO_PL_MCP_INIT_TIMEOUT = "180"
-        PRAWO_PL_MCP_TIMEOUT = "90"
-        PRAWO_PL_MCP_CMD_SAOS = ('"{0}" -y @matematicsolutions/mcp-saos@1.2.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_NSA = ('"{0}" -y @matematicsolutions/mcp-nsa@1.3.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_ISAP = ('"{0}" -y @matematicsolutions/mcp-isap@1.3.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_KRS = ('"{0}" -y @matematicsolutions/mcp-krs@1.1.1' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_EUREKA = ('"{0}" -y @matematicsolutions/mcp-eureka@0.2.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_KIO = ('"{0}" --from kio-orzeczenia-mcp==0.4.3 kio-orzeczenia-mcp' -f $uvxExe)
-        PRAWO_PL_MCP_CMD_UODO = ('"{0}" "{1}"' -f $nodeExe, $uodoServer)
-        PRAWO_PL_MCP_CMD_EU_SPARQL = ('"{0}" -y @matematicsolutions/mcp-eu-sparql@1.2.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_EU_COMPLIANCE = ('"{0}" -y @matematicsolutions/mcp-eu-compliance@0.4.0' -f $npxCmd)
-        PRAWO_PL_MCP_CMD_LEGALIZE = ('"{0}" --from legalize-mcp==0.2.4 legalize-mcp' -f $uvxExe)
-      }
-    }
-    saos = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-saos@1.2.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    nsa = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-nsa@1.3.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    isap = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-isap@1.3.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    krs = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-krs@1.1.1")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    eureka = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-eureka@0.2.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    kio = [ordered]@{
-      command = $uvxExe
-      args = @("--from", "kio-orzeczenia-mcp==0.4.3", "kio-orzeczenia-mcp")
-      timeout_ms = 120000
-      env = [ordered]@{ PATH = $connectorPath; PYTHONUTF8 = "1" }
-    }
-    uodo = [ordered]@{
-      command = $nodeExe
-      args = @($uodoServer)
-      timeout_ms = 45000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    eu_sparql = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-eu-sparql@1.2.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    eu_compliance = [ordered]@{
-      command = $npxCmd
-      args = @("-y", "@matematicsolutions/mcp-eu-compliance@0.4.0")
-      timeout_ms = 90000
-      env = [ordered]@{ PATH = $connectorPath }
-    }
-    legalize = [ordered]@{
-      command = $uvxExe
-      args = @("--from", "legalize-mcp==0.2.4", "legalize-mcp")
-      timeout_ms = 120000
-      env = [ordered]@{ PATH = $connectorPath; PYTHONUTF8 = "1" }
-    }
     uodo_official = [ordered]@{
       command = $nodeExe
       args = @($uodoServer)
@@ -201,6 +121,14 @@ $mcpConfig = [ordered]@{
         PATH = $connectorPath
       }
     }
+  }
+}
+foreach ($lexServer in $lexMcpServers) {
+  $mcpConfig.mcpServers[$lexServer] = [ordered]@{
+    command = $nodeExe
+    args = @($lexMcp, $lexServer)
+    timeout_ms = 90000
+    env = [ordered]@{ PATH = $connectorPath }
   }
 }
 [IO.File]::WriteAllText(
@@ -243,9 +171,9 @@ LEX_LOCAL_DOCUMENT_PRIVACY_POLICY_V1
 23. Odtworzenie danych wykonuj dopiero na końcu przez documents_privacy_deanonymize_text albo documents_privacy_finalize_document_file. Jeśli resolver fleksji zgłosi błąd w trybie strict, nie publikuj dokumentu jako finalnego.
 
 LEX_LEGAL_MCP_FEDERATION_POLICY_V1
-24. Do polskiego i unijnego researchu prawnego preferuj MCP "prawo" oraz właściwy bezpośredni MCP źródłowy przed ogólnym web_search.
-25. Bezpośrednio dostępne są prawo_*, saos_*, nsa_*, isap_*, krs_*, eureka_*, kio_*, uodo_*, eu_sparql_*, eu_compliance_* i legalize_*. Wynik discovery nie zastępuje odczytu dokumentu ani weryfikacji źródła.
-26. Dla treści polskich ustaw i rozporządzeń preferuj ISAP/ELI; dla orzeczeń używaj właściwego źródła (SAOS/NSA/KIO/UODO). Dla UODO zachowaj również uodo_official jako niezależny fallback oficjalnego API.
+24. Do polskiego i unijnego researchu prawnego preferuj konektory MCP Lex Machina (lex-mcp) przed ogólnym web_search.
+25. Bezpośrednio dostępne są isap_*, eurlex_*, saos_*, cbosa_*, krs_*, wl_*, nbp_*, eureka_*, sudop_* i uodo_*. Wynik discovery nie zastępuje odczytu dokumentu ani weryfikacji źródła.
+26. Dla treści polskich ustaw i rozporządzeń preferuj ISAP/ELI; dla orzeczeń używaj właściwego źródła (SAOS/CBOSA/UODO). Wynik CBOSA (NSA/WSA) to snapshot 🟨 bez awansu; brak trafień = OUT_OF_SCOPE. Dla UODO zachowaj również uodo_official jako niezależny fallback oficjalnego API.
 27. Do zewnętrznych MCP prawnych nie wysyłaj danych klienta, treści akt ani tokenów PII; przekazuj wyłącznie publiczne identyfikatory, sygnatury i neutralne frazy prawne.
 '@
 
@@ -289,8 +217,8 @@ $result = [ordered]@{
   legalMcpScript = $legalMcpScript
   documentsMcpScript = $documentsMcpScript
   privacyVaultRoot = $privacyVaultRoot
-  legalFederation = "prawo-pl-mcp==0.1.4"
-  legalFederationSources = @("saos","nsa","isap","krs","eureka","kio","uodo","eu-sparql","eu-compliance","legalize")
+  legalFederation = "lex-mcp.mjs"
+  legalFederationSources = $lexMcpServers
   legalSkillsRoot = $skillsRoot
   legalSkillCount = $skillCount
   mistralChatTemplate = $templatePath
@@ -309,17 +237,16 @@ $result = [ordered]@{
     "documents_privacy_inflect_token",
     "documents_privacy_deanonymize_text",
     "documents_privacy_finalize_document_file",
-    "prawo-pl-mcp federation",
-    "saos_*",
-    "nsa_*",
     "isap_*",
+    "eurlex_*",
+    "saos_*",
+    "cbosa_*",
     "krs_*",
+    "wl_*",
+    "nbp_*",
     "eureka_*",
-    "kio_*",
+    "sudop_*",
     "uodo_*",
-    "eu_sparql_*",
-    "eu_compliance_*",
-    "legalize_*",
     "uodo_official"
   )
 } | ConvertTo-Json -Compress

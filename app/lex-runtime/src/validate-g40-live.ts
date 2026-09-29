@@ -1,242 +1,70 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   LegalFederationToolRuntime
 } from "./legal-federation-tool-runtime.js";
+import {
+  LEX_MCP_SERVER_IDS,
+  LexMcpConnectorStore
+} from "./lex-mcp-connectors.js";
 
-const SOURCES = [
-  "saos",
-  "nsa",
-  "isap",
-  "krs",
-  "eureka",
-  "kio",
-  "uodo",
-  "eu-sparql",
-  "eu-compliance",
-  "legalize"
-] as const;
+// G40 — konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs):
+// każdy serwer bez klucza musi odpowiedzieć listą narzędzi; EUREKA dodatkowo zapytaniem na żywo.
+const skillsRoot =
+  process.env.LEX_SKILLS_PATH?.trim() ||
+  path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../Wersja rozwojowa rozpakowana"
+  );
 
-async function main():
-  Promise<void> {
-  const runtime =
-    new LegalFederationToolRuntime();
+async function main(): Promise<void> {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-g40-"));
+  const connectors = new LexMcpConnectorStore(
+    skillsRoot,
+    stateDir,
+    path.join(stateDir, "brak-claude-desktop", "claude_desktop_config.json")
+  );
+  const runtime = new LegalFederationToolRuntime(undefined, undefined, connectors);
+  const sources = LEX_MCP_SERVER_IDS.filter((source) => source !== "ceidg" || connectors.ceidgKey());
 
   try {
-    const [coverage] =
-      await runtime.runTools([
-        {
-          id:
-            "g40-coverage",
-          name:
-            "federated_legal_coverage",
-          input: {}
-        }
+    const [coverage] = await runtime.runTools([
+      { id: "g40-coverage", name: "federated_legal_coverage", input: {} }
+    ]);
+    if (!coverage || coverage.content.includes("SOURCE_UNAVAILABLE")) {
+      throw new Error("G40_COVERAGE_FAILED");
+    }
+
+    for (const source of sources) {
+      const [result] = await runtime.runTools([
+        { id: `g40-${source}`, name: "list_federated_legal_sources", input: { sourceId: source } }
       ]);
-
-    if (
-      !coverage ||
-      coverage.content.includes(
-        "SOURCE_UNAVAILABLE"
-      )
-    ) {
-      throw new Error(
-        "G40_COVERAGE_FAILED"
-      );
+      const payload = JSON.parse(result?.content ?? "{}") as { status?: string; tools?: Array<{ name: string }> };
+      if (payload.status !== "OK" || !payload.tools?.length) {
+        throw new Error(`G40_SOURCE_UNAVAILABLE:${source}:${(result?.content ?? "<missing>").slice(0, 800)}`);
+      }
+      console.log("G40_SOURCE_PASS", source, payload.tools.map((tool) => tool.name).join(","));
     }
 
-    for (
-      const source
-      of SOURCES
-    ) {
-      const [result] =
-        await runtime.runTools([
-          {
-            id:
-              "g40-" +
-              source,
-            name:
-              "list_federated_legal_sources",
-            input: {
-              sourceId:
-                source
-            }
-          }
-        ]);
-
-      if (!result) {
-        throw new Error(
-          "G40_SOURCE_NO_RESULT:" +
-            source
-        );
-      }
-
-      if (
-        result.content.includes(
-          "SOURCE_UNAVAILABLE"
-        ) ||
-        result.content.includes(
-          "[source_unavailable]"
-        )
-      ) {
-        throw new Error(
-          "G40_SOURCE_UNAVAILABLE:" +
-            source +
-            ":" +
-            result.content.slice(
-              0,
-              800
-            )
-        );
-      }
-
-      if (
-        source === "eureka"
-      ) {
-        const [probe] =
-          await runtime.runTools([
-            {
-              id:
-                "g40-eureka-search",
-              name:
-                "search_federated_legal_sources",
-              input: {
-                source:
-                  "eureka",
-                query:
-                  "VAT",
-                limit:
-                  1
-              }
-            }
-          ]);
-        if (
-          !probe ||
-          probe.content.includes(
-            "SOURCE_UNAVAILABLE"
-          )
-        ) {
-          throw new Error(
-            "G40_EUREKA_LIVE_SEARCH_FAILED"
-          );
-        }
-        console.log(
-          "G40_LIVE_QUERY_PASS",
-          "eureka"
-        );
-      }
-
-      if (
-        source === "uodo"
-      ) {
-        const [probe] =
-          await runtime.runTools([
-            {
-              id:
-                "g40-uodo-recent",
-              name:
-                "call_federated_legal_source",
-              input: {
-                source:
-                  "uodo",
-                tool:
-                  "uodo_recent",
-                arguments: {
-                  limit:
-                    1
-                }
-              }
-            }
-          ]);
-        if (
-          !probe ||
-          probe.content.includes(
-            "SOURCE_UNAVAILABLE"
-          ) ||
-          !probe.content.includes(
-            "orzeczenia.uodo.gov.pl"
-          )
-        ) {
-          throw new Error(
-            "G40_UODO_OFFICIAL_FALLBACK_FAILED:" +
-              (
-                probe?.content ??
-                "<missing>"
-              ).slice(
-                0,
-                800
-              )
-          );
-        }
-        console.log(
-          "G40_LIVE_QUERY_PASS",
-          "uodo-official-fallback"
-        );
-      }
-
-      console.log(
-        "G40_SOURCE_PASS",
-        source
-      );
+    const [probe] = await runtime.runTools([
+      { id: "g40-eureka-search", name: "search_federated_legal_sources", input: { source: "eureka", query: "VAT", limit: 1 } }
+    ]);
+    const probeStatus = (JSON.parse(probe?.content ?? "{}") as { status?: string }).status;
+    if (!probe || probeStatus === "SOURCE_UNAVAILABLE" || probeStatus === "ERROR") {
+      throw new Error(`G40_EUREKA_LIVE_SEARCH_FAILED:${(probe?.content ?? "<missing>").slice(0, 800)}`);
     }
+    console.log("G40_LIVE_QUERY_PASS", "eureka");
 
-    const [uodoProbe] =
-      await runtime.runTools([
-        {
-          id:
-            "g40-uodo-live",
-          name:
-            "call_federated_legal_source",
-          input: {
-            source:
-              "uodo",
-            tool:
-              "uodo_stats",
-            arguments: {}
-          }
-        }
-      ]);
-    if (
-      !uodoProbe ||
-      uodoProbe.content.includes(
-        "SOURCE_UNAVAILABLE"
-      ) ||
-      uodoProbe.content.includes(
-        "UODO_HTTP_"
-      )
-    ) {
-      throw new Error(
-        "G40_UODO_LIVE_API_FAILED:" +
-          (
-            uodoProbe?.content ??
-            "NO_RESULT"
-          ).slice(
-            0,
-            1000
-          )
-      );
-    }
-    console.log(
-      "G40_UODO_LIVE_API_PASS"
-    );
-
-    console.log(
-      "G40_LEGAL_MCP_FLEET_PASS",
-      SOURCES.join(",")
-    );
+    console.log("G40_LEX_MCP_CONNECTORS_PASS", sources.join(","));
   } finally {
     await runtime.close();
+    fs.rmSync(stateDir, { recursive: true, force: true });
   }
 }
 
-main().catch(
-  (error) => {
-    console.error(
-      error instanceof Error
-        ? error.stack ??
-          error.message
-        : String(
-            error
-          )
-    );
-    process.exitCode = 1;
-  }
-);
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+  process.exitCode = 1;
+});

@@ -6,6 +6,7 @@ import { MaintenancePanel } from "./MaintenancePanel.js";
 import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { AdminSupportPanel } from "./AdminSupportPanel.js";
+import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
 import type {
   AuthMeResponse,
   AuthenticatedUser
@@ -58,6 +59,11 @@ export default function App({
               />
               <AdminSupportPanel />
             </>
+          ) : null,
+        mcp:
+          user.appRole ===
+          "ADMIN" ? (
+            <McpConnectorsPanel />
           ) : null,
         maintenance: (
           <MaintenancePanel

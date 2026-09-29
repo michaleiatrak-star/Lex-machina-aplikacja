@@ -3,6 +3,7 @@ import { LocalOcrCorrector } from "../ocr-correction.js";
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLexHttpApp } from "./app.js";
@@ -10,6 +11,8 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
+import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
 import { DynamicModelCatalog } from "../providers/model-catalog.js";
 import { EnvironmentCredentialResolver, MemoryOverlayCredentialResolver } from "../providers/credentials.js";
@@ -255,7 +258,13 @@ export async function startLocalServer(options) {
     const privacyNamedEntities = new LocalLlmPrivacyNamedEntityRecognizer(providerGateway, localModels, stanzaNamedEntities);
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
     const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor());
-    const legalFederationTools = new LegalFederationToolRuntime();
+    // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
+    const mcpConnectors = new LexMcpConnectorStore([
+        runtimeRoot,
+        baseRuntimeRoot,
+        bundledRuntimeRoot()
+    ].find((root) => fs.existsSync(lexMcpPackagePath(root))) ?? runtimeRoot);
+    const legalFederationTools = new LegalFederationToolRuntime(undefined, undefined, mcpConnectors);
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();
     // Official ELI texts of every act named in the domain act maps; refreshed
@@ -338,6 +347,10 @@ export async function startLocalServer(options) {
         authService,
         localModels,
         maintenance
+    });
+    registerMcpConnectorRoutes(app, {
+        authService,
+        connectors: mcpConnectors
     });
     app.use(coreApp);
     return new Promise((resolve, reject) => {

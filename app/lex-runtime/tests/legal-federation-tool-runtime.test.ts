@@ -57,16 +57,17 @@ describe(
         expect(
           source.enum
         ).toEqual([
-          "saos",
-          "nsa",
           "isap",
+          "eurlex",
+          "saos",
+          "cbosa",
           "krs",
+          "wl",
+          "ceidg",
+          "nbp",
           "eureka",
-          "kio",
-          "uodo",
-          "eu-sparql",
-          "eu-compliance",
-          "legalize"
+          "sudop",
+          "uodo"
         ]);
       }
     );
@@ -93,7 +94,7 @@ describe(
             result!.content
           ) as {
             status: string;
-            aggregatorPackage: string;
+            connectorPackage: string;
             sources: Array<{
               source: string;
               fallback: string;
@@ -122,13 +123,13 @@ describe(
           payload.status
         ).toBe("OK");
         expect(
-          payload.aggregatorPackage
-        ).toBe(
-          "prawo-pl-mcp==0.1.4"
+          payload.connectorPackage
+        ).toContain(
+          "lex-mcp.mjs"
         );
         expect(
           payload.sources
-        ).toHaveLength(10);
+        ).toHaveLength(11);
         expect(
           payload.sources.map(
             (source) =>
@@ -186,10 +187,10 @@ describe(
           payload.sources.find(
             (source) =>
               source.source ===
-              "legalize"
+              "cbosa"
           )?.sourcePolicy
         ).toMatchObject({
-          sourceTier: "R3",
+          sourceTier: "R2A",
           crossCheckRequired:
             true
         });
@@ -510,7 +511,7 @@ describe(
         const arrayPayload =
           JSON.parse(
             annotateFederatedLegalContent(
-              "legalize",
+              "unknown-source",
               JSON.stringify([
                 {
                   id: "x"
