@@ -56,6 +56,10 @@ export type VerificationRecord = {
   // NSA/WSA (CBOSA) material is kept as a dated snapshot and never promoted
   // to VERIFIED/SUPPORTED.
   verificationCeiling?: "SNAPSHOT_NO_PROMOTION";
+  // Przepis odczytany z lokalnej kopii ELI (CoreLawIndex), której nowelizacji nie
+  // sprawdzono w ostatnich 24 h: SUPPORTED z datą kopii, nigdy VERIFIED.
+  supportScope?: "LOCAL_ELI_COPY";
+  localCopyFetchedAt?: string;
 };
 
 function normalizeClaim(value: string): string {
@@ -113,8 +117,22 @@ export class VerificationLedger {
       );
     }
 
+    const localCopySupport =
+      record.status === "SUPPORTED" &&
+      record.supportScope === "LOCAL_ELI_COPY" &&
+      (record.kind === "statute" || record.kind === "journal");
+    if (
+      localCopySupport &&
+      (!record.evidence?.trim() || !record.localCopyFetchedAt?.trim())
+    ) {
+      throw new Error(
+        "Local ELI copy support requires evidence and the copy date."
+      );
+    }
+
     if (
       record.status === "SUPPORTED" &&
+      !localCopySupport &&
       (
         record.caseScope !==
           "PROPOSITION_SUPPORT" ||

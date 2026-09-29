@@ -2,6 +2,7 @@ import {
   VerificationLedger,
   type VerificationRecord
 } from "./verification-ledger.js";
+import { localCopyMarker } from "./core-law-verification.js";
 
 export type DetectedLegalReference = {
   claim: string;
@@ -14,6 +15,7 @@ export type FinalizationFinding = {
   reference: DetectedLegalReference;
   status:
     | "VERIFIED"
+    | "SUPPORTED_LOCAL_COPY"
     | "UNVERIFIED_MARKED"
     | "MISSING_LEDGER_RECORD"
     | "MISSING_VERIFICATION_MARKER"
@@ -245,6 +247,24 @@ export class FinalizationGate {
         continue;
       }
 
+      if (
+        record.status === "SUPPORTED" &&
+        record.supportScope === "LOCAL_ELI_COPY"
+      ) {
+        const expectedMarker = localCopyMarker(record);
+        findings.push({
+          reference,
+          status:
+            expectedMarker &&
+            reference.lineText.includes(expectedMarker) &&
+            !unexpectedLineMarker
+              ? "SUPPORTED_LOCAL_COPY"
+              : "MISSING_VERIFICATION_MARKER",
+          record
+        });
+        continue;
+      }
+
       if (UNVERIFIED_MARKER.test(reference.lineText)) {
         findings.push({
           reference,
@@ -472,7 +492,11 @@ export class FinalizationGate {
 
     const degraded =
       !blocked &&
-      findings.some((finding) => finding.status === "UNVERIFIED_MARKED");
+      findings.some(
+        (finding) =>
+          finding.status === "UNVERIFIED_MARKED" ||
+          finding.status === "SUPPORTED_LOCAL_COPY"
+      );
 
     return {
       gate: "G8_HARD_GATE_FINALIZATION",
@@ -483,6 +507,20 @@ export class FinalizationGate {
       caseSupportFindings
     };
   }
+}
+
+/**
+ * DEGRADED wyłącznie przez przepisy z lokalnej kopii ELI (SUPPORTED z datą kopii):
+ * dokument można wydać z jawnym znacznikiem kopii. Każdy inny powód DEGRADED
+ * (np. [NIEWERYFIKOWANE]) nadal wymaga decyzji człowieka.
+ */
+export function isLocalCopyOnlyDegradation(
+  statuses: readonly string[]
+): boolean {
+  return (
+    statuses.length > 0 &&
+    statuses.every((status) => status === "SUPPORTED_LOCAL_COPY")
+  );
 }
 
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";

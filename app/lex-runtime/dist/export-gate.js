@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { isLocalCopyOnlyDegradation } from "./finalization-gate.js";
 function bytesOf(content) {
     return typeof content === "string"
         ? new TextEncoder().encode(content)
@@ -77,7 +78,18 @@ export class ExportGate {
             audit: args.audit,
             closeSession: false
         });
-        if (finalization.result !== "PASS") {
+        const localCopyOnly = finalization.result === "DEGRADED" &&
+            isLocalCopyOnlyDegradation(finalization.findings
+                .filter((finding) => finding.status !== "VERIFIED")
+                .map((finding) => finding.status));
+        if (localCopyOnly) {
+            args.audit.record("gate", "LOCAL_ELI_COPY_SUPPORT", "DEGRADED", {
+                references: finalization.findings
+                    .filter((finding) => finding.status === "SUPPORTED_LOCAL_COPY")
+                    .length
+            });
+        }
+        if (finalization.result !== "PASS" && !localCopyOnly) {
             const reason = finalization.result === "DEGRADED"
                 ? "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
                 : "G8_FINALIZATION_BLOCKED";

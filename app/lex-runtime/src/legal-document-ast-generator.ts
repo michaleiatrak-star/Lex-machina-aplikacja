@@ -1,3 +1,4 @@
+import { isLocalCopyOnlyDegradation } from "./finalization-gate.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionDocumentAttachment,
@@ -167,9 +168,17 @@ export class LegalDocumentAstGenerator {
         : {})
     });
 
+    const finalizationAccepted =
+      result.finalization === "PASS" ||
+      (
+        result.finalization === "DEGRADED" &&
+        isLocalCopyOnlyDegradation(
+          result.blockedReferences.map((reference) => reference.status)
+        )
+      );
     if (
       result.status !== "DRAFT_PRESENTABLE" ||
-      result.finalization !== "PASS" ||
+      !finalizationAccepted ||
       result.audit.result !== "PASS" ||
       !result.answer
     ) {

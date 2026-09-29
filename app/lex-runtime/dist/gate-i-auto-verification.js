@@ -1,3 +1,4 @@
+import { localCopyMarker } from "./core-law-verification.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 const ACT_ALIAS = /\b(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)\b/giu;
 const SUPREME_COURT = /\b(?:SN|SĄD\s+NAJWYŻSZY|SĄDU\s+NAJWYŻSZEGO)\b/iu;
@@ -165,6 +166,12 @@ function marker(record) {
     if (record.status ===
         "UNVERIFIED") {
         return "⚠️ [NIEWERYFIKOWANE]";
+    }
+    if (record.status ===
+        "SUPPORTED" &&
+        record.supportScope ===
+            "LOCAL_ELI_COPY") {
+        return localCopyMarker(record);
     }
     if (record.status !==
         "VERIFIED" ||

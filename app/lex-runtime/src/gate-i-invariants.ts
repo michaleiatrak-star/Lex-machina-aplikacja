@@ -359,7 +359,9 @@ function citationLedger(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" &&
+          finding.status !==
+            "SUPPORTED_LOCAL_COPY"
       );
   return {
     id:
@@ -413,7 +415,9 @@ function citations(
       .filter(
         (finding) =>
           finding.status !==
-            "VERIFIED"
+            "VERIFIED" &&
+          finding.status !==
+            "SUPPORTED_LOCAL_COPY"
       );
   return {
     id:
