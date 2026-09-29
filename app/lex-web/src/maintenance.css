@@ -186,3 +186,10 @@
 .maintenance-panel-embedded > summary {
   cursor: default;
 }
+
+.maintenance-channel {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: 13px;
+}

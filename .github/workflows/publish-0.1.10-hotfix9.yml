@@ -99,9 +99,12 @@ jobs:
           - polskie nazwy narzędzi i pól zamiast nazw technicznych (np. „Decyzje Prezesa UODO”, „Słowo kluczowe lub fragment tekstu”, „Prawomocność”, „Data od”), pełne słowa na listach wyboru (np. „częściowo prawomocna”), daty z kalendarzem;
           - wyszukiwarki po słowie kluczowym lub fragmencie tekstu na początku listy: orzeczenia SAOS (treść, teza, uzasadnienie), NSA/WSA (CBOSA), interpretacje EUREKA, decyzje UODO, TSUE (tytuł), fragment w treści aktu (ISAP).
 
-          ### Aktualizacja skilli
-          - wersja aplikacji w runtime 0.1.10 zamiast zaszytej 0.1.3;
-          - status aktualizacji skilli z przyczyną: brak wydania w repozytorium (pre-release i tagi inne niż x.y.z są pomijane), odmowa GitHub (limit zapytań) albo brak połączenia, zamiast samego UNAVAILABLE.
+          ### Skille: kanał stabilny albo rozwojowy z repozytorium Lex Machina
+          - Ustawienia -> Konserwacja -> Skille: wybór kanału (wersja stabilna / wersja rozwojowa) i przycisk „Odśwież skille”; skille pochodzą z repozytorium Lex Machina, nie z wydań aplikacji;
+          - kanał stabilny = najnowszy katalog „Wersja stabilna rozpakowana <data>”, więc awans wersji rozwojowej do stabilnej nie wymaga zmian w aplikacji;
+          - pobranie przypięte do commita gałęzi main; każdy plik kanału sprawdzany sumą git z drzewa tego commita (brak, nadmiar albo zmiana pliku = odmowa), potem walidacja strukturalna skilli; instalacja jako nakładka z kopią poprzedniej wersji i wycofaniem przy nieudanym starcie;
+          - stan: zainstalowany kanał i commit, najnowszy commit w kanale, przyczyna niedostępności (limit GitHub, brak połączenia);
+          - wersja aplikacji w runtime 0.1.10 zamiast zaszytej 0.1.3.
 
           ### Weryfikacja przepisów (z hotfix 8)
           - modele w chmurze (ChatGPT, Claude): każdy akt, także KC/KPC/KK/KPK, weryfikowany w źródle Sejm ELI z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim); lokalna kopia (RAG) wyłącznie przy awarii samego ELI, a wynik ma wtedy wyraźną informację (sourceNotice: ELI niedostępne, data kopii), którą model musi przekazać przy przepisie; odmowy merytoryczne (np. nowelizacje po t.j.) nie przechodzą na kopię;

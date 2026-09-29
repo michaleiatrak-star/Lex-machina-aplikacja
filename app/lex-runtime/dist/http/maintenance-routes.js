@@ -1,4 +1,5 @@
 import { AuthError } from "../auth/service.js";
+import { isSkillChannel } from "../skill-channel.js";
 function authenticated(req, authService) {
     return authService.authenticateAuthorization(req.get("authorization"));
 }
@@ -39,6 +40,7 @@ function sendMaintenanceError(res, error) {
             : code.includes("UNKNOWN")
                 ? 404
                 : code.includes("MISSING") ||
+                    code.startsWith("SKILL_CHANNEL_") ||
                     code.includes("NOT_VERIFIED") ||
                     code.includes("VALIDATION") ||
                     code.includes("PROVISIONING_FAILED")
@@ -312,6 +314,37 @@ export function registerMaintenanceRoutes(app, dependencies) {
             return;
         try {
             res.json(await maintenance.skillStatus());
+        }
+        catch (error) {
+            sendMaintenanceError(res, error);
+        }
+    });
+    // Skille z repozytorium Lex Machina: kanał rozwojowy albo stabilny.
+    app.get("/api/skills/channel/status", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const channel = req.query.channel;
+        if (!isSkillChannel(channel)) {
+            res.status(400).json({ error: "SKILL_CHANNEL_INVALID" });
+            return;
+        }
+        try {
+            res.json(await maintenance.skillChannelStatus(channel));
+        }
+        catch (error) {
+            sendMaintenanceError(res, error);
+        }
+    });
+    app.post("/api/skills/channel/refresh", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const channel = req.body?.channel;
+        if (!isSkillChannel(channel)) {
+            res.status(400).json({ error: "SKILL_CHANNEL_INVALID" });
+            return;
+        }
+        try {
+            res.json(await maintenance.refreshSkillsFromChannel(channel));
         }
         catch (error) {
             sendMaintenanceError(res, error);

@@ -5,21 +5,45 @@ import {
 } from "react";
 import {
   ApiError,
-  applySkillUpdate,
   downloadApplicationUpdate,
-  getSkillUpdateStatus,
+  getSkillChannelStatus,
   getUpdateStatus,
   installStagedApplicationUpdate,
   isDesktopShell,
+  refreshSkillsFromChannel,
   type ApplicationUpdateDownloadResponse,
   type AuthenticatedUser,
-  type SkillUpdateStatusResponse,
+  type SkillChannel,
+  type SkillChannelStatusResponse,
   type UpdateStatusResponse
 } from "./api.js";
 import {
   useFloatingPanelDrag
 } from "./use-floating-panel.js";
 import "./maintenance.css";
+
+const CHANNEL_LABEL: Record<SkillChannel, string> = {
+  stable: "stabilna",
+  development: "rozwojowa"
+};
+
+function shortDate(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString("pl-PL") : "—";
+}
+
+function channelUnavailableText(reason: string | undefined): string {
+  if (!reason) return "Nie udało się sprawdzić kanału skilli.";
+  if (/GITHUB_HTTP_(403|429)/.test(reason)) {
+    return "GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę.";
+  }
+  if (/fetch failed|ENOTFOUND|ECONN|timeout|aborted/i.test(reason)) {
+    return "Brak połączenia z GitHub — nie sprawdzono kanału skilli.";
+  }
+  if (reason === "SKILL_CHANNEL_DIRECTORY_MISSING") {
+    return "W repozytorium Lex Machina nie ma katalogu tego kanału.";
+  }
+  return `Nie udało się sprawdzić kanału skilli (${reason}).`;
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) {
@@ -62,8 +86,13 @@ export function MaintenancePanel({
 }) {
   const [appStatus, setAppStatus] =
     useState<UpdateStatusResponse | null>(null);
+  const [channel, setChannel] =
+    useState<SkillChannel>("stable");
+  // Bez wyboru użytkownika panel pokazuje kanał zainstalowanych skilli (znacznik nakładki).
+  const [channelChosen, setChannelChosen] =
+    useState(false);
   const [skillStatus, setSkillStatus] =
-    useState<SkillUpdateStatusResponse | null>(null);
+    useState<SkillChannelStatusResponse | null>(null);
   const [staged, setStaged] =
     useState<ApplicationUpdateDownloadResponse | null>(null);
   const [busy, setBusy] = useState<
@@ -82,8 +111,7 @@ export function MaintenancePanel({
   const appUpdateAvailable =
     appStatus?.status === "AVAILABLE";
   const skillUpdateAvailable =
-    skillStatus?.status === "AVAILABLE" &&
-    skillStatus.bundleReady;
+    skillStatus?.status === "AVAILABLE";
 
   const badge = useMemo(() => {
     if (appUpdateAvailable || skillUpdateAvailable) {
@@ -99,7 +127,9 @@ export function MaintenancePanel({
     skillUpdateAvailable
   ]);
 
-  async function refresh(): Promise<void> {
+  async function refresh(
+    selected: SkillChannel = channel
+  ): Promise<void> {
     if (!desktop || busy) return;
     setBusy("refresh");
     setError("");
@@ -108,11 +138,17 @@ export function MaintenancePanel({
         await Promise.all([
           getUpdateStatus(),
           user.appRole === "ADMIN"
-            ? getSkillUpdateStatus()
+            ? getSkillChannelStatus(selected)
             : Promise.resolve(null)
         ]);
       setAppStatus(application);
-      setSkillStatus(skills);
+      const installedChannel = skills?.installed?.channel;
+      if (!channelChosen && installedChannel && installedChannel !== selected) {
+        setChannel(installedChannel);
+        setSkillStatus(await getSkillChannelStatus(installedChannel));
+      } else {
+        setSkillStatus(skills);
+      }
     } catch (problem) {
       setError(friendlyError(problem));
     } finally {
@@ -181,29 +217,34 @@ export function MaintenancePanel({
   async function updateSkills(): Promise<void> {
     if (
       user.appRole !== "ADMIN" ||
-      busy ||
-      !skillUpdateAvailable
+      busy
     ) {
       return;
     }
     setBusy("skills");
     setError("");
     setMessage(
-      "Pobieram, waliduję i atomowo aktywuję nowy pakiet skilli."
+      `Pobieram skille z kanału ${CHANNEL_LABEL[channel]} repozytorium Lex Machina, sprawdzam sumę każdego pliku i strukturę, potem aktywuję.`
     );
     try {
-      const result = await applySkillUpdate();
+      const result = await refreshSkillsFromChannel(channel);
       setMessage(
-        `Skille zaktualizowano z ${result.previousVersion} do ${result.installedVersion}. Uruchom ponownie program, aby runtime załadował nowy pakiet.`
+        `Skille odświeżone z kanału ${CHANNEL_LABEL[result.channel]} (${result.directory}, commit ${result.commit.slice(0, 7)}, ${result.files} plików). Uruchom ponownie program, aby runtime załadował skille; przy nieudanym starcie wróci poprzednia wersja.`
       );
-      const next = await getSkillUpdateStatus();
-      setSkillStatus(next);
+      setSkillStatus(await getSkillChannelStatus(channel));
     } catch (problem) {
       setMessage("");
       setError(friendlyError(problem));
     } finally {
       setBusy(null);
     }
+  }
+
+  function selectChannel(next: SkillChannel): void {
+    setChannel(next);
+    setChannelChosen(true);
+    setSkillStatus(null);
+    void refresh(next);
   }
 
   if (!desktop) return null;
@@ -374,7 +415,9 @@ export function MaintenancePanel({
               <strong>Skille</strong>
               <small>
                 {skillStatus
-                  ? `${skillStatus.currentVersion} → ${skillStatus.latestVersion ?? "—"}`
+                  ? skillStatus.installed
+                    ? `zainstalowane: ${CHANNEL_LABEL[skillStatus.installed.channel]}, commit ${skillStatus.installed.commit.slice(0, 7)} (${shortDate(skillStatus.installed.installedAt)})`
+                    : "zainstalowane: wbudowane w instalator aplikacji"
                   : user.appRole === "ADMIN"
                     ? "sprawdzanie…"
                     : "status dostępny administratorowi"}
@@ -384,38 +427,38 @@ export function MaintenancePanel({
               {skillStatus?.status === "UNAVAILABLE"
                 ? "niedostępne"
                 : skillStatus?.status === "AVAILABLE"
-                  ? "dostępna aktualizacja"
+                  ? "do odświeżenia"
                   : skillStatus?.status === "UP_TO_DATE"
                     ? "aktualne"
                     : "—"}
             </span>
           </div>
 
+          {user.appRole === "ADMIN" ? (
+            <label className="maintenance-channel">
+              Kanał skilli (repozytorium Lex Machina)
+              <select
+                value={channel}
+                disabled={Boolean(busy)}
+                onChange={(event) =>
+                  selectChannel(event.target.value === "development" ? "development" : "stable")
+                }
+              >
+                <option value="stable">Wersja stabilna</option>
+                <option value="development">Wersja rozwojowa</option>
+              </select>
+            </label>
+          ) : null}
+
+          {skillStatus?.latest ? (
+            <small>
+              Najnowsze w kanale: {skillStatus.latest.directory}, commit {skillStatus.latest.commit.slice(0, 7)} z {shortDate(skillStatus.latest.committedAt)}, {skillStatus.latest.files} plików.
+            </small>
+          ) : null}
+
           {skillStatus?.status === "UNAVAILABLE" ? (
             <small className="maintenance-trust-warning">
-              {skillStatus.unavailableReason === "NO_RELEASE"
-                ? `W repozytorium ${skillStatus.repository ?? "Lex Machina"} nie ma wydania skilli (pre-release i tagi inne niż x.y.z są pomijane).`
-                : skillStatus.unavailableReason === "HTTP_403" || skillStatus.unavailableReason === "HTTP_429"
-                  ? "GitHub odrzucił sprawdzenie (limit zapytań bez logowania). Spróbuj ponownie za godzinę."
-                  : skillStatus.unavailableReason === "NETWORK_ERROR"
-                    ? "Brak połączenia z GitHub — nie sprawdzono aktualizacji skilli."
-                    : `Nie udało się sprawdzić aktualizacji skilli${skillStatus.unavailableReason ? ` (${skillStatus.unavailableReason})` : ""}.`}
-            </small>
-          ) : null}
-
-          {skillStatus?.signatureMode === "UNSIGNED_ALLOWED" ? (
-            <small className="maintenance-trust-warning">
-              Skille mogą być aktualizowane bez Ed25519 wyłącznie z oficjalnego GitHub Releases Lex Machina. Indeks JSON, zgodność wersji, SHA-256 assetu i bundla, rozmiar oraz walidacja strukturalna nadal są obowiązkowe.
-            </small>
-          ) : null}
-
-          {skillStatus?.blockedReason ? (
-            <small className="maintenance-trust-warning">
-              {skillStatus.blockedReason === "SIGNER_POLICY_MISSING"
-                ? "Aktualizacja skilli jest zablokowana przez politykę zaufania."
-                : skillStatus.blockedReason === "INDEX_MISSING"
-                  ? "Release nie zawiera wymaganego indeksu skilli JSON."
-                  : "W trybie wymagającym podpisu release nie zawiera kompletnego indeksu .json + .sig."}
+              {channelUnavailableText(skillStatus.unavailableReason)}
             </small>
           ) : null}
 
@@ -424,15 +467,15 @@ export function MaintenancePanel({
               type="button"
               disabled={
                 Boolean(busy) ||
-                !skillUpdateAvailable
+                skillStatus?.status === "UNAVAILABLE"
               }
               onClick={() =>
                 void updateSkills()
               }
             >
               {busy === "skills"
-                ? "Walidacja i aktywacja…"
-                : "Zaktualizuj skille"}
+                ? "Pobieranie, weryfikacja i aktywacja…"
+                : "Odśwież skille"}
             </button>
           ) : null}
         </section>

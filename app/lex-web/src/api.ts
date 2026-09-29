@@ -2368,6 +2368,61 @@ export function getSkillUpdateStatus():
   );
 }
 
+export type SkillChannel = "stable" | "development";
+
+export type SkillChannelStatusResponse = {
+  channel: SkillChannel;
+  repository: string;
+  status: "UP_TO_DATE" | "AVAILABLE" | "UNAVAILABLE";
+  checkedAt: string;
+  installed: {
+    channel: SkillChannel;
+    commit: string;
+    directory: string;
+    treeSha: string;
+    installedAt: string;
+    health: string | null;
+  } | null;
+  latest?: {
+    commit: string;
+    committedAt: string | null;
+    directory: string;
+    treeSha: string;
+    files: number;
+  };
+  unavailableReason?: string;
+};
+
+export type SkillChannelRefreshResponse = {
+  channel: SkillChannel;
+  commit: string;
+  directory: string;
+  files: number;
+  installedAt: string;
+  restartRequired: true;
+  skillRoot: string;
+};
+
+export function getSkillChannelStatus(
+  channel: SkillChannel
+): Promise<SkillChannelStatusResponse> {
+  return json<SkillChannelStatusResponse>(
+    `/api/skills/channel/status?channel=${encodeURIComponent(channel)}`
+  );
+}
+
+export function refreshSkillsFromChannel(
+  channel: SkillChannel
+): Promise<SkillChannelRefreshResponse> {
+  return json<SkillChannelRefreshResponse>(
+    "/api/skills/channel/refresh",
+    {
+      method: "POST",
+      body: JSON.stringify({ channel })
+    }
+  );
+}
+
 export function applySkillUpdate():
   Promise<SkillUpdateApplyResponse> {
   return json<SkillUpdateApplyResponse>(

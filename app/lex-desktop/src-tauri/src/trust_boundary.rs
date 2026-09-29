@@ -1406,6 +1406,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
             method == "GET"
                 || (path == "/api/cases" && method == "POST")
         }
+        "/api/skills/channel/status" => method == "GET",
+        "/api/skills/channel/refresh" => method == "POST",
         "/api/update/download"
         | "/api/local-models/provision"
         | "/api/local-models/repair"
@@ -1550,6 +1552,7 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
             "/api/local-models/provision"
                 | "/api/local-models/repair"
                 | "/api/local-models/update/apply"
+                | "/api/skills/channel/refresh"
         )
     {
         return Duration::from_secs(
@@ -2001,6 +2004,14 @@ mod tests {
         assert!(!route_allowed("GET", "/api/mcp-search/query"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/SAOS/tools"));
+    }
+
+    #[test]
+    fn allowlist_admits_skill_channel_routes() {
+        assert!(route_allowed("GET", "/api/skills/channel/status"));
+        assert!(route_allowed("POST", "/api/skills/channel/refresh"));
+        assert!(!route_allowed("POST", "/api/skills/channel/status"));
+        assert!(!route_allowed("GET", "/api/skills/channel/refresh"));
     }
 
     #[test]
