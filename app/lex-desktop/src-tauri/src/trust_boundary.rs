@@ -1391,6 +1391,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/deanonymization/preview"
         | "/api/privacy/name-forms"
         | "/api/sessions/execute"
+        | "/api/sessions/document-fit"
         | "/api/routes/validate" => method == "POST",
         "/api/cases"
         | "/api/skills"
@@ -2004,6 +2005,13 @@ mod tests {
         assert!(!route_allowed("GET", "/api/mcp-search/query"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/SAOS/tools"));
+    }
+
+    #[test]
+    fn allowlist_admits_document_fit_check() {
+        // Pasek okna modelu i blokada zbyt dużych plików przed wysłaniem.
+        assert!(route_allowed("POST", "/api/sessions/document-fit"));
+        assert!(!route_allowed("GET", "/api/sessions/document-fit"));
     }
 
     #[test]

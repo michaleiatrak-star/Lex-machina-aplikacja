@@ -1,5 +1,7 @@
 # Lex Machina App — local runtime
 
+Dokumentacja: [użytkowa](../docs/APLIKACJA-DOKUMENTACJA.md) · [techniczna](../docs/DOKUMENTACJA-TECHNICZNA.md) · [zmiany 0.1.10](../docs/ZMIANY-0.1.10.md)
+
 This directory contains the application/runtime workstream for running the development Lex Machina corpus outside a vendor-specific host.
 
 ## Source of truth
