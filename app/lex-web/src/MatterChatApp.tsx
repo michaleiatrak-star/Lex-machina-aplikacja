@@ -166,6 +166,7 @@ import {
   validMarks
 } from "./restoration-review.js";
 import "./chat.css";
+import { McpSearchPanel } from "./McpSearchPanel.js";
 import "./workspace.css";
 
 type TabId =
@@ -175,6 +176,7 @@ type TabId =
   | "skills"
   | "case"
   | "firm"
+  | "search"
   | "settings";
 
 export type SettingsSection =
@@ -3450,6 +3452,7 @@ export default function MatterChatApp({
             ["skills", "Skille"],
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
+            ["search", "Wyszukiwarka"],
             ["settings", "Ustawienia"]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
@@ -3736,7 +3739,9 @@ export default function MatterChatApp({
                     ? "Sprawa i dokumenty"
                     : activeTab === "firm"
                       ? "Know-how i wzory kancelarii"
-                      : "Ustawienia"}
+                      : activeTab === "search"
+                        ? "Wyszukiwarka źródeł prawa"
+                        : "Ustawienia"}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -5641,6 +5646,10 @@ export default function MatterChatApp({
               </article>
             ) : null}
           </section>
+        ) : null}
+
+        {activeTab === "search" ? (
+          <McpSearchPanel />
         ) : null}
 
         {activeTab === "firm" ? (

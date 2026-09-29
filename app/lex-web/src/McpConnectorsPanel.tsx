@@ -4,6 +4,7 @@ import {
 } from "react";
 import {
   ApiError,
+  checkMcpConnector,
   clearCeidgApiKey,
   getMcpConnectors,
   installMcpConnector,
@@ -79,6 +80,9 @@ export function McpConnectorsPanel() {
     useState(false);
   const [ceidgKey, setCeidgKey] =
     useState("");
+  // Wynik "Sprawdź gotowość" per serwer: działa (z liczbą narzędzi) albo błąd.
+  const [readiness, setReadiness] =
+    useState<Record<string, { ok: boolean; text: string }>>({});
 
   useEffect(() => {
     void getMcpConnectors()
@@ -116,6 +120,29 @@ export function McpConnectorsPanel() {
         `Zainstalowano ${server.id}: ${(result as { tools: string[] }).tools.join(", ")}.` +
         (syncDesktop && status?.desktop.available ? " Zrestartuj Claude Desktop." : "")
     );
+  }
+
+  async function check(server: McpServerStatus): Promise<void> {
+    setBusy(`check:${server.id}`);
+    setError("");
+    setMessage("");
+    try {
+      const result = await checkMcpConnector(server.id);
+      setReadiness((current) => ({
+        ...current,
+        [server.id]: {
+          ok: true,
+          text: `gotowy · ${result.tools.length} narz. · pakiet ${result.packageVersion ?? "?"} · ${new Date(result.checkedAt).toLocaleTimeString("pl-PL")}`
+        }
+      }));
+    } catch (failure) {
+      setReadiness((current) => ({
+        ...current,
+        [server.id]: { ok: false, text: `nie działa: ${failureText(failure)}` }
+      }));
+    } finally {
+      setBusy(null);
+    }
   }
 
   function uninstall(server: McpServerStatus): void {
@@ -174,6 +201,12 @@ export function McpConnectorsPanel() {
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert">{message}</div> : null}
 
+      {status?.packageAvailable ? (
+        <p className="field-help">
+          Pakiet serwerów: wersja {status.packageVersion ?? "nieznana"} z zainstalowanych skilli (aktualizuje się razem ze skillami w „Aplikacja i utrzymanie”).
+        </p>
+      ) : null}
+
       {status && !status.packageAvailable ? (
         <div className="alert alert-error">
           Brak pakietu <code>{status.packagePath}</code> — zaktualizuj skille.
@@ -214,7 +247,23 @@ export function McpConnectorsPanel() {
                           : "niezainstalowany"}
                         {server.desktopInstalled ? " · Claude Desktop" : ""}
                       </small>
+                      {readiness[server.id] ? (
+                        <small className={readiness[server.id]!.ok ? "mcp-ready-ok" : "mcp-ready-fail"}>
+                          {readiness[server.id]!.text}
+                        </small>
+                      ) : null}
                     </span>
+                    <span className="mcp-connector-actions">
+                    {server.ready ? (
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={Boolean(busy)}
+                        onClick={() => void check(server)}
+                      >
+                        {busy === `check:${server.id}` ? "Sprawdzam…" : "Sprawdź gotowość"}
+                      </button>
+                    ) : null}
                     {server.installed ? (
                       <button
                         type="button"
@@ -238,6 +287,7 @@ export function McpConnectorsPanel() {
                         {busy === server.id ? "Instaluję…" : "Zainstaluj"}
                       </button>
                     )}
+                    </span>
                   </li>
                 ))}
               </ul>

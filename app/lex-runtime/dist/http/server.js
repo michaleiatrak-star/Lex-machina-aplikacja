@@ -350,7 +350,8 @@ export async function startLocalServer(options) {
     });
     registerMcpConnectorRoutes(app, {
         authService,
-        connectors: mcpConnectors
+        connectors: mcpConnectors,
+        federation: legalFederationTools
     });
     app.use(coreApp);
     return new Promise((resolve, reject) => {

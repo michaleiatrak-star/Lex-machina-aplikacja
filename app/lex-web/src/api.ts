@@ -2950,6 +2950,7 @@ export type McpServerStatus = {
 export type McpConnectorStatusResponse = {
   packagePath: string;
   packageAvailable: boolean;
+  packageVersion: string | null;
   ceidg: {
     keyConfigured: boolean;
     keyUrl: string;
@@ -3020,4 +3021,49 @@ export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse
       method: "DELETE"
     }
   );
+}
+
+export type McpSearchSource = {
+  id: string;
+  group: string;
+  label: string;
+};
+
+export function getMcpSearchSources(): Promise<{ sources: McpSearchSource[] }> {
+  return json("/api/mcp-search/sources");
+}
+
+export function searchMcpSource(input: {
+  source: string;
+  query: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}): Promise<{ source: string; content: string }> {
+  return json("/api/mcp-search", {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function getMcpSourceDocument(
+  source: string,
+  documentId: string
+): Promise<{ source: string; content: string }> {
+  return json("/api/mcp-search/document", {
+    method: "POST",
+    body: JSON.stringify({ source, documentId })
+  });
+}
+
+export function checkMcpConnector(server: string): Promise<{
+  server: string;
+  ready: boolean;
+  tools: string[];
+  packageVersion: string | null;
+  checkedAt: string;
+}> {
+  return json(`/api/admin/mcp-connectors/${encodeURIComponent(server)}/check`, {
+    method: "POST"
+  });
 }

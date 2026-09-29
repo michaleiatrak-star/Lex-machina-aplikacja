@@ -723,7 +723,9 @@ export async function startLocalServer(options?: {
     {
       authService,
       connectors:
-        mcpConnectors
+        mcpConnectors,
+      federation:
+        legalFederationTools
     }
   );
   app.use(coreApp);

@@ -280,6 +280,7 @@ export class LexMcpConnectorStore {
         return {
             packagePath: this.packagePath,
             packageAvailable: fs.existsSync(this.packagePath),
+            packageVersion: this.packageVersion(),
             ceidg: {
                 keyConfigured: Boolean(this.ceidgKey()),
                 keyUrl: CEIDG_KEY_URL
@@ -295,6 +296,15 @@ export class LexMcpConnectorStore {
                 desktopInstalled: desktop.has(DESKTOP_PREFIX + server.id)
             }))
         };
+    }
+    packageVersion() {
+        try {
+            const manifest = JSON.parse(fs.readFileSync(path.join(path.dirname(path.dirname(this.packagePath)), "mcpb-manifest.json"), "utf8"));
+            return typeof manifest.version === "string" ? manifest.version : null;
+        }
+        catch {
+            return null;
+        }
     }
     // Handshake MCP (initialize + tools/list) na samym serwerze — instalacja bez działającego serwera nie przechodzi.
     async probe(id) {
