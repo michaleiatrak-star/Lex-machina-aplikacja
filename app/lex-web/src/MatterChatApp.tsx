@@ -1,0 +1,6220 @@
+import {
+  canWriteCase,
+  caseScheduleKindLabel,
+  caseScheduleStartLabel
+} from "./case-calendar.js";
+import { CalendarPanel } from "./CalendarPanel.js";
+import { CaseContactsCard } from "./CaseContactsCard.js";
+import { HomeDashboard } from "./HomeDashboard.js";
+import {
+  loadLastUsedModel,
+  saveLastUsedModel,
+  shouldAutoStartLocalModel
+} from "./last-used-model.js";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode
+} from "react";
+import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
+import { DocumentCitationContent } from "./DocumentCitationContent.js";
+import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
+import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
+import { FirmFilePicker } from "./FirmFilePicker.js";
+import { pickKey, type FilePick } from "./file-pick-tree.js";
+import { WorkspaceManager } from "./WorkspaceManager.js";
+import { ProcessPleadingWorkflowPanel } from "./ProcessPleadingWorkflowPanel.js";
+import {
+  ApiError,
+  getSkills,
+  addCaseScheduleEvent,
+  archiveCase,
+  clearClaudeOAuthToken,
+  clearProviderApiKey,
+  createCase,
+  createDeanonymizationIntent,
+  deleteCase,
+  deleteCaseScheduleEvent,
+  downloadGeneratedArtifact,
+  downloadSensitiveArtifact,
+  executeSession,
+  checkDocumentFit,
+  getFirmKnowledgeWorkspace,
+  getSessionProgress,
+  finalizeDeanonymization,
+  generateLegalDocument,
+  getHealth,
+  getLocalModels,
+  getModels,
+  getProviderAccountStatus,
+  getProviderStatus,
+  getRoutes,
+  isDesktopShell,
+  finalizeDocument as finalizeCaseDocument,
+  keepAllDirectives,
+  listCaseFiles,
+  processStoredCaseFile,
+  uploadCaseFile,
+  listCaseSchedule,
+  listCases,
+  loginProviderAccount,
+  provisionLocalModel,
+  repairLocalModel,
+  reauthorizeDeanonymization,
+  previewDeanonymization,
+  saveNameForm,
+  renameCase,
+  setClaudeOAuthToken,
+  setProviderApiKey,
+  startLocalModel,
+  unarchiveCase,
+  type AuthenticatedUser,
+  type CaseListItem,
+  type CaseScheduleEvent,
+  type CaseScheduleKind,
+  type DocumentAttachmentSelection,
+  type DocumentDelivery,
+  type DocumentFitResponse,
+  type ExecutionStepsSnapshot,
+  type EvidenceItem,
+  type ModelDescriptor,
+  type ProviderAccountSessionStatus,
+  type ProviderId,
+  type SessionExecutionResponse,
+  type DeanonymizationPreview,
+  type StoredUploadResponse,
+  type LegalDocumentFormat,
+  type LocalModelsResponse
+} from "./api.js";
+import {
+  DOCUMENT_FILE_ACCEPT,
+  MAX_DOCUMENT_DROP_QUEUE,
+  consumeDocumentDropFile,
+  createDocumentDropQueueState,
+  describeDocumentFile,
+  enqueueDocumentDropFiles
+} from "./document-drop-queue.js";
+import {
+  createDocumentStagingState,
+  setStagedDocumentMode,
+  stageDocuments,
+  takeStagedDocuments,
+  updateStagedDocument
+} from "./document-staging.js";
+import {
+  DOCUMENT_PROCESSING_MODES,
+  processingModeKeepsClearText,
+  processingModeOptions,
+  processingModeUsesLocalAi,
+  type DocumentProcessingMode
+} from "./document-processing-mode.js";
+import {
+  AUTO_CASE_TYPE,
+  DETERMINISTIC_ACTIONS,
+  DETERMINISTIC_ACTION_META_PREFIX,
+  buildSkillSelectionEnvelope,
+  choosePrimaryRoute,
+  deterministicActionFromMeta,
+  deterministicActionMeta,
+  labelForSkill,
+  setAllowedDomainSkills,
+  setCaseTypeExecutionSkills,
+  skillsForDeterministicAction,
+  workModeForAction,
+  type ChatWorkMode,
+  type DeterministicActionId,
+  type PublicSkillDescriptor
+} from "./chat-routing.js";
+import {
+  useCaseThread,
+  type CaseChatMessage
+} from "./case-thread.js";
+import {
+  conversationForProvider
+} from "./conversation-context.js";
+import {
+  filterMatterCases,
+  type MatterRoleFilter,
+  type MatterSort,
+  type MatterStatusFilter
+} from "./search-filters.js";
+import {
+  accountModelChoices,
+  accountModelIdForPrimarySource,
+  canExecutePrimaryModel,
+  isAccountPrimarySource,
+  modelsForPrimarySource,
+  runtimeProviderForPrimarySource,
+  shouldLoadPrimaryModelCatalog,
+  type PrimaryModelSource
+} from "./primary-model-policy.js";
+import type {
+  WorkspaceDocumentCitation
+} from "./workspace-client.js";
+import { RestorationReview } from "./RestorationReview.js";
+import {
+  DeanonymizationReview,
+  applyAliasCorrection
+} from "./DeanonymizationReview.js";
+import {
+  applyRestorationCorrection,
+  shiftMarks,
+  unresolvedPlaceholders,
+  validMarks
+} from "./restoration-review.js";
+import "./chat.css";
+import "./workspace.css";
+
+type TabId =
+  | "home"
+  | "calendar"
+  | "chat"
+  | "skills"
+  | "case"
+  | "firm"
+  | "settings";
+
+export type SettingsSection =
+  | "models"
+  | "users"
+  | "security"
+  | "maintenance";
+
+export type SettingsRequest = {
+  section: SettingsSection;
+  nonce: number;
+};
+
+type SettingsPanels = {
+  localAi?: ReactNode;
+  users?: ReactNode;
+  security?: ReactNode;
+  maintenance?: ReactNode;
+};
+
+type ExtendedExecution = SessionExecutionResponse & {
+  documentCitations?: WorkspaceDocumentCitation[];
+  loadedSkills?: string[];
+  executionSkills?: string[];
+  domainSkills?: string[];
+};
+
+type ExecutionDiagnostic = {
+  friendly: string;
+  code: string;
+  status?: number;
+  reason?: string;
+  description?: string;
+  stage?: string;
+  trace?: ApiError["trace"];
+};
+
+const WELCOME: CaseChatMessage = {
+  id: "welcome",
+  role: "system",
+  content:
+    "Ten wątek jest przypisany do jednej sprawy. Opisz zadanie, a Lex Machina dobierze potrzebne dziedziny prawa i współpracujące skille wykonawcze."
+};
+
+const PROVIDERS: Array<{
+  id: ProviderId;
+  label: string;
+  apiKeyUrl: string;
+  accountClientLabel: string;
+  accountInstallUrl: string;
+}> = [
+  {
+    id: "openai",
+    label: "OpenAI",
+    apiKeyUrl: "https://platform.openai.com/api-keys",
+    accountClientLabel: "Codex CLI",
+    accountInstallUrl:
+      "https://developers.openai.com/codex/cli"
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic / Claude",
+    apiKeyUrl: "https://platform.claude.com/settings/keys",
+    accountClientLabel: "Claude Code",
+    accountInstallUrl:
+      "https://support.claude.com/en/articles/14552382-your-first-day-in-claude-code"
+  },
+  {
+    id: "xai",
+    label: "xAI / Grok",
+    apiKeyUrl: "https://console.x.ai/",
+    accountClientLabel: "Grok Build",
+    accountInstallUrl:
+      "https://docs.x.ai/build/overview"
+  }
+];
+
+const PRIMARY_MODEL_SOURCES: Array<{
+  id: PrimaryModelSource;
+  label: string;
+}> = [
+  {
+    id: "local",
+    label: "Lokalne"
+  },
+  {
+    id: "openai-account",
+    label: "ChatGPT · konto"
+  },
+  {
+    id: "openai",
+    label: "OpenAI · API"
+  },
+  {
+    id: "anthropic-account",
+    label: "Claude · konto / OAuth"
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic · API"
+  },
+  {
+    id: "xai-account",
+    label: "Grok · konto"
+  },
+  {
+    id: "xai",
+    label: "xAI · API"
+  }
+];
+
+const ACCOUNT_MODEL_LABELS: Record<
+  ProviderId,
+  string
+> = {
+  openai:
+    "ChatGPT / Codex · model konta",
+  anthropic:
+    "Claude Code · model konta",
+  xai:
+    "Grok · model konta"
+};
+
+const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
+const KNOWN_EXECUTION_SKILLS = new Set([
+  "analiza-sadowa-v6",
+  "analizator-dowodow-v3",
+  "analizator-przepisow-v2",
+  "analizator-umow-v1",
+  "chronologia-sprawy-v1",
+  "orzeczenia-sadowe-v2",
+  "pisma-procesowe-v3",
+  "pisma-proste-v2",
+  "przesluchanie-swiadkow-v2-min90",
+  "przewodnik-prawny-v2",
+  "raport-klienta-v1",
+  "raport-sytuacyjny-v2"
+]);
+
+const FALLBACK_EXECUTION_SKILLS: PublicSkillDescriptor[] = [
+  {
+    name: "analiza-sadowa-v6",
+    category: "execution",
+    description: "Analiza sądowa i procesowa akt sprawy."
+  },
+  {
+    name: "analizator-dowodow-v3",
+    category: "execution",
+    description: "Analiza materiału dowodowego, luk i ryzyk."
+  },
+  {
+    name: "analizator-przepisow-v2",
+    category: "execution",
+    description: "Analiza i zestawienie przepisów istotnych dla sprawy."
+  },
+  {
+    name: "analizator-umow-v1",
+    category: "execution",
+    description: "Analiza postanowień umowy, obowiązków i ryzyk."
+  },
+  {
+    name: "chronologia-sprawy-v1",
+    category: "execution",
+    description: "Chronologia zdarzeń, terminów i zależności czasowych."
+  },
+  {
+    name: "orzeczenia-sadowe-v2",
+    category: "execution",
+    description: "Praca z orzecznictwem i tezami judykatury."
+  },
+  {
+    name: "pisma-procesowe-v3",
+    category: "execution",
+    description: "Przygotowanie pisma procesowego w checkpointowanym workflow."
+  },
+  {
+    name: "pisma-proste-v2",
+    category: "execution",
+    description: "Przygotowanie prostego pisma prawnego lub procesowego."
+  },
+  {
+    name: "przesluchanie-swiadkow-v2-min90",
+    category: "execution",
+    description: "Plan przesłuchania świadków i zestaw pytań."
+  },
+  {
+    name: "przewodnik-prawny-v2",
+    category: "execution",
+    description: "Przewodnik po dalszych krokach i ścieżkach działania."
+  },
+  {
+    name: "raport-klienta-v1",
+    category: "execution",
+    description: "Raport dla klienta."
+  },
+  {
+    name: "raport-sytuacyjny-v2",
+    category: "execution",
+    description: "Raport sytuacyjny sprawy, ryzyk i kolejnych działań."
+  }
+];
+
+function mergeSkillCatalog(
+  ...catalogs: readonly PublicSkillDescriptor[][]
+): PublicSkillDescriptor[] {
+  const byName = new Map<string, PublicSkillDescriptor>();
+  for (const catalog of catalogs) {
+    for (const skill of catalog) {
+      const existing = byName.get(skill.name);
+      byName.set(
+        skill.name,
+        existing
+          ? {
+              ...existing,
+              ...skill,
+              category:
+                skill.category ??
+                existing.category
+            }
+          : skill
+      );
+    }
+  }
+  return [...byName.values()];
+}
+
+function messageId(): string {
+  const random = globalThis.crypto?.randomUUID?.().replaceAll("-", "") ??
+    `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+      .replace(/[^a-f0-9]/g, "")
+      .padEnd(32, "0")
+      .slice(0, 32);
+  return `message_${random}`;
+}
+
+function suggestedCaseName(input: string): string {
+  const clean = input
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 72);
+  return clean.length >= 8 ? clean : "Nowa sprawa";
+}
+
+type DirectDocumentRequest = {
+  format: "docx" | "odt";
+  documentType:
+    | "pleading"
+    | "contract"
+    | "opinion"
+    | "letter"
+    | "report"
+    | "other";
+};
+
+function directDocumentRequest(
+  input: string
+): DirectDocumentRequest | null {
+  const normalized =
+    input
+      .normalize("NFKC")
+      .toLocaleLowerCase("pl");
+
+  const explicitFormat =
+    /\bodt\b/u.test(normalized)
+      ? "odt" as const
+      : /\bdocx\b|\bword\b/u.test(normalized)
+        ? "docx" as const
+        : null;
+
+  const documentNoun =
+    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór)\b/u
+      .test(normalized);
+  const generationVerb =
+    /\b(?:wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj)\b/u
+      .test(normalized);
+
+  if (
+    !explicitFormat &&
+    !(documentNoun && generationVerb)
+  ) {
+    return null;
+  }
+
+  const documentType =
+    /\b(?:pozew|apelacj|sprzeciw|zażalen|pismo procesowe)\b/u
+      .test(normalized)
+      ? "pleading" as const
+      : /\bumow/u.test(normalized)
+        ? "contract" as const
+        : /\bopini/u.test(normalized)
+          ? "opinion" as const
+          : /\braport/u.test(normalized)
+            ? "report" as const
+            : /\b(?:wezwanie|reklamacj|oświadczen|pełnomocnictw|list)\b/u
+                .test(normalized)
+              ? "letter" as const
+              : "other" as const;
+
+  return {
+    format:
+      explicitFormat ??
+      "docx",
+    documentType
+  };
+}
+
+function downloadBlob(
+  blob: Blob,
+  filename: string
+): void {
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+  try {
+    const anchor =
+      document.createElement(
+        "a"
+      );
+    anchor.href = url;
+    anchor.download =
+      filename;
+    anchor.rel =
+      "noreferrer";
+    document.body.appendChild(
+      anchor
+    );
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(
+      url
+    );
+  }
+}
+
+function upsertAttachment(
+  current: DocumentAttachmentSelection[],
+  selection: DocumentAttachmentSelection
+): DocumentAttachmentSelection[] {
+  const existing = current.findIndex(
+    (item) =>
+      item.caseId === selection.caseId &&
+      item.documentId === selection.documentId
+  );
+  if (existing >= 0) {
+    return current.map((item, index) =>
+      index === existing ? selection : item
+    );
+  }
+  // The limit is checked where files are picked, with a message; never drop one silently.
+  return [...current, selection];
+}
+
+function isExecutionSkill(skill: PublicSkillDescriptor): boolean {
+  return (
+    skill.category === "execution" ||
+    skill.type?.toLowerCase().startsWith("executive-") === true ||
+    KNOWN_EXECUTION_SKILLS.has(skill.name)
+  );
+}
+
+function visibleMessageMeta(
+  meta?: string
+): string {
+  if (!meta) return "";
+  return meta
+    .split(/\s*[|;]\s*/)
+    .filter(
+      (item) =>
+        !item.startsWith(
+          DETERMINISTIC_ACTION_META_PREFIX
+        )
+    )
+    .join(" · ")
+    .trim();
+}
+
+export function localModelFailureMessage(
+  reason?: string
+): string {
+  switch (reason) {
+    case "LOCAL_MODEL_SERVER_UNREACHABLE":
+      return "Profil lokalnego modelu przeszedł przygotowanie, ale serwer llama.cpp przestał odpowiadać przed lub w trakcie generowania. Program uruchomi go ponownie przy następnej wiadomości. Kod: LOCAL_MODEL_SERVER_UNREACHABLE";
+    case "LOCAL_MODEL_REQUEST_REJECTED":
+      return "Połączenie z lokalnym serwerem działało, ale llama.cpp odrzucił żądanie inferencji. Kod: LOCAL_MODEL_REQUEST_REJECTED";
+    case "LOCAL_MODEL_SERVER_ERROR":
+      return "Połączenie z lokalnym serwerem działało, ale llama.cpp zwrócił błąd podczas generowania. Kod: LOCAL_MODEL_SERVER_ERROR";
+    case "LOCAL_MODEL_CONTEXT_OVERFLOW":
+      return "Lokalny model działa, ale żądanie przekroczyło dostępny kontekst. Zmniejsz zakres rozmowy lub kontekst załączników. Kod: LOCAL_MODEL_CONTEXT_OVERFLOW";
+    case "LOCAL_MODEL_RESOURCE_EXHAUSTED":
+      return "Lokalny model został uruchomiony, ale zabrakło pamięci RAM/VRAM podczas inferencji. Zmniejsz kontekst albo wybierz profil CPU/mniejszy model. Kod: LOCAL_MODEL_RESOURCE_EXHAUSTED";
+    case "LOCAL_MODEL_INFERENCE_FAILED":
+      return "Połączenie z lokalnym llama.cpp zostało wcześniej potwierdzone przez health-check, ale sama generacja odpowiedzi nie zakończyła się poprawnie. Kod: LOCAL_MODEL_INFERENCE_FAILED";
+    default:
+      return `Lokalny model nie mógł wykonać odpowiedzi.${reason ? ` Kod: ${reason}` : ""}`;
+  }
+}
+
+export function providerFailureMessage(
+  provider: PrimaryModelSource,
+  reason?: string,
+  description?: string
+): string {
+  const name =
+    provider.startsWith("anthropic")
+      ? "Claude"
+      : provider.startsWith("xai")
+        ? "Grok"
+        : "ChatGPT/Codex";
+  const client =
+    provider.startsWith("anthropic")
+      ? "Claude Code"
+      : provider.startsWith("xai")
+        ? "Grok Build"
+        : "Codex";
+  const base = (() => {
+    switch (reason) {
+      case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
+        return `${name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.`;
+      case "ACCOUNT_SESSION_AUTH_EXPIRED":
+      case "ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH":
+        return `Sesja ${name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.`;
+      case "ACCOUNT_SESSION_CAPACITY":
+        return `${name} chwilowo odrzuca wykonanie z powodu limitu lub dostępności konta.`;
+      case "ACCOUNT_SESSION_PROMPT_REJECTED":
+        return `${name} odrzucił bieżące żądanie po stronie usługi.`;
+      case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
+        return `Klient ${client} jest niezgodny z kontraktem Lex Machina. Lex Machina używa przypiętej wersji prywatnego klienta; ponów połączenie konta.`;
+      case "ACCOUNT_SESSION_CLI_SPAWN_FAILED":
+        return `Nie udało się uruchomić klienta ${client}. Ponów połączenie konta w Ustawieniach, aby Lex Machina przygotowała przypiętą wersję klienta.`;
+      case "ACCOUNT_SESSION_CLI_STALLED":
+        return `Klient ${client} nie rozpoczął pracy w ciągu 120 s (brak żadnej odpowiedzi procesu).`;
+      case "ACCOUNT_SESSION_COMMAND_TIMEOUT":
+        return `Klient ${client} przekroczył limit czasu wykonania.`;
+      case "ACCOUNT_SESSION_EMPTY_RESPONSE":
+        return `${name} zakończył wykonanie bez treści odpowiedzi.`;
+      case "ACCOUNT_SESSION_CLI_FAILED":
+        return `Klient ${client} zakończył wykonanie błędem.`;
+      default:
+        return `${name} odrzucił lub przerwał wykonanie.`;
+    }
+  })();
+  const code =
+    reason
+      ? ` Kod: ${reason}.`
+      : "";
+  const detail =
+    description?.trim()
+      ? ` Szczegóły: ${description.trim().slice(0, 600)}`
+      : "";
+  return `${base}${code}${detail}`;
+}
+
+export function newExecutionId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return Array.from(
+    { length: 32 },
+    () => Math.floor(Math.random() * 16).toString(16)
+  ).join("");
+}
+
+/**
+ * Polls the runtime for the live draft of a running execution. Returns a
+ * stop function; the draft is cleared when polling stops.
+ */
+export function startDraftPolling(
+  executionId: string,
+  onDraft: (text: string) => void,
+  intervalMs = 1000,
+  fetchProgress: typeof getSessionProgress = getSessionProgress,
+  onSteps?: (steps: ExecutionStepsSnapshot | null) => void
+): () => void {
+  let stopped = false;
+  let inFlight = false;
+  const timer = setInterval(() => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    void fetchProgress(executionId)
+      .then((progress) => {
+        if (!stopped && progress?.text) {
+          onDraft(progress.text);
+        }
+        if (!stopped && progress?.steps) {
+          onSteps?.(progress.steps);
+        }
+      })
+      .catch(() => {
+        // A missed poll is harmless; the final answer still arrives.
+      })
+      .finally(() => {
+        inFlight = false;
+      });
+  }, intervalMs);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    onDraft("");
+    onSteps?.(null);
+  };
+}
+
+async function openExternalUrl(url: string): Promise<void> {
+  if (isDesktopShell()) {
+    const internals = (
+      window as Window & {
+        __TAURI_INTERNALS__?: {
+          invoke?: (
+            command: string,
+            args?: Record<string, unknown>
+          ) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    if (!internals?.invoke) {
+      throw new Error("TAURI_INVOKE_UNAVAILABLE");
+    }
+    await internals.invoke("open_external_url", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// A conversational answer loads no legal skills; the routing label would
+// suggest a legal domain that was never used.
+export function routingMeta(
+  execution: Pick<
+    ExtendedExecution,
+    "primarySkill" | "loadedSkills"
+  >,
+  route: string
+): string {
+  return execution.loadedSkills?.length === 0
+    ? "rozmowa bez skilli prawnych"
+    : `routing: ${labelForSkill(execution.primarySkill || route)}`;
+}
+
+function executionMessage(
+  execution: ExtendedExecution,
+  route: string
+): CaseChatMessage {
+  if (
+    execution.status === "DRAFT_PRESENTABLE" &&
+    execution.answer
+  ) {
+    const skillMeta = execution.executionSkills?.length
+      ? ` · skille: ${execution.executionSkills.map(labelForSkill).join(", ")}`
+      : "";
+    const domainMeta = execution.domainSkills?.length
+      ? ` · domeny: ${execution.domainSkills.map(labelForSkill).join(", ")}`
+      : "";
+    const contextMeta =
+      execution.context?.modelContextTokens
+        ? ` · runtime ${execution.context.modelContextTokens.toLocaleString("pl-PL")} tok. · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.${execution.context.omittedChunks > 0 ? ` · pominięte chunki: ${execution.context.omittedChunks}` : ""}`
+        : execution.context
+          ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.`
+          : "";
+    const citationMeta =
+      execution.documentCitationFreshness
+        ? ` · cytaty odświeżone: ${execution.documentCitationFreshness.checked}`
+        : "";
+    const workflowMeta =
+      execution.processAuto
+        ? ` · AUTO: ${execution.processAuto.steps.length}/${execution.processAuto.maxSteps} kroków · ${execution.processAuto.stopped}`
+        : execution.processWorkflow
+          ? ` · proces: ${execution.processWorkflow.stage}${execution.processWorkflow.pendingCheckpoint ? ` · czeka: ${execution.processWorkflow.pendingCheckpoint}` : ""}`
+          : execution.courtWorkflow
+            ? ` · analiza sądowa: ${execution.courtWorkflow.stage}${execution.courtWorkflow.nextCheckpoint ? ` · następny: ${execution.courtWorkflow.nextCheckpoint}` : ""}`
+            : "";
+    const modelRoutingMeta = ` · model: ${execution.model}`;
+    const verificationDegraded =
+      execution.finalization !== "PASS" ||
+      execution.gateI?.result === "BLOCKED";
+    const verificationWarning =
+      verificationDegraded
+        ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
+        : "";
+
+    return {
+      id: messageId(),
+      role: "assistant",
+      content:
+        verificationWarning +
+        execution.answer,
+      evidence: execution.evidence,
+      ...(execution.auxiliarySources?.length
+        ? {
+            auxiliarySources:
+              execution.auxiliarySources
+          }
+        : {}),
+      documentCitations: execution.documentCitations,
+      ...(execution.restorations?.length
+        ? {
+            restorations:
+              shiftMarks(
+                execution.restorations,
+                verificationWarning.length
+              )
+          }
+        : {}),
+      meta:
+        routingMeta(
+          execution,
+          route
+        ) +
+        skillMeta +
+        domainMeta +
+        contextMeta +
+        citationMeta +
+        workflowMeta +
+        modelRoutingMeta +
+        ` · VERIFIED ${execution.verification.verified}` +
+        ` · SUPPORTED ${execution.verification.supported}` +
+        (verificationDegraded
+          ? ` · WERYFIKACJA NIEPEŁNA · UNVERIFIED ${execution.verification.unverified}`
+          : "")
+    };
+  }
+
+  return {
+    id: messageId(),
+    role: "system",
+    content:
+      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.",
+    evidence: execution.evidence,
+    ...(execution.auxiliarySources?.length
+      ? {
+          auxiliarySources:
+            execution.auxiliarySources
+        }
+      : {}),
+    meta:
+      `routing: ${labelForSkill(execution.primarySkill || route)}` +
+      ` · finalization ${execution.finalization}` +
+      ` · UNVERIFIED ${execution.verification.unverified}`
+  };
+}
+
+export default function MatterChatApp({
+  user,
+  settingsPanels,
+  settingsRequest,
+  onLock,
+  onLogout
+}: {
+  user: AuthenticatedUser;
+  settingsPanels?: SettingsPanels;
+  settingsRequest?: SettingsRequest | null;
+  onLock?: () => void;
+  onLogout?: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<TabId>("home");
+  // Bumped when events change anywhere, so the home screen, the calendar and
+  // the case schedule show the same data.
+  const [scheduleRefresh, setScheduleRefresh] = useState(0);
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection>("models");
+  const [runtimeOnline, setRuntimeOnline] = useState(false);
+  const [runtimeError, setRuntimeError] = useState("");
+
+  const [cases, setCases] = useState<CaseListItem[]>([]);
+  const [caseId, setCaseId] = useState("");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseStatusFilter, setCaseStatusFilter] =
+    useState<MatterStatusFilter>("ALL");
+  const [caseRoleFilter, setCaseRoleFilter] =
+    useState<MatterRoleFilter>("ALL");
+  const [caseSort, setCaseSort] =
+    useState<MatterSort>("UPDATED_DESC");
+  const [newCaseName, setNewCaseName] = useState("");
+  const [caseNameDraft, setCaseNameDraft] = useState("");
+  const [caseBusy, setCaseBusy] = useState(false);
+  const [caseError, setCaseError] = useState("");
+  const [caseSchedule, setCaseSchedule] =
+    useState<CaseScheduleEvent[]>([]);
+  const [caseScheduleLoading, setCaseScheduleLoading] =
+    useState(false);
+  const [caseScheduleBusy, setCaseScheduleBusy] =
+    useState(false);
+  const [caseScheduleError, setCaseScheduleError] =
+    useState("");
+  const [scheduleKind, setScheduleKind] =
+    useState<CaseScheduleKind>("CLIENT_MEETING");
+  const [scheduleTitle, setScheduleTitle] =
+    useState("");
+  const [scheduleStartsAt, setScheduleStartsAt] =
+    useState("");
+  const [scheduleLocation, setScheduleLocation] =
+    useState("");
+  const [scheduleNotes, setScheduleNotes] =
+    useState("");
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
+  const [caseFiles, setCaseFiles] =
+    useState<StoredUploadResponse[]>([]);
+  const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  const [caseFilePickerOpen, setCaseFilePickerOpen] =
+    useState(false);
+  const [caseFilePickerError, setCaseFilePickerError] =
+    useState("");
+  const [generatedDocumentMessage, setGeneratedDocumentMessage] =
+    useState("");
+  const [pendingFinalDocument, setPendingFinalDocument] =
+    useState<{
+      caseId: string;
+      artifactId: string;
+      format: LegalDocumentFormat;
+    } | null>(null);
+  const [finalDocumentPassword, setFinalDocumentPassword] =
+    useState("");
+  const [finalDocumentBusy, setFinalDocumentBusy] =
+    useState(false);
+  const [finalReview, setFinalReview] =
+    useState<{
+      grantId: string;
+      preview: DeanonymizationPreview;
+      overrides: Record<string, string>;
+    } | null>(null);
+  // A review belongs to one generated document.
+  useEffect(() => {
+    setFinalReview(null);
+  }, [pendingFinalDocument?.artifactId]);
+
+  // The source and model the user last worked with become the default.
+  const [rememberedModel] = useState(() => loadLastUsedModel(user.userId));
+  const [provider, setProvider] =
+    useState<PrimaryModelSource>(rememberedModel?.provider ?? "local");
+  const [providerConfiguration, setProviderConfiguration] = useState<
+    Record<ProviderId, boolean | undefined>
+  >({ openai: undefined, anthropic: undefined, xai: undefined });
+  const [providerAccounts, setProviderAccounts] = useState<
+    Record<
+      ProviderId,
+      ProviderAccountSessionStatus | undefined
+    >
+  >({
+    openai: undefined,
+    anthropic: undefined,
+    xai: undefined
+  });
+  const [providerAccountBusy, setProviderAccountBusy] =
+    useState(false);
+  const [localStartBusy, setLocalStartBusy] =
+    useState(false);
+  const [localStartMessage, setLocalStartMessage] =
+    useState("");
+  const [providerAccountMessage, setProviderAccountMessage] =
+    useState("");
+  const [claudeOAuthToken, setClaudeOAuthTokenInput] =
+    useState("");
+  const [claudeOAuthBusy, setClaudeOAuthBusy] =
+    useState(false);
+  const [claudeOAuthMessage, setClaudeOAuthMessage] =
+    useState("");
+  const [providerApiKey, setProviderApiKeyInput] = useState("");
+  const [providerKeyBusy, setProviderKeyBusy] = useState(false);
+  const [providerKeyMessage, setProviderKeyMessage] = useState("");
+  const [models, setModels] = useState<ModelDescriptor[]>([]);
+  const [model, setModel] = useState(rememberedModel?.model ?? "");
+  const localAutoStartTried = useRef(false);
+  const [modelError, setModelError] = useState("");
+  const [
+    modelCatalogLoading,
+    setModelCatalogLoading
+  ] = useState(false);
+  const [
+    localModelsRefreshToken,
+    setLocalModelsRefreshToken
+  ] = useState(0);
+  const [
+    localRuntimeStatus,
+    setLocalRuntimeStatus
+  ] = useState<
+    LocalModelsResponse["runtime"] | null
+  >(null);
+
+  const [routes, setRoutes] = useState<string[]>([]);
+  const [skills, setSkills] = useState<PublicSkillDescriptor[]>(
+    FALLBACK_EXECUTION_SKILLS
+  );
+  // null = every optional execution skill is selected. This mirrors the DR
+  // domain selector and makes newly discovered execution skills selected by
+  // default without a second initialization race.
+  const [manualSkills, setManualSkills] =
+    useState<string[] | null>(null);
+  const [
+    deterministicAction,
+    setDeterministicAction
+  ] = useState<DeterministicActionId | "">("");
+  const [
+    workMode,
+    setWorkMode
+  ] = useState<ChatWorkMode>("AUTO");
+  const [caseTypeSkills, setCaseTypeSkills] = useState<string[]>([]);
+  // null = every DR module is selected. Kept as null rather than a filled list
+  // so the default sends no restriction at all and routing stays unchanged
+  // until the user actually narrows it.
+  const [allowedDomains, setAllowedDomains] =
+    useState<string[] | null>(null);
+  const [automaticSkills, setAutomaticSkills] = useState(true);
+  const [skillFilter, setSkillFilter] = useState("");
+
+  const [query, setQuery] = useState("");
+  const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [executionError, setExecutionError] = useState("");
+  const [executionDiagnostic, setExecutionDiagnostic] =
+    useState<ExecutionDiagnostic | null>(null);
+  const [executionSteps, setExecutionSteps] = useState<ExecutionStepsSnapshot | null>(null);
+  const [executionStage, setExecutionStage] =
+    useState("Przygotowanie sesji");
+  const [draftText, setDraftText] =
+    useState("");
+  const [executionElapsedSeconds, setExecutionElapsedSeconds] =
+    useState(0);
+  const [runtimePulse, setRuntimePulse] =
+    useState<"CHECKING" | "OK" | "LOST">("CHECKING");
+  const [processWorkflowVisible, setProcessWorkflowVisible] =
+    useState(false);
+  const [processWorkflowRefresh, setProcessWorkflowRefresh] =
+    useState(0);
+  const {
+    messages,
+    setMessages,
+    updateMessage,
+    loading: threadLoading,
+    error: threadError
+  } = useCaseThread(caseId, WELCOME);
+
+  const [documentAttachments, setDocumentAttachments] = useState<
+    DocumentAttachmentSelection[]
+  >([]);
+  const [firmKnowledgeWorkspace, setFirmKnowledgeWorkspace] =
+    useState<CaseListItem | null>(null);
+  // Firm templates (DOCX/ODT) picked for the message, sent as text.
+  const [firmTemplateIds, setFirmTemplateIds] = useState<string[]>([]);
+  const [pickerTab, setPickerTab] = useState<"case" | "firm">("case");
+  const [pickerNotice, setPickerNotice] = useState("");
+  const [firmPickerReload, setFirmPickerReload] = useState(0);
+  const [documentFit, setDocumentFit] = useState<DocumentFitResponse | null>(null);
+  // What reached the model with the last message.
+  const [lastDelivery, setLastDelivery] = useState<{ documents: DocumentDelivery[]; names: Record<string, string> } | null>(null);
+  const [includeCaseKnowledge, setIncludeCaseKnowledge] = useState(false);
+  const [includeFirmKnowledge, setIncludeFirmKnowledge] = useState(false);
+  // Photos go to image-capable models as evidence; pages with text only on request.
+  const [imagesWithText, setImagesWithText] = useState(false);
+  // Added files wait for a per-file decision; nothing starts OCR on its own.
+  const [documentStaging, setDocumentStaging] = useState(
+    createDocumentStagingState
+  );
+  // Mode of each file handed to the privacy review (anonymization modes).
+  const reviewModes = useRef(new WeakMap<File, DocumentProcessingMode>());
+  const [documentDropQueue, setDocumentDropQueue] = useState(
+    createDocumentDropQueueState
+  );
+  const [dropActive, setDropActive] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const dragDepth = useRef(0);
+  const activeCaseIdRef =
+    useRef(caseId);
+
+  const matterCases = useMemo(
+    () => cases.filter((item) => item.caseKind === "MATTER"),
+    [cases]
+  );
+  const matterSearchResult =
+    useMemo(
+      () =>
+        filterMatterCases(
+          cases,
+          {
+            query:
+              caseSearch,
+            status:
+              caseStatusFilter,
+            role:
+              caseRoleFilter,
+            sort:
+              caseSort,
+            currentCaseId:
+              caseId
+          }
+        ),
+      [
+        cases,
+        caseSearch,
+        caseStatusFilter,
+        caseRoleFilter,
+        caseSort,
+        caseId
+      ]
+    );
+  const filteredMatterCases =
+    matterSearchResult.items;
+  const caseSearchMatchCount =
+    matterSearchResult.matchCount;
+  const selectedCase = useMemo(
+    () => matterCases.find((item) => item.caseId === caseId),
+    [matterCases, caseId]
+  );
+  const runtimeProvider =
+    runtimeProviderForPrimarySource(provider);
+  const localModelSelected =
+    provider === "local" || model.startsWith("local/");
+  // Files per message: 20 for a hosted model, 4 for a local one (server decides).
+  const documentLimit =
+    documentFit?.limit ?? (localModelSelected ? 4 : 20);
+  const selectedFileCount =
+    documentAttachments.length + firmTemplateIds.length;
+  const firmCaseId = firmKnowledgeWorkspace?.caseId;
+  const selectedFirmKeys = useMemo(
+    () =>
+      new Set([
+        ...firmTemplateIds,
+        ...documentAttachments
+          .filter((attachment) => attachment.caseId === firmCaseId)
+          .map((attachment) => attachment.documentId)
+      ]),
+    [firmTemplateIds, documentAttachments, firmCaseId]
+  );
+
+  /** Adds or removes picked files; over the limit only what fits is added, with a message. */
+  function pickFiles(picks: FilePick[], select: boolean, pickCaseId: string): void {
+    if (!select) {
+      const keys = new Set(picks.map(pickKey));
+      setDocumentAttachments((current) =>
+        current.filter((attachment) => !(attachment.caseId === pickCaseId && keys.has(attachment.documentId)))
+      );
+      setFirmTemplateIds((current) => current.filter((id) => !keys.has(id)));
+      setPickerNotice("");
+      return;
+    }
+    const chosen = new Set([...firmTemplateIds, ...documentAttachments.map((attachment) => attachment.documentId)]);
+    const fresh = picks.filter((pick) => !chosen.has(pickKey(pick)));
+    const taken = fresh.slice(0, Math.max(0, documentLimit - selectedFileCount));
+    setPickerNotice(
+      taken.length < fresh.length
+        ? `Limit ${documentLimit} plików w jednej wiadomości` +
+            (localModelSelected ? " dla modelu lokalnego" : "") +
+            `: dodano ${taken.length} z ${fresh.length}. Odznacz inne pliki albo wyślij pozostałe w kolejnej wiadomości.`
+        : ""
+    );
+    const documents = taken.flatMap((pick) => (pick.kind === "document" ? [pick] : []));
+    const templates = taken.flatMap((pick) => (pick.kind === "template" ? [pick.templateId] : []));
+    if (documents.length) {
+      setDocumentAttachments((current) =>
+        documents.reduce(
+          (list, pick) =>
+            upsertAttachment(list, { caseId: pickCaseId, documentId: pick.documentId, chunkIndices: pick.chunkIndices }),
+          current
+        )
+      );
+    }
+    if (templates.length) setFirmTemplateIds((current) => [...current, ...templates]);
+  }
+
+  const [firmFileNames, setFirmFileNames] = useState<Record<string, string>>({});
+  function fileLabel(documentId: string, title?: string): string {
+    return (
+      title ??
+      caseFiles.find((file) => file.processing?.documentId === documentId)?.filename ??
+      firmFileNames[documentId] ??
+      "plik"
+    );
+  }
+
+  // The firm library is known to the chat without visiting the Kancelaria tab.
+  useEffect(() => {
+    if (firmKnowledgeWorkspace) return;
+    let cancelled = false;
+    getFirmKnowledgeWorkspace()
+      .then((result) => {
+        if (!cancelled && result.workspace) setFirmKnowledgeWorkspace(result.workspace);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [firmKnowledgeWorkspace]);
+
+  // Does the pick fit the chosen model? Checked on the server with the same count as sending.
+  useEffect(() => {
+    if (!model || selectedFileCount === 0) {
+      setDocumentFit(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      checkDocumentFit({
+        provider: runtimeProvider,
+        model,
+        attachments: documentAttachments,
+        firmTemplates: firmTemplateIds
+      })
+        .then((result) => {
+          if (!cancelled) setDocumentFit(result);
+        })
+        .catch(() => {
+          if (!cancelled) setDocumentFit(null);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [model, runtimeProvider, documentAttachments, firmTemplateIds, selectedFileCount]);
+  const providerDefinition =
+    PROVIDERS.find(
+      (item) =>
+        item.id ===
+        runtimeProvider
+    );
+  const providerConfigured =
+    providerConfiguration[runtimeProvider];
+  const accountSession =
+    providerAccounts[runtimeProvider];
+  const accountAuthenticated =
+    isAccountPrimarySource(provider) &&
+    accountSession?.authenticated === true;
+  const selectedModel = models.find((item) => item.id === model);
+  const localModelReady =
+    provider === "local" &&
+    localRuntimeStatus?.state ===
+      "READY" &&
+    localRuntimeStatus
+      .activeModelId === model;
+  const localModelStarting =
+    provider === "local" &&
+    (
+      localRuntimeStatus?.state ===
+        "STARTING" ||
+      localRuntimeStatus?.state ===
+        "PROVISIONING"
+    );
+  const executionSkills = useMemo(
+    () => skills
+      .filter(isExecutionSkill)
+      .sort((a, b) =>
+        labelForSkill(a.name).localeCompare(labelForSkill(b.name), "pl")
+      ),
+    [skills]
+  );
+  const domainSelection = allowedDomains ?? routes;
+  const conversationIsNew = useMemo(
+    () =>
+      messages.every(
+        (message) => message.role === "system"
+      ),
+    [messages]
+  );
+  const availableActions = useMemo(
+    () =>
+      DETERMINISTIC_ACTIONS.filter(
+        (action) =>
+          action.skills.every(
+            (name) =>
+              skills.some(
+                (skill) =>
+                  skill.name === name
+              )
+          )
+      ),
+    [skills]
+  );
+  const selectedDeterministicAction =
+    useMemo(
+      () =>
+        DETERMINISTIC_ACTIONS.find(
+          (action) =>
+            action.id ===
+            deterministicAction
+        ) ?? null,
+      [deterministicAction]
+    );
+  const selectableExecutionSkills = useMemo(
+    () =>
+      executionSkills.filter(
+        (item) =>
+          !MANDATORY_SKILLS.includes(
+            item.name as (typeof MANDATORY_SKILLS)[number]
+          ) &&
+          item.name !== "prawo-polskie-v2"
+      ),
+    [executionSkills]
+  );
+  const manualSkillSelection = useMemo(
+    () =>
+      manualSkills ??
+      selectableExecutionSkills.map(
+        (item) => item.name
+      ),
+    [
+      manualSkills,
+      selectableExecutionSkills
+    ]
+  );
+  const filteredSkills = useMemo(() => {
+    const needle = skillFilter.trim().toLowerCase();
+    return selectableExecutionSkills.filter(
+      (item) =>
+        !needle ||
+        item.name.toLowerCase().includes(needle) ||
+        item.description?.toLowerCase().includes(needle)
+    );
+  }, [
+    selectableExecutionSkills,
+    skillFilter
+  ]);
+  useEffect(() => {
+    setCaseTypeExecutionSkills(caseTypeSkills);
+    return () => setCaseTypeExecutionSkills([]);
+  }, [caseTypeSkills]);
+
+  useEffect(() => {
+    setDeterministicAction("");
+    setWorkMode("AUTO");
+    setCaseTypeSkills([]);
+    setManualSkills(null);
+    setAllowedDomains(null);
+    setAutomaticSkills(true);
+  }, [caseId]);
+
+  useEffect(() => {
+    if (threadLoading) {
+      return;
+    }
+    const firstUser =
+      messages.find(
+        (message) =>
+          message.role === "user"
+      );
+    if (!firstUser) {
+      return;
+    }
+    const restored =
+      deterministicActionFromMeta(
+        firstUser.meta
+      );
+    setDeterministicAction(
+      restored
+    );
+    setWorkMode(
+      workModeForAction(
+        restored
+      )
+    );
+    setCaseTypeSkills(
+      skillsForDeterministicAction(
+        restored
+      )
+    );
+    setAutomaticSkills(
+      restored === ""
+    );
+  }, [
+    messages,
+    threadLoading
+  ]);
+
+  useEffect(() => {
+    const restricted =
+      allowedDomains !== null &&
+      allowedDomains.length < routes.length;
+    setAllowedDomainSkills(
+      restricted ? allowedDomains : []
+    );
+    return () => setAllowedDomainSkills([]);
+  }, [allowedDomains, routes.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      getHealth(),
+      getRoutes(),
+      getProviderStatus(),
+      getProviderAccountStatus(),
+      listCases()
+    ])
+      .then(([
+        health,
+        routeList,
+        providerStatus,
+        accountStatus,
+        caseList
+      ]) => {
+        if (cancelled) return;
+        setRuntimeOnline(health.status === "ok" && health.localOnly === true);
+        setRoutes(routeList.primarySkills);
+        setCases(caseList.cases);
+        const matters = caseList.cases.filter((item) => item.caseKind === "MATTER");
+        setCaseId(
+          matters.find((item) => !item.archivedAt)?.caseId ??
+          matters[0]?.caseId ??
+          ""
+        );
+        setProviderConfiguration(
+          Object.fromEntries(
+            providerStatus.providers.map((item) => [item.provider, item.configured])
+          ) as Record<ProviderId, boolean>
+        );
+        setProviderAccounts(
+          Object.fromEntries(
+            accountStatus.providers.map(
+              (item) => [
+                item.provider,
+                item
+              ]
+            )
+          ) as Record<
+            ProviderId,
+            ProviderAccountSessionStatus
+          >
+        );
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setRuntimeOnline(false);
+        setRuntimeError(error instanceof Error ? error.message : String(error));
+      });
+
+    void getSkills()
+      .then((payload) => {
+        if (
+          !cancelled &&
+          Array.isArray(payload.skills)
+        ) {
+          setSkills((current) =>
+            mergeSkillCatalog(
+              FALLBACK_EXECUTION_SKILLS,
+              current,
+              payload.skills
+            )
+          );
+        }
+      })
+      .catch(() => {
+        // The built-in execution catalog stays visible even when the runtime
+        // skill registry is temporarily unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (routes.length === 0) {
+      return;
+    }
+    setSkills((current) =>
+      mergeSkillCatalog(
+        FALLBACK_EXECUTION_SKILLS,
+        current,
+        routes.map((name) => ({
+          name,
+          category: "domain"
+        }))
+      )
+    );
+  }, [routes]);
+
+  useEffect(() => {
+    const refreshLocalModels = () => {
+      setLocalModelsRefreshToken(
+        (value) => value + 1
+      );
+    };
+    window.addEventListener(
+      "lex-local-models-changed",
+      refreshLocalModels
+    );
+    return () => {
+      window.removeEventListener(
+        "lex-local-models-changed",
+        refreshLocalModels
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setModels([]);
+    // Keep the user's explicit model choice while the catalog refreshes.
+    // Execution is disabled by modelCatalogLoading, so there is no need to
+    // blank the selection and accidentally fall back to the first model.
+    setModelError("");
+    setModelCatalogLoading(true);
+
+    if (
+      isAccountPrimarySource(
+        provider
+      )
+    ) {
+      const accountModelId =
+        accountModelIdForPrimarySource(
+          provider
+        );
+      if (accountModelId) {
+        const authenticated =
+          accountSession
+            ?.authenticated === true;
+        const choices =
+          accountModelChoices(
+            provider,
+            ACCOUNT_MODEL_LABELS[
+              runtimeProvider
+            ]
+          );
+        setModels(
+          choices.map((choice) => ({
+            provider:
+              runtimeProvider,
+            id: choice.id,
+            displayName:
+              choice.label,
+            selectable:
+              authenticated,
+            ownedBy:
+              "account-session",
+            capabilities: [
+              "account-session",
+              "lex-runtime-tools"
+            ]
+          }))
+        );
+        // Keep the chosen account model while the source stays the same.
+        setModel((current) =>
+          choices.some(
+            (choice) =>
+              choice.id === current
+          )
+            ? current
+            : accountModelId
+        );
+        if (
+          accountSession &&
+          !accountSession.installed
+        ) {
+          setModelError(
+            "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
+          );
+        } else if (
+          !authenticated
+        ) {
+          setModelError(
+            "ACCOUNT_SESSION_NOT_AUTHENTICATED"
+          );
+        }
+      }
+      setModelCatalogLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (
+      !shouldLoadPrimaryModelCatalog(
+        provider,
+        providerConfigured
+      )
+    ) {
+      if (
+        providerConfigured === false &&
+        provider !== "local"
+      ) {
+        setModelError("PROVIDER_NOT_CONFIGURED");
+      }
+      setModelCatalogLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    const loadModels =
+      provider === "local"
+        ? getLocalModels().then(
+            (response) => {
+              if (!cancelled) {
+                setLocalRuntimeStatus(
+                  response.runtime
+                );
+              }
+              return {
+              models:
+                response.models
+                  .filter(
+                    (item) =>
+                      item.installed
+                  )
+                  .map<ModelDescriptor>(
+                    (item) => ({
+                      provider:
+                        "openai",
+                      id:
+                        item.id,
+                      displayName:
+                        `Lokalny · ${item.displayName}`,
+                      selectable:
+                        true,
+                      contextWindow:
+                        item.configuredContextWindow ??
+                        item.contextWindow,
+                      nativeContextWindow:
+                        item.nativeContextWindow,
+                      contextMode:
+                        item.contextMode,
+                      ownedBy:
+                        "local",
+                      inputModalities:
+                        ["text"],
+                      outputModalities:
+                        ["text"],
+                      capabilities: [
+                        "local-only",
+                        "offline-inference",
+                        item.configuredContextWindow !==
+                          undefined
+                          ? "qualified-profile"
+                          : "installed-profile-recovery"
+                      ]
+                    })
+                  )
+              };
+            }
+          )
+        : getModels(
+            runtimeProvider
+          );
+
+    void loadModels
+      .then((response) => {
+        if (cancelled) return;
+        const sourceModels =
+          modelsForPrimarySource(
+            provider,
+            response.models
+          );
+        setModels(sourceModels);
+        setModel(
+          (current) =>
+            sourceModels.some(
+              (item) =>
+                item.id === current &&
+                item.selectable
+            )
+              ? current
+              : sourceModels.find(
+                  (item) =>
+                    item.selectable
+                )?.id ?? ""
+        );
+        setModelCatalogLoading(false);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setModelError(error instanceof Error ? error.message : String(error));
+          setModelCatalogLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    provider,
+    providerConfigured,
+    runtimeProvider,
+    accountSession,
+    localModelsRefreshToken
+  ]);
+
+  useEffect(() => {
+    setDocumentDropQueue(createDocumentDropQueueState());
+    setDocumentAttachments([]);
+    setFirmTemplateIds([]);
+    setLastDelivery(null);
+    setPickerNotice("");
+    setIncludeCaseKnowledge(false);
+    setCaseNameDraft(selectedCase?.displayName ?? "");
+    setCaseScheduleError("");
+    setScheduleTitle("");
+    setScheduleStartsAt("");
+    setScheduleLocation("");
+    setScheduleNotes("");
+    setDeletePhrase("");
+    setDeletePassword("");
+    setPendingFinalDocument(null);
+    setFinalDocumentPassword("");
+    setProcessWorkflowVisible(false);
+    setProcessWorkflowRefresh((value) => value + 1);
+  }, [caseId, selectedCase?.displayName]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCaseScheduleError("");
+    if (!caseId) {
+      setCaseSchedule([]);
+      setCaseScheduleLoading(false);
+      return;
+    }
+
+    setCaseScheduleLoading(true);
+    void listCaseSchedule(
+      caseId
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setCaseSchedule(
+            result.events
+          );
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCaseSchedule([]);
+          setCaseScheduleError(
+            error instanceof Error
+              ? error.message
+              : String(error)
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCaseScheduleLoading(
+            false
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, scheduleRefresh]);
+
+  useEffect(() => {
+    activeCaseIdRef.current =
+      caseId;
+  }, [caseId]);
+
+  // A different case closes the file list; a refresh within one case keeps it open.
+  useEffect(() => {
+    setCaseFilePickerOpen(false);
+  }, [caseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCaseFilePickerError("");
+    if (!caseId) {
+      setCaseFiles([]);
+      return;
+    }
+
+    void listCaseFiles(caseId)
+      .then((result) => {
+        if (!cancelled) {
+          setCaseFiles(
+            result.uploads
+          );
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCaseFiles([]);
+          setCaseFilePickerError(
+            error instanceof Error
+              ? error.message
+              : String(error)
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, workspaceRefresh]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, executing]);
+
+  useEffect(() => {
+    if (!settingsRequest) {
+      return;
+    }
+    setActiveTab("settings");
+    setSettingsSection(
+      settingsRequest.section
+    );
+  }, [
+    settingsRequest?.nonce,
+    settingsRequest?.section
+  ]);
+
+  useEffect(() => {
+    if (!executing) {
+      setExecutionElapsedSeconds(0);
+      setRuntimePulse("CHECKING");
+      return;
+    }
+
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const tick = () => {
+      if (!cancelled) {
+        setExecutionElapsedSeconds(
+          Math.max(
+            0,
+            Math.floor(
+              (Date.now() - startedAt) /
+                1000
+            )
+          )
+        );
+      }
+    };
+
+    const probeRuntime = async () => {
+      try {
+        await getHealth();
+        if (!cancelled) {
+          setRuntimePulse("OK");
+        }
+      } catch {
+        if (!cancelled) {
+          setRuntimePulse("LOST");
+        }
+      }
+    };
+
+    tick();
+    void probeRuntime();
+    const clock = window.setInterval(
+      tick,
+      1000
+    );
+    const heartbeat =
+      window.setInterval(
+        () => {
+          void probeRuntime();
+        },
+        4000
+      );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(clock);
+      window.clearInterval(
+        heartbeat
+      );
+    };
+  }, [executing]);
+
+  useEffect(() => {
+    if (
+      pendingFirstMessage &&
+      caseId &&
+      !threadLoading &&
+      !executing
+    ) {
+      const pending = pendingFirstMessage;
+      setPendingFirstMessage(null);
+      void executeMessage(pending);
+    }
+  }, [pendingFirstMessage, caseId, threadLoading, executing]);
+
+  function switchToCase(
+    nextCaseId: string
+  ): void {
+    if (
+      caseBusy ||
+      !nextCaseId ||
+      nextCaseId === caseId
+    ) {
+      return;
+    }
+    setPendingFirstMessage(null);
+    // Files waiting for a decision were added for the case being left.
+    setDocumentStaging(createDocumentStagingState());
+    setExecutionError("");
+    setGeneratedDocumentMessage("");
+    setPendingFinalDocument(null);
+    setFinalDocumentPassword("");
+    setCaseFilePickerOpen(false);
+    setCaseId(nextCaseId);
+    setActiveTab("chat");
+  }
+
+  async function refreshCases(preferredCaseId?: string): Promise<void> {
+    const response = await listCases();
+    setCases(response.cases);
+    const matters = response.cases.filter((item) => item.caseKind === "MATTER");
+    const next =
+      matters.find((item) => item.caseId === preferredCaseId) ??
+      matters.find((item) => !item.archivedAt) ??
+      matters[0];
+    setCaseId(next?.caseId ?? "");
+  }
+
+  async function createLocalCase(displayName?: string): Promise<string> {
+    setCaseBusy(true);
+    setCaseError("");
+    try {
+      const created = await createCase(displayName?.trim() || undefined);
+      await refreshCases(created.caseId);
+      setNewCaseName("");
+      setActiveTab("chat");
+      return created.caseId;
+    } catch (error) {
+      setCaseError(error instanceof Error ? error.message : String(error));
+      throw error;
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
+  async function acceptFiles(files: readonly File[] | FileList): Promise<void> {
+    const incoming = Array.from(files);
+    if (incoming.length === 0) return;
+    try {
+      if (!selectedCase || selectedCase.archivedAt) {
+        await createLocalCase(newCaseName.trim() || "Nowa sprawa");
+      }
+      setDocumentStaging((current) =>
+        stageDocuments(current, incoming)
+      );
+      setActiveTab("chat");
+    } catch {
+      setExecutionError(
+        "Nie udało się utworzyć aktywnej sprawy dla dodawanych plików."
+      );
+    }
+  }
+
+  function processStagedDocuments(ids?: string[]): void {
+    const pending = documentStaging.items.filter(
+      (item) => item.status !== "SAVING" && (!ids || ids.includes(item.id))
+    );
+    const clear = pending.filter((item) => processingModeKeepsClearText(item.mode));
+    if (
+      clear.length > 0 &&
+      !window.confirm(
+        `${clear.map((item) => `„${item.file.name}”`).join(", ")}: bez anonimizacji - wybrane do czatu trafią do modelu z danymi osobowymi w jawnej postaci. Kontynuować?`
+      )
+    ) {
+      return;
+    }
+    // Anonymization modes: the per-file privacy review (with AI when chosen).
+    const review = pending.filter((item) => !processingModeKeepsClearText(item.mode));
+    if (review.length > 0) {
+      const taken = takeStagedDocuments(documentStaging, review.map((item) => item.id));
+      for (const item of taken.items) reviewModes.current.set(item.file, item.mode);
+      setDocumentStaging(taken.state);
+      setDocumentDropQueue((current) =>
+        enqueueDocumentDropFiles(current, taken.files)
+      );
+    }
+    for (const item of clear) void processStagedClearText(item.id, item.file, item.mode);
+  }
+
+  // OCR only (optionally with the local model's OCR correction): stored in
+  // the case, processed without anonymization and attached to the message.
+  async function processStagedClearText(
+    id: string,
+    file: File,
+    mode: DocumentProcessingMode
+  ): Promise<void> {
+    const targetCase = caseId;
+    setDocumentStaging((current) =>
+      updateStagedDocument(current, id, { status: "SAVING" })
+    );
+    try {
+      const stored = await uploadCaseFile(targetCase, file);
+      const review = await processStoredCaseFile(
+        targetCase,
+        stored.uploadId,
+        undefined,
+        undefined,
+        processingModeOptions(mode)
+      );
+      const result = await finalizeCaseDocument(
+        targetCase,
+        review.documentId,
+        keepAllDirectives(review)
+      );
+      pickFiles(
+        [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
+        true,
+        targetCase
+      );
+      setDocumentStaging((current) =>
+        takeStagedDocuments(
+          updateStagedDocument(current, id, { status: "PENDING" }),
+          [id]
+        ).state
+      );
+      setWorkspaceRefresh((value) => value + 1);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      setDocumentStaging((current) =>
+        updateStagedDocument(current, id, {
+          status: "FAILED",
+          error:
+            processingModeUsesLocalAi(mode) && /LOCAL_PRIVACY_MODEL/.test(code)
+              ? "tryb z AI wymaga uruchomionego modelu lokalnego (zakładka Sprawa → Uruchom model lokalny)"
+              : code
+        })
+      );
+    }
+  }
+
+  async function saveStagedDocuments(ids?: string[]): Promise<void> {
+    const targetCase = caseId;
+    const items = documentStaging.items.filter(
+      (item) => item.status !== "SAVING" && (!ids || ids.includes(item.id))
+    );
+    for (const item of items) {
+      setDocumentStaging((current) =>
+        updateStagedDocument(current, item.id, { status: "SAVING" })
+      );
+      try {
+        await uploadCaseFile(targetCase, item.file);
+        setDocumentStaging((current) =>
+          takeStagedDocuments(
+            updateStagedDocument(current, item.id, { status: "PENDING" }),
+            [item.id]
+          ).state
+        );
+        setWorkspaceRefresh((value) => value + 1);
+      } catch (error) {
+        setDocumentStaging((current) =>
+          updateStagedDocument(current, item.id, {
+            status: "FAILED",
+            error: error instanceof Error ? error.message : String(error)
+          })
+        );
+      }
+    }
+  }
+
+  function removeStagedDocuments(ids?: string[]): void {
+    setDocumentStaging((current) => takeStagedDocuments(current, ids).state);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>): void {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDropActive(false);
+    void acceptFiles(event.dataTransfer.files);
+  }
+
+  function toggleManualSkill(name: string): void {
+    if (
+      MANDATORY_SKILLS.includes(
+        name as (typeof MANDATORY_SKILLS)[number]
+      )
+    ) return;
+    setManualSkills((current) => {
+      const selected =
+        current ??
+        selectableExecutionSkills.map(
+          (item) => item.name
+        );
+      return selected.includes(name)
+        ? selected.filter(
+            (item) => item !== name
+          )
+        : [
+            ...selected,
+            name
+          ];
+    });
+  }
+
+  function selectAllManualSkills(): void {
+    setManualSkills(null);
+  }
+
+  function clearManualSkills(): void {
+    setManualSkills([]);
+  }
+
+  function selectAllDomainSkills(): void {
+    setAllowedDomains(null);
+  }
+
+  function clearDomainSkills(): void {
+    setAllowedDomains([]);
+  }
+
+  function selectAllSkills(): void {
+    selectAllDomainSkills();
+    selectAllManualSkills();
+  }
+
+  function clearAllSkills(): void {
+    clearDomainSkills();
+    clearManualSkills();
+  }
+
+  function toggleDomainSkill(name: string): void {
+    setAllowedDomains((current) => {
+      const selected = current ?? routes;
+      return selected.includes(name)
+        ? selected.filter((item) => item !== name)
+        : [...selected, name];
+    });
+  }
+
+  function selectDeterministicAction(
+    actionId:
+      DeterministicActionId | ""
+  ): void {
+    const mappedSkills =
+      skillsForDeterministicAction(
+        actionId
+      );
+    setDeterministicAction(
+      actionId
+    );
+    if (actionId) {
+      setWorkMode("MECHANICAL");
+    }
+    setCaseTypeSkills(
+      mappedSkills
+    );
+    // Keep the non-React routing bridge in sync immediately. This prevents a
+    // click+send race on the first turn before useEffect has a chance to run.
+    setCaseTypeExecutionSkills(
+      mappedSkills
+    );
+    // No action = full router-controlled AUTO. A selected action pins the
+    // execution pipeline programmatically; the router still selects DR domains.
+    setAutomaticSkills(
+      actionId === ""
+    );
+  }
+
+  async function refreshProviderStatus(): Promise<void> {
+    const result = await getProviderStatus();
+    setProviderConfiguration(
+      Object.fromEntries(
+        result.providers.map((item) => [item.provider, item.configured])
+      ) as Record<ProviderId, boolean>
+    );
+  }
+
+  async function refreshProviderAccountStatus(): Promise<void> {
+    const result =
+      await getProviderAccountStatus();
+    setProviderAccounts(
+      Object.fromEntries(
+        result.providers.map(
+          (item) => [
+            item.provider,
+            item
+          ]
+        )
+      ) as Record<
+        ProviderId,
+        ProviderAccountSessionStatus
+      >
+    );
+  }
+
+  function switchAccountToApi(): void {
+    setProvider(
+      runtimeProvider
+    );
+    setProviderApiKeyInput("");
+    setProviderKeyMessage("");
+    setProviderAccountMessage(
+      "Przełączono na kanał API. Wklej klucz dostawcy; w aplikacji desktopowej możesz zapisać go w systemowym magazynie poświadczeń."
+    );
+    setActiveTab("settings");
+    setSettingsSection("models");
+  }
+
+  async function openAccountClientSetup(): Promise<void> {
+    if (
+      !providerDefinition
+    ) {
+      return;
+    }
+    try {
+      await openExternalUrl(
+        providerDefinition
+          .accountInstallUrl
+      );
+    } catch (error) {
+      setProviderAccountMessage(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    }
+  }
+
+  async function connectProviderAccount(): Promise<boolean> {
+    if (
+      !isAccountPrimarySource(
+        provider
+      ) ||
+      user.appRole !== "ADMIN" ||
+      providerAccountBusy
+    ) {
+      return false;
+    }
+    setProviderAccountBusy(true);
+    setProviderAccountMessage(
+      isDesktopShell()
+        ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
+        : "Otwieram oficjalne logowanie dostawcy…"
+    );
+    try {
+      const status =
+        await loginProviderAccount(
+          runtimeProvider
+        );
+      setProviderAccounts(
+        (current) => ({
+          ...current,
+          [runtimeProvider]:
+            status
+        })
+      );
+      setProviderAccountMessage(
+        status.authenticated
+          ? "Konto połączone. Lex Machina automatycznie wznowi zapamiętaną lub ostatnią sesję hosta; jeśli jej nie ma, utworzy nową."
+          : "Logowanie zakończone, ale klient nie potwierdził aktywnej sesji."
+      );
+      return status.authenticated;
+    } catch (error) {
+      const code =
+        error instanceof ApiError
+          ? error.code
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      setProviderAccountMessage(
+        code ===
+          "ACCOUNT_SESSION_SUBSCRIPTION_LOGIN_REQUIRED"
+          ? "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API."
+          : code ===
+              "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
+            ? "Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj klienta z oficjalnej instrukcji albo przełącz źródło na API."
+            : code
+      );
+      await refreshProviderAccountStatus()
+        .catch(() => {});
+      return false;
+    } finally {
+      setProviderAccountBusy(false);
+    }
+  }
+
+  async function saveClaudeOAuthToken(): Promise<void> {
+    if (
+      provider !==
+        "anthropic-account" ||
+      user.appRole !==
+        "ADMIN" ||
+      !claudeOAuthToken.trim()
+    ) {
+      return;
+    }
+    setClaudeOAuthBusy(true);
+    setClaudeOAuthMessage("");
+    try {
+      await setClaudeOAuthToken(
+        claudeOAuthToken,
+        isDesktopShell()
+          ? "OS_KEYRING"
+          : "PROCESS_MEMORY"
+      );
+      setClaudeOAuthTokenInput("");
+      await refreshProviderAccountStatus();
+      setClaudeOAuthMessage(
+        isDesktopShell()
+          ? "Token OAuth Claude zapisano w systemowym magazynie poświadczeń."
+          : "Token OAuth Claude jest aktywny w pamięci procesu."
+      );
+    } catch (error) {
+      setClaudeOAuthMessage(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    } finally {
+      setClaudeOAuthBusy(false);
+    }
+  }
+
+  async function removeClaudeOAuthToken(): Promise<void> {
+    if (
+      user.appRole !==
+        "ADMIN"
+    ) {
+      return;
+    }
+    setClaudeOAuthBusy(true);
+    setClaudeOAuthMessage("");
+    try {
+      await clearClaudeOAuthToken();
+      await refreshProviderAccountStatus();
+      setClaudeOAuthMessage(
+        "Token OAuth Claude został usunięty."
+      );
+    } catch (error) {
+      setClaudeOAuthMessage(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    } finally {
+      setClaudeOAuthBusy(false);
+    }
+  }
+
+  async function saveApiKey(): Promise<void> {
+    if (
+      provider === "local" ||
+      isAccountPrimarySource(
+        provider
+      ) ||
+      user.appRole !== "ADMIN" ||
+      !providerApiKey.trim()
+    ) return;
+    setProviderKeyBusy(true);
+    setProviderKeyMessage("");
+    try {
+      await setProviderApiKey(
+        provider,
+        providerApiKey,
+        isDesktopShell() ? "OS_KEYRING" : "PROCESS_MEMORY"
+      );
+      setProviderApiKeyInput("");
+      await refreshProviderStatus();
+      setProviderKeyMessage(
+        isDesktopShell()
+          ? "Klucz zapisano w systemowym magazynie poświadczeń."
+          : "Klucz jest aktywny w pamięci procesu."
+      );
+    } catch (error) {
+      setProviderKeyMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProviderKeyBusy(false);
+    }
+  }
+
+  async function removeApiKey(): Promise<void> {
+    if (
+      provider === "local" ||
+      isAccountPrimarySource(
+        provider
+      ) ||
+      user.appRole !== "ADMIN"
+    ) return;
+    setProviderKeyBusy(true);
+    try {
+      await clearProviderApiKey(provider);
+      await refreshProviderStatus();
+      setProviderKeyMessage("Klucz został usunięty.");
+    } catch (error) {
+      setProviderKeyMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProviderKeyBusy(false);
+    }
+  }
+
+  async function prepareLocalPrimaryModel():
+    Promise<string | null> {
+    if (
+      provider !== "local" ||
+      !model.startsWith("local/")
+    ) {
+      return null;
+    }
+
+    const codeOf = (
+      error: unknown
+    ): string =>
+      error instanceof ApiError
+        ? error.code
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+    try {
+      const started =
+        await startLocalModel(
+          model
+        );
+      setLocalRuntimeStatus(
+        started.runtime
+      );
+      setModelError("");
+      return null;
+    } catch (initialError) {
+      if (
+        user.appRole !==
+          "ADMIN"
+      ) {
+        return (
+          "Lokalny model wymaga naprawy profilu. " +
+          "Poproś administratora aplikacji o uruchomienie naprawy lokalnej AI. " +
+          `Kod: ${codeOf(initialError)}`
+        );
+      }
+
+      setModelError(
+        "Przygotowuję i weryfikuję lokalny model…"
+      );
+
+      try {
+        let snapshot =
+          await getLocalModels();
+        let local =
+          snapshot.models.find(
+            (item) =>
+              item.id === model
+          );
+        if (!local) {
+          throw new Error(
+            "LOCAL_MODEL_NOT_FOUND"
+          );
+        }
+
+        const preferredContext =
+          local
+            .configuredContextWindow ??
+          local.contextWindow;
+
+        if (
+          snapshot.runtime
+            .configured &&
+          snapshot.runtime
+            .selectedModelId ===
+            model
+        ) {
+          try {
+            await repairLocalModel();
+          } catch {
+            await provisionLocalModel(
+              model,
+              preferredContext
+            );
+          }
+        } else {
+          await provisionLocalModel(
+            model,
+            preferredContext
+          );
+        }
+
+        try {
+          const started =
+            await startLocalModel(
+              model
+            );
+          setLocalRuntimeStatus(
+            started.runtime
+          );
+        } catch (startError) {
+          snapshot =
+            await getLocalModels();
+          local =
+            snapshot.models.find(
+              (item) =>
+                item.id === model
+            );
+          if (!local) {
+            throw startError;
+          }
+
+          const activeContext =
+            local
+              .configuredContextWindow ??
+            local.contextWindow;
+          const fallbackContext =
+            local
+              .minimumContextWindow;
+
+          if (
+            fallbackContext >=
+              activeContext
+          ) {
+            throw startError;
+          }
+
+          // 128k remains the preferred default. This fallback is used only
+          // after the qualified profile cannot start on the current machine.
+          await provisionLocalModel(
+            model,
+            fallbackContext
+          );
+          const started =
+            await startLocalModel(
+              model
+            );
+          setLocalRuntimeStatus(
+            started.runtime
+          );
+        }
+
+        setLocalModelsRefreshToken(
+          (value) => value + 1
+        );
+        setModelError("");
+        return null;
+      } catch (recoveryError) {
+        const code =
+          codeOf(
+            recoveryError
+          );
+        setModelError(code);
+        return (
+          "Nie udało się uruchomić lokalnego modelu nawet po automatycznej naprawie profilu. " +
+          `Kod: ${code}`
+        );
+      }
+    }
+  }
+
+  async function startSelectedLocalModel():
+    Promise<void> {
+    if (
+      provider !== "local" ||
+      !model.startsWith("local/") ||
+      localStartBusy ||
+      executing
+    ) {
+      return;
+    }
+    setLocalStartBusy(true);
+    setLocalStartMessage(
+      "Uruchamiam lokalny model…"
+    );
+    try {
+      const failure =
+        await prepareLocalPrimaryModel();
+      if (failure) {
+        setLocalStartMessage(
+          failure
+        );
+        return;
+      }
+      const snapshot =
+        await getLocalModels();
+      setLocalRuntimeStatus(
+        snapshot.runtime
+      );
+      setLocalStartMessage(
+        snapshot.runtime.state ===
+            "READY" &&
+          snapshot.runtime
+            .activeModelId === model
+          ? "Lokalny model działa."
+          : "Runtime odpowiedział, ale model nie osiągnął stanu READY."
+      );
+    } catch (error) {
+      setLocalStartMessage(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    } finally {
+      setLocalStartBusy(false);
+    }
+  }
+
+  // The last used model was local: start it on entry, once per session.
+  useEffect(() => {
+    if (
+      localAutoStartTried.current ||
+      !runtimeOnline ||
+      modelCatalogLoading ||
+      !models.some((item) => item.id === model && item.selectable) ||
+      !shouldAutoStartLocalModel({
+        remembered: rememberedModel,
+        provider,
+        model,
+        runtimeState: localRuntimeStatus?.state,
+        activeModelId: localRuntimeStatus?.activeModelId
+      })
+    ) {
+      return;
+    }
+    localAutoStartTried.current = true;
+    void startSelectedLocalModel();
+  });
+
+  async function executeMessage(plain: string): Promise<void> {
+    const trimmed =
+      plain.trim();
+    if (
+      executing ||
+      !trimmed ||
+      !caseId ||
+      selectedCase?.archivedAt ||
+      !runtimeOnline ||
+      !model
+    ) return;
+    saveLastUsedModel(user.userId, { provider, model });
+
+    if (
+      conversationIsNew &&
+      workMode === "MECHANICAL" &&
+      !deterministicAction
+    ) {
+      setExecutionError(
+        "Tryb mechaniczny: wybierz skill wykonawczy albo przełącz na tryb automatyczny."
+      );
+      return;
+    }
+
+    const route =
+      automaticSkills
+        ? "AUTO"
+        : choosePrimaryRoute(
+            trimmed,
+            routes,
+            skills,
+            []
+          );
+    if (!route) {
+      setExecutionError(
+        "Nie udało się wybrać dziedziny głównej dla tej wiadomości."
+      );
+      return;
+    }
+
+    const priorMessages =
+      messages;
+    const userMessage:
+      CaseChatMessage = {
+        id: messageId(),
+        role: "user",
+        content: trimmed,
+        ...(conversationIsNew
+          ? {
+              meta:
+                deterministicActionMeta(
+                  deterministicAction
+                )
+            }
+          : {})
+      };
+
+    // Optimistic UI: move the message into the thread immediately. Provider
+    // login/model startup/repair happens only after the user sees what was sent.
+    setMessages((current) => [
+      ...current,
+      userMessage
+    ]);
+    const executionCaseId =
+      caseId;
+
+    setQuery("");
+    setExecuting(true);
+    setExecutionStage(
+      "Przygotowanie sesji"
+    );
+    setExecutionError("");
+    setExecutionDiagnostic(null);
+    setGeneratedDocumentMessage("");
+
+    try {
+      let readyAccount =
+        accountAuthenticated;
+      if (
+        isAccountPrimarySource(
+          provider
+        ) &&
+        !readyAccount
+      ) {
+        setExecutionStage(
+          "Łączenie konta modelu"
+        );
+        const connected =
+          await connectProviderAccount();
+        if (!connected) {
+          throw new Error(
+            accountSession?.installed ===
+              false
+              ? "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
+              : user.appRole === "ADMIN"
+                ? "ACCOUNT_SESSION_LOGIN_NOT_CONFIRMED"
+                : "ACCOUNT_SESSION_LOGIN_ADMIN_REQUIRED"
+          );
+        }
+        readyAccount = true;
+      }
+
+      if (
+        !canExecutePrimaryModel(
+          providerConfigured,
+          model,
+          readyAccount
+        )
+      ) {
+        throw new Error(
+          "PRIMARY_MODEL_NOT_READY"
+        );
+      }
+
+      setExecutionStage(
+        provider === "local"
+          ? "Przygotowanie modelu lokalnego"
+          : "Sprawdzanie gotowości modelu"
+      );
+      const localPreparationError =
+        await prepareLocalPrimaryModel();
+      if (localPreparationError) {
+        throw new Error(
+          localPreparationError
+        );
+      }
+
+      const documentRequest =
+        directDocumentRequest(
+          trimmed
+        );
+      if (
+        documentRequest &&
+        caseId
+      ) {
+        setExecutionStage(
+          "Tworzenie dokumentu i weryfikacja źródeł"
+        );
+        const generated =
+          await generateLegalDocument(
+            executionCaseId,
+            {
+              query:
+                buildSkillSelectionEnvelope(
+                  conversationForProvider(
+                    priorMessages,
+                    trimmed
+                  ),
+                  automaticSkills,
+                  [],
+                  manualSkills === null
+                    ? null
+                    : manualSkillSelection
+                ),
+              provider:
+                runtimeProvider,
+              model,
+              primarySkill:
+                route,
+              mode:
+                "PRAWNIK",
+              format:
+                documentRequest
+                  .format,
+              documentType:
+                documentRequest
+                  .documentType,
+              styleProfile:
+                "lex-classic-clean-v1",
+              attachments:
+                documentAttachments,
+              ...(firmTemplateIds.length > 0
+                ? { firmTemplates: firmTemplateIds }
+                : {}),
+              filename:
+                (
+                  documentRequest.documentType ===
+                    "letter"
+                    ? "LexMachina-pismo"
+                    : documentRequest.documentType ===
+                        "pleading"
+                      ? "LexMachina-pismo-procesowe"
+                      : documentRequest.documentType ===
+                          "contract"
+                        ? "LexMachina-umowa"
+                        : documentRequest.documentType ===
+                            "opinion"
+                          ? "LexMachina-opinia"
+                          : documentRequest.documentType ===
+                              "report"
+                            ? "LexMachina-raport"
+                            : "LexMachina-dokument"
+                ) +
+                "." +
+                documentRequest.format
+            }
+          );
+
+        const downloadedFinal =
+          generated
+            .readyForDownload ===
+            true;
+
+        if (downloadedFinal) {
+          const blob =
+            await downloadGeneratedArtifact(
+              executionCaseId,
+              generated
+                .artifact
+                .artifactId
+            );
+          downloadBlob(
+            blob,
+            generated
+              .artifact
+              .filename
+          );
+        }
+
+        if (
+          activeCaseIdRef.current ===
+            executionCaseId
+        ) {
+          setPendingFinalDocument(
+            downloadedFinal
+              ? null
+              : {
+                  caseId:
+                    executionCaseId,
+                  artifactId:
+                    generated
+                      .artifact
+                      .artifactId,
+                  format:
+                    generated
+                      .format
+                }
+          );
+          setFinalDocumentPassword("");
+          setMessages(
+            (
+              current
+            ) => [
+              ...current,
+              {
+                id:
+                  messageId(),
+                role:
+                  "assistant",
+                content:
+                  downloadedFinal
+                    ? "Gotowy dokument został przygotowany w profesjonalnym układzie i pobrany jako " +
+                      documentRequest
+                        .format
+                        .toUpperCase() +
+                      "."
+                    : "Dokument został przygotowany jako bezpieczna wersja tokenizowana " +
+                      documentRequest
+                        .format
+                        .toUpperCase() +
+                      ". Aby utworzyć finalny plik, użyj poniżej jednorazowej reautoryzacji. Lex Machina odwróci wyłącznie aliasy z vaultów dokumentów użytych do tego pisma.",
+                meta:
+                  "dokument: " +
+                  generated
+                    .artifact
+                    .filename
+              }
+            ]
+          );
+          setGeneratedDocumentMessage(
+            downloadedFinal
+              ? "Dokument gotowy i pobrany."
+              : "Wersja tokenizowana jest zapisana w aktach. Finalizacja czeka na jednorazową reautoryzację."
+          );
+          setWorkspaceRefresh(
+            (value) =>
+              value + 1
+          );
+        }
+        return;
+      }
+
+      setExecutionStage(
+        selectedFileCount > 0
+          ? `Wysyłanie ${selectedFileCount} ${selectedFileCount === 1 ? "pliku" : "plików"} do modelu · analiza prawna i weryfikacja źródeł`
+          : "Analiza prawna, routing i weryfikacja źródeł"
+      );
+      setLastDelivery(null);
+      const executionId =
+        newExecutionId();
+      const stopDraftPolling =
+        startDraftPolling(
+          executionId,
+          setDraftText,
+          1000,
+          getSessionProgress,
+          setExecutionSteps
+        );
+      const result = await executeSession({
+        query: buildSkillSelectionEnvelope(
+          conversationForProvider(
+            priorMessages,
+            trimmed
+          ),
+          automaticSkills,
+          [],
+          manualSkills === null
+            ? null
+            : manualSkillSelection
+        ),
+        provider: runtimeProvider,
+        model,
+        auxiliaryText:
+          trimmed,
+        primarySkill: route,
+        mode: "PRAWNIK",
+        ...(documentAttachments.length > 0
+          ? {
+              attachments: documentAttachments,
+              evidenceImages: imagesWithText ? "all" as const : "photos" as const
+            }
+          : {}),
+        ...(firmTemplateIds.length > 0
+          ? { firmTemplates: firmTemplateIds }
+          : {}),
+        knowledge: {
+          caseId,
+          includeCase: includeCaseKnowledge,
+          includeFirm: includeFirmKnowledge,
+          limit: 8
+        }
+      }, executionId).finally(
+        stopDraftPolling
+      ) as ExtendedExecution;
+
+      setExecutionStage(
+        "Finalizacja odpowiedzi"
+      );
+      if (result.context?.documents?.length) {
+        setLastDelivery({
+          documents: result.context.documents,
+          names: Object.fromEntries(
+            result.context.documents.map((document) => [
+              document.documentId,
+              fileLabel(document.documentId, document.title)
+            ])
+          )
+        });
+      }
+      if (result.processWorkflow) {
+        setProcessWorkflowVisible(true);
+        setProcessWorkflowRefresh(
+          (value) => value + 1
+        );
+      }
+      if (
+        activeCaseIdRef.current ===
+          executionCaseId
+      ) {
+        setMessages((current) => [
+          ...current,
+          executionMessage(
+            result,
+            route
+          )
+        ]);
+      }
+    } catch (error) {
+      const code =
+        error instanceof ApiError
+          ? error.code
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      const reason =
+        error instanceof ApiError
+          ? error.reason
+          : undefined;
+      if (
+        code.startsWith(
+          "PROCESS_PLEADING_"
+        )
+      ) {
+        setProcessWorkflowVisible(true);
+        setProcessWorkflowRefresh(
+          (value) => value + 1
+        );
+      }
+      const friendly =
+        code ===
+          "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
+          ? "Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API."
+        : code ===
+            "ACCOUNT_SESSION_LOGIN_NOT_CONFIRMED"
+          ? "Nie udało się potwierdzić logowania do wybranego konta. Zakończ oficjalne logowanie w widocznym terminalu lub przeglądarce i spróbuj ponownie."
+        : code ===
+            "ACCOUNT_SESSION_LOGIN_ADMIN_REQUIRED"
+          ? "Wybrane konto dostawcy nie jest zalogowane. Połączenie konta wymaga administratora aplikacji."
+        : code ===
+            "PRIMARY_MODEL_NOT_READY"
+          ? "Wybrany model nie jest jeszcze gotowy do użycia."
+        : code === "PROVIDER_NOT_CONFIGURED"
+          ? "Brak lokalnego klucza API dla wybranego dostawcy."
+          : code === "CHAT_PRIVACY_GATE_FAILED"
+            ? "Lokalna pseudonimizacja nie mogła się wykonać, więc zapytanie zostało zatrzymane przed wysłaniem do modelu. Sprawdź lokalny runtime prywatności w panelu Utrzymanie."
+          : code === "LOCAL_MODEL_EXECUTION_FAILED"
+            ? localModelFailureMessage(
+                reason
+              )
+          : code === "PROVIDER_EXECUTION_FAILED"
+            ? provider === "local"
+              ? localModelFailureMessage(
+                  reason
+                )
+              : providerFailureMessage(
+                  provider,
+                  reason,
+                  error instanceof ApiError
+                    ? error.description
+                    : undefined
+                )
+          : code ===
+              "AUTO_ROUTING_FAILED"
+            ? `Model nie zwrócił poprawnego wyboru domeny i skilli w trybie AUTO${reason ? ` (kod: ${reason})` : ""}. Lex Machina nie zgaduje routingu zastępczego.`
+          : code ===
+              "LEGAL_WORKFLOW_EXECUTION_FAILED"
+            ? `Deterministyczny workflow prawny zatrzymał wykonanie${
+                reason
+                  ? ` na etapie: ${reason}`
+                  : ""
+              }.`
+            : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
+              ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
+              : code === "PROCESS_PLEADING_STATE_REQUIRED"
+                ? "To zadanie wymaga deterministycznego pipeline pisma procesowego. Uruchom go w panelu procesu i zaakceptuj start."
+                : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
+                  ? "Pipeline pisma procesowego czeka na Twoją akceptację startu."
+                  : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"
+                    ? "Pipeline czeka na potwierdzenie bieżącego checkpointu."
+                    : code === "PROCESS_PLEADING_CASE_REQUIRED"
+                      ? "Pismo procesowe musi być powiązane z aktywną sprawą."
+                      : code === "PROCESS_PLEADING_ALREADY_FINAL"
+                        ? "Pipeline tej sprawy ma już status FINAL."
+                        : code.startsWith("PROCESS_PLEADING_")
+                          ? `Pipeline pisma procesowego zablokował wykonanie: ${code}`
+                          : code === "COURT_ANALYSIS_CASE_REQUIRED"
+                            ? "Analiza sądowa musi być powiązana z aktywną sprawą."
+                            : code === "COURT_ANALYSIS_ALREADY_COMPLETE"
+                              ? "Deterministyczna analiza sądowa tej sprawy została już zakończona."
+                              : code.startsWith("COURT_ANALYSIS_")
+                                ? `Pipeline analizy sądowej zablokował wykonanie: ${code}`
+                                : code.startsWith(
+                                    "Nie udało się uruchomić lokalnego modelu"
+                                  ) ||
+                                  code.startsWith(
+                                    "Lokalny model wymaga naprawy profilu"
+                                  )
+                                  ? code
+                                  : `Nie udało się wykonać sesji: ${code}`;
+      setExecutionError(friendly);
+      setExecutionDiagnostic({
+        friendly,
+        code,
+        ...(error instanceof ApiError
+          ? {
+              status:
+                error.status,
+              ...(error.reason
+                ? {
+                    reason:
+                      error.reason
+                  }
+                : {}),
+              ...(error.description
+                ? {
+                    description:
+                      error.description
+                  }
+                : {}),
+              ...(error.stage
+                ? {
+                    stage:
+                      error.stage
+                  }
+                : {}),
+              ...(error.trace
+                ? {
+                    trace:
+                      error.trace
+                  }
+                : {})
+            }
+          : {
+              description:
+                error instanceof Error
+                  ? `${error.name}: ${error.message}`
+                  : String(error)
+            })
+      });
+      setMessages((current) => [
+        ...current,
+        {
+          id: messageId(),
+          role: "system",
+          content:
+            friendly
+        }
+      ]);
+    } finally {
+      // Restore the persistent DR bridge after a zero-selection turn.
+      if (
+        allowedDomains !== null &&
+        allowedDomains.length === 0
+      ) {
+        setAllowedDomainSkills([]);
+      }
+      setExecuting(false);
+    }
+  }
+
+  // Step 1: password -> grant -> restored text with every value marked.
+  async function reviewPendingDocument(): Promise<void> {
+    if (
+      !pendingFinalDocument ||
+      finalDocumentBusy ||
+      !finalDocumentPassword.trim()
+    ) {
+      return;
+    }
+    setFinalDocumentBusy(true);
+    setExecutionError("");
+    try {
+      const intent = await createDeanonymizationIntent(
+        pendingFinalDocument.caseId,
+        pendingFinalDocument.artifactId
+      );
+      const authorized = await reauthorizeDeanonymization(
+        intent.intent.intentId,
+        finalDocumentPassword
+      );
+      setFinalDocumentPassword("");
+      const preview = await previewDeanonymization(
+        authorized.grant.grantId
+      );
+      setFinalReview({
+        grantId: authorized.grant.grantId,
+        preview,
+        overrides: {}
+      });
+    } catch (error) {
+      setExecutionError(
+        error instanceof Error
+          ? "Nie udało się przygotować podglądu przywróconych danych: " + error.message
+          : "Nie udało się przygotować podglądu przywróconych danych."
+      );
+    } finally {
+      setFinalDocumentBusy(false);
+    }
+  }
+
+  // Step 2: the reviewed (and corrected) values go into the one-time final file.
+  async function finalizePendingDocument(): Promise<void> {
+    if (!pendingFinalDocument || !finalReview || finalDocumentBusy) {
+      return;
+    }
+    setFinalDocumentBusy(true);
+    setExecutionError("");
+    try {
+      const final = await finalizeDeanonymization(
+        finalReview.grantId,
+        "LexMachina-final." + pendingFinalDocument.format,
+        finalReview.overrides
+      );
+      if (!final.downloadTicket) {
+        throw new Error("SENSITIVE_DOWNLOAD_TICKET_MISSING");
+      }
+      const blob = await downloadSensitiveArtifact(
+        final.downloadTicket.ticketId
+      );
+      downloadBlob(blob, final.artifact.filename);
+      const corrected = Object.keys(finalReview.overrides).length;
+      setPendingFinalDocument(null);
+      setFinalReview(null);
+      setGeneratedDocumentMessage(
+        "Finalny dokument z przywróconymi danymi został utworzony i pobrany." +
+          (corrected > 0 ? ` Ręczne poprawki: ${corrected}.` : "")
+      );
+      setWorkspaceRefresh((value) => value + 1);
+    } catch (error) {
+      setExecutionError(
+        error instanceof Error
+          ? "Nie udało się przywrócić danych do finalnego dokumentu: " +
+            error.message +
+            (/REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(error.message)
+              ? ". Podaj hasło ponownie."
+              : "")
+          : "Nie udało się przywrócić danych do finalnego dokumentu."
+      );
+      if (error instanceof Error && /REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(error.message)) {
+        setFinalReview(null);
+      }
+    } finally {
+      setFinalDocumentBusy(false);
+    }
+  }
+
+  async function sendMessage(): Promise<void> {
+    const plain = query.trim();
+    if (!plain || executing || caseBusy) return;
+    if (!caseId || !selectedCase || selectedCase.archivedAt) {
+      setQuery("");
+      setPendingFirstMessage(plain);
+      await createLocalCase(newCaseName.trim() || suggestedCaseName(plain));
+      return;
+    }
+    await executeMessage(plain);
+  }
+
+  async function saveCaseName(): Promise<void> {
+    if (!selectedCase || !caseNameDraft.trim()) return;
+    setCaseBusy(true);
+    setCaseError("");
+    try {
+      await renameCase(selectedCase.caseId, caseNameDraft.trim());
+      await refreshCases(selectedCase.caseId);
+      setWorkspaceRefresh(
+        (value) => value + 1
+      );
+    } catch (error) {
+      setCaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
+  async function saveCaseScheduleEvent(): Promise<void> {
+    if (
+      !selectedCase ||
+      !canWriteCase(
+        selectedCase
+      ) ||
+      !scheduleTitle.trim() ||
+      !scheduleStartsAt ||
+      caseScheduleBusy
+    ) {
+      return;
+    }
+
+    setCaseScheduleBusy(true);
+    setCaseScheduleError("");
+    try {
+      const created =
+        await addCaseScheduleEvent(
+          selectedCase.caseId,
+          {
+            kind:
+              scheduleKind,
+            title:
+              scheduleTitle.trim(),
+            startsAt:
+              scheduleStartsAt,
+            ...(scheduleLocation
+              .trim()
+              ? {
+                  location:
+                    scheduleLocation
+                      .trim()
+                }
+              : {}),
+            ...(scheduleNotes
+              .trim()
+              ? {
+                  notes:
+                    scheduleNotes
+                      .trim()
+                }
+              : {})
+          }
+        );
+      setCaseSchedule(
+        (current) =>
+          [...current, created]
+            .sort(
+              (
+                left,
+                right
+              ) =>
+                left.startsAt
+                  .localeCompare(
+                    right.startsAt
+                  ) ||
+                left.createdAt
+                  .localeCompare(
+                    right.createdAt
+                  )
+            )
+      );
+      setScheduleTitle("");
+      setScheduleLocation("");
+      setScheduleNotes("");
+    } catch (error) {
+      setCaseScheduleError(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    } finally {
+      setCaseScheduleBusy(false);
+    }
+  }
+
+  async function removeCaseScheduleEvent(
+    eventId: string
+  ): Promise<void> {
+    if (
+      !selectedCase ||
+      !canWriteCase(
+        selectedCase
+      ) ||
+      caseScheduleBusy
+    ) {
+      return;
+    }
+
+    setCaseScheduleBusy(true);
+    setCaseScheduleError("");
+    try {
+      await deleteCaseScheduleEvent(
+        selectedCase.caseId,
+        eventId
+      );
+      setCaseSchedule(
+        (current) =>
+          current.filter(
+            (event) =>
+              event.eventId !==
+                eventId
+          )
+      );
+    } catch (error) {
+      setCaseScheduleError(
+        error instanceof Error
+          ? error.message
+          : String(error)
+      );
+    } finally {
+      setCaseScheduleBusy(false);
+    }
+  }
+
+  async function toggleArchive(): Promise<void> {
+    if (!selectedCase) return;
+    setCaseBusy(true);
+    setCaseError("");
+    try {
+      if (selectedCase.archivedAt) {
+        await unarchiveCase(selectedCase.caseId);
+      } else {
+        await archiveCase(selectedCase.caseId);
+      }
+      await refreshCases(selectedCase.caseId);
+    } catch (error) {
+      setCaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
+  async function permanentlyDeleteCase(): Promise<void> {
+    if (
+      !selectedCase ||
+      deletePhrase !== "USUŃ" ||
+      !deletePassword
+    ) return;
+    setCaseBusy(true);
+    setCaseError("");
+    try {
+      await deleteCase(selectedCase.caseId, deletePassword);
+      setDeletePhrase("");
+      setDeletePassword("");
+      await refreshCases();
+    } catch (error) {
+      setCaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
+  const accountCanLoginInline =
+    isAccountPrimarySource(
+      provider
+    ) &&
+    user.appRole === "ADMIN" &&
+    accountSession?.installed !== false;
+
+  const canSend =
+    runtimeOnline &&
+    (
+      canExecutePrimaryModel(
+        providerConfigured,
+        model,
+        accountAuthenticated
+      ) ||
+      accountCanLoginInline
+    ) &&
+    Boolean(model) &&
+    Boolean(query.trim()) &&
+    !executing &&
+    !caseBusy &&
+    !selectedCase?.archivedAt &&
+    // Picked files that do not fit the model are not sent at all.
+    selectedFileCount <= documentLimit &&
+    documentFit?.estimate?.fits !== false;
+
+  return (
+    <div className="chat-app-shell matter-chat-app">
+      <aside className="chat-sidebar">
+        <div className="chat-brand">
+          <span className="chat-brand-mark">LM</span>
+          <div>
+            <strong>Lex Machina</strong>
+            <small>1 wątek = 1 sprawa</small>
+          </div>
+        </div>
+
+        <div className="matter-thread-list" aria-label="Wątki spraw">
+          <div className="matter-thread-heading">
+            <strong>Sprawy</strong>
+            <button
+              type="button"
+              disabled={caseBusy}
+              onClick={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa")}
+            >
+              + Nowa sprawa
+            </button>
+          </div>
+          <input
+            value={newCaseName}
+            maxLength={160}
+            placeholder="Nazwa nowej sprawy"
+            onChange={(event) => setNewCaseName(event.target.value)}
+          />
+          <div className="matter-thread-items">
+            {matterCases.map((item) => (
+              <button
+                key={item.caseId}
+                type="button"
+                disabled={caseBusy}
+                className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
+                onClick={() => {
+                  setPendingFirstMessage(null);
+                  setExecutionError("");
+                  setCaseId(item.caseId);
+                  setActiveTab("chat");
+                }}
+              >
+                <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                <small>
+                  {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                </small>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <nav className="chat-tabs" aria-label="Sekcje aplikacji">
+          {([
+            ["home", "Start"],
+            ["calendar", "Kalendarz"],
+            ["chat", "Czat"],
+            ["skills", "Skille"],
+            ["case", "Sprawa"],
+            ["firm", "Kancelaria"],
+            ["settings", "Ustawienia"]
+          ] as Array<[TabId, string]>).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={activeTab === id ? "chat-tab chat-tab-active" : "chat-tab"}
+              onClick={() => setActiveTab(id)}
+            >
+              {label}
+              {id === "case" && documentDropQueue.total + documentStaging.items.length > 0 ? (
+                <span>{documentDropQueue.total + documentStaging.items.length}</span>
+              ) : null}
+            </button>
+          ))}
+        </nav>
+
+        <div className="chat-sidebar-card">
+          <div className="chat-status-line">
+            <span className={runtimeOnline ? "chat-dot online" : "chat-dot offline"} />
+            <strong>{runtimeOnline ? "Runtime aktywny" : "Runtime offline"}</strong>
+          </div>
+          <small>
+            {selectedCase?.displayName || "Nowy wątek utworzy własną sprawę"}
+          </small>
+        </div>
+
+        <div className="chat-sidebar-foot">
+          <span>prawny-router-v3 ✓</span>
+          <span>shared ✓</span>
+          <span>
+            {selectedDeterministicAction
+              ? selectedDeterministicAction.label
+              : AUTO_CASE_TYPE}
+          </span>
+        </div>
+
+        <div className="chat-account-card">
+          <div className="chat-account-identity">
+            <strong>
+              {user.displayName}
+            </strong>
+            <small>
+              @{user.loginName} · {user.appRole}
+            </small>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("settings");
+              setSettingsSection(
+                "security"
+              );
+            }}
+          >
+            Ustawienia
+          </button>
+          <div className="chat-account-actions">
+            <button
+              type="button"
+              onClick={onLock}
+              disabled={!onLock}
+            >
+              Zablokuj
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              disabled={!onLogout}
+            >
+              Wyloguj
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main className="chat-main">
+        {activeTab === "chat" ? (
+          <section
+            className="chat-model-dock"
+            aria-label="Aktywny model rozmowy"
+          >
+            <div className="chat-model-dock-status">
+              <span
+                className={
+                  provider === "local"
+                    ? localModelReady
+                      ? "chat-dot online"
+                      : localModelStarting
+                        ? "chat-dot starting"
+                        : "chat-dot offline"
+                    : runtimeOnline
+                      ? "chat-dot online"
+                      : "chat-dot offline"
+                }
+              />
+              <div>
+                <strong>
+                  {selectedModel?.displayName ??
+                    (provider === "local"
+                      ? "Model lokalny"
+                      : "Wybierz model")}
+                </strong>
+                <small>
+                  {provider === "local"
+                    ? localModelReady
+                      ? "lokalny model · działa"
+                      : localModelStarting
+                        ? "lokalny model · uruchamianie"
+                        : localRuntimeStatus
+                          ? "lokalny model · zatrzymany"
+                          : "lokalny model · sprawdzanie stanu"
+                    : PRIMARY_MODEL_SOURCES.find(
+                        (item) =>
+                          item.id ===
+                          provider
+                      )?.label ??
+                      provider}
+                </small>
+              </div>
+            </div>
+            <div className="chat-model-dock-controls">
+              <select
+                aria-label="Źródło modelu głównego"
+                value={provider}
+                disabled={executing}
+                onChange={(event) => {
+                  setProvider(
+                    event.target.value as PrimaryModelSource
+                  );
+                  localAutoStartTried.current = true;
+                  setProviderApiKeyInput("");
+                  setProviderKeyMessage("");
+                  setProviderAccountMessage("");
+                  setLocalStartMessage("");
+                }}
+              >
+                {PRIMARY_MODEL_SOURCES.map(
+                  (item) => (
+                    <option
+                      key={item.id}
+                      value={item.id}
+                    >
+                      {item.label}
+                    </option>
+                  )
+                )}
+              </select>
+              <select
+                aria-label="Model główny"
+                value={model}
+                disabled={
+                  executing ||
+                  modelCatalogLoading ||
+                  models.length === 0
+                }
+                onChange={(event) => {
+                  setModel(
+                    event.target.value
+                  );
+                  saveLastUsedModel(user.userId, { provider, model: event.target.value });
+                  setLocalStartMessage("");
+                }}
+              >
+                {modelCatalogLoading ? (
+                  <option value="">
+                    Odświeżam modele…
+                  </option>
+                ) : models.length === 0 ? (
+                  <option value="">
+                    {provider === "local"
+                      ? "Brak zainstalowanego modelu"
+                      : "Brak modeli"}
+                  </option>
+                ) : null}
+                {models.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                    disabled={
+                      !item.selectable
+                    }
+                  >
+                    {item.displayName}
+                  </option>
+                ))}
+              </select>
+              {provider === "local" ? (
+                <button
+                  type="button"
+                  className="chat-primary-action chat-model-start"
+                  disabled={
+                    executing ||
+                    localStartBusy ||
+                    localModelReady ||
+                    !model.startsWith(
+                      "local/"
+                    )
+                  }
+                  onClick={() =>
+                    void startSelectedLocalModel()
+                  }
+                >
+                  {localStartBusy ||
+                  localModelStarting
+                    ? "Uruchamianie…"
+                    : localModelReady
+                      ? "Model uruchomiony"
+                      : "Uruchom lokalny model"}
+                </button>
+              ) : isAccountPrimarySource(
+                  provider
+                ) &&
+                !accountAuthenticated ? (
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    executing ||
+                    providerAccountBusy ||
+                    user.appRole !==
+                      "ADMIN"
+                  }
+                  onClick={() =>
+                    accountSession
+                      ?.installed ===
+                    false
+                      ? void openAccountClientSetup()
+                      : void connectProviderAccount()
+                  }
+                >
+                  {providerAccountBusy
+                    ? "Logowanie…"
+                    : accountSession
+                        ?.installed ===
+                      false
+                      ? "Zainstaluj klienta ↗"
+                      : "Połącz konto"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="chat-secondary-action"
+                onClick={() => {
+                  setActiveTab(
+                    "settings"
+                  );
+                  setSettingsSection(
+                    "models"
+                  );
+                }}
+              >
+                Zarządzaj modelami
+              </button>
+            </div>
+            {localStartMessage ? (
+              <small
+                className={
+                  localStartMessage ===
+                  "Lokalny model działa."
+                    ? "chat-model-dock-message ready"
+                    : "chat-model-dock-message"
+                }
+              >
+                {localStartMessage}
+              </small>
+            ) : null}
+          </section>
+        ) : null}
+        <header className="chat-page-header">
+          <div>
+            <p className="eyebrow">
+              {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"}
+            </p>
+            <h1>
+              {activeTab === "home"
+                ? "Start"
+                : activeTab === "calendar"
+                ? "Kalendarz spraw"
+                : activeTab === "chat"
+                ? "Czat sprawy"
+                : activeTab === "skills"
+                  ? "Routing i skille"
+                  : activeTab === "case"
+                    ? "Sprawa i dokumenty"
+                    : activeTab === "firm"
+                      ? "Know-how i wzory kancelarii"
+                      : "Ustawienia"}
+            </h1>
+          </div>
+          <div className="chat-header-actions">
+            <div className="chat-case-switcher">
+              <label className="chat-case-search">
+                <span>Szukaj spraw</span>
+                <input
+                  type="search"
+                  value={caseSearch}
+                  placeholder="Nazwa lub ID sprawy"
+                  aria-label="Szukaj spraw"
+                  onChange={(event) =>
+                    setCaseSearch(
+                      event.target.value
+                    )
+                  }
+                />
+              </label>
+              <label className="chat-case-filter">
+                <span>Status</span>
+                <select
+                  aria-label="Filtr statusu spraw"
+                  value={caseStatusFilter}
+                  onChange={(event) =>
+                    setCaseStatusFilter(
+                      event.target
+                        .value as MatterStatusFilter
+                    )
+                  }
+                >
+                  <option value="ALL">
+                    Wszystkie
+                  </option>
+                  <option value="ACTIVE">
+                    Aktywne
+                  </option>
+                  <option value="ARCHIVED">
+                    Archiwalne
+                  </option>
+                </select>
+              </label>
+              <label className="chat-case-filter">
+                <span>Rola</span>
+                <select
+                  aria-label="Filtr roli w sprawie"
+                  value={caseRoleFilter}
+                  onChange={(event) =>
+                    setCaseRoleFilter(
+                      event.target
+                        .value as MatterRoleFilter
+                    )
+                  }
+                >
+                  <option value="ALL">
+                    Wszystkie
+                  </option>
+                  <option value="OWNER">
+                    Owner
+                  </option>
+                  <option value="EDITOR">
+                    Editor
+                  </option>
+                  <option value="ANALYST">
+                    Analyst
+                  </option>
+                  <option value="VIEWER">
+                    Viewer
+                  </option>
+                </select>
+              </label>
+              <label className="chat-case-filter">
+                <span>Sortuj</span>
+                <select
+                  aria-label="Sortowanie spraw"
+                  value={caseSort}
+                  onChange={(event) =>
+                    setCaseSort(
+                      event.target
+                        .value as MatterSort
+                    )
+                  }
+                >
+                  <option value="UPDATED_DESC">
+                    Ostatnio zmieniane
+                  </option>
+                  <option value="CREATED_DESC">
+                    Najnowsze
+                  </option>
+                  <option value="NAME_ASC">
+                    Nazwa A–Z
+                  </option>
+                </select>
+              </label>
+              <label>
+                <span>Sprawa</span>
+                <select
+                  aria-label="Wybierz sprawę"
+                  value={caseId}
+                  disabled={
+                    caseBusy
+                  }
+                  onChange={(event) =>
+                    switchToCase(
+                      event.target
+                        .value
+                    )
+                  }
+                >
+                  {filteredMatterCases.map(
+                    (item) => (
+                      <option
+                        key={
+                          item.caseId
+                        }
+                        value={
+                          item.caseId
+                        }
+                      >
+                        {item.displayName ||
+                          "Sprawa bez nazwy"}
+                        {item.archivedAt
+                          ? " · archiwalna"
+                          : ""}
+                      </option>
+                    )
+                  )}
+                </select>
+                {caseSearch.trim() ||
+                caseStatusFilter !== "ALL" ||
+                caseRoleFilter !== "ALL" ? (
+                  <small className="chat-case-search-count">
+                    {caseSearchMatchCount} wyników
+                    {matterSearchResult.currentPreserved
+                      ? " · bieżąca sprawa pokazana dodatkowo"
+                      : ""}
+                  </small>
+                ) : null}
+              </label>
+              {caseSearch.trim() ||
+              caseStatusFilter !== "ALL" ||
+              caseRoleFilter !== "ALL" ||
+              caseSort !== "UPDATED_DESC" ? (
+                <button
+                  type="button"
+                  className="chat-secondary-action chat-case-filter-reset"
+                  onClick={() => {
+                    setCaseSearch("");
+                    setCaseStatusFilter(
+                      "ALL"
+                    );
+                    setCaseRoleFilter(
+                      "ALL"
+                    );
+                    setCaseSort(
+                      "UPDATED_DESC"
+                    );
+                  }}
+                >
+                  Wyczyść filtry
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="chat-secondary-action"
+                disabled={
+                  caseBusy
+                }
+                onClick={() =>
+                  void createLocalCase(
+                    newCaseName
+                      .trim() ||
+                      "Nowa sprawa"
+                  )
+                }
+              >
+                + Nowa sprawa
+              </button>
+            </div>
+            <button
+              type="button"
+              className="chat-secondary-action"
+              disabled={Boolean(selectedCase?.archivedAt)}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              + Dodaj pliki
+            </button>
+            <input
+              ref={fileInputRef}
+              className="chat-hidden-file-input"
+              type="file"
+              multiple
+              accept={DOCUMENT_FILE_ACCEPT}
+              onChange={(event) => {
+                if (event.target.files) void acceptFiles(event.target.files);
+                event.currentTarget.value = "";
+              }}
+            />
+          </div>
+        </header>
+
+        {Array.from(
+          new Set(
+            [runtimeError, caseError, threadError]
+              .filter(Boolean)
+          )
+        ).map((error) => (
+          <div key={error} className="chat-alert chat-alert-error">
+            {error === "CASE_ACCESS_DENIED"
+              ? "Nie udało się otworzyć tej sprawy w bieżącej sesji. Wybierz inną sprawę albo utwórz nową."
+              : error}
+          </div>
+        ))}
+
+        {documentStaging.items.length > 0 ? (
+          <section className="chat-card-stack chat-document-flow" aria-label="Pliki do decyzji">
+            <article className="chat-card">
+              <p className="eyebrow">Dodane pliki · decyzja przed przetwarzaniem</p>
+              <h2>{documentStaging.items.length} do decyzji</h2>
+              <p>
+                OCR nie startuje sam. Dla każdego pliku wybierz sposób: OCR + anonimizacja,
+                OCR + anonimizacja z AI, Tylko OCR albo Tylko OCR z korektą AI (AI = model
+                lokalny, tylko do plików). Możesz też zapisać plik bez przetwarzania i
+                przetworzyć go później w zakładce Sprawa.
+              </p>
+              {documentStaging.rejected > 0 ? (
+                <p className="chat-inline-error">
+                  Pominięto {documentStaging.rejected} plików (puste albo ponad limit {MAX_DOCUMENT_DROP_QUEUE}).
+                </p>
+              ) : null}
+              <ul className="chat-file-list">
+                {documentStaging.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.file.name}</strong>
+                    <small>
+                      {describeDocumentFile(item.file)}
+                      {item.status === "SAVING" ? " · zapisuję i przetwarzam…" : ""}
+                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
+                    </small>
+                    <span className="chat-file-actions">
+                      <select
+                        aria-label={`Sposób przetwarzania: ${item.file.name}`}
+                        value={item.mode}
+                        disabled={item.status === "SAVING"}
+                        title={DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === item.mode)?.title}
+                        onChange={(event) =>
+                          setDocumentStaging((current) =>
+                            setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
+                          )
+                        }
+                      >
+                        {DOCUMENT_PROCESSING_MODES.map((entry) => (
+                          <option key={entry.mode} value={entry.mode} title={entry.title}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => processStagedDocuments([item.id])}
+                      >
+                        Przetwórz
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING" || !caseId}
+                        onClick={() => void saveStagedDocuments([item.id])}
+                      >
+                        Zapisz bez przetwarzania
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={item.status === "SAVING"}
+                        onClick={() => removeStagedDocuments([item.id])}
+                      >
+                        Usuń
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {documentStaging.items.length > 1 ? (
+                <span className="chat-file-actions">
+                  <button type="button" className="chat-secondary-action" onClick={() => processStagedDocuments()}>
+                    Przetwórz wszystkie (wybrane sposoby)
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={!caseId}
+                    onClick={() => void saveStagedDocuments()}
+                  >
+                    Zapisz wszystkie bez przetwarzania
+                  </button>
+                </span>
+              ) : null}
+            </article>
+          </section>
+        ) : null}
+
+        {documentDropQueue.total > 0 ? (
+          <section className="chat-card-stack chat-document-flow" aria-label="OCR i prywatność plików">
+            <article className="chat-card">
+              <p className="eyebrow">OCR w czacie · plik po pliku</p>
+              <h2>
+                {documentDropQueue.completed}/{documentDropQueue.total} zakończono
+              </h2>
+              <p>
+                Każdy plik przechodzi osobno: wykrycie skanu → lokalny OCR → decyzja o anonimizacji →
+                osobny zaszyfrowany vault. Następny plik nie rozpocznie decyzji prywatności, dopóki
+                bieżący nie zostanie zakończony lub pominięty.
+              </p>
+              {documentDropQueue.rejected > 0 ? (
+                <p className="chat-inline-error">
+                  Pominięto {documentDropQueue.rejected} plików.
+                </p>
+              ) : null}
+              <ul className="chat-file-list">
+                {documentDropQueue.files.slice(0, 12).map((file, index) => (
+                  <li key={`${file.name}-${file.lastModified}-${index}`}>
+                    <strong>{file.name}</strong>
+                    <small>
+                      {index === 0 ? "OCR / decyzja prywatności" : "Oczekuje"} · {describeDocumentFile(file)}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+              <small>limit kolejki {MAX_DOCUMENT_DROP_QUEUE}</small>
+            </article>
+
+            <DocumentPrivacyPanel
+              caseId={caseId}
+              incomingFile={documentDropQueue.files[0] ?? null}
+              processingOptionsFor={(file) => {
+                const mode = reviewModes.current.get(file);
+                return mode ? processingModeOptions(mode) : undefined;
+              }}
+              onIncomingFileConsumed={() =>
+                setDocumentDropQueue((current) => consumeDocumentDropFile(current))
+              }
+              onCaseFilesChange={() =>
+                setWorkspaceRefresh((value) => value + 1)
+              }
+              onAttachmentSelectionChange={(selection) => {
+                if (!selection) return;
+                setDocumentAttachments((current) => upsertAttachment(current, selection));
+              }}
+            />
+          </section>
+        ) : null}
+
+        {activeTab === "chat" ? (
+          <section
+            className={dropActive ? "chat-panel chat-drop-active" : "chat-panel"}
+            onDragEnter={(event) => {
+              if (event.dataTransfer.types.includes("Files")) {
+                event.preventDefault();
+                dragDepth.current += 1;
+                setDropActive(true);
+              }
+            }}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("Files")) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setDropActive(true);
+              }
+            }}
+            onDragLeave={() => {
+              dragDepth.current = Math.max(0, dragDepth.current - 1);
+              if (dragDepth.current === 0) setDropActive(false);
+            }}
+            onDrop={handleDrop}
+          >
+            <ProcessPleadingWorkflowPanel
+              caseId={caseId}
+              forceVisible={processWorkflowVisible}
+              refreshToken={processWorkflowRefresh}
+              canWrite={Boolean(
+                selectedCase &&
+                !selectedCase.archivedAt &&
+                canWriteCase(selectedCase)
+              )}
+              busy={executing || caseBusy}
+              onContinue={() => {
+                void executeMessage(
+                  "Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem."
+                );
+              }}
+            />
+            {conversationIsNew ? (
+              <section
+                className="chat-pipeline-picker"
+                aria-label="Tryb pracy dla nowej rozmowy"
+              >
+                <div>
+                  <p className="eyebrow">Tryb pracy</p>
+                  <h3>
+                    {workMode === "AUTO"
+                      ? "Automatyczny — prawny router"
+                      : selectedDeterministicAction
+                        ? `Mechaniczny — ${selectedDeterministicAction.label}`
+                        : "Mechaniczny — wybierz skill wykonawczy"}
+                  </h3>
+                  <p>
+                    {workMode === "AUTO"
+                      ? "prawny-router-v3 dobiera dziedziny DR, skille wykonawcze i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych."
+                      : "Wybrany skill wykonawczy uruchamia stały, deterministyczny pipeline z jego modułami. Router nadal dobiera dziedzinę DR. Po wysłaniu pierwszej wiadomości wybór zostaje przypięty do wątku."}
+                  </p>
+                </div>
+                <div
+                  className="chat-work-mode"
+                  role="radiogroup"
+                  aria-label="Tryb pracy"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={workMode === "AUTO"}
+                    className={
+                      workMode === "AUTO"
+                        ? "chat-pipeline-option selected"
+                        : "chat-pipeline-option"
+                    }
+                    onClick={() => {
+                      selectDeterministicAction("");
+                      setWorkMode("AUTO");
+                    }}
+                  >
+                    <strong>Automatyczny</strong>
+                    <small>Router sam dobiera skille i moduły.</small>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={workMode === "MECHANICAL"}
+                    disabled={availableActions.length === 0}
+                    className={
+                      workMode === "MECHANICAL"
+                        ? "chat-pipeline-option selected"
+                        : "chat-pipeline-option"
+                    }
+                    onClick={() => setWorkMode("MECHANICAL")}
+                  >
+                    <strong>Mechaniczny</strong>
+                    <small>
+                      {availableActions.length > 0
+                        ? "Ty wybierasz skill wykonawczy i jego pipeline."
+                        : "Brak skilli wykonawczych w korpusie."}
+                    </small>
+                  </button>
+                </div>
+                {workMode === "MECHANICAL" ? (
+                  <div className="chat-pipeline-options">
+                    {availableActions.map((action) => {
+                      const checked =
+                        deterministicAction ===
+                        action.id;
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          className={
+                            checked
+                              ? "chat-pipeline-option selected"
+                              : "chat-pipeline-option"
+                          }
+                          aria-pressed={checked}
+                          onClick={() =>
+                            selectDeterministicAction(
+                              action.id
+                            )
+                          }
+                        >
+                          <strong>
+                            {action.label}
+                          </strong>
+                          <small>
+                            {action.description}
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            <div className="chat-message-list" aria-live="polite">
+              {threadLoading ? (
+                <article className="chat-message chat-message-system">
+                  Ładowanie zaszyfrowanego wątku sprawy…
+                </article>
+              ) : null}
+              {messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={`chat-message chat-message-${message.role}`}
+                >
+                  <div className="chat-message-role">
+                    {message.role === "user"
+                      ? "Ty"
+                      : message.role === "assistant"
+                        ? "Lex Machina"
+                        : "System"}
+                  </div>
+                  <DocumentCitationContent
+                    content={message.content}
+                    citations={message.documentCitations}
+                    onOpenUrl={openExternalUrl}
+                  />
+                  {message.role === "assistant" &&
+                  (message.restorations?.length ||
+                    unresolvedPlaceholders(message.content).length) ? (
+                    <RestorationReview
+                      key={`${message.id}-${message.content.length}`}
+                      content={message.content}
+                      marks={validMarks(message.content, message.restorations)}
+                      unresolved={unresolvedPlaceholders(message.content)}
+                      readOnly={!canWriteCase(selectedCase)}
+                      onCorrect={async (index, text, remember) => {
+                        const marks = validMarks(message.content, message.restorations);
+                        const mark = marks[index];
+                        if (remember && mark?.canonical && mark.gender && mark.case) {
+                          await saveNameForm({
+                            canonical: mark.canonical,
+                            gender: mark.gender,
+                            case: mark.case,
+                            text: text.trim()
+                          });
+                        }
+                        const corrected = applyRestorationCorrection(
+                          message.content,
+                          marks,
+                          index,
+                          text
+                        );
+                        await updateMessage({
+                          ...message,
+                          content: corrected.content,
+                          restorations: corrected.marks
+                        });
+                      }}
+                    />
+                  ) : null}
+                  {visibleMessageMeta(message.meta) ? (
+                    <small className="chat-message-meta">
+                      {visibleMessageMeta(message.meta)}
+                    </small>
+                  ) : null}
+                  {message.evidence?.length ? (
+                    <details className="chat-evidence">
+                      <summary>Źródła i weryfikacja ({message.evidence.length})</summary>
+                      <ul>
+                        {message.evidence.map((item: EvidenceItem, index: number) => (
+                          <li key={`${item.claim}-${index}`}>
+                            <span className="chat-evidence-meta">
+                              <b>{item.status}</b>
+                              <span>· {item.kind}</span>
+                              {item.sourceTier ? (
+                                <span className={`chat-source-tier chat-source-tier-${item.sourceTier.toLocaleLowerCase("en")}`}>
+                                  {item.sourceTier}
+                                </span>
+                              ) : null}
+                            </span>
+                            <strong>{item.claim}</strong>
+                            {item.sourceUrl ? (
+                              <a
+                                className="source-inline-link"
+                                href={item.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  void openExternalUrl(item.sourceUrl!);
+                                }}
+                              >
+                                Otwórz źródło w przeglądarce ↗
+                              </a>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                  {message.auxiliarySources?.length ? (
+                    <details className="chat-auxiliary-sources">
+                      <summary>
+                        Źródła pomocnicze R2B/R3 ({message.auxiliarySources.length})
+                      </summary>
+                      <p className="chat-auxiliary-intro">
+                        Materiały pomocnicze nie tworzą znacznika VERIFIED ani samodzielnej podstawy prawnej.
+                      </p>
+                      <ul>
+                        {message.auxiliarySources.map((item, index) => (
+                          <li
+                            key={`${item.sourceUrl}-${item.claim ?? ""}-${index}`}
+                            className={item.conflict ? "conflict" : ""}
+                          >
+                            <div className="chat-auxiliary-source-head">
+                              <span className={`chat-source-tier chat-source-tier-${item.sourceTier.toLocaleLowerCase("en")}`}>
+                                {item.sourceTier}
+                              </span>
+                              <strong>
+                                {item.claim || "Materiał pomocniczy"}
+                              </strong>
+                            </div>
+                            <small>
+                              Cross-check: {
+                                item.crossCheckStatus === "CONFIRMED_R1_R2A"
+                                  ? `potwierdzony w ${item.crossCheckTier ?? "R1/2A"}`
+                                  : item.crossCheckStatus === "CONFLICT"
+                                    ? "konflikt ze źródłem wyższego rzędu"
+                                    : item.crossCheckStatus === "UNAVAILABLE"
+                                      ? "niedostępny"
+                                      : "wymagany / oczekuje"
+                              }
+                            </small>
+                            {item.staleOrUndatedWarning ? (
+                              <small className="chat-source-warning">
+                                ⚠️ Brak aktualnej daty albo materiał starszy niż 24 miesiące.
+                              </small>
+                            ) : null}
+                            {item.conflict ? (
+                              <small className="chat-source-warning">
+                                ⚠️ Nie buduj wniosku na tym materiale; pierwszeństwo ma R1/2A.
+                              </small>
+                            ) : null}
+                            <div className="chat-auxiliary-source-links">
+                              <a
+                                className="source-inline-link"
+                                href={item.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  void openExternalUrl(item.sourceUrl);
+                                }}
+                              >
+                                Otwórz źródło pomocnicze ↗
+                              </a>
+                              {item.crossCheckUrl ? (
+                                <a
+                                  className="source-inline-link"
+                                  href={item.crossCheckUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    void openExternalUrl(item.crossCheckUrl!);
+                                  }}
+                                >
+                                  Otwórz cross-check {item.crossCheckTier ?? "R1/2A"} ↗
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </article>
+              ))}
+              {executing ? (
+                <article
+                  className="chat-message chat-message-assistant chat-thinking chat-working-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="chat-message-role">
+                    Lex Machina
+                  </div>
+                  <div className="chat-working-head">
+                    <span
+                      className="chat-working-spinner"
+                      aria-hidden="true"
+                    />
+                    <strong>Pracuję</strong>
+                    <span>
+                      {executionElapsedSeconds}s
+                    </span>
+                  </div>
+                  <div className="chat-message-content">
+                    {executionStage}
+                  </div>
+                  {executionSteps ? (
+                    <ol className="chat-steps" aria-label="Etapy pracy">
+                      <li className="chat-steps-summary">
+                        Etap {executionSteps.current} z {executionSteps.total} · zakończone:{" "}
+                        {executionSteps.phases.filter((phase) => phase.status === "done").length} · pozostało:{" "}
+                        {executionSteps.phases.filter((phase) => phase.status !== "done").length}
+                      </li>
+                      {executionSteps.phases.map((phase) => (
+                        <li key={phase.key} className={`chat-step chat-step-${phase.status}`}>
+                          <span className="chat-step-status">
+                            {phase.status === "done" ? "zakończono" : phase.status === "active" ? "w toku" : "oczekuje"}
+                          </span>
+                          <strong>{phase.label}</strong>
+                          {phase.details.length ? (
+                            <small>{phase.details.slice(-6).join(" · ")}</small>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  {draftText ? (
+                    <div className="chat-draft">
+                      <div className="chat-draft-label">
+                        Wersja robocza — odpowiedź powstaje, weryfikacja źródeł jeszcze trwa
+                      </div>
+                      <div className="chat-draft-text">
+                        {draftText}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="chat-working-meta">
+                    <span>
+                      {runtimePulse === "OK"
+                        ? "Runtime odpowiada"
+                        : runtimePulse === "LOST"
+                          ? "Brak odpowiedzi z runtime — operacja nadal oczekuje"
+                          : "Sprawdzam runtime…"}
+                    </span>
+                    <span>
+                      To okno aktualizuje się podczas oczekiwania na model i źródła.
+                    </span>
+                  </div>
+                </article>
+              ) : null}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div className="chat-composer">
+              {dropActive ? (
+                <div className="chat-drop-overlay">
+                  Upuść pliki, aby dodać je do tej sprawy
+                </div>
+              ) : null}
+              <div className="chat-composer-meta">
+                <span>Sprawa: {selectedCase?.displayName || "utworzy się przy pierwszej wiadomości"}</span>
+                <span>
+                  Działanie: {selectedDeterministicAction
+                    ? selectedDeterministicAction.label
+                    : "AUTO · prawny router"}
+                </span>
+                <span>Załączniki: {selectedFileCount}</span>
+                {firmTemplateIds.length > 0 ||
+                documentAttachments.some((attachment) =>
+                  caseFiles.some(
+                    (file) =>
+                      file.processing?.documentId === attachment.documentId &&
+                      file.processing.anonymized === false
+                  )
+                ) ? (
+                  <span className="chat-clear-text-warning">Uwaga: część załączników to tekst jawny</span>
+                ) : null}
+              </div>
+              {lastDelivery ? (
+                <div className="chat-delivery" role="status">
+                  <strong>
+                    Do modelu trafiło w całości:{" "}
+                    {lastDelivery.documents.filter((document) => document.status === "FULL").length} z{" "}
+                    {lastDelivery.documents.length} plików
+                    {lastDelivery.documents.some((document) => document.status !== "FULL")
+                      ? " - reszta skrócona lub pominięta (brak miejsca w oknie modelu)"
+                      : ""}
+                  </strong>
+                  <details>
+                    <summary>Szczegóły wysyłki</summary>
+                    <ul>
+                      {lastDelivery.documents.map((document) => (
+                        <li key={document.documentId} className={`chat-delivery-${document.status.toLowerCase()}`}>
+                          <span>{lastDelivery.names[document.documentId]}</span>
+                          <small>
+                            {document.sourceScope === "FIRM_TEMPLATE"
+                              ? "wzór kancelarii · "
+                              : document.sourceScope === "FIRM_KNOWLEDGE"
+                                ? "kancelaria · "
+                                : document.sourceScope === "CASE_KNOWLEDGE"
+                                  ? "wyszukane w sprawie · "
+                                  : ""}
+                            {document.status === "FULL"
+                              ? `w całości (${document.chunks} ${document.chunks === 1 ? "fragment" : "fragmentów"})`
+                              : document.status === "PARTIAL"
+                                ? `częściowo: ${document.fullChunks + document.digestChunks} z ${document.chunks} fragmentów`
+                                : document.status === "DIGEST"
+                                  ? "tylko streszczenie fragmentów"
+                                  : "pominięty - brak miejsca w oknie modelu"}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <button type="button" className="chat-secondary-action" onClick={() => setLastDelivery(null)}>
+                    Ukryj
+                  </button>
+                </div>
+              ) : null}
+              <textarea
+                value={query}
+                maxLength={20_000}
+                disabled={Boolean(selectedCase?.archivedAt)}
+                placeholder={
+                  selectedCase?.archivedAt
+                    ? "Sprawa archiwalna jest tylko do odczytu."
+                    : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
+                }
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    if (canSend) void sendMessage();
+                  }
+                }}
+              />
+              <div className="chat-composer-actions">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  aria-expanded={
+                    caseFilePickerOpen
+                  }
+                  title="Wybierz pliki sprawy do wysłania z wiadomością"
+                  onClick={() => {
+                    const opening = !caseFilePickerOpen;
+                    setCaseFilePickerOpen(opening);
+                    if (opening) setFirmPickerReload((value) => value + 1);
+                    // Files added in the Sprawa tab since the list was read.
+                    if (opening && caseId) {
+                      void listCaseFiles(caseId)
+                        .then((result) => setCaseFiles(result.uploads))
+                        .catch((error) =>
+                          setCaseFilePickerError(error instanceof Error ? error.message : String(error))
+                        );
+                    }
+                  }}
+                >
+                  Pliki{selectedFileCount ? ` (${selectedFileCount})` : ""}
+                </button>
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  onClick={() => setActiveTab("skills")}
+                >
+                  ⚙ Skille
+                </button>
+                <span className="chat-composer-spacer" />
+                <button
+                  type="button"
+                  className="chat-primary-action"
+                  disabled={!canSend}
+                  onClick={() => void sendMessage()}
+                >
+                  {executing || pendingFirstMessage ? "Wysyłanie…" : "Wyślij"}
+                </button>
+              </div>
+              {caseFilePickerOpen ? (
+                <div
+                  className="chat-case-file-picker"
+                  aria-label="Pliki do dołączenia"
+                >
+                  <div className="chat-file-picker-tabs" role="tablist">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={pickerTab === "case"}
+                      onClick={() => setPickerTab("case")}
+                    >
+                      Dokumenty sprawy ({documentAttachments.filter((attachment) => attachment.caseId !== firmCaseId).length})
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={pickerTab === "firm"}
+                      disabled={!firmCaseId}
+                      title={firmCaseId ? undefined : "Biblioteka kancelarii nie jest jeszcze utworzona (zakładka Kancelaria)"}
+                      onClick={() => setPickerTab("firm")}
+                    >
+                      Wzory i know-how kancelarii ({selectedFirmKeys.size})
+                    </button>
+                    <span className="chat-file-picker-count">
+                      {selectedFileCount} z {documentLimit} plików
+                    </span>
+                  </div>
+                  {pickerNotice ? <p className="chat-inline-error" role="status">{pickerNotice}</p> : null}
+                  {documentFit?.estimate ? (
+                    <div
+                      className={`chat-file-fit ${documentFit.estimate.fits ? "" : "chat-file-fit-over"}`}
+                      role="status"
+                    >
+                      <div className="chat-file-fit-bar">
+                        <span
+                          style={{
+                            width: `${Math.min(100, Math.round((documentFit.estimate.neededTokens / Math.max(1, documentFit.estimate.budgetTokens)) * 100))}%`
+                          }}
+                        />
+                      </div>
+                      <small>
+                        Okno modelu na dokumenty: ~{Math.round(documentFit.estimate.neededTokens / 1000)} tys. z{" "}
+                        {Math.round(documentFit.estimate.budgetTokens / 1000)} tys. tokenów
+                        {documentFit.estimate.fits
+                          ? ""
+                          : ` - za dużo; największe: ${[...documentFit.estimate.documents]
+                              .sort((left, right) => right.tokens - left.tokens)
+                              .slice(0, 3)
+                              .map((document) => `${fileLabel(document.documentId, document.title)} (~${Math.round(document.tokens / 1000)} tys.)`)
+                              .join(", ")}. Odznacz część plików; wysyłka jest zablokowana.`}
+                      </small>
+                    </div>
+                  ) : null}
+                  {pickerTab === "firm" && firmCaseId ? (
+                    <FirmFilePicker
+                      firmCaseId={firmCaseId}
+                      selected={selectedFirmKeys}
+                      reloadToken={firmPickerReload}
+                      onChange={(picks, select) => pickFiles(picks, select, firmCaseId)}
+                      onNames={setFirmFileNames}
+                    />
+                  ) : (
+                  <>
+                  <div className="chat-case-file-picker-head">
+                    <strong>
+                      Dokumenty sprawy
+                    </strong>
+                    <small>
+                      Zaznaczone pliki zostaną wysłane z wiadomością, z oznaczeniem każdej strony. Plik
+                      zanonimizowany trafia do modelu wyłącznie w wersji z symbolami; plik przetworzony bez
+                      anonimizacji - jako tekst jawny.
+                    </small>
+                    <button
+                      type="button"
+                      className="chat-secondary-action"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Dodaj pliki do sprawy
+                    </button>
+                  </div>
+                  {caseFilePickerError ? (
+                    <p className="chat-inline-error">
+                      Nie udało się odczytać dokumentów sprawy: {caseFilePickerError}
+                    </p>
+                  ) : null}
+                  {caseFiles.length === 0 ? (
+                    <small>
+                      Brak zapisanych plików w tej sprawie.
+                    </small>
+                  ) : (
+                    <ul className="chat-case-file-picker-list">
+                      {caseFiles.map(
+                        (item) => {
+                          const ready =
+                            Boolean(
+                              item.processing &&
+                              item.processing.chunkIndices.length > 0
+                            );
+                          const selected =
+                            Boolean(
+                              item.processing &&
+                              documentAttachments.some(
+                                (attachment) =>
+                                  attachment.documentId ===
+                                    item.processing!.documentId
+                              )
+                            );
+                          return (
+                            <li
+                              key={
+                                item.uploadId
+                              }
+                            >
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  disabled={
+                                    !ready
+                                  }
+                                  checked={
+                                    selected
+                                  }
+                                  onChange={(event) => {
+                                    const processing = item.processing;
+                                    if (!processing) return;
+                                    pickFiles(
+                                      [{ kind: "document", documentId: processing.documentId, chunkIndices: processing.chunkIndices }],
+                                      event.target.checked,
+                                      caseId
+                                    );
+                                  }}
+                                />
+                                <span>
+                                  <strong>
+                                    {item.filename}
+                                  </strong>
+                                  <small>
+                                    {item.processing
+                                      ? (item.processing.anonymized === false
+                                          ? "Wysyłany tekst jawny (bez anonimizacji)"
+                                          : "Wysyłana wersja zanonimizowana") +
+                                        ` · ${item.processing.totalPages} stron` +
+                                        (item.processing.ocrPages > 0 ? ` · OCR ${item.processing.ocrPages}` : "")
+                                      : "Nieprzetworzony - wybierz anonimizację albo samo OCR"}
+                                  </small>
+                                </span>
+                              </label>
+                              {!item.processing && canWriteCase(selectedCase) ? (
+                                <>
+                                <button
+                                  type="button"
+                                  className="chat-secondary-action"
+                                  disabled={pickerAnonymizing !== null}
+                                  onClick={() => {
+                                    setPickerAnonymizing(item.uploadId);
+                                    setCaseFilePickerError("");
+                                    void processStoredCaseFile(caseId, item.uploadId)
+                                      .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
+                                      .then((result) => {
+                                        pickFiles(
+                                          [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
+                                          true,
+                                          caseId
+                                        );
+                                        setWorkspaceRefresh((value) => value + 1);
+                                      })
+                                      .catch((error) =>
+                                        setCaseFilePickerError(error instanceof Error ? error.message : String(error))
+                                      )
+                                      .finally(() => setPickerAnonymizing(null));
+                                  }}
+                                >
+                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : "Anonimizuj i zaznacz"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="chat-secondary-action"
+                                  disabled={pickerAnonymizing !== null}
+                                  title="Tylko OCR/tekst, bez anonimizacji - plik trafi do modelu z jawnymi danymi"
+                                  onClick={() => {
+                                    if (
+                                      !window.confirm(
+                                        `„${item.filename}” trafi do modelu bez anonimizacji, z danymi osobowymi w jawnej postaci. Kontynuować?`
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    setPickerAnonymizing(item.uploadId);
+                                    setCaseFilePickerError("");
+                                    void processStoredCaseFile(caseId, item.uploadId)
+                                      .then((review) =>
+                                        finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
+                                      )
+                                      .then((result) => {
+                                        pickFiles(
+                                          [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
+                                          true,
+                                          caseId
+                                        );
+                                        setWorkspaceRefresh((value) => value + 1);
+                                      })
+                                      .catch((error) =>
+                                        setCaseFilePickerError(error instanceof Error ? error.message : String(error))
+                                      )
+                                      .finally(() => setPickerAnonymizing(null));
+                                  }}
+                                >
+                                  Tylko OCR i zaznacz
+                                </button>
+                                </>
+                              ) : null}
+                            </li>
+                          );
+                        }
+                      )}
+                    </ul>
+                  )}
+                  </>
+                  )}
+                </div>
+              ) : null}
+              {pendingFinalDocument ? (
+                <div className="chat-final-document">
+                  <div>
+                    <strong>Finalny dokument z przywróconymi danymi</strong>
+                    <small>
+                      Każdy dokument źródłowy ma własny vault. Alias D01/D02/… jest odwracany wyłącznie przez deanonimizator przypisany do tego dokumentu.
+                    </small>
+                  </div>
+                  {finalReview ? (
+                    <DeanonymizationReview
+                      preview={finalReview.preview}
+                      busy={finalDocumentBusy}
+                      onCorrect={async (restoration, text, remember) => {
+                        if (
+                          remember &&
+                          restoration.canonical &&
+                          restoration.gender &&
+                          restoration.case
+                        ) {
+                          await saveNameForm({
+                            canonical: restoration.canonical,
+                            gender: restoration.gender,
+                            case: restoration.case,
+                            text: text.trim()
+                          });
+                        }
+                        setFinalReview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                preview: applyAliasCorrection(
+                                  current.preview,
+                                  restoration.alias,
+                                  text
+                                ),
+                                overrides: {
+                                  ...current.overrides,
+                                  [restoration.alias]: text.trim()
+                                }
+                              }
+                            : current
+                        );
+                      }}
+                      onConfirm={() => void finalizePendingDocument()}
+                      onCancel={() => setFinalReview(null)}
+                    />
+                  ) : (
+                  <>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={finalDocumentPassword}
+                    disabled={finalDocumentBusy}
+                    placeholder="Bieżące hasło — jednorazowa reautoryzacja"
+                    onChange={(event) =>
+                      setFinalDocumentPassword(
+                        event.target
+                          .value
+                      )
+                    }
+                  />
+                  <div className="chat-form-row compact">
+                    <button
+                      type="button"
+                      className="chat-primary-action"
+                      disabled={
+                        finalDocumentBusy ||
+                        !finalDocumentPassword
+                          .trim()
+                      }
+                      onClick={() =>
+                        void reviewPendingDocument()
+                      }
+                    >
+                      {finalDocumentBusy
+                        ? "Przywracam dane…"
+                        : "Przywróć dane i sprawdź przed zapisem"}
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-secondary-action"
+                      disabled={finalDocumentBusy}
+                      onClick={async () => {
+                        try {
+                          const blob =
+                            await downloadGeneratedArtifact(
+                              pendingFinalDocument.caseId,
+                              pendingFinalDocument.artifactId
+                            );
+                          downloadBlob(
+                            blob,
+                            "LexMachina-tokenized." +
+                              pendingFinalDocument.format
+                          );
+                        } catch (error) {
+                          setExecutionError(
+                            error instanceof Error
+                              ? error.message
+                              : String(error)
+                          );
+                        }
+                      }}
+                    >
+                      Pobierz wersję tokenizowaną
+                    </button>
+                  </div>
+                  </>
+                  )}
+                </div>
+              ) : null}
+              {generatedDocumentMessage ? (
+                <p className="chat-inline-success">
+                  {generatedDocumentMessage}
+                </p>
+              ) : null}
+              {executionError ? (
+                <div className="chat-error-diagnostic">
+                  <p className="chat-inline-error">
+                    {executionError}
+                  </p>
+                  {executionDiagnostic ? (
+                    <details>
+                      <summary>
+                        Pełne informacje diagnostyczne
+                      </summary>
+                      <dl>
+                        <div>
+                          <dt>Kod</dt>
+                          <dd>
+                            <code>
+                              {executionDiagnostic.code}
+                            </code>
+                          </dd>
+                        </div>
+                        {executionDiagnostic.status !== undefined ? (
+                          <div>
+                            <dt>HTTP</dt>
+                            <dd>
+                              {executionDiagnostic.status}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {executionDiagnostic.stage ? (
+                          <div>
+                            <dt>Etap</dt>
+                            <dd>
+                              <code>
+                                {executionDiagnostic.stage}
+                              </code>
+                            </dd>
+                          </div>
+                        ) : null}
+                        {executionDiagnostic.reason ? (
+                          <div>
+                            <dt>Powód</dt>
+                            <dd>
+                              <code>
+                                {executionDiagnostic.reason}
+                              </code>
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                      {executionDiagnostic.description ? (
+                        <pre>
+                          {executionDiagnostic.description}
+                        </pre>
+                      ) : null}
+                      {executionDiagnostic.trace &&
+                      executionDiagnostic.trace.length > 0 ? (
+                        <ol className="chat-error-trace">
+                          {executionDiagnostic.trace.map(
+                            (event, index) => (
+                              <li
+                                key={
+                                  String(
+                                    event.sequence ??
+                                      index
+                                  ) +
+                                  ":" +
+                                  String(
+                                    event.target ??
+                                      ""
+                                  )
+                                }
+                              >
+                                <code>
+                                  {event.sequence ??
+                                    index + 1}
+                                  {" · "}
+                                  {event.type ??
+                                    "event"}
+                                  {" · "}
+                                  {event.target ??
+                                    "unknown"}
+                                  {" · "}
+                                  {event.status ??
+                                    "?"}
+                                </code>
+                                {event.detail ? (
+                                  <span>
+                                    {event.detail}
+                                  </span>
+                                ) : null}
+                              </li>
+                            )
+                          )}
+                        </ol>
+                      ) : null}
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "skills" ? (
+          <section className="chat-card-stack">
+            <article className="chat-card">
+              <p className="eyebrow">Sterowanie wykonaniem</p>
+              <h2>
+                {selectedDeterministicAction
+                  ? selectedDeterministicAction.label
+                  : "AUTO · prawny-router-v3"}
+              </h2>
+              <p>
+                Tryb pracy (automatyczny lub mechaniczny) wybiera się wyłącznie nad polem pierwszej wiadomości.
+                Brak wyboru oznacza pełne AUTO: prawny-router-v3 sam dobiera dziedziny
+                DR i skille wykonawcze. Po pierwszej wiadomości tryb jest przypięty do
+                wątku i selektor w czacie znika.
+              </p>
+              <div className="chat-model-select-row">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === routes.length &&
+                    manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                  }
+                  onClick={
+                    selectAllSkills
+                  }
+                >
+                  Zaznacz wszystkie skille
+                </button>
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === 0 &&
+                    manualSkillSelection.length === 0
+                  }
+                  onClick={
+                    clearAllSkills
+                  }
+                >
+                  Odznacz wszystkie opcjonalne
+                </button>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <p className="eyebrow">Obowiązkowy rdzeń</p>
+              <div className="chat-mandatory-grid">
+                <div>
+                  <strong>✓ prawny-router-v3</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ shared</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ prawo-polskie-v2</strong>
+                  <small>zawsze aktywny dla zapytań prawnych PL</small>
+                </div>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Dziedziny prawa</p>
+                  <h2>
+                    {domainSelection.length === routes.length
+                      ? `Wszystkie moduły DR (${routes.length})`
+                      : `${domainSelection.length} z ${routes.length} modułów DR`}
+                  </h2>
+                  <p>
+                    Wszystkie moduły DR są zaznaczone na start. Odznaczenie
+                    ogranicza dziedziny, z których router może korzystać w tej
+                    rozmowie; pełny zestaw nie nakłada żadnego ograniczenia.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length ===
+                      routes.length
+                    }
+                    onClick={
+                      selectAllDomainSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length === 0
+                    }
+                    onClick={
+                      clearDomainSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {routes.map((name) => {
+                  const checked =
+                    domainSelection.includes(name);
+                  return (
+                    <label
+                      key={name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleDomainSkill(name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(name)}</strong>
+                        <small>dziedzina prawa</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Skille wykonawcze</p>
+                  <h2>
+                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
+                  </h2>
+                  <p>
+                    Wszystkie dostępne skille wykonawcze są zaznaczone domyślnie.
+                    Ta lista nie zawiera modułów DR; dziedziny prawa są kontrolowane
+                    w sekcji powyżej.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                    }
+                    onClick={
+                      selectAllManualSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length === 0
+                    }
+                    onClick={
+                      clearManualSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                  <input
+                    className="chat-search"
+                    value={skillFilter}
+                    placeholder="Filtruj skille…"
+                    onChange={(event) =>
+                      setSkillFilter(
+                        event.target.value
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {filteredSkills.map((skill) => {
+                  const checked =
+                    manualSkillSelection.includes(
+                      skill.name
+                    );
+                  return (
+                    <label
+                      key={skill.name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleManualSkill(skill.name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(skill.name)}</strong>
+                        <small>{skill.description || skill.type || "skill"}</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
+        ) : null}
+
+        {activeTab === "home" ? (
+          <HomeDashboard
+            user={user}
+            cases={cases}
+            modelLabel={
+              selectedModel?.displayName ??
+              (model ? model : "")
+            }
+            modelStatus={
+              (PRIMARY_MODEL_SOURCES.find((item) => item.id === provider)?.label ?? provider) +
+              (provider === "local"
+                ? localModelReady
+                  ? " · działa"
+                  : localModelStarting || localStartBusy
+                    ? " · uruchamianie"
+                    : localRuntimeStatus
+                      ? " · zatrzymany"
+                      : " · sprawdzanie stanu"
+                : "")
+            }
+            refreshToken={scheduleRefresh}
+            onOpenCase={(nextCaseId) => {
+              switchToCase(nextCaseId);
+              setActiveTab("chat");
+            }}
+            onOpenCalendar={() => setActiveTab("calendar")}
+            onOpenFirm={() => setActiveTab("firm")}
+            onOpenModels={() => {
+              setActiveTab("settings");
+              setSettingsSection("models");
+            }}
+            onNewCase={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa").catch(() => undefined)}
+          />
+        ) : null}
+
+        {activeTab === "calendar" ? (
+          <CalendarPanel
+            cases={cases}
+            refreshToken={scheduleRefresh}
+            onOpenCase={(nextCaseId) => {
+              switchToCase(nextCaseId);
+              setActiveTab("case");
+            }}
+            onChanged={() => setScheduleRefresh((value) => value + 1)}
+          />
+        ) : null}
+
+        {activeTab === "case" ? (
+          <section className="chat-card-stack">
+            <article className="chat-card">
+              <p className="eyebrow">Wątek = sprawa</p>
+              <h2>Nazwa sprawy</h2>
+              <p>
+                Sygnatura nie jest wymagana przy zakładaniu sprawy. Nazwa jest niezależna
+                od sygnatury i może być dowolnie nadana oraz później zmieniona przez użytkownika.
+              </p>
+              <div className="chat-form-row">
+                <input
+                  value={caseNameDraft}
+                  maxLength={160}
+                  disabled={!selectedCase || caseBusy}
+                  placeholder="np. Kowalski przeciwko ABC — odszkodowanie"
+                  onChange={(event) => setCaseNameDraft(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="chat-primary-action"
+                  disabled={!selectedCase || caseBusy || !caseNameDraft.trim()}
+                  onClick={() => void saveCaseName()}
+                >
+                  Zapisz nazwę
+                </button>
+              </div>
+              {selectedCase ? (
+                <div className="matter-case-meta">
+                  <span>ID katalogu: {selectedCase.caseId}</span>
+                  <span>Rola: {selectedCase.role}</span>
+                  <span>{selectedCase.archivedAt ? "ARCHIWALNA (tylko odczyt)" : "AKTYWNA"}</span>
+                </div>
+              ) : null}
+            </article>
+
+            <article className="chat-card matter-schedule-card">
+              <p className="eyebrow">Terminarz sprawy</p>
+              <h2>Spotkania, posiedzenia i terminy</h2>
+              <p>
+                Terminy są przypisane do bieżącej sprawy i przechowywane w jej
+                zaszyfrowanych danych. OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.
+              </p>
+
+              <div className="matter-schedule-form">
+                <div className="chat-form-row">
+                  <select
+                    aria-label="Rodzaj terminu"
+                    value={scheduleKind}
+                    disabled={
+                      !canWriteCase(
+                        selectedCase
+                      ) ||
+                      caseScheduleBusy
+                    }
+                    onChange={(event) =>
+                      setScheduleKind(
+                        event.target.value as CaseScheduleKind
+                      )
+                    }
+                  >
+                    <option value="CLIENT_MEETING">
+                      Spotkanie z klientem
+                    </option>
+                    <option value="COURT_HEARING">
+                      Posiedzenie sądu
+                    </option>
+                    <option value="DEADLINE">
+                      Termin
+                    </option>
+                    <option value="OTHER">
+                      Inne
+                    </option>
+                  </select>
+                  <input
+                    type="datetime-local"
+                    aria-label="Data i godzina terminu"
+                    value={scheduleStartsAt}
+                    disabled={
+                      !canWriteCase(
+                        selectedCase
+                      ) ||
+                      caseScheduleBusy
+                    }
+                    onChange={(event) =>
+                      setScheduleStartsAt(
+                        event.target.value
+                      )
+                    }
+                  />
+                </div>
+
+                <input
+                  value={scheduleTitle}
+                  maxLength={180}
+                  disabled={
+                    !canWriteCase(
+                      selectedCase
+                    ) ||
+                    caseScheduleBusy
+                  }
+                  placeholder="Opis, np. rozprawa apelacyjna"
+                  onChange={(event) =>
+                    setScheduleTitle(
+                      event.target.value
+                    )
+                  }
+                />
+
+                <div className="chat-form-row">
+                  <input
+                    value={scheduleLocation}
+                    maxLength={180}
+                    disabled={
+                      !canWriteCase(
+                        selectedCase
+                      ) ||
+                      caseScheduleBusy
+                    }
+                    placeholder="Miejsce / sala / adres (opcjonalnie)"
+                    onChange={(event) =>
+                      setScheduleLocation(
+                        event.target.value
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="chat-primary-action"
+                    disabled={
+                      !canWriteCase(
+                        selectedCase
+                      ) ||
+                      caseScheduleBusy ||
+                      !scheduleTitle.trim() ||
+                      !scheduleStartsAt
+                    }
+                    onClick={() =>
+                      void saveCaseScheduleEvent()
+                    }
+                  >
+                    Dodaj termin
+                  </button>
+                </div>
+
+                <textarea
+                  value={scheduleNotes}
+                  maxLength={2000}
+                  disabled={
+                    !canWriteCase(
+                      selectedCase
+                    ) ||
+                    caseScheduleBusy
+                  }
+                  placeholder="Notatka do terminu (opcjonalnie)"
+                  onChange={(event) =>
+                    setScheduleNotes(
+                      event.target.value
+                    )
+                  }
+                />
+              </div>
+
+              {caseScheduleError ? (
+                <p className="chat-error">
+                  {caseScheduleError}
+                </p>
+              ) : null}
+
+              <div className="matter-schedule-list">
+                {caseScheduleLoading ? (
+                  <p>Ładuję terminarz…</p>
+                ) : caseSchedule.length === 0 ? (
+                  <p>Brak zapisanych terminów dla tej sprawy.</p>
+                ) : (
+                  caseSchedule.map(
+                    (event) => (
+                      <div
+                        className="matter-schedule-item"
+                        key={event.eventId}
+                      >
+                        <div className="matter-schedule-item-main">
+                          <span className="matter-schedule-kind">
+                            {caseScheduleKindLabel(
+                              event.kind
+                            )}
+                          </span>
+                          <strong>
+                            {event.title}
+                          </strong>
+                          <small>
+                            {caseScheduleStartLabel(
+                              event.startsAt
+                            )}
+                            {event.location
+                              ? " · " +
+                                event.location
+                              : ""}
+                          </small>
+                          {event.notes ? (
+                            <p>
+                              {event.notes}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          className="workspace-delete"
+                          disabled={
+                            !canWriteCase(
+                              selectedCase
+                            ) ||
+                            caseScheduleBusy
+                          }
+                          onClick={() =>
+                            void removeCaseScheduleEvent(
+                              event.eventId
+                            )
+                          }
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    )
+                  )
+                )}
+              </div>
+            </article>
+
+            <CaseContactsCard
+              caseId={selectedCase?.caseId ?? null}
+              canWrite={canWriteCase(selectedCase)}
+            />
+
+            <article
+              className="chat-card chat-file-drop-card"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+              }}
+              onDrop={handleDrop}
+            >
+              <div>
+                <p className="eyebrow">Dokumenty sprawy</p>
+                <h2>Kliknij lub przeciągnij pliki</h2>
+                <p>
+                  Pliki trafiają do zaszyfrowanego magazynu bieżącej sprawy.
+                  OCR i pytanie o prywatność są prowadzone w czacie plik po pliku;
+                  w tej samej sekcji zarządzasz zapisanymi dokumentami i folderami.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="chat-primary-action"
+                disabled={Boolean(selectedCase?.archivedAt)}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Otwórz eksplorator
+              </button>
+            </article>
+
+            <article className="chat-card">
+              <p className="eyebrow">Wiedza w sesji</p>
+              <div className="chat-check-row">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={includeCaseKnowledge}
+                    disabled={!selectedCase || Boolean(selectedCase.archivedAt)}
+                    onChange={(event) => setIncludeCaseKnowledge(event.target.checked)}
+                  />
+                  Przeszukuj dokumenty bieżącej sprawy
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={includeFirmKnowledge}
+                    disabled={!firmKnowledgeWorkspace}
+                    onChange={(event) => setIncludeFirmKnowledge(event.target.checked)}
+                  />
+                  Przeszukuj know-how kancelarii
+                </label>
+                <label title="Zdjęcia bez tekstu modele hostowane dostają zawsze jako obraz; modele lokalne czytają tylko tekst.">
+                  <input
+                    type="checkbox"
+                    checked={imagesWithText}
+                    onChange={(event) => setImagesWithText(event.target.checked)}
+                  />
+                  Wysyłaj też obrazy stron z tekstem (dane osobowe zamaskowane)
+                </label>
+              </div>
+            </article>
+
+            {selectedCase ? (
+              <WorkspaceManager
+                caseId={caseId}
+                title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
+                canWrite={canWriteCase(selectedCase)}
+                refreshToken={workspaceRefresh}
+              />
+            ) : null}
+
+            {selectedCase ? (
+              <article className="chat-card">
+                <p className="eyebrow">Cykl życia</p>
+                <h2>Zarządzanie sprawą</h2>
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={caseBusy}
+                  onClick={() => void toggleArchive()}
+                >
+                  {selectedCase.archivedAt ? "Przywróć z archiwum" : "Archiwizuj sprawę"}
+                </button>
+
+                {selectedCase.role === "OWNER" && user.appRole === "ADMIN" ? (
+                  <details className="matter-danger-zone">
+                    <summary>Trwałe usunięcie sprawy</summary>
+                    <p>Wpisz USUŃ i podaj aktualne hasło.</p>
+                    <div className="chat-form-row">
+                      <input
+                        value={deletePhrase}
+                        placeholder="Wpisz USUŃ"
+                        onChange={(event) => setDeletePhrase(event.target.value)}
+                      />
+                      <input
+                        type="password"
+                        value={deletePassword}
+                        autoComplete="current-password"
+                        placeholder="Aktualne hasło"
+                        onChange={(event) => setDeletePassword(event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="workspace-delete"
+                        disabled={
+                          caseBusy ||
+                          deletePhrase !== "USUŃ" ||
+                          !deletePassword
+                        }
+                        onClick={() => void permanentlyDeleteCase()}
+                      >
+                        Usuń sprawę trwale
+                      </button>
+                    </div>
+                  </details>
+                ) : null}
+              </article>
+            ) : null}
+          </section>
+        ) : null}
+
+        {activeTab === "firm" ? (
+          <section className="chat-card-stack">
+            <FirmKnowledgePanel
+              user={user}
+              currentCase={selectedCase}
+              onUseHit={(selection) =>
+                setDocumentAttachments((current) => upsertAttachment(current, selection))
+              }
+              onWorkspaceChange={setFirmKnowledgeWorkspace}
+            />
+            {firmKnowledgeWorkspace ? (
+              <WorkspaceManager
+                caseId={firmKnowledgeWorkspace.caseId}
+                title="Know-how i wzory kancelarii"
+                canWrite={
+                  user.appRole === "ADMIN" &&
+                  !firmKnowledgeWorkspace.archivedAt
+                }
+                refreshToken={workspaceRefresh}
+              />
+            ) : null}
+          </section>
+        ) : null}
+
+        {activeTab === "settings" ? (
+          <section className="chat-settings-hub">
+            <nav
+              className="chat-settings-nav"
+              aria-label="Sekcje ustawień"
+            >
+              {([
+                ["models", "Modele i AI"],
+                ["users", "Użytkownicy i uprawnienia"],
+                ["security", "Hasło i bezpieczeństwo"],
+                ["maintenance", "Aplikacja i utrzymanie"]
+              ] as Array<
+                [SettingsSection, string]
+              >)
+                .map(
+                  ([section, label]) => (
+                    <button
+                      key={section}
+                      type="button"
+                      className={
+                        settingsSection ===
+                        section
+                          ? "active"
+                          : ""
+                      }
+                      onClick={() =>
+                        setSettingsSection(
+                          section
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+            </nav>
+            <div className="chat-settings-content">
+              {settingsSection === "models" ? (
+                <div className="chat-settings-grid">
+            <article className="chat-card chat-settings-primary">
+              <p className="eyebrow">Model główny</p>
+              <h2>
+                {selectedModel?.displayName ??
+                  (provider === "local"
+                    ? "Lokalny model główny"
+                    : "Wybierz źródło i model")}
+              </h2>
+              <div className="chat-settings-field-grid">
+              <label>
+                Źródło
+                <select
+                  value={provider}
+                  onChange={(event) => {
+                    setProvider(
+                      event.target.value as PrimaryModelSource
+                    );
+                    setProviderApiKeyInput("");
+                    setProviderKeyMessage("");
+                    setProviderAccountMessage("");
+                  }}
+                >
+                  {PRIMARY_MODEL_SOURCES.map((item) => {
+                    const accountSource =
+                      isAccountPrimarySource(
+                        item.id
+                      );
+                    const itemProvider =
+                      runtimeProviderForPrimarySource(
+                        item.id
+                      );
+                    const account =
+                      accountSource
+                        ? providerAccounts[
+                            itemProvider
+                          ]
+                        : undefined;
+                    const apiReady =
+                      !accountSource &&
+                      item.id !== "local"
+                        ? providerConfiguration[
+                            itemProvider
+                          ]
+                        : undefined;
+                    const suffix =
+                      item.id === "local"
+                        ? " · bez klucza API"
+                        : accountSource
+                          ? account?.authenticated
+                            ? " · połączone"
+                            : account?.installed === false
+                              ? " · brak CLI"
+                              : account
+                                ? " · niezalogowane"
+                                : " · sprawdzanie"
+                          : apiReady === true
+                            ? " · API gotowe"
+                            : apiReady === false
+                              ? " · brak klucza"
+                              : " · sprawdzanie";
+                    return (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.label}{suffix}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label>
+                Model
+                <select
+                  value={model}
+                  disabled={
+                    modelCatalogLoading ||
+                    models.length === 0
+                  }
+                  onChange={(event) => {
+                    setModel(
+                      event.target.value
+                    );
+                    saveLastUsedModel(user.userId, { provider, model: event.target.value });
+                  }}
+                >
+                  {modelCatalogLoading ? (
+                    <option value="">
+                      Odświeżam listę modeli…
+                    </option>
+                  ) : models.length === 0 ? (
+                    <option value="">
+                      {provider === "local"
+                        ? "Brak zainstalowanych modeli lokalnych"
+                        : "Brak dostępnych modeli"}
+                    </option>
+                  ) : null}
+                  {models.map((item) => (
+                    <option
+                      key={item.id}
+                      value={item.id}
+                      disabled={!item.selectable}
+                    >
+                      {item.displayName}
+                      {!item.selectable
+                        ? isAccountPrimarySource(provider)
+                          ? " · wymaga logowania"
+                          : " · nieobsługiwany"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              </div>
+              {provider === "local" ? (
+                <div className="chat-settings-status-row">
+                  <span className="chat-settings-status ready">
+                    {modelCatalogLoading
+                      ? "Odświeżam lokalny katalog…"
+                      : `Wykryto modeli lokalnych: ${models.length}`}
+                  </span>
+                </div>
+              ) : isAccountPrimarySource(provider) ? (
+                <div className="chat-settings-status-row">
+                  <span
+                    className={
+                      accountAuthenticated
+                        ? "chat-settings-status ready"
+                        : "chat-settings-status"
+                    }
+                  >
+                    {accountAuthenticated
+                      ? "Konto połączone"
+                      : "Konto wymaga połączenia"}
+                  </span>
+                </div>
+              ) : (
+                <div className="chat-settings-status-row">
+                  <span
+                    className={
+                      providerConfigured
+                        ? "chat-settings-status ready"
+                        : "chat-settings-status"
+                    }
+                  >
+                    {providerConfigured
+                      ? "Klucz API aktywny"
+                      : "Brak aktywnego klucza API"}
+                  </span>
+                </div>
+              )}
+              {modelError ? (
+                <p className="chat-inline-error">
+                  {modelError === "PROVIDER_NOT_CONFIGURED"
+                    ? "Najpierw dodaj klucz API dla tego dostawcy."
+                    : modelError === "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
+                      ? "Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj go z instrukcji poniżej albo wybierz kanał API."
+                      : modelError === "ACCOUNT_SESSION_NOT_AUTHENTICATED"
+                        ? "Najpierw połącz konto użytkownika."
+                        : modelError}
+                </p>
+              ) : null}
+              {selectedModel?.contextWindow ? (
+                <small>
+                  Aktywne okno runtime: {selectedModel.contextWindow.toLocaleString("pl-PL")} tokenów
+                  {selectedModel.nativeContextWindow
+                    ? ` · natywne: ${selectedModel.nativeContextWindow.toLocaleString("pl-PL")}`
+                    : ""}
+                  {selectedModel.contextMode === "YARN_EXTENDED"
+                    ? " · rozszerzone YaRN"
+                    : ""}
+                </small>
+              ) : null}
+              {model.startsWith("local/") ? (
+                <small>
+                  Model lokalny jest dostępny jako model główny przez llama.cpp i nie wymaga klucza OpenAI.
+                </small>
+              ) : null}
+              {providerDefinition &&
+              !model.startsWith("local/") &&
+              !isAccountPrimarySource(provider) ? (
+                <button
+                  type="button"
+                  className="chat-link-action"
+                  onClick={() => void openExternalUrl(providerDefinition.apiKeyUrl)}
+                >
+                  {model
+                    ? `Klucz API dla ${providerDefinition.label} — otwórz w przeglądarce ↗`
+                    : `Utwórz / pobierz klucz ${providerDefinition.label} — otwórz w przeglądarce ↗`}
+                </button>
+              ) : null}
+            </article>
+
+            <article className="chat-card chat-settings-auth">
+              <p className="eyebrow">
+                {provider === "local"
+                  ? "Lokalne AI"
+                  : isAccountPrimarySource(provider)
+                    ? "Konto użytkownika"
+                    : "Klucz API"}
+              </p>
+              <h2>
+                {provider === "local"
+                  ? "Konfiguracja lokalna"
+                  : isAccountPrimarySource(provider)
+                    ? "Połączenie z kontem"
+                    : "Konfiguracja API"}
+              </h2>
+              {provider === "local" ? (
+                <>
+                  <p>
+                    Modele lokalne działają przez llama.cpp i nie wymagają klucza API
+                    ani logowania do zewnętrznego konta.
+                  </p>
+                  <div className="chat-local-inventory">
+                    <strong>
+                      {modelCatalogLoading
+                        ? "Odświeżam lokalny katalog…"
+                        : `Zainstalowane modele: ${models.length}`}
+                    </strong>
+                    {models.length > 0 ? (
+                      <div className="chat-model-chip-list">
+                        {models.map((item) => (
+                          <span key={item.id} className="chat-model-chip">
+                            {item.displayName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <small>
+                        Nie wykryto zainstalowanego GGUF. Po instalacji modelu lista
+                        odświeży się automatycznie; można też wymusić odczyt poniżej.
+                      </small>
+                    )}
+                    <button
+                      type="button"
+                      className="chat-secondary-action"
+                      disabled={modelCatalogLoading}
+                      onClick={() =>
+                        setLocalModelsRefreshToken(
+                          (value) => value + 1
+                        )
+                      }
+                    >
+                      {modelCatalogLoading
+                        ? "Odświeżanie…"
+                        : "Odśwież modele lokalne"}
+                    </button>
+                  </div>
+                </>
+              ) : isAccountPrimarySource(provider) ? (
+                <>
+                  <p>
+                    Kanał konta jest opcjonalną integracją z oficjalnym klientem
+                    {runtimeProvider === "openai"
+                      ? " Codex CLI"
+                      : runtimeProvider === "anthropic"
+                        ? " Claude Code"
+                        : " Grok Build"}.
+                    Na Windows Lex Machina otwiera widoczny terminal, a klient prowadzi
+                    dalej przez swój oficjalny login w przeglądarce lub flow kodu urządzenia.
+                    Token OAuth pozostaje po stronie klienta i nie jest kopiowany do UI Lex Machina.
+                  </p>
+                  {runtimeProvider === "anthropic" ? (
+                    <>
+                      <p>
+                        Claude Code wspiera również oficjalny tryb automatyzacji:
+                        uruchom <code>claude setup-token</code>. Otrzymany
+                        długowieczny token OAuth możesz wkleić poniżej; Lex Machina
+                        przekaże go do Claude Code jako
+                        <code> CLAUDE_CODE_OAUTH_TOKEN</code>. W aplikacji desktopowej
+                        token jest przechowywany w systemowym magazynie poświadczeń.
+                      </p>
+                      <small>
+                        {accountSession?.oauthTokenConfigured
+                          ? "OAuth setup-token: skonfigurowany"
+                          : "OAuth setup-token: nie skonfigurowany"}
+                      </small>
+                      {user.appRole === "ADMIN" ? (
+                        <>
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            value={claudeOAuthToken}
+                            placeholder="Wklej token z: claude setup-token"
+                            onChange={(event) =>
+                              setClaudeOAuthTokenInput(
+                                event.target.value
+                              )
+                            }
+                          />
+                          <div className="chat-form-row compact">
+                            <button
+                              type="button"
+                              className="chat-primary-action"
+                              disabled={
+                                claudeOAuthBusy ||
+                                !claudeOAuthToken.trim()
+                              }
+                              onClick={() =>
+                                void saveClaudeOAuthToken()
+                              }
+                            >
+                              {claudeOAuthBusy
+                                ? "Zapisywanie…"
+                                : isDesktopShell()
+                                  ? "Zapisz token w systemie"
+                                  : "Użyj tokenu w sesji"}
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-secondary-action"
+                              disabled={claudeOAuthBusy}
+                              onClick={() =>
+                                void removeClaudeOAuthToken()
+                              }
+                            >
+                              Usuń token OAuth
+                            </button>
+                          </div>
+                          {claudeOAuthMessage ? (
+                            <small>
+                              {claudeOAuthMessage}
+                            </small>
+                          ) : null}
+                        </>
+                      ) : null}
+                      <p>
+                        Alternatywnie możesz użyć provisionowanego
+                        <code> CLAUDE_CODE_OAUTH_REFRESH_TOKEN</code> wraz z
+                        <code> CLAUDE_CODE_OAUTH_SCOPES</code> w środowisku
+                        zarządzanym.
+                      </p>
+                    </>
+                  ) : null}
+                  <p>
+                    Do zwykłej integracji Lex Machina z zewnętrznym modelem możesz
+                    zamiast tego wybrać kanał API — nie wymaga instalowania klienta CLI,
+                    udostępnia katalog modeli providera, a w aplikacji desktopowej klucz
+                    może być zapisany w systemowym magazynie poświadczeń.
+                  </p>
+                  <small>
+                    {accountSession
+                      ? accountSession.installed
+                        ? accountSession.authenticated
+                          ? "Status: połączone · " + accountSession.command
+                          : "Status: klient zainstalowany, brak aktywnej sesji · " + accountSession.command
+                        : "Status: brak klienta · " + accountSession.command + ". " + accountSession.installHint
+                      : "Sprawdzanie klienta i sesji…"}
+                  </small>
+                  {user.appRole === "ADMIN" ? (
+                    <div className="chat-form-row compact">
+                      {accountSession?.installed === false ? (
+                        <button
+                          type="button"
+                          className="chat-primary-action"
+                          onClick={() =>
+                            void openAccountClientSetup()
+                          }
+                        >
+                          Instalacja {providerDefinition?.accountClientLabel ?? "klienta"} ↗
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="chat-primary-action"
+                          disabled={
+                            providerAccountBusy ||
+                            accountSession?.authenticated === true
+                          }
+                          onClick={() =>
+                            void connectProviderAccount()
+                          }
+                        >
+                          {providerAccountBusy
+                            ? "Logowanie…"
+                            : accountSession?.authenticated
+                              ? "Połączone"
+                              : "Połącz konto"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={providerAccountBusy}
+                        onClick={() =>
+                          void refreshProviderAccountStatus()
+                        }
+                      >
+                        Sprawdź ponownie
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-secondary-action"
+                        disabled={providerAccountBusy}
+                        onClick={switchAccountToApi}
+                      >
+                        Przejdź na API
+                      </button>
+                    </div>
+                  ) : (
+                    <p>
+                      Konto dostawcy może połączyć administrator aplikacji.
+                    </p>
+                  )}
+                  {accountSession?.authenticated ? (
+                    <small>
+                      Aby zmienić konto, wyloguj lub przełącz konto w oficjalnym
+                      kliencie dostawcy, a następnie kliknij „Sprawdź ponownie”.
+                    </small>
+                  ) : null}
+                  {providerAccountMessage ? (
+                    <small>{providerAccountMessage}</small>
+                  ) : null}
+                </>
+              ) : user.appRole === "ADMIN" ? (
+                <>
+                  {runtimeProvider === "anthropic" ? (
+                    <p className="chat-inline-warning">
+                      Ten kanał używa oficjalnego Anthropic API i klucza API.
+                      Jeżeli chcesz użyć uwierzytelnienia Claude Code/OAuth,
+                      wybierz „Claude · konto / OAuth”.
+                    </p>
+                  ) : null}
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={providerApiKey}
+                    placeholder="Wklej klucz API"
+                    onChange={(event) => setProviderApiKeyInput(event.target.value)}
+                  />
+                  <div className="chat-form-row compact">
+                    <button
+                      type="button"
+                      className="chat-primary-action"
+                      disabled={providerKeyBusy || !providerApiKey.trim()}
+                      onClick={() => void saveApiKey()}
+                    >
+                      {isDesktopShell() ? "Zapisz w systemie" : "Użyj w sesji"}
+                    </button>
+                    <button
+                      type="button"
+                      className="chat-secondary-action"
+                      disabled={providerKeyBusy}
+                      onClick={() => void removeApiKey()}
+                    >
+                      Usuń klucz
+                    </button>
+                  </div>
+                  {providerKeyMessage ? <small>{providerKeyMessage}</small> : null}
+                </>
+              ) : (
+                <p>Klucz API może zmieniać administrator aplikacji.</p>
+              )}
+            </article>
+                {settingsPanels?.localAi ? (
+                  <div className="chat-settings-embedded-wide">
+                    {settingsPanels.localAi}
+                  </div>
+                ) : null}
+                </div>
+              ) : settingsSection === "users" ? (
+                <div className="chat-settings-section-stack">
+                  {user.appRole === "ADMIN"
+                    ? settingsPanels?.users
+                    : (
+                      <article className="chat-card">
+                        <p className="eyebrow">
+                          Konto aplikacji
+                        </p>
+                        <h2>
+                          Użytkownicy globalni
+                        </h2>
+                        <p>
+                          Tworzenie, wyłączanie i usuwanie kont aplikacji jest dostępne dla administratora. Uprawnienia do bieżącej sprawy są zarządzane poniżej zgodnie z rolą w tej sprawie.
+                        </p>
+                      </article>
+                    )}
+                  {caseId ? (
+                    <article className="chat-card chat-settings-case-access">
+                      <p className="eyebrow">
+                        Bieżąca sprawa
+                      </p>
+                      <h2>
+                        Uprawnienia do sprawy
+                      </h2>
+                      <p>
+                        Role OWNER, EDITOR, ANALYST i VIEWER dotyczą wyłącznie wybranej sprawy.
+                      </p>
+                      <CaseCollaborationPanel
+                        caseId={caseId}
+                        caseRole={
+                          selectedCase?.role
+                        }
+                      />
+                    </article>
+                  ) : null}
+                </div>
+              ) : settingsSection === "security" ? (
+                <div className="chat-settings-section-stack">
+                  {settingsPanels?.security}
+                </div>
+              ) : (
+                <div className="chat-settings-section-stack">
+                  {settingsPanels?.maintenance}
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
+      </main>
+    </div>
+  );
+}

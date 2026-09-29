@@ -1,0 +1,188 @@
+.maintenance-panel {
+  position: fixed;
+  right: 20px;
+  /* stacks under the auth toolbar instead of on top of it */
+  top: var(--lex-overlay-top, 20px);
+  z-index: 49;
+  width: min(430px, calc(100vw - 40px));
+  max-height: min(
+    calc(100vh - var(--lex-overlay-top, 20px) - 20px),
+    680px
+  );
+  overflow: auto;
+  border: 1px solid rgba(120, 120, 120, 0.28);
+  border-radius: 16px;
+  background: var(--panel-bg, #ffffff);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+}
+
+.maintenance-panel > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.maintenance-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.maintenance-title {
+  display: grid;
+  gap: 2px;
+}
+
+.maintenance-panel small {
+  opacity: 0.72;
+}
+
+.maintenance-panel-minimized {
+  top: var(--lex-overlay-top, 20px);
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 5px 6px;
+  border-radius: 12px;
+}
+
+.maintenance-panel-minimized .floating-icon-button {
+  border: 1px solid rgba(120, 120, 120, 0.24);
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+
+.floating-update-dot {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #b87700;
+}
+
+.maintenance-panel > summary > .floating-drag-handle {
+  flex: none;
+}
+
+.maintenance-panel > summary > .floating-minimize-button {
+  flex: none;
+  height: 30px;
+  border: 1px solid rgba(120, 120, 120, 0.22);
+  border-radius: 9px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+
+.maintenance-badge {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(120, 120, 120, 0.14);
+}
+
+.maintenance-badge.update {
+  background: rgba(184, 119, 0, 0.15);
+}
+
+.maintenance-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 16px 16px;
+}
+
+.maintenance-body section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(120, 120, 120, 0.2);
+  border-radius: 12px;
+}
+
+.maintenance-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.maintenance-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.maintenance-heading > span {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.maintenance-body button {
+  min-height: 38px;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.maintenance-body button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.maintenance-refresh {
+  justify-self: start;
+}
+
+.maintenance-message,
+.maintenance-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.maintenance-error {
+  color: #b42318;
+}
+
+@media (max-width: 720px) {
+  .maintenance-panel {
+    right: 10px;
+    top: 10px;
+    width: calc(100vw - 20px);
+  }
+}
+
+.maintenance-panel-embedded {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  border-color: #d5ddd3;
+  background: #fafbf8;
+  box-shadow: none;
+}
+
+.maintenance-panel-embedded > summary {
+  cursor: default;
+}
