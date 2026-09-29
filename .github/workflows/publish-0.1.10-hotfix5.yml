@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 18b8ab5d526075d077435a6f0e9149ad1d207ef6
-  INSTALLER_RUN_ID: "36554172959"
+  SOURCE_SHA: 39c6df7f9a3f4783b81c096ab32b8ccccfa8efe3
+  INSTALLER_RUN_ID: "36556169598"
   RELEASE_TAG: v0.1.10-hotfix5
   RELEASE_TITLE: Lex Machina v0.1.10 hotfix 5
   ASSET_NAME: Lex-Machina-0.1.10-hotfix5-Online-x64-Setup.exe
@@ -128,6 +128,10 @@ jobs:
           - o wyniku decyduje prawidłowość powołania, nie skrót: akt rozpoznawany po ELI, Dz.U., nazwie albo treści tytułu (także w odmianie), przepis musi istnieć w tekście jednolitym, a podany cytat musi się w nim znajdować;
           - KC/KPC/KPK/KK przy braku dostępu do ELI weryfikowane tak samo na lokalnej kopii;
           - odmowa, gdy kopia nie może być prawidłowa: nowelizacje po tekście jednolitym, akt nieobowiązujący, stan historyczny.
+
+          ### Modele lokalne (Bielik, Mistral) - okno kontekstu 32k
+          - bez narzędzi i instrukcji federacji MCP w promptcie modelu lokalnego (przepisy z lokalnego RAG i weryfikacji ELI) - prompt krótszy o ok. 9 tys. znaków;
+          - wyniki narzędzi (np. odczyt skilla) podawane kolejnymi porcjami: najnowszy wynik obcinany do okna z instrukcją odczytu dalszej części, starsze zastępowane jedną linią - koniec LOCAL_MODEL_CONTEXT_OVERFLOW przy odczycie dużego skilla.
 
           ### Poprawki
           - generowanie pisma z czatu na modelu lokalnym (np. Bielik) nie jest już przerywane po 120 s (DESKTOP_RUNTIME_PROXY_FAILED:READ, os error 10060);
