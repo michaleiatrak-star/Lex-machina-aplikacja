@@ -119,7 +119,15 @@ describe("LegalDocumentAstGenerator", () => {
         ],
         verification: { records: 2, verified: 0, supported: 0, unverified: 2 },
         evidence: [],
-        audit: { result: "BLOCKED", eventCount: 5, closed: true, violations: ["FINALIZATION_GATE"] }
+        audit: { result: "BLOCKED", eventCount: 5, closed: true, violations: ["FINALIZATION_GATE"] },
+        [SESSION_EXECUTION_INTERNAL]: {
+          verificationRecords: [],
+          auditEvents: [
+            { sequence: 1, timestamp: "", type: "gate", target: "G36_LEGAL_CORPUS_RUNTIME", status: "BLOCKED", detail: { toolEvents: 3 } },
+            { sequence: 2, timestamp: "", type: "resource_read", target: "shared/NIEISTNIEJE.md", status: "BLOCKED", detail: { error: "LEGAL_RESOURCE_NOT_FOUND" } },
+            { sequence: 3, timestamp: "", type: "gate", target: "G8", status: "OK" }
+          ]
+        }
       })
     };
     const failure = await new LegalDocumentAstGenerator(sessions)
@@ -142,6 +150,10 @@ describe("LegalDocumentAstGenerator", () => {
     expect(blocked.description).toContain("audit.violations: FINALIZATION_GATE");
     expect(blocked.description).toContain("blockedReference[statute/UNVERIFIED]: art. 51 § 1 KW");
     expect(blocked.description).toContain("unverified=2");
+    // Nazwa zablokowanej bramki i kod przyczyny (bez treści odpowiedzi).
+    expect(blocked.description).toContain("blockedEvent[gate]: G36_LEGAL_CORPUS_RUNTIME");
+    expect(blocked.description).toContain("blockedEvent[resource_read]: shared/NIEISTNIEJE.md — LEGAL_RESOURCE_NOT_FOUND");
+    expect(blocked.description).not.toContain("G8");
     expect(`${blocked.reason}${blocked.description}`).not.toContain("TAJNA");
   });
 

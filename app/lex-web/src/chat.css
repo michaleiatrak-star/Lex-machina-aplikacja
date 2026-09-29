@@ -2311,3 +2311,64 @@ mark.restored {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.mcp-search-items {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mcp-search-item p {
+  margin: 4px 0;
+}
+
+.mcp-search-snippet,
+.mcp-search-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mcp-search-text {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mcp-search-document {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mcp-search-document h4 {
+  margin: 8px 0 4px;
+}
+
+.mcp-search-facts {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.mcp-search-facts div {
+  display: grid;
+  grid-template-columns: minmax(120px, 30%) 1fr;
+  gap: 8px;
+}
+
+.mcp-search-facts dt {
+  color: #5b6b5a;
+}
+
+.mcp-search-facts dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.mcp-search-raw {
+  margin-top: 12px;
+}

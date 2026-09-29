@@ -230,8 +230,12 @@ class Sesja {
       }
       if (!r.ok) throw new Error(`CBOSA HTTP ${r.status}`);
       const buf = Buffer.from(await r.arrayBuffer());
+      // Content-Length to rozmiar PRZESŁANY: przy gzip/br fetch zwraca treść po dekompresji
+      // (większą), a ucięty strumień skompresowany kończy się wyjątkiem dekompresji. Długość
+      // porównujemy więc tylko dla odpowiedzi bez kompresji (wcześniej: fałszywy błąd 18128/5690 B).
       const cl = Number(r.headers.get("content-length"));
-      if (cl && cl !== buf.length) throw new Error(`Niekompletny transport HTTP (${buf.length}/${cl} B)`);
+      const kodowanie = (r.headers.get("content-encoding") ?? "").trim().toLowerCase();
+      if (cl && (!kodowanie || kodowanie === "identity") && cl !== buf.length) throw new Error(`Niekompletny transport HTTP (${buf.length}/${cl} B)`);
       const cs = ((r.headers.get("content-type") ?? "").match(/charset=([\w-]+)/i)?.[1] ?? "utf-8").toLowerCase();
       return new TextDecoder(cs).decode(buf);
     }

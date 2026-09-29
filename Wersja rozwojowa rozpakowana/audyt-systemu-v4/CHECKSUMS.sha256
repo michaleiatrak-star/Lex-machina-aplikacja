@@ -7,7 +7,7 @@ d00a4033f581c60d4d41f41b8e6387089a7a35d9dd777ef465811f549338e98b  ./SKILL.md
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986  ./mcp-servers/LICENSE
 0adcfd21893fc7e53fc853a3788f2d824fa736aa769e2ec967505646cd586f5c  ./mcp-servers/README.md
-6578f6678f74b6d5047bcac3711e4c3ca9f80b4061ea2bd3434f3bcb80ce867f  ./mcp-servers/cbosa-example/cbosa-mcp-server.js
+bec17b4b9100e535dbc72daf98b17b5a3c747ac711c55188e2d7d6976f0a7515  ./mcp-servers/cbosa-example/cbosa-mcp-server.js
 b60fc3f8d1eeafef8f409f005d0fff75690584be904f73145473d948f7c0d745  ./mcp-servers/cbosa-example/fixtures/rownowaznosc.json
 ff92c1ac0b960d12d6b1d85d27b4f64f3dab54151433fad01fd556db5d8f769b  ./mcp-servers/cbosa-example/test_normalizacja.mjs
 ed62ff5196aa08b551c9545b2ed011ae8468c74555596f897df4b48dc7ef2ec4  ./mcp-servers/ceidg-example/README.md
@@ -15,7 +15,7 @@ ed62ff5196aa08b551c9545b2ed011ae8468c74555596f897df4b48dc7ef2ec4  ./mcp-servers/
 55dbd937ab8ed74d02b95ac874a4a79cf6f7551485302f7fad85617634585a1a  ./mcp-servers/ceidg-example/fixtures/firmy_nip_aktywny.json
 74b6c9bda725bbfbc3926510d234bb5cbfde501267ec28bd7d804c4a00823dab  ./mcp-servers/ceidg-example/test_normalizacja.mjs
 ad8df07cc7234d88ebdfd7eefa0a2ea8acf405c492683d783078c2fbe7cd1ad2  ./mcp-servers/dist/NOTICE-THIRD-PARTY.txt
-157c00e008cd61a0f177d134286ff05054b98d92164830257f36de07e7da08f7  ./mcp-servers/dist/lex-mcp.mjs
+05bbe732aa756b4d17fe6503a907b247b3ed4aaf2c129e4f38d06f117738d8cd  ./mcp-servers/dist/lex-mcp.mjs
 48391503627b14151e3f12e654ea828ebef7eb5ad362870130d4a4eeb8cb94f7  ./mcp-servers/eureka-example/eureka-mcp-server.js
 1aa02a2b1c340653a9e5dbdcfcba96c0023d2a9f30f50f19fe98dede3f0b2590  ./mcp-servers/eureka-example/fixtures/dok_445895.json
 6a82c22d36d35a4b721780eb8c7c3eff1c64819a1d4f8ebee22841e188bb76bb  ./mcp-servers/eureka-example/fixtures/dok_709097.json

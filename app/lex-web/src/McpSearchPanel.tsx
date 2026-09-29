@@ -6,6 +6,7 @@ import {
 import {
   ApiError,
   getMcpSearchSources,
+  isDesktopShell,
   getMcpSearchTools,
   queryMcpSearch,
   type McpPackageInfo,
@@ -15,6 +16,13 @@ import {
   type McpToolInputProperty
 } from "./api.js";
 import { fieldLabel, toolLabel } from "./mcp-search-labels.js";
+import {
+  appendDocument,
+  nextPageArgs,
+  readSearchResult,
+  type SearchDocument,
+  type SearchItem
+} from "./mcp-search-results.js";
 
 type FieldValue = string | boolean;
 
@@ -52,6 +60,78 @@ function failureText(error: unknown): string {
   return ERRORS[code] ?? code;
 }
 
+async function openExternalUrl(url: string): Promise<void> {
+  if (isDesktopShell()) {
+    const internals = (
+      window as Window & {
+        __TAURI_INTERNALS__?: {
+          invoke?: (
+            command: string,
+            args?: Record<string, unknown>
+          ) => Promise<unknown>;
+        };
+      }
+    ).__TAURI_INTERNALS__;
+    if (internals?.invoke) {
+      await internals.invoke("open_external_url", { url });
+      return;
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// Wynik wyszukiwania złożony z kolejnych stron; surowe odpowiedzi tylko w danych technicznych.
+type ResultView = {
+  source: string;
+  tool: string;
+  ok: boolean;
+  status: string | null;
+  total: number | null;
+  notice: string | null;
+  items: SearchItem[];
+  document: SearchDocument | null;
+  documentArgs: Record<string, unknown>;
+  next: Record<string, unknown> | null;
+  raw: unknown[];
+};
+
+type DetailState = {
+  busy: boolean;
+  error?: string;
+  document?: SearchDocument | null;
+  args?: Record<string, unknown>;
+  tool?: string;
+};
+
+function DocumentView({
+  document,
+  busy,
+  onMore
+}: {
+  document: SearchDocument;
+  busy: boolean;
+  onMore: (() => void) | null;
+}) {
+  return (
+    <div className="mcp-search-document">
+      {document.meta.length ? (
+        <p className="field-help">{document.meta.join(" · ")}</p>
+      ) : null}
+      {document.sections.map((section) => (
+        <section key={section.label}>
+          <h4>{section.label}</h4>
+          <div className="mcp-search-text">{section.text}</div>
+        </section>
+      ))}
+      {onMore ? (
+        <button type="button" className="chat-secondary-action" disabled={busy} onClick={onMore}>
+          {busy ? "Wczytuję…" : "Wczytaj dalszą część treści"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function groupsOf(
   sources: McpSearchSource[]
 ): Array<[string, McpSearchSource[]]> {
@@ -80,16 +160,6 @@ function toArgument(
   return text;
 }
 
-function resultStatus(
-  response: McpSearchQueryResponse
-): string | undefined {
-  const result = response.result;
-  if (result && typeof result === "object" && typeof (result as { status?: unknown }).status === "string") {
-    return (result as { status: string }).status;
-  }
-  return undefined;
-}
-
 export function McpSearchPanel() {
   const [sources, setSources] =
     useState<McpSearchSource[] | null>(null);
@@ -107,8 +177,10 @@ export function McpSearchPanel() {
     useState(false);
   const [error, setError] =
     useState("");
-  const [response, setResponse] =
-    useState<McpSearchQueryResponse | null>(null);
+  const [view, setView] =
+    useState<ResultView | null>(null);
+  const [details, setDetails] =
+    useState<Record<string, DetailState>>({});
 
   useEffect(() => {
     void getMcpSearchSources()
@@ -122,7 +194,7 @@ export function McpSearchPanel() {
   useEffect(() => {
     setTools([]);
     setToolName("");
-    setResponse(null);
+    setView(null);
     if (!sourceId) return;
     let cancelled = false;
     setBusy(true);
@@ -152,7 +224,7 @@ export function McpSearchPanel() {
 
   useEffect(() => {
     setValues({});
-    setResponse(null);
+    setView(null);
   }, [toolName]);
 
   const tool = useMemo(
@@ -167,6 +239,16 @@ export function McpSearchPanel() {
     !String(values[name] ?? "").trim()
   );
 
+  const availableTools = tools.map((item) => item.name);
+  const parameters = properties.map(([name]) => name);
+
+  function pageOf(
+    response: McpSearchQueryResponse,
+    args: Record<string, unknown>
+  ) {
+    return readSearchResult(response.tool, args, response.result, availableTools);
+  }
+
   async function submit(): Promise<void> {
     if (!tool) return;
     const args: Record<string, unknown> = {};
@@ -177,9 +259,24 @@ export function McpSearchPanel() {
     }
     setBusy(true);
     setError("");
-    setResponse(null);
+    setView(null);
+    setDetails({});
     try {
-      setResponse(await queryMcpSearch(sourceId, tool.name, args));
+      const response = await queryMcpSearch(sourceId, tool.name, args);
+      const page = pageOf(response, args);
+      setView({
+        source: response.source,
+        tool: response.tool,
+        ok: response.ok,
+        status: page.status,
+        total: page.total,
+        notice: page.notice,
+        items: page.items,
+        document: page.document,
+        documentArgs: args,
+        next: nextPageArgs(args, page, page.items.length, parameters),
+        raw: [response.result]
+      });
     } catch (failure) {
       setError(failureText(failure));
     } finally {
@@ -187,7 +284,87 @@ export function McpSearchPanel() {
     }
   }
 
-  const status = response ? resultStatus(response) : undefined;
+  async function loadMore(): Promise<void> {
+    if (!view?.next) return;
+    const args = view.next;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await queryMcpSearch(view.source, view.tool, args);
+      const page = pageOf(response, args);
+      const seen = new Set(view.items.map((item) => item.key));
+      const items = [...view.items, ...page.items.filter((item) => !seen.has(item.key))];
+      setView({
+        ...view,
+        items,
+        notice: page.notice ?? view.notice,
+        next: page.items.length ? nextPageArgs(args, page, items.length, parameters) : null,
+        raw: [...view.raw, response.result]
+      });
+    } catch (failure) {
+      setError(failureText(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDocumentPart(): Promise<void> {
+    if (!view?.document?.continuation) return;
+    const args = view.document.continuation;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await queryMcpSearch(view.source, view.tool, args);
+      const next = pageOf(response, args).document;
+      if (next) {
+        setView({
+          ...view,
+          document: appendDocument(view.document, next),
+          raw: [...view.raw, response.result]
+        });
+      }
+    } catch (failure) {
+      setError(failureText(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleDetail(item: SearchItem, more = false): Promise<void> {
+    if (!view || !item.detail) return;
+    const current = details[item.key];
+    if (current && !more) {
+      const { [item.key]: _closed, ...rest } = details;
+      setDetails(rest);
+      return;
+    }
+    const detailTool = item.detail.tool;
+    const args = more && current?.document?.continuation
+      ? current.document.continuation
+      : item.detail.args;
+    setDetails((previous) => ({ ...previous, [item.key]: { ...previous[item.key], busy: true, error: undefined } }));
+    try {
+      const response = await queryMcpSearch(view.source, detailTool, args);
+      const page = readSearchResult(detailTool, args, response.result, availableTools);
+      const document =
+        more && current?.document && page.document
+          ? appendDocument(current.document, page.document)
+          : page.document;
+      setDetails((previous) => ({
+        ...previous,
+        [item.key]: document
+          ? { busy: false, document, args, tool: detailTool }
+          : { busy: false, error: page.notice ?? STATUS_TEXT[page.status ?? ""] ?? "Źródło nie zwróciło treści." }
+      }));
+    } catch (failure) {
+      setDetails((previous) => ({
+        ...previous,
+        [item.key]: { busy: false, error: failureText(failure) }
+      }));
+    }
+  }
+
+  const status = view?.status ?? undefined;
 
   return (
     <section className="chat-card-stack">
@@ -341,22 +518,112 @@ export function McpSearchPanel() {
         ) : null}
       </article>
 
-      {response ? (
+      {view ? (
         <article className="chat-card">
           <p className="eyebrow">
-            {toolLabel(response.tool).label}
+            {toolLabel(view.tool).label}
           </p>
           <h2>
-            {status ? STATUS_TEXT[status] ?? status : response.ok ? "Wynik" : "Błąd"}
+            {status ? STATUS_TEXT[status] ?? status : view.ok ? "Wynik" : "Błąd"}
           </h2>
-          {response.source === "cbosa" ? (
+          {view.total !== null ? (
+            <p className="field-help">
+              Trafień w źródle: {view.total}; wyświetlono: {view.items.length}.
+            </p>
+          ) : null}
+          {view.source === "cbosa" ? (
             <p className="field-help">
               NSA/WSA z CBOSA to snapshot bez awansu do statusu zweryfikowanego; brak trafień = OUT_OF_SCOPE, nie dowód braku orzeczenia.
             </p>
           ) : null}
-          <pre className="mcp-search-result">
-            {JSON.stringify(response.result, null, 2)}
-          </pre>
+          {view.notice ? <div className="alert">{view.notice}</div> : null}
+
+          {view.document ? (
+            <>
+              <h3>{view.document.title}</h3>
+              {view.document.url ? (
+                <p>
+                  <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(view.document!.url!)}>
+                    Otwórz w źródle
+                  </button>
+                </p>
+              ) : null}
+              <DocumentView
+                document={view.document}
+                busy={busy}
+                onMore={view.document.continuation ? () => void loadDocumentPart() : null}
+              />
+            </>
+          ) : null}
+
+          {view.items.length ? (
+            <ol className="mcp-search-items">
+              {view.items.map((item) => {
+                const detail = details[item.key];
+                return (
+                  <li key={item.key} className="mcp-search-item">
+                    <strong>{item.title}</strong>
+                    {item.meta.length ? (
+                      <p className="field-help">{item.meta.join(" · ")}</p>
+                    ) : null}
+                    {item.snippet ? <p className="mcp-search-snippet">{item.snippet}</p> : null}
+                    {item.facts.length ? (
+                      <dl className="mcp-search-facts">
+                        {item.facts.map(([label, value]) => (
+                          <div key={label}>
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+                    <div className="chat-form-row compact">
+                      {item.detail ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={detail?.busy}
+                          onClick={() => void toggleDetail(item)}
+                        >
+                          {detail?.busy ? "Wczytuję…" : detail ? "Zwiń treść" : "Pokaż treść"}
+                        </button>
+                      ) : null}
+                      {item.url ? (
+                        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
+                          Otwórz w źródle
+                        </button>
+                      ) : null}
+                    </div>
+                    {detail?.error ? <div className="alert alert-error">{detail.error}</div> : null}
+                    {detail?.document ? (
+                      <DocumentView
+                        document={detail.document}
+                        busy={detail.busy}
+                        onMore={detail.document.continuation ? () => void toggleDetail(item, true) : null}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : !view.document ? (
+            <p>Brak pozycji do wyświetlenia.</p>
+          ) : null}
+
+          {view.next ? (
+            <div className="chat-form-row compact">
+              <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void loadMore()}>
+                {busy ? "Wczytuję…" : "Wczytaj kolejne wyniki"}
+              </button>
+            </div>
+          ) : null}
+
+          <details className="mcp-search-raw">
+            <summary>Dane techniczne (odpowiedź źródła)</summary>
+            <pre className="mcp-search-result">
+              {JSON.stringify(view.raw.length === 1 ? view.raw[0] : view.raw, null, 2)}
+            </pre>
+          </details>
         </article>
       ) : null}
     </section>

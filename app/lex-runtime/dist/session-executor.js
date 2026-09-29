@@ -905,12 +905,14 @@ export class SafeSessionExecutor {
             });
         }
         const corpusAudit = corpusTools.auditEvents();
-        // When the model picks skills itself, a refused read it can correct
-        // (router-v3 not read yet, a guessed file name) is guidance, not a failed
-        // turn. Path escapes and other refusals still block.
-        const correctableCorpusRefusal = /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|INVALID_RESOURCE_OFFSET)/;
-        const correctable = (event) => modelSelectedSkills &&
-            correctableCorpusRefusal.test(String(event.detail?.error ?? ""));
+        // A refused read that grants no content and that the model can correct
+        // (router-v3 not read yet, a guessed file name, a malformed or binary read,
+        // an unknown corpus tool) is guidance, not a failed turn - also when the
+        // runtime routed the skills (document generation), where the required
+        // reads are enforced separately by G39H. Path escapes (INVALID_RESOURCE_PREFIX,
+        // PATH_ESCAPE), the criminal qualifier and other refusals still block.
+        const correctableCorpusRefusal = /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|LEGAL_RESOURCE_NOT_TEXT|LEGAL_RESOURCE_REQUEST_INVALID|INVALID_RESOURCE_OFFSET|INVALID_RESOURCE_CURSOR|UNKNOWN_LEGAL_CORPUS_TOOL)/;
+        const correctable = (event) => correctableCorpusRefusal.test(String(event.detail?.error ?? ""));
         // Poprawialna odmowa = DEGRADED, nie BLOCKED: HYBRID-VAL przed .docx odrzuca każde
         // zdarzenie BLOCKED sesji źródłowej, a bramka G36 takiej odmowy nie blokuje.
         for (const event of corpusAudit) {

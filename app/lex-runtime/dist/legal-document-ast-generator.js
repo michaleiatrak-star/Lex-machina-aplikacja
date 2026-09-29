@@ -95,6 +95,16 @@ function blockedSessionDiagnostic(result) {
                 .filter((check) => check.result === "BLOCKED")
                 .map((check) => `gateI.${check.id}: ${check.detail.slice(0, 200)}`)
             : []),
+        // Które zdarzenia audytu mają BLOCKED (bramka / odczyt / narzędzie): tylko typ, cel i kod
+        // przyczyny, bez treści odpowiedzi i danych sprawy.
+        ...(result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+            .filter((event) => event.status === "BLOCKED")
+            .slice(0, 12)
+            .map((event) => {
+            const code = [event.detail?.error, event.detail?.reason, event.detail?.decision]
+                .find((value) => typeof value === "string" && value.trim());
+            return `blockedEvent[${event.type}]: ${event.target.slice(0, 120)}${code ? ` — ${String(code).slice(0, 160)}` : ""}`;
+        }),
         ...result.blockedReferences
             .slice(0, 10)
             .map((reference) => `blockedReference[${reference.kind}/${reference.status}]: ${reference.claim.slice(0, 80)}`),

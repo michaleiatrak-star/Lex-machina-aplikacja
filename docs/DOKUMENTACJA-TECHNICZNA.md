@@ -84,8 +84,9 @@ pobranie tekstu i dopasowanie (OfficialLegalSourceVerifier)
 
 - **Serwery:** `audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs` (`isap, eurlex, saos, cbosa, krs, wl, ceidg, nbp, eureka, sudop, uodo`); jeden proces stdio dla wszystkich gotowych serwerów.
 - **Stan** (`LexMcpConnectorStore.status()`): `installed`, `ready` (CEIDG wymaga klucza), `lastCheck` (handshake z `check()`), `package.integrity` = SHA-256 `lex-mcp.mjs` wobec `CHECKSUMS.sha256` skilla (`MATCH | MISMATCH | UNVERIFIED | MISSING`).
-- **Audyt sesji:** instancja federacji jest wspólna; każda sesja przekazuje własny dziennik (`runTools(calls, events)`). Zdarzenie `BLOCK` ma `outcome`: `SOURCE_UNAVAILABLE` → audyt `DEGRADED` (jak G40), `POLICY_BLOCKED` i `*_CASE_DATA_FORBIDDEN` → `BLOCKED`. Poprawialna odmowa odczytu skilla (model sam wybiera skille) → `DEGRADED` (jak G36). HYBRID-VAL odrzuca tylko `BLOCKED`.
+- **Audyt sesji:** instancja federacji jest wspólna; każda sesja przekazuje własny dziennik (`runTools(calls, events)`). Zdarzenie `BLOCK` ma `outcome`: `SOURCE_UNAVAILABLE` → audyt `DEGRADED` (jak G40), `POLICY_BLOCKED` i `*_CASE_DATA_FORBIDDEN` → `BLOCKED`. Poprawialna odmowa odczytu skilla (`LEGAL_RESOURCE_NOT_FOUND`, `ROUTER_V3_REQUIRED_FIRST` itp.) → `DEGRADED` także w sesji prowadzonej przez runtime (generowanie `.docx`); wyjście poza korpus i brak kwalifikatora karnego → `BLOCKED`. HYBRID-VAL odrzuca tylko `BLOCKED`.
 - **Karta Wyszukiwanie:** osobna instancja `LegalFederationToolRuntime`, `direct()` = te same bramki co narzędzia modelu, zdarzenia nie trafiają do audytu sesji. Etykiety po polsku: `lex-web/src/mcp-search-labels.ts` (nowe narzędzie/pole bez wpisu → nazwa techniczna z automatycznym podziałem).
+- **Strona wyników:** `lex-web/src/mcp-search-results.ts` — `readSearchResult` (kandydaci/result → pozycje, dokument z sekcjami, pola rejestrów), `nextPageArgs` (parametr `strona`), `appendDocument` (treść porcjowana: `tresc_offset`/`tresc_kompletna`/`tresc_dlugosc` → `offset`). Pełna treść pozycji: `cbosa_pobierz`, `eureka_pobierz`, `uodo_pobierz`. Surowy JSON tylko w „Danych technicznych”.
 
 ## 6. Generowanie pisma (.docx / .odt)
 

@@ -536,6 +536,42 @@ describe("SafeSessionExecutor", () => {
     expect(seen["local/bielik-test"]).not.toContain("search_federated_legal_sources");
   });
 
+  it("runtime-routed session (document generation): a guessed missing file is DEGRADED, a path escape still blocks", async () => {
+    let path = "";
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "corpus",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        await params.runTools?.([{ id: "c1", name: "read_legal_resource", input: { skill: DR, path } }]);
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(fixture(), new ProviderGateway(providers));
+    const request = {
+      query: "Jaki jest termin przedawnienia roszczenia?",
+      provider: "openai" as const,
+      model: "test",
+      primarySkill: DR,
+      mode: "PRAWNIK" as const
+    };
+
+    path = "references/zgadnieta-nazwa.md";
+    const guessed = await executor.execute(request);
+    const guessedEvents = guessed[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(guessedEvents.find((event) => event.target === "G36_LEGAL_CORPUS_RUNTIME")?.status).toBe("OK");
+    expect(guessedEvents.some((event) => event.status === "BLOCKED")).toBe(false);
+    expect(guessedEvents.some((event) => event.status === "DEGRADED" && String(event.detail?.error).startsWith("LEGAL_RESOURCE_NOT_FOUND"))).toBe(true);
+
+    path = "../../poza-korpusem.md";
+    const escape = await executor.execute(request);
+    const escapeEvents = escape[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(escapeEvents.find((event) => event.target === "G36_LEGAL_CORPUS_RUNTIME")?.status).toBe("BLOCKED");
+    expect(escape.status).toBe("BLOCKED");
+  });
+
   it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
     let callFederation = true;
     const adapter: ProviderAdapter = {

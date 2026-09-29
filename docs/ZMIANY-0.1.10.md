@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–9)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–10)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -9,9 +9,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 6 | `360ff57` | karta Wyszukiwanie, sprawdzanie i integralność konektorów MCP |
 | hotfix 7 | `fec4967` | konektory i Wyszukiwanie na desktopie, `.docx` bez fałszywych blokad |
 | hotfix 8 | `6fd11d1` | ELI dla wszystkich aktów, RAG tylko przy awarii ELI, kopia KK/KW |
-| hotfix 9 | budowany | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
+| hotfix 9 | `8b86baa` | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
+| hotfix 10 | budowany | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
 
 ---
+
+## hotfix 10
+
+- `.docx` (`blocked_event_present`, ChatGPT i Claude): sesja generatora jest prowadzona przez runtime (`allowModelSelection: false`), a G36 uznawał odmowę odczytu skilla za poprawialną tylko przy wyborze skilli przez model. Odczyt nieistniejącego pliku skilla dawał `BLOCKED` G36 → G39I → G39H → G15 i odrzucenie każdego pisma. Teraz `DEGRADED`; `INVALID_RESOURCE_PREFIX`/`PATH_ESCAPE` i `CRIMINAL_QUALIFIER_MISSING` nadal blokują. `DOCUMENT_AST_SESSION_BLOCKED` wymienia zdarzenia `BLOCKED` (typ, cel, kod).
+- Wyszukiwanie: lista pozycji zamiast JSON, „Pokaż treść” (CBOSA/EUREKA/UODO, z doczytywaniem części), „Wczytaj kolejne wyniki”, pola rejestrów; surowa odpowiedź w „Danych technicznych”.
+- CBOSA: „Niekompletny transport HTTP (x/y B)” przy każdym wyszukiwaniu — porównanie długości rozpakowanego gzip z `Content-Length` skompresowanej odpowiedzi. Kontrola tylko bez `Content-Encoding`. Zmiana w skillu `audyt-systemu-v4` (źródło, `dist/lex-mcp.mjs`, `CHECKSUMS.sha256`) — musi trafić też do repozytorium Lex Machina, inaczej „Odśwież skille” przywróci błąd.
 
 ## hotfix 9
 
@@ -63,7 +70,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 9
+## Znane ograniczenia po hotfix 10
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.
