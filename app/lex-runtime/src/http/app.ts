@@ -91,8 +91,9 @@ import {
 import type {
   LocalDocumentAuthoringService
 } from "../document-authoring-service.js";
-import type {
-  LegalDocumentAstGenerator
+import {
+  DocumentAstSessionBlockedError,
+  type LegalDocumentAstGenerator
 } from "../legal-document-ast-generator.js";
 import type {
   LocalTemplateProfileService
@@ -6747,7 +6748,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               error instanceof
                 Error
                 ? error.message
-                : "DOCUMENT_GENERATION_FAILED"
+                : "DOCUMENT_GENERATION_FAILED",
+            ...(error instanceof
+              DocumentAstSessionBlockedError
+              ? {
+                  stage:
+                    "DOCUMENT_AST_SESSION",
+                  reason:
+                    error.reason,
+                  description:
+                    error.description
+                }
+              : {})
           });
           return;
         }
