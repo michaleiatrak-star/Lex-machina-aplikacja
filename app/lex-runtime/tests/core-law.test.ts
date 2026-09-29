@@ -49,7 +49,7 @@ const KK_HTML =
   "<p>Art. 148. § 1. Kto zabija człowieka,</p><p>podlega karze pozbawienia wolności&nbsp;na czas nie krótszy od lat 10.</p>" +
   "<p>Art. 148a. § 1. Kto zabija człowieka ze szczególnym okrucieństwem</p></body></html>";
 
-function fakeEli(options: { deny?: boolean; references?: Record<string, unknown> } = {}) {
+function fakeEli(options: { deny?: boolean; references?: Record<string, unknown>; emptyKkHtml?: boolean } = {}) {
   const requested: string[] = [];
   const fetcher = async (url: string) => {
     requested.push(url);
@@ -65,7 +65,8 @@ function fakeEli(options: { deny?: boolean; references?: Record<string, unknown>
     if (url.endsWith("/DU/2025/383")) {
       return Response.json({ title: "Obwieszczenie — Kodeks karny", status: "akt jednorazowy", textHTML: true, textPDF: true });
     }
-    if (url.endsWith("/DU/2025/383/text.html")) return new Response(KK_HTML);
+    if (url.endsWith("/DU/2025/383/text.html")) return new Response(options.emptyKkHtml ? "" : KK_HTML);
+    if (url.endsWith("/DU/2025/383/text.pdf")) return new Response(new Uint8Array([4, 5, 6]));
     if (url.endsWith("/DU/2025/734")) {
       return Response.json({ title: "Kodeks wykroczeń", status: "obowiązujący", textHTML: false, textPDF: true });
     }
@@ -178,6 +179,55 @@ describe("core law index", () => {
 
     await index.refresh();
     expect(eli.requested).toHaveLength(2);
+  });
+
+  it("reads the consolidated text from PDF when ELI serves an empty text.html", async () => {
+    const eli = fakeEli({ emptyKkHtml: true });
+    const index = new CoreLawIndex(tempDir("lex-core-store-"), eli.fetcher as never, eli.pdf as never, () => Date.parse("2026-09-23T12:00:00Z"), 0);
+    index.load(corpus());
+    await index.refresh();
+    const kk = index.currentRecord("DU/2025/383");
+    expect(kk?.textSource).toBe("pdf");
+    expect(kk?.sourceUrl).toBe("https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf");
+    expect(kk?.articleOrder.length).toBeGreaterThan(0);
+  });
+
+  it("downloads again a copy without articles saved before extraction v2", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    const file = path.join(store, "DU_2025_734.json");
+    const stale = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(stale.extraction).toBe(2);
+    delete stale.extraction;
+    stale.articleOrder = [];
+    stale.articles = {};
+    fs.writeFileSync(file, JSON.stringify(stale));
+
+    const { eli, index } = later(store, start + 60_000, {});
+    expect(index.currentRecord("DU/2025/734")).toBeNull();
+    await index.refresh();
+    expect(eli.requested).toContain("https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.pdf");
+    expect(index.currentRecord("DU/2025/734")?.articleOrder).toEqual(["51"]);
+  });
+
+  it("adopts an act verified at the source outside the maps and keeps it across restarts", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    const { eli, index } = later(store, start + 60_000, {});
+    expect(index.summary("DU/2025/2000")).toBeNull();
+
+    index.adopt({ eli: "DU/2025/2000", baseEli: "DU/1985/14", title: "o drogach publicznych" });
+    await index.refresh();
+    expect(eli.requested).toContain("https://api.sejm.gov.pl/eli/acts/DU/2025/2000");
+    expect(index.summary("DU/2025/2000")?.labels).toEqual(["o drogach publicznych"]);
+
+    const restarted = later(store, start + 120_000, {}).index;
+    expect(restarted.summary("DU/2025/2000")).not.toBeNull();
+    // Akt z map z tym samym t.j. nie jest dodawany drugi raz.
+    restarted.adopt({ eli: "DU/2025/734", baseEli: "DU/1971/114", title: "Kodeks wykroczeń" });
+    expect(restarted.summaries().filter((act) => act.eli === "DU/2025/734")).toHaveLength(1);
   });
 
   it("downloads a new amendment on its own and flags it on the article", async () => {

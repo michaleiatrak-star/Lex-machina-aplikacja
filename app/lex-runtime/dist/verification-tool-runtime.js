@@ -4,6 +4,7 @@ import { DeterministicLegalActResolver, LegalActResolutionError } from "./legal-
 import { ToolBroker, ToolPolicy } from "./tool-broker.js";
 import { OFFICIAL_LEGAL_SOURCE_HOSTS, OfficialLegalSourceVerifier } from "./legal-source-verifier.js";
 import { verifyFromCoreLaw } from "./core-law-verification.js";
+import { describeEliAct } from "./eli-act-descriptor.js";
 const TOOL_NAME = "verify_legal_reference";
 const CASE_SEARCH_TOOL_NAME = "search_case_law";
 const CASE_TOOL_NAME = "verify_case_reference";
@@ -33,7 +34,7 @@ const TOOL_SCHEMA = {
                 },
                 act: {
                     type: "string",
-                    description: "Legal act identity or alias, e.g. KC, KPC, KPK, KK, KW, a Dz.U. reference (Dz.U. 2025 poz. 734), an ELI (DU/2025/734) or the full act title of an act from the DR act maps."
+                    description: "Legal act identity or alias, e.g. KC, KPC, KPK, KK, KW, a Dz.U. reference (Dz.U. 2025 poz. 734), an ELI (DU/2025/734) or the full act title (also of an act outside the DR act maps)."
                 },
                 asOf: {
                     type: "string",
@@ -354,7 +355,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
     "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
     "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
-    "- Acts outside KC/KPC/KPK/KK (and these four when the network is unavailable) are verified offline against the local official ELI copy of the DR act maps. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
+    "- Acts outside KC/KPC/KPK/KK are verified at the source (Sejm ELI, current consolidated text and amendments after it), like these four; an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. Only when ELI is unreachable is the local official ELI copy used (offline). The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
     "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
@@ -377,9 +378,14 @@ export class LegalVerificationToolRuntime {
     caseVerifier;
     caseLawSearch;
     coreLaw;
+    eliFetch;
+    adoptAct;
     broker;
     resolverAudit = [];
-    constructor(ledger, verifier = new OfficialLegalSourceVerifier(), resolver = new DeterministicLegalActResolver(), freshnessChecker = null, caseVerifier = new SupremeCourtCaseVerifier(), caseLawSearch = new CaseLawSearchService(), coreLaw = null) {
+    constructor(ledger, verifier = new OfficialLegalSourceVerifier(), resolver = new DeterministicLegalActResolver(), freshnessChecker = null, caseVerifier = new SupremeCourtCaseVerifier(), caseLawSearch = new CaseLawSearchService(), coreLaw = null, eliFetch = globalThis.fetch.bind(globalThis), 
+    // Akt zweryfikowany w źródle, którego nie ma w lokalnej kopii (albo ma tam starszy
+    // tekst): dołączany do kopii i RAG, jak akty z map DR.
+    adoptAct = null) {
         this.ledger = ledger;
         this.verifier = verifier;
         this.resolver = resolver;
@@ -387,6 +393,8 @@ export class LegalVerificationToolRuntime {
         this.caseVerifier = caseVerifier;
         this.caseLawSearch = caseLawSearch;
         this.coreLaw = coreLaw;
+        this.eliFetch = eliFetch;
+        this.adoptAct = adoptAct;
         this.broker = new ToolBroker(new ToolPolicy({
             allowNetwork: true,
             allowedNetworkHosts: [
@@ -704,6 +712,21 @@ export class LegalVerificationToolRuntime {
     systemPromptAppendix() {
         return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
     }
+    async describeUnregisteredAct(act, claim) {
+        try {
+            return ((await describeEliAct({
+                act,
+                claim,
+                index: this.coreLaw,
+                fetcher: this.eliFetch,
+                today: new Date().toISOString().slice(0, 10)
+            })) ?? undefined);
+        }
+        catch {
+            // ELI nieosiągalne: zostaje lokalna kopia (i jej odmowy temporalne).
+            return undefined;
+        }
+    }
     verifyWithCoreLaw(call, actInput, asOf, fallbackReason) {
         const claim = typeof call.input.claim === "string"
             ? call.input.claim.trim()
@@ -986,8 +1009,18 @@ export class LegalVerificationToolRuntime {
                 const reason = error instanceof LegalActResolutionError
                     ? error.code
                     : "LEGAL_ACT_RESOLUTION_FAILED";
-                // Akty spoza rejestru: lokalna kopia ELI z map DR (A + RAG rdzeniowy).
+                // Akty spoza rejestru: najpierw w źródle (Sejm ELI) z kontrolą aktualności, tak jak
+                // KC/KPC/KK/KPK; lokalna kopia z map DR tylko gdy źródło nieosiągalne albo aktu nie
+                // da się jednoznacznie ustalić.
                 if (reason === "UNKNOWN_LEGAL_ACT" &&
+                    this.freshnessChecker) {
+                    resolvedAct =
+                        await this.describeUnregisteredAct(actInput, typeof call.input.claim === "string"
+                            ? call.input.claim
+                            : "");
+                }
+                if (!resolvedAct &&
+                    reason === "UNKNOWN_LEGAL_ACT" &&
                     this.coreLaw) {
                     results.push({
                         tool_use_id: call.id,
@@ -995,21 +1028,23 @@ export class LegalVerificationToolRuntime {
                     });
                     continue;
                 }
-                this.resolverAudit.push({
-                    sequence: this.resolverAudit.length + 1,
-                    tool: TOOL_NAME,
-                    capability: "network",
-                    decision: "DENY",
-                    reason
-                });
-                results.push({
-                    tool_use_id: call.id,
-                    content: JSON.stringify({
-                        status: "DENIED",
-                        error: reason
-                    })
-                });
-                continue;
+                if (!resolvedAct) {
+                    this.resolverAudit.push({
+                        sequence: this.resolverAudit.length + 1,
+                        tool: TOOL_NAME,
+                        capability: "network",
+                        decision: "DENY",
+                        reason
+                    });
+                    results.push({
+                        tool_use_id: call.id,
+                        content: JSON.stringify({
+                            status: "DENIED",
+                            error: reason
+                        })
+                    });
+                    continue;
+                }
             }
             let freshness;
             if (this.freshnessChecker) {
@@ -1100,6 +1135,23 @@ export class LegalVerificationToolRuntime {
                         })
                 }
             });
+            if (result.ok &&
+                resolvedAct.id === "ELI" &&
+                this.adoptAct) {
+                try {
+                    if (JSON.parse(String(result.output ?? ""))
+                        .status === "VERIFIED") {
+                        this.adoptAct({
+                            ...resolvedAct,
+                            eli: freshness?.currentEli ??
+                                resolvedAct.eli
+                        });
+                    }
+                }
+                catch {
+                    // Wynik bez JSON: nic do dołączenia.
+                }
+            }
             if (!result.ok && this.coreLaw) {
                 results.push({
                     tool_use_id: call.id,

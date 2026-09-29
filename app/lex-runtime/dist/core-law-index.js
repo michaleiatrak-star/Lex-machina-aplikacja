@@ -118,6 +118,18 @@ export function htmlToText(html) {
         .replace(/\n{3,}/g, "\n\n")
         .trim();
 }
+// Nagłówek/stopka strony Dz.U. z ISAP ("©Kancelaria Sejmu s. 12/180", data t.j.) przerywa
+// artykuł na granicy stron i psułby porównanie cytatu.
+export function stripPdfPageHeaders(text) {
+    return text
+        .split("\n")
+        .filter((line) => !/^\s*©?\s*Kancelaria Sejmu\s+s\.\s*\d+\s*\/\s*\d+\s*$/iu.test(line))
+        .filter((line) => !/^\s*\d{4}-\d{2}-\d{2}\s*$/u.test(line))
+        .filter((line) => !/^\s*Dziennik Ustaw\s*[–-]\s*\d+\s*[–-]\s*Poz\.\s*\d+\s*$/iu.test(line))
+        .join("\n")
+        // Przeniesienie wyrazu na granicy wiersza ("zna-\nleziony").
+        .replace(/(\p{L})-\n(\p{Ll})/gu, "$1$2");
+}
 /** Article number -> article text. The first occurrence of a number wins. */
 export function splitArticles(text) {
     const pattern = /(?:^|\n)\s*Art\.\s*(\d+[a-z]{0,4})\.(?=\s)/g;
@@ -144,7 +156,16 @@ export function normalizeForSearch(value) {
         .replace(/Ł/g, "L")
         .toLocaleLowerCase("pl");
 }
-function eliLinks(refs, relation) {
+function adoptedRef(entry) {
+    return {
+        eli: entry.eli,
+        consolidated: true,
+        labels: [entry.title],
+        domains: [],
+        notes: ["Dołączony po weryfikacji w źródle (Sejm ELI), spoza map DR."]
+    };
+}
+export function eliLinks(refs, relation) {
     if (!refs || typeof refs !== "object")
         return [];
     const links = [];
@@ -196,7 +217,10 @@ export class CoreLawIndex {
     cache = new Map();
     searchIndex = null;
     refreshing = null;
-    constructor(directory = defaultCoreLawDir(), fetcher = globalThis.fetch.bind(globalThis), pdf = new LocalPdfTextExtractor(), now = () => Date.now(), gapMs = REQUEST_GAP_MS) {
+    constructor(directory = defaultCoreLawDir(), fetcher = globalThis.fetch.bind(globalThis), 
+    // Wiersze z PDF: splitArticles szuka "Art. N." na początku wiersza; bez nich tekst
+    // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
+    pdf = new LocalPdfTextExtractor(undefined, { lines: true }), now = () => Date.now(), gapMs = REQUEST_GAP_MS) {
         this.directory = directory;
         this.fetcher = fetcher;
         this.pdf = pdf;
@@ -212,6 +236,33 @@ export class CoreLawIndex {
         catch {
             this.state = { acts: {}, blockedUntil: null };
         }
+        for (const adopted of this.state.adopted ?? []) {
+            if (!this.ref(adopted.eli))
+                this.refs.push(adoptedRef(adopted));
+        }
+    }
+    /**
+     * Akt zweryfikowany w źródle (ELI): spoza map -> dołączony do kopii i RAG; z map, ale z
+     * nowszym t.j. w źródle niż w kopii -> wymuszone sprawdzenie relacji przy odświeżaniu.
+     * Pobieranie odbywa się w tle, jak dla aktów z map.
+     */
+    adopt(act, currentEli = act.eli) {
+        const known = this.refs.find((ref) => ref.eli === act.eli ||
+            ref.eli === currentEli ||
+            this.state.acts[ref.eli]?.currentEli === currentEli);
+        if (known) {
+            const state = this.state.acts[known.eli];
+            if (!state || (state.currentEli ?? known.eli) === currentEli)
+                return;
+            state.checkedAt = null;
+        }
+        else {
+            const entry = { eli: currentEli, title: act.title };
+            this.state.adopted = [...(this.state.adopted ?? []), entry];
+            this.refs.push(adoptedRef(entry));
+        }
+        this.saveState();
+        void this.refresh().catch(() => undefined);
     }
     summaries() {
         return this.refs.map((ref) => {
@@ -317,6 +368,10 @@ export class CoreLawIndex {
             return cached;
         try {
             const record = JSON.parse(fs.readFileSync(path.join(this.directory, fileNameFor(eli)), "utf8"));
+            // Kopia bez artykułów sprzed wersji 2 (pusty HTML t.j. albo PDF bez wierszy) jest
+            // traktowana jak niepobrana, więc odświeżanie pobiera ją ponownie.
+            if (!record.extraction && record.articleOrder.length === 0)
+                return null;
             if (this.cache.size > 24) {
                 this.cache.delete(this.cache.keys().next().value);
             }
@@ -476,10 +531,11 @@ export class CoreLawIndex {
             body = htmlToText(await (await this.get(sourceUrl, "text/html")).text());
             textSource = "html";
         }
-        else if (meta.textPDF === true) {
+        // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
+        if (splitArticles(body).order.length === 0 && meta.textPDF === true) {
             sourceUrl = `${base}/text.pdf`;
             const bytes = new Uint8Array(await (await this.get(sourceUrl, "application/pdf")).arrayBuffer());
-            body = (await this.pdf.extract(bytes)).text;
+            body = stripPdfPageHeaders((await this.pdf.extract(bytes)).text);
             textSource = "pdf";
         }
         const { order, articles } = splitArticles(body);
@@ -490,6 +546,7 @@ export class CoreLawIndex {
             status: text(meta.status),
             promulgation: text(meta.promulgation),
             textSource,
+            extraction: 2,
             fetchedAt: new Date(this.now()).toISOString(),
             sourceUrl,
             articleOrder: order,

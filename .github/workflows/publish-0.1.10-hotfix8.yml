@@ -1,0 +1,162 @@
+name: Publish Lex Machina 0.1.10 hotfix 8 online installer
+
+# Builds, accepts and publishes the online installer in one run: runtime
+# validation, the G33D online installer build and installed-copy acceptance,
+# then the exact accepted artifact is attached to a pre-release at GITHUB_SHA.
+
+on:
+  push:
+    branches:
+      - "claude/modest-knuth-re40mu"
+    paths:
+      - ".github/workflows/publish-0.1.10-hotfix8.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: lex-publish-0.1.10-hotfix8
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.1.10-hotfix8
+  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 8
+  ASSET_NAME: Lex-Machina-0.1.10-hotfix8-Online-x64-Setup.exe
+
+jobs:
+  runtime:
+    name: Runtime and Gate I audit
+    uses: ./.github/workflows/lex-runtime.yml
+    secrets: inherit
+
+  online:
+    name: Accepted online installer
+    needs:
+      - runtime
+    uses: ./.github/workflows/lex-installer.yml
+    secrets: inherit
+
+  publish:
+    name: Publish accepted online installer
+    needs:
+      - runtime
+      - online
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download accepted online installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-Windows-Online-Installer
+          path: release-input/online
+
+      - name: Verify receipt and assemble release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-out
+
+          online_exe="$(find release-input/online -type f -iname '*.exe' -print -quit)"
+          online_receipt="$(find release-input/online -type f -name 'SHA256.txt' -print -quit)"
+          for required in "$online_exe" "$online_receipt"; do
+            [[ -n "$required" && -f "$required" ]] || {
+              echo "RELEASE_ACCEPTED_ASSET_MISSING:$required" >&2
+              exit 1
+            }
+          done
+
+          expected="$(awk -F= '$1=="sha256"{print $2}' "$online_receipt" | tr -d '\r\n ')"
+          actual="$(sha256sum "$online_exe" | awk '{print $1}')"
+          [[ "$expected" == "$actual" ]] || {
+            echo "ONLINE_RELEASE_HASH_MISMATCH expected=$expected actual=$actual" >&2
+            exit 1
+          }
+
+          cp "$online_exe" "release-out/$ASSET_NAME"
+          cp "$online_receipt" release-out/CI-SHA256-ONLINE.txt
+          cp app/lex-version.yaml release-out/LEX-VERSION.yaml
+          printf '%s\n' "$GITHUB_SHA" > release-out/SOURCE-SHA.txt
+          (
+            cd release-out
+            sha256sum "$ASSET_NAME" LEX-VERSION.yaml > SHA256SUMS.txt
+          )
+          cat release-out/SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-out/RELEASE-NOTES.md <<'EOF'
+          ## Lex Machina 0.1.10 hotfix 8
+
+          Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
+
+          ### Weryfikacja przepisów (verify_legal_reference)
+          - akty spoza rejestru KC/KPC/KK/KPK (np. KW, ustawy z map DR) są weryfikowane w źródle Sejm ELI, z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim), tak jak cztery kodeksy; lokalna kopia tylko gdy ELI jest nieosiągalne;
+          - akt spoza map DR jest ustalany po Dz.U. albo jednoznacznym tytule w wyszukiwarce ELI, a po weryfikacji dołączany do lokalnej kopii i RAG; gdy źródło ma nowszy tekst jednolity niż kopia, kopia jest odświeżana;
+          - lokalna kopia: pusty text.html obwieszczenia t.j. (np. Kodeks karny) przechodzi na PDF, a PDF (np. Kodeks wykroczeń) jest czytany z podziałem na wiersze; wcześniej obie kopie nie miały żadnego artykułu (CORE_LAW_TEXT_UNAVAILABLE); kopie bez artykułów są pobierane ponownie;
+          - znacznik NIEWERYFIKOWANE nie jest już wstawiany przy „art. N”, gdy w tym samym wierszu jest znacznik VER zweryfikowanej jednostki tego artykułu (np. art. 46 ust. 2).
+
+          Zawiera wszystkie zmiany hotfix 7 (trasy konektorów MCP i karty Wyszukiwanie na desktopie, generowanie .docx) i hotfix 5.
+
+          Pre-release: produkcyjne certyfikaty Authenticode nie są skonfigurowane, Windows SmartScreen może ostrzec. Sprawdź instalator z SHA256SUMS.txt.
+          EOF
+
+      # GITHUB_TOKEN nie może założyć tagu na commicie, który zmienia pliki workflow
+      # względem main (HTTP 403). Tag trafia na commit-punkt: drzewo aplikacji = build
+      # GITHUB_SHA, katalog .github = main, rodzic = GITHUB_SHA (jak w hotfix 5).
+      - name: Create pre-release on a tag point commit and upload installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(gh api "$api/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+            tag_parent="$(gh api "$api/git/commits/$tag_sha" --jq '.parents[0].sha')"
+            [[ "$tag_sha" == "$GITHUB_SHA" || "$tag_parent" == "$GITHUB_SHA" ]] || {
+              echo "IMMUTABLE_RELEASE_TAG_MISMATCH tag=$tag_sha parent=$tag_parent source=$GITHUB_SHA" >&2
+              exit 1
+            }
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease
+          else
+            main_sha="$(gh api "$api/git/ref/heads/main" --jq '.object.sha')"
+            main_tree="$(gh api "$api/git/commits/$main_sha" --jq '.tree.sha')"
+            main_github="$(gh api "$api/git/trees/$main_tree" --jq '.tree[] | select(.path==".github") | .sha')"
+            source_tree="$(gh api "$api/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
+            [[ -n "$main_github" && -n "$source_tree" ]] || {
+              echo "TAG_POINT_TREE_UNRESOLVED" >&2
+              exit 1
+            }
+            tag_tree="$(jq -n --arg base "$source_tree" --arg gh "$main_github" \
+              '{base_tree: $base, tree: [{path: ".github", mode: "040000", type: "tree", sha: $gh}]}' |
+              gh api -X POST "$api/git/trees" --input - --jq '.sha')"
+            tag_point="$(jq -n --arg tree "$tag_tree" --arg parent "$GITHUB_SHA" --arg tag "$RELEASE_TAG" \
+              '{message: ("Punkt tagu " + $tag + ": .github jak na main, aplikacja = " + $parent), tree: $tree, parents: [$parent]}' |
+              gh api -X POST "$api/git/commits" --input - --jq '.sha')"
+            echo "tag point $tag_point (tree $tag_tree, source $GITHUB_SHA)"
+            printf 'tag_point=%s\n' "$tag_point" >> release-out/SOURCE-SHA.txt
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease \
+              --target "$tag_point"
+          fi
+
+          gh release upload "$RELEASE_TAG" --clobber \
+            "release-out/$ASSET_NAME" \
+            release-out/SHA256SUMS.txt \
+            release-out/CI-SHA256-ONLINE.txt \
+            release-out/SOURCE-SHA.txt \
+            release-out/LEX-VERSION.yaml
+
+          gh release view "$RELEASE_TAG" --json url,tagName,isPrerelease,assets \
+            --jq '{url, tagName, isPrerelease, assets: [.assets[] | {name, url}]}'

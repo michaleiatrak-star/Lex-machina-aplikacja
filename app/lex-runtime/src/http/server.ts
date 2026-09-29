@@ -599,7 +599,9 @@ export async function startLocalServer(options?: {
           new TemporalSourceFreshnessChecker(),
           undefined,
           undefined,
-          coreLawIndex
+          coreLawIndex,
+          undefined,
+          (act) => coreLawIndex.adopt(act)
         ),
       privacyNamedEntities,
       legalFederationTools,

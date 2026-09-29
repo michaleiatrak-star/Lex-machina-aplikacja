@@ -11,6 +11,7 @@ import {
 } from "../src/core-law-verification.js";
 import { FinalizationGate } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
+import { OfficialLegalSourceVerifier } from "../src/legal-source-verifier.js";
 import { LegalVerificationToolRuntime } from "../src/verification-tool-runtime.js";
 
 const NOW = Date.parse("2026-09-29T10:00:00.000Z");
@@ -236,5 +237,113 @@ describe("verify_legal_reference with the core law index", () => {
     expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
     expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("VERIFIED");
     expect(runtime.auditEvents().some((event) => event.reason === "CORE_LAW_LOCAL_ELI_COPY")).toBe(true);
+  });
+});
+
+describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)", () => {
+  const CHECKED = "2026-09-29T10:00:00.000Z";
+  const DROGI_URL = "https://api.sejm.gov.pl/eli/acts/DU/2025/889/text.html";
+
+  // Kontrola aktualności na żywo: bieżący t.j. i jego adres (tu bez nowelizacji po t.j.).
+  const freshness = {
+    check: async (descriptor: { baseEli: string; eli: string }) => ({
+      status: "CURRENT" as const,
+      mode: "CURRENT" as const,
+      checkedAt: CHECKED,
+      baseEli: descriptor.baseEli,
+      pinnedEli: descriptor.eli,
+      currentEli: descriptor.eli === "DU/2025/734" ? "DU/2025/734" : "DU/2025/889",
+      sourceUrl: descriptor.eli === "DU/2025/734" ? KW_URL : DROGI_URL,
+      amendmentsAfter: []
+    })
+  };
+
+  function eli(options: { down?: boolean } = {}) {
+    const requested: string[] = [];
+    const fetcher = async (url: string) => {
+      requested.push(url);
+      if (options.down) throw new Error("ECONNREFUSED");
+      if (url.endsWith("/DU/2025/734/references")) {
+        return Response.json({ "Tekst jednolity dla aktu": [{ act: { ELI: "DU/1971/114" } }] });
+      }
+      if (url.endsWith("/DU/1971/114")) {
+        return Response.json({ title: "Ustawa z dnia 20 maja 1971 r. - Kodeks wykroczeń", status: "obowiązujący" });
+      }
+      if (url.includes("/search?")) {
+        return Response.json({
+          items: [
+            { ELI: "DU/1985/14", title: "Ustawa z dnia 21 marca 1985 r. o drogach publicznych", status: "obowiązujący" },
+            { ELI: "DU/2025/889", title: "Obwieszczenie Marszałka Sejmu w sprawie ogłoszenia jednolitego tekstu ustawy o drogach publicznych", status: "obowiązujący" }
+          ]
+        });
+      }
+      if (url.endsWith("/DU/1985/14/references")) return Response.json({});
+      if (url.endsWith("/DU/1985/14")) {
+        return Response.json({ title: "Ustawa z dnia 21 marca 1985 r. o drogach publicznych", status: "obowiązujący" });
+      }
+      return new Response("", { status: 404 });
+    };
+    return { fetcher, requested };
+  }
+
+  function officialText(url: string): Response {
+    const body =
+      url === KW_URL
+        ? `<html><body><p>Kodeks wykroczeń</p><p>${KW_ART_51}</p></body></html>`
+        : "<html><body><p>o drogach publicznych</p><p>Art. 4. Użyte w ustawie określenia oznaczają: 2) droga - budowla.</p></body></html>";
+    return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
+  }
+
+  function runtime(ledger: VerificationLedger, eliFetch: ReturnType<typeof eli>, adopted: unknown[]) {
+    return new LegalVerificationToolRuntime(
+      ledger,
+      new OfficialLegalSourceVerifier(async (input: string | URL) => officialText(String(input)), () => CHECKED),
+      undefined,
+      freshness as never,
+      undefined,
+      undefined,
+      index(kw()),
+      eliFetch.fetcher as never,
+      (act) => adopted.push(act)
+    );
+  }
+
+  it("KW z map DR weryfikowany w źródle ELI, nie tylko w lokalnej kopii", async () => {
+    const ledger = new VerificationLedger();
+    const adopted: unknown[] = [];
+    const [result] = await runtime(ledger, eli(), adopted).runTools([
+      { id: "w1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } }
+    ]);
+    const payload = JSON.parse(result!.content);
+    expect(payload).toMatchObject({ status: "VERIFIED", act: { id: "ELI", title: "Kodeks wykroczeń", baseEli: "DU/1971/114" } });
+    expect(payload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-29]`);
+    expect(adopted).toMatchObject([{ eli: "DU/2025/734", baseEli: "DU/1971/114" }]);
+  });
+
+  it("akt spoza map znaleziony po tytule w ELI, zweryfikowany i dołączony do kopii (RAG)", async () => {
+    const ledger = new VerificationLedger();
+    const adopted: unknown[] = [];
+    const [result] = await runtime(ledger, eli(), adopted).runTools([
+      {
+        id: "w2",
+        name: "verify_legal_reference",
+        input: { claim: "art. 4 ustawy o drogach publicznych", kind: "statute", act: "ustawy o drogach publicznych" }
+      }
+    ]);
+    expect(JSON.parse(result!.content)).toMatchObject({ status: "VERIFIED", act: { id: "ELI", title: "o drogach publicznych" } });
+    expect(adopted).toMatchObject([{ eli: "DU/2025/889", baseEli: "DU/1985/14" }]);
+  });
+
+  it("bez dostępu do ELI zostaje lokalna kopia z jej odmowami", async () => {
+    const ledger = new VerificationLedger();
+    const adopted: unknown[] = [];
+    const rt = runtime(ledger, eli({ down: true }), adopted);
+    const [kwResult, outside] = await rt.runTools([
+      { id: "w3", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
+      { id: "w4", name: "verify_legal_reference", input: { claim: "art. 4 ustawy o drogach publicznych", kind: "statute", act: "ustawy o drogach publicznych" } }
+    ]);
+    expect(JSON.parse(kwResult!.content)).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" } });
+    expect(JSON.parse(outside!.content)).toMatchObject({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
+    expect(adopted).toEqual([]);
   });
 });

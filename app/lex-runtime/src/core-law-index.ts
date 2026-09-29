@@ -34,6 +34,8 @@ export type CoreActRecord = {
   status: string | null;
   promulgation: string | null;
   textSource: "html" | "pdf" | "none";
+  // Wersja ekstrakcji: 2 = pusty HTML obwieszczenia t.j. -> PDF, PDF z wierszami (0.1.10 hotfix 7).
+  extraction?: 2;
   fetchedAt: string;
   sourceUrl: string;
   articleOrder: string[];
@@ -200,6 +202,19 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
+// Nagłówek/stopka strony Dz.U. z ISAP ("©Kancelaria Sejmu s. 12/180", data t.j.) przerywa
+// artykuł na granicy stron i psułby porównanie cytatu.
+export function stripPdfPageHeaders(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*©?\s*Kancelaria Sejmu\s+s\.\s*\d+\s*\/\s*\d+\s*$/iu.test(line))
+    .filter((line) => !/^\s*\d{4}-\d{2}-\d{2}\s*$/u.test(line))
+    .filter((line) => !/^\s*Dziennik Ustaw\s*[–-]\s*\d+\s*[–-]\s*Poz\.\s*\d+\s*$/iu.test(line))
+    .join("\n")
+    // Przeniesienie wyrazu na granicy wiersza ("zna-\nleziony").
+    .replace(/(\p{L})-\n(\p{Ll})/gu, "$1$2");
+}
+
 /** Article number -> article text. The first occurrence of a number wins. */
 export function splitArticles(text: string): {
   order: string[];
@@ -246,9 +261,11 @@ type ActState = {
 type IndexState = {
   acts: Record<string, ActState>;
   blockedUntil: string | null;
+  // Akty spoza map DR dołączone po weryfikacji w źródle (ELI t.j. i tytuł).
+  adopted?: Array<{ eli: string; title: string }>;
 };
 
-type EliActLink = {
+export type EliActLink = {
   eli: string;
   year: number;
   pos: number;
@@ -257,7 +274,17 @@ type EliActLink = {
   status: string;
 };
 
-function eliLinks(refs: unknown, relation: (key: string) => boolean): EliActLink[] {
+function adoptedRef(entry: { eli: string; title: string }): CoreActRef {
+  return {
+    eli: entry.eli,
+    consolidated: true,
+    labels: [entry.title],
+    domains: [],
+    notes: ["Dołączony po weryfikacji w źródle (Sejm ELI), spoza map DR."]
+  };
+}
+
+export function eliLinks(refs: unknown, relation: (key: string) => boolean): EliActLink[] {
   if (!refs || typeof refs !== "object") return [];
   const links: EliActLink[] = [];
   for (const [key, value] of Object.entries(refs as Record<string, unknown>)) {
@@ -308,7 +335,9 @@ export class CoreLawIndex {
   constructor(
     private readonly directory: string = defaultCoreLawDir(),
     private readonly fetcher: CoreLawFetch = globalThis.fetch.bind(globalThis),
-    private readonly pdf: PdfTextExtractor = new LocalPdfTextExtractor(),
+    // Wiersze z PDF: splitArticles szuka "Art. N." na początku wiersza; bez nich tekst
+    // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
+    private readonly pdf: PdfTextExtractor = new LocalPdfTextExtractor(undefined, { lines: true }),
     private readonly now: () => number = () => Date.now(),
     private readonly gapMs: number = REQUEST_GAP_MS
   ) {}
@@ -323,6 +352,34 @@ export class CoreLawIndex {
     } catch {
       this.state = { acts: {}, blockedUntil: null };
     }
+    for (const adopted of this.state.adopted ?? []) {
+      if (!this.ref(adopted.eli)) this.refs.push(adoptedRef(adopted));
+    }
+  }
+
+  /**
+   * Akt zweryfikowany w źródle (ELI): spoza map -> dołączony do kopii i RAG; z map, ale z
+   * nowszym t.j. w źródle niż w kopii -> wymuszone sprawdzenie relacji przy odświeżaniu.
+   * Pobieranie odbywa się w tle, jak dla aktów z map.
+   */
+  adopt(act: { eli: string; baseEli: string; title: string }, currentEli: string = act.eli): void {
+    const known = this.refs.find(
+      (ref) =>
+        ref.eli === act.eli ||
+        ref.eli === currentEli ||
+        this.state.acts[ref.eli]?.currentEli === currentEli
+    );
+    if (known) {
+      const state = this.state.acts[known.eli];
+      if (!state || (state.currentEli ?? known.eli) === currentEli) return;
+      state.checkedAt = null;
+    } else {
+      const entry = { eli: currentEli, title: act.title };
+      this.state.adopted = [...(this.state.adopted ?? []), entry];
+      this.refs.push(adoptedRef(entry));
+    }
+    this.saveState();
+    void this.refresh().catch(() => undefined);
   }
 
   summaries(): CoreActSummary[] {
@@ -434,6 +491,9 @@ export class CoreLawIndex {
       const record = JSON.parse(
         fs.readFileSync(path.join(this.directory, fileNameFor(eli)), "utf8")
       ) as CoreActRecord;
+      // Kopia bez artykułów sprzed wersji 2 (pusty HTML t.j. albo PDF bez wierszy) jest
+      // traktowana jak niepobrana, więc odświeżanie pobiera ją ponownie.
+      if (!record.extraction && record.articleOrder.length === 0) return null;
       if (this.cache.size > 24) {
         this.cache.delete(this.cache.keys().next().value!);
       }
@@ -612,12 +672,14 @@ export class CoreLawIndex {
       sourceUrl = `${base}/text.html`;
       body = htmlToText(await (await this.get(sourceUrl, "text/html")).text());
       textSource = "html";
-    } else if (meta.textPDF === true) {
+    }
+    // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
+    if (splitArticles(body).order.length === 0 && meta.textPDF === true) {
       sourceUrl = `${base}/text.pdf`;
       const bytes = new Uint8Array(
         await (await this.get(sourceUrl, "application/pdf")).arrayBuffer()
       );
-      body = (await this.pdf.extract(bytes)).text;
+      body = stripPdfPageHeaders((await this.pdf.extract(bytes)).text);
       textSource = "pdf";
     }
     const { order, articles } = splitArticles(body);
@@ -628,6 +690,7 @@ export class CoreLawIndex {
       status: text(meta.status),
       promulgation: text(meta.promulgation),
       textSource,
+      extraction: 2,
       fetchedAt: new Date(this.now()).toISOString(),
       sourceUrl,
       articleOrder: order,

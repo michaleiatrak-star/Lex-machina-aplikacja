@@ -61,6 +61,38 @@ describe("FinalizationGate", () => {
     expect(report.findings[0]?.status).toBe("VERIFIED");
   });
 
+  it("covers art. N by one verified record of a narrower unit whose VER marker is on the line", () => {
+    const ledger = new VerificationLedger();
+    ledger.add({
+      claim: "art. 46 ust. 2 ustawy o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi",
+      kind: "statute",
+      status: "VERIFIED",
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2023/2151/text.html",
+      sourceTier: "R1",
+      fetchedAt: "2026-09-24T00:00:00Z",
+      toolCallId: "core-1"
+    });
+    const line =
+      "Wynika to z art. 46 ust. 2 ustawy o wychowaniu w trzeźwości ✅ [VER: https://api.sejm.gov.pl/eli/acts/DU/2023/2151/text.html, 2026-09-24].";
+
+    const report = new FinalizationGate().evaluate(line, ledger);
+    expect(report.result).toBe("PASS");
+    expect(report.findings.map((finding) => finding.status)).toEqual(["VERIFIED"]);
+
+    // Bez znacznika VER w wierszu zapis szerszej jednostki nie obejmuje wzmianki.
+    const hidden = new FinalizationGate().evaluate(
+      "Wynika to z art. 46 ust. 2 ustawy o wychowaniu w trzeźwości.",
+      ledger
+    );
+    expect(hidden.findings[0]?.status).toBe("MISSING_LEDGER_RECORD");
+    // Inny artykuł o tym samym początku numeru nie jest obejmowany.
+    const other = new FinalizationGate().evaluate(
+      "Por. art. 4 tej ustawy ✅ [VER: https://api.sejm.gov.pl/eli/acts/DU/2023/2151/text.html, 2026-09-24].",
+      ledger
+    );
+    expect(other.result).toBe("BLOCKED");
+  });
+
   it("blocks a forged VER marker when its source receipt differs from the ledger", () => {
     const ledger = new VerificationLedger();
     ledger.add({

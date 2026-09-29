@@ -44,7 +44,11 @@ export class LocalPdfTextExtractor
 implements PdfTextExtractor {
   constructor(
     private readonly limits: PdfTextLimits =
-      DEFAULT_LIMITS
+      DEFAULT_LIMITS,
+    // true = koniec wiersza w PDF (hasEOL) zostaje "\n". Potrzebne tam, gdzie tekst dzieli
+    // się po nagłówkach wierszy (Art. N. w kopii ELI); domyślnie strona to jeden wiersz,
+    // jak dotąd (hasze i cytaty dokumentów sprawy się nie zmieniają).
+    private readonly options: { lines?: boolean } = {}
   ) {}
 
   async extract(
@@ -110,15 +114,27 @@ implements PdfTextExtractor {
           await page.getTextContent();
 
         const pageText =
-          content.items
-            .map((item) =>
-              "str" in item &&
-              typeof item.str === "string"
-                ? item.str
-                : ""
-            )
-            .filter(Boolean)
-            .join(" ");
+          this.options.lines
+            ? content.items
+                .map((item) =>
+                  "str" in item &&
+                  typeof item.str === "string"
+                    ? item.str + (item.hasEOL ? "\n" : " ")
+                    : ""
+                )
+                .join("")
+                .replace(/[ \t]+/g, " ")
+                .replace(/ *\n */g, "\n")
+                .trim()
+            : content.items
+                .map((item) =>
+                  "str" in item &&
+                  typeof item.str === "string"
+                    ? item.str
+                    : ""
+                )
+                .filter(Boolean)
+                .join(" ");
 
         textChars +=
           pageText.length + 1;
