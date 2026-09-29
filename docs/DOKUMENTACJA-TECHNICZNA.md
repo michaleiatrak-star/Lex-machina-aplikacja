@@ -87,7 +87,13 @@ pobranie tekstu i dopasowanie (OfficialLegalSourceVerifier)
 - **Audyt sesji:** instancja federacji jest wspólna; każda sesja przekazuje własny dziennik (`runTools(calls, events)`). Zdarzenie `BLOCK` ma `outcome`: `SOURCE_UNAVAILABLE` → audyt `DEGRADED` (jak G40), `POLICY_BLOCKED` i `*_CASE_DATA_FORBIDDEN` → `BLOCKED`. Poprawialna odmowa odczytu skilla (model sam wybiera skille) → `DEGRADED` (jak G36). HYBRID-VAL odrzuca tylko `BLOCKED`.
 - **Karta Wyszukiwanie:** osobna instancja `LegalFederationToolRuntime`, `direct()` = te same bramki co narzędzia modelu, zdarzenia nie trafiają do audytu sesji. Etykiety po polsku: `lex-web/src/mcp-search-labels.ts` (nowe narzędzie/pole bez wpisu → nazwa techniczna z automatycznym podziałem).
 
-## 6. Skille: kanały z repozytorium Lex Machina
+## 6. Generowanie pisma (.docx / .odt)
+
+`LegalDocumentAstGenerator.generate` → sesja z `documentAstOutput: true` → JSON AST (`validateLegalDocumentAst`) → render → `validateLocalHybridDocument` (HYBRID-VAL: puste pismo, `⬛`/`[UZUPEŁNIJ]`, `DRAFT — NIEWERYFIKOWANY`, token PII, znaki sterujące, zdarzenie `BLOCKED` sesji źródłowej, brak odczytu dokumentu) → bramka eksportu → plik w sprawie.
+
+W sesji z `documentAstOutput` workflow `SIMPLE_LETTER_V1` nie wymaga sekcji tekstowych (tryb `DOCUMENT_AST`) — struktura pisma jest w blokach AST, a HYBRID-VAL działa na wygenerowanym dokumencie. Bez tej flagi (czat) obowiązuje kontrakt sekcji `TREŚĆ PISMA → UWAGI PRAKTYCZNE → CO DALEJ → HYBRID-VALIDATION`.
+
+## 7. Skille: kanały z repozytorium Lex Machina
 
 `skill-channel.ts` + `MaintenanceService.skillChannelStatus / refreshSkillsFromChannel`:
 1. `GET api.github.com/repos/michaleiatrak-star/Lex-Machina/commits/main` → commit;
@@ -98,13 +104,13 @@ pobranie tekstu i dopasowanie (OfficialLegalSourceVerifier)
 
 Status: `UP_TO_DATE` gdy zainstalowany kanał i `treeSha` są równe najnowszym. Dwa zapytania API na sprawdzenie (limit GitHub bez logowania: 60/h). Stara ścieżka (podpisane indeksy w GitHub Releases, `/api/skills/update/*`) pozostaje w kodzie, panel jej nie używa.
 
-## 7. Granica zaufania desktopu (`lex-desktop/src-tauri/src/trust_boundary.rs`)
+## 8. Granica zaufania desktopu (`lex-desktop/src-tauri/src/trust_boundary.rs`)
 
 - `route_allowed(method, path)`: dokładne trasy i metody; MCP w `is_mcp_route` (identyfikator serwera = małe litery, bez `..`).
 - Limity odczytu proxy: domyślnie 120 s; sesja i generowanie pisma 1200 s; przetwarzanie dokumentów 1200 s; start modelu lokalnego i logowanie kont 300 s; konserwacja modeli i odświeżanie skilli 7200 s.
 - Kontrola kompletności: `python3 app/lex-desktop/scripts/check-route-allowlist.py` — każda trasa runtime wobec allowlisty (jedyny wyjątek celowy: `POST /api/auth/bootstrap-managed`). Uruchamiać po dodaniu trasy.
 
-## 8. API HTTP (runtime, 127.0.0.1)
+## 9. API HTTP (runtime, 127.0.0.1)
 
 Wszystkie trasy poza `/health`, `/api/auth/status|bootstrap|login|recover` wymagają sesji (`Authorization`). `A` = tylko ADMIN.
 
@@ -131,15 +137,15 @@ Wszystkie trasy poza `/health`, `/api/auth/status|bootstrap|login|recover` wymag
 ### Kody błędów warte uwagi
 | Kod | Znaczenie |
 |---|---|
-| `DESKTOP_ROUTE_NOT_ALLOWED` | trasa bez wpisu w allowliście proxy (sekcja 7) |
+| `DESKTOP_ROUTE_NOT_ALLOWED` | trasa bez wpisu w allowliście proxy (sekcja 8) |
 | `CORE_LAW_TEXT_UNAVAILABLE` | lokalna kopia aktu bez artykułów (pobieranie w tle albo brak tekstu w ELI) |
 | `ELI_UNAVAILABLE:<przyczyna>` | awaria ELI; wynik z kopii ma `sourceNotice` |
 | `TEMPORAL_POST_TJ_AMENDMENTS` | nowelizacje po tekście jednolitym — brzmienie z t.j. nieaktualne |
 | `READY_DOCUMENT_HYBRID_BLOCKED:<powody>` | HYBRID-VAL odrzucił pismo (np. `SOURCE_SESSION_BLOCKED_EVENT`) |
-| `DOCUMENT_AST_SESSION_BLOCKED` | sesja pisma nie przeszła finalizacji; szczegóły w polach `reason`/`description` odpowiedzi 422 |
+| `DOCUMENT_AST_SESSION_BLOCKED` | sesja pisma nie przeszła bramek; szczegóły w polach `reason`/`description` odpowiedzi 422 (`workflow=…`, `gateI=…`, `audit.violations`) |
 | `SKILL_CHANNEL_*` | odświeżanie skilli: `GITHUB_HTTP_<kod>`, `FILE_HASH_MISMATCH`, `FILE_SET_MISMATCH`, `VALIDATION_FAILED`, `DIRECTORY_MISSING` |
 
-## 9. Zmienne środowiskowe (uzupełnienie)
+## 10. Zmienne środowiskowe (uzupełnienie)
 
 | Zmienna | Znaczenie |
 |---|---|
@@ -149,7 +155,7 @@ Wszystkie trasy poza `/health`, `/api/auth/status|bootstrap|login|recover` wymag
 | `LEX_CORE_LAW_DIR` | katalog lokalnej kopii ELI (domyślnie `%LOCALAPPDATA%\LexMachina\core-law`) |
 | `LOCALAPPDATA` | korzeń danych: `LexMachina\{skills, core-law, mcp}` |
 
-## 10. Testy i walidatory
+## 11. Testy i walidatory
 
 ```bash
 cd app/lex-runtime && npm install && npm run typecheck && npx vitest run && npm run build
@@ -162,7 +168,7 @@ python3 app/lex-desktop/scripts/check-route-allowlist.py
 - Testy obszarów z tej wersji: `tests/{lex-mcp-connectors, mcp-search-http, core-law, core-law-pdf-articles, core-law-verification, finalization-gate, skill-channel, session-executor}.test.ts`, `src/update-discovery.test.ts`, `src/maintenance-skill-policy.test.ts`; Rust: testy `allowlist_*` w `trust_boundary.rs`.
 - G14 (`validate-dist.mjs`): `localStorage` wyłącznie w `last-used-model.ts`.
 
-## 11. Proces wydania (instalator online)
+## 12. Proces wydania (instalator online)
 
 Workflow `publish-0.1.10-hotfixN.yml` (wyzwalany zmianą samego pliku albo `workflow_dispatch`):
 1. `lex-runtime.yml` (typecheck, testy, walidatory, sondy live, kompilacja Tauri G34G);

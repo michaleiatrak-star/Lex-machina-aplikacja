@@ -744,6 +744,9 @@ export class SafeSessionExecutor {
                     guideContext: request.guideContext
                 }
                 : {}),
+            ...(request.documentAstOutput
+                ? { documentAstOutput: true }
+                : {}),
             ...(request.processWorkflowContext
                 ? {
                     processWorkflowContext: request.processWorkflowContext

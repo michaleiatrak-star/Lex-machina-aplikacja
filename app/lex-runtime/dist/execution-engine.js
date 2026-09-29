@@ -225,6 +225,9 @@ export class LexExecutionEngine {
         let workflowPlan;
         try {
             workflowPlan = createDeterministicWorkflowPlan(this.registry, skillSelection.workflowExecutionSkill);
+            if (args.documentAstOutput) {
+                workflowPlan = { ...workflowPlan, documentAstOutput: true };
+            }
         }
         catch (error) {
             const detail = error instanceof Error

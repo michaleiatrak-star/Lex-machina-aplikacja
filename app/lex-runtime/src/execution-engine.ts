@@ -323,6 +323,8 @@ export class LexExecutionEngine {
     };
     // Live draft of the model output (shown while gates are still pending).
     draftCallbacks?: StreamCallbacks;
+    // Generowanie pisma: wynik to JSON AST (deterministic-workflow.ts, documentAstOutput).
+    documentAstOutput?: boolean;
     provider: ProviderId;
     model: string;
     continuityKey?: string;
@@ -616,6 +618,9 @@ export class LexExecutionEngine {
         this.registry,
         skillSelection.workflowExecutionSkill
       );
+      if (args.documentAstOutput) {
+        workflowPlan = { ...workflowPlan, documentAstOutput: true };
+      }
     } catch (error) {
       const detail =
         error instanceof Error

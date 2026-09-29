@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createDeterministicWorkflowPlan, evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
+import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt, evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { LexSkillRegistry } from "./registry.js";
 const roots = [];
 const guideResources = [
@@ -145,6 +145,25 @@ afterEach(() => {
     }
 });
 describe("deterministic legal workflow", () => {
+    it("simple letter in document generation: JSON AST is the output, not text sections", () => {
+        const plan = createDeterministicWorkflowPlan(fixture(), "pisma-proste-v2");
+        const ast = JSON.stringify({
+            schemaVersion: "1",
+            documentType: "letter",
+            blocks: [{ type: "heading", level: 1, children: [{ type: "text", text: "WEZWANIE DO ZAPŁATY" }] }]
+        });
+        // Czat: odpowiedź bez sekcji pisma prostego jest blokowana, jak dotąd.
+        expect(evaluateDeterministicWorkflowOutput(plan, ast).result).toBe("BLOCKED");
+        const generation = { ...plan, documentAstOutput: true };
+        expect(evaluateDeterministicWorkflowOutput(generation, ast)).toMatchObject({
+            mode: "DOCUMENT_AST",
+            result: "PASS"
+        });
+        const prompt = deterministicWorkflowPrompt(generation);
+        expect(prompt).toContain("LEGAL DOCUMENT AST");
+        expect(prompt).not.toContain("TREŚĆ PISMA → UWAGI PRAKTYCZNE");
+        expect(deterministicWorkflowPrompt(plan)).toContain("TREŚĆ PISMA → UWAGI PRAKTYCZNE");
+    });
     it("selects the simple-letter workflow and verifies actual resource reads", () => {
         const registry = fixture();
         const plan = createDeterministicWorkflowPlan(registry, "pisma-proste-v2");

@@ -9,7 +9,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 6 | `360ff57` | karta Wyszukiwanie, sprawdzanie i integralność konektorów MCP |
 | hotfix 7 | `fec4967` | konektory i Wyszukiwanie na desktopie, `.docx` bez fałszywych blokad |
 | hotfix 8 | `6fd11d1` | ELI dla wszystkich aktów, RAG tylko przy awarii ELI, kopia KK/KW |
-| hotfix 9 | budowany | skille z kanału stabilnego/rozwojowego, polskie etykiety, pasek okna modelu na desktopie |
+| hotfix 9 | budowany | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
 
 ---
 
@@ -25,6 +25,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 - Polskie nazwy narzędzi i pól, pełne słowa w listach (np. „częściowo prawomocna”), daty z kalendarzem; wyszukiwarki po słowie kluczowym lub fragmencie tekstu (SAOS, CBOSA, EUREKA, UODO, TSUE, ISAP) na początku listy.
 
 **Poprawki**
+- Generowanie `.docx` pisma prostego (`DOCUMENT_AST_SESSION_BLOCKED`, `workflow=SIMPLE_LETTER_V1:BLOCKED`): workflow pisma prostego wymagał sekcji tekstowych (TREŚĆ PISMA → … → HYBRID-VALIDATION), a generator `.docx` każe zwrócić wyłącznie JSON AST i te sekcje zabrania — każda taka próba była blokowana, niezależnie od modelu. Sesja generatora ma teraz flagę `documentAstOutput`: pismo trafia do bloków AST, a HYBRID-VAL i bramka eksportu sprawdzają wygenerowany dokument przed utworzeniem pliku. W czacie kontrakt sekcji bez zmian.
 - Desktop: `POST /api/sessions/document-fit` dopuszczone w proxy — wcześniej pasek „Okno modelu” i blokada zbyt dużych plików przed wysłaniem nie działały w aplikacji desktopowej (błąd połykany).
 - Wersja aplikacji w runtime 0.1.10 (było zaszyte 0.1.3 — błędne porównania w aktualizacjach).
 - Stan aktualizacji z przyczyną zamiast samego `UNAVAILABLE` (brak wydania, limit GitHub, brak połączenia).
@@ -68,4 +69,3 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.
 - Stara ścieżka aktualizacji skilli z podpisanych wydań (`/api/skills/update/*`) pozostaje w kodzie, nieużywana przez interfejs.
 - Aktualizacja aplikacji nadal sprawdza wydania `michaleiatrak-star/Lex-Machina` (tag `v0.1.11` tam istnieje); do decyzji, czy źródłem instalatora ma być `Lex-machina-aplikacja`.
-- `DOCUMENT_AST_SESSION_BLOCKED` na koncie ChatGPT: przyczyna nieustalona bez „Pełnych informacji diagnostycznych” z interfejsu.

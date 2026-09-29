@@ -224,6 +224,8 @@ export type SessionExecutionRequest = {
     | "guidedQuestionIndex"
     | "pendingIrreversibleAction"
   >;
+  // Sesja generatora pisma (LegalDocumentAstGenerator): wynik to JSON AST.
+  documentAstOutput?: boolean;
   processWorkflowContext?: {
     stage: ProcessPleadingStage;
     checkpoint: ProcessPleadingCheckpoint;
@@ -1552,6 +1554,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             guideContext:
               request.guideContext
           }
+        : {}),
+      ...(request.documentAstOutput
+        ? { documentAstOutput: true }
         : {}),
       ...(request.processWorkflowContext
         ? {

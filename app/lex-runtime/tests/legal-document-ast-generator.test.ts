@@ -11,9 +11,11 @@ import {
 describe("LegalDocumentAstGenerator", () => {
   it("accepts provider JSON and validates only declared aliases", async () => {
     let query = "";
+    let documentAstOutput: boolean | undefined;
     const sessions: Pick<SessionExecutor, "execute"> = {
       execute: async (request) => {
         query = request.query;
+        documentAstOutput = request.documentAstOutput;
         return {
           sessionId: "session_test",
           status: "DRAFT_PRESENTABLE",
@@ -97,6 +99,8 @@ describe("LegalDocumentAstGenerator", () => {
 
     expect(query).toContain("[PII:PERSON:0001] -> [LMPII:D01:PERSON:0001]");
     expect(query).not.toContain("Jan Kowalski");
+    // Sesja generatora: wynik to JSON AST, nie sekcje tekstowe workflow pisma.
+    expect(documentAstOutput).toBe(true);
     expect(result.aliasesUsed).toEqual(["[LMPII:D01:PERSON:0001]"]);
   });
 
