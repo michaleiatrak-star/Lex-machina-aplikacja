@@ -22,6 +22,7 @@ każdego przepisu i każdej sygnatury.*
 [Katalog skilli](#-katalog-skilli) •
 [Mechanizmy weryfikacji](#%EF%B8%8F-mechanizmy-antyhalucynacyjne) •
 [Baza źródeł](#baza-źródeł-i-portali) •
+[Konektory MCP](#konektory-mcp) •
 [Instalacja](#-instalacja) •
 [Zadania cykliczne (Cowork)](#zadania-cykliczne-scheduled-tasks-w-cowork) •
 [Zastrzeżenia](#%EF%B8%8F-zastrzeżenia-prawne)
@@ -403,12 +404,46 @@ generalistycznych z zawężonym zapytaniem.
 Dopuszczone wyłącznie jako trop do dalszej weryfikacji — wysokie ryzyko
 dezaktualizacji, obowiązkowe skrzyżowanie z Rzędem 1/2A przed użyciem.
 
-### Konektory MCP (dostęp deterministyczny, poziom A)
+Konektory MCP opisuje osobna sekcja: [Konektory MCP](#konektory-mcp).
 
-| Konektor | Źródło | Status |
+---
+
+## Konektory MCP
+
+Lex Machina ma własny pakiet serwerów MCP (Model Context Protocol) do polskich i unijnych źródeł publicznych: `audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs`. Aplikacja Lex Machina instaluje je i sprawdza w **Ustawienia → Konektory MCP**; w Claude Desktop działają jako wpisy `lex-<serwer>` w `claude_desktop_config.json`.
+
+> **CEIDG wymaga Twojego własnego klucza API.** Konektor CEIDG (przedsiębiorcy — osoby fizyczne) nie działa bez tokenu z Hurtowni danych CEIDG. Klucza nie dostarczamy i nie wolno go udostępniać: token jest wydawany na osobę i zawiera jej dane (m.in. PESEL). Bez klucza CEIDG jest raportowany jako **niedostępny**, nigdy jako „brak podmiotu”. Spółki są w KRS, nie w CEIDG.
+>
+> **Jak wyrobić klucz:** wniosek o dostęp do API w [Hurtowni danych CEIDG i Biznes.gov.pl](https://dane.biznes.gov.pl/pl/portal/034872) (logowanie Profilem Zaufanym lub e-dowodem) → po akceptacji skopiuj token (JWT) → w aplikacji: Ustawienia → Konektory MCP → „Token CEIDG” → „Zatwierdź klucz” (aplikacja sprawdza kształt tokenu i próbuje API v3; zapis lokalny z uprawnieniami tylko dla Twojego konta) → „Zainstaluj” przy CEIDG. Poza aplikacją: zmienna środowiskowa `CEIDG_API_KEY`.
+
+| Serwer | Źródło | Klucz |
 |---|---|---|
-| `mcp-isap` | api.sejm.gov.pl/eli — 96 000+ aktów Dz.U./M.P. | skonfigurowany ([`claude_desktop_config.json`](claude_desktop_config.json)) |
-| SAOS, EUR-Lex/CELLAR, KRS, CEIDG, NBP, SUDOP | przykładowe implementacje | [`shared/tools/mcp-servers/`](Wersja%20rozwojowa%20rozpakowana/shared/tools/mcp-servers/) + rekomendacje: [`shared/KONEKTORY-REKOMENDOWANE.md`](Wersja%20rozwojowa%20rozpakowana/shared/KONEKTORY-REKOMENDOWANE.md) |
+| `isap` | Sejm ELI — akty Dz.U./M.P., aktualny tekst jednolity, nowelizacje po nim | — |
+| `eurlex` | EUR-Lex / Cellar i wyroki TSUE | — |
+| `saos` | orzeczenia sądów powszechnych, SN, TK, KIO (treść, teza, uzasadnienie), cytator | — |
+| `cbosa` | orzeczenia NSA i WSA — snapshot bez awansu do VERIFIED, brak trafień = `OUT_OF_SCOPE` | — |
+| `krs` | odpis aktualny KRS, reprezentacja | — |
+| `wl` | biała lista VAT: status podatnika i kontrola rachunku z `requestId` | — |
+| `ceidg` | CEIDG API v3 | **wymagany, własny** |
+| `nbp` | kursy średnie NBP (tabela A) | — |
+| `eureka` | interpretacje i objaśnienia podatkowe z aktualnością | — |
+| `sudop` | pomoc publiczna i de minimis (UOKiK) | — |
+| `uodo` | decyzje Prezesa UODO z prawomocnością | — |
+
+### Czym to się różni od innych rozwiązań
+
+Stan na 29.09.2026, na podstawie publicznych materiałów dostawców:
+
+- **Otwarte serwery MCP do polskiego prawa istnieją** — m.in. [`prawo-pl-mcp`](https://github.com/matematicsolutions/prawo-pl-mcp) (MateMatic, Apache-2.0: SAOS, CBOSA, ISAP/ELI, KRS, EUREKA, KIO, UODO, EUR-Lex) oraz pojedyncze serwery społeczności, np. [`mcp-wl-vat`](https://github.com/pwasniowski/mcp-wl-vat) (biała lista VAT). Samo MCP nie jest więc wyróżnikiem.
+- **Komercyjne systemy AI dla prawników** (LEX Expert AI i Libra — Wolters Kluwer, Legalis AI i Beck-Noxtua — C.H.Beck) opierają się na własnych bazach treści w zamkniętym środowisku; w ich publicznych materiałach nie znaleźliśmy konektorów MCP do rejestrów publicznych.
+
+Wyróżnikiem Lex Machiny jest **sposób użycia** konektorów, nie sam protokół:
+
+1. **Jeden pakiet, 11 źródeł**, w tym CEIDG, biała lista VAT z kontrolą rachunku, NBP i SUDOP — których brak w `prawo-pl-mcp`.
+2. **Konektory są częścią bramek antyhalucynacyjnych**: wynik MCP służy do odnalezienia źródła i nigdy sam nie tworzy statusu VERIFIED; brzmienie przepisu potwierdza wyłącznie weryfikator ELI (Rząd 1), a niedostępne źródło to „niedostępne”, nie „brak prawa”.
+3. **Kontrola tożsamości wyniku**: sygnatura (SAOS, CBOSA, EUREKA, UODO) musi się zgadzać dokładnie — prefiks ani podobna sygnatura nie potwierdza orzeczenia; CBOSA jako snapshot bez awansu.
+4. **Ochrona danych sprawy** (w aplikacji Lex Machina): do zewnętrznych API nie trafiają fakty sprawy, tekst dokumentów ani tokeny danych osobowych — blokada w runtime, nie tylko instrukcja dla modelu. W Claude Desktop obowiązuje ta sama reguła skilli, ale bez blokady po stronie programu.
+5. **Instalacja z kontrolą**: handshake MCP przy instalacji, przycisk „Sprawdź”, suma kontrolna pakietu wobec skilla („najnowsza instalacja”), wyszukiwarka bez modelu w aplikacji (karta Wyszukiwanie).
 
 ---
 

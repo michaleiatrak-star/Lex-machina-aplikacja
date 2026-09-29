@@ -141,7 +141,8 @@ Audyt (`app/privacy/benchmarks/privacy_audit.mts`, 500 dokumentów): skutecznoś
 
 ## 7. Źródła prawa: konektory MCP i Wyszukiwanie
 
-- **Konektory MCP** (Ustawienia → Konektory MCP, administrator): instalacja, `Sprawdź` (czy serwer odpowiada, z datą), deinstalacja; klucz CEIDG. Nad listą - czy pakiet serwerów jest zgodny z sumą kontrolną skilla („najnowsza instalacja”).
+- **Konektory MCP** (Ustawienia → Konektory MCP, administrator): instalacja, `Sprawdź` (czy serwer odpowiada, z datą), deinstalacja.
+- **CEIDG wymaga własnego klucza API** (token z [Hurtowni danych CEIDG](https://dane.biznes.gov.pl/pl/portal/034872), logowanie Profilem Zaufanym): wklej go w polu „Token CEIDG”, `Zatwierdź klucz`, potem `Zainstaluj` przy CEIDG. Token jest imienny i zawiera PESEL - nie udostępniaj go. Bez klucza CEIDG jest „niedostępny”, nie „brak podmiotu”. Nad listą - czy pakiet serwerów jest zgodny z sumą kontrolną skilla („najnowsza instalacja”).
 - **Wyszukiwanie** (karta dla każdego zalogowanego): źródło → narzędzie → formularz → wynik wprost z API źródła, bez modelu. Słowo kluczowe lub fragment tekstu: orzeczenia SAOS (treść, teza, uzasadnienie), NSA/WSA (CBOSA), interpretacje podatkowe (EUREKA), decyzje UODO, TSUE (tytuł), fragment w treści aktu (ISAP). To materiał do odnalezienia źródła, nie weryfikacja; NSA/WSA to snapshot, brak trafień = `OUT_OF_SCOPE`. Nie wpisuj faktów sprawy ani danych klienta.
 
 ---
