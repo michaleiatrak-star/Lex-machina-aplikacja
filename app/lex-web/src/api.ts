@@ -999,6 +999,7 @@ export type SessionExecutionResponse = {
     closed: boolean;
     missing?: string[];
     violations?: string[];
+    blockedEvents?: string[];
   };
   workflow?: {
     id: string;

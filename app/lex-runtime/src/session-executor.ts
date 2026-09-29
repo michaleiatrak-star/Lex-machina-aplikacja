@@ -676,6 +676,8 @@ export type SessionExecutionResponse = {
     closed: boolean;
     missing?: string[];
     violations?: string[];
+    // Zdarzenia BLOCKED: typ, cel i kod przyczyny, bez treści odpowiedzi i danych sprawy.
+    blockedEvents?: string[];
   };
   workflow?: {
     id: string;
@@ -2732,7 +2734,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         eventCount: completeness.eventCount,
         closed: audit.isClosed,
         missing: [...completeness.missing],
-        violations: [...completeness.violations]
+        violations: [...completeness.violations],
+        blockedEvents: audit.events
+          .filter((event) => event.status === "BLOCKED")
+          .slice(0, 12)
+          .map((event) => {
+            const code = [event.detail?.error, event.detail?.reason, event.detail?.decision]
+              .find((value) => typeof value === "string" && value.trim());
+            return `${event.type}: ${event.target.slice(0, 120)}${code ? ` — ${String(code).slice(0, 160)}` : ""}`;
+          })
       },
       workflow: {
         id: execution.workflowPlan.id,

@@ -721,6 +721,27 @@ export function routingMeta(
     : `routing: ${labelForSkill(execution.primarySkill || route)}`;
 }
 
+// Przyczyna blokady wprost: stan, bramki i zdarzenia BLOCKED z kodem.
+export function blockedReasonText(
+  execution: Pick<
+    ExtendedExecution,
+    "status" | "answer" | "audit" | "workflow" | "gateI" | "finalization"
+  >
+): string {
+  const lines = [
+    `status=${execution.status}; finalization=${execution.finalization}; audit=${execution.audit?.result ?? "?"}; answer=${execution.answer ? "present" : "missing"}` +
+      (execution.workflow ? `; workflow=${execution.workflow.id}:${execution.workflow.result}` : "") +
+      (execution.gateI ? `; gateI=${execution.gateI.result}` : ""),
+    ...(execution.audit?.missing?.length ? [`audit.missing: ${execution.audit.missing.join(", ")}`] : []),
+    ...(execution.audit?.violations?.length ? [`audit.violations: ${execution.audit.violations.join(", ")}`] : []),
+    ...(execution.workflow?.missingResources.length
+      ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
+      : []),
+    ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
+  ];
+  return `\n\nPrzyczyna:\n${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
 function executionMessage(
   execution: ExtendedExecution,
   route: string
@@ -808,7 +829,8 @@ function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.",
+      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi." +
+      blockedReasonText(execution),
     evidence: execution.evidence,
     ...(execution.auxiliarySources?.length
       ? {

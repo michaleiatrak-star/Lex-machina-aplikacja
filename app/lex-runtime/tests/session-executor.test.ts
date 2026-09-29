@@ -570,6 +570,7 @@ describe("SafeSessionExecutor", () => {
     const escapeEvents = escape[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
     expect(escapeEvents.find((event) => event.target === "G36_LEGAL_CORPUS_RUNTIME")?.status).toBe("BLOCKED");
     expect(escape.status).toBe("BLOCKED");
+    expect(escape.audit.blockedEvents).toContain("gate: G36_LEGAL_CORPUS_RUNTIME");
   });
 
   it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
