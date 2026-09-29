@@ -96,7 +96,8 @@ jobs:
           Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
 
           ### Weryfikacja przepisów (verify_legal_reference)
-          - akty spoza rejestru KC/KPC/KK/KPK (np. KW, ustawy z map DR) są weryfikowane w źródle Sejm ELI, z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim), tak jak cztery kodeksy; lokalna kopia tylko gdy ELI jest nieosiągalne;
+          - modele w chmurze (ChatGPT, Claude): każdy akt, także KC/KPC/KK/KPK, weryfikowany w źródle Sejm ELI z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim); lokalna kopia (RAG) wyłącznie przy awarii samego ELI, a wynik ma wtedy wyraźną informację (sourceNotice: ELI niedostępne, data kopii), którą model musi przekazać przy przepisie; odmowy merytoryczne (np. nowelizacje po t.j.) nie przechodzą na kopię;
+          - modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG); gdy kopia nie może odpowiedzieć (brak aktu, brak tekstu, nowelizacje po t.j.), próba w ELI i dołączenie aktu do kopii;
           - akt spoza map DR jest ustalany po Dz.U. albo jednoznacznym tytule w wyszukiwarce ELI, a po weryfikacji dołączany do lokalnej kopii i RAG; gdy źródło ma nowszy tekst jednolity niż kopia, kopia jest odświeżana;
           - lokalna kopia: pusty text.html obwieszczenia t.j. (np. Kodeks karny) przechodzi na PDF, a PDF (np. Kodeks wykroczeń) jest czytany z podziałem na wiersze; wcześniej obie kopie nie miały żadnego artykułu (CORE_LAW_TEXT_UNAVAILABLE); kopie bez artykułów są pobierane ponownie;
           - znacznik NIEWERYFIKOWANE nie jest już wstawiany przy „art. N”, gdy w tym samym wierszu jest znacznik VER zweryfikowanej jednostki tego artykułu (np. art. 46 ust. 2).

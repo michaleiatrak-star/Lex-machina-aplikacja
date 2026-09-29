@@ -513,7 +513,10 @@ export class SafeSessionExecutor {
         }
         const requestedHistoricalAsOf = detectHistoricalAsOf(protectedQuery);
         const ledger = new VerificationLedger();
-        const verificationTools = this.verificationToolFactory?.(ledger);
+        // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
+        const verificationTools = this.verificationToolFactory?.(ledger, {
+            localModel: request.model.startsWith("local/")
+        });
         const corpusTools = new LegalCorpusToolRuntime(this.registry, {
             modelSelectsSkills: request.modelSelectsSkills === true
         });

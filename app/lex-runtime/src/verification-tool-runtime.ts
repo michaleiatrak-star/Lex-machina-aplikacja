@@ -508,7 +508,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
   "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
-  "- Acts outside KC/KPC/KPK/KK are verified at the source (Sejm ELI, current consolidated text and amendments after it), like these four; an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. Only when ELI is unreachable is the local official ELI copy used (offline). The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
+  "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
   "- Never invent a verification marker, source URL, or tool result.",
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
@@ -551,7 +551,9 @@ export class LegalVerificationToolRuntime {
     // tekst): dołączany do kopii i RAG, jak akty z map DR.
     private readonly adoptAct:
       | ((act: LegalActDescriptor) => void)
-      | null = null
+      | null = null,
+    // Model lokalny (Bielik, Mistral): lokalna kopia ELI (RAG) pierwsza.
+    private readonly localModel = false
   ) {
     this.broker = new ToolBroker(
       new ToolPolicy({
@@ -1051,29 +1053,75 @@ export class LegalVerificationToolRuntime {
   private async describeUnregisteredAct(
     act: string,
     claim: string
-  ): Promise<LegalActDescriptor | undefined> {
+  ): Promise<{ act?: LegalActDescriptor; outage?: string }> {
     try {
-      return (
-        (await describeEliAct({
-          act,
-          claim,
-          index: this.coreLaw,
-          fetcher: this.eliFetch,
-          today: new Date().toISOString().slice(0, 10)
-        })) ?? undefined
-      );
-    } catch {
-      // ELI nieosiągalne: zostaje lokalna kopia (i jej odmowy temporalne).
-      return undefined;
+      const described = await describeEliAct({
+        act,
+        claim,
+        index: this.coreLaw,
+        fetcher: this.eliFetch,
+        today: new Date().toISOString().slice(0, 10)
+      });
+      return described ? { act: described } : {};
+    } catch (error) {
+      // Awaria ELI (sieć, 5xx, 429, 403), a nie brak aktu.
+      return {
+        outage:
+          "ELI_UNAVAILABLE:" +
+          (error instanceof Error ? error.message : String(error))
+      };
     }
+  }
+
+  /**
+   * Model w chmurze: lokalna kopia ELI (RAG) tylko przy awarii samego ELI, z wyraźną
+   * informacją w wyniku; odmowa kopii zostaje odmową. Model lokalny próbował kopii już
+   * wcześniej, więc tu tylko odmowa z przyczyną.
+   */
+  private eliOutageFallback(
+    call: NormalizedToolCall,
+    actInput: string,
+    asOf: string,
+    cause: string,
+    localCopy: string | undefined
+  ): string {
+    if (this.localModel || !this.coreLaw) {
+      return JSON.stringify({
+        status: "DENIED",
+        error: cause,
+        ...(localCopy ? { localCopy } : {})
+      });
+    }
+    const local = this.verifyWithCoreLaw(call, actInput, asOf);
+    if (local.denied) {
+      return JSON.stringify({ status: "DENIED", error: cause, localCopy: local.denied });
+    }
+    const payload = JSON.parse(local.content) as Record<string, unknown>;
+    return JSON.stringify({
+      ...payload,
+      sourceNotice: {
+        eliUnavailable: true,
+        cause,
+        localCopyDate:
+          typeof payload.fetchedAt === "string"
+            ? payload.fetchedAt.slice(0, 10)
+            : null
+      },
+      instruction:
+        "ELI (the official source) is unavailable right now (" +
+        cause +
+        "). This result comes from the local ELI copy (RAG) dated " +
+        (typeof payload.fetchedAt === "string" ? payload.fetchedAt.slice(0, 10) : "unknown") +
+        ", not from a live ELI check. State this explicitly to the user next to the reference (e.g. \"zweryfikowano na lokalnej kopii ELI z dnia …, ELI niedostępne\"). " +
+        String(payload.instruction ?? "")
+    });
   }
 
   private verifyWithCoreLaw(
     call: NormalizedToolCall,
     actInput: string,
-    asOf: string,
-    fallbackReason?: string
-  ): string {
+    asOf: string
+  ): { content: string; denied?: string } {
     const claim =
       typeof call.input.claim === "string"
         ? call.input.claim.trim()
@@ -1084,7 +1132,10 @@ export class LegalVerificationToolRuntime {
         : "";
     const verificationKind = kind(call.input.kind);
     if (!claim || !verificationKind || !this.coreLaw) {
-      return JSON.stringify({ status: "DENIED", error: "INVALID_VERIFICATION_INPUT" });
+      return {
+        content: JSON.stringify({ status: "DENIED", error: "INVALID_VERIFICATION_INPUT" }),
+        denied: "INVALID_VERIFICATION_INPUT"
+      };
     }
     const outcome = verifyFromCoreLaw({
       index: this.coreLaw,
@@ -1103,16 +1154,19 @@ export class LegalVerificationToolRuntime {
       reason:
         outcome.decision === "DENY"
           ? outcome.reason
-          : "CORE_LAW_LOCAL_ELI_COPY" + (fallbackReason ? ":" + fallbackReason : "")
+          : "CORE_LAW_LOCAL_ELI_COPY"
     });
     if (outcome.decision === "DENY") {
-      return JSON.stringify({ status: "DENIED", error: fallbackReason ?? outcome.reason, localCopy: outcome.reason });
+      return {
+        content: JSON.stringify({ status: "DENIED", error: outcome.reason, localCopy: outcome.reason }),
+        denied: outcome.reason
+      };
     }
 
     const { record, act } = outcome;
     this.ledger.add(record);
     const verified = record.status === "VERIFIED";
-    return JSON.stringify({
+    return { content: JSON.stringify({
       claim: record.claim,
       status: record.status,
       act: {
@@ -1137,7 +1191,7 @@ export class LegalVerificationToolRuntime {
       instruction: verified
         ? "Copy the marker verbatim onto the same line as this exact legal reference. Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
         : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
-    });
+    }) };
   }
 
   auditEvents(): readonly ToolAuditEvent[] {
@@ -1453,6 +1507,26 @@ export class LegalVerificationToolRuntime {
           ? call.input.asOf.trim()
           : "";
 
+      // Modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG), także KC/KPC/KK/KPK.
+      // Gdy kopia nie może odpowiedzieć, próba w źródle i dołączenie aktu do kopii.
+      // Modele w chmurze: wyłącznie źródło (Sejm ELI), bez cichego przejścia na kopię.
+      let localCopy: string | undefined;
+      if (this.localModel && this.coreLaw) {
+        const local = this.verifyWithCoreLaw(call, actInput, asOf);
+        if (!local.denied) {
+          results.push({ tool_use_id: call.id, content: local.content });
+          continue;
+        }
+        localCopy = local.denied;
+      }
+      const deny = (error: string, extra: Record<string, unknown> = {}) =>
+        JSON.stringify({
+          status: "DENIED",
+          error,
+          ...extra,
+          ...(localCopy ? { localCopy } : {})
+        });
+
       let resolvedAct: LegalActDescriptor | undefined;
       try {
         resolvedAct = this.resolver.resolve(actInput);
@@ -1462,36 +1536,32 @@ export class LegalVerificationToolRuntime {
             ? error.code
             : "LEGAL_ACT_RESOLUTION_FAILED";
 
-        // Akty spoza rejestru: najpierw w źródle (Sejm ELI) z kontrolą aktualności, tak jak
-        // KC/KPC/KK/KPK; lokalna kopia z map DR tylko gdy źródło nieosiągalne albo aktu nie
-        // da się jednoznacznie ustalić.
+        // Akty spoza rejestru: w źródle (Sejm ELI) z kontrolą aktualności, tak jak KC/KPC/KK/KPK.
         if (
           reason === "UNKNOWN_LEGAL_ACT" &&
           this.freshnessChecker
         ) {
-          resolvedAct =
+          const described =
             await this.describeUnregisteredAct(
               actInput,
               typeof call.input.claim === "string"
                 ? call.input.claim
                 : ""
             );
-        }
-
-        if (
-          !resolvedAct &&
-          reason === "UNKNOWN_LEGAL_ACT" &&
-          this.coreLaw
-        ) {
-          results.push({
-            tool_use_id: call.id,
-            content: this.verifyWithCoreLaw(
-              call,
-              actInput,
-              asOf
-            )
-          });
-          continue;
+          if (described.outage) {
+            results.push({
+              tool_use_id: call.id,
+              content: this.eliOutageFallback(
+                call,
+                actInput,
+                asOf,
+                described.outage,
+                localCopy
+              )
+            });
+            continue;
+          }
+          resolvedAct = described.act;
         }
 
         if (!resolvedAct) {
@@ -1504,10 +1574,7 @@ export class LegalVerificationToolRuntime {
           });
           results.push({
             tool_use_id: call.id,
-            content: JSON.stringify({
-              status: "DENIED",
-              error: reason
-            })
+            content: deny(reason)
           });
           continue;
         }
@@ -1550,19 +1617,18 @@ export class LegalVerificationToolRuntime {
             this.verifier.supportsPdf()
           );
 
-        // Bez sieci (Bielik offline): ta sama weryfikacja na lokalnej kopii ELI.
         if (
           !temporalStatusPermitsVerification &&
-          freshness.status === "SOURCE_METADATA_UNAVAILABLE" &&
-          this.coreLaw
+          freshness.status === "SOURCE_METADATA_UNAVAILABLE"
         ) {
           results.push({
             tool_use_id: call.id,
-            content: this.verifyWithCoreLaw(
+            content: this.eliOutageFallback(
               call,
-              resolvedAct.title,
+              actInput,
               asOf,
-              "TEMPORAL_SOURCE_METADATA_UNAVAILABLE"
+              "ELI_UNAVAILABLE:TEMPORAL_SOURCE_METADATA_UNAVAILABLE",
+              localCopy
             )
           });
           continue;
@@ -1585,6 +1651,7 @@ export class LegalVerificationToolRuntime {
             content: JSON.stringify({
               status: "DENIED",
               error: reason,
+              ...(localCopy ? { localCopy } : {}),
               freshness: {
                 status: freshness.status,
                 checkedAt:
@@ -1636,9 +1703,29 @@ export class LegalVerificationToolRuntime {
         }
       });
 
+      // Tekstu nie dało się pobrać z ELI (sieć, 5xx, 429, 403): awaria źródła, nie wynik.
+      if (
+        !result.ok &&
+        /could not be fetched|returned HTTP (?!404\b)\d{3}|fetch failed|ECONN|ETIMEDOUT|ENOTFOUND|aborted|timeout/i.test(
+          result.error ?? ""
+        )
+      ) {
+        results.push({
+          tool_use_id: call.id,
+          content: this.eliOutageFallback(
+            call,
+            actInput,
+            asOf,
+            "ELI_UNAVAILABLE:SOURCE_FETCH_FAILED",
+            localCopy
+          )
+        });
+        continue;
+      }
+
       if (
         result.ok &&
-        resolvedAct.id === "ELI" &&
+        (resolvedAct.id === "ELI" || this.localModel) &&
         this.adoptAct
       ) {
         try {
@@ -1658,27 +1745,12 @@ export class LegalVerificationToolRuntime {
         }
       }
 
-      if (!result.ok && this.coreLaw) {
-        results.push({
-          tool_use_id: call.id,
-          content: this.verifyWithCoreLaw(
-            call,
-            resolvedAct.title,
-            asOf,
-            result.error ?? "TOOL_FAILED"
-          )
-        });
-        continue;
-      }
 
       results.push({
         tool_use_id: call.id,
         content: result.ok
           ? String(result.output ?? "")
-          : JSON.stringify({
-              status: "DENIED",
-              error: result.error ?? "TOOL_FAILED"
-            })
+          : deny(result.error ?? "TOOL_FAILED")
       });
     }
 
@@ -1687,5 +1759,6 @@ export class LegalVerificationToolRuntime {
 }
 
 export type LegalVerificationToolFactory = (
-  ledger: VerificationLedger
+  ledger: VerificationLedger,
+  context?: { localModel: boolean }
 ) => LegalVerificationToolRuntime;

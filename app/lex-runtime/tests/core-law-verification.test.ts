@@ -205,7 +205,7 @@ describe("verifyFromCoreLaw", () => {
 });
 
 describe("verify_legal_reference with the core law index", () => {
-  it("verifies an act outside the deterministic registry offline", async () => {
+  it("model lokalny (Bielik, Mistral) weryfikuje offline na lokalnej kopii ELI (RAG)", async () => {
     const ledger = new VerificationLedger();
     const runtime = new LegalVerificationToolRuntime(
       ledger,
@@ -214,7 +214,10 @@ describe("verify_legal_reference with the core law index", () => {
       null,
       undefined,
       undefined,
-      index(kw(), trzezwosc())
+      index(kw(), trzezwosc()),
+      undefined,
+      null,
+      true
     );
     const [kwResult, titleResult, unknown] = await runtime.runTools([
       { id: "c1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
@@ -234,7 +237,7 @@ describe("verify_legal_reference with the core law index", () => {
     expect(kwPayload.status).toBe("VERIFIED");
     expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20]`);
     expect(JSON.parse(titleResult!.content).status).toBe("VERIFIED");
-    expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
+    expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", localCopy: "UNKNOWN_LEGAL_ACT" });
     expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("VERIFIED");
     expect(runtime.auditEvents().some((event) => event.reason === "CORE_LAW_LOCAL_ELI_COPY")).toBe(true);
   });
@@ -294,17 +297,23 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
   }
 
-  function runtime(ledger: VerificationLedger, eliFetch: ReturnType<typeof eli>, adopted: unknown[]) {
+  function runtime(
+    ledger: VerificationLedger,
+    eliFetch: ReturnType<typeof eli>,
+    adopted: unknown[],
+    options: { localModel?: boolean; freshness?: unknown; acts?: Act[] } = {}
+  ) {
     return new LegalVerificationToolRuntime(
       ledger,
       new OfficialLegalSourceVerifier(async (input: string | URL) => officialText(String(input)), () => CHECKED),
       undefined,
-      freshness as never,
+      (options.freshness ?? freshness) as never,
       undefined,
       undefined,
-      index(kw()),
+      index(...(options.acts ?? [kw()])),
       eliFetch.fetcher as never,
-      (act) => adopted.push(act)
+      (act) => adopted.push(act),
+      options.localModel === true
     );
   }
 
@@ -334,7 +343,7 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     expect(adopted).toMatchObject([{ eli: "DU/2025/889", baseEli: "DU/1985/14" }]);
   });
 
-  it("bez dostępu do ELI zostaje lokalna kopia z jej odmowami", async () => {
+  it("model w chmurze: lokalna kopia tylko przy awarii ELI, z wyraźną informacją", async () => {
     const ledger = new VerificationLedger();
     const adopted: unknown[] = [];
     const rt = runtime(ledger, eli({ down: true }), adopted);
@@ -342,8 +351,66 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
       { id: "w3", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
       { id: "w4", name: "verify_legal_reference", input: { claim: "art. 4 ustawy o drogach publicznych", kind: "statute", act: "ustawy o drogach publicznych" } }
     ]);
-    expect(JSON.parse(kwResult!.content)).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" } });
-    expect(JSON.parse(outside!.content)).toMatchObject({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
+    const kwPayload = JSON.parse(kwResult!.content);
+    expect(kwPayload).toMatchObject({
+      status: "VERIFIED",
+      act: { sourceKind: "local_eli_copy" },
+      sourceNotice: { eliUnavailable: true, localCopyDate: "2026-09-20" }
+    });
+    expect(kwPayload.sourceNotice.cause).toMatch(/^ELI_UNAVAILABLE:/);
+    expect(kwPayload.instruction).toContain("lokalnej kopii ELI");
+    expect(JSON.parse(outside!.content)).toMatchObject({ status: "DENIED", localCopy: "UNKNOWN_LEGAL_ACT" });
+    expect(JSON.parse(outside!.content).error).toMatch(/^ELI_UNAVAILABLE:/);
     expect(adopted).toEqual([]);
+  });
+
+  it("model w chmurze: KK z ELI; kopia przy braku metadanych ELI, nie przy nowelizacjach po t.j.", async () => {
+    const at = (status: string) => ({
+      check: async (descriptor: { baseEli: string; eli: string }) => ({
+        status,
+        mode: "CURRENT" as const,
+        checkedAt: CHECKED,
+        baseEli: descriptor.baseEli,
+        pinnedEli: descriptor.eli,
+        amendmentsAfter: []
+      })
+    });
+    const kk = act({
+      eli: "DU/2025/383",
+      title: "Kodeks karny",
+      labels: ["KK"],
+      url: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf",
+      articles: { "178a": "Art. 178a. § 1. Kto, znajdując się w stanie nietrzeźwości, prowadzi pojazd mechaniczny, podlega karze." }
+    });
+    const call = { id: "k1", name: "verify_legal_reference", input: { claim: "art. 178a § 1 KK", kind: "statute", act: "KK" } };
+
+    const outage = await runtime(new VerificationLedger(), eli(), [], { freshness: at("SOURCE_METADATA_UNAVAILABLE"), acts: [kk] })
+      .runTools([call]);
+    expect(JSON.parse(outage[0]!.content)).toMatchObject({
+      status: "VERIFIED",
+      sourceNotice: { eliUnavailable: true, cause: "ELI_UNAVAILABLE:TEMPORAL_SOURCE_METADATA_UNAVAILABLE" }
+    });
+
+    const amended = await runtime(new VerificationLedger(), eli(), [], { freshness: at("POST_TJ_AMENDMENTS"), acts: [kk] })
+      .runTools([call]);
+    const payload = JSON.parse(amended[0]!.content);
+    expect(payload).toMatchObject({ status: "DENIED", error: "TEMPORAL_POST_TJ_AMENDMENTS" });
+    expect(payload.sourceNotice).toBeUndefined();
+  });
+
+  it("model lokalny: najpierw kopia (bez ELI); gdy kopia nie ma aktu, ELI i dołączenie do RAG", async () => {
+    const ledger = new VerificationLedger();
+    const adopted: unknown[] = [];
+    const eliFetch = eli();
+    const rt = runtime(ledger, eliFetch, adopted, { localModel: true });
+    const [kwResult, outside] = await rt.runTools([
+      { id: "l1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
+      { id: "l2", name: "verify_legal_reference", input: { claim: "art. 4 ustawy o drogach publicznych", kind: "statute", act: "ustawy o drogach publicznych" } }
+    ]);
+    expect(JSON.parse(kwResult!.content)).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" } });
+    expect(JSON.parse(kwResult!.content).sourceNotice).toBeUndefined();
+    expect(JSON.parse(outside!.content)).toMatchObject({ status: "VERIFIED", act: { id: "ELI" } });
+    expect(adopted).toMatchObject([{ eli: "DU/2025/889" }]);
+    expect(eliFetch.requested.some((url) => url.includes("/DU/2025/734"))).toBe(false);
   });
 });

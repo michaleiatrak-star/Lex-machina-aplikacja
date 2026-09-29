@@ -591,7 +591,7 @@ export async function startLocalServer(options?: {
       registry,
       providerGateway,
       undefined,
-      (ledger) =>
+      (ledger, context) =>
         new LegalVerificationToolRuntime(
           ledger,
           legalSourceVerifier,
@@ -601,7 +601,8 @@ export async function startLocalServer(options?: {
           undefined,
           coreLawIndex,
           undefined,
-          (act) => coreLawIndex.adopt(act)
+          (act) => coreLawIndex.adopt(act),
+          context?.localModel === true
         ),
       privacyNamedEntities,
       legalFederationTools,
