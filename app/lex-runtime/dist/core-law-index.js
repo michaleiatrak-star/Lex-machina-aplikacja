@@ -227,6 +227,7 @@ export class CoreLawIndex {
                 articleCount: state?.articleCount ?? 0,
                 fetchedAt: state?.fetchedAt ?? null,
                 lastError: state?.lastError ?? null,
+                relationsCheckedAt: state?.relationsCheckedAt ?? null,
                 currentEli: state?.currentEli ?? ref.eli,
                 amendmentsAfter: state?.amendmentsAfter ?? []
             };
@@ -397,6 +398,7 @@ export class CoreLawIndex {
             }
         }
         state.checkedAt = new Date(this.now()).toISOString();
+        state.relationsCheckedAt = state.checkedAt;
     }
     async refreshAll() {
         if (this.state.blockedUntil &&

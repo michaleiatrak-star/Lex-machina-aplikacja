@@ -596,7 +596,10 @@ export async function startLocalServer(options?: {
           ledger,
           legalSourceVerifier,
           undefined,
-          new TemporalSourceFreshnessChecker()
+          new TemporalSourceFreshnessChecker(),
+          undefined,
+          undefined,
+          coreLawIndex
         ),
       privacyNamedEntities,
       legalFederationTools,

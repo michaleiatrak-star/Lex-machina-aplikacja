@@ -52,6 +52,9 @@ export type CoreActSummary = {
   articleCount: number;
   fetchedAt: string | null;
   lastError: string | null;
+  // Last successful check of ELI relations (new amendments, newer t.j.);
+  // null until checkConsolidated() has actually run for this act.
+  relationsCheckedAt: string | null;
   // ELI of the consolidated text actually served (a newer t.j. than the map's).
   currentEli: string;
   amendmentsAfter: CoreAmendment[];
@@ -235,6 +238,7 @@ type ActState = {
   fetchedAt: string | null;
   lastError: string | null;
   checkedAt?: string | null;
+  relationsCheckedAt?: string | null;
   currentEli?: string;
   amendmentsAfter?: CoreAmendment[];
 };
@@ -335,6 +339,7 @@ export class CoreLawIndex {
         articleCount: state?.articleCount ?? 0,
         fetchedAt: state?.fetchedAt ?? null,
         lastError: state?.lastError ?? null,
+        relationsCheckedAt: state?.relationsCheckedAt ?? null,
         currentEli: state?.currentEli ?? ref.eli,
         amendmentsAfter: state?.amendmentsAfter ?? []
       };
@@ -524,6 +529,7 @@ export class CoreLawIndex {
       }
     }
     state.checkedAt = new Date(this.now()).toISOString();
+    state.relationsCheckedAt = state.checkedAt;
   }
 
   private async refreshAll(): Promise<void> {

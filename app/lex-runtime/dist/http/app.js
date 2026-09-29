@@ -16,6 +16,7 @@ import { SupportError } from "../support-service.js";
 import { parseGuideTransition } from "../guide-session-state.js";
 import { CaseAccessError } from "../case-access.js";
 import { ReauthorizationError } from "../auth/reauthorization.js";
+import { DocumentAstSessionBlockedError } from "../legal-document-ast-generator.js";
 import { ExecutionSteps } from "../execution-steps.js";
 import { ContextBudgetError, estimateDocumentFit, HOSTED_CONTEXT_TOKENS, LOCAL_MAX_DOCUMENT_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS } from "../context-orchestrator.js";
 import { MAX_FIRM_TEMPLATES, templateChunks, templateText } from "../firm-template-text.js";
@@ -3851,7 +3852,15 @@ export function createLexHttpApp(options) {
                     error: error instanceof
                         Error
                         ? error.message
-                        : "DOCUMENT_GENERATION_FAILED"
+                        : "DOCUMENT_GENERATION_FAILED",
+                    ...(error instanceof
+                        DocumentAstSessionBlockedError
+                        ? {
+                            stage: "DOCUMENT_AST_SESSION",
+                            reason: error.reason,
+                            description: error.description
+                        }
+                        : {})
                 });
                 return;
             }

@@ -99,6 +99,48 @@ function generationInstruction(
   ].join("\n");
 }
 
+// Diagnostyka zablokowanej sesji pisma: tylko statusy, nazwy bramek i powołania (bez treści
+// odpowiedzi i danych sprawy), żeby w UI było widać, która bramka zatrzymała dokument.
+export class DocumentAstSessionBlockedError extends Error {
+  constructor(
+    readonly reason: string,
+    readonly description: string
+  ) {
+    super("DOCUMENT_AST_SESSION_BLOCKED");
+    this.name = "DocumentAstSessionBlockedError";
+  }
+}
+
+function blockedSessionDiagnostic(
+  result: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>
+): DocumentAstSessionBlockedError {
+  const reason = [
+    `status=${result.status}`,
+    `finalization=${result.finalization}`,
+    `audit=${result.audit.result}`,
+    `answer=${result.answer ? "present" : "missing"}`,
+    ...(result.workflow ? [`workflow=${result.workflow.id}:${result.workflow.result}`] : []),
+    ...(result.gateI ? [`gateI=${result.gateI.result}`] : [])
+  ].join("; ");
+  const details = [
+    ...(result.audit.missing?.length ? [`audit.missing: ${result.audit.missing.join(", ")}`] : []),
+    ...(result.audit.violations?.length ? [`audit.violations: ${result.audit.violations.join(", ")}`] : []),
+    ...(result.workflow?.missingResources.length
+      ? [`workflow.missingResources: ${result.workflow.missingResources.join(", ")}`]
+      : []),
+    ...(result.gateI
+      ? result.gateI.checks
+          .filter((check) => check.result === "BLOCKED")
+          .map((check) => `gateI.${check.id}: ${check.detail.slice(0, 200)}`)
+      : []),
+    ...result.blockedReferences
+      .slice(0, 10)
+      .map((reference) => `blockedReference[${reference.kind}/${reference.status}]: ${reference.claim.slice(0, 80)}`),
+    `verification: records=${result.verification.records}, verified=${result.verification.verified}, supported=${result.verification.supported}, unverified=${result.verification.unverified}`
+  ];
+  return new DocumentAstSessionBlockedError(reason, details.join("\n"));
+}
+
 export class LegalDocumentAstGenerator {
   constructor(
     private readonly sessions: Pick<SessionExecutor, "execute">
@@ -131,7 +173,7 @@ export class LegalDocumentAstGenerator {
       result.audit.result !== "PASS" ||
       !result.answer
     ) {
-      throw new Error("DOCUMENT_AST_SESSION_BLOCKED");
+      throw blockedSessionDiagnostic(result);
     }
 
     const parsed = extractJson(result.answer);
