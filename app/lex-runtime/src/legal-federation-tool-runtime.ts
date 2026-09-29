@@ -180,6 +180,11 @@ export type LegalFederationAuditEvent = {
   decision:
     "ALLOW" |
     "BLOCK";
+  // Tylko przy BLOCK: POLICY_BLOCKED = odmowa polityki źródeł/prywatności,
+  // SOURCE_UNAVAILABLE = źródło nie odpowiedziało (nie jest dowodem braku).
+  outcome?:
+    "POLICY_BLOCKED" |
+    "SOURCE_UNAVAILABLE";
   detail?:
     Record<string, unknown>;
 };
@@ -994,6 +999,8 @@ export class LegalFederationToolRuntime {
     ok: boolean;
     result: unknown;
   }> {
+    // Własny dziennik: zdarzenia karty nie trafiają do audytu żadnej sesji.
+    const events: LegalFederationAuditEvent[] = [];
     const [reply] =
       await this.runTools([
         request.tool
@@ -1018,9 +1025,7 @@ export class LegalFederationToolRuntime {
                   request.source
               }
             }
-      ]);
-    // Instancja karty nie należy do żadnej sesji — jej zdarzenia nie trafiają do audytu sesji.
-    this.events.splice(0);
+      ], events);
     let result: unknown;
     try {
       result =
@@ -1049,9 +1054,14 @@ export class LegalFederationToolRuntime {
     };
   }
 
+  // Instancja jest współdzielona przez sesje: każda sesja przekazuje własny dziennik,
+  // inaczej zdarzenia jednej rozmowy trafiałyby do audytu kolejnych.
   async runTools(
     calls:
-      NormalizedToolCall[]
+      NormalizedToolCall[],
+    events:
+      LegalFederationAuditEvent[] =
+        this.events
   ): Promise<
     NormalizedToolResult[]
   > {
@@ -1073,7 +1083,7 @@ export class LegalFederationToolRuntime {
           await this.execute(
             call
           );
-        this.events.push({
+        events.push({
           tool:
             call.name,
           ...(source
@@ -1096,21 +1106,6 @@ export class LegalFederationToolRuntime {
             : String(
                 error
               );
-        this.events.push({
-          tool:
-            call.name,
-          ...(source
-            ? {
-                source
-              }
-            : {}),
-          decision:
-            "BLOCK",
-          detail: {
-            error:
-              message
-          }
-        });
         const policyBlocked =
           call.name ===
             ASSESS_SOURCE_TOOL ||
@@ -1143,6 +1138,29 @@ export class LegalFederationToolRuntime {
               )
             )
           );
+        events.push({
+          tool:
+            call.name,
+          ...(source
+            ? {
+                source
+              }
+            : {}),
+          decision:
+            "BLOCK",
+          // Próba wysłania danych sprawy do zewnętrznego źródła to zawsze odmowa polityki.
+          outcome:
+            policyBlocked ||
+            /CASE_DATA_FORBIDDEN/.test(
+              message
+            )
+              ? "POLICY_BLOCKED"
+              : "SOURCE_UNAVAILABLE",
+          detail: {
+            error:
+              message
+          }
+        });
         results.push({
           tool_use_id:
             call.id,

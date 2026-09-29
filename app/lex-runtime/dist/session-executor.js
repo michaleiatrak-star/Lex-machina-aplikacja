@@ -524,6 +524,8 @@ export class SafeSessionExecutor {
         const federationTools = request.model.startsWith("local/")
             ? undefined
             : this.legalFederationTools;
+        // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
+        const federationEvents = [];
         const auxiliarySources = [];
         // References in the message are checked by the Gate I runtime prelude
         // (ELI); no model is asked to extract them.
@@ -824,7 +826,7 @@ export class SafeSessionExecutor {
                 const federationResults = federationTools &&
                     federationCalls.length > 0
                     ? await federationTools
-                        .runTools(federationCalls)
+                        .runTools(federationCalls, federationEvents)
                     : [];
                 for (const result of federationResults) {
                     const source = publicAuxiliarySourceFromToolResult(result);
@@ -897,21 +899,28 @@ export class SafeSessionExecutor {
             });
         }
         const corpusAudit = corpusTools.auditEvents();
-        for (const event of corpusAudit) {
-            audit.record(event.tool === "read_legal_resource" || event.tool === "Read"
-                ? "resource_read"
-                : "tool_decision", event.target, event.decision === "ALLOW" ? "OK" : "BLOCKED", {
-                tool: event.tool,
-                ...(event.detail ? event.detail : {})
-            });
-        }
         // When the model picks skills itself, a refused read it can correct
         // (router-v3 not read yet, a guessed file name) is guidance, not a failed
         // turn. Path escapes and other refusals still block.
         const correctableCorpusRefusal = /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|INVALID_RESOURCE_OFFSET)/;
+        const correctable = (event) => modelSelectedSkills &&
+            correctableCorpusRefusal.test(String(event.detail?.error ?? ""));
+        // Poprawialna odmowa = DEGRADED, nie BLOCKED: HYBRID-VAL przed .docx odrzuca każde
+        // zdarzenie BLOCKED sesji źródłowej, a bramka G36 takiej odmowy nie blokuje.
+        for (const event of corpusAudit) {
+            audit.record(event.tool === "read_legal_resource" || event.tool === "Read"
+                ? "resource_read"
+                : "tool_decision", event.target, event.decision === "ALLOW"
+                ? "OK"
+                : correctable(event)
+                    ? "DEGRADED"
+                    : "BLOCKED", {
+                tool: event.tool,
+                ...(event.detail ? event.detail : {})
+            });
+        }
         const corpusBlocked = corpusAudit.some((event) => event.decision === "BLOCK" &&
-            !(modelSelectedSkills &&
-                correctableCorpusRefusal.test(String(event.detail?.error ?? ""))));
+            !correctable(event));
         audit.record("gate", "G36_LEGAL_CORPUS_RUNTIME", corpusBlocked ? "BLOCKED" : "OK", { toolEvents: corpusAudit.length });
         const reportAudit = reportTools.auditEvents();
         for (const event of reportAudit) {
@@ -925,15 +934,20 @@ export class SafeSessionExecutor {
             });
         }
         if (federationTools) {
-            const federationAudit = federationTools.auditEvents();
+            const federationAudit = federationEvents;
             for (const event of federationAudit) {
                 audit.record("tool_decision", event.source
                     ? "federated-legal:" +
                         event.source
-                    : "federated-legal", event.decision ===
+                    : "federated-legal", 
+                // Niedostępne źródło = DEGRADED (jak bramka G40); odmowa polityki = BLOCKED.
+                event.decision ===
                     "ALLOW"
                     ? "OK"
-                    : "BLOCKED", {
+                    : event.outcome ===
+                        "SOURCE_UNAVAILABLE"
+                        ? "DEGRADED"
+                        : "BLOCKED", {
                     tool: event.tool,
                     ...(event.detail
                         ? event.detail

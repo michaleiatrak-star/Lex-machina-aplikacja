@@ -14,6 +14,7 @@ import type {
 import { LexSkillRegistry } from "../src/registry.js";
 import { PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
 import {
+  SESSION_EXECUTION_INTERNAL,
   SafeSessionExecutor,
   namespaceDocumentAttachmentTokens,
   publicAuxiliarySourceFromToolResult,
@@ -21,6 +22,7 @@ import {
   reconcileAuxiliarySourcesWithVerification
 } from "../src/session-executor.js";
 import { LegalFederationToolRuntime } from "../src/legal-federation-tool-runtime.js";
+import { validateLocalHybridDocument } from "../src/document-generation-validation.js";
 
 const roots: string[] = [];
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -532,6 +534,67 @@ describe("SafeSessionExecutor", () => {
     expect(seen["test"]).toContain("search_federated_legal_sources");
     expect(seen["local/bielik-test"]).toBeDefined();
     expect(seen["local/bielik-test"]).not.toContain("search_federated_legal_sources");
+  });
+
+  it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
+    let callFederation = true;
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "federation",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        if (callFederation) {
+          await params.runTools?.([{
+            id: "f1",
+            name: "search_federated_legal_sources",
+            input: { source: "isap", query: "przedawnienie" }
+          }]);
+        }
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    // Bez konektorów: każde źródło = FEDERATED_SOURCE_NOT_INSTALLED (SOURCE_UNAVAILABLE).
+    const executor = new SafeSessionExecutor(
+      fixture(),
+      new ProviderGateway(providers),
+      undefined,
+      undefined,
+      undefined,
+      new LegalFederationToolRuntime()
+    );
+    const request = {
+      query: "Jaki jest termin przedawnienia roszczenia?",
+      provider: "openai" as const,
+      model: "test",
+      primarySkill: DR,
+      mode: "PRAWNIK" as const
+    };
+
+    const first = await executor.execute(request);
+    const firstEvents = first[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(firstEvents.filter((event) => event.target === "federated-legal:isap").map((event) => event.status))
+      .toEqual(["DEGRADED"]);
+
+    callFederation = false;
+    const second = await executor.execute(request);
+    const secondEvents = second[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(secondEvents.some((event) => event.target.startsWith("federated-legal"))).toBe(false);
+
+    for (const events of [firstEvents, secondEvents]) {
+      const hybrid = validateLocalHybridDocument("Wezwanie do zapłaty.", {
+        schemaVersion: 1,
+        sourceSessionId: "s",
+        primarySkill: DR,
+        provider: "openai",
+        model: "test",
+        usedDocumentContext: false,
+        verificationRecords: [],
+        auditEvents: events
+      });
+      expect(hybrid.reasons).not.toContain("SOURCE_SESSION_BLOCKED_EVENT");
+    }
   });
 
   it("sends the placeholder key with gender to the model, never the name", async () => {

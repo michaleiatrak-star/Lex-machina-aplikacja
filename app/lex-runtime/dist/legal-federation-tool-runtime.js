@@ -645,6 +645,8 @@ export class LegalFederationToolRuntime {
     // narzędzia ze źródłem, ochrona danych sprawy), ale wywołanie wprost, bez modelu.
     // Bez `tool` zwraca listę narzędzi źródła ze schematami parametrów.
     async direct(request) {
+        // Własny dziennik: zdarzenia karty nie trafiają do audytu żadnej sesji.
+        const events = [];
         const [reply] = await this.runTools([
             request.tool
                 ? {
@@ -664,9 +666,7 @@ export class LegalFederationToolRuntime {
                         source: request.source
                     }
                 }
-        ]);
-        // Instancja karty nie należy do żadnej sesji — jej zdarzenia nie trafiają do audytu sesji.
-        this.events.splice(0);
+        ], events);
         let result;
         try {
             result =
@@ -690,14 +690,16 @@ export class LegalFederationToolRuntime {
             result
         };
     }
-    async runTools(calls) {
+    // Instancja jest współdzielona przez sesje: każda sesja przekazuje własny dziennik,
+    // inaczej zdarzenia jednej rozmowy trafiałyby do audytu kolejnych.
+    async runTools(calls, events = this.events) {
         const results = [];
         // Intentionally sequential: several upstreams publish explicit rate limits.
         for (const call of calls) {
             const source = sourceFrom(call.input);
             try {
                 const content = await this.execute(call);
-                this.events.push({
+                events.push({
                     tool: call.name,
                     ...(source
                         ? {
@@ -715,18 +717,6 @@ export class LegalFederationToolRuntime {
                 const message = error instanceof Error
                     ? error.message
                     : String(error);
-                this.events.push({
-                    tool: call.name,
-                    ...(source
-                        ? {
-                            source
-                        }
-                        : {}),
-                    decision: "BLOCK",
-                    detail: {
-                        error: message
-                    }
-                });
                 const policyBlocked = call.name ===
                     ASSESS_SOURCE_TOOL ||
                     (call.name ===
@@ -748,6 +738,23 @@ export class LegalFederationToolRuntime {
                                     "AUX_SOURCE_HOST_FORBIDDEN",
                                     "AUX_SOURCE_DNS_PRIVATE"
                                 ].includes(error.code))));
+                events.push({
+                    tool: call.name,
+                    ...(source
+                        ? {
+                            source
+                        }
+                        : {}),
+                    decision: "BLOCK",
+                    // Próba wysłania danych sprawy do zewnętrznego źródła to zawsze odmowa polityki.
+                    outcome: policyBlocked ||
+                        /CASE_DATA_FORBIDDEN/.test(message)
+                        ? "POLICY_BLOCKED"
+                        : "SOURCE_UNAVAILABLE",
+                    detail: {
+                        error: message
+                    }
+                });
                 results.push({
                     tool_use_id: call.id,
                     content: JSON.stringify({

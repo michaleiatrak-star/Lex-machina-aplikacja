@@ -99,6 +99,10 @@ jobs:
           - desktop: proxy aplikacji przepuszcza trasy konektorów MCP i karty Wyszukiwanie; wcześniej panel Ustawienia -> Konektory MCP i karta Wyszukiwanie kończyły się błędem DESKTOP_ROUTE_NOT_ALLOWED;
           - lista dozwolonych tras obejmuje tylko konkretne ścieżki i metody (lista konektorów, instalacja, deinstalacja, sprawdzenie, klucz CEIDG, źródła, narzędzia, zapytanie).
 
+          ### Poprawka: generowanie .docx z czatu (DOCUMENT_AST / HYBRID-VAL)
+          - zdarzenia federacji źródeł (MCP) trafiały do audytu wszystkich kolejnych rozmów: jedno nieudane zapytanie do źródła blokowało każde późniejsze pismo (READY_DOCUMENT_HYBRID_BLOCKED:SOURCE_SESSION_BLOCKED_EVENT) do restartu aplikacji; teraz każda sesja audytuje tylko własne wywołania;
+          - niedostępne źródło i poprawialna odmowa odczytu skilla (np. ROUTER_V3_REQUIRED_FIRST przy Claude Code) mają w audycie status DEGRADED, zgodnie z bramkami G40 i G36; odmowy polityki (dane sprawy do zewnętrznego źródła) nadal blokują.
+
           ### Karta Wyszukiwanie (konektory MCP)
           - wybór źródła i narzędzia z list, formularz budowany ze schematu narzędzia, wynik wprost z API źródła, bez modelu;
           - te same bramki co w czacie: tylko zainstalowane źródła, narzędzie musi należeć do źródła, ochrona danych sprawy; zapytania nie trafiają do audytu sesji;

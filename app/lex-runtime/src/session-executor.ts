@@ -55,7 +55,8 @@ import {
   LegalCorpusToolRuntime
 } from "./legal-corpus-tool-runtime.js";
 import {
-  LegalFederationToolRuntime
+  LegalFederationToolRuntime,
+  type LegalFederationAuditEvent
 } from "./legal-federation-tool-runtime.js";
 import type {
   LegalSourceCrossCheckStatus,
@@ -1245,6 +1246,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       request.model.startsWith("local/")
         ? undefined
         : this.legalFederationTools;
+    // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
+    const federationEvents:
+      LegalFederationAuditEvent[] =
+      [];
     const auxiliarySources:
       PublicAuxiliarySourceItem[] =
       [];
@@ -1661,7 +1666,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           federationCalls.length > 0
             ? await federationTools
                 .runTools(
-                  federationCalls
+                  federationCalls,
+                  federationEvents
                 )
             : [];
 
@@ -1773,13 +1779,29 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
 
     const corpusAudit = corpusTools.auditEvents();
+    // When the model picks skills itself, a refused read it can correct
+    // (router-v3 not read yet, a guessed file name) is guidance, not a failed
+    // turn. Path escapes and other refusals still block.
+    const correctableCorpusRefusal =
+      /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|INVALID_RESOURCE_OFFSET)/;
+    const correctable = (event: (typeof corpusAudit)[number]) =>
+      modelSelectedSkills &&
+      correctableCorpusRefusal.test(
+        String(event.detail?.error ?? "")
+      );
+    // Poprawialna odmowa = DEGRADED, nie BLOCKED: HYBRID-VAL przed .docx odrzuca każde
+    // zdarzenie BLOCKED sesji źródłowej, a bramka G36 takiej odmowy nie blokuje.
     for (const event of corpusAudit) {
       audit.record(
         event.tool === "read_legal_resource" || event.tool === "Read"
           ? "resource_read"
           : "tool_decision",
         event.target,
-        event.decision === "ALLOW" ? "OK" : "BLOCKED",
+        event.decision === "ALLOW"
+          ? "OK"
+          : correctable(event)
+            ? "DEGRADED"
+            : "BLOCKED",
         {
           tool: event.tool,
           ...(event.detail ? event.detail : {})
@@ -1787,20 +1809,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     }
 
-    // When the model picks skills itself, a refused read it can correct
-    // (router-v3 not read yet, a guessed file name) is guidance, not a failed
-    // turn. Path escapes and other refusals still block.
-    const correctableCorpusRefusal =
-      /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|INVALID_RESOURCE_OFFSET)/;
     const corpusBlocked = corpusAudit.some(
       (event) =>
         event.decision === "BLOCK" &&
-        !(
-          modelSelectedSkills &&
-          correctableCorpusRefusal.test(
-            String(event.detail?.error ?? "")
-          )
-        )
+        !correctable(event)
     );
     audit.record(
       "gate",
@@ -1829,7 +1841,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     if (federationTools) {
       const federationAudit =
-        federationTools.auditEvents();
+        federationEvents;
       for (
         const event
         of federationAudit
@@ -1840,10 +1852,14 @@ export class SafeSessionExecutor implements SessionExecutor {
             ? "federated-legal:" +
               event.source
             : "federated-legal",
+          // Niedostępne źródło = DEGRADED (jak bramka G40); odmowa polityki = BLOCKED.
           event.decision ===
             "ALLOW"
             ? "OK"
-            : "BLOCKED",
+            : event.outcome ===
+                "SOURCE_UNAVAILABLE"
+              ? "DEGRADED"
+              : "BLOCKED",
           {
             tool:
               event.tool,
