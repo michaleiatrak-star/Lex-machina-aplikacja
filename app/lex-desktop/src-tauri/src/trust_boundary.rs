@@ -1448,6 +1448,28 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/models/") => method == "GET",
         _ if is_execution_progress_route(path) => method == "GET",
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
+        _ if is_mcp_route(method, path) => true,
+        _ => false,
+    }
+}
+
+// Konektory MCP (Ustawienia) i karta Wyszukiwanie: tylko te trasy i metody.
+fn is_mcp_route(method: &str, path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let server_id = |id: &str| {
+        (1..=16).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_lowercase())
+    };
+    match segments.as_slice() {
+        ["api", "admin", "mcp-connectors"] => method == "GET",
+        ["api", "admin", "mcp-connectors", "ceidg", "key"] => {
+            matches!(method, "PUT" | "DELETE")
+        }
+        ["api", "admin", "mcp-connectors", id, "install" | "uninstall" | "check"] => {
+            method == "POST" && server_id(id)
+        }
+        ["api", "mcp-search", "sources"] => method == "GET",
+        ["api", "mcp-search", "sources", id, "tools"] => method == "GET" && server_id(id),
+        ["api", "mcp-search", "query"] => method == "POST",
         _ => false,
     }
 }
@@ -1956,6 +1978,29 @@ mod tests {
         assert!(!route_allowed("GET", "/api/sessions/progress/../../auth/me"));
         assert!(!route_allowed("GET", "/api/arbitrary"));
         assert!(!route_allowed("GET", "https://example.com/"));
+    }
+
+    #[test]
+    fn allowlist_admits_only_mcp_connector_and_search_routes() {
+        assert!(route_allowed("GET", "/api/admin/mcp-connectors"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/nbp/install"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/cbosa/uninstall"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/isap/check"));
+        assert!(route_allowed("PUT", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("DELETE", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("GET", "/api/mcp-search/sources"));
+        assert!(route_allowed("GET", "/api/mcp-search/sources/saos/tools"));
+        assert!(route_allowed("POST", "/api/mcp-search/query"));
+
+        assert!(!route_allowed("DELETE", "/api/admin/mcp-connectors"));
+        assert!(!route_allowed("GET", "/api/admin/mcp-connectors/nbp/install"));
+        assert!(!route_allowed("POST", "/api/admin/mcp-connectors/nbp/delete"));
+        assert!(!route_allowed("POST", "/api/admin/mcp-connectors/../install"));
+        assert!(!route_allowed("GET", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(!route_allowed("POST", "/api/mcp-search/sources"));
+        assert!(!route_allowed("GET", "/api/mcp-search/query"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sources/SAOS/tools"));
     }
 
     #[test]

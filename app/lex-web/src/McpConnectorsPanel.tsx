@@ -192,7 +192,7 @@ export function McpConnectorsPanel() {
         Konektory MCP Lex Machina
       </h2>
       <p>
-        Serwery z <code>audyt-systemu-v4/mcp-servers</code> (własne, zamiast @matematicsolutions). Instalacja uruchamia serwer i sprawdza handshake MCP; zainstalowane źródła są dostępne w czacie przez federację źródeł prawa.
+        Serwery z <code>audyt-systemu-v4/mcp-servers</code>. Instalacja uruchamia serwer i sprawdza handshake MCP; zainstalowane źródła są dostępne w czacie przez federację źródeł prawa.
       </p>
 
       {error ? <div className="alert alert-error">{error}</div> : null}

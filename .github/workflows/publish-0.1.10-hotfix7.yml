@@ -1,4 +1,4 @@
-name: Publish Lex Machina 0.1.10 hotfix 6 online installer
+name: Publish Lex Machina 0.1.10 hotfix 7 online installer
 
 # Builds, accepts and publishes the online installer in one run: runtime
 # validation, the G33D online installer build and installed-copy acceptance,
@@ -9,7 +9,7 @@ on:
     branches:
       - "claude/modest-knuth-re40mu"
     paths:
-      - ".github/workflows/publish-0.1.10-hotfix6.yml"
+      - ".github/workflows/publish-0.1.10-hotfix7.yml"
   workflow_dispatch:
 
 permissions:
@@ -17,13 +17,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: lex-publish-0.1.10-hotfix6
+  group: lex-publish-0.1.10-hotfix7
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: v0.1.10-hotfix6
-  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 6
-  ASSET_NAME: Lex-Machina-0.1.10-hotfix6-Online-x64-Setup.exe
+  RELEASE_TAG: v0.1.10-hotfix7
+  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 7
+  ASSET_NAME: Lex-Machina-0.1.10-hotfix7-Online-x64-Setup.exe
 
 jobs:
   runtime:
@@ -91,18 +91,22 @@ jobs:
         shell: bash
         run: |
           cat > release-out/RELEASE-NOTES.md <<'EOF'
-          ## Lex Machina 0.1.10 hotfix 6
+          ## Lex Machina 0.1.10 hotfix 7
 
           Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
 
+          ### Poprawka
+          - desktop: proxy aplikacji przepuszcza trasy konektorów MCP i karty Wyszukiwanie; wcześniej panel Ustawienia -> Konektory MCP i karta Wyszukiwanie kończyły się błędem DESKTOP_ROUTE_NOT_ALLOWED;
+          - lista dozwolonych tras obejmuje tylko konkretne ścieżki i metody (lista konektorów, instalacja, deinstalacja, sprawdzenie, klucz CEIDG, źródła, narzędzia, zapytanie).
+
           ### Karta Wyszukiwanie (konektory MCP)
-          - nowa karta: wybór źródła i narzędzia z list, formularz budowany ze schematu narzędzia, wynik wprost z API źródła, bez modelu;
+          - wybór źródła i narzędzia z list, formularz budowany ze schematu narzędzia, wynik wprost z API źródła, bez modelu;
           - te same bramki co w czacie: tylko zainstalowane źródła, narzędzie musi należeć do źródła, ochrona danych sprawy; zapytania nie trafiają do audytu sesji;
           - CBOSA: snapshot bez awansu, brak trafień = OUT_OF_SCOPE.
 
-          ### Ustawienia → Konektory MCP
+          ### Ustawienia -> Konektory MCP
           - przycisk Sprawdź: ponowny handshake MCP z zapisem wyniku i czasu;
-          - integralność pakietu lex-mcp.mjs: SHA-256 porównany z CHECKSUMS.sha256 skilla audyt-systemu-v4 (najnowsza instalacja / niezgodny / nieweryfikowalny), wersja pakietu i skilla.
+          - integralność pakietu lex-mcp.mjs: SHA-256 porównany z CHECKSUMS.sha256 skilla audyt-systemu-v4, wersja pakietu i skilla.
 
           Zawiera wszystkie zmiany hotfix 5 (weryfikacja przepisów na lokalnej kopii ELI, okno kontekstu 32k modeli lokalnych, timeout generowania pisma).
 
