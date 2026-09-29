@@ -3,7 +3,7 @@ import { CASE_LAW_SEARCH_HOSTS, CaseLawSearchService, caseLawSearchEntryUrl } fr
 import { DeterministicLegalActResolver, LegalActResolutionError } from "./legal-act-resolver.js";
 import { ToolBroker, ToolPolicy } from "./tool-broker.js";
 import { OFFICIAL_LEGAL_SOURCE_HOSTS, OfficialLegalSourceVerifier } from "./legal-source-verifier.js";
-import { localCopyMarker, verifyFromCoreLaw } from "./core-law-verification.js";
+import { verifyFromCoreLaw } from "./core-law-verification.js";
 const TOOL_NAME = "verify_legal_reference";
 const CASE_SEARCH_TOOL_NAME = "search_case_law";
 const CASE_TOOL_NAME = "verify_case_reference";
@@ -38,6 +38,10 @@ const TOOL_SCHEMA = {
                 asOf: {
                     type: "string",
                     description: "Optional historical legal-state date in YYYY-MM-DD. Use only when the user asks for a past legal state. Omit for current law."
+                },
+                quote: {
+                    type: "string",
+                    description: "Optional exact wording you intend to quote from the provision. It is checked against the official ELI text; a mismatch makes the reference UNVERIFIED."
                 }
             }
         }
@@ -350,7 +354,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
     "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
     "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
-    "- Acts outside KC/KPC/KPK/KK are checked against the local official ELI copy of the DR act maps. status=SUPPORTED means the wording comes from that copy but amendments were not re-checked in the last 24 hours: copy the returned [KOPIA-ELI: …] marker verbatim onto the SAME LINE and never call it verified.",
+    "- Acts outside KC/KPC/KPK/KK (and these four when the network is unavailable) are verified offline against the local official ELI copy of the DR act maps. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
     "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
@@ -700,9 +704,12 @@ export class LegalVerificationToolRuntime {
     systemPromptAppendix() {
         return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
     }
-    verifyWithCoreLaw(call, actInput, asOf) {
+    verifyWithCoreLaw(call, actInput, asOf, fallbackReason) {
         const claim = typeof call.input.claim === "string"
             ? call.input.claim.trim()
+            : "";
+        const quote = typeof call.input.quote === "string"
+            ? call.input.quote.trim()
             : "";
         const verificationKind = kind(call.input.kind);
         if (!claim || !verificationKind || !this.coreLaw) {
@@ -713,6 +720,7 @@ export class LegalVerificationToolRuntime {
             claim,
             kind: verificationKind,
             act: actInput,
+            ...(quote ? { quote } : {}),
             ...(asOf ? { asOf } : {}),
             toolCallId: call.id
         });
@@ -723,18 +731,14 @@ export class LegalVerificationToolRuntime {
             decision: outcome.decision === "DENY" ? "DENY" : "ALLOW",
             reason: outcome.decision === "DENY"
                 ? outcome.reason
-                : "CORE_LAW_LOCAL_ELI_COPY"
+                : "CORE_LAW_LOCAL_ELI_COPY" + (fallbackReason ? ":" + fallbackReason : "")
         });
         if (outcome.decision === "DENY") {
-            return JSON.stringify({ status: "DENIED", error: outcome.reason });
+            return JSON.stringify({ status: "DENIED", error: fallbackReason ?? outcome.reason, localCopy: outcome.reason });
         }
         const { record, act } = outcome;
         this.ledger.add(record);
-        const marker = record.status === "VERIFIED"
-            ? "✅ [VER: " + record.sourceUrl + ", " + record.fetchedAt.slice(0, 10) + "]"
-            : record.status === "SUPPORTED"
-                ? localCopyMarker(record)
-                : "⚠️ [NIEWERYFIKOWANE]";
+        const verified = record.status === "VERIFIED";
         return JSON.stringify({
             claim: record.claim,
             status: record.status,
@@ -742,9 +746,11 @@ export class LegalVerificationToolRuntime {
                 eli: act.eli,
                 currentEli: act.currentEli,
                 title: act.title,
+                resolvedBy: act.resolvedBy,
                 sourceKind: "local_eli_copy"
             },
             freshness: {
+                textFetchedAt: record.fetchedAt,
                 relationsCheckedAt: act.relationsCheckedAt,
                 amendmentsAfter: 0
             },
@@ -752,12 +758,12 @@ export class LegalVerificationToolRuntime {
             sourceFormat: record.sourceFormat ?? null,
             evidence: record.evidence ?? null,
             fetchedAt: record.fetchedAt,
-            marker,
-            instruction: record.status === "VERIFIED"
-                ? "Copy the marker verbatim onto the same line as this exact legal reference. Use the returned evidence as the official provision text."
-                : record.status === "SUPPORTED"
-                    ? "Text comes from the local official ELI copy, but amendments were not checked in the last 24 hours. Copy the KOPIA-ELI marker verbatim onto the same line as this exact legal reference; never present it as VERIFIED."
-                    : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
+            marker: verified
+                ? "✅ [VER: " + record.sourceUrl + ", " + record.fetchedAt.slice(0, 10) + "]"
+                : "⚠️ [NIEWERYFIKOWANE]",
+            instruction: verified
+                ? "Copy the marker verbatim onto the same line as this exact legal reference. Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
+                : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
         });
     }
     auditEvents() {
@@ -1028,6 +1034,16 @@ export class LegalVerificationToolRuntime {
                 const temporalStatusPermitsVerification = directTextStatus ||
                     (pdfTextStatus &&
                         this.verifier.supportsPdf());
+                // Bez sieci (Bielik offline): ta sama weryfikacja na lokalnej kopii ELI.
+                if (!temporalStatusPermitsVerification &&
+                    freshness.status === "SOURCE_METADATA_UNAVAILABLE" &&
+                    this.coreLaw) {
+                    results.push({
+                        tool_use_id: call.id,
+                        content: this.verifyWithCoreLaw(call, resolvedAct.title, asOf, "TEMPORAL_SOURCE_METADATA_UNAVAILABLE")
+                    });
+                    continue;
+                }
                 if (!temporalStatusPermitsVerification) {
                     const reason = "TEMPORAL_" + freshness.status;
                     this.resolverAudit.push({
@@ -1084,6 +1100,13 @@ export class LegalVerificationToolRuntime {
                         })
                 }
             });
+            if (!result.ok && this.coreLaw) {
+                results.push({
+                    tool_use_id: call.id,
+                    content: this.verifyWithCoreLaw(call, resolvedAct.title, asOf, result.error ?? "TOOL_FAILED")
+                });
+                continue;
+            }
             results.push({
                 tool_use_id: call.id,
                 content: result.ok

@@ -35,15 +35,7 @@ export class VerificationLedger {
             !record.sourceUrl?.trim()) {
             throw new Error("Verified/supported claims require a source URL.");
         }
-        const localCopySupport = record.status === "SUPPORTED" &&
-            record.supportScope === "LOCAL_ELI_COPY" &&
-            (record.kind === "statute" || record.kind === "journal");
-        if (localCopySupport &&
-            (!record.evidence?.trim() || !record.localCopyFetchedAt?.trim())) {
-            throw new Error("Local ELI copy support requires evidence and the copy date.");
-        }
         if (record.status === "SUPPORTED" &&
-            !localCopySupport &&
             (record.caseScope !==
                 "PROPOSITION_SUPPORT" ||
                 !record.caseSignature?.trim() ||

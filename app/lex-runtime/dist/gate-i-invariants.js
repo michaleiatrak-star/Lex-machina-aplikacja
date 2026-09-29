@@ -167,9 +167,7 @@ function temporalFreshness(records) {
 function citationLedger(finalization) {
     const invalid = finalization.findings
         .filter((finding) => finding.status !==
-        "VERIFIED" &&
-        finding.status !==
-            "SUPPORTED_LOCAL_COPY");
+        "VERIFIED");
     return {
         id: "CITATION_LEDGER",
         subgate: "I-E_CITATION_LEDGER",
@@ -199,9 +197,7 @@ function documentCitations(report) {
 function citations(finalization) {
     const invalid = finalization.findings
         .filter((finding) => finding.status !==
-        "VERIFIED" &&
-        finding.status !==
-            "SUPPORTED_LOCAL_COPY");
+        "VERIFIED");
     return {
         id: "LEGAL_CITATIONS",
         subgate: "I-E1_LEGAL_CITATIONS",

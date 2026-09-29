@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
 import { AuditTrail, type AuditCompletenessReport } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
-import {
-  isLocalCopyOnlyDegradation,
-  type FinalizationReport
-} from "./finalization-gate.js";
+import type { FinalizationReport } from "./finalization-gate.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -167,26 +164,7 @@ export class ExportGate {
       closeSession: false
     });
 
-    const localCopyOnly =
-      finalization.result === "DEGRADED" &&
-      isLocalCopyOnlyDegradation(
-        finalization.findings
-          .filter((finding) => finding.status !== "VERIFIED")
-          .map((finding) => finding.status)
-      );
-    if (localCopyOnly) {
-      args.audit.record(
-        "gate",
-        "LOCAL_ELI_COPY_SUPPORT",
-        "DEGRADED",
-        {
-          references: finalization.findings
-            .filter((finding) => finding.status === "SUPPORTED_LOCAL_COPY")
-            .length
-        }
-      );
-    }
-    if (finalization.result !== "PASS" && !localCopyOnly) {
+    if (finalization.result !== "PASS") {
       const reason =
         finalization.result === "DEGRADED"
           ? "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"

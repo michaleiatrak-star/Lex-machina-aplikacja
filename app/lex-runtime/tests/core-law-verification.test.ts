@@ -2,183 +2,209 @@ import { describe, expect, it } from "vitest";
 import type {
   CoreActRecord,
   CoreActRef,
-  CoreActSummary,
-  CoreLawIndex
+  CoreActSummary
 } from "../src/core-law-index.js";
 import {
-  CORE_LAW_FRESH_CHECK_MS,
-  localCopyMarker,
-  verifyFromCoreLaw
+  resolveActByTitle,
+  verifyFromCoreLaw,
+  type CoreLawVerificationIndex
 } from "../src/core-law-verification.js";
-import {
-  FinalizationGate,
-  isLocalCopyOnlyDegradation
-} from "../src/finalization-gate.js";
+import { FinalizationGate } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 import { LegalVerificationToolRuntime } from "../src/verification-tool-runtime.js";
 
 const NOW = Date.parse("2026-09-29T10:00:00.000Z");
 const KW_URL = "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.html";
+const TRZ_URL = "https://api.sejm.gov.pl/eli/acts/DU/2026/1214/text.html";
 
-function fakeIndex(options: {
-  relationsCheckedAt?: string | null;
-  amendmentsAfter?: CoreActSummary["amendmentsAfter"];
+type Act = {
+  ref: CoreActRef;
+  record: CoreActRecord;
+  summary: CoreActSummary;
+};
+
+function act(options: {
+  eli: string;
+  title: string;
+  labels: string[];
+  url: string;
+  articles: Record<string, string>;
   status?: string;
-} = {}): Pick<CoreLawIndex, "resolve" | "summary" | "currentRecord"> {
+  amendmentsAfter?: CoreActSummary["amendmentsAfter"];
+  relationsCheckedAt?: string | null;
+}): Act {
   const ref: CoreActRef = {
-    eli: "DU/2025/734",
+    eli: options.eli,
     consolidated: true,
-    labels: ["KW", "Kodeks wykroczeń (KW) — current-state"],
+    labels: options.labels,
     domains: ["dr-03-prawo-karne-wykroczenia-egzekucja"],
     notes: []
   };
   const record: CoreActRecord = {
-    eli: "DU/2025/734",
-    title: "Kodeks wykroczeń",
+    eli: options.eli,
+    title: options.title,
     type: "Ustawa",
     status: options.status ?? "obowiązujący",
     promulgation: "2025-06-02",
     textSource: "html",
     fetchedAt: "2026-09-20T08:00:00.000Z",
-    sourceUrl: KW_URL,
-    articleOrder: ["51"],
-    articles: {
-      "51": "Art. 51. § 1. Kto krzykiem, hałasem, alarmem lub innym wybrykiem zakłóca spokój, porządek publiczny, spoczynek nocny albo wywołuje zgorszenie w miejscu publicznym, podlega karze aresztu, ograniczenia wolności albo grzywny."
-    },
+    sourceUrl: options.url,
+    articleOrder: Object.keys(options.articles),
+    articles: options.articles,
     text: ""
   };
   const summary: CoreActSummary = {
-    eli: ref.eli,
-    title: record.title,
+    eli: options.eli,
+    title: options.title,
     status: record.status,
     consolidated: true,
-    labels: ref.labels,
+    labels: options.labels,
     domains: ref.domains,
     textSource: "html",
-    articleCount: 1,
+    articleCount: record.articleOrder.length,
     fetchedAt: record.fetchedAt,
     lastError: null,
-    relationsCheckedAt:
-      options.relationsCheckedAt === undefined
-        ? "2026-09-29T06:00:00.000Z"
-        : options.relationsCheckedAt,
-    currentEli: ref.eli,
+    relationsCheckedAt: options.relationsCheckedAt ?? null,
+    currentEli: options.eli,
     amendmentsAfter: options.amendmentsAfter ?? []
   };
-  return {
-    resolve: (act: string) =>
-      ["kw", "kodeks wykroczeń", "du/2025/734"].includes(act.trim().toLocaleLowerCase("pl"))
-        ? ref
-        : null,
-    summary: (eli: string) => (eli === ref.eli ? summary : null),
-    currentRecord: (eli: string) => (eli === ref.eli ? record : null)
-  };
+  return { ref, record, summary };
 }
 
-function verify(
-  index: ReturnType<typeof fakeIndex>,
-  claim = "art. 51 § 1 KW",
-  extra: { asOf?: string } = {}
-) {
-  return verifyFromCoreLaw({
-    index,
-    claim,
-    kind: "statute",
-    act: "KW",
-    toolCallId: "call_1",
-    now: NOW,
+const KW_ART_51 =
+  "Art. 51. § 1. Kto krzykiem, hałasem, alarmem lub innym wybrykiem zakłóca spokój, porządek publiczny, spoczynek nocny albo wywołuje zgorszenie w miejscu publicznym, podlega karze aresztu, ograniczenia wolności albo grzywny.";
+
+function kw(extra: Partial<Parameters<typeof act>[0]> = {}): Act {
+  return act({
+    eli: "DU/2025/734",
+    title: "Kodeks wykroczeń",
+    labels: ["KW"],
+    url: KW_URL,
+    articles: { "51": KW_ART_51 },
     ...extra
   });
 }
 
+function trzezwosc(): Act {
+  return act({
+    eli: "DU/2026/1214",
+    title: "Ustawa z dnia 26 października 1982 r. o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi",
+    labels: ["Ustawa o wychowaniu w trzeźwości (1982, + sekcja DO MONITOROWANIA"],
+    url: TRZ_URL,
+    articles: { "43": "Art. 43. 1. Kto sprzedaje lub podaje napoje alkoholowe w wypadkach, w których jest to zabronione, podlega grzywnie." }
+  });
+}
+
+function index(...acts: Act[]): CoreLawVerificationIndex {
+  return {
+    // Rozpoznanie po etykiecie mapy / ELI (jak CoreLawIndex.resolve): tu tylko dokładne.
+    resolve: (value: string) =>
+      acts.find(
+        (item) =>
+          item.ref.eli === value.trim() ||
+          item.ref.labels.some((label) => label.toLocaleLowerCase("pl") === value.trim().toLocaleLowerCase("pl"))
+      )?.ref ?? null,
+    summaries: () => acts.map((item) => item.summary),
+    summary: (eli: string) => acts.find((item) => item.ref.eli === eli)?.summary ?? null,
+    currentRecord: (eli: string) => acts.find((item) => item.ref.eli === eli)?.record ?? null
+  };
+}
+
+function verify(
+  idx: CoreLawVerificationIndex,
+  args: { claim?: string; act?: string; quote?: string; asOf?: string } = {}
+) {
+  return verifyFromCoreLaw({
+    index: idx,
+    claim: args.claim ?? "art. 51 § 1 KW",
+    kind: "statute",
+    act: args.act ?? "KW",
+    toolCallId: "call_1",
+    now: NOW,
+    ...(args.quote ? { quote: args.quote } : {}),
+    ...(args.asOf ? { asOf: args.asOf } : {})
+  });
+}
+
 describe("verifyFromCoreLaw", () => {
-  it("VERIFIED when ELI relations were checked within 24 hours", () => {
-    const outcome = verify(fakeIndex());
+  it("VERIFIED offline when the provision exists in the consolidated ELI text", () => {
+    const outcome = verify(index(kw()));
     expect(outcome.decision).toBe("RECORD");
     if (outcome.decision !== "RECORD") return;
     expect(outcome.record).toMatchObject({
       status: "VERIFIED",
       sourceUrl: KW_URL,
       sourceTier: "R1",
+      verificationMethod: "file_read",
+      fetchedAt: "2026-09-20T08:00:00.000Z",
       temporalFreshnessStatus: "CURRENT",
-      freshnessCheckedAt: "2026-09-29T06:00:00.000Z",
-      currentEli: "DU/2025/734"
+      freshnessCheckedAt: "2026-09-20T08:00:00.000Z"
     });
-    expect(outcome.record.evidence).toContain("Art. 51. § 1.");
+    expect(outcome.record.evidence).toBe(KW_ART_51);
     new VerificationLedger().add(outcome.record);
   });
 
-  it("SUPPORTED with the copy date when the check is stale or missing, never VERIFIED", () => {
-    const stale = new Date(NOW - CORE_LAW_FRESH_CHECK_MS - 1).toISOString();
-    for (const relationsCheckedAt of [stale, null]) {
-      const outcome = verify(fakeIndex({ relationsCheckedAt }));
-      expect(outcome.decision).toBe("RECORD");
-      if (outcome.decision !== "RECORD") return;
-      expect(outcome.record.status).toBe("SUPPORTED");
-      expect(outcome.record.supportScope).toBe("LOCAL_ELI_COPY");
-      expect(outcome.record.localCopyFetchedAt).toBe("2026-09-20T08:00:00.000Z");
-      new VerificationLedger().add(outcome.record);
+  it("recognises the act by its inflected title, not only by an abbreviation", () => {
+    const idx = index(kw(), trzezwosc());
+    for (const name of [
+      "ustawy o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi",
+      "ustawa o wychowaniu w trzeźwości",
+      "Kodeksu wykroczeń"
+    ]) {
+      expect(resolveActByTitle(idx, name)).not.toBeNull();
     }
-    const outcome = verify(fakeIndex({ relationsCheckedAt: null }));
-    if (outcome.decision !== "RECORD") throw new Error("expected record");
-    expect(localCopyMarker(outcome.record)).toBe(
-      `[KOPIA-ELI: ${KW_URL}, kopia z 2026-09-20, nowelizacji nie sprawdzono]`
+    const outcome = verify(idx, {
+      claim: "art. 43 ust. 1 ustawy o wychowaniu w trzeźwości",
+      act: "ustawy o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi"
+    });
+    expect(outcome.decision === "RECORD" && outcome.record.status).toBe("VERIFIED");
+    expect(outcome.decision === "RECORD" && outcome.act.resolvedBy).toBe("TITLE");
+    expect(resolveActByTitle(idx, "ustawa o czymś zupełnie innym")).toBeNull();
+
+    const karne = index(
+      act({ eli: "DU/2025/383", title: "Kodeks karny", labels: [], url: KW_URL, articles: { "1": "Art. 1. § 1." } }),
+      act({ eli: "DU/2025/633", title: "Kodeks karny skarbowy", labels: [], url: KW_URL, articles: { "1": "Art. 1. § 1." } })
     );
+    expect(resolveActByTitle(karne, "kodeksu karnego")).toBe("DU/2025/383");
+    expect(resolveActByTitle(karne, "Kodeks karny skarbowy")).toBe("DU/2025/633");
   });
 
-  it("refuses amended, repealed, historical and unknown acts", () => {
-    expect(
-      verify(fakeIndex({ amendmentsAfter: [{ eli: "DU/2025/1814", title: null, promulgation: null }] }))
-    ).toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" });
-    expect(verify(fakeIndex({ status: "uchylony" }))).toEqual({
-      decision: "DENY",
-      reason: "TEMPORAL_ACT_NOT_IN_FORCE"
-    });
-    expect(verify(fakeIndex(), "art. 51 § 1 KW", { asOf: "2020-01-01" })).toEqual({
-      decision: "DENY",
-      reason: "CORE_LAW_CURRENT_STATE_ONLY"
-    });
-    expect(
-      verifyFromCoreLaw({
-        index: fakeIndex(),
-        claim: "art. 1 XYZ",
-        kind: "statute",
-        act: "XYZ",
-        toolCallId: "call_1",
-        now: NOW
-      })
-    ).toEqual({ decision: "DENY", reason: "UNKNOWN_LEGAL_ACT" });
+  it("checks the quoted wording against the provision", () => {
+    const idx = index(kw());
+    const matching = verify(idx, { quote: "zakłóca spokój, porządek publiczny, spoczynek nocny" });
+    expect(matching.decision === "RECORD" && matching.record.status).toBe("VERIFIED");
+    const wrong = verify(idx, { quote: "podlega karze pozbawienia wolności do lat 5" });
+    expect(wrong.decision === "RECORD" && wrong.record.status).toBe("UNVERIFIED");
+    const missing = verify(idx, { claim: "art. 999 KW" });
+    expect(missing.decision === "RECORD" && missing.record.status).toBe("UNVERIFIED");
   });
 
-  it("UNVERIFIED when the article is absent from the copy", () => {
-    const outcome = verify(fakeIndex(), "art. 999 KW");
-    expect(outcome.decision === "RECORD" && outcome.record.status).toBe("UNVERIFIED");
+  it("refuses when the copy cannot be correct: amendments after t.j., repealed act, past state, unknown act", () => {
+    expect(verify(index(kw({ amendmentsAfter: [{ eli: "DU/2025/1814", title: null, promulgation: null }] }))))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" });
+    expect(verify(index(kw({ status: "uchylony" }))))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" });
+    expect(verify(index(kw()), { asOf: "2020-01-01" }))
+      .toEqual({ decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" });
+    expect(verify(index(kw()), { act: "XYZ" }))
+      .toEqual({ decision: "DENY", reason: "UNKNOWN_LEGAL_ACT" });
   });
-});
 
-describe("local ELI copy in finalization", () => {
-  it("degrades only through the copy marker and blocks when the marker is missing", () => {
-    const outcome = verify(fakeIndex({ relationsCheckedAt: null }));
+  it("the verified record passes the HARD GATE with its ELI marker", () => {
+    const outcome = verify(index(kw()));
     if (outcome.decision !== "RECORD") throw new Error("expected record");
     const ledger = new VerificationLedger();
     ledger.add(outcome.record);
-    const marker = localCopyMarker(outcome.record)!;
-
-    const marked = new FinalizationGate().evaluate(`Zgodnie z art. 51 § 1 KW ${marker} wzywam.`, ledger);
-    expect(marked.result).toBe("DEGRADED");
-    expect(marked.findings.map((finding) => finding.status)).toEqual(["SUPPORTED_LOCAL_COPY"]);
-    expect(isLocalCopyOnlyDegradation(marked.findings.map((finding) => finding.status))).toBe(true);
-
-    const unmarked = new FinalizationGate().evaluate("Zgodnie z art. 51 § 1 KW wzywam.", ledger);
-    expect(unmarked.result).toBe("BLOCKED");
-
-    expect(isLocalCopyOnlyDegradation(["SUPPORTED_LOCAL_COPY", "UNVERIFIED_MARKED"])).toBe(false);
-    expect(isLocalCopyOnlyDegradation([])).toBe(false);
+    const report = new FinalizationGate().evaluate(
+      `Zgodnie z art. 51 § 1 KW ✅ [VER: ${KW_URL}, 2026-09-20] wzywam.`,
+      ledger
+    );
+    expect(report.result).toBe("PASS");
   });
 });
 
 describe("verify_legal_reference with the core law index", () => {
-  it("falls back to the local ELI copy for acts outside the deterministic registry", async () => {
+  it("verifies an act outside the deterministic registry offline", async () => {
     const ledger = new VerificationLedger();
     const runtime = new LegalVerificationToolRuntime(
       ledger,
@@ -187,20 +213,28 @@ describe("verify_legal_reference with the core law index", () => {
       null,
       undefined,
       undefined,
-      fakeIndex({ relationsCheckedAt: null })
+      index(kw(), trzezwosc())
     );
-    const [result] = await runtime.runTools([
-      { id: "call_kw", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } }
+    const [kwResult, titleResult, unknown] = await runtime.runTools([
+      { id: "c1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } },
+      {
+        id: "c2",
+        name: "verify_legal_reference",
+        input: {
+          claim: "art. 43 ust. 1 ustawy o wychowaniu w trzeźwości",
+          kind: "statute",
+          act: "ustawy o wychowaniu w trzeźwości i przeciwdziałaniu alkoholizmowi",
+          quote: "sprzedaje lub podaje napoje alkoholowe"
+        }
+      },
+      { id: "c3", name: "verify_legal_reference", input: { claim: "art. 1 XYZ", kind: "statute", act: "XYZ" } }
     ]);
-    const payload = JSON.parse(result!.content) as { status: string; marker: string };
-    expect(payload.status).toBe("SUPPORTED");
-    expect(payload.marker).toContain("[KOPIA-ELI: ");
-    expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("SUPPORTED");
+    const kwPayload = JSON.parse(kwResult!.content) as { status: string; marker: string };
+    expect(kwPayload.status).toBe("VERIFIED");
+    expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20]`);
+    expect(JSON.parse(titleResult!.content).status).toBe("VERIFIED");
+    expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
+    expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("VERIFIED");
     expect(runtime.auditEvents().some((event) => event.reason === "CORE_LAW_LOCAL_ELI_COPY")).toBe(true);
-
-    const [unknown] = await runtime.runTools([
-      { id: "call_x", name: "verify_legal_reference", input: { claim: "art. 1 XYZ", kind: "statute", act: "XYZ" } }
-    ]);
-    expect(JSON.parse(unknown!.content)).toEqual({ status: "DENIED", error: "UNKNOWN_LEGAL_ACT" });
   });
 });

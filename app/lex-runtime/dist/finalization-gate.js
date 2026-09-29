@@ -1,4 +1,3 @@
-import { localCopyMarker } from "./core-law-verification.js";
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN = /✅\s*\[VER:[^\]\r\n]+\]/giu;
 const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/iu;
@@ -111,20 +110,6 @@ export class FinalizationGate {
                         record
                     });
                 }
-                continue;
-            }
-            if (record.status === "SUPPORTED" &&
-                record.supportScope === "LOCAL_ELI_COPY") {
-                const expectedMarker = localCopyMarker(record);
-                findings.push({
-                    reference,
-                    status: expectedMarker &&
-                        reference.lineText.includes(expectedMarker) &&
-                        !unexpectedLineMarker
-                        ? "SUPPORTED_LOCAL_COPY"
-                        : "MISSING_VERIFICATION_MARKER",
-                    record
-                });
                 continue;
             }
             if (UNVERIFIED_MARKER.test(reference.lineText)) {
@@ -273,8 +258,7 @@ export class FinalizationGate {
             caseQuoteFindings.some((finding) => finding.status !== "VERIFIED") ||
             caseSupportFindings.some((finding) => finding.status !== "SUPPORTED");
         const degraded = !blocked &&
-            findings.some((finding) => finding.status === "UNVERIFIED_MARKED" ||
-                finding.status === "SUPPORTED_LOCAL_COPY");
+            findings.some((finding) => finding.status === "UNVERIFIED_MARKED");
         return {
             gate: "G8_HARD_GATE_FINALIZATION",
             result: blocked ? "BLOCKED" : degraded ? "DEGRADED" : "PASS",
@@ -284,15 +268,6 @@ export class FinalizationGate {
             caseSupportFindings
         };
     }
-}
-/**
- * DEGRADED wyłącznie przez przepisy z lokalnej kopii ELI (SUPPORTED z datą kopii):
- * dokument można wydać z jawnym znacznikiem kopii. Każdy inny powód DEGRADED
- * (np. [NIEWERYFIKOWANE]) nadal wymaga decyzji człowieka.
- */
-export function isLocalCopyOnlyDegradation(statuses) {
-    return (statuses.length > 0 &&
-        statuses.every((status) => status === "SUPPORTED_LOCAL_COPY"));
 }
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
 /**

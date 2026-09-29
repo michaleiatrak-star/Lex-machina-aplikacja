@@ -1,4 +1,3 @@
-import { isLocalCopyOnlyDegradation } from "./finalization-gate.js";
 import { SESSION_EXECUTION_INTERNAL } from "./session-executor.js";
 import { validateLegalDocumentAst } from "./legal-document-ast.js";
 function extractJson(value) {
@@ -120,11 +119,8 @@ export class LegalDocumentAstGenerator {
                 ? { documentAttachments: request.attachments }
                 : {})
         });
-        const finalizationAccepted = result.finalization === "PASS" ||
-            (result.finalization === "DEGRADED" &&
-                isLocalCopyOnlyDegradation(result.blockedReferences.map((reference) => reference.status)));
         if (result.status !== "DRAFT_PRESENTABLE" ||
-            !finalizationAccepted ||
+            result.finalization !== "PASS" ||
             result.audit.result !== "PASS" ||
             !result.answer) {
             throw blockedSessionDiagnostic(result);

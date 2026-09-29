@@ -1,18 +1,26 @@
 import type { CoreLawIndex } from "./core-law-index.js";
+import { searchStems } from "./core-law-search.js";
 import type {
   VerificationKind,
   VerificationRecord
 } from "./verification-ledger.js";
 
 /**
- * verify_legal_reference dla aktów spoza rejestru deterministycznego (KC, KPC, KPK, KK):
- * akt z map DR i jego tekst z lokalnej kopii ELI (CoreLawIndex).
+ * verify_legal_reference na lokalnej kopii ELI (CoreLawIndex, akty z map DR), bez sieci.
  *
- * - nowelizacje po tekście jednolitym, akt nieobowiązujący, stan historyczny -> odmowa;
- * - relacje ELI sprawdzone w ciągu 24 h -> VERIFIED (jak ścieżka sieciowa);
- * - brak takiego sprawdzenia (offline, stara kopia) -> SUPPORTED z datą kopii, nigdy VERIFIED.
+ * O wyniku decyduje prawidłowość powołania, nie skrót aktu:
+ * - akt rozpoznany po ELI, Dz.U., nazwie z mapy albo po treści tytułu (rdzenie słów,
+ *   odporne na odmianę: "ustawy o wychowaniu w trzeźwości" = tytuł aktu);
+ * - jednostka redakcyjna musi istnieć w tekście jednolitym, a podany cytat musi się w niej
+ *   znajdować; wtedy VERIFIED ze wskazaniem ELI i daty kopii, inaczej UNVERIFIED;
+ * - odmowa tylko wtedy, gdy kopia nie może być prawidłowa: znane nowelizacje po tekście
+ *   jednolitym, akt nieobowiązujący, stan historyczny albo brak tekstu.
  */
-export const CORE_LAW_FRESH_CHECK_MS = 24 * 60 * 60 * 1000;
+
+export type CoreLawVerificationIndex = Pick<
+  CoreLawIndex,
+  "resolve" | "summary" | "summaries" | "currentRecord"
+>;
 
 export type CoreLawVerificationOutcome =
   | {
@@ -26,9 +34,13 @@ export type CoreLawVerificationOutcome =
         eli: string;
         currentEli: string;
         title: string;
+        resolvedBy: "REFERENCE" | "TITLE";
         relationsCheckedAt: string | null;
       };
     };
+
+// Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
+const TITLE_MATCH_MIN = 0.75;
 
 function articleToken(claim: string): string | null {
   return /\bart\.?\s+(\d+[a-ząćęłńóśźż]*)/iu
@@ -43,33 +55,70 @@ function journalMatches(claim: string, elis: string[]): boolean {
   return elis.includes(`DU/${year}/${Number(position)}`);
 }
 
-export function localCopyMarker(record: VerificationRecord): string | null {
-  if (
-    record.status !== "SUPPORTED" ||
-    record.supportScope !== "LOCAL_ELI_COPY" ||
-    !record.sourceUrl ||
-    !record.localCopyFetchedAt
-  ) {
-    return null;
-  }
-  return [
-    "[KOPIA-ELI: ",
-    record.sourceUrl,
-    ", kopia z ",
-    record.localCopyFetchedAt.slice(0, 10),
-    ", ",
-    record.freshnessCheckedAt
-      ? "nowelizacje sprawdzone " + record.freshnessCheckedAt.slice(0, 10)
-      : "nowelizacji nie sprawdzono",
-    "]"
-  ].join("");
+function comparable(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("pl")
+    .replace(/[„”"«»]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function titleStems(value: string): Set<string> {
+  return new Set(
+    searchStems(
+      value.replace(/\b(?:z\s+dnia\s+)?\d{1,2}\s+\S+\s+\d{4}\s*r?\.?/giu, " ")
+    ).filter((stem) => !/^\d+$/.test(stem) && stem !== "dnia")
+  );
+}
+
+// Odmiana skraca albo zmienia końcówkę ("karny"/"karnego" -> "karny"/"karneg"): wspólny
+// przedrostek >= 4 liter, najwyżej jedna litera krócej niż krótszy rdzeń.
+function stemsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  let common = 0;
+  while (common < a.length && common < b.length && a[common] === b[common]) common += 1;
+  return common >= 4 && common >= Math.min(a.length, b.length) - 1;
+}
+
+/**
+ * Akt po treści nazwy (odporne na odmianę): pokrycie rdzeni nazwy z zapytania przez tytuł,
+ * remis rozstrzyga pokrycie tytułu ("kodeks karny" -> KK, nie KKS); bez jednoznaczności null.
+ */
+export function resolveActByTitle(
+  index: Pick<CoreLawIndex, "summaries">,
+  act: string
+): string | null {
+  const wanted = titleStems(act);
+  if (wanted.size === 0) return null;
+  const scored = index
+    .summaries()
+    .filter((summary) => summary.title && summary.articleCount > 0)
+    .map((summary) => {
+      const title = titleStems(summary.title!);
+      const shared = [...wanted].filter((stem) =>
+        [...title].some((candidate) => stemsMatch(stem, candidate))
+      ).length;
+      return {
+        eli: summary.eli,
+        query: shared / wanted.size,
+        title: title.size ? shared / title.size : 0
+      };
+    })
+    .filter((item) => item.query >= TITLE_MATCH_MIN)
+    .sort((a, b) => b.query - a.query || b.title - a.title);
+  const [best, second] = scored;
+  if (!best) return null;
+  if (second && second.query === best.query && second.title === best.title) return null;
+  return best.eli;
 }
 
 export function verifyFromCoreLaw(args: {
-  index: Pick<CoreLawIndex, "resolve" | "summary" | "currentRecord">;
+  index: CoreLawVerificationIndex;
   claim: string;
   kind: VerificationKind;
   act: string;
+  quote?: string;
   asOf?: string;
   toolCallId: string;
   now?: number;
@@ -77,11 +126,12 @@ export function verifyFromCoreLaw(args: {
   if (args.asOf) {
     return { decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" };
   }
-  const ref = args.index.resolve(args.act);
-  if (!ref) return { decision: "DENY", reason: "UNKNOWN_LEGAL_ACT" };
-  const summary = args.index.summary(ref.eli);
+  const byReference = args.index.resolve(args.act)?.eli ?? null;
+  const eli = byReference ?? resolveActByTitle(args.index, args.act);
+  if (!eli) return { decision: "DENY", reason: "UNKNOWN_LEGAL_ACT" };
+  const summary = args.index.summary(eli);
   if (!summary) return { decision: "DENY", reason: "CORE_LAW_ACT_NOT_IN_MAP" };
-  const record = args.index.currentRecord(ref.eli);
+  const record = args.index.currentRecord(eli);
   if (!record || record.articleOrder.length === 0) {
     return { decision: "DENY", reason: "CORE_LAW_TEXT_UNAVAILABLE" };
   }
@@ -96,25 +146,29 @@ export function verifyFromCoreLaw(args: {
   }
 
   let evidence: string | undefined;
+  let failure = "";
   if (args.kind === "statute") {
     const article = articleToken(args.claim);
     evidence = article ? record.articles[article] : undefined;
+    if (!evidence) {
+      failure = "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
+    } else if (
+      args.quote?.trim() &&
+      !comparable(evidence).includes(comparable(args.quote))
+    ) {
+      evidence = undefined;
+      failure = "Podany cytat nie występuje w tej jednostce redakcyjnej tekstu jednolitego ELI.";
+    }
   } else if (args.kind === "journal") {
     evidence = journalMatches(args.claim, [summary.eli, record.eli])
       ? record.title
       : undefined;
+    if (!evidence) failure = "Numer Dz.U. nie odpowiada rozpoznanemu aktowi.";
   } else {
     return { decision: "DENY", reason: "CORE_LAW_UNSUPPORTED_KIND" };
   }
 
   const now = args.now ?? Date.now();
-  const checkedAt = summary.relationsCheckedAt;
-  const freshlyChecked =
-    summary.consolidated &&
-    checkedAt !== null &&
-    !Number.isNaN(Date.parse(checkedAt)) &&
-    now - Date.parse(checkedAt) < CORE_LAW_FRESH_CHECK_MS;
-
   const base = {
     claim: args.claim,
     kind: args.kind,
@@ -127,32 +181,28 @@ export function verifyFromCoreLaw(args: {
     currentEli: record.eli
   };
 
-  const verificationRecord: VerificationRecord = !evidence
+  // Brzmienie na dzień pobrania kopii z ELI; ostatnie sprawdzenie relacji, jeśli było późniejsze.
+  const checkedAt =
+    summary.relationsCheckedAt &&
+    Date.parse(summary.relationsCheckedAt) > Date.parse(record.fetchedAt)
+      ? summary.relationsCheckedAt
+      : record.fetchedAt;
+
+  const verificationRecord: VerificationRecord = evidence
     ? {
+        ...base,
+        status: "VERIFIED",
+        fetchedAt: record.fetchedAt,
+        temporalFreshnessStatus: "CURRENT",
+        freshnessCheckedAt: checkedAt,
+        evidence: evidence.slice(0, 4_000)
+      }
+    : {
         ...base,
         status: "UNVERIFIED",
         fetchedAt: new Date(now).toISOString(),
-        evidence:
-          "Lokalna kopia ELI aktu nie zawiera wskazanej jednostki redakcyjnej."
-      }
-    : freshlyChecked
-      ? {
-          ...base,
-          status: "VERIFIED",
-          fetchedAt: record.fetchedAt,
-          temporalFreshnessStatus: "CURRENT",
-          freshnessCheckedAt: checkedAt!,
-          evidence: evidence.slice(0, 4_000)
-        }
-      : {
-          ...base,
-          status: "SUPPORTED",
-          fetchedAt: record.fetchedAt,
-          supportScope: "LOCAL_ELI_COPY",
-          localCopyFetchedAt: record.fetchedAt,
-          ...(checkedAt ? { freshnessCheckedAt: checkedAt } : {}),
-          evidence: evidence.slice(0, 4_000)
-        };
+        evidence: failure
+      };
 
   return {
     decision: "RECORD",
@@ -161,7 +211,8 @@ export function verifyFromCoreLaw(args: {
       eli: summary.eli,
       currentEli: record.eli,
       title: record.title,
-      relationsCheckedAt: checkedAt
+      resolvedBy: byReference ? "REFERENCE" : "TITLE",
+      relationsCheckedAt: summary.relationsCheckedAt
     }
   };
 }

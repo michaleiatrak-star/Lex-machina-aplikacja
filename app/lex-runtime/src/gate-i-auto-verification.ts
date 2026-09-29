@@ -1,4 +1,3 @@
-import { localCopyMarker } from "./core-law-verification.js";
 import {
   detectLegalReferences,
   type DetectedLegalReference
@@ -334,15 +333,6 @@ function marker(
       "UNVERIFIED"
   ) {
     return "⚠️ [NIEWERYFIKOWANE]";
-  }
-
-  if (
-    record.status ===
-      "SUPPORTED" &&
-    record.supportScope ===
-      "LOCAL_ELI_COPY"
-  ) {
-    return localCopyMarker(record);
   }
 
   if (
