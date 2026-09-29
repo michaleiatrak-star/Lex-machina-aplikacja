@@ -4,3 +4,4 @@ node_modules
 *.tsbuildinfo
 app/lex-web/dist/
 __pycache__/
+target/
