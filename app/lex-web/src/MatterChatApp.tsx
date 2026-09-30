@@ -6,6 +6,7 @@ import {
 import { CalendarPanel } from "./CalendarPanel.js";
 import { McpSearchPanel } from "./McpSearchPanel.js";
 import { downloadBlob } from "./download-file.js";
+import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -2786,42 +2787,20 @@ export default function MatterChatApp({
             .readyForDownload ===
             true;
 
-        let savedPath: string | null = null;
-        if (downloadedFinal) {
-          const blob =
-            await downloadGeneratedArtifact(
-              executionCaseId,
-              generated
-                .artifact
-                .artifactId
-            );
-          savedPath = await downloadBlob(
-            blob,
-            generated
-              .artifact
-              .filename
-          );
-        }
+        // The document is shown in the chat as a card (download, preview, open in
+        // Word, machine deanonymization) instead of being saved without asking.
+        const generatedDocument = {
+          artifactId: generated.artifact.artifactId,
+          filename: generated.artifact.filename,
+          format: generated.format,
+          tokenized: !downloadedFinal
+        };
 
         if (
           activeCaseIdRef.current ===
             executionCaseId
         ) {
-          setPendingFinalDocument(
-            downloadedFinal
-              ? null
-              : {
-                  caseId:
-                    executionCaseId,
-                  artifactId:
-                    generated
-                      .artifact
-                      .artifactId,
-                  format:
-                    generated
-                      .format
-                }
-          );
+          setPendingFinalDocument(null);
           setFinalDocumentPassword("");
           setMessages(
             (
@@ -2835,36 +2814,22 @@ export default function MatterChatApp({
                   "assistant",
                 content:
                   downloadedFinal
-                    ? savedPath
-                      ? "Gotowy dokument " +
-                        documentRequest.format.toUpperCase() +
-                        " został zapisany: " +
-                        savedPath
-                      : "Gotowy dokument został przygotowany w profesjonalnym układzie i pobrany jako " +
-                        documentRequest
-                          .format
-                          .toUpperCase() +
-                        "."
-                    : "Dokument został przygotowany jako bezpieczna wersja tokenizowana " +
-                      documentRequest
-                        .format
-                        .toUpperCase() +
-                      ". Aby utworzyć finalny plik, użyj poniżej jednorazowej reautoryzacji. Lex Machina odwróci wyłącznie aliasy z vaultów dokumentów użytych do tego pisma.",
+                    ? "Gotowy dokument " +
+                      documentRequest.format.toUpperCase() +
+                      " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
+                    : "Dokument " +
+                      documentRequest.format.toUpperCase() +
+                      " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
                 meta:
                   "dokument: " +
                   generated
                     .artifact
-                    .filename
+                    .filename,
+                generatedDocument
               }
             ]
           );
-          setGeneratedDocumentMessage(
-            downloadedFinal
-              ? savedPath
-                ? `Dokument zapisany: ${savedPath}`
-                : "Dokument gotowy i pobrany."
-              : "Wersja tokenizowana jest zapisana w aktach. Finalizacja czeka na jednorazową reautoryzację."
-          );
+          setGeneratedDocumentMessage("");
           setWorkspaceRefresh(
             (value) =>
               value + 1
@@ -4387,6 +4352,13 @@ export default function MatterChatApp({
                           restorations: corrected.marks
                         });
                       }}
+                    />
+                  ) : null}
+                  {message.generatedDocument && caseId ? (
+                    <ChatDocumentCard
+                      caseId={caseId}
+                      document={message.generatedDocument}
+                      canWrite={canWriteCase(selectedCase)}
                     />
                   ) : null}
                   {visibleMessageMeta(message.meta) ? (

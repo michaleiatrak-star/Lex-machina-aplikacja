@@ -60,6 +60,10 @@ export type ProviderStreamParams = {
   systemPrompt: string;
   messages: LlmMessage[];
   continuityKey?: string;
+  // Account sessions (ChatGPT/Claude/Grok CLI): "none" = a fresh host session that
+  // neither resumes nor records a thread. For self-contained calls (skill router,
+  // document generator) whose prompt already carries the whole context.
+  accountContinuity?: "none";
   tools?: NormalizedToolSchema[];
   maxIterations?: number;
   callbacks?: StreamCallbacks;

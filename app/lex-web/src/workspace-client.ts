@@ -36,6 +36,14 @@ export type WorkspaceDocumentCitation = {
   highlightEnd?: number;
 };
 
+// A document generated in a chat message: download, preview and deanonymization card.
+export type GeneratedDocumentRef = {
+  artifactId: string;
+  filename: string;
+  format: "docx" | "odt";
+  tokenized: boolean;
+};
+
 export type WorkspaceThreadMessage = {
   messageId: string;
   role: "user" | "assistant" | "system";
@@ -44,6 +52,7 @@ export type WorkspaceThreadMessage = {
   meta?: string;
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: RestorationMark[];
+  generatedDocument?: GeneratedDocumentRef;
 };
 
 /** A value put back into model output locally (never sent to the model). */

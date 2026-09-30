@@ -592,6 +592,10 @@ export class ModelAutoRouter {
                 ],
                 reasoning:
                   "none",
+                // Self-contained routing call: never resume or record an account
+                // thread; a shared thread made the main answer copy this JSON.
+                accountContinuity:
+                  "none",
                 // The decision is one short JSON object.
                 ...(localModel
                   ? { localMaxOutputTokens: 256 }

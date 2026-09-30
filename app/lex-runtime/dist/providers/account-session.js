@@ -1865,7 +1865,7 @@ export class AccountSessionManager {
                 ...tail
             ]), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, { settleOnStdout: claudeResultReady, firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS });
             let result = null;
-            const savedSessionId = await readAccountSessionId("anthropic", args.continuityKey);
+            const savedSessionId = args.fresh ? null : await readAccountSessionId("anthropic", args.continuityKey);
             if (savedSessionId) {
                 result = await run(["--resume", savedSessionId]);
                 const outcome = parseClaudeResult(result.stdout);
@@ -1894,7 +1894,7 @@ export class AccountSessionManager {
                 if (relative)
                     args.corpus.onRead?.(relative);
             }
-            if (parsed.sessionId) {
+            if (parsed.sessionId && !args.fresh) {
                 await writeAccountSessionId("anthropic", parsed.sessionId, args.continuityKey);
             }
             return parsed.text;
@@ -1908,10 +1908,14 @@ export class AccountSessionManager {
     // Claude only (stream-json input); other CLIs get the text.
     images = [], 
     // A model chosen for the account session; null lets the client decide.
-    clientModel = null) {
+    clientModel = null, 
+    // Fresh host session: no resume, no takeover of the latest CLI session, no
+    // recorded thread (self-contained router and document-generator calls).
+    fresh = false) {
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-session-"));
-        const allowExternalTakeover = !continuityKey ||
-            !await hasPinnedAccountSession(provider);
+        const allowExternalTakeover = !fresh &&
+            (!continuityKey ||
+                !await hasPinnedAccountSession(provider));
         try {
             if (provider === "openai" ||
                 provider === "anthropic") {
@@ -1929,7 +1933,9 @@ export class AccountSessionManager {
                 ].filter((value, index, all) => all.indexOf(value) === index);
                 let result = null;
                 let lastFailure = null;
-                let savedSessionId = await readAccountSessionId(provider, continuityKey);
+                let savedSessionId = fresh
+                    ? null
+                    : await readAccountSessionId(provider, continuityKey);
                 const runCodex = async (candidateModel, tail) => {
                     await fsp.rm(outputPath, {
                         force: true
@@ -2020,7 +2026,7 @@ export class AccountSessionManager {
                         new Error("ACCOUNT_SESSION_CLI_FAILED:openai:1"));
                 }
                 const threadId = parseCodexThreadId(result.stdout);
-                if (threadId) {
+                if (threadId && !fresh) {
                     await writeAccountSessionId(provider, threadId, continuityKey);
                 }
                 try {
@@ -2077,7 +2083,9 @@ export class AccountSessionManager {
                     return run;
                 };
                 let result = null;
-                const savedSessionId = await readAccountSessionId(provider, continuityKey);
+                const savedSessionId = fresh
+                    ? null
+                    : await readAccountSessionId(provider, continuityKey);
                 if (savedSessionId) {
                     result =
                         await runClaude([
@@ -2109,12 +2117,14 @@ export class AccountSessionManager {
                 if (!parsed) {
                     throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
                 }
-                if (parsed.sessionId) {
+                if (parsed.sessionId && !fresh) {
                     await writeAccountSessionId(provider, parsed.sessionId, continuityKey);
                 }
                 return parsed.text;
             }
-            const savedSessionId = await readAccountSessionId(provider, continuityKey);
+            const savedSessionId = fresh
+                ? null
+                : await readAccountSessionId(provider, continuityKey);
             const resumeSessionId = savedSessionId ??
                 (allowExternalTakeover
                     ? await discoverLatestGrokSessionId()
@@ -2126,7 +2136,7 @@ export class AccountSessionManager {
             if (!grok.text) {
                 throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:xai");
             }
-            if (grok.sessionId) {
+            if (grok.sessionId && !fresh) {
                 await writeAccountSessionId(provider, grok.sessionId, continuityKey);
             }
             return grok.text;
@@ -2153,7 +2163,8 @@ export async function streamAccountSession(manager, provider, params) {
             ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
             ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
             ...(params.continuityKey ? { continuityKey: params.continuityKey } : {}),
-            clientModel: accountSessionClientModel(provider, params.model)
+            clientModel: accountSessionClientModel(provider, params.model),
+            fresh: params.accountContinuity === "none"
         });
         if (!text.trim())
             throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
@@ -2162,7 +2173,7 @@ export async function streamAccountSession(manager, provider, params) {
     }
     const maxIterations = Math.max(1, Math.min(params.maxIterations ?? 10, 12));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-        const output = await manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model));
+        const output = await manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none");
         const calls = parseToolCalls(output);
         if (!calls) {
             params.callbacks?.onContentDelta?.(output);

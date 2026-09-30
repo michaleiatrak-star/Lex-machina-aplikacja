@@ -1953,6 +1953,14 @@ export function registerWorkspaceRoutes(
                   WorkspaceThreadMessage["restorations"]
                 >
             }
+          : {}),
+        ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
+          ? {
+              generatedDocument:
+                raw.generatedDocument as NonNullable<
+                  WorkspaceThreadMessage["generatedDocument"]
+                >
+            }
           : {})
       };
       const saved = await dependencies.caseAccessService.withCaseDataKey(

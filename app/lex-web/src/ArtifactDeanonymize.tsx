@@ -92,7 +92,7 @@ export function ArtifactDeanonymize(props: {
               );
               setTicket(null);
               if (savedPath) props.onDone(`Zapisano: ${savedPath}`);
-              else props.onCancel();
+              props.onCancel();
             })
           }
         >

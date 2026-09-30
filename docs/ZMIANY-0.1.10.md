@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–13)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–14)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -14,8 +14,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 11 | `a3612c8` | `.docx` bez fałszywego „brakującego załącznika”, przyczyna blokady w czacie, zmiana nazwy sprawy w panelu bocznym |
 | hotfix 12 | `1c4c02d` | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
 | hotfix 13 | `4c16230` | kontekst rozmowy wg okna modelu (Claude ~100k tokenów) |
+| hotfix 14 | budowany | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
 
 ---
+
+## hotfix 14
+
+- ChatGPT (konto/Codex): `runText` bez klucza ciągłości wznawiał wspólny wątek, a bez niego `resume --last --all` (ostatnia sesja Codex na komputerze). Router i generator dzieliły wątek; model kopiował JSON routera (`AST_HEADER_INVALID`, `blocks=brak`). Teraz `accountContinuity: "none"` (router, generator): bez wznawiania, przejęcia i zapisu wątku; dotyczy ChatGPT, Claude, Grok. Czat w sprawie bez zmian (`accountSessionKey`).
+- Karta dokumentu w czacie (`ChatDocumentCard`): Pobierz, Podgląd, Otwórz w Wordzie, Deanonimizuj (`ArtifactDeanonymize`). Wiadomość w wątku ma `generatedDocument` (walidacja w `case-workspace-store`). Bez automatycznego zapisu.
+- SN: parser sn.pl — pojedynczy rekord, lista jako obiekt PHP, kolekcja pod nieznanym kluczem; ślad G22 do głębokości 6.
 
 ## hotfix 13
 
@@ -89,7 +96,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 13
+## Znane ograniczenia po hotfix 14
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.

@@ -83,10 +83,12 @@ describe("LegalDocumentAstGenerator", () => {
   it("accepts provider JSON and validates only declared aliases", async () => {
     let query = "";
     let documentAstOutput: boolean | undefined;
+    let accountContinuity: string | undefined;
     const sessions: Pick<SessionExecutor, "execute"> = {
       execute: async (request) => {
         query = request.query;
         documentAstOutput = request.documentAstOutput;
+        accountContinuity = request.accountContinuity;
         return {
           sessionId: "session_test",
           status: "DRAFT_PRESENTABLE",
@@ -172,6 +174,9 @@ describe("LegalDocumentAstGenerator", () => {
     expect(query).not.toContain("Jan Kowalski");
     // Sesja generatora: wynik to JSON AST, nie sekcje tekstowe workflow pisma.
     expect(documentAstOutput).toBe(true);
+    // Konto ChatGPT/Claude: sesja generatora nie wznawia wspólnego wątku CLI.
+    expect(accountContinuity).toBe("none");
+    expect(query).toContain("Never output routing keys");
     expect(result.aliasesUsed).toEqual(["[LMPII:D01:PERSON:0001]"]);
   });
 

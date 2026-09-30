@@ -65,6 +65,16 @@ export type WorkspaceThreadMessage = {
   meta?: string;
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: WorkspaceRestoration[];
+  // A document generated in this message (chat card: download, preview, deanonymize).
+  generatedDocument?: WorkspaceGeneratedDocument;
+};
+
+export type WorkspaceGeneratedDocument = {
+  artifactId: string;
+  filename: string;
+  format: "docx" | "odt";
+  // true: the file carries alias symbols and needs machine deanonymization.
+  tokenized: boolean;
 };
 
 /** A value restored into an assistant message (see privacy/restoration-report). */
@@ -125,6 +135,7 @@ const FOLDER_ID = /^folder_[a-f0-9]{32}$/;
 const ITEM_ID = /^(?:upload|template)_[a-f0-9]{32}$/;
 const DOCUMENT_ID = /^[a-z][a-z0-9-]*_[a-f0-9]{16,64}$/;
 const MESSAGE_ID = /^[a-z][a-z0-9-]*_[a-f0-9]{16,64}$/;
+const ARTIFACT_ID = /^artifact_[a-f0-9]{32}$/;
 
 function defaultRootDir(): string {
   return path.resolve(
@@ -242,9 +253,36 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     };
   });
 
-  const { restorations: _dropped, ...rest } = input;
+  const generated = input.generatedDocument;
+  if (
+    generated !== undefined &&
+    (
+      typeof generated !== "object" ||
+      generated === null ||
+      !ARTIFACT_ID.test(String(generated.artifactId)) ||
+      typeof generated.filename !== "string" ||
+      !generated.filename.trim() ||
+      generated.filename.length > 200 ||
+      !["docx", "odt"].includes(generated.format) ||
+      typeof generated.tokenized !== "boolean"
+    )
+  ) {
+    throw new Error("WORKSPACE_GENERATED_DOCUMENT_INVALID");
+  }
+
+  const { restorations: _dropped, generatedDocument: _generated, ...rest } = input;
   return {
     ...rest,
+    ...(generated
+      ? {
+          generatedDocument: {
+            artifactId: generated.artifactId,
+            filename: generated.filename,
+            format: generated.format,
+            tokenized: generated.tokenized
+          }
+        }
+      : {}),
     ...(citations.length > 0 ? { documentCitations: citations } : {}),
     ...(restorations.length > 0 ? { restorations } : {})
   };

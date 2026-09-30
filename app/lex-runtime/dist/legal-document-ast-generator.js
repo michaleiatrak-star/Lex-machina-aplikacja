@@ -85,6 +85,8 @@ function generationInstruction(request) {
         "documentType must equal \"" + request.documentType + "\".",
         "locale must equal \"pl-PL\".",
         "styleProfile must equal \"" + request.styleProfile + "\".",
+        "The object MUST contain a non-empty \"blocks\" array with the full text of the document. Never output routing keys (legal, primarySkill, domainSkills, executionSkills, workflowExecutionSkill).",
+        "If the user refers to text from earlier in the conversation (e.g. \"wygeneruj to\"), put that text into the blocks.",
         "Allowed block types: heading(level 1-3), paragraph, quote, list, table, signature, page_break.",
         "Allowed inline types: text, pii_ref, xref.",
         "Generate the actual finished legal document, not a chat answer about the document.",
@@ -180,6 +182,9 @@ export class LegalDocumentAstGenerator {
             primarySkill: request.primarySkill,
             mode: request.mode,
             documentAstOutput: true,
+            // The instruction carries the whole conversation; a resumed account thread
+            // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
+            accountContinuity: "none",
             ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
             ...(request.attachments?.length
                 ? { documentAttachments: request.attachments }

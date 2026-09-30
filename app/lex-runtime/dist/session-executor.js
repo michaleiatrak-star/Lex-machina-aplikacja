@@ -736,6 +736,9 @@ export class SafeSessionExecutor {
                     continuityKey: request.accountSessionKey
                 }
                 : {}),
+            ...(request.accountContinuity
+                ? { accountContinuity: request.accountContinuity }
+                : {}),
             route: {
                 jurisdiction: "PL",
                 primarySkill: request.primarySkill,

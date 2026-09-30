@@ -275,6 +275,11 @@ describe(
         ).toContain(
           '{"legal":false}'
         );
+        // Account sessions: the router never resumes or records a shared CLI thread.
+        expect(
+          setup.adapter.calls[0]
+            ?.accountContinuity
+        ).toBe("none");
       }
     );
 

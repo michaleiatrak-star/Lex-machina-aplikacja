@@ -191,6 +191,8 @@ export type SessionExecutionRequest = {
   provider: ProviderId;
   model: string;
   accountSessionKey?: string;
+  // "none": fresh account host session, no resumed or recorded thread (document generator).
+  accountContinuity?: "none";
   modelRouting?: {
     primary: {
       provider: ProviderId;
@@ -1548,6 +1550,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             continuityKey:
               request.accountSessionKey
           }
+        : {}),
+      ...(request.accountContinuity
+        ? { accountContinuity: request.accountContinuity }
         : {}),
       route: {
         jurisdiction: "PL",

@@ -328,6 +328,8 @@ export class LexExecutionEngine {
     provider: ProviderId;
     model: string;
     continuityKey?: string;
+    // "none": fresh account host session (document generator).
+    accountContinuity?: "none";
     route: RouteDecision;
     guideContext?: Pick<
       GuideSessionState,
@@ -746,6 +748,7 @@ export class LexExecutionEngine {
                     args.continuityKey
                 }
               : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages: [
               {
                 role:
@@ -1437,6 +1440,7 @@ export class LexExecutionEngine {
             ...(args.continuityKey
               ? { continuityKey: args.continuityKey }
               : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages,
             ...(quickTools.length > 0 && trackedRunTools
               ? {
@@ -1743,6 +1747,7 @@ export class LexExecutionEngine {
                 args.continuityKey
             }
           : {}),
+        ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
         messages: [
           ...(args.documentContext
             ? [{
@@ -1982,6 +1987,7 @@ export class LexExecutionEngine {
         ...(args.continuityKey
           ? { continuityKey: args.continuityKey }
           : {}),
+        ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
         messages: [
           ...(args.documentContext
             ? [{
@@ -2016,6 +2022,7 @@ export class LexExecutionEngine {
         model: args.model,
         systemPrompt: promptParts.join("\n\n"),
         ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
+        ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
         messages: [
           { role: "user", content: effectiveQuery },
           { role: "assistant", content: response.fullText },

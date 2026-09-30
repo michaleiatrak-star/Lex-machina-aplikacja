@@ -290,6 +290,7 @@ export class LexExecutionEngine {
                         continuityKey: args.continuityKey
                     }
                     : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages: [
                     {
                         role: "user",
@@ -610,6 +611,7 @@ export class LexExecutionEngine {
                 ...(args.continuityKey
                     ? { continuityKey: args.continuityKey }
                     : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages,
                 ...(quickTools.length > 0 && trackedRunTools
                     ? {
@@ -845,6 +847,7 @@ export class LexExecutionEngine {
                     continuityKey: args.continuityKey
                 }
                 : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages: [
                 ...(args.documentContext
                     ? [{
@@ -1027,6 +1030,7 @@ export class LexExecutionEngine {
             ...(args.continuityKey
                 ? { continuityKey: args.continuityKey }
                 : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages: [
                 ...(args.documentContext
                     ? [{
@@ -1059,6 +1063,7 @@ export class LexExecutionEngine {
                 model: args.model,
                 systemPrompt: promptParts.join("\n\n"),
                 ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages: [
                     { role: "user", content: effectiveQuery },
                     { role: "assistant", content: response.fullText },

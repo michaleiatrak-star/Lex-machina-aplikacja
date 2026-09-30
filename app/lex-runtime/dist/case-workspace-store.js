@@ -12,6 +12,7 @@ const FOLDER_ID = /^folder_[a-f0-9]{32}$/;
 const ITEM_ID = /^(?:upload|template)_[a-f0-9]{32}$/;
 const DOCUMENT_ID = /^[a-z][a-z0-9-]*_[a-f0-9]{16,64}$/;
 const MESSAGE_ID = /^[a-z][a-z0-9-]*_[a-f0-9]{16,64}$/;
+const ARTIFACT_ID = /^artifact_[a-f0-9]{32}$/;
 function defaultRootDir() {
     return path.resolve(process.env.LEX_DATA_DIR ??
         path.join(os.homedir(), ".lex-machina", "data"));
@@ -113,9 +114,31 @@ function safeMessage(input) {
             ...(item.agreement ? { agreement: item.agreement } : {})
         };
     });
-    const { restorations: _dropped, ...rest } = input;
+    const generated = input.generatedDocument;
+    if (generated !== undefined &&
+        (typeof generated !== "object" ||
+            generated === null ||
+            !ARTIFACT_ID.test(String(generated.artifactId)) ||
+            typeof generated.filename !== "string" ||
+            !generated.filename.trim() ||
+            generated.filename.length > 200 ||
+            !["docx", "odt"].includes(generated.format) ||
+            typeof generated.tokenized !== "boolean")) {
+        throw new Error("WORKSPACE_GENERATED_DOCUMENT_INVALID");
+    }
+    const { restorations: _dropped, generatedDocument: _generated, ...rest } = input;
     return {
         ...rest,
+        ...(generated
+            ? {
+                generatedDocument: {
+                    artifactId: generated.artifactId,
+                    filename: generated.filename,
+                    format: generated.format,
+                    tokenized: generated.tokenized
+                }
+            }
+            : {}),
         ...(citations.length > 0 ? { documentCitations: citations } : {}),
         ...(restorations.length > 0 ? { restorations } : {})
     };
