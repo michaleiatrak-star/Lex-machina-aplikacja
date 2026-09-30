@@ -466,7 +466,8 @@ export type LexHttpAppOptions = {
     | "login"
     | "setAnthropicOAuthToken"
     | "clearAnthropicOAuthToken"
-  >;
+  > &
+    Partial<Pick<AccountSessionManager, "startProvision" | "provisionProgress">>;
   updateDiscovery?: UpdateDiscovery;
   sessionExecutor?: SessionExecutor;
   guideSessionStore?: Pick<
@@ -5504,6 +5505,36 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
     }
   );
+
+  // Downloads the pinned account client (first Gemini CLI / Grok Build
+  // install takes minutes) as a background job; the UI polls its stage.
+  const provisionRoute = (
+    action: "start" | "progress"
+  ) =>
+    (req: express.Request, res: express.Response) => {
+      const context = responseAuthContext(res);
+      if (context.user.appRole !== "ADMIN") {
+        res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+        return;
+      }
+      const sessions = options.accountSessions;
+      if (!sessions?.startProvision || !sessions.provisionProgress) {
+        res.status(503).json({ error: "PROVIDER_ACCOUNT_SESSION_UNAVAILABLE" });
+        return;
+      }
+      const provider = String(req.params.provider ?? "").trim();
+      if (!isProviderId(provider)) {
+        res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+        return;
+      }
+      res.json(
+        action === "start"
+          ? sessions.startProvision(provider)
+          : sessions.provisionProgress(provider)
+      );
+    };
+  app.post("/api/provider-accounts/:provider/provision", provisionRoute("start"));
+  app.get("/api/provider-accounts/:provider/provision", provisionRoute("progress"));
 
   app.get("/api/providers", async (_req, res) => {
     if (!options.credentialResolver) {

@@ -996,6 +996,7 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
         });
         child.stderr.on("data", (chunk) => {
             stderr = appendCapture(stderr, chunk);
+            settleOptions.onStderr?.(String(chunk));
         });
         child.stdin.on("error", () => {
             // The client may exit before consuming stdin; the exit handler reports it.
@@ -1065,7 +1066,51 @@ async function ensureAccountExecutable(provider) {
         throw error;
     }
 }
-async function provisionPinnedAccountClient(provider) {
+const provisionListeners = new Map();
+const provisionsInFlight = new Map();
+// One npm install per provider at a time: login and an explicit provision
+// request must not install into the same directory concurrently.
+function provisionPinnedAccountClient(provider) {
+    const running = provisionsInFlight.get(provider);
+    if (running)
+        return running;
+    const started = provisionPinnedAccountClientOnce(provider).finally(() => provisionsInFlight.delete(provider));
+    provisionsInFlight.set(provider, started);
+    return started;
+}
+async function directorySize(root) {
+    let total = 0;
+    const pending = [root];
+    while (pending.length) {
+        const dir = pending.pop();
+        let entries;
+        try {
+            entries = await fsp.readdir(dir, { withFileTypes: true });
+        }
+        catch {
+            continue;
+        }
+        for (const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory())
+                pending.push(full);
+            else if (entry.isFile()) {
+                try {
+                    total += (await fsp.stat(full)).size;
+                }
+                catch {
+                    // File replaced while npm unpacks; the next tick counts it.
+                }
+            }
+        }
+    }
+    return total;
+}
+// npm --loglevel=http prints one "http fetch GET 200 <url>" line per package.
+export function countNpmFetches(chunk) {
+    return chunk.match(/http fetch GET 20\d /g)?.length ?? 0;
+}
+async function provisionPinnedAccountClientOnce(provider) {
     const spec = OPTIONAL_ACCOUNT_CLIENTS[provider];
     if (!spec) {
         return null;
@@ -1096,18 +1141,52 @@ async function provisionPinnedAccountClient(provider) {
         recursive: true
     });
     const packageSpec = `${spec.packageName}@${spec.version}`;
-    const result = await runDirect(npmExecutable, [
-        "install",
-        "--prefix",
-        installRoot,
-        "--no-audit",
-        "--no-fund",
-        "--save-exact",
-        packageSpec
-    ], undefined, {
-        ...process.env,
-        npm_config_update_notifier: "false"
-    }, OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS);
+    const report = provisionListeners.get(provider);
+    let packagesFetched = 0;
+    report?.({ stage: "DOWNLOADING", packagesFetched, bytesOnDisk: 0 });
+    let measuring = false;
+    const sizeTimer = report
+        ? setInterval(() => {
+            if (measuring)
+                return;
+            measuring = true;
+            void directorySize(installRoot)
+                .then((bytesOnDisk) => report({ bytesOnDisk }))
+                .finally(() => {
+                measuring = false;
+            });
+        }, 2_000)
+        : null;
+    let result;
+    try {
+        result =
+            await runDirect(npmExecutable, [
+                "install",
+                "--prefix",
+                installRoot,
+                "--no-audit",
+                "--no-fund",
+                "--save-exact",
+                "--loglevel=http",
+                packageSpec
+            ], undefined, {
+                ...process.env,
+                npm_config_update_notifier: "false"
+            }, OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS, undefined, undefined, {
+                onStderr: (chunk) => {
+                    const fetched = countNpmFetches(chunk);
+                    if (fetched && report) {
+                        packagesFetched += fetched;
+                        report({ packagesFetched });
+                    }
+                }
+            });
+    }
+    finally {
+        if (sizeTimer)
+            clearInterval(sizeTimer);
+    }
+    report?.({ stage: "VERIFYING" });
     if (result.code !== 0) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${result.stderr.trim().slice(-1200)}`);
     }
@@ -1909,6 +1988,61 @@ export class AccountSessionManager {
     async statusAll() {
         return Promise.all(["openai", "anthropic", "xai", "google"]
             .map((provider) => this.status(provider)));
+    }
+    provisionJobs = new Map();
+    // Downloads the pinned client before login as a background job the UI
+    // polls: a first Gemini CLI / Grok Build install takes minutes, and the user
+    // must see its stage instead of a silent "Logowanie…" until the window opens.
+    startProvision(provider) {
+        const current = this.provisionJobs.get(provider);
+        if (current &&
+            current.progress.stage !== "READY" &&
+            current.progress.stage !== "FAILED") {
+            return this.provisionProgress(provider);
+        }
+        const startedMs = Date.now();
+        const progress = {
+            provider,
+            stage: "CHECKING",
+            startedAt: new Date(startedMs).toISOString(),
+            elapsedMs: 0,
+            packagesFetched: 0,
+            bytesOnDisk: 0
+        };
+        const job = { startedMs, progress };
+        this.provisionJobs.set(provider, job);
+        provisionListeners.set(provider, (tick) => {
+            Object.assign(job.progress, tick);
+        });
+        void (async () => {
+            try {
+                const executable = await ensureAccountExecutable(provider);
+                if (!executable) {
+                    throw new Error(`ACCOUNT_SESSION_CLI_NOT_INSTALLED:${provider}`);
+                }
+                job.progress.stage = "VERIFYING";
+                job.progress.status = await this.status(provider);
+                job.progress.stage = "READY";
+            }
+            catch (error) {
+                job.progress.stage = "FAILED";
+                job.progress.error = sanitizeAccountCliFailureDetail(error instanceof Error ? error.message : String(error));
+            }
+            finally {
+                provisionListeners.delete(provider);
+            }
+        })();
+        return this.provisionProgress(provider);
+    }
+    provisionProgress(provider) {
+        const job = this.provisionJobs.get(provider);
+        if (!job) {
+            return { provider, stage: "IDLE", elapsedMs: 0, packagesFetched: 0, bytesOnDisk: 0 };
+        }
+        return {
+            ...job.progress,
+            elapsedMs: Date.now() - job.startedMs
+        };
     }
     async login(provider) {
         const current = await this.status(provider);

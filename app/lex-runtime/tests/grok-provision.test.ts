@@ -2,12 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AccountSessionManager } from "../src/providers/account-session.js";
+import { AccountSessionManager, countNpmFetches } from "../src/providers/account-session.js";
 
 const roots: string[] = [];
 const previous = {
   clients: process.env.LEX_OPTIONAL_ACCOUNT_CLIENTS_ROOT,
-  path: process.env.PATH
+  path: process.env.PATH,
+  npm: process.env.LEX_NPM_CLI
 };
 
 function tempDir(): string {
@@ -19,7 +20,8 @@ function tempDir(): string {
 afterEach(() => {
   for (const [key, value] of [
     ["LEX_OPTIONAL_ACCOUNT_CLIENTS_ROOT", previous.clients],
-    ["PATH", previous.path]
+    ["PATH", previous.path],
+    ["LEX_NPM_CLI", previous.npm]
   ] as const) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -55,6 +57,58 @@ describe("Grok Build: klient pobierany na żądanie", () => {
       const status = await new AccountSessionManager().status("xai").catch(() => null);
       expect(status?.installed ?? true).toBe(true);
       expect(fs.readFileSync(marker, "utf8")).toContain("agent");
+    }
+  );
+
+  it("liczy pobrane pakiety z logu npm --loglevel=http", () => {
+    expect(
+      countNpmFetches(
+        "npm http fetch GET 200 https://registry.npmjs.org/a 12ms (cache miss)\nnpm http fetch GET 304 https://registry.npmjs.org/b 3ms\nnpm http fetch GET 200 https://registry.npmjs.org/c.tgz 40ms\n"
+      )
+    ).toBe(2);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "pobieranie klienta w tle: etap, liczba pakietów i gotowość przed logowaniem",
+    async () => {
+      const root = tempDir();
+      process.env.LEX_OPTIONAL_ACCOUNT_CLIENTS_ROOT = root;
+      process.env.PATH = ["/usr/bin", "/bin", path.dirname(process.execPath)].join(path.delimiter);
+      const npm = path.join(tempDir(), "npm");
+      fs.writeFileSync(
+        npm,
+        [
+          "#!/bin/sh",
+          'prefix="$3"',
+          'mkdir -p "$prefix/node_modules/@xai-official/grok" "$prefix/node_modules/.bin"',
+          "echo 'npm http fetch GET 200 https://registry.npmjs.org/@xai-official%2fgrok 10ms' >&2",
+          "echo 'npm http fetch GET 200 https://registry.npmjs.org/@xai-official/grok/-/grok-1.0.44.tgz 20ms' >&2",
+          `echo '{"version":"1.0.44"}' > "$prefix/node_modules/@xai-official/grok/package.json"`,
+          `printf '#!/bin/sh\\nexit 1\\n' > "$prefix/node_modules/.bin/grok"`,
+          'chmod +x "$prefix/node_modules/.bin/grok"',
+          "exit 0"
+        ].join("\n")
+      );
+      fs.chmodSync(npm, 0o755);
+      process.env.LEX_NPM_CLI = npm;
+
+      const sessions = new AccountSessionManager();
+      expect(sessions.provisionProgress("xai").stage).toBe("IDLE");
+      const started = sessions.startProvision("xai");
+      expect(started.stage).toBe("CHECKING");
+      // A second click while running returns the same job.
+      expect(sessions.startProvision("xai").startedAt).toBe(started.startedAt);
+
+      let progress = sessions.provisionProgress("xai");
+      for (let i = 0; i < 100 && !["READY", "FAILED"].includes(progress.stage); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        progress = sessions.provisionProgress("xai");
+      }
+      expect(progress.error).toBeUndefined();
+      expect(progress.stage).toBe("READY");
+      expect(progress.packagesFetched).toBe(2);
+      expect(progress.status?.installed).toBe(true);
+      expect(fs.existsSync(path.join(root, "xai", "node_modules", ".bin", "grok"))).toBe(true);
     }
   );
 });

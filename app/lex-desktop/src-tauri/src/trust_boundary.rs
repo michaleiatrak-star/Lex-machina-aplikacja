@@ -25,7 +25,8 @@ const MAX_REQUEST_BYTES: usize = 160 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 192 * 1024 * 1024;
 const DEFAULT_PROXY_READ_TIMEOUT_SECS: u64 = 120;
 const LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS: u64 = 300;
-const PROVIDER_ACCOUNT_LOGIN_PROXY_READ_TIMEOUT_SECS: u64 = 300;
+// Login waits up to 5 min for the user in the official client window.
+const PROVIDER_ACCOUNT_LOGIN_PROXY_READ_TIMEOUT_SECS: u64 = 420;
 const AI_SESSION_PROXY_READ_TIMEOUT_SECS: u64 = 1_200;
 const LOCAL_MODEL_MAINTENANCE_PROXY_READ_TIMEOUT_SECS: u64 = 7_200;
 // OCR, text extraction and local-model PII detection run inside these calls;
@@ -1437,6 +1438,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
         {
             method == "POST"
         }
+        _ if path.starts_with("/api/provider-accounts/")
+            && path.ends_with("/provision") =>
+        {
+            matches!(method, "GET" | "POST")
+        }
         _ if path.starts_with("/api/admin/support") => {
             matches!(method, "GET" | "POST")
         }
@@ -1948,6 +1954,18 @@ mod tests {
         assert!(!route_allowed(
             "DELETE",
             "/api/provider-accounts/openai/login"
+        ));
+        assert!(route_allowed(
+            "POST",
+            "/api/provider-accounts/google/provision"
+        ));
+        assert!(route_allowed(
+            "GET",
+            "/api/provider-accounts/xai/provision"
+        ));
+        assert!(!route_allowed(
+            "DELETE",
+            "/api/provider-accounts/xai/provision"
         ));
         assert!(route_allowed("GET", "/api/local-models/update/status"));
         assert!(route_allowed("POST", "/api/local-models/update/apply"));

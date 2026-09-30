@@ -2297,6 +2297,36 @@ export function getProviderAccountStatus():
   );
 }
 
+export type AccountClientProvisionProgress = {
+  provider: ProviderId;
+  stage: "IDLE" | "CHECKING" | "DOWNLOADING" | "VERIFYING" | "READY" | "FAILED";
+  startedAt?: string;
+  elapsedMs: number;
+  packagesFetched: number;
+  bytesOnDisk: number;
+  error?: string;
+  status?: ProviderAccountSessionStatus;
+};
+
+// Starts downloading the pinned account client (Codex, Claude Code, Gemini
+// CLI, Grok Build) in the background; a first install can take minutes.
+export function startProviderAccountProvision(
+  provider: ProviderId
+): Promise<AccountClientProvisionProgress> {
+  return json<AccountClientProvisionProgress>(
+    `/api/provider-accounts/${provider}/provision`,
+    { method: "POST" }
+  );
+}
+
+export function getProviderAccountProvision(
+  provider: ProviderId
+): Promise<AccountClientProvisionProgress> {
+  return json<AccountClientProvisionProgress>(
+    `/api/provider-accounts/${provider}/provision`
+  );
+}
+
 export function loginProviderAccount(
   provider: ProviderId
 ): Promise<ProviderAccountSessionStatus> {

@@ -1,4 +1,8 @@
 import {
+  AccountConnectProgress,
+  type AccountConnectPhase
+} from "./AccountConnectProgress.js";
+import {
   canWriteCase,
   caseScheduleKindLabel,
   caseScheduleStartLabel
@@ -64,6 +68,8 @@ import {
   listCaseSchedule,
   listCases,
   loginProviderAccount,
+  startProviderAccountProvision,
+  getProviderAccountProvision,
   provisionLocalModel,
   repairLocalModel,
   reauthorizeDeanonymization,
@@ -258,6 +264,20 @@ const PROVIDERS: Array<{
     accountClientLabel: "Gemini CLI"
   }
 ];
+
+// Runtime error codes from provisioning the pinned account client.
+export function provisionFailureText(error: string): string {
+  if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISIONER_NOT_AVAILABLE")) {
+    return "Nie można pobrać klienta: brak npm w pakiecie aplikacji. Przełącz źródło na API albo zgłoś błąd.";
+  }
+  if (error.startsWith("ACCOUNT_SESSION_COMMAND_TIMEOUT")) {
+    return "Pobieranie klienta przekroczyło 10 minut (wolne łącze lub serwer npm). Spróbuj ponownie.";
+  }
+  if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISION_FAILED")) {
+    return "Pobieranie klienta nie powiodło się (sieć lub serwer npm). Spróbuj ponownie za chwilę.";
+  }
+  return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
+}
 
 const PRIMARY_MODEL_SOURCES: Array<{
   id: PrimaryModelSource;
@@ -976,6 +996,8 @@ export default function MatterChatApp({
     useState(false);
   const [localStartMessage, setLocalStartMessage] =
     useState("");
+  const [accountConnectPhase, setAccountConnectPhase] =
+    useState<AccountConnectPhase | null>(null);
   const [providerAccountMessage, setProviderAccountMessage] =
     useState("");
   const [claudeOAuthToken, setClaudeOAuthTokenInput] =
@@ -2225,12 +2247,54 @@ export default function MatterChatApp({
       return false;
     }
     setProviderAccountBusy(true);
-    setProviderAccountMessage(
-      isDesktopShell()
-        ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
-        : "Otwieram oficjalne logowanie dostawcy…"
-    );
+    setAccountConnectPhase(null);
     try {
+      if (accountSession?.installed === false) {
+        setProviderAccountMessage("");
+        let progress =
+          await startProviderAccountProvision(
+            runtimeProvider
+          );
+        setAccountConnectPhase({ kind: "provision", progress });
+        while (
+          progress.stage !== "READY" &&
+          progress.stage !== "FAILED"
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          progress =
+            await getProviderAccountProvision(
+              runtimeProvider
+            );
+          setAccountConnectPhase({ kind: "provision", progress });
+        }
+        if (progress.stage === "FAILED") {
+          setAccountConnectPhase({
+            kind: "failed",
+            message: provisionFailureText(progress.error ?? "")
+          });
+          return false;
+        }
+        if (progress.status) {
+          const provisioned = progress.status;
+          setProviderAccounts(
+            (current) => ({
+              ...current,
+              [runtimeProvider]:
+                provisioned
+            })
+          );
+          if (provisioned.authenticated) {
+            setAccountConnectPhase({ kind: "done" });
+            return true;
+          }
+        }
+      }
+      setAccountConnectPhase({ kind: "login" });
+      setProviderAccountMessage(
+        isDesktopShell()
+          ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
+          : "Otwieram oficjalne logowanie dostawcy…"
+      );
       const status =
         await loginProviderAccount(
           runtimeProvider
@@ -2241,6 +2305,11 @@ export default function MatterChatApp({
           [runtimeProvider]:
             status
         })
+      );
+      setAccountConnectPhase(
+        status.authenticated
+          ? { kind: "done" }
+          : null
       );
       setProviderAccountMessage(
         status.authenticated
@@ -2261,9 +2330,10 @@ export default function MatterChatApp({
           ? "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API."
           : code ===
               "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
-            ? "Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj klienta z oficjalnej instrukcji albo przełącz źródło na API."
+            ? "Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API."
             : code
       );
+      setAccountConnectPhase(null);
       await refreshProviderAccountStatus()
         .catch(() => {});
       return false;
@@ -3877,7 +3947,9 @@ export default function MatterChatApp({
                   }
                 >
                   {providerAccountBusy
-                    ? "Logowanie…"
+                    ? accountConnectPhase?.kind === "provision"
+                      ? "Pobieranie klienta…"
+                      : "Logowanie…"
                     : "Połącz konto"}
                 </button>
               ) : null}
@@ -3896,6 +3968,12 @@ export default function MatterChatApp({
                 Zarządzaj modelami
               </button>
             </div>
+            {isAccountPrimarySource(provider) ? (
+              <AccountConnectProgress
+                phase={accountConnectPhase}
+                clientLabel={providerDefinition?.accountClientLabel ?? "klient"}
+              />
+            ) : null}
             {localStartMessage ? (
               <small
                 className={
@@ -6283,7 +6361,9 @@ export default function MatterChatApp({
                         }
                       >
                         {providerAccountBusy
-                          ? "Logowanie…"
+                          ? accountConnectPhase?.kind === "provision"
+                      ? "Pobieranie klienta…"
+                      : "Logowanie…"
                           : accountSession?.authenticated
                             ? "Połączone"
                             : "Połącz konto"}
@@ -6318,6 +6398,10 @@ export default function MatterChatApp({
                       kliencie dostawcy, a następnie kliknij „Sprawdź ponownie”.
                     </small>
                   ) : null}
+                  <AccountConnectProgress
+                    phase={accountConnectPhase}
+                    clientLabel={providerDefinition?.accountClientLabel ?? "klient"}
+                  />
                   {providerAccountMessage ? (
                     <small>{providerAccountMessage}</small>
                   ) : null}
