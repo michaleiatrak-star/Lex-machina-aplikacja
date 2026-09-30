@@ -437,7 +437,7 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-function directDocumentRequest(
+export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
   const normalized =
@@ -448,12 +448,13 @@ function directDocumentRequest(
   const explicitFormat =
     /\bodt\b/u.test(normalized)
       ? "odt" as const
-      : /\bdocx\b|\bword\b/u.test(normalized)
+      // "plik doc", "w Wordzie", "worda": the same .docx request.
+      : /\bdocx?\b|\bword(?:a|zie|owy|owym)?\b/u.test(normalized)
         ? "docx" as const
         : null;
 
   const documentNoun =
-    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór)\b/u
+    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór|plik)\b/u
       .test(normalized);
   const generationVerb =
     /\b(?:wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj)\b/u

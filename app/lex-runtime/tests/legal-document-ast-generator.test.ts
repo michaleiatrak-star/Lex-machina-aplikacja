@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DocumentAstSessionBlockedError,
   LegalDocumentAstGenerator,
+  normalizeAstBlocks,
   normalizeAstHeader
 } from "../src/legal-document-ast-generator.js";
 import { validateLegalDocumentAst } from "../src/legal-document-ast.js";
@@ -65,6 +66,40 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     expect(diagnostic.reason).toContain("schemaVersion=2");
     expect(diagnostic.reason).toContain("locale=\"pl-PL\"");
     expect(`${diagnostic.reason} ${diagnostic.description}`).not.toContain("TAJNE");
+  });
+
+  it("ujednolica kształt bloków (AST_INLINE_ARRAY_INVALID) bez zmiany treści", () => {
+    const variants = [
+      [{ type: "paragraph", content: "ok" }],
+      [{ type: "paragraph", text: "ok" }],
+      [{ type: "paragraph", content: { type: "text", text: "ok" } }],
+      [{ type: "paragraph", content: ["ok"] }],
+      [{ type: "paragraph", content: [{ text: "ok" }] }],
+      ["ok"],
+      [{ type: "text", text: "ok" }]
+    ];
+    for (const variantBlocks of variants) {
+      const ast = validateLegalDocumentAst(
+        normalizeAstBlocks(normalizeAstHeader({ blocks: variantBlocks }, request)),
+        []
+      ).ast;
+      expect(ast.blocks).toEqual([{ type: "paragraph", content: [{ type: "text", text: "ok" }] }]);
+    }
+    const mixed = validateLegalDocumentAst(
+      normalizeAstBlocks(normalizeAstHeader({
+        title: "Wezwanie",
+        blocks: [
+          { type: "h2", content: "Tytuł" },
+          { type: "list", items: ["a", { text: "b" }] },
+          { type: "table", rows: [["x", { text: "y" }]] }
+        ]
+      }, request)),
+      []
+    ).ast;
+    expect(mixed.title).toEqual([{ type: "text", text: "Wezwanie" }]);
+    expect(mixed.blocks[0]).toMatchObject({ type: "heading", level: 2 });
+    expect(mixed.blocks[1]).toMatchObject({ type: "list", ordered: false });
+    expect(mixed.blocks[2]).toMatchObject({ type: "table" });
   });
 
   it("nie zmienia poprawnego, innego typu dokumentu ani bloków", () => {

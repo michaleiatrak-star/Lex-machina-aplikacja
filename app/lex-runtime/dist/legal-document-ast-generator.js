@@ -22,8 +22,8 @@ function isRecord(value) {
 // The header carries only values the runtime dictates (schema, locale, type and profile
 // of the requested document). Models differ in how they echo it (schemaVersion 1 as a
 // number, "pl" for the locale, a missing field, the AST wrapped in {"document": ...}), so
-// the runtime fills and normalizes it. The blocks are never touched and are validated as
-// before; a valid but different documentType/styleProfile still fails the contract check.
+// the runtime fills and normalizes it (block shapes: normalizeAstBlocks); a valid but
+// different documentType/styleProfile still fails the contract check.
 export function normalizeAstHeader(value, request) {
     if (!isRecord(value))
         return value;
@@ -56,6 +56,112 @@ export function normalizeAstHeader(value, request) {
             ? record.styleProfile
             : request.styleProfile
     };
+}
+// Inline content in the shape the validator expects: a list of inline nodes. Models
+// write a paragraph as "content": "ok", "text": "ok", one node object or a list of
+// strings; only the shape is changed, never the wording.
+function normalizeInlines(value) {
+    if (typeof value === "string")
+        return [{ type: "text", text: value }];
+    if (isRecord(value))
+        return [normalizeInline(value)];
+    if (Array.isArray(value)) {
+        return value.map((item) => typeof item === "string"
+            ? { type: "text", text: item }
+            : isRecord(item)
+                ? normalizeInline(item)
+                : item);
+    }
+    return value;
+}
+function normalizeInline(node) {
+    if (node.type === undefined && typeof node.text === "string") {
+        return { ...node, type: "text" };
+    }
+    return node;
+}
+const INLINE_BLOCKS = new Set(["paragraph", "heading", "quote", "signature"]);
+const BLOCK_ALIASES = {
+    text: { type: "paragraph" },
+    para: { type: "paragraph" },
+    p: { type: "paragraph" },
+    title: { type: "heading", level: 1 },
+    h1: { type: "heading", level: 1 },
+    h2: { type: "heading", level: 2 },
+    h3: { type: "heading", level: 3 }
+};
+function normalizeBlock(value, depth = 0) {
+    if (typeof value === "string") {
+        return { type: "paragraph", content: [{ type: "text", text: value }] };
+    }
+    if (!isRecord(value) || depth > 4)
+        return value;
+    const alias = typeof value.type === "string" ? BLOCK_ALIASES[value.type] : undefined;
+    const block = alias
+        ? { ...value, type: alias.type, ...(alias.level && value.level === undefined ? { level: alias.level } : {}) }
+        : { ...value };
+    if (typeof block.type === "string" && INLINE_BLOCKS.has(block.type)) {
+        const content = block.content ?? block.text ?? block.inlines ?? block.children;
+        block.content = normalizeInlines(content);
+        if (block.type === "heading") {
+            const level = Number(block.level ?? 1);
+            block.level = Number.isInteger(level) ? Math.min(3, Math.max(1, level)) : 1;
+        }
+    }
+    else if (block.type === "list") {
+        if (typeof block.ordered !== "boolean") {
+            block.ordered = block.ordered === "true" || block.style === "ordered" || block.numbered === true;
+        }
+        if (Array.isArray(block.items)) {
+            block.items = block.items.map((item) => isRecord(item) && item.type === undefined && (item.content ?? item.text) !== undefined
+                ? normalizeInlines(item.content ?? item.text)
+                : normalizeInlines(item));
+        }
+    }
+    else if (block.type === "table" && Array.isArray(block.rows)) {
+        block.rows = block.rows.map((row) => Array.isArray(row)
+            ? row.map((cell) => {
+                if (isRecord(cell) && Array.isArray(cell.blocks)) {
+                    return { ...cell, blocks: cell.blocks.map((child) => normalizeBlock(child, depth + 1)) };
+                }
+                if (Array.isArray(cell)) {
+                    return { blocks: cell.map((child) => normalizeBlock(child, depth + 1)) };
+                }
+                const text = isRecord(cell) ? cell.content ?? cell.text : cell;
+                return { blocks: [normalizeBlock({ type: "paragraph", content: normalizeInlines(text ?? "") }, depth + 1)] };
+            })
+            : row);
+    }
+    return block;
+}
+export function normalizeAstBlocks(value) {
+    if (!isRecord(value))
+        return value;
+    return {
+        ...value,
+        ...(value.title !== undefined ? { title: normalizeInlines(value.title) } : {}),
+        ...(Array.isArray(value.blocks)
+            ? { blocks: value.blocks.map((block) => normalizeBlock(block)) }
+            : {})
+    };
+}
+// Shape of the blocks for a rejected AST: block types, keys and value kinds only,
+// never the text of the document.
+function astShape(value) {
+    const record = isRecord(value) ? value : {};
+    const blocks = Array.isArray(record.blocks) ? record.blocks : [];
+    const kind = (item) => Array.isArray(item) ? "lista" : item === null ? "null" : typeof item;
+    return blocks
+        .slice(0, 6)
+        .map((block, index) => isRecord(block)
+        ? `blok ${index + 1}: type=${JSON.stringify(block.type ?? null)}; ` +
+            Object.keys(block)
+                .filter((key) => key !== "type")
+                .slice(0, 8)
+                .map((key) => `${key}:${kind(block[key])}`)
+                .join(", ")
+        : `blok ${index + 1}: ${kind(block)}`)
+        .join("\n") || "brak bloków";
 }
 function generationInstruction(request) {
     const aliasRows = request.aliases.entries
@@ -121,7 +227,7 @@ export class DocumentAstSessionBlockedError extends Error {
     }
 }
 // Shape of a rejected AST header: keys and header values only, never block content.
-function astHeaderDiagnostic(value) {
+function astDiagnostic(value, code) {
     const record = isRecord(value) ? value : {};
     const shown = (key) => {
         const item = record[key];
@@ -130,7 +236,7 @@ function astHeaderDiagnostic(value) {
     return new DocumentAstSessionBlockedError(["schemaVersion", "documentType", "locale", "styleProfile"]
         .map((key) => `${key}=${shown(key)}`)
         .join("; ") +
-        `; blocks=${Array.isArray(record.blocks) ? `${record.blocks.length} bloków` : "brak"}`, `klucze odpowiedzi: ${Object.keys(record).slice(0, 20).join(", ") || "(nie obiekt JSON)"}`, "AST_HEADER_INVALID", "DOCUMENT_AST_VALIDATION");
+        `; blocks=${Array.isArray(record.blocks) ? `${record.blocks.length} bloków` : "brak"}`, `klucze odpowiedzi: ${Object.keys(record).slice(0, 20).join(", ") || "(nie obiekt JSON)"}\n${astShape(record)}`, code, "DOCUMENT_AST_VALIDATION");
 }
 function blockedSessionDiagnostic(result) {
     const reason = [
@@ -196,14 +302,15 @@ export class LegalDocumentAstGenerator {
             !result.answer) {
             throw blockedSessionDiagnostic(result);
         }
-        const parsed = normalizeAstHeader(extractJson(result.answer), request);
+        const parsed = normalizeAstBlocks(normalizeAstHeader(extractJson(result.answer), request));
         let validated;
         try {
             validated = validateLegalDocumentAst(parsed, request.aliases.entries);
         }
         catch (error) {
-            if (error instanceof Error && error.message === "AST_HEADER_INVALID") {
-                throw astHeaderDiagnostic(parsed);
+            // Any AST shape error: header fields and block shapes (never document text).
+            if (error instanceof Error && /^AST_[A-Z_]+$/.test(error.message)) {
+                throw astDiagnostic(parsed, error.message);
             }
             throw error;
         }

@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–14)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–15)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -15,8 +15,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 12 | `1c4c02d` | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
 | hotfix 13 | `4c16230` | kontekst rozmowy wg okna modelu (Claude ~100k tokenów) |
 | hotfix 14 | `0320028` | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
+| hotfix 15 | budowany | kształt bloków AST (ChatGPT), rozpoznanie „plik doc” |
 
 ---
+
+## hotfix 15
+
+- `AST_INLINE_ARRAY_INVALID` (ChatGPT): `normalizeAstBlocks` — treść akapitu/nagłówka jako tekst, obiekt lub lista napisów → lista elementów; aliasy typów (`text`, `h2`…), lista i tabela z napisów, tytuł. Treść bez zmian. Każdy błąd `AST_*`: diagnostyka typów i kluczy bloków.
+- Czat: `directDocumentRequest` rozpoznaje „doc”, „plik”, „w Wordzie”, „worda” (wcześniej „plik doc” szło do zwykłego czatu).
 
 ## hotfix 14
 
@@ -96,7 +102,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 14
+## Znane ograniczenia po hotfix 15
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.
