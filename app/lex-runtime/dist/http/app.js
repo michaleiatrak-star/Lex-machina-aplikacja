@@ -6,6 +6,7 @@ import { ProcessingProgressRegistry, progressIdFrom } from "../processing-progre
 import { createHash } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
+import { saveToDownloads } from "../download-save.js";
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
@@ -1466,6 +1467,36 @@ export function createLexHttpApp(options) {
     const sharedTemplateBody = express.raw({
         type: () => true,
         limit: "64mb"
+    });
+    // Desktop: save a generated document in the user's Downloads folder (the WebView
+    // does not perform <a download> of blob URLs). Authenticated like every /api route.
+    app.post("/api/downloads/save", sharedTemplateBody, async (req, res) => {
+        if (!res.locals.lexAuth) {
+            res.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+            return;
+        }
+        if (!Buffer.isBuffer(req.body) ||
+            req.body.byteLength === 0) {
+            res.status(400).json({ error: "DOWNLOAD_BODY_REQUIRED" });
+            return;
+        }
+        let filename;
+        try {
+            filename = decodeURIComponent(String(req.get("X-Lex-Filename") ?? ""));
+        }
+        catch {
+            res.status(400).json({ error: "DOWNLOAD_FILENAME_INVALID" });
+            return;
+        }
+        try {
+            res.json(await saveToDownloads(filename, req.body));
+        }
+        catch (error) {
+            const code = error instanceof Error ? error.message : "DOWNLOAD_SAVE_FAILED";
+            res.status(code === "DOWNLOAD_FILE_TYPE_NOT_ALLOWED" ? 400 : 500).json({
+                error: /^DOWNLOAD_[A-Z_]+$/.test(code) ? code : "DOWNLOAD_SAVE_FAILED"
+            });
+        }
     });
     app.post("/api/shared/templates", sharedTemplateBody, async (req, res) => {
         if (!options.sharedTemplateStore) {
@@ -3856,7 +3887,7 @@ export function createLexHttpApp(options) {
                     ...(error instanceof
                         DocumentAstSessionBlockedError
                         ? {
-                            stage: "DOCUMENT_AST_SESSION",
+                            stage: error.stage,
                             reason: error.reason,
                             description: error.description
                         }

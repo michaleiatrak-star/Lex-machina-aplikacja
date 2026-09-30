@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–11)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–12)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -12,8 +12,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 9 | `8b86baa` | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
 | hotfix 10 | `403c3d7` | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
 | hotfix 11 | `a3612c8` | `.docx` bez fałszywego „brakującego załącznika”, przyczyna blokady w czacie, zmiana nazwy sprawy w panelu bocznym |
+| hotfix 12 | budowany | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
 
 ---
+
+## hotfix 12
+
+- Desktop: WebView ignoruje `<a download>` dla blob URL — czat pisał „pobrany jako DOCX”, a pliku nie było (także finalne pismo po reautoryzacji, wersja tokenizowana, deanonimizacja w aktach, eksport `.txt`). Teraz `POST /api/downloads/save` zapisuje w folderze Pobrane (bez nadpisywania, tylko `.docx/.odt/.pdf/.txt`), czat podaje ścieżkę. Web: `download-file.ts`.
+- `AST_HEADER_INVALID` (ChatGPT): runtime uzupełnia nagłówek AST wartościami z żądania (`schemaVersion`, `locale`, `documentType`, `styleProfile`; opakowanie `document`/`ast`, `content` → `blocks`). Bloki bez zmian. Przy odrzuceniu: etap `DOCUMENT_AST_VALIDATION`, pola nagłówka i klucze odpowiedzi.
 
 ## hotfix 11
 
@@ -77,7 +83,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 11
+## Znane ograniczenia po hotfix 12
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.

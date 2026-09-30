@@ -5,6 +5,7 @@ import {
 } from "./case-calendar.js";
 import { CalendarPanel } from "./CalendarPanel.js";
 import { McpSearchPanel } from "./McpSearchPanel.js";
+import { downloadBlob } from "./download-file.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -483,36 +484,6 @@ function directDocumentRequest(
       "docx",
     documentType
   };
-}
-
-function downloadBlob(
-  blob: Blob,
-  filename: string
-): void {
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-  try {
-    const anchor =
-      document.createElement(
-        "a"
-      );
-    anchor.href = url;
-    anchor.download =
-      filename;
-    anchor.rel =
-      "noreferrer";
-    document.body.appendChild(
-      anchor
-    );
-    anchor.click();
-    anchor.remove();
-  } finally {
-    URL.revokeObjectURL(
-      url
-    );
-  }
 }
 
 function upsertAttachment(
@@ -2807,6 +2778,7 @@ export default function MatterChatApp({
             .readyForDownload ===
             true;
 
+        let savedPath: string | null = null;
         if (downloadedFinal) {
           const blob =
             await downloadGeneratedArtifact(
@@ -2815,7 +2787,7 @@ export default function MatterChatApp({
                 .artifact
                 .artifactId
             );
-          downloadBlob(
+          savedPath = await downloadBlob(
             blob,
             generated
               .artifact
@@ -2855,11 +2827,16 @@ export default function MatterChatApp({
                   "assistant",
                 content:
                   downloadedFinal
-                    ? "Gotowy dokument został przygotowany w profesjonalnym układzie i pobrany jako " +
-                      documentRequest
-                        .format
-                        .toUpperCase() +
-                      "."
+                    ? savedPath
+                      ? "Gotowy dokument " +
+                        documentRequest.format.toUpperCase() +
+                        " został zapisany: " +
+                        savedPath
+                      : "Gotowy dokument został przygotowany w profesjonalnym układzie i pobrany jako " +
+                        documentRequest
+                          .format
+                          .toUpperCase() +
+                        "."
                     : "Dokument został przygotowany jako bezpieczna wersja tokenizowana " +
                       documentRequest
                         .format
@@ -2875,7 +2852,9 @@ export default function MatterChatApp({
           );
           setGeneratedDocumentMessage(
             downloadedFinal
-              ? "Dokument gotowy i pobrany."
+              ? savedPath
+                ? `Dokument zapisany: ${savedPath}`
+                : "Dokument gotowy i pobrany."
               : "Wersja tokenizowana jest zapisana w aktach. Finalizacja czeka na jednorazową reautoryzację."
           );
           setWorkspaceRefresh(
@@ -3183,12 +3162,14 @@ export default function MatterChatApp({
       const blob = await downloadSensitiveArtifact(
         final.downloadTicket.ticketId
       );
-      downloadBlob(blob, final.artifact.filename);
+      const savedPath = await downloadBlob(blob, final.artifact.filename);
       const corrected = Object.keys(finalReview.overrides).length;
       setPendingFinalDocument(null);
       setFinalReview(null);
       setGeneratedDocumentMessage(
-        "Finalny dokument z przywróconymi danymi został utworzony i pobrany." +
+        (savedPath
+          ? `Finalny dokument z przywróconymi danymi został zapisany: ${savedPath}.`
+          : "Finalny dokument z przywróconymi danymi został utworzony i pobrany.") +
           (corrected > 0 ? ` Ręczne poprawki: ${corrected}.` : "")
       );
       setWorkspaceRefresh((value) => value + 1);
@@ -5021,11 +5002,14 @@ export default function MatterChatApp({
                               pendingFinalDocument.caseId,
                               pendingFinalDocument.artifactId
                             );
-                          downloadBlob(
+                          const savedPath = await downloadBlob(
                             blob,
                             "LexMachina-tokenized." +
                               pendingFinalDocument.format
                           );
+                          if (savedPath) {
+                            setGeneratedDocumentMessage(`Wersja tokenizowana zapisana: ${savedPath}`);
+                          }
                         } catch (error) {
                           setExecutionError(
                             error instanceof Error

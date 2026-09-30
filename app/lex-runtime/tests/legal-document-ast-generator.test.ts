@@ -1,12 +1,83 @@
 import { describe, expect, it } from "vitest";
 import {
   DocumentAstSessionBlockedError,
-  LegalDocumentAstGenerator
+  LegalDocumentAstGenerator,
+  normalizeAstHeader
 } from "../src/legal-document-ast-generator.js";
+import { validateLegalDocumentAst } from "../src/legal-document-ast.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionExecutor
 } from "../src/session-executor.js";
+
+describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () => {
+  const request = { documentType: "letter", styleProfile: "lex-classic-clean-v1" } as const;
+  const blocks = [{ type: "paragraph", content: [{ type: "text", text: "ok" }] }];
+
+  it("przyjmuje typowe warianty nagłówka od modeli", () => {
+    for (const variant of [
+      { schemaVersion: 1, locale: "pl", blocks },
+      { blocks },
+      { document: { schemaVersion: "1", documentType: "list", blocks } },
+      { schemaVersion: "1.0", locale: "pl_PL", documentType: "letter", content: blocks }
+    ]) {
+      const ast = validateLegalDocumentAst(normalizeAstHeader(variant, request), []).ast;
+      expect(ast).toMatchObject({
+        schemaVersion: "1",
+        locale: "pl-PL",
+        documentType: "letter",
+        styleProfile: "lex-classic-clean-v1"
+      });
+    }
+  });
+
+  it("odrzucony nagłówek: diagnostyka z polami nagłówka, bez treści pisma", async () => {
+    const generator = new LegalDocumentAstGenerator({
+      execute: async () => ({
+        sessionId: "session_test",
+        status: "DRAFT_PRESENTABLE",
+        provider: "openai",
+        model: "test",
+        primarySkill: "dr-01-prawo-cywilne",
+        answer: JSON.stringify({ schemaVersion: 2, blocks: [{ type: "paragraph", content: [{ type: "text", text: "TAJNE" }] }] }),
+        finalization: "PASS",
+        blockedReferences: [],
+        verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+        evidence: [],
+        audit: { result: "PASS", eventCount: 1, closed: true },
+        [SESSION_EXECUTION_INTERNAL]: { verificationRecords: [], auditEvents: [] }
+      })
+    } as Pick<SessionExecutor, "execute">);
+    const failure = await generator.generate({
+      query: "Wygeneruj docx z napisem ok.",
+      provider: "openai",
+      model: "test",
+      primarySkill: "dr-01-prawo-cywilne",
+      mode: "PRAWNIK",
+      documentType: "letter",
+      styleProfile: "lex-classic-clean-v1",
+      aliases: { schemaVersion: 1, entries: [] }
+    }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(DocumentAstSessionBlockedError);
+    const diagnostic = failure as DocumentAstSessionBlockedError;
+    expect(diagnostic.message).toBe("AST_HEADER_INVALID");
+    expect(diagnostic.stage).toBe("DOCUMENT_AST_VALIDATION");
+    expect(diagnostic.reason).toContain("schemaVersion=2");
+    expect(diagnostic.reason).toContain("locale=\"pl-PL\"");
+    expect(`${diagnostic.reason} ${diagnostic.description}`).not.toContain("TAJNE");
+  });
+
+  it("nie zmienia poprawnego, innego typu dokumentu ani bloków", () => {
+    const normalized = normalizeAstHeader(
+      { schemaVersion: "1", locale: "pl-PL", documentType: "contract", styleProfile: "lex-classic-clean-v1", blocks },
+      request
+    ) as { documentType: string; blocks: unknown };
+    expect(normalized.documentType).toBe("contract");
+    expect(normalized.blocks).toBe(blocks);
+    expect(() => validateLegalDocumentAst(normalizeAstHeader({ schemaVersion: 2, blocks }, request), []))
+      .toThrow("AST_HEADER_INVALID");
+  });
+});
 
 describe("LegalDocumentAstGenerator", () => {
   it("accepts provider JSON and validates only declared aliases", async () => {

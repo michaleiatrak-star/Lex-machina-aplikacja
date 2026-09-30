@@ -5,6 +5,8 @@ import {
 } from "./session-executor.js";
 import type { ProviderId } from "./providers/types.js";
 import {
+  DOCUMENT_TYPES,
+  STYLE_PROFILES,
   validateLegalDocumentAst,
   type LegalDocumentAst,
   type LegalDocumentType,
@@ -44,6 +46,56 @@ function extractJson(value: string): unknown {
   } catch {
     throw new Error("DOCUMENT_AST_JSON_INVALID");
   }
+}
+
+type AstRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is AstRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// The header carries only values the runtime dictates (schema, locale, type and profile
+// of the requested document). Models differ in how they echo it (schemaVersion 1 as a
+// number, "pl" for the locale, a missing field, the AST wrapped in {"document": ...}), so
+// the runtime fills and normalizes it. The blocks are never touched and are validated as
+// before; a valid but different documentType/styleProfile still fails the contract check.
+export function normalizeAstHeader(
+  value: unknown,
+  request: Pick<LegalDocumentAstGenerationRequest, "documentType" | "styleProfile">
+): unknown {
+  if (!isRecord(value)) return value;
+  let record: AstRecord = value;
+  if (!Array.isArray(record.blocks)) {
+    const wrapped = ["document", "ast", "legalDocument", "result"]
+      .map((key) => value[key])
+      .find((item): item is AstRecord => isRecord(item) && Array.isArray(item.blocks));
+    if (wrapped) record = wrapped;
+  }
+  if (!Array.isArray(record.blocks) && Array.isArray(record.content)) {
+    const { content, ...rest } = record;
+    record = { ...rest, blocks: content };
+  }
+  const version = record.schemaVersion;
+  const locale = typeof record.locale === "string" ? record.locale.trim() : undefined;
+  return {
+    ...record,
+    schemaVersion:
+      version === undefined || version === 1 || version === "1.0"
+        ? "1"
+        : version,
+    locale:
+      locale === undefined || /^pl([-_]pl)?$/i.test(locale)
+        ? "pl-PL"
+        : record.locale,
+    documentType:
+      DOCUMENT_TYPES.has(record.documentType as LegalDocumentType)
+        ? record.documentType
+        : request.documentType,
+    styleProfile:
+      STYLE_PROFILES.has(record.styleProfile as LegalStyleProfile)
+        ? record.styleProfile
+        : request.styleProfile
+  };
 }
 
 function generationInstruction(
@@ -104,11 +156,31 @@ function generationInstruction(
 export class DocumentAstSessionBlockedError extends Error {
   constructor(
     readonly reason: string,
-    readonly description: string
+    readonly description: string,
+    code = "DOCUMENT_AST_SESSION_BLOCKED",
+    readonly stage = "DOCUMENT_AST_SESSION"
   ) {
-    super("DOCUMENT_AST_SESSION_BLOCKED");
+    super(code);
     this.name = "DocumentAstSessionBlockedError";
   }
+}
+
+// Shape of a rejected AST header: keys and header values only, never block content.
+function astHeaderDiagnostic(value: unknown): DocumentAstSessionBlockedError {
+  const record = isRecord(value) ? value : {};
+  const shown = (key: string) => {
+    const item = record[key];
+    return item === undefined ? "brak" : JSON.stringify(item).slice(0, 60);
+  };
+  return new DocumentAstSessionBlockedError(
+    ["schemaVersion", "documentType", "locale", "styleProfile"]
+      .map((key) => `${key}=${shown(key)}`)
+      .join("; ") +
+      `; blocks=${Array.isArray(record.blocks) ? `${record.blocks.length} bloków` : "brak"}`,
+    `klucze odpowiedzi: ${Object.keys(record).slice(0, 20).join(", ") || "(nie obiekt JSON)"}`,
+    "AST_HEADER_INVALID",
+    "DOCUMENT_AST_VALIDATION"
+  );
 }
 
 function blockedSessionDiagnostic(
@@ -187,11 +259,19 @@ export class LegalDocumentAstGenerator {
       throw blockedSessionDiagnostic(result);
     }
 
-    const parsed = extractJson(result.answer);
-    const validated = validateLegalDocumentAst(
-      parsed,
-      request.aliases.entries
-    );
+    const parsed = normalizeAstHeader(extractJson(result.answer), request);
+    let validated: ReturnType<typeof validateLegalDocumentAst>;
+    try {
+      validated = validateLegalDocumentAst(
+        parsed,
+        request.aliases.entries
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === "AST_HEADER_INVALID") {
+        throw astHeaderDiagnostic(parsed);
+      }
+      throw error;
+    }
 
     if (
       validated.ast.documentType !== request.documentType ||

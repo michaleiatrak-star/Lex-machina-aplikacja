@@ -90,7 +90,7 @@ pobranie tekstu i dopasowanie (OfficialLegalSourceVerifier)
 
 ## 6. Generowanie pisma (.docx / .odt)
 
-`LegalDocumentAstGenerator.generate` → sesja z `documentAstOutput: true` → JSON AST (`validateLegalDocumentAst`) → render → `validateLocalHybridDocument` (HYBRID-VAL: puste pismo, `⬛`/`[UZUPEŁNIJ]`, `DRAFT — NIEWERYFIKOWANY`, token PII, znaki sterujące, zdarzenie `BLOCKED` sesji źródłowej, brak odczytu dokumentu) → bramka eksportu → plik w sprawie.
+`LegalDocumentAstGenerator.generate` → sesja z `documentAstOutput: true` → JSON AST (nagłówek uzupełniany przez `normalizeAstHeader`) (`validateLegalDocumentAst`) → render → `validateLocalHybridDocument` (HYBRID-VAL: puste pismo, `⬛`/`[UZUPEŁNIJ]`, `DRAFT — NIEWERYFIKOWANY`, token PII, znaki sterujące, zdarzenie `BLOCKED` sesji źródłowej, brak odczytu dokumentu) → bramka eksportu → plik w sprawie.
 
 W sesji z `documentAstOutput` workflow `SIMPLE_LETTER_V1` nie wymaga sekcji tekstowych (tryb `DOCUMENT_AST`) — struktura pisma jest w blokach AST, a HYBRID-VAL działa na wygenerowanym dokumencie. Bez tej flagi (czat) obowiązuje kontrakt sekcji `TREŚĆ PISMA → UWAGI PRAKTYCZNE → CO DALEJ → HYBRID-VALIDATION`.
 
@@ -120,6 +120,7 @@ Wszystkie trasy poza `/health`, `/api/auth/status|bootstrap|login|recover` wymag
 | Uwierzytelnianie | `GET /api/auth/status`, `GET /api/auth/me`, `POST /api/auth/{bootstrap, bootstrap-managed, login, logout, lock, activity, password, recover, recovery-code}` |
 | Administracja (A) | `GET/POST /api/admin/users`, `DELETE /api/admin/users/:userId`, `PATCH /api/admin/users/:userId/status`, `PUT/DELETE /api/admin/providers/:provider/credential`, `PUT/DELETE /api/admin/provider-accounts/anthropic/oauth-token`, `GET /api/admin/support/status`, `POST /api/admin/support/{challenge, activate}` |
 | Konektory MCP (A) | `GET /api/admin/mcp-connectors`, `POST /api/admin/mcp-connectors/:server/{install, uninstall, check}`, `PUT/DELETE /api/admin/mcp-connectors/ceidg/key` |
+| Zapis pliku (desktop) | `POST /api/downloads/save` (surowe bajty, `X-Lex-Filename`; folder Pobrane, bez nadpisywania) |
 | Wyszukiwanie MCP | `GET /api/mcp-search/sources`, `GET /api/mcp-search/sources/:server/tools`, `POST /api/mcp-search/query` |
 | Sesje | `POST /api/sessions/execute`, `POST /api/sessions/document-fit`, `GET /api/sessions/progress/:executionId`, `GET /api/routes`, `POST /api/routes/validate`, `GET /api/skills` |
 | Sprawy | `GET/POST /api/cases`, `GET/PATCH/DELETE /api/cases/:caseId`, `POST …/{archive, unarchive, rotate-key, transfer-owner, import-legacy, migrate-legacy-storage}`, dostęp `GET/POST …/access`, `DELETE …/access/:userId`, `GET …/access-candidates`, `GET /api/cases/legacy` |

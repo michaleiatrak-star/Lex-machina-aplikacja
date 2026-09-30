@@ -20,6 +20,7 @@ import {
   type ProviderId,
   type SharedTemplateManifest
 } from "./api.js";
+import { downloadBlob } from "./download-file.js";
 
 export function DocumentAuthoringPanel({
   currentCase,
@@ -303,34 +304,16 @@ export function DocumentAuthoringPanel({
           final.downloadTicket
             .ticketId
         );
-      const url =
-        URL.createObjectURL(
-          blob
-        );
-      try {
-        const anchor =
-          document.createElement(
-            "a"
-          );
-        anchor.href = url;
-        anchor.download =
+      const savedPath =
+        await downloadBlob(
+          blob,
           final.artifact
-            .filename;
-        anchor.rel =
-          "noreferrer";
-        document.body.appendChild(
-          anchor
+            .filename
         );
-        anchor.click();
-        anchor.remove();
-      } finally {
-        URL.revokeObjectURL(
-          url
-        );
-      }
 
       setGenerated(null);
       setMessage(
+        (savedPath ? `Zapisano: ${savedPath}. ` : "") +
         `Finalny dokument zawiera oryginalne dane przywrócone mechanicznie z klucza anonimizacja↔deanonimizacja (${final.replacements} zamian). Model nie uczestniczył w reidentyfikacji. Dokument przeszedł HYBRID, G8 i G10.`
       );
     } catch (value) {

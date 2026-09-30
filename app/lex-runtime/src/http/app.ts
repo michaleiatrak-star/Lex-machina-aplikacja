@@ -21,6 +21,7 @@ import express, {
   type Response
 } from "express";
 import helmet from "helmet";
+import { saveToDownloads } from "../download-save.js";
 import { LexSkillRegistry } from "../registry.js";
 import {
   DynamicModelCatalog,
@@ -2802,6 +2803,41 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       type: () => true,
       limit: "64mb"
     });
+
+  // Desktop: save a generated document in the user's Downloads folder (the WebView
+  // does not perform <a download> of blob URLs). Authenticated like every /api route.
+  app.post(
+    "/api/downloads/save",
+    sharedTemplateBody,
+    async (req, res) => {
+      if (!res.locals.lexAuth) {
+        res.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+        return;
+      }
+      if (
+        !Buffer.isBuffer(req.body) ||
+        req.body.byteLength === 0
+      ) {
+        res.status(400).json({ error: "DOWNLOAD_BODY_REQUIRED" });
+        return;
+      }
+      let filename: string;
+      try {
+        filename = decodeURIComponent(String(req.get("X-Lex-Filename") ?? ""));
+      } catch {
+        res.status(400).json({ error: "DOWNLOAD_FILENAME_INVALID" });
+        return;
+      }
+      try {
+        res.json(await saveToDownloads(filename, req.body));
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "DOWNLOAD_SAVE_FAILED";
+        res.status(code === "DOWNLOAD_FILE_TYPE_NOT_ALLOWED" ? 400 : 500).json({
+          error: /^DOWNLOAD_[A-Z_]+$/.test(code) ? code : "DOWNLOAD_SAVE_FAILED"
+        });
+      }
+    }
+  );
 
   app.post(
     "/api/shared/templates",
@@ -6753,7 +6789,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               DocumentAstSessionBlockedError
               ? {
                   stage:
-                    "DOCUMENT_AST_SESSION",
+                    error.stage,
                   reason:
                     error.reason,
                   description:

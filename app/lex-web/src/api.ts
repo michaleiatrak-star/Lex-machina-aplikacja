@@ -2714,6 +2714,38 @@ function uploadMediaType(file: File): string {
   return "application/octet-stream";
 }
 
+// Desktop: the runtime saves the file in the user's Downloads folder (the WebView does
+// not perform <a download> of blob URLs). Returns the saved path.
+export async function saveToDownloads(
+  blob: Blob,
+  filename: string
+): Promise<{ path: string; filename: string }> {
+  const response = await fetch(
+    `${apiBase()}/api/downloads/save`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/octet-stream",
+        ...authorizationHeaders(),
+        "X-Lex-Filename": encodeURIComponent(filename)
+      },
+      body: blob
+    }
+  );
+  const payload =
+    await response.json() as
+      | { path: string; filename: string }
+      | ApiFailure;
+  if (!response.ok) {
+    throw new ApiError(
+      (payload as ApiFailure).error || `HTTP_${response.status}`,
+      response.status
+    );
+  }
+  return payload as { path: string; filename: string };
+}
+
 export async function uploadCaseFile(
   caseId: string,
   file: File

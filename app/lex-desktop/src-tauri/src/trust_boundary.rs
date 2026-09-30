@@ -1392,6 +1392,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/privacy/name-forms"
         | "/api/sessions/execute"
         | "/api/sessions/document-fit"
+        | "/api/downloads/save"
         | "/api/routes/validate" => method == "POST",
         "/api/cases"
         | "/api/skills"
@@ -2012,6 +2013,13 @@ mod tests {
         // Pasek okna modelu i blokada zbyt dużych plików przed wysłaniem.
         assert!(route_allowed("POST", "/api/sessions/document-fit"));
         assert!(!route_allowed("GET", "/api/sessions/document-fit"));
+    }
+
+    #[test]
+    fn allowlist_admits_download_save() {
+        // Zapis wygenerowanego pisma w folderze Pobrane (WebView nie pobiera blob URL).
+        assert!(route_allowed("POST", "/api/downloads/save"));
+        assert!(!route_allowed("GET", "/api/downloads/save"));
     }
 
     #[test]

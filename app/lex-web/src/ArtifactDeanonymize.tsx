@@ -10,23 +10,12 @@ import {
   type DeanonymizationPreview
 } from "./api.js";
 import { DeanonymizationReview, applyAliasCorrection } from "./DeanonymizationReview.js";
+import { downloadBlob } from "./download-file.js";
 
 function finalName(filename: string): string {
   const dot = filename.lastIndexOf(".");
   const stem = (dot > 0 ? filename.slice(0, dot) : filename).replace(/[-_ ]?tokenized$/i, "");
   return `${stem} (deanonimizowany)${dot > 0 ? filename.slice(dot) : ""}`;
-}
-
-function saveBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-  } finally {
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
 }
 
 /**
@@ -97,9 +86,13 @@ export function ArtifactDeanonymize(props: {
           type="button"
           onClick={() =>
             void run(async () => {
-              saveBlob(await downloadSensitiveArtifact(ticket.ticketId), ticket.filename);
+              const savedPath = await downloadBlob(
+                await downloadSensitiveArtifact(ticket.ticketId),
+                ticket.filename
+              );
               setTicket(null);
-              props.onCancel();
+              if (savedPath) props.onDone(`Zapisano: ${savedPath}`);
+              else props.onCancel();
             })
           }
         >

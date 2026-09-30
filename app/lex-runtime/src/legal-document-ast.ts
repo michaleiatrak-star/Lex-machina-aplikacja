@@ -102,7 +102,7 @@ export type LegalDocumentAstValidation = {
   aliasesUsed: string[];
 };
 
-const DOCUMENT_TYPES =
+export const DOCUMENT_TYPES =
   new Set<LegalDocumentType>([
     "pleading",
     "contract",
@@ -112,7 +112,7 @@ const DOCUMENT_TYPES =
     "other"
   ]);
 
-const STYLE_PROFILES =
+export const STYLE_PROFILES =
   new Set<LegalStyleProfile>([
     "lex-classic-clean-v1",
     "lex-light-legal-design-v1",
