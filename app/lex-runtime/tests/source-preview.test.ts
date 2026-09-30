@@ -60,3 +60,40 @@ describe("podgląd strony źródła (Wyszukiwanie)", () => {
     expect(preview.kind).toBe("pdf");
   });
 });
+
+describe("podgląd EUREKA i stron wymagających JavaScript", () => {
+  it("EUREKA: dokument z publicznego API zamiast pustej powłoki aplikacji", async () => {
+    const calls: string[] = [];
+    const preview = await fetchSourcePreview("https://eureka.mf.gov.pl/informacje/podglad/711644", async (input) => {
+      calls.push(input);
+      return new Response(
+        JSON.stringify({
+          dokument: {
+            fields: [
+              { key: "ID_INFORMACJI", value: "711644" },
+              { key: "TEZA", value: "Zwolnienie z akcyzy alkoholu etylowego" },
+              { key: "SYG", value: "0111-KDIB3-3.4013.256.2026.2.AM" },
+              { key: "DT_WYD", value: "2026-09-23T01:00:00.000Z" },
+              { key: "TRESC_INTERESARIUSZ", value: '<p onclick="x()">Treść interpretacji</p><script>evil()</script>' }
+            ]
+          }
+        }),
+        { headers: { "content-type": "application/json" } }
+      );
+    });
+    expect(calls).toEqual(["https://eureka.mf.gov.pl/api/public/v1/informacje/711644"]);
+    expect(preview.kind).toBe("html");
+    const html = preview.kind === "html" ? preview.html : "";
+    expect(html).toContain("Zwolnienie z akcyzy alkoholu etylowego");
+    expect(html).toContain("0111-KDIB3-3.4013.256.2026.2.AM");
+    expect(html).toContain("Treść interpretacji");
+    expect(html).not.toMatch(/<script|onclick/i);
+  });
+
+  it("pusta powłoka aplikacji JavaScript daje komunikat zamiast pustej ramki", async () => {
+    const preview = await fetchSourcePreview("https://orzeczenia.uodo.gov.pl/decision/x", async () =>
+      page('<html><head><script src="app.js"></script></head><body><div id="root"></div></body></html>')
+    );
+    expect(preview.kind === "html" && preview.html).toContain("wyłącznie przez JavaScript");
+  });
+});

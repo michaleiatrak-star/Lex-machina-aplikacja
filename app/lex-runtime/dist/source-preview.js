@@ -75,6 +75,49 @@ function decode(data, charset) {
         return new TextDecoder("utf-8").decode(data);
     }
 }
+// Text a reader would see: without tags, styles and whitespace runs.
+export function visibleText(html) {
+    return html
+        .replace(/<(style|head|title)\b[\s\S]*?<\/\1\s*>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;|&#160;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+// Portals that render the document with JavaScript (the frame runs none)
+// leave an empty shell; say so instead of showing a blank frame.
+function scriptOnlyNotice(url) {
+    return inertHtml(`<p>Ta strona źródła wyświetla treść wyłącznie przez JavaScript, którego podgląd w aplikacji nie uruchamia (bezpieczeństwo). Użyj „Pokaż treść” albo „Otwórz w źródle”.</p><p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>`, url);
+}
+const EUREKA_HOST = "eureka.mf.gov.pl";
+const EUREKA_DOCUMENT_PATH = /^\/informacje\/podglad\/(\d{1,10})\/?$/;
+// EUREKA (Ministry of Finance) is a JavaScript application: its document page
+// is an empty shell without scripts. The same document comes from the portal's
+// public API (the source of "Pokaż treść"), rendered here as a static page.
+export async function eurekaDocumentPreview(url, fetcher) {
+    const id = url.hostname === EUREKA_HOST ? EUREKA_DOCUMENT_PATH.exec(url.pathname)?.[1] : undefined;
+    if (!id)
+        return null;
+    const response = await fetcher(`https://${EUREKA_HOST}/api/public/v1/informacje/${id}`, {
+        method: "GET",
+        redirect: "manual",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(TIMEOUT_MS)
+    });
+    if (!response.ok)
+        throw new Error(`SOURCE_PREVIEW_HTTP_${response.status}`);
+    const raw = JSON.parse((await readLimited(response)).toString("utf8"));
+    const fields = new Map((raw.dokument?.fields ?? []).map((field) => [field.key, field.value]));
+    const text = (key) => (typeof fields.get(key) === "string" ? fields.get(key) : "");
+    const body = text("TRESC_INTERESARIUSZ") || text("TRESC");
+    if (!body && !text("TEZA"))
+        throw new Error("SOURCE_PREVIEW_EMPTY");
+    const meta = [text("SYG") && `Sygnatura: ${escapeHtml(text("SYG"))}`, text("DT_WYD") && `data wydania: ${escapeHtml(text("DT_WYD").slice(0, 10))}`]
+        .filter(Boolean)
+        .join(" · ");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(text("TEZA") || text("SYG"))}</title></head><body style="font-family:Calibri,Arial,sans-serif;margin:16px;line-height:1.45"><h1 style="font-size:1.2em">${escapeHtml(text("TEZA"))}</h1><p style="color:#555">${meta} · źródło: EUREKA (Ministerstwo Finansów)</p><hr>${body}</body></html>`;
+    return { kind: "html", url: url.toString(), html: inertHtml(html, url.toString()) };
+}
 async function readLimited(response) {
     const declared = Number(response.headers.get("content-length"));
     if (declared && declared > MAX_BYTES)
@@ -86,6 +129,9 @@ async function readLimited(response) {
 }
 export async function fetchSourcePreview(value, fetcher = globalThis.fetch.bind(globalThis)) {
     let url = allowedPreviewUrl(value);
+    const eureka = await eurekaDocumentPreview(url, fetcher);
+    if (eureka)
+        return eureka;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
         const response = await fetcher(url.toString(), {
             method: "GET",
@@ -110,7 +156,14 @@ export async function fetchSourcePreview(value, fetcher = globalThis.fetch.bind(
         }
         const text = decode(data, charsetOf(contentType, data));
         if (/html|xml/i.test(contentType) || /^\s*</.test(text)) {
-            return { kind: "html", url: url.toString(), html: inertHtml(text, url.toString()) };
+            const html = inertHtml(text, url.toString());
+            return {
+                kind: "html",
+                url: url.toString(),
+                html: /<script\b/i.test(text) && visibleText(html).length < 40
+                    ? scriptOnlyNotice(url.toString())
+                    : html
+            };
         }
         return {
             kind: "html",

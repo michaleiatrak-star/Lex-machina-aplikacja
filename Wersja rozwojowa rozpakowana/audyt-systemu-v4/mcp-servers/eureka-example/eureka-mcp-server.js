@@ -156,8 +156,11 @@ async function http(url, init = {}) {
   throw ostatni;
 }
 
+// ⛔ POPRAWKA 2026-09-30: searchInFullPhrase:false szuka słów osobno — „akcyza alkohol” dawało
+//    3722 trafień posortowanych po dacie (podział spółek, ryczałt…). Portal EUREKA szuka frazy
+//    w całości: 454 trafienia, te same co na stronie (pomiar na żywym API, CI 36761874591).
 async function szukaj({ filtr = {}, fraza, rozmiar = 10 }) {
-  const body = { filter: filtr, columns: KOLUMNY, searchInFullPhrase: false, searchInContent: false, searchInSynonyms: false, warunkiDodatkowe: [] };
+  const body = { filter: filtr, columns: KOLUMNY, searchInFullPhrase: Boolean(fraza), searchInContent: false, searchInSynonyms: false, warunkiDodatkowe: [] };
   if (fraza) body.searchQuery = fraza;
   return http(`${BASE}/wyszukiwarka/informacje/?size=${rozmiar}&page=0&sort=DT_WYD%2Cdesc`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
