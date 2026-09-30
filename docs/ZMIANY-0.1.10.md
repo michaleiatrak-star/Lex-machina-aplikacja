@@ -14,7 +14,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 11 | `a3612c8` | `.docx` bez fałszywego „brakującego załącznika”, przyczyna blokady w czacie, zmiana nazwy sprawy w panelu bocznym |
 | hotfix 12 | `1c4c02d` | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
 | hotfix 13 | `4c16230` | kontekst rozmowy wg okna modelu (Claude ~100k tokenów) |
-| hotfix 14 | budowany | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
+| hotfix 14 | `0320028` | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
 
 ---
 
