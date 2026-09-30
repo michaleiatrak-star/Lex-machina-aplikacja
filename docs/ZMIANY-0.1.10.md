@@ -15,9 +15,9 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 12 | `1c4c02d` | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
 | hotfix 13 | `4c16230` | kontekst rozmowy wg okna modelu (Claude ~100k tokenów) |
 | hotfix 14 | `0320028` | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
-| hotfix 15 | budowany | kształt bloków AST (ChatGPT), rozpoznanie „plik doc” |
-| hotfix 16 | budowany | Google Gemini: klucz API i konto Google (Gemini CLI) |
-| hotfix 17 | budowany | szkic/gotowy dokument po cyklach pism, edycja w karcie, podgląd źródła w ramce |
+| hotfix 15 | 0c8ab07 | kształt bloków AST (ChatGPT), rozpoznanie „plik doc” |
+| hotfix 16 | c2a7d08 | Google Gemini: klucz API i konto Google (Gemini CLI) |
+| hotfix 17 | a30e2a4 | szkic/gotowy dokument po cyklach pism, edycja w karcie, podgląd źródła w ramce |
 
 ---
 
