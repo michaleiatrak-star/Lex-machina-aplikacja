@@ -135,6 +135,8 @@ import {
   type CaseChatMessage
 } from "./case-thread.js";
 import {
+  LOCAL_CONVERSATION_CHARS,
+  conversationBudgetChars,
   conversationForProvider
 } from "./conversation-context.js";
 import {
@@ -1088,6 +1090,11 @@ export default function MatterChatApp({
     runtimeProviderForPrimarySource(provider);
   const localModelSelected =
     provider === "local" || model.startsWith("local/");
+  // History sent with each message: sized to the model window, small for local models.
+  const conversationChars =
+    localModelSelected
+      ? LOCAL_CONVERSATION_CHARS
+      : conversationBudgetChars(runtimeProvider, model);
   // Files per message: 20 for a hosted model, 4 for a local one (server decides).
   const documentLimit =
     documentFit?.limit ?? (localModelSelected ? 4 : 20);
@@ -2721,7 +2728,8 @@ export default function MatterChatApp({
                 buildSkillSelectionEnvelope(
                   conversationForProvider(
                     priorMessages,
-                    trimmed
+                    trimmed,
+                    conversationChars
                   ),
                   automaticSkills,
                   [],
@@ -2885,7 +2893,8 @@ export default function MatterChatApp({
         query: buildSkillSelectionEnvelope(
           conversationForProvider(
             priorMessages,
-            trimmed
+            trimmed,
+            conversationChars
           ),
           automaticSkills,
           [],

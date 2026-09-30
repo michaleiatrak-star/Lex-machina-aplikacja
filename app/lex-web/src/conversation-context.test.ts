@@ -4,6 +4,8 @@ import {
   it
 } from "vitest";
 import {
+  LOCAL_CONVERSATION_CHARS,
+  conversationBudgetChars,
   conversationForProvider
 } from "./conversation-context.js";
 import type {
@@ -109,5 +111,34 @@ describe(
         );
       }
     );
+
+    it("sizes the history to the model window; local models keep the small budget", () => {
+      expect(conversationBudgetChars("anthropic", "claude-x")).toBe(300_000);
+      expect(conversationBudgetChars("openai", "account/openai/default")).toBe(150_000);
+      expect(conversationBudgetChars("openai", "local/bielik")).toBe(LOCAL_CONVERSATION_CHARS);
+      expect(conversationBudgetChars("local", "mistral")).toBe(LOCAL_CONVERSATION_CHARS);
+    });
+
+    it("drops whole older turns with a note instead of cutting a message", () => {
+      const messages: CaseChatMessage[] = Array.from({ length: 30 }, (_, index) => ({
+        id: `m${index}`,
+        role: index % 2 === 0 ? "user" : "assistant",
+        content: `WIADOMOSC_${index}_` + "x".repeat(9_000)
+      }));
+
+      const long = conversationForProvider(messages, "PYTANIE", 300_000);
+      expect(long).toContain("WIADOMOSC_0_");
+      expect(long).not.toContain("pominięta");
+
+      const short = conversationForProvider(messages, "PYTANIE", 100_000);
+      expect(short.length).toBeLessThanOrEqual(100_000);
+      expect(short).toMatch(/^\[Wcześniejsza część rozmowy pominięta \(\d+ wiadomości\)/);
+      expect(short).toContain("WIADOMOSC_29_");
+      expect(short).toMatch(/Użytkownik: PYTANIE$/);
+      // Every kept turn is whole.
+      for (const part of short.split("\n\n").slice(1, -1)) {
+        expect(part).toMatch(/^(Użytkownik|Asystent): WIADOMOSC_\d+_x{9000}$/);
+      }
+    });
   }
 );

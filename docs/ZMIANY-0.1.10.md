@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–12)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–13)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -13,8 +13,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 10 | `403c3d7` | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
 | hotfix 11 | `a3612c8` | `.docx` bez fałszywego „brakującego załącznika”, przyczyna blokady w czacie, zmiana nazwy sprawy w panelu bocznym |
 | hotfix 12 | budowany | `.docx` zapisywany w Pobranych na desktopie, `AST_HEADER_INVALID` |
+| hotfix 13 | budowany | kontekst rozmowy wg okna modelu (Claude ~100k tokenów) |
 
 ---
+
+## hotfix 13
+
+- Historia rozmowy wysyłana z wiadomością: było 28 000 znaków dla każdego modelu. Teraz `conversationBudgetChars`: Claude 300 000, OpenAI/xAI 150 000, lokalne 28 000. Pomijane są całe najstarsze wiadomości z informacją, bez ucinania w połowie.
+- Runtime: zapytanie do 320 000 znaków (`MAX_SESSION_QUERY_CHARS`), JSON 2 MB; `orchestrateDocumentContext` rezerwuje całe zapytanie (bez limitu 48k), więc długa rozmowa zmniejsza budżet dokumentów zamiast przepełniać okno.
 
 ## hotfix 12
 
@@ -83,7 +89,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 12
+## Znane ograniczenia po hotfix 13
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.

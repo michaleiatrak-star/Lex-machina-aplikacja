@@ -218,4 +218,19 @@ describe("document limits per model", () => {
     });
     expect(response.body.estimate.documents).toHaveLength(2);
   });
+
+  it("a long conversation is reserved in full, so documents get less instead of overflowing", () => {
+    const attachments = [doc("doc_case", "MANUAL", 2_000, true)];
+    const short = orchestrateDocumentContext({ attachments, query: "Najem", modelContextTokens: 200_000 });
+    const long = orchestrateDocumentContext({
+      attachments,
+      query: "Użytkownik: " + "x".repeat(300_000),
+      modelContextTokens: 200_000
+    });
+    const shortBudget = short.report.documentBudgetTokens!;
+    const longBudget = long.report.documentBudgetTokens!;
+    // ~100k tokens of conversation (3 chars/token) come off the document budget.
+    expect(shortBudget - longBudget).toBeGreaterThan(90_000);
+    expect(long.report.documents![0]!.status).toBe("FULL");
+  });
 });

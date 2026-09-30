@@ -326,6 +326,7 @@ const EXECUTION_DRAFT_MAX_ENTRIES = 64;
 const EXECUTION_DRAFT_MAX_CHARS = 200_000;
 // While a request is still running, refresh the idle deadline this often.
 const IN_FLIGHT_ACTIVITY_INTERVAL_MS = 60_000;
+export const MAX_SESSION_QUERY_CHARS = 320_000;
 function responseAuthContext(res) {
     const context = res.locals.lexAuth;
     if (!context) {
@@ -584,7 +585,9 @@ function parseSessionRequest(body) {
             .trim()
         : "";
     if (query.length < 1 ||
-        query.length > 30_000 ||
+        // Conversation history is sized to the model window by the client (Claude up to
+        // ~300k characters); the envelope adds a little.
+        query.length > MAX_SESSION_QUERY_CHARS ||
         !isProviderId(provider) ||
         model.length < 1 ||
         model.length > 256 ||
@@ -849,7 +852,8 @@ export function createLexHttpApp(options) {
     app.disable("x-powered-by");
     app.use(helmet());
     app.use(loopbackOriginGuard);
-    app.use(express.json({ limit: "256kb" }));
+    // A long conversation (query up to MAX_SESSION_QUERY_CHARS, Polish UTF-8) fits.
+    app.use(express.json({ limit: "2mb" }));
     app.get("/health", (_req, res) => {
         res.json({
             status: "ok",
