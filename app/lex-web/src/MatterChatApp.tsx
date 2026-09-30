@@ -6306,7 +6306,9 @@ export default function MatterChatApp({
                   </small>
                   {user.appRole === "ADMIN" ? (
                     <div className="chat-form-row compact">
-                      {accountSession?.installed === false ? (
+                      {/* Codex, Claude Code and Gemini CLI are provisioned by the runtime on
+                          "Połącz konto"; only Grok Build needs a manual install. */}
+                      {accountSession?.installed === false && runtimeProvider === "xai" ? (
                         <button
                           type="button"
                           className="chat-primary-action"
