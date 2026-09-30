@@ -86,6 +86,10 @@ describe("session execution HTTP API", () => {
         {
           provider: "xai",
           configured: true
+        },
+        {
+          provider: "google",
+          configured: false
         }
       ]
     });

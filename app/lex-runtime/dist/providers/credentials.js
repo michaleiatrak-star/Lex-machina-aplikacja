@@ -4,7 +4,8 @@ import path from "node:path";
 const PROVIDERS = [
     "openai",
     "anthropic",
-    "xai"
+    "xai",
+    "google"
 ];
 function localAiRoot() {
     const configured = process.env.LEX_LOCAL_LLM_ROOT?.trim();
@@ -92,7 +93,8 @@ export async function providerConfigurationStatus(resolver) {
 const PROVIDER_ENV = {
     openai: "OPENAI_API_KEY",
     anthropic: "ANTHROPIC_API_KEY",
-    xai: "XAI_API_KEY"
+    xai: "XAI_API_KEY",
+    google: "GOOGLE_GENERATIVE_AI_API_KEY"
 };
 export class EnvironmentCredentialResolver {
     async getApiKey(provider) {

@@ -221,7 +221,8 @@ import {
 const PROVIDERS = new Set<ProviderId>([
   "openai",
   "anthropic",
-  "xai"
+  "xai",
+  "google"
 ]);
 
 function isProviderId(value: string): value is ProviderId {

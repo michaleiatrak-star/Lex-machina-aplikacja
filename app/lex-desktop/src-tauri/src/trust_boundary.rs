@@ -330,7 +330,7 @@ impl RuntimeBridge {
     }
 
     fn restore_provider_credentials(&self) -> Result<(), String> {
-        for provider in ["openai", "anthropic", "xai"] {
+        for provider in ["openai", "anthropic", "xai", "google"] {
             let entry = Entry::new(
                 PROVIDER_KEYRING_SERVICE,
                 provider,
@@ -925,7 +925,7 @@ fn provider_credential_from_request(
     ];
     if !matches!(
         provider,
-        "openai" | "anthropic" | "xai"
+        "openai" | "anthropic" | "xai" | "google"
     ) {
         return Err(
             "DESKTOP_PROVIDER_INVALID".to_string()

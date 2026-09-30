@@ -257,6 +257,14 @@ const PROVIDERS: Array<{
     accountClientLabel: "Grok Build",
     accountInstallUrl:
       "https://docs.x.ai/build/overview"
+  },
+  {
+    id: "google",
+    label: "Google / Gemini",
+    apiKeyUrl: "https://aistudio.google.com/apikey",
+    accountClientLabel: "Gemini CLI",
+    accountInstallUrl:
+      "https://github.com/google-gemini/gemini-cli"
   }
 ];
 
@@ -291,6 +299,14 @@ const PRIMARY_MODEL_SOURCES: Array<{
   {
     id: "xai",
     label: "xAI · API"
+  },
+  {
+    id: "google-account",
+    label: "Gemini · konto Google"
+  },
+  {
+    id: "google",
+    label: "Google Gemini · API"
   }
 ];
 
@@ -303,7 +319,9 @@ const ACCOUNT_MODEL_LABELS: Record<
   anthropic:
     "Claude Code · model konta",
   xai:
-    "Grok · model konta"
+    "Grok · model konta",
+  google:
+    "Gemini CLI · model konta"
 };
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
@@ -563,13 +581,17 @@ export function providerFailureMessage(
       ? "Claude"
       : provider.startsWith("xai")
         ? "Grok"
-        : "ChatGPT/Codex";
+        : provider.startsWith("google")
+          ? "Gemini"
+          : "ChatGPT/Codex";
   const client =
     provider.startsWith("anthropic")
       ? "Claude Code"
       : provider.startsWith("xai")
         ? "Grok Build"
-        : "Codex";
+        : provider.startsWith("google")
+          ? "Gemini CLI"
+          : "Codex";
   const base = (() => {
     switch (reason) {
       case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
@@ -915,7 +937,7 @@ export default function MatterChatApp({
     useState<PrimaryModelSource>(rememberedModel?.provider ?? "local");
   const [providerConfiguration, setProviderConfiguration] = useState<
     Record<ProviderId, boolean | undefined>
-  >({ openai: undefined, anthropic: undefined, xai: undefined });
+  >({ openai: undefined, anthropic: undefined, xai: undefined, google: undefined });
   const [providerAccounts, setProviderAccounts] = useState<
     Record<
       ProviderId,
@@ -924,7 +946,8 @@ export default function MatterChatApp({
   >({
     openai: undefined,
     anthropic: undefined,
-    xai: undefined
+    xai: undefined,
+    google: undefined
   });
   const [providerAccountBusy, setProviderAccountBusy] =
     useState(false);
@@ -6049,7 +6072,9 @@ export default function MatterChatApp({
                       ? " Codex CLI"
                       : runtimeProvider === "anthropic"
                         ? " Claude Code"
-                        : " Grok Build"}.
+                        : runtimeProvider === "google"
+                          ? " Gemini CLI (logowanie kontem Google; po zalogowaniu wpisz /quit w oknie terminala)"
+                          : " Grok Build"}.
                     Na Windows Lex Machina otwiera widoczny terminal, a klient prowadzi
                     dalej przez swój oficjalny login w przeglądarce lub flow kodu urządzenia.
                     Token OAuth pozostaje po stronie klienta i nie jest kopiowany do UI Lex Machina.

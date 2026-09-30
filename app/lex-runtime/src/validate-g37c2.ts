@@ -136,7 +136,7 @@ const checks = {
     ),
   providerAllowlist:
     trust.includes(
-      '"openai" | "anthropic" | "xai"'
+      '"openai" | "anthropic" | "xai" | "google"'
     ),
   transientSecretZeroization:
     trust.includes(

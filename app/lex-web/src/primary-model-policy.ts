@@ -3,7 +3,8 @@ import type { ProviderId } from "./api.js";
 export type AccountPrimaryModelSource =
   | "openai-account"
   | "anthropic-account"
-  | "xai-account";
+  | "xai-account"
+  | "google-account";
 
 export type PrimaryModelSource =
   | ProviderId
@@ -41,6 +42,12 @@ export function runtimeProviderForPrimarySource(
       "xai-account"
   ) {
     return "xai";
+  }
+  if (
+    source ===
+      "google-account"
+  ) {
+    return "google";
   }
   return source;
 }

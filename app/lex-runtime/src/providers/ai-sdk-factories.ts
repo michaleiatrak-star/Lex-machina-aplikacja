@@ -4,11 +4,16 @@ import type { ProviderId } from "./types.js";
 export type AiSdkModelFactory = {
   id: ProviderId;
   label: string;
-  apiKeyEnvironment: "OPENAI_API_KEY" | "ANTHROPIC_API_KEY" | "XAI_API_KEY";
+  apiKeyEnvironment:
+    | "OPENAI_API_KEY"
+    | "ANTHROPIC_API_KEY"
+    | "XAI_API_KEY"
+    | "GOOGLE_GENERATIVE_AI_API_KEY";
   packageName:
     | "@ai-sdk/openai"
     | "@ai-sdk/anthropic"
-    | "@ai-sdk/xai";
+    | "@ai-sdk/xai"
+    | "@ai-sdk/google";
   createModel(args: {
     apiKey: string;
     model: string;
@@ -53,6 +58,18 @@ export const AI_SDK_MODEL_FACTORIES: Record<
       const xai = createXai({ apiKey });
       return xai(model);
     }
+  },
+
+  google: {
+    id: "google",
+    label: "Google Gemini",
+    apiKeyEnvironment: "GOOGLE_GENERATIVE_AI_API_KEY",
+    packageName: "@ai-sdk/google",
+    async createModel({ apiKey, model }) {
+      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+      const google = createGoogleGenerativeAI({ apiKey });
+      return google(model);
+    }
   }
 };
 
@@ -67,11 +84,12 @@ export async function smokeTestAiSdkFactories(): Promise<
   const modelIds: Record<ProviderId, string> = {
     openai: "gpt-test",
     anthropic: "claude-test",
-    xai: "grok-test"
+    xai: "grok-test",
+    google: "gemini-test"
   };
 
   const results = [];
-  for (const id of ["openai", "anthropic", "xai"] as const) {
+  for (const id of ["openai", "anthropic", "xai", "google"] as const) {
     const factory = AI_SDK_MODEL_FACTORIES[id];
     try {
       const model = await factory.createModel({

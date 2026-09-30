@@ -40,7 +40,7 @@ const checks = {
     deleteFromOsKeyring: trust.includes("fn delete_provider_credential(") &&
         trust.includes(".delete_credential()") &&
         trust.includes("Err(KeyringError::NoEntry) => Ok(())"),
-    providerAllowlist: trust.includes('"openai" | "anthropic" | "xai"'),
+    providerAllowlist: trust.includes('"openai" | "anthropic" | "xai" | "google"'),
     transientSecretZeroization: trust.includes("unsafe_zero_string(&mut api_key);") &&
         runtimeCredentials.includes("previous?.fill(0);"),
     noBrowserPersistence: !webApi.includes("localStorage") &&

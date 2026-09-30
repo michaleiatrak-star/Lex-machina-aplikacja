@@ -10,7 +10,8 @@ export const LOCAL_CONVERSATION_CHARS = 28_000;
 const HOSTED_CONVERSATION_CHARS: Record<string, number> = {
   anthropic: 300_000,
   openai: 150_000,
-  xai: 150_000
+  xai: 150_000,
+  google: 300_000
 };
 
 export function conversationBudgetChars(

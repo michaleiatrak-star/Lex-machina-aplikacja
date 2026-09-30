@@ -1,6 +1,6 @@
 import type { RestorationMark } from "./workspace-client.js";
 
-export type ProviderId = "openai" | "anthropic" | "xai";
+export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
 export type AuthStatusResponse = {
   initialized: boolean;

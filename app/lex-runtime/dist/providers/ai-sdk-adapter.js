@@ -1223,7 +1223,7 @@ export class AiSdkProviderAdapter {
 }
 export function createLiveProviderRegistry(credentials, localModels, accountSessions) {
     const registry = new ProviderRegistry();
-    for (const id of ["openai", "anthropic", "xai"]) {
+    for (const id of ["openai", "anthropic", "xai", "google"]) {
         registry.register(new AiSdkProviderAdapter(id, credentials, id === "openai" ? localModels : undefined, accountSessions));
     }
     return registry;

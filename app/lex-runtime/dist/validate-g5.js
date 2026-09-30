@@ -2,7 +2,7 @@ import { runProviderConformance } from "./providers/conformance.js";
 import { ScriptedProviderAdapter } from "./providers/scripted-provider.js";
 import { smokeTestAiSdkFactories } from "./providers/ai-sdk-factories.js";
 const reports = [];
-for (const id of ["openai", "anthropic", "xai"]) {
+for (const id of ["openai", "anthropic", "xai", "google"]) {
     reports.push(await runProviderConformance(new ScriptedProviderAdapter({
         id,
         autoToolCall: true

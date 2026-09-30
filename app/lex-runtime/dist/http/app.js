@@ -41,7 +41,8 @@ import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrder
 const PROVIDERS = new Set([
     "openai",
     "anthropic",
-    "xai"
+    "xai",
+    "google"
 ]);
 function isProviderId(value) {
     return PROVIDERS.has(value);

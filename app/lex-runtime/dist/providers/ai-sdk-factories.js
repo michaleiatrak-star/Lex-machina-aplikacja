@@ -31,16 +31,28 @@ export const AI_SDK_MODEL_FACTORIES = {
             const xai = createXai({ apiKey });
             return xai(model);
         }
+    },
+    google: {
+        id: "google",
+        label: "Google Gemini",
+        apiKeyEnvironment: "GOOGLE_GENERATIVE_AI_API_KEY",
+        packageName: "@ai-sdk/google",
+        async createModel({ apiKey, model }) {
+            const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+            const google = createGoogleGenerativeAI({ apiKey });
+            return google(model);
+        }
     }
 };
 export async function smokeTestAiSdkFactories() {
     const modelIds = {
         openai: "gpt-test",
         anthropic: "claude-test",
-        xai: "grok-test"
+        xai: "grok-test",
+        google: "gemini-test"
     };
     const results = [];
-    for (const id of ["openai", "anthropic", "xai"]) {
+    for (const id of ["openai", "anthropic", "xai", "google"]) {
         const factory = AI_SDK_MODEL_FACTORIES[id];
         try {
             const model = await factory.createModel({

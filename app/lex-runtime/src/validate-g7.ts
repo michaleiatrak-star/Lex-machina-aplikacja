@@ -31,7 +31,7 @@ if (scanIssues.length || declarationIssues.length) {
   process.exitCode = 1;
 } else {
   const providers = new ProviderRegistry();
-  for (const id of ["openai", "anthropic", "xai"] as const) {
+  for (const id of ["openai", "anthropic", "xai", "google"] as const) {
     providers.register(new ScriptedProviderAdapter({ id }));
   }
 
@@ -41,7 +41,7 @@ if (scanIssues.length || declarationIssues.length) {
   );
 
   const results = [];
-  for (const provider of ["openai", "anthropic", "xai"] as const) {
+  for (const provider of ["openai", "anthropic", "xai", "google"] as const) {
     const result = await engine.executePolishLegalQuery({
       query: '__LEX_SKILLS_V1__ {"auto":false,"manual":[]}\nTest techniczny pionowego routingu domeny cywilnej bez uruchamiania wykonawczego workflow dokumentowego.',
       provider,

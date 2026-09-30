@@ -13,7 +13,8 @@ export type LocalUserStatus =
 export type AssistantModelProvider =
   | "openai"
   | "anthropic"
-  | "xai";
+  | "xai"
+  | "google";
 
 export type AuthKdfPolicy = {
   algorithm: "ARGON2ID";

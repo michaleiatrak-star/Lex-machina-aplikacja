@@ -194,6 +194,9 @@ export class DynamicModelCatalog {
     if (provider === "anthropic") {
       return this.listAnthropic(key);
     }
+    if (provider === "google") {
+      return this.listGoogle(key);
+    }
     return this.listXai(key);
   }
 
@@ -315,6 +318,51 @@ export class DynamicModelCatalog {
       if (!afterId) break;
     }
 
+    return models;
+  }
+
+  // Gemini API: only models that generate content (no embeddings, imagen, tts).
+  private async listGoogle(apiKey: string): Promise<ModelDescriptor[]> {
+    const models: ModelDescriptor[] = [];
+    let pageToken: string | null = null;
+    for (let page = 0; page < 10; page += 1) {
+      const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
+      url.searchParams.set("pageSize", "1000");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const response = await this.fetcher(url, {
+        method: "GET",
+        headers: {
+          "x-goog-api-key": apiKey,
+          Accept: "application/json"
+        }
+      });
+      const payload = record(await parseJson(response, "google"));
+      const data = Array.isArray(payload?.models) ? payload.models : [];
+      for (const item of data) {
+        const model = record(item);
+        const name = typeof model?.name === "string" ? model.name : "";
+        const id = name.replace(/^models\//, "");
+        const methods = strings(model?.supportedGenerationMethods) ?? [];
+        if (!id || !methods.includes("generateContent")) continue;
+        models.push({
+          provider: "google",
+          id,
+          displayName:
+            typeof model?.displayName === "string" && model.displayName
+              ? model.displayName
+              : id,
+          selectable: true,
+          ...(typeof model?.inputTokenLimit === "number"
+            ? { contextWindow: model.inputTokenLimit }
+            : {})
+        });
+      }
+      pageToken =
+        typeof payload?.nextPageToken === "string" && payload.nextPageToken
+          ? payload.nextPageToken
+          : null;
+      if (!pageToken) break;
+    }
     return models;
   }
 

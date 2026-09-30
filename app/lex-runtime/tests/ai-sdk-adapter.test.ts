@@ -866,6 +866,6 @@ describe("AiSdkProviderAdapter", () => {
 
     expect(
       registry.list().map((adapter) => adapter.id).sort()
-    ).toEqual(["anthropic", "openai", "xai"]);
+    ).toEqual(["anthropic", "google", "openai", "xai"]);
   });
 });

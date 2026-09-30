@@ -35,6 +35,16 @@ function parseXai(id) {
         version: match[1].split(".").map(Number)
     };
 }
+// "gemini-2.5-pro", "gemini-3-pro-preview", "gemini-2.5-flash"; lite tiers are small.
+function parseGoogle(id) {
+    const match = /^gemini-(\d+(?:\.\d+)?)-(pro|flash)(?:-preview(?:-[\w-]+)?|-\d{3})?$/i.exec(id);
+    if (!match)
+        return null;
+    return {
+        family: `gemini-${match[2].toLowerCase()}`,
+        version: match[1].split(".").map(Number)
+    };
+}
 export function parseModelFamily(provider, id) {
     if (SMALL_TIER.test(id))
         return null;
@@ -42,6 +52,8 @@ export function parseModelFamily(provider, id) {
         return parseAnthropic(id);
     if (provider === "openai")
         return parseOpenAi(id);
+    if (provider === "google")
+        return parseGoogle(id);
     return parseXai(id);
 }
 function compareVersions(a, b) {

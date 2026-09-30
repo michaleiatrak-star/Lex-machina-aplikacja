@@ -2224,7 +2224,7 @@ export function createLiveProviderRegistry(
   accountSessions?: AccountSessionManager
 ): ProviderRegistry {
   const registry = new ProviderRegistry();
-  for (const id of ["openai", "anthropic", "xai"] as const) {
+  for (const id of ["openai", "anthropic", "xai", "google"] as const) {
     registry.register(
       new AiSdkProviderAdapter(
         id,

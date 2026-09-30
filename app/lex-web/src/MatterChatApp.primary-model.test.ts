@@ -230,3 +230,12 @@ describe("account model choices", () => {
     expect(accountModelChoices("anthropic", "x")).toEqual([]);
   });
 });
+
+describe("Gemini as a primary model source", () => {
+  it("maps the Google account source to the google runtime provider and account model", () => {
+    expect(runtimeProviderForPrimarySource("google-account")).toBe("google");
+    expect(runtimeProviderForPrimarySource("google")).toBe("google");
+    expect(isAccountPrimarySource("google-account")).toBe(true);
+    expect(accountModelIdForPrimarySource("google-account")).toBe("account/google/default");
+  });
+});

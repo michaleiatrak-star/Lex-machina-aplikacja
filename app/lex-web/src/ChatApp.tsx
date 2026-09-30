@@ -74,6 +74,11 @@ const PROVIDERS: Array<{
     id: "xai",
     label: "xAI / Grok",
     apiKeyUrl: "https://console.x.ai/"
+  },
+  {
+    id: "google",
+    label: "Google / Gemini",
+    apiKeyUrl: "https://aistudio.google.com/apikey"
   }
 ];
 
@@ -193,7 +198,8 @@ export default function ChatApp({
   >({
     openai: undefined,
     anthropic: undefined,
-    xai: undefined
+    xai: undefined,
+    google: undefined
   });
   const [providerApiKey, setProviderApiKeyInput] = useState("");
   const [providerKeyBusy, setProviderKeyBusy] = useState(false);

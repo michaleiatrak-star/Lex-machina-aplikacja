@@ -83,7 +83,9 @@ export const LOCAL_MAX_DOCUMENT_ATTACHMENTS = 4;
 export const HOSTED_CONTEXT_TOKENS: Record<string, number> = {
   anthropic: 200_000,
   openai: 128_000,
-  xai: 128_000
+  xai: 128_000,
+  // Gemini offers up to 1M tokens; capped by MAX_CONTEXT_WINDOW like the others.
+  google: 200_000
 };
 const LEGACY_CHAR_CAP = 160_000;
 const MIN_CONTEXT_WINDOW = 8_192;

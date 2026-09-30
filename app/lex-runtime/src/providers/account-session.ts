@@ -60,13 +60,15 @@ import { ACCOUNT_SESSION_MODELS } from "./model-families.js";
 const ACCOUNT_MODEL_IDS: Record<ProviderId, string> = {
   openai: "account/openai/default",
   anthropic: "account/anthropic/default",
-  xai: "account/xai/default"
+  xai: "account/xai/default",
+  google: "account/google/default"
 };
 
 const CLI_NAMES: Record<ProviderId, string> = {
   openai: "codex",
   anthropic: "claude",
-  xai: "grok"
+  xai: "grok",
+  google: "gemini"
 };
 
 const OPTIONAL_ACCOUNT_CLIENTS: Partial<Record<
@@ -86,6 +88,11 @@ const OPTIONAL_ACCOUNT_CLIENTS: Partial<Record<
     packageName: "@anthropic-ai/claude-code",
     version: "2.1.278",
     binary: "claude"
+  },
+  google: {
+    packageName: "@google/gemini-cli",
+    version: "0.62.0",
+    binary: "gemini"
   }
 };
 
@@ -96,7 +103,8 @@ export type AccountSessionResumeMode =
 export function accountSessionResumeMode(
   provider?: ProviderId
 ): AccountSessionResumeMode {
-  return provider === "anthropic"
+  // Gemini never resumes a CLI session: Lex sends the whole context itself.
+  return provider === "anthropic" || provider === "google"
     ? "LEX_CONTEXT_ONLY"
     : "LAST_OR_NEW";
 }
@@ -774,6 +782,14 @@ function accountEnvironment(provider: ProviderId): NodeJS.ProcessEnv {
     } else {
       delete env.CLAUDE_CODE_OAUTH_TOKEN;
     }
+  } else if (provider === "google") {
+    // The Google account (Login with Google) must be used, never an API key.
+    delete env.GEMINI_API_KEY;
+    delete env.GOOGLE_API_KEY;
+    delete env.GOOGLE_GENERATIVE_AI_API_KEY;
+    delete env.GOOGLE_GENAI_USE_VERTEXAI;
+    delete env.GOOGLE_GENAI_USE_GCA;
+    env.GEMINI_CLI_NO_RELAUNCH = "true";
   } else {
     delete env.XAI_API_KEY;
   }
@@ -787,7 +803,81 @@ function installHint(provider: ProviderId): string {
   if (provider === "anthropic") {
     return "Claude Code nie jest częścią instalatora. Po wybraniu połączenia konta Claude Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
   }
+  if (provider === "google") {
+    return "Gemini CLI nie jest częścią instalatora. Po wybraniu połączenia konta Google Gemini Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
+  }
   return "Zainstaluj Grok Build CLI i wykonaj: grok login";
+}
+
+// Gemini CLI keeps its Google-account login in ~/.gemini (oauth_creds.json);
+// settings.json selects the auth method.
+function geminiHome(): string {
+  const home = process.env.GEMINI_CLI_HOME?.trim() || os.homedir();
+  return path.join(home, ".gemini");
+}
+
+export function geminiGoogleLoginPresent(dir = geminiHome()): boolean {
+  return existsSync(path.join(dir, "oauth_creds.json"));
+}
+
+// Selects "Login with Google" (a personal Google account / Gemini subscription)
+// without touching the user's other Gemini CLI settings.
+export async function selectGeminiGoogleLogin(dir = geminiHome()): Promise<void> {
+  const file = path.join(dir, "settings.json");
+  let settings: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(await fsp.readFile(file, "utf8")) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      settings = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // No or unreadable settings: start a new file.
+  }
+  const security =
+    settings.security && typeof settings.security === "object" && !Array.isArray(settings.security)
+      ? { ...(settings.security as Record<string, unknown>) }
+      : {};
+  const auth =
+    security.auth && typeof security.auth === "object" && !Array.isArray(security.auth)
+      ? { ...(security.auth as Record<string, unknown>) }
+      : {};
+  if (auth.selectedType === "oauth-personal") return;
+  auth.selectedType = "oauth-personal";
+  security.auth = auth;
+  settings.security = security;
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(file, JSON.stringify(settings, null, 2) + "\n", "utf8");
+}
+
+// Headless Gemini CLI output (-o json): {"response": "..."} or {"error": {...}}.
+export function parseGeminiResult(stdout: string): {
+  text: string | null;
+  error: { message: string; code: number | null } | null;
+} {
+  const start = stdout.indexOf("{");
+  const end = stdout.lastIndexOf("}");
+  if (start < 0 || end < start) return { text: null, error: null };
+  try {
+    const parsed = JSON.parse(stdout.slice(start, end + 1)) as {
+      response?: unknown;
+      error?: { message?: unknown; code?: unknown };
+    };
+    if (parsed.error) {
+      return {
+        text: null,
+        error: {
+          message: String(parsed.error.message ?? "GEMINI_ERROR"),
+          code: typeof parsed.error.code === "number" ? parsed.error.code : null
+        }
+      };
+    }
+    return {
+      text: typeof parsed.response === "string" ? parsed.response : null,
+      error: null
+    };
+  } catch {
+    return { text: null, error: null };
+  }
 }
 
 function cmdQuote(value: string): string {
@@ -943,7 +1033,7 @@ function optionalAccountClientsRoot(): string {
 }
 
 function optionalAccountClientExecutable(
-  provider: "openai" | "anthropic"
+  provider: "openai" | "anthropic" | "google"
 ): string | null {
   const spec =
     OPTIONAL_ACCOUNT_CLIENTS[
@@ -970,7 +1060,7 @@ function optionalAccountClientExecutable(
 }
 
 async function optionalAccountClientMatchesPinnedVersion(
-  provider: "openai" | "anthropic"
+  provider: "openai" | "anthropic" | "google"
 ): Promise<boolean> {
   const spec = OPTIONAL_ACCOUNT_CLIENTS[provider];
   if (!spec) return false;
@@ -1359,6 +1449,9 @@ async function resolveAccountExecutable(
   if (provider === "anthropic") {
     return privateClaudeExecutable();
   }
+  if (provider === "google") {
+    return optionalAccountClientExecutable("google");
+  }
   return null;
 }
 
@@ -1580,11 +1673,13 @@ function runDirect(
 async function ensureAccountExecutable(
   provider: ProviderId
 ): Promise<string | null> {
-  if (provider === "openai" || provider === "anthropic") {
+  if (provider === "openai" || provider === "anthropic" || provider === "google") {
     const privateExecutable =
       provider === "openai"
         ? privateCodexExecutable()
-        : privateClaudeExecutable();
+        : provider === "google"
+          ? optionalAccountClientExecutable("google")
+          : privateClaudeExecutable();
     if (
       privateExecutable &&
       await optionalAccountClientMatchesPinnedVersion(provider)
@@ -1597,7 +1692,7 @@ async function ensureAccountExecutable(
     // fallback when provisioning the pinned client fails.
     if (
       !privateExecutable &&
-      provider === "openai"
+      (provider === "openai" || provider === "google")
     ) {
       const systemExecutable =
         await resolveCommand(CLI_NAMES[provider]);
@@ -1830,6 +1925,12 @@ export function accountLoginArgs(
       "login"
     ];
   }
+  if (provider === "google") {
+    // Gemini CLI has no login subcommand: the interactive client starts the
+    // "Login with Google" browser flow selected in its settings (see
+    // selectGeminiGoogleLogin); the user closes it with /quit.
+    return [];
+  }
   return ["login"];
 }
 
@@ -1906,7 +2007,9 @@ async function runVisibleWindowsLogin(
       ? "Codex / ChatGPT"
       : provider === "anthropic"
         ? "Claude Code"
-        : "Grok Build";
+        : provider === "google"
+          ? "Gemini CLI"
+          : "Grok Build";
   const loginCommand =
     /\.(cmd|bat)$/i.test(
       executable
@@ -1922,6 +2025,9 @@ async function runVisibleWindowsLogin(
       `title Lex Machina - ${loginLabel} login`,
       `echo Lex Machina otworzy logowanie: ${loginLabel}.`,
       "echo Dokoncz oficjalne logowanie w przegladarce i wroc do tego okna, jesli klient poprosi o kod.",
+      ...(provider === "google"
+        ? ["echo Po zalogowaniu wpisz /quit i nacisnij Enter, aby zamknac Gemini CLI."]
+        : []),
       "echo.",
       loginCommand,
       "set \"LEX_EXIT=%ERRORLEVEL%\"",
@@ -2932,6 +3038,17 @@ export class AccountSessionManager {
       };
     }
 
+    if (provider === "google") {
+      return {
+        provider,
+        command,
+        installed: true,
+        authenticated: geminiGoogleLoginPresent(),
+        installHint: installHint(provider),
+        resumeMode: accountSessionResumeMode(provider)
+      };
+    }
+
     let result: RunResult;
     try {
       if (provider === "openai") {
@@ -3045,7 +3162,7 @@ export class AccountSessionManager {
 
   async statusAll(): Promise<ProviderAccountSessionStatus[]> {
     return Promise.all(
-      (["openai", "anthropic", "xai"] as const)
+      (["openai", "anthropic", "xai", "google"] as const)
         .map((provider) => this.status(provider))
     );
   }
@@ -3064,6 +3181,9 @@ export class AccountSessionManager {
       return current;
     }
 
+    if (provider === "google") {
+      await selectGeminiGoogleLogin();
+    }
     const args =
       accountLoginArgs(
         provider
@@ -3660,6 +3780,58 @@ export class AccountSessionManager {
           );
         }
         return parsed.text;
+      }
+
+      if (provider === "google") {
+        // Headless Gemini CLI: the prompt on stdin, JSON result, read-only
+        // approval mode in an empty temporary workspace; never resumes a
+        // session (Lex sends the whole context itself).
+        const result =
+          await runCli(
+            provider,
+            [
+              "-p",
+              "",
+              "-o",
+              "json",
+              "--approval-mode",
+              "plan",
+              "--skip-trust",
+              ...(clientModel ? ["-m", clientModel] : [])
+            ],
+            prompt,
+            COMMAND_TIMEOUT_MS,
+            workDir,
+            abortSignal
+          );
+        const parsed =
+          parseGeminiResult(
+            result.stdout
+          );
+        if (
+          parsed.error?.code === 41 ||
+          /auth method|login required|not logged in|oauth/i.test(parsed.error?.message ?? "")
+        ) {
+          throw new Error(
+            "ACCOUNT_SESSION_NOT_AUTHENTICATED:google"
+          );
+        }
+        if (parsed.error) {
+          throw normalizeCliFailure(provider, {
+            code: result.code === 0 ? 1 : result.code,
+            stdout: "",
+            stderr: parsed.error.message
+          });
+        }
+        if (result.code !== 0 && !parsed.text) {
+          throw normalizeCliFailure(provider, result);
+        }
+        if (!parsed.text?.trim()) {
+          throw new Error(
+            "ACCOUNT_SESSION_EMPTY_RESPONSE:google"
+          );
+        }
+        return parsed.text.trim();
       }
 
       const savedSessionId =

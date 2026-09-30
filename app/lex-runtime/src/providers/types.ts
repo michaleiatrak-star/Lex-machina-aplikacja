@@ -1,4 +1,4 @@
-export type ProviderId = "openai" | "anthropic" | "xai";
+export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
 export type ReasoningLevel =
   | "none"

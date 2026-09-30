@@ -16,9 +16,11 @@ const SOURCES: ReadonlySet<string> = new Set([
   "openai",
   "anthropic",
   "xai",
+  "google",
   "openai-account",
   "anthropic-account",
-  "xai-account"
+  "xai-account",
+  "google-account"
 ]);
 
 function storageKey(userId: string): string {
