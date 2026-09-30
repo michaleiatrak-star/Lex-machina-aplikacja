@@ -61,6 +61,13 @@ const OPTIONAL_ACCOUNT_CLIENTS = {
         packageName: "@google/gemini-cli",
         version: "0.62.0",
         binary: "gemini"
+    },
+    // Official Grok Build CLI (npm publisher xai-security, security@x.ai);
+    // bin/grok is a Node launcher, so the npm .cmd shim works on Windows.
+    xai: {
+        packageName: "@xai-official/grok",
+        version: "1.0.44",
+        binary: "grok"
     }
 };
 export function accountSessionResumeMode(provider) {
@@ -470,7 +477,7 @@ function installHint(provider) {
     if (provider === "google") {
         return "Gemini CLI nie jest częścią instalatora. Po wybraniu połączenia konta Google Gemini Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
     }
-    return "Zainstaluj Grok Build CLI i wykonaj: grok login";
+    return "Grok Build nie jest częścią instalatora. Po wybraniu połączenia konta Grok Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
 }
 // Gemini CLI keeps its Google-account login in ~/.gemini (oauth_creds.json);
 // settings.json selects the auth method.
@@ -878,8 +885,8 @@ async function resolveAccountExecutable(provider) {
     if (provider === "anthropic") {
         return privateClaudeExecutable();
     }
-    if (provider === "google") {
-        return optionalAccountClientExecutable("google");
+    if (provider === "google" || provider === "xai") {
+        return optionalAccountClientExecutable(provider);
     }
     return null;
 }
@@ -1014,11 +1021,14 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
     });
 }
 async function ensureAccountExecutable(provider) {
-    if (provider === "openai" || provider === "anthropic" || provider === "google") {
+    if (provider === "openai" ||
+        provider === "anthropic" ||
+        provider === "google" ||
+        provider === "xai") {
         const privateExecutable = provider === "openai"
             ? privateCodexExecutable()
-            : provider === "google"
-                ? optionalAccountClientExecutable("google")
+            : provider === "google" || provider === "xai"
+                ? optionalAccountClientExecutable(provider)
                 : privateClaudeExecutable();
         if (privateExecutable &&
             await optionalAccountClientMatchesPinnedVersion(provider)) {
@@ -1029,7 +1039,7 @@ async function ensureAccountExecutable(provider) {
         // headless flags; it shares the same login (~/.claude), so it is only a
         // fallback when provisioning the pinned client fails.
         if (!privateExecutable &&
-            (provider === "openai" || provider === "google")) {
+            (provider === "openai" || provider === "google" || provider === "xai")) {
             const systemExecutable = await resolveCommand(CLI_NAMES[provider]);
             if (systemExecutable) {
                 return systemExecutable;
@@ -1103,8 +1113,8 @@ async function provisionPinnedAccountClient(provider) {
     }
     const installed = provider === "openai"
         ? privateCodexExecutable()
-        : provider === "google"
-            ? optionalAccountClientExecutable("google")
+        : provider === "google" || provider === "xai"
+            ? optionalAccountClientExecutable(provider)
             : privateClaudeExecutable();
     if (!installed) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`);
@@ -1350,7 +1360,7 @@ async function assertSubscriptionAccount(provider, abortSignal) {
     }
 }
 async function runGrokAcp(prompt, cwd, abortSignal, resumeSessionId) {
-    const executable = await resolveCommand(CLI_NAMES.xai);
+    const executable = await ensureAccountExecutable("xai");
     if (!executable) {
         throw new Error("ACCOUNT_SESSION_CLI_NOT_INSTALLED:xai");
     }
@@ -1374,6 +1384,10 @@ async function runGrokAcp(prompt, cwd, abortSignal, resumeSessionId) {
         const rl = readline.createInterface({
             input: proc.stdout
         });
+        // A client that exits early (not logged in, crash) closes stdin; the
+        // write then fails with EPIPE, which must not crash the runtime. The
+        // "exit" handler below settles the request.
+        proc.stdin.on("error", () => { });
         let nextId = 1;
         let text = "";
         let stderr = "";

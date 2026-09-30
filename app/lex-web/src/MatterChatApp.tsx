@@ -232,39 +232,30 @@ const PROVIDERS: Array<{
   label: string;
   apiKeyUrl: string;
   accountClientLabel: string;
-  accountInstallUrl: string;
 }> = [
   {
     id: "openai",
     label: "OpenAI",
     apiKeyUrl: "https://platform.openai.com/api-keys",
-    accountClientLabel: "Codex CLI",
-    accountInstallUrl:
-      "https://developers.openai.com/codex/cli"
+    accountClientLabel: "Codex CLI"
   },
   {
     id: "anthropic",
     label: "Anthropic / Claude",
     apiKeyUrl: "https://platform.claude.com/settings/keys",
-    accountClientLabel: "Claude Code",
-    accountInstallUrl:
-      "https://support.claude.com/en/articles/14552382-your-first-day-in-claude-code"
+    accountClientLabel: "Claude Code"
   },
   {
     id: "xai",
     label: "xAI / Grok",
     apiKeyUrl: "https://console.x.ai/",
-    accountClientLabel: "Grok Build",
-    accountInstallUrl:
-      "https://docs.x.ai/build/overview"
+    accountClientLabel: "Grok Build"
   },
   {
     id: "google",
     label: "Google / Gemini",
     apiKeyUrl: "https://aistudio.google.com/apikey",
-    accountClientLabel: "Gemini CLI",
-    accountInstallUrl:
-      "https://github.com/google-gemini/gemini-cli"
+    accountClientLabel: "Gemini CLI"
   }
 ];
 
@@ -2223,26 +2214,6 @@ export default function MatterChatApp({
     setSettingsSection("models");
   }
 
-  async function openAccountClientSetup(): Promise<void> {
-    if (
-      !providerDefinition
-    ) {
-      return;
-    }
-    try {
-      await openExternalUrl(
-        providerDefinition
-          .accountInstallUrl
-      );
-    } catch (error) {
-      setProviderAccountMessage(
-        error instanceof Error
-          ? error.message
-          : String(error)
-      );
-    }
-  }
-
   async function connectProviderAccount(): Promise<boolean> {
     if (
       !isAccountPrimarySource(
@@ -3902,20 +3873,12 @@ export default function MatterChatApp({
                       "ADMIN"
                   }
                   onClick={() =>
-                    accountSession
-                      ?.installed ===
-                    false
-                      ? void openAccountClientSetup()
-                      : void connectProviderAccount()
+                    void connectProviderAccount()
                   }
                 >
                   {providerAccountBusy
                     ? "Logowanie…"
-                    : accountSession
-                        ?.installed ===
-                      false
-                      ? "Zainstaluj klienta ↗"
-                      : "Połącz konto"}
+                    : "Połącz konto"}
                 </button>
               ) : null}
               <button
@@ -6306,37 +6269,25 @@ export default function MatterChatApp({
                   </small>
                   {user.appRole === "ADMIN" ? (
                     <div className="chat-form-row compact">
-                      {/* Codex, Claude Code and Gemini CLI are provisioned by the runtime on
-                          "Połącz konto"; only Grok Build needs a manual install. */}
-                      {accountSession?.installed === false && runtimeProvider === "xai" ? (
-                        <button
-                          type="button"
-                          className="chat-primary-action"
-                          onClick={() =>
-                            void openAccountClientSetup()
-                          }
-                        >
-                          Instalacja {providerDefinition?.accountClientLabel ?? "klienta"} ↗
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="chat-primary-action"
-                          disabled={
-                            providerAccountBusy ||
-                            accountSession?.authenticated === true
-                          }
-                          onClick={() =>
-                            void connectProviderAccount()
-                          }
-                        >
-                          {providerAccountBusy
-                            ? "Logowanie…"
-                            : accountSession?.authenticated
-                              ? "Połączone"
-                              : "Połącz konto"}
-                        </button>
-                      )}
+                      {/* The runtime provisions the pinned client (Codex, Claude Code,
+                          Gemini CLI, Grok Build) on "Połącz konto". */}
+                      <button
+                        type="button"
+                        className="chat-primary-action"
+                        disabled={
+                          providerAccountBusy ||
+                          accountSession?.authenticated === true
+                        }
+                        onClick={() =>
+                          void connectProviderAccount()
+                        }
+                      >
+                        {providerAccountBusy
+                          ? "Logowanie…"
+                          : accountSession?.authenticated
+                            ? "Połączone"
+                            : "Połącz konto"}
+                      </button>
                       <button
                         type="button"
                         className="chat-secondary-action"
