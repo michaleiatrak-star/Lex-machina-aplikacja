@@ -42,6 +42,8 @@ export type GeneratedDocumentRef = {
   filename: string;
   format: "docx" | "odt";
   tokenized: boolean;
+  // Letter workflows: a draft after a cycle, the finished document at the end.
+  stage?: "DRAFT" | "FINAL";
 };
 
 export type WorkspaceThreadMessage = {

@@ -113,7 +113,8 @@ describe("encrypted case workspace", () => {
                     artifactId: "artifact_" + "1".repeat(32),
                     filename: "LexMachina-pismo.docx",
                     format: "docx",
-                    tokenized: true
+                    tokenized: true,
+                    stage: "DRAFT"
                 }
             }
         });
@@ -122,7 +123,8 @@ describe("encrypted case workspace", () => {
             artifactId: "artifact_" + "1".repeat(32),
             filename: "LexMachina-pismo.docx",
             format: "docx",
-            tokenized: true
+            tokenized: true,
+            stage: "DRAFT"
         });
         await expect(store.appendThreadMessage({
             caseId, caseDataKey: key, keyVersion: 1,

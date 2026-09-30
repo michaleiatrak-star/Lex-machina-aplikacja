@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–16)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–17)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -17,8 +17,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 14 | `0320028` | świeża sesja konta dla routera i generatora (ChatGPT), karta dokumentu w czacie, parser SN |
 | hotfix 15 | budowany | kształt bloków AST (ChatGPT), rozpoznanie „plik doc” |
 | hotfix 16 | budowany | Google Gemini: klucz API i konto Google (Gemini CLI) |
+| hotfix 17 | budowany | szkic/gotowy dokument po cyklach pism, edycja w karcie, podgląd źródła w ramce |
 
 ---
+
+## hotfix 17
+
+- Pisma: `letterDocumentPlan` — po `SIMPLE_LETTER_V1` (gotowy, gdy finalizacja PASS, Gate I nie BLOCKED i 0 niezweryfikowanych; inaczej szkic) i po etapie `PROCESS_PLEADING_V1` (szkic; gotowy przy `documentStatus = FINAL`) czat sam generuje `.docx` i kartę; `generatedDocument.stage` (`DRAFT`/`FINAL`) w wątku.
+- Karta dokumentu: edycja (`DocumentEditor`, zapis przez `workspace/render` jako nowy plik w aktach), pobranie wersji edytowanej.
+- Wyszukiwanie: `POST /api/mcp-search/source-preview` (`source-preview.ts`) — tylko HTTPS i domeny źródeł MCP (także po przekierowaniach, maks. 4), limit 8 MB / 20 s, bez skryptów, ramek i atrybutów zdarzeń, `<base>`; web: `SourcePreviewFrame` (ramka `sandbox` z `blob:`, PDF w `PdfPreview`). Trasa w allowliście proxy.
 
 ## hotfix 16
 
@@ -109,7 +116,10 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Znane ograniczenia po hotfix 16
+## Znane ograniczenia po hotfix 17
+
+- Podgląd źródła: obrazy i style z domeny źródła nie są wczytywane (CSP aplikacji), widoczny jest tekst strony.
+- Automatyczny plik pisma to dodatkowe wywołanie modelu po odpowiedzi.
 
 - Gemini przez konto: przetestowane z podstawionym CLI (argumenty, stdin, JSON); logowanie kontem Google w prawdziwym Gemini CLI do potwierdzenia po instalacji.
 

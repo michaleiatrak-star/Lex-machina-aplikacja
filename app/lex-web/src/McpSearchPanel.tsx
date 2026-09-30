@@ -16,6 +16,7 @@ import {
   type McpToolInputProperty
 } from "./api.js";
 import { fieldLabel, toolLabel } from "./mcp-search-labels.js";
+import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
 import {
   appendDocument,
   nextPageArgs,
@@ -181,6 +182,9 @@ export function McpSearchPanel() {
     useState<ResultView | null>(null);
   const [details, setDetails] =
     useState<Record<string, DetailState>>({});
+  // One source page previewed at a time (URL of the result or document).
+  const [sourcePreview, setSourcePreview] =
+    useState<string | null>(null);
 
   useEffect(() => {
     void getMcpSearchSources()
@@ -543,10 +547,20 @@ export function McpSearchPanel() {
               <h3>{view.document.title}</h3>
               {view.document.url ? (
                 <p>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    onClick={() => setSourcePreview(sourcePreview === view.document!.url ? null : view.document!.url)}
+                  >
+                    {sourcePreview === view.document.url ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                  </button>{" "}
                   <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(view.document!.url!)}>
                     Otwórz w źródle
                   </button>
                 </p>
+              ) : null}
+              {view.document.url && sourcePreview === view.document.url ? (
+                <SourcePreviewFrame url={view.document.url} />
               ) : null}
               <DocumentView
                 document={view.document}
@@ -589,11 +603,23 @@ export function McpSearchPanel() {
                         </button>
                       ) : null}
                       {item.url ? (
-                        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
-                          Otwórz w źródle
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="chat-secondary-action"
+                            onClick={() => setSourcePreview(sourcePreview === item.url ? null : item.url)}
+                          >
+                            {sourcePreview === item.url ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                          </button>
+                          <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
+                            Otwórz w źródle
+                          </button>
+                        </>
                       ) : null}
                     </div>
+                    {item.url && sourcePreview === item.url ? (
+                      <SourcePreviewFrame url={item.url} />
+                    ) : null}
                     {detail?.error ? <div className="alert alert-error">{detail.error}</div> : null}
                     {detail?.document ? (
                       <DocumentView

@@ -123,7 +123,8 @@ function safeMessage(input) {
             !generated.filename.trim() ||
             generated.filename.length > 200 ||
             !["docx", "odt"].includes(generated.format) ||
-            typeof generated.tokenized !== "boolean")) {
+            typeof generated.tokenized !== "boolean" ||
+            (generated.stage !== undefined && !["DRAFT", "FINAL"].includes(generated.stage)))) {
         throw new Error("WORKSPACE_GENERATED_DOCUMENT_INVALID");
     }
     const { restorations: _dropped, generatedDocument: _generated, ...rest } = input;
@@ -135,7 +136,8 @@ function safeMessage(input) {
                     artifactId: generated.artifactId,
                     filename: generated.filename,
                     format: generated.format,
-                    tokenized: generated.tokenized
+                    tokenized: generated.tokenized,
+                    ...(generated.stage ? { stage: generated.stage } : {})
                 }
             }
             : {}),

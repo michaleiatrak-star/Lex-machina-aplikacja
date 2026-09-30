@@ -75,6 +75,8 @@ export type WorkspaceGeneratedDocument = {
   format: "docx" | "odt";
   // true: the file carries alias symbols and needs machine deanonymization.
   tokenized: boolean;
+  // Letter workflows: a draft after a cycle, the finished document at the end.
+  stage?: "DRAFT" | "FINAL";
 };
 
 /** A value restored into an assistant message (see privacy/restoration-report). */
@@ -264,7 +266,8 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
       !generated.filename.trim() ||
       generated.filename.length > 200 ||
       !["docx", "odt"].includes(generated.format) ||
-      typeof generated.tokenized !== "boolean"
+      typeof generated.tokenized !== "boolean" ||
+      (generated.stage !== undefined && !["DRAFT", "FINAL"].includes(generated.stage))
     )
   ) {
     throw new Error("WORKSPACE_GENERATED_DOCUMENT_INVALID");
@@ -279,7 +282,8 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
             artifactId: generated.artifactId,
             filename: generated.filename,
             format: generated.format,
-            tokenized: generated.tokenized
+            tokenized: generated.tokenized,
+            ...(generated.stage ? { stage: generated.stage } : {})
           }
         }
       : {}),

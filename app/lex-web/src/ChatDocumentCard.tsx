@@ -3,6 +3,7 @@ import {
   downloadGeneratedArtifact,
   isDesktopShell,
   listCaseArtifacts,
+  uploadCaseFile,
   type CaseArtifact
 } from "./api.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
@@ -11,6 +12,7 @@ import { downloadBlob } from "./download-file.js";
 import {
   getEditableItem,
   openWorkspaceItemInSystem,
+  renderEditable,
   type EditableBlock,
   type GeneratedDocumentRef
 } from "./workspace-client.js";
@@ -29,6 +31,21 @@ export function ChatDocumentCard(props: {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<EditableBlock[] | null>(null);
   const [deanonymize, setDeanonymize] = useState<CaseArtifact | null>(null);
+  // The last edited version saved in the case files (download without re-rendering).
+  const [edited, setEdited] = useState<{ blob: Blob; filename: string } | null>(null);
+
+  // Editing: the edited document is rendered by the runtime and stored in the case
+  // files as a new file; the generated original stays unchanged.
+  async function saveEdited(
+    filename: string,
+    format: "docx" | "odt",
+    blocks: EditableBlock[]
+  ): Promise<void> {
+    const blob = await renderEditable(caseId, { format, model: { kind: "document", blocks } });
+    await uploadCaseFile(caseId, new File([blob], filename, { type: blob.type }));
+    setEdited({ blob, filename });
+    setStatus(`Wersja edytowana „${filename}” zapisana w aktach sprawy.`);
+  }
 
   async function run(action: () => Promise<void>): Promise<void> {
     setBusy(true);
@@ -57,6 +74,11 @@ export function ChatDocumentCard(props: {
         <div>
           <strong>{document.filename}</strong>
           <small>
+            {document.stage === "DRAFT"
+              ? "Szkic · "
+              : document.stage === "FINAL"
+                ? "Gotowy dokument · "
+                : ""}
             {document.format.toUpperCase()}
             {document.tokenized ? " · z symbolami danych osobowych" : ""}
           </small>
@@ -91,8 +113,22 @@ export function ChatDocumentCard(props: {
             })
           }
         >
-          {preview ? "Zwiń podgląd" : "Podgląd"}
+          {preview ? "Zwiń podgląd" : props.canWrite ? "Podgląd i edycja" : "Podgląd"}
         </button>
+        {edited ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const saved = await downloadBlob(edited.blob, edited.filename);
+                setStatus(saved ? `Zapisano: ${saved}` : "Pobieranie rozpoczęte.");
+              })
+            }
+          >
+            Pobierz wersję edytowaną
+          </button>
+        ) : null}
         {isDesktopShell() ? (
           <button
             type="button"
@@ -141,8 +177,8 @@ export function ChatDocumentCard(props: {
             filename={document.filename}
             format={document.format}
             blocks={preview}
-            readOnly
-            onSave={async () => undefined}
+            readOnly={!props.canWrite}
+            onSave={saveEdited}
           />
         </div>
       ) : null}

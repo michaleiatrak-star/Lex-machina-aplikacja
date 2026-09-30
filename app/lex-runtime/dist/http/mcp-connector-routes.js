@@ -1,5 +1,6 @@
 import { AuthError } from "../auth/service.js";
 import { isLexMcpServerId } from "../lex-mcp-connectors.js";
+import { fetchSourcePreview } from "../source-preview.js";
 function requireAdmin(req, res, authService) {
     return authorize(req, res, authService, true);
 }
@@ -48,7 +49,7 @@ function sendConnectorError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMcpConnectorRoutes(app, dependencies) {
-    const { authService, connectors, search } = dependencies;
+    const { authService, connectors, search, previewFetch } = dependencies;
     app.get("/api/admin/mcp-connectors", (req, res) => {
         if (!requireAdmin(req, res, authService))
             return;
@@ -176,5 +177,23 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         }
         const reply = await search.direct({ source, tool, arguments: args ?? {} });
         res.json({ source, tool, ok: reply.ok, result: reply.result });
+    });
+    // Podgląd strony źródła w aplikacji: tylko oficjalne domeny, bez skryptów.
+    app.post("/api/mcp-search/source-preview", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+        try {
+            const preview = await fetchSourcePreview(url, previewFetch);
+            res.json(preview.kind === "pdf"
+                ? { kind: "pdf", url: preview.url, base64: preview.data.toString("base64") }
+                : preview);
+        }
+        catch (error) {
+            const code = error instanceof Error && /^SOURCE_PREVIEW_[A-Z0-9_]+$/.test(error.message)
+                ? error.message
+                : "SOURCE_PREVIEW_FAILED";
+            res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
+        }
     });
 }

@@ -455,6 +455,36 @@ type DirectDocumentRequest = {
     | "other";
 };
 
+// Letter workflows end with a file: a draft after each completed cycle and the
+// finished document at the end (simple letter: every gate passed; process
+// pleading: FINAL document status). Other workflows produce no file on their own.
+export function letterDocumentPlan(
+  result: Pick<
+    ExtendedExecution,
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification"
+  >
+): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
+  if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
+  if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
+    return {
+      documentType: "pleading",
+      stage: result.processWorkflow?.documentStatus === "FINAL" ? "FINAL" : "DRAFT"
+    };
+  }
+  if (result.workflow?.id === "SIMPLE_LETTER_V1") {
+    return {
+      documentType: "letter",
+      stage:
+        result.finalization === "PASS" &&
+        result.gateI?.result !== "BLOCKED" &&
+        result.verification.unverified === 0
+          ? "FINAL"
+          : "DRAFT"
+    };
+  }
+  return null;
+}
+
 export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
@@ -2936,17 +2966,125 @@ export default function MatterChatApp({
           (value) => value + 1
         );
       }
+      const answerMessage =
+        executionMessage(
+          result,
+          route
+        );
       if (
         activeCaseIdRef.current ===
           executionCaseId
       ) {
         setMessages((current) => [
           ...current,
-          executionMessage(
-            result,
-            route
-          )
+          answerMessage
         ]);
+      }
+
+      // Letter workflows end with a file, like a document artifact: after each
+      // completed cycle a draft .docx, and the finished document at the end
+      // (simple letter: all gates passed; process pleading: FINAL status).
+      const letterPlan = letterDocumentPlan(result);
+      if (
+        letterPlan &&
+        canWriteCase(selectedCase)
+      ) {
+        const letterWorkflow = letterPlan.documentType;
+        const stage = letterPlan.stage;
+        setExecutionStage(
+          stage === "FINAL"
+            ? "Tworzenie gotowego dokumentu"
+            : "Tworzenie szkicu dokumentu"
+        );
+        try {
+          const generated =
+            await generateLegalDocument(
+              executionCaseId,
+              {
+                query:
+                  buildSkillSelectionEnvelope(
+                    conversationForProvider(
+                      [
+                        ...priorMessages,
+                        { id: messageId(), role: "user", content: trimmed },
+                        answerMessage
+                      ],
+                      "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, uwagi dla prawnika).",
+                      conversationChars
+                    ),
+                    automaticSkills,
+                    [],
+                    manualSkills === null
+                      ? null
+                      : manualSkillSelection
+                  ),
+                provider: runtimeProvider,
+                model,
+                primarySkill: route,
+                mode: "PRAWNIK",
+                format: "docx",
+                documentType: letterWorkflow,
+                styleProfile: "lex-classic-clean-v1",
+                attachments: documentAttachments,
+                ...(firmTemplateIds.length > 0
+                  ? { firmTemplates: firmTemplateIds }
+                  : {}),
+                filename:
+                  (letterWorkflow === "pleading"
+                    ? "LexMachina-pismo-procesowe"
+                    : "LexMachina-pismo") +
+                  (stage === "DRAFT" ? "-szkic" : "") +
+                  ".docx"
+              }
+            );
+          if (
+            activeCaseIdRef.current ===
+              executionCaseId
+          ) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "assistant",
+                content:
+                  stage === "FINAL"
+                    ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
+                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.",
+                meta: "dokument: " + generated.artifact.filename,
+                generatedDocument: {
+                  artifactId: generated.artifact.artifactId,
+                  filename: generated.artifact.filename,
+                  format: generated.format,
+                  tokenized: generated.readyForDownload !== true,
+                  stage
+                }
+              }
+            ]);
+            setWorkspaceRefresh((value) => value + 1);
+          }
+        } catch (documentError) {
+          // The answer itself stays; only the file is missing.
+          if (
+            activeCaseIdRef.current ===
+              executionCaseId
+          ) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "system",
+                content:
+                  "Nie udało się utworzyć pliku pisma: " +
+                  (documentError instanceof ApiError
+                    ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
+                    : documentError instanceof Error
+                      ? documentError.message
+                      : String(documentError)) +
+                  ". Możesz poprosić: „wygeneruj to w pliku docx”."
+              }
+            ]);
+          }
+        }
       }
     } catch (error) {
       const code =

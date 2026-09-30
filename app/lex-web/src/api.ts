@@ -3178,6 +3178,18 @@ export type McpSearchQueryResponse = {
   result: unknown;
 };
 
+export type McpSourcePreview =
+  | { kind: "html"; url: string; html: string }
+  | { kind: "pdf"; url: string; base64: string };
+
+// Page of an official source (search result) fetched by the runtime without scripts.
+export function previewMcpSource(url: string): Promise<McpSourcePreview> {
+  return json<McpSourcePreview>("/api/mcp-search/source-preview", {
+    method: "POST",
+    body: JSON.stringify({ url })
+  });
+}
+
 export function getMcpSearchSources(): Promise<{ package: McpPackageInfo; sources: McpSearchSource[] }> {
   return json("/api/mcp-search/sources");
 }

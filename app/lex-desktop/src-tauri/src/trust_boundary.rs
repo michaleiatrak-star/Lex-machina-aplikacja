@@ -1474,6 +1474,8 @@ fn is_mcp_route(method: &str, path: &str) -> bool {
         ["api", "mcp-search", "sources"] => method == "GET",
         ["api", "mcp-search", "sources", id, "tools"] => method == "GET" && server_id(id),
         ["api", "mcp-search", "query"] => method == "POST",
+        // Podgląd strony źródła (runtime pobiera tylko z oficjalnych domen).
+        ["api", "mcp-search", "source-preview"] => method == "POST",
         _ => false,
     }
 }
@@ -1996,6 +1998,8 @@ mod tests {
         assert!(route_allowed("GET", "/api/mcp-search/sources"));
         assert!(route_allowed("GET", "/api/mcp-search/sources/saos/tools"));
         assert!(route_allowed("POST", "/api/mcp-search/query"));
+        assert!(route_allowed("POST", "/api/mcp-search/source-preview"));
+        assert!(!route_allowed("GET", "/api/mcp-search/source-preview"));
 
         assert!(!route_allowed("DELETE", "/api/admin/mcp-connectors"));
         assert!(!route_allowed("GET", "/api/admin/mcp-connectors/nbp/install"));
