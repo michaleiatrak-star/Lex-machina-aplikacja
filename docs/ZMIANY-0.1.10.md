@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–10)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–11)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -11,8 +11,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 8 | `6fd11d1` | ELI dla wszystkich aktów, RAG tylko przy awarii ELI, kopia KK/KW |
 | hotfix 9 | `8b86baa` | skille z kanału stabilnego/rozwojowego, `.docx` pisma prostego, polskie etykiety, pasek okna modelu na desktopie |
 | hotfix 10 | `403c3d7` | `.docx` bez blokady G36, strona wyników w Wyszukiwaniu, CBOSA bez fałszywego błędu transportu |
+| hotfix 11 | budowany | `.docx` bez fałszywego „brakującego załącznika”, przyczyna blokady w czacie, zmiana nazwy sprawy w panelu bocznym |
 
 ---
+
+## hotfix 11
+
+- `.docx` (`G39I_INPUT_COMPLETENESS — ATTACHMENT_ASSERTED_BUT_MISSING`): bramka kompletności wejścia czytała całą historię rozmowy wysyłaną do modelu (także odpowiedzi asystenta), więc „w załączniku”/„w pliku”/„te dokumenty” z wcześniejszej wiadomości blokowało każde pismo bez załącznika. Teraz tylko bieżąca wiadomość użytkownika (`latestUserTurn`); „w pliku docx/Word/PDF/ODT” to format wyjścia.
+- Czat: odpowiedź `BLOCKED` podaje przyczynę (stan, `audit.violations`, brakujące zasoby, `audit.blockedEvents`).
+- Panel boczny: ikonka zmiany nazwy sprawy (właściciel; `PATCH /api/cases/:caseId`, uprawnienie MANAGE).
 
 ## hotfix 10
 
@@ -70,11 +77,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 
 ---
 
-## Po hotfix 10 (następne wydanie)
-
-- Czat: odpowiedź `BLOCKED` pokazuje przyczynę (stan, `audit.violations`, brakujące zasoby workflow, `audit.blockedEvents` z bramką i kodem) zamiast samej „blokady wykonania”.
-
-## Znane ograniczenia po hotfix 10
+## Znane ograniczenia po hotfix 11
 
 - Odświeżanie skilli z GitHub sprawdzone na prawdziwym repozytorium lokalnie (`git archive`, 1433/1262 plików), nie przez API GitHub z aplikacji — do potwierdzenia po instalacji.
 - Status kanału skilli zużywa 2 zapytania API GitHub; bez logowania limit to 60/h.

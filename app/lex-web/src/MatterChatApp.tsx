@@ -880,6 +880,9 @@ export default function MatterChatApp({
   const [caseNameDraft, setCaseNameDraft] = useState("");
   const [caseBusy, setCaseBusy] = useState(false);
   const [caseError, setCaseError] = useState("");
+  // Szybka zmiana nazwy sprawy w panelu bocznym.
+  const [sidebarRename, setSidebarRename] =
+    useState<{ caseId: string; value: string; error: string } | null>(null);
   const [caseSchedule, setCaseSchedule] =
     useState<CaseScheduleEvent[]>([]);
   const [caseScheduleLoading, setCaseScheduleLoading] =
@@ -3236,6 +3239,31 @@ export default function MatterChatApp({
     }
   }
 
+  async function saveSidebarRename(): Promise<void> {
+    if (!sidebarRename) return;
+    const value = sidebarRename.value.trim();
+    const current = matterCases.find((item) => item.caseId === sidebarRename.caseId);
+    if (!value || value === current?.displayName) {
+      setSidebarRename(null);
+      return;
+    }
+    setCaseBusy(true);
+    try {
+      await renameCase(sidebarRename.caseId, value);
+      await refreshCases(caseId || sidebarRename.caseId);
+      if (sidebarRename.caseId === caseId) setCaseNameDraft(value);
+      setWorkspaceRefresh((count) => count + 1);
+      setSidebarRename(null);
+    } catch (error) {
+      setSidebarRename({
+        ...sidebarRename,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
   async function saveCaseScheduleEvent(): Promise<void> {
     if (
       !selectedCase ||
@@ -3444,25 +3472,84 @@ export default function MatterChatApp({
             onChange={(event) => setNewCaseName(event.target.value)}
           />
           <div className="matter-thread-items">
-            {matterCases.map((item) => (
-              <button
-                key={item.caseId}
-                type="button"
-                disabled={caseBusy}
-                className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
-                onClick={() => {
-                  setPendingFirstMessage(null);
-                  setExecutionError("");
-                  setCaseId(item.caseId);
-                  setActiveTab("chat");
-                }}
-              >
-                <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
-                <small>
-                  {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
-                </small>
-              </button>
-            ))}
+            {matterCases.map((item) =>
+              sidebarRename?.caseId === item.caseId ? (
+                <form
+                  key={item.caseId}
+                  className="matter-thread-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveSidebarRename();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={sidebarRename.value}
+                    maxLength={160}
+                    disabled={caseBusy}
+                    aria-label="Nowa nazwa sprawy"
+                    onChange={(event) =>
+                      setSidebarRename({ ...sidebarRename, value: event.target.value, error: "" })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setSidebarRename(null);
+                    }}
+                  />
+                  <div className="matter-thread-rename-actions">
+                    <button type="submit" disabled={caseBusy || !sidebarRename.value.trim()}>
+                      Zapisz
+                    </button>
+                    <button type="button" disabled={caseBusy} onClick={() => setSidebarRename(null)}>
+                      Anuluj
+                    </button>
+                  </div>
+                  {sidebarRename.error ? (
+                    <small className="matter-thread-rename-error">{sidebarRename.error}</small>
+                  ) : null}
+                </form>
+              ) : (
+                <div key={item.caseId} className="matter-thread-row">
+                  <button
+                    type="button"
+                    disabled={caseBusy}
+                    className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
+                    onClick={() => {
+                      setPendingFirstMessage(null);
+                      setExecutionError("");
+                      setCaseId(item.caseId);
+                      setActiveTab("chat");
+                    }}
+                  >
+                    <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                    <small>
+                      {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                    </small>
+                  </button>
+                  {item.role === "OWNER" ? (
+                    <button
+                      type="button"
+                      className="matter-thread-edit"
+                      disabled={caseBusy}
+                      title="Zmień nazwę sprawy"
+                      aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                      onClick={() =>
+                        setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
+                      }
+                    >
+                      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                        <path
+                          d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
+              )
+            )}
           </div>
         </div>
 

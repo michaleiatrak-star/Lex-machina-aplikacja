@@ -232,7 +232,9 @@ const CONTRACTS = {
         ]
     }
 };
-const ATTACHMENT_ASSERTION = /\b(?:w\s+załączniku|załączam|załączone|w\s+pliku|wgrałem|wgrałam|przesyłam\s+(?:plik|dokument)|te\s+(?:pliki|dokumenty)|załączone\s+akta|akta\s+w\s+załączniku)\b/iu;
+const ATTACHMENT_ASSERTION = 
+// "w pliku .docx/Word/PDF" names the requested output format, not an input file.
+/\b(?:w\s+załączniku|załączam|załączone|w\s+pliku(?!\s+(?:\.?(?:docx|doc|odt|pdf|rtf|txt)\b|word|wordowym|tekstowym))|wgrałem|wgrałam|przesyłam\s+(?:plik|dokument)|te\s+(?:pliki|dokumenty)|załączone\s+akta|akta\s+w\s+załączniku)\b/iu;
 export function gateIWorkflowContract(workflow, executionSkill) {
     const contract = CONTRACTS[workflow];
     return {

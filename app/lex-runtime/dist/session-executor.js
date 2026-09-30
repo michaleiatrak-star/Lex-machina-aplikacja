@@ -5,7 +5,7 @@ import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
-import { LexExecutionEngine } from "./execution-engine.js";
+import { LexExecutionEngine, latestUserTurn } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
@@ -549,7 +549,9 @@ export class SafeSessionExecutor {
             });
             throw new Error("MODEL_TASK_OWNERSHIP_GATE_FAILED");
         }
-        const gateIInput = evaluateGateIInputCompleteness(request.query, request.documentAttachments
+        // Only the newest user turn asserts attachments: earlier turns and assistant
+        // replies in the history ("w pliku", "te dokumenty") are not this request's input.
+        const gateIInput = evaluateGateIInputCompleteness(latestUserTurn(request.query), request.documentAttachments
             ?.length ?? 0);
         audit.record("gate", "G39I_INPUT_COMPLETENESS", gateIInput.result ===
             "PASS"

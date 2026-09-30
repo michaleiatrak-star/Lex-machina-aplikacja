@@ -154,6 +154,27 @@ describe(
     );
 
     it(
+      "treats the requested output format as no attachment assertion",
+      () => {
+        for (const query of [
+          "Wygeneruj pusty dokument w pliku docx z napisem ok.",
+          "Przygotuj wezwanie do zapłaty w pliku .docx",
+          "Daj pismo w pliku Word"
+        ]) {
+          expect(
+            evaluateGateIInputCompleteness(query, 0).result
+          ).toBe("PASS");
+        }
+        expect(
+          evaluateGateIInputCompleteness(
+            "Umowa jest w pliku, sprawdź ją.",
+            0
+          ).result
+        ).toBe("BLOCKED");
+      }
+    );
+
+    it(
       "does not demand an attachment for an abstract legal question",
       () => {
         expect(

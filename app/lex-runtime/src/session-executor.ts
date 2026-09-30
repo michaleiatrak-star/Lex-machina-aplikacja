@@ -27,6 +27,7 @@ import {
 import { AuditedFinalizer } from "./audited-finalizer.js";
 import {
   LexExecutionEngine,
+  latestUserTurn,
   type ExecutionEvent
 } from "./execution-engine.js";
 import { ProviderGateway } from "./providers/gateway.js";
@@ -1304,9 +1305,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     }
 
+    // Only the newest user turn asserts attachments: earlier turns and assistant
+    // replies in the history ("w pliku", "te dokumenty") are not this request's input.
     const gateIInput =
       evaluateGateIInputCompleteness(
-        request.query,
+        latestUserTurn(request.query),
         request.documentAttachments
           ?.length ?? 0
       );

@@ -573,6 +573,40 @@ describe("SafeSessionExecutor", () => {
     expect(escape.audit.blockedEvents).toContain("gate: G36_LEGAL_CORPUS_RUNTIME");
   });
 
+  it("G39I input completeness reads only the newest user turn, not the history", async () => {
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "history",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream() {
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(fixture(), new ProviderGateway(providers));
+    const base = { provider: "openai" as const, model: "test", primarySkill: DR, mode: "PRAWNIK" as const };
+    const inputGate = (result: Awaited<ReturnType<typeof executor.execute>>) =>
+      (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+        .find((event) => event.target === "G39I_INPUT_COMPLETENESS");
+
+    const history = await executor.execute({
+      ...base,
+      query:
+        "Użytkownik: Umowa jest w załączniku.\n\n" +
+        "Asystent: Przygotuję pismo w pliku, gdy wgrasz te dokumenty.\n\n" +
+        "Użytkownik: Wygeneruj pusty dokument z napisem ok."
+    });
+    expect(inputGate(history)?.status).toBe("OK");
+
+    const current = await executor.execute({
+      ...base,
+      query: "Użytkownik: Dzień dobry.\n\nAsystent: Dzień dobry.\n\nUżytkownik: Przeanalizuj umowę w załączniku."
+    });
+    expect(inputGate(current)?.status).toBe("BLOCKED");
+    expect(current.status).toBe("BLOCKED");
+  });
+
   it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
     let callFederation = true;
     const adapter: ProviderAdapter = {
