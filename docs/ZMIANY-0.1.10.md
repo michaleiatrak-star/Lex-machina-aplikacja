@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–20)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–21)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -21,8 +21,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 18 | `85eba7a` | konto Gemini/ChatGPT/Claude: klient pobierany przy „Połącz konto”, Gemini CLI rozpoznawany po pobraniu |
 | hotfix 19 | `eec5a89` | Grok przez konto: klient pobierany przy „Połącz konto”, EPIPE klienta Grok |
 | hotfix 20 | `b69d602` | „Połącz konto”: pobieranie klienta w tle z paskiem etapów, potem logowanie |
+| hotfix 21 | `c82dc5a` | EUREKA: wyszukiwanie frazy w całości, podgląd dokumentu z API |
 
 ---
+
+## hotfix 21
+
+- Konektor EUREKA (`eureka-mcp-server.js`, `dist/lex-mcp.mjs`, `CHECKSUMS.sha256`): `searchInFullPhrase` przy frazie. Pomiar na żywym API: „akcyza alkohol” 3722 → 454 trafień, zgodnie z portalem.
+- `source-preview.ts`: `eureka.mf.gov.pl/informacje/podglad/{id}` z `/api/public/v1/informacje/{id}`; pusta powłoka JavaScript → komunikat.
 
 ## hotfix 20
 
