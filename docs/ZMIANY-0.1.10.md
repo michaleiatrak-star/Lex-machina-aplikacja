@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–19)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–20)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -20,8 +20,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 17 | `a30e2a4` | szkic/gotowy dokument po cyklach pism, edycja w karcie, podgląd źródła w ramce |
 | hotfix 18 | `85eba7a` | konto Gemini/ChatGPT/Claude: klient pobierany przy „Połącz konto”, Gemini CLI rozpoznawany po pobraniu |
 | hotfix 19 | `eec5a89` | Grok przez konto: klient pobierany przy „Połącz konto”, EPIPE klienta Grok |
+| hotfix 20 | `b69d602` | „Połącz konto”: pobieranie klienta w tle z paskiem etapów, potem logowanie |
 
 ---
+
+## hotfix 20
+
+- `POST/GET /api/provider-accounts/:provider/provision`: zadanie w tle (`startProvision`/`provisionProgress`): etap, pakiety z `npm --loglevel=http`, MB na dysku, czas; jedna instalacja na dostawcę naraz.
+- UI: `AccountConnectProgress` w Ustawieniach i przy „Połącz konto” w czacie (wcześniej czat pokazywał tylko „Logowanie…”).
+- Desktop: trasa `provision` (GET/POST) w allowliście; limit proxy logowania 420 s (logowanie 300 s + zapas).
 
 ## hotfix 19
 
