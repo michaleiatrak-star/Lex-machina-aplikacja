@@ -4,7 +4,7 @@ function shape(value, depth = 0) {
     if (value === null) {
         return { type: "null" };
     }
-    if (depth >= 3) {
+    if (depth >= 6) {
         return {
             type: Array.isArray(value)
                 ? "array"
@@ -24,10 +24,20 @@ function shape(value, depth = 0) {
     }
     if (typeof value === "object") {
         const objectValue = value;
+        const firstKey = Object.keys(objectValue)[0];
         return {
             type: "object",
             keys: Object.keys(objectValue)
                 .slice(0, 20),
+            // Unknown wrappers: the first member shows where records sit (keys only).
+            ...(!("data" in objectValue) &&
+                firstKey !== undefined &&
+                objectValue[firstKey] !== null &&
+                typeof objectValue[firstKey] === "object"
+                ? {
+                    first: shape(objectValue[firstKey], depth + 1)
+                }
+                : {}),
             ...("data" in objectValue
                 ? {
                     data: shape(objectValue.data, depth + 1)

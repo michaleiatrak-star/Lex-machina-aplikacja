@@ -424,6 +424,13 @@ function nestedSnSearchRecords(
     return null;
   }
 
+  // A single judgment returned as an object instead of a one-element list.
+  if (
+    "sygnatura_sprawy" in current
+  ) {
+    return [current];
+  }
+
   // sn.pl has used multiple Joomla/com_ajax wrapper depths over time.
   // Follow only explicit collection-bearing keys and accept an array only
   // when its objects look like SN judgment records. Unknown shapes remain
@@ -447,6 +454,61 @@ function nestedSnSearchRecords(
         depth + 1
       );
     if (nested !== null) {
+      return nested;
+    }
+  }
+
+  // PHP json_encode turns a non-sequential list into {"0": {...}, "1": {...}}.
+  const members =
+    Object.values(current)
+      .map(object)
+      .filter(
+        (
+          item
+        ): item is Record<string, unknown> =>
+          Boolean(item)
+      );
+  if (
+    members.length > 0 &&
+    members.length === Object.keys(current).length &&
+    members.every(
+      (item) =>
+        "sygnatura_sprawy" in item
+    )
+  ) {
+    return members;
+  }
+
+  // A collection under a key not listed above: still only arrays whose objects
+  // look like SN judgment records are accepted.
+  for (
+    const [key, member]
+    of Object.entries(current)
+  ) {
+    if (
+      [
+        "data",
+        "items",
+        "records",
+        "results",
+        "orzeczenia",
+        "message",
+        "messages"
+      ].includes(key) ||
+      member === null ||
+      typeof member !== "object"
+    ) {
+      continue;
+    }
+    const nested =
+      nestedSnSearchRecords(
+        member,
+        depth + 1
+      );
+    if (
+      nested !== null &&
+      nested.length > 0
+    ) {
       return nested;
     }
   }
