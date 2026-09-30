@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–18)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–19)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -19,14 +19,19 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 16 | `c2a7d08` | Google Gemini: klucz API i konto Google (Gemini CLI) |
 | hotfix 17 | `a30e2a4` | szkic/gotowy dokument po cyklach pism, edycja w karcie, podgląd źródła w ramce |
 | hotfix 18 | `85eba7a` | konto Gemini/ChatGPT/Claude: klient pobierany przy „Połącz konto”, Gemini CLI rozpoznawany po pobraniu |
+| hotfix 19 | `eec5a89` | Grok przez konto: klient pobierany przy „Połącz konto”, EPIPE klienta Grok |
 
 ---
+
+## hotfix 19
+
+- `OPTIONAL_ACCOUNT_CLIENTS.xai`: `@xai-official/grok` 1.0.44 (wydawca xai-security); `runGrokAcp` przez `ensureAccountExecutable`. UI: „Połącz konto” zawsze, bez przycisku instalacji.
+- `runGrokAcp`: obsługa błędu `stdin` (EPIPE po wczesnym wyjściu klienta przerywał proces runtime).
 
 ## hotfix 18
 
 - UI: „Połącz konto” zamiast odsyłania na GitHub, gdy klienta konta (Codex, Claude Code, Gemini CLI) jeszcze nie ma; runtime pobiera przypiętą wersję.
 - `provisionPinnedAccountClient`: po instalacji Gemini CLI zwracał ścieżkę Claude Code (`ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:google`); teraz `optionalAccountClientExecutable("google")`.
-- Grok: bez zmian (ręczna instalacja Grok Build).
 
 ## hotfix 17
 
