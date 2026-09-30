@@ -1816,7 +1816,9 @@ async function provisionPinnedAccountClient(
   const installed =
     provider === "openai"
       ? privateCodexExecutable()
-      : privateClaudeExecutable();
+      : provider === "google"
+        ? optionalAccountClientExecutable("google")
+        : privateClaudeExecutable();
   if (!installed) {
     throw new Error(
       `ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`
