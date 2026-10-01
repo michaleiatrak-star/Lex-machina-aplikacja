@@ -738,6 +738,16 @@ export class LocalAuthStore {
             ? this.mapCase(row)
             : null;
     }
+    // Case metadata only (no key envelopes) for the administrator overview.
+    listAllCases() {
+        const rows = this.db.prepare(`
+      SELECT *
+      FROM cases
+      ORDER BY updated_at DESC,
+               case_id
+    `).all();
+        return rows.map((row) => this.mapCase(row));
+    }
     listCasesForUser(userId) {
         const rows = this.db.prepare(`
       SELECT

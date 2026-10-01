@@ -2555,3 +2555,39 @@ mark.restored {
   font-weight: 600;
   opacity: 1;
 }
+
+.case-access-admin-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.case-access-admin-case {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.case-access-admin-case header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.case-access-admin-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.case-access-admin-members li,
+.case-access-admin-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

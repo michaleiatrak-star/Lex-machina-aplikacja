@@ -1881,6 +1881,32 @@ export function listCaseAccess(
   );
 }
 
+// Administrator overview of who may open which case (metadata only).
+export type CaseAccessOverviewItem = {
+  caseId: string;
+  caseKind: CaseKind;
+  displayName?: string;
+  archivedAt?: string;
+  updatedAt: string;
+  viewerRole?: CaseRole;
+  canManage: boolean;
+  members: Array<{
+    userId: string;
+    loginName: string;
+    displayName: string;
+    status: string;
+    role: CaseRole;
+    canReidentify: boolean;
+    grantedAt: string;
+  }>;
+};
+
+export function getCaseAccessOverview(): Promise<{
+  cases: CaseAccessOverviewItem[];
+}> {
+  return json("/api/admin/case-access");
+}
+
 export function listCaseAccessCandidates(
   caseId: string
 ): Promise<CaseAccessCandidatesResponse> {

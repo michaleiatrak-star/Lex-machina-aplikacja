@@ -42,6 +42,28 @@ export type StoredCaseAccess = {
   grantedAt: string;
 };
 
+// Administrator overview of who may open which case. Metadata only: no case
+// key, envelope or content; changes still go through the case OWNER, who
+// holds the case key needed to wrap it for another user.
+export type CaseAccessOverviewItem = {
+  caseId: string;
+  caseKind: CaseKind;
+  displayName?: string;
+  archivedAt?: string;
+  updatedAt: string;
+  viewerRole?: CaseRole;
+  canManage: boolean;
+  members: Array<{
+    userId: string;
+    loginName: string;
+    displayName: string;
+    status: string;
+    role: CaseRole;
+    canReidentify: boolean;
+    grantedAt: string;
+  }>;
+};
+
 export type CaseListItem =
   StoredCaseRecord & {
     role: CaseRole;

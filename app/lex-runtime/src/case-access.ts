@@ -14,6 +14,7 @@ import {
 } from "./auth/store.js";
 import type {
   CaseKind,
+  CaseAccessOverviewItem,
   CaseListItem,
   StoredCaseAccess,
   StoredCaseRecord
@@ -1512,6 +1513,40 @@ export class LocalCaseAccessService {
             }
           : {})
       }));
+  }
+
+  // ADMIN: every case with its members and roles (metadata only). The admin
+  // can change access only where it is the OWNER, because granting wraps the
+  // case key, which only members hold.
+  listAccessOverview(
+    context: AuthenticatedContext
+  ): CaseAccessOverviewItem[] {
+    this.assertAdmin(context);
+    return this.store.listAllCases().map((record) => {
+      const members = this.store.listCaseAccess(record.caseId).map((access) => {
+        const user = this.store.getUserById(access.userId);
+        return {
+          userId: access.userId,
+          loginName: user?.loginName ?? access.userId,
+          displayName: user?.displayName ?? access.userId,
+          status: user?.status ?? "DELETED",
+          role: access.role,
+          canReidentify: access.canReidentify,
+          grantedAt: access.grantedAt
+        };
+      });
+      const viewer = members.find((member) => member.userId === context.user.userId);
+      return {
+        caseId: record.caseId,
+        caseKind: record.caseKind,
+        ...(record.displayName ? { displayName: record.displayName } : {}),
+        ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
+        updatedAt: record.updatedAt,
+        ...(viewer ? { viewerRole: viewer.role } : {}),
+        canManage: viewer?.role === "OWNER",
+        members
+      };
+    });
   }
 
   listAccess(

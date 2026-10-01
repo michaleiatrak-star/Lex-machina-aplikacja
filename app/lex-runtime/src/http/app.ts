@@ -615,7 +615,8 @@ export type LexHttpAppOptions = {
     | "revokeAccess"
     | "rotateCaseKey"
     | "withCaseDataKey"
-  >;
+  > &
+    Partial<Pick<LocalCaseAccessService, "listAccessOverview">>;
   caseScheduleService?: Pick<
     LocalCaseAccessService,
     | "listCaseSchedule"
@@ -3772,6 +3773,26 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error:
             "CASE_KNOWLEDGE_SEARCH_FAILED"
         });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/case-access",
+    (_req, res) => {
+      const service = options.caseAccessService;
+      if (!service?.listAccessOverview) {
+        res.status(503).json({ error: "CASE_ACCESS_UNAVAILABLE" });
+        return;
+      }
+      try {
+        res.json({
+          cases: service.listAccessOverview(responseAuthContext(res))
+        });
+      } catch (error) {
+        if (!sendCaseAccessError(res, error)) {
+          res.status(500).json({ error: "CASE_ACCESS_OVERVIEW_FAILED" });
+        }
       }
     }
   );

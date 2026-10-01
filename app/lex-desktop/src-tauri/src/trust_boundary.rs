@@ -1427,6 +1427,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/admin/users") => {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
+        "/api/admin/case-access" => method == "GET",
         "/api/admin/provider-accounts/anthropic/oauth-token" => {
             matches!(method, "PUT" | "DELETE")
         }
@@ -1947,6 +1948,8 @@ mod tests {
         assert!(route_allowed("POST", "/api/update/download"));
         assert!(route_allowed("GET", "/api/local-models"));
         assert!(route_allowed("GET", "/api/provider-accounts"));
+        assert!(route_allowed("GET", "/api/admin/case-access"));
+        assert!(!route_allowed("POST", "/api/admin/case-access"));
         assert!(route_allowed(
             "POST",
             "/api/provider-accounts/openai/login"

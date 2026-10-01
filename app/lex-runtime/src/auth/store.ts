@@ -1330,6 +1330,20 @@ export class LocalAuthStore {
       : null;
   }
 
+  // Case metadata only (no key envelopes) for the administrator overview.
+  listAllCases(): StoredCaseRecord[] {
+    const rows = this.db.prepare(`
+      SELECT *
+      FROM cases
+      ORDER BY updated_at DESC,
+               case_id
+    `).all() as
+      Record<string, unknown>[];
+    return rows.map((row) =>
+      this.mapCase(row)
+    );
+  }
+
   listCasesForUser(
     userId: string
   ): CaseListItem[] {
