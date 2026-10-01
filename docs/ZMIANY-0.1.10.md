@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–27)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–28)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -28,8 +28,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 25 | `5337c41` | Przepisy (RAG): własne akty z ISAP/ELI/Dz.U., sprawdzane w Sejm ELI |
 | hotfix 26 | `6fa6eef` | modele widzą akty dodane i stan kopii; codzienne sprawdzanie kopii w działającej aplikacji |
 | hotfix 27 | `9b8e46a` | Gemini/Grok przez konto: uruchamianie npm.cmd i klientów .cmd na Windows |
+| hotfix 28 | `b44bf03` | Wyszukiwanie: podgląd ELI/EUR-Lex/KRS/NBP/biała lista/CEIDG, KRS po NIP/REGON, NBP kupno/sprzedaż, CBOSA data orzeczenia, SUDOP kolejka |
 
 ---
+
+## hotfix 28
+
+- `source-preview.ts`: ISAP/`api.sejm.gov.pl/eli/acts/…` → `text.html` albo `text.pdf` (ISAP: Imperva); EUR-Lex → Cellar `publications.europa.eu/resource/celex/{CELEX}` (`Accept-Language: pol`, XHTML; EUR-Lex: AWS WAF 202); KRS `OdpisAktualny` i NBP `rates/a` renderowane z API (hosty `api-krs.ms.gov.pl`, `api.nbp.pl`).
+- MCP (`lex-mcp.mjs` przebudowany): `url_podgladu`; `krs_szukaj` (NIP/REGON → KRS z wl-api); NBP tabela C; CEIDG 45 s + 1 ponowienie; WL/KRS/NBP: oficjalne strony w `url_zrodlowy`.
+- CBOSA (JS i parser referencyjny Pythona): zagnieżdżone `<td>` w wartości („Data orzeczenia” + prawomocność).
+- UI: `SearchItem.preview` (URL albo rekord WL/CEIDG), bez `cbosa_pobierz` w „Pokaż treść”, `isap_tekst`; SUDOP `PENDING` → `sudop_odbierz_wynik` (6 prób).
+- `callTool` timeout 110 s.
 
 ## hotfix 27
 
