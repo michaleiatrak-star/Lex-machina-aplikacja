@@ -184,6 +184,13 @@ describe("provider failure message", () => {
       providerFailureMessage("openai-account", "ACCOUNT_SESSION_CLI_FAILED")
     ).toContain("Codex");
   });
+
+  it("Gemini: odmowa bezpłatnego planu przez Google wskazuje klucz API", async () => {
+    const { providerFailureMessage } = await import("./MatterChatApp.js");
+    const message = providerFailureMessage("google-account", "ACCOUNT_SESSION_PLAN_UNSUPPORTED");
+    expect(message).toContain("Google Gemini · API");
+    expect(message).toContain("ponowne logowanie nie pomoże");
+  });
 });
 
 describe("routing footer", () => {

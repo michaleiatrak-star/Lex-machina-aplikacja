@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   AccountSessionManager,
+  classifyAccountCliFailureDetail,
   countNpmFetches,
   npmCliScript,
   npmFailureDetail,
@@ -158,5 +159,12 @@ describe("Grok Build: klient pobierany na żądanie", () => {
     fs.mkdirSync(path.dirname(cli), { recursive: true });
     fs.writeFileSync(cli, "");
     expect(npmCliScript(path.join(dir, "npm.cmd"))).toBe(cli);
+  });
+
+  it("Gemini CLI: odmowa planu konta przez Google to PLAN_UNSUPPORTED, nie ogólny błąd klienta", () => {
+    const detail =
+      "{ ineligibleTiers: [ { reasonCode: 'UNSUPPORTED_CLIENT', reasonMessage: 'This client is no longer supported for Gemini Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite of products: https://antigravity.google', tierId: 'free-tier' } ] } An unexpected critical error occurred:IneligibleTierError: This client is no longer supported";
+    expect(classifyAccountCliFailureDetail(detail)).toBe("ACCOUNT_SESSION_PLAN_UNSUPPORTED");
+    expect(classifyAccountCliFailureDetail("Error: something else")).toBe("ACCOUNT_SESSION_CLI_FAILED");
   });
 });

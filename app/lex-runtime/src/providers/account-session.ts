@@ -1332,6 +1332,7 @@ export function sanitizeAccountCliFailureDetail(
 export function classifyAccountCliFailureDetail(
   detail: string
 ):
+  | "ACCOUNT_SESSION_PLAN_UNSUPPORTED"
   | "ACCOUNT_SESSION_MODEL_UNSUPPORTED"
   | "ACCOUNT_SESSION_AUTH_EXPIRED"
   | "ACCOUNT_SESSION_CAPACITY"
@@ -1341,6 +1342,16 @@ export function classifyAccountCliFailureDetail(
   const lower =
     detail.toLowerCase();
 
+  // The service refuses the account's plan for this client, e.g. Google since
+  // 2026-10: IneligibleTierError UNSUPPORTED_CLIENT for the free "Gemini Code
+  // Assist for individuals" tier in Gemini CLI. Logging in again cannot help.
+  if (
+    /ineligibletiererror|unsupported_client|ineligibletiers|no longer supported for gemini code assist/.test(
+      lower
+    )
+  ) {
+    return "ACCOUNT_SESSION_PLAN_UNSUPPORTED";
+  }
   if (
     /model.{0,80}(not supported|unsupported|not available)|not supported when using codex with a chatgpt account|model metadata.*not found/.test(
       lower

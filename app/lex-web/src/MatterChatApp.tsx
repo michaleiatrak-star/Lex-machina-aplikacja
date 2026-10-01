@@ -322,7 +322,8 @@ const PRIMARY_MODEL_SOURCES: Array<{
   },
   {
     id: "google-account",
-    label: "Gemini · konto Google"
+    // Google odrzuca w Gemini CLI bezpłatny plan „Gemini Code Assist for individuals”.
+    label: "Gemini · konto Google (plan płatny)"
   },
   {
     id: "google",
@@ -644,6 +645,10 @@ export function providerFailureMessage(
           : "Codex";
   const base = (() => {
     switch (reason) {
+      case "ACCOUNT_SESSION_PLAN_UNSUPPORTED":
+        return provider.startsWith("google")
+          ? "Google nie obsługuje już Gemini CLI w bezpłatnym planie konta Google („Gemini Code Assist for individuals”) — ponowne logowanie nie pomoże. Użyj „Google Gemini · API” z kluczem z Google AI Studio (Ustawienia → Modele i AI) albo konta z płatnym planem."
+          : `${name} odrzuca plan Twojego konta dla klienta ${client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.`;
       case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
         return `${name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.`;
       case "ACCOUNT_SESSION_AUTH_EXPIRED":
