@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–23)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–24)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -24,8 +24,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 21 | `c82dc5a` | EUREKA: wyszukiwanie frazy w całości, podgląd dokumentu z API |
 | hotfix 22 | `5132bdc` | Gemini/Grok przez konto: Node z pakietu aplikacji dla skryptów npm, błąd npm w UI |
 | hotfix 23 | `4eebca9` | Użytkownicy: przegląd i zmiana uprawnień do spraw; bez panelu wsparcia serwisowego |
+| hotfix 24 | `2c29a94` | Aktualizacje: stan i aktualizacja przepisów (RAG) |
 
 ---
+
+## hotfix 24
+
+- `CoreLawIndex`: sprawdzenie bez stosowania (`pendingConsolidated`, `pendingAmendments`), `applyUpdates`, `autoApply` (domyślnie włączone), dziennik zmian, `status()`. Nowszy t.j. zastępuje tekst; nowelizacja po t.j. trafia do wyszukiwania jako osobny dokument.
+- Weryfikacja: niezastosowana aktualizacja → `DENY TEMPORAL_UPDATE_PENDING`; `read_core_law_article` zwraca `pendingUpdate` z ostrzeżeniem.
+- Trasy `GET /api/core-law/status`, `POST /api/core-law/check|apply`, `PUT /api/core-law/settings` (zmiany: ADMIN); allowlista desktopu.
+- UI: sekcja „Przepisy (RAG)” w panelu utrzymania (`CoreLawUpdatesSection`).
 
 ## hotfix 23
 
