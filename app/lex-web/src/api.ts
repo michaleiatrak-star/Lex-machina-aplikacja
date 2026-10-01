@@ -1904,6 +1904,9 @@ export type CoreLawActStatus = {
   amendmentsAfter: CoreLawAmendment[];
   pendingConsolidated: CoreLawAmendment | null;
   pendingAmendments: CoreLawAmendment[];
+  origin: "MAP" | "VERIFIED" | "USER";
+  addedAt: string | null;
+  addedBy: string | null;
   state: "CURRENT" | "UPDATE_AVAILABLE" | "CHECK_DUE" | "MISSING" | "ERROR";
 };
 
@@ -1916,7 +1919,7 @@ export type CoreLawStatus = {
   pending: { consolidated: number; amendments: number };
   recent: Array<{
     at: string;
-    kind: "CONSOLIDATED" | "AMENDMENT";
+    kind: "CONSOLIDATED" | "AMENDMENT" | "ADDED" | "REMOVED";
     actEli: string;
     eli: string;
     title: string | null;
@@ -1943,6 +1946,46 @@ export function setCoreLawAutoApply(autoApply: boolean): Promise<CoreLawStatus> 
   return json<CoreLawStatus>("/api/core-law/settings", {
     method: "PUT",
     body: JSON.stringify({ autoApply })
+  });
+}
+
+// An additional act checked in Sejm ELI before it is added to the copy.
+export type CoreLawActLookup = {
+  inputEli: string;
+  baseEli: string;
+  currentEli: string;
+  title: string;
+  type: string | null;
+  status: string | null;
+  promulgation: string | null;
+  consolidated: boolean;
+  consolidatedTitle: string | null;
+  amendmentsAfter: number;
+  sourceUrl: string;
+};
+
+export function lookupCoreLawAct(
+  reference: string
+): Promise<{ act: CoreLawActLookup; presentAs: string | null }> {
+  return json("/api/core-law/acts/lookup", {
+    method: "POST",
+    body: JSON.stringify({ reference })
+  });
+}
+
+export function addCoreLawAct(
+  reference: string
+): Promise<{ act: CoreLawActLookup; status: CoreLawStatus }> {
+  return json("/api/core-law/acts", {
+    method: "POST",
+    body: JSON.stringify({ reference })
+  });
+}
+
+export function removeCoreLawAct(eli: string): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/acts/remove", {
+    method: "POST",
+    body: JSON.stringify({ eli })
   });
 }
 

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
+  addCoreLawAct,
   applyCoreLawUpdates,
   checkCoreLawUpdates,
   getCoreLawStatus,
+  lookupCoreLawAct,
+  removeCoreLawAct,
   setCoreLawAutoApply,
   type AuthenticatedUser,
+  type CoreLawActLookup,
   type CoreLawActStatus,
   type CoreLawStatus
 } from "./api.js";
@@ -24,6 +28,34 @@ function day(value: string | null | undefined): string {
 
 function actName(act: CoreLawActStatus): string {
   return act.title ?? act.labels[0] ?? act.eli;
+}
+
+const CHANGE_LABEL: Record<CoreLawStatus["recent"][number]["kind"], string> = {
+  CONSOLIDATED: "nowy tekst jednolity",
+  AMENDMENT: "dodana nowelizacja",
+  ADDED: "dodany akt",
+  REMOVED: "usunięty akt"
+};
+
+export function coreLawActErrorText(code: string): string {
+  switch (code) {
+    case "CORE_LAW_ACT_REFERENCE_INVALID":
+      return "Nie rozpoznano aktu. Podaj adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”.";
+    case "CORE_LAW_ACT_NOT_FOUND":
+      return "Sejm ELI nie ma aktu o tym oznaczeniu.";
+    case "CORE_LAW_ACT_NOT_IN_FORCE":
+      return "Według Sejm ELI akt nie obowiązuje; kopia przepisów zawiera tylko akty obowiązujące.";
+    case "CORE_LAW_ACT_TEXT_UNAVAILABLE":
+      return "Sejm ELI nie udostępnia tekstu tego aktu (ani HTML, ani PDF).";
+    case "CORE_LAW_ACT_SOURCE_UNAVAILABLE":
+      return "Sejm ELI jest niedostępne. Spróbuj ponownie za chwilę.";
+    case "CORE_LAW_ACT_ALREADY_PRESENT":
+      return "Ten akt jest już w kopii przepisów.";
+    case "CORE_LAW_USER_ACT_NOT_FOUND":
+      return "Akt nie jest na liście dodanych przez użytkowników.";
+    default:
+      return code;
+  }
 }
 
 // Acts whose text in RAG is current, and acts that need an update or check.
@@ -48,6 +80,8 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
   const [status, setStatus] = useState<CoreLawStatus | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [reference, setReference] = useState("");
+  const [found, setFound] = useState<{ act: CoreLawActLookup; presentAs: string | null } | null>(null);
   const admin = user.appRole === "ADMIN";
 
   const load = useCallback(async () => {
@@ -69,17 +103,20 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
     return () => clearInterval(timer);
   }, [status?.refreshing, load]);
 
-  async function run(key: string, action: () => Promise<CoreLawStatus>) {
+  async function run(key: string, action: () => Promise<CoreLawStatus | null>) {
     setBusy(key);
     setError("");
     try {
-      setStatus(await action());
+      const next = await action();
+      if (next) setStatus(next);
     } catch (failure) {
-      setError(failure instanceof ApiError ? failure.code : String(failure));
+      setError(failure instanceof ApiError ? coreLawActErrorText(failure.code) : String(failure));
     } finally {
       setBusy("");
     }
   }
+
+  const userActs = (status?.acts ?? []).filter((act) => act.origin === "USER");
 
   const groups = groupCoreLawActs(status?.acts ?? []);
   const pendingTotal = (status?.pending.consolidated ?? 0) + (status?.pending.amendments ?? 0);
@@ -164,6 +201,118 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
             <small>Aktualizacje kopii przepisów uruchamia administrator.</small>
           )}
 
+          {admin ? (
+            <div className="core-law-add">
+              <strong>Dodaj akt prawny</strong>
+              <small>
+                Adres z ISAP (isap.sejm.gov.pl, np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”.
+                Akt jest sprawdzany w Sejm ELI; do RAG trafia jego najnowszy tekst jednolity.
+              </small>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!reference.trim()) return;
+                  setFound(null);
+                  void run("lookup", async () => {
+                    setFound(await lookupCoreLawAct(reference.trim()));
+                    return null;
+                  });
+                }}
+              >
+                <input
+                  type="text"
+                  value={reference}
+                  aria-label="Akt prawny: adres ISAP, ELI albo Dz.U."
+                  placeholder="https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU…"
+                  disabled={Boolean(busy)}
+                  onChange={(event) => {
+                    setReference(event.target.value);
+                    setFound(null);
+                  }}
+                />
+                <button type="submit" disabled={Boolean(busy) || !reference.trim()}>
+                  {busy === "lookup" ? "Sprawdzanie w ELI…" : "Sprawdź w ELI"}
+                </button>
+              </form>
+              {found ? (
+                <div className="core-law-found">
+                  <strong>{found.act.title}</strong>
+                  <small>
+                    {found.act.type ?? "akt"} · {found.act.baseEli}
+                    {found.act.status ? ` · ${found.act.status}` : ""}
+                    {found.act.promulgation ? ` · ogłoszony ${day(found.act.promulgation)}` : ""}
+                  </small>
+                  <small>
+                    {found.act.consolidated
+                      ? `Do RAG: tekst jednolity ${found.act.currentEli}.`
+                      : `Do RAG: tekst aktu ${found.act.currentEli} (brak tekstu jednolitego w ELI).`}
+                    {found.act.inputEli !== found.act.currentEli && found.act.inputEli !== found.act.baseEli
+                      ? ` Podano ${found.act.inputEli}; w ELI jest nowszy tekst jednolity.`
+                      : ""}
+                  </small>
+                  {found.act.amendmentsAfter ? (
+                    <small className="maintenance-trust-warning">
+                      Nowelizacje po tym tekście: {found.act.amendmentsAfter}. Zostaną dodane do RAG jako osobne
+                      dokumenty; do czasu nowego tekstu jednolitego przepisy tego aktu są weryfikowane bezpośrednio w ELI.
+                    </small>
+                  ) : null}
+                  {found.presentAs ? (
+                    <small>Ten akt jest już w kopii przepisów ({found.presentAs}).</small>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() =>
+                        void run("add", async () => {
+                          const result = await addCoreLawAct(reference.trim());
+                          setFound(null);
+                          setReference("");
+                          return result.status;
+                        })
+                      }
+                    >
+                      {busy === "add" ? "Dodawanie…" : "Dodaj do RAG"}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {userActs.length ? (
+            <details className="core-law-list" open>
+              <summary>Dodane przez użytkowników ({userActs.length})</summary>
+              <ul>
+                {userActs.map((act) => (
+                  <li key={act.eli}>
+                    <div>
+                      <strong>{actName(act)}</strong> <small>{act.currentEli}</small>{" "}
+                      <span className="security-pill">{STATE_LABEL[act.state]}</span>
+                    </div>
+                    <small>
+                      dodał {act.addedBy ?? "—"} {day(act.addedAt)} · {act.articleCount} art.
+                      {act.fetchedAt ? ` · pobrano ${day(act.fetchedAt)}` : " · pobieranie w toku"}
+                    </small>
+                    {admin ? (
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={disabled}
+                        onClick={() => {
+                          if (window.confirm(`Usunąć z kopii przepisów „${actName(act)}”?`)) {
+                            void run(`remove:${act.eli}`, () => removeCoreLawAct(act.eli));
+                          }
+                        }}
+                      >
+                        Usuń z RAG
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
           <details className="core-law-list" open={groups.needsUpdate.length > 0 && groups.needsUpdate.length <= 10}>
             <summary>Wymagające aktualizacji ({groups.needsUpdate.length})</summary>
             {groups.needsUpdate.length ? (
@@ -241,7 +390,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   <li key={`${change.at}:${change.eli}`}>
                     <small>
                       {day(change.at)} ·{" "}
-                      {change.kind === "CONSOLIDATED" ? "nowy tekst jednolity" : "dodana nowelizacja"} {change.eli}
+                      {CHANGE_LABEL[change.kind]} {change.eli}
                       {change.title ? ` „${change.title}”` : ""}
                     </small>
                   </li>

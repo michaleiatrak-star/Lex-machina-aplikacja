@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupCoreLawActs } from "./CoreLawUpdatesSection.js";
+import { coreLawActErrorText, groupCoreLawActs } from "./CoreLawUpdatesSection.js";
 import type { CoreLawActStatus } from "./api.js";
 
 function act(eli: string, state: CoreLawActStatus["state"]): CoreLawActStatus {
@@ -19,6 +19,9 @@ function act(eli: string, state: CoreLawActStatus["state"]): CoreLawActStatus {
     amendmentsAfter: [],
     pendingConsolidated: null,
     pendingAmendments: [],
+    origin: "MAP",
+    addedAt: null,
+    addedBy: null,
     state
   };
 }
@@ -33,5 +36,11 @@ describe("karta przepisów (RAG)", () => {
     ]);
     expect(groups.current.map((a) => a.eli)).toEqual(["DU/2025/1"]);
     expect(groups.needsUpdate.map((a) => a.eli)).toEqual(["DU/2025/3", "DU/2025/4", "DU/2025/2"]);
+  });
+
+  it("opisuje odmowy ELI przy dodawaniu aktu po polsku", () => {
+    expect(coreLawActErrorText("CORE_LAW_ACT_NOT_IN_FORCE")).toContain("nie obowiązuje");
+    expect(coreLawActErrorText("CORE_LAW_ACT_REFERENCE_INVALID")).toContain("ISAP");
+    expect(coreLawActErrorText("INNY_KOD")).toBe("INNY_KOD");
   });
 });

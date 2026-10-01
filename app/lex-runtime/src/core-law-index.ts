@@ -64,11 +64,16 @@ export type CoreActSummary = {
   // t.j. replaces the text, new amendments are added to RAG as documents.
   pendingConsolidated: CoreAmendment | null;
   pendingAmendments: CoreAmendment[];
+  // MAP: z map DR; VERIFIED: dołączony po weryfikacji przepisu w ELI;
+  // USER: dodany przez użytkownika (sprawdzony w ELI przy dodaniu).
+  origin: "MAP" | "VERIFIED" | "USER";
+  addedAt: string | null;
+  addedBy: string | null;
 };
 
 export type CoreLawChange = {
   at: string;
-  kind: "CONSOLIDATED" | "AMENDMENT";
+  kind: "CONSOLIDATED" | "AMENDMENT" | "ADDED" | "REMOVED";
   actEli: string;
   eli: string;
   title: string | null;
@@ -309,7 +314,16 @@ type IndexState = {
   lastCheckAt?: string;
   changes?: CoreLawChange[];
   // Akty spoza map DR dołączone po weryfikacji w źródle (ELI t.j. i tytuł).
-  adopted?: Array<{ eli: string; title: string }>;
+  adopted?: AdoptedAct[];
+};
+
+type AdoptedAct = {
+  eli: string;
+  title: string;
+  origin?: "USER";
+  baseEli?: string;
+  addedAt?: string;
+  addedBy?: string;
 };
 
 export type EliActLink = {
@@ -321,13 +335,17 @@ export type EliActLink = {
   status: string;
 };
 
-function adoptedRef(entry: { eli: string; title: string }): CoreActRef {
+function adoptedRef(entry: AdoptedAct): CoreActRef {
   return {
     eli: entry.eli,
     consolidated: true,
     labels: [entry.title],
     domains: [],
-    notes: ["Dołączony po weryfikacji w źródle (Sejm ELI), spoza map DR."]
+    notes: [
+      entry.origin === "USER"
+        ? "Dodany przez użytkownika, sprawdzony w źródle (Sejm ELI)."
+        : "Dołączony po weryfikacji w źródle (Sejm ELI), spoza map DR."
+    ]
   };
 }
 
@@ -339,12 +357,12 @@ export function eliLinks(refs: unknown, relation: (key: string) => boolean): Eli
     for (const item of value) {
       const wrapper = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
       const act = (wrapper.act && typeof wrapper.act === "object" ? wrapper.act : wrapper) as Record<string, unknown>;
-      const match = /^DU\/(\d{4})\/(\d+)$/i.exec(String(act.ELI ?? "").trim());
+      const match = /^(DU|MP)\/(\d{4})\/(\d+)$/i.exec(String(act.ELI ?? "").trim());
       if (!match) continue;
       links.push({
-        eli: `DU/${match[1]}/${Number(match[2])}`,
-        year: Number(match[1]),
-        pos: Number(match[2]),
+        eli: `${match[1]!.toUpperCase()}/${match[2]}/${Number(match[3])}`,
+        year: Number(match[2]),
+        pos: Number(match[3]),
         title: typeof act.title === "string" ? act.title : null,
         promulgation: typeof act.promulgation === "string" ? act.promulgation : null,
         status: typeof act.status === "string" ? act.status : ""
@@ -355,7 +373,7 @@ export function eliLinks(refs: unknown, relation: (key: string) => boolean): Eli
 }
 
 function eliOrder(eli: string): [number, number] {
-  const match = /^DU\/(\d{4})\/(\d+)$/.exec(eli);
+  const match = /^(?:DU|MP)\/(\d{4})\/(\d+)$/.exec(eli);
   return match ? [Number(match[1]), Number(match[2])] : [0, 0];
 }
 
@@ -430,8 +448,10 @@ export class CoreLawIndex {
   }
 
   summaries(): CoreActSummary[] {
+    const adopted = new Map((this.state.adopted ?? []).map((entry) => [entry.eli, entry]));
     return this.refs.map((ref) => {
       const state = this.state.acts[ref.eli];
+      const entry = adopted.get(ref.eli);
       return {
         eli: ref.eli,
         title: state?.title ?? null,
@@ -447,9 +467,78 @@ export class CoreLawIndex {
         currentEli: state?.currentEli ?? ref.eli,
         amendmentsAfter: state?.amendmentsAfter ?? [],
         pendingConsolidated: state?.pendingConsolidated ?? null,
-        pendingAmendments: state?.pendingAmendments ?? []
+        pendingAmendments: state?.pendingAmendments ?? [],
+        origin: entry ? (entry.origin === "USER" ? "USER" : "VERIFIED") : "MAP",
+        addedAt: entry?.addedAt ?? null,
+        addedBy: entry?.addedBy ?? null
       };
     });
+  }
+
+  /** Akt już w kopii (z map albo dołączony) dla któregokolwiek z podanych ELI. */
+  present(elis: string[]): string | null {
+    const wanted = new Set(elis);
+    const ref = this.refs.find(
+      (item) =>
+        wanted.has(item.eli) ||
+        wanted.has(this.state.acts[item.eli]?.currentEli ?? item.eli) ||
+        (this.state.adopted ?? []).some((entry) => entry.eli === item.eli && entry.baseEli && wanted.has(entry.baseEli))
+    );
+    return ref?.eli ?? null;
+  }
+
+  /**
+   * Akt dodany przez użytkownika po sprawdzeniu w ELI (lookupCoreLawAct): tekst
+   * (najnowszy t.j. albo akt) jest pobierany w tle i trafia do kopii i RAG.
+   */
+  addUserAct(
+    act: { currentEli: string; baseEli: string; title: string },
+    addedBy: string
+  ): { added: boolean; eli: string } {
+    const existing = this.present([act.currentEli, act.baseEli]);
+    if (existing) return { added: false, eli: existing };
+    const entry: AdoptedAct = {
+      eli: act.currentEli,
+      title: act.title,
+      origin: "USER",
+      baseEli: act.baseEli,
+      addedAt: new Date(this.now()).toISOString(),
+      addedBy
+    };
+    this.state.adopted = [...(this.state.adopted ?? []), entry];
+    this.refs.push(adoptedRef(entry));
+    this.logChange({ kind: "ADDED", actEli: entry.eli, eli: entry.eli, title: act.title });
+    this.saveState();
+    void this.refresh({ force: true, only: [entry.eli] }).catch(() => undefined);
+    return { added: true, eli: entry.eli };
+  }
+
+  /** Usuwa z kopii akt dodany przez użytkownika (akty z map zostają). */
+  removeUserAct(eli: string): boolean {
+    const entry = (this.state.adopted ?? []).find((item) => item.eli === eli && item.origin === "USER");
+    if (!entry) return false;
+    const state = this.state.acts[eli];
+    const files = new Set([eli, state?.currentEli ?? eli, ...(state?.amendmentsAfter ?? []).map((item) => item.eli)]);
+    this.state.adopted = (this.state.adopted ?? []).filter((item) => item !== entry);
+    this.refs = this.refs.filter((ref) => ref.eli !== eli);
+    delete this.state.acts[eli];
+    // Pliki współdzielone z innym aktem kopii zostają.
+    const used = new Set<string>();
+    for (const ref of this.refs) {
+      const other = this.state.acts[ref.eli];
+      used.add(ref.eli);
+      if (other?.currentEli) used.add(other.currentEli);
+      for (const item of other?.amendmentsAfter ?? []) used.add(item.eli);
+    }
+    for (const file of files) {
+      if (used.has(file)) continue;
+      fs.rmSync(path.join(this.directory, fileNameFor(file)), { force: true });
+      this.cache.delete(file);
+    }
+    this.searchIndex = null;
+    this.logChange({ kind: "REMOVED", actEli: eli, eli, title: entry.title });
+    this.saveState();
+    return true;
   }
 
   summary(eli: string): CoreActSummary | null {
@@ -682,7 +771,28 @@ export class CoreLawIndex {
 
     let newer: CoreAmendment | null = null;
     const base = eliLinks(references, (key) => /jednolit\S* dla/i.test(key))[0];
-    if (base) {
+    if (!base) {
+      // Tekst aktu, nie t.j.: każdy t.j. jest nowszy, a do czasu jego ogłoszenia
+      // nowelizacjami są akty zmieniające (inaczej kopia uchodziłaby za aktualną).
+      const consolidatedText = eliLinks(references, (key) => /^Inf\. o tekście jednolitym$/i.test(key))
+        .filter((link) => !/uchyl|nieobowi/i.test(link.status))
+        .sort((a, b) => a.year - b.year || a.pos - b.pos)
+        .at(-1);
+      if (consolidatedText) {
+        newer = {
+          eli: consolidatedText.eli,
+          title: consolidatedText.title,
+          promulgation: consolidatedText.promulgation
+        };
+        newAmendments.length = 0;
+      } else {
+        newAmendments.push(
+          ...eliLinks(references, (key) => /^Akty zmieniające$/i.test(key))
+            .filter((amendment) => !known.has(amendment.eli))
+            .map((amendment) => ({ eli: amendment.eli, title: amendment.title, promulgation: amendment.promulgation }))
+        );
+      }
+    } else {
       await this.pause();
       const baseReferences = await (
         await this.get(`${ELI_API}/acts/${base.eli}/references`, "application/json")
@@ -778,6 +888,12 @@ export class CoreLawIndex {
             currentEli: ref.eli,
             checkedAt: new Date(this.now()).toISOString()
           });
+          // Requested runs (a user-added act, "Sprawdź teraz") check ELI
+          // relations right away, so amendments after the text are known.
+          if (options.force && ref.consolidated) {
+            await this.pause();
+            await this.checkConsolidated(ref, state, apply);
+          }
         } else {
           await this.checkConsolidated(ref, state, apply);
         }

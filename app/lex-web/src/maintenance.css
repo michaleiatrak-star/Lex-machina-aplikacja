@@ -232,3 +232,31 @@
 .core-law-list li button {
   justify-self: start;
 }
+
+.core-law-add,
+.core-law-found {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.core-law-add form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.core-law-add input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.core-law-found {
+  padding: 8px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 6px;
+}
+
+.core-law-found button {
+  justify-self: start;
+}

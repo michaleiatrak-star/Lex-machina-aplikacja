@@ -71,7 +71,10 @@ function act(options: {
     currentEli: options.eli,
     amendmentsAfter: options.amendmentsAfter ?? [],
     pendingConsolidated: options.pendingConsolidated ?? null,
-    pendingAmendments: options.pendingAmendments ?? []
+    pendingAmendments: options.pendingAmendments ?? [],
+    origin: "MAP",
+    addedAt: null,
+    addedBy: null
   };
   return { ref, record, summary };
 }
