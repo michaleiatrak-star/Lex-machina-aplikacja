@@ -8,9 +8,11 @@ import { AuthError, type AuthService } from "../src/auth/service.js";
 import {
   CoreLawActLookupError,
   lookupCoreLawAct,
-  parseLegalActReference
+  parseLegalActReference,
+  shortLegalActName
 } from "../src/core-law-act-lookup.js";
 import { CoreLawIndex } from "../src/core-law-index.js";
+import { CoreLawToolRuntime } from "../src/core-law-tool-runtime.js";
 import { registerCoreLawRoutes } from "../src/http/core-law-routes.js";
 
 const roots: string[] = [];
@@ -171,6 +173,18 @@ describe("user-added acts", () => {
     await settled(index);
     const act = index.status().acts.find((item) => item.eli === "DU/2025/126")!;
     expect(act).toMatchObject({ origin: "USER", addedBy: "admin", articleCount: 2 });
+    expect(act.labels[0]).toBe("Ustawa o podatku akcyzowym");
+
+    // Models see the added act, its origin and that the copy is not current.
+    const tools = new CoreLawToolRuntime(index);
+    expect(tools.systemPromptAppendix()).toContain("w tym 1 dodanych przez użytkowników");
+    expect(tools.systemPromptAppendix()).toContain("Kopia 1 aktów nie jest aktualnym brzmieniem");
+    const [listed] = await tools.runTools([{ id: "1", name: "list_core_law_acts", input: { query: "akcyz" } }]);
+    expect(JSON.parse(listed!.content).acts[0]).toMatchObject({
+      eli: "DU/2025/126",
+      origin: "USER",
+      eliCaution: "nowelizacje po tekście jednolitym (1)"
+    });
     // Relations are checked right after the download: the amendment after the t.j. is known.
     expect(act.amendmentsAfter.map((item) => item.eli)).toEqual(["DU/2025/900"]);
     expect(index.currentRecord("DU/2025/126")?.articles["1"]).toContain("DU/2025/126");
@@ -207,5 +221,31 @@ describe("user-added acts", () => {
     await request(app).post("/api/core-law/acts").set("authorization", "Bearer admin").send({ reference: "DU/1990/1" }).expect(422);
     await request(app).post("/api/core-law/acts/lookup").set("authorization", "Bearer admin").send({ reference: "x" }).expect(400);
     await request(app).post("/api/core-law/acts/lookup").set("authorization", "Bearer admin").send({}).expect(400);
+  });
+});
+
+describe("core law schedule", () => {
+  it("names acts briefly and checks the copy while the application runs", async () => {
+    expect(shortLegalActName("Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym", "Ustawa")).toBe(
+      "Ustawa o podatku akcyzowym"
+    );
+    expect(shortLegalActName("Ustawa z dnia 20 maja 1971 r. - Kodeks wykroczeń", "Ustawa")).toBe("Kodeks wykroczeń");
+
+    const { app, index } = setup();
+    await request(app).post("/api/core-law/acts").set("authorization", "Bearer admin").send({ reference: "DU/2024/1000" }).expect(201);
+    await settled(index);
+    const runs: number[] = [];
+    const original = index.refresh.bind(index);
+    index.refresh = (options) => {
+      runs.push(Date.now());
+      return original(options);
+    };
+    const stop = index.startSchedule(5);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    stop();
+    const count = runs.length;
+    expect(count).toBeGreaterThan(1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(runs.length).toBe(count);
   });
 });

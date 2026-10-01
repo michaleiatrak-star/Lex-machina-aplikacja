@@ -71,6 +71,21 @@ export type CoreActSummary = {
   addedBy: string | null;
 };
 
+/**
+ * Why the copy of an act cannot be taken as the current wording (verification
+ * from the copy is refused and the act must be checked in ELI), or null.
+ */
+export function coreLawEliCaution(
+  act: Pick<CoreActSummary, "amendmentsAfter" | "pendingConsolidated" | "pendingAmendments">
+): string | null {
+  if (act.pendingConsolidated) return "w ELI jest nowszy tekst jednolity, jeszcze niezastosowany";
+  if (act.pendingAmendments.length) {
+    return `nowe nowelizacje w ELI, jeszcze niezastosowane (${act.pendingAmendments.length})`;
+  }
+  if (act.amendmentsAfter.length) return `nowelizacje po tekście jednolitym (${act.amendmentsAfter.length})`;
+  return null;
+}
+
 export type CoreLawChange = {
   at: string;
   kind: "CONSOLIDATED" | "AMENDMENT" | "ADDED" | "REMOVED";
@@ -115,6 +130,7 @@ const ELI_API = "https://api.sejm.gov.pl/eli";
 // only, no text) at most once a day for new amendments or a newer t.j.
 const CHECK_AFTER_MS = 24 * 60 * 60 * 1000;
 const RETRY_AFTER_BLOCK_MS = 60 * 60 * 1000;
+const SCHEDULE_TICK_MS = 60 * 60 * 1000;
 const REQUEST_GAP_MS = 750;
 const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -320,6 +336,8 @@ type IndexState = {
 type AdoptedAct = {
   eli: string;
   title: string;
+  // Krótka nazwa (etykieta dla list i modeli); bez niej pełny tytuł.
+  label?: string;
   origin?: "USER";
   baseEli?: string;
   addedAt?: string;
@@ -339,7 +357,7 @@ function adoptedRef(entry: AdoptedAct): CoreActRef {
   return {
     eli: entry.eli,
     consolidated: true,
-    labels: [entry.title],
+    labels: entry.label ? [entry.label, entry.title] : [entry.title],
     domains: [],
     notes: [
       entry.origin === "USER"
@@ -492,7 +510,7 @@ export class CoreLawIndex {
    * (najnowszy t.j. albo akt) jest pobierany w tle i trafia do kopii i RAG.
    */
   addUserAct(
-    act: { currentEli: string; baseEli: string; title: string },
+    act: { currentEli: string; baseEli: string; title: string; shortTitle?: string },
     addedBy: string
   ): { added: boolean; eli: string } {
     const existing = this.present([act.currentEli, act.baseEli]);
@@ -500,6 +518,7 @@ export class CoreLawIndex {
     const entry: AdoptedAct = {
       eli: act.currentEli,
       title: act.title,
+      ...(act.shortTitle ? { label: act.shortTitle } : {}),
       origin: "USER",
       baseEli: act.baseEli,
       addedAt: new Date(this.now()).toISOString(),
@@ -670,6 +689,19 @@ export class CoreLawIndex {
   setAutoApply(value: boolean): void {
     this.state.autoApply = value;
     this.saveState();
+  }
+
+  /**
+   * Checks the copy while the application runs: every tick runs a regular
+   * (not forced) refresh, so each consolidated text is checked in ELI at most
+   * once a day and texts not downloaded yet are retried. Returns a stop function.
+   */
+  startSchedule(intervalMs: number = SCHEDULE_TICK_MS): () => void {
+    const timer = setInterval(() => {
+      void this.refresh().catch(() => undefined);
+    }, intervalMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 
   /** Checks every consolidated text now (relations only unless auto-apply). */

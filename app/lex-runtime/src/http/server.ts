@@ -580,6 +580,8 @@ export async function startLocalServer(options?: {
             `LEX_CORE_LAW_REFRESH_FAILED:${error instanceof Error ? error.message : String(error)}\n`
           );
         });
+      // Daily ELI check while the application runs, not only at start.
+      coreLawIndex.startSchedule();
     }
   } catch (error) {
     process.stderr.write(

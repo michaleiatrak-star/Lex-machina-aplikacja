@@ -1,5 +1,5 @@
 import { searchStems } from "./core-law-search.js";
-import { normalizeForSearch } from "./core-law-index.js";
+import { coreLawEliCaution, normalizeForSearch } from "./core-law-index.js";
 const LIST_TOOL = "list_core_law_acts";
 const SEARCH_TOOL = "search_core_law";
 const READ_TOOL = "read_core_law_article";
@@ -11,7 +11,7 @@ const SCHEMAS = [
         type: "function",
         function: {
             name: LIST_TOOL,
-            description: "List the core Polish acts (all acts named in the Lex domain act maps) held locally from the official ELI text, with ELI, title, status and article count.",
+            description: "List the Polish acts held locally from the official ELI text (acts named in the Lex domain act maps, acts added after verification and acts added by users), with ELI, title, status, article count, origin and whether the copy is current (eliCaution: verify the act in ELI before relying on the copy).",
             parameters: {
                 type: "object",
                 additionalProperties: false,
@@ -127,12 +127,15 @@ export class CoreLawToolRuntime {
         return name === LIST_TOOL || name === SEARCH_TOOL || name === READ_TOOL;
     }
     systemPromptAppendix() {
-        const available = this.index
-            .summaries()
-            .filter((act) => act.articleCount > 0).length;
+        const withText = this.index.summaries().filter((act) => act.articleCount > 0);
+        const added = withText.filter((act) => act.origin === "USER").length;
+        const cautious = withText.filter((act) => coreLawEliCaution(act)).length;
         return [
             "# RDZEŃ PRAWA (TEKSTY Z ELI)",
-            `Lokalnie dostępne są oficjalne teksty aktów wskazanych w mapach dziedzinowych DR i prawo-polskie (${available} aktów z tekstem).`,
+            `Lokalnie dostępne są oficjalne teksty aktów z map dziedzinowych DR i prawo-polskie, aktów dołączonych po weryfikacji w ELI i aktów dodanych przez użytkowników (${withText.length} aktów z tekstem${added ? `, w tym ${added} dodanych przez użytkowników` : ""}); listę podaje list_core_law_acts.`,
+            ...(cautious
+                ? [`Kopia ${cautious} aktów nie jest aktualnym brzmieniem (eliCaution w list_core_law_acts): ich przepisy potwierdzaj verify_legal_reference w ELI.`]
+                : []),
             "Dosłowne brzmienie przepisu bierz z read_core_law_article (albo search_core_law, gdy nie znasz numeru artykułu); nigdy nie cytuj przepisu z pamięci.",
             "Wynik podaje ELI, status aktu i datę pobrania. Jeśli mapa lub status wskazuje nowelizacje po tekście jednolitym, potwierdź aktualne brzmienie verify_legal_reference przed przedstawieniem go jako obowiązującego."
         ].join("\n");
@@ -189,7 +192,9 @@ export class CoreLawToolRuntime {
                 consolidatedText: act.consolidated,
                 articles: act.articleCount,
                 fetchedAt: act.fetchedAt,
-                available: act.articleCount > 0 || act.textSource !== null
+                available: act.articleCount > 0 || act.textSource !== null,
+                origin: act.origin,
+                eliCaution: coreLawEliCaution(act)
             }));
             this.events.push({
                 tool: call.name,

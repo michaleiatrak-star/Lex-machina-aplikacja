@@ -1,4 +1,5 @@
 import { eliLinks } from "./core-law-index.js";
+import { shortActTitle } from "./eli-act-descriptor.js";
 
 /**
  * Akt prawny dodawany przez użytkownika do lokalnej kopii (RAG): adres ISAP
@@ -22,6 +23,8 @@ export type CoreLawActLookup = {
   // Tekst pobierany do kopii: najnowszy t.j. albo sam akt.
   currentEli: string;
   title: string;
+  // Krótka nazwa dla list i modeli: "Ustawa o podatku akcyzowym", "Kodeks wykroczeń".
+  shortTitle: string;
   type: string | null;
   status: string | null;
   promulgation: string | null;
@@ -109,6 +112,13 @@ async function eliJson(fetcher: EliFetch, path: string): Promise<Record<string, 
   }
 }
 
+/** "Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym" -> "Ustawa o podatku akcyzowym". */
+export function shortLegalActName(title: string, type: string | null): string {
+  const short = shortActTitle(title);
+  if (short.length < 4) return title;
+  return /^\p{Ll}/u.test(short) ? `${type?.trim() || "Akt"} ${short}` : short;
+}
+
 export async function lookupCoreLawAct(
   reference: string,
   fetcher: EliFetch = globalThis.fetch.bind(globalThis)
@@ -166,6 +176,7 @@ export async function lookupCoreLawAct(
     baseEli,
     currentEli,
     title: text(baseMeta.title) ?? baseEli,
+    shortTitle: shortLegalActName(text(baseMeta.title) ?? baseEli, text(baseMeta.type)),
     type: text(baseMeta.type),
     status,
     promulgation: text(baseMeta.promulgation),

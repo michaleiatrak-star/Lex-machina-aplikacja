@@ -7,6 +7,7 @@ import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
 import { LexExecutionEngine, latestUserTurn } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
+import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
@@ -676,7 +677,9 @@ export class SafeSessionExecutor {
                         title: act.title,
                         labels: act.labels,
                         domains: act.domains,
-                        articleCount: act.articleCount
+                        articleCount: act.articleCount,
+                        origin: act.origin,
+                        eliCaution: coreLawEliCaution(act)
                     }))
                 }
                 : {}),

@@ -46,8 +46,9 @@ import {
 import type {
   LegalVerificationToolFactory
 } from "./verification-tool-runtime.js";
-import type {
-  CoreLawIndex
+import {
+  coreLawEliCaution,
+  type CoreLawIndex
 } from "./core-law-index.js";
 import {
   CoreLawToolRuntime
@@ -1497,7 +1498,9 @@ export class SafeSessionExecutor implements SessionExecutor {
               title: act.title,
               labels: act.labels,
               domains: act.domains,
-              articleCount: act.articleCount
+              articleCount: act.articleCount,
+              origin: act.origin,
+              eliCaution: coreLawEliCaution(act)
             }))
           }
         : {}),

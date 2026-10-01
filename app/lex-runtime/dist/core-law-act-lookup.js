@@ -1,4 +1,5 @@
 import { eliLinks } from "./core-law-index.js";
+import { shortActTitle } from "./eli-act-descriptor.js";
 /**
  * Akt prawny dodawany przez użytkownika do lokalnej kopii (RAG): adres ISAP
  * (WDU20250000383), ELI (DU/2025/383, eli.gov.pl, api.sejm.gov.pl) albo
@@ -74,6 +75,13 @@ async function eliJson(fetcher, path) {
         throw new CoreLawActLookupError("CORE_LAW_ACT_SOURCE_UNAVAILABLE", 502);
     }
 }
+/** "Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym" -> "Ustawa o podatku akcyzowym". */
+export function shortLegalActName(title, type) {
+    const short = shortActTitle(title);
+    if (short.length < 4)
+        return title;
+    return /^\p{Ll}/u.test(short) ? `${type?.trim() || "Akt"} ${short}` : short;
+}
 export async function lookupCoreLawAct(reference, fetcher = globalThis.fetch.bind(globalThis)) {
     const inputEli = parseLegalActReference(reference);
     if (!inputEli) {
@@ -116,6 +124,7 @@ export async function lookupCoreLawAct(reference, fetcher = globalThis.fetch.bin
         baseEli,
         currentEli,
         title: text(baseMeta.title) ?? baseEli,
+        shortTitle: shortLegalActName(text(baseMeta.title) ?? baseEli, text(baseMeta.type)),
         type: text(baseMeta.type),
         status,
         promulgation: text(baseMeta.promulgation),
