@@ -43,13 +43,14 @@ async function main(): Promise<void> {
   fs.mkdirSync(root, { recursive: true });
 
   const probe = path.join(root, "probe.cmd");
-  fs.writeFileSync(probe, "@echo off\r\necho ARG1=[%~1]\r\necho ARG2=[%~2]\r\necho ARG3=[%~3]\r\n");
+  // %1..%3 keep their quotes, so "&" inside stays text for echo too.
+  fs.writeFileSync(probe, "@echo off\r\necho ARG1=[%1]\r\necho ARG2=[%2]\r\necho ARG3=[%3]\r\n");
   const echoed = await run(probe, ["-p", "", "C:\\Lex Machina\\x & y"]);
   check(
     echoed.code === 0 &&
-      echoed.stdout.includes("ARG1=[-p]") &&
-      echoed.stdout.includes("ARG2=[]") &&
-      echoed.stdout.includes("ARG3=[C:\\Lex Machina\\x & y]"),
+      echoed.stdout.includes('ARG1=["-p"]') &&
+      echoed.stdout.includes('ARG2=[""]') &&
+      echoed.stdout.includes('ARG3=["C:\\Lex Machina\\x & y"]'),
     ".cmd w katalogu ze spacją, argumenty puste i ze spacjami",
     echoed.stdout + echoed.stderr
   );

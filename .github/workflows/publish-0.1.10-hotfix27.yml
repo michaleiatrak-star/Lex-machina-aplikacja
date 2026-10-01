@@ -57,6 +57,7 @@ jobs:
       - name: Install runtime dependencies
         run: npm install --no-audit --no-fund
 
+      # Each argument must reach the .cmd as one quoted argument.
       - name: npm.cmd and .cmd shims under "Lex Machina"
         run: npm run validate:windows-account-shim
 
