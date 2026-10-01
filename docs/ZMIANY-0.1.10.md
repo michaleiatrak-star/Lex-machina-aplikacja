@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–24)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–25)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -25,8 +25,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 22 | `5132bdc` | Gemini/Grok przez konto: Node z pakietu aplikacji dla skryptów npm, błąd npm w UI |
 | hotfix 23 | `4eebca9` | Użytkownicy: przegląd i zmiana uprawnień do spraw; bez panelu wsparcia serwisowego |
 | hotfix 24 | `2c29a94` | Aktualizacje: stan i aktualizacja przepisów (RAG) |
+| hotfix 25 | `5337c41` | Przepisy (RAG): własne akty z ISAP/ELI/Dz.U., sprawdzane w Sejm ELI |
 
 ---
+
+## hotfix 25
+
+- `core-law-act-lookup.ts`: `parseLegalActReference` (ISAP `W(DU|MP)RRRRNNNPPPP`, ELI, Dz.U./M.P.), `lookupCoreLawAct` (akt bazowy z „Tekst jednolity dla aktu”, najnowszy t.j. z „Inf. o tekście jednolitym”, odmowa: nieznany / nieobowiązujący / bez tekstu / ELI niedostępne).
+- `CoreLawIndex.addUserAct` / `removeUserAct` / `present`; `origin` (`MAP`/`VERIFIED`/`USER`), `addedAt`, `addedBy`; wymuszone pobranie od razu sprawdza relacje. Akt bez t.j.: „Akty zmieniające” = nowelizacje po tekście.
+- Trasy `POST /api/core-law/acts/lookup`, `POST /api/core-law/acts`, `POST /api/core-law/acts/remove` (ADMIN); allowlista desktopu.
+- UI: „Dodaj akt prawny” i „Dodane przez użytkowników” w `CoreLawUpdatesSection`.
 
 ## hotfix 24
 
