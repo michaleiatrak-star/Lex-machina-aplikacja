@@ -1462,7 +1462,19 @@ async function resolveAccountExecutable(
   return null;
 }
 
-function spawnResolved(
+/**
+ * cmd.exe line for a .cmd/.bat shim: `/s /c "<line>"` strips only the outer
+ * quotes, so every quoted part survives. It must be passed verbatim: Node's
+ * default argv quoting turns the inner quotes into \" which cmd.exe does not
+ * understand ('"C:\...\npm.cmd\"' is not recognized). % is not doubled here:
+ * that escape exists only inside batch files.
+ */
+export function windowsShimCommandLine(executable: string, args: string[]): string {
+  const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  return `"${[quote(executable), ...args.map(quote)].join(" ")}"`;
+}
+
+export function spawnResolved(
   executable: string,
   args: string[],
   cwd: string | undefined,
@@ -1473,17 +1485,14 @@ function spawnResolved(
     /\.(cmd|bat)$/i.test(executable)
   ) {
     const comspec = process.env.ComSpec || "cmd.exe";
-    const commandLine = [
-      cmdQuote(executable),
-      ...args.map(cmdQuote)
-    ].join(" ");
     return spawn(
       comspec,
-      ["/d", "/s", "/c", commandLine],
+      ["/d", "/s", "/c", windowsShimCommandLine(executable, args)],
       {
         cwd,
         env,
         windowsHide: true,
+        windowsVerbatimArguments: true,
         stdio: ["pipe", "pipe", "pipe"]
       }
     );
@@ -1832,6 +1841,18 @@ export function npmInstallEnvironment(
   return env;
 }
 
+/** npm-cli.js next to an npm launcher (Node for Windows layout and node/bin/npm). */
+export function npmCliScript(npmExecutable: string): string | null {
+  const dir = path.dirname(npmExecutable);
+  for (const candidate of [
+    path.join(dir, "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(dir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
 // The npm error lines (not the http progress lines) explain a failed install.
 export function npmFailureDetail(stderr: string): string {
   const lines = stderr.split(/\r?\n/).filter((line) => /npm (error|ERR!)/i.test(line));
@@ -1890,6 +1911,9 @@ async function provisionPinnedAccountClientOnce(
       `ACCOUNT_SESSION_CLI_PROVISIONER_NOT_AVAILABLE:${provider}`
     );
   }
+  // npm.cmd only starts node with npm-cli.js; calling it directly avoids
+  // cmd.exe and its quoting (an install path with spaces, "Lex Machina").
+  const npmCli = npmCliScript(npmExecutable);
 
   const installRoot =
     path.join(
@@ -1924,8 +1948,9 @@ async function provisionPinnedAccountClientOnce(
   try {
     result =
       await runDirect(
-        npmExecutable,
+        npmCli ? process.execPath : npmExecutable,
         [
+          ...(npmCli ? [npmCli] : []),
           "install",
           "--prefix",
           installRoot,

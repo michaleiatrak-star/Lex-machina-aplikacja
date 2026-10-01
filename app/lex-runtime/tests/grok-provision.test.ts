@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AccountSessionManager,
   countNpmFetches,
+  npmCliScript,
   npmFailureDetail,
-  npmInstallEnvironment
+  npmInstallEnvironment,
+  windowsShimCommandLine
 } from "../src/providers/account-session.js";
 
 const roots: string[] = [];
@@ -136,5 +138,25 @@ describe("Grok Build: klient pobierany na żądanie", () => {
         "npm http fetch GET 200 https://registry.npmjs.org/a 5ms\nnpm error code 1\nnpm error 'node' is not recognized\n"
       )
     ).toBe("npm error code 1\nnpm error 'node' is not recognized");
+  });
+
+  it("linia cmd.exe dla npm.cmd w katalogu ze spacją: cudzysłowy zewnętrzne, bez \\\"", () => {
+    const line = windowsShimCommandLine(
+      "C:\\Users\\Mi9chal\\AppData\\Local\\Lex Machina\\runtime\\node\\npm.cmd",
+      ["install", "--prefix", "C:\\Users\\x\\Lex Machina\\clients", "-p", "", 'a"b', "100%"]
+    );
+    expect(line).toBe(
+      '""C:\\Users\\Mi9chal\\AppData\\Local\\Lex Machina\\runtime\\node\\npm.cmd" "install" "--prefix" "C:\\Users\\x\\Lex Machina\\clients" "-p" "" "a""b" "100%""'
+    );
+    expect(line).not.toContain('\\"');
+  });
+
+  it("npm uruchamiany przez Node i npm-cli.js obok npm.cmd", () => {
+    const dir = tempDir();
+    expect(npmCliScript(path.join(dir, "npm.cmd"))).toBeNull();
+    const cli = path.join(dir, "node_modules", "npm", "bin", "npm-cli.js");
+    fs.mkdirSync(path.dirname(cli), { recursive: true });
+    fs.writeFileSync(cli, "");
+    expect(npmCliScript(path.join(dir, "npm.cmd"))).toBe(cli);
   });
 });
