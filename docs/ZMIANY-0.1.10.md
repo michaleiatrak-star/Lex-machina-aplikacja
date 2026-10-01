@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–22)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–23)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -23,8 +23,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 20 | `b69d602` | „Połącz konto”: pobieranie klienta w tle z paskiem etapów, potem logowanie |
 | hotfix 21 | `c82dc5a` | EUREKA: wyszukiwanie frazy w całości, podgląd dokumentu z API |
 | hotfix 22 | `5132bdc` | Gemini/Grok przez konto: Node z pakietu aplikacji dla skryptów npm, błąd npm w UI |
+| hotfix 23 | `4eebca9` | Użytkownicy: przegląd i zmiana uprawnień do spraw; bez panelu wsparcia serwisowego |
 
 ---
+
+## hotfix 23
+
+- `GET /api/admin/case-access` (ADMIN, `listAccessOverview`): wszystkie sprawy z członkami, rolami i `canManage` (tylko OWNER); tylko metadane.
+- UI: `CaseAccessAdminPanel` w Ustawienia → Użytkownicy (filtr po użytkowniku; nadawanie, zmiana roli, deanonimizacja, odbieranie przez istniejące trasy sprawy). `AdminSupportPanel` usunięty z UI; mechanizm SERVICE w runtime bez zmian.
+- Desktop: trasa w allowliście.
 
 ## hotfix 22
 
