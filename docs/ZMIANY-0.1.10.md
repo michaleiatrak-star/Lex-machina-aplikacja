@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–21)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–22)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -22,8 +22,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 19 | `eec5a89` | Grok przez konto: klient pobierany przy „Połącz konto”, EPIPE klienta Grok |
 | hotfix 20 | `b69d602` | „Połącz konto”: pobieranie klienta w tle z paskiem etapów, potem logowanie |
 | hotfix 21 | `c82dc5a` | EUREKA: wyszukiwanie frazy w całości, podgląd dokumentu z API |
+| hotfix 22 | `5132bdc` | Gemini/Grok przez konto: Node z pakietu aplikacji dla skryptów npm, błąd npm w UI |
 
 ---
+
+## hotfix 22
+
+- `npmInstallEnvironment`: katalog Node runtime (i npm) na początku PATH dla `npm install` klienta konta. npm nie dodaje go sam, więc bez systemowego Node padał `postinstall: node …` (Grok Build, zależności Gemini CLI).
+- `npmFailureDetail`: do błędu trafiają linie `npm error`, nie linie pobierania; UI (`provisionFailureText`) pokazuje przyczynę i szczegóły.
 
 ## hotfix 21
 
