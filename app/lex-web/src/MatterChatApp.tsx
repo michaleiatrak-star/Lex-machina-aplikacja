@@ -274,7 +274,16 @@ export function provisionFailureText(error: string): string {
     return "Pobieranie klienta przekroczyło 10 minut (wolne łącze lub serwer npm). Spróbuj ponownie.";
   }
   if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISION_FAILED")) {
-    return "Pobieranie klienta nie powiodło się (sieć lub serwer npm). Spróbuj ponownie za chwilę.";
+    // ACCOUNT_SESSION_CLI_PROVISION_FAILED:<provider>:<exit code>:<npm error lines>
+    const detail = error.split(":").slice(3).join(":").trim();
+    const cause = /ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|proxy|certificate|CERT_/i.test(detail)
+      ? "brak połączenia z serwerem npm (sieć, proxy lub certyfikat)"
+      : /not recognized|is not recognized|ENOENT/i.test(detail)
+        ? "brak wymaganego programu podczas instalacji"
+        : /EPERM|EACCES|EBUSY/i.test(detail)
+          ? "brak dostępu do plików (program antywirusowy lub otwarty plik)"
+          : "błąd instalacji npm";
+    return `Pobieranie klienta nie powiodło się: ${cause}.${detail ? ` Szczegóły: ${detail}` : ""}`;
   }
   return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
 }

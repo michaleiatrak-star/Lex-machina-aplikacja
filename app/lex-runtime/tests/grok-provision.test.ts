@@ -2,7 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AccountSessionManager, countNpmFetches } from "../src/providers/account-session.js";
+import {
+  AccountSessionManager,
+  countNpmFetches,
+  npmFailureDetail,
+  npmInstallEnvironment
+} from "../src/providers/account-session.js";
 
 const roots: string[] = [];
 const previous = {
@@ -73,7 +78,8 @@ describe("Grok Build: klient pobierany na żądanie", () => {
     async () => {
       const root = tempDir();
       process.env.LEX_OPTIONAL_ACCOUNT_CLIENTS_ROOT = root;
-      process.env.PATH = ["/usr/bin", "/bin", path.dirname(process.execPath)].join(path.delimiter);
+      // No Node on PATH, like a Windows PC with only the bundled runtime.
+      process.env.PATH = ["/usr/bin", "/bin"].join(path.delimiter);
       const npm = path.join(tempDir(), "npm");
       fs.writeFileSync(
         npm,
@@ -83,7 +89,8 @@ describe("Grok Build: klient pobierany na żądanie", () => {
           'mkdir -p "$prefix/node_modules/@xai-official/grok" "$prefix/node_modules/.bin"',
           "echo 'npm http fetch GET 200 https://registry.npmjs.org/@xai-official%2fgrok 10ms' >&2",
           "echo 'npm http fetch GET 200 https://registry.npmjs.org/@xai-official/grok/-/grok-1.0.44.tgz 20ms' >&2",
-          `echo '{"version":"1.0.44"}' > "$prefix/node_modules/@xai-official/grok/package.json"`,
+          // Like the package's "postinstall: node bin/postinstall.js".
+          `node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({ version: "1.0.44" }))' "$prefix/node_modules/@xai-official/grok/package.json" || exit 9`,
           `printf '#!/bin/sh\\nexit 1\\n' > "$prefix/node_modules/.bin/grok"`,
           'chmod +x "$prefix/node_modules/.bin/grok"',
           "exit 0"
@@ -111,4 +118,23 @@ describe("Grok Build: klient pobierany na żądanie", () => {
       expect(fs.existsSync(path.join(root, "xai", "node_modules", ".bin", "grok"))).toBe(true);
     }
   );
+
+  it("npm dostaje Node z pakietu aplikacji w PATH i bez powielania wpisów", () => {
+    const env = npmInstallEnvironment(
+      path.join("/app", "node", "npm"),
+      { Path: ["/usr/bin", "/app/node"].join(path.delimiter), OTHER: "1" },
+      path.join("/app", "node", "node")
+    );
+    expect(env.Path?.split(path.delimiter)).toEqual(["/app/node", "/usr/bin"]);
+    expect(env.npm_config_update_notifier).toBe("false");
+    expect(env.OTHER).toBe("1");
+  });
+
+  it("szczegół błędu to linie błędu npm, nie linie pobierania", () => {
+    expect(
+      npmFailureDetail(
+        "npm http fetch GET 200 https://registry.npmjs.org/a 5ms\nnpm error code 1\nnpm error 'node' is not recognized\n"
+      )
+    ).toBe("npm error code 1\nnpm error 'node' is not recognized");
+  });
 });

@@ -1106,6 +1106,28 @@ async function directorySize(root) {
     }
     return total;
 }
+// npm does not put its own Node on PATH for package install scripts, and the
+// desktop runtime's Node is bundled (not installed system-wide). Without this,
+// "postinstall: node …" (Grok Build, Gemini CLI dependencies) fails with
+// "'node' is not recognized" on a PC without a system Node.
+export function npmInstallEnvironment(npmExecutable, base = process.env, nodeExecutable = process.execPath) {
+    const env = { ...base, npm_config_update_notifier: "false" };
+    const pathKeys = Object.keys(env).filter((key) => /^path$/i.test(key));
+    const pathKey = pathKeys[0] ?? (process.platform === "win32" ? "Path" : "PATH");
+    const existing = pathKeys
+        .flatMap((key) => (env[key] ?? "").split(path.delimiter))
+        .filter(Boolean);
+    const nodeDirs = [path.dirname(nodeExecutable), path.dirname(npmExecutable)].filter((dir, index, all) => all.indexOf(dir) === index);
+    for (const key of pathKeys)
+        delete env[key];
+    env[pathKey] = [...nodeDirs, ...existing.filter((dir) => !nodeDirs.includes(dir))].join(path.delimiter);
+    return env;
+}
+// The npm error lines (not the http progress lines) explain a failed install.
+export function npmFailureDetail(stderr) {
+    const lines = stderr.split(/\r?\n/).filter((line) => /npm (error|ERR!)/i.test(line));
+    return (lines.length ? lines.join("\n") : stderr).trim().slice(-1200);
+}
 // npm --loglevel=http prints one "http fetch GET 200 <url>" line per package.
 export function countNpmFetches(chunk) {
     return chunk.match(/http fetch GET 20\d /g)?.length ?? 0;
@@ -1169,10 +1191,7 @@ async function provisionPinnedAccountClientOnce(provider) {
                 "--save-exact",
                 "--loglevel=http",
                 packageSpec
-            ], undefined, {
-                ...process.env,
-                npm_config_update_notifier: "false"
-            }, OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS, undefined, undefined, {
+            ], undefined, npmInstallEnvironment(npmExecutable), OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS, undefined, undefined, {
                 onStderr: (chunk) => {
                     const fetched = countNpmFetches(chunk);
                     if (fetched && report) {
@@ -1188,7 +1207,7 @@ async function provisionPinnedAccountClientOnce(provider) {
     }
     report?.({ stage: "VERIFYING" });
     if (result.code !== 0) {
-        throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${result.stderr.trim().slice(-1200)}`);
+        throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${npmFailureDetail(result.stderr)}`);
     }
     const installed = provider === "openai"
         ? privateCodexExecutable()
