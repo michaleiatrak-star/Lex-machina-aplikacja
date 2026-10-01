@@ -18,6 +18,9 @@ export const MCP_TOOL_LABELS: Record<string, McpToolLabel> = {
   cbosa_szukaj: { label: "Orzeczenia NSA i WSA", help: "Słowo kluczowe lub fragment tekstu orzeczenia; wynik to lista dokumentów do pobrania.", fullText: true },
   cbosa_sprawdz_sygnature: { label: "Sprawdź sygnaturę NSA/WSA", help: "Czy orzeczenie o tej sygnaturze jest w CBOSA." },
   cbosa_pobierz: { label: "Pobierz orzeczenie NSA/WSA", help: "Sentencja i uzasadnienie po identyfikatorze dokumentu z wyszukiwania." },
+  kio_szukaj: { label: "Orzeczenia KIO i sądów zamówień", help: "Słowo kluczowe lub fragment treści (z odmianą), sygnatura albo zakres dat; wyszukiwarka Urzędu Zamówień Publicznych.", fullText: true },
+  kio_sprawdz_sygnature: { label: "Sprawdź sygnaturę KIO", help: "Czy orzeczenie o tej sygnaturze jest w wyszukiwarce UZP (np. KIO 827/18)." },
+  kio_pobierz: { label: "Pobierz orzeczenie KIO", help: "Metryka (rozstrzygnięcie, zamawiający, przepisy Pzp) i treść po identyfikatorze z wyszukiwania." },
   krs_lookup: { label: "Podmiot w KRS", help: "Odpis aktualny: czy podmiot istnieje i nie jest wykreślony." },
   krs_szukaj: { label: "Podmiot w KRS po NIP albo REGON", help: "Numer KRS z wykazu podatników VAT, potem odpis aktualny. Podmiot spoza wykazu VAT znajdziesz po numerze KRS." },
   krs_reprezentacja: { label: "Reprezentacja podmiotu w KRS", help: "Zarząd, sposób reprezentacji, prokurenci." },
@@ -87,6 +90,10 @@ export const MCP_FIELD_LABELS: Record<string, McpFieldLabel> = {
   kolejka_id: { label: "Numer zlecenia", help: "z odpowiedzi PENDING" },
   urn_lub_sygnatura: { label: "Sygnatura lub URN decyzji" },
   tylkoAktualne: { label: "Tylko aktualne" },
+  rodzaj: {
+    label: "Organ",
+    options: { KIO: "Krajowa Izba Odwoławcza", SO: "sądy okręgowe (skargi na orzeczenia KIO)", SA: "sądy apelacyjne", SN: "Sąd Najwyższy", wszystkie: "wszystkie" }
+  },
   kategoria: {
     label: "Rodzaj dokumentu",
     options: { "1": "interpretacja indywidualna", "3": "interpretacja ogólna", "11": "objaśnienia podatkowe" }

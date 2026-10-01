@@ -83,6 +83,18 @@
       "description": "CBOSA: pełny dokument orzeczenia"
     },
     {
+      "name": "kio_szukaj",
+      "description": "KIO: wyszukiwanie orzeczeń Krajowej Izby Odwoławczej (wyszukiwarka UZP) po frazie, sygnaturze i dacie"
+    },
+    {
+      "name": "kio_sprawdz_sygnature",
+      "description": "KIO: czy orzeczenie o tej sygnaturze jest w wyszukiwarce UZP"
+    },
+    {
+      "name": "kio_pobierz",
+      "description": "KIO: metryka i treść orzeczenia"
+    },
+    {
       "name": "ceidg_szukaj_firmy",
       "description": "CEIDG: firmy jednoosobowe (wymaga klucza)"
     },

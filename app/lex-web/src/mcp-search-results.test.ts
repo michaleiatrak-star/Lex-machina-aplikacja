@@ -132,4 +132,23 @@ describe("wynik MCP jako strona wyników", () => {
     expect(failed.pending).toBeNull();
     expect(failed.status).toBe("ERROR");
   });
+
+  it("KIO: lista z wyszukiwarki UZP, podgląd treści i „Pokaż treść” przez kio_pobierz", () => {
+    const page = readSearchResult("kio_szukaj", { fraza: "rażąco niska cena" }, {
+      status: "AMBIGUOUS", liczba_trafien: 8654, strona: 1, stron: 866,
+      kandydaci: [{
+        identyfikator: "KIO 4983/25", tytul_lub_nazwa: "wyrok KIO 4983/25", sad: "Krajowa Izba Odwoławcza",
+        data_wyroku: "2026-12-07", fragment: "rażąco niskiej ceny", id_kio: "32291",
+        url_zrodlowy: "https://orzeczenia.uzp.gov.pl/Home/Details/32291",
+        url_podgladu: "https://orzeczenia.uzp.gov.pl/Home/ContentHtml/32291?Kind=KIO"
+      }]
+    }, ["kio_szukaj", "kio_pobierz"]);
+    expect(page.items[0]).toMatchObject({
+      key: "KIO 4983/25",
+      url: "https://orzeczenia.uzp.gov.pl/Home/Details/32291",
+      preview: { kind: "url", url: "https://orzeczenia.uzp.gov.pl/Home/ContentHtml/32291?Kind=KIO" },
+      detail: { tool: "kio_pobierz", args: { id: "32291" } }
+    });
+    expect(nextPageArgs({ fraza: "x" }, page, 1, ["fraza", "strona"])).toEqual({ fraza: "x", strona: 2 });
+  });
 });

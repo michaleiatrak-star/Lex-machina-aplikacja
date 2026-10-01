@@ -18,6 +18,7 @@ export const SOURCE_PREVIEW_HOSTS = new Set([
     "www.sn.pl",
     // Official open-data APIs rendered as a readable page (KRS odpis, NBP rates).
     "api-krs.ms.gov.pl",
+    "orzeczenia.uzp.gov.pl",
     "api.nbp.pl"
 ]);
 const MAX_BYTES = 8 * 1024 * 1024;

@@ -85,6 +85,7 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
   // CBOSA: bez „Pokaż treść” — strona orzeczenia jest w podglądzie źródła.
   const candidates: Array<[string, string, unknown]> = [
     ["isap_tekst", "eli", row.eli],
+    ["kio_pobierz", "id", row.id_kio],
     ["eureka_pobierz", "id", row.id_eureka],
     ["uodo_pobierz", "urn_lub_sygnatura", row.urn ?? row.identyfikator]
   ];
@@ -97,7 +98,7 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
 }
 
 const SHOWN = new Set([
-  "tytul_lub_nazwa", "sygnatura", "identyfikator", "tytul", "doc_id", "id_eureka", "urn", "sad",
+  "tytul_lub_nazwa", "sygnatura", "identyfikator", "tytul", "doc_id", "id_eureka", "id_kio", "urn", "sad",
   "fragment", "teza", "sentencja", "url_zrodlowy", "url_podgladu", "url", "rola",
   ...DATE_LABELS.map(([key]) => key),
   "prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"
