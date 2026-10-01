@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–26)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–27)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -27,8 +27,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 24 | `2c29a94` | Aktualizacje: stan i aktualizacja przepisów (RAG) |
 | hotfix 25 | `5337c41` | Przepisy (RAG): własne akty z ISAP/ELI/Dz.U., sprawdzane w Sejm ELI |
 | hotfix 26 | `6fa6eef` | modele widzą akty dodane i stan kopii; codzienne sprawdzanie kopii w działającej aplikacji |
+| hotfix 27 | `9b8e46a` | Gemini/Grok przez konto: uruchamianie npm.cmd i klientów .cmd na Windows |
 
 ---
+
+## hotfix 27
+
+- `spawnResolved` (.cmd/.bat na Windows): `cmd.exe /d /s /c "<linia>"` z `windowsVerbatimArguments` (`windowsShimCommandLine`); wcześniej Node cytował linię jako `\"…\"` i cmd.exe zgłaszał `'"…\npm.cmd"' is not recognized`.
+- Instalacja klienta: `node npm-cli.js` (`npmCliScript`) zamiast `npm.cmd`.
+- Bramka publikacji `validate:windows-account-shim` (windows-latest, katalog „Lex Machina”).
 
 ## hotfix 26
 
