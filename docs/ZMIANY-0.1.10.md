@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–25)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–26)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -26,8 +26,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 23 | `4eebca9` | Użytkownicy: przegląd i zmiana uprawnień do spraw; bez panelu wsparcia serwisowego |
 | hotfix 24 | `2c29a94` | Aktualizacje: stan i aktualizacja przepisów (RAG) |
 | hotfix 25 | `5337c41` | Przepisy (RAG): własne akty z ISAP/ELI/Dz.U., sprawdzane w Sejm ELI |
+| hotfix 26 | `6fa6eef` | modele widzą akty dodane i stan kopii; codzienne sprawdzanie kopii w działającej aplikacji |
 
 ---
+
+## hotfix 26
+
+- `coreLawEliCaution`; `KnowledgeMapAct.origin/eliCaution`; `list_core_law_acts` zwraca `origin`, `eliCaution`; instrukcja `CoreLawToolRuntime` liczy akty dodane i nieaktualne.
+- Mapa wiedzy dla modeli lokalnych: akty `USER` zawsze (do 15) + akty aktywnych dziedzin.
+- `shortLegalActName` → etykieta aktu dodanego.
+- `CoreLawIndex.startSchedule` (tik 1 h, zwykłe `refresh()`); wcześniej sprawdzanie tylko przy starcie runtime.
 
 ## hotfix 25
 
