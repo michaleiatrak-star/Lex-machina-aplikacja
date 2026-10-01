@@ -1,4 +1,4 @@
-# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–28)
+# Lex Machina 0.1.10 — dziennik zmian (hotfix 4–29)
 
 Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator online, niepodpisany; sumy w `SHA256SUMS.txt`). Szczegóły techniczne: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md).
 
@@ -29,8 +29,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 26 | `6fa6eef` | modele widzą akty dodane i stan kopii; codzienne sprawdzanie kopii w działającej aplikacji |
 | hotfix 27 | `9b8e46a` | Gemini/Grok przez konto: uruchamianie npm.cmd i klientów .cmd na Windows |
 | hotfix 28 | `b44bf03` | Wyszukiwanie: podgląd ELI/EUR-Lex/KRS/NBP/biała lista/CEIDG, KRS po NIP/REGON, NBP kupno/sprzedaż, CBOSA data orzeczenia, SUDOP kolejka |
+| hotfix 29 | `01b82e5` | KIO (wyszukiwarka UZP), SAOS bez fałszywej niedostępności, przypisania/archiwum/nazwa spraw, Gemini: odmowa planu Google |
 
 ---
+
+## hotfix 29
+
+- Konektor `kio` (`kio-example/kio-mcp-server.js`): `POST /Home/GetResults` (formularz: Phrase/Fle/SCnt/Sign/Dt/Kind/Pg), `/Home/Details/{id}`, `/Home/ContentHtml/{id}`; `kio_szukaj`, `kio_sprawdz_sygnature`, `kio_pobierz`. Rejestracja: `lex-mcp.js`, `.mcp.json`, instalator, MCPB, `LEX_MCP_CATALOG`, federacja, polityka R2A, host podglądu `orzeczenia.uzp.gov.pl`.
+- Limity: `callTool` 280 s, proxy desktopu `POST /api/mcp-search/query` 300 s (SAOS 3 × 45 s); licznik oczekiwania w UI.
+- `CaseAccessAdminPanel`: szybkie przypisanie (`assignableCases`), `renameCase`, `archiveCase`/`unarchiveCase` (MANAGE).
+- `ACCOUNT_SESSION_PLAN_UNSUPPORTED` (IneligibleTierError/UNSUPPORTED_CLIENT) z komunikatem o kluczu API.
+- `test_protokol.mjs`: `krs_szukaj` (brak od hotfix 28), KIO; `test_na_zywo.mjs`: przypadki KIO, filtr `LEX_TYLKO`; job `kio-live` w publikacji (bez blokowania).
 
 ## hotfix 28
 
