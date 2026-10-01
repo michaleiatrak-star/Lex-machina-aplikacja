@@ -4,7 +4,7 @@ import { appendDocument, nextPageArgs, readSearchResult } from "./mcp-search-res
 const CBOSA_TOOLS = ["cbosa_szukaj", "cbosa_pobierz", "cbosa_sprawdz_sygnature"];
 
 describe("wynik MCP jako strona wyników", () => {
-  it("CBOSA: lista kandydatów z linkiem, treścią do pobrania i kolejną stroną", () => {
+  it("CBOSA: lista kandydatów z linkiem i podglądem źródła (bez „Pokaż treść”), kolejna strona", () => {
     const args = { fraza: "podatek od nieruchomości" };
     const page = readSearchResult("cbosa_szukaj", args, {
       status: "AMBIGUOUS",
@@ -19,7 +19,8 @@ describe("wynik MCP jako strona wyników", () => {
     expect(page.items[0]).toMatchObject({
       key: "A1",
       url: "https://orzeczenia.nsa.gov.pl/doc/A1",
-      detail: { tool: "cbosa_pobierz", args: { doc_id: "A1" } }
+      preview: { kind: "url", url: "https://orzeczenia.nsa.gov.pl/doc/A1" },
+      detail: null
     });
     expect(nextPageArgs(args, page, 2, ["fraza", "strona"])).toEqual({ ...args, strona: 2 });
     expect(nextPageArgs(args, page, 25, ["fraza", "strona"])).toBeNull();
@@ -72,5 +73,63 @@ describe("wynik MCP jako strona wyników", () => {
   it("błąd źródła jako komunikat", () => {
     const page = readSearchResult("cbosa_szukaj", {}, { status: "ERROR", detail: "Przekroczono czas" }, CBOSA_TOOLS);
     expect(page).toMatchObject({ status: "ERROR", notice: "Przekroczono czas", items: [] });
+  });
+
+  it("KRS i NBP: podgląd z oficjalnego API, „Otwórz w źródle” to wyszukiwarka/strona tabel", () => {
+    const krs = readSearchResult("krs_lookup", { numerKrs: "28860" }, {
+      status: "FOUND",
+      result: {
+        identyfikator: "KRS 0000028860",
+        tytul_lub_nazwa: "ORLEN SPÓŁKA AKCYJNA",
+        url_zrodlowy: "https://wyszukiwarka-krs.ms.gov.pl/",
+        url_podgladu: "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000028860?rejestr=P&format=json"
+      }
+    }, ["krs_lookup"]);
+    expect(krs.items[0]).toMatchObject({
+      url: "https://wyszukiwarka-krs.ms.gov.pl/",
+      preview: { kind: "url", url: "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000028860?rejestr=P&format=json" }
+    });
+    expect(krs.items[0]!.facts.map(([label]) => label)).not.toContain("url podgladu");
+  });
+
+  it("biała lista VAT: podgląd rekordu z odpowiedzi API, bez ponownego zapytania", () => {
+    const page = readSearchResult("wl_sprawdz_nip", { nip: "7740001454" }, {
+      status: "FOUND",
+      retrieved_at: "2026-10-01T16:00:00.000Z",
+      result: { identyfikator: "NIP 7740001454", tytul_lub_nazwa: "ORLEN <S.A.>", status_vat: "Czynny", url_zrodlowy: "https://www.podatki.gov.pl/wykaz-podatnikow-vat-wyszukiwarka" }
+    }, ["wl_sprawdz_nip"]);
+    const preview = page.items[0]!.preview;
+    expect(preview?.kind).toBe("record");
+    const html = preview?.kind === "record" ? preview.html : "";
+    expect(html).toContain("Czynny");
+    expect(html).toContain("ORLEN &lt;S.A.&gt;");
+    expect(html).toContain("wl-api.mf.gov.pl");
+    expect(html).not.toContain("<S.A.>");
+  });
+
+  it("ISAP: „Pokaż treść” przez isap_tekst po ELI", () => {
+    const page = readSearchResult("isap_lookup", { query: "kodeks karny" }, {
+      status: "AMBIGUOUS",
+      kandydaci: [{ identyfikator: "DU 2025 poz. 383", eli: "DU/2025/383", url_zrodlowy: "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU20250000383" }]
+    }, ["isap_lookup", "isap_tekst"]);
+    expect(page.items[0]!.detail).toEqual({ tool: "isap_tekst", args: { eli: "DU/2025/383" } });
+  });
+
+  it("SUDOP: zlecenie w kolejce to oczekiwanie na wynik, nie błąd", () => {
+    const page = readSearchResult("sudop_szukaj_pomocy", { nip: "7740001454" }, {
+      status: "ERROR",
+      detail: "PENDING",
+      kolejka_id: "5cd15a24-75bf-4c2b-9b43-7e3ed58a6dc1",
+      komunikat_serwera: "Przygotowywanie odpowiedzi, przewidywany czas to 60 sekund"
+    }, ["sudop_szukaj_pomocy", "sudop_odbierz_wynik"]);
+    expect(page.status).toBe("PENDING");
+    expect(page.pending).toEqual({
+      tool: "sudop_odbierz_wynik",
+      args: { kolejka_id: "5cd15a24-75bf-4c2b-9b43-7e3ed58a6dc1" },
+      message: "Przygotowywanie odpowiedzi, przewidywany czas to 60 sekund"
+    });
+    const failed = readSearchResult("sudop_szukaj_pomocy", {}, { status: "ERROR", detail: "HTTP 500" }, ["sudop_szukaj_pomocy", "sudop_odbierz_wynik"]);
+    expect(failed.pending).toBeNull();
+    expect(failed.status).toBe("ERROR");
   });
 });

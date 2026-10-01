@@ -529,7 +529,11 @@ class LexMcpClient {
             const result = await client.callTool({
                 name,
                 arguments: guardOutboundPayload(args)
-            });
+            }, undefined, 
+            // SDK default is 60 s; CEIDG (45 s, one retry) and SUDOP (waits up
+            // to 50 s for its queue) need longer. Stays under the desktop
+            // proxy's 120 s.
+            { timeout: 110_000 });
             return extractToolText(result);
         }
         catch (error) {

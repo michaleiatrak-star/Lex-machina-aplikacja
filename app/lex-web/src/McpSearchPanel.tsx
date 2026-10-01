@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import {
@@ -22,8 +23,19 @@ import {
   nextPageArgs,
   readSearchResult,
   type SearchDocument,
-  type SearchItem
+  type SearchItem,
+  type SearchPage,
+  type SourcePreviewTarget
 } from "./mcp-search-results.js";
+
+// SUDOP przyjmuje zlecenie do kolejki (około minuty); każde odebranie czeka do 50 s po stronie
+// źródła. Najwyżej tyle prób, zanim użytkownik dostanie przycisk ponownego odbioru.
+const PENDING_ATTEMPTS = 6;
+const PENDING_PAUSE_MS = 10_000;
+
+function previewKey(target: SourcePreviewTarget): string {
+  return target.kind === "url" ? target.url : target.key;
+}
 
 type FieldValue = string | boolean;
 
@@ -39,6 +51,7 @@ const STATUS_TEXT: Record<string, string> = {
   AMBIGUOUS: "Niejednoznaczne — zawęź zapytanie",
   OUT_OF_SCOPE: "OUT_OF_SCOPE — poza zakresem źródła, nie dowód braku",
   ERROR: "Błąd źródła",
+  PENDING: "Zlecenie w kolejce źródła — wynik w przygotowaniu",
   SOURCE_UNAVAILABLE: "Źródło niedostępne — nie wnioskuj o braku",
   POLICY_BLOCKED: "Zablokowane przez politykę źródeł",
   OK: "OK"
@@ -94,6 +107,7 @@ type ResultView = {
   documentArgs: Record<string, unknown>;
   next: Record<string, unknown> | null;
   raw: unknown[];
+  pending: SearchPage["pending"];
 };
 
 type DetailState = {
@@ -185,6 +199,14 @@ export function McpSearchPanel() {
   // One source page previewed at a time (URL of the result or document).
   const [sourcePreview, setSourcePreview] =
     useState<string | null>(null);
+  // Odbiór wyniku z kolejki źródła (SUDOP): numer próby; null = nie trwa.
+  const [pendingAttempt, setPendingAttempt] =
+    useState<number | null>(null);
+  const pendingRun = useRef(0);
+
+  useEffect(() => () => {
+    pendingRun.current += 1;
+  }, []);
 
   useEffect(() => {
     void getMcpSearchSources()
@@ -265,27 +287,65 @@ export function McpSearchPanel() {
     setError("");
     setView(null);
     setDetails({});
+    pendingRun.current += 1;
+    setPendingAttempt(null);
     try {
       const response = await queryMcpSearch(sourceId, tool.name, args);
       const page = pageOf(response, args);
-      setView({
-        source: response.source,
-        tool: response.tool,
-        ok: response.ok,
-        status: page.status,
-        total: page.total,
-        notice: page.notice,
-        items: page.items,
-        document: page.document,
-        documentArgs: args,
-        next: nextPageArgs(args, page, page.items.length, parameters),
-        raw: [response.result]
-      });
+      const next = viewOf(response, page, args, [response.result]);
+      setView(next);
+      if (page.pending) void collectPending(next);
     } catch (failure) {
       setError(failureText(failure));
     } finally {
       setBusy(false);
     }
+  }
+
+  function viewOf(
+    response: McpSearchQueryResponse,
+    page: SearchPage,
+    args: Record<string, unknown>,
+    raw: unknown[]
+  ): ResultView {
+    return {
+      source: response.source,
+      tool: response.tool,
+      ok: response.ok,
+      status: page.status,
+      total: page.total,
+      notice: page.notice,
+      items: page.items,
+      document: page.document,
+      documentArgs: args,
+      next: nextPageArgs(args, page, page.items.length, parameters),
+      raw,
+      pending: page.pending
+    };
+  }
+
+  // Wynik z kolejki źródła: kolejne odbiory, aż wynik będzie gotowy albo skończą się próby.
+  async function collectPending(start: ResultView): Promise<void> {
+    const run = (pendingRun.current += 1);
+    let current = start;
+    for (let attempt = 1; current.pending && attempt <= PENDING_ATTEMPTS; attempt += 1) {
+      setPendingAttempt(attempt);
+      if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, PENDING_PAUSE_MS));
+      if (pendingRun.current !== run) return;
+      try {
+        const { tool: pendingTool, args } = current.pending;
+        const response = await queryMcpSearch(current.source, pendingTool, args);
+        if (pendingRun.current !== run) return;
+        const page = readSearchResult(pendingTool, args, response.result, availableTools);
+        current = { ...viewOf(response, page, args, [...current.raw, response.result]), next: null };
+        setView(current);
+      } catch (failure) {
+        if (pendingRun.current !== run) return;
+        setError(failureText(failure));
+        break;
+      }
+    }
+    if (pendingRun.current === run) setPendingAttempt(null);
   }
 
   async function loadMore(): Promise<void> {
@@ -541,26 +601,49 @@ export function McpSearchPanel() {
             </p>
           ) : null}
           {view.notice ? <div className="alert">{view.notice}</div> : null}
+          {view.pending ? (
+            <div className="chat-form-row compact">
+              <p className="field-help">
+                {pendingAttempt
+                  ? `Odbieranie wyniku z kolejki źródła: próba ${pendingAttempt} z ${PENDING_ATTEMPTS}${
+                      view.pending.message ? ` (${view.pending.message})` : ""
+                    }…`
+                  : "Wynik jeszcze niegotowy. Brak wyniku nie oznacza braku danych w źródle."}
+              </p>
+              {pendingAttempt ? null : (
+                <button type="button" className="chat-secondary-action" onClick={() => void collectPending(view)}>
+                  Odbierz wynik ponownie
+                </button>
+              )}
+            </div>
+          ) : null}
 
           {view.document ? (
             <>
               <h3>{view.document.title}</h3>
-              {view.document.url ? (
+              {view.document.url || view.document.preview ? (
                 <p>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    onClick={() => setSourcePreview(sourcePreview === view.document!.url ? null : view.document!.url)}
-                  >
-                    {sourcePreview === view.document.url ? "Zwiń podgląd źródła" : "Podgląd źródła"}
-                  </button>{" "}
-                  <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(view.document!.url!)}>
-                    Otwórz w źródle
-                  </button>
+                  {view.document.preview ? (
+                    <button
+                      type="button"
+                      className="chat-secondary-action"
+                      onClick={() => {
+                        const key = previewKey(view.document!.preview!);
+                        setSourcePreview(sourcePreview === key ? null : key);
+                      }}
+                    >
+                      {sourcePreview === previewKey(view.document.preview) ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                    </button>
+                  ) : null}{" "}
+                  {view.document.url ? (
+                    <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(view.document!.url!)}>
+                      Otwórz w źródle
+                    </button>
+                  ) : null}
                 </p>
               ) : null}
-              {view.document.url && sourcePreview === view.document.url ? (
-                <SourcePreviewFrame url={view.document.url} />
+              {view.document.preview && sourcePreview === previewKey(view.document.preview) ? (
+                <SourcePreviewFrame target={view.document.preview} />
               ) : null}
               <DocumentView
                 document={view.document}
@@ -602,23 +685,26 @@ export function McpSearchPanel() {
                           {detail?.busy ? "Wczytuję…" : detail ? "Zwiń treść" : "Pokaż treść"}
                         </button>
                       ) : null}
+                      {item.preview ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          onClick={() => {
+                            const key = previewKey(item.preview!);
+                            setSourcePreview(sourcePreview === key ? null : key);
+                          }}
+                        >
+                          {sourcePreview === previewKey(item.preview) ? "Zwiń podgląd źródła" : "Podgląd źródła"}
+                        </button>
+                      ) : null}
                       {item.url ? (
-                        <>
-                          <button
-                            type="button"
-                            className="chat-secondary-action"
-                            onClick={() => setSourcePreview(sourcePreview === item.url ? null : item.url)}
-                          >
-                            {sourcePreview === item.url ? "Zwiń podgląd źródła" : "Podgląd źródła"}
-                          </button>
-                          <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
-                            Otwórz w źródle
-                          </button>
-                        </>
+                        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(item.url!)}>
+                          Otwórz w źródle
+                        </button>
                       ) : null}
                     </div>
-                    {item.url && sourcePreview === item.url ? (
-                      <SourcePreviewFrame url={item.url} />
+                    {item.preview && sourcePreview === previewKey(item.preview) ? (
+                      <SourcePreviewFrame target={item.preview} />
                     ) : null}
                     {detail?.error ? <div className="alert alert-error">{detail.error}</div> : null}
                     {detail?.document ? (
@@ -632,7 +718,7 @@ export function McpSearchPanel() {
                 );
               })}
             </ol>
-          ) : !view.document ? (
+          ) : !view.document && !view.pending ? (
             <p>Brak pozycji do wyświetlenia.</p>
           ) : null}
 

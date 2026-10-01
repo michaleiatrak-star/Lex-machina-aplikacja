@@ -9,16 +9,24 @@ export type SearchItem = {
   meta: string[];
   snippet: string | null;
   url: string | null;
+  // Podgląd źródła w aplikacji: adres oficjalnego API/tekstu (url_podgladu) albo strona źródła;
+  // dla rejestrów z limitem zapytań lub tokenem (biała lista VAT, CEIDG) — rekord już zwrócony przez API.
+  preview: SourcePreviewTarget | null;
   // Pozostałe pola pozycji (np. KRS, biała lista VAT, kurs NBP) jako etykieta: wartość.
   facts: Array<[string, string]>;
   // Pełna treść pozycji: narzędzie "pobierz" tego samego źródła.
   detail: { tool: string; args: Record<string, unknown> } | null;
 };
 
+export type SourcePreviewTarget =
+  | { kind: "url"; url: string }
+  | { kind: "record"; key: string; html: string };
+
 export type SearchDocument = {
   title: string;
   meta: string[];
   url: string | null;
+  preview: SourcePreviewTarget | null;
   sections: Array<{ label: string; text: string }>;
   // Treść porcjowana (EUREKA, UODO, ISAP): argumenty dalszej części.
   continuation: Record<string, unknown> | null;
@@ -32,6 +40,8 @@ export type SearchPage = {
   notice: string | null;
   items: SearchItem[];
   document: SearchDocument | null;
+  // Zlecenie przyjęte w kolejce źródła (SUDOP): narzędzie i argumenty odbioru wyniku.
+  pending: { tool: string; args: Record<string, unknown>; message: string | null } | null;
 };
 
 type Row = Record<string, unknown>;
@@ -72,8 +82,9 @@ function metaOf(row: Row): string[] {
 // Pełna treść pozycji: narzędzie pobierające tego samego źródła, jeśli jest dostępne.
 function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["detail"] {
   const source = tool.split("_", 1)[0];
+  // CBOSA: bez „Pokaż treść” — strona orzeczenia jest w podglądzie źródła.
   const candidates: Array<[string, string, unknown]> = [
-    ["cbosa_pobierz", "doc_id", row.doc_id],
+    ["isap_tekst", "eli", row.eli],
     ["eureka_pobierz", "id", row.id_eureka],
     ["uodo_pobierz", "urn_lub_sygnatura", row.urn ?? row.identyfikator]
   ];
@@ -87,7 +98,7 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
 
 const SHOWN = new Set([
   "tytul_lub_nazwa", "sygnatura", "identyfikator", "tytul", "doc_id", "id_eureka", "urn", "sad",
-  "fragment", "teza", "sentencja", "url_zrodlowy", "url", "rola",
+  "fragment", "teza", "sentencja", "url_zrodlowy", "url_podgladu", "url", "rola",
   ...DATE_LABELS.map(([key]) => key),
   "prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"
 ]);
@@ -122,7 +133,38 @@ function factsOf(row: Row, skip: Set<string>): Array<[string, string]> {
   return facts;
 }
 
-function itemOf(tool: string, row: Row, index: number, available: Set<string>, withFacts = false): SearchItem {
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Rejestry, których rekord pokazujemy z odpowiedzi API (bez ponownego zapytania: limit
+// zapytań białej listy, token CEIDG).
+const RECORD_SOURCES: Record<string, string> = {
+  wl: "Wykaz podatników VAT (biała lista), API Ministerstwa Finansów wl-api.mf.gov.pl",
+  ceidg: "Centralna Ewidencja i Informacja o Działalności Gospodarczej, API dane.biznes.gov.pl"
+};
+
+export function recordPreviewHtml(title: string, sourceLabel: string, row: Row, retrievedAt: string | null): string {
+  const rows = Object.entries(row)
+    .filter(([key]) => !["url_zrodlowy", "url_podgladu", "url_rekordu_api"].includes(key))
+    .map(([key, value]) => {
+      const shown = factText(value, 0);
+      return shown ? `<tr><th>${escapeHtml(key.replace(/_/g, " "))}</th><td>${escapeHtml(shown)}</td></tr>` : "";
+    })
+    .join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>body{font-family:Calibri,Arial,sans-serif;margin:16px;font-size:14px;line-height:1.45}table{border-collapse:collapse}th,td{border:1px solid #ccc;padding:3px 6px;text-align:left;vertical-align:top}th{background:#f3f3f3;white-space:nowrap}p{color:#555}</style></head><body><h1 style="font-size:1.2em">${escapeHtml(title)}</h1><p>Rekord z oficjalnego źródła: ${escapeHtml(sourceLabel)}${retrievedAt ? `, pobrany ${escapeHtml(retrievedAt.replace("T", " ").slice(0, 19))}` : ""}.</p><table>${rows}</table></body></html>`;
+}
+
+function previewOf(tool: string, row: Row, title: string, retrievedAt: string | null): SourcePreviewTarget | null {
+  const source = tool.split("_", 1)[0] ?? "";
+  if (RECORD_SOURCES[source]) {
+    return { kind: "record", key: `${tool}:${title}`, html: recordPreviewHtml(title, RECORD_SOURCES[source]!, row, retrievedAt) };
+  }
+  const url = text(row.url_podgladu) ?? text(row.url_zrodlowy) ?? text(row.url);
+  return url ? { kind: "url", url } : null;
+}
+
+function itemOf(tool: string, row: Row, index: number, available: Set<string>, withFacts = false, retrievedAt: string | null = null): SearchItem {
   const title =
     text(row.tytul_lub_nazwa) ??
     text(row.sygnatura) ??
@@ -137,6 +179,7 @@ function itemOf(tool: string, row: Row, index: number, available: Set<string>, w
     meta: [...(identifier && identifier !== title ? [identifier] : []), ...metaOf(row)],
     snippet: text(row.fragment) ?? text(row.teza) ?? text(row.sentencja)?.slice(0, 600) ?? null,
     url: text(row.url_zrodlowy) ?? text(row.url),
+    preview: previewOf(tool, row, title, retrievedAt),
     facts: withFacts ? factsOf(row, SHOWN) : [],
     detail: detailOf(tool, row, available)
   };
@@ -174,6 +217,7 @@ function documentOf(tool: string, row: Row, args: Record<string, unknown>): Sear
     title: text(row.identyfikator) ?? text(row.sygnatura) ?? text(row.tytul_lub_nazwa) ?? tool,
     meta: metaOf(row),
     url: text(row.url_zrodlowy),
+    preview: previewOf(tool, row, text(row.identyfikator) ?? text(row.sygnatura) ?? tool, null),
     sections,
     continuation
   };
@@ -198,13 +242,22 @@ export function readSearchResult(
   // Pojedyncze trafienie wyszukiwarki to pozycja listy (z "Pokaż treść"), nie dokument.
   const searchTool = /_(szukaj|search)$/.test(tool);
   const document = single && !searchTool ? documentOf(tool, single, args) : null;
+  const retrievedAt = text(root.retrieved_at);
   const items = rows
     .filter((row): row is Row => Boolean(row) && typeof row === "object")
-    .map((row, index) => itemOf(tool, row, index, available));
-  if (single && !document) items.push(itemOf(tool, single, 0, available, !searchTool));
+    .map((row, index) => itemOf(tool, row, index, available, false, retrievedAt));
+  if (single && !document) items.push(itemOf(tool, single, 0, available, !searchTool, retrievedAt));
+  const queueId = text(root.kolejka_id);
+  const source = tool.split("_", 1)[0];
+  const pendingTool = `${source}_odbierz_wynik`;
+  const pending =
+    text(root.detail) === "PENDING" && queueId && available.has(pendingTool)
+      ? { tool: pendingTool, args: { kolejka_id: queueId }, message: text(root.komunikat_serwera) }
+      : null;
   const notice = text(root.uwaga) ?? text(root.powod) ?? text(root.detail) ?? text(root.error);
   return {
-    status: text(root.status),
+    status: pending ? "PENDING" : text(root.status),
+    pending,
     total: num(root.liczba_trafien),
     page: num(root.strona),
     pages: num(root.stron),

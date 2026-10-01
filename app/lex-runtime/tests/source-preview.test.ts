@@ -96,4 +96,94 @@ describe("podgląd EUREKA i stron wymagających JavaScript", () => {
     );
     expect(preview.kind === "html" && preview.html).toContain("wyłącznie przez JavaScript");
   });
+
+  it("ISAP (ochrona przed botami) → tekst aktu z Sejm ELI: HTML albo PDF", async () => {
+    const requested: string[] = [];
+    const fetcher = async (url: string) => {
+      requested.push(url);
+      if (url === "https://api.sejm.gov.pl/eli/acts/DU/2025/383") return Response.json({ textHTML: false, textPDF: true });
+      if (url === "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf")
+        return new Response(Buffer.from("%PDF-1.7 x"), { headers: { "content-type": "application/pdf" } });
+      if (url === "https://api.sejm.gov.pl/eli/acts/DU/2024/1000") return Response.json({ textHTML: true });
+      if (url === "https://api.sejm.gov.pl/eli/acts/DU/2024/1000/text.html") return page("<p>Art. 1. Tekst.</p>");
+      return page("Pardon Our Interruption", {}, 200);
+    };
+    const pdf = await fetchSourcePreview("https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU20250000383", fetcher);
+    expect(pdf.kind).toBe("pdf");
+    expect(requested.some((url) => url.includes("isap.sejm.gov.pl"))).toBe(false);
+    const html = await fetchSourcePreview("https://api.sejm.gov.pl/eli/acts/DU/2024/1000", fetcher);
+    expect(html.kind === "html" && html.html).toContain("Art. 1. Tekst.");
+  });
+
+  it("KRS: cały odpis aktualny z API jako strona, PESEL w treści wolnej zamaskowany", async () => {
+    const fetcher = async (url: string) => {
+      expect(url).toBe("https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000028860?rejestr=P&format=json");
+      return Response.json({
+        odpis: {
+          naglowekA: { stanZDnia: "17.09.2026", dataCzasOdpisu: "01.10.2026 18:16:37" },
+          dane: {
+            dzial1: { danePodmiotu: { nazwa: "ORLEN SPÓŁKA AKCYJNA", identyfikatory: { nip: "7740001454" } } },
+            dzial2: { prokurenci: [{ nazwisko: "K*****", rodzajProkury: "ŁĄCZNA Z X (PESEL:82072702612)" }] }
+          }
+        }
+      });
+    };
+    const preview = await fetchSourcePreview(
+      "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000028860?rejestr=P&format=json",
+      fetcher
+    );
+    expect(preview.kind).toBe("html");
+    const html = preview.kind === "html" ? preview.html : "";
+    expect(html).toContain("ORLEN SPÓŁKA AKCYJNA");
+    expect(html).toContain("Dział 2");
+    expect(html).toContain("rodzaj prokury");
+    expect(html).toContain("stan z dnia 17.09.2026");
+    expect(html).not.toMatch(/\d{11}/);
+  });
+
+  it("NBP: kurs średni (A) oraz kupna i sprzedaży (C) z tego dnia", async () => {
+    const fetcher = async (url: string) =>
+      url.includes("/rates/a/")
+        ? Response.json({ currency: "euro", code: "EUR", rates: [{ no: "191/A/NBP/2026", effectiveDate: "2026-10-01", mid: 4.377 }] })
+        : Response.json({ code: "EUR", rates: [{ no: "191/C/NBP/2026", effectiveDate: "2026-10-01", bid: 4.3202, ask: 4.4074 }] });
+    const preview = await fetchSourcePreview(
+      "https://api.nbp.pl/api/exchangerates/rates/a/eur/2026-10-01/?format=json",
+      fetcher
+    );
+    const html = preview.kind === "html" ? preview.html : "";
+    expect(html).toContain("4.377");
+    expect(html).toContain("kurs kupna");
+    expect(html).toContain("4.4074");
+  });
+
+  it("EUR-Lex (wyzwanie AWS WAF) → polski tekst z Cellar po numerze CELEX", async () => {
+    const requested: string[] = [];
+    const fetcher = async (url: string, init?: RequestInit) => {
+      requested.push(url);
+      if (url === "https://publications.europa.eu/resource/celex/32016R0679") {
+        expect((init?.headers as Record<string, string>)["Accept-Language"]).toBe("pol");
+        return new Response("", {
+          status: 303,
+          headers: { location: "http://publications.europa.eu/resource/cellar/3e485e15.0018.03/DOC_1" }
+        });
+      }
+      if (url === "https://publications.europa.eu/resource/cellar/3e485e15.0018.03/DOC_1") {
+        return page('<?xml version="1.0"?><html><head><title>RODO</title></head><body><p>Artykuł 1</p></body></html>', {
+          "content-type": "application/xhtml+xml;charset=UTF-8"
+        });
+      }
+      return page("<script>awsWaf</script>", {}, 202);
+    };
+    const preview = await fetchSourcePreview(
+      "https://eur-lex.europa.eu/legal-content/PL/TXT/?uri=CELEX:32016R0679",
+      fetcher
+    );
+    expect(preview.kind === "html" && preview.html).toContain("Artykuł 1");
+    expect(requested.some((url) => url.startsWith("https://eur-lex"))).toBe(false);
+    await expect(
+      fetchSourcePreview("https://eur-lex.europa.eu/legal-content/PL/TXT/?uri=CELEX:32016R0679", async () =>
+        new Response("", { status: 303, headers: { location: "https://evil.example/x" } })
+      )
+    ).rejects.toThrow("SOURCE_PREVIEW_HOST_NOT_ALLOWED");
+  });
 });

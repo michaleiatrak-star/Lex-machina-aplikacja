@@ -7,5 +7,5 @@
 b3035ab3c019d54200475afa4969b2d435358a5aa3e10d5be4a11d37141b4abd  ./references/CHANGELOG.md
 522e692769ddbb4218e598cc141b861c22d520f8cd751991c713254658bd0b39  ./references/PORTALE-LOKALNE.md
 fa94fd3020d9c7594f4aa805b9e86a51ba0e7906dc8044d88f4866fec2cd36b1  ./references/widget.md
-3ae446feb2acb47cfffab2c39fa8edfb7c7cf809cce71c43977ad78ffed7ebe4  ./tests/test_cbosa_parser.py
-2daccd4d24b73bc310b85655832a27e6ace2c06808ca5449b8dee63fa95b7600  ./tools/cbosa_parser.py
+620521a98a7697643a9e4e03559ea34d4198fd4a1baf9168cd942d096d6d14e8  ./tests/test_cbosa_parser.py
+47484007156a989367227560164f4f49aedbb94f999706b93a241dfe39cc9265  ./tools/cbosa_parser.py

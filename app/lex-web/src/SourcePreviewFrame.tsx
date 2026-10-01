@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import { ApiError, previewMcpSource } from "./api.js";
 import { PdfPreview } from "./PdfPreview.js";
+import type { SourcePreviewTarget } from "./mcp-search-results.js";
 
 const ERRORS: Record<string, string> = {
-  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, UODO, ISAP/ELI, EUR-Lex, SN). Użyj „Otwórz w źródle”.",
+  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, UODO, ISAP/ELI, EUR-Lex, SN, KRS, NBP). Użyj „Otwórz w źródle”.",
+  SOURCE_PREVIEW_NO_POLISH_TEXT: "Repozytorium UE (Cellar) nie ma polskiej wersji tego dokumentu. Użyj „Otwórz w źródle”.",
   SOURCE_PREVIEW_TOO_LARGE: "Strona źródła jest zbyt duża do podglądu. Użyj „Otwórz w źródle”."
 };
 
 // The source page, fetched by the runtime without scripts, in a sandboxed frame
 // (no scripts, no forms, no navigation of the app); a PDF opens in the PDF viewer.
-export function SourcePreviewFrame(props: { url: string }) {
+export function SourcePreviewFrame(props: { target: SourcePreviewTarget }) {
+  const { target } = props;
+  const key = target.kind === "url" ? target.url : target.key;
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "html"; blobUrl: string }
@@ -21,7 +25,14 @@ export function SourcePreviewFrame(props: { url: string }) {
     let cancelled = false;
     let blobUrl: string | null = null;
     setState({ kind: "loading" });
-    void previewMcpSource(props.url)
+    if (target.kind === "record") {
+      blobUrl = URL.createObjectURL(new Blob([target.html], { type: "text/html;charset=utf-8" }));
+      setState({ kind: "html", blobUrl });
+      return () => {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+      };
+    }
+    void previewMcpSource(target.url)
       .then((preview) => {
         if (cancelled) return;
         if (preview.kind === "pdf") {
@@ -41,15 +52,15 @@ export function SourcePreviewFrame(props: { url: string }) {
       cancelled = true;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
-  }, [props.url]);
+  }, [key]);
 
   if (state.kind === "loading") return <p className="field-help">Wczytywanie źródła…</p>;
   if (state.kind === "error") return <p className="chat-inline-error">{state.message}</p>;
-  if (state.kind === "pdf") return <PdfPreview blob={state.blob} filename={props.url} />;
+  if (state.kind === "pdf") return <PdfPreview blob={state.blob} filename={key} />;
   return (
     <iframe
       className="source-preview-frame"
-      title={`Podgląd źródła: ${props.url}`}
+      title={`Podgląd źródła: ${key}`}
       src={state.blobUrl}
       sandbox=""
       referrerPolicy="no-referrer"
