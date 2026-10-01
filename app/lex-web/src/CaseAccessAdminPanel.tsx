@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  archiveCase,
   getCaseAccessOverview,
   grantCaseAccess,
   listAdminUsers,
+  renameCase,
   revokeCaseAccess,
+  unarchiveCase,
   type AuthenticatedUser,
   type CaseAccessOverviewItem,
   type CaseRole
@@ -37,6 +40,27 @@ function errorText(failure: unknown): string {
   }
 }
 
+// Cases the administrator can assign people to: owned (key holder) and not archived.
+export function assignableCases(cases: CaseAccessOverviewItem[]): CaseAccessOverviewItem[] {
+  return cases
+    .filter((item) => item.canManage && !item.archivedAt)
+    .sort((a, b) => (a.displayName ?? a.caseId).localeCompare(b.displayName ?? b.caseId, "pl"));
+}
+
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path
+        d="M11.3 1.7a1 1 0 0 1 1.4 0l1.6 1.6a1 1 0 0 1 0 1.4L5.6 13.4 2 14l.6-3.6 8.7-8.7z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 // Cases the given user can open, and cases where they have no access.
 export function splitCasesForUser(
   cases: CaseAccessOverviewItem[],
@@ -63,6 +87,13 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
   const [drafts, setDrafts] = useState<
     Record<string, { userId: string; role: GrantableRole; canReidentify: boolean }>
   >({});
+  const [quick, setQuick] = useState<{ userId: string; caseId: string; role: GrantableRole; canReidentify: boolean }>({
+    userId: "",
+    caseId: "",
+    role: "EDITOR",
+    canReidentify: false
+  });
+  const [renaming, setRenaming] = useState<{ caseId: string; name: string } | null>(null);
 
   const reload = useCallback(async () => {
     const [overview, accounts] = await Promise.all([getCaseAccessOverview(), listAdminUsers()]);
@@ -104,11 +135,77 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
     const candidates = users.filter(
       (user) => !item.members.some((member) => member.userId === user.userId)
     );
+    const name = item.displayName || item.caseId;
+    const ownerOnly = item.canManage ? undefined : "Zmienia właściciel sprawy.";
     return (
       <article key={item.caseId} className="case-access-admin-case">
         <header>
-          <strong>{item.displayName || item.caseId}</strong>
+          {renaming?.caseId === item.caseId ? (
+            <form
+              className="case-access-admin-rename"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const next = renaming.name.trim();
+                if (!next || next === item.displayName) {
+                  setRenaming(null);
+                  return;
+                }
+                void run(
+                  `rename:${item.caseId}`,
+                  async () => {
+                    await renameCase(item.caseId, next);
+                    setRenaming(null);
+                  },
+                  "Nazwa sprawy zmieniona."
+                );
+              }}
+            >
+              <input
+                value={renaming.name}
+                maxLength={160}
+                aria-label="Nowa nazwa sprawy"
+                autoFocus
+                disabled={Boolean(busy)}
+                onChange={(event) => setRenaming({ caseId: item.caseId, name: event.target.value })}
+              />
+              <button type="submit" className="primary-button" disabled={Boolean(busy) || !renaming.name.trim()}>
+                Zapisz
+              </button>
+              <button type="button" disabled={Boolean(busy)} onClick={() => setRenaming(null)}>
+                Anuluj
+              </button>
+            </form>
+          ) : (
+            <>
+              <strong>{name}</strong>
+              <button
+                type="button"
+                className="icon-button"
+                title={ownerOnly ?? "Zmień nazwę sprawy"}
+                aria-label={`Zmień nazwę sprawy „${name}”`}
+                disabled={Boolean(busy) || !item.canManage}
+                onClick={() => setRenaming({ caseId: item.caseId, name: item.displayName ?? "" })}
+              >
+                <PencilIcon />
+              </button>
+            </>
+          )}
           {item.archivedAt ? <span className="security-pill">archiwum</span> : null}
+          <button
+            type="button"
+            className="case-access-admin-archive"
+            title={ownerOnly}
+            disabled={Boolean(busy) || !item.canManage}
+            onClick={() => {
+              if (item.archivedAt) {
+                void run(`archive:${item.caseId}`, () => unarchiveCase(item.caseId), "Sprawa przywrócona z archiwum.");
+              } else if (window.confirm(`Przenieść sprawę „${name}” do archiwum? Można ją potem przywrócić.`)) {
+                void run(`archive:${item.caseId}`, () => archiveCase(item.caseId), "Sprawa przeniesiona do archiwum.");
+              }
+            }}
+          >
+            {item.archivedAt ? "Przywróć" : "Archiwizuj"}
+          </button>
           <small>
             Właściciel: {owner ? owner.displayName : "—"}
             {item.canManage ? " (Ty)" : ""}
@@ -290,6 +387,87 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         Kto ma dostęp do której sprawy i z jaką rolą. Nadawać, zmieniać i odbierać dostęp możesz w
         sprawach, których jesteś właścicielem; pozostałe są widoczne do wglądu.
       </p>
+      <fieldset className="case-access-admin-quick">
+        <legend>Przypisz osobę do sprawy</legend>
+        <select
+          value={quick.userId}
+          aria-label="Osoba"
+          disabled={Boolean(busy)}
+          onChange={(event) => setQuick({ ...quick, userId: event.target.value })}
+        >
+          <option value="">Osoba…</option>
+          {users
+            .filter((user) => user.userId !== currentUserId)
+            .map((user) => (
+              <option key={user.userId} value={user.userId}>
+                {user.displayName} ({user.loginName})
+              </option>
+            ))}
+        </select>
+        <select
+          value={quick.caseId}
+          aria-label="Sprawa"
+          disabled={Boolean(busy)}
+          onChange={(event) => setQuick({ ...quick, caseId: event.target.value })}
+        >
+          <option value="">Sprawa…</option>
+          {assignableCases(cases).map((item) => {
+            const member = item.members.find((m) => m.userId === quick.userId);
+            return (
+              <option key={item.caseId} value={item.caseId}>
+                {item.displayName || item.caseId}
+                {member ? ` (ma dostęp: ${ROLE_LABELS[member.role]})` : ""}
+              </option>
+            );
+          })}
+        </select>
+        <select
+          value={quick.role}
+          aria-label="Rola"
+          disabled={Boolean(busy)}
+          onChange={(event) => setQuick({ ...quick, role: event.target.value as GrantableRole })}
+        >
+          {GRANTABLE.map((role) => (
+            <option key={role} value={role}>
+              {ROLE_LABELS[role]}
+            </option>
+          ))}
+        </select>
+        <label className="case-reidentify-toggle">
+          <input
+            type="checkbox"
+            checked={quick.canReidentify}
+            disabled={Boolean(busy)}
+            onChange={(event) => setQuick({ ...quick, canReidentify: event.target.checked })}
+          />
+          deanonimizacja
+        </label>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={Boolean(busy) || !quick.userId || !quick.caseId}
+          onClick={() =>
+            void run(
+              "quick",
+              async () => {
+                await grantCaseAccess(quick.caseId, {
+                  userId: quick.userId,
+                  role: quick.role,
+                  canReidentify: quick.canReidentify
+                });
+                setQuick({ ...quick, caseId: "" });
+              },
+              "Osoba przypisana do sprawy."
+            )
+          }
+        >
+          {busy === "quick" ? "Przypisywanie…" : "Przypisz"}
+        </button>
+        <p className="field-help">
+          Lista obejmuje sprawy, których jesteś właścicielem (tylko właściciel ma klucz sprawy i może go
+          udostępnić). Przypisanie osoby, która ma już dostęp, zmienia jej rolę.
+        </p>
+      </fieldset>
       <label>
         Użytkownik
         <select value={userFilter} onChange={(event) => setUserFilter(event.target.value)}>

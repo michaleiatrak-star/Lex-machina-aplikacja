@@ -24,6 +24,9 @@ use tauri::http::{Request, Response, StatusCode};
 const MAX_REQUEST_BYTES: usize = 160 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 192 * 1024 * 1024;
 const DEFAULT_PROXY_READ_TIMEOUT_SECS: u64 = 120;
+// Direct MCP search: SAOS retries up to 3 x 45 s, CEIDG 2 x 45 s, SUDOP waits
+// 50 s for its queue; the runtime gives a connector call up to 280 s.
+const MCP_SEARCH_PROXY_READ_TIMEOUT_SECS: u64 = 300;
 const LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS: u64 = 300;
 // Login waits up to 5 min for the user in the official client window.
 const PROVIDER_ACCOUNT_LOGIN_PROXY_READ_TIMEOUT_SECS: u64 = 420;
@@ -1551,6 +1554,10 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
         );
     }
 
+    if method == "POST" && path == "/api/mcp-search/query" {
+        return Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS);
+    }
+
     if method == "POST" && path == "/api/local-models/start" {
         return Duration::from_secs(LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS);
     }
@@ -2125,6 +2132,16 @@ mod tests {
             Duration::from_secs(
                 LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS
             )
+        );
+
+        let mcp_search = Request::builder()
+            .method("POST")
+            .uri("/api/mcp-search/query")
+            .body(Vec::new())
+            .expect("mcp search request");
+        assert_eq!(
+            proxy_read_timeout(&mcp_search),
+            Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS)
         );
 
         for path in [

@@ -190,6 +190,19 @@ export function McpSearchPanel() {
     useState<Record<string, FieldValue>>({});
   const [busy, setBusy] =
     useState(false);
+  // Sekundy oczekiwania na źródło (SAOS bywa wolny, CEIDG i SUDOP czekają po stronie źródła).
+  const [waited, setWaited] =
+    useState(0);
+
+  useEffect(() => {
+    if (!busy) {
+      setWaited(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = setInterval(() => setWaited(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [busy]);
   const [error, setError] =
     useState("");
   const [view, setView] =
@@ -574,6 +587,12 @@ export function McpSearchPanel() {
                 >
                   {busy ? "Szukam…" : "Szukaj"}
                 </button>
+                {busy && waited >= 5 ? (
+                  <span className="field-help">
+                    Czekam na odpowiedź źródła: {waited} s
+                    {waited >= 20 ? " — źródło odpowiada wolno, aplikacja ponawia zapytanie (do kilku minut)." : ""}
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>

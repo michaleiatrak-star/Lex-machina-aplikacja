@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitCasesForUser } from "./CaseAccessAdminPanel.js";
+import { assignableCases, splitCasesForUser } from "./CaseAccessAdminPanel.js";
 import type { CaseAccessOverviewItem } from "./api.js";
 
 function item(caseId: string, members: string[]): CaseAccessOverviewItem {
@@ -26,5 +26,16 @@ describe("uprawnienia do spraw: widok użytkownika", () => {
     const split = splitCasesForUser(cases, "anna");
     expect(split.member.map((c) => c.caseId)).toEqual(["case_a", "case_c"]);
     expect(split.other.map((c) => c.caseId)).toEqual(["case_b"]);
+  });
+
+  it("szybkie przypisanie: tylko sprawy właściciela, bez archiwalnych, alfabetycznie", () => {
+    const base = { caseKind: "MATTER" as const, updatedAt: "2026-10-01T00:00:00Z", members: [] };
+    const list = assignableCases([
+      { ...base, caseId: "c1", displayName: "Zeta", canManage: true },
+      { ...base, caseId: "c2", displayName: "Alfa", canManage: true },
+      { ...base, caseId: "c3", displayName: "Beta", canManage: false },
+      { ...base, caseId: "c4", displayName: "Gamma", canManage: true, archivedAt: "2026-09-01T00:00:00Z" }
+    ]);
+    expect(list.map((item) => item.caseId)).toEqual(["c2", "c1"]);
   });
 });

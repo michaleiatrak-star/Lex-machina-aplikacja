@@ -2572,8 +2572,52 @@ mark.restored {
 .case-access-admin-case header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+}
+
+.case-access-admin-case .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.case-access-admin-archive {
+  margin-left: auto;
+}
+
+.case-access-admin-rename,
+.case-access-admin-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-access-admin-rename input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.case-access-admin-quick {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.case-access-admin-quick select {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.case-access-admin-quick .field-help {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .case-access-admin-members {
