@@ -81,6 +81,11 @@ export function verifyFromCoreLaw(args) {
     if (summary.amendmentsAfter.length > 0) {
         return { decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" };
     }
+    // A newer t.j. or new amendments were found but not applied yet
+    // (automatic updates off): the copy is not the current wording.
+    if (summary.pendingConsolidated || summary.pendingAmendments.length > 0) {
+        return { decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" };
+    }
     if (record.status &&
         !record.status.toLocaleLowerCase("pl").includes("obowiązując")) {
         return { decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" };

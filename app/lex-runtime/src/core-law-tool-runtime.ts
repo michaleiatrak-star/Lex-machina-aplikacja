@@ -244,8 +244,11 @@ export class CoreLawToolRuntime {
       if (!record) throw new Error("CORE_LAW_TEXT_NOT_YET_DOWNLOADED");
       const text = record.articles[article];
       if (text === undefined) throw new Error("CORE_LAW_ARTICLE_NOT_FOUND");
-      const amendmentsAfter =
-        this.index.summary(ref.eli)?.amendmentsAfter ?? [];
+      const summary = this.index.summary(ref.eli);
+      const amendmentsAfter = summary?.amendmentsAfter ?? [];
+      const pendingUpdate = Boolean(
+        summary?.pendingConsolidated || (summary?.pendingAmendments.length ?? 0) > 0
+      );
       this.events.push({
         tool: call.name,
         target: `${ref.eli}:art.${article}`,
@@ -272,8 +275,17 @@ export class CoreLawToolRuntime {
         text: text.slice(0, MAX_ARTICLE_CHARS),
         truncated: text.length > MAX_ARTICLE_CHARS,
         mapNotes: ref.notes,
-        warning:
-          amendmentsAfter.length > 0
+        ...(pendingUpdate
+          ? {
+              pendingUpdate: {
+                consolidated: summary?.pendingConsolidated ?? null,
+                amendments: summary?.pendingAmendments ?? []
+              }
+            }
+          : {}),
+        warning: pendingUpdate
+          ? "W ELI jest nowszy tekst jednolity albo nowelizacja, jeszcze niezastosowane w lokalnej kopii (pendingUpdate). Brzmienie może być nieaktualne: potwierdź je verify_legal_reference przed przedstawieniem jako obowiązujące."
+          : amendmentsAfter.length > 0
             ? `Po tym tekście jednolitym ogłoszono ${amendmentsAfter.length} nowelizację/nowelizacje (amendmentsAfter). Sprawdź, czy zmieniają ten artykuł (read_core_law_article z ELI nowelizacji albo verify_legal_reference), zanim przedstawisz brzmienie jako obowiązujące.`
             : "Brzmienie z najnowszego pobranego tekstu jednolitego. Jeśli mapNotes lub actStatus wskazują zmiany, potwierdź brzmienie verify_legal_reference przed przedstawieniem go jako obowiązującego."
       });

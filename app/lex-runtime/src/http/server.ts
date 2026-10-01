@@ -15,6 +15,7 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import {
   LexMcpConnectorStore,
@@ -721,6 +722,10 @@ export async function startLocalServer(options?: {
       maintenance
     }
   );
+  registerCoreLawRoutes(app, {
+    authService,
+    index: coreLawIndex
+  });
   registerMcpConnectorRoutes(
     app,
     {

@@ -193,3 +193,42 @@
   margin: 8px 0;
   font-size: 13px;
 }
+
+.core-law-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.core-law-auto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.core-law-list summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.core-law-list ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.core-law-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.core-law-list li button {
+  justify-self: start;
+}

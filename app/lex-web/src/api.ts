@@ -1881,6 +1881,71 @@ export function listCaseAccess(
   );
 }
 
+// Local copy of law from Sejm ELI (RAG) and its updates.
+export type CoreLawAmendment = {
+  eli: string;
+  title: string | null;
+  promulgation: string | null;
+};
+
+export type CoreLawActStatus = {
+  eli: string;
+  title: string | null;
+  status: string | null;
+  consolidated: boolean;
+  labels: string[];
+  domains: string[];
+  textSource: "html" | "pdf" | "none" | null;
+  articleCount: number;
+  fetchedAt: string | null;
+  lastError: string | null;
+  relationsCheckedAt: string | null;
+  currentEli: string;
+  amendmentsAfter: CoreLawAmendment[];
+  pendingConsolidated: CoreLawAmendment | null;
+  pendingAmendments: CoreLawAmendment[];
+  state: "CURRENT" | "UPDATE_AVAILABLE" | "CHECK_DUE" | "MISSING" | "ERROR";
+};
+
+export type CoreLawStatus = {
+  autoApply: boolean;
+  refreshing: boolean;
+  blockedUntil: string | null;
+  lastCheckAt: string | null;
+  counts: { consolidated: number; amendments: number; other: number; articles: number };
+  pending: { consolidated: number; amendments: number };
+  recent: Array<{
+    at: string;
+    kind: "CONSOLIDATED" | "AMENDMENT";
+    actEli: string;
+    eli: string;
+    title: string | null;
+  }>;
+  acts: CoreLawActStatus[];
+};
+
+export function getCoreLawStatus(): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/status");
+}
+
+export function checkCoreLawUpdates(): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/check", { method: "POST" });
+}
+
+export function applyCoreLawUpdates(elis?: string[]): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/apply", {
+    method: "POST",
+    body: JSON.stringify(elis?.length ? { elis } : {})
+  });
+}
+
+export function setCoreLawAutoApply(autoApply: boolean): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/settings", {
+    method: "PUT",
+    body: JSON.stringify({ autoApply })
+  });
+}
+
 // Administrator overview of who may open which case (metadata only).
 export type CaseAccessOverviewItem = {
   caseId: string;

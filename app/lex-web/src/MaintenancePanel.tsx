@@ -20,6 +20,7 @@ import {
 import {
   useFloatingPanelDrag
 } from "./use-floating-panel.js";
+import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import "./maintenance.css";
 
 const CHANNEL_LABEL: Record<SkillChannel, string> = {
@@ -479,6 +480,8 @@ export function MaintenancePanel({
             </button>
           ) : null}
         </section>
+
+        <CoreLawUpdatesSection user={user} />
 
         <button
           type="button"

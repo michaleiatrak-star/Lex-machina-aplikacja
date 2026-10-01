@@ -49,13 +49,21 @@ const KK_HTML =
   "<p>Art. 148. § 1. Kto zabija człowieka,</p><p>podlega karze pozbawienia wolności&nbsp;na czas nie krótszy od lat 10.</p>" +
   "<p>Art. 148a. § 1. Kto zabija człowieka ze szczególnym okrucieństwem</p></body></html>";
 
-function fakeEli(options: { deny?: boolean; references?: Record<string, unknown>; emptyKkHtml?: boolean } = {}) {
+function fakeEli(
+  options: { deny?: boolean; references?: Record<string, unknown>; emptyKkHtml?: boolean; amendmentText?: boolean } = {}
+) {
   const requested: string[] = [];
   const fetcher = async (url: string) => {
     requested.push(url);
     if (options.deny) return new Response("", { status: 403 });
     const references = /\/acts\/(DU\/\d+\/\d+)\/references$/.exec(url);
     if (references) return Response.json(options.references?.[references[1]!] ?? {});
+    if (options.amendmentText && url.endsWith("/DU/2026/999")) {
+      return Response.json({ title: "Ustawa o zmianie ustawy — Kodeks karny", textHTML: true });
+    }
+    if (options.amendmentText && url.endsWith("/DU/2026/999/text.html")) {
+      return new Response("<p>Art. 1. W ustawie Kodeks karny dodaje się przepis o czynnym żalu sprawcy kradzieży.</p>");
+    }
     if (url.endsWith("/DU/2026/1500")) {
       return Response.json({ title: "Obwieszczenie — Kodeks karny (nowszy t.j.)", textHTML: true });
     }
@@ -308,5 +316,83 @@ describe("core law index", () => {
     expect(eli.requested).toHaveLength(5);
     await index.refresh();
     expect(eli.requested).toHaveLength(5);
+  });
+
+  const NEWER_TJ = {
+    "DU/2025/383": {
+      "Tekst jednolity dla aktu": [{ act: { ELI: "DU/1997/553" } }],
+      "Nowelizacje po tekście jednolitym": [
+        { act: { ELI: "DU/2026/999", title: "Ustawa o zmianie ustawy — Kodeks karny", promulgation: "2026-09-20" } }
+      ]
+    },
+    "DU/1997/553": {
+      "Inf. o tekście jednolitym": [
+        { act: { ELI: "DU/2025/383", status: "akt objęty tekstem jednolitym" } },
+        { act: { ELI: "DU/2026/1500", status: "obowiązujący" } }
+      ]
+    }
+  };
+
+  it("bez automatycznych aktualizacji sprawdzenie tylko wykrywa zmiany; zastosowanie podmienia t.j.", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+
+    const { eli, index } = later(store, start + DAY, { references: NEWER_TJ });
+    index.setAutoApply(false);
+    await index.checkNow();
+    // Found, not downloaded.
+    expect(eli.requested).not.toContain("https://api.sejm.gov.pl/eli/acts/DU/2026/1500/text.html");
+    const found = index.status();
+    expect(found.autoApply).toBe(false);
+    expect(found.pending).toEqual({ consolidated: 1, amendments: 1 });
+    expect(found.acts.find((act) => act.eli === "DU/2025/383")).toMatchObject({
+      state: "UPDATE_AVAILABLE",
+      currentEli: "DU/2025/383",
+      pendingConsolidated: { eli: "DU/2026/1500" }
+    });
+    const [stale] = await new CoreLawToolRuntime(index).runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }
+    ]);
+    expect(JSON.parse(stale!.content)).toMatchObject({
+      eli: "DU/2025/383",
+      pendingUpdate: { consolidated: { eli: "DU/2026/1500" } },
+      warning: expect.stringContaining("niezastosowane")
+    });
+
+    await index.applyUpdates(["DU/2025/383"]);
+    const applied = index.status();
+    expect(applied.pending).toEqual({ consolidated: 0, amendments: 0 });
+    expect(applied.recent[0]).toMatchObject({ kind: "CONSOLIDATED", actEli: "DU/2025/383", eli: "DU/2026/1500" });
+    const [current] = await new CoreLawToolRuntime(index).runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }
+    ]);
+    expect(JSON.parse(current!.content)).toMatchObject({
+      eli: "DU/2026/1500",
+      text: expect.stringContaining("w nowym brzmieniu")
+    });
+  });
+
+  it("zastosowana nowelizacja jest osobnym dokumentem w wyszukiwaniu RAG", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+
+    const { index } = later(store, start + DAY, {
+      amendmentText: true,
+      references: {
+        "DU/2025/383": {
+          "Nowelizacje po tekście jednolitym": [
+            { act: { ELI: "DU/2026/999", title: "Ustawa o zmianie ustawy — Kodeks karny", promulgation: "2026-09-20" } }
+          ]
+        }
+      }
+    });
+    await index.refresh();
+    expect(index.status()).toMatchObject({
+      counts: { amendments: 1 },
+      recent: [{ kind: "AMENDMENT", eli: "DU/2026/999" }]
+    });
+    expect(index.search("czynnym żalu sprawcy kradzieży").map((hit) => hit.eli)).toContain("DU/2026/999");
   });
 });

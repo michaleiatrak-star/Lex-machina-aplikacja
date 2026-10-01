@@ -280,7 +280,9 @@ export class CoreLawIndex {
                 lastError: state?.lastError ?? null,
                 relationsCheckedAt: state?.relationsCheckedAt ?? null,
                 currentEli: state?.currentEli ?? ref.eli,
-                amendmentsAfter: state?.amendmentsAfter ?? []
+                amendmentsAfter: state?.amendmentsAfter ?? [],
+                pendingConsolidated: state?.pendingConsolidated ?? null,
+                pendingAmendments: state?.pendingAmendments ?? []
             };
         });
     }
@@ -356,6 +358,15 @@ export class CoreLawIndex {
                 for (const id of record.articleOrder) {
                     articles.push({ eli: record.eli, title: record.title, article: id, text: record.articles[id] });
                 }
+                // An amendment after the t.j. is its own document in RAG.
+                for (const amendment of act.amendmentsAfter) {
+                    const text = this.record(amendment.eli);
+                    if (!text)
+                        continue;
+                    for (const id of text.articleOrder) {
+                        articles.push({ eli: text.eli, title: text.title, article: id, text: text.articles[id] });
+                    }
+                }
             }
             this.searchIndex = new CoreLawSearchIndex(articles);
         }
@@ -383,11 +394,73 @@ export class CoreLawIndex {
         }
     }
     /** Background refresh; returns immediately when one is already running. */
-    refresh() {
-        this.refreshing ??= this.refreshAll().finally(() => {
-            this.refreshing = null;
+    refresh(options = {}) {
+        // A requested check/apply runs after the one in progress, not instead of it.
+        const run = (this.refreshing && options.force
+            ? this.refreshing.then(() => this.refreshAll(options))
+            : this.refreshing ?? this.refreshAll(options)).finally(() => {
+            if (this.refreshing === run)
+                this.refreshing = null;
         });
-        return this.refreshing;
+        this.refreshing = run;
+        return run;
+    }
+    get autoApply() {
+        return this.state.autoApply !== false;
+    }
+    setAutoApply(value) {
+        this.state.autoApply = value;
+        this.saveState();
+    }
+    /** Checks every consolidated text now (relations only unless auto-apply). */
+    checkNow() {
+        return this.refresh({ force: true });
+    }
+    /** Applies found updates: all acts, or the given map ELIs. */
+    applyUpdates(elis) {
+        return this.refresh(elis?.length ? { force: true, apply: elis, only: elis } : { force: true, apply: "all" });
+    }
+    status() {
+        const acts = this.summaries().map((act) => {
+            const due = act.consolidated &&
+                (!act.relationsCheckedAt || this.now() - Date.parse(act.relationsCheckedAt) >= CHECK_AFTER_MS);
+            const state = act.articleCount === 0 && !act.fetchedAt
+                ? act.lastError
+                    ? "ERROR"
+                    : "MISSING"
+                : act.pendingConsolidated || act.pendingAmendments.length
+                    ? "UPDATE_AVAILABLE"
+                    : act.lastError
+                        ? "ERROR"
+                        : due
+                            ? "CHECK_DUE"
+                            : "CURRENT";
+            return { ...act, state };
+        });
+        return {
+            autoApply: this.autoApply,
+            refreshing: this.refreshing !== null,
+            blockedUntil: this.state.blockedUntil,
+            lastCheckAt: this.state.lastCheckAt ?? null,
+            counts: {
+                consolidated: acts.filter((act) => act.consolidated && act.fetchedAt).length,
+                amendments: acts.reduce((sum, act) => sum + act.amendmentsAfter.length, 0),
+                other: acts.filter((act) => !act.consolidated && act.fetchedAt).length,
+                articles: acts.reduce((sum, act) => sum + act.articleCount, 0)
+            },
+            pending: {
+                consolidated: acts.filter((act) => act.pendingConsolidated).length,
+                amendments: acts.reduce((sum, act) => sum + act.pendingAmendments.length, 0)
+            },
+            recent: [...(this.state.changes ?? [])].reverse().slice(0, 50),
+            acts
+        };
+    }
+    logChange(change) {
+        this.state.changes = [
+            ...(this.state.changes ?? []),
+            { at: new Date(this.now()).toISOString(), ...change }
+        ].slice(-200);
     }
     saveState() {
         const target = path.join(this.directory, "index.json");
@@ -408,26 +481,17 @@ export class CoreLawIndex {
     }
     /**
      * A consolidated text is re-read only when ELI shows a newer t.j. of the
-     * same act; a new amendment after the t.j. is downloaded on its own.
+     * same act; a new amendment after the t.j. is downloaded on its own. With
+     * apply=false the findings are only recorded as pending.
      */
-    async checkConsolidated(ref, state) {
+    async checkConsolidated(ref, state, apply) {
         const current = state.currentEli ?? ref.eli;
         const references = await (await this.get(`${ELI_API}/acts/${current}/references`, "application/json")).json();
         const known = new Set((state.amendmentsAfter ?? []).map((item) => item.eli));
-        const amendments = eliLinks(references, (key) => /^Nowelizacje po tekście jednolitym$/i.test(key));
-        for (const amendment of amendments) {
-            if (known.has(amendment.eli))
-                continue;
-            await this.pause();
-            if (!this.record(amendment.eli)) {
-                await this.store(amendment.eli);
-            }
-            state.amendmentsAfter = [
-                ...(state.amendmentsAfter ?? []),
-                { eli: amendment.eli, title: amendment.title, promulgation: amendment.promulgation }
-            ];
-            known.add(amendment.eli);
-        }
+        const newAmendments = eliLinks(references, (key) => /^Nowelizacje po tekście jednolitym$/i.test(key))
+            .filter((amendment) => !known.has(amendment.eli))
+            .map((amendment) => ({ eli: amendment.eli, title: amendment.title, promulgation: amendment.promulgation }));
+        let newer = null;
         const base = eliLinks(references, (key) => /jednolit\S* dla/i.test(key))[0];
         if (base) {
             await this.pause();
@@ -440,36 +504,71 @@ export class CoreLawIndex {
             if (newest &&
                 (newest.year > currentYear ||
                     (newest.year === currentYear && newest.pos > currentPos))) {
-                await this.pause();
-                const record = await this.store(newest.eli);
-                state.currentEli = newest.eli;
-                // Amendments before the new t.j. are part of it now.
-                state.amendmentsAfter = [];
-                state.title = record.title;
-                state.status = record.status;
-                state.textSource = record.textSource;
-                state.articleCount = record.articleOrder.length;
-                state.fetchedAt = record.fetchedAt;
+                newer = { eli: newest.eli, title: newest.title, promulgation: newest.promulgation };
             }
+        }
+        if (!apply) {
+            state.pendingConsolidated = newer;
+            state.pendingAmendments = newAmendments;
+        }
+        else if (newer) {
+            // A newer t.j. replaces the text; amendments before it are part of it.
+            await this.pause();
+            const record = await this.store(newer.eli);
+            state.currentEli = newer.eli;
+            state.amendmentsAfter = [];
+            state.title = record.title;
+            state.status = record.status;
+            state.textSource = record.textSource;
+            state.articleCount = record.articleOrder.length;
+            state.fetchedAt = record.fetchedAt;
+            state.pendingConsolidated = null;
+            state.pendingAmendments = [];
+            this.logChange({ kind: "CONSOLIDATED", actEli: ref.eli, eli: newer.eli, title: record.title });
+            // Amendments published after the new t.j. are found by the next check.
+            state.checkedAt = null;
+            state.relationsCheckedAt = new Date(this.now()).toISOString();
+            return;
+        }
+        else {
+            // A new amendment is added to RAG as its own document.
+            for (const amendment of newAmendments) {
+                await this.pause();
+                if (!this.record(amendment.eli)) {
+                    await this.store(amendment.eli);
+                }
+                state.amendmentsAfter = [...(state.amendmentsAfter ?? []), amendment];
+                this.logChange({ kind: "AMENDMENT", actEli: ref.eli, eli: amendment.eli, title: amendment.title });
+            }
+            state.pendingConsolidated = null;
+            state.pendingAmendments = [];
         }
         state.checkedAt = new Date(this.now()).toISOString();
         state.relationsCheckedAt = state.checkedAt;
     }
-    async refreshAll() {
-        if (this.state.blockedUntil &&
+    async refreshAll(options = {}) {
+        if (!options.force &&
+            this.state.blockedUntil &&
             Date.parse(this.state.blockedUntil) > this.now()) {
             return;
         }
         let consecutiveFailures = 0;
         for (const ref of this.refs) {
+            if (options.only?.length && !options.only.includes(ref.eli))
+                continue;
             const state = this.state.acts[ref.eli] ??
                 { title: null, status: null, textSource: null, articleCount: 0, fetchedAt: null, lastError: null };
             const downloaded = this.record(state.currentEli ?? ref.eli) !== null;
             const checkDue = downloaded &&
                 ref.consolidated &&
-                (!state.checkedAt || this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
+                (options.force ||
+                    !state.checkedAt ||
+                    this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
             if (downloaded && !checkDue)
                 continue;
+            const apply = options.apply === "all" ||
+                (Array.isArray(options.apply) && options.apply.includes(ref.eli)) ||
+                (options.apply === undefined && this.autoApply);
             try {
                 if (!downloaded) {
                     const record = await this.store(ref.eli);
@@ -484,7 +583,7 @@ export class CoreLawIndex {
                     });
                 }
                 else {
-                    await this.checkConsolidated(ref, state);
+                    await this.checkConsolidated(ref, state, apply);
                 }
                 state.lastError = null;
                 consecutiveFailures = 0;
@@ -504,6 +603,9 @@ export class CoreLawIndex {
             await this.pause();
         }
         this.state.blockedUntil = null;
+        if (!options.only?.length) {
+            this.state.lastCheckAt = new Date(this.now()).toISOString();
+        }
         this.saveState();
     }
     async get(url, accept) {

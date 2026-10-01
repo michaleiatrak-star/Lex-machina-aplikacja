@@ -1428,6 +1428,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
         "/api/admin/case-access" => method == "GET",
+        "/api/core-law/status" => method == "GET",
+        "/api/core-law/check" | "/api/core-law/apply" => method == "POST",
+        "/api/core-law/settings" => method == "PUT",
         "/api/admin/provider-accounts/anthropic/oauth-token" => {
             matches!(method, "PUT" | "DELETE")
         }
@@ -1950,6 +1953,11 @@ mod tests {
         assert!(route_allowed("GET", "/api/provider-accounts"));
         assert!(route_allowed("GET", "/api/admin/case-access"));
         assert!(!route_allowed("POST", "/api/admin/case-access"));
+        assert!(route_allowed("GET", "/api/core-law/status"));
+        assert!(route_allowed("POST", "/api/core-law/check"));
+        assert!(route_allowed("POST", "/api/core-law/apply"));
+        assert!(route_allowed("PUT", "/api/core-law/settings"));
+        assert!(!route_allowed("DELETE", "/api/core-law/settings"));
         assert!(route_allowed(
             "POST",
             "/api/provider-accounts/openai/login"

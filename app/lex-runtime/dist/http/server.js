@@ -11,6 +11,7 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
@@ -347,6 +348,10 @@ export async function startLocalServer(options) {
         authService,
         localModels,
         maintenance
+    });
+    registerCoreLawRoutes(app, {
+        authService,
+        index: coreLawIndex
     });
     registerMcpConnectorRoutes(app, {
         authService,

@@ -32,6 +32,8 @@ function act(options: {
   articles: Record<string, string>;
   status?: string;
   amendmentsAfter?: CoreActSummary["amendmentsAfter"];
+  pendingConsolidated?: CoreActSummary["pendingConsolidated"];
+  pendingAmendments?: CoreActSummary["pendingAmendments"];
   relationsCheckedAt?: string | null;
 }): Act {
   const ref: CoreActRef = {
@@ -67,7 +69,9 @@ function act(options: {
     lastError: null,
     relationsCheckedAt: options.relationsCheckedAt ?? null,
     currentEli: options.eli,
-    amendmentsAfter: options.amendmentsAfter ?? []
+    amendmentsAfter: options.amendmentsAfter ?? [],
+    pendingConsolidated: options.pendingConsolidated ?? null,
+    pendingAmendments: options.pendingAmendments ?? []
   };
   return { ref, record, summary };
 }
@@ -183,6 +187,11 @@ describe("verifyFromCoreLaw", () => {
   it("refuses when the copy cannot be correct: amendments after t.j., repealed act, past state, unknown act", () => {
     expect(verify(index(kw({ amendmentsAfter: [{ eli: "DU/2025/1814", title: null, promulgation: null }] }))))
       .toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" });
+    // Found by a check but not applied yet (automatic updates off).
+    expect(verify(index(kw({ pendingConsolidated: { eli: "DU/2026/77", title: null, promulgation: null } }))))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
+    expect(verify(index(kw({ pendingAmendments: [{ eli: "DU/2026/78", title: null, promulgation: null }] }))))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_UPDATE_PENDING" });
     expect(verify(index(kw({ status: "uchylony" }))))
       .toEqual({ decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" });
     expect(verify(index(kw()), { asOf: "2020-01-01" }))
