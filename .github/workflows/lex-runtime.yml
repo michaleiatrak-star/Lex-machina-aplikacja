@@ -2,6 +2,11 @@ name: Lex Runtime Validation
 
 on:
   workflow_call:
+    inputs:
+      sn_live_advisory:
+        description: "G22 live sn.pl probe failure does not block (recorded as a warning)."
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "app/lex-runtime/**"
@@ -377,7 +382,13 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: G22 — real sn.pl case verification
+        id: g22
+        continue-on-error: ${{ inputs.sn_live_advisory == true }}
         run: npm run validate:g22-live
+
+      - name: G22 advisory warning
+        if: steps.g22.outcome == 'failure'
+        run: echo "::warning title=G22 live SN::sn.pl probe failed; release allowed by sn_live_advisory"
 
   g17-live-source:
     name: G17 live official-source probe

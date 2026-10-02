@@ -29,6 +29,10 @@ jobs:
   runtime:
     name: Runtime and Gate I audit
     uses: ./.github/workflows/lex-runtime.yml
+    # sn.pl search returned an error envelope during the 36-38 runs; SN and
+    # CBOSA code is unchanged since hotfix 35 (G22 passed there). Release-only.
+    with:
+      sn_live_advisory: true
     secrets: inherit
 
   online:
@@ -145,6 +149,9 @@ jobs:
           ## Lex Machina 0.1.10 hotfix 38
 
           Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
+
+          ### Uwaga do wydania
+          - test na żywo wyszukiwarki sn.pl (G22) był w tym wydaniu ostrzeżeniem, nie blokadą: w czasie budowy sn.pl zwracał komunikat błędu; kod weryfikacji orzeczeń SN i CBOSA jest bez zmian od hotfix 35, w którym G22 przeszedł.
 
           ### Dziennik nieprawidłowości
           - nowa sekcja w panelu Konserwacja (administrator): podsumowanie powtarzających się problemów (kod i plik, liczba, ostatnie wystąpienie, model), ostatnie wpisy, eksport do pliku JSONL i czyszczenie;
