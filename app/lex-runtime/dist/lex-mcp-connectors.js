@@ -75,17 +75,80 @@ function defaultStateDir() {
         return path.resolve(local, "LexMachina", "mcp");
     return path.resolve(os.homedir(), ".lex-machina", "mcp");
 }
+const DESKTOP_CONFIG_FILE = "claude_desktop_config.json";
+// Claude ze Sklepu Microsoft / instalatora MSIX (np. Claude_pzs8sxrjxfjjc).
+const DESKTOP_MSIX_PACKAGE = /^(?:Anthropic[^_]*\.)?Claude_[a-z0-9]+$/i;
+function isFile(file) {
+    try {
+        return fs.statSync(file).isFile();
+    }
+    catch {
+        return false;
+    }
+}
+function msixPackageDirs(localAppData) {
+    const packages = path.join(localAppData, "Packages");
+    try {
+        return fs.readdirSync(packages, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory() && DESKTOP_MSIX_PACKAGE.test(entry.name))
+            .map((entry) => path.join(packages, entry.name));
+    }
+    catch {
+        return [];
+    }
+}
+function locateWindowsClaudeDesktop(env, homedir) {
+    const appData = env.APPDATA?.trim() || path.join(homedir, "AppData", "Roaming");
+    const localAppData = env.LOCALAPPDATA?.trim() || path.join(homedir, "AppData", "Local");
+    const packages = msixPackageDirs(localAppData);
+    // MSIX przekierowuje zapisy do %APPDATA% na LocalCache\Roaming pakietu — tę kopię czyta Claude.
+    const candidates = [
+        ...packages.map((dir) => path.join(dir, "LocalCache", "Roaming", "Claude", DESKTOP_CONFIG_FILE)),
+        path.join(appData, "Claude", DESKTOP_CONFIG_FILE)
+    ];
+    const existing = candidates
+        .filter(isFile)
+        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    if (existing[0])
+        return { configPath: existing[0], available: true };
+    const withDir = candidates.find((file) => fs.existsSync(path.dirname(file)));
+    if (withDir)
+        return { configPath: withDir, available: true };
+    // Zainstalowany, ale jeszcze nieuruchomiony — brak folderu konfiguracji.
+    const msixConfig = candidates[0];
+    if (packages.length && msixConfig)
+        return { configPath: msixConfig, available: true };
+    const installDirs = [
+        path.join(localAppData, "AnthropicClaude"),
+        path.join(localAppData, "Programs", "Claude"),
+        ...[env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramW6432]
+            .filter((dir) => Boolean(dir?.trim()))
+            .map((dir) => path.join(dir, "Claude"))
+    ];
+    return {
+        configPath: path.join(appData, "Claude", DESKTOP_CONFIG_FILE),
+        available: installDirs.some((dir) => fs.existsSync(dir))
+    };
+}
+export function locateClaudeDesktop(probe = {
+    platform: process.platform,
+    env: process.env,
+    homedir: os.homedir()
+}) {
+    const configured = probe.env.LEX_CLAUDE_DESKTOP_CONFIG?.trim();
+    if (configured) {
+        const configPath = path.resolve(configured);
+        return { configPath, available: fs.existsSync(path.dirname(configPath)) };
+    }
+    if (probe.platform === "win32")
+        return locateWindowsClaudeDesktop(probe.env, probe.homedir);
+    const dir = probe.platform === "darwin"
+        ? path.join(probe.homedir, "Library", "Application Support", "Claude")
+        : path.join(probe.homedir, ".config", "Claude");
+    return { configPath: path.join(dir, DESKTOP_CONFIG_FILE), available: fs.existsSync(dir) };
+}
 export function claudeDesktopConfigPath() {
-    const configured = process.env.LEX_CLAUDE_DESKTOP_CONFIG?.trim();
-    if (configured)
-        return path.resolve(configured);
-    if (process.platform === "win32") {
-        return path.join(process.env.APPDATA ?? "", "Claude", "claude_desktop_config.json");
-    }
-    if (process.platform === "darwin") {
-        return path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-    }
-    return path.join(os.homedir(), ".config", "Claude", "claude_desktop_config.json");
+    return locateClaudeDesktop().configPath;
 }
 function writePrivate(file, content) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -196,13 +259,15 @@ export function inspectLexMcpPackage(packagePath) {
 export class LexMcpConnectorStore {
     skillsRoot;
     stateDir;
-    desktopConfig;
+    desktopConfigOverride;
     nodeCommand;
     revisionValue = 0;
-    constructor(skillsRoot, stateDir = defaultStateDir(), desktopConfig = claudeDesktopConfigPath(), nodeCommand = process.execPath) {
+    constructor(skillsRoot, stateDir = defaultStateDir(), 
+    // Bez jawnej ścieżki Claude Desktop jest wykrywany przy każdym odczycie (np. zainstalowany po starcie).
+    desktopConfigOverride, nodeCommand = process.execPath) {
         this.skillsRoot = skillsRoot;
         this.stateDir = stateDir;
-        this.desktopConfig = desktopConfig;
+        this.desktopConfigOverride = desktopConfigOverride;
         this.nodeCommand = nodeCommand;
     }
     get packagePath() {
@@ -277,6 +342,18 @@ export class LexMcpConnectorStore {
             env.CEIDG_API_KEY = key;
         return env;
     }
+    get desktopLocation() {
+        if (this.desktopConfigOverride) {
+            return {
+                configPath: this.desktopConfigOverride,
+                available: fs.existsSync(path.dirname(this.desktopConfigOverride))
+            };
+        }
+        return locateClaudeDesktop();
+    }
+    get desktopConfig() {
+        return this.desktopLocation.configPath;
+    }
     readDesktop() {
         try {
             const text = fs.readFileSync(this.desktopConfig, "utf8");
@@ -292,7 +369,7 @@ export class LexMcpConnectorStore {
         }
     }
     desktopAvailable() {
-        return fs.existsSync(path.dirname(this.desktopConfig));
+        return this.desktopLocation.available;
     }
     desktopEntries() {
         if (!this.desktopAvailable())
@@ -332,6 +409,7 @@ export class LexMcpConnectorStore {
         const desktop = this.desktopEntries();
         const checks = this.readState().checks ?? {};
         const packageInfo = inspectLexMcpPackage(this.packagePath);
+        const desktopLocation = this.desktopLocation;
         return {
             packagePath: this.packagePath,
             packageAvailable: packageInfo.integrity !== "MISSING",
@@ -340,10 +418,7 @@ export class LexMcpConnectorStore {
                 keyConfigured: Boolean(this.ceidgKey()),
                 keyUrl: CEIDG_KEY_URL
             },
-            desktop: {
-                configPath: this.desktopConfig,
-                available: this.desktopAvailable()
-            },
+            desktop: desktopLocation,
             servers: LEX_MCP_CATALOG.map((server) => ({
                 ...server,
                 installed: installed.has(server.id),
