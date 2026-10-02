@@ -35,6 +35,7 @@ expected="$(awk '$2=="./mcp-servers/dist/lex-mcp.mjs"{print $1}' "$PAYLOAD/corpu
 actual="$(shasum -a 256 "$PAYLOAD/corpus/audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs" | cut -d' ' -f1)"
 [ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "MCP_BUNDLE_CHECKSUM_MISMATCH: $actual != $expected" >&2; exit 1; }
 cp "$REPO/LICENSE" "$PAYLOAD/LICENSE.txt"
+cp "$REPO/POLITYKA-PRYWATNOSCI.md" "$PAYLOAD/POLITYKA-PRYWATNOSCI.md"
 cp "$INSTALLER/macos-release-source.json" "$PAYLOAD/release-source.json"
 cp "$INSTALLER/windows-release-requirements.txt" "$PAYLOAD/release-requirements.txt"
 mkdir -p "$PAYLOAD/bootstrap"

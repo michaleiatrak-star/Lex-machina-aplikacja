@@ -168,6 +168,7 @@ są traktowane jako semantyka, nie jako wymóg konkretnego API danego dostawcy.
 Lex-Machina/
 ├── README.md                                ← ten plik
 ├── LICENSE                                  ← licencja: bezpłatny użytek osobisty, kod zastrzeżony
+├── POLITYKA-PRYWATNOSCI.md                  ← polityka prywatności (część licencji)
 ├── DOKUMENTACJA-WDROZENIOWA-2026-07-13.md   ← dokumentacja wdrożeniowa systemu
 ├── claude_desktop_config.json               ← przykładowa konfiguracja konektorów MCP
 ├── benchmark/                               ← wyniki testów na bankach kazusów (per data)
@@ -683,6 +684,8 @@ Błędy, sugestie i propozycje zmian → [**Issues**](https://github.com/michale
 **Kod zastrzeżony.** © 2026 michaleiatrak-star (autor Lex Machina). Wszelkie prawa zastrzeżone.
 
 Aplikację można bezpłatnie instalować i używać **wyłącznie do osobistego użytku** ([LICENSE](LICENSE)). Bez pisemnej zgody autora zabronione jest kopiowanie kodu źródłowego lub jego fragmentów, modyfikowanie, tworzenie utworów zależnych, rozpowszechnianie i wykorzystanie w działalności gospodarczej lub zawodowej. Komponenty osób trzecich pozostają na swoich licencjach.
+
+Przetwarzanie danych: [Polityka prywatności](POLITYKA-PRYWATNOSCI.md).
 
 <div align="center">
 <sub>⚖️ Lex Machina — <i>prawo z maszyny, weryfikacja ze źródła.</i></sub>
