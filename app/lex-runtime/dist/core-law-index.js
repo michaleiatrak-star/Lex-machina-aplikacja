@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
+import { htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
 /**
  * Why the copy of an act cannot be taken as the current wording (verification
  * from the copy is refused and the act must be checked in ELI), or null.
@@ -837,7 +838,7 @@ export class CoreLawIndex {
         if (!isScan) {
             if (!joined())
                 throw new Error("PDF w ELI nie zawiera tekstu.");
-            return { text: joined(), pages: extracted.pages, ocrPages: [] };
+            return { text: joined(), pages: extracted.pages, ocrPages: [], pageTexts };
         }
         if (!this.ocr) {
             throw new CoreLawPermanentError("PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny.");
@@ -883,7 +884,7 @@ export class CoreLawIndex {
             }
         }
         fs.rmSync(cacheFile, { force: true });
-        return { text: joined(), pages: extracted.pages, ocrPages: scanned };
+        return { text: joined(), pages: extracted.pages, ocrPages: scanned, pageTexts };
     }
     async fetchAct(eli) {
         const base = `${ELI_API}/acts/${eli}`;
@@ -892,9 +893,12 @@ export class CoreLawIndex {
         let body = "";
         let textSource = "none";
         let sourceUrl = base;
+        let html = "";
+        let pageTexts = [];
         if (meta.textHTML === true) {
             sourceUrl = `${base}/text.html`;
-            body = htmlToText(await (await this.get(sourceUrl, "text/html")).text());
+            html = await (await this.get(sourceUrl, "text/html")).text();
+            body = htmlToText(html);
             textSource = "html";
         }
         // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
@@ -906,11 +910,17 @@ export class CoreLawIndex {
             const bytes = new Uint8Array(await (await this.get(sourceUrl, "application/pdf", PDF_TIMEOUT_MS)).arrayBuffer());
             const pdf = await this.pdfText(eli, bytes);
             body = pdf.text;
+            pageTexts = pdf.pageTexts;
             ocrPages = pdf.ocrPages;
             pages = pdf.pages;
             textSource = ocrPages.length ? "ocr" : "pdf";
         }
         const { order, articles } = splitArticles(body);
+        const articleAnchors = textSource === "html"
+            ? htmlArticleAnchors(html, order)
+            : textSource === "pdf"
+                ? pdfArticleAnchors(pageTexts)
+                : {};
         if (textSource === "ocr" && order.length === 0) {
             // Np. DU/1965/232: w ELI jest tylko strona numeru z adnotacją, że tekst
             // umowy zamieszczono w załączniku do numeru (załącznika ELI nie publikuje).
@@ -934,6 +944,7 @@ export class CoreLawIndex {
             sourceUrl,
             articleOrder: order,
             articles,
+            ...(Object.keys(articleAnchors).length ? { articleAnchors } : {}),
             text: body
         };
     }

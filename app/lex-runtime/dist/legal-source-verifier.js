@@ -1,4 +1,5 @@
 import { DEFAULT_PDF_MAX_BYTES, LocalPdfTextExtractor, PdfTextExtractionError } from "./pdf-text-extractor.js";
+import { anchoredUrl, htmlUnitFragment, pageFragment, pdfArticlePage } from "./source-anchor.js";
 const NSA_WSA_SNAPSHOT_HOSTS = new Set([
     "nsa.gov.pl",
     "orzeczenia.nsa.gov.pl"
@@ -226,6 +227,7 @@ export class OfficialLegalSourceVerifier {
         const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
         const pdfSource = isPdfResponse(url, contentType);
         let body;
+        let pageTexts;
         if (pdfSource) {
             if (!this.pdfTextExtractor) {
                 throw new LegalSourceVerificationError("Official PDF requires a configured local PDF text extractor.", "UNSUPPORTED_SOURCE_CONTENT");
@@ -240,6 +242,7 @@ export class OfficialLegalSourceVerifier {
             try {
                 const extracted = await this.pdfTextExtractor.extract(bytes);
                 body = extracted.text.slice(0, MAX_SOURCE_CHARS);
+                pageTexts = extracted.pageTexts;
             }
             catch (error) {
                 if (error instanceof
@@ -268,12 +271,20 @@ export class OfficialLegalSourceVerifier {
         const sourceUrl = url.toString();
         const evidence = evidenceSnippet(request.claim, request.kind, body);
         const snapshotOnly = NSA_WSA_SNAPSHOT_HOSTS.has(host);
+        const sourceAnchorUrl = matched && request.kind === "statute"
+            ? anchoredUrl(sourceUrl, pdfSource
+                ? pageTexts
+                    ? pageFragment(pdfArticlePage(pageTexts, request.claim))
+                    : undefined
+                : htmlUnitFragment(body, request.claim))
+            : undefined;
         const record = matched && !snapshotOnly
             ? {
                 claim: request.claim,
                 kind: request.kind,
                 status: "VERIFIED",
                 sourceUrl,
+                ...(sourceAnchorUrl ? { sourceAnchorUrl } : {}),
                 sourceTier: sourceTier(host),
                 fetchedAt,
                 toolCallId: request.toolCallId,

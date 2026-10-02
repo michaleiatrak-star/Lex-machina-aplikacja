@@ -1,4 +1,5 @@
 import { detectLegalReferences } from "./finalization-gate.js";
+import { verificationMarker } from "./source-anchor.js";
 const ACT_ALIAS = /\b(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)\b/giu;
 const SUPREME_COURT = /\b(?:SN|SĄD\s+NAJWYŻSZY|SĄDU\s+NAJWYŻSZEGO)\b/iu;
 const CASE_SIGNATURE = /\bsygn\.?\s*(?:akt\s*)?([A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,12}){0,3}\s+\d+\/\d{2,4})\b/iu;
@@ -176,17 +177,7 @@ function marker(record) {
         !record.fetchedAt) {
         return null;
     }
-    return [
-        "✅ [VER: ",
-        record.sourceUrl,
-        ", ",
-        record.fetchedAt
-            .slice(0, 10),
-        record.asOf
-            ? `, STAN NA ${record.asOf}`
-            : "",
-        "]"
-    ].join("");
+    return verificationMarker(record);
 }
 export function applyAutomaticVerificationMarkers(text, ledger, requestedAsOf) {
     const references = detectLegalReferences(text);

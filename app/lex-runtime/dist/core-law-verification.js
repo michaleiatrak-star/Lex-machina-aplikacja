@@ -1,4 +1,5 @@
 import { searchStems } from "./core-law-search.js";
+import { anchoredUrl } from "./source-anchor.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
 function articleToken(claim) {
@@ -95,9 +96,11 @@ export function verifyFromCoreLaw(args) {
         return { decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" };
     }
     let evidence;
+    let anchor;
     let failure = "";
     if (args.kind === "statute") {
         const article = articleToken(args.claim);
+        anchor = article ? record.articleAnchors?.[article] : undefined;
         evidence = article ? record.articles[article] : undefined;
         if (!evidence) {
             failure = "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
@@ -135,10 +138,12 @@ export function verifyFromCoreLaw(args) {
         Date.parse(summary.relationsCheckedAt) > Date.parse(record.fetchedAt)
         ? summary.relationsCheckedAt
         : record.fetchedAt;
+    const sourceAnchorUrl = anchoredUrl(record.sourceUrl, anchor);
     const verificationRecord = evidence
         ? {
             ...base,
             status: "VERIFIED",
+            ...(sourceAnchorUrl ? { sourceAnchorUrl } : {}),
             fetchedAt: record.fetchedAt,
             temporalFreshnessStatus: "CURRENT",
             freshnessCheckedAt: checkedAt,

@@ -1,5 +1,6 @@
 import type { CoreLawIndex } from "./core-law-index.js";
 import { searchStems } from "./core-law-search.js";
+import { anchoredUrl } from "./source-anchor.js";
 import type {
   VerificationKind,
   VerificationRecord
@@ -155,9 +156,11 @@ export function verifyFromCoreLaw(args: {
   }
 
   let evidence: string | undefined;
+  let anchor: string | undefined;
   let failure = "";
   if (args.kind === "statute") {
     const article = articleToken(args.claim);
+    anchor = article ? record.articleAnchors?.[article] : undefined;
     evidence = article ? record.articles[article] : undefined;
     if (!evidence) {
       failure = "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
@@ -197,10 +200,12 @@ export function verifyFromCoreLaw(args: {
       ? summary.relationsCheckedAt
       : record.fetchedAt;
 
+  const sourceAnchorUrl = anchoredUrl(record.sourceUrl, anchor);
   const verificationRecord: VerificationRecord = evidence
     ? {
         ...base,
         status: "VERIFIED",
+        ...(sourceAnchorUrl ? { sourceAnchorUrl } : {}),
         fetchedAt: record.fetchedAt,
         temporalFreshnessStatus: "CURRENT",
         freshnessCheckedAt: checkedAt,

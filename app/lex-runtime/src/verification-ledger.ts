@@ -30,6 +30,8 @@ export type VerificationRecord = {
   kind: VerificationKind;
   status: VerificationStatus;
   sourceUrl?: string;
+  // sourceUrl z kotwicą do jednostki redakcyjnej (#page=N w PDF, id jednostki w HTML ELI).
+  sourceAnchorUrl?: string;
   sourceTier?: LegalSourceTier;
   sourceProvenance?: LegalSourceProvenance;
   crossCheckStatus?: LegalSourceCrossCheckStatus;
