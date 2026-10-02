@@ -314,7 +314,7 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     ledger: VerificationLedger,
     eliFetch: ReturnType<typeof eli>,
     adopted: unknown[],
-    options: { localModel?: boolean; freshness?: unknown; acts?: Act[] } = {}
+    options: { localModel?: boolean; freshness?: unknown; acts?: Act[]; index?: CoreLawVerificationIndex } = {}
   ) {
     return new LegalVerificationToolRuntime(
       ledger,
@@ -323,7 +323,7 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
       (options.freshness ?? freshness) as never,
       undefined,
       undefined,
-      index(...(options.acts ?? [kw()])),
+      options.index ?? index(...(options.acts ?? [kw()])),
       eliFetch.fetcher as never,
       (act) => adopted.push(act),
       options.localModel === true
@@ -425,5 +425,52 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     expect(JSON.parse(outside!.content)).toMatchObject({ status: "VERIFIED", act: { id: "ELI" } });
     expect(adopted).toMatchObject([{ eli: "DU/2025/889" }]);
     expect(eliFetch.requested.some((url) => url.includes("/DU/2025/734"))).toBe(false);
+  });
+  it("model lokalny: przed użyciem kopii sprawdzenie w ELI; nowsza wersja -> weryfikacja w ELI, brak ELI -> kopia z informacją", async () => {
+    const withCheck = (state: "CURRENT" | "UPDATE_FOUND" | "UNREACHABLE") => {
+      const current = kw();
+      const checked: string[] = [];
+      const idx: CoreLawVerificationIndex = {
+        ...index(current),
+        confirmCurrent: async (eli: string) => {
+          checked.push(eli);
+          // Jak CoreLawIndex: znaleziona zmiana jest zapisywana jako oczekująca.
+          if (state === "UPDATE_FOUND") {
+            current.summary.pendingConsolidated = { eli: "DU/2026/77", title: null, promulgation: null };
+          }
+          return state === "UNREACHABLE"
+            ? { state, checkedAt: null, error: "ELI_HTTP_503" }
+            : { state, checkedAt: CHECKED };
+        }
+      };
+      return { idx, checked, act: current };
+    };
+    const call = { id: "u1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } };
+
+    const current = withCheck("CURRENT");
+    const [ok] = await runtime(new VerificationLedger(), eli(), [], { localModel: true, index: current.idx }).runTools([call]);
+    expect(current.checked).toEqual(["DU/2025/734"]);
+    expect(JSON.parse(ok!.content)).toMatchObject({
+      status: "VERIFIED",
+      act: { sourceKind: "local_eli_copy" },
+      freshness: { liveCheck: "CURRENT" }
+    });
+
+    const updated = withCheck("UPDATE_FOUND");
+    const adopted: unknown[] = [];
+    const [live] = await runtime(new VerificationLedger(), eli(), adopted, { localModel: true, index: updated.idx }).runTools([call]);
+    const livePayload = JSON.parse(live!.content);
+    expect(livePayload).toMatchObject({ status: "VERIFIED", act: { id: "ELI" } });
+    expect(livePayload.act.sourceKind).not.toBe("local_eli_copy");
+    expect(adopted).toMatchObject([{ eli: "DU/2025/734" }]);
+
+    const down = withCheck("UNREACHABLE");
+    const [copy] = await runtime(new VerificationLedger(), eli(), [], { localModel: true, index: down.idx }).runTools([call]);
+    expect(JSON.parse(copy!.content)).toMatchObject({
+      status: "VERIFIED",
+      act: { sourceKind: "local_eli_copy" },
+      freshness: { liveCheck: "UNREACHABLE" },
+      sourceNotice: { eliUnavailable: true, cause: "ELI_UNAVAILABLE:ELI_HTTP_503", localCopyDate: "2026-09-20" }
+    });
   });
 });
