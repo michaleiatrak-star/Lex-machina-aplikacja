@@ -37,8 +37,13 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 34 | `580d663` | AUTO: router v3 i prawo-polskie-v2 z góry dla wszystkich modeli, metodyka doboru narzędzi |
 | hotfix 35 | `c15ed5a` | Metodyka doboru skilli i modułów taka sama dla wszystkich hostów (także Claude z korpusem), kilka domen i dalsze skille |
 | hotfix 36 | `f916e44` | Błędna ścieżka modułu lub nazwa skilla: jedyny pasujący plik w tej samej rundzie albo lista kandydatów |
+| hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
 
 ---
+
+## hotfix 37
+
+- `looseSkill`/`looseResource`: porównanie bez `-vN` (wynik 90); brak trafień w skillu → dokładna nazwa w pozostałych skillach (`matchSkill`).
 
 ## hotfix 36
 
