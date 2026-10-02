@@ -132,6 +132,10 @@ function looseKey(value) {
         .replace(/-+/g, "-")
         .replace(/^-|-$/g, "");
 }
+// "-v3", "-v2.1": a wrong version number in a name is the commonest slip.
+function withoutVersion(key) {
+    return key.replace(/-v\d+(?:-\d+)*(?=-|$)/g, "");
+}
 function looseSkill(registry, requested) {
     const key = looseKey(requested);
     if (!key)
@@ -143,11 +147,33 @@ function looseSkill(registry, requested) {
     const exact = names.filter((item) => item.keys.includes(key));
     if (exact.length)
         return exact.map((item) => item.name);
+    const unversioned = names.filter((item) => item.keys.some((name) => withoutVersion(name) === withoutVersion(key)));
+    if (unversioned.length)
+        return unversioned.map((item) => item.name);
     return names
         .filter((item) => item.keys.some((name) => name.startsWith(`${key}-`) || key.startsWith(`${name}-`)))
         .map((item) => item.name);
 }
 export function looseResource(registry, skillName, requested) {
+    const own = looseResourceIn(registry, skillName, requested);
+    if (own.match || own.candidates.length)
+        return own;
+    // Not in this skill at all: the same file name in another skill or shared/
+    // (a module cited from a different domain), only on an exact name match.
+    const wanted = looseKey(path.posix.basename(requested.replaceAll("\\", "/")));
+    if (!wanted)
+        return own;
+    const hits = [...registry.skills.values()].flatMap((skill) => skill.name === skillName || !fs.existsSync(skill.directory)
+        ? []
+        : collectFiles(skill.directory, "")
+            .filter((file) => withoutVersion(looseKey(path.posix.basename(file))) === withoutVersion(wanted))
+            .map((file) => ({ skill: skill.name, file })));
+    const hit = hits[0];
+    return hits.length === 1 && hit
+        ? { match: hit.file, matchSkill: hit.skill, candidates: [`${hit.skill}/${hit.file}`] }
+        : { match: null, candidates: hits.slice(0, MAX_RESOURCE_CANDIDATES).map((item) => `${item.skill}/${item.file}`) };
+}
+function looseResourceIn(registry, skillName, requested) {
     const skill = registry.get(skillName);
     if (!skill)
         return { match: null, candidates: [] };
@@ -170,7 +196,9 @@ export function looseResource(registry, skillName, requested) {
         let score = 0;
         if (base === wanted)
             score = 100;
-        else if (wanted.length >= 6 && base.startsWith(wanted))
+        else if (withoutVersion(base) === withoutVersion(wanted))
+            score = 90;
+        else if (wanted.length >= 6 && base.startsWith(withoutVersion(wanted)))
             score = 60;
         else if (wanted.length >= 6 && (base.includes(wanted) || wanted.startsWith(base)))
             score = 40;
@@ -500,7 +528,7 @@ export class LegalCorpusToolRuntime {
             if (!resolved) {
                 const loose = looseResource(this.registry, skillName, semanticPath);
                 resolved = loose.match
-                    ? this.registry.resolveResource(skillName, loose.match)
+                    ? this.registry.resolveResource(loose.matchSkill ?? skillName, loose.match)
                     : null;
                 if (!resolved) {
                     return this.notFound(call, "LEGAL_RESOURCE_NOT_FOUND", {

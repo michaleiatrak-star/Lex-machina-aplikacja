@@ -370,4 +370,21 @@ describe("model skill selection mode", () => {
     expect(none).toMatchObject({ status: "NOT_FOUND", error: "LEGAL_RESOURCE_NOT_FOUND", candidates: [] });
     expect(runtime.auditEvents().every((event) => event.decision === "BLOCK")).toBe(true);
   });
+
+  it("resolves a wrong version number and a module kept in another skill", async () => {
+    const registry = fixture();
+    fs.writeFileSync(path.join(registry.root, DR, "modules", "mod-KC-umowy-v3.md"), "# v3\n");
+    const other = path.join(registry.root, "prawo-polskie-v2", "modules");
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, "mod-mapa-dziedzin.md"), "# mapa\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const parsed = (await runtime.runTools([
+      read(DR, "modules/mod-KC-umowy-v2.md", "file-version"),
+      read("prawny-router-v2", "SKILL.md", "skill-version"),
+      read(DR, "modules/mod-mapa-dziedzin.md", "other-skill")
+    ])).map((result) => JSON.parse(result.content));
+    expect(parsed[0]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-v3.md` });
+    expect(parsed[1]).toMatchObject({ status: "OK", path: "prawny-router-v3/SKILL.md", requestedPath: "prawny-router-v2/SKILL.md" });
+    expect(parsed[2]).toMatchObject({ status: "OK", path: "prawo-polskie-v2/modules/mod-mapa-dziedzin.md" });
+  });
 });
