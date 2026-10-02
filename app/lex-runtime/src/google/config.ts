@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // OAuth client of type "Desktop app" from Google Cloud Console. Google treats
 // the desktop client secret as non-confidential; PKCE protects the code.
@@ -48,20 +49,34 @@ function defaultClientFile(): string {
   );
 }
 
+// The publisher's client, shipped with the app so end users only click
+// "Sign in with Google" and never touch Google Cloud.
+export function bundledClientFile(): string {
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "config",
+    "google-oauth-client.json"
+  );
+}
+
 function nonEmpty(value: unknown): string | undefined {
   return typeof value === "string" && value.trim()
     ? value.trim()
     : undefined;
 }
 
-// Reads LEX_GOOGLE_OAUTH_CLIENT_ID / LEX_GOOGLE_OAUTH_CLIENT_SECRET, or the
-// client JSON downloaded from Google Cloud Console ({"installed": {...}}).
-// Returns null when nothing is configured: Google features stay off.
+// Order: LEX_GOOGLE_OAUTH_CLIENT_ID / _SECRET, a local override file, then
+// the client bundled with the app. Files use the JSON downloaded from Google
+// Cloud Console ({"installed": {...}}). Returns null when none exists:
+// Google features stay off.
 export function loadGoogleOAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
-  clientFile: string =
+  overrideFile: string =
     env.LEX_GOOGLE_OAUTH_CLIENT_FILE ??
-      defaultClientFile()
+      defaultClientFile(),
+  bundledFile: string = bundledClientFile()
 ): GoogleOAuthClientConfig | null {
   const envId = nonEmpty(env.LEX_GOOGLE_OAUTH_CLIENT_ID);
   if (envId) {
@@ -72,7 +87,10 @@ export function loadGoogleOAuthConfig(
       ? { clientId: envId, clientSecret: secret }
       : { clientId: envId };
   }
-  if (!existsSync(clientFile)) {
+  const clientFile = [overrideFile, bundledFile].find(
+    (file) => existsSync(file)
+  );
+  if (!clientFile) {
     return null;
   }
   let parsed: unknown;

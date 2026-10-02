@@ -184,7 +184,11 @@ async function recover(
 describe("Google OAuth config", () => {
   it("is off when nothing is configured", () => {
     expect(
-      loadGoogleOAuthConfig({}, path.join(tempDir("lex-gcfg-"), "none.json"))
+      loadGoogleOAuthConfig(
+        {},
+        path.join(tempDir("lex-gcfg-"), "none.json"),
+        "/nonexistent/bundled.json"
+      )
     ).toBeNull();
   });
 
@@ -200,6 +204,17 @@ describe("Google OAuth config", () => {
       clientId: CLIENT_ID,
       clientSecret: "s"
     });
+  });
+
+  it("falls back to the client bundled with the app", () => {
+    const bundled = path.join(tempDir("lex-gcfg-"), "bundled.json");
+    fs.writeFileSync(
+      bundled,
+      JSON.stringify({ installed: { client_id: "publisher-id" } })
+    );
+    expect(
+      loadGoogleOAuthConfig({}, "/nonexistent/override.json", bundled)
+    ).toEqual({ clientId: "publisher-id" });
   });
 
   it("prefers environment variables", () => {

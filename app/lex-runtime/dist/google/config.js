@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 export const GOOGLE_AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 export const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
@@ -29,16 +30,22 @@ function defaultClientFile() {
     return path.join(process.env.LEX_DATA_DIR ??
         path.join(os.homedir(), ".lex-machina", "data"), "google", "oauth-client.json");
 }
+// The publisher's client, shipped with the app so end users only click
+// "Sign in with Google" and never touch Google Cloud.
+export function bundledClientFile() {
+    return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "config", "google-oauth-client.json");
+}
 function nonEmpty(value) {
     return typeof value === "string" && value.trim()
         ? value.trim()
         : undefined;
 }
-// Reads LEX_GOOGLE_OAUTH_CLIENT_ID / LEX_GOOGLE_OAUTH_CLIENT_SECRET, or the
-// client JSON downloaded from Google Cloud Console ({"installed": {...}}).
-// Returns null when nothing is configured: Google features stay off.
-export function loadGoogleOAuthConfig(env = process.env, clientFile = env.LEX_GOOGLE_OAUTH_CLIENT_FILE ??
-    defaultClientFile()) {
+// Order: LEX_GOOGLE_OAUTH_CLIENT_ID / _SECRET, a local override file, then
+// the client bundled with the app. Files use the JSON downloaded from Google
+// Cloud Console ({"installed": {...}}). Returns null when none exists:
+// Google features stay off.
+export function loadGoogleOAuthConfig(env = process.env, overrideFile = env.LEX_GOOGLE_OAUTH_CLIENT_FILE ??
+    defaultClientFile(), bundledFile = bundledClientFile()) {
     const envId = nonEmpty(env.LEX_GOOGLE_OAUTH_CLIENT_ID);
     if (envId) {
         const secret = nonEmpty(env.LEX_GOOGLE_OAUTH_CLIENT_SECRET);
@@ -46,7 +53,8 @@ export function loadGoogleOAuthConfig(env = process.env, clientFile = env.LEX_GO
             ? { clientId: envId, clientSecret: secret }
             : { clientId: envId };
     }
-    if (!existsSync(clientFile)) {
+    const clientFile = [overrideFile, bundledFile].find((file) => existsSync(file));
+    if (!clientFile) {
         return null;
     }
     let parsed;
