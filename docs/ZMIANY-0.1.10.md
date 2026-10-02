@@ -38,8 +38,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 35 | `c15ed5a` | Metodyka doboru skilli i modułów taka sama dla wszystkich hostów (także Claude z korpusem), kilka domen i dalsze skille |
 | hotfix 36 | `f916e44` | Błędna ścieżka modułu lub nazwa skilla: jedyny pasujący plik w tej samej rundzie albo lista kandydatów |
 | hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
+| hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
 
 ---
+
+## hotfix 38
+
+- `anomaly-journal.ts`: `withAnomalyJournal` wokół `SafeSessionExecutor`; `<LEX_DATA_DIR>/diagnostics/anomalies.jsonl`, maks. 5000 wpisów. API (ADMIN): `GET /api/diagnostics/anomalies`, `GET .../export`, `DELETE`.
+- `reportNativeReads`: Read nieistniejącego pliku → `onMissing` → `recordNativeMissing` (`LEGAL_RESOURCE_NOT_FOUND`, `native`), nie `onRead`.
 
 ## hotfix 37
 
