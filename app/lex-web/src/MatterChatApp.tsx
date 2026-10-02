@@ -655,7 +655,7 @@ export function providerFailureMessage(
       case "ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH":
         return `Sesja ${name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.`;
       case "ACCOUNT_SESSION_CAPACITY":
-        return `${name} chwilowo odrzuca wykonanie z powodu limitu lub dostępności konta.`;
+        return `${name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.`;
       case "ACCOUNT_SESSION_PROMPT_REJECTED":
         return `${name} odrzucił bieżące żądanie po stronie usługi.`;
       case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":

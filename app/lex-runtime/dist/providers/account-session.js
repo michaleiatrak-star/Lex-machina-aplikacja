@@ -1399,6 +1399,27 @@ async function runVisibleWindowsLogin(provider, args, timeoutMs) {
         }).catch(() => { });
     }
 }
+/**
+ * Grok ACP errors arrive as bare JSON-RPC messages ("Rate limited"); give them
+ * the same code as CLI failures so the UI says what happened.
+ */
+export function codedGrokFailure(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^[A-Z0-9_]+(?::|$)/.test(message)) {
+        return error instanceof Error ? error : new Error(message);
+    }
+    const detail = sanitizeAccountCliFailureDetail(message);
+    return new Error(`${classifyAccountCliFailureDetail(detail)}:xai:1${detail ? `:${detail}` : ""}`);
+}
+/** Short per-minute request limit (worth waiting for), not a used-up quota. */
+export function isTransientRateLimit(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (message.startsWith("ACCOUNT_SESSION_CAPACITY") &&
+        /rate.?limit|too many requests|429/i.test(message) &&
+        !/usage limit|quota|resets? (?:at|in)|try again (?:at|in) \d+ ?h/i.test(message));
+}
+// Waits before repeating a model run refused by a short request limit.
+const RATE_LIMIT_BACKOFF_MS = [15_000, 45_000];
 function normalizeCliFailure(provider, result) {
     const detail = sanitizeAccountCliFailureDetail(result.stderr || result.stdout);
     const code = classifyAccountCliFailureDetail(detail);
@@ -2478,7 +2499,14 @@ export class AccountSessionManager {
                 (allowExternalTakeover
                     ? await discoverLatestGrokSessionId()
                     : null);
-            const grok = await runGrokAcp(prompt, workDir, abortSignal, resumeSessionId);
+            let grok;
+            try {
+                grok =
+                    await runGrokAcp(prompt, workDir, abortSignal, resumeSessionId);
+            }
+            catch (error) {
+                throw codedGrokFailure(error);
+            }
             if (!grok.authenticated) {
                 throw new Error("ACCOUNT_SESSION_NOT_AUTHENTICATED:xai");
             }
@@ -2522,7 +2550,29 @@ export async function streamAccountSession(manager, provider, params) {
     }
     const maxIterations = Math.max(1, Math.min(params.maxIterations ?? 10, 12));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-        const output = await manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none");
+        const runOnce = () => manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none");
+        let output;
+        for (let attempt = 0;; attempt += 1) {
+            try {
+                output = await runOnce();
+                break;
+            }
+            catch (error) {
+                const wait = RATE_LIMIT_BACKOFF_MS[attempt];
+                if (wait === undefined || !isTransientRateLimit(error) || params.abortSignal?.aborted) {
+                    throw error;
+                }
+                await new Promise((resolve) => {
+                    const timer = setTimeout(resolve, wait);
+                    params.abortSignal?.addEventListener("abort", () => {
+                        clearTimeout(timer);
+                        resolve();
+                    }, { once: true });
+                });
+                if (params.abortSignal?.aborted)
+                    throw error;
+            }
+        }
         const calls = parseToolCalls(output);
         if (!calls) {
             params.callbacks?.onContentDelta?.(output);

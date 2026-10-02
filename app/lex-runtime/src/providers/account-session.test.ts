@@ -652,3 +652,16 @@ describe("provider account-session transport", () => {
     ).toBe(false);
   });
 });
+
+describe("Grok ACP failures", () => {
+  it("codes a bare rate-limit message and keeps coded errors", async () => {
+    const { codedGrokFailure, isTransientRateLimit } = await import("./account-session.js");
+    const coded = codedGrokFailure(new Error("Rate limited"));
+    expect(coded.message).toBe("ACCOUNT_SESSION_CAPACITY:xai:1:Rate limited");
+    expect(isTransientRateLimit(coded)).toBe(true);
+    const kept = new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:xai");
+    expect(codedGrokFailure(kept)).toBe(kept);
+    // A used-up plan quota is not worth waiting for.
+    expect(isTransientRateLimit(new Error("ACCOUNT_SESSION_CAPACITY:openai:1:You've hit your usage limit"))).toBe(false);
+  });
+});
