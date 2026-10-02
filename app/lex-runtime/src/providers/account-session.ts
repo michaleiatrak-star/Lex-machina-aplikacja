@@ -1306,6 +1306,24 @@ export function claudeToolUses(
   return uses;
 }
 
+/**
+ * Native Reads of the run, for the audit. A failed Read ("File does not exist")
+ * is not a read: it must not count as a loaded skill, and it is what the
+ * anomaly journal reports.
+ */
+export function reportNativeReads(corpus: NativeCorpusAccess, stdout: string): void {
+  for (const use of claudeToolUses(stdout)) {
+    if (use.name !== "Read") continue;
+    const relative = corpusRelativePath(corpus.root, use.input.file_path);
+    if (!relative) continue;
+    if (statSync(path.join(corpus.root, relative), { throwIfNoEntry: false })?.isFile()) {
+      corpus.onRead?.(relative);
+    } else {
+      corpus.onMissing?.(relative);
+    }
+  }
+}
+
 /** Corpus-relative path of a native Read, or null when it is outside the corpus. */
 export function corpusRelativePath(root: string, filePath: unknown): string | null {
   if (typeof filePath !== "string" || !filePath) return null;
@@ -3628,11 +3646,7 @@ export class AccountSessionManager {
           stderr: [result.stderr, parsed?.text ?? ""].filter(Boolean).join("\n")
         });
       }
-      for (const use of claudeToolUses(result.stdout)) {
-        if (use.name !== "Read") continue;
-        const relative = corpusRelativePath(args.corpus.root, use.input.file_path);
-        if (relative) args.corpus.onRead?.(relative);
-      }
+      reportNativeReads(args.corpus, result.stdout);
       if (parsed.sessionId && !args.fresh) {
         await writeAccountSessionId("anthropic", parsed.sessionId, args.continuityKey);
       }

@@ -49,7 +49,41 @@ function sendMaintenanceError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMaintenanceRoutes(app, dependencies) {
-    const { authService, localModels, maintenance } = dependencies;
+    const { authService, localModels, maintenance, anomalyJournal } = dependencies;
+    if (anomalyJournal) {
+        const query = (value) => typeof value === "string" && value.trim() ? value.trim() : undefined;
+        app.get("/api/diagnostics/anomalies", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            const severity = query(req.query.severity);
+            const area = query(req.query.area);
+            const since = query(req.query.since);
+            const limit = Number(query(req.query.limit) ?? 200);
+            res.json({
+                file: anomalyJournal.file,
+                summary: anomalyJournal.summary(since),
+                entries: anomalyJournal.list({
+                    limit: Number.isFinite(limit) ? limit : 200,
+                    ...(severity === "WARN" || severity === "ERROR" ? { severity: severity } : {}),
+                    ...(area ? { area: area } : {}),
+                    ...(since ? { since } : {})
+                })
+            });
+        });
+        app.get("/api/diagnostics/anomalies/export", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+            res.setHeader("Content-Disposition", 'attachment; filename="lex-nieprawidlowosci.jsonl"');
+            res.send(anomalyJournal.exportJsonl());
+        });
+        app.delete("/api/diagnostics/anomalies", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            anomalyJournal.clear();
+            res.status(204).end();
+        });
+    }
     app.get("/api/local-models", (req, res) => {
         try {
             authenticated(req, authService);

@@ -260,3 +260,63 @@
 .core-law-found button {
   justify-self: start;
 }
+
+.anomaly-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.anomaly-count-error {
+  color: #b42318;
+  opacity: 1 !important;
+}
+
+.anomaly-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  display: block;
+  overflow-x: auto;
+}
+
+.anomaly-table th,
+.anomaly-table td {
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.2);
+}
+
+.anomaly-table td small,
+.anomaly-entries small {
+  display: block;
+  opacity: 0.72;
+}
+
+.anomaly-target {
+  word-break: break-all;
+}
+
+.anomaly-error td:first-child,
+li.anomaly-error > strong {
+  color: #b42318;
+}
+
+.anomaly-entries {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .anomaly-count-error,
+  .anomaly-error td:first-child,
+  li.anomaly-error > strong {
+    color: #f97066;
+  }
+}

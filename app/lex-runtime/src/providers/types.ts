@@ -92,6 +92,8 @@ export type NativeCorpusAccess = {
   root: string;
   // Relative path of every corpus file the model read (audit).
   onRead?: (relativePath: string) => void;
+  // A Read of a corpus file that does not exist (wrong name, version or folder).
+  onMissing?: (relativePath: string) => void;
 };
 
 export type ProviderStreamResult = {

@@ -9,6 +9,7 @@ import type {
 } from "../local-model-runtime.js";
 import type { MaintenanceService } from "../maintenance-service.js";
 import { isSkillChannel } from "../skill-channel.js";
+import type { AnomalyArea, AnomalyJournal, AnomalySeverity } from "../anomaly-journal.js";
 
 function authenticated(
   req: Request,
@@ -79,13 +80,48 @@ export function registerMaintenanceRoutes(
     authService: AuthService;
     localModels: LocalModelRuntime;
     maintenance: MaintenanceService;
+    anomalyJournal?: AnomalyJournal;
   }
 ): void {
   const {
     authService,
     localModels,
-    maintenance
+    maintenance,
+    anomalyJournal
   } = dependencies;
+
+  if (anomalyJournal) {
+    const query = (value: unknown) =>
+      typeof value === "string" && value.trim() ? value.trim() : undefined;
+    app.get("/api/diagnostics/anomalies", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      const severity = query(req.query.severity);
+      const area = query(req.query.area);
+      const since = query(req.query.since);
+      const limit = Number(query(req.query.limit) ?? 200);
+      res.json({
+        file: anomalyJournal.file,
+        summary: anomalyJournal.summary(since),
+        entries: anomalyJournal.list({
+          limit: Number.isFinite(limit) ? limit : 200,
+          ...(severity === "WARN" || severity === "ERROR" ? { severity: severity as AnomalySeverity } : {}),
+          ...(area ? { area: area as AnomalyArea } : {}),
+          ...(since ? { since } : {})
+        })
+      });
+    });
+    app.get("/api/diagnostics/anomalies/export", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="lex-nieprawidlowosci.jsonl"');
+      res.send(anomalyJournal.exportJsonl());
+    });
+    app.delete("/api/diagnostics/anomalies", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      anomalyJournal.clear();
+      res.status(204).end();
+    });
+  }
 
   app.get(
     "/api/local-models",

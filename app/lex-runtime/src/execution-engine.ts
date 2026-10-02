@@ -319,6 +319,7 @@ export class LexExecutionEngine {
     nativeCorpus?: {
       root: string;
       onRead: (relativePath: string) => void;
+      onMissing?: (relativePath: string) => void;
       missingQualifier: () => string | null;
     };
     // AUTO bez natywnego korpusu: router v3 i fasada prawo-polskie-v2 są podawane
@@ -2033,7 +2034,7 @@ export class LexExecutionEngine {
         ],
         tools: args.tools,
         runTools: args.runTools,
-        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead } } : {}),
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
         ...(args.draftCallbacks
           ? { callbacks: args.draftCallbacks }
           : {}),
@@ -2062,7 +2063,7 @@ export class LexExecutionEngine {
         ],
         tools: args.tools,
         runTools: args.runTools,
-        nativeCorpus: { root: native.root, onRead: native.onRead },
+        nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) },
         reasoning: "none"
       });
       if (corrected.fullText.trim()) response.fullText = corrected.fullText;

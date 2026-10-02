@@ -15,6 +15,7 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import {
@@ -590,7 +591,10 @@ export async function startLocalServer(options?: {
     );
   }
 
-  const sessionExecutor =
+  // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
+  const anomalyJournal =
+    new AnomalyJournal(caseFileStore.rootDir);
+  const sessionExecutor = withAnomalyJournal(
     new SafeSessionExecutor(
       registry,
       providerGateway,
@@ -612,7 +616,9 @@ export async function startLocalServer(options?: {
       legalFederationTools,
       coreLawIndex,
       personMorphology
-    );
+    ),
+    anomalyJournal
+  );
   const documentAstGenerator =
     new LegalDocumentAstGenerator(
       sessionExecutor
@@ -722,7 +728,8 @@ export async function startLocalServer(options?: {
     {
       authService,
       localModels,
-      maintenance
+      maintenance,
+      anomalyJournal
     }
   );
   registerCoreLawRoutes(app, {

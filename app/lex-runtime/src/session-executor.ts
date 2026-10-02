@@ -1550,6 +1550,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                 corpusTools.recordNativeRead(relativePath);
                 step("SKILLS", relativePath);
               },
+              onMissing: (relativePath: string) => corpusTools.recordNativeMissing(relativePath),
               missingQualifier: () => corpusTools.missingCriminalQualifier()
             }
           }

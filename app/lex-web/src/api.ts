@@ -3386,3 +3386,54 @@ export function queryMcpSearch(
     }
   );
 }
+
+export type AnomalySeverity = "WARN" | "ERROR";
+export type AnomalyArea = "SKILL_PATH" | "CORPUS" | "GATE" | "SESSION" | "EXECUTION";
+
+export type AnomalyEntry = {
+  at: string;
+  severity: AnomalySeverity;
+  area: AnomalyArea;
+  code: string;
+  provider?: string;
+  model?: string;
+  sessionId?: string;
+  target?: string;
+  detail?: Record<string, string | number | boolean | string[]>;
+};
+
+export type AnomalySummaryRow = {
+  severity: AnomalySeverity;
+  area: AnomalyArea;
+  code: string;
+  target: string | null;
+  count: number;
+  lastAt: string;
+  providers: string[];
+};
+
+export function getAnomalies(filter: { severity?: AnomalySeverity; since?: string; limit?: number } = {}):
+  Promise<{ file: string; summary: AnomalySummaryRow[]; entries: AnomalyEntry[] }> {
+  const params = new URLSearchParams();
+  if (filter.severity) params.set("severity", filter.severity);
+  if (filter.since) params.set("since", filter.since);
+  if (filter.limit) params.set("limit", String(filter.limit));
+  const query = params.toString();
+  return json(`/api/diagnostics/anomalies${query ? `?${query}` : ""}`);
+}
+
+export async function exportAnomalies(): Promise<Blob> {
+  const response = await fetch(`${apiBase()}/api/diagnostics/anomalies/export`, {
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status);
+  return response.blob();
+}
+
+export async function clearAnomalies(): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/diagnostics/anomalies`, {
+    method: "DELETE",
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status);
+}

@@ -448,6 +448,16 @@ export class LegalCorpusToolRuntime {
     this.events.push({ tool: "Read", target: relativePath, decision: "ALLOW", detail: { native: true } });
   }
 
+  /** A native Read of a corpus file that does not exist: correctable, not a read. */
+  recordNativeMissing(relativePath: string): void {
+    this.events.push({
+      tool: "Read",
+      target: relativePath,
+      decision: "BLOCK",
+      detail: { native: true, error: "LEGAL_RESOURCE_NOT_FOUND" }
+    });
+  }
+
   /** A SKILL.md the runtime put in the prompt up front (router v3, prawo-polskie-v2). */
   recordPreloaded(relativePath: string): void {
     const skill = this.skillForPath(relativePath);

@@ -736,6 +736,7 @@ export class SafeSessionExecutor {
                             corpusTools.recordNativeRead(relativePath);
                             step("SKILLS", relativePath);
                         },
+                        onMissing: (relativePath) => corpusTools.recordNativeMissing(relativePath),
                         missingQualifier: () => corpusTools.missingCriminalQualifier()
                     }
                 }
