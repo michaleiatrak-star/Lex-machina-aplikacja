@@ -35,8 +35,13 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 32 | `81817b6` | Grok przez konto: kod limitu zapytań (ACP „Rate limited”), ponowienie po 15/45 s |
 | hotfix 33 | `ee5fbed` | Router v3 dostarczany z pierwszym odczytem (bez straconej rundy), konta: bez powtórnych wyszukiwań |
 | hotfix 34 | `580d663` | AUTO: router v3 i prawo-polskie-v2 z góry dla wszystkich modeli, metodyka doboru narzędzi |
+| hotfix 35 | `c15ed5a` | Metodyka doboru skilli i modułów taka sama dla wszystkich hostów (także Claude z korpusem), kilka domen i dalsze skille |
 
 ---
+
+## hotfix 35
+
+- `executeModelSelectedSkills`: wspólna `methodology` dla natywnego korpusu i `read_legal_resource`; kilka domen DR i skilli wykonawczych, samodzielne dociąganie modułów i dalszych skilli; natywny prompt wskazuje wczytane z góry pliki.
 
 ## hotfix 34
 

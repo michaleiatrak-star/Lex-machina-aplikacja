@@ -1,0 +1,410 @@
+name: Publish Lex Machina 0.1.10 hotfix 35 online installer
+
+# Builds, accepts and publishes the online installer in one run: runtime
+# validation, the G33D online installer build and installed-copy acceptance,
+# then the exact accepted artifact is attached to a pre-release at GITHUB_SHA.
+
+on:
+  push:
+    branches:
+      - "claude/jolly-bell-v4xata"
+    paths:
+      - ".github/workflows/publish-0.1.10-hotfix35.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: lex-publish-0.1.10-hotfix35
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.1.10-hotfix35
+  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 35
+  ASSET_NAME: Lex-Machina-0.1.10-hotfix35-Online-x64-Setup.exe
+
+jobs:
+  runtime:
+    name: Runtime and Gate I audit
+    uses: ./.github/workflows/lex-runtime.yml
+    secrets: inherit
+
+  online:
+    name: Accepted online installer
+    needs:
+      - runtime
+    uses: ./.github/workflows/lex-installer.yml
+    secrets: inherit
+
+  windows-account-shim:
+    name: Windows account client launch (npm.cmd, path with a space)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app/lex-runtime
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install runtime dependencies
+        run: npm install --no-audit --no-fund
+
+      # Each argument must reach the .cmd as one quoted argument.
+      - name: npm.cmd and .cmd shims under "Lex Machina"
+        run: npm run validate:windows-account-shim
+
+  kio-live:
+    name: KIO connector against the live UZP search
+    runs-on: windows-latest
+    timeout-minutes: 15
+    # Official external service: an outage must not block the release, the
+    # result is read before handing over the installer.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: "Wersja rozwojowa rozpakowana/audyt-systemu-v4/mcp-servers"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install connector dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: KIO live cases
+        env:
+          LEX_TYLKO: "^KIO"
+        run: node test_na_zywo.mjs
+
+  publish:
+    name: Publish accepted online installer
+    needs:
+      - runtime
+      - online
+      - windows-account-shim
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download accepted online installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-Windows-Online-Installer
+          path: release-input/online
+
+      - name: Verify receipt and assemble release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-out
+
+          online_exe="$(find release-input/online -type f -iname '*.exe' -print -quit)"
+          online_receipt="$(find release-input/online -type f -name 'SHA256.txt' -print -quit)"
+          for required in "$online_exe" "$online_receipt"; do
+            [[ -n "$required" && -f "$required" ]] || {
+              echo "RELEASE_ACCEPTED_ASSET_MISSING:$required" >&2
+              exit 1
+            }
+          done
+
+          expected="$(awk -F= '$1=="sha256"{print $2}' "$online_receipt" | tr -d '\r\n ')"
+          actual="$(sha256sum "$online_exe" | awk '{print $1}')"
+          [[ "$expected" == "$actual" ]] || {
+            echo "ONLINE_RELEASE_HASH_MISMATCH expected=$expected actual=$actual" >&2
+            exit 1
+          }
+
+          cp "$online_exe" "release-out/$ASSET_NAME"
+          cp "$online_receipt" release-out/CI-SHA256-ONLINE.txt
+          cp app/lex-version.yaml release-out/LEX-VERSION.yaml
+          printf '%s\n' "$GITHUB_SHA" > release-out/SOURCE-SHA.txt
+          (
+            cd release-out
+            sha256sum "$ASSET_NAME" LEX-VERSION.yaml > SHA256SUMS.txt
+          )
+          cat release-out/SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-out/RELEASE-NOTES.md <<'EOF'
+          ## Lex Machina 0.1.10 hotfix 35
+
+          Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
+
+          ### Metodyka doboru skilli dla wszystkich hostów
+          - Claude z kontem (natywny korpus), ChatGPT, Gemini, Grok i klucze API dostają tę samą metodykę; różni się tylko narzędzie odczytu (Read albo read_legal_resource);
+          - metodyka obejmuje kilka domen DR i kilka skilli wykonawczych naraz, a model ma sam dociągać moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md, bez pytania użytkownika;
+          - przy Claude z kontem prompt mówi wprost, że router i prawo-polskie-v2 są już wczytane.
+
+          ### Z hotfix 34: Pytania prawne: router i prawo polskie od razu, metodyka doboru narzędzi
+          - router prawny-router-v3 i fasada prawa polskiego prawo-polskie-v2 (wybór dziedziny DR-01–DR-16) są podawane modelowi z góry przy każdym modelu w trybie automatycznym — dotąd tylko przy Claude z kontem; przy ChatGPT, Gemini, Groku i kluczach API model musiał je najpierw sam wczytać, co kosztowało do dwóch rund (osobnych uruchomień modelu) przy każdym pytaniu prawnym; odczyt obu plików jest zapisany w audycie, a zasada „router v3 pierwszy” obowiązuje bez zmian;
+          - metodyka doboru: domena DR i skill wykonawczy według routera; jeden odczyt to jeden plik — najpierw sam SKILL.md domeny, moduł w tej samej rundzie tylko przy znanej dokładnej nazwie, potem wyłącznie moduły potrzebne do zagadnienia razem z weryfikacją przepisów, które trafią do odpowiedzi; bez zgadywania nazw plików i przeglądania całych katalogów;
+          - kwalifikator karnomaterialny jest dołączany wyłącznie przy skillu DR-03 (prawo karne, wykroczenia, KKS, wykonanie orzeczeń), nie w innych dziedzinach.
+
+          ### Z hotfix 33: Krótsza ścieżka odpowiedzi prawnej (mniej rund modelu)
+          - model, który przed routerem prawny-router-v3 poprosił o skill dziedzinowy albo moduł, dostawał odmowę i tracił całą rundę (przy logowaniu kontem to nowe uruchomienie klienta i kolejne zapytanie do limitu konta); teraz router jest dołączany do pierwszego odczytu (tak jak kwalifikator karny), a odczyt routera zlecony w tej samej rundzie wykonuje się jako pierwszy; zasada „router v3 pierwszy” obowiązuje bez zmian;
+          - przy logowaniu kontem model dostaje polecenie, by nie powtarzał wyszukiwań i odczytów, które już ma, i weryfikował tylko przepisy, które poda w odpowiedzi.
+
+          ### Z hotfix 32: Grok przez konto: „Rate limited” (PROVIDER_UNCODED_FAILURE)
+          - klient Grok zgłasza przekroczenie limitu zapytań konta przez protokół ACP, a aplikacja przekazywała ten komunikat bez kodu; teraz to „limit zapytań lub dostępności konta” (ACCOUNT_SESSION_CAPACITY);
+          - krótki limit zapytań jest ponawiany automatycznie po 15 s i po 45 s; wyczerpany limit planu (np. „usage limit”) nie jest ponawiany;
+          - komunikat wyjaśnia, że pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej, i wskazuje: odczekać, wybrać inny model albo połączenie przez klucz API.
+
+          ### Z hotfix 31: Konektory MCP: „NIEZGODNY z sumą kontrolną skilla”
+          - przyczyna: instalator jest budowany na Windows, gdzie git przy pobraniu repozytorium zamieniał końce linii (LF na CRLF) w plikach skilli; pakiet serwerów lex-mcp.mjs w instalatorze miał przez to inne bajty niż suma w CHECKSUMS.sha256 skilla audyt-systemu-v4 (w repozytorium oba są zgodne);
+          - pliki skilli trafiają do instalatora bez zmian końców linii, a budowa instalatora zatrzymuje się, gdy pakiet MCP nie zgadza się z sumą kontrolną skilla.
+
+          ### Z hotfix 31: Przepisy (RAG): postęp OCR i akty bez tekstu w ELI
+          - MRG Polska–Ukraina pokazywał stary błąd „PDF exceeds the configured page limit” także w trakcie pobierania, bo OCR 606 stron trwa długo, a status pokazywał tylko ostatni błąd; teraz przy akcie i w nagłówku sekcji widać postęp: pobieranie PDF, odczyt tekstu, „OCR skanu: 120/606 stron”;
+          - przerwany OCR (zamknięcie aplikacji, błąd lokalnego OCR) wznawia się od pierwszej nieodczytanej strony, zamiast zaczynać od początku;
+          - Konwencja wiedeńska (DU/1965/232) nie jest już „błędem pobierania”: ELI publikuje tylko skan pierwszej strony numeru Dz.U. z odesłaniem do załącznika, którego w ELI nie ma; akt trafia do osobnej listy „Bez tekstu w ELI” z wyjaśnieniem (sprawdzenie ELI raz na dobę); rozpoznanie adnotacji o załączniku jest odporne na błędy OCR (np. „ńumeru”).
+
+          ### Z hotfix 31: Szybsze odpowiedzi przy logowaniu kontem (ChatGPT, Claude, Gemini, Grok)
+          - każda runda narzędzi (odczyt routera, SKILL.md, modułu, weryfikacja przepisu) uruchamia przy koncie nowy proces klienta z całym kontekstem; model dostaje polecenie, by niezależne odczyty i weryfikacje zlecać w jednej rundzie, co zmniejsza liczbę uruchomień klienta.
+
+          ### Z hotfix 31: Ustawienia → Użytkownicy: czytelniejsze uprawnienia do spraw
+          - każda sprawa to zwijana karta: w nagłówku nazwa, właściciel i skład („1 osoba: Marcin (Edycja)”); po rozwinięciu przyciski „Zmień nazwę” i „Archiwizuj”, tabela „Osoby z dostępem” (osoba, rola, deanonimizacja, „Odbierz dostęp”) i formularz „Dodaj osobę do sprawy” z opisanymi polami;
+          - opis ról: Właściciel (zarządzanie, klucz sprawy), Edycja (zmiany w aktach i analizy), Analiza (odczyt i analizy bez zmian w aktach), Podgląd (tylko odczyt).
+
+          ### Z hotfix 31: Kalendarz
+          - nagłówek dnia słownie („piątek, 2 października 2026”, „jutro”, „za 5 dni”);
+          - w kratkach dni kolorowe znaczniki rodzajów zdarzeń (posiedzenie sądu, termin, spotkanie z klientem, inne) z legendą i podpowiedzią z listą zdarzeń;
+          - nowa lista „Nadchodzące terminy” na 14 dni (terminy wyróżnione), kliknięcie przenosi do dnia;
+          - w formularzu pole daty (wcześniej tylko zaznaczony dzień); przy zdarzeniu przycisk „Usuń” dla spraw z prawem zapisu.
+
+          ### Z hotfix 30: Przepisy (RAG): akty, których PDF w ELI jest skanem albo ma ponad 600 stron
+          - limit 600 stron dotyczył dokumentów sprawy, a kopia ELI dostała ten sam; tekst ogłoszony w Dz.U. bywa całym numerem z załącznikami (umowa MRG Polska–Ukraina, DU/2009/858: 608 stron) — kopia przepisów ma teraz własne limity (do 5000 stron, 128 MB) i dłuższy czas pobierania;
+          - strony PDF bez warstwy tekstowej (skany) są czytane lokalnym OCR partiami po 20 stron, a tekst jest składany z powrotem w kolejności stron; w MRG Polska–Ukraina tekst ma tylko strona 1 i 608, strony 2–607 to skany;
+          - tekst z OCR jest oznaczony: modele widzą „tekst odczytany OCR ze skanu ELI, możliwe błędy odczytu”, a weryfikacja przepisu z takiej kopii nie daje statusu „zweryfikowany” (cytat trzeba sprawdzić w PDF ELI);
+          - Konwencja wiedeńska o stosunkach dyplomatycznych (DU/1965/232): ELI udostępnia tylko pierwszą stronę numeru Dz.U. 1965 nr 37 z adnotacją „Tekst konwencji zamieszczony jest w załączniku do niniejszego numeru”; załącznika nie ma w ELI, więc tekstu konwencji nie da się pobrać z ELI żadną techniką — zamiast „OCR is intentionally disabled” widać tę przyczynę, a pobranie jest ponawiane raz na dobę, nie co godzinę;
+          - PDF Dz.U. z lat ok. 2003–2011 mają czcionki z własnym kodowaniem („mi´dzy Rzàdem ma∏ego”) — tekst jest naprawiany do polskich znaków, więc cytaty z takich aktów dają się porównać;
+          - umowy międzynarodowe dzielą się na jednostki po „Artykuł N” (dotąd tylko „Art. N.”), a nagłówki stron Dz.U. („Dziennik Ustaw Nr 103 — 7711 — Poz. 858”) nie przerywają tekstu artykułów.
+
+          ### Z hotfix 29: KIO: wyszukiwanie orzeczeń Krajowej Izby Odwoławczej
+          - nowy konektor „KIO — orzeczenia Krajowej Izby Odwoławczej (wyszukiwarka UZP)” w Ustawieniach → Konektory (instalacja jednym przyciskiem; w nowych instalacjach włączony od razu) i w karcie Wyszukiwanie;
+          - wyszukiwanie po słowach z odmianą w treści, sygnaturze i dacie wydania, z wyborem organu: KIO, sądy okręgowe (skargi na orzeczenia KIO), sądy apelacyjne, SN;
+          - „Sprawdź sygnaturę KIO” (dokładne dopasowanie, także w sprawach łączonych); brak trafienia to OUT_OF_SCOPE, nie dowód braku orzeczenia;
+          - „Pokaż treść”: metryka (sposób rozstrzygnięcia, przewodniczący, zamawiający, tryb, kluczowe przepisy Pzp, zagadnienia) i treść orzeczenia; „Podgląd źródła” pokazuje treść z wyszukiwarki UZP;
+          - modele mogą korzystać z KIO przez narzędzia federacji (orzeczenie KIO to materiał orzeczniczy, przepisy Pzp nadal weryfikowane w ELI).
+
+          ### Z hotfix 29: Wyszukiwanie: wolne źródła (SAOS)
+          - SAOS bywa wolny i ponawia zapytanie do 3 razy po 45 s, a aplikacja przerywała czekanie po 110–120 s — wolna odpowiedź kończyła się błędem jako „niedostępne”; teraz czeka do 5 minut;
+          - przy dłuższym oczekiwaniu widać licznik sekund i informację, że źródło odpowiada wolno.
+
+          ### Z hotfix 29: Ustawienia → Użytkownicy: przypisania i sprawy
+          - „Przypisz osobę do sprawy”: osoba, sprawa, rola i zgoda na deanonimizację w jednym wierszu; przypisanie osoby, która ma już dostęp, zmienia jej rolę;
+          - przy każdej sprawie ikona zmiany nazwy i przycisk „Archiwizuj” / „Przywróć”;
+          - przypisywać, zmieniać nazwę i archiwizować może właściciel sprawy (tylko on ma klucz sprawy); pozostałe sprawy są widoczne do wglądu.
+
+          ### Z hotfix 29: Gemini przez konto Google: czytelny komunikat
+          - Google nie obsługuje już Gemini CLI w bezpłatnym planie konta („Gemini Code Assist for individuals”: IneligibleTierError UNSUPPORTED_CLIENT); zamiast śladu błędu klienta aplikacja pokazuje, że ponowne logowanie nie pomoże, i wskazuje „Google Gemini · API” z kluczem z Google AI Studio;
+          - opcja nazywa się teraz „Gemini · konto Google (plan płatny)”.
+
+          ### Z hotfix 28: Wyszukiwanie, podgląd źródła i poprawki konektorów
+          - ISAP/ELI: „Podgląd źródła” kończył się SOURCE_PREVIEW_TOO_MANY_REDIRECTS — strona ISAP jest chroniona przed automatami (Imperva); podgląd pokazuje teraz tekst aktu z Sejm ELI (HTML albo PDF tekstu jednolitego); dodane „Pokaż treść” (isap_tekst);
+          - EUR-Lex: strony EUR-Lex odpowiadają programom wyzwaniem AWS WAF zamiast treścią; podgląd pokazuje polski tekst aktu lub orzeczenia z repozytorium Urzędu Publikacji UE (Cellar) po numerze CELEX;
+          - CBOSA: przy podglądzie źródła usunięto „Pokaż treść”; poprawiony błąd „Zmiana/niekompletność kontraktu HTML CBOSA …: brak pól Data orzeczenia” — data orzeczenia jest na stronie w tabeli zagnieżdżonej razem z informacją o prawomocności i parser ją gubił (dotyczyło też weryfikacji sygnatur przez modele); wynik podaje też prawomocność wg CBOSA;
+          - KRS: nowe wyszukiwanie po NIP albo REGON (numer KRS z wykazu podatników VAT, potem odpis aktualny; podmiot spoza wykazu VAT — po numerze KRS); „Podgląd źródła” pokazuje cały odpis aktualny ze wszystkimi działami z Otwartego API KRS (PESEL w treści wolnej zamaskowany); „Otwórz w źródle” prowadzi do wyszukiwarki KRS zamiast pustej strony prs.ms.gov.pl;
+          - biała lista VAT: „Podgląd źródła” pokazuje rekord z oficjalnego API (bez ponownego zapytania, API ma dzienny limit); „Otwórz w źródle” prowadzi do wyszukiwarki Ministerstwa Finansów zamiast serwisu podatnik.info;
+          - CEIDG: dłuższy czas oczekiwania na API (45 s, jedno ponowienie przy przekroczeniu czasu, nigdy przy limicie zapytań) i podgląd rekordu z API;
+          - kursy NBP: oprócz kursu średniego (tabela A) kurs kupna i sprzedaży (tabela C, dla walut, które NBP w niej publikuje); „Podgląd źródła” to tabela kursów z API NBP, „Otwórz w źródle” — strona tabel NBP zamiast surowego XML;
+          - SUDOP: zlecenie przyjęte do kolejki nie jest już „Błędem źródła”; aplikacja sama odbiera wynik (do 6 prób, z widocznym postępem) i daje przycisk ponownego odbioru;
+          - czas wywołania konektora wydłużony do 110 s (wcześniej 60 s).
+
+          ### Z hotfix 27: Gemini i Grok przez konto, pobieranie klienta działa
+          - pobieranie klienta kończyło się „brak wymaganego programu”: '"C:\Users\…\Lex Machina\runtime\node\npm.cmd"' is not recognized; runtime przekazywał do cmd.exe polecenie z cudzysłowami zamienionymi na \" (domyślne cytowanie Node), więc cmd.exe nie rozpoznawał ścieżki; ten sam błąd dotyczył uruchamiania pobranych klientów Gemini CLI i Grok (pliki .cmd);
+          - polecenie trafia do cmd.exe dosłownie, a npm jest uruchamiany bezpośrednio przez Node z pakietu aplikacji (bez cmd.exe);
+          - przed publikacją CI sprawdza na Windows: npm.cmd i pliki .cmd w katalogu ze spacją, instalację paczki przez npm.cmd i przez Node;
+          - korekta diagnozy z hotfix 22 (brak Node w PATH): ta zmiana była potrzebna, ale nie była przyczyną błędu.
+
+          ### Z hotfix 26: Przepisy (RAG), modele wiedzą o dodanych aktach i stanie kopii
+          - lista aktów w instrukcji dla modeli i w narzędziu list_core_law_acts pokazuje akty dodane przez użytkowników (oznaczone „dodany przez użytkownika”, z krótką nazwą, np. „Ustawa o podatku akcyzowym”) oraz akty, których kopia nie jest aktualnym brzmieniem (nowszy t.j. albo nowelizacje w ELI); przepisy takich aktów model ma potwierdzać w ELI;
+          - modele lokalne (Bielik, Mistral) zawsze widzą akty dodane przez użytkowników; wcześniej dostawały tylko akty z dziedzin aktywnych skilli;
+          - poprawka: kopia przepisów była sprawdzana w ELI tylko przy uruchomieniu aplikacji, mimo opisu „sprawdzenie raz dziennie”; teraz w działającej aplikacji każdy tekst jednolity jest sprawdzany raz na dobę, a niepobrane teksty są ponawiane.
+
+          ### Z hotfix 25: Przepisy (RAG), własne akty prawne z ISAP, sprawdzane w Sejm ELI
+          - w sekcji „Przepisy (RAG)” administrator może dodać akt prawny spoza map: adres z ISAP (np. https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp?id=WDU20250000383 albo samo WDU20250000383), ELI (DU/2025/383, adres eli.gov.pl lub api.sejm.gov.pl) albo „Dz.U. 2025 poz. 383” / „M.P. 2024 poz. 12”;
+          - „Sprawdź w ELI” pokazuje, co zostanie dodane: tytuł, rodzaj, status, datę ogłoszenia, tekst trafiający do RAG (najnowszy tekst jednolity, także gdy podano starszy t.j. albo sam akt) i liczbę nowelizacji po nim;
+          - akt nieistniejący w ELI, nieobowiązujący albo bez tekstu w ELI jest odrzucany z czytelnym komunikatem; akt już obecny w kopii (także pod innym oznaczeniem) nie jest dodawany drugi raz;
+          - po dodaniu tekst jest pobierany w tle i od razu sprawdzane są nowelizacje po nim; nowelizacje trafiają do RAG jako osobne dokumenty, a do czasu nowego t.j. przepisy tego aktu są weryfikowane bezpośrednio w ELI;
+          - lista „Dodane przez użytkowników” (kto i kiedy dodał, stan, liczba artykułów) z przyciskiem „Usuń z RAG”; dodanie i usunięcie widać w „Ostatnich zmianach w RAG”;
+          - poprawka: akt w kopii bez tekstu jednolitego (np. dołączony po weryfikacji) uchodził za aktualny mimo aktów zmieniających; teraz akty zmieniające są nowelizacjami po tekście, a ogłoszony t.j. zastępuje tekst.
+
+          ### Z hotfix 24: Aktualizacje, stan i aktualizacja przepisów (RAG)
+          - w panelu „Aplikacja i utrzymanie” nowa sekcja „Przepisy (RAG)”: liczba tekstów jednolitych, nowelizacji po t.j., pozostałych aktów i artykułów w lokalnej kopii z Sejm ELI oraz data ostatniego sprawdzenia;
+          - liczba nowych, jeszcze niezastosowanych zmian w ELI: nowszych tekstów jednolitych i nowelizacji;
+          - nowszy tekst jednolity zastępuje tekst aktu w RAG; nowelizacja ogłoszona po t.j. jest dodawana do RAG jako osobny dokument (także w wyszukiwaniu);
+          - rozwijane listy: „Wymagające aktualizacji” (z przyczyną: nowszy t.j., nowelizacje, błąd, niepobrany, do sprawdzenia) i „Aktualne” (z datą pobrania i nowelizacjami), oraz „Ostatnie zmiany w RAG”;
+          - administrator: „Sprawdź teraz”, „Zastosuj wszystkie aktualizacje”, „Zastosuj” przy pojedynczym akcie i przełącznik „Aktualizuj automatycznie” (domyślnie włączony, jak dotąd);
+          - przy wyłączonych automatycznych aktualizacjach wykryta, a niezastosowana zmiana blokuje weryfikację z kopii dla tego aktu: przepis jest wtedy weryfikowany bezpośrednio w ELI.
+
+          ### Z hotfix 23: Ustawienia → Użytkownicy, uprawnienia do spraw
+          - zamiast nieużywanego panelu „Wsparcie serwisowe” jest przegląd uprawnień do spraw: kto ma dostęp do której sprawy i z jaką rolą (Właściciel, Edycja, Analiza, Podgląd), z filtrem po użytkowniku (sprawy z dostępem i pozostałe);
+          - w sprawach, których administrator jest właścicielem: nadawanie dostępu, zmiana roli, zgoda na deanonimizację i odbieranie dostępu (z wymianą klucza sprawy);
+          - pozostałe sprawy są widoczne do wglądu: sprawa jest zaszyfrowana kluczem, który mają tylko jej członkowie, więc uprawnienia zmienia jej właściciel;
+          - przegląd zawiera tylko metadane (nazwa sprawy, członkowie, role), bez treści i kluczy.
+
+          ### Z hotfix 22: Gemini i Grok przez konto, pobieranie klienta bez osobnego Node
+          - pobieranie klienta Gemini CLI i Grok Build kończyło się „Pobieranie klienta nie powiodło się”: skrypty instalacyjne tych paczek uruchamiają Node, a na komputerze bez osobno zainstalowanego Node nie mogły go znaleźć (aplikacja ma Node tylko we własnym pakiecie); teraz instalator paczek dostaje Node z pakietu aplikacji;
+          - przy błędzie pobierania widać przyczynę i linie błędu npm zamiast ogólnego „sieć lub serwer npm”.
+
+          ### Z hotfix 21: EUREKA, trafne wyniki i podgląd dokumentu
+          - wyszukiwanie w EUREKA szuka frazy w całości, tak jak portal eureka.mf.gov.pl; wcześniej słowa były szukane osobno i np. „akcyza alkohol” dawało 3722 niepowiązanych wyników posortowanych po dacie (podział spółek, ryczałt), teraz 454, te same co na stronie EUREKA;
+          - „Podgląd źródła” dla EUREKA pokazuje dokument (teza, sygnatura, data, treść) z oficjalnego API; wcześniej ramka była pusta, bo strona EUREKA wyświetla treść wyłącznie przez JavaScript;
+          - inne strony źródeł, które pokazują treść tylko przez JavaScript, dają komunikat z odnośnikiem zamiast pustej ramki.
+
+          ### Z hotfix 20: Połącz konto z widocznym postępem
+          - przy pierwszym połączeniu Gemini lub Groka aplikacja pobiera oficjalnego klienta (kilkadziesiąt–kilkaset MB, zwykle 1–5 minut); wcześniej trwało to bez żadnego komunikatu, a okno logowania pojawiało się dopiero po pobraniu albo wcale (pośrednik desktopu przerywał zapytanie po 5 minutach);
+          - teraz pasek etapów: sprawdzanie klienta → pobieranie (liczba pakietów, MB na dysku, czas) → sprawdzanie pobranego klienta → logowanie w oknie dostawcy; postęp widać także przy przycisku „Połącz konto” w oknie czatu;
+          - pobieranie działa w tle i nie liczy się do czasu logowania; ponowne kliknięcie nie uruchamia drugiej instalacji;
+          - błąd pobierania ma czytelną przyczynę (sieć lub serwer npm, przekroczony czas, brak npm).
+
+          ### Z hotfix 19: Grok przez konto, jedno kliknięcie
+          - „Połącz konto” przy „Grok · konto” samo pobiera oficjalny klient Grok Build (@xai-official/grok 1.0.44, wydawca xAI) do prywatnego katalogu użytkownika i otwiera logowanie; wcześniej trzeba było zainstalować go ręcznie;
+          - gdy klient Grok kończył działanie od razu (np. brak logowania), runtime mógł przerwać pracę błędem zapisu (EPIPE); teraz zapytanie kończy się zwykłym komunikatem.
+
+          ### Z hotfix 18: Gemini przez konto Google, jedno kliknięcie
+          - „Połącz konto” przy „Gemini · konto Google” samo pobiera Gemini CLI i otwiera logowanie Google; wcześniej przycisk „Instalacja Gemini CLI” odsyłał na stronę GitHuba (tak samo dla ChatGPT i Claude, gdy klienta jeszcze nie było);
+          - po pobraniu Gemini CLI runtime rozpoznawał go błędnie jako klienta Claude Code i zgłaszał brak programu; teraz wskazuje właściwy plik.
+
+          ### Z hotfix 17: pisma, szkic po cyklu, gotowy dokument na końcu
+          - po zakończonym cyklu pisma prostego albo etapu pisma procesowego Lex Machina sama tworzy plik .docx w oknie czatu: „Szkic” po etapach, „Gotowy dokument” na końcu (pismo proste: wszystkie bramki i weryfikacja przeszły; pismo procesowe: status FINAL);
+          - karta dokumentu: Podgląd i edycja w oknie czatu (zapis jako nowy plik w aktach sprawy, oryginał bez zmian), Pobierz, Pobierz wersję edytowaną, Otwórz w Wordzie, Deanonimizuj.
+
+          ### Wyszukiwanie: podgląd źródła w ramce
+          - „Podgląd źródła” przy wynikach CBOSA, SAOS, EUREKA, UODO, ISAP/ELI, EUR-Lex i SN: strona oficjalnego źródła w ramce w aplikacji (PDF w przeglądarce PDF);
+          - runtime pobiera stronę wyłącznie z listy oficjalnych domen (także po przekierowaniach), usuwa skrypty i aktywne elementy, a ramka działa bez skryptów i formularzy.
+
+          ### Z hotfix 16: Google Gemini jako model
+          - Ustawienia → Modele i AI: „Google Gemini · API” (klucz z Google AI Studio, zapisywany w magazynie kluczy systemu jak klucze OpenAI/Anthropic/xAI) oraz „Gemini · konto Google” (logowanie kontem Google przez oficjalny Gemini CLI, bez klucza API);
+          - Gemini CLI nie jest częścią instalatora: po wybraniu konta Google Lex Machina pobiera przypiętą wersję klienta (@google/gemini-cli 0.62.0) do prywatnego katalogu użytkownika; na Windows otwiera się widoczny terminal z logowaniem w przeglądarce, po zalogowaniu wpisz /quit;
+          - Gemini przez konto działa w trybie tylko do odczytu, zawsze w świeżej sesji (bez wznawiania wątków), a Lex Machina przekazuje cały kontekst rozmowy sama; klucz API w środowisku jest ignorowany przy logowaniu kontem;
+          - lista modeli z API: tylko modele generujące treść, dwie najnowsze wersje rodzin Gemini Pro i Flash; historia rozmowy dla Gemini ok. 300 000 znaków.
+
+          ### Z hotfix 15: AST_INLINE_ARRAY_INVALID (ChatGPT)
+          - model zapisywał treść akapitu jako zwykły tekst, pojedynczy obiekt albo listę napisów, a walidator wymaga listy elementów; runtime ujednolica kształt bloków (akapit, nagłówek, lista, tabela, tytuł) bez zmiany treści pisma;
+          - przy odrzuceniu kształtu błąd podaje typy i klucze bloków (bez treści pisma).
+
+          ### Poprawka: „wygeneruj plik doc” trafiało do zwykłego czatu
+          - rozpoznawane są też „doc”, „plik”, „w Wordzie”, „worda”; wcześniej tylko „docx”, „word”, „odt” i nazwy pism, więc Claude odpowiadał, że nie ma narzędzia do plików.
+
+          ### Z hotfix 14: ChatGPT zwracał JSON routera zamiast pisma (AST_HEADER_INVALID)
+          - połączenie przez konto ChatGPT (Codex) wznawiało wspólny wątek CLI dla wywołań bez klucza ciągłości, a gdy go nie było — ostatnią sesję Codex na komputerze; router skilli i generator pisma trafiały do jednego wątku, więc model powtarzał instrukcję routera ({"legal", "primarySkill", ...}) zamiast zwrócić treść dokumentu;
+          - router skilli i generator pisma działają teraz w świeżej sesji: bez wznawiania, bez przejmowania ostatniej sesji CLI i bez zapisu wątku (ChatGPT, Claude, Grok); kontynuacja czatu w sprawie bez zmian;
+          - kontrakt pisma wymaga niepustej listy bloków i zabrania kluczy routera.
+
+          ### Dokument w oknie czatu
+          - wygenerowane pismo pojawia się w czacie jako karta pliku: Pobierz (na desktopie zapis w folderze Pobrane ze ścieżką), Podgląd w oknie czatu, Otwórz w Wordzie (desktop), Deanonimizuj — maszynowe przywrócenie danych z klucza sprawy po potwierdzeniu hasłem, z jednorazowym pobraniem wersji z danymi;
+          - plik nie jest już zapisywany automatycznie; karta zostaje w wątku sprawy po ponownym otwarciu.
+
+          ### Weryfikacja SN
+          - parser wyszukiwarki sn.pl przyjmuje kolejne warianty odpowiedzi (pojedynczy rekord, lista jako obiekt, kolekcja pod innym kluczem); rekord nadal musi mieć sygnaturę.
+
+          ### Z hotfix 13: dłuższy kontekst rozmowy
+          - do modelu trafiała historia rozmowy przycięta do 28 000 znaków (ok. 7–8 tys. tokenów), choć okna modeli mają 128–200 tys. tokenów; teraz budżet zależy od modelu: Claude ok. 300 000 znaków (ok. 100 tys. tokenów), ChatGPT i xAI ok. 150 000 znaków (ok. 50 tys. tokenów), modele lokalne (Bielik, Mistral) bez zmian (28 000 znaków);
+          - gdy rozmowa się nie mieści, pomijane są najstarsze wiadomości w całości, z wyraźną informacją „wcześniejsza część rozmowy pominięta”, zamiast ucinania tekstu w połowie;
+          - budżet dokumentów w oknie modelu uwzględnia teraz całą długość rozmowy, więc długa rozmowa z załącznikami nie przepełnia okna (załączniki dostają mniej miejsca i są streszczane jak dotąd);
+          - dłuższa historia oznacza więcej tokenów w każdym zapytaniu, czyli wyższy koszt i dłuższy czas odpowiedzi przy modelach płatnych.
+
+          ### Z hotfix 12: plik .docx nie trafiał na dysk (desktop)
+          - okno aplikacji desktopowej (WebView) po cichu ignoruje przeglądarkowe „pobierz” dla plików tworzonych w pamięci, więc czat pisał „pobrany jako DOCX”, a plik nie powstawał (dotyczyło też finalnego pisma po reautoryzacji, wersji tokenizowanej, deanonimizacji w aktach i eksportu .txt dla modelu);
+          - teraz runtime zapisuje plik w folderze Pobrane użytkownika, a czat podaje pełną ścieżkę; istniejący plik nie jest nadpisywany (kolejna kopia dostaje numer), dozwolone tylko .docx, .odt, .pdf, .txt;
+          - nowa trasa POST /api/downloads/save (zalogowany użytkownik, w allowliście proxy desktopu).
+
+          ### Z hotfix 12: AST_HEADER_INVALID (ChatGPT)
+          - nagłówek pisma (wersja schematu, język, typ, profil stylu) zawiera wyłącznie wartości ustalone przez aplikację, a modele zapisują go różnie (schemaVersion jako liczba, „pl” zamiast „pl-PL”, brak pola, pismo opakowane w „document”, „content” zamiast „blocks”) i cały dokument był odrzucany; runtime uzupełnia i ujednolica nagłówek, treść pisma (bloki) jest sprawdzana jak dotąd;
+          - gdyby nagłówek nadal był odrzucony, błąd podaje pola nagłówka i klucze odpowiedzi (bez treści pisma).
+
+          ### Z hotfix 11
+          - .docx bez fałszywego „brakującego załącznika” (G39I sprawdza tylko bieżącą wiadomość); przyczyna blokady w czacie; zmiana nazwy sprawy w panelu bocznym.
+
+          ### Karta Wyszukiwanie: strona wyników zamiast kodu
+          - wynik jako lista pozycji: tytuł/sygnatura, sąd, daty, prawomocność, fragment, „Otwórz w źródle”;
+          - „Pokaż treść”: pełna treść orzeczenia, interpretacji lub decyzji (CBOSA, EUREKA, UODO) pod pozycją, treść porcjowana doczytywana przyciskiem;
+          - „Wczytaj kolejne wyniki”: kolejne strony dopisywane do listy (licznik trafień w źródle i wyświetlonych);
+          - wyniki rejestrów (KRS, biała lista VAT, NBP, CEIDG) jako pola; surowa odpowiedź tylko w zwiniętych „Danych technicznych”.
+
+          ### Poprawka: CBOSA „Niekompletny transport HTTP”
+          - serwer CBOSA porównywał długość rozpakowanej odpowiedzi gzip z nagłówkiem Content-Length skompresowanej, więc każde wyszukiwanie kończyło się błędem; kontrola dotyczy teraz tylko odpowiedzi bez kompresji (pakiet lex-mcp.mjs i CHECKSUMS.sha256 skilla audyt-systemu-v4 zaktualizowane).
+
+          ### Weryfikacja przepisów (z hotfix 8)
+          - modele w chmurze (ChatGPT, Claude): każdy akt, także KC/KPC/KK/KPK, weryfikowany w źródle Sejm ELI z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim); lokalna kopia (RAG) wyłącznie przy awarii samego ELI, a wynik ma wtedy wyraźną informację (sourceNotice: ELI niedostępne, data kopii), którą model musi przekazać przy przepisie; odmowy merytoryczne (np. nowelizacje po t.j.) nie przechodzą na kopię;
+          - modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG); gdy kopia nie może odpowiedzieć (brak aktu, brak tekstu, nowelizacje po t.j.), próba w ELI i dołączenie aktu do kopii;
+          - akt spoza map DR jest ustalany po Dz.U. albo jednoznacznym tytule w wyszukiwarce ELI, a po weryfikacji dołączany do lokalnej kopii i RAG; gdy źródło ma nowszy tekst jednolity niż kopia, kopia jest odświeżana;
+          - lokalna kopia: pusty text.html obwieszczenia t.j. (np. Kodeks karny) przechodzi na PDF, a PDF (np. Kodeks wykroczeń) jest czytany z podziałem na wiersze; wcześniej obie kopie nie miały żadnego artykułu (CORE_LAW_TEXT_UNAVAILABLE); kopie bez artykułów są pobierane ponownie;
+          - znacznik NIEWERYFIKOWANE nie jest już wstawiany przy „art. N”, gdy w tym samym wierszu jest znacznik VER zweryfikowanej jednostki tego artykułu (np. art. 46 ust. 2).
+
+          Zawiera wszystkie zmiany hotfix 33, hotfix 32, hotfix 31, hotfix 30, hotfix 29, hotfix 28, hotfix 27, hotfix 26, hotfix 25, hotfix 24, hotfix 23, hotfix 22, hotfix 21, hotfix 20, hotfix 19, hotfix 18, hotfix 17, hotfix 16, hotfix 15, hotfix 14, hotfix 13, hotfix 12, hotfix 11, hotfix 10, hotfix 9 (kanały skilli, polskie etykiety wyszukiwania, .docx pisma prostego, pasek okna modelu na desktopie), hotfix 8 (weryfikacja przepisów), hotfix 7 (trasy konektorów MCP i karty Wyszukiwanie na desktopie, generowanie .docx) i hotfix 5.
+
+          Pre-release: produkcyjne certyfikaty Authenticode nie są skonfigurowane, Windows SmartScreen może ostrzec. Sprawdź instalator z SHA256SUMS.txt.
+          EOF
+
+      # GITHUB_TOKEN nie może założyć tagu na commicie, który zmienia pliki workflow
+      # względem main (HTTP 403). Tag trafia na commit-punkt: drzewo aplikacji = build
+      # GITHUB_SHA, katalog .github = main, rodzic = GITHUB_SHA (jak w hotfix 5).
+      - name: Create pre-release on a tag point commit and upload installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(gh api "$api/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+            tag_parent="$(gh api "$api/git/commits/$tag_sha" --jq '.parents[0].sha')"
+            [[ "$tag_sha" == "$GITHUB_SHA" || "$tag_parent" == "$GITHUB_SHA" ]] || {
+              echo "IMMUTABLE_RELEASE_TAG_MISMATCH tag=$tag_sha parent=$tag_parent source=$GITHUB_SHA" >&2
+              exit 1
+            }
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease
+          else
+            main_sha="$(gh api "$api/git/ref/heads/main" --jq '.object.sha')"
+            main_tree="$(gh api "$api/git/commits/$main_sha" --jq '.tree.sha')"
+            main_github="$(gh api "$api/git/trees/$main_tree" --jq '.tree[] | select(.path==".github") | .sha')"
+            source_tree="$(gh api "$api/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
+            [[ -n "$main_github" && -n "$source_tree" ]] || {
+              echo "TAG_POINT_TREE_UNRESOLVED" >&2
+              exit 1
+            }
+            tag_tree="$(jq -n --arg base "$source_tree" --arg gh "$main_github" \
+              '{base_tree: $base, tree: [{path: ".github", mode: "040000", type: "tree", sha: $gh}]}' |
+              gh api -X POST "$api/git/trees" --input - --jq '.sha')"
+            tag_point="$(jq -n --arg tree "$tag_tree" --arg parent "$GITHUB_SHA" --arg tag "$RELEASE_TAG" \
+              '{message: ("Punkt tagu " + $tag + ": .github jak na main, aplikacja = " + $parent), tree: $tree, parents: [$parent]}' |
+              gh api -X POST "$api/git/commits" --input - --jq '.sha')"
+            echo "tag point $tag_point (tree $tag_tree, source $GITHUB_SHA)"
+            printf 'tag_point=%s\n' "$tag_point" >> release-out/SOURCE-SHA.txt
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease \
+              --target "$tag_point"
+          fi
+
+          gh release upload "$RELEASE_TAG" --clobber \
+            "release-out/$ASSET_NAME" \
+            release-out/SHA256SUMS.txt \
+            release-out/CI-SHA256-ONLINE.txt \
+            release-out/SOURCE-SHA.txt \
+            release-out/LEX-VERSION.yaml
+
+          gh release view "$RELEASE_TAG" --json url,tagName,isPrerelease,assets \
+            --jq '{url, tagName, isPrerelease, assets: [.assets[] | {name, url}]}'
