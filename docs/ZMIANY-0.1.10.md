@@ -31,8 +31,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 28 | `b44bf03` | Wyszukiwanie: podgląd ELI/EUR-Lex/KRS/NBP/biała lista/CEIDG, KRS po NIP/REGON, NBP kupno/sprzedaż, CBOSA data orzeczenia, SUDOP kolejka |
 | hotfix 29 | `01b82e5` | KIO (wyszukiwarka UZP), SAOS bez fałszywej niedostępności, przypisania/archiwum/nazwa spraw, Gemini: odmowa planu Google |
 | hotfix 30 | `d87b0ff` | Przepisy (RAG): PDF ELI ponad 600 stron, skany przez lokalny OCR (partiami, oznaczone), kodowanie starych Dz.U., „Artykuł N” |
+| hotfix 31 | `ebebb89` | MCP: suma pakietu (CRLF z checkoutu na Windows), RAG: postęp OCR i „Bez tekstu w ELI”, konto: narzędzia w jednej rundzie, sprawy i kalendarz |
 
 ---
+
+## hotfix 31
+
+- `.gitattributes`: `Wersja?rozwojowa?rozpakowana/** -text` (i stabilna) — `actions/checkout` na Windows (autocrlf) zmieniał `lex-mcp.mjs` → `MISMATCH`; `build-windows-online.ps1`: `MCP_BUNDLE_CHECKSUM_MISMATCH`.
+- `CoreLawIndex`: `status().progress` (`download`/`extract`/`ocr`, done/total), `ocr-cache/<sha256>.json` (wznawianie), `CoreLawPermanentError(noText)` → stan `UNAVAILABLE` + `unavailable`; adnotacja o załączniku po `normalizeForSearch`.
+- `buildAccountPrompt`: niezależne wywołania narzędzi w jednej rundzie (każda runda = nowy proces CLI).
+- Web: `CaseAccessAdminPanel` (karty `details`, tabela, `ROLE_HELP`, `caseMembersText`); `CalendarPanel` (`dayLabel`, `relativeDayText`, znaczniki rodzajów, agenda 14 dni, data, usuwanie).
 
 ## hotfix 30
 
