@@ -269,8 +269,9 @@ export async function startLocalServer(options) {
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();
     // Official ELI texts of every act named in the domain act maps; refreshed
-    // in the background, kept locally for offline and local-model use.
-    const coreLawIndex = new CoreLawIndex();
+    // in the background, kept locally for offline and local-model use. Scanned
+    // PDFs (old Dz.U.) are read with the local OCR.
+    const coreLawIndex = new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
     try {
         coreLawIndex.load(runtimeRoot);
         if (!/^(off|0|false)$/i.test(process.env.LEX_CORE_LAW_REFRESH?.trim() ?? "")) {

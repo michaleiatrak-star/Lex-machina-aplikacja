@@ -43,7 +43,7 @@ export type CoreLawVerificationOutcome =
 const TITLE_MATCH_MIN = 0.75;
 
 function articleToken(claim: string): string | null {
-  return /\bart\.?\s+(\d+[a-ząćęłńóśźż]*)/iu
+  return /\bart(?:\.|ykuł\p{L}*)?\s+(\d+[a-ząćęłńóśźż]*)/iu
     .exec(claim)?.[1]
     ?.toLocaleLowerCase("pl") ?? null;
 }
@@ -137,6 +137,10 @@ export function verifyFromCoreLaw(args: {
   }
   if (summary.amendmentsAfter.length > 0) {
     return { decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" };
+  }
+  // Tekst z OCR skanu może mieć błędy odczytu: nie jest podstawą VERIFIED.
+  if (record.textSource === "ocr") {
+    return { decision: "DENY", reason: "CORE_LAW_OCR_TEXT" };
   }
   // A newer t.j. or new amendments were found but not applied yet
   // (automatic updates off): the copy is not the current wording.

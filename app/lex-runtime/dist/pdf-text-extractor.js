@@ -19,6 +19,7 @@ export class LocalPdfTextExtractor {
     // true = koniec wiersza w PDF (hasEOL) zostaje "\n". Potrzebne tam, gdzie tekst dzieli
     // się po nagłówkach wierszy (Art. N. w kopii ELI); domyślnie strona to jeden wiersz,
     // jak dotąd (hasze i cytaty dokumentów sprawy się nie zmieniają).
+    // allowEmpty: strony bez warstwy tekstowej nie są błędem (wywołujący robi OCR tych stron).
     options = {}) {
         this.limits = limits;
         this.options = options;
@@ -75,13 +76,14 @@ export class LocalPdfTextExtractor {
                 page.cleanup();
             }
             const text = chunks.join("\n").trim();
-            if (!text) {
+            if (!text && !this.options.allowEmpty) {
                 throw new PdfTextExtractionError("PDF contains no extractable text; OCR is intentionally disabled.", "PDF_NO_TEXT");
             }
             return {
                 text,
                 pages: document.numPages,
-                bytes: data.byteLength
+                bytes: data.byteLength,
+                pageTexts: chunks
             };
         }
         catch (error) {

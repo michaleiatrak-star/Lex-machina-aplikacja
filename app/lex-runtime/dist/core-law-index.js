@@ -15,6 +15,8 @@ export function coreLawEliCaution(act) {
     }
     if (act.amendmentsAfter.length)
         return `nowelizacje po tekście jednolitym (${act.amendmentsAfter.length})`;
+    if (act.textSource === "ocr")
+        return "tekst odczytany OCR ze skanu ELI (bez warstwy tekstowej), możliwe błędy odczytu";
     return null;
 }
 const ELI_API = "https://api.sejm.gov.pl/eli";
@@ -25,6 +27,15 @@ const RETRY_AFTER_BLOCK_MS = 60 * 60 * 1000;
 const SCHEDULE_TICK_MS = 60 * 60 * 1000;
 const REQUEST_GAP_MS = 750;
 const REQUEST_TIMEOUT_MS = 90_000;
+// Tekst ogłoszony w Dz.U. bywa całym numerem z załącznikami (umowa MRG Polska–Ukraina:
+// 608 stron, 8 MB), więc kopia ELI ma własne, wyższe limity niż dokumenty sprawy.
+const CORE_LAW_PDF_LIMITS = { maxBytes: 128 * 1024 * 1024, maxPages: 5_000, maxTextChars: 60_000_000 };
+const PDF_TIMEOUT_MS = 10 * 60_000;
+// Strona, na której po usunięciu nagłówka Dz.U. zostaje mniej znaków, jest skanem.
+const OCR_MIN_PAGE_CHARS = 40;
+// OCR idzie partiami stron; partia to osobne wywołanie lokalnego OCR.
+const OCR_BATCH_PAGES = 20;
+const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const NOTE_CHARS = 400;
 const REF_PATTERN = /Dz\.\s?U\.\s?(?:z\s)?(\d{4})\s?(?:r\.\s)?(?:nr\s\d+\s)?poz\.\s?(\d+)((?:\s*,\s*(?:\d{4}\s?poz\.\s?)?\d+(?!\d|\.\d))*)(\s*t\.\s?j\.)?/g;
@@ -140,16 +151,35 @@ export function stripPdfPageHeaders(text) {
         .split("\n")
         .filter((line) => !/^\s*©?\s*Kancelaria Sejmu\s+s\.\s*\d+\s*\/\s*\d+\s*$/iu.test(line))
         .filter((line) => !/^\s*\d{4}-\d{2}-\d{2}\s*$/u.test(line))
-        .filter((line) => !/^\s*Dziennik Ustaw\s*[–-]\s*\d+\s*[–-]\s*Poz\.\s*\d+\s*$/iu.test(line))
+        .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]\s*Poz\.\s*\d+(?:\s+www\.rcl\.gov\.pl)?\s*$/iu.test(line))
+        .filter((line) => !/^\s*www\.rcl\.gov\.pl\s*$/iu.test(line))
+        // OCR dzieli nagłówek na dwa wiersze: "Dziennik Ustaw Nr 103 — 7712 —" i "Poz. 858".
+        .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]?\s*$/iu.test(line))
+        .filter((line) => !/^\s*Poz\.\s*\d+\s*$/iu.test(line))
         .join("\n")
         // Przeniesienie wyrazu na granicy wiersza ("zna-\nleziony").
         .replace(/(\p{L})-\n(\p{Ll})/gu, "$1$2");
 }
+// PDF Dz.U. z lat ok. 2003-2011 mają czcionki z własnym kodowaniem: pdf.js zwraca
+// "mi´dzy Rzàdem ma∏ego" zamiast "między Rządem małego". Mapowanie małych liter
+// potwierdzone na DU/2009/858; wielkie jak w pomyłce CP1250/CP1252.
+const DZU_FONT_MAP = {
+    "à": "ą", "ç": "ć", "´": "ę", "∏": "ł", "ƒ": "ń", "Ê": "ś", "ê": "ź", "˝": "ż",
+    "¥": "Ą", "Æ": "Ć", "£": "Ł", "Œ": "Ś", "¯": "Ż"
+};
+/** Naprawia tekst PDF Dz.U. z błędnym kodowaniem czcionki; inny tekst bez zmian. */
+export function repairDzuPdfEncoding(text) {
+    // "∏" i "´"/"˝" wewnątrz wyrazu nie występują w poprawnym polskim tekście.
+    if (!/\p{L}[´∏˝ƒ]|[∏˝]\p{L}/u.test(text))
+        return text;
+    return text.replace(/[àç´∏ƒÊê˝¥Æ£Œ¯]/gu, (char) => DZU_FONT_MAP[char] ?? char);
+}
 /** Article number -> article text. The first occurrence of a number wins. */
 export function splitArticles(text) {
-    const pattern = /(?:^|\n)\s*Art\.\s*(\d+[a-z]{0,4})\.(?=\s)/g;
+    // "Art. 5." w ustawach; "Artykuł 5" w umowach międzynarodowych.
+    const pattern = /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
     const marks = [...text.matchAll(pattern)].map((match) => ({
-        id: match[1],
+        id: (match[1] ?? match[2]),
         start: match.index + (match[0].startsWith("\n") ? 1 : 0)
     }));
     const order = [];
@@ -222,6 +252,11 @@ export function defaultCoreLawDir(env = process.env) {
         ? path.resolve(base, "LexMachina", "core-law")
         : path.resolve(os.homedir(), ".lex-machina", "core-law");
 }
+/** Błąd, którego ponowienie za godzinę nic nie zmieni (np. ELI nie ma tekstu aktu). */
+class CoreLawPermanentError extends Error {
+}
+// Trwały błąd pobrania jest ponawiany raz na dobę, nie przy każdym cyklu.
+const PERMANENT_RETRY_MS = 24 * 60 * 60 * 1000;
 function fileNameFor(eli) {
     return eli.replace(/\//g, "_") + ".json";
 }
@@ -231,6 +266,7 @@ export class CoreLawIndex {
     pdf;
     now;
     gapMs;
+    ocr;
     refs = [];
     state = { acts: {}, blockedUntil: null };
     cache = new Map();
@@ -239,12 +275,18 @@ export class CoreLawIndex {
     constructor(directory = defaultCoreLawDir(), fetcher = globalThis.fetch.bind(globalThis), 
     // Wiersze z PDF: splitArticles szuka "Art. N." na początku wiersza; bez nich tekst
     // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
-    pdf = new LocalPdfTextExtractor(undefined, { lines: true }), now = () => Date.now(), gapMs = REQUEST_GAP_MS) {
+    pdf = new LocalPdfTextExtractor(CORE_LAW_PDF_LIMITS, {
+        lines: true,
+        allowEmpty: true
+    }), now = () => Date.now(), gapMs = REQUEST_GAP_MS, 
+    // Lokalny OCR dla PDF ELI będących skanem (stare Dz.U.); null = bez OCR.
+    ocr = null) {
         this.directory = directory;
         this.fetcher = fetcher;
         this.pdf = pdf;
         this.now = now;
         this.gapMs = gapMs;
+        this.ocr = ocr;
     }
     load(corpusRoot) {
         this.refs = extractCoreActs(corpusRoot);
@@ -686,6 +728,8 @@ export class CoreLawIndex {
                     this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
             if (downloaded && !checkDue)
                 continue;
+            if (!downloaded && !options.force && state.retryAt && Date.parse(state.retryAt) > this.now())
+                continue;
             const apply = options.apply === "all" ||
                 (Array.isArray(options.apply) && options.apply.includes(ref.eli)) ||
                 (options.apply === undefined && this.autoApply);
@@ -712,12 +756,19 @@ export class CoreLawIndex {
                     await this.checkConsolidated(ref, state, apply);
                 }
                 state.lastError = null;
+                state.retryAt = null;
                 consecutiveFailures = 0;
             }
             catch (error) {
                 // Keep the text already held; only record why this attempt failed.
                 state.lastError = error instanceof Error ? error.message : String(error);
-                consecutiveFailures += 1;
+                if (error instanceof CoreLawPermanentError) {
+                    // Brak tekstu w ELI to nie awaria źródła: nie blokuje pozostałych aktów.
+                    state.retryAt = new Date(this.now() + PERMANENT_RETRY_MS).toISOString();
+                }
+                else {
+                    consecutiveFailures += 1;
+                }
             }
             this.state.acts[ref.eli] = state;
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -734,18 +785,60 @@ export class CoreLawIndex {
         }
         this.saveState();
     }
-    async get(url, accept) {
+    async get(url, accept, timeoutMs = REQUEST_TIMEOUT_MS) {
         const response = await this.fetcher(url, {
             headers: {
                 Accept: accept,
                 "User-Agent": "LexMachina-core-law-index/1.0"
             },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+            signal: AbortSignal.timeout(timeoutMs)
         });
         if (!response.ok) {
             throw new Error(`ELI_HTTP_${response.status}`);
         }
         return response;
+    }
+    /**
+     * Tekst PDF strona po stronie. Gdy PDF jest skanem (połowa stron albo więcej
+     * bez warstwy tekstowej, albo brak jakichkolwiek artykułów), strony-obrazy
+     * czyta lokalny OCR partiami po OCR_BATCH_PAGES stron, a tekst składa się
+     * z powrotem w kolejności stron.
+     */
+    async pdfText(bytes) {
+        const extracted = await this.pdf.extract(bytes);
+        const pageTexts = (extracted.pageTexts ?? [extracted.text]).map((page) => stripPdfPageHeaders(repairDzuPdfEncoding(page)).trim());
+        const joined = () => pageTexts.filter(Boolean).join("\n");
+        const scanned = pageTexts.flatMap((page, index) => page.replace(/\s+/g, "").length < OCR_MIN_PAGE_CHARS ? [index + 1] : []);
+        const isScan = scanned.length > 0 &&
+            (scanned.length * 2 >= pageTexts.length || splitArticles(joined()).order.length === 0);
+        if (!isScan) {
+            if (!joined())
+                throw new Error("PDF w ELI nie zawiera tekstu.");
+            return { text: joined(), pages: extracted.pages, ocrPages: [] };
+        }
+        if (!this.ocr) {
+            throw new CoreLawPermanentError("PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny.");
+        }
+        if (scanned.length > OCR_MAX_PAGES) {
+            throw new CoreLawPermanentError(`PDF w ELI jest skanem ${scanned.length} stron; limit OCR kopii to ${OCR_MAX_PAGES} stron.`);
+        }
+        for (let start = 0; start < scanned.length; start += OCR_BATCH_PAGES) {
+            const batch = scanned.slice(start, start + OCR_BATCH_PAGES);
+            let results;
+            try {
+                results = await this.ocr.recognizePages(bytes, batch);
+            }
+            catch (error) {
+                const detail = error instanceof Error ? error.message : String(error);
+                throw new Error(`OCR skanu ELI nie powiódł się (strony ${batch[0]}-${batch.at(-1)}): ${detail}`);
+            }
+            for (const result of results) {
+                if (result.page >= 1 && result.page <= pageTexts.length) {
+                    pageTexts[result.page - 1] = stripPdfPageHeaders(result.text).trim();
+                }
+            }
+        }
+        return { text: joined(), pages: extracted.pages, ocrPages: scanned };
     }
     async fetchAct(eli) {
         const base = `${ELI_API}/acts/${eli}`;
@@ -760,13 +853,26 @@ export class CoreLawIndex {
             textSource = "html";
         }
         // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
+        let ocrPages = [];
+        let pages;
         if (splitArticles(body).order.length === 0 && meta.textPDF === true) {
             sourceUrl = `${base}/text.pdf`;
-            const bytes = new Uint8Array(await (await this.get(sourceUrl, "application/pdf")).arrayBuffer());
-            body = stripPdfPageHeaders((await this.pdf.extract(bytes)).text);
-            textSource = "pdf";
+            const bytes = new Uint8Array(await (await this.get(sourceUrl, "application/pdf", PDF_TIMEOUT_MS)).arrayBuffer());
+            const pdf = await this.pdfText(bytes);
+            body = pdf.text;
+            ocrPages = pdf.ocrPages;
+            pages = pdf.pages;
+            textSource = ocrPages.length ? "ocr" : "pdf";
         }
         const { order, articles } = splitArticles(body);
+        if (textSource === "ocr" && order.length === 0) {
+            // Np. DU/1965/232: w ELI jest tylko strona numeru z adnotacją, że tekst
+            // umowy zamieszczono w załączniku do numeru (załącznika ELI nie publikuje).
+            const annex = /w\s+załączniku\s+do\s+niniejszego\s+numeru/iu.test(body);
+            throw new CoreLawPermanentError(annex
+                ? `ELI udostępnia tylko skan ${pages} str. numeru Dz.U. z adnotacją, że tekst aktu zamieszczono w załączniku do numeru; załącznika nie ma w ELI.`
+                : `ELI udostępnia dla tego aktu tylko skan (${pages} str.); OCR nie znalazł w nim artykułów.`);
+        }
         return {
             eli,
             title: text(meta.title) ?? eli,
@@ -775,6 +881,8 @@ export class CoreLawIndex {
             promulgation: text(meta.promulgation),
             textSource,
             extraction: 2,
+            ...(ocrPages.length ? { ocrPages } : {}),
+            ...(pages ? { pages } : {}),
             fetchedAt: new Date(this.now()).toISOString(),
             sourceUrl,
             articleOrder: order,

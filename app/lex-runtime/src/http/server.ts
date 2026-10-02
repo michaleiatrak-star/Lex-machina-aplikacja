@@ -561,9 +561,10 @@ export async function startLocalServer(options?: {
     new LocalPersonMorphology();
 
   // Official ELI texts of every act named in the domain act maps; refreshed
-  // in the background, kept locally for offline and local-model use.
+  // in the background, kept locally for offline and local-model use. Scanned
+  // PDFs (old Dz.U.) are read with the local OCR.
   const coreLawIndex =
-    new CoreLawIndex();
+    new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
   try {
     coreLawIndex.load(
       runtimeRoot

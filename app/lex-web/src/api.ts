@@ -1895,7 +1895,7 @@ export type CoreLawActStatus = {
   consolidated: boolean;
   labels: string[];
   domains: string[];
-  textSource: "html" | "pdf" | "none" | null;
+  textSource: "html" | "pdf" | "ocr" | "none" | null;
   articleCount: number;
   fetchedAt: string | null;
   lastError: string | null;
