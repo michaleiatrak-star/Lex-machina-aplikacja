@@ -21,7 +21,9 @@ import type {
 export type CoreLawVerificationIndex = Pick<
   CoreLawIndex,
   "resolve" | "summary" | "summaries" | "currentRecord"
->;
+> &
+  // Sprawdzenie w ELI przy użyciu kopii (CoreLawIndex); bez niego kopia bez kontroli na żywo.
+  Partial<Pick<CoreLawIndex, "confirmCurrent">>;
 
 export type CoreLawVerificationOutcome =
   | {

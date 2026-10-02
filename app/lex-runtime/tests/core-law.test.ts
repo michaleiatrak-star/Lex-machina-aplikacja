@@ -206,7 +206,7 @@ describe("core law index", () => {
     await downloadedIndex(store, start);
     const file = path.join(store, "DU_2025_734.json");
     const stale = JSON.parse(fs.readFileSync(file, "utf8"));
-    expect(stale.extraction).toBe(2);
+    expect(stale.extraction).toBe(3);
     delete stale.extraction;
     stale.articleOrder = [];
     stale.articles = {};
@@ -394,5 +394,94 @@ describe("core law index", () => {
       recent: [{ kind: "AMENDMENT", eli: "DU/2026/999" }]
     });
     expect(index.search("czynnym żalu sprawcy kradzieży").map((hit) => hit.eli)).toContain("DU/2026/999");
+  });
+  it("pobiera ponownie kopię sprzed kotwic jednostek; link do artykułu prowadzi do jednostki w ELI", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    const file = path.join(store, "DU_2025_734.json");
+    const old = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(old.articleAnchors).toEqual({ "51": "page=1" });
+    old.extraction = 2;
+    delete old.articleAnchors;
+    fs.writeFileSync(file, JSON.stringify(old));
+
+    const { eli, index } = later(store, start + 60_000, {});
+    expect(index.currentRecord("DU/2025/734")?.articleAnchors).toBeUndefined();
+    await index.refresh();
+    // Tylko kopia bez kotwic: KK (z kotwicami) nie jest pobierany ponownie.
+    expect(eli.requested).toEqual([
+      "https://api.sejm.gov.pl/eli/acts/DU/2025/734",
+      "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.pdf"
+    ]);
+    const record = index.currentRecord("DU/2025/734")!;
+    expect(record).toMatchObject({ extraction: 3, articleAnchors: { "51": "page=1" } });
+
+    await index.refresh();
+    expect(eli.requested).toHaveLength(2);
+    const [read] = await new CoreLawToolRuntime(index).runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "Dz.U. 2025 poz. 734", article: "51" } }
+    ]);
+    expect(JSON.parse(read!.content)).toMatchObject({
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.pdf",
+      sourceAnchorUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.pdf#page=1"
+    });
+  });
+
+  it("przy użyciu kopii sprawdza ELI: nowszy t.j. jest wykrywany i od razu pobierany", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+
+    // Pół godziny po pobraniu (przed dobowym sprawdzeniem) ELI ma nowszy t.j.
+    const { eli, index } = later(store, start + 30 * 60_000, { references: NEWER_TJ });
+    const tools = new CoreLawToolRuntime(index);
+    const [stale] = await tools.runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }
+    ]);
+    expect(eli.requested).toContain("https://api.sejm.gov.pl/eli/acts/DU/2025/383/references");
+    expect(JSON.parse(stale!.content)).toMatchObject({
+      eli: "DU/2025/383",
+      liveCheck: { state: "UPDATE_FOUND" },
+      pendingUpdate: { consolidated: { eli: "DU/2026/1500" } },
+      warning: expect.stringContaining("niezastosowane")
+    });
+
+    // Automatyczne aktualizacje: odświeżenie kopii ruszyło w tle.
+    for (let i = 0; i < 50 && index.status().refreshing; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(index.summary("DU/2025/383")).toMatchObject({ currentEli: "DU/2026/1500", pendingConsolidated: null });
+    const requests = eli.requested.length;
+    const [fresh] = await tools.runTools([
+      { id: "2", name: "read_core_law_article", input: { act: "KK", article: "148" } }
+    ]);
+    expect(JSON.parse(fresh!.content)).toMatchObject({
+      eli: "DU/2026/1500",
+      liveCheck: { state: "CURRENT" },
+      text: expect.stringContaining("w nowym brzmieniu")
+    });
+    // Sprawdzone przed chwilą: bez ponownego zapytania do ELI.
+    expect(eli.requested).toHaveLength(requests);
+  });
+
+  it("gdy ELI nie odpowiada przy użyciu kopii, tekst z kopii ma datę i informację o niedostępności", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+
+    const { index } = later(store, start + 30 * 60_000, { deny: true });
+    const [read] = await new CoreLawToolRuntime(index).runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "KK", article: "148" } }
+    ]);
+    const payload = JSON.parse(read!.content);
+    expect(payload).toMatchObject({
+      status: "OK",
+      eli: "DU/2025/383",
+      liveCheck: { state: "UNREACHABLE" },
+      text: expect.stringContaining("Kto zabija")
+    });
+    expect(payload.liveCheck.notice).toContain("ELI niedostępne (ELI_HTTP_403)");
+    expect(payload.liveCheck.notice).toContain("z dnia 2026-09-23");
   });
 });

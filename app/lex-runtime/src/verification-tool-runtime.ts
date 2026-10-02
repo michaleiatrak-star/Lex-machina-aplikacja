@@ -33,9 +33,11 @@ import {
   type TemporalFreshnessResult
 } from "./temporal-source-freshness.js";
 import {
+  resolveActByTitle,
   verifyFromCoreLaw,
   type CoreLawVerificationIndex
 } from "./core-law-verification.js";
+import type { CoreLawUseCheck } from "./core-law-index.js";
 import { describeEliAct } from "./eli-act-descriptor.js";
 import {
   verificationMarker,
@@ -48,6 +50,30 @@ import {
 } from "./verification-ledger.js";
 
 const TOOL_NAME = "verify_legal_reference";
+
+/** Wynik z lokalnej kopii ELI, gdy samo ELI nie odpowiada: data kopii i wyraźna informacja. */
+function withEliOutageNotice(
+  payload: Record<string, unknown>,
+  cause: string
+): Record<string, unknown> {
+  const copyDate =
+    typeof payload.fetchedAt === "string" ? payload.fetchedAt.slice(0, 10) : null;
+  return {
+    ...payload,
+    sourceNotice: {
+      eliUnavailable: true,
+      cause,
+      localCopyDate: copyDate
+    },
+    instruction:
+      "ELI (the official source) is unavailable right now (" +
+      cause +
+      "). This result comes from the local ELI copy (RAG) dated " +
+      (copyDate ?? "unknown") +
+      ", not from a live ELI check. State this explicitly to the user next to the reference (e.g. \"zweryfikowano na lokalnej kopii ELI z dnia …, ELI niedostępne\"). " +
+      String(payload.instruction ?? "")
+  };
+}
 const CASE_SEARCH_TOOL_NAME =
   "search_case_law";
 const CASE_TOOL_NAME = "verify_case_reference";
@@ -1105,31 +1131,37 @@ export class LegalVerificationToolRuntime {
     if (local.denied) {
       return JSON.stringify({ status: "DENIED", error: cause, localCopy: local.denied });
     }
-    const payload = JSON.parse(local.content) as Record<string, unknown>;
-    return JSON.stringify({
-      ...payload,
-      sourceNotice: {
-        eliUnavailable: true,
-        cause,
-        localCopyDate:
-          typeof payload.fetchedAt === "string"
-            ? payload.fetchedAt.slice(0, 10)
-            : null
-      },
-      instruction:
-        "ELI (the official source) is unavailable right now (" +
-        cause +
-        "). This result comes from the local ELI copy (RAG) dated " +
-        (typeof payload.fetchedAt === "string" ? payload.fetchedAt.slice(0, 10) : "unknown") +
-        ", not from a live ELI check. State this explicitly to the user next to the reference (e.g. \"zweryfikowano na lokalnej kopii ELI z dnia …, ELI niedostępne\"). " +
-        String(payload.instruction ?? "")
-    });
+    return JSON.stringify(
+      withEliOutageNotice(JSON.parse(local.content) as Record<string, unknown>, cause)
+    );
+  }
+
+  /**
+   * Model lokalny: przed użyciem kopii sprawdzenie w ELI, czy nie ma nowszego t.j. albo
+   * nowych nowelizacji (CoreLawIndex.confirmCurrent). Znaleziona zmiana -> kopia odmawia
+   * (TEMPORAL_UPDATE_PENDING) i weryfikacja idzie do ELI; ELI niedostępne -> kopia z informacją.
+   */
+  private async checkCopyInEli(actInput: string): Promise<CoreLawUseCheck | undefined> {
+    const index = this.coreLaw;
+    if (!index?.confirmCurrent) return undefined;
+    const eli = index.resolve(actInput)?.eli ?? resolveActByTitle(index, actInput);
+    if (!eli) return undefined;
+    try {
+      return await index.confirmCurrent(eli);
+    } catch (error) {
+      return {
+        state: "UNREACHABLE",
+        checkedAt: null,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 
   private verifyWithCoreLaw(
     call: NormalizedToolCall,
     actInput: string,
-    asOf: string
+    asOf: string,
+    liveCheck?: CoreLawUseCheck
   ): { content: string; denied?: string } {
     const claim =
       typeof call.input.claim === "string"
@@ -1175,7 +1207,7 @@ export class LegalVerificationToolRuntime {
     const { record, act } = outcome;
     this.ledger.add(record);
     const verified = record.status === "VERIFIED";
-    return { content: JSON.stringify({
+    const payload = {
       claim: record.claim,
       status: record.status,
       act: {
@@ -1188,7 +1220,8 @@ export class LegalVerificationToolRuntime {
       freshness: {
         textFetchedAt: record.fetchedAt,
         relationsCheckedAt: act.relationsCheckedAt,
-        amendmentsAfter: 0
+        amendmentsAfter: 0,
+        ...(liveCheck ? { liveCheck: liveCheck.state } : {})
       },
       sourceUrl: record.sourceUrl ?? null,
       sourceLink: verificationSourceLink(record) ?? null,
@@ -1201,7 +1234,14 @@ export class LegalVerificationToolRuntime {
       instruction: verified
         ? "Copy the marker verbatim onto the same line as this exact legal reference. " + STATUS_CONSISTENCY_INSTRUCTION + " Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
         : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
-    }) };
+    };
+    return {
+      content: JSON.stringify(
+        liveCheck?.state === "UNREACHABLE"
+          ? withEliOutageNotice(payload, `ELI_UNAVAILABLE:${liveCheck.error ?? "USE_CHECK_FAILED"}`)
+          : payload
+      )
+    };
   }
 
   auditEvents(): readonly ToolAuditEvent[] {
@@ -1522,7 +1562,8 @@ export class LegalVerificationToolRuntime {
       // Modele w chmurze: wyłącznie źródło (Sejm ELI), bez cichego przejścia na kopię.
       let localCopy: string | undefined;
       if (this.localModel && this.coreLaw) {
-        const local = this.verifyWithCoreLaw(call, actInput, asOf);
+        const liveCheck = asOf ? undefined : await this.checkCopyInEli(actInput);
+        const local = this.verifyWithCoreLaw(call, actInput, asOf, liveCheck);
         if (!local.denied) {
           results.push({ tool_use_id: call.id, content: local.content });
           continue;

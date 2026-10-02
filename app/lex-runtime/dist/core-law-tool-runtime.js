@@ -1,5 +1,7 @@
 import { searchStems } from "./core-law-search.js";
 import { coreLawEliCaution, normalizeForSearch } from "./core-law-index.js";
+import { CoreLawActLookupError, lookupCoreLawAct, parseLegalActReference } from "./core-law-act-lookup.js";
+import { anchoredUrl } from "./source-anchor.js";
 const LIST_TOOL = "list_core_law_acts";
 const SEARCH_TOOL = "search_core_law";
 const READ_TOOL = "read_core_law_article";
@@ -54,7 +56,7 @@ const SCHEMAS = [
         type: "function",
         function: {
             name: READ_TOOL,
-            description: "Read the exact wording of one article of a core act from the locally held official ELI text.",
+            description: "Read the exact wording of one article of a core act from the locally held official ELI text. An act missing from the copy, given by ELI or Dz.U./M.P. reference, is fetched from Sejm ELI first. The copy is checked in ELI for a newer consolidated text before use.",
             parameters: {
                 type: "object",
                 additionalProperties: false,
@@ -116,9 +118,13 @@ export function coreLawRetrievalPrompt(index, query) {
 }
 export class CoreLawToolRuntime {
     index;
+    fetcher;
     events = [];
-    constructor(index) {
+    constructor(index, 
+    // Sejm ELI dla aktów, których brak w kopii.
+    fetcher = globalThis.fetch.bind(globalThis)) {
         this.index = index;
+        this.fetcher = fetcher;
     }
     schemas() {
         return SCHEMAS;
@@ -144,35 +150,68 @@ export class CoreLawToolRuntime {
         return this.events.map((event) => ({ ...event }));
     }
     async runTools(calls) {
-        return calls.map((call) => {
-            try {
-                return { tool_use_id: call.id, content: this.execute(call) };
-            }
-            catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                this.events.push({
-                    tool: call.name,
-                    target: String(call.input.act ?? call.input.query ?? "core-law"),
-                    decision: "BLOCK",
-                    detail: { error: message }
-                });
-                return {
-                    tool_use_id: call.id,
-                    content: JSON.stringify({ status: "BLOCKED", error: message })
-                };
-            }
-        });
+        const results = [];
+        for (const call of calls)
+            results.push(await this.runTool(call));
+        return results;
     }
-    resolveAct(value) {
+    async runTool(call) {
+        try {
+            return { tool_use_id: call.id, content: await this.execute(call) };
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.events.push({
+                tool: call.name,
+                target: String(call.input.act ?? call.input.query ?? "core-law"),
+                decision: "BLOCK",
+                detail: { error: message }
+            });
+            return {
+                tool_use_id: call.id,
+                content: JSON.stringify({ status: "BLOCKED", error: message })
+            };
+        }
+    }
+    /**
+     * Akt z kopii; gdy go brak, a podano ELI albo Dz.U./M.P., sprawdzenie w Sejm ELI
+     * i pobranie do kopii. Tekst, który jeszcze się pobiera, zwraca wynik DOWNLOADING.
+     */
+    async resolveAct(value) {
         if (typeof value !== "string" || !value.trim()) {
             throw new Error("CORE_LAW_ACT_REQUIRED");
         }
         const ref = this.index.resolve(value);
-        if (!ref)
+        if (ref)
+            return { ref };
+        if (!parseLegalActReference(value))
             throw new Error("CORE_LAW_ACT_NOT_IN_MAPS");
-        return ref;
+        let added;
+        try {
+            added = await this.index.addMissingAct(await lookupCoreLawAct(value, this.fetcher));
+        }
+        catch (error) {
+            throw new Error(error instanceof CoreLawActLookupError ? error.code : "CORE_LAW_ACT_SOURCE_UNAVAILABLE");
+        }
+        this.events.push({
+            tool: "core_law_fetch_missing",
+            target: added.eli,
+            decision: "ALLOW",
+            detail: { added: added.added, ready: added.ready }
+        });
+        const fetched = this.index.ref(added.eli);
+        if (added.ready && fetched)
+            return { ref: fetched };
+        return {
+            result: JSON.stringify({
+                status: "DOWNLOADING",
+                eli: added.eli,
+                sourceUrl: `https://api.sejm.gov.pl/eli/acts/${added.eli}`,
+                instruction: "Akt nie był w lokalnej kopii; został sprawdzony w Sejm ELI i jego tekst jednolity jest pobierany do kopii. Do tego czasu potwierdź przepis verify_legal_reference w ELI; nie cytuj go z pamięci."
+            })
+        };
     }
-    execute(call) {
+    async execute(call) {
         if (call.name === LIST_TOOL) {
             const query = typeof call.input.query === "string"
                 ? normalizeForSearch(call.input.query.trim())
@@ -205,13 +244,18 @@ export class CoreLawToolRuntime {
             return JSON.stringify({ status: "OK", acts });
         }
         if (call.name === READ_TOOL) {
-            const ref = this.resolveAct(call.input.act);
             const article = String(call.input.article ?? "")
                 .replace(/^art\.?\s*/i, "")
                 .trim()
                 .toLowerCase();
             if (!article)
                 throw new Error("CORE_LAW_ARTICLE_REQUIRED");
+            const resolved = await this.resolveAct(call.input.act);
+            if ("result" in resolved)
+                return resolved.result;
+            const { ref } = resolved;
+            // Kopia to pamięć podręczna ELI: przed użyciem sprawdzenie, czy w ELI nie ma nowszej wersji.
+            const liveCheck = await this.index.confirmCurrent(ref.eli);
             const record = this.index.currentRecord(ref.eli);
             if (!record)
                 throw new Error("CORE_LAW_TEXT_NOT_YET_DOWNLOADED");
@@ -234,7 +278,17 @@ export class CoreLawToolRuntime {
                 promulgation: record.promulgation,
                 fetchedAt: record.fetchedAt,
                 sourceUrl: record.sourceUrl,
+                sourceAnchorUrl: anchoredUrl(record.sourceUrl, record.articleAnchors?.[article]) ?? record.sourceUrl,
                 consolidatedText: ref.consolidated,
+                liveCheck: {
+                    state: liveCheck.state,
+                    checkedAt: liveCheck.checkedAt,
+                    ...(liveCheck.state === "UNREACHABLE"
+                        ? {
+                            notice: `ELI niedostępne (${liveCheck.error ?? "brak odpowiedzi"}); brzmienie z lokalnej kopii z dnia ${record.fetchedAt.slice(0, 10)}. Podaj to użytkownikowi przy przepisie.`
+                        }
+                        : {})
+                },
                 ...(record.eli !== ref.eli
                     ? {
                         mapEli: ref.eli,
@@ -265,9 +319,13 @@ export class CoreLawToolRuntime {
             const query = String(call.input.query ?? "").trim();
             if (!query)
                 throw new Error("CORE_LAW_QUERY_REQUIRED");
-            const act = call.input.act !== undefined && call.input.act !== ""
-                ? this.resolveAct(call.input.act)
-                : undefined;
+            let act;
+            if (call.input.act !== undefined && call.input.act !== "") {
+                const resolved = await this.resolveAct(call.input.act);
+                if ("result" in resolved)
+                    return resolved.result;
+                act = resolved.ref;
+            }
             const hits = this.index
                 .search(query, { ...(act ? { eli: act.eli } : {}), limit: MAX_SEARCH_HITS })
                 .map((hit) => {
