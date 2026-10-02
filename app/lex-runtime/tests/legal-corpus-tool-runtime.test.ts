@@ -334,4 +334,40 @@ describe("model skill selection mode", () => {
     const [result] = await runtime.runTools([read(DR, "SKILL.md")]);
     expect(JSON.parse(result!.content).status).toBe("OK");
   });
+
+  it("delivers the only matching file for a mistyped module path", async () => {
+    const registry = fixture();
+    const modules = path.join(registry.root, DR, "modules");
+    fs.writeFileSync(path.join(modules, "mod-KC-umowy-nazwane.md"), "# umowy\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const results = await runtime.runTools([
+      read(DR, "modules/mod-KC", "no-ext"),
+      read(DR, "mod-KC-umowy-nazwane.md", "no-dir"),
+      read("dr-02", "SKILL.md", "short-skill"),
+      read(DR, "modules/mod-kc-umowy", "prefix")
+    ]);
+    const parsed = results.map((result) => JSON.parse(result.content));
+    expect(parsed[0]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC.md`, requestedPath: `${DR}/modules/mod-KC` });
+    expect(parsed[1]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-nazwane.md` });
+    expect(parsed[2]).toMatchObject({ status: "OK", path: `${DR}/SKILL.md`, requestedPath: "dr-02/SKILL.md" });
+    expect(parsed[3]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-nazwane.md` });
+    expect(runtime.auditEvents().filter((event) => event.detail?.resolvedFrom)).toHaveLength(4);
+  });
+
+  it("returns candidates instead of guessing when several files match", async () => {
+    const registry = fixture();
+    const modules = path.join(registry.root, DR, "modules");
+    fs.writeFileSync(path.join(modules, "mod-KC-umowy.md"), "# umowy\n");
+    fs.writeFileSync(path.join(modules, "mod-KC-spadki.md"), "# spadki\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const [several, none] = (await runtime.runTools([
+      read(DR, "modules/mod-K.md", "several"),
+      read(DR, "modules/xyz-abc.md", "none")
+    ])).map((result) => JSON.parse(result.content));
+    expect(several.status).toBe("NOT_FOUND");
+    expect(several.candidates).toEqual(expect.arrayContaining(["modules/mod-KC-umowy.md", "modules/mod-KC-spadki.md"]));
+    expect(several.content).toBeUndefined();
+    expect(none).toMatchObject({ status: "NOT_FOUND", error: "LEGAL_RESOURCE_NOT_FOUND", candidates: [] });
+    expect(runtime.auditEvents().every((event) => event.decision === "BLOCK")).toBe(true);
+  });
 });

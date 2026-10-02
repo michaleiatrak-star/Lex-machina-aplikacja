@@ -184,6 +184,85 @@ function normalizePrefix(
   return normalized;
 }
 
+// Loose matching of a mistyped skill name or resource path: the model gets
+// the file in the same round when exactly one matches (like a native reader
+// recovering with Glob, but without the extra round), otherwise the list of
+// candidates instead of a bare LEGAL_RESOURCE_NOT_FOUND.
+const MAX_RESOURCE_CANDIDATES = 12;
+
+function looseKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "l")
+    .toLowerCase()
+    .replace(/\.(md|markdown|txt|ya?ml|json)$/, "")
+    .replace(/[\s_.]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function looseSkill(registry: LexSkillRegistry, requested: string): string[] {
+  const key = looseKey(requested);
+  if (!key) return [];
+  const names = [...registry.skills.values()].map((skill) => ({
+    name: skill.name,
+    keys: [looseKey(skill.name), looseKey(path.basename(skill.directory))]
+  }));
+  const exact = names.filter((item) => item.keys.includes(key));
+  if (exact.length) return exact.map((item) => item.name);
+  return names
+    .filter((item) => item.keys.some((name) => name.startsWith(`${key}-`) || key.startsWith(`${name}-`)))
+    .map((item) => item.name);
+}
+
+export function looseResource(
+  registry: LexSkillRegistry,
+  skillName: string,
+  requested: string
+): { match: string | null; candidates: string[] } {
+  const skill = registry.get(skillName);
+  if (!skill) return { match: null, candidates: [] };
+  const normalized = requested.replaceAll("\\", "/").replace(/^\.\//, "").trim();
+  const shared = normalized.startsWith("shared/");
+  const base = shared ? path.join(registry.root, "shared") : skill.directory;
+  if (!fs.existsSync(base)) return { match: null, candidates: [] };
+  const files = shared
+    ? collectFiles(base, "").map((file) => `shared/${file}`)
+    : collectFiles(base, "");
+  const wanted = looseKey(path.posix.basename(normalized));
+  const wantedDir = looseKey(path.posix.dirname(normalized));
+  if (!wanted) return { match: null, candidates: [] };
+  const scored = files
+    .map((file) => {
+      const base = looseKey(path.posix.basename(file));
+      const dir = looseKey(path.posix.dirname(file));
+      let score = 0;
+      if (base === wanted) score = 100;
+      else if (wanted.length >= 6 && base.startsWith(wanted)) score = 60;
+      else if (wanted.length >= 6 && (base.includes(wanted) || wanted.startsWith(base))) score = 40;
+      else {
+        const tokens = wanted.split("-").filter((token) => token.length >= 3);
+        const hits = tokens.filter((token) => base.includes(token)).length;
+        if (tokens.length && hits / tokens.length >= 0.6) score = Math.round(30 * hits / tokens.length);
+      }
+      if (score && wantedDir && wantedDir !== "." && dir === wantedDir) score += 5;
+      return { file, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file, "pl"));
+  const best = scored[0];
+  const unique =
+    best !== undefined &&
+    best.score >= 60 &&
+    (scored.length === 1 || scored[1]!.score < best.score);
+  return {
+    match: unique ? best.file : null,
+    candidates: scored.slice(0, MAX_RESOURCE_CANDIDATES).map((item) => item.file)
+  };
+}
+
 function textFile(
   filePath: string
 ): string {
@@ -631,10 +710,10 @@ export class LegalCorpusToolRuntime {
       call.name ===
         READ_RESOURCE
     ) {
-      const skillName =
+      const requestedSkill =
         typeof call.input
           .skill === "string"
-          ? call.input.skill
+          ? call.input.skill.trim()
           : "";
       const semanticPath =
         typeof call.input
@@ -643,33 +722,46 @@ export class LegalCorpusToolRuntime {
               .trim()
           : "";
       if (
-        !skillName ||
+        !requestedSkill ||
         !semanticPath
       ) {
         throw new Error(
           "LEGAL_RESOURCE_REQUEST_INVALID"
         );
       }
-      if (
-        !this.registry.get(
-          skillName
-        )
-      ) {
-        throw new Error(
-          "LEGAL_SKILL_NOT_FOUND"
-        );
+      let skillName = requestedSkill;
+      if (!this.registry.get(skillName)) {
+        const skills = looseSkill(this.registry, skillName);
+        if (skills.length !== 1) {
+          return this.notFound(call, "LEGAL_SKILL_NOT_FOUND", {
+            skillCandidates: skills.slice(0, MAX_RESOURCE_CANDIDATES)
+          });
+        }
+        skillName = skills[0]!;
       }
 
-      const resolved =
+      let resolved =
         this.registry
           .resolveResource(
             skillName,
             semanticPath
           );
+      let resolvedFrom: string | undefined;
       if (!resolved) {
-        throw new Error(
-          "LEGAL_RESOURCE_NOT_FOUND"
-        );
+        const loose = looseResource(this.registry, skillName, semanticPath);
+        resolved = loose.match
+          ? this.registry.resolveResource(skillName, loose.match)
+          : null;
+        if (!resolved) {
+          return this.notFound(call, "LEGAL_RESOURCE_NOT_FOUND", {
+            skill: skillName,
+            candidates: loose.candidates
+          });
+        }
+        resolvedFrom = semanticPath;
+      }
+      if (skillName !== requestedSkill || resolvedFrom) {
+        resolvedFrom = `${requestedSkill}/${semanticPath}`;
       }
       if (
         !fs.statSync(
@@ -869,6 +961,7 @@ export class LegalCorpusToolRuntime {
         decision:
           "ALLOW",
         detail: {
+          ...(resolvedFrom ? { resolvedFrom } : {}),
           offset,
           returnedChars:
             content.length,
@@ -883,6 +976,12 @@ export class LegalCorpusToolRuntime {
         status: "OK",
         path:
           canonicalPath,
+        ...(resolvedFrom
+          ? {
+              requestedPath: resolvedFrom,
+              note: "The requested path does not exist; this is the only matching file. Use this path from now on."
+            }
+          : {}),
         offset,
         returnedChars:
           content.length,
@@ -914,6 +1013,28 @@ export class LegalCorpusToolRuntime {
     throw new Error(
       "UNKNOWN_LEGAL_CORPUS_TOOL"
     );
+  }
+
+  /** Not found, but with what the model can read instead (no extra listing round). */
+  private notFound(
+    call: NormalizedToolCall,
+    error: string,
+    hints: { skill?: string; candidates?: string[]; skillCandidates?: string[] }
+  ): string {
+    this.events.push({
+      tool: call.name,
+      target: this.targetFor(call),
+      decision: "BLOCK",
+      detail: { error, ...hints }
+    });
+    return JSON.stringify({
+      status: "NOT_FOUND",
+      error,
+      ...hints,
+      instruction: hints.candidates?.length || hints.skillCandidates?.length
+        ? "Read the right one from these candidates in your next call (closest first, at most 12; if none fits, list_legal_resources); do not guess other names."
+        : "No similar file. Use list_legal_resources for this skill instead of guessing names."
+    });
   }
 
   private skillForPath(
