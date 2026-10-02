@@ -36,8 +36,13 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 33 | `ee5fbed` | Router v3 dostarczany z pierwszym odczytem (bez straconej rundy), konta: bez powtórnych wyszukiwań |
 | hotfix 34 | `580d663` | AUTO: router v3 i prawo-polskie-v2 z góry dla wszystkich modeli, metodyka doboru narzędzi |
 | hotfix 35 | `c15ed5a` | Metodyka doboru skilli i modułów taka sama dla wszystkich hostów (także Claude z korpusem), kilka domen i dalsze skille |
+| hotfix 36 | `f916e44` | Błędna ścieżka modułu lub nazwa skilla: jedyny pasujący plik w tej samej rundzie albo lista kandydatów |
 
 ---
+
+## hotfix 36
+
+- `read_legal_resource`: `looseResource`/`looseSkill` przy braku ścieżki lub skilla; jednoznaczne dopasowanie (wynik ≥ 60, bez remisu) czytane od razu z `requestedPath` i `resolvedFrom` w audycie; w innym razie `NOT_FOUND` z `candidates` (do 12). Dotyczy hostów bez natywnego korpusu.
 
 ## hotfix 35
 
