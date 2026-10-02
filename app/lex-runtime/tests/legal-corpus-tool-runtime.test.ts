@@ -285,19 +285,30 @@ describe("model skill selection mode", () => {
     input: { skill, path: file }
   });
 
-  it("requires prawny-router-v3 before any other legal resource", async () => {
+  it("delivers prawny-router-v3 with the first other legal resource instead of refusing it", async () => {
     const runtime = new LegalCorpusToolRuntime(fixture(), { modelSelectsSkills: true });
-    const [blocked] = await runtime.runTools([read(DR, "SKILL.md")]);
-    expect(JSON.parse(blocked!.content)).toMatchObject({
-      status: "BLOCKED",
-      error: expect.stringMatching(/^ROUTER_V3_REQUIRED_FIRST/)
+    const [first] = await runtime.runTools([read(DR, "SKILL.md")]);
+    const body = JSON.parse(first!.content);
+    expect(body.status).toBe("OK");
+    expect(body.requiredRouter).toMatchObject({ path: expect.stringMatching(/SKILL\.md$/) });
+    expect(runtime.auditEvents()[0]).toMatchObject({ decision: "ALLOW", detail: { deliveredWith: expect.any(String) } });
+    expect(runtime.modelSkillSelection()).toEqual({
+      primarySkill: DR,
+      loadedSkills: ["prawny-router-v3", DR],
+      domainSkills: [DR],
+      executionSkills: []
     });
+  });
 
+  it("runs a router read batched after other reads first", async () => {
+    const runtime = new LegalCorpusToolRuntime(fixture(), { modelSelectsSkills: true });
     const results = await runtime.runTools([
-      read("prawny-router-v3", "SKILL.md"),
-      read(DR, "SKILL.md")
+      read(DR, "SKILL.md"),
+      read("prawny-router-v3", "SKILL.md")
     ]);
+    expect(results.map((item) => item.tool_use_id)).toEqual([DR + "SKILL.md", "prawny-router-v3SKILL.md"]);
     expect(results.map((item) => JSON.parse(item.content).status)).toEqual(["OK", "OK"]);
+    expect(JSON.parse(results[0]!.content).requiredRouter).toBeUndefined();
     expect(runtime.modelSkillSelection()).toEqual({
       primarySkill: DR,
       loadedSkills: ["prawny-router-v3", DR],

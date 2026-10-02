@@ -409,8 +409,23 @@ export class LegalCorpusToolRuntime {
   ): Promise<
     NormalizedToolResult[]
   > {
-    return calls.map(
-      (call) => {
+    // A router-v3 read in the same round runs first, so a batched round
+    // (router + SKILL.md + modules) is not refused for its order.
+    const isRouterRead = (call: NormalizedToolCall) =>
+      call.name === READ_RESOURCE && call.input.skill === ROUTER_SKILL;
+    const order = [
+      ...calls.filter(isRouterRead),
+      ...calls.filter((call) => !isRouterRead(call))
+    ];
+    const byId = new Map(
+      order.map((call) => [call, this.runOne(call)] as const)
+    );
+    return calls.map((call) => byId.get(call)!);
+  }
+
+  private runOne(
+    call: NormalizedToolCall
+  ): NormalizedToolResult {
         try {
           const content =
             this.execute(
@@ -454,8 +469,6 @@ export class LegalCorpusToolRuntime {
               })
           };
         }
-      }
-    );
   }
 
   private execute(
@@ -672,6 +685,13 @@ export class LegalCorpusToolRuntime {
         this.skillForPath(
           resolvedPath
         );
+      // Router v3 is always first. When the model asks for another legal
+      // resource before it, the router entry is delivered with that read
+      // (like the criminal qualifier) instead of refusing it and costing a
+      // whole model round.
+      let requiredRouter:
+        | { path: string; content: string; truncated: boolean }
+        | undefined;
       if (
         this.options.modelSelectsSkills &&
         targetSkill !== ROUTER_SKILL &&
@@ -679,9 +699,35 @@ export class LegalCorpusToolRuntime {
           ROUTER_SKILL
         )
       ) {
-        throw new Error(
-          "ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource"
-        );
+        const router =
+          this.registry.resolveResource(
+            ROUTER_SKILL,
+            "SKILL.md"
+          );
+        if (!router) {
+          throw new Error(
+            "ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource"
+          );
+        }
+        const routerText = textFile(router);
+        const routerPath =
+          path.relative(this.registry.root, router).replaceAll(path.sep, "/");
+        requiredRouter = {
+          path: routerPath,
+          content: routerText.slice(0, MAX_READ_CHARS),
+          truncated: routerText.length > MAX_READ_CHARS
+        };
+        this.readSkills.push(ROUTER_SKILL);
+        this.events.push({
+          tool: call.name,
+          target: routerPath,
+          decision: "ALLOW",
+          detail: {
+            deliveredWith: resolvedPath,
+            returnedChars: requiredRouter.content.length,
+            totalChars: routerText.length
+          }
+        });
       }
 
       const text =
@@ -835,6 +881,15 @@ export class LegalCorpusToolRuntime {
           text.length,
         nextOffset,
         content,
+        ...(requiredRouter
+          ? {
+              requiredRouter: {
+                ...requiredRouter,
+                instruction:
+                  "Mandatory prawny-router-v3 entry, delivered with the first legal resource. Apply its routing; read further router files only if the routing needs them."
+              }
+            }
+          : {}),
         ...(requiredModule
           ? {
               requiredModule: {

@@ -251,36 +251,45 @@ export class LegalCorpusToolRuntime {
         }));
     }
     async runTools(calls) {
-        return calls.map((call) => {
-            try {
-                const content = this.execute(call);
-                return {
-                    tool_use_id: call.id,
-                    content
-                };
-            }
-            catch (error) {
-                this.events.push({
-                    tool: call.name,
-                    target: this.targetFor(call),
-                    decision: "BLOCK",
-                    detail: {
-                        error: error instanceof Error
-                            ? error.message
-                            : String(error)
-                    }
-                });
-                return {
-                    tool_use_id: call.id,
-                    content: JSON.stringify({
-                        status: "BLOCKED",
-                        error: error instanceof Error
-                            ? error.message
-                            : String(error)
-                    })
-                };
-            }
-        });
+        // A router-v3 read in the same round runs first, so a batched round
+        // (router + SKILL.md + modules) is not refused for its order.
+        const isRouterRead = (call) => call.name === READ_RESOURCE && call.input.skill === ROUTER_SKILL;
+        const order = [
+            ...calls.filter(isRouterRead),
+            ...calls.filter((call) => !isRouterRead(call))
+        ];
+        const byId = new Map(order.map((call) => [call, this.runOne(call)]));
+        return calls.map((call) => byId.get(call));
+    }
+    runOne(call) {
+        try {
+            const content = this.execute(call);
+            return {
+                tool_use_id: call.id,
+                content
+            };
+        }
+        catch (error) {
+            this.events.push({
+                tool: call.name,
+                target: this.targetFor(call),
+                decision: "BLOCK",
+                detail: {
+                    error: error instanceof Error
+                        ? error.message
+                        : String(error)
+                }
+            });
+            return {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                    status: "BLOCKED",
+                    error: error instanceof Error
+                        ? error.message
+                        : String(error)
+                })
+            };
+        }
     }
     execute(call) {
         if (call.name ===
@@ -401,10 +410,36 @@ export class LegalCorpusToolRuntime {
             const resolvedPath = path.relative(this.registry.root, resolved)
                 .replaceAll(path.sep, "/");
             const targetSkill = this.skillForPath(resolvedPath);
+            // Router v3 is always first. When the model asks for another legal
+            // resource before it, the router entry is delivered with that read
+            // (like the criminal qualifier) instead of refusing it and costing a
+            // whole model round.
+            let requiredRouter;
             if (this.options.modelSelectsSkills &&
                 targetSkill !== ROUTER_SKILL &&
                 !this.readSkills.includes(ROUTER_SKILL)) {
-                throw new Error("ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource");
+                const router = this.registry.resolveResource(ROUTER_SKILL, "SKILL.md");
+                if (!router) {
+                    throw new Error("ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource");
+                }
+                const routerText = textFile(router);
+                const routerPath = path.relative(this.registry.root, router).replaceAll(path.sep, "/");
+                requiredRouter = {
+                    path: routerPath,
+                    content: routerText.slice(0, MAX_READ_CHARS),
+                    truncated: routerText.length > MAX_READ_CHARS
+                };
+                this.readSkills.push(ROUTER_SKILL);
+                this.events.push({
+                    tool: call.name,
+                    target: routerPath,
+                    decision: "ALLOW",
+                    detail: {
+                        deliveredWith: resolvedPath,
+                        returnedChars: requiredRouter.content.length,
+                        totalChars: routerText.length
+                    }
+                });
             }
             const text = textFile(resolved);
             const offset = Number.isInteger(call.input.offset)
@@ -481,6 +516,14 @@ export class LegalCorpusToolRuntime {
                 totalChars: text.length,
                 nextOffset,
                 content,
+                ...(requiredRouter
+                    ? {
+                        requiredRouter: {
+                            ...requiredRouter,
+                            instruction: "Mandatory prawny-router-v3 entry, delivered with the first legal resource. Apply its routing; read further router files only if the routing needs them."
+                        }
+                    }
+                    : {}),
                 ...(requiredModule
                     ? {
                         requiredModule: {

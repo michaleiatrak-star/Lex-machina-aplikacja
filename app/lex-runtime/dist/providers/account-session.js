@@ -1921,6 +1921,7 @@ function buildAccountPrompt(params, toolTranscript) {
             // independent reads and checks belong in one round (router, SKILL.md, modules,
             // verification of unrelated provisions); only calls that depend on a result wait.
             "Every tool round starts a new model run and costs the user tens of seconds. Put ALL tool calls you already know you need into ONE line (several entries in \"calls\"): e.g. the router together with the SKILL.md and modules you expect, or verification of several independent provisions. Make a further round only for calls that depend on results you have not seen yet.",
+            "Do not repeat a search or read whose result is already in LEX_RUNTIME_TOOL_TRANSCRIPT. Verify only the provisions you will actually cite in the answer.",
             "After tool results are supplied, continue the task. When no more tools are needed, return the final answer normally.",
             `LEX_RUNTIME_TOOLS=${toolSchemas}`
         ].join("\n")
