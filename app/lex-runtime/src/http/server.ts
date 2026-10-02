@@ -20,6 +20,8 @@ import { registerMaintenanceRoutes } from "./maintenance-routes.js";
 import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
+import { registerInvoiceRoutes } from "./invoice-routes.js";
+import { EncryptedInvoiceStore } from "../invoice-store.js";
 import {
   LexMcpConnectorStore,
   lexMcpPackagePath
@@ -762,6 +764,17 @@ export async function startLocalServer(options?: {
         )
     }
   );
+  registerInvoiceRoutes(app, {
+    authService,
+    invoices: new EncryptedInvoiceStore({
+      rootDir: caseFileStore.rootDir
+    }),
+    legalText: new LegalFederationToolRuntime(
+      undefined,
+      undefined,
+      mcpConnectors
+    )
+  });
   app.use(coreApp);
 
   return new Promise((resolve, reject) => {

@@ -3450,3 +3450,162 @@ export async function clearAnomalies(): Promise<void> {
   });
   if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status);
 }
+
+// Faktury i KSeF (dane użytkownika szyfrowane jego kluczem; token nie wraca z API).
+
+export type KsefEnvironment = "test" | "production";
+
+export type KsefSettings = {
+  environment: KsefEnvironment;
+  tokenConfigured: boolean;
+  tokenHint?: string;
+  tokenSetAt?: string;
+  contextNip?: string;
+};
+
+export type InvoiceParty = {
+  name: string;
+  nip?: string;
+  address: string;
+  countryCode?: string;
+};
+
+export type InvoiceLine = {
+  name: string;
+  unit: string;
+  quantity: string;
+  unitNetPrice: string;
+  vatRate: string;
+};
+
+export type InvoiceLogo = {
+  mediaType: "image/png" | "image/jpeg";
+  fileName: string;
+  base64: string;
+  uploadedAt: string;
+};
+
+export type InvoiceDraft = {
+  number: string;
+  issueDate: string;
+  saleDate?: string;
+  placeOfIssue?: string;
+  seller: InvoiceParty;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  currency: string;
+  paymentMethod?: string;
+  paymentDueDate?: string;
+  bankAccount?: string;
+  notes?: string;
+};
+
+export type InvoiceTotals = {
+  byRate: Array<{ vatRate: string; net: string; vat: string; gross: string }>;
+  net: string;
+  vat: string;
+  gross: string;
+};
+
+export type InvoiceView = InvoiceDraft & {
+  invoiceId: string;
+  status: "DRAFT" | "ISSUED";
+  basedOnInvoiceId?: string;
+  createdAt: string;
+  updatedAt: string;
+  totals: InvoiceTotals;
+};
+
+export type InvoiceSort = "date-desc" | "date-asc" | "client-asc" | "client-desc";
+
+export type InvoiceSettingsResponse = {
+  ksef: KsefSettings;
+  seller?: InvoiceParty;
+  logo?: InvoiceLogo;
+};
+
+export function getInvoiceSettings(): Promise<InvoiceSettingsResponse> {
+  return json<InvoiceSettingsResponse>("/api/invoices/settings");
+}
+
+export function setKsefToken(token: string, contextNip?: string): Promise<{ ksef: KsefSettings }> {
+  return json("/api/invoices/settings/ksef-token", {
+    method: "PUT",
+    body: JSON.stringify({ token, ...(contextNip ? { contextNip } : {}) })
+  });
+}
+
+export function clearKsefToken(): Promise<{ ksef: KsefSettings }> {
+  return json("/api/invoices/settings/ksef-token", { method: "DELETE" });
+}
+
+export function setKsefEnvironment(
+  environment: KsefEnvironment,
+  confirmProduction = false
+): Promise<{ ksef: KsefSettings }> {
+  return json("/api/invoices/settings/ksef-environment", {
+    method: "PUT",
+    body: JSON.stringify({ environment, confirmProduction })
+  });
+}
+
+export function setInvoiceSeller(seller: InvoiceParty): Promise<{ seller: InvoiceParty }> {
+  return json("/api/invoices/settings/seller", {
+    method: "PUT",
+    body: JSON.stringify({ seller })
+  });
+}
+
+export function setInvoiceLogo(logo: {
+  mediaType: string;
+  base64: string;
+  fileName: string;
+}): Promise<{ logo: InvoiceLogo }> {
+  return json("/api/invoices/settings/logo", {
+    method: "PUT",
+    body: JSON.stringify(logo)
+  });
+}
+
+export function clearInvoiceLogo(): Promise<{ ok: true }> {
+  return json("/api/invoices/settings/logo", { method: "DELETE" });
+}
+
+export function listInvoices(query: string, sort: InvoiceSort): Promise<{ invoices: InvoiceView[] }> {
+  const params = new URLSearchParams({ sort });
+  if (query.trim()) params.set("q", query.trim());
+  return json(`/api/invoices?${params.toString()}`);
+}
+
+export function createInvoice(invoice: InvoiceDraft): Promise<{ invoice: InvoiceView }> {
+  return json("/api/invoices", { method: "POST", body: JSON.stringify({ invoice }) });
+}
+
+export function updateInvoice(invoiceId: string, invoice: InvoiceDraft): Promise<{ invoice: InvoiceView }> {
+  return json(`/api/invoices/${encodeURIComponent(invoiceId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ invoice })
+  });
+}
+
+export function deleteInvoice(invoiceId: string): Promise<{ ok: true }> {
+  return json(`/api/invoices/${encodeURIComponent(invoiceId)}`, { method: "DELETE" });
+}
+
+export function issueInvoice(invoiceId: string): Promise<{ invoice: InvoiceView }> {
+  return json(`/api/invoices/${encodeURIComponent(invoiceId)}/issue`, { method: "POST" });
+}
+
+export function duplicateInvoice(invoiceId: string): Promise<{ invoice: InvoiceView }> {
+  return json(`/api/invoices/${encodeURIComponent(invoiceId)}/duplicate`, { method: "POST" });
+}
+
+export function getInvoiceLegalBasis(): Promise<{
+  eli: string;
+  article: string;
+  ok: boolean;
+  result: unknown;
+  retrievedAt: string;
+}> {
+  return json("/api/invoices/legal-basis");
+}

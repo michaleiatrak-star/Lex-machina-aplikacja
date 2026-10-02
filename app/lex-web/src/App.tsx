@@ -7,6 +7,7 @@ import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
+import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
 import type {
   AuthMeResponse,
   AuthenticatedUser
@@ -69,6 +70,7 @@ export default function App({
           "ADMIN" ? (
             <McpConnectorsPanel />
           ) : null,
+        invoices: <InvoiceSettingsPanel />,
         maintenance: (
           <MaintenancePanel
             user={user}

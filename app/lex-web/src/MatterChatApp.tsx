@@ -9,6 +9,7 @@ import {
 } from "./case-calendar.js";
 import { CalendarPanel } from "./CalendarPanel.js";
 import { McpSearchPanel } from "./McpSearchPanel.js";
+import { InvoicesPanel } from "./InvoicesPanel.js";
 import { downloadBlob } from "./download-file.js";
 import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
@@ -189,6 +190,7 @@ type TabId =
   | "case"
   | "firm"
   | "search"
+  | "invoices"
   | "settings";
 
 export type SettingsSection =
@@ -196,6 +198,7 @@ export type SettingsSection =
   | "users"
   | "security"
   | "mcp"
+  | "invoices"
   | "maintenance";
 
 export type SettingsRequest = {
@@ -208,6 +211,7 @@ type SettingsPanels = {
   users?: ReactNode;
   security?: ReactNode;
   mcp?: ReactNode;
+  invoices?: ReactNode;
   maintenance?: ReactNode;
 };
 
@@ -3765,6 +3769,7 @@ export default function MatterChatApp({
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
             ["search", "Wyszukiwanie"],
+            ["invoices", "Faktury"],
             ["settings", "Ustawienia"]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
@@ -4053,7 +4058,9 @@ export default function MatterChatApp({
                       ? "Know-how i wzory kancelarii"
                       : activeTab === "search"
                         ? "Wyszukiwanie w źródłach MCP"
-                        : "Ustawienia"}
+                        : activeTab === "invoices"
+                          ? "Faktury"
+                          : "Ustawienia"}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -5613,6 +5620,15 @@ export default function MatterChatApp({
           <McpSearchPanel />
         ) : null}
 
+        {activeTab === "invoices" ? (
+          <InvoicesPanel
+            onOpenSettings={() => {
+              setActiveTab("settings");
+              setSettingsSection("invoices");
+            }}
+          />
+        ) : null}
+
         {activeTab === "calendar" ? (
           <CalendarPanel
             cases={cases}
@@ -6001,6 +6017,7 @@ export default function MatterChatApp({
                 ["users", "Użytkownicy i uprawnienia"],
                 ["security", "Hasło i bezpieczeństwo"],
                 ["mcp", "Konektory MCP"],
+                ["invoices", "Faktury i KSeF"],
                 ["maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
                 [SettingsSection, string]
@@ -6544,6 +6561,10 @@ export default function MatterChatApp({
                         </p>
                       </article>
                     )}
+                </div>
+              ) : settingsSection === "invoices" ? (
+                <div className="chat-settings-section-stack">
+                  {settingsPanels?.invoices}
                 </div>
               ) : (
                 <div className="chat-settings-section-stack">
