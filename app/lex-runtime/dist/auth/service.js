@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { DEFAULT_AUTH_KDF } from "./types.js";
-import { decryptRecoveryUserMasterKey, decryptUserMasterKey, deriveRecoveryKey, encryptRecoveryUserMasterKey, encryptUserMasterKey, generateRecoveryCode, isValidLoginName, normalizeLoginName, PasswordKdfExecutor, randomKdfSalt, randomRecoverySalt, randomUserMasterKey, validateDisplayName, validateNewPassword } from "./crypto.js";
+import { decryptGoogleRecoveryUserMasterKey, decryptRecoveryUserMasterKey, deriveGoogleRecoveryKey, encryptGoogleRecoveryUserMasterKey, decryptUserMasterKey, deriveRecoveryKey, encryptRecoveryUserMasterKey, encryptUserMasterKey, generateRecoveryCode, isValidLoginName, normalizeLoginName, PasswordKdfExecutor, randomKdfSalt, randomRecoverySalt, randomUserMasterKey, validateDisplayName, validateNewPassword } from "./crypto.js";
 import { generateUserSharingKeys } from "../case-crypto.js";
 import { AuthSessionManager } from "./session-manager.js";
 export class AuthError extends Error {
@@ -874,6 +874,200 @@ export class LocalAuthService {
             passwordSalt.fill(0);
             nextRecoveryKey.fill(0);
             nextRecoverySalt.fill(0);
+        }
+    }
+    googleRecoveryStatus(userId) {
+        const link = this.store.getGoogleRecoveryLink(userId);
+        return link
+            ? {
+                googleEmail: link.googleEmail,
+                linkedAt: link.updatedAt
+            }
+            : null;
+    }
+    // Wraps the session's user master key with a key derived from `secret`.
+    // The caller has already stored `secret` in the user's Drive app folder
+    // under `driveFileId`; the session must have passed a recent reauth.
+    async linkGoogleRecovery(input) {
+        const user = this.store.getUserById(input.userId);
+        if (!user || user.status !== "ACTIVE") {
+            throw new AuthError("SESSION_REVOKED", 401);
+        }
+        const previous = this.store.getGoogleRecoveryLink(user.userId);
+        const binding = {
+            userId: user.userId,
+            googleSub: input.googleSub,
+            keyVersion: (previous?.keyVersion ?? 0) + 1
+        };
+        const salt = randomRecoverySalt();
+        const recoveryKey = deriveGoogleRecoveryKey(input.secret, salt, binding);
+        const now = new Date(this.clock.now()).toISOString();
+        try {
+            const envelope = await this.withSessionUserMasterKey(input.sessionId, (userMasterKey) => encryptGoogleRecoveryUserMasterKey(recoveryKey, userMasterKey, binding));
+            this.store.putGoogleRecoveryLink({
+                userId: user.userId,
+                googleSub: input.googleSub,
+                googleEmail: input.googleEmail,
+                salt,
+                nonce: envelope.nonce,
+                ciphertext: envelope.ciphertext,
+                tag: envelope.tag,
+                keyVersion: binding.keyVersion,
+                driveFileId: input.driveFileId,
+                createdAt: previous?.createdAt ?? now,
+                updatedAt: now
+            });
+            this.store.recordSecurityEvent({
+                eventId: "event_" +
+                    randomBytes(16).toString("hex"),
+                userId: user.userId,
+                eventType: "google_recovery_linked",
+                occurredAt: now,
+                result: "PASS",
+                metadata: {
+                    keyVersion: binding.keyVersion
+                }
+            });
+            return {
+                googleEmail: input.googleEmail,
+                linkedAt: now
+            };
+        }
+        finally {
+            recoveryKey.fill(0);
+        }
+    }
+    unlinkGoogleRecovery(actor) {
+        const removed = this.store.deleteGoogleRecoveryLink(actor.user.userId);
+        if (removed) {
+            this.store.recordSecurityEvent({
+                eventId: "event_" +
+                    randomBytes(16).toString("hex"),
+                userId: actor.user.userId,
+                eventType: "google_recovery_unlinked",
+                occurredAt: new Date(this.clock.now()).toISOString(),
+                result: "PASS"
+            });
+        }
+        return removed;
+    }
+    // Sets a new password after the caller proved control of the linked
+    // Google account and fetched the Drive secret. The regular recovery code
+    // stays valid.
+    async recoverAccountWithGoogle(input) {
+        const normalizedLoginName = normalizeLoginName(input.loginName.slice(0, 256));
+        let newPassword;
+        try {
+            if (!isValidLoginName(normalizedLoginName)) {
+                throw new Error("INVALID_LOGIN");
+            }
+            newPassword =
+                validateNewPassword(input.newPassword);
+        }
+        catch {
+            throw new AuthError("INVALID_RECOVERY_REQUEST", 400);
+        }
+        const user = this.store.getUserByNormalizedLogin(normalizedLoginName);
+        const link = user
+            ? this.store.getGoogleRecoveryLink(user.userId)
+            : null;
+        const fail = (reason) => {
+            if (user) {
+                this.store.recordSecurityEvent({
+                    eventId: "event_" +
+                        randomBytes(16).toString("hex"),
+                    userId: user.userId,
+                    eventType: "google_recovery_failure",
+                    occurredAt: new Date(this.clock.now()).toISOString(),
+                    result: "BLOCKED",
+                    metadata: { reason }
+                });
+            }
+            throw new AuthError("INVALID_RECOVERY_CREDENTIALS", 401);
+        };
+        if (!user ||
+            user.status !== "ACTIVE" ||
+            !link) {
+            return fail("NOT_LINKED");
+        }
+        if (link.googleSub !== input.googleSub) {
+            return fail("GOOGLE_ACCOUNT_MISMATCH");
+        }
+        let secret;
+        let recoveryKey;
+        let userMasterKey;
+        try {
+            secret =
+                await input.readSecret(link.driveFileId);
+            recoveryKey =
+                deriveGoogleRecoveryKey(secret, link.salt, {
+                    userId: user.userId,
+                    googleSub: link.googleSub,
+                    keyVersion: link.keyVersion
+                });
+            userMasterKey =
+                decryptGoogleRecoveryUserMasterKey(recoveryKey, {
+                    nonce: link.nonce,
+                    ciphertext: link.ciphertext,
+                    tag: link.tag
+                }, {
+                    userId: user.userId,
+                    googleSub: link.googleSub,
+                    keyVersion: link.keyVersion
+                });
+        }
+        catch {
+            userMasterKey?.fill(0);
+            return fail("ESCROW_UNAVAILABLE");
+        }
+        finally {
+            secret?.fill(0);
+            recoveryKey?.fill(0);
+        }
+        const passwordSalt = randomKdfSalt();
+        const passwordKey = await this.deriveKey(newPassword, passwordSalt, this.kdf);
+        const now = new Date(this.clock.now()).toISOString();
+        const passwordKeyVersion = user.umkKeyVersion + 1;
+        try {
+            const passwordEnvelope = encryptUserMasterKey(passwordKey, userMasterKey, {
+                userId: user.userId,
+                normalizedLoginName: user.normalizedLoginName,
+                keyVersion: passwordKeyVersion
+            });
+            const authEpoch = this.store
+                .updatePasswordEnvelopeAndIncrementEpoch({
+                userId: user.userId,
+                updatedAt: now,
+                kdf: this.kdf,
+                kdfSalt: passwordSalt,
+                nonce: passwordEnvelope.nonce,
+                ciphertext: passwordEnvelope.ciphertext,
+                tag: passwordEnvelope.tag,
+                keyVersion: passwordKeyVersion
+            });
+            this.sessions.revokeUser(user.userId, "AUTH_EPOCH");
+            const refreshed = this.store.getUserById(user.userId);
+            if (!refreshed) {
+                throw new Error("AUTH_USER_MISSING_AFTER_RECOVERY");
+            }
+            this.store.recordSecurityEvent({
+                eventId: "event_" +
+                    randomBytes(16).toString("hex"),
+                userId: user.userId,
+                eventType: "google_recovery_used",
+                occurredAt: now,
+                result: "PASS",
+                metadata: {
+                    authEpoch,
+                    umkKeyVersion: passwordKeyVersion
+                }
+            });
+            return this.createSuccess(refreshed, userMasterKey);
+        }
+        finally {
+            userMasterKey?.fill(0);
+            passwordKey.fill(0);
+            passwordSalt.fill(0);
         }
     }
     async reauthenticate(actor, password, purpose) {

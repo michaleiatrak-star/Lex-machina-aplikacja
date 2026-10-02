@@ -11,6 +11,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLexHttpApp } from "./app.js";
+import { GoogleRecoveryController } from "../google/recovery-controller.js";
+import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
@@ -176,7 +178,14 @@ function desktopBootstrapGuard(
     process.env
       .LEX_DESKTOP_BOOTSTRAP_TOKEN
       ?.trim();
-  if (!expected) {
+  // The system browser cannot send the desktop secret. The Google callback
+  // only completes flows a bootstrapped client started and returns a static
+  // page.
+  if (
+    !expected ||
+    (req.method === "GET" &&
+      req.path === GOOGLE_CALLBACK_PATH)
+  ) {
     next();
     return;
   }
@@ -648,6 +657,9 @@ export async function startLocalServer(options?: {
 
   const coreApp = createLexHttpApp({
     registry,
+    // Off until a Google OAuth client is configured (see google/config.ts).
+    googleRecovery:
+      new GoogleRecoveryController(authService),
     personMorphology,
     modelCatalog,
     credentialResolver: credentials,

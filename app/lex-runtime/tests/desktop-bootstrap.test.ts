@@ -71,6 +71,24 @@ describe("desktop loopback bootstrap guard", () => {
       expect(
         accepted.status
       ).toBe(200);
+
+      // The system browser reaches only the Google OAuth callback.
+      const callback =
+        await fetch(
+          base +
+            "/oauth/google/callback?state=x&code=y"
+        );
+      expect(
+        callback.status
+      ).toBe(400);
+      expect(
+        (
+          await fetch(
+            base +
+              "/oauth/google/other"
+          )
+        ).status
+      ).toBe(401);
       expect(
         await accepted.json()
       ).toMatchObject({

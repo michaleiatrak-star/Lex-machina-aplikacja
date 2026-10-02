@@ -36,6 +36,7 @@ import { completeChronologyExecution, requireChronologyExecutionPermit } from ".
 import { chronologyTemporalGateRequired } from "../chronology-date-trigger.js";
 import { nextContractCheckpoint } from "../contract-analysis-state.js";
 import { completeContractExecution, requireContractExecutionPermit } from "../contract-analysis-execution-gate.js";
+import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes } from "../google/http-routes.js";
 import { buildWorkflowAuditArtifact, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 const PROVIDERS = new Set([
@@ -1070,6 +1071,9 @@ export function createLexHttpApp(options) {
             res.status(204).end();
         });
     }
+    if (options.googleRecovery) {
+        registerGooglePublicRoutes(app, options.googleRecovery);
+    }
     if (options.authService) {
         app.use("/api", (req, res, next) => {
             try {
@@ -1235,6 +1239,9 @@ export function createLexHttpApp(options) {
                 .sessionId);
             res.status(204).end();
         });
+        if (options.googleRecovery) {
+            registerGoogleAuthenticatedRoutes(app, options.googleRecovery, responseAuthContext);
+        }
         app.post("/api/auth/recovery-code", async (req, res) => {
             const password = typeof req.body?.password ===
                 "string"
