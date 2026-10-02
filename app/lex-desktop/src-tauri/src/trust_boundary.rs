@@ -1470,6 +1470,30 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if is_execution_progress_route(path) => method == "GET",
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
         _ if is_mcp_route(method, path) => true,
+        _ if is_invoice_route(method, path) => true,
+        _ => false,
+    }
+}
+
+// Karta Faktury i Ustawienia → Faktury i KSeF: tylko te trasy i metody.
+fn is_invoice_route(method: &str, path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let invoice_id = |id: &str| {
+        id.len() == 36
+            && id.starts_with("inv_")
+            && id[4..].bytes().all(|b| b.is_ascii_hexdigit())
+    };
+    match segments.as_slice() {
+        ["api", "invoices"] => matches!(method, "GET" | "POST"),
+        ["api", "invoices", "settings"] | ["api", "invoices", "legal-basis"] => method == "GET",
+        ["api", "invoices", "settings", "ksef-token" | "logo"] => {
+            matches!(method, "PUT" | "DELETE")
+        }
+        ["api", "invoices", "settings", "ksef-environment" | "seller"] => method == "PUT",
+        ["api", "invoices", id] => {
+            matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
+        }
+        ["api", "invoices", id, "issue" | "duplicate"] => method == "POST" && invoice_id(id),
         _ => false,
     }
 }
@@ -2055,6 +2079,34 @@ mod tests {
         assert!(!route_allowed("GET", "/api/mcp-search/query"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/SAOS/tools"));
+    }
+
+    #[test]
+    fn allowlist_admits_only_invoice_routes() {
+        let id = "inv_0123456789abcdef0123456789abcdef";
+        assert!(route_allowed("GET", "/api/invoices"));
+        assert!(route_allowed("POST", "/api/invoices"));
+        assert!(route_allowed("GET", "/api/invoices/settings"));
+        assert!(route_allowed("GET", "/api/invoices/legal-basis"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/ksef-token"));
+        assert!(route_allowed("DELETE", "/api/invoices/settings/ksef-token"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/ksef-environment"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
+        assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
+        assert!(route_allowed("GET", &format!("/api/invoices/{id}")));
+        assert!(route_allowed("PUT", &format!("/api/invoices/{id}")));
+        assert!(route_allowed("DELETE", &format!("/api/invoices/{id}")));
+        assert!(route_allowed("POST", &format!("/api/invoices/{id}/issue")));
+        assert!(route_allowed("POST", &format!("/api/invoices/{id}/duplicate")));
+
+        assert!(!route_allowed("DELETE", "/api/invoices"));
+        assert!(!route_allowed("GET", "/api/invoices/settings/ksef-token"));
+        assert!(!route_allowed("PUT", "/api/invoices/settings"));
+        assert!(!route_allowed("GET", "/api/invoices/inv_xyz"));
+        assert!(!route_allowed("GET", "/api/invoices/../cases"));
+        assert!(!route_allowed("GET", &format!("/api/invoices/{id}/issue")));
+        assert!(!route_allowed("POST", &format!("/api/invoices/{id}/send")));
     }
 
     #[test]
