@@ -63,6 +63,7 @@ import {
   isDesktopShell,
   finalizeDocument as finalizeCaseDocument,
   keepAllDirectives,
+  listCaseArtifacts,
   listCaseFiles,
   processStoredCaseFile,
   uploadCaseFile,
@@ -957,6 +958,10 @@ export default function MatterChatApp({
   const [deletePhrase, setDeletePhrase] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
+  // Current names of documents made by a model (renamed in the case files or
+  // in the chat card); the thread keeps the name given at generation.
+  const [artifactNames, setArtifactNames] =
+    useState<Record<string, string>>({});
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
@@ -1811,6 +1816,31 @@ export default function MatterChatApp({
     activeCaseIdRef.current =
       caseId;
   }, [caseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!caseId) {
+      setArtifactNames({});
+      return;
+    }
+    void listCaseArtifacts(caseId)
+      .then((list) => {
+        if (!cancelled) {
+          setArtifactNames(
+            Object.fromEntries(list.map((item) => [item.artifactId, item.filename]))
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setArtifactNames({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, workspaceRefresh]);
+
+  const rememberArtifactName = (artifactId: string, filename: string) =>
+    setArtifactNames((current) => ({ ...current, [artifactId]: filename }));
 
   // A different case closes the file list; a refresh within one case keeps it open.
   useEffect(() => {
@@ -4577,6 +4607,8 @@ export default function MatterChatApp({
                       caseId={caseId}
                       document={message.generatedDocument}
                       canWrite={canWriteCase(selectedCase)}
+                      filename={artifactNames[message.generatedDocument.artifactId]}
+                      onRenamed={rememberArtifactName}
                     />
                   ) : null}
                   {visibleMessageMeta(message.meta) ? (
@@ -5880,6 +5912,7 @@ export default function MatterChatApp({
                 title={`Dokumenty sprawy — ${selectedCase.displayName || "Sprawa bez nazwy"}`}
                 canWrite={canWriteCase(selectedCase)}
                 refreshToken={workspaceRefresh}
+                onArtifactRenamed={rememberArtifactName}
               />
             ) : null}
 

@@ -7,6 +7,7 @@ import {
   type CaseArtifact
 } from "./api.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
+import { ArtifactRenameForm } from "./ArtifactRenameForm.js";
 import { DocumentEditor } from "./DocumentEditor.js";
 import { downloadBlob } from "./download-file.js";
 import {
@@ -24,8 +25,13 @@ export function ChatDocumentCard(props: {
   caseId: string;
   document: GeneratedDocumentRef;
   canWrite: boolean;
+  // Current name from the case files; the thread keeps the name from generation.
+  filename?: string;
+  onRenamed?: (artifactId: string, filename: string) => void;
 }) {
   const { caseId, document } = props;
+  const filename = props.filename ?? document.filename;
+  const [renaming, setRenaming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -72,7 +78,7 @@ export function ChatDocumentCard(props: {
           />
         </svg>
         <div>
-          <strong>{document.filename}</strong>
+          <strong>{filename}</strong>
           <small>
             {document.stage === "DRAFT"
               ? "Szkic · "
@@ -91,7 +97,7 @@ export function ChatDocumentCard(props: {
           onClick={() =>
             void run(async () => {
               const blob = await downloadGeneratedArtifact(caseId, document.artifactId);
-              const saved = await downloadBlob(blob, document.filename);
+              const saved = await downloadBlob(blob, filename);
               setStatus(saved ? `Zapisano: ${saved}` : "Pobieranie rozpoczęte.");
             })
           }
@@ -138,6 +144,11 @@ export function ChatDocumentCard(props: {
             Otwórz w Wordzie
           </button>
         ) : null}
+        {props.canWrite ? (
+          <button type="button" disabled={busy} onClick={() => setRenaming((value) => !value)}>
+            Zmień nazwę
+          </button>
+        ) : null}
         {document.tokenized && props.canWrite ? (
           <button
             type="button"
@@ -159,6 +170,19 @@ export function ChatDocumentCard(props: {
           </button>
         ) : null}
       </div>
+      {renaming ? (
+        <ArtifactRenameForm
+          caseId={caseId}
+          artifactId={document.artifactId}
+          filename={filename}
+          onRenamed={(next) => {
+            setRenaming(false);
+            setStatus(`Zmieniono nazwę na „${next}”.`);
+            props.onRenamed?.(document.artifactId, next);
+          }}
+          onCancel={() => setRenaming(false)}
+        />
+      ) : null}
       {status ? <p className="chat-inline-success">{status}</p> : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}
       {deanonymize ? (
@@ -174,7 +198,7 @@ export function ChatDocumentCard(props: {
       {preview ? (
         <div className="chat-document-preview">
           <DocumentEditor
-            filename={document.filename}
+            filename={filename}
             format={document.format}
             blocks={preview}
             readOnly={!props.canWrite}

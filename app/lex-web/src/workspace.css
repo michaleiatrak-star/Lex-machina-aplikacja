@@ -936,6 +936,31 @@
   border-top: 1px dashed #e3e7df;
 }
 
+.artifact-rename-form {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 0;
+}
+
+.artifact-rename-form label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.artifact-rename-form input {
+  min-width: min(320px, 100%);
+}
+
+.artifact-rename-form .chat-inline-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .anonymized-legend {
   margin: 0 0 8px;
   color: #6d786f;
