@@ -169,8 +169,10 @@ function chooseAssets(
         .filter((asset): asset is VerifiedReleaseAsset => Boolean(asset))
     : [];
 
-  const installer =
-    assets.find((asset) =>
+  // macOS: the online .pkg of the same release (the Windows .exe never applies).
+  const installer = process.platform === "darwin"
+    ? assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name))
+    : assets.find((asset) =>
       /lexmachina.*windows.*online.*installer.*\.exe$/i.test(asset.name)
     ) ??
     assets.find((asset) =>
