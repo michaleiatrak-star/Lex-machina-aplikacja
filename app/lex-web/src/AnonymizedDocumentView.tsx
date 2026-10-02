@@ -12,6 +12,7 @@ import {
 } from "./api.js";
 import { KIND_LABEL, PrivacyKeyTable } from "./PrivacyKeyTable.js";
 import { modelExportFilename, modelExportText } from "./model-export.js";
+import { downloadBlob } from "./download-file.js";
 
 const TOKEN = /(\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/;
 const PAGE_HEADER = /\[STRONA (\d+)(?: · CZĘŚĆ (\d+)\/(\d+))? · [A-Z]+\]\n?/g;
@@ -235,12 +236,16 @@ export function AnonymizedDocumentView(props: {
               <button
                 type="button"
                 onClick={() => {
-                  const url = URL.createObjectURL(new Blob([exportText()], { type: "text/plain;charset=utf-8" }));
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = modelExportFilename(props.filename);
-                  link.click();
-                  URL.revokeObjectURL(url);
+                  void downloadBlob(
+                    new Blob([exportText()], { type: "text/plain;charset=utf-8" }),
+                    modelExportFilename(props.filename)
+                  )
+                    .then((savedPath) => {
+                      if (savedPath) setStatus(`Zapisano: ${savedPath}`);
+                    })
+                    .catch((error) =>
+                      setStatus(`Nie udało się zapisać pliku: ${error instanceof Error ? error.message : String(error)}`)
+                    );
                 }}
               >
                 Pobierz .txt dla modelu

@@ -15,7 +15,8 @@ export type ProviderConfigurationStatus = {
 const PROVIDERS: ProviderId[] = [
   "openai",
   "anthropic",
-  "xai"
+  "xai",
+  "google"
 ];
 
 function localAiRoot(): string {
@@ -196,7 +197,8 @@ export async function providerConfigurationStatus(
 const PROVIDER_ENV: Record<ProviderId, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
-  xai: "XAI_API_KEY"
+  xai: "XAI_API_KEY",
+  google: "GOOGLE_GENERATIVE_AI_API_KEY"
 };
 
 export class EnvironmentCredentialResolver

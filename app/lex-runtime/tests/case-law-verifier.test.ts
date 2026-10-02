@@ -186,6 +186,41 @@ describe("SupremeCourtCaseVerifier", () => {
     );
   });
 
+  it("accepts sn.pl wrappers seen in 2026-09: list as PHP object, single record, unknown collection key", async () => {
+    const record = {
+      id: "wrapped-1",
+      sygnatura_sprawy: "II CSK 101/20",
+      data_wydania: "2021-03-18",
+      forma_orzeczenia: "postanowienie"
+    };
+    const envelope = (inner: unknown) => ({
+      success: true,
+      message: null,
+      messages: null,
+      data: [{ success: true, message: null, messages: null, data: inner }]
+    });
+    for (const inner of [
+      { "0": record },
+      record,
+      { lista: [record], liczba: 1 }
+    ]) {
+      const fetcher = vi.fn(async (input: string | URL) =>
+        String(input).includes("task=searchOrzeczenia")
+          ? json(envelope(inner))
+          : fullText("II CSK 101/20")
+      );
+      const result = await new SupremeCourtCaseVerifier(fetcher).verify({
+        claim: "sygn. II CSK 101/20",
+        signature: "II CSK 101/20",
+        toolCallId: "case-tool-wrapped"
+      });
+      expect(result).toMatchObject({
+        status: "FOUND",
+        judgment: { id: "wrapped-1", contentScope: "FULL_TEXT" }
+      });
+    }
+  });
+
   it("still fails closed for a nested SN shape without recognizable judgment records", async () => {
     const fetcher = vi.fn(
       async () =>

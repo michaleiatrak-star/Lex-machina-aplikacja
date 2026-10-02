@@ -1,4 +1,5 @@
-export type LegalActId = "KC" | "KPC" | "KPK" | "KK";
+// "ELI" = akt spoza rejestru opisany z Sejm ELI (eli-act-descriptor.ts).
+export type LegalActId = "KC" | "KPC" | "KPK" | "KK" | "ELI";
 
 export type LegalActDescriptor = {
   id: LegalActId;

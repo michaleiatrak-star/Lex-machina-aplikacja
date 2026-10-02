@@ -1,0 +1,246 @@
+name: Publish Lex Machina 0.1.10 hotfix 22 online installer
+
+# Builds, accepts and publishes the online installer in one run: runtime
+# validation, the G33D online installer build and installed-copy acceptance,
+# then the exact accepted artifact is attached to a pre-release at GITHUB_SHA.
+
+on:
+  push:
+    branches:
+      - "claude/modest-knuth-re40mu"
+    paths:
+      - ".github/workflows/publish-0.1.10-hotfix22.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: lex-publish-0.1.10-hotfix22
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.1.10-hotfix22
+  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 22
+  ASSET_NAME: Lex-Machina-0.1.10-hotfix22-Online-x64-Setup.exe
+
+jobs:
+  runtime:
+    name: Runtime and Gate I audit
+    uses: ./.github/workflows/lex-runtime.yml
+    secrets: inherit
+
+  online:
+    name: Accepted online installer
+    needs:
+      - runtime
+    uses: ./.github/workflows/lex-installer.yml
+    secrets: inherit
+
+  publish:
+    name: Publish accepted online installer
+    needs:
+      - runtime
+      - online
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download accepted online installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-Windows-Online-Installer
+          path: release-input/online
+
+      - name: Verify receipt and assemble release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-out
+
+          online_exe="$(find release-input/online -type f -iname '*.exe' -print -quit)"
+          online_receipt="$(find release-input/online -type f -name 'SHA256.txt' -print -quit)"
+          for required in "$online_exe" "$online_receipt"; do
+            [[ -n "$required" && -f "$required" ]] || {
+              echo "RELEASE_ACCEPTED_ASSET_MISSING:$required" >&2
+              exit 1
+            }
+          done
+
+          expected="$(awk -F= '$1=="sha256"{print $2}' "$online_receipt" | tr -d '\r\n ')"
+          actual="$(sha256sum "$online_exe" | awk '{print $1}')"
+          [[ "$expected" == "$actual" ]] || {
+            echo "ONLINE_RELEASE_HASH_MISMATCH expected=$expected actual=$actual" >&2
+            exit 1
+          }
+
+          cp "$online_exe" "release-out/$ASSET_NAME"
+          cp "$online_receipt" release-out/CI-SHA256-ONLINE.txt
+          cp app/lex-version.yaml release-out/LEX-VERSION.yaml
+          printf '%s\n' "$GITHUB_SHA" > release-out/SOURCE-SHA.txt
+          (
+            cd release-out
+            sha256sum "$ASSET_NAME" LEX-VERSION.yaml > SHA256SUMS.txt
+          )
+          cat release-out/SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-out/RELEASE-NOTES.md <<'EOF'
+          ## Lex Machina 0.1.10 hotfix 22
+
+          Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
+
+          ### Gemini i Grok przez konto: pobieranie klienta działa bez osobnego Node
+          - pobieranie klienta Gemini CLI i Grok Build kończyło się „Pobieranie klienta nie powiodło się”: skrypty instalacyjne tych paczek uruchamiają Node, a na komputerze bez osobno zainstalowanego Node nie mogły go znaleźć (aplikacja ma Node tylko we własnym pakiecie); teraz instalator paczek dostaje Node z pakietu aplikacji;
+          - przy błędzie pobierania widać przyczynę i linie błędu npm zamiast ogólnego „sieć lub serwer npm”.
+
+          ### Z hotfix 21: EUREKA, trafne wyniki i podgląd dokumentu
+          - wyszukiwanie w EUREKA szuka frazy w całości, tak jak portal eureka.mf.gov.pl; wcześniej słowa były szukane osobno i np. „akcyza alkohol” dawało 3722 niepowiązanych wyników posortowanych po dacie (podział spółek, ryczałt), teraz 454, te same co na stronie EUREKA;
+          - „Podgląd źródła” dla EUREKA pokazuje dokument (teza, sygnatura, data, treść) z oficjalnego API; wcześniej ramka była pusta, bo strona EUREKA wyświetla treść wyłącznie przez JavaScript;
+          - inne strony źródeł, które pokazują treść tylko przez JavaScript, dają komunikat z odnośnikiem zamiast pustej ramki.
+
+          ### Z hotfix 20: Połącz konto z widocznym postępem
+          - przy pierwszym połączeniu Gemini lub Groka aplikacja pobiera oficjalnego klienta (kilkadziesiąt–kilkaset MB, zwykle 1–5 minut); wcześniej trwało to bez żadnego komunikatu, a okno logowania pojawiało się dopiero po pobraniu albo wcale (pośrednik desktopu przerywał zapytanie po 5 minutach);
+          - teraz pasek etapów: sprawdzanie klienta → pobieranie (liczba pakietów, MB na dysku, czas) → sprawdzanie pobranego klienta → logowanie w oknie dostawcy; postęp widać także przy przycisku „Połącz konto” w oknie czatu;
+          - pobieranie działa w tle i nie liczy się do czasu logowania; ponowne kliknięcie nie uruchamia drugiej instalacji;
+          - błąd pobierania ma czytelną przyczynę (sieć lub serwer npm, przekroczony czas, brak npm).
+
+          ### Z hotfix 19: Grok przez konto, jedno kliknięcie
+          - „Połącz konto” przy „Grok · konto” samo pobiera oficjalny klient Grok Build (@xai-official/grok 1.0.44, wydawca xAI) do prywatnego katalogu użytkownika i otwiera logowanie; wcześniej trzeba było zainstalować go ręcznie;
+          - gdy klient Grok kończył działanie od razu (np. brak logowania), runtime mógł przerwać pracę błędem zapisu (EPIPE); teraz zapytanie kończy się zwykłym komunikatem.
+
+          ### Z hotfix 18: Gemini przez konto Google, jedno kliknięcie
+          - „Połącz konto” przy „Gemini · konto Google” samo pobiera Gemini CLI i otwiera logowanie Google; wcześniej przycisk „Instalacja Gemini CLI” odsyłał na stronę GitHuba (tak samo dla ChatGPT i Claude, gdy klienta jeszcze nie było);
+          - po pobraniu Gemini CLI runtime rozpoznawał go błędnie jako klienta Claude Code i zgłaszał brak programu; teraz wskazuje właściwy plik.
+
+          ### Z hotfix 17: pisma, szkic po cyklu, gotowy dokument na końcu
+          - po zakończonym cyklu pisma prostego albo etapu pisma procesowego Lex Machina sama tworzy plik .docx w oknie czatu: „Szkic” po etapach, „Gotowy dokument” na końcu (pismo proste: wszystkie bramki i weryfikacja przeszły; pismo procesowe: status FINAL);
+          - karta dokumentu: Podgląd i edycja w oknie czatu (zapis jako nowy plik w aktach sprawy, oryginał bez zmian), Pobierz, Pobierz wersję edytowaną, Otwórz w Wordzie, Deanonimizuj.
+
+          ### Wyszukiwanie: podgląd źródła w ramce
+          - „Podgląd źródła” przy wynikach CBOSA, SAOS, EUREKA, UODO, ISAP/ELI, EUR-Lex i SN: strona oficjalnego źródła w ramce w aplikacji (PDF w przeglądarce PDF);
+          - runtime pobiera stronę wyłącznie z listy oficjalnych domen (także po przekierowaniach), usuwa skrypty i aktywne elementy, a ramka działa bez skryptów i formularzy.
+
+          ### Z hotfix 16: Google Gemini jako model
+          - Ustawienia → Modele i AI: „Google Gemini · API” (klucz z Google AI Studio, zapisywany w magazynie kluczy systemu jak klucze OpenAI/Anthropic/xAI) oraz „Gemini · konto Google” (logowanie kontem Google przez oficjalny Gemini CLI, bez klucza API);
+          - Gemini CLI nie jest częścią instalatora: po wybraniu konta Google Lex Machina pobiera przypiętą wersję klienta (@google/gemini-cli 0.62.0) do prywatnego katalogu użytkownika; na Windows otwiera się widoczny terminal z logowaniem w przeglądarce, po zalogowaniu wpisz /quit;
+          - Gemini przez konto działa w trybie tylko do odczytu, zawsze w świeżej sesji (bez wznawiania wątków), a Lex Machina przekazuje cały kontekst rozmowy sama; klucz API w środowisku jest ignorowany przy logowaniu kontem;
+          - lista modeli z API: tylko modele generujące treść, dwie najnowsze wersje rodzin Gemini Pro i Flash; historia rozmowy dla Gemini ok. 300 000 znaków.
+
+          ### Z hotfix 15: AST_INLINE_ARRAY_INVALID (ChatGPT)
+          - model zapisywał treść akapitu jako zwykły tekst, pojedynczy obiekt albo listę napisów, a walidator wymaga listy elementów; runtime ujednolica kształt bloków (akapit, nagłówek, lista, tabela, tytuł) bez zmiany treści pisma;
+          - przy odrzuceniu kształtu błąd podaje typy i klucze bloków (bez treści pisma).
+
+          ### Poprawka: „wygeneruj plik doc” trafiało do zwykłego czatu
+          - rozpoznawane są też „doc”, „plik”, „w Wordzie”, „worda”; wcześniej tylko „docx”, „word”, „odt” i nazwy pism, więc Claude odpowiadał, że nie ma narzędzia do plików.
+
+          ### Z hotfix 14: ChatGPT zwracał JSON routera zamiast pisma (AST_HEADER_INVALID)
+          - połączenie przez konto ChatGPT (Codex) wznawiało wspólny wątek CLI dla wywołań bez klucza ciągłości, a gdy go nie było — ostatnią sesję Codex na komputerze; router skilli i generator pisma trafiały do jednego wątku, więc model powtarzał instrukcję routera ({"legal", "primarySkill", ...}) zamiast zwrócić treść dokumentu;
+          - router skilli i generator pisma działają teraz w świeżej sesji: bez wznawiania, bez przejmowania ostatniej sesji CLI i bez zapisu wątku (ChatGPT, Claude, Grok); kontynuacja czatu w sprawie bez zmian;
+          - kontrakt pisma wymaga niepustej listy bloków i zabrania kluczy routera.
+
+          ### Dokument w oknie czatu
+          - wygenerowane pismo pojawia się w czacie jako karta pliku: Pobierz (na desktopie zapis w folderze Pobrane ze ścieżką), Podgląd w oknie czatu, Otwórz w Wordzie (desktop), Deanonimizuj — maszynowe przywrócenie danych z klucza sprawy po potwierdzeniu hasłem, z jednorazowym pobraniem wersji z danymi;
+          - plik nie jest już zapisywany automatycznie; karta zostaje w wątku sprawy po ponownym otwarciu.
+
+          ### Weryfikacja SN
+          - parser wyszukiwarki sn.pl przyjmuje kolejne warianty odpowiedzi (pojedynczy rekord, lista jako obiekt, kolekcja pod innym kluczem); rekord nadal musi mieć sygnaturę.
+
+          ### Z hotfix 13: dłuższy kontekst rozmowy
+          - do modelu trafiała historia rozmowy przycięta do 28 000 znaków (ok. 7–8 tys. tokenów), choć okna modeli mają 128–200 tys. tokenów; teraz budżet zależy od modelu: Claude ok. 300 000 znaków (ok. 100 tys. tokenów), ChatGPT i xAI ok. 150 000 znaków (ok. 50 tys. tokenów), modele lokalne (Bielik, Mistral) bez zmian (28 000 znaków);
+          - gdy rozmowa się nie mieści, pomijane są najstarsze wiadomości w całości, z wyraźną informacją „wcześniejsza część rozmowy pominięta”, zamiast ucinania tekstu w połowie;
+          - budżet dokumentów w oknie modelu uwzględnia teraz całą długość rozmowy, więc długa rozmowa z załącznikami nie przepełnia okna (załączniki dostają mniej miejsca i są streszczane jak dotąd);
+          - dłuższa historia oznacza więcej tokenów w każdym zapytaniu, czyli wyższy koszt i dłuższy czas odpowiedzi przy modelach płatnych.
+
+          ### Z hotfix 12: plik .docx nie trafiał na dysk (desktop)
+          - okno aplikacji desktopowej (WebView) po cichu ignoruje przeglądarkowe „pobierz” dla plików tworzonych w pamięci, więc czat pisał „pobrany jako DOCX”, a plik nie powstawał (dotyczyło też finalnego pisma po reautoryzacji, wersji tokenizowanej, deanonimizacji w aktach i eksportu .txt dla modelu);
+          - teraz runtime zapisuje plik w folderze Pobrane użytkownika, a czat podaje pełną ścieżkę; istniejący plik nie jest nadpisywany (kolejna kopia dostaje numer), dozwolone tylko .docx, .odt, .pdf, .txt;
+          - nowa trasa POST /api/downloads/save (zalogowany użytkownik, w allowliście proxy desktopu).
+
+          ### Z hotfix 12: AST_HEADER_INVALID (ChatGPT)
+          - nagłówek pisma (wersja schematu, język, typ, profil stylu) zawiera wyłącznie wartości ustalone przez aplikację, a modele zapisują go różnie (schemaVersion jako liczba, „pl” zamiast „pl-PL”, brak pola, pismo opakowane w „document”, „content” zamiast „blocks”) i cały dokument był odrzucany; runtime uzupełnia i ujednolica nagłówek, treść pisma (bloki) jest sprawdzana jak dotąd;
+          - gdyby nagłówek nadal był odrzucony, błąd podaje pola nagłówka i klucze odpowiedzi (bez treści pisma).
+
+          ### Z hotfix 11
+          - .docx bez fałszywego „brakującego załącznika” (G39I sprawdza tylko bieżącą wiadomość); przyczyna blokady w czacie; zmiana nazwy sprawy w panelu bocznym.
+
+          ### Karta Wyszukiwanie: strona wyników zamiast kodu
+          - wynik jako lista pozycji: tytuł/sygnatura, sąd, daty, prawomocność, fragment, „Otwórz w źródle”;
+          - „Pokaż treść”: pełna treść orzeczenia, interpretacji lub decyzji (CBOSA, EUREKA, UODO) pod pozycją, treść porcjowana doczytywana przyciskiem;
+          - „Wczytaj kolejne wyniki”: kolejne strony dopisywane do listy (licznik trafień w źródle i wyświetlonych);
+          - wyniki rejestrów (KRS, biała lista VAT, NBP, CEIDG) jako pola; surowa odpowiedź tylko w zwiniętych „Danych technicznych”.
+
+          ### Poprawka: CBOSA „Niekompletny transport HTTP”
+          - serwer CBOSA porównywał długość rozpakowanej odpowiedzi gzip z nagłówkiem Content-Length skompresowanej, więc każde wyszukiwanie kończyło się błędem; kontrola dotyczy teraz tylko odpowiedzi bez kompresji (pakiet lex-mcp.mjs i CHECKSUMS.sha256 skilla audyt-systemu-v4 zaktualizowane).
+
+          ### Weryfikacja przepisów (z hotfix 8)
+          - modele w chmurze (ChatGPT, Claude): każdy akt, także KC/KPC/KK/KPK, weryfikowany w źródle Sejm ELI z kontrolą aktualności (bieżący tekst jednolity i nowelizacje po nim); lokalna kopia (RAG) wyłącznie przy awarii samego ELI, a wynik ma wtedy wyraźną informację (sourceNotice: ELI niedostępne, data kopii), którą model musi przekazać przy przepisie; odmowy merytoryczne (np. nowelizacje po t.j.) nie przechodzą na kopię;
+          - modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG); gdy kopia nie może odpowiedzieć (brak aktu, brak tekstu, nowelizacje po t.j.), próba w ELI i dołączenie aktu do kopii;
+          - akt spoza map DR jest ustalany po Dz.U. albo jednoznacznym tytule w wyszukiwarce ELI, a po weryfikacji dołączany do lokalnej kopii i RAG; gdy źródło ma nowszy tekst jednolity niż kopia, kopia jest odświeżana;
+          - lokalna kopia: pusty text.html obwieszczenia t.j. (np. Kodeks karny) przechodzi na PDF, a PDF (np. Kodeks wykroczeń) jest czytany z podziałem na wiersze; wcześniej obie kopie nie miały żadnego artykułu (CORE_LAW_TEXT_UNAVAILABLE); kopie bez artykułów są pobierane ponownie;
+          - znacznik NIEWERYFIKOWANE nie jest już wstawiany przy „art. N”, gdy w tym samym wierszu jest znacznik VER zweryfikowanej jednostki tego artykułu (np. art. 46 ust. 2).
+
+          Zawiera wszystkie zmiany hotfix 21, hotfix 20, hotfix 19, hotfix 18, hotfix 17, hotfix 16, hotfix 15, hotfix 14, hotfix 13, hotfix 12, hotfix 11, hotfix 10, hotfix 9 (kanały skilli, polskie etykiety wyszukiwania, .docx pisma prostego, pasek okna modelu na desktopie), hotfix 8 (weryfikacja przepisów), hotfix 7 (trasy konektorów MCP i karty Wyszukiwanie na desktopie, generowanie .docx) i hotfix 5.
+
+          Pre-release: produkcyjne certyfikaty Authenticode nie są skonfigurowane, Windows SmartScreen może ostrzec. Sprawdź instalator z SHA256SUMS.txt.
+          EOF
+
+      # GITHUB_TOKEN nie może założyć tagu na commicie, który zmienia pliki workflow
+      # względem main (HTTP 403). Tag trafia na commit-punkt: drzewo aplikacji = build
+      # GITHUB_SHA, katalog .github = main, rodzic = GITHUB_SHA (jak w hotfix 5).
+      - name: Create pre-release on a tag point commit and upload installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(gh api "$api/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+            tag_parent="$(gh api "$api/git/commits/$tag_sha" --jq '.parents[0].sha')"
+            [[ "$tag_sha" == "$GITHUB_SHA" || "$tag_parent" == "$GITHUB_SHA" ]] || {
+              echo "IMMUTABLE_RELEASE_TAG_MISMATCH tag=$tag_sha parent=$tag_parent source=$GITHUB_SHA" >&2
+              exit 1
+            }
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease
+          else
+            main_sha="$(gh api "$api/git/ref/heads/main" --jq '.object.sha')"
+            main_tree="$(gh api "$api/git/commits/$main_sha" --jq '.tree.sha')"
+            main_github="$(gh api "$api/git/trees/$main_tree" --jq '.tree[] | select(.path==".github") | .sha')"
+            source_tree="$(gh api "$api/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
+            [[ -n "$main_github" && -n "$source_tree" ]] || {
+              echo "TAG_POINT_TREE_UNRESOLVED" >&2
+              exit 1
+            }
+            tag_tree="$(jq -n --arg base "$source_tree" --arg gh "$main_github" \
+              '{base_tree: $base, tree: [{path: ".github", mode: "040000", type: "tree", sha: $gh}]}' |
+              gh api -X POST "$api/git/trees" --input - --jq '.sha')"
+            tag_point="$(jq -n --arg tree "$tag_tree" --arg parent "$GITHUB_SHA" --arg tag "$RELEASE_TAG" \
+              '{message: ("Punkt tagu " + $tag + ": .github jak na main, aplikacja = " + $parent), tree: $tree, parents: [$parent]}' |
+              gh api -X POST "$api/git/commits" --input - --jq '.sha')"
+            echo "tag point $tag_point (tree $tag_tree, source $GITHUB_SHA)"
+            printf 'tag_point=%s\n' "$tag_point" >> release-out/SOURCE-SHA.txt
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease \
+              --target "$tag_point"
+          fi
+
+          gh release upload "$RELEASE_TAG" --clobber \
+            "release-out/$ASSET_NAME" \
+            release-out/SHA256SUMS.txt \
+            release-out/CI-SHA256-ONLINE.txt \
+            release-out/SOURCE-SHA.txt \
+            release-out/LEX-VERSION.yaml
+
+          gh release view "$RELEASE_TAG" --json url,tagName,isPrerelease,assets \
+            --jq '{url, tagName, isPrerelease, assets: [.assets[] | {name, url}]}'

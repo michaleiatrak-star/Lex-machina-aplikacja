@@ -24,8 +24,12 @@ use tauri::http::{Request, Response, StatusCode};
 const MAX_REQUEST_BYTES: usize = 160 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 192 * 1024 * 1024;
 const DEFAULT_PROXY_READ_TIMEOUT_SECS: u64 = 120;
+// Direct MCP search: SAOS retries up to 3 x 45 s, CEIDG 2 x 45 s, SUDOP waits
+// 50 s for its queue; the runtime gives a connector call up to 280 s.
+const MCP_SEARCH_PROXY_READ_TIMEOUT_SECS: u64 = 300;
 const LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS: u64 = 300;
-const PROVIDER_ACCOUNT_LOGIN_PROXY_READ_TIMEOUT_SECS: u64 = 300;
+// Login waits up to 5 min for the user in the official client window.
+const PROVIDER_ACCOUNT_LOGIN_PROXY_READ_TIMEOUT_SECS: u64 = 420;
 const AI_SESSION_PROXY_READ_TIMEOUT_SECS: u64 = 1_200;
 const LOCAL_MODEL_MAINTENANCE_PROXY_READ_TIMEOUT_SECS: u64 = 7_200;
 // OCR, text extraction and local-model PII detection run inside these calls;
@@ -330,7 +334,7 @@ impl RuntimeBridge {
     }
 
     fn restore_provider_credentials(&self) -> Result<(), String> {
-        for provider in ["openai", "anthropic", "xai"] {
+        for provider in ["openai", "anthropic", "xai", "google"] {
             let entry = Entry::new(
                 PROVIDER_KEYRING_SERVICE,
                 provider,
@@ -925,7 +929,7 @@ fn provider_credential_from_request(
     ];
     if !matches!(
         provider,
-        "openai" | "anthropic" | "xai"
+        "openai" | "anthropic" | "xai" | "google"
     ) {
         return Err(
             "DESKTOP_PROVIDER_INVALID".to_string()
@@ -1391,6 +1395,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/deanonymization/preview"
         | "/api/privacy/name-forms"
         | "/api/sessions/execute"
+        | "/api/sessions/document-fit"
+        | "/api/downloads/save"
         | "/api/routes/validate" => method == "POST",
         "/api/cases"
         | "/api/skills"
@@ -1406,6 +1412,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
             method == "GET"
                 || (path == "/api/cases" && method == "POST")
         }
+        "/api/skills/channel/status" => method == "GET",
+        "/api/skills/channel/refresh" => method == "POST",
         "/api/update/download"
         | "/api/local-models/provision"
         | "/api/local-models/repair"
@@ -1422,6 +1430,14 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/admin/users") => {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
+        "/api/admin/case-access" => method == "GET",
+        "/api/core-law/status" => method == "GET",
+        "/api/core-law/check"
+        | "/api/core-law/apply"
+        | "/api/core-law/acts"
+        | "/api/core-law/acts/lookup"
+        | "/api/core-law/acts/remove" => method == "POST",
+        "/api/core-law/settings" => method == "PUT",
         "/api/admin/provider-accounts/anthropic/oauth-token" => {
             matches!(method, "PUT" | "DELETE")
         }
@@ -1432,6 +1448,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
             && path.ends_with("/login") =>
         {
             method == "POST"
+        }
+        _ if path.starts_with("/api/provider-accounts/")
+            && path.ends_with("/provision") =>
+        {
+            matches!(method, "GET" | "POST")
         }
         _ if path.starts_with("/api/admin/support") => {
             matches!(method, "GET" | "POST")
@@ -1448,6 +1469,30 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/models/") => method == "GET",
         _ if is_execution_progress_route(path) => method == "GET",
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
+        _ if is_mcp_route(method, path) => true,
+        _ => false,
+    }
+}
+
+// Konektory MCP (Ustawienia) i karta Wyszukiwanie: tylko te trasy i metody.
+fn is_mcp_route(method: &str, path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let server_id = |id: &str| {
+        (1..=16).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_lowercase())
+    };
+    match segments.as_slice() {
+        ["api", "admin", "mcp-connectors"] => method == "GET",
+        ["api", "admin", "mcp-connectors", "ceidg", "key"] => {
+            matches!(method, "PUT" | "DELETE")
+        }
+        ["api", "admin", "mcp-connectors", id, "install" | "uninstall" | "check"] => {
+            method == "POST" && server_id(id)
+        }
+        ["api", "mcp-search", "sources"] => method == "GET",
+        ["api", "mcp-search", "sources", id, "tools"] => method == "GET" && server_id(id),
+        ["api", "mcp-search", "query"] => method == "POST",
+        // Podgląd strony źródła (runtime pobiera tylko z oficjalnych domen).
+        ["api", "mcp-search", "source-preview"] => method == "POST",
         _ => false,
     }
 }
@@ -1485,11 +1530,21 @@ fn is_document_processing_route(path: &str) -> bool {
     }
 }
 
+// Generowanie pisma to pełna sesja modelu (router, weryfikacja, AST) — lokalny model
+// potrzebuje na nią tyle samo czasu co /api/sessions/execute, nie domyślnych 120 s.
+fn is_document_generation_route(path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    matches!(
+        segments.as_slice(),
+        ["api", "cases", case_id, "artifacts", "generate"] if !case_id.is_empty()
+    )
+}
+
 fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
     let method = request.method().as_str();
     let path = request.uri().path();
 
-    if method == "POST" && path == "/api/sessions/execute" {
+    if method == "POST" && (path == "/api/sessions/execute" || is_document_generation_route(path)) {
         return Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS);
     }
 
@@ -1497,6 +1552,10 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
         return Duration::from_secs(
             DOCUMENT_PROCESSING_PROXY_READ_TIMEOUT_SECS,
         );
+    }
+
+    if method == "POST" && path == "/api/mcp-search/query" {
+        return Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS);
     }
 
     if method == "POST" && path == "/api/local-models/start" {
@@ -1518,6 +1577,7 @@ fn proxy_read_timeout(request: &Request<Vec<u8>>) -> Duration {
             "/api/local-models/provision"
                 | "/api/local-models/repair"
                 | "/api/local-models/update/apply"
+                | "/api/skills/channel/refresh"
         )
     {
         return Duration::from_secs(
@@ -1902,6 +1962,18 @@ mod tests {
         assert!(route_allowed("POST", "/api/update/download"));
         assert!(route_allowed("GET", "/api/local-models"));
         assert!(route_allowed("GET", "/api/provider-accounts"));
+        assert!(route_allowed("GET", "/api/admin/case-access"));
+        assert!(!route_allowed("POST", "/api/admin/case-access"));
+        assert!(route_allowed("GET", "/api/core-law/status"));
+        assert!(route_allowed("POST", "/api/core-law/check"));
+        assert!(route_allowed("POST", "/api/core-law/apply"));
+        assert!(route_allowed("PUT", "/api/core-law/settings"));
+        assert!(!route_allowed("DELETE", "/api/core-law/settings"));
+        assert!(route_allowed("POST", "/api/core-law/acts"));
+        assert!(route_allowed("POST", "/api/core-law/acts/lookup"));
+        assert!(route_allowed("POST", "/api/core-law/acts/remove"));
+        assert!(!route_allowed("GET", "/api/core-law/acts"));
+        assert!(!route_allowed("DELETE", "/api/core-law/acts/DU/2025/126"));
         assert!(route_allowed(
             "POST",
             "/api/provider-accounts/openai/login"
@@ -1909,6 +1981,18 @@ mod tests {
         assert!(!route_allowed(
             "DELETE",
             "/api/provider-accounts/openai/login"
+        ));
+        assert!(route_allowed(
+            "POST",
+            "/api/provider-accounts/google/provision"
+        ));
+        assert!(route_allowed(
+            "GET",
+            "/api/provider-accounts/xai/provision"
+        ));
+        assert!(!route_allowed(
+            "DELETE",
+            "/api/provider-accounts/xai/provision"
         ));
         assert!(route_allowed("GET", "/api/local-models/update/status"));
         assert!(route_allowed("POST", "/api/local-models/update/apply"));
@@ -1949,6 +2033,53 @@ mod tests {
     }
 
     #[test]
+    fn allowlist_admits_only_mcp_connector_and_search_routes() {
+        assert!(route_allowed("GET", "/api/admin/mcp-connectors"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/nbp/install"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/cbosa/uninstall"));
+        assert!(route_allowed("POST", "/api/admin/mcp-connectors/isap/check"));
+        assert!(route_allowed("PUT", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("DELETE", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("GET", "/api/mcp-search/sources"));
+        assert!(route_allowed("GET", "/api/mcp-search/sources/saos/tools"));
+        assert!(route_allowed("POST", "/api/mcp-search/query"));
+        assert!(route_allowed("POST", "/api/mcp-search/source-preview"));
+        assert!(!route_allowed("GET", "/api/mcp-search/source-preview"));
+
+        assert!(!route_allowed("DELETE", "/api/admin/mcp-connectors"));
+        assert!(!route_allowed("GET", "/api/admin/mcp-connectors/nbp/install"));
+        assert!(!route_allowed("POST", "/api/admin/mcp-connectors/nbp/delete"));
+        assert!(!route_allowed("POST", "/api/admin/mcp-connectors/../install"));
+        assert!(!route_allowed("GET", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(!route_allowed("POST", "/api/mcp-search/sources"));
+        assert!(!route_allowed("GET", "/api/mcp-search/query"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sources/SAOS/tools"));
+    }
+
+    #[test]
+    fn allowlist_admits_document_fit_check() {
+        // Pasek okna modelu i blokada zbyt dużych plików przed wysłaniem.
+        assert!(route_allowed("POST", "/api/sessions/document-fit"));
+        assert!(!route_allowed("GET", "/api/sessions/document-fit"));
+    }
+
+    #[test]
+    fn allowlist_admits_download_save() {
+        // Zapis wygenerowanego pisma w folderze Pobrane (WebView nie pobiera blob URL).
+        assert!(route_allowed("POST", "/api/downloads/save"));
+        assert!(!route_allowed("GET", "/api/downloads/save"));
+    }
+
+    #[test]
+    fn allowlist_admits_skill_channel_routes() {
+        assert!(route_allowed("GET", "/api/skills/channel/status"));
+        assert!(route_allowed("POST", "/api/skills/channel/refresh"));
+        assert!(!route_allowed("POST", "/api/skills/channel/status"));
+        assert!(!route_allowed("GET", "/api/skills/channel/refresh"));
+    }
+
+    #[test]
     fn long_running_local_ai_routes_have_extended_proxy_timeouts() {
         let session = Request::builder()
             .method("POST")
@@ -1958,6 +2089,25 @@ mod tests {
         assert_eq!(
             proxy_read_timeout(&session),
             Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS)
+        );
+
+        let generate = Request::builder()
+            .method("POST")
+            .uri("/api/cases/case_0123456789abcdef/artifacts/generate")
+            .body(Vec::new())
+            .expect("document generation request");
+        assert_eq!(
+            proxy_read_timeout(&generate),
+            Duration::from_secs(AI_SESSION_PROXY_READ_TIMEOUT_SECS)
+        );
+        let empty_case = Request::builder()
+            .method("POST")
+            .uri("/api/cases//artifacts/generate")
+            .body(Vec::new())
+            .expect("empty case request");
+        assert_eq!(
+            proxy_read_timeout(&empty_case),
+            Duration::from_secs(DEFAULT_PROXY_READ_TIMEOUT_SECS)
         );
 
         let login = Request::builder()
@@ -1982,6 +2132,16 @@ mod tests {
             Duration::from_secs(
                 LOCAL_MODEL_START_PROXY_READ_TIMEOUT_SECS
             )
+        );
+
+        let mcp_search = Request::builder()
+            .method("POST")
+            .uri("/api/mcp-search/query")
+            .body(Vec::new())
+            .expect("mcp search request");
+        assert_eq!(
+            proxy_read_timeout(&mcp_search),
+            Duration::from_secs(MCP_SEARCH_PROXY_READ_TIMEOUT_SECS)
         );
 
         for path in [

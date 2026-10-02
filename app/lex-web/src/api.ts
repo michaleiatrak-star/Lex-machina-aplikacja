@@ -1,6 +1,6 @@
 import type { RestorationMark } from "./workspace-client.js";
 
-export type ProviderId = "openai" | "anthropic" | "xai";
+export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
 export type AuthStatusResponse = {
   initialized: boolean;
@@ -870,6 +870,8 @@ export type SkillUpdateStatusResponse = {
     | "INDEX_MISSING"
     | "SIGNED_INDEX_MISSING"
     | "SIGNER_POLICY_MISSING";
+  unavailableReason?: string;
+  repository?: string;
 };
 
 export type SkillUpdateApplyResponse = {
@@ -997,6 +999,7 @@ export type SessionExecutionResponse = {
     closed: boolean;
     missing?: string[];
     violations?: string[];
+    blockedEvents?: string[];
   };
   workflow?: {
     id: string;
@@ -1878,6 +1881,149 @@ export function listCaseAccess(
   );
 }
 
+// Local copy of law from Sejm ELI (RAG) and its updates.
+export type CoreLawAmendment = {
+  eli: string;
+  title: string | null;
+  promulgation: string | null;
+};
+
+export type CoreLawActStatus = {
+  eli: string;
+  title: string | null;
+  status: string | null;
+  consolidated: boolean;
+  labels: string[];
+  domains: string[];
+  textSource: "html" | "pdf" | "ocr" | "none" | null;
+  articleCount: number;
+  fetchedAt: string | null;
+  lastError: string | null;
+  unavailable?: string | null;
+  relationsCheckedAt: string | null;
+  currentEli: string;
+  amendmentsAfter: CoreLawAmendment[];
+  pendingConsolidated: CoreLawAmendment | null;
+  pendingAmendments: CoreLawAmendment[];
+  origin: "MAP" | "VERIFIED" | "USER";
+  addedAt: string | null;
+  addedBy: string | null;
+  state: "CURRENT" | "UPDATE_AVAILABLE" | "CHECK_DUE" | "MISSING" | "ERROR" | "UNAVAILABLE";
+};
+
+export type CoreLawProgress = {
+  eli: string;
+  phase: "download" | "extract" | "ocr";
+  done: number;
+  total: number;
+};
+
+export type CoreLawStatus = {
+  autoApply: boolean;
+  refreshing: boolean;
+  progress?: CoreLawProgress | null;
+  blockedUntil: string | null;
+  lastCheckAt: string | null;
+  counts: { consolidated: number; amendments: number; other: number; articles: number };
+  pending: { consolidated: number; amendments: number };
+  recent: Array<{
+    at: string;
+    kind: "CONSOLIDATED" | "AMENDMENT" | "ADDED" | "REMOVED";
+    actEli: string;
+    eli: string;
+    title: string | null;
+  }>;
+  acts: CoreLawActStatus[];
+};
+
+export function getCoreLawStatus(): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/status");
+}
+
+export function checkCoreLawUpdates(): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/check", { method: "POST" });
+}
+
+export function applyCoreLawUpdates(elis?: string[]): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/apply", {
+    method: "POST",
+    body: JSON.stringify(elis?.length ? { elis } : {})
+  });
+}
+
+export function setCoreLawAutoApply(autoApply: boolean): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/settings", {
+    method: "PUT",
+    body: JSON.stringify({ autoApply })
+  });
+}
+
+// An additional act checked in Sejm ELI before it is added to the copy.
+export type CoreLawActLookup = {
+  inputEli: string;
+  baseEli: string;
+  currentEli: string;
+  title: string;
+  type: string | null;
+  status: string | null;
+  promulgation: string | null;
+  consolidated: boolean;
+  consolidatedTitle: string | null;
+  amendmentsAfter: number;
+  sourceUrl: string;
+};
+
+export function lookupCoreLawAct(
+  reference: string
+): Promise<{ act: CoreLawActLookup; presentAs: string | null }> {
+  return json("/api/core-law/acts/lookup", {
+    method: "POST",
+    body: JSON.stringify({ reference })
+  });
+}
+
+export function addCoreLawAct(
+  reference: string
+): Promise<{ act: CoreLawActLookup; status: CoreLawStatus }> {
+  return json("/api/core-law/acts", {
+    method: "POST",
+    body: JSON.stringify({ reference })
+  });
+}
+
+export function removeCoreLawAct(eli: string): Promise<CoreLawStatus> {
+  return json<CoreLawStatus>("/api/core-law/acts/remove", {
+    method: "POST",
+    body: JSON.stringify({ eli })
+  });
+}
+
+// Administrator overview of who may open which case (metadata only).
+export type CaseAccessOverviewItem = {
+  caseId: string;
+  caseKind: CaseKind;
+  displayName?: string;
+  archivedAt?: string;
+  updatedAt: string;
+  viewerRole?: CaseRole;
+  canManage: boolean;
+  members: Array<{
+    userId: string;
+    loginName: string;
+    displayName: string;
+    status: string;
+    role: CaseRole;
+    canReidentify: boolean;
+    grantedAt: string;
+  }>;
+};
+
+export function getCaseAccessOverview(): Promise<{
+  cases: CaseAccessOverviewItem[];
+}> {
+  return json("/api/admin/case-access");
+}
+
 export function listCaseAccessCandidates(
   caseId: string
 ): Promise<CaseAccessCandidatesResponse> {
@@ -2294,6 +2440,36 @@ export function getProviderAccountStatus():
   );
 }
 
+export type AccountClientProvisionProgress = {
+  provider: ProviderId;
+  stage: "IDLE" | "CHECKING" | "DOWNLOADING" | "VERIFYING" | "READY" | "FAILED";
+  startedAt?: string;
+  elapsedMs: number;
+  packagesFetched: number;
+  bytesOnDisk: number;
+  error?: string;
+  status?: ProviderAccountSessionStatus;
+};
+
+// Starts downloading the pinned account client (Codex, Claude Code, Gemini
+// CLI, Grok Build) in the background; a first install can take minutes.
+export function startProviderAccountProvision(
+  provider: ProviderId
+): Promise<AccountClientProvisionProgress> {
+  return json<AccountClientProvisionProgress>(
+    `/api/provider-accounts/${provider}/provision`,
+    { method: "POST" }
+  );
+}
+
+export function getProviderAccountProvision(
+  provider: ProviderId
+): Promise<AccountClientProvisionProgress> {
+  return json<AccountClientProvisionProgress>(
+    `/api/provider-accounts/${provider}/provision`
+  );
+}
+
 export function loginProviderAccount(
   provider: ProviderId
 ): Promise<ProviderAccountSessionStatus> {
@@ -2363,6 +2539,61 @@ export function getSkillUpdateStatus():
   Promise<SkillUpdateStatusResponse> {
   return json<SkillUpdateStatusResponse>(
     "/api/skills/update/status"
+  );
+}
+
+export type SkillChannel = "stable" | "development";
+
+export type SkillChannelStatusResponse = {
+  channel: SkillChannel;
+  repository: string;
+  status: "UP_TO_DATE" | "AVAILABLE" | "UNAVAILABLE";
+  checkedAt: string;
+  installed: {
+    channel: SkillChannel;
+    commit: string;
+    directory: string;
+    treeSha: string;
+    installedAt: string;
+    health: string | null;
+  } | null;
+  latest?: {
+    commit: string;
+    committedAt: string | null;
+    directory: string;
+    treeSha: string;
+    files: number;
+  };
+  unavailableReason?: string;
+};
+
+export type SkillChannelRefreshResponse = {
+  channel: SkillChannel;
+  commit: string;
+  directory: string;
+  files: number;
+  installedAt: string;
+  restartRequired: true;
+  skillRoot: string;
+};
+
+export function getSkillChannelStatus(
+  channel: SkillChannel
+): Promise<SkillChannelStatusResponse> {
+  return json<SkillChannelStatusResponse>(
+    `/api/skills/channel/status?channel=${encodeURIComponent(channel)}`
+  );
+}
+
+export function refreshSkillsFromChannel(
+  channel: SkillChannel
+): Promise<SkillChannelRefreshResponse> {
+  return json<SkillChannelRefreshResponse>(
+    "/api/skills/channel/refresh",
+    {
+      method: "POST",
+      body: JSON.stringify({ channel })
+    }
   );
 }
 
@@ -2656,6 +2887,38 @@ function uploadMediaType(file: File): string {
   return "application/octet-stream";
 }
 
+// Desktop: the runtime saves the file in the user's Downloads folder (the WebView does
+// not perform <a download> of blob URLs). Returns the saved path.
+export async function saveToDownloads(
+  blob: Blob,
+  filename: string
+): Promise<{ path: string; filename: string }> {
+  const response = await fetch(
+    `${apiBase()}/api/downloads/save`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/octet-stream",
+        ...authorizationHeaders(),
+        "X-Lex-Filename": encodeURIComponent(filename)
+      },
+      body: blob
+    }
+  );
+  const payload =
+    await response.json() as
+      | { path: string; filename: string }
+      | ApiFailure;
+  if (!response.ok) {
+    throw new ApiError(
+      (payload as ApiFailure).error || `HTTP_${response.status}`,
+      response.status
+    );
+  }
+  return payload as { path: string; filename: string };
+}
+
 export async function uploadCaseFile(
   caseId: string,
   file: File
@@ -2937,6 +3200,13 @@ export async function getPrivacyKey(
   return body.entries;
 }
 
+export type McpServerCheck = {
+  at: string;
+  ok: boolean;
+  tools?: string[];
+  error?: string;
+};
+
 export type McpServerStatus = {
   id: string;
   group: string;
@@ -2945,11 +3215,21 @@ export type McpServerStatus = {
   installed: boolean;
   ready: boolean;
   desktopInstalled: boolean;
+  lastCheck?: McpServerCheck;
+};
+
+export type McpPackageInfo = {
+  integrity: "MATCH" | "MISMATCH" | "UNVERIFIED" | "MISSING";
+  sha256?: string;
+  expectedSha256?: string;
+  version?: string;
+  skillVersion?: string;
 };
 
 export type McpConnectorStatusResponse = {
   packagePath: string;
   packageAvailable: boolean;
+  package: McpPackageInfo;
   ceidg: {
     keyConfigured: boolean;
     keyUrl: string;
@@ -2988,6 +3268,18 @@ export function installMcpConnector(
   );
 }
 
+export function checkMcpConnector(
+  server: string
+): Promise<{ server: string; check: McpServerCheck; status: McpConnectorStatusResponse }> {
+  return json(
+    `/api/admin/mcp-connectors/${encodeURIComponent(server)}/check`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+}
+
 export function uninstallMcpConnector(
   server: string,
   desktop: boolean
@@ -3020,4 +3312,128 @@ export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse
       method: "DELETE"
     }
   );
+}
+
+export type McpSearchSource = {
+  id: string;
+  group: string;
+  label: string;
+  ready: boolean;
+  lastCheck?: McpServerCheck;
+};
+
+export type McpToolInputProperty = {
+  type?: string;
+  description?: string;
+  enum?: string[];
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  items?: {
+    type?: string;
+  };
+};
+
+export type McpSearchTool = {
+  name: string;
+  description?: string;
+  inputSchema: {
+    type?: string;
+    properties?: Record<string, McpToolInputProperty>;
+    required?: string[];
+  };
+};
+
+export type McpSearchQueryResponse = {
+  source: string;
+  tool: string;
+  ok: boolean;
+  result: unknown;
+};
+
+export type McpSourcePreview =
+  | { kind: "html"; url: string; html: string }
+  | { kind: "pdf"; url: string; base64: string };
+
+// Page of an official source (search result) fetched by the runtime without scripts.
+export function previewMcpSource(url: string): Promise<McpSourcePreview> {
+  return json<McpSourcePreview>("/api/mcp-search/source-preview", {
+    method: "POST",
+    body: JSON.stringify({ url })
+  });
+}
+
+export function getMcpSearchSources(): Promise<{ package: McpPackageInfo; sources: McpSearchSource[] }> {
+  return json("/api/mcp-search/sources");
+}
+
+export function getMcpSearchTools(
+  source: string
+): Promise<{ source: string; tools: McpSearchTool[] }> {
+  return json(`/api/mcp-search/sources/${encodeURIComponent(source)}/tools`);
+}
+
+export function queryMcpSearch(
+  source: string,
+  tool: string,
+  args: Record<string, unknown>
+): Promise<McpSearchQueryResponse> {
+  return json<McpSearchQueryResponse>(
+    "/api/mcp-search/query",
+    {
+      method: "POST",
+      body: JSON.stringify({ source, tool, arguments: args })
+    }
+  );
+}
+
+export type AnomalySeverity = "WARN" | "ERROR";
+export type AnomalyArea = "SKILL_PATH" | "CORPUS" | "GATE" | "SESSION" | "EXECUTION";
+
+export type AnomalyEntry = {
+  at: string;
+  severity: AnomalySeverity;
+  area: AnomalyArea;
+  code: string;
+  provider?: string;
+  model?: string;
+  sessionId?: string;
+  target?: string;
+  detail?: Record<string, string | number | boolean | string[]>;
+};
+
+export type AnomalySummaryRow = {
+  severity: AnomalySeverity;
+  area: AnomalyArea;
+  code: string;
+  target: string | null;
+  count: number;
+  lastAt: string;
+  providers: string[];
+};
+
+export function getAnomalies(filter: { severity?: AnomalySeverity; since?: string; limit?: number } = {}):
+  Promise<{ file: string; summary: AnomalySummaryRow[]; entries: AnomalyEntry[] }> {
+  const params = new URLSearchParams();
+  if (filter.severity) params.set("severity", filter.severity);
+  if (filter.since) params.set("since", filter.since);
+  if (filter.limit) params.set("limit", String(filter.limit));
+  const query = params.toString();
+  return json(`/api/diagnostics/anomalies${query ? `?${query}` : ""}`);
+}
+
+export async function exportAnomalies(): Promise<Blob> {
+  const response = await fetch(`${apiBase()}/api/diagnostics/anomalies/export`, {
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status);
+  return response.blob();
+}
+
+export async function clearAnomalies(): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/diagnostics/anomalies`, {
+    method: "DELETE",
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) throw new ApiError(`HTTP_${response.status}`, response.status);
 }

@@ -1,4 +1,4 @@
-export type ProviderId = "openai" | "anthropic" | "xai";
+export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
 export type ReasoningLevel =
   | "none"
@@ -60,6 +60,10 @@ export type ProviderStreamParams = {
   systemPrompt: string;
   messages: LlmMessage[];
   continuityKey?: string;
+  // Account sessions (ChatGPT/Claude/Grok CLI): "none" = a fresh host session that
+  // neither resumes nor records a thread. For self-contained calls (skill router,
+  // document generator) whose prompt already carries the whole context.
+  accountContinuity?: "none";
   tools?: NormalizedToolSchema[];
   maxIterations?: number;
   callbacks?: StreamCallbacks;
@@ -88,6 +92,8 @@ export type NativeCorpusAccess = {
   root: string;
   // Relative path of every corpus file the model read (audit).
   onRead?: (relativePath: string) => void;
+  // A Read of a corpus file that does not exist (wrong name, version or folder).
+  onMissing?: (relativePath: string) => void;
 };
 
 export type ProviderStreamResult = {

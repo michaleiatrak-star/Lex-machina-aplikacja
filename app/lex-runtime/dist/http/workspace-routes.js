@@ -1247,6 +1247,11 @@ export function registerWorkspaceRoutes(app, dependencies) {
                     ? {
                         restorations: raw.restorations
                     }
+                    : {}),
+                ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
+                    ? {
+                        generatedDocument: raw.generatedDocument
+                    }
                     : {})
             };
             const saved = await dependencies.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => dependencies.workspace.appendThreadMessage({

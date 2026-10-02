@@ -1,6 +1,6 @@
 # Lex Machina - dokumentacja aplikacji
 
-Stan: 2026-09-25 · gałąź `claude/lex-machina-claude-timeout-pralq8` · wersja desktop 0.1.10
+Stan: 2026-09-29 · wersja desktop 0.1.10 (hotfix 9) · dokumentacja techniczna: [`DOKUMENTACJA-TECHNICZNA.md`](DOKUMENTACJA-TECHNICZNA.md) · zmiany: [`ZMIANY-0.1.10.md`](ZMIANY-0.1.10.md)
 
 **Najważniejsze:** dane spraw nie opuszczają komputera w postaci jawnej, chyba że użytkownik świadomie wyśle tekst jawny. Do modeli zewnętrznych trafiają symbole zastępcze (`[PII:PERSON:0001|GEN]`), a klucz do nich jest zaszyfrowany lokalnie. Przepisy są cytowane wyłącznie po weryfikacji (ELI), nigdy z pamięci modelu.
 
@@ -27,6 +27,8 @@ Runtime jest źródłem prawdy; `app/lex-runtime/dist` jest zbudowany i trzymany
 - **Instalator offline**: wstrzymany do potwierdzenia instalatora online.
 - Pierwsze logowanie: `admin` / hasło początkowe - aplikacja wymusza zmianę na min. 10 znaków.
 - Skille z kont (Claude/Codex/Grok) w nowszej wersji niż wbudowane są używane automatycznie (scalony prywatny korpus, walidowany przy starcie).
+- **Skille z repozytorium Lex Machina** (Ustawienia → Konserwacja → Skille, administrator): kanał `Wersja stabilna` albo `Wersja rozwojowa` i przycisk `Odśwież skille`. Każdy plik jest sprawdzany sumą z repozytorium, skille przechodzą walidację, poprzednia wersja zostaje do wycofania; nowe skille działają po ponownym uruchomieniu programu.
+- **Aktualizacja aplikacji**: wydania są pre-release z instalatorem online i `SHA256SUMS.txt`; instalator jest niepodpisany (SmartScreen: „Więcej informacji” → „Uruchom mimo to”).
 
 ---
 
@@ -127,6 +129,8 @@ Audyt (`app/privacy/benchmarks/privacy_audit.mts`, 500 dokumentów): skutecznoś
 
 **Strażnik źródeł (szybka odpowiedź)**: każdy artykuł, pozycja Dz.U., adres URL i powołane narzędzie w odpowiedzi musi pochodzić z tekstów ELI lub wyników narzędzi tej tury; inaczej jedna runda korekty („pobierz albo usuń”), potem blokada `QUICK_LEGAL_UNSOURCED_PROVISION`. Rozumowanie modelu (`<think>`, angielskie akapity przed polską odpowiedzią) jest wycinane.
 
+**Źródło przepisów**: modele w chmurze (API i konta) weryfikują każdy akt, także KC/KPC/KK/KPK, w Sejm ELI z kontrolą aktualności (bieżący tekst jednolity, nowelizacje po nim). Lokalna kopia ELI (RAG) jest używana tylko przy awarii ELI - wtedy przy przepisie pojawia się informacja „zweryfikowano na lokalnej kopii ELI z dnia …, ELI niedostępne”. Modele lokalne (Bielik, Mistral) najpierw korzystają z lokalnej kopii, a gdy jej brakuje - z ELI. Akt spoza map DR jest wyszukiwany w ELI i po weryfikacji dołączany do lokalnej kopii.
+
 **Finalizacja (wszystkie modele)**: niezweryfikowany przepis lub Dz.U. jest pokazywany wyłącznie z `⚠️ [NIEWERYFIKOWANE]` przy samym odwołaniu (wstawia runtime); zmyślona lub zmieniona sygnatura, cytat albo teza orzeczenia blokuje odpowiedź.
 
 **Narzędzia Lex dostępne dla modeli** (w Claude jako `mcp__lex__*`): rdzeń aktów prawnych (teksty z ELI, lokalnie), weryfikacja przepisów i orzeczeń, orzecznictwo (SAOS, CBOSA, SN), źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne), raporty. Każde wywołanie przechodzi przez audytowany runtime.
@@ -135,15 +139,23 @@ Audyt (`app/privacy/benchmarks/privacy_audit.mts`, 500 dokumentów): skutecznoś
 
 ---
 
-## 7. Biblioteka kancelarii (zakładka Kancelaria)
+## 7. Źródła prawa: konektory MCP i Wyszukiwanie
+
+- **Konektory MCP** (Ustawienia → Konektory MCP, administrator): instalacja, `Sprawdź` (czy serwer odpowiada, z datą), deinstalacja.
+- **CEIDG wymaga własnego klucza API** (token z [Hurtowni danych CEIDG](https://dane.biznes.gov.pl/pl/portal/034872), logowanie Profilem Zaufanym): wklej go w polu „Token CEIDG”, `Zatwierdź klucz`, potem `Zainstaluj` przy CEIDG. Token jest imienny i zawiera PESEL - nie udostępniaj go. Bez klucza CEIDG jest „niedostępny”, nie „brak podmiotu”. Nad listą - czy pakiet serwerów jest zgodny z sumą kontrolną skilla („najnowsza instalacja”).
+- **Wyszukiwanie** (karta dla każdego zalogowanego): źródło → narzędzie → formularz → wynik wprost z API źródła, bez modelu. Słowo kluczowe lub fragment tekstu: orzeczenia SAOS (treść, teza, uzasadnienie), NSA/WSA (CBOSA), interpretacje podatkowe (EUREKA), decyzje UODO, TSUE (tytuł), fragment w treści aktu (ISAP). To materiał do odnalezienia źródła, nie weryfikacja; NSA/WSA to snapshot, brak trafień = `OUT_OF_SCOPE`. Nie wpisuj faktów sprawy ani danych klienta.
+
+---
+
+## 8. Biblioteka kancelarii (zakładka Kancelaria)
 
 Osobny zaszyfrowany magazyn `Wiedza kancelarii`: wzory DOCX/ODT (dodaje administrator) i dokumenty know-how w folderach. Wyszukiwanie semantyczne; w czacie opcja `Przeszukuj know-how kancelarii` (fragmenty) albo wybór całych plików przez `Pliki`.
 
 ---
 
-## 8. Bezpieczeństwo
+## 9. Bezpieczeństwo
 
-- Runtime nasłuchuje tylko na 127.0.0.1; desktop przepuszcza wyłącznie nagłówki `X-Lex-*` z listy.
+- Runtime nasłuchuje tylko na 127.0.0.1; desktop przepuszcza wyłącznie nagłówki `X-Lex-*` z listy i wyłącznie trasy z listy dozwolonych (kontrola: `python3 app/lex-desktop/scripts/check-route-allowlist.py`).
 - Magazyny spraw i klucze anonimizacji szyfrowane kluczem sprawy; rotacja przy odebraniu dostępu.
 - Model Claude nie ma powłoki, internetu, zapisu ani serwerów MCP konta; odczyt ograniczony do korpusu skilli.
 - Most narzędzi MCP: prywatny kanał (named pipe / socket 0600) z jednorazowym tokenem na turę.
@@ -151,7 +163,7 @@ Osobny zaszyfrowany magazyn `Wiedza kancelarii`: wzory DOCX/ODT (dodaje administ
 
 ---
 
-## 9. Budowa ze źródeł
+## 10. Budowa ze źródeł
 
 ```bash
 # runtime
@@ -160,6 +172,8 @@ cd app/lex-runtime && npm install && npm run typecheck && npx vitest run && npm 
 cd app/lex-web && npm install && npx tsc -b && npx vitest run && npm run build && npm run validate:g14
 # walidatory (przykłady)
 cd app/lex-runtime && npm run validate:g33d && npm run validate:g36
+# trasy runtime a allowlista proxy desktopu
+python3 app/lex-desktop/scripts/check-route-allowlist.py
 # lista słów instytucji i ról (po zmianie list w skrypcie)
 python app/privacy/generate_generic_words.py
 ```
@@ -170,7 +184,7 @@ W nowym repozytorium: dodaj `push: branches: [main]` do `on:` w `lex-installer.y
 
 ---
 
-## 10. Zmienne środowiskowe (runtime)
+## 11. Zmienne środowiskowe (runtime)
 
 | Zmienna | Znaczenie |
 |---|---|
@@ -182,10 +196,12 @@ W nowym repozytorium: dodaj `push: branches: [main]` do `on:` w `lex-installer.y
 | `LEX_NER_PYTHON`, `LEX_GAZETTEER_WORKER`, `LEX_GENERIC_WORDS` | ścieżki workerów i listy słów |
 | `LEX_HOST`, `LEX_PORT` | adres runtime (tylko loopback) |
 | `LEX_OCR_PYTHON`, `LEX_OCR_REDACTOR` | Python OCR (Pillow) i skrypt maskowania obrazów |
+| `LEX_CORE_LAW_DIR` | katalog lokalnej kopii ELI |
+| `LEX_MCP_PACKAGE`, `LEX_MCP_STATE_DIR`, `CEIDG_API_KEY` | pakiet serwerów MCP, stan konektorów, klucz CEIDG |
 
 ---
 
-## 11. Znane ograniczenia
+## 12. Znane ograniczenia
 
 - Przyspieszenie trybu natywnego Claude i weryfikacja przez lokalne AI nie były mierzone na prawdziwym koncie/modelu (pokryte testami).
 - Czas szybkiej odpowiedzi modelu lokalnego nie był mierzony na prawdziwym modelu; zmierzony jest rozmiar promptu (ok. 3 razy mniejszy).
@@ -195,3 +211,4 @@ W nowym repozytorium: dodaj `push: branches: [main]` do `on:` w `lex-installer.y
 - Korekta OCR i obrazy z PaddleOCR sprawdzone testami i atrapą silnika; nie mierzono jakości na prawdziwym Bieliku ani na prawdziwych skanach.
 - Maskowanie w obrębie linii jest proporcjonalne do liczby znaków (z zapasem); przy nietypowych czcionkach fragment sąsiedniego słowa może zostać zakryty.
 - Instalator offline wstrzymany.
+- Odświeżanie skilli z kanału nie było jeszcze wykonane przez API GitHub z zainstalowanej aplikacji (sprawdzone na kopii repozytorium); sprawdzenie stanu kanału zużywa 2 z 60 zapytań GitHub na godzinę bez logowania.

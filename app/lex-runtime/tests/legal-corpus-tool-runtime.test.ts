@@ -285,19 +285,30 @@ describe("model skill selection mode", () => {
     input: { skill, path: file }
   });
 
-  it("requires prawny-router-v3 before any other legal resource", async () => {
+  it("delivers prawny-router-v3 with the first other legal resource instead of refusing it", async () => {
     const runtime = new LegalCorpusToolRuntime(fixture(), { modelSelectsSkills: true });
-    const [blocked] = await runtime.runTools([read(DR, "SKILL.md")]);
-    expect(JSON.parse(blocked!.content)).toMatchObject({
-      status: "BLOCKED",
-      error: expect.stringMatching(/^ROUTER_V3_REQUIRED_FIRST/)
+    const [first] = await runtime.runTools([read(DR, "SKILL.md")]);
+    const body = JSON.parse(first!.content);
+    expect(body.status).toBe("OK");
+    expect(body.requiredRouter).toMatchObject({ path: expect.stringMatching(/SKILL\.md$/) });
+    expect(runtime.auditEvents()[0]).toMatchObject({ decision: "ALLOW", detail: { deliveredWith: expect.any(String) } });
+    expect(runtime.modelSkillSelection()).toEqual({
+      primarySkill: DR,
+      loadedSkills: ["prawny-router-v3", DR],
+      domainSkills: [DR],
+      executionSkills: []
     });
+  });
 
+  it("runs a router read batched after other reads first", async () => {
+    const runtime = new LegalCorpusToolRuntime(fixture(), { modelSelectsSkills: true });
     const results = await runtime.runTools([
-      read("prawny-router-v3", "SKILL.md"),
-      read(DR, "SKILL.md")
+      read(DR, "SKILL.md"),
+      read("prawny-router-v3", "SKILL.md")
     ]);
+    expect(results.map((item) => item.tool_use_id)).toEqual([DR + "SKILL.md", "prawny-router-v3SKILL.md"]);
     expect(results.map((item) => JSON.parse(item.content).status)).toEqual(["OK", "OK"]);
+    expect(JSON.parse(results[0]!.content).requiredRouter).toBeUndefined();
     expect(runtime.modelSkillSelection()).toEqual({
       primarySkill: DR,
       loadedSkills: ["prawny-router-v3", DR],
@@ -322,5 +333,58 @@ describe("model skill selection mode", () => {
     const runtime = new LegalCorpusToolRuntime(fixture());
     const [result] = await runtime.runTools([read(DR, "SKILL.md")]);
     expect(JSON.parse(result!.content).status).toBe("OK");
+  });
+
+  it("delivers the only matching file for a mistyped module path", async () => {
+    const registry = fixture();
+    const modules = path.join(registry.root, DR, "modules");
+    fs.writeFileSync(path.join(modules, "mod-KC-umowy-nazwane.md"), "# umowy\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const results = await runtime.runTools([
+      read(DR, "modules/mod-KC", "no-ext"),
+      read(DR, "mod-KC-umowy-nazwane.md", "no-dir"),
+      read("dr-02", "SKILL.md", "short-skill"),
+      read(DR, "modules/mod-kc-umowy", "prefix")
+    ]);
+    const parsed = results.map((result) => JSON.parse(result.content));
+    expect(parsed[0]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC.md`, requestedPath: `${DR}/modules/mod-KC` });
+    expect(parsed[1]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-nazwane.md` });
+    expect(parsed[2]).toMatchObject({ status: "OK", path: `${DR}/SKILL.md`, requestedPath: "dr-02/SKILL.md" });
+    expect(parsed[3]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-nazwane.md` });
+    expect(runtime.auditEvents().filter((event) => event.detail?.resolvedFrom)).toHaveLength(4);
+  });
+
+  it("returns candidates instead of guessing when several files match", async () => {
+    const registry = fixture();
+    const modules = path.join(registry.root, DR, "modules");
+    fs.writeFileSync(path.join(modules, "mod-KC-umowy.md"), "# umowy\n");
+    fs.writeFileSync(path.join(modules, "mod-KC-spadki.md"), "# spadki\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const [several, none] = (await runtime.runTools([
+      read(DR, "modules/mod-K.md", "several"),
+      read(DR, "modules/xyz-abc.md", "none")
+    ])).map((result) => JSON.parse(result.content));
+    expect(several.status).toBe("NOT_FOUND");
+    expect(several.candidates).toEqual(expect.arrayContaining(["modules/mod-KC-umowy.md", "modules/mod-KC-spadki.md"]));
+    expect(several.content).toBeUndefined();
+    expect(none).toMatchObject({ status: "NOT_FOUND", error: "LEGAL_RESOURCE_NOT_FOUND", candidates: [] });
+    expect(runtime.auditEvents().every((event) => event.decision === "BLOCK")).toBe(true);
+  });
+
+  it("resolves a wrong version number and a module kept in another skill", async () => {
+    const registry = fixture();
+    fs.writeFileSync(path.join(registry.root, DR, "modules", "mod-KC-umowy-v3.md"), "# v3\n");
+    const other = path.join(registry.root, "prawo-polskie-v2", "modules");
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, "mod-mapa-dziedzin.md"), "# mapa\n");
+    const runtime = new LegalCorpusToolRuntime(registry);
+    const parsed = (await runtime.runTools([
+      read(DR, "modules/mod-KC-umowy-v2.md", "file-version"),
+      read("prawny-router-v2", "SKILL.md", "skill-version"),
+      read(DR, "modules/mod-mapa-dziedzin.md", "other-skill")
+    ])).map((result) => JSON.parse(result.content));
+    expect(parsed[0]).toMatchObject({ status: "OK", path: `${DR}/modules/mod-KC-umowy-v3.md` });
+    expect(parsed[1]).toMatchObject({ status: "OK", path: "prawny-router-v3/SKILL.md", requestedPath: "prawny-router-v2/SKILL.md" });
+    expect(parsed[2]).toMatchObject({ status: "OK", path: "prawo-polskie-v2/modules/mod-mapa-dziedzin.md" });
   });
 });

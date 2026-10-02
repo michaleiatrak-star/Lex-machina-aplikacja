@@ -1,5 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+function actLine(act) {
+    const notes = [
+        `${act.eli}, ${act.articleCount} art.`,
+        ...(act.origin === "USER" ? ["dodany przez użytkownika"] : []),
+        ...(act.eliCaution ? [`kopia nieaktualna: ${act.eliCaution} — brzmienie tylko po verify_legal_reference (ELI)`] : [])
+    ];
+    return `- ${act.labels[0] ?? oneLine(act.title, 80)} (${notes.join("; ")})`;
+}
 const TEXT_FILE = /\.(md|txt|json|ya?ml|csv)$/i;
 // Packaging and history files: no legal content for the model.
 const NOISE = /(^|\/)(agents\/|CHANGELOG\.md$|PORTABILITY-MANIFEST\.md$)/i;
@@ -89,10 +97,17 @@ export function knowledgeMapPrompt(args) {
     const acts = (args.coreLaw ?? []).filter((act) => act.articleCount > 0);
     if (acts.length) {
         const domains = new Set(active.filter((name) => name.startsWith("dr-")).map((name) => name.slice(0, 5)));
+        // Acts added by users have no domain: a local model always sees them.
         const relevant = args.local
-            ? acts.filter((act) => act.domains.some((domain) => domains.has(domain.slice(0, 5)))).slice(0, 15)
+            ? [
+                ...acts.filter((act) => act.origin === "USER").slice(0, 15),
+                ...acts
+                    .filter((act) => act.origin !== "USER" && act.domains.some((domain) => domains.has(domain.slice(0, 5))))
+                    .slice(0, 15)
+            ]
             : acts;
-        lines.push("", `## Rdzeń aktów prawnych (lokalnie, teksty z ELI): ${acts.length} aktów`, ...relevant.map((act) => `- ${act.labels[0] ?? oneLine(act.title, 80)} (${act.eli}, ${act.articleCount} art.)`), ...(args.local && relevant.length < acts.length ? [`… oraz ${acts.length - relevant.length} innych aktów.`] : []), args.toolNames.has("read_core_law_article")
+        const added = acts.filter((act) => act.origin === "USER").length;
+        lines.push("", `## Rdzeń aktów prawnych (lokalnie, teksty z ELI): ${acts.length} aktów${added ? `, w tym ${added} dodanych przez użytkowników` : ""}`, ...relevant.map(actLine), ...(args.local && relevant.length < acts.length ? [`… oraz ${acts.length - relevant.length} innych aktów.`] : []), args.toolNames.has("read_core_law_article")
             ? "Brzmienie przepisu: read_core_law_article / search_core_law; aktualność: verify_legal_reference."
             : "Brzmienie przepisu bierz z tych tekstów lub weryfikacji ELI, nigdy z pamięci.");
     }

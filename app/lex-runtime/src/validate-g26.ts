@@ -16,7 +16,8 @@ async function main(): Promise<void> {
   const expected = [
     { provider: "openai", configured: true },
     { provider: "anthropic", configured: false },
-    { provider: "xai", configured: true }
+    { provider: "xai", configured: true },
+    { provider: "google", configured: false }
   ];
 
   if (JSON.stringify(status) !== JSON.stringify(expected)) {

@@ -2,6 +2,8 @@ export type PdfTextExtractionResult = {
   text: string;
   pages: number;
   bytes: number;
+  // Tekst każdej strony (indeks 0 = strona 1).
+  pageTexts?: string[];
 };
 
 export type PdfTextLimits = {
@@ -44,7 +46,12 @@ export class LocalPdfTextExtractor
 implements PdfTextExtractor {
   constructor(
     private readonly limits: PdfTextLimits =
-      DEFAULT_LIMITS
+      DEFAULT_LIMITS,
+    // true = koniec wiersza w PDF (hasEOL) zostaje "\n". Potrzebne tam, gdzie tekst dzieli
+    // się po nagłówkach wierszy (Art. N. w kopii ELI); domyślnie strona to jeden wiersz,
+    // jak dotąd (hasze i cytaty dokumentów sprawy się nie zmieniają).
+    // allowEmpty: strony bez warstwy tekstowej nie są błędem (wywołujący robi OCR tych stron).
+    private readonly options: { lines?: boolean; allowEmpty?: boolean } = {}
   ) {}
 
   async extract(
@@ -110,15 +117,27 @@ implements PdfTextExtractor {
           await page.getTextContent();
 
         const pageText =
-          content.items
-            .map((item) =>
-              "str" in item &&
-              typeof item.str === "string"
-                ? item.str
-                : ""
-            )
-            .filter(Boolean)
-            .join(" ");
+          this.options.lines
+            ? content.items
+                .map((item) =>
+                  "str" in item &&
+                  typeof item.str === "string"
+                    ? item.str + (item.hasEOL ? "\n" : " ")
+                    : ""
+                )
+                .join("")
+                .replace(/[ \t]+/g, " ")
+                .replace(/ *\n */g, "\n")
+                .trim()
+            : content.items
+                .map((item) =>
+                  "str" in item &&
+                  typeof item.str === "string"
+                    ? item.str
+                    : ""
+                )
+                .filter(Boolean)
+                .join(" ");
 
         textChars +=
           pageText.length + 1;
@@ -140,7 +159,7 @@ implements PdfTextExtractor {
       const text =
         chunks.join("\n").trim();
 
-      if (!text) {
+      if (!text && !this.options.allowEmpty) {
         throw new PdfTextExtractionError(
           "PDF contains no extractable text; OCR is intentionally disabled.",
           "PDF_NO_TEXT"
@@ -150,7 +169,8 @@ implements PdfTextExtractor {
       return {
         text,
         pages: document.numPages,
-        bytes: data.byteLength
+        bytes: data.byteLength,
+        pageTexts: chunks
       };
     } catch (error) {
       if (

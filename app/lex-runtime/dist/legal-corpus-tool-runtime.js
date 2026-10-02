@@ -115,6 +115,114 @@ function normalizePrefix(value) {
     }
     return normalized;
 }
+// Loose matching of a mistyped skill name or resource path: the model gets
+// the file in the same round when exactly one matches (like a native reader
+// recovering with Glob, but without the extra round), otherwise the list of
+// candidates instead of a bare LEGAL_RESOURCE_NOT_FOUND.
+const MAX_RESOURCE_CANDIDATES = 12;
+function looseKey(value) {
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ł/g, "l")
+        .replace(/Ł/g, "l")
+        .toLowerCase()
+        .replace(/\.(md|markdown|txt|ya?ml|json)$/, "")
+        .replace(/[\s_.]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+}
+// "-v3", "-v2.1": a wrong version number in a name is the commonest slip.
+function withoutVersion(key) {
+    return key.replace(/-v\d+(?:-\d+)*(?=-|$)/g, "");
+}
+function looseSkill(registry, requested) {
+    const key = looseKey(requested);
+    if (!key)
+        return [];
+    const names = [...registry.skills.values()].map((skill) => ({
+        name: skill.name,
+        keys: [looseKey(skill.name), looseKey(path.basename(skill.directory))]
+    }));
+    const exact = names.filter((item) => item.keys.includes(key));
+    if (exact.length)
+        return exact.map((item) => item.name);
+    const unversioned = names.filter((item) => item.keys.some((name) => withoutVersion(name) === withoutVersion(key)));
+    if (unversioned.length)
+        return unversioned.map((item) => item.name);
+    return names
+        .filter((item) => item.keys.some((name) => name.startsWith(`${key}-`) || key.startsWith(`${name}-`)))
+        .map((item) => item.name);
+}
+export function looseResource(registry, skillName, requested) {
+    const own = looseResourceIn(registry, skillName, requested);
+    if (own.match || own.candidates.length)
+        return own;
+    // Not in this skill at all: the same file name in another skill or shared/
+    // (a module cited from a different domain), only on an exact name match.
+    const wanted = looseKey(path.posix.basename(requested.replaceAll("\\", "/")));
+    if (!wanted)
+        return own;
+    const hits = [...registry.skills.values()].flatMap((skill) => skill.name === skillName || !fs.existsSync(skill.directory)
+        ? []
+        : collectFiles(skill.directory, "")
+            .filter((file) => withoutVersion(looseKey(path.posix.basename(file))) === withoutVersion(wanted))
+            .map((file) => ({ skill: skill.name, file })));
+    const hit = hits[0];
+    return hits.length === 1 && hit
+        ? { match: hit.file, matchSkill: hit.skill, candidates: [`${hit.skill}/${hit.file}`] }
+        : { match: null, candidates: hits.slice(0, MAX_RESOURCE_CANDIDATES).map((item) => `${item.skill}/${item.file}`) };
+}
+function looseResourceIn(registry, skillName, requested) {
+    const skill = registry.get(skillName);
+    if (!skill)
+        return { match: null, candidates: [] };
+    const normalized = requested.replaceAll("\\", "/").replace(/^\.\//, "").trim();
+    const shared = normalized.startsWith("shared/");
+    const base = shared ? path.join(registry.root, "shared") : skill.directory;
+    if (!fs.existsSync(base))
+        return { match: null, candidates: [] };
+    const files = shared
+        ? collectFiles(base, "").map((file) => `shared/${file}`)
+        : collectFiles(base, "");
+    const wanted = looseKey(path.posix.basename(normalized));
+    const wantedDir = looseKey(path.posix.dirname(normalized));
+    if (!wanted)
+        return { match: null, candidates: [] };
+    const scored = files
+        .map((file) => {
+        const base = looseKey(path.posix.basename(file));
+        const dir = looseKey(path.posix.dirname(file));
+        let score = 0;
+        if (base === wanted)
+            score = 100;
+        else if (withoutVersion(base) === withoutVersion(wanted))
+            score = 90;
+        else if (wanted.length >= 6 && base.startsWith(withoutVersion(wanted)))
+            score = 60;
+        else if (wanted.length >= 6 && (base.includes(wanted) || wanted.startsWith(base)))
+            score = 40;
+        else {
+            const tokens = wanted.split("-").filter((token) => token.length >= 3);
+            const hits = tokens.filter((token) => base.includes(token)).length;
+            if (tokens.length && hits / tokens.length >= 0.6)
+                score = Math.round(30 * hits / tokens.length);
+        }
+        if (score && wantedDir && wantedDir !== "." && dir === wantedDir)
+            score += 5;
+        return { file, score };
+    })
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file, "pl"));
+    const best = scored[0];
+    const unique = best !== undefined &&
+        best.score >= 60 &&
+        (scored.length === 1 || scored[1].score < best.score);
+    return {
+        match: unique ? best.file : null,
+        candidates: scored.slice(0, MAX_RESOURCE_CANDIDATES).map((item) => item.file)
+    };
+}
 function textFile(filePath) {
     const stat = fs.statSync(filePath);
     if (!stat.isFile() ||
@@ -195,6 +303,23 @@ export class LegalCorpusToolRuntime {
         }
         this.events.push({ tool: "Read", target: relativePath, decision: "ALLOW", detail: { native: true } });
     }
+    /** A native Read of a corpus file that does not exist: correctable, not a read. */
+    recordNativeMissing(relativePath) {
+        this.events.push({
+            tool: "Read",
+            target: relativePath,
+            decision: "BLOCK",
+            detail: { native: true, error: "LEGAL_RESOURCE_NOT_FOUND" }
+        });
+    }
+    /** A SKILL.md the runtime put in the prompt up front (router v3, prawo-polskie-v2). */
+    recordPreloaded(relativePath) {
+        const skill = this.skillForPath(relativePath);
+        if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md") && !this.readSkills.includes(skill)) {
+            this.readSkills.push(skill);
+        }
+        this.events.push({ tool: READ_RESOURCE, target: relativePath, decision: "ALLOW", detail: { preloaded: true } });
+    }
     /**
      * A criminal-law skill was read natively without the qualifier: the
      * corpus path the model still has to read before qualifying the act.
@@ -251,36 +376,45 @@ export class LegalCorpusToolRuntime {
         }));
     }
     async runTools(calls) {
-        return calls.map((call) => {
-            try {
-                const content = this.execute(call);
-                return {
-                    tool_use_id: call.id,
-                    content
-                };
-            }
-            catch (error) {
-                this.events.push({
-                    tool: call.name,
-                    target: this.targetFor(call),
-                    decision: "BLOCK",
-                    detail: {
-                        error: error instanceof Error
-                            ? error.message
-                            : String(error)
-                    }
-                });
-                return {
-                    tool_use_id: call.id,
-                    content: JSON.stringify({
-                        status: "BLOCKED",
-                        error: error instanceof Error
-                            ? error.message
-                            : String(error)
-                    })
-                };
-            }
-        });
+        // A router-v3 read in the same round runs first, so a batched round
+        // (router + SKILL.md + modules) is not refused for its order.
+        const isRouterRead = (call) => call.name === READ_RESOURCE && call.input.skill === ROUTER_SKILL;
+        const order = [
+            ...calls.filter(isRouterRead),
+            ...calls.filter((call) => !isRouterRead(call))
+        ];
+        const byId = new Map(order.map((call) => [call, this.runOne(call)]));
+        return calls.map((call) => byId.get(call));
+    }
+    runOne(call) {
+        try {
+            const content = this.execute(call);
+            return {
+                tool_use_id: call.id,
+                content
+            };
+        }
+        catch (error) {
+            this.events.push({
+                tool: call.name,
+                target: this.targetFor(call),
+                decision: "BLOCK",
+                detail: {
+                    error: error instanceof Error
+                        ? error.message
+                        : String(error)
+                }
+            });
+            return {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                    status: "BLOCKED",
+                    error: error instanceof Error
+                        ? error.message
+                        : String(error)
+                })
+            };
+        }
     }
     execute(call) {
         if (call.name ===
@@ -374,26 +508,47 @@ export class LegalCorpusToolRuntime {
         }
         if (call.name ===
             READ_RESOURCE) {
-            const skillName = typeof call.input
+            const requestedSkill = typeof call.input
                 .skill === "string"
-                ? call.input.skill
+                ? call.input.skill.trim()
                 : "";
             const semanticPath = typeof call.input
                 .path === "string"
                 ? call.input.path
                     .trim()
                 : "";
-            if (!skillName ||
+            if (!requestedSkill ||
                 !semanticPath) {
                 throw new Error("LEGAL_RESOURCE_REQUEST_INVALID");
             }
+            let skillName = requestedSkill;
             if (!this.registry.get(skillName)) {
-                throw new Error("LEGAL_SKILL_NOT_FOUND");
+                const skills = looseSkill(this.registry, skillName);
+                if (skills.length !== 1) {
+                    return this.notFound(call, "LEGAL_SKILL_NOT_FOUND", {
+                        skillCandidates: skills.slice(0, MAX_RESOURCE_CANDIDATES)
+                    });
+                }
+                skillName = skills[0];
             }
-            const resolved = this.registry
+            let resolved = this.registry
                 .resolveResource(skillName, semanticPath);
+            let resolvedFrom;
             if (!resolved) {
-                throw new Error("LEGAL_RESOURCE_NOT_FOUND");
+                const loose = looseResource(this.registry, skillName, semanticPath);
+                resolved = loose.match
+                    ? this.registry.resolveResource(loose.matchSkill ?? skillName, loose.match)
+                    : null;
+                if (!resolved) {
+                    return this.notFound(call, "LEGAL_RESOURCE_NOT_FOUND", {
+                        skill: skillName,
+                        candidates: loose.candidates
+                    });
+                }
+                resolvedFrom = semanticPath;
+            }
+            if (skillName !== requestedSkill || resolvedFrom) {
+                resolvedFrom = `${requestedSkill}/${semanticPath}`;
             }
             if (!fs.statSync(resolved).isFile()) {
                 throw new Error("LEGAL_RESOURCE_NOT_FILE");
@@ -401,10 +556,36 @@ export class LegalCorpusToolRuntime {
             const resolvedPath = path.relative(this.registry.root, resolved)
                 .replaceAll(path.sep, "/");
             const targetSkill = this.skillForPath(resolvedPath);
+            // Router v3 is always first. When the model asks for another legal
+            // resource before it, the router entry is delivered with that read
+            // (like the criminal qualifier) instead of refusing it and costing a
+            // whole model round.
+            let requiredRouter;
             if (this.options.modelSelectsSkills &&
                 targetSkill !== ROUTER_SKILL &&
                 !this.readSkills.includes(ROUTER_SKILL)) {
-                throw new Error("ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource");
+                const router = this.registry.resolveResource(ROUTER_SKILL, "SKILL.md");
+                if (!router) {
+                    throw new Error("ROUTER_V3_REQUIRED_FIRST: read skill=prawny-router-v3 path=SKILL.md before any other legal resource");
+                }
+                const routerText = textFile(router);
+                const routerPath = path.relative(this.registry.root, router).replaceAll(path.sep, "/");
+                requiredRouter = {
+                    path: routerPath,
+                    content: routerText.slice(0, MAX_READ_CHARS),
+                    truncated: routerText.length > MAX_READ_CHARS
+                };
+                this.readSkills.push(ROUTER_SKILL);
+                this.events.push({
+                    tool: call.name,
+                    target: routerPath,
+                    decision: "ALLOW",
+                    detail: {
+                        deliveredWith: resolvedPath,
+                        returnedChars: requiredRouter.content.length,
+                        totalChars: routerText.length
+                    }
+                });
             }
             const text = textFile(resolved);
             const offset = Number.isInteger(call.input.offset)
@@ -467,6 +648,7 @@ export class LegalCorpusToolRuntime {
                 target: canonicalPath,
                 decision: "ALLOW",
                 detail: {
+                    ...(resolvedFrom ? { resolvedFrom } : {}),
                     offset,
                     returnedChars: content.length,
                     totalChars: text.length,
@@ -476,11 +658,25 @@ export class LegalCorpusToolRuntime {
             return JSON.stringify({
                 status: "OK",
                 path: canonicalPath,
+                ...(resolvedFrom
+                    ? {
+                        requestedPath: resolvedFrom,
+                        note: "The requested path does not exist; this is the only matching file. Use this path from now on."
+                    }
+                    : {}),
                 offset,
                 returnedChars: content.length,
                 totalChars: text.length,
                 nextOffset,
                 content,
+                ...(requiredRouter
+                    ? {
+                        requiredRouter: {
+                            ...requiredRouter,
+                            instruction: "Mandatory prawny-router-v3 entry, delivered with the first legal resource. Apply its routing; read further router files only if the routing needs them."
+                        }
+                    }
+                    : {}),
                 ...(requiredModule
                     ? {
                         requiredModule: {
@@ -492,6 +688,23 @@ export class LegalCorpusToolRuntime {
             });
         }
         throw new Error("UNKNOWN_LEGAL_CORPUS_TOOL");
+    }
+    /** Not found, but with what the model can read instead (no extra listing round). */
+    notFound(call, error, hints) {
+        this.events.push({
+            tool: call.name,
+            target: this.targetFor(call),
+            decision: "BLOCK",
+            detail: { error, ...hints }
+        });
+        return JSON.stringify({
+            status: "NOT_FOUND",
+            error,
+            ...hints,
+            instruction: hints.candidates?.length || hints.skillCandidates?.length
+                ? "Read the right one from these candidates in your next call (closest first, at most 12; if none fits, list_legal_resources); do not guess other names."
+                : "No similar file. Use list_legal_resources for this skill instead of guessing names."
+        });
     }
     skillForPath(relativePath) {
         const directory = relativePath.split("/", 1)[0];

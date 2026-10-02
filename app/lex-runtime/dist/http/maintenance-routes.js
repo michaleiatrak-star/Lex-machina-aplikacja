@@ -1,4 +1,5 @@
 import { AuthError } from "../auth/service.js";
+import { isSkillChannel } from "../skill-channel.js";
 function authenticated(req, authService) {
     return authService.authenticateAuthorization(req.get("authorization"));
 }
@@ -39,6 +40,7 @@ function sendMaintenanceError(res, error) {
             : code.includes("UNKNOWN")
                 ? 404
                 : code.includes("MISSING") ||
+                    code.startsWith("SKILL_CHANNEL_") ||
                     code.includes("NOT_VERIFIED") ||
                     code.includes("VALIDATION") ||
                     code.includes("PROVISIONING_FAILED")
@@ -47,7 +49,41 @@ function sendMaintenanceError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMaintenanceRoutes(app, dependencies) {
-    const { authService, localModels, maintenance } = dependencies;
+    const { authService, localModels, maintenance, anomalyJournal } = dependencies;
+    if (anomalyJournal) {
+        const query = (value) => typeof value === "string" && value.trim() ? value.trim() : undefined;
+        app.get("/api/diagnostics/anomalies", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            const severity = query(req.query.severity);
+            const area = query(req.query.area);
+            const since = query(req.query.since);
+            const limit = Number(query(req.query.limit) ?? 200);
+            res.json({
+                file: anomalyJournal.file,
+                summary: anomalyJournal.summary(since),
+                entries: anomalyJournal.list({
+                    limit: Number.isFinite(limit) ? limit : 200,
+                    ...(severity === "WARN" || severity === "ERROR" ? { severity: severity } : {}),
+                    ...(area ? { area: area } : {}),
+                    ...(since ? { since } : {})
+                })
+            });
+        });
+        app.get("/api/diagnostics/anomalies/export", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+            res.setHeader("Content-Disposition", 'attachment; filename="lex-nieprawidlowosci.jsonl"');
+            res.send(anomalyJournal.exportJsonl());
+        });
+        app.delete("/api/diagnostics/anomalies", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            anomalyJournal.clear();
+            res.status(204).end();
+        });
+    }
     app.get("/api/local-models", (req, res) => {
         try {
             authenticated(req, authService);
@@ -312,6 +348,37 @@ export function registerMaintenanceRoutes(app, dependencies) {
             return;
         try {
             res.json(await maintenance.skillStatus());
+        }
+        catch (error) {
+            sendMaintenanceError(res, error);
+        }
+    });
+    // Skille z repozytorium Lex Machina: kanał rozwojowy albo stabilny.
+    app.get("/api/skills/channel/status", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const channel = req.query.channel;
+        if (!isSkillChannel(channel)) {
+            res.status(400).json({ error: "SKILL_CHANNEL_INVALID" });
+            return;
+        }
+        try {
+            res.json(await maintenance.skillChannelStatus(channel));
+        }
+        catch (error) {
+            sendMaintenanceError(res, error);
+        }
+    });
+    app.post("/api/skills/channel/refresh", async (req, res) => {
+        if (!requireAdmin(req, res, authService))
+            return;
+        const channel = req.body?.channel;
+        if (!isSkillChannel(channel)) {
+            res.status(400).json({ error: "SKILL_CHANNEL_INVALID" });
+            return;
+        }
+        try {
+            res.json(await maintenance.refreshSkillsFromChannel(channel));
         }
         catch (error) {
             sendMaintenanceError(res, error);

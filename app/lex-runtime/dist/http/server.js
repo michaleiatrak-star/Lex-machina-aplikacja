@@ -11,6 +11,8 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
+import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
@@ -268,8 +270,9 @@ export async function startLocalServer(options) {
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();
     // Official ELI texts of every act named in the domain act maps; refreshed
-    // in the background, kept locally for offline and local-model use.
-    const coreLawIndex = new CoreLawIndex();
+    // in the background, kept locally for offline and local-model use. Scanned
+    // PDFs (old Dz.U.) are read with the local OCR.
+    const coreLawIndex = new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
     try {
         coreLawIndex.load(runtimeRoot);
         if (!/^(off|0|false)$/i.test(process.env.LEX_CORE_LAW_REFRESH?.trim() ?? "")) {
@@ -278,12 +281,16 @@ export async function startLocalServer(options) {
                 .catch((error) => {
                 process.stderr.write(`LEX_CORE_LAW_REFRESH_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
             });
+            // Daily ELI check while the application runs, not only at start.
+            coreLawIndex.startSchedule();
         }
     }
     catch (error) {
         process.stderr.write(`LEX_CORE_LAW_UNAVAILABLE:${error instanceof Error ? error.message : String(error)}\n`);
     }
-    const sessionExecutor = new SafeSessionExecutor(registry, providerGateway, undefined, (ledger) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker()), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology);
+    // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
+    const anomalyJournal = new AnomalyJournal(caseFileStore.rootDir);
+    const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)));
     const coreApp = createLexHttpApp({
@@ -346,11 +353,17 @@ export async function startLocalServer(options) {
     registerMaintenanceRoutes(app, {
         authService,
         localModels,
-        maintenance
+        maintenance,
+        anomalyJournal
+    });
+    registerCoreLawRoutes(app, {
+        authService,
+        index: coreLawIndex
     });
     registerMcpConnectorRoutes(app, {
         authService,
-        connectors: mcpConnectors
+        connectors: mcpConnectors,
+        search: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
     app.use(coreApp);
     return new Promise((resolve, reject) => {

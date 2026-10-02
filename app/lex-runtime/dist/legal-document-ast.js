@@ -1,5 +1,5 @@
 import { PERSON_CASES } from "./privacy/person-morphology.js";
-const DOCUMENT_TYPES = new Set([
+export const DOCUMENT_TYPES = new Set([
     "pleading",
     "contract",
     "opinion",
@@ -7,7 +7,7 @@ const DOCUMENT_TYPES = new Set([
     "report",
     "other"
 ]);
-const STYLE_PROFILES = new Set([
+export const STYLE_PROFILES = new Set([
     "lex-classic-clean-v1",
     "lex-light-legal-design-v1",
     "lex-classic-tnr-v1"

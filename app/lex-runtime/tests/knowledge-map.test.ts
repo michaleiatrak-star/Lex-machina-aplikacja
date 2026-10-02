@@ -66,4 +66,40 @@ describe("knowledge map", () => {
     expect(text).not.toContain("KK (DU/1997/553");
     expect(text).toContain("… oraz 1 innych aktów.");
   });
+
+  it("marks acts added by users and acts whose copy is not current; a local model always sees added acts", () => {
+    const withAdded = [
+      ...acts,
+      {
+        eli: "DU/2025/126",
+        title: "Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym",
+        labels: ["Ustawa o podatku akcyzowym"],
+        domains: [],
+        articleCount: 200,
+        origin: "USER" as const,
+        eliCaution: "nowelizacje po tekście jednolitym (1)"
+      }
+    ];
+    const hosted = knowledgeMapPrompt({
+      registry: corpus(),
+      activeSkills: ["dr-02-cywilne"],
+      local: false,
+      toolNames: new Set(["read_core_law_article"]),
+      coreLaw: withAdded
+    });
+    expect(hosted).toContain("3 aktów, w tym 1 dodanych przez użytkowników");
+    expect(hosted).toContain(
+      "- Ustawa o podatku akcyzowym (DU/2025/126, 200 art.; dodany przez użytkownika; kopia nieaktualna: nowelizacje po tekście jednolitym (1)"
+    );
+    const local = knowledgeMapPrompt({
+      registry: corpus(),
+      activeSkills: ["dr-02-cywilne"],
+      local: true,
+      toolNames: new Set(["read_core_law_article"]),
+      coreLaw: withAdded
+    });
+    expect(local).toContain("Ustawa o podatku akcyzowym (DU/2025/126");
+    expect(local).toContain("KC (DU/1964/93");
+    expect(local).not.toContain("KK (DU/1997/553");
+  });
 });

@@ -184,6 +184,13 @@ describe("provider failure message", () => {
       providerFailureMessage("openai-account", "ACCOUNT_SESSION_CLI_FAILED")
     ).toContain("Codex");
   });
+
+  it("Gemini: odmowa bezpłatnego planu przez Google wskazuje klucz API", async () => {
+    const { providerFailureMessage } = await import("./MatterChatApp.js");
+    const message = providerFailureMessage("google-account", "ACCOUNT_SESSION_PLAN_UNSUPPORTED");
+    expect(message).toContain("Google Gemini · API");
+    expect(message).toContain("ponowne logowanie nie pomoże");
+  });
 });
 
 describe("routing footer", () => {
@@ -228,5 +235,14 @@ describe("account model choices", () => {
       "account/openai/gpt-5.5"
     ]);
     expect(accountModelChoices("anthropic", "x")).toEqual([]);
+  });
+});
+
+describe("Gemini as a primary model source", () => {
+  it("maps the Google account source to the google runtime provider and account model", () => {
+    expect(runtimeProviderForPrimarySource("google-account")).toBe("google");
+    expect(runtimeProviderForPrimarySource("google")).toBe("google");
+    expect(isAccountPrimarySource("google-account")).toBe(true);
+    expect(accountModelIdForPrimarySource("google-account")).toBe("account/google/default");
   });
 });

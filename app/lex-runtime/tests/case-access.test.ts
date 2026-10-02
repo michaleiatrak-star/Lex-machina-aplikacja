@@ -1002,3 +1002,50 @@ describe("G34C/G34D case access", () => {
     current.auth.close();
   });
 });
+
+describe("przegląd uprawnień do spraw (ADMIN)", () => {
+  it("pokazuje wszystkie sprawy z członkami; zarządzać można tylko jako OWNER", async () => {
+    const current = fixture();
+    const admin = await current.auth.bootstrap({
+      loginName: "admin",
+      displayName: "Admin",
+      password: "Admin haslo testowe bezpieczne 2026"
+    });
+    const adminContext = context(admin);
+    const anna = await current.auth.createUser(adminContext, {
+      loginName: "anna",
+      displayName: "Anna",
+      password: "Anna haslo testowe bezpieczne 2026"
+    });
+    const adminCase = await current.cases.createCase(adminContext, "Sprawa admina");
+    await current.cases.grantAccess(adminContext, adminCase.caseId, {
+      userId: anna.userId,
+      role: "EDITOR",
+      canReidentify: false
+    });
+    const annaContext = context(
+      await current.auth.login({ loginName: "anna", password: "Anna haslo testowe bezpieczne 2026" })
+    );
+    const annaCase = await current.cases.createCase(annaContext, "Sprawa Anny");
+
+    const overview = current.cases.listAccessOverview(adminContext);
+    const own = overview.find((item) => item.caseId === adminCase.caseId);
+    const foreign = overview.find((item) => item.caseId === annaCase.caseId);
+    expect(own).toMatchObject({ displayName: "Sprawa admina", viewerRole: "OWNER", canManage: true });
+    expect(own?.members.map((member) => [member.loginName, member.role])).toEqual(
+      expect.arrayContaining([
+        ["admin", "OWNER"],
+        ["anna", "EDITOR"]
+      ])
+    );
+    expect(foreign).toMatchObject({ displayName: "Sprawa Anny", canManage: false });
+    expect(foreign?.viewerRole).toBeUndefined();
+    expect(foreign?.members).toEqual([expect.objectContaining({ loginName: "anna", role: "OWNER" })]);
+    // Metadata only: no key material leaves the service.
+    expect(JSON.stringify(overview)).not.toMatch(/envelope|wrappedKey|ciphertext/i);
+
+    expect(() => current.cases.listAccessOverview(annaContext)).toThrow(
+      expect.objectContaining({ code: "CASE_ACCESS_DENIED" })
+    );
+  });
+});

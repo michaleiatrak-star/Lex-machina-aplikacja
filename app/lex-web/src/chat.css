@@ -144,6 +144,86 @@
   font-size: 10px;
 }
 
+.matter-thread-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.matter-thread-row .matter-thread {
+  flex: 1;
+  min-width: 0;
+}
+
+.matter-thread-edit {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #91a095;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.matter-thread-row:hover .matter-thread-edit,
+.matter-thread-edit:focus-visible {
+  opacity: 1;
+}
+
+.matter-thread-edit:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.matter-thread-rename {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.matter-thread-rename input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.matter-thread-rename-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.matter-thread-rename-actions button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.matter-thread-rename-error {
+  color: #ffb4a8;
+  font-size: 10px;
+}
+
 .chat-case-switcher {
   display: flex;
   align-items: end;
@@ -2287,4 +2367,444 @@ mark.restored {
 
 .mcp-connector-list button {
   flex: none;
+}
+
+.mcp-search-form {
+  display: grid;
+  gap: 12px;
+}
+
+.mcp-search-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.mcp-search-result {
+  max-height: 60vh;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mcp-search-items {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mcp-search-item p {
+  margin: 4px 0;
+}
+
+.mcp-search-snippet,
+.mcp-search-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mcp-search-text {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.mcp-search-document {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mcp-search-document h4 {
+  margin: 8px 0 4px;
+}
+
+.mcp-search-facts {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.mcp-search-facts div {
+  display: grid;
+  grid-template-columns: minmax(120px, 30%) 1fr;
+  gap: 8px;
+}
+
+.mcp-search-facts dt {
+  color: #5b6b5a;
+}
+
+.mcp-search-facts dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.mcp-search-raw {
+  margin-top: 12px;
+}
+
+.chat-document-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.chat-document-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #2f4a3a;
+}
+
+.chat-document-card-head div {
+  display: grid;
+  min-width: 0;
+}
+
+.chat-document-card-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-document-card-head small {
+  color: #5b6b5a;
+}
+
+.chat-document-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-document-card-actions button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #c7d0c4;
+  border-radius: 9px;
+  background: #f4f7f2;
+  color: #1f3328;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-document-card-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chat-document-preview {
+  max-height: 70vh;
+  overflow: auto;
+  border-top: 1px solid #e3e8e0;
+  padding-top: 8px;
+}
+
+.source-preview-frame {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  margin-top: 8px;
+  border: 1px solid #d5dcd2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.account-connect-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.account-connect-progress progress {
+  width: 100%;
+  height: 8px;
+}
+
+.account-connect-progress ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 2px;
+  font-size: 0.9em;
+  opacity: 0.75;
+}
+
+.account-connect-progress li.done {
+  text-decoration: line-through;
+}
+
+.account-connect-progress li.current {
+  font-weight: 600;
+  opacity: 1;
+}
+
+.case-access-admin-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.case-access-admin-case {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+}
+
+.case-access-admin-case > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.case-access-admin-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-access-admin-meta {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.case-access-admin-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.case-access-admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-access-admin-toolbar > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.case-access-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.case-access-admin-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+.case-access-admin-table th,
+.case-access-admin-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(127, 127, 127, 0.18);
+  vertical-align: middle;
+}
+
+.case-access-admin-table th {
+  font-size: 0.8em;
+  font-weight: 600;
+  opacity: 0.75;
+  border-top: none;
+}
+
+.case-access-admin-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.case-access-admin-add label:not(.case-reidentify-toggle) {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 180px;
+}
+
+.case-access-admin-add .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.case-access-admin-roles {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .case-access-admin-table thead {
+    display: none;
+  }
+  .case-access-admin-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(127, 127, 127, 0.18);
+  }
+  .case-access-admin-table td {
+    border: none;
+    padding: 0;
+  }
+}
+
+.case-access-admin-rename,
+.case-access-admin-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.case-access-admin-rename input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.case-access-admin-quick {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.case-access-admin-quick select {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.case-access-admin-quick .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+
+
+/* Kalendarz: znaczniki rodzajów zdarzeń, legenda, najbliższe terminy. */
+.lex-calendar-kinds {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.lex-calendar-kind {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8a948c;
+}
+
+.lex-calendar-kind.kind-court_hearing {
+  background: #285132;
+}
+
+.lex-calendar-kind.kind-deadline {
+  background: #b3261e;
+}
+
+.lex-calendar-kind.kind-client_meeting {
+  background: #2f5f9e;
+}
+
+.lex-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #66736a;
+}
+
+.lex-calendar-agenda {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.lex-calendar-agenda li {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #e3e8e0;
+}
+
+.lex-calendar-agenda li.deadline strong {
+  color: #b3261e;
+}
+
+.lex-calendar-agenda-day {
+  display: grid;
+  justify-items: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lex-calendar-agenda-day small,
+.lex-calendar-agenda li > span small {
+  color: #66736a;
+}
+
+.matter-schedule-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .lex-calendar-agenda li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }

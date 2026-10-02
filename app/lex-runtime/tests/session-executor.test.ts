@@ -14,12 +14,15 @@ import type {
 import { LexSkillRegistry } from "../src/registry.js";
 import { PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
 import {
+  SESSION_EXECUTION_INTERNAL,
   SafeSessionExecutor,
   namespaceDocumentAttachmentTokens,
   publicAuxiliarySourceFromToolResult,
   publicEvidenceBundle,
   reconcileAuxiliarySourcesWithVerification
 } from "../src/session-executor.js";
+import { LegalFederationToolRuntime } from "../src/legal-federation-tool-runtime.js";
+import { validateLocalHybridDocument } from "../src/document-generation-validation.js";
 
 const roots: string[] = [];
 const DR = "dr-02-prawo-cywilne-rodzinne-gospodarcze";
@@ -496,6 +499,173 @@ describe("SafeSessionExecutor", () => {
     expect(messages).toContain("Pismo wysłano na [PII:EMAIL:0002].");
     expect(messages).not.toContain("LMPII");
     expect(messages).not.toContain("anna.nowak");
+  });
+
+  it("does not give MCP federation tools to local models (context budget), only to hosted ones", async () => {
+    const seen: Record<string, string[]> = {};
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "capture",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        seen[params.model] = (params.tools ?? []).map((tool) => tool.function.name);
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(
+      fixture(),
+      new ProviderGateway(providers),
+      undefined,
+      undefined,
+      undefined,
+      new LegalFederationToolRuntime()
+    );
+    for (const model of ["local/bielik-test", "test"]) {
+      await executor.execute({
+        query: "Jaki jest termin przedawnienia roszczenia?",
+        provider: "openai",
+        model,
+        primarySkill: DR,
+        mode: "PRAWNIK"
+      }).catch(() => undefined);
+    }
+    expect(seen["test"]).toContain("search_federated_legal_sources");
+    expect(seen["local/bielik-test"]).toBeDefined();
+    expect(seen["local/bielik-test"]).not.toContain("search_federated_legal_sources");
+  });
+
+  it("runtime-routed session (document generation): a guessed missing file is DEGRADED, a path escape still blocks", async () => {
+    let path = "";
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "corpus",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        await params.runTools?.([{ id: "c1", name: "read_legal_resource", input: { skill: DR, path } }]);
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(fixture(), new ProviderGateway(providers));
+    const request = {
+      query: "Jaki jest termin przedawnienia roszczenia?",
+      provider: "openai" as const,
+      model: "test",
+      primarySkill: DR,
+      mode: "PRAWNIK" as const
+    };
+
+    path = "references/zgadnieta-nazwa.md";
+    const guessed = await executor.execute(request);
+    const guessedEvents = guessed[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(guessedEvents.find((event) => event.target === "G36_LEGAL_CORPUS_RUNTIME")?.status).toBe("OK");
+    expect(guessedEvents.some((event) => event.status === "BLOCKED")).toBe(false);
+    expect(guessedEvents.some((event) => event.status === "DEGRADED" && String(event.detail?.error).startsWith("LEGAL_RESOURCE_NOT_FOUND"))).toBe(true);
+
+    path = "../../poza-korpusem.md";
+    const escape = await executor.execute(request);
+    const escapeEvents = escape[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(escapeEvents.find((event) => event.target === "G36_LEGAL_CORPUS_RUNTIME")?.status).toBe("BLOCKED");
+    expect(escape.status).toBe("BLOCKED");
+    expect(escape.audit.blockedEvents).toContain("gate: G36_LEGAL_CORPUS_RUNTIME");
+  });
+
+  it("G39I input completeness reads only the newest user turn, not the history", async () => {
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "history",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream() {
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(fixture(), new ProviderGateway(providers));
+    const base = { provider: "openai" as const, model: "test", primarySkill: DR, mode: "PRAWNIK" as const };
+    const inputGate = (result: Awaited<ReturnType<typeof executor.execute>>) =>
+      (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+        .find((event) => event.target === "G39I_INPUT_COMPLETENESS");
+
+    const history = await executor.execute({
+      ...base,
+      query:
+        "Użytkownik: Umowa jest w załączniku.\n\n" +
+        "Asystent: Przygotuję pismo w pliku, gdy wgrasz te dokumenty.\n\n" +
+        "Użytkownik: Wygeneruj pusty dokument z napisem ok."
+    });
+    expect(inputGate(history)?.status).toBe("OK");
+
+    const current = await executor.execute({
+      ...base,
+      query: "Użytkownik: Dzień dobry.\n\nAsystent: Dzień dobry.\n\nUżytkownik: Przeanalizuj umowę w załączniku."
+    });
+    expect(inputGate(current)?.status).toBe("BLOCKED");
+    expect(current.status).toBe("BLOCKED");
+  });
+
+  it("audits only its own federated calls and treats an unavailable source as DEGRADED for HYBRID-VAL", async () => {
+    let callFederation = true;
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "federation",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        if (callFederation) {
+          await params.runTools?.([{
+            id: "f1",
+            name: "search_federated_legal_sources",
+            input: { source: "isap", query: "przedawnienie" }
+          }]);
+        }
+        return { fullText: "Gotowe." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    // Bez konektorów: każde źródło = FEDERATED_SOURCE_NOT_INSTALLED (SOURCE_UNAVAILABLE).
+    const executor = new SafeSessionExecutor(
+      fixture(),
+      new ProviderGateway(providers),
+      undefined,
+      undefined,
+      undefined,
+      new LegalFederationToolRuntime()
+    );
+    const request = {
+      query: "Jaki jest termin przedawnienia roszczenia?",
+      provider: "openai" as const,
+      model: "test",
+      primarySkill: DR,
+      mode: "PRAWNIK" as const
+    };
+
+    const first = await executor.execute(request);
+    const firstEvents = first[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(firstEvents.filter((event) => event.target === "federated-legal:isap").map((event) => event.status))
+      .toEqual(["DEGRADED"]);
+
+    callFederation = false;
+    const second = await executor.execute(request);
+    const secondEvents = second[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(secondEvents.some((event) => event.target.startsWith("federated-legal"))).toBe(false);
+
+    for (const events of [firstEvents, secondEvents]) {
+      const hybrid = validateLocalHybridDocument("Wezwanie do zapłaty.", {
+        schemaVersion: 1,
+        sourceSessionId: "s",
+        primarySkill: DR,
+        provider: "openai",
+        model: "test",
+        usedDocumentContext: false,
+        verificationRecords: [],
+        auditEvents: events
+      });
+      expect(hybrid.reasons).not.toContain("SOURCE_SESSION_BLOCKED_EVENT");
+    }
   });
 
   it("sends the placeholder key with gender to the model, never the name", async () => {

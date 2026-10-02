@@ -5,6 +5,7 @@ import type {
   NormalizedToolSchema
 } from "./providers/types.js";
 import {
+  coreLawEliCaution,
   normalizeForSearch,
   type CoreLawIndex
 } from "./core-law-index.js";
@@ -30,7 +31,7 @@ const SCHEMAS: NormalizedToolSchema[] = [
     function: {
       name: LIST_TOOL,
       description:
-        "List the core Polish acts (all acts named in the Lex domain act maps) held locally from the official ELI text, with ELI, title, status and article count.",
+        "List the Polish acts held locally from the official ELI text (acts named in the Lex domain act maps, acts added after verification and acts added by users), with ELI, title, status, article count, origin and whether the copy is current (eliCaution: verify the act in ELI before relying on the copy).",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -151,12 +152,15 @@ export class CoreLawToolRuntime {
   }
 
   systemPromptAppendix(): string {
-    const available = this.index
-      .summaries()
-      .filter((act) => act.articleCount > 0).length;
+    const withText = this.index.summaries().filter((act) => act.articleCount > 0);
+    const added = withText.filter((act) => act.origin === "USER").length;
+    const cautious = withText.filter((act) => coreLawEliCaution(act)).length;
     return [
       "# RDZEŃ PRAWA (TEKSTY Z ELI)",
-      `Lokalnie dostępne są oficjalne teksty aktów wskazanych w mapach dziedzinowych DR i prawo-polskie (${available} aktów z tekstem).`,
+      `Lokalnie dostępne są oficjalne teksty aktów z map dziedzinowych DR i prawo-polskie, aktów dołączonych po weryfikacji w ELI i aktów dodanych przez użytkowników (${withText.length} aktów z tekstem${added ? `, w tym ${added} dodanych przez użytkowników` : ""}); listę podaje list_core_law_acts.`,
+      ...(cautious
+        ? [`Kopia ${cautious} aktów nie jest aktualnym brzmieniem (eliCaution w list_core_law_acts): ich przepisy potwierdzaj verify_legal_reference w ELI.`]
+        : []),
       "Dosłowne brzmienie przepisu bierz z read_core_law_article (albo search_core_law, gdy nie znasz numeru artykułu); nigdy nie cytuj przepisu z pamięci.",
       "Wynik podaje ELI, status aktu i datę pobrania. Jeśli mapa lub status wskazuje nowelizacje po tekście jednolitym, potwierdź aktualne brzmienie verify_legal_reference przed przedstawieniem go jako obowiązującego."
     ].join("\n");
@@ -222,7 +226,9 @@ export class CoreLawToolRuntime {
           consolidatedText: act.consolidated,
           articles: act.articleCount,
           fetchedAt: act.fetchedAt,
-          available: act.articleCount > 0 || act.textSource !== null
+          available: act.articleCount > 0 || act.textSource !== null,
+          origin: act.origin,
+          eliCaution: coreLawEliCaution(act)
         }));
       this.events.push({
         tool: call.name,
@@ -244,8 +250,11 @@ export class CoreLawToolRuntime {
       if (!record) throw new Error("CORE_LAW_TEXT_NOT_YET_DOWNLOADED");
       const text = record.articles[article];
       if (text === undefined) throw new Error("CORE_LAW_ARTICLE_NOT_FOUND");
-      const amendmentsAfter =
-        this.index.summary(ref.eli)?.amendmentsAfter ?? [];
+      const summary = this.index.summary(ref.eli);
+      const amendmentsAfter = summary?.amendmentsAfter ?? [];
+      const pendingUpdate = Boolean(
+        summary?.pendingConsolidated || (summary?.pendingAmendments.length ?? 0) > 0
+      );
       this.events.push({
         tool: call.name,
         target: `${ref.eli}:art.${article}`,
@@ -272,8 +281,17 @@ export class CoreLawToolRuntime {
         text: text.slice(0, MAX_ARTICLE_CHARS),
         truncated: text.length > MAX_ARTICLE_CHARS,
         mapNotes: ref.notes,
-        warning:
-          amendmentsAfter.length > 0
+        ...(pendingUpdate
+          ? {
+              pendingUpdate: {
+                consolidated: summary?.pendingConsolidated ?? null,
+                amendments: summary?.pendingAmendments ?? []
+              }
+            }
+          : {}),
+        warning: pendingUpdate
+          ? "W ELI jest nowszy tekst jednolity albo nowelizacja, jeszcze niezastosowane w lokalnej kopii (pendingUpdate). Brzmienie może być nieaktualne: potwierdź je verify_legal_reference przed przedstawieniem jako obowiązujące."
+          : amendmentsAfter.length > 0
             ? `Po tym tekście jednolitym ogłoszono ${amendmentsAfter.length} nowelizację/nowelizacje (amendmentsAfter). Sprawdź, czy zmieniają ten artykuł (read_core_law_article z ELI nowelizacji albo verify_legal_reference), zanim przedstawisz brzmienie jako obowiązujące.`
             : "Brzmienie z najnowszego pobranego tekstu jednolitego. Jeśli mapNotes lub actStatus wskazują zmiany, potwierdź brzmienie verify_legal_reference przed przedstawieniem go jako obowiązującego."
       });

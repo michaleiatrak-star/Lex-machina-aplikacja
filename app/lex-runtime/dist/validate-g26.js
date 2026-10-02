@@ -8,7 +8,8 @@ async function main() {
     const expected = [
         { provider: "openai", configured: true },
         { provider: "anthropic", configured: false },
-        { provider: "xai", configured: true }
+        { provider: "xai", configured: true },
+        { provider: "google", configured: false }
     ];
     if (JSON.stringify(status) !== JSON.stringify(expected)) {
         throw new Error("G26 provider configuration status is not deterministic.");

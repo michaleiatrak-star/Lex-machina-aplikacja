@@ -225,6 +225,9 @@ export class LexExecutionEngine {
         let workflowPlan;
         try {
             workflowPlan = createDeterministicWorkflowPlan(this.registry, skillSelection.workflowExecutionSkill);
+            if (args.documentAstOutput) {
+                workflowPlan = { ...workflowPlan, documentAstOutput: true };
+            }
         }
         catch (error) {
             const detail = error instanceof Error
@@ -287,6 +290,7 @@ export class LexExecutionEngine {
                         continuityKey: args.continuityKey
                     }
                     : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages: [
                     {
                         role: "user",
@@ -607,6 +611,7 @@ export class LexExecutionEngine {
                 ...(args.continuityKey
                     ? { continuityKey: args.continuityKey }
                     : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages,
                 ...(quickTools.length > 0 && trackedRunTools
                     ? {
@@ -842,6 +847,7 @@ export class LexExecutionEngine {
                     continuityKey: args.continuityKey
                 }
                 : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages: [
                 ...(args.documentContext
                     ? [{
@@ -913,15 +919,37 @@ export class LexExecutionEngine {
             const folder = native ? ` [${path.basename(skill.directory)}/]` : "";
             return `- ${skill.name}${folder}${version ? ` v${version}` : ""} :: ${text.length > 300 ? text.slice(0, 300) + "…" : text || "(brak opisu)"}`;
         });
-        // Native corpus: the router is given in full up front (router-v3 first by
-        // construction, one tool round less) and counted as read.
-        const router = native ? this.registry.get("prawny-router-v3") : undefined;
-        const routerText = router
-            ? fs.readFileSync(path.join(router.directory, "SKILL.md"), "utf8")
-            : null;
-        if (router && routerText) {
-            native.onRead(`${path.basename(router.directory)}/SKILL.md`);
-        }
+        // The router v3 and the Polish-law facade (prawo-polskie-v2, the DR-01..16
+        // routing) are given in full up front - for every model, not only the
+        // native corpus - and counted as read: router-v3 first by construction and
+        // two tool rounds less on every legal question.
+        const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
+        const preloaded = onPreloaded
+            ? ["prawny-router-v3", "prawo-polskie-v2"].flatMap((name) => {
+                const skill = this.registry.get(name);
+                if (!skill || !allowed(name))
+                    return [];
+                const file = path.join(skill.directory, "SKILL.md");
+                if (!fs.existsSync(file))
+                    return [];
+                const relative = `${path.basename(skill.directory)}/SKILL.md`;
+                onPreloaded(relative);
+                return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+            })
+            : [];
+        const preloadedPrompt = preloaded.map((item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`);
+        // One selection methodology for every host (Claude with the native corpus,
+        // ChatGPT, Gemini, Grok, API keys): only the read/list tools differ.
+        const readTool = native ? "Read" : "read_legal_resource";
+        const listTool = native ? "Glob z dokładnym wzorcem" : "list_legal_resources";
+        const preloadedNames = preloaded.map((item) => item.name).join(" i ");
+        const methodology = [
+            preloaded.length
+                ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`
+                : `Sprawa lub pytanie prawne: NAJPIERW wczytaj ${native ? "Read prawny-router-v3/SKILL.md" : "read_legal_resource skill=prawny-router-v3 path=SKILL.md"} i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla).`,
+            `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === "prawo-polskie-v2") ? " i prawo-polskie-v2" : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
+            `Nie wczytuj skilli i modułów, do których ani router, ani wczytane skille nie kierują dla tego pytania; nie zgaduj nazw plików (nazwy nie znasz: ${listTool}) i nie przeglądaj całych katalogów.${native ? "" : " Gdy ścieżka lub nazwa skilla jest błędna, runtime w tej samej rundzie poda jedyny pasujący plik (pole requestedPath) albo listę kandydatów (NOT_FOUND, candidates) - wybierz z niej, nie zgaduj dalej."} Nie udawaj, że przeczytałeś plik, którego nie wczytałeś.`
+        ];
         const toolNames = new Set(args.tools.map((tool) => tool.function.name));
         // Skills are written for an assistant with its own tools; map their
         // instructions onto the Lex tools available in this turn.
@@ -942,7 +970,8 @@ export class LexExecutionEngine {
                     "# LEX MACHINA — AUTO: MODEL DOBIERA SKILLE",
                     "Pracujesz jak asystent prawny z zainstalowanymi skillami. Katalog roboczy to pełny korpus skilli prawnych Lex (tylko do odczytu): każdy skill to folder z SKILL.md i podfolderami (modules/, references/, shared/ i inne). Czytasz je narzędziami Read, Glob i Grep - masz dostęp do wszystkich plików i podfolderów.",
                     "Wiadomość bez kwestii prawnej (powitanie, test, krótkie polecenie, pytanie ogólne): odpowiedz bezpośrednio, bez czytania skilli.",
-                    "Sprawa lub pytanie prawne: wykonaj HARD GATE i routing prawnego routera v3 podanego niżej w całości, potem przeczytaj SKILL.md właściwych domen DR i skilli wykonawczych oraz moduły, do których odsyłają. Ścieżki podawaj względem katalogu roboczego (np. dr-02-.../SKILL.md). Czytaj to, czego rzeczywiście potrzebujesz; nie udawaj, że przeczytałeś plik, którego nie otworzyłeś.",
+                    ...methodology,
+                    "Ścieżki podawaj względem katalogu roboczego (np. dr-02-.../SKILL.md, dr-02-.../modules/<plik>).",
                     `Prawo karne (DR-03): przed kwalifikacją przeczytaj obowiązkowy kwalifikator karnomaterialny <folder DR-03>/${CRIMINAL_QUALIFIER_INDEX} i zastosuj go.`,
                     "Narzędzia Lex masz jako mcp__lex__<nazwa>: rdzeń aktów prawnych z tekstami z ELI (read_core_law_article, search_core_law - lokalnie, szybko), weryfikacja przepisów i orzeczeń, orzecznictwo (SAOS, CBOSA, SN) i źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne). Brzmienie przepisu bierz z rdzenia aktów albo weryfikacji ELI, nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
                     "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z przeczytanego skilla.",
@@ -963,7 +992,7 @@ export class LexExecutionEngine {
                     toolNames: new Set(args.tools.map((tool) => tool.function.name)),
                     ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
                 }),
-                ...(routerText ? [`# PRAWNY ROUTER V3 (prawny-router-v3/SKILL.md, już przeczytany)\n\n${routerText}`] : [])
+                ...preloadedPrompt
             ]
             : null;
         const promptParts = nativeParts ?? [
@@ -971,8 +1000,8 @@ export class LexExecutionEngine {
                 "# LEX MACHINA — AUTO: MODEL DOBIERA SKILLE",
                 "Pracujesz jak asystent prawny z zainstalowanymi skillami: sam oceniasz, które skille i moduły są potrzebne, i wczytujesz je narzędziem read_legal_resource.",
                 "Wiadomość bez kwestii prawnej (powitanie, test, krótkie polecenie, pytanie ogólne): odpowiedz bezpośrednio, bez wczytywania skilli.",
-                "Sprawa lub pytanie prawne: NAJPIERW wczytaj read_legal_resource skill=prawny-router-v3 path=SKILL.md i wykonaj jego HARD GATE i routing. Runtime blokuje odczyt innych skilli przed routerem.",
-                "Następnie wczytaj SKILL.md właściwych domen DR i skilli wykonawczych oraz moduły, do których odsyłają (view modules/..., shared/...). Wczytuj to, czego rzeczywiście potrzebujesz; nie udawaj, że przeczytałeś plik, którego nie wczytałeś.",
+                ...methodology,
+                "Polecenia skilli typu view modules/..., shared/... wykonujesz narzędziem read_legal_resource (skill=<nazwa> path=<ścieżka w skillu>).",
                 "Prawo karne (DR-03): runtime dołącza obowiązkowy kwalifikator karnomaterialny przy pierwszym SKILL.md DR-03; zastosuj go przed kwalifikacją.",
                 "Przepisy cytuj wyłącznie po weryfikacji narzędziami (ELI), nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
                 "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z wczytanego skilla.",
@@ -993,7 +1022,8 @@ export class LexExecutionEngine {
                 catalog: false,
                 toolNames: new Set(args.tools.map((tool) => tool.function.name)),
                 ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
-            })
+            }),
+            ...preloadedPrompt
         ];
         if (args.documentContext) {
             promptParts.push([
@@ -1024,6 +1054,7 @@ export class LexExecutionEngine {
             ...(args.continuityKey
                 ? { continuityKey: args.continuityKey }
                 : {}),
+            ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
             messages: [
                 ...(args.documentContext
                     ? [{
@@ -1041,7 +1072,7 @@ export class LexExecutionEngine {
             ],
             tools: args.tools,
             runTools: args.runTools,
-            ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead } } : {}),
+            ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
             ...(args.draftCallbacks
                 ? { callbacks: args.draftCallbacks }
                 : {}),
@@ -1056,6 +1087,7 @@ export class LexExecutionEngine {
                 model: args.model,
                 systemPrompt: promptParts.join("\n\n"),
                 ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
+                ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
                 messages: [
                     { role: "user", content: effectiveQuery },
                     { role: "assistant", content: response.fullText },
@@ -1067,7 +1099,7 @@ export class LexExecutionEngine {
                 ],
                 tools: args.tools,
                 runTools: args.runTools,
-                nativeCorpus: { root: native.root, onRead: native.onRead },
+                nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) },
                 reasoning: "none"
             });
             if (corrected.fullText.trim())

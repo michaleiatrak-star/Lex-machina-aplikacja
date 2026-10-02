@@ -1,6 +1,7 @@
 // Konektory MCP Lex Machina (audyt-systemu-v4/mcp-servers, pakiet dist/lex-mcp.mjs).
 // Zastępują flotę @matematicsolutions/* i agregator prawo-pl-mcp. Lista, grupy i link do
 // klucza CEIDG odpowiadają instaluj_serwery_mcp.py (FAZA 0E audytu) — tam jest źródło prawdy.
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +17,7 @@ export const LEX_MCP_SERVER_IDS = [
   "eurlex",
   "saos",
   "cbosa",
+  "kio",
   "krs",
   "wl",
   "ceidg",
@@ -40,6 +42,7 @@ export const LEX_MCP_CATALOG: LexMcpServerInfo[] = [
   { id: "eurlex", group: "Akty prawne i orzecznictwo", label: "EUR-Lex + TSUE — akty UE, status, wyroki" },
   { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — orzeczenia sądów powszechnych i SN, cytator" },
   { id: "cbosa", group: "Akty prawne i orzecznictwo", label: "CBOSA — orzeczenia NSA/WSA (snapshot 🟨)" },
+  { id: "kio", group: "Akty prawne i orzecznictwo", label: "KIO — orzeczenia Krajowej Izby Odwoławczej (wyszukiwarka UZP)" },
   { id: "krs", group: "Rejestry podmiotów", label: "KRS — odpis, reprezentacja (bez klucza)" },
   { id: "wl", group: "Rejestry podmiotów", label: "Biała lista VAT — status i rachunki (bez klucza)" },
   { id: "ceidg", group: "Rejestry podmiotów", label: "CEIDG — przedsiębiorcy-osoby fizyczne (WYMAGA KLUCZA)", requiresKey: "CEIDG_API_KEY" },
@@ -190,9 +193,17 @@ export async function testCeidgKey(
   }
 }
 
+export type LexMcpServerCheck = {
+  at: string;
+  ok: boolean;
+  tools?: string[];
+  error?: string;
+};
+
 type StoredState = {
   schemaVersion: 1;
   installed: LexMcpServerId[];
+  checks?: Partial<Record<LexMcpServerId, LexMcpServerCheck>>;
 };
 
 type DesktopConfig = {
@@ -204,11 +215,28 @@ export type LexMcpServerStatus = LexMcpServerInfo & {
   installed: boolean;
   ready: boolean;
   desktopInstalled: boolean;
+  lastCheck?: LexMcpServerCheck;
+};
+
+// MATCH = pakiet identyczny z sumą w CHECKSUMS.sha256 skilla audyt-systemu-v4 (najnowsza instalacja).
+export type LexMcpPackageIntegrity =
+  | "MATCH"
+  | "MISMATCH"
+  | "UNVERIFIED"
+  | "MISSING";
+
+export type LexMcpPackageInfo = {
+  integrity: LexMcpPackageIntegrity;
+  sha256?: string;
+  expectedSha256?: string;
+  version?: string;
+  skillVersion?: string;
 };
 
 export type LexMcpConnectorStatus = {
   packagePath: string;
   packageAvailable: boolean;
+  package: LexMcpPackageInfo;
   ceidg: {
     keyConfigured: boolean;
     keyUrl: string;
@@ -219,6 +247,55 @@ export type LexMcpConnectorStatus = {
   };
   servers: LexMcpServerStatus[];
 };
+
+function readText(file: string): string | null {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+// Pakiet leży w <skill>/mcp-servers/dist/lex-mcp.mjs; skill trzyma CHECKSUMS.sha256 i wersję w SKILL.md.
+export function inspectLexMcpPackage(
+  packagePath: string
+): LexMcpPackageInfo {
+  let bytes: Buffer;
+  try {
+    bytes = fs.readFileSync(packagePath);
+  } catch {
+    return { integrity: "MISSING" };
+  }
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const serversDir = path.dirname(path.dirname(packagePath));
+  const skillDir = path.dirname(serversDir);
+  const relative = "./" + path.relative(skillDir, packagePath).split(path.sep).join("/");
+  const expectedSha256 = readText(path.join(skillDir, "CHECKSUMS.sha256"))
+    ?.split(/\r?\n/)
+    .map((line) => line.trim().split(/\s+/))
+    .find((parts) => parts[1] === relative)?.[0]
+    ?.toLowerCase();
+  let version: string | undefined;
+  try {
+    const manifest = JSON.parse(readText(path.join(serversDir, "mcpb-manifest.json")) ?? "") as { version?: unknown };
+    if (typeof manifest.version === "string") version = manifest.version;
+  } catch {
+    // Brak manifestu MCPB — wersja nieznana.
+  }
+  const skillVersion = readText(path.join(skillDir, "SKILL.md"))
+    ?.match(/^version:\s*"([^"]+)"/m)?.[1];
+  return {
+    integrity: !expectedSha256
+      ? "UNVERIFIED"
+      : expectedSha256 === sha256
+        ? "MATCH"
+        : "MISMATCH",
+    sha256,
+    ...(expectedSha256 ? { expectedSha256 } : {}),
+    ...(version ? { version } : {}),
+    ...(skillVersion ? { skillVersion } : {})
+  };
+}
 
 export class LexMcpConnectorStore {
   private revisionValue = 0;
@@ -257,7 +334,8 @@ export class LexMcpConnectorStore {
       if (parsed.schemaVersion === 1 && Array.isArray(parsed.installed)) {
         return {
           schemaVersion: 1,
-          installed: parsed.installed.filter((id): id is LexMcpServerId => typeof id === "string" && isLexMcpServerId(id))
+          installed: parsed.installed.filter((id): id is LexMcpServerId => typeof id === "string" && isLexMcpServerId(id)),
+          ...(parsed.checks && typeof parsed.checks === "object" ? { checks: parsed.checks } : {})
         };
       }
     } catch {
@@ -362,9 +440,12 @@ export class LexMcpConnectorStore {
     const installed = new Set(this.installedServers());
     const ready = new Set(this.readyServers());
     const desktop = this.desktopEntries();
+    const checks = this.readState().checks ?? {};
+    const packageInfo = inspectLexMcpPackage(this.packagePath);
     return {
       packagePath: this.packagePath,
-      packageAvailable: fs.existsSync(this.packagePath),
+      packageAvailable: packageInfo.integrity !== "MISSING",
+      package: packageInfo,
       ceidg: {
         keyConfigured: Boolean(this.ceidgKey()),
         keyUrl: CEIDG_KEY_URL
@@ -377,7 +458,8 @@ export class LexMcpConnectorStore {
         ...server,
         installed: installed.has(server.id),
         ready: ready.has(server.id),
-        desktopInstalled: desktop.has(DESKTOP_PREFIX + server.id)
+        desktopInstalled: desktop.has(DESKTOP_PREFIX + server.id),
+        ...(checks[server.id] ? { lastCheck: checks[server.id] } : {})
       }))
     };
   }
@@ -423,6 +505,7 @@ export class LexMcpConnectorStore {
     const tools = await this.probe(id);
     const state = this.readState();
     if (!state.installed.includes(id)) state.installed.push(id);
+    state.checks = { ...state.checks, [id]: { at: new Date().toISOString(), ok: true, tools } };
     this.writeState(state);
     if (options.desktop) {
       this.writeDesktop((servers) => {
@@ -432,12 +515,34 @@ export class LexMcpConnectorStore {
     return { tools };
   }
 
+  // Ponowny handshake zainstalowanego serwera; wynik trafia do stanu, instalacja się nie zmienia.
+  async check(
+    id: LexMcpServerId
+  ): Promise<LexMcpServerCheck> {
+    let result: LexMcpServerCheck;
+    try {
+      if (id === "ceidg" && !this.ceidgKey()) throw new Error("CEIDG_KEY_REQUIRED");
+      result = { at: new Date().toISOString(), ok: true, tools: await this.probe(id) };
+    } catch (error) {
+      result = {
+        at: new Date().toISOString(),
+        ok: false,
+        error: error instanceof Error ? error.message.split(":", 1)[0]! : "LEX_MCP_FAILED"
+      };
+    }
+    const state = this.readState();
+    state.checks = { ...state.checks, [id]: result };
+    writePrivate(this.stateFile, JSON.stringify(state, null, 2) + "\n");
+    return result;
+  }
+
   uninstall(
     id: LexMcpServerId,
     options: { desktop?: boolean } = {}
   ): void {
     const state = this.readState();
     state.installed = state.installed.filter((installed) => installed !== id);
+    if (state.checks) delete state.checks[id];
     this.writeState(state);
     if (options.desktop && this.desktopEntries().has(DESKTOP_PREFIX + id)) {
       this.writeDesktop((servers) => {

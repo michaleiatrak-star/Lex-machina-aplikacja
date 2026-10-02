@@ -5,7 +5,7 @@ import { LocalAiSetupPanel } from "./LocalAiSetupPanel.js";
 import { MaintenancePanel } from "./MaintenancePanel.js";
 import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
-import { AdminSupportPanel } from "./AdminSupportPanel.js";
+import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
 import type {
   AuthMeResponse,
@@ -57,7 +57,11 @@ export default function App({
                   user.userId
                 }
               />
-              <AdminSupportPanel />
+              <CaseAccessAdminPanel
+                currentUserId={
+                  user.userId
+                }
+              />
             </>
           ) : null,
         mcp:

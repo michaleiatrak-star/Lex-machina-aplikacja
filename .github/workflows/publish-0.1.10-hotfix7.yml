@@ -1,0 +1,173 @@
+name: Publish Lex Machina 0.1.10 hotfix 7 online installer
+
+# Builds, accepts and publishes the online installer in one run: runtime
+# validation, the G33D online installer build and installed-copy acceptance,
+# then the exact accepted artifact is attached to a pre-release at GITHUB_SHA.
+
+on:
+  push:
+    branches:
+      - "claude/modest-knuth-re40mu"
+    paths:
+      - ".github/workflows/publish-0.1.10-hotfix7.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: lex-publish-0.1.10-hotfix7
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: v0.1.10-hotfix7
+  RELEASE_TITLE: Lex Machina v0.1.10 hotfix 7
+  ASSET_NAME: Lex-Machina-0.1.10-hotfix7-Online-x64-Setup.exe
+
+jobs:
+  runtime:
+    name: Runtime and Gate I audit
+    uses: ./.github/workflows/lex-runtime.yml
+    secrets: inherit
+
+  online:
+    name: Accepted online installer
+    needs:
+      - runtime
+    uses: ./.github/workflows/lex-installer.yml
+    secrets: inherit
+
+  publish:
+    name: Publish accepted online installer
+    needs:
+      - runtime
+      - online
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download accepted online installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-Windows-Online-Installer
+          path: release-input/online
+
+      - name: Verify receipt and assemble release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-out
+
+          online_exe="$(find release-input/online -type f -iname '*.exe' -print -quit)"
+          online_receipt="$(find release-input/online -type f -name 'SHA256.txt' -print -quit)"
+          for required in "$online_exe" "$online_receipt"; do
+            [[ -n "$required" && -f "$required" ]] || {
+              echo "RELEASE_ACCEPTED_ASSET_MISSING:$required" >&2
+              exit 1
+            }
+          done
+
+          expected="$(awk -F= '$1=="sha256"{print $2}' "$online_receipt" | tr -d '\r\n ')"
+          actual="$(sha256sum "$online_exe" | awk '{print $1}')"
+          [[ "$expected" == "$actual" ]] || {
+            echo "ONLINE_RELEASE_HASH_MISMATCH expected=$expected actual=$actual" >&2
+            exit 1
+          }
+
+          cp "$online_exe" "release-out/$ASSET_NAME"
+          cp "$online_receipt" release-out/CI-SHA256-ONLINE.txt
+          cp app/lex-version.yaml release-out/LEX-VERSION.yaml
+          printf '%s\n' "$GITHUB_SHA" > release-out/SOURCE-SHA.txt
+          (
+            cd release-out
+            sha256sum "$ASSET_NAME" LEX-VERSION.yaml > SHA256SUMS.txt
+          )
+          cat release-out/SHA256SUMS.txt
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-out/RELEASE-NOTES.md <<'EOF'
+          ## Lex Machina 0.1.10 hotfix 7
+
+          Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja.
+
+          ### Poprawka
+          - desktop: proxy aplikacji przepuszcza trasy konektorów MCP i karty Wyszukiwanie; wcześniej panel Ustawienia -> Konektory MCP i karta Wyszukiwanie kończyły się błędem DESKTOP_ROUTE_NOT_ALLOWED;
+          - lista dozwolonych tras obejmuje tylko konkretne ścieżki i metody (lista konektorów, instalacja, deinstalacja, sprawdzenie, klucz CEIDG, źródła, narzędzia, zapytanie).
+
+          ### Poprawka: generowanie .docx z czatu (DOCUMENT_AST / HYBRID-VAL)
+          - zdarzenia federacji źródeł (MCP) trafiały do audytu wszystkich kolejnych rozmów: jedno nieudane zapytanie do źródła blokowało każde późniejsze pismo (READY_DOCUMENT_HYBRID_BLOCKED:SOURCE_SESSION_BLOCKED_EVENT) do restartu aplikacji; teraz każda sesja audytuje tylko własne wywołania;
+          - niedostępne źródło i poprawialna odmowa odczytu skilla (np. ROUTER_V3_REQUIRED_FIRST przy Claude Code) mają w audycie status DEGRADED, zgodnie z bramkami G40 i G36; odmowy polityki (dane sprawy do zewnętrznego źródła) nadal blokują.
+
+          ### Karta Wyszukiwanie (konektory MCP)
+          - wybór źródła i narzędzia z list, formularz budowany ze schematu narzędzia, wynik wprost z API źródła, bez modelu;
+          - te same bramki co w czacie: tylko zainstalowane źródła, narzędzie musi należeć do źródła, ochrona danych sprawy; zapytania nie trafiają do audytu sesji;
+          - CBOSA: snapshot bez awansu, brak trafień = OUT_OF_SCOPE.
+
+          ### Ustawienia -> Konektory MCP
+          - przycisk Sprawdź: ponowny handshake MCP z zapisem wyniku i czasu;
+          - integralność pakietu lex-mcp.mjs: SHA-256 porównany z CHECKSUMS.sha256 skilla audyt-systemu-v4, wersja pakietu i skilla.
+
+          Zawiera wszystkie zmiany hotfix 5 (weryfikacja przepisów na lokalnej kopii ELI, okno kontekstu 32k modeli lokalnych, timeout generowania pisma).
+
+          Pre-release: produkcyjne certyfikaty Authenticode nie są skonfigurowane, Windows SmartScreen może ostrzec. Sprawdź instalator z SHA256SUMS.txt.
+          EOF
+
+      # GITHUB_TOKEN nie może założyć tagu na commicie, który zmienia pliki workflow
+      # względem main (HTTP 403). Tag trafia na commit-punkt: drzewo aplikacji = build
+      # GITHUB_SHA, katalog .github = main, rodzic = GITHUB_SHA (jak w hotfix 5).
+      - name: Create pre-release on a tag point commit and upload installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(gh api "$api/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+            tag_parent="$(gh api "$api/git/commits/$tag_sha" --jq '.parents[0].sha')"
+            [[ "$tag_sha" == "$GITHUB_SHA" || "$tag_parent" == "$GITHUB_SHA" ]] || {
+              echo "IMMUTABLE_RELEASE_TAG_MISMATCH tag=$tag_sha parent=$tag_parent source=$GITHUB_SHA" >&2
+              exit 1
+            }
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease
+          else
+            main_sha="$(gh api "$api/git/ref/heads/main" --jq '.object.sha')"
+            main_tree="$(gh api "$api/git/commits/$main_sha" --jq '.tree.sha')"
+            main_github="$(gh api "$api/git/trees/$main_tree" --jq '.tree[] | select(.path==".github") | .sha')"
+            source_tree="$(gh api "$api/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
+            [[ -n "$main_github" && -n "$source_tree" ]] || {
+              echo "TAG_POINT_TREE_UNRESOLVED" >&2
+              exit 1
+            }
+            tag_tree="$(jq -n --arg base "$source_tree" --arg gh "$main_github" \
+              '{base_tree: $base, tree: [{path: ".github", mode: "040000", type: "tree", sha: $gh}]}' |
+              gh api -X POST "$api/git/trees" --input - --jq '.sha')"
+            tag_point="$(jq -n --arg tree "$tag_tree" --arg parent "$GITHUB_SHA" --arg tag "$RELEASE_TAG" \
+              '{message: ("Punkt tagu " + $tag + ": .github jak na main, aplikacja = " + $parent), tree: $tree, parents: [$parent]}' |
+              gh api -X POST "$api/git/commits" --input - --jq '.sha')"
+            echo "tag point $tag_point (tree $tag_tree, source $GITHUB_SHA)"
+            printf 'tag_point=%s\n' "$tag_point" >> release-out/SOURCE-SHA.txt
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release-out/RELEASE-NOTES.md \
+              --prerelease \
+              --target "$tag_point"
+          fi
+
+          gh release upload "$RELEASE_TAG" --clobber \
+            "release-out/$ASSET_NAME" \
+            release-out/SHA256SUMS.txt \
+            release-out/CI-SHA256-ONLINE.txt \
+            release-out/SOURCE-SHA.txt \
+            release-out/LEX-VERSION.yaml
+
+          gh release view "$RELEASE_TAG" --json url,tagName,isPrerelease,assets \
+            --jq '{url, tagName, isPrerelease, assets: [.assets[] | {name, url}]}'

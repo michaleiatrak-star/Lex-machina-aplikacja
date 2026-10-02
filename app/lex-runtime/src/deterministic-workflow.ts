@@ -22,6 +22,9 @@ export type DeterministicWorkflowId =
 export type DeterministicWorkflowPlan = {
   id: DeterministicWorkflowId;
   executionSkill: string | null;
+  // Sesja generowania pisma (.docx/.odt): wynik to JSON AST pisma, nie tekst z sekcjami.
+  // Kontrakt SIMPLE_LETTER_V1 sprawdzają wtedy walidator AST, HYBRID-VAL i bramka eksportu.
+  documentAstOutput?: boolean;
   escalatedFromSimpleLetter: boolean;
   requiredFreshResources: string[];
   semanticContextResources: string[];
@@ -44,6 +47,7 @@ export type DeterministicWorkflowOutputReport = {
   workflow: DeterministicWorkflowId;
   mode:
     | "NOT_APPLICABLE"
+    | "DOCUMENT_AST"
     | "INTAKE_REQUIRED"
     | "READY_ARTIFACT"
     | "PROCESS_CHECKPOINT"
@@ -506,7 +510,13 @@ export function deterministicWorkflowPrompt(
       (resource) => `- runtime-read: ${resource}`
     ),
     "Only resources explicitly injected under RUNTIME-PRELOADED SEMANTIC CONTEXT should be treated as semantic reading material. The remaining required resources are mechanical policy enforced by code.",
-    ...(plan.id === "SIMPLE_LETTER_V1"
+    ...(plan.id === "SIMPLE_LETTER_V1" && plan.documentAstOutput
+      ? [
+          "SIMPLE_LETTER_V1 in document generation: the output is the LEGAL DOCUMENT AST defined below, not text sections.",
+          "Put the finished letter into AST blocks; missing user data go into neutral square-bracket fields such as [Kwota].",
+          "The runtime renders the document and runs HYBRID-VALIDATION and the export gate on it before the file is created."
+        ]
+      : plan.id === "SIMPLE_LETTER_V1"
       ? [
           "SIMPLE_LETTER_V1 output contract is runtime-enforced.",
           "If critical intake data are missing, present an explicit DANE DO UZUPEŁNIENIA section and do not pretend a complete letter is ready.",
@@ -1288,6 +1298,18 @@ export function evaluateDeterministicWorkflowOutput(
         orderValid
           ? "PASS"
           : "BLOCKED"
+    };
+  }
+
+  if (plan.id === "SIMPLE_LETTER_V1" && plan.documentAstOutput) {
+    return {
+      workflow: plan.id,
+      mode: "DOCUMENT_AST",
+      required: [],
+      observed: [],
+      missing: [],
+      orderValid: true,
+      result: "PASS"
     };
   }
 

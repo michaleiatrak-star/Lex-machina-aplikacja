@@ -21,6 +21,7 @@ import express, {
   type Response
 } from "express";
 import helmet from "helmet";
+import { saveToDownloads } from "../download-save.js";
 import { LexSkillRegistry } from "../registry.js";
 import {
   DynamicModelCatalog,
@@ -91,8 +92,9 @@ import {
 import type {
   LocalDocumentAuthoringService
 } from "../document-authoring-service.js";
-import type {
-  LegalDocumentAstGenerator
+import {
+  DocumentAstSessionBlockedError,
+  type LegalDocumentAstGenerator
 } from "../legal-document-ast-generator.js";
 import type {
   LocalTemplateProfileService
@@ -219,7 +221,8 @@ import {
 const PROVIDERS = new Set<ProviderId>([
   "openai",
   "anthropic",
-  "xai"
+  "xai",
+  "google"
 ]);
 
 function isProviderId(value: string): value is ProviderId {
@@ -463,7 +466,8 @@ export type LexHttpAppOptions = {
     | "login"
     | "setAnthropicOAuthToken"
     | "clearAnthropicOAuthToken"
-  >;
+  > &
+    Partial<Pick<AccountSessionManager, "startProvision" | "provisionProgress">>;
   updateDiscovery?: UpdateDiscovery;
   sessionExecutor?: SessionExecutor;
   guideSessionStore?: Pick<
@@ -611,7 +615,8 @@ export type LexHttpAppOptions = {
     | "revokeAccess"
     | "rotateCaseKey"
     | "withCaseDataKey"
-  >;
+  > &
+    Partial<Pick<LocalCaseAccessService, "listAccessOverview">>;
   caseScheduleService?: Pick<
     LocalCaseAccessService,
     | "listCaseSchedule"
@@ -895,6 +900,8 @@ const EXECUTION_DRAFT_MAX_ENTRIES = 64;
 const EXECUTION_DRAFT_MAX_CHARS = 200_000;
 // While a request is still running, refresh the idle deadline this often.
 const IN_FLIGHT_ACTIVITY_INTERVAL_MS = 60_000;
+
+export const MAX_SESSION_QUERY_CHARS = 320_000;
 
 function responseAuthContext(
   res: Response
@@ -1319,7 +1326,9 @@ function parseSessionRequest(
 
   if (
     query.length < 1 ||
-    query.length > 30_000 ||
+    // Conversation history is sized to the model window by the client (Claude up to
+    // ~300k characters); the envelope adds a little.
+    query.length > MAX_SESSION_QUERY_CHARS ||
     !isProviderId(provider) ||
     model.length < 1 ||
     model.length > 256 ||
@@ -1789,7 +1798,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(loopbackOriginGuard);
-  app.use(express.json({ limit: "256kb" }));
+  // A long conversation (query up to MAX_SESSION_QUERY_CHARS, Polish UTF-8) fits.
+  app.use(express.json({ limit: "2mb" }));
 
   app.get("/health", (_req, res) => {
     res.json({
@@ -2802,6 +2812,41 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       limit: "64mb"
     });
 
+  // Desktop: save a generated document in the user's Downloads folder (the WebView
+  // does not perform <a download> of blob URLs). Authenticated like every /api route.
+  app.post(
+    "/api/downloads/save",
+    sharedTemplateBody,
+    async (req, res) => {
+      if (!res.locals.lexAuth) {
+        res.status(401).json({ error: "AUTHENTICATION_REQUIRED" });
+        return;
+      }
+      if (
+        !Buffer.isBuffer(req.body) ||
+        req.body.byteLength === 0
+      ) {
+        res.status(400).json({ error: "DOWNLOAD_BODY_REQUIRED" });
+        return;
+      }
+      let filename: string;
+      try {
+        filename = decodeURIComponent(String(req.get("X-Lex-Filename") ?? ""));
+      } catch {
+        res.status(400).json({ error: "DOWNLOAD_FILENAME_INVALID" });
+        return;
+      }
+      try {
+        res.json(await saveToDownloads(filename, req.body));
+      } catch (error) {
+        const code = error instanceof Error ? error.message : "DOWNLOAD_SAVE_FAILED";
+        res.status(code === "DOWNLOAD_FILE_TYPE_NOT_ALLOWED" ? 400 : 500).json({
+          error: /^DOWNLOAD_[A-Z_]+$/.test(code) ? code : "DOWNLOAD_SAVE_FAILED"
+        });
+      }
+    }
+  );
+
   app.post(
     "/api/shared/templates",
     sharedTemplateBody,
@@ -3728,6 +3773,26 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error:
             "CASE_KNOWLEDGE_SEARCH_FAILED"
         });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/case-access",
+    (_req, res) => {
+      const service = options.caseAccessService;
+      if (!service?.listAccessOverview) {
+        res.status(503).json({ error: "CASE_ACCESS_UNAVAILABLE" });
+        return;
+      }
+      try {
+        res.json({
+          cases: service.listAccessOverview(responseAuthContext(res))
+        });
+      } catch (error) {
+        if (!sendCaseAccessError(res, error)) {
+          res.status(500).json({ error: "CASE_ACCESS_OVERVIEW_FAILED" });
+        }
       }
     }
   );
@@ -5462,6 +5527,36 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   );
 
+  // Downloads the pinned account client (first Gemini CLI / Grok Build
+  // install takes minutes) as a background job; the UI polls its stage.
+  const provisionRoute = (
+    action: "start" | "progress"
+  ) =>
+    (req: express.Request, res: express.Response) => {
+      const context = responseAuthContext(res);
+      if (context.user.appRole !== "ADMIN") {
+        res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+        return;
+      }
+      const sessions = options.accountSessions;
+      if (!sessions?.startProvision || !sessions.provisionProgress) {
+        res.status(503).json({ error: "PROVIDER_ACCOUNT_SESSION_UNAVAILABLE" });
+        return;
+      }
+      const provider = String(req.params.provider ?? "").trim();
+      if (!isProviderId(provider)) {
+        res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+        return;
+      }
+      res.json(
+        action === "start"
+          ? sessions.startProvision(provider)
+          : sessions.provisionProgress(provider)
+      );
+    };
+  app.post("/api/provider-accounts/:provider/provision", provisionRoute("start"));
+  app.get("/api/provider-accounts/:provider/provision", provisionRoute("progress"));
+
   app.get("/api/providers", async (_req, res) => {
     if (!options.credentialResolver) {
       res.status(503).json({
@@ -6747,7 +6842,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               error instanceof
                 Error
                 ? error.message
-                : "DOCUMENT_GENERATION_FAILED"
+                : "DOCUMENT_GENERATION_FAILED",
+            ...(error instanceof
+              DocumentAstSessionBlockedError
+              ? {
+                  stage:
+                    error.stage,
+                  reason:
+                    error.reason,
+                  description:
+                    error.description
+                }
+              : {})
           });
           return;
         }

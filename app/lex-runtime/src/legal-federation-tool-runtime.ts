@@ -71,6 +71,7 @@ const NATIVE_SEARCH: Record<
   eurlex: (input) => ({ tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } }),
   saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
   cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
+  kio: (input) => ({ tool: "kio_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } }),
   krs: (input) => ({ tool: "krs_lookup", args: { numerKrs: input.query } }),
   wl: (input) => ({ tool: "wl_sprawdz_nip", args: { nip: input.query, data: input.dateTo } }),
   ceidg: (input) => ({ tool: "ceidg_szukaj_firmy", args: { nip: input.query } }),
@@ -88,6 +89,7 @@ const NATIVE_GET: Record<
   eurlex: (id) => ({ tool: "eurlex_lookup", args: { celex: id } }),
   saos: (id) => ({ tool: "saos_search", args: { sygnatura: id } }),
   cbosa: (id) => ({ tool: "cbosa_pobierz", args: { doc_id: id } }),
+  kio: (id) => ({ tool: "kio_pobierz", args: { id } }),
   krs: (id) => ({ tool: "krs_lookup", args: { numerKrs: id } }),
   wl: (id) => ({ tool: "wl_sprawdz_nip", args: { nip: id } }),
   ceidg: (id) => ({ tool: "ceidg_szukaj_firmy", args: { nip: id } }),
@@ -129,6 +131,12 @@ const LOCAL_COVERAGE: Record<
     authority: "CBOSA",
     role: "snapshot 🟨 without promotion",
     fallback: "Native Lex direct-CBOSA adapter; no exact match = OUT_OF_SCOPE, never NOT_FOUND."
+  },
+  kio: {
+    family: "public-procurement-case-law",
+    authority: "KIO / UZP decisions search",
+    role: "decisional practice",
+    fallback: "Official UZP search (orzeczenia.uzp.gov.pl); no exact match = OUT_OF_SCOPE, Pzp provisions still require ELI verification."
   },
   krs: {
     family: "company-register",
@@ -180,6 +188,11 @@ export type LegalFederationAuditEvent = {
   decision:
     "ALLOW" |
     "BLOCK";
+  // Tylko przy BLOCK: POLICY_BLOCKED = odmowa polityki źródeł/prywatności,
+  // SOURCE_UNAVAILABLE = źródło nie odpowiedziało (nie jest dowodem braku).
+  outcome?:
+    "POLICY_BLOCKED" |
+    "SOURCE_UNAVAILABLE";
   detail?:
     Record<string, unknown>;
 };
@@ -802,13 +815,20 @@ class LexMcpClient {
       await this.ensureClient();
     try {
       const result =
-        await client.callTool({
-          name,
-          arguments:
-            guardOutboundPayload(
-              args
-            )
-        });
+        await client.callTool(
+          {
+            name,
+            arguments:
+              guardOutboundPayload(
+                args
+              )
+          },
+          undefined,
+          // SDK default is 60 s; SAOS (3 x 45 s), CEIDG (2 x 45 s) and SUDOP
+          // (waits up to 50 s for its queue) need longer. Stays under the
+          // desktop proxy's 300 s for direct search.
+          { timeout: 280_000 }
+        );
       return extractToolText(
         result
       );
@@ -981,9 +1001,82 @@ export class LegalFederationToolRuntime {
     );
   }
 
+  // Karta „Wyszukiwanie": te same bramki co narzędzia modelu (instalacja, zgodność
+  // narzędzia ze źródłem, ochrona danych sprawy), ale wywołanie wprost, bez modelu.
+  // Bez `tool` zwraca listę narzędzi źródła ze schematami parametrów.
+  async direct(
+    request: {
+      source: string;
+      tool?: string;
+      arguments?: Record<string, unknown>;
+    }
+  ): Promise<{
+    ok: boolean;
+    result: unknown;
+  }> {
+    // Własny dziennik: zdarzenia karty nie trafiają do audytu żadnej sesji.
+    const events: LegalFederationAuditEvent[] = [];
+    const [reply] =
+      await this.runTools([
+        request.tool
+          ? {
+              id: "direct",
+              name: CALL_TOOL,
+              input: {
+                source:
+                  request.source,
+                tool:
+                  request.tool,
+                arguments:
+                  request.arguments ??
+                  {}
+              }
+            }
+          : {
+              id: "direct",
+              name: LIST_TOOL,
+              input: {
+                source:
+                  request.source
+              }
+            }
+      ], events);
+    let result: unknown;
+    try {
+      result =
+        JSON.parse(
+          reply!.content
+        );
+    } catch {
+      result = {
+        content:
+          reply!.content
+      };
+    }
+    const status =
+      result &&
+      typeof result ===
+        "object"
+        ? (result as { status?: unknown }).status
+        : undefined;
+    return {
+      ok:
+        status !==
+          "SOURCE_UNAVAILABLE" &&
+        status !==
+          "POLICY_BLOCKED",
+      result
+    };
+  }
+
+  // Instancja jest współdzielona przez sesje: każda sesja przekazuje własny dziennik,
+  // inaczej zdarzenia jednej rozmowy trafiałyby do audytu kolejnych.
   async runTools(
     calls:
-      NormalizedToolCall[]
+      NormalizedToolCall[],
+    events:
+      LegalFederationAuditEvent[] =
+        this.events
   ): Promise<
     NormalizedToolResult[]
   > {
@@ -1005,7 +1098,7 @@ export class LegalFederationToolRuntime {
           await this.execute(
             call
           );
-        this.events.push({
+        events.push({
           tool:
             call.name,
           ...(source
@@ -1028,21 +1121,6 @@ export class LegalFederationToolRuntime {
             : String(
                 error
               );
-        this.events.push({
-          tool:
-            call.name,
-          ...(source
-            ? {
-                source
-              }
-            : {}),
-          decision:
-            "BLOCK",
-          detail: {
-            error:
-              message
-          }
-        });
         const policyBlocked =
           call.name ===
             ASSESS_SOURCE_TOOL ||
@@ -1075,6 +1153,29 @@ export class LegalFederationToolRuntime {
               )
             )
           );
+        events.push({
+          tool:
+            call.name,
+          ...(source
+            ? {
+                source
+              }
+            : {}),
+          decision:
+            "BLOCK",
+          // Próba wysłania danych sprawy do zewnętrznego źródła to zawsze odmowa polityki.
+          outcome:
+            policyBlocked ||
+            /CASE_DATA_FORBIDDEN/.test(
+              message
+            )
+              ? "POLICY_BLOCKED"
+              : "SOURCE_UNAVAILABLE",
+          detail: {
+            error:
+              message
+          }
+        });
         results.push({
           tool_use_id:
             call.id,

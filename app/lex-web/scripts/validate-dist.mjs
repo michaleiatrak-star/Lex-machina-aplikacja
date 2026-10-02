@@ -26,7 +26,6 @@ const forbidden = [
   "PRAWO-HARDGATE.md",
   "# SKILL:",
   "BEGIN PRIVATE KEY",
-  "localStorage",
   "sessionStorage",
   "indexedDB"
 ];
@@ -122,7 +121,23 @@ const required = [
   "Konfiguracja lokalna"
 ];
 
-const exposed = forbidden.filter((token) => content.includes(token));
+// localStorage: dopuszczony wyłącznie dla niesekretnego wyboru ostatniego modelu
+// (klucz lex.lastUsedModel.<userId> w src/last-used-model.ts). Każdy inny plik źródłowy
+// z localStorage albo bundle bez tego klucza blokuje bramkę.
+const LOCAL_STORAGE_ALLOWED_SOURCE = "last-used-model.ts";
+const sourceRoot = path.resolve(process.cwd(), "src");
+const localStorageSources = collect(sourceRoot)
+  .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))
+  .filter((file) => fs.readFileSync(file, "utf8").includes("localStorage"))
+  .map((file) => path.basename(file));
+const localStorageViolation =
+  localStorageSources.some((file) => file !== LOCAL_STORAGE_ALLOWED_SOURCE) ||
+  (content.includes("localStorage") && !content.includes("lex.lastUsedModel."));
+
+const exposed = [
+  ...forbidden.filter((token) => content.includes(token)),
+  ...(localStorageViolation ? ["localStorage"] : [])
+];
 const missing = required.filter((token) => !content.includes(token));
 const pass = exposed.length === 0 && missing.length === 0;
 
@@ -131,6 +146,7 @@ process.stdout.write(JSON.stringify({
   result: pass ? "PASS" : "BLOCKED",
   bundleFiles: files.length,
   forbiddenTokensFound: exposed,
+  localStorageSources,
   requiredExecutionMarkersMissing: missing,
   localApiReferencePresent: content.includes("127.0.0.1:4317"),
   sessionExecutionEndpointPresent: content.includes("/api/sessions/execute"),

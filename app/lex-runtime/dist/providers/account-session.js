@@ -37,12 +37,14 @@ import { ACCOUNT_SESSION_MODELS } from "./model-families.js";
 const ACCOUNT_MODEL_IDS = {
     openai: "account/openai/default",
     anthropic: "account/anthropic/default",
-    xai: "account/xai/default"
+    xai: "account/xai/default",
+    google: "account/google/default"
 };
 const CLI_NAMES = {
     openai: "codex",
     anthropic: "claude",
-    xai: "grok"
+    xai: "grok",
+    google: "gemini"
 };
 const OPTIONAL_ACCOUNT_CLIENTS = {
     openai: {
@@ -54,10 +56,23 @@ const OPTIONAL_ACCOUNT_CLIENTS = {
         packageName: "@anthropic-ai/claude-code",
         version: "2.1.278",
         binary: "claude"
+    },
+    google: {
+        packageName: "@google/gemini-cli",
+        version: "0.62.0",
+        binary: "gemini"
+    },
+    // Official Grok Build CLI (npm publisher xai-security, security@x.ai);
+    // bin/grok is a Node launcher, so the npm .cmd shim works on Windows.
+    xai: {
+        packageName: "@xai-official/grok",
+        version: "1.0.44",
+        binary: "grok"
     }
 };
 export function accountSessionResumeMode(provider) {
-    return provider === "anthropic"
+    // Gemini never resumes a CLI session: Lex sends the whole context itself.
+    return provider === "anthropic" || provider === "google"
         ? "LEX_CONTEXT_ONLY"
         : "LAST_OR_NEW";
 }
@@ -438,6 +453,15 @@ function accountEnvironment(provider) {
             delete env.CLAUDE_CODE_OAUTH_TOKEN;
         }
     }
+    else if (provider === "google") {
+        // The Google account (Login with Google) must be used, never an API key.
+        delete env.GEMINI_API_KEY;
+        delete env.GOOGLE_API_KEY;
+        delete env.GOOGLE_GENERATIVE_AI_API_KEY;
+        delete env.GOOGLE_GENAI_USE_VERTEXAI;
+        delete env.GOOGLE_GENAI_USE_GCA;
+        env.GEMINI_CLI_NO_RELAUNCH = "true";
+    }
     else {
         delete env.XAI_API_KEY;
     }
@@ -450,7 +474,73 @@ function installHint(provider) {
     if (provider === "anthropic") {
         return "Claude Code nie jest częścią instalatora. Po wybraniu połączenia konta Claude Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
     }
-    return "Zainstaluj Grok Build CLI i wykonaj: grok login";
+    if (provider === "google") {
+        return "Gemini CLI nie jest częścią instalatora. Po wybraniu połączenia konta Google Gemini Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
+    }
+    return "Grok Build nie jest częścią instalatora. Po wybraniu połączenia konta Grok Lex Machina pobierze przypiętą wersję klienta do prywatnego katalogu użytkownika.";
+}
+// Gemini CLI keeps its Google-account login in ~/.gemini (oauth_creds.json);
+// settings.json selects the auth method.
+function geminiHome() {
+    const home = process.env.GEMINI_CLI_HOME?.trim() || os.homedir();
+    return path.join(home, ".gemini");
+}
+export function geminiGoogleLoginPresent(dir = geminiHome()) {
+    return existsSync(path.join(dir, "oauth_creds.json"));
+}
+// Selects "Login with Google" (a personal Google account / Gemini subscription)
+// without touching the user's other Gemini CLI settings.
+export async function selectGeminiGoogleLogin(dir = geminiHome()) {
+    const file = path.join(dir, "settings.json");
+    let settings = {};
+    try {
+        const parsed = JSON.parse(await fsp.readFile(file, "utf8"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            settings = parsed;
+        }
+    }
+    catch {
+        // No or unreadable settings: start a new file.
+    }
+    const security = settings.security && typeof settings.security === "object" && !Array.isArray(settings.security)
+        ? { ...settings.security }
+        : {};
+    const auth = security.auth && typeof security.auth === "object" && !Array.isArray(security.auth)
+        ? { ...security.auth }
+        : {};
+    if (auth.selectedType === "oauth-personal")
+        return;
+    auth.selectedType = "oauth-personal";
+    security.auth = auth;
+    settings.security = security;
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(file, JSON.stringify(settings, null, 2) + "\n", "utf8");
+}
+// Headless Gemini CLI output (-o json): {"response": "..."} or {"error": {...}}.
+export function parseGeminiResult(stdout) {
+    const start = stdout.indexOf("{");
+    const end = stdout.lastIndexOf("}");
+    if (start < 0 || end < start)
+        return { text: null, error: null };
+    try {
+        const parsed = JSON.parse(stdout.slice(start, end + 1));
+        if (parsed.error) {
+            return {
+                text: null,
+                error: {
+                    message: String(parsed.error.message ?? "GEMINI_ERROR"),
+                    code: typeof parsed.error.code === "number" ? parsed.error.code : null
+                }
+            };
+        }
+        return {
+            text: typeof parsed.response === "string" ? parsed.response : null,
+            error: null
+        };
+    }
+    catch {
+        return { text: null, error: null };
+    }
 }
 function cmdQuote(value) {
     const escaped = value
@@ -705,6 +795,26 @@ export function claudeToolUses(stdout) {
     }
     return uses;
 }
+/**
+ * Native Reads of the run, for the audit. A failed Read ("File does not exist")
+ * is not a read: it must not count as a loaded skill, and it is what the
+ * anomaly journal reports.
+ */
+export function reportNativeReads(corpus, stdout) {
+    for (const use of claudeToolUses(stdout)) {
+        if (use.name !== "Read")
+            continue;
+        const relative = corpusRelativePath(corpus.root, use.input.file_path);
+        if (!relative)
+            continue;
+        if (statSync(path.join(corpus.root, relative), { throwIfNoEntry: false })?.isFile()) {
+            corpus.onRead?.(relative);
+        }
+        else {
+            corpus.onMissing?.(relative);
+        }
+    }
+}
 /** Corpus-relative path of a native Read, or null when it is outside the corpus. */
 export function corpusRelativePath(root, filePath) {
     if (typeof filePath !== "string" || !filePath)
@@ -727,6 +837,12 @@ export function sanitizeAccountCliFailureDetail(value) {
 }
 export function classifyAccountCliFailureDetail(detail) {
     const lower = detail.toLowerCase();
+    // The service refuses the account's plan for this client, e.g. Google since
+    // 2026-10: IneligibleTierError UNSUPPORTED_CLIENT for the free "Gemini Code
+    // Assist for individuals" tier in Gemini CLI. Logging in again cannot help.
+    if (/ineligibletiererror|unsupported_client|ineligibletiers|no longer supported for gemini code assist/.test(lower)) {
+        return "ACCOUNT_SESSION_PLAN_UNSUPPORTED";
+    }
     if (/model.{0,80}(not supported|unsupported|not available)|not supported when using codex with a chatgpt account|model metadata.*not found/.test(lower)) {
         return "ACCOUNT_SESSION_MODEL_UNSUPPORTED";
     }
@@ -795,20 +911,31 @@ async function resolveAccountExecutable(provider) {
     if (provider === "anthropic") {
         return privateClaudeExecutable();
     }
+    if (provider === "google" || provider === "xai") {
+        return optionalAccountClientExecutable(provider);
+    }
     return null;
 }
-function spawnResolved(executable, args, cwd, env) {
+/**
+ * cmd.exe line for a .cmd/.bat shim: `/s /c "<line>"` strips only the outer
+ * quotes, so every quoted part survives. It must be passed verbatim: Node's
+ * default argv quoting turns the inner quotes into \" which cmd.exe does not
+ * understand ('"C:\...\npm.cmd\"' is not recognized). % is not doubled here:
+ * that escape exists only inside batch files.
+ */
+export function windowsShimCommandLine(executable, args) {
+    const quote = (value) => `"${value.replace(/"/g, '""')}"`;
+    return `"${[quote(executable), ...args.map(quote)].join(" ")}"`;
+}
+export function spawnResolved(executable, args, cwd, env) {
     if (process.platform === "win32" &&
         /\.(cmd|bat)$/i.test(executable)) {
         const comspec = process.env.ComSpec || "cmd.exe";
-        const commandLine = [
-            cmdQuote(executable),
-            ...args.map(cmdQuote)
-        ].join(" ");
-        return spawn(comspec, ["/d", "/s", "/c", commandLine], {
+        return spawn(comspec, ["/d", "/s", "/c", windowsShimCommandLine(executable, args)], {
             cwd,
             env,
             windowsHide: true,
+            windowsVerbatimArguments: true,
             stdio: ["pipe", "pipe", "pipe"]
         });
     }
@@ -903,6 +1030,7 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
         });
         child.stderr.on("data", (chunk) => {
             stderr = appendCapture(stderr, chunk);
+            settleOptions.onStderr?.(String(chunk));
         });
         child.stdin.on("error", () => {
             // The client may exit before consuming stdin; the exit handler reports it.
@@ -928,10 +1056,15 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
     });
 }
 async function ensureAccountExecutable(provider) {
-    if (provider === "openai" || provider === "anthropic") {
+    if (provider === "openai" ||
+        provider === "anthropic" ||
+        provider === "google" ||
+        provider === "xai") {
         const privateExecutable = provider === "openai"
             ? privateCodexExecutable()
-            : privateClaudeExecutable();
+            : provider === "google" || provider === "xai"
+                ? optionalAccountClientExecutable(provider)
+                : privateClaudeExecutable();
         if (privateExecutable &&
             await optionalAccountClientMatchesPinnedVersion(provider)) {
             return privateExecutable;
@@ -941,7 +1074,7 @@ async function ensureAccountExecutable(provider) {
         // headless flags; it shares the same login (~/.claude), so it is only a
         // fallback when provisioning the pinned client fails.
         if (!privateExecutable &&
-            provider === "openai") {
+            (provider === "openai" || provider === "google" || provider === "xai")) {
             const systemExecutable = await resolveCommand(CLI_NAMES[provider]);
             if (systemExecutable) {
                 return systemExecutable;
@@ -967,7 +1100,85 @@ async function ensureAccountExecutable(provider) {
         throw error;
     }
 }
-async function provisionPinnedAccountClient(provider) {
+const provisionListeners = new Map();
+const provisionsInFlight = new Map();
+// One npm install per provider at a time: login and an explicit provision
+// request must not install into the same directory concurrently.
+function provisionPinnedAccountClient(provider) {
+    const running = provisionsInFlight.get(provider);
+    if (running)
+        return running;
+    const started = provisionPinnedAccountClientOnce(provider).finally(() => provisionsInFlight.delete(provider));
+    provisionsInFlight.set(provider, started);
+    return started;
+}
+async function directorySize(root) {
+    let total = 0;
+    const pending = [root];
+    while (pending.length) {
+        const dir = pending.pop();
+        let entries;
+        try {
+            entries = await fsp.readdir(dir, { withFileTypes: true });
+        }
+        catch {
+            continue;
+        }
+        for (const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory())
+                pending.push(full);
+            else if (entry.isFile()) {
+                try {
+                    total += (await fsp.stat(full)).size;
+                }
+                catch {
+                    // File replaced while npm unpacks; the next tick counts it.
+                }
+            }
+        }
+    }
+    return total;
+}
+// npm does not put its own Node on PATH for package install scripts, and the
+// desktop runtime's Node is bundled (not installed system-wide). Without this,
+// "postinstall: node …" (Grok Build, Gemini CLI dependencies) fails with
+// "'node' is not recognized" on a PC without a system Node.
+export function npmInstallEnvironment(npmExecutable, base = process.env, nodeExecutable = process.execPath) {
+    const env = { ...base, npm_config_update_notifier: "false" };
+    const pathKeys = Object.keys(env).filter((key) => /^path$/i.test(key));
+    const pathKey = pathKeys[0] ?? (process.platform === "win32" ? "Path" : "PATH");
+    const existing = pathKeys
+        .flatMap((key) => (env[key] ?? "").split(path.delimiter))
+        .filter(Boolean);
+    const nodeDirs = [path.dirname(nodeExecutable), path.dirname(npmExecutable)].filter((dir, index, all) => all.indexOf(dir) === index);
+    for (const key of pathKeys)
+        delete env[key];
+    env[pathKey] = [...nodeDirs, ...existing.filter((dir) => !nodeDirs.includes(dir))].join(path.delimiter);
+    return env;
+}
+/** npm-cli.js next to an npm launcher (Node for Windows layout and node/bin/npm). */
+export function npmCliScript(npmExecutable) {
+    const dir = path.dirname(npmExecutable);
+    for (const candidate of [
+        path.join(dir, "node_modules", "npm", "bin", "npm-cli.js"),
+        path.join(dir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
+    ]) {
+        if (existsSync(candidate))
+            return candidate;
+    }
+    return null;
+}
+// The npm error lines (not the http progress lines) explain a failed install.
+export function npmFailureDetail(stderr) {
+    const lines = stderr.split(/\r?\n/).filter((line) => /npm (error|ERR!)/i.test(line));
+    return (lines.length ? lines.join("\n") : stderr).trim().slice(-1200);
+}
+// npm --loglevel=http prints one "http fetch GET 200 <url>" line per package.
+export function countNpmFetches(chunk) {
+    return chunk.match(/http fetch GET 20\d /g)?.length ?? 0;
+}
+async function provisionPinnedAccountClientOnce(provider) {
     const spec = OPTIONAL_ACCOUNT_CLIENTS[provider];
     if (!spec) {
         return null;
@@ -993,29 +1204,66 @@ async function provisionPinnedAccountClient(provider) {
     if (!npmExecutable) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISIONER_NOT_AVAILABLE:${provider}`);
     }
+    // npm.cmd only starts node with npm-cli.js; calling it directly avoids
+    // cmd.exe and its quoting (an install path with spaces, "Lex Machina").
+    const npmCli = npmCliScript(npmExecutable);
     const installRoot = path.join(optionalAccountClientsRoot(), provider);
     await fsp.mkdir(installRoot, {
         recursive: true
     });
     const packageSpec = `${spec.packageName}@${spec.version}`;
-    const result = await runDirect(npmExecutable, [
-        "install",
-        "--prefix",
-        installRoot,
-        "--no-audit",
-        "--no-fund",
-        "--save-exact",
-        packageSpec
-    ], undefined, {
-        ...process.env,
-        npm_config_update_notifier: "false"
-    }, OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS);
+    const report = provisionListeners.get(provider);
+    let packagesFetched = 0;
+    report?.({ stage: "DOWNLOADING", packagesFetched, bytesOnDisk: 0 });
+    let measuring = false;
+    const sizeTimer = report
+        ? setInterval(() => {
+            if (measuring)
+                return;
+            measuring = true;
+            void directorySize(installRoot)
+                .then((bytesOnDisk) => report({ bytesOnDisk }))
+                .finally(() => {
+                measuring = false;
+            });
+        }, 2_000)
+        : null;
+    let result;
+    try {
+        result =
+            await runDirect(npmCli ? process.execPath : npmExecutable, [
+                ...(npmCli ? [npmCli] : []),
+                "install",
+                "--prefix",
+                installRoot,
+                "--no-audit",
+                "--no-fund",
+                "--save-exact",
+                "--loglevel=http",
+                packageSpec
+            ], undefined, npmInstallEnvironment(npmExecutable), OPTIONAL_ACCOUNT_CLIENT_INSTALL_TIMEOUT_MS, undefined, undefined, {
+                onStderr: (chunk) => {
+                    const fetched = countNpmFetches(chunk);
+                    if (fetched && report) {
+                        packagesFetched += fetched;
+                        report({ packagesFetched });
+                    }
+                }
+            });
+    }
+    finally {
+        if (sizeTimer)
+            clearInterval(sizeTimer);
+    }
+    report?.({ stage: "VERIFYING" });
     if (result.code !== 0) {
-        throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${result.stderr.trim().slice(-1200)}`);
+        throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${npmFailureDetail(result.stderr)}`);
     }
     const installed = provider === "openai"
         ? privateCodexExecutable()
-        : privateClaudeExecutable();
+        : provider === "google" || provider === "xai"
+            ? optionalAccountClientExecutable(provider)
+            : privateClaudeExecutable();
     if (!installed) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`);
     }
@@ -1081,6 +1329,12 @@ export function accountLoginArgs(provider) {
             "login"
         ];
     }
+    if (provider === "google") {
+        // Gemini CLI has no login subcommand: the interactive client starts the
+        // "Login with Google" browser flow selected in its settings (see
+        // selectGeminiGoogleLogin); the user closes it with /quit.
+        return [];
+    }
     return ["login"];
 }
 export function accountLoginFallbackArgs(provider) {
@@ -1124,7 +1378,9 @@ async function runVisibleWindowsLogin(provider, args, timeoutMs) {
         ? "Codex / ChatGPT"
         : provider === "anthropic"
             ? "Claude Code"
-            : "Grok Build";
+            : provider === "google"
+                ? "Gemini CLI"
+                : "Grok Build";
     const loginCommand = /\.(cmd|bat)$/i.test(executable)
         ? `call ${cmdQuote(executable)} ${argumentLine}`
         : `${cmdQuote(executable)} ${argumentLine}`;
@@ -1134,6 +1390,9 @@ async function runVisibleWindowsLogin(provider, args, timeoutMs) {
         `title Lex Machina - ${loginLabel} login`,
         `echo Lex Machina otworzy logowanie: ${loginLabel}.`,
         "echo Dokoncz oficjalne logowanie w przegladarce i wroc do tego okna, jesli klient poprosi o kod.",
+        ...(provider === "google"
+            ? ["echo Po zalogowaniu wpisz /quit i nacisnij Enter, aby zamknac Gemini CLI."]
+            : []),
         "echo.",
         loginCommand,
         "set \"LEX_EXIT=%ERRORLEVEL%\"",
@@ -1160,6 +1419,27 @@ async function runVisibleWindowsLogin(provider, args, timeoutMs) {
         }).catch(() => { });
     }
 }
+/**
+ * Grok ACP errors arrive as bare JSON-RPC messages ("Rate limited"); give them
+ * the same code as CLI failures so the UI says what happened.
+ */
+export function codedGrokFailure(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^[A-Z0-9_]+(?::|$)/.test(message)) {
+        return error instanceof Error ? error : new Error(message);
+    }
+    const detail = sanitizeAccountCliFailureDetail(message);
+    return new Error(`${classifyAccountCliFailureDetail(detail)}:xai:1${detail ? `:${detail}` : ""}`);
+}
+/** Short per-minute request limit (worth waiting for), not a used-up quota. */
+export function isTransientRateLimit(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (message.startsWith("ACCOUNT_SESSION_CAPACITY") &&
+        /rate.?limit|too many requests|429/i.test(message) &&
+        !/usage limit|quota|resets? (?:at|in)|try again (?:at|in) \d+ ?h/i.test(message));
+}
+// Waits before repeating a model run refused by a short request limit.
+const RATE_LIMIT_BACKOFF_MS = [15_000, 45_000];
 function normalizeCliFailure(provider, result) {
     const detail = sanitizeAccountCliFailureDetail(result.stderr || result.stdout);
     const code = classifyAccountCliFailureDetail(detail);
@@ -1249,7 +1529,7 @@ async function assertSubscriptionAccount(provider, abortSignal) {
     }
 }
 async function runGrokAcp(prompt, cwd, abortSignal, resumeSessionId) {
-    const executable = await resolveCommand(CLI_NAMES.xai);
+    const executable = await ensureAccountExecutable("xai");
     if (!executable) {
         throw new Error("ACCOUNT_SESSION_CLI_NOT_INSTALLED:xai");
     }
@@ -1273,6 +1553,10 @@ async function runGrokAcp(prompt, cwd, abortSignal, resumeSessionId) {
         const rl = readline.createInterface({
             input: proc.stdout
         });
+        // A client that exits early (not logged in, crash) closes stdin; the
+        // write then fails with EPIPE, which must not crash the runtime. The
+        // "exit" handler below settles the request.
+        proc.stdin.on("error", () => { });
         let nextId = 1;
         let text = "";
         let stderr = "";
@@ -1653,6 +1937,11 @@ function buildAccountPrompt(params, toolTranscript) {
             "If a Lex runtime tool is required, output ONLY one line beginning with:",
             `${TOOL_SENTINEL}{"calls":[{"id":"call_1","name":"tool_name","input":{}}]}`,
             "Use only tool names listed in LEX_RUNTIME_TOOLS.",
+            // Each round of tool calls is a separate CLI run with the whole context, so
+            // independent reads and checks belong in one round (router, SKILL.md, modules,
+            // verification of unrelated provisions); only calls that depend on a result wait.
+            "Every tool round starts a new model run and costs the user tens of seconds. Put ALL tool calls you already know you need into ONE line (several entries in \"calls\"): e.g. the router together with the SKILL.md and modules you expect, or verification of several independent provisions. Make a further round only for calls that depend on results you have not seen yet.",
+            "Do not repeat a search or read whose result is already in LEX_RUNTIME_TOOL_TRANSCRIPT. Verify only the provisions you will actually cite in the answer.",
             "After tool results are supplied, continue the task. When no more tools are needed, return the final answer normally.",
             `LEX_RUNTIME_TOOLS=${toolSchemas}`
         ].join("\n")
@@ -1716,6 +2005,16 @@ export class AccountSessionManager {
                         oauthTokenConfigured: this.hasAnthropicOAuthToken()
                     }
                     : {})
+            };
+        }
+        if (provider === "google") {
+            return {
+                provider,
+                command,
+                installed: true,
+                authenticated: geminiGoogleLoginPresent(),
+                installHint: installHint(provider),
+                resumeMode: accountSessionResumeMode(provider)
             };
         }
         let result;
@@ -1782,14 +2081,72 @@ export class AccountSessionManager {
         };
     }
     async statusAll() {
-        return Promise.all(["openai", "anthropic", "xai"]
+        return Promise.all(["openai", "anthropic", "xai", "google"]
             .map((provider) => this.status(provider)));
+    }
+    provisionJobs = new Map();
+    // Downloads the pinned client before login as a background job the UI
+    // polls: a first Gemini CLI / Grok Build install takes minutes, and the user
+    // must see its stage instead of a silent "Logowanie…" until the window opens.
+    startProvision(provider) {
+        const current = this.provisionJobs.get(provider);
+        if (current &&
+            current.progress.stage !== "READY" &&
+            current.progress.stage !== "FAILED") {
+            return this.provisionProgress(provider);
+        }
+        const startedMs = Date.now();
+        const progress = {
+            provider,
+            stage: "CHECKING",
+            startedAt: new Date(startedMs).toISOString(),
+            elapsedMs: 0,
+            packagesFetched: 0,
+            bytesOnDisk: 0
+        };
+        const job = { startedMs, progress };
+        this.provisionJobs.set(provider, job);
+        provisionListeners.set(provider, (tick) => {
+            Object.assign(job.progress, tick);
+        });
+        void (async () => {
+            try {
+                const executable = await ensureAccountExecutable(provider);
+                if (!executable) {
+                    throw new Error(`ACCOUNT_SESSION_CLI_NOT_INSTALLED:${provider}`);
+                }
+                job.progress.stage = "VERIFYING";
+                job.progress.status = await this.status(provider);
+                job.progress.stage = "READY";
+            }
+            catch (error) {
+                job.progress.stage = "FAILED";
+                job.progress.error = sanitizeAccountCliFailureDetail(error instanceof Error ? error.message : String(error));
+            }
+            finally {
+                provisionListeners.delete(provider);
+            }
+        })();
+        return this.provisionProgress(provider);
+    }
+    provisionProgress(provider) {
+        const job = this.provisionJobs.get(provider);
+        if (!job) {
+            return { provider, stage: "IDLE", elapsedMs: 0, packagesFetched: 0, bytesOnDisk: 0 };
+        }
+        return {
+            ...job.progress,
+            elapsedMs: Date.now() - job.startedMs
+        };
     }
     async login(provider) {
         const current = await this.status(provider);
         if (current.installed &&
             current.authenticated) {
             return current;
+        }
+        if (provider === "google") {
+            await selectGeminiGoogleLogin();
         }
         const args = accountLoginArgs(provider);
         const runLogin = (loginArgs) => accountLoginLaunchMode(provider) ===
@@ -1865,7 +2222,7 @@ export class AccountSessionManager {
                 ...tail
             ]), input.stdin, COMMAND_TIMEOUT_MS, args.corpus.root, args.abortSignal, { settleOnStdout: claudeResultReady, firstOutputTimeoutMs: CLAUDE_FIRST_OUTPUT_TIMEOUT_MS });
             let result = null;
-            const savedSessionId = await readAccountSessionId("anthropic", args.continuityKey);
+            const savedSessionId = args.fresh ? null : await readAccountSessionId("anthropic", args.continuityKey);
             if (savedSessionId) {
                 result = await run(["--resume", savedSessionId]);
                 const outcome = parseClaudeResult(result.stdout);
@@ -1887,14 +2244,8 @@ export class AccountSessionManager {
                     stderr: [result.stderr, parsed?.text ?? ""].filter(Boolean).join("\n")
                 });
             }
-            for (const use of claudeToolUses(result.stdout)) {
-                if (use.name !== "Read")
-                    continue;
-                const relative = corpusRelativePath(args.corpus.root, use.input.file_path);
-                if (relative)
-                    args.corpus.onRead?.(relative);
-            }
-            if (parsed.sessionId) {
+            reportNativeReads(args.corpus, result.stdout);
+            if (parsed.sessionId && !args.fresh) {
                 await writeAccountSessionId("anthropic", parsed.sessionId, args.continuityKey);
             }
             return parsed.text;
@@ -1908,10 +2259,14 @@ export class AccountSessionManager {
     // Claude only (stream-json input); other CLIs get the text.
     images = [], 
     // A model chosen for the account session; null lets the client decide.
-    clientModel = null) {
+    clientModel = null, 
+    // Fresh host session: no resume, no takeover of the latest CLI session, no
+    // recorded thread (self-contained router and document-generator calls).
+    fresh = false) {
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-session-"));
-        const allowExternalTakeover = !continuityKey ||
-            !await hasPinnedAccountSession(provider);
+        const allowExternalTakeover = !fresh &&
+            (!continuityKey ||
+                !await hasPinnedAccountSession(provider));
         try {
             if (provider === "openai" ||
                 provider === "anthropic") {
@@ -1929,7 +2284,9 @@ export class AccountSessionManager {
                 ].filter((value, index, all) => all.indexOf(value) === index);
                 let result = null;
                 let lastFailure = null;
-                let savedSessionId = await readAccountSessionId(provider, continuityKey);
+                let savedSessionId = fresh
+                    ? null
+                    : await readAccountSessionId(provider, continuityKey);
                 const runCodex = async (candidateModel, tail) => {
                     await fsp.rm(outputPath, {
                         force: true
@@ -2020,7 +2377,7 @@ export class AccountSessionManager {
                         new Error("ACCOUNT_SESSION_CLI_FAILED:openai:1"));
                 }
                 const threadId = parseCodexThreadId(result.stdout);
-                if (threadId) {
+                if (threadId && !fresh) {
                     await writeAccountSessionId(provider, threadId, continuityKey);
                 }
                 try {
@@ -2077,7 +2434,9 @@ export class AccountSessionManager {
                     return run;
                 };
                 let result = null;
-                const savedSessionId = await readAccountSessionId(provider, continuityKey);
+                const savedSessionId = fresh
+                    ? null
+                    : await readAccountSessionId(provider, continuityKey);
                 if (savedSessionId) {
                     result =
                         await runClaude([
@@ -2109,24 +2468,67 @@ export class AccountSessionManager {
                 if (!parsed) {
                     throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
                 }
-                if (parsed.sessionId) {
+                if (parsed.sessionId && !fresh) {
                     await writeAccountSessionId(provider, parsed.sessionId, continuityKey);
                 }
                 return parsed.text;
             }
-            const savedSessionId = await readAccountSessionId(provider, continuityKey);
+            if (provider === "google") {
+                // Headless Gemini CLI: the prompt on stdin, JSON result, read-only
+                // approval mode in an empty temporary workspace; never resumes a
+                // session (Lex sends the whole context itself).
+                const result = await runCli(provider, [
+                    "-p",
+                    "",
+                    "-o",
+                    "json",
+                    "--approval-mode",
+                    "plan",
+                    "--skip-trust",
+                    ...(clientModel ? ["-m", clientModel] : [])
+                ], prompt, COMMAND_TIMEOUT_MS, workDir, abortSignal);
+                const parsed = parseGeminiResult(result.stdout);
+                if (parsed.error?.code === 41 ||
+                    /auth method|login required|not logged in|oauth/i.test(parsed.error?.message ?? "")) {
+                    throw new Error("ACCOUNT_SESSION_NOT_AUTHENTICATED:google");
+                }
+                if (parsed.error) {
+                    throw normalizeCliFailure(provider, {
+                        code: result.code === 0 ? 1 : result.code,
+                        stdout: "",
+                        stderr: parsed.error.message
+                    });
+                }
+                if (result.code !== 0 && !parsed.text) {
+                    throw normalizeCliFailure(provider, result);
+                }
+                if (!parsed.text?.trim()) {
+                    throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:google");
+                }
+                return parsed.text.trim();
+            }
+            const savedSessionId = fresh
+                ? null
+                : await readAccountSessionId(provider, continuityKey);
             const resumeSessionId = savedSessionId ??
                 (allowExternalTakeover
                     ? await discoverLatestGrokSessionId()
                     : null);
-            const grok = await runGrokAcp(prompt, workDir, abortSignal, resumeSessionId);
+            let grok;
+            try {
+                grok =
+                    await runGrokAcp(prompt, workDir, abortSignal, resumeSessionId);
+            }
+            catch (error) {
+                throw codedGrokFailure(error);
+            }
             if (!grok.authenticated) {
                 throw new Error("ACCOUNT_SESSION_NOT_AUTHENTICATED:xai");
             }
             if (!grok.text) {
                 throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:xai");
             }
-            if (grok.sessionId) {
+            if (grok.sessionId && !fresh) {
                 await writeAccountSessionId(provider, grok.sessionId, continuityKey);
             }
             return grok.text;
@@ -2153,7 +2555,8 @@ export async function streamAccountSession(manager, provider, params) {
             ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
             ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
             ...(params.continuityKey ? { continuityKey: params.continuityKey } : {}),
-            clientModel: accountSessionClientModel(provider, params.model)
+            clientModel: accountSessionClientModel(provider, params.model),
+            fresh: params.accountContinuity === "none"
         });
         if (!text.trim())
             throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
@@ -2162,7 +2565,29 @@ export async function streamAccountSession(manager, provider, params) {
     }
     const maxIterations = Math.max(1, Math.min(params.maxIterations ?? 10, 12));
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-        const output = await manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model));
+        const runOnce = () => manager.runText(provider, buildAccountPrompt(params, toolTranscript), params.abortSignal, params.continuityKey, provider === "anthropic" ? messageImages(params) : [], accountSessionClientModel(provider, params.model), params.accountContinuity === "none");
+        let output;
+        for (let attempt = 0;; attempt += 1) {
+            try {
+                output = await runOnce();
+                break;
+            }
+            catch (error) {
+                const wait = RATE_LIMIT_BACKOFF_MS[attempt];
+                if (wait === undefined || !isTransientRateLimit(error) || params.abortSignal?.aborted) {
+                    throw error;
+                }
+                await new Promise((resolve) => {
+                    const timer = setTimeout(resolve, wait);
+                    params.abortSignal?.addEventListener("abort", () => {
+                        clearTimeout(timer);
+                        resolve();
+                    }, { once: true });
+                });
+                if (params.abortSignal?.aborted)
+                    throw error;
+            }
+        }
         const calls = parseToolCalls(output);
         if (!calls) {
             params.callbacks?.onContentDelta?.(output);

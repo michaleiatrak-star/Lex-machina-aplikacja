@@ -52,6 +52,16 @@ Copy-Item (Join-Path $repo "app\ocr") (Join-Path $payload "ocr") -Recurse
 Copy-Item (Join-Path $repo "app\privacy") (Join-Path $payload "privacy") -Recurse
 Copy-Item (Join-Path $repo "app\storage") (Join-Path $payload "storage") -Recurse
 Copy-Item (Join-Path $repo "Wersja rozwojowa rozpakowana") (Join-Path $payload "corpus") -Recurse
+# Pakiet serwerów MCP musi mieć bajty z sumy w CHECKSUMS.sha256 skilla (bez CRLF z checkoutu).
+$mcpSkill = Join-Path $payload "corpus\audyt-systemu-v4"
+$mcpBundle = Join-Path $mcpSkill "mcp-servers\dist\lex-mcp.mjs"
+$mcpExpected = (Get-Content (Join-Path $mcpSkill "CHECKSUMS.sha256") |
+  Where-Object { $_ -match "\s\./mcp-servers/dist/lex-mcp\.mjs$" } |
+  ForEach-Object { ($_ -split "\s+")[0] } | Select-Object -First 1)
+$mcpActual = (Get-FileHash $mcpBundle -Algorithm SHA256).Hash.ToLowerInvariant()
+if (-not $mcpExpected -or $mcpActual -ne $mcpExpected.ToLowerInvariant()) {
+  throw "MCP_BUNDLE_CHECKSUM_MISMATCH: lex-mcp.mjs $mcpActual, CHECKSUMS.sha256 $mcpExpected"
+}
 Copy-Item (Join-Path $installer "windows-release-source.json") (Join-Path $payload "release-source.json")
 Copy-Item (Join-Path $installer "windows-release-requirements.txt") (Join-Path $payload "release-requirements.txt")
 

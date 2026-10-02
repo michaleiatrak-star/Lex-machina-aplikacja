@@ -11,7 +11,9 @@ import {
 import {
   CEIDG_KEY_URL,
   LexMcpConnectorStore,
-  inspectCeidgKey
+  inspectCeidgKey,
+  inspectLexMcpPackage,
+  lexMcpPackagePath
 } from "../src/lex-mcp-connectors.js";
 import {
   LegalFederationToolRuntime
@@ -65,7 +67,7 @@ describe("LexMcpConnectorStore", () => {
     expect(status.ceidg).toEqual({ keyConfigured: false, keyUrl: CEIDG_KEY_URL });
     expect(CEIDG_KEY_URL).toBe("https://dane.biznes.gov.pl/pl/portal/034872");
     expect(status.servers.map((server) => server.id)).toEqual([
-      "isap", "eurlex", "saos", "cbosa", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
+      "isap", "eurlex", "saos", "cbosa", "kio", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
     ]);
     expect(status.servers.filter((server) => !server.installed).map((server) => server.id)).toEqual(["ceidg"]);
   });
@@ -137,7 +139,65 @@ describe("LexMcpConnectorStore", () => {
   });
 });
 
+describe("Lex MCP package integrity and readiness checks", () => {
+  it("matches the bundled package against CHECKSUMS.sha256 of audyt-systemu-v4", () => {
+    const info = inspectLexMcpPackage(lexMcpPackagePath(skillsRoot));
+    expect(info.integrity).toBe("MATCH");
+    expect(info.sha256).toBe(info.expectedSha256);
+    expect(info.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(info.skillVersion).toMatch(/^\d+\.\d+$/);
+    expect(store().status().package.integrity).toBe("MATCH");
+  });
+
+  it("flags a package that differs from the skill checksum, or is missing", () => {
+    const skill = path.join(tempDir(), "audyt-systemu-v4");
+    const dist = path.join(skill, "mcp-servers", "dist");
+    fs.mkdirSync(dist, { recursive: true });
+    fs.writeFileSync(path.join(dist, "lex-mcp.mjs"), "// podmieniony\n");
+    fs.writeFileSync(path.join(skill, "CHECKSUMS.sha256"), `${"0".repeat(64)}  ./mcp-servers/dist/lex-mcp.mjs\n`);
+    expect(inspectLexMcpPackage(path.join(dist, "lex-mcp.mjs")).integrity).toBe("MISMATCH");
+
+    fs.rmSync(path.join(skill, "CHECKSUMS.sha256"));
+    expect(inspectLexMcpPackage(path.join(dist, "lex-mcp.mjs")).integrity).toBe("UNVERIFIED");
+    expect(inspectLexMcpPackage(path.join(dist, "brak.mjs"))).toEqual({ integrity: "MISSING" });
+  });
+
+  it("records a live handshake per server and forgets it on uninstall", async () => {
+    const connectors = store();
+    const nbp = await connectors.check("nbp");
+    expect(nbp).toMatchObject({ ok: true, tools: ["nbp_kurs_waluty"] });
+    expect(connectors.status().servers.find((server) => server.id === "nbp")?.lastCheck).toEqual(nbp);
+
+    expect(await connectors.check("ceidg")).toMatchObject({ ok: false, error: "CEIDG_KEY_REQUIRED" });
+
+    const revision = connectors.revision;
+    connectors.uninstall("nbp");
+    expect(connectors.revision).toBeGreaterThan(revision);
+    expect(connectors.status().servers.find((server) => server.id === "nbp")?.lastCheck).toBeUndefined();
+  }, 60_000);
+});
+
 describe("LegalFederationToolRuntime on Lex MCP connectors", () => {
+  it("serves the search tab directly with the same source gates and no session audit", async () => {
+    const connectors = store();
+    connectors.uninstall("cbosa");
+    const runtime = new LegalFederationToolRuntime(undefined, undefined, connectors);
+    try {
+      const listed = await runtime.direct({ source: "nbp" });
+      expect(listed.ok).toBe(true);
+      expect((listed.result as { tools: Array<{ name: string }> }).tools.map((tool) => tool.name)).toEqual(["nbp_kurs_waluty"]);
+
+      const mismatch = await runtime.direct({ source: "isap", tool: "krs_lookup" });
+      expect(mismatch).toMatchObject({ ok: false, result: { error: "FEDERATED_NATIVE_TOOL_SOURCE_MISMATCH" } });
+
+      const missing = await runtime.direct({ source: "cbosa", tool: "cbosa_szukaj", arguments: { query: "II FSK 1/20" } });
+      expect(missing).toMatchObject({ ok: false, result: { status: "SOURCE_UNAVAILABLE" } });
+      expect(runtime.auditEvents()).toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+  }, 60_000);
+
   it("lists native tools of an installed server through lex-mcp.mjs", async () => {
     const runtime = new LegalFederationToolRuntime(undefined, undefined, store());
     try {

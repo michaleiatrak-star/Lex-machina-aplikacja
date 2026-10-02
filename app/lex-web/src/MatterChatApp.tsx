@@ -1,9 +1,16 @@
 import {
+  AccountConnectProgress,
+  type AccountConnectPhase
+} from "./AccountConnectProgress.js";
+import {
   canWriteCase,
   caseScheduleKindLabel,
   caseScheduleStartLabel
 } from "./case-calendar.js";
 import { CalendarPanel } from "./CalendarPanel.js";
+import { McpSearchPanel } from "./McpSearchPanel.js";
+import { downloadBlob } from "./download-file.js";
+import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -61,6 +68,8 @@ import {
   listCaseSchedule,
   listCases,
   loginProviderAccount,
+  startProviderAccountProvision,
+  getProviderAccountProvision,
   provisionLocalModel,
   repairLocalModel,
   reauthorizeDeanonymization,
@@ -133,6 +142,8 @@ import {
   type CaseChatMessage
 } from "./case-thread.js";
 import {
+  LOCAL_CONVERSATION_CHARS,
+  conversationBudgetChars,
   conversationForProvider
 } from "./conversation-context.js";
 import {
@@ -175,6 +186,7 @@ type TabId =
   | "skills"
   | "case"
   | "firm"
+  | "search"
   | "settings";
 
 export type SettingsSection =
@@ -226,33 +238,55 @@ const PROVIDERS: Array<{
   label: string;
   apiKeyUrl: string;
   accountClientLabel: string;
-  accountInstallUrl: string;
 }> = [
   {
     id: "openai",
     label: "OpenAI",
     apiKeyUrl: "https://platform.openai.com/api-keys",
-    accountClientLabel: "Codex CLI",
-    accountInstallUrl:
-      "https://developers.openai.com/codex/cli"
+    accountClientLabel: "Codex CLI"
   },
   {
     id: "anthropic",
     label: "Anthropic / Claude",
     apiKeyUrl: "https://platform.claude.com/settings/keys",
-    accountClientLabel: "Claude Code",
-    accountInstallUrl:
-      "https://support.claude.com/en/articles/14552382-your-first-day-in-claude-code"
+    accountClientLabel: "Claude Code"
   },
   {
     id: "xai",
     label: "xAI / Grok",
     apiKeyUrl: "https://console.x.ai/",
-    accountClientLabel: "Grok Build",
-    accountInstallUrl:
-      "https://docs.x.ai/build/overview"
+    accountClientLabel: "Grok Build"
+  },
+  {
+    id: "google",
+    label: "Google / Gemini",
+    apiKeyUrl: "https://aistudio.google.com/apikey",
+    accountClientLabel: "Gemini CLI"
   }
 ];
+
+// Runtime error codes from provisioning the pinned account client.
+export function provisionFailureText(error: string): string {
+  if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISIONER_NOT_AVAILABLE")) {
+    return "Nie można pobrać klienta: brak npm w pakiecie aplikacji. Przełącz źródło na API albo zgłoś błąd.";
+  }
+  if (error.startsWith("ACCOUNT_SESSION_COMMAND_TIMEOUT")) {
+    return "Pobieranie klienta przekroczyło 10 minut (wolne łącze lub serwer npm). Spróbuj ponownie.";
+  }
+  if (error.startsWith("ACCOUNT_SESSION_CLI_PROVISION_FAILED")) {
+    // ACCOUNT_SESSION_CLI_PROVISION_FAILED:<provider>:<exit code>:<npm error lines>
+    const detail = error.split(":").slice(3).join(":").trim();
+    const cause = /ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN|network|proxy|certificate|CERT_/i.test(detail)
+      ? "brak połączenia z serwerem npm (sieć, proxy lub certyfikat)"
+      : /not recognized|is not recognized|ENOENT/i.test(detail)
+        ? "brak wymaganego programu podczas instalacji"
+        : /EPERM|EACCES|EBUSY/i.test(detail)
+          ? "brak dostępu do plików (program antywirusowy lub otwarty plik)"
+          : "błąd instalacji npm";
+    return `Pobieranie klienta nie powiodło się: ${cause}.${detail ? ` Szczegóły: ${detail}` : ""}`;
+  }
+  return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
+}
 
 const PRIMARY_MODEL_SOURCES: Array<{
   id: PrimaryModelSource;
@@ -285,6 +319,15 @@ const PRIMARY_MODEL_SOURCES: Array<{
   {
     id: "xai",
     label: "xAI · API"
+  },
+  {
+    id: "google-account",
+    // Google odrzuca w Gemini CLI bezpłatny plan „Gemini Code Assist for individuals”.
+    label: "Gemini · konto Google (plan płatny)"
+  },
+  {
+    id: "google",
+    label: "Google Gemini · API"
   }
 ];
 
@@ -297,7 +340,9 @@ const ACCOUNT_MODEL_LABELS: Record<
   anthropic:
     "Claude Code · model konta",
   xai:
-    "Grok · model konta"
+    "Grok · model konta",
+  google:
+    "Gemini CLI · model konta"
 };
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
@@ -431,7 +476,37 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-function directDocumentRequest(
+// Letter workflows end with a file: a draft after each completed cycle and the
+// finished document at the end (simple letter: every gate passed; process
+// pleading: FINAL document status). Other workflows produce no file on their own.
+export function letterDocumentPlan(
+  result: Pick<
+    ExtendedExecution,
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification"
+  >
+): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
+  if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
+  if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
+    return {
+      documentType: "pleading",
+      stage: result.processWorkflow?.documentStatus === "FINAL" ? "FINAL" : "DRAFT"
+    };
+  }
+  if (result.workflow?.id === "SIMPLE_LETTER_V1") {
+    return {
+      documentType: "letter",
+      stage:
+        result.finalization === "PASS" &&
+        result.gateI?.result !== "BLOCKED" &&
+        result.verification.unverified === 0
+          ? "FINAL"
+          : "DRAFT"
+    };
+  }
+  return null;
+}
+
+export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
   const normalized =
@@ -442,12 +517,13 @@ function directDocumentRequest(
   const explicitFormat =
     /\bodt\b/u.test(normalized)
       ? "odt" as const
-      : /\bdocx\b|\bword\b/u.test(normalized)
+      // "plik doc", "w Wordzie", "worda": the same .docx request.
+      : /\bdocx?\b|\bword(?:a|zie|owy|owym)?\b/u.test(normalized)
         ? "docx" as const
         : null;
 
   const documentNoun =
-    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór)\b/u
+    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór|plik)\b/u
       .test(normalized);
   const generationVerb =
     /\b(?:wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj)\b/u
@@ -481,36 +557,6 @@ function directDocumentRequest(
       "docx",
     documentType
   };
-}
-
-function downloadBlob(
-  blob: Blob,
-  filename: string
-): void {
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-  try {
-    const anchor =
-      document.createElement(
-        "a"
-      );
-    anchor.href = url;
-    anchor.download =
-      filename;
-    anchor.rel =
-      "noreferrer";
-    document.body.appendChild(
-      anchor
-    );
-    anchor.click();
-    anchor.remove();
-  } finally {
-    URL.revokeObjectURL(
-      url
-    );
-  }
 }
 
 function upsertAttachment(
@@ -586,22 +632,30 @@ export function providerFailureMessage(
       ? "Claude"
       : provider.startsWith("xai")
         ? "Grok"
-        : "ChatGPT/Codex";
+        : provider.startsWith("google")
+          ? "Gemini"
+          : "ChatGPT/Codex";
   const client =
     provider.startsWith("anthropic")
       ? "Claude Code"
       : provider.startsWith("xai")
         ? "Grok Build"
-        : "Codex";
+        : provider.startsWith("google")
+          ? "Gemini CLI"
+          : "Codex";
   const base = (() => {
     switch (reason) {
+      case "ACCOUNT_SESSION_PLAN_UNSUPPORTED":
+        return provider.startsWith("google")
+          ? "Google nie obsługuje już Gemini CLI w bezpłatnym planie konta Google („Gemini Code Assist for individuals”) — ponowne logowanie nie pomoże. Użyj „Google Gemini · API” z kluczem z Google AI Studio (Ustawienia → Modele i AI) albo konta z płatnym planem."
+          : `${name} odrzuca plan Twojego konta dla klienta ${client}; ponowne logowanie nie pomoże. Użyj połączenia przez klucz API albo konta z planem obsługującym ten klient.`;
       case "ACCOUNT_SESSION_MODEL_UNSUPPORTED":
         return `${name} odrzucił model domyślny dla tej sesji. Zaktualizuj aplikację i ponów połączenie konta.`;
       case "ACCOUNT_SESSION_AUTH_EXPIRED":
       case "ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH":
         return `Sesja ${name} wygasła albo została odrzucona. Otwórz Ustawienia → Modele i AI i ponownie połącz konto.`;
       case "ACCOUNT_SESSION_CAPACITY":
-        return `${name} chwilowo odrzuca wykonanie z powodu limitu lub dostępności konta.`;
+        return `${name} odrzuca wykonanie z powodu limitu zapytań lub dostępności konta (Lex Machina ponowiła je już po odczekaniu). Pytanie prawne to kilka uruchomień modelu (odczyt skilli, weryfikacja przepisów), więc limit konta wyczerpuje się szybciej niż w zwykłej rozmowie. Odczekaj kilka minut albo wybierz inny model lub połączenie przez klucz API.`;
       case "ACCOUNT_SESSION_PROMPT_REJECTED":
         return `${name} odrzucił bieżące żądanie po stronie usługi.`;
       case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
@@ -719,6 +773,27 @@ export function routingMeta(
     : `routing: ${labelForSkill(execution.primarySkill || route)}`;
 }
 
+// Przyczyna blokady wprost: stan, bramki i zdarzenia BLOCKED z kodem.
+export function blockedReasonText(
+  execution: Pick<
+    ExtendedExecution,
+    "status" | "answer" | "audit" | "workflow" | "gateI" | "finalization"
+  >
+): string {
+  const lines = [
+    `status=${execution.status}; finalization=${execution.finalization}; audit=${execution.audit?.result ?? "?"}; answer=${execution.answer ? "present" : "missing"}` +
+      (execution.workflow ? `; workflow=${execution.workflow.id}:${execution.workflow.result}` : "") +
+      (execution.gateI ? `; gateI=${execution.gateI.result}` : ""),
+    ...(execution.audit?.missing?.length ? [`audit.missing: ${execution.audit.missing.join(", ")}`] : []),
+    ...(execution.audit?.violations?.length ? [`audit.violations: ${execution.audit.violations.join(", ")}`] : []),
+    ...(execution.workflow?.missingResources.length
+      ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
+      : []),
+    ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
+  ];
+  return `\n\nPrzyczyna:\n${lines.map((line) => `- ${line}`).join("\n")}`;
+}
+
 function executionMessage(
   execution: ExtendedExecution,
   route: string
@@ -806,7 +881,8 @@ function executionMessage(
     id: messageId(),
     role: "system",
     content:
-      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi.",
+      "Nie udało się zaprezentować odpowiedzi z powodu blokady wykonania lub wymaganego workflow. Sama niepełna weryfikacja źródeł nie blokuje już odpowiedzi." +
+      blockedReasonText(execution),
     evidence: execution.evidence,
     ...(execution.auxiliarySources?.length
       ? {
@@ -856,6 +932,9 @@ export default function MatterChatApp({
   const [caseNameDraft, setCaseNameDraft] = useState("");
   const [caseBusy, setCaseBusy] = useState(false);
   const [caseError, setCaseError] = useState("");
+  // Szybka zmiana nazwy sprawy w panelu bocznym.
+  const [sidebarRename, setSidebarRename] =
+    useState<{ caseId: string; value: string; error: string } | null>(null);
   const [caseSchedule, setCaseSchedule] =
     useState<CaseScheduleEvent[]>([]);
   const [caseScheduleLoading, setCaseScheduleLoading] =
@@ -913,7 +992,7 @@ export default function MatterChatApp({
     useState<PrimaryModelSource>(rememberedModel?.provider ?? "local");
   const [providerConfiguration, setProviderConfiguration] = useState<
     Record<ProviderId, boolean | undefined>
-  >({ openai: undefined, anthropic: undefined, xai: undefined });
+  >({ openai: undefined, anthropic: undefined, xai: undefined, google: undefined });
   const [providerAccounts, setProviderAccounts] = useState<
     Record<
       ProviderId,
@@ -922,7 +1001,8 @@ export default function MatterChatApp({
   >({
     openai: undefined,
     anthropic: undefined,
-    xai: undefined
+    xai: undefined,
+    google: undefined
   });
   const [providerAccountBusy, setProviderAccountBusy] =
     useState(false);
@@ -930,6 +1010,8 @@ export default function MatterChatApp({
     useState(false);
   const [localStartMessage, setLocalStartMessage] =
     useState("");
+  const [accountConnectPhase, setAccountConnectPhase] =
+    useState<AccountConnectPhase | null>(null);
   const [providerAccountMessage, setProviderAccountMessage] =
     useState("");
   const [claudeOAuthToken, setClaudeOAuthTokenInput] =
@@ -1090,6 +1172,11 @@ export default function MatterChatApp({
     runtimeProviderForPrimarySource(provider);
   const localModelSelected =
     provider === "local" || model.startsWith("local/");
+  // History sent with each message: sized to the model window, small for local models.
+  const conversationChars =
+    localModelSelected
+      ? LOCAL_CONVERSATION_CHARS
+      : conversationBudgetChars(runtimeProvider, model);
   // Files per message: 20 for a hosted model, 4 for a local one (server decides).
   const documentLimit =
     documentFit?.limit ?? (localModelSelected ? 4 : 20);
@@ -2163,26 +2250,6 @@ export default function MatterChatApp({
     setSettingsSection("models");
   }
 
-  async function openAccountClientSetup(): Promise<void> {
-    if (
-      !providerDefinition
-    ) {
-      return;
-    }
-    try {
-      await openExternalUrl(
-        providerDefinition
-          .accountInstallUrl
-      );
-    } catch (error) {
-      setProviderAccountMessage(
-        error instanceof Error
-          ? error.message
-          : String(error)
-      );
-    }
-  }
-
   async function connectProviderAccount(): Promise<boolean> {
     if (
       !isAccountPrimarySource(
@@ -2194,12 +2261,54 @@ export default function MatterChatApp({
       return false;
     }
     setProviderAccountBusy(true);
-    setProviderAccountMessage(
-      isDesktopShell()
-        ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
-        : "Otwieram oficjalne logowanie dostawcy…"
-    );
+    setAccountConnectPhase(null);
     try {
+      if (accountSession?.installed === false) {
+        setProviderAccountMessage("");
+        let progress =
+          await startProviderAccountProvision(
+            runtimeProvider
+          );
+        setAccountConnectPhase({ kind: "provision", progress });
+        while (
+          progress.stage !== "READY" &&
+          progress.stage !== "FAILED"
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+          progress =
+            await getProviderAccountProvision(
+              runtimeProvider
+            );
+          setAccountConnectPhase({ kind: "provision", progress });
+        }
+        if (progress.stage === "FAILED") {
+          setAccountConnectPhase({
+            kind: "failed",
+            message: provisionFailureText(progress.error ?? "")
+          });
+          return false;
+        }
+        if (progress.status) {
+          const provisioned = progress.status;
+          setProviderAccounts(
+            (current) => ({
+              ...current,
+              [runtimeProvider]:
+                provisioned
+            })
+          );
+          if (provisioned.authenticated) {
+            setAccountConnectPhase({ kind: "done" });
+            return true;
+          }
+        }
+      }
+      setAccountConnectPhase({ kind: "login" });
+      setProviderAccountMessage(
+        isDesktopShell()
+          ? "Otwieram widoczne okno oficjalnego logowania dostawcy. Dokończ logowanie w tym oknie lub w uruchomionej przez nie przeglądarce…"
+          : "Otwieram oficjalne logowanie dostawcy…"
+      );
       const status =
         await loginProviderAccount(
           runtimeProvider
@@ -2210,6 +2319,11 @@ export default function MatterChatApp({
           [runtimeProvider]:
             status
         })
+      );
+      setAccountConnectPhase(
+        status.authenticated
+          ? { kind: "done" }
+          : null
       );
       setProviderAccountMessage(
         status.authenticated
@@ -2230,9 +2344,10 @@ export default function MatterChatApp({
           ? "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API."
           : code ===
               "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
-            ? "Nie znaleziono oficjalnego klienta tego dostawcy. Zainstaluj klienta z oficjalnej instrukcji albo przełącz źródło na API."
+            ? "Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API."
             : code
       );
+      setAccountConnectPhase(null);
       await refreshProviderAccountStatus()
         .catch(() => {});
       return false;
@@ -2723,7 +2838,8 @@ export default function MatterChatApp({
                 buildSkillSelectionEnvelope(
                   conversationForProvider(
                     priorMessages,
-                    trimmed
+                    trimmed,
+                    conversationChars
                   ),
                   automaticSkills,
                   [],
@@ -2780,41 +2896,20 @@ export default function MatterChatApp({
             .readyForDownload ===
             true;
 
-        if (downloadedFinal) {
-          const blob =
-            await downloadGeneratedArtifact(
-              executionCaseId,
-              generated
-                .artifact
-                .artifactId
-            );
-          downloadBlob(
-            blob,
-            generated
-              .artifact
-              .filename
-          );
-        }
+        // The document is shown in the chat as a card (download, preview, open in
+        // Word, machine deanonymization) instead of being saved without asking.
+        const generatedDocument = {
+          artifactId: generated.artifact.artifactId,
+          filename: generated.artifact.filename,
+          format: generated.format,
+          tokenized: !downloadedFinal
+        };
 
         if (
           activeCaseIdRef.current ===
             executionCaseId
         ) {
-          setPendingFinalDocument(
-            downloadedFinal
-              ? null
-              : {
-                  caseId:
-                    executionCaseId,
-                  artifactId:
-                    generated
-                      .artifact
-                      .artifactId,
-                  format:
-                    generated
-                      .format
-                }
-          );
+          setPendingFinalDocument(null);
           setFinalDocumentPassword("");
           setMessages(
             (
@@ -2828,29 +2923,22 @@ export default function MatterChatApp({
                   "assistant",
                 content:
                   downloadedFinal
-                    ? "Gotowy dokument został przygotowany w profesjonalnym układzie i pobrany jako " +
-                      documentRequest
-                        .format
-                        .toUpperCase() +
-                      "."
-                    : "Dokument został przygotowany jako bezpieczna wersja tokenizowana " +
-                      documentRequest
-                        .format
-                        .toUpperCase() +
-                      ". Aby utworzyć finalny plik, użyj poniżej jednorazowej reautoryzacji. Lex Machina odwróci wyłącznie aliasy z vaultów dokumentów użytych do tego pisma.",
+                    ? "Gotowy dokument " +
+                      documentRequest.format.toUpperCase() +
+                      " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
+                    : "Dokument " +
+                      documentRequest.format.toUpperCase() +
+                      " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
                 meta:
                   "dokument: " +
                   generated
                     .artifact
-                    .filename
+                    .filename,
+                generatedDocument
               }
             ]
           );
-          setGeneratedDocumentMessage(
-            downloadedFinal
-              ? "Dokument gotowy i pobrany."
-              : "Wersja tokenizowana jest zapisana w aktach. Finalizacja czeka na jednorazową reautoryzację."
-          );
+          setGeneratedDocumentMessage("");
           setWorkspaceRefresh(
             (value) =>
               value + 1
@@ -2879,7 +2967,8 @@ export default function MatterChatApp({
         query: buildSkillSelectionEnvelope(
           conversationForProvider(
             priorMessages,
-            trimmed
+            trimmed,
+            conversationChars
           ),
           automaticSkills,
           [],
@@ -2932,17 +3021,125 @@ export default function MatterChatApp({
           (value) => value + 1
         );
       }
+      const answerMessage =
+        executionMessage(
+          result,
+          route
+        );
       if (
         activeCaseIdRef.current ===
           executionCaseId
       ) {
         setMessages((current) => [
           ...current,
-          executionMessage(
-            result,
-            route
-          )
+          answerMessage
         ]);
+      }
+
+      // Letter workflows end with a file, like a document artifact: after each
+      // completed cycle a draft .docx, and the finished document at the end
+      // (simple letter: all gates passed; process pleading: FINAL status).
+      const letterPlan = letterDocumentPlan(result);
+      if (
+        letterPlan &&
+        canWriteCase(selectedCase)
+      ) {
+        const letterWorkflow = letterPlan.documentType;
+        const stage = letterPlan.stage;
+        setExecutionStage(
+          stage === "FINAL"
+            ? "Tworzenie gotowego dokumentu"
+            : "Tworzenie szkicu dokumentu"
+        );
+        try {
+          const generated =
+            await generateLegalDocument(
+              executionCaseId,
+              {
+                query:
+                  buildSkillSelectionEnvelope(
+                    conversationForProvider(
+                      [
+                        ...priorMessages,
+                        { id: messageId(), role: "user", content: trimmed },
+                        answerMessage
+                      ],
+                      "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, uwagi dla prawnika).",
+                      conversationChars
+                    ),
+                    automaticSkills,
+                    [],
+                    manualSkills === null
+                      ? null
+                      : manualSkillSelection
+                  ),
+                provider: runtimeProvider,
+                model,
+                primarySkill: route,
+                mode: "PRAWNIK",
+                format: "docx",
+                documentType: letterWorkflow,
+                styleProfile: "lex-classic-clean-v1",
+                attachments: documentAttachments,
+                ...(firmTemplateIds.length > 0
+                  ? { firmTemplates: firmTemplateIds }
+                  : {}),
+                filename:
+                  (letterWorkflow === "pleading"
+                    ? "LexMachina-pismo-procesowe"
+                    : "LexMachina-pismo") +
+                  (stage === "DRAFT" ? "-szkic" : "") +
+                  ".docx"
+              }
+            );
+          if (
+            activeCaseIdRef.current ===
+              executionCaseId
+          ) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "assistant",
+                content:
+                  stage === "FINAL"
+                    ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
+                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.",
+                meta: "dokument: " + generated.artifact.filename,
+                generatedDocument: {
+                  artifactId: generated.artifact.artifactId,
+                  filename: generated.artifact.filename,
+                  format: generated.format,
+                  tokenized: generated.readyForDownload !== true,
+                  stage
+                }
+              }
+            ]);
+            setWorkspaceRefresh((value) => value + 1);
+          }
+        } catch (documentError) {
+          // The answer itself stays; only the file is missing.
+          if (
+            activeCaseIdRef.current ===
+              executionCaseId
+          ) {
+            setMessages((current) => [
+              ...current,
+              {
+                id: messageId(),
+                role: "system",
+                content:
+                  "Nie udało się utworzyć pliku pisma: " +
+                  (documentError instanceof ApiError
+                    ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
+                    : documentError instanceof Error
+                      ? documentError.message
+                      : String(documentError)) +
+                  ". Możesz poprosić: „wygeneruj to w pliku docx”."
+              }
+            ]);
+          }
+        }
       }
     } catch (error) {
       const code =
@@ -3156,12 +3353,14 @@ export default function MatterChatApp({
       const blob = await downloadSensitiveArtifact(
         final.downloadTicket.ticketId
       );
-      downloadBlob(blob, final.artifact.filename);
+      const savedPath = await downloadBlob(blob, final.artifact.filename);
       const corrected = Object.keys(finalReview.overrides).length;
       setPendingFinalDocument(null);
       setFinalReview(null);
       setGeneratedDocumentMessage(
-        "Finalny dokument z przywróconymi danymi został utworzony i pobrany." +
+        (savedPath
+          ? `Finalny dokument z przywróconymi danymi został zapisany: ${savedPath}.`
+          : "Finalny dokument z przywróconymi danymi został utworzony i pobrany.") +
           (corrected > 0 ? ` Ręczne poprawki: ${corrected}.` : "")
       );
       setWorkspaceRefresh((value) => value + 1);
@@ -3207,6 +3406,31 @@ export default function MatterChatApp({
       );
     } catch (error) {
       setCaseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCaseBusy(false);
+    }
+  }
+
+  async function saveSidebarRename(): Promise<void> {
+    if (!sidebarRename) return;
+    const value = sidebarRename.value.trim();
+    const current = matterCases.find((item) => item.caseId === sidebarRename.caseId);
+    if (!value || value === current?.displayName) {
+      setSidebarRename(null);
+      return;
+    }
+    setCaseBusy(true);
+    try {
+      await renameCase(sidebarRename.caseId, value);
+      await refreshCases(caseId || sidebarRename.caseId);
+      if (sidebarRename.caseId === caseId) setCaseNameDraft(value);
+      setWorkspaceRefresh((count) => count + 1);
+      setSidebarRename(null);
+    } catch (error) {
+      setSidebarRename({
+        ...sidebarRename,
+        error: error instanceof Error ? error.message : String(error)
+      });
     } finally {
       setCaseBusy(false);
     }
@@ -3420,25 +3644,84 @@ export default function MatterChatApp({
             onChange={(event) => setNewCaseName(event.target.value)}
           />
           <div className="matter-thread-items">
-            {matterCases.map((item) => (
-              <button
-                key={item.caseId}
-                type="button"
-                disabled={caseBusy}
-                className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
-                onClick={() => {
-                  setPendingFirstMessage(null);
-                  setExecutionError("");
-                  setCaseId(item.caseId);
-                  setActiveTab("chat");
-                }}
-              >
-                <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
-                <small>
-                  {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
-                </small>
-              </button>
-            ))}
+            {matterCases.map((item) =>
+              sidebarRename?.caseId === item.caseId ? (
+                <form
+                  key={item.caseId}
+                  className="matter-thread-rename"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveSidebarRename();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={sidebarRename.value}
+                    maxLength={160}
+                    disabled={caseBusy}
+                    aria-label="Nowa nazwa sprawy"
+                    onChange={(event) =>
+                      setSidebarRename({ ...sidebarRename, value: event.target.value, error: "" })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setSidebarRename(null);
+                    }}
+                  />
+                  <div className="matter-thread-rename-actions">
+                    <button type="submit" disabled={caseBusy || !sidebarRename.value.trim()}>
+                      Zapisz
+                    </button>
+                    <button type="button" disabled={caseBusy} onClick={() => setSidebarRename(null)}>
+                      Anuluj
+                    </button>
+                  </div>
+                  {sidebarRename.error ? (
+                    <small className="matter-thread-rename-error">{sidebarRename.error}</small>
+                  ) : null}
+                </form>
+              ) : (
+                <div key={item.caseId} className="matter-thread-row">
+                  <button
+                    type="button"
+                    disabled={caseBusy}
+                    className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
+                    onClick={() => {
+                      setPendingFirstMessage(null);
+                      setExecutionError("");
+                      setCaseId(item.caseId);
+                      setActiveTab("chat");
+                    }}
+                  >
+                    <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                    <small>
+                      {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                    </small>
+                  </button>
+                  {item.role === "OWNER" ? (
+                    <button
+                      type="button"
+                      className="matter-thread-edit"
+                      disabled={caseBusy}
+                      title="Zmień nazwę sprawy"
+                      aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                      onClick={() =>
+                        setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
+                      }
+                    >
+                      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                        <path
+                          d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
+              )
+            )}
           </div>
         </div>
 
@@ -3450,6 +3733,7 @@ export default function MatterChatApp({
             ["skills", "Skille"],
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
+            ["search", "Wyszukiwanie"],
             ["settings", "Ustawienia"]
           ] as Array<[TabId, string]>).map(([id, label]) => (
             <button
@@ -3673,20 +3957,14 @@ export default function MatterChatApp({
                       "ADMIN"
                   }
                   onClick={() =>
-                    accountSession
-                      ?.installed ===
-                    false
-                      ? void openAccountClientSetup()
-                      : void connectProviderAccount()
+                    void connectProviderAccount()
                   }
                 >
                   {providerAccountBusy
-                    ? "Logowanie…"
-                    : accountSession
-                        ?.installed ===
-                      false
-                      ? "Zainstaluj klienta ↗"
-                      : "Połącz konto"}
+                    ? accountConnectPhase?.kind === "provision"
+                      ? "Pobieranie klienta…"
+                      : "Logowanie…"
+                    : "Połącz konto"}
                 </button>
               ) : null}
               <button
@@ -3704,6 +3982,12 @@ export default function MatterChatApp({
                 Zarządzaj modelami
               </button>
             </div>
+            {isAccountPrimarySource(provider) ? (
+              <AccountConnectProgress
+                phase={accountConnectPhase}
+                clientLabel={providerDefinition?.accountClientLabel ?? "klient"}
+              />
+            ) : null}
             {localStartMessage ? (
               <small
                 className={
@@ -3736,7 +4020,9 @@ export default function MatterChatApp({
                     ? "Sprawa i dokumenty"
                     : activeTab === "firm"
                       ? "Know-how i wzory kancelarii"
-                      : "Ustawienia"}
+                      : activeTab === "search"
+                        ? "Wyszukiwanie w źródłach MCP"
+                        : "Ustawienia"}
             </h1>
           </div>
           <div className="chat-header-actions">
@@ -4283,6 +4569,13 @@ export default function MatterChatApp({
                           restorations: corrected.marks
                         });
                       }}
+                    />
+                  ) : null}
+                  {message.generatedDocument && caseId ? (
+                    <ChatDocumentCard
+                      caseId={caseId}
+                      document={message.generatedDocument}
+                      canWrite={canWriteCase(selectedCase)}
                     />
                   ) : null}
                   {visibleMessageMeta(message.meta) ? (
@@ -4907,11 +5200,14 @@ export default function MatterChatApp({
                               pendingFinalDocument.caseId,
                               pendingFinalDocument.artifactId
                             );
-                          downloadBlob(
+                          const savedPath = await downloadBlob(
                             blob,
                             "LexMachina-tokenized." +
                               pendingFinalDocument.format
                           );
+                          if (savedPath) {
+                            setGeneratedDocumentMessage(`Wersja tokenizowana zapisana: ${savedPath}`);
+                          }
                         } catch (error) {
                           setExecutionError(
                             error instanceof Error
@@ -5278,6 +5574,10 @@ export default function MatterChatApp({
             }}
             onNewCase={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa").catch(() => undefined)}
           />
+        ) : null}
+
+        {activeTab === "search" ? (
+          <McpSearchPanel />
         ) : null}
 
         {activeTab === "calendar" ? (
@@ -5965,7 +6265,9 @@ export default function MatterChatApp({
                       ? " Codex CLI"
                       : runtimeProvider === "anthropic"
                         ? " Claude Code"
-                        : " Grok Build"}.
+                        : runtimeProvider === "google"
+                          ? " Gemini CLI (logowanie kontem Google; po zalogowaniu wpisz /quit w oknie terminala)"
+                          : " Grok Build"}.
                     Na Windows Lex Machina otwiera widoczny terminal, a klient prowadzi
                     dalej przez swój oficjalny login w przeglądarce lub flow kodu urządzenia.
                     Token OAuth pozostaje po stronie klienta i nie jest kopiowany do UI Lex Machina.
@@ -6059,35 +6361,27 @@ export default function MatterChatApp({
                   </small>
                   {user.appRole === "ADMIN" ? (
                     <div className="chat-form-row compact">
-                      {accountSession?.installed === false ? (
-                        <button
-                          type="button"
-                          className="chat-primary-action"
-                          onClick={() =>
-                            void openAccountClientSetup()
-                          }
-                        >
-                          Instalacja {providerDefinition?.accountClientLabel ?? "klienta"} ↗
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="chat-primary-action"
-                          disabled={
-                            providerAccountBusy ||
-                            accountSession?.authenticated === true
-                          }
-                          onClick={() =>
-                            void connectProviderAccount()
-                          }
-                        >
-                          {providerAccountBusy
-                            ? "Logowanie…"
-                            : accountSession?.authenticated
-                              ? "Połączone"
-                              : "Połącz konto"}
-                        </button>
-                      )}
+                      {/* The runtime provisions the pinned client (Codex, Claude Code,
+                          Gemini CLI, Grok Build) on "Połącz konto". */}
+                      <button
+                        type="button"
+                        className="chat-primary-action"
+                        disabled={
+                          providerAccountBusy ||
+                          accountSession?.authenticated === true
+                        }
+                        onClick={() =>
+                          void connectProviderAccount()
+                        }
+                      >
+                        {providerAccountBusy
+                          ? accountConnectPhase?.kind === "provision"
+                      ? "Pobieranie klienta…"
+                      : "Logowanie…"
+                          : accountSession?.authenticated
+                            ? "Połączone"
+                            : "Połącz konto"}
+                      </button>
                       <button
                         type="button"
                         className="chat-secondary-action"
@@ -6118,6 +6412,10 @@ export default function MatterChatApp({
                       kliencie dostawcy, a następnie kliknij „Sprawdź ponownie”.
                     </small>
                   ) : null}
+                  <AccountConnectProgress
+                    phase={accountConnectPhase}
+                    clientLabel={providerDefinition?.accountClientLabel ?? "klient"}
+                  />
                   {providerAccountMessage ? (
                     <small>{providerAccountMessage}</small>
                   ) : null}

@@ -1,5 +1,7 @@
 # Lex Machina App — local runtime
 
+Dokumentacja: [użytkowa](../docs/APLIKACJA-DOKUMENTACJA.md) · [techniczna](../docs/DOKUMENTACJA-TECHNICZNA.md) · [zmiany 0.1.10](../docs/ZMIANY-0.1.10.md)
+
 This directory contains the application/runtime workstream for running the development Lex Machina corpus outside a vendor-specific host.
 
 ## Source of truth
@@ -56,7 +58,7 @@ The application MUST NOT duplicate or silently rewrite legal skill instructions.
 Źródła prawa (federacja w czacie, konfiguracja llama.cpp, `.mcp.json`) korzystają wyłącznie z serwerów MCP Lex Machina z korpusu skilli: `audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs` — `isap`, `eurlex`, `saos`, `cbosa`, `krs`, `wl`, `ceidg`, `nbp`, `eureka`, `sudop`, `uodo`. Agregator `prawo-pl-mcp` i pakiety `@matematicsolutions/*` (w tym KIO, Legalize i EU-compliance, które nie mają odpowiednika) zostały usunięte.
 
 - **Ustawienia → Konektory MCP** (ADMIN): instalacja (handshake MCP `tools/list`) i deinstalacja każdego serwera; opcjonalnie te same wpisy `lex-<serwer>` w `claude_desktop_config.json` Claude Desktop (kopia zapasowa `*.kopia-przed-lex`).
-- **CEIDG**: link do wniosku o klucz (https://dane.biznes.gov.pl/pl/portal/034872), pole na token i „Zatwierdź klucz” — kontrola kształtu JWT, próba API v3 (401/403 = odrzucony), zapis lokalny z uprawnieniami 600 (`%LOCALAPPDATA%\LexMachina\mcp\ceidg.token` albo `~/.lex-machina/mcp/`). Token zawiera PESEL właściciela — nigdy nie trafia do repozytorium.
+- **CEIDG — wymagany własny klucz API** (bez niego konektor jest niedostępny): link do wniosku o klucz (https://dane.biznes.gov.pl/pl/portal/034872), pole na token i „Zatwierdź klucz” — kontrola kształtu JWT, próba API v3 (401/403 = odrzucony), zapis lokalny z uprawnieniami 600 (`%LOCALAPPDATA%\LexMachina\mcp\ceidg.token` albo `~/.lex-machina/mcp/`). Token zawiera PESEL właściciela — nigdy nie trafia do repozytorium.
 - Zmienne: `LEX_MCP_PACKAGE`, `LEX_MCP_STATE_DIR`, `LEX_CLAUDE_DESKTOP_CONFIG`, `CEIDG_API_KEY` (ma pierwszeństwo przed zapisanym kluczem).
 - Test na żywo: `npm run validate:g40-live` (lista narzędzi każdego serwera + zapytanie EUREKA).
 

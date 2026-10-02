@@ -15,6 +15,8 @@ import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
+import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
+import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import {
   LexMcpConnectorStore,
@@ -560,9 +562,10 @@ export async function startLocalServer(options?: {
     new LocalPersonMorphology();
 
   // Official ELI texts of every act named in the domain act maps; refreshed
-  // in the background, kept locally for offline and local-model use.
+  // in the background, kept locally for offline and local-model use. Scanned
+  // PDFs (old Dz.U.) are read with the local OCR.
   const coreLawIndex =
-    new CoreLawIndex();
+    new CoreLawIndex(undefined, undefined, undefined, undefined, undefined, new LocalPaddleOcrEngine());
   try {
     coreLawIndex.load(
       runtimeRoot
@@ -579,6 +582,8 @@ export async function startLocalServer(options?: {
             `LEX_CORE_LAW_REFRESH_FAILED:${error instanceof Error ? error.message : String(error)}\n`
           );
         });
+      // Daily ELI check while the application runs, not only at start.
+      coreLawIndex.startSchedule();
     }
   } catch (error) {
     process.stderr.write(
@@ -586,23 +591,34 @@ export async function startLocalServer(options?: {
     );
   }
 
-  const sessionExecutor =
+  // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
+  const anomalyJournal =
+    new AnomalyJournal(caseFileStore.rootDir);
+  const sessionExecutor = withAnomalyJournal(
     new SafeSessionExecutor(
       registry,
       providerGateway,
       undefined,
-      (ledger) =>
+      (ledger, context) =>
         new LegalVerificationToolRuntime(
           ledger,
           legalSourceVerifier,
           undefined,
-          new TemporalSourceFreshnessChecker()
+          new TemporalSourceFreshnessChecker(),
+          undefined,
+          undefined,
+          coreLawIndex,
+          undefined,
+          (act) => coreLawIndex.adopt(act),
+          context?.localModel === true
         ),
       privacyNamedEntities,
       legalFederationTools,
       coreLawIndex,
       personMorphology
-    );
+    ),
+    anomalyJournal
+  );
   const documentAstGenerator =
     new LegalDocumentAstGenerator(
       sessionExecutor
@@ -712,15 +728,26 @@ export async function startLocalServer(options?: {
     {
       authService,
       localModels,
-      maintenance
+      maintenance,
+      anomalyJournal
     }
   );
+  registerCoreLawRoutes(app, {
+    authService,
+    index: coreLawIndex
+  });
   registerMcpConnectorRoutes(
     app,
     {
       authService,
       connectors:
-        mcpConnectors
+        mcpConnectors,
+      search:
+        new LegalFederationToolRuntime(
+          undefined,
+          undefined,
+          mcpConnectors
+        )
     }
   );
   app.use(coreApp);

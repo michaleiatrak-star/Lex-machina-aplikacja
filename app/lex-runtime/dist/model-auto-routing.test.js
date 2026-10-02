@@ -101,6 +101,9 @@ describe("ModelAutoRouter", () => {
         expect(result.decision.workflowExecutionSkill).toBeNull();
         expect(setup.adapter.calls[0]
             ?.systemPrompt).toContain('{"legal":false}');
+        // Account sessions: the router never resumes or records a shared CLI thread.
+        expect(setup.adapter.calls[0]
+            ?.accountContinuity).toBe("none");
     });
     it("does not call a local model to route a trivial chat command", async () => {
         const setup = router(fixture(), []);

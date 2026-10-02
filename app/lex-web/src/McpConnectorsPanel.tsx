@@ -4,6 +4,7 @@ import {
 } from "react";
 import {
   ApiError,
+  checkMcpConnector,
   clearCeidgApiKey,
   getMcpConnectors,
   installMcpConnector,
@@ -13,6 +14,7 @@ import {
   type McpConnectorStatusResponse,
   type McpServerStatus
 } from "./api.js";
+import { INTEGRITY_TEXT } from "./McpSearchPanel.js";
 
 const ERRORS: Record<string, string> = {
   CEIDG_KEY_NOT_JWT: "To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token.",
@@ -25,6 +27,15 @@ const ERRORS: Record<string, string> = {
   LEX_MCP_PROBE_NO_TOOLS: "Serwer MCP uruchomił się, ale nie zgłosił narzędzi — instalacja przerwana.",
   AUTHORIZATION_DENIED: "Konektorami MCP zarządza administrator aplikacji."
 };
+
+function checkText(server: McpServerStatus): string {
+  const check = server.lastCheck;
+  if (!check) return "";
+  const at = new Date(check.at).toLocaleString("pl-PL");
+  return check.ok
+    ? ` · działa (sprawdzono ${at})`
+    : ` · nie działa: ${ERRORS[check.error ?? ""] ?? check.error} (sprawdzono ${at})`;
+}
 
 function failureText(error: unknown): string {
   const code =
@@ -118,6 +129,19 @@ export function McpConnectorsPanel() {
     );
   }
 
+  function check(server: McpServerStatus): void {
+    void run(
+      `check-${server.id}`,
+      () => checkMcpConnector(server.id),
+      (result) => {
+        const { check: outcome } = result as { check: { ok: boolean; tools?: string[]; error?: string } };
+        return outcome.ok
+          ? `${server.id} działa: ${outcome.tools?.join(", ")}.`
+          : `${server.id} nie działa: ${ERRORS[outcome.error ?? ""] ?? outcome.error}.`;
+      }
+    );
+  }
+
   function uninstall(server: McpServerStatus): void {
     void run(
       server.id,
@@ -168,11 +192,18 @@ export function McpConnectorsPanel() {
         Konektory MCP Lex Machina
       </h2>
       <p>
-        Serwery z <code>audyt-systemu-v4/mcp-servers</code> (własne, zamiast @matematicsolutions). Instalacja uruchamia serwer i sprawdza handshake MCP; zainstalowane źródła są dostępne w czacie przez federację źródeł prawa.
+        Serwery z <code>audyt-systemu-v4/mcp-servers</code>. Instalacja uruchamia serwer i sprawdza handshake MCP; zainstalowane źródła są dostępne w czacie przez federację źródeł prawa.
       </p>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert">{message}</div> : null}
+
+      {status?.packageAvailable ? (
+        <p className={status.package.integrity === "MATCH" ? "field-help" : "alert alert-error"}>
+          Pakiet serwerów{status.package.version ? ` ${status.package.version}` : ""}
+          {status.package.skillVersion ? ` (audyt-systemu-v4 ${status.package.skillVersion})` : ""}: {INTEGRITY_TEXT[status.package.integrity]}.
+        </p>
+      ) : null}
 
       {status && !status.packageAvailable ? (
         <div className="alert alert-error">
@@ -213,17 +244,28 @@ export function McpConnectorsPanel() {
                             : "zainstalowany, czeka na klucz"
                           : "niezainstalowany"}
                         {server.desktopInstalled ? " · Claude Desktop" : ""}
+                        {checkText(server)}
                       </small>
                     </span>
                     {server.installed ? (
-                      <button
-                        type="button"
-                        className="chat-secondary-action"
-                        disabled={Boolean(busy)}
-                        onClick={() => uninstall(server)}
-                      >
-                        {busy === server.id ? "Odinstalowuję…" : "Odinstaluj"}
-                      </button>
+                      <span className="chat-form-row compact">
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={Boolean(busy) || !status.packageAvailable}
+                          onClick={() => check(server)}
+                        >
+                          {busy === `check-${server.id}` ? "Sprawdzam…" : "Sprawdź"}
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={Boolean(busy)}
+                          onClick={() => uninstall(server)}
+                        >
+                          {busy === server.id ? "Odinstalowuję…" : "Odinstaluj"}
+                        </button>
+                      </span>
                     ) : (
                       <button
                         type="button"

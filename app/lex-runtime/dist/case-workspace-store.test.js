@@ -97,6 +97,49 @@ describe("encrypted case workspace", () => {
             }
         })).rejects.toThrow("WORKSPACE_RESTORATION_INVALID");
     });
+    it("keeps the generated document of a chat message for the download/preview card", async () => {
+        const { caseId, key, store } = fixture();
+        const base = {
+            role: "assistant",
+            content: "Gotowy dokument DOCX jest poniżej.",
+            createdAt: new Date().toISOString()
+        };
+        await store.appendThreadMessage({
+            caseId, caseDataKey: key, keyVersion: 1,
+            message: {
+                ...base,
+                messageId: "message_" + "f".repeat(32),
+                generatedDocument: {
+                    artifactId: "artifact_" + "1".repeat(32),
+                    filename: "LexMachina-pismo.docx",
+                    format: "docx",
+                    tokenized: true,
+                    stage: "DRAFT"
+                }
+            }
+        });
+        const thread = await store.loadThread({ caseId, caseDataKey: key, keyVersion: 1 });
+        expect(thread[0].generatedDocument).toEqual({
+            artifactId: "artifact_" + "1".repeat(32),
+            filename: "LexMachina-pismo.docx",
+            format: "docx",
+            tokenized: true,
+            stage: "DRAFT"
+        });
+        await expect(store.appendThreadMessage({
+            caseId, caseDataKey: key, keyVersion: 1,
+            message: {
+                ...base,
+                messageId: "message_" + "9".repeat(32),
+                generatedDocument: {
+                    artifactId: "../../evil",
+                    filename: "x.docx",
+                    format: "docx",
+                    tokenized: false
+                }
+            }
+        })).rejects.toThrow("WORKSPACE_GENERATED_DOCUMENT_INVALID");
+    });
     it("supports several folders and item moves but rejects deleting a non-empty folder", async () => {
         const { caseId, key, store } = fixture();
         const folder = await store.createFolder({

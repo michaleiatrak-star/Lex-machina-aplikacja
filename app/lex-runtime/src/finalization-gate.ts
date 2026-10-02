@@ -140,6 +140,40 @@ export function detectLegalReferences(text: string): DetectedLegalReference[] {
   return references;
 }
 
+function comparableClaim(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("pl")
+    .replace(/[.,;:()[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Wykrywanie rozpoznaje "art. 46", a zweryfikowano "art. 46 ust. 2 ustawy o ...": zapis
+// bardziej szczegółowej jednostki tego artykułu obejmuje wzmiankę, gdy jego znacznik VER
+// stoi w tym samym wierszu. Tylko jeden taki zapis; inaczej brak dopasowania.
+function coveringVerifiedRecord(
+  ledger: VerificationLedger,
+  reference: DetectedLegalReference,
+  lineMarkers: string[]
+): VerificationRecord | undefined {
+  if (reference.kind !== "statute") return undefined;
+  const prefix = comparableClaim(reference.claim) + " ";
+  const covering = ledger
+    .all()
+    .filter(
+      (record) =>
+        record.status === "VERIFIED" &&
+        comparableClaim(record.claim).startsWith(prefix)
+    )
+    .filter((record) => {
+      const marker = expectedVerificationMarker(record);
+      return Boolean(marker) && lineMarkers.includes(marker!);
+    });
+  const claims = new Set(covering.map((record) => comparableClaim(record.claim)));
+  return claims.size === 1 ? covering.at(-1) : undefined;
+}
+
 export class FinalizationGate {
   evaluate(text: string, ledger: VerificationLedger): FinalizationReport {
     const references = detectLegalReferences(text);
@@ -165,6 +199,11 @@ export class FinalizationGate {
               (candidate) =>
                 ledger.latest(
                   candidate.claim
+                ) ??
+                coveringVerifiedRecord(
+                  ledger,
+                  candidate,
+                  lineMarkers
                 )
             )
             .filter(
@@ -192,7 +231,9 @@ export class FinalizationGate {
             )
         );
 
-      const record = ledger.latest(reference.claim);
+      const record =
+        ledger.latest(reference.claim) ??
+        coveringVerifiedRecord(ledger, reference, lineMarkers);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       if (!record && UNVERIFIED_MARKER.test(reference.lineText)) {

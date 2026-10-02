@@ -25,6 +25,7 @@ import {
   reviewDocument,
   setProviderApiKey,
   clearProviderApiKey,
+  saveToDownloads,
   uploadCaseFile,
   validateRoute
 } from "./api.js";
@@ -831,6 +832,36 @@ describe("local API client", () => {
         })
       })
     );
+  });
+
+  it("saves a generated document in Downloads through the runtime (desktop)", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ path: "C:\\Users\\a\\Downloads\\LexMachina-pismo.docx", filename: "LexMachina-pismo.docx" }),
+        { status: 200 }
+      )
+    );
+    const blob = new Blob([new Uint8Array([80, 75, 3, 4])]);
+
+    await expect(saveToDownloads(blob, "LexMachina-pismo.docx")).resolves.toEqual({
+      path: "C:\\Users\\a\\Downloads\\LexMachina-pismo.docx",
+      filename: "LexMachina-pismo.docx"
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:4317/api/downloads/save",
+      expect.objectContaining({
+        method: "POST",
+        body: blob,
+        headers: expect.objectContaining({
+          "X-Lex-Filename": encodeURIComponent("LexMachina-pismo.docx")
+        })
+      })
+    );
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "DOWNLOAD_FILE_TYPE_NOT_ALLOWED" }), { status: 400 })
+    );
+    await expect(saveToDownloads(blob, "x.exe")).rejects.toThrow("DOWNLOAD_FILE_TYPE_NOT_ALLOWED");
   });
 
   it("posts user privacy directives to local finalization", async () => {

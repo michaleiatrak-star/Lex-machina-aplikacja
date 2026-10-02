@@ -83,7 +83,9 @@ export const LOCAL_MAX_DOCUMENT_ATTACHMENTS = 4;
 export const HOSTED_CONTEXT_TOKENS: Record<string, number> = {
   anthropic: 200_000,
   openai: 128_000,
-  xai: 128_000
+  xai: 128_000,
+  // Gemini offers up to 1M tokens; capped by MAX_CONTEXT_WINDOW like the others.
+  google: 200_000
 };
 const LEGACY_CHAR_CAP = 160_000;
 const MIN_CONTEXT_WINDOW = 8_192;
@@ -551,6 +553,14 @@ export function orchestrateDocumentContext(args: {
         )
       )
     );
+  // The query carries the conversation history (up to ~100k tokens for Claude), so it
+  // is reserved in full on top of the capped system-prompt reserve; otherwise a long
+  // conversation plus documents would overflow the window.
+  const queryReserve =
+    estimateTokens(
+      args.query,
+      charsPerTokenEstimate
+    );
   const systemReserve =
     args.systemPrompt === undefined
       ? Math.min(
@@ -561,6 +571,10 @@ export function orchestrateDocumentContext(args: {
               modelContextTokens * 0.3
             )
           )
+        ) +
+        Math.max(
+          0,
+          queryReserve - 8_192
         )
       : Math.max(
           4_096,
@@ -570,12 +584,9 @@ export function orchestrateDocumentContext(args: {
               args.systemPrompt,
               charsPerTokenEstimate
             ) +
-              estimateTokens(
-                args.query,
-                charsPerTokenEstimate
-              ) +
               2_048
-          )
+          ) +
+            queryReserve
         );
   const safetyReserve =
     Math.max(

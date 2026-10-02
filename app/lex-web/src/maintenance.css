@@ -186,3 +186,137 @@
 .maintenance-panel-embedded > summary {
   cursor: default;
 }
+
+.maintenance-channel {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.core-law-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.core-law-auto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.core-law-list summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.core-law-list ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.core-law-list li {
+  display: grid;
+  gap: 2px;
+}
+
+.core-law-list li button {
+  justify-self: start;
+}
+
+.core-law-add,
+.core-law-found {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.core-law-add form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.core-law-add input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.core-law-found {
+  padding: 8px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 6px;
+}
+
+.core-law-found button {
+  justify-self: start;
+}
+
+.anomaly-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.anomaly-count-error {
+  color: #b42318;
+  opacity: 1 !important;
+}
+
+.anomaly-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  display: block;
+  overflow-x: auto;
+}
+
+.anomaly-table th,
+.anomaly-table td {
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.2);
+}
+
+.anomaly-table td small,
+.anomaly-entries small {
+  display: block;
+  opacity: 0.72;
+}
+
+.anomaly-target {
+  word-break: break-all;
+}
+
+.anomaly-error td:first-child,
+li.anomaly-error > strong {
+  color: #b42318;
+}
+
+.anomaly-entries {
+  margin: 4px 0;
+  padding-left: 16px;
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .anomaly-count-error,
+  .anomaly-error td:first-child,
+  li.anomaly-error > strong {
+    color: #f97066;
+  }
+}

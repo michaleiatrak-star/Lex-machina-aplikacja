@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.3";
+export const CURRENT_APPLICATION_VERSION = "0.1.10";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
@@ -124,7 +124,9 @@ export class GitHubReleaseUpdateDiscovery {
                 return {
                     currentVersion: this.currentVersion,
                     status: "UNAVAILABLE",
-                    checkedAt
+                    checkedAt,
+                    unavailableReason: `HTTP_${response.status}`,
+                    repository: this.repository
                 };
             }
             const payload = await response.json();
@@ -132,7 +134,9 @@ export class GitHubReleaseUpdateDiscovery {
                 return {
                     currentVersion: this.currentVersion,
                     status: "UNAVAILABLE",
-                    checkedAt
+                    checkedAt,
+                    unavailableReason: "INVALID_RESPONSE",
+                    repository: this.repository
                 };
             }
             const releases = payload;
@@ -226,6 +230,7 @@ export class GitHubReleaseUpdateDiscovery {
                     currentVersion: this.currentVersion,
                     status: "NO_RELEASE",
                     checkedAt,
+                    repository: this.repository,
                     ...modelPackAssets
                 };
             }
@@ -256,7 +261,9 @@ export class GitHubReleaseUpdateDiscovery {
             return {
                 currentVersion: this.currentVersion,
                 status: "UNAVAILABLE",
-                checkedAt
+                checkedAt,
+                unavailableReason: "NETWORK_ERROR",
+                repository: this.repository
             };
         }
     }

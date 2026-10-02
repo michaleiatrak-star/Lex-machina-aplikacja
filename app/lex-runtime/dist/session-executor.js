@@ -5,8 +5,9 @@ import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
-import { LexExecutionEngine } from "./execution-engine.js";
+import { LexExecutionEngine, latestUserTurn } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
+import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
@@ -513,12 +514,22 @@ export class SafeSessionExecutor {
         }
         const requestedHistoricalAsOf = detectHistoricalAsOf(protectedQuery);
         const ledger = new VerificationLedger();
-        const verificationTools = this.verificationToolFactory?.(ledger);
+        // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
+        const verificationTools = this.verificationToolFactory?.(ledger, {
+            localModel: request.model.startsWith("local/")
+        });
         const corpusTools = new LegalCorpusToolRuntime(this.registry, {
             modelSelectsSkills: request.modelSelectsSkills === true
         });
         const reportTools = new ReportBlueprintToolRuntime();
-        const federationTools = this.legalFederationTools;
+        // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
+        // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
+        // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
+        const federationTools = request.model.startsWith("local/")
+            ? undefined
+            : this.legalFederationTools;
+        // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
+        const federationEvents = [];
         const auxiliarySources = [];
         // References in the message are checked by the Gate I runtime prelude
         // (ELI); no model is asked to extract them.
@@ -539,7 +550,9 @@ export class SafeSessionExecutor {
             });
             throw new Error("MODEL_TASK_OWNERSHIP_GATE_FAILED");
         }
-        const gateIInput = evaluateGateIInputCompleteness(request.query, request.documentAttachments
+        // Only the newest user turn asserts attachments: earlier turns and assistant
+        // replies in the history ("w pliku", "te dokumenty") are not this request's input.
+        const gateIInput = evaluateGateIInputCompleteness(latestUserTurn(request.query), request.documentAttachments
             ?.length ?? 0);
         audit.record("gate", "G39I_INPUT_COMPLETENESS", gateIInput.result ===
             "PASS"
@@ -664,7 +677,9 @@ export class SafeSessionExecutor {
                         title: act.title,
                         labels: act.labels,
                         domains: act.domains,
-                        articleCount: act.articleCount
+                        articleCount: act.articleCount,
+                        origin: act.origin,
+                        eliCaution: coreLawEliCaution(act)
                     }))
                 }
                 : {}),
@@ -705,6 +720,14 @@ export class SafeSessionExecutor {
                     modelSelectsSkills: true
                 }
                 : {}),
+            ...(request.modelSelectsSkills && !nativeCorpus
+                ? {
+                    onCorpusPreloaded: (relativePath) => {
+                        corpusTools.recordPreloaded(relativePath);
+                        step("SKILLS", relativePath);
+                    }
+                }
+                : {}),
             ...(nativeCorpus
                 ? {
                     nativeCorpus: {
@@ -713,6 +736,7 @@ export class SafeSessionExecutor {
                             corpusTools.recordNativeRead(relativePath);
                             step("SKILLS", relativePath);
                         },
+                        onMissing: (relativePath) => corpusTools.recordNativeMissing(relativePath),
                         missingQualifier: () => corpusTools.missingCriminalQualifier()
                     }
                 }
@@ -724,6 +748,9 @@ export class SafeSessionExecutor {
                     continuityKey: request.accountSessionKey
                 }
                 : {}),
+            ...(request.accountContinuity
+                ? { accountContinuity: request.accountContinuity }
+                : {}),
             route: {
                 jurisdiction: "PL",
                 primarySkill: request.primarySkill,
@@ -733,6 +760,9 @@ export class SafeSessionExecutor {
                 ? {
                     guideContext: request.guideContext
                 }
+                : {}),
+            ...(request.documentAstOutput
+                ? { documentAstOutput: true }
                 : {}),
             ...(request.processWorkflowContext
                 ? {
@@ -819,7 +849,7 @@ export class SafeSessionExecutor {
                 const federationResults = federationTools &&
                     federationCalls.length > 0
                     ? await federationTools
-                        .runTools(federationCalls)
+                        .runTools(federationCalls, federationEvents)
                     : [];
                 for (const result of federationResults) {
                     const source = publicAuxiliarySourceFromToolResult(result);
@@ -892,21 +922,30 @@ export class SafeSessionExecutor {
             });
         }
         const corpusAudit = corpusTools.auditEvents();
+        // A refused read that grants no content and that the model can correct
+        // (router-v3 not read yet, a guessed file name, a malformed or binary read,
+        // an unknown corpus tool) is guidance, not a failed turn - also when the
+        // runtime routed the skills (document generation), where the required
+        // reads are enforced separately by G39H. Path escapes (INVALID_RESOURCE_PREFIX,
+        // PATH_ESCAPE), the criminal qualifier and other refusals still block.
+        const correctableCorpusRefusal = /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|LEGAL_RESOURCE_NOT_TEXT|LEGAL_RESOURCE_REQUEST_INVALID|INVALID_RESOURCE_OFFSET|INVALID_RESOURCE_CURSOR|UNKNOWN_LEGAL_CORPUS_TOOL)/;
+        const correctable = (event) => correctableCorpusRefusal.test(String(event.detail?.error ?? ""));
+        // Poprawialna odmowa = DEGRADED, nie BLOCKED: HYBRID-VAL przed .docx odrzuca każde
+        // zdarzenie BLOCKED sesji źródłowej, a bramka G36 takiej odmowy nie blokuje.
         for (const event of corpusAudit) {
             audit.record(event.tool === "read_legal_resource" || event.tool === "Read"
                 ? "resource_read"
-                : "tool_decision", event.target, event.decision === "ALLOW" ? "OK" : "BLOCKED", {
+                : "tool_decision", event.target, event.decision === "ALLOW"
+                ? "OK"
+                : correctable(event)
+                    ? "DEGRADED"
+                    : "BLOCKED", {
                 tool: event.tool,
                 ...(event.detail ? event.detail : {})
             });
         }
-        // When the model picks skills itself, a refused read it can correct
-        // (router-v3 not read yet, a guessed file name) is guidance, not a failed
-        // turn. Path escapes and other refusals still block.
-        const correctableCorpusRefusal = /^(ROUTER_V3_REQUIRED_FIRST|LEGAL_RESOURCE_NOT_FOUND|LEGAL_SKILL_NOT_FOUND|LEGAL_RESOURCE_NOT_FILE|INVALID_RESOURCE_OFFSET)/;
         const corpusBlocked = corpusAudit.some((event) => event.decision === "BLOCK" &&
-            !(modelSelectedSkills &&
-                correctableCorpusRefusal.test(String(event.detail?.error ?? ""))));
+            !correctable(event));
         audit.record("gate", "G36_LEGAL_CORPUS_RUNTIME", corpusBlocked ? "BLOCKED" : "OK", { toolEvents: corpusAudit.length });
         const reportAudit = reportTools.auditEvents();
         for (const event of reportAudit) {
@@ -920,15 +959,20 @@ export class SafeSessionExecutor {
             });
         }
         if (federationTools) {
-            const federationAudit = federationTools.auditEvents();
+            const federationAudit = federationEvents;
             for (const event of federationAudit) {
                 audit.record("tool_decision", event.source
                     ? "federated-legal:" +
                         event.source
-                    : "federated-legal", event.decision ===
+                    : "federated-legal", 
+                // Niedostępne źródło = DEGRADED (jak bramka G40); odmowa polityki = BLOCKED.
+                event.decision ===
                     "ALLOW"
                     ? "OK"
-                    : "BLOCKED", {
+                    : event.outcome ===
+                        "SOURCE_UNAVAILABLE"
+                        ? "DEGRADED"
+                        : "BLOCKED", {
                     tool: event.tool,
                     ...(event.detail
                         ? event.detail
@@ -1435,7 +1479,15 @@ export class SafeSessionExecutor {
                 eventCount: completeness.eventCount,
                 closed: audit.isClosed,
                 missing: [...completeness.missing],
-                violations: [...completeness.violations]
+                violations: [...completeness.violations],
+                blockedEvents: audit.events
+                    .filter((event) => event.status === "BLOCKED")
+                    .slice(0, 12)
+                    .map((event) => {
+                    const code = [event.detail?.error, event.detail?.reason, event.detail?.decision]
+                        .find((value) => typeof value === "string" && value.trim());
+                    return `${event.type}: ${event.target.slice(0, 120)}${code ? ` — ${String(code).slice(0, 160)}` : ""}`;
+                })
             },
             workflow: {
                 id: execution.workflowPlan.id,

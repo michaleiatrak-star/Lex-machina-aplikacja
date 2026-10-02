@@ -524,6 +524,21 @@ const FEDERATED_POLICIES:
       note:
         "Official NBP exchange-rate data; the applicable rate rule must come from the statute."
     },
+    kio: {
+      sourceTier: "R2A",
+      provenance:
+        "EXTERNAL_MCP",
+      transport:
+        "FEDERATED_MCP",
+      verificationAuthority:
+        "LEX_NATIVE_ONLY",
+      verificationEligible:
+        false,
+      crossCheckRequired:
+        true,
+      note:
+        "KIO and public-procurement court decisions from the official UZP search are decisional material, not statutory wording; Pzp provisions require R1 verification."
+    },
     sudop: {
       sourceTier: "R2A",
       provenance:

@@ -10,6 +10,13 @@ import {
 } from "./application-update-verifier.js";
 import { LexSkillRegistry } from "./registry.js";
 import {
+  SKILLS_REPOSITORY,
+  downloadSkillChannelArchive,
+  resolveSkillChannel,
+  verifiedChannelRoot,
+  type SkillChannel
+} from "./skill-channel.js";
+import {
   skillUpdateSignatureMode,
   skillUpdateTrustReady,
   verifySkillUpdateIndex,
@@ -67,9 +74,49 @@ export type SkillUpdateStatus = {
     | "INDEX_MISSING"
     | "SIGNED_INDEX_MISSING"
     | "SIGNER_POLICY_MISSING";
+  // Przy UNAVAILABLE: NO_RELEASE (brak wydania w repozytorium) albo błąd GitHub API.
+  unavailableReason?: string;
+  repository?: string;
   signatureMode:
     | "SIGNED_REQUIRED"
     | "UNSIGNED_ALLOWED";
+};
+
+// Skille z repozytorium Lex Machina, kanał rozwojowy albo stabilny (skill-channel.ts).
+export type SkillChannelInstalled = {
+  channel: SkillChannel;
+  commit: string;
+  directory: string;
+  treeSha: string;
+  installedAt: string;
+  health: string | null;
+};
+
+export type SkillChannelStatus = {
+  channel: SkillChannel;
+  repository: string;
+  status: "UP_TO_DATE" | "AVAILABLE" | "UNAVAILABLE";
+  checkedAt: string;
+  // Zainstalowana nakładka z kanału; brak = skille wbudowane w instalator aplikacji.
+  installed: SkillChannelInstalled | null;
+  latest?: {
+    commit: string;
+    committedAt: string | null;
+    directory: string;
+    treeSha: string;
+    files: number;
+  };
+  unavailableReason?: string;
+};
+
+export type SkillChannelRefreshResult = {
+  channel: SkillChannel;
+  commit: string;
+  directory: string;
+  files: number;
+  installedAt: string;
+  restartRequired: true;
+  skillRoot: string;
 };
 
 export type SkillUpdateApplyResult = {
@@ -839,8 +886,147 @@ export class MaintenanceService {
       () =>
         | "SIGNED_REQUIRED"
         | "UNSIGNED_ALLOWED" =
-      modelPackSignatureMode
+      modelPackSignatureMode,
+    private readonly archiveExtractor:
+      (zipPath: string, destination: string) => void =
+      extractZip
   ) {}
+
+  private installedChannel(): SkillChannelInstalled | null {
+    const marker = readSkillHealthMarker(installedSkillOverlayRoot()) as
+      | (Record<string, unknown> & SkillHealthMarker)
+      | null;
+    if (
+      !marker ||
+      (marker.channel !== "stable" && marker.channel !== "development") ||
+      typeof marker.commit !== "string" ||
+      typeof marker.treeSha !== "string"
+    ) {
+      return null;
+    }
+    return {
+      channel: marker.channel,
+      commit: marker.commit,
+      directory: typeof marker.directory === "string" ? marker.directory : "",
+      treeSha: marker.treeSha,
+      installedAt: typeof marker.installedAt === "string" ? marker.installedAt : "",
+      health: typeof marker.health === "string" ? marker.health : null
+    };
+  }
+
+  async skillChannelStatus(channel: SkillChannel): Promise<SkillChannelStatus> {
+    const checkedAt = new Date().toISOString();
+    const installed = this.installedChannel();
+    try {
+      const latest = await resolveSkillChannel(channel, this.fetchImpl);
+      return {
+        channel,
+        repository: latest.repository,
+        status:
+          installed?.channel === channel && installed.treeSha === latest.treeSha
+            ? "UP_TO_DATE"
+            : "AVAILABLE",
+        checkedAt,
+        installed,
+        latest: {
+          commit: latest.commit,
+          committedAt: latest.committedAt,
+          directory: latest.directory,
+          treeSha: latest.treeSha,
+          files: latest.files.length
+        }
+      };
+    } catch (error) {
+      return {
+        channel,
+        repository: SKILLS_REPOSITORY,
+        status: "UNAVAILABLE",
+        checkedAt,
+        installed,
+        unavailableReason: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Odświeżenie skilli z kanału: commit gałęzi, archiwum, weryfikacja każdego pliku sumą
+   * git, walidacja strukturalna, instalacja jako nakładka (poprzednia zostaje do wycofania,
+   * start z nieudaną walidacją wraca do poprzedniej albo do wbudowanej).
+   */
+  async refreshSkillsFromChannel(channel: SkillChannel): Promise<SkillChannelRefreshResult> {
+    const snapshot = await resolveSkillChannel(channel, this.fetchImpl);
+    const bytes = await downloadSkillChannelArchive(snapshot, this.fetchImpl);
+    const skillsRoot = path.join(localAppDataRoot(), "skills");
+    const workRoot = path.join(
+      skillsRoot,
+      `channel-${Date.now()}-${randomBytes(4).toString("hex")}`
+    );
+    const zipPath = path.join(workRoot, "skills.zip");
+    const extracted = path.join(workRoot, "extracted");
+    const candidate = path.join(workRoot, "candidate");
+    fs.mkdirSync(workRoot, { recursive: true });
+    try {
+      fs.writeFileSync(zipPath, bytes);
+      this.archiveExtractor(zipPath, extracted);
+      const sourceRoot = verifiedChannelRoot(extracted, snapshot);
+      fs.cpSync(sourceRoot, candidate, { recursive: true, force: true });
+
+      const validation = new LexSkillRegistry(candidate);
+      const issues = [...validation.scan(), ...validation.validateDeclarations()];
+      if (validation.skills.size === 0 || issues.length > 0) {
+        throw new Error("SKILL_CHANNEL_VALIDATION_FAILED");
+      }
+
+      const installedAt = new Date().toISOString();
+      fs.writeFileSync(
+        markerPath(candidate),
+        JSON.stringify(
+          {
+            // Wersja aplikacji, dla której zainstalowano; źródło opisują pola kanału.
+            version: CURRENT_APPLICATION_VERSION,
+            installedAt,
+            channel,
+            repository: snapshot.repository,
+            commit: snapshot.commit,
+            directory: snapshot.directory,
+            treeSha: snapshot.treeSha
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+
+      const current = installedSkillOverlayRoot();
+      const backup = installedSkillOverlayPreviousRoot();
+      fs.rmSync(backup, { recursive: true, force: true });
+      if (fs.existsSync(current)) {
+        fs.renameSync(current, backup);
+      }
+      try {
+        fs.renameSync(candidate, current);
+        writeSkillHealthMarker(current, { health: "PENDING_RESTART_VALIDATION" });
+      } catch (error) {
+        fs.rmSync(current, { recursive: true, force: true });
+        if (fs.existsSync(backup)) {
+          fs.renameSync(backup, current);
+        }
+        throw error;
+      }
+
+      return {
+        channel,
+        commit: snapshot.commit,
+        directory: snapshot.directory,
+        files: snapshot.files.length,
+        installedAt,
+        restartRequired: true,
+        skillRoot: current
+      };
+    } finally {
+      fs.rmSync(workRoot, { recursive: true, force: true });
+    }
+  }
 
   async applicationStatus(): Promise<UpdateDiscoveryResult> {
     return await this.discovery.check();
@@ -961,6 +1147,12 @@ export class MaintenanceService {
             ? "AVAILABLE"
             : "UP_TO_DATE",
       ...(latestVersion ? { latestVersion } : {}),
+      ...(status.status === "NO_RELEASE"
+        ? { unavailableReason: "NO_RELEASE" }
+        : status.unavailableReason
+          ? { unavailableReason: status.unavailableReason }
+          : {}),
+      ...(status.repository ? { repository: status.repository } : {}),
       checkedAt: status.checkedAt,
       bundleReady:
         indexAssetsReady &&

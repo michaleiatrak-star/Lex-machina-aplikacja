@@ -292,6 +292,58 @@ export function buildLocalToolSystemPrompt(params, toolTranscript) {
             : [])
     ].join("\n");
 }
+// Odpowiedź modelu lokalnego musi się zmieścić obok promptu: tyle tokenów zostaje
+// zarezerwowane, zanim zapis wyników narzędzi dostanie resztę okna.
+const LOCAL_TRANSCRIPT_OUTPUT_RESERVE_TOKENS = 2_048;
+function transcriptEntry(entry, content) {
+    return [
+        `TOOL_CALL ${entry.id} ${entry.name}`,
+        JSON.stringify(entry.input),
+        `TOOL_RESULT ${entry.id}`,
+        content
+    ].join("\n");
+}
+/**
+ * Wyniki narzędzi modelu lokalnego jako kolejne porcje w oknie kontekstu (np. 32k):
+ * najnowszy wynik zostaje, a gdy nie mieści się w budżecie, jest obcinany z informacją,
+ * od którego znaku czytać dalej (read_legal_resource ma offset). Starsze wyniki, już
+ * wykorzystane przez model, zastępuje jedna linia - można je odczytać ponownie.
+ */
+export function fitLocalToolTranscript(entries, budgetChars) {
+    const fitted = [];
+    let used = 0;
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+        const entry = entries[index];
+        const whole = transcriptEntry(entry, entry.content);
+        const newest = index === entries.length - 1;
+        if (used + whole.length + 2 <= budgetChars) {
+            fitted.unshift(whole);
+            used += whole.length + 2;
+            continue;
+        }
+        if (newest) {
+            const offset = typeof entry.input.offset === "number" && Number.isInteger(entry.input.offset)
+                ? entry.input.offset
+                : 0;
+            const room = Math.max(0, budgetChars - used - transcriptEntry(entry, "").length - 400);
+            const shown = entry.content.slice(0, room);
+            const next = offset + shown.length;
+            const partial = transcriptEntry(entry, shown +
+                `\n[LEX_RUNTIME: wynik obcięty do okna modelu lokalnego - pokazano ${shown.length} z ${entry.content.length} znaków. ` +
+                `Jeśli potrzebujesz dalszej części, wywołaj ponownie ${entry.name} z tymi samymi argumentami i offset=${next}.]`);
+            fitted.unshift(partial);
+            used += partial.length + 2;
+            continue;
+        }
+        const stub = `TOOL_CALL ${entry.id} ${entry.name} ${JSON.stringify(entry.input)}\n` +
+            `TOOL_RESULT ${entry.id} [LEX_RUNTIME: wynik ${entry.content.length} znaków wykorzystany i usunięty z okna modelu lokalnego; wywołaj ponownie, jeśli jest potrzebny.]`;
+        if (used + stub.length + 2 > budgetChars)
+            break;
+        fitted.unshift(stub);
+        used += stub.length + 2;
+    }
+    return fitted;
+}
 export function localChatBudget(contextTokens, systemPrompt, messages, conservativeCharsPerToken = 2) {
     const promptChars = systemPrompt.length +
         messages.reduce((sum, message) => sum +
@@ -779,6 +831,16 @@ async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCh
     const allowedTools = new Set((params.tools ?? [])
         .map((tool) => tool.function.name));
     const toolTranscript = [];
+    // Budżet znaków na zapis narzędzi: okno minus prompt bazowy, rezerwa na odpowiedź i margines.
+    const transcriptBudget = () => {
+        const baseChars = buildLocalToolSystemPrompt(params, []).length +
+            params.messages.reduce((sum, message) => sum + message.content.length, 0);
+        const tokens = contextTokens -
+            512 -
+            LOCAL_CONTEXT_SAFETY_TOKENS -
+            LOCAL_TRANSCRIPT_OUTPUT_RESERVE_TOKENS;
+        return Math.max(0, Math.floor(tokens * Math.max(1, conservativeCharsPerToken)) - baseChars);
+    };
     const maxIterations = Math.max(1, Math.min(params.maxIterations ??
         10, 12));
     for (let iteration = 0; iteration <
@@ -789,7 +851,7 @@ async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCh
             ?.onContentDelta);
         try {
             result =
-                await streamLocalChatCompletion(endpoint, modelId, buildLocalToolSystemPrompt(params, toolTranscript), localParams.messages, contextTokens, conservativeCharsPerToken, localParams.abortSignal, draft.push, params.localMaxOutputTokens);
+                await streamLocalChatCompletion(endpoint, modelId, buildLocalToolSystemPrompt(params, fitLocalToolTranscript(toolTranscript, transcriptBudget())), localParams.messages, contextTokens, conservativeCharsPerToken, localParams.abortSignal, draft.push, params.localMaxOutputTokens);
         }
         catch (error) {
             const detail = error instanceof Error
@@ -827,12 +889,12 @@ async function streamLocalModel(endpoint, modelId, contextTokens, conservativeCh
             if (!toolResult) {
                 throw new Error(`LOCAL_MODEL_TOOL_RESULT_MISSING:${call.id}`);
             }
-            toolTranscript.push([
-                `TOOL_CALL ${call.id} ${call.name}`,
-                JSON.stringify(call.input),
-                `TOOL_RESULT ${call.id}`,
-                toolResult.content
-            ].join("\n"));
+            toolTranscript.push({
+                id: call.id,
+                name: call.name,
+                input: call.input,
+                content: toolResult.content
+            });
         }
     }
     throw new Error("LOCAL_MODEL_MAX_TOOL_ITERATIONS");
@@ -1161,7 +1223,7 @@ export class AiSdkProviderAdapter {
 }
 export function createLiveProviderRegistry(credentials, localModels, accountSessions) {
     const registry = new ProviderRegistry();
-    for (const id of ["openai", "anthropic", "xai"]) {
+    for (const id of ["openai", "anthropic", "xai", "google"]) {
         registry.register(new AiSdkProviderAdapter(id, credentials, id === "openai" ? localModels : undefined, accountSessions));
     }
     return registry;

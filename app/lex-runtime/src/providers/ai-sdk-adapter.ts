@@ -491,6 +491,75 @@ export function buildLocalToolSystemPrompt(
   ].join("\n");
 }
 
+export type LocalToolTranscriptEntry = {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  content: string;
+};
+
+// Odpowiedź modelu lokalnego musi się zmieścić obok promptu: tyle tokenów zostaje
+// zarezerwowane, zanim zapis wyników narzędzi dostanie resztę okna.
+const LOCAL_TRANSCRIPT_OUTPUT_RESERVE_TOKENS = 2_048;
+
+function transcriptEntry(entry: LocalToolTranscriptEntry, content: string): string {
+  return [
+    `TOOL_CALL ${entry.id} ${entry.name}`,
+    JSON.stringify(entry.input),
+    `TOOL_RESULT ${entry.id}`,
+    content
+  ].join("\n");
+}
+
+/**
+ * Wyniki narzędzi modelu lokalnego jako kolejne porcje w oknie kontekstu (np. 32k):
+ * najnowszy wynik zostaje, a gdy nie mieści się w budżecie, jest obcinany z informacją,
+ * od którego znaku czytać dalej (read_legal_resource ma offset). Starsze wyniki, już
+ * wykorzystane przez model, zastępuje jedna linia - można je odczytać ponownie.
+ */
+export function fitLocalToolTranscript(
+  entries: readonly LocalToolTranscriptEntry[],
+  budgetChars: number
+): string[] {
+  const fitted: string[] = [];
+  let used = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    const whole = transcriptEntry(entry, entry.content);
+    const newest = index === entries.length - 1;
+    if (used + whole.length + 2 <= budgetChars) {
+      fitted.unshift(whole);
+      used += whole.length + 2;
+      continue;
+    }
+    if (newest) {
+      const offset =
+        typeof entry.input.offset === "number" && Number.isInteger(entry.input.offset)
+          ? entry.input.offset
+          : 0;
+      const room = Math.max(0, budgetChars - used - transcriptEntry(entry, "").length - 400);
+      const shown = entry.content.slice(0, room);
+      const next = offset + shown.length;
+      const partial = transcriptEntry(
+        entry,
+        shown +
+          `\n[LEX_RUNTIME: wynik obcięty do okna modelu lokalnego - pokazano ${shown.length} z ${entry.content.length} znaków. ` +
+          `Jeśli potrzebujesz dalszej części, wywołaj ponownie ${entry.name} z tymi samymi argumentami i offset=${next}.]`
+      );
+      fitted.unshift(partial);
+      used += partial.length + 2;
+      continue;
+    }
+    const stub =
+      `TOOL_CALL ${entry.id} ${entry.name} ${JSON.stringify(entry.input)}\n` +
+      `TOOL_RESULT ${entry.id} [LEX_RUNTIME: wynik ${entry.content.length} znaków wykorzystany i usunięty z okna modelu lokalnego; wywołaj ponownie, jeśli jest potrzebny.]`;
+    if (used + stub.length + 2 > budgetChars) break;
+    fitted.unshift(stub);
+    used += stub.length + 2;
+  }
+  return fitted;
+}
+
 export type LocalChatBudget = {
   contextTokens: number;
   promptChars: number;
@@ -1498,7 +1567,22 @@ async function streamLocalModel(
         )
     );
   const toolTranscript:
-    string[] = [];
+    LocalToolTranscriptEntry[] = [];
+  // Budżet znaków na zapis narzędzi: okno minus prompt bazowy, rezerwa na odpowiedź i margines.
+  const transcriptBudget = (): number => {
+    const baseChars =
+      buildLocalToolSystemPrompt(params, []).length +
+      params.messages.reduce((sum, message) => sum + message.content.length, 0);
+    const tokens =
+      contextTokens -
+      512 -
+      LOCAL_CONTEXT_SAFETY_TOKENS -
+      LOCAL_TRANSCRIPT_OUTPUT_RESERVE_TOKENS;
+    return Math.max(
+      0,
+      Math.floor(tokens * Math.max(1, conservativeCharsPerToken)) - baseChars
+    );
+  };
   const maxIterations =
     Math.max(
       1,
@@ -1538,7 +1622,10 @@ async function streamLocalModel(
           modelId,
           buildLocalToolSystemPrompt(
             params,
-            toolTranscript
+            fitLocalToolTranscript(
+              toolTranscript,
+              transcriptBudget()
+            )
           ),
           localParams.messages,
           contextTokens,
@@ -1628,16 +1715,12 @@ async function streamLocalModel(
           `LOCAL_MODEL_TOOL_RESULT_MISSING:${call.id}`
         );
       }
-      toolTranscript.push(
-        [
-          `TOOL_CALL ${call.id} ${call.name}`,
-          JSON.stringify(
-            call.input
-          ),
-          `TOOL_RESULT ${call.id}`,
-          toolResult.content
-        ].join("\n")
-      );
+      toolTranscript.push({
+        id: call.id,
+        name: call.name,
+        input: call.input,
+        content: toolResult.content
+      });
     }
   }
 
@@ -2141,7 +2224,7 @@ export function createLiveProviderRegistry(
   accountSessions?: AccountSessionManager
 ): ProviderRegistry {
   const registry = new ProviderRegistry();
-  for (const id of ["openai", "anthropic", "xai"] as const) {
+  for (const id of ["openai", "anthropic", "xai", "google"] as const) {
     registry.register(
       new AiSdkProviderAdapter(
         id,

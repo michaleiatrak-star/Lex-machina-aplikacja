@@ -61,6 +61,7 @@ describe(
           "eurlex",
           "saos",
           "cbosa",
+          "kio",
           "krs",
           "wl",
           "ceidg",
@@ -129,7 +130,7 @@ describe(
         );
         expect(
           payload.sources
-        ).toHaveLength(11);
+        ).toHaveLength(12);
         expect(
           payload.sources.map(
             (source) =>
@@ -137,6 +138,14 @@ describe(
           )
         ).toContain(
           "eureka"
+        );
+        expect(
+          payload.sources.map(
+            (source) =>
+              source.source
+          )
+        ).toContain(
+          "kio"
         );
         expect(
           payload.policy

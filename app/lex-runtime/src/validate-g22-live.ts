@@ -18,6 +18,7 @@ type Shape =
   | {
       type: "object";
       keys: string[];
+      first?: Shape;
       data?: Shape;
       raw?: Shape;
     }
@@ -38,7 +39,7 @@ function shape(
   }
 
   if (
-    depth >= 3
+    depth >= 6
   ) {
     return {
       type:
@@ -70,11 +71,26 @@ function shape(
     const objectValue =
       value as
         Record<string, unknown>;
+    const firstKey =
+      Object.keys(objectValue)[0];
     return {
       type: "object",
       keys:
         Object.keys(objectValue)
           .slice(0, 20),
+      // Unknown wrappers: the first member shows where records sit (keys only).
+      ...(!("data" in objectValue) &&
+      firstKey !== undefined &&
+      objectValue[firstKey] !== null &&
+      typeof objectValue[firstKey] === "object"
+        ? {
+            first:
+              shape(
+                objectValue[firstKey],
+                depth + 1
+              )
+          }
+        : {}),
       ...("data" in objectValue
         ? {
             data:
