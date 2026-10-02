@@ -6992,7 +6992,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         );
         res.setHeader(
           "Content-Disposition",
-          `attachment; filename="${result.artifact.filename.replace(/"/g, "")}"`
+          // Non-Latin-1 names (Polish letters) would fail in setHeader.
+          `attachment; filename="${result.artifact.filename.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(result.artifact.filename)}`
         );
         res.status(200).send(
           result.data

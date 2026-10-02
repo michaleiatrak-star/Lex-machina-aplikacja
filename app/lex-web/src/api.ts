@@ -3123,6 +3123,17 @@ export async function listCaseArtifacts(caseId: string): Promise<CaseArtifact[]>
   return (await json<{ artifacts: CaseArtifact[] }>(`/api/cases/${caseId}/workspace/artifacts`)).artifacts;
 }
 
+export async function renameCaseArtifact(
+  caseId: string,
+  artifactId: string,
+  filename: string
+): Promise<{ artifactId: string; filename: string }> {
+  return json<{ artifactId: string; filename: string }>(
+    `/api/cases/${caseId}/workspace/artifacts/${artifactId}`,
+    { method: "PATCH", body: JSON.stringify({ filename }) }
+  );
+}
+
 export function deanonymizeUpload(
   caseId: string,
   uploadId: string,

@@ -52,6 +52,7 @@ import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
 import { AnonymizedDocumentView } from "./AnonymizedDocumentView.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
+import { ArtifactRenameForm } from "./ArtifactRenameForm.js";
 import { decodeTextFile } from "./text-editing.js";
 import {
   DEFAULT_DOCUMENT_PROCESSING_MODE,
@@ -208,12 +209,15 @@ export function WorkspaceManager({
   caseId,
   title,
   canWrite,
-  refreshToken = 0
+  refreshToken = 0,
+  onArtifactRenamed
 }: {
   caseId: string;
   title: string;
   canWrite: boolean;
   refreshToken?: number;
+  // The chat cards show the same name, so the chat is told about a rename.
+  onArtifactRenamed?: (artifactId: string, filename: string) => void;
 }) {
   const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -309,6 +313,7 @@ export function WorkspaceManager({
   const [notice, setNotice] = useState("");
   const [artifacts, setArtifacts] = useState<CaseArtifact[]>([]);
   const [deanonymizing, setDeanonymizing] = useState<string | null>(null);
+  const [renamingArtifact, setRenamingArtifact] = useState<string | null>(null);
   const [fileDeanonymize, setFileDeanonymize] = useState<{ itemId: string; documentId: string } | null>(null);
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
@@ -1374,12 +1379,35 @@ export function WorkspaceManager({
                         Otwórz w systemie
                       </button>
                     ) : null}
+                    {canWrite ? (
+                      <button type="button" disabled={busy} onClick={() => setRenamingArtifact(artifact.artifactId)}>
+                        Zmień nazwę
+                      </button>
+                    ) : null}
                     {canWrite && artifact.sensitivity === "PROTECTED" ? (
                       <button type="button" disabled={busy} onClick={() => setDeanonymizing(artifact.artifactId)}>
                         Deanonimizuj
                       </button>
                     ) : null}
                   </div>
+                  {renamingArtifact === artifact.artifactId ? (
+                    <ArtifactRenameForm
+                      caseId={caseId}
+                      artifactId={artifact.artifactId}
+                      filename={artifact.filename}
+                      onRenamed={(filename) => {
+                        setRenamingArtifact(null);
+                        setArtifacts((current) =>
+                          current.map((entry) =>
+                            entry.artifactId === artifact.artifactId ? { ...entry, filename } : entry
+                          )
+                        );
+                        setNotice(`Zmieniono nazwę na „${filename}”.`);
+                        onArtifactRenamed?.(artifact.artifactId, filename);
+                      }}
+                      onCancel={() => setRenamingArtifact(null)}
+                    />
+                  ) : null}
                   {deanonymizing === artifact.artifactId ? (
                     <ArtifactDeanonymize
                       caseId={caseId}
