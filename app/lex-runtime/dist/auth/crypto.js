@@ -236,3 +236,49 @@ export function decryptRecoveryUserMasterKey(recoveryKey, envelope, args) {
         decipher.final()
     ]);
 }
+function googleRecoveryLabel(prefix, args) {
+    return Buffer.from([
+        prefix,
+        args.userId,
+        args.googleSub,
+        String(args.keyVersion)
+    ].join("\u0000"), "utf8");
+}
+export function generateGoogleRecoverySecret() {
+    return randomBytes(32);
+}
+export function deriveGoogleRecoveryKey(secret, salt, args) {
+    if (secret.byteLength !== 32) {
+        throw new Error("INVALID_GOOGLE_RECOVERY_SECRET");
+    }
+    return Buffer.from(hkdfSync("sha256", secret, salt, googleRecoveryLabel("lex/google-recovery-umk/v1", args), 32));
+}
+export function encryptGoogleRecoveryUserMasterKey(recoveryKey, userMasterKey, args) {
+    if (recoveryKey.byteLength !== 32) {
+        throw new Error("INVALID_RECOVERY_KEY");
+    }
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", recoveryKey, nonce);
+    cipher.setAAD(googleRecoveryLabel("lex-auth-google-recovery-v1", args));
+    const ciphertext = Buffer.concat([
+        cipher.update(userMasterKey),
+        cipher.final()
+    ]);
+    return {
+        nonce,
+        ciphertext,
+        tag: cipher.getAuthTag()
+    };
+}
+export function decryptGoogleRecoveryUserMasterKey(recoveryKey, envelope, args) {
+    if (recoveryKey.byteLength !== 32) {
+        throw new Error("INVALID_RECOVERY_KEY");
+    }
+    const decipher = createDecipheriv("aes-256-gcm", recoveryKey, envelope.nonce);
+    decipher.setAAD(googleRecoveryLabel("lex-auth-google-recovery-v1", args));
+    decipher.setAuthTag(envelope.tag);
+    return Buffer.concat([
+        decipher.update(envelope.ciphertext),
+        decipher.final()
+    ]);
+}

@@ -273,6 +273,24 @@ export class LocalAuthStore {
         ) STRICT;
     `);
         this.db.prepare("INSERT OR IGNORE INTO auth_schema(version) VALUES (7)").run();
+        this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_google_recovery (
+        user_id TEXT PRIMARY KEY
+          REFERENCES users(user_id)
+          ON DELETE CASCADE,
+        google_sub TEXT NOT NULL,
+        google_email TEXT NOT NULL,
+        salt BLOB NOT NULL,
+        nonce BLOB NOT NULL,
+        ciphertext BLOB NOT NULL,
+        tag BLOB NOT NULL,
+        key_version INTEGER NOT NULL,
+        drive_file_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+    `);
+        this.db.prepare("INSERT OR IGNORE INTO auth_schema(version) VALUES (8)").run();
     }
     close() {
         if (this.db.isOpen) {
@@ -514,6 +532,66 @@ export class LocalAuthStore {
         created_at = excluded.created_at,
         updated_at = excluded.updated_at
     `).run(value.userId, value.salt, value.nonce, value.ciphertext, value.tag, value.keyVersion, value.createdAt, value.updatedAt);
+    }
+    getGoogleRecoveryLink(userId) {
+        const row = this.db.prepare(`
+      SELECT *
+      FROM user_google_recovery
+      WHERE user_id = ?
+      LIMIT 1
+    `).get(userId);
+        if (!row) {
+            return null;
+        }
+        return {
+            userId: textValue(row.user_id, "user_id"),
+            googleSub: textValue(row.google_sub, "google_sub"),
+            googleEmail: textValue(row.google_email, "google_email"),
+            salt: bufferValue(row.salt, "salt"),
+            nonce: bufferValue(row.nonce, "nonce"),
+            ciphertext: bufferValue(row.ciphertext, "ciphertext"),
+            tag: bufferValue(row.tag, "tag"),
+            keyVersion: numberValue(row.key_version, "key_version"),
+            driveFileId: textValue(row.drive_file_id, "drive_file_id"),
+            createdAt: textValue(row.created_at, "created_at"),
+            updatedAt: textValue(row.updated_at, "updated_at")
+        };
+    }
+    putGoogleRecoveryLink(value) {
+        this.db.prepare(`
+      INSERT INTO user_google_recovery (
+        user_id,
+        google_sub,
+        google_email,
+        salt,
+        nonce,
+        ciphertext,
+        tag,
+        key_version,
+        drive_file_id,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        google_sub = excluded.google_sub,
+        google_email = excluded.google_email,
+        salt = excluded.salt,
+        nonce = excluded.nonce,
+        ciphertext = excluded.ciphertext,
+        tag = excluded.tag,
+        key_version = excluded.key_version,
+        drive_file_id = excluded.drive_file_id,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `).run(value.userId, value.googleSub, value.googleEmail, value.salt, value.nonce, value.ciphertext, value.tag, value.keyVersion, value.driveFileId, value.createdAt, value.updatedAt);
+    }
+    deleteGoogleRecoveryLink(userId) {
+        const result = this.db.prepare(`
+      DELETE FROM user_google_recovery
+      WHERE user_id = ?
+    `).run(userId);
+        return Number(result.changes) > 0;
     }
     updatePasswordEnvelopeAndIncrementEpoch(args) {
         this.db.exec("BEGIN IMMEDIATE");

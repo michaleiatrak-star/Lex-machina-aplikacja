@@ -126,3 +126,22 @@ export type AuthRecoverySuccess =
   AuthSuccess & {
     recoveryCode: string;
   };
+
+export type StoredGoogleRecoveryLink = {
+  userId: string;
+  googleSub: string;
+  googleEmail: string;
+  salt: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  tag: Buffer;
+  keyVersion: number;
+  driveFileId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GoogleRecoveryLinkView = {
+  googleEmail: string;
+  linkedAt: string;
+};

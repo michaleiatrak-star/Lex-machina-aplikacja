@@ -203,6 +203,11 @@ import {
   requireContractExecutionPermit,
   type ContractExecutionPermit
 } from "../contract-analysis-execution-gate.js";
+import type { GoogleRecoveryController } from "../google/recovery-controller.js";
+import {
+  registerGoogleAuthenticatedRoutes,
+  registerGooglePublicRoutes
+} from "../google/http-routes.js";
 import {
   buildWorkflowAuditArtifact,
   parseWorkflowAuditArtifact,
@@ -528,6 +533,7 @@ export type LexHttpAppOptions = {
     | "readExtractedPayload"
   >;
   authService?: AuthService;
+  googleRecovery?: GoogleRecoveryController;
   supportService?: Pick<
     LocalSupportService,
     | "status"
@@ -2140,6 +2146,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     );
   }
 
+  if (options.googleRecovery) {
+    registerGooglePublicRoutes(
+      app,
+      options.googleRecovery
+    );
+  }
+
   if (options.authService) {
     app.use(
       "/api",
@@ -2410,6 +2423,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         res.status(204).end();
       }
     );
+
+    if (options.googleRecovery) {
+      registerGoogleAuthenticatedRoutes(
+        app,
+        options.googleRecovery,
+        responseAuthContext
+      );
+    }
 
     app.post(
       "/api/auth/recovery-code",

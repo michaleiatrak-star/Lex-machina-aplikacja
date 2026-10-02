@@ -484,3 +484,116 @@ export function decryptRecoveryUserMasterKey(
     decipher.final()
   ]);
 }
+
+// Google recovery: the user master key is wrapped with a key derived from a
+// random secret that lives only in the user's Google Drive app folder. The
+// local envelope alone and the Drive secret alone are both useless.
+type GoogleRecoveryBinding = {
+  userId: string;
+  googleSub: string;
+  keyVersion: number;
+};
+
+function googleRecoveryLabel(
+  prefix: string,
+  args: GoogleRecoveryBinding
+): Buffer {
+  return Buffer.from(
+    [
+      prefix,
+      args.userId,
+      args.googleSub,
+      String(args.keyVersion)
+    ].join("\u0000"),
+    "utf8"
+  );
+}
+
+export function generateGoogleRecoverySecret(): Buffer {
+  return randomBytes(32);
+}
+
+export function deriveGoogleRecoveryKey(
+  secret: Buffer,
+  salt: Buffer,
+  args: GoogleRecoveryBinding
+): Buffer {
+  if (secret.byteLength !== 32) {
+    throw new Error(
+      "INVALID_GOOGLE_RECOVERY_SECRET"
+    );
+  }
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      secret,
+      salt,
+      googleRecoveryLabel(
+        "lex/google-recovery-umk/v1",
+        args
+      ),
+      32
+    )
+  );
+}
+
+export function encryptGoogleRecoveryUserMasterKey(
+  recoveryKey: Buffer,
+  userMasterKey: Buffer,
+  args: GoogleRecoveryBinding
+): UmkEnvelope {
+  if (recoveryKey.byteLength !== 32) {
+    throw new Error(
+      "INVALID_RECOVERY_KEY"
+    );
+  }
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    recoveryKey,
+    nonce
+  );
+  cipher.setAAD(
+    googleRecoveryLabel(
+      "lex-auth-google-recovery-v1",
+      args
+    )
+  );
+  const ciphertext = Buffer.concat([
+    cipher.update(userMasterKey),
+    cipher.final()
+  ]);
+  return {
+    nonce,
+    ciphertext,
+    tag: cipher.getAuthTag()
+  };
+}
+
+export function decryptGoogleRecoveryUserMasterKey(
+  recoveryKey: Buffer,
+  envelope: UmkEnvelope,
+  args: GoogleRecoveryBinding
+): Buffer {
+  if (recoveryKey.byteLength !== 32) {
+    throw new Error(
+      "INVALID_RECOVERY_KEY"
+    );
+  }
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    recoveryKey,
+    envelope.nonce
+  );
+  decipher.setAAD(
+    googleRecoveryLabel(
+      "lex-auth-google-recovery-v1",
+      args
+    )
+  );
+  decipher.setAuthTag(envelope.tag);
+  return Buffer.concat([
+    decipher.update(envelope.ciphertext),
+    decipher.final()
+  ]);
+}
