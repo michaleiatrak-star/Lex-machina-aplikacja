@@ -4,7 +4,7 @@
 
 **Modułowy system skilli prawniczych AI dla prawa polskiego — z twardymi bramkami antyhalucynacyjnymi**
 
-[![Licencja: GPL v3](https://img.shields.io/badge/Licencja-GPL%20v3-blue.svg)](LICENSE)
+[![Licencja: użytek osobisty, kod zastrzeżony](https://img.shields.io/badge/Licencja-u%C5%BCytek%20osobisty%20%C2%B7%20kod%20zastrze%C5%BCony-red.svg)](LICENSE)
 [![Wersja stabilna](https://img.shields.io/badge/stabilna-8.09.2026-2A6F50.svg)](#-wersjonowanie)
 [![Wieloplatformowość](https://img.shields.io/badge/wieloplatformowo%C5%9B%C4%87-stabilna%20%2B%20rozwojowa-2A6F50.svg)](#-kompatybilno%C5%9B%C4%87-llm)
 [![Wersja rozwojowa](https://img.shields.io/badge/rozwojowa-aktywna-orange.svg)](#-wersjonowanie)
@@ -167,7 +167,7 @@ są traktowane jako semantyka, nie jako wymóg konkretnego API danego dostawcy.
 ```
 Lex-Machina/
 ├── README.md                                ← ten plik
-├── LICENSE                                  ← GNU GPL v3
+├── LICENSE                                  ← licencja: bezpłatny użytek osobisty, kod zastrzeżony
 ├── DOKUMENTACJA-WDROZENIOWA-2026-07-13.md   ← dokumentacja wdrożeniowa systemu
 ├── claude_desktop_config.json               ← przykładowa konfiguracja konektorów MCP
 ├── benchmark/                               ← wyniki testów na bankach kazusów (per data)
@@ -680,7 +680,9 @@ Błędy, sugestie i propozycje zmian → [**Issues**](https://github.com/michale
 
 ## 📜 Licencja
 
-Projekt udostępniony na licencji **[GNU GPL v3](LICENSE)**.
+**Kod zastrzeżony.** © 2026 michaleiatrak-star (autor Lex Machina). Wszelkie prawa zastrzeżone.
+
+Aplikację można bezpłatnie instalować i używać **wyłącznie do osobistego użytku** ([LICENSE](LICENSE)). Bez pisemnej zgody autora zabronione jest kopiowanie kodu źródłowego lub jego fragmentów, modyfikowanie, tworzenie utworów zależnych, rozpowszechnianie i wykorzystanie w działalności gospodarczej lub zawodowej. Komponenty osób trzecich pozostają na swoich licencjach.
 
 <div align="center">
 <sub>⚖️ Lex Machina — <i>prawo z maszyny, weryfikacja ze źródła.</i></sub>

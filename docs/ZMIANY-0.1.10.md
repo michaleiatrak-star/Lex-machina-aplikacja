@@ -39,8 +39,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 36 | `f916e44` | Błędna ścieżka modułu lub nazwa skilla: jedyny pasujący plik w tej samej rundzie albo lista kandydatów |
 | hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
 | hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
+| hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
 
 ---
+
+## hotfix 39
+
+- macOS: `build-macos-online.sh` (payload, sidecar, `.app` z `tauri.macos.conf.json`, podpis ad hoc, `.pkg`), `macos/scripts/postinstall` uruchamia `macos-online-bootstrap.sh` jako zalogowany użytkownik: Node 24.21.0 darwin-arm64, CPython 3.13.16 (python-build-standalone 20261001), paczki, modele, `generate-component-lock.py`, autotest.
+- `runtime_sidecar.rs`: katalog komponentów `~/Library/Application Support/LexMachina/runtime` (`LEX_COMPONENTS_ROOT`), ścieżki node/python/uvx/npm per system, `LEX_NPM_CLI`; keyring `apple-native`; `build.rs` zapisuje `icon.png`.
+- Aktualizacje: na macOS zasób `*macos*.pkg`, `APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED` zamiast instalacji w aplikacji.
+- CI: `macos-installer.yml` (macos-14: budowa, `installer -pkg`, autotest, `/health`, uruchomienie aplikacji); `publish-0.1.10-hotfix39.yml` publikuje `.exe` i `.pkg` w jednym wydaniu.
 
 ## hotfix 38
 
