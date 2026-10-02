@@ -62,6 +62,7 @@ $mcpActual = (Get-FileHash $mcpBundle -Algorithm SHA256).Hash.ToLowerInvariant()
 if (-not $mcpExpected -or $mcpActual -ne $mcpExpected.ToLowerInvariant()) {
   throw "MCP_BUNDLE_CHECKSUM_MISMATCH: lex-mcp.mjs $mcpActual, CHECKSUMS.sha256 $mcpExpected"
 }
+Copy-Item (Join-Path $repo "LICENSE") (Join-Path $payload "LICENSE.txt")
 Copy-Item (Join-Path $installer "windows-release-source.json") (Join-Path $payload "release-source.json")
 Copy-Item (Join-Path $installer "windows-release-requirements.txt") (Join-Path $payload "release-requirements.txt")
 

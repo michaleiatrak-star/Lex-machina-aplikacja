@@ -12,6 +12,8 @@ import {
   type PdfTextExtractor
 } from "./pdf-text-extractor.js";
 import type { OcrEngine } from "./document-ingestion.js";
+import type { CoreLawActLookup } from "./core-law-act-lookup.js";
+import { htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -20,6 +22,7 @@ import type { OcrEngine } from "./document-ingestion.js";
  * locally so every model (local ones included) can read the exact wording,
  * also offline. The text is never generated from model memory.
  */
+
 export type CoreActRef = {
   eli: string;
   // The map marks this reference as a consolidated text (t.j.).
@@ -37,8 +40,9 @@ export type CoreActRecord = {
   promulgation: string | null;
   // ocr: PDF ELI to skan (strony bez warstwy tekstowej) odczytany lokalnym OCR.
   textSource: "html" | "pdf" | "ocr" | "none";
-  // Wersja ekstrakcji: 2 = pusty HTML obwieszczenia t.j. -> PDF, PDF z wierszami (0.1.10 hotfix 7).
-  extraction?: 2;
+  // Wersja ekstrakcji: 2 = pusty HTML obwieszczenia t.j. -> PDF, PDF z wierszami (0.1.10 hotfix 7);
+  // 3 = kotwice jednostek (articleAnchors) liczone przy pobraniu.
+  extraction?: 2 | 3;
   // Strony PDF odczytane OCR (pozostałe z warstwy tekstowej).
   ocrPages?: number[];
   pages?: number;
@@ -46,6 +50,8 @@ export type CoreActRecord = {
   sourceUrl: string;
   articleOrder: string[];
   articles: Record<string, string>;
+  // Kotwica artykułu w sourceUrl: id jednostki HTML ELI albo "page=N" w PDF.
+  articleAnchors?: Record<string, string>;
   text: string;
 };
 
@@ -94,6 +100,26 @@ export function coreLawEliCaution(
   if (act.amendmentsAfter.length) return `nowelizacje po tekście jednolitym (${act.amendmentsAfter.length})`;
   if (act.textSource === "ocr") return "tekst odczytany OCR ze skanu ELI (bez warstwy tekstowej), możliwe błędy odczytu";
   return null;
+}
+
+/**
+ * Sprawdzenie w ELI przy użyciu kopii. CURRENT: ELI nie ma nowszego t.j. ani nowych
+ * nowelizacji; UPDATE_FOUND: ma (kopia odświeżana w tle, do tego czasu odmowa z kopii);
+ * UNREACHABLE: ELI nie odpowiada, kopia tylko z wyraźną informacją; NO_COPY: brak tekstu.
+ */
+export type CoreLawUseCheck = {
+  state: "CURRENT" | "UPDATE_FOUND" | "UNREACHABLE" | "NO_COPY";
+  checkedAt: string | null;
+  error?: string;
+};
+
+/** Kopia sprzed kotwic jednostek: link bez kotwicy, do ponownego pobrania. */
+export function needsAnchorUpgrade(record: Pick<CoreActRecord, "extraction" | "textSource" | "articleOrder">): boolean {
+  return (
+    (record.extraction ?? 0) < 3 &&
+    (record.textSource === "html" || record.textSource === "pdf") &&
+    record.articleOrder.length > 0
+  );
 }
 
 export type CoreLawChange = {
@@ -163,6 +189,11 @@ const OCR_MIN_PAGE_CHARS = 40;
 const OCR_BATCH_PAGES = 25;
 const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
+// Przy użyciu kopii relacje aktu są sprawdzane w ELI, nie częściej niż raz na kwadrans.
+const USE_CHECK_AFTER_MS = 15 * 60 * 1000;
+const USE_CHECK_TIMEOUT_MS = 15_000;
+// Kopie sprzed kotwic jednostek (extraction < 3) są pobierane ponownie, partiami.
+const ANCHOR_UPGRADES_PER_RUN = 5;
 const NOTE_CHARS = 400;
 
 const REF_PATTERN =
@@ -479,6 +510,7 @@ export class CoreLawIndex {
   private searchIndex: CoreLawSearchIndex | null = null;
   private refreshing: Promise<void> | null = null;
   private progress: CoreLawProgress | null = null;
+  private readonly useChecks = new Map<string, Promise<CoreLawUseCheck>>();
 
   constructor(
     private readonly directory: string = defaultCoreLawDir(),
@@ -586,21 +618,104 @@ export class CoreLawIndex {
   ): { added: boolean; eli: string } {
     const existing = this.present([act.currentEli, act.baseEli]);
     if (existing) return { added: false, eli: existing };
+    const entry = this.addAdopted(act, { origin: "USER", addedBy });
+    void this.refresh({ force: true, only: [entry.eli] }).catch(() => undefined);
+    return { added: true, eli: entry.eli };
+  }
+
+  /**
+   * Akt, którego brak w kopii, sprawdzony w ELI (lookupCoreLawAct): dołączany do kopii
+   * jako pamięć podręczna oficjalnego tekstu (najnowszy t.j., data pobrania). Czeka na
+   * pobranie najwyżej waitMs; ready=false oznacza, że tekst jeszcze się pobiera.
+   */
+  async addMissingAct(act: CoreLawActLookup, waitMs = 20_000): Promise<{ eli: string; added: boolean; ready: boolean }> {
+    const existing = this.present([act.currentEli, act.baseEli, act.inputEli]);
+    const eli = existing ?? this.addAdopted(act).eli;
+    if (this.currentRecord(eli)) return { eli, added: false, ready: true };
+    const run = this.refresh({ force: true, only: [eli] }).then(
+      () => true,
+      () => false
+    );
+    let timer: NodeJS.Timeout | undefined;
+    const ready = await Promise.race([
+      run,
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), waitMs);
+        timer.unref?.();
+      })
+    ]);
+    clearTimeout(timer);
+    return { eli, added: !existing, ready: ready && this.currentRecord(eli) !== null };
+  }
+
+  private addAdopted(
+    act: { currentEli: string; baseEli: string; title: string; shortTitle?: string },
+    user?: { origin: "USER"; addedBy: string }
+  ): AdoptedAct {
     const entry: AdoptedAct = {
       eli: act.currentEli,
       title: act.title,
       ...(act.shortTitle ? { label: act.shortTitle } : {}),
-      origin: "USER",
+      ...(user ? { origin: user.origin } : {}),
       baseEli: act.baseEli,
       addedAt: new Date(this.now()).toISOString(),
-      addedBy
+      ...(user ? { addedBy: user.addedBy } : {})
     };
     this.state.adopted = [...(this.state.adopted ?? []), entry];
     this.refs.push(adoptedRef(entry));
     this.logChange({ kind: "ADDED", actEli: entry.eli, eli: entry.eli, title: act.title });
     this.saveState();
-    void this.refresh({ force: true, only: [entry.eli] }).catch(() => undefined);
-    return { added: true, eli: entry.eli };
+    return entry;
+  }
+
+  /**
+   * Przy użyciu kopii: czy ELI nie ma nowszego t.j. albo nowych nowelizacji (same relacje,
+   * bez tekstu). Znaleziona zmiana trafia do pendingConsolidated/pendingAmendments, więc
+   * weryfikacja z kopii jest odmawiana do czasu odświeżenia; przy automatycznych
+   * aktualizacjach odświeżenie rusza od razu w tle. Kopia sprzed kotwic jest pobierana ponownie.
+   */
+  confirmCurrent(eli: string): Promise<CoreLawUseCheck> {
+    const running = this.useChecks.get(eli);
+    if (running) return running;
+    const run = this.runUseCheck(eli).finally(() => this.useChecks.delete(eli));
+    this.useChecks.set(eli, run);
+    return run;
+  }
+
+  private async runUseCheck(eli: string): Promise<CoreLawUseCheck> {
+    const ref = this.ref(eli);
+    const state = this.state.acts[eli];
+    const record = this.currentRecord(eli);
+    if (!ref || !state || !record) return { state: "NO_COPY", checkedAt: null };
+    const pending = () => Boolean(state.pendingConsolidated || state.pendingAmendments?.length);
+    const result = (): CoreLawUseCheck => ({
+      state: pending() ? "UPDATE_FOUND" : "CURRENT",
+      checkedAt: state.relationsCheckedAt ?? null
+    });
+    if (needsAnchorUpgrade(record)) {
+      void this.refresh({ force: true, only: [eli] }).catch(() => undefined);
+    }
+    const last = state.relationsCheckedAt ? Date.parse(state.relationsCheckedAt) : 0;
+    if (!pending() && this.now() - last < USE_CHECK_AFTER_MS) return result();
+    if (this.state.blockedUntil && Date.parse(this.state.blockedUntil) > this.now()) {
+      return { state: "UNREACHABLE", checkedAt: state.relationsCheckedAt ?? null, error: "ELI_BLOCKED" };
+    }
+    if (!pending()) {
+      try {
+        await this.checkConsolidated(ref, state, false, USE_CHECK_TIMEOUT_MS);
+      } catch (error) {
+        return {
+          state: "UNREACHABLE",
+          checkedAt: state.relationsCheckedAt ?? null,
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+      this.saveState();
+    }
+    if (pending() && this.autoApply) {
+      void this.refresh({ force: true, apply: [eli], only: [eli] }).catch(() => undefined);
+    }
+    return result();
   }
 
   /** Usuwa z kopii akt dodany przez użytkownika (akty z map zostają). */
@@ -869,10 +984,15 @@ export class CoreLawIndex {
    * same act; a new amendment after the t.j. is downloaded on its own. With
    * apply=false the findings are only recorded as pending.
    */
-  private async checkConsolidated(ref: CoreActRef, state: ActState, apply: boolean): Promise<void> {
+  private async checkConsolidated(
+    ref: CoreActRef,
+    state: ActState,
+    apply: boolean,
+    timeoutMs: number = REQUEST_TIMEOUT_MS
+  ): Promise<void> {
     const current = state.currentEli ?? ref.eli;
     const references = await (
-      await this.get(`${ELI_API}/acts/${current}/references`, "application/json")
+      await this.get(`${ELI_API}/acts/${current}/references`, "application/json", timeoutMs)
     ).json();
 
     const known = new Set((state.amendmentsAfter ?? []).map((item) => item.eli));
@@ -906,7 +1026,7 @@ export class CoreLawIndex {
     } else {
       await this.pause();
       const baseReferences = await (
-        await this.get(`${ELI_API}/acts/${base.eli}/references`, "application/json")
+        await this.get(`${ELI_API}/acts/${base.eli}/references`, "application/json", timeoutMs)
       ).json();
       const [currentYear, currentPos] = eliOrder(current);
       const newest = eliLinks(baseReferences, (key) => /^Inf\. o tekście jednolitym$/i.test(key))
@@ -969,19 +1089,27 @@ export class CoreLawIndex {
       return;
     }
     let consecutiveFailures = 0;
+    let anchorUpgrades = 0;
     for (const ref of this.refs) {
       if (options.only?.length && !options.only.includes(ref.eli)) continue;
       const state: ActState =
         this.state.acts[ref.eli] ??
         { title: null, status: null, textSource: null, articleCount: 0, fetchedAt: null, lastError: null };
-      const downloaded = this.record(state.currentEli ?? ref.eli) !== null;
+      const held = this.record(state.currentEli ?? ref.eli);
+      const downloaded = held !== null;
+      const upgrade =
+        held !== null &&
+        needsAnchorUpgrade(held) &&
+        (options.force || !state.retryAt || Date.parse(state.retryAt) <= this.now()) &&
+        (Boolean(options.only?.includes(ref.eli)) || anchorUpgrades < ANCHOR_UPGRADES_PER_RUN);
+      if (upgrade) anchorUpgrades += 1;
       const checkDue =
         downloaded &&
         ref.consolidated &&
         (options.force ||
           !state.checkedAt ||
           this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
-      if (downloaded && !checkDue) continue;
+      if (downloaded && !checkDue && !upgrade) continue;
       if (!downloaded && !options.force && state.retryAt && Date.parse(state.retryAt) > this.now()) continue;
       const apply =
         options.apply === "all" ||
@@ -1007,7 +1135,21 @@ export class CoreLawIndex {
             await this.checkConsolidated(ref, state, apply);
           }
         } else {
-          await this.checkConsolidated(ref, state, apply);
+          if (upgrade) {
+            // Ten sam tekst ponownie z ELI, teraz z kotwicami jednostek.
+            const record = await this.store(state.currentEli ?? ref.eli);
+            Object.assign(state, {
+              title: record.title,
+              status: record.status,
+              textSource: record.textSource,
+              articleCount: record.articleOrder.length,
+              fetchedAt: record.fetchedAt
+            });
+          }
+          if (checkDue) {
+            if (upgrade) await this.pause();
+            await this.checkConsolidated(ref, state, apply);
+          }
         }
         state.lastError = null;
         state.retryAt = null;
@@ -1061,7 +1203,10 @@ export class CoreLawIndex {
    * czyta lokalny OCR partiami po OCR_BATCH_PAGES stron, a tekst składa się
    * z powrotem w kolejności stron.
    */
-  private async pdfText(eli: string, bytes: Uint8Array): Promise<{ text: string; pages: number; ocrPages: number[] }> {
+  private async pdfText(
+    eli: string,
+    bytes: Uint8Array
+  ): Promise<{ text: string; pages: number; ocrPages: number[]; pageTexts: string[] }> {
     this.progress = { eli, phase: "extract", done: 0, total: 0 };
     const extracted = await this.pdf.extract(bytes);
     const pageTexts = (extracted.pageTexts ?? [extracted.text]).map((page) =>
@@ -1076,7 +1221,7 @@ export class CoreLawIndex {
       (scanned.length * 2 >= pageTexts.length || splitArticles(joined()).order.length === 0);
     if (!isScan) {
       if (!joined()) throw new Error("PDF w ELI nie zawiera tekstu.");
-      return { text: joined(), pages: extracted.pages, ocrPages: [] };
+      return { text: joined(), pages: extracted.pages, ocrPages: [], pageTexts };
     }
     if (!this.ocr) {
       throw new CoreLawPermanentError("PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny.");
@@ -1122,7 +1267,7 @@ export class CoreLawIndex {
       }
     }
     fs.rmSync(cacheFile, { force: true });
-    return { text: joined(), pages: extracted.pages, ocrPages: scanned };
+    return { text: joined(), pages: extracted.pages, ocrPages: scanned, pageTexts };
   }
 
   private async fetchAct(eli: string): Promise<CoreActRecord> {
@@ -1133,9 +1278,12 @@ export class CoreLawIndex {
     let body = "";
     let textSource: CoreActRecord["textSource"] = "none";
     let sourceUrl = base;
+    let html = "";
+    let pageTexts: string[] = [];
     if (meta.textHTML === true) {
       sourceUrl = `${base}/text.html`;
-      body = htmlToText(await (await this.get(sourceUrl, "text/html")).text());
+      html = await (await this.get(sourceUrl, "text/html")).text();
+      body = htmlToText(html);
       textSource = "html";
     }
     // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
@@ -1149,11 +1297,18 @@ export class CoreLawIndex {
       );
       const pdf = await this.pdfText(eli, bytes);
       body = pdf.text;
+      pageTexts = pdf.pageTexts;
       ocrPages = pdf.ocrPages;
       pages = pdf.pages;
       textSource = ocrPages.length ? "ocr" : "pdf";
     }
     const { order, articles } = splitArticles(body);
+    const articleAnchors =
+      textSource === "html"
+        ? htmlArticleAnchors(html, order)
+        : textSource === "pdf"
+          ? pdfArticleAnchors(pageTexts)
+          : {};
     if (textSource === "ocr" && order.length === 0) {
       // Np. DU/1965/232: w ELI jest tylko strona numeru z adnotacją, że tekst
       // umowy zamieszczono w załączniku do numeru (załącznika ELI nie publikuje).
@@ -1173,13 +1328,14 @@ export class CoreLawIndex {
       status: text(meta.status),
       promulgation: text(meta.promulgation),
       textSource,
-      extraction: 2,
+      extraction: 3,
       ...(ocrPages.length ? { ocrPages } : {}),
       ...(pages ? { pages } : {}),
       fetchedAt: new Date(this.now()).toISOString(),
       sourceUrl,
       articleOrder: order,
       articles,
+      ...(Object.keys(articleAnchors).length ? { articleAnchors } : {}),
       text: body
     };
   }

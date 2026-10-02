@@ -1,4 +1,6 @@
 import { FinalizationGate, markUnverifiedReferences } from "./finalization-gate.js";
+import { verificationSourceLink } from "./source-anchor.js";
+import { evaluateStatusConsistency, reconcileStatusMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
 import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
@@ -214,6 +216,9 @@ export function publicEvidenceBundle(records) {
         kind: record.kind,
         status: record.status,
         ...(record.sourceUrl ? { sourceUrl: record.sourceUrl } : {}),
+        ...(verificationSourceLink(record) !== record.sourceUrl
+            ? { sourceAnchorUrl: verificationSourceLink(record) }
+            : {}),
         ...(record.sourceTier ? { sourceTier: record.sourceTier } : {}),
         fetchedAt: record.fetchedAt,
         ...(record.verificationMethod
@@ -1026,12 +1031,33 @@ export class SafeSessionExecutor {
         // HARD GATE: an unverified statute or Dz.U. reference is shown only with
         // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
         const preFinalization = new FinalizationGate().evaluate(citedAnswer.text, ledger);
-        const processedDocumentCitations = preFinalization.result === "BLOCKED"
+        const markedAnswer = preFinalization.result === "BLOCKED"
             ? {
                 ...citedAnswer,
                 text: markUnverifiedReferences(citedAnswer.text, preFinalization)
             }
             : citedAnswer;
+        // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
+        // odpowiedzi. Sprzeczność z rejestrem VERIFIED jest naprawiana według rejestru;
+        // sprzeczność, której rejestr nie rozstrzyga, blokuje prezentację.
+        const statusReconciliation = reconcileStatusMarkers(markedAnswer.text, ledger);
+        const processedDocumentCitations = statusReconciliation.repaired > 0
+            ? {
+                ...markedAnswer,
+                text: statusReconciliation.text
+            }
+            : markedAnswer;
+        const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
+        const statusConsistencyBlocked = statusConsistency.result ===
+            "BLOCKED";
+        audit.record("gate", statusConsistency.gate, statusConsistencyBlocked
+            ? "BLOCKED"
+            : "OK", {
+            repairedMarkers: statusReconciliation.repaired,
+            provisions: statusConsistency.provisions.length,
+            findings: statusConsistency.findings,
+            orphanUnverifiedLines: statusConsistency.orphanUnverifiedLines
+        });
         audit.record("gate", "LOCAL_DOCUMENT_DEEP_LINKS", "OK", {
             accepted: processedDocumentCitations.citations.length,
             rejected: processedDocumentCitations.rejectedMarkers,
@@ -1346,6 +1372,7 @@ export class SafeSessionExecutor {
             caseReferences: gateI.caseReferences
         });
         const workflowFinalizationBlocked = finalization.result !== "PASS" ||
+            statusConsistencyBlocked ||
             corpusBlocked ||
             workflowResourcesBlocked ||
             workflowOutputBlocked ||
@@ -1375,6 +1402,7 @@ export class SafeSessionExecutor {
         // Still blocked after marking: a case-law claim without evidence or a
         // verification marker that does not match its source.
         finalization.result === "BLOCKED" ||
+            statusConsistencyBlocked ||
             corpusBlocked ||
             workflowResourcesBlocked ||
             workflowOutputBlocked ||
@@ -1384,6 +1412,7 @@ export class SafeSessionExecutor {
         audit.record("gate", "G39H_WORKFLOW_FINALIZATION", workflowFinalizationBlocked ? "BLOCKED" : "OK", {
             workflow: execution.workflowPlan.id,
             finalization: finalization.result,
+            statusConsistency: statusConsistency.result,
             corpusBlocked,
             workflowResourcesBlocked,
             workflowOutputBlocked,
@@ -1421,7 +1450,13 @@ export class SafeSessionExecutor {
             kind: finding.reference.kind,
             line: finding.reference.line,
             status: finding.status
-        }));
+        }))
+            .concat(statusConsistency.findings.flatMap((finding) => finding.lines.map((line) => ({
+            claim: finding.key,
+            kind: "statute",
+            line,
+            status: finding.code
+        }))));
         step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
         // Every restored value is reported so the UI can mark it for review.
         const restoredAnswer = restoreWithReport(processedDocumentCitations.text, chatPrivacyVault);

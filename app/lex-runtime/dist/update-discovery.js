@@ -76,10 +76,13 @@ function chooseAssets(release, repository) {
             .map((asset) => verifiedAsset(asset, repository))
             .filter((asset) => Boolean(asset))
         : [];
-    const installer = assets.find((asset) => /lexmachina.*windows.*online.*installer.*\.exe$/i.test(asset.name)) ??
-        assets.find((asset) => /lex.?machina.*setup.*\.exe$/i.test(asset.name)) ??
-        assets.find((asset) => /lex.?machina.*\.exe$/i.test(asset.name) &&
-            !/offline/i.test(asset.name));
+    // macOS: the online .pkg of the same release (the Windows .exe never applies).
+    const installer = process.platform === "darwin"
+        ? assets.find((asset) => /lex.?machina.*macos.*\.pkg$/i.test(asset.name))
+        : assets.find((asset) => /lexmachina.*windows.*online.*installer.*\.exe$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*setup.*\.exe$/i.test(asset.name)) ??
+            assets.find((asset) => /lex.?machina.*\.exe$/i.test(asset.name) &&
+                !/offline/i.test(asset.name));
     const skillsBundle = assets.find((asset) => /lex.?machina.*skills.*\.zip$/i.test(asset.name));
     const skillsIndex = assets.find((asset) => /^LexMachina-Skills-Index\.json$/i.test(asset.name));
     const skillsSignature = assets.find((asset) => /^LexMachina-Skills-Index\.sig$/i.test(asset.name));

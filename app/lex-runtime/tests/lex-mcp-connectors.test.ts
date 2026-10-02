@@ -13,7 +13,8 @@ import {
   LexMcpConnectorStore,
   inspectCeidgKey,
   inspectLexMcpPackage,
-  lexMcpPackagePath
+  lexMcpPackagePath,
+  locateClaudeDesktop
 } from "../src/lex-mcp-connectors.js";
 import {
   LegalFederationToolRuntime
@@ -233,5 +234,95 @@ describe("LegalFederationToolRuntime on Lex MCP connectors", () => {
       { id: "x", name: "call_federated_legal_source", input: { source: "isap", tool: "krs_lookup", arguments: {} } }
     ]);
     expect(JSON.parse(result!.content).error).toBe("FEDERATED_NATIVE_TOOL_SOURCE_MISMATCH");
+  });
+});
+
+describe("Claude Desktop detection on Windows", () => {
+  function windows() {
+    const home = tempDir();
+    const appData = path.join(home, "AppData", "Roaming");
+    const local = path.join(home, "AppData", "Local");
+    fs.mkdirSync(appData, { recursive: true });
+    fs.mkdirSync(local, { recursive: true });
+    const locate = (extra: NodeJS.ProcessEnv = {}) =>
+      locateClaudeDesktop({
+        platform: "win32",
+        env: { APPDATA: appData, LOCALAPPDATA: local, ...extra },
+        homedir: home
+      });
+    return { home, appData, local, locate };
+  }
+
+  it("reports Claude Desktop absent when nothing is installed", () => {
+    const { appData, locate } = windows();
+    expect(locate()).toEqual({
+      configPath: path.join(appData, "Claude", "claude_desktop_config.json"),
+      available: false
+    });
+  });
+
+  it("finds the classic %APPDATA%\\Claude config", () => {
+    const { appData, locate } = windows();
+    fs.mkdirSync(path.join(appData, "Claude"));
+    expect(locate()).toEqual({
+      configPath: path.join(appData, "Claude", "claude_desktop_config.json"),
+      available: true
+    });
+  });
+
+  it("finds the Microsoft Store / MSIX config in LocalCache\\Roaming", () => {
+    const { local, locate } = windows();
+    const dir = path.join(local, "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "claude_desktop_config.json"), "{}");
+    expect(locate()).toEqual({
+      configPath: path.join(dir, "claude_desktop_config.json"),
+      available: true
+    });
+  });
+
+  it("prefers the most recently written config when both copies exist", () => {
+    const { appData, local, locate } = windows();
+    const msix = path.join(local, "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude");
+    const classic = path.join(appData, "Claude");
+    fs.mkdirSync(msix, { recursive: true });
+    fs.mkdirSync(classic);
+    fs.writeFileSync(path.join(msix, "claude_desktop_config.json"), "{}");
+    fs.writeFileSync(path.join(classic, "claude_desktop_config.json"), "{}");
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(path.join(msix, "claude_desktop_config.json"), old, old);
+    expect(locate().configPath).toBe(path.join(classic, "claude_desktop_config.json"));
+  });
+
+  it("detects an installed but never started Claude Desktop", () => {
+    const squirrel = windows();
+    fs.mkdirSync(path.join(squirrel.local, "AnthropicClaude"));
+    expect(squirrel.locate()).toEqual({
+      configPath: path.join(squirrel.appData, "Claude", "claude_desktop_config.json"),
+      available: true
+    });
+
+    const msix = windows();
+    const pkg = path.join(msix.local, "Packages", "Claude_pzs8sxrjxfjjc");
+    fs.mkdirSync(pkg, { recursive: true });
+    expect(msix.locate()).toEqual({
+      configPath: path.join(pkg, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"),
+      available: true
+    });
+  });
+
+  it("falls back to the user profile when APPDATA is not inherited", () => {
+    const { home, appData } = windows();
+    fs.mkdirSync(path.join(appData, "Claude"));
+    expect(locateClaudeDesktop({ platform: "win32", env: {}, homedir: home })).toEqual({
+      configPath: path.join(appData, "Claude", "claude_desktop_config.json"),
+      available: true
+    });
+  });
+
+  it("honours LEX_CLAUDE_DESKTOP_CONFIG", () => {
+    const { home, locate } = windows();
+    const file = path.join(home, "wlasny", "claude_desktop_config.json");
+    expect(locate({ LEX_CLAUDE_DESKTOP_CONFIG: file })).toEqual({ configPath: file, available: false });
   });
 });

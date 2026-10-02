@@ -224,6 +224,65 @@ describe("user-added acts", () => {
   });
 });
 
+describe("akty brakujące w kopii (RAG)", () => {
+  it("read_core_law_article pobiera brakujący akt z ELI do kopii, z datą pobrania i linkiem do ELI", async () => {
+    const corpus = tempDir("lex-core-acts-corpus-");
+    const { fetcher, requested } = fakeEli();
+    const pdf = { extract: async () => ({ text: "", pages: 0, truncated: false, bytes: 0 }) };
+    const index = new CoreLawIndex(tempDir("lex-core-acts-"), fetcher, pdf, () => Date.parse("2026-10-01T10:00:00Z"), 0);
+    index.load(corpus);
+    expect(index.resolve("Dz.U. 2023 poz. 1542")).toBeNull();
+
+    const tools = new CoreLawToolRuntime(index, fetcher);
+    const [read, unknown, byTitle] = await tools.runTools([
+      { id: "1", name: "read_core_law_article", input: { act: "Dz.U. 2023 poz. 1542", article: "1" } },
+      { id: "2", name: "read_core_law_article", input: { act: "Dz.U. 2024 poz. 7", article: "1" } },
+      { id: "3", name: "read_core_law_article", input: { act: "ustawa o czymś", article: "1" } }
+    ]);
+    // Starszy t.j. podany przez model: do kopii trafia najnowszy t.j. z ELI.
+    expect(JSON.parse(read!.content)).toMatchObject({
+      status: "OK",
+      eli: "DU/2025/126",
+      fetchedAt: "2026-10-01T10:00:00.000Z",
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/126/text.html",
+      text: expect.stringContaining("Tekst DU/2025/126"),
+      amendmentsAfter: [{ eli: "DU/2025/900" }]
+    });
+    expect(index.summary("DU/2025/126")).toMatchObject({ origin: "VERIFIED", articleCount: 2 });
+    expect(index.status().recent.map((change) => [change.kind, change.eli])).toEqual([
+      ["AMENDMENT", "DU/2025/900"],
+      ["ADDED", "DU/2025/126"]
+    ]);
+    expect(JSON.parse(unknown!.content)).toEqual({ status: "BLOCKED", error: "CORE_LAW_ACT_NOT_FOUND" });
+    expect(JSON.parse(byTitle!.content)).toEqual({ status: "BLOCKED", error: "CORE_LAW_ACT_NOT_IN_MAPS" });
+
+    // Drugi raz z kopii, bez ponownego pobierania tekstu.
+    const before = requested.filter((url) => url.endsWith("/text.html")).length;
+    await tools.runTools([{ id: "4", name: "read_core_law_article", input: { act: "DU/2004/485", article: "2" } }]);
+    expect(requested.filter((url) => url.endsWith("/text.html")).length).toBe(before);
+    expect(index.summaries().filter((act) => act.eli === "DU/2025/126")).toHaveLength(1);
+  });
+
+  it("tekst, który jeszcze się pobiera, nie jest cytowany z pamięci", async () => {
+    const corpus = tempDir("lex-core-acts-corpus-");
+    const { fetcher } = fakeEli();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = async (url: string) => {
+      if (url.endsWith("/text.html")) await gate;
+      return fetcher(url);
+    };
+    const pdf = { extract: async () => ({ text: "", pages: 0, truncated: false, bytes: 0 }) };
+    const index = new CoreLawIndex(tempDir("lex-core-acts-"), slow, pdf, () => Date.parse("2026-10-01T10:00:00Z"), 0);
+    index.load(corpus);
+    const added = await index.addMissingAct(await lookupCoreLawAct("DU/2024/1000", fetcher), 20);
+    expect(added).toEqual({ eli: "DU/2024/1000", added: true, ready: false });
+    release();
+    await settled(index);
+    expect(index.currentRecord("DU/2024/1000")?.articles["1"]).toContain("Tekst DU/2024/1000");
+  });
+});
+
 describe("core law schedule", () => {
   it("names acts briefly and checks the copy while the application runs", async () => {
     expect(shortLegalActName("Ustawa z dnia 6 grudnia 2008 r. o podatku akcyzowym", "Ustawa")).toBe(

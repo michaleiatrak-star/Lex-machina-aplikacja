@@ -140,12 +140,15 @@ function extensionFor(filename: string): string {
   return /^[a-z0-9]{1,10}$/.test(extension) ? extension : "";
 }
 
-function contentDisposition(filename: string): string {
+export function contentDisposition(filename: string): string {
   const safe = filename
     .normalize("NFKC")
     .replace(/[\r\n"\\/]/g, "_")
     .slice(0, 180) || "document.bin";
-  return `inline; filename="${safe}"`;
+  // Node rejects non-Latin-1 header bytes (a Polish name would fail with
+  // ERR_INVALID_CHAR): ASCII fallback plus the RFC 5987 UTF-8 name.
+  const ascii = safe.replace(/[^\x20-\x7e]/g, "_");
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
 }
 
 async function cleanupOpenCopies(root: string): Promise<void> {
@@ -199,7 +202,7 @@ export function registerWorkspaceRoutes(
     rootDir: string;
     officeEditor?: Pick<LocalOfficeEditor, "read" | "write">;
     // Documents made by a model (with placeholders or deanonymized).
-    artifacts?: Pick<SecureCaseArtifactStore, "listArtifacts" | "readArtifact">;
+    artifacts?: Pick<SecureCaseArtifactStore, "listArtifacts" | "readArtifact" | "renameArtifact">;
   }
 ): void {
   const actorFor = (req: Request) =>
@@ -1810,6 +1813,37 @@ export function registerWorkspaceRoutes(
           ...(item.sourceArtifactId ? { sourceArtifactId: item.sourceArtifactId } : {})
         }))
       });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // Renames a document made by a model; the case files and the chat card
+  // both read the name from the artifact manifest.
+  app.patch("/api/cases/:caseId/workspace/artifacts/:artifactId", async (req, res) => {
+    try {
+      const actor = actorFor(req);
+      const caseId = caseIdFrom(req);
+      const artifactId = String(req.params.artifactId ?? "");
+      if (!ARTIFACT_ID.test(artifactId)) throw new Error("ARTIFACT_ID_INVALID");
+      const filename = typeof req.body?.filename === "string" ? req.body.filename : "";
+      if (!dependencies.artifacts) throw new Error("ARTIFACT_NOT_FOUND");
+      const artifacts = dependencies.artifacts;
+      dependencies.caseAccessService.assertAccess(actor, caseId, "WRITE");
+      const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+      const renamed = await dependencies.caseAccessService.withCaseDataKey(
+        actor,
+        caseId,
+        "WRITE",
+        (caseDataKey) => artifacts.renameArtifact({
+          caseId,
+          artifactId,
+          filename,
+          caseDataKey,
+          keyVersion: caseView.keyVersion
+        })
+      );
+      res.json({ artifactId, filename: renamed.filename });
     } catch (error) {
       sendError(res, error);
     }

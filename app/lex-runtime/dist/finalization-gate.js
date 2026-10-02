@@ -1,24 +1,12 @@
+import { verificationMarker } from "./source-anchor.js";
+import { statuteClaimsInLine } from "./status-consistency-gate.js";
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN = /✅\s*\[VER:[^\]\r\n]+\]/giu;
 const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/iu;
 const CASE_QUOTE_MARKER = /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER = /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
 function expectedVerificationMarker(record) {
-    if (record.status !== "VERIFIED" ||
-        !record.sourceUrl?.trim() ||
-        !record.fetchedAt?.trim()) {
-        return null;
-    }
-    return [
-        "✅ [VER: ",
-        record.sourceUrl,
-        ", ",
-        record.fetchedAt.slice(0, 10),
-        record.asOf
-            ? `, STAN NA ${record.asOf}`
-            : "",
-        "]"
-    ].join("");
+    return verificationMarker(record);
 }
 const ARTICLE_PATTERN = /\bart\.?\s+\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\s*§\s*\d+[a-zA-Z]*)?(?:\s+(?:KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP))?/giu;
 const DZU_PATTERN = /\bDz\.?\s*U\.?\s*(?:(?:z\s+)?\d{4}\s*r?\.?\s*)?poz\.?\s*\d+/giu;
@@ -94,6 +82,15 @@ export class FinalizationGate {
                 "VERIFIED")
                 .map(expectedVerificationMarker)
                 .filter((marker) => Boolean(marker)));
+            // Wyliczenie "art. 233 i 234 KK": znacznik drugiego przepisu też należy do wiersza.
+            for (const claim of statuteClaimsInLine(reference.lineText)) {
+                const enumerated = ledger.latest(claim);
+                const marker = enumerated?.status === "VERIFIED"
+                    ? expectedVerificationMarker(enumerated)
+                    : null;
+                if (marker)
+                    allowedLineMarkers.add(marker);
+            }
             const unexpectedLineMarker = lineMarkers.some((marker) => !allowedLineMarkers.has(marker));
             const record = ledger.latest(reference.claim) ??
                 coveringVerifiedRecord(ledger, reference, lineMarkers);

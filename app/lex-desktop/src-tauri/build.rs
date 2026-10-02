@@ -87,7 +87,22 @@ fn materialize_windows_icon() {
     let icon_dir = PathBuf::from("icons");
     let icon_path = icon_dir.join("icon.ico");
     fs::create_dir_all(&icon_dir).expect("failed to create Tauri icon directory");
-    fs::write(&icon_path, bytes).expect("failed to materialize pinned Lex Machina brand icon");
+    // macOS bundle (tauri.macos.conf.json) builds its .icns from the largest PNG
+    // image of the same pinned icon.
+    let mut largest: Option<(u32, &[u8])> = None;
+    for index in 0..usize::from(count) {
+        let entry = &bytes[6 + index * 16..22 + index * 16];
+        let width = if entry[0] == 0 { 256 } else { u32::from(entry[0]) };
+        let size = u32::from_le_bytes([entry[8], entry[9], entry[10], entry[11]]) as usize;
+        let offset = u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]) as usize;
+        let image = &bytes[offset..offset + size];
+        if image.starts_with(b"\x89PNG") && largest.map_or(true, |(best, _)| width > best) {
+            largest = Some((width, image));
+        }
+    }
+    let (_, png) = largest.expect("pinned Lex Machina brand icon has no PNG image");
+    fs::write(icon_dir.join("icon.png"), png).expect("failed to materialize macOS brand icon");
+    fs::write(&icon_path, &bytes).expect("failed to materialize pinned Lex Machina brand icon");
 }
 
 fn main() {

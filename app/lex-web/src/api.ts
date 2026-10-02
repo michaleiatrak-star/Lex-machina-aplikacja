@@ -926,6 +926,8 @@ export type EvidenceItem = {
   kind: "statute" | "journal" | "case" | "deadline" | "amount";
   status: "VERIFIED" | "SUPPORTED" | "UNVERIFIED";
   sourceUrl?: string;
+  // sourceUrl z kotwicą do artykułu/jednostki, gdy runtime ją ustalił.
+  sourceAnchorUrl?: string;
   sourceTier?: "R1" | "R2A" | "R2B" | "R3";
   fetchedAt: string;
   verificationMethod?:
@@ -3121,6 +3123,17 @@ export type CaseArtifact = {
 
 export async function listCaseArtifacts(caseId: string): Promise<CaseArtifact[]> {
   return (await json<{ artifacts: CaseArtifact[] }>(`/api/cases/${caseId}/workspace/artifacts`)).artifacts;
+}
+
+export async function renameCaseArtifact(
+  caseId: string,
+  artifactId: string,
+  filename: string
+): Promise<{ artifactId: string; filename: string }> {
+  return json<{ artifactId: string; filename: string }>(
+    `/api/cases/${caseId}/workspace/artifacts/${artifactId}`,
+    { method: "PATCH", body: JSON.stringify({ filename }) }
+  );
 }
 
 export function deanonymizeUpload(

@@ -847,7 +847,9 @@ export default function ChatApp({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  void openExternalUrl(item.sourceUrl!)
+                                  void openExternalUrl(
+                                    item.sourceAnchorUrl ?? item.sourceUrl!
+                                  )
                                 }
                               >
                                 Otwórz źródło ↗

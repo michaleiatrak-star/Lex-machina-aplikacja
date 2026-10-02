@@ -1,0 +1,33 @@
+#!/bin/bash
+# .pkg postinstall (runs as root): the online bootstrap runs as the logged-in
+# user, so the components land in that user's Application Support directory.
+set -uo pipefail
+
+APP="${2:-/}/Applications/Lex Machina.app"
+[ -d "$APP" ] || APP="/Applications/Lex Machina.app"
+CODE_ROOT="$APP/Contents/Resources/runtime"
+USER_NAME="$(stat -f%Su /dev/console)"
+if [ -z "$USER_NAME" ] || [ "$USER_NAME" = "root" ] || [ "$USER_NAME" = "_mbsetupuser" ]; then
+  # No GUI session (e.g. command-line install over SSH): the only regular user.
+  candidates="$(dscl . -list /Users UniqueID | awk '$2 >= 501 && $1 !~ /^_/ {print $1}')"
+  if [ "$(printf '%s\n' "$candidates" | grep -c .)" = 1 ]; then
+    USER_NAME="$candidates"
+  else
+    USER_NAME=""
+  fi
+fi
+[ -n "$USER_NAME" ] || { echo "LEX_POSTINSTALL_NO_CONSOLE_USER" >&2; exit 1; }
+USER_HOME="$(dscl . -read "/Users/$USER_NAME" NFSHomeDirectory | awk '{print $2}')"
+LOG_DIR="$USER_HOME/Library/Logs/LexMachina"
+
+/usr/bin/sudo -u "$USER_NAME" /bin/mkdir -p "$LOG_DIR"
+/usr/bin/sudo -u "$USER_NAME" -H /bin/bash "$CODE_ROOT/bootstrap/macos-online-bootstrap.sh" "$CODE_ROOT" \
+  >"$LOG_DIR/install.log" 2>&1
+status=$?
+chown "$USER_NAME" "$LOG_DIR/install.log" 2>/dev/null || true
+if [ "$status" -ne 0 ]; then
+  echo "LEX_POSTINSTALL_BOOTSTRAP_FAILED:$status (log: $LOG_DIR/install.log)" >&2
+  tail -20 "$LOG_DIR/install.log" >&2
+  exit 1
+fi
+exit 0

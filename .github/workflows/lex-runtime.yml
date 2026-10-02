@@ -67,6 +67,10 @@ jobs:
       - name: Unit tests — runtime and app contracts
         run: npm test
 
+      - name: Desktop proxy allowlist covers every runtime route
+        working-directory: .
+        run: python3 app/lex-desktop/scripts/check-route-allowlist.py
+
       - name: Python worker syntax
         run: python -m py_compile ../ocr/paddle_worker.py ../ocr/redact_image.py ../privacy/stanza_ner_worker.py ../storage/zip_extract_worker.py ../storage/office_extract_worker.py ../storage/spreadsheet_extract_worker.py ../storage/legal_document_worker.py ../storage/office_edit_worker.py
 
