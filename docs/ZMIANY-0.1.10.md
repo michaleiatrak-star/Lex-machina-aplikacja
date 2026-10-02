@@ -34,8 +34,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 31 | `ebebb89` | MCP: suma pakietu (CRLF z checkoutu na Windows), RAG: postęp OCR i „Bez tekstu w ELI”, konto: narzędzia w jednej rundzie, sprawy i kalendarz |
 | hotfix 32 | `81817b6` | Grok przez konto: kod limitu zapytań (ACP „Rate limited”), ponowienie po 15/45 s |
 | hotfix 33 | `ee5fbed` | Router v3 dostarczany z pierwszym odczytem (bez straconej rundy), konta: bez powtórnych wyszukiwań |
+| hotfix 34 | `580d663` | AUTO: router v3 i prawo-polskie-v2 z góry dla wszystkich modeli, metodyka doboru narzędzi |
 
 ---
+
+## hotfix 34
+
+- `executeModelSelectedSkills`: SKILL.md `prawny-router-v3` i `prawo-polskie-v2` w prompcie z góry także bez natywnego korpusu (`onCorpusPreloaded` → `LegalCorpusToolRuntime.recordPreloaded`, zdarzenie `ALLOW` `preloaded`); natywny korpus dostaje też `prawo-polskie-v2`.
+- Instrukcja AUTO: metodyka doboru (jeden odczyt = jeden plik, moduł z SKILL.md tylko przy znanej nazwie).
 
 ## hotfix 33
 
