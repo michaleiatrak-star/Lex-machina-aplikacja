@@ -6,6 +6,7 @@ import {
   type CaseContact,
   type CaseContactKind
 } from "./api.js";
+import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 
 const EMPTY_DRAFT = {
   kind: "PERSON" as CaseContactKind,
@@ -109,82 +110,77 @@ export function CaseContactsCard({
   });
 
   return (
-    <article className="chat-card matter-schedule-card">
-      <p className="eyebrow">Osoby i organizacje</p>
-      <h2>Kontakty w sprawie</h2>
-      <p>
-        Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych
-        danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy.
-      </p>
-
-      <div className="matter-schedule-form">
-        <div className="chat-form-row">
-          <select aria-label="Rodzaj kontaktu" {...field("kind")}>
-            <option value="PERSON">Osoba</option>
-            <option value="ORGANIZATION">Organizacja</option>
-          </select>
-          <input
-            maxLength={180}
-            placeholder={draft.kind === "PERSON" ? "Imię i nazwisko" : "Nazwa organizacji"}
-            {...field("name")}
-          />
+    <CollapsibleCaseSection
+      eyebrow="Osoby i organizacje"
+      title="Kontakty w sprawie"
+      count={contacts.length}
+      loading={loading}
+      error={error}
+      resetKey={caseId}
+      addLabel="Dodaj kontakt"
+      hint={
+        caseId
+          ? "Klient, strony, pełnomocnicy, sąd, biegli. Dane są przechowywane w zaszyfrowanych danych sprawy; OWNER i EDITOR mogą dopisywać oraz usuwać wpisy."
+          : "Wybierz sprawę, aby zobaczyć kontakty."
+      }
+      addForm={
+        <div className="matter-schedule-form">
+          <div className="chat-form-row">
+            <select aria-label="Rodzaj kontaktu" {...field("kind")}>
+              <option value="PERSON">Osoba</option>
+              <option value="ORGANIZATION">Organizacja</option>
+            </select>
+            <input
+              maxLength={180}
+              placeholder={draft.kind === "PERSON" ? "Imię i nazwisko" : "Nazwa organizacji"}
+              {...field("name")}
+            />
+          </div>
+          <div className="chat-form-row">
+            <input maxLength={120} placeholder="Rola, np. klient, pełnomocnik strony przeciwnej" {...field("role")} />
+            <input maxLength={60} type="tel" placeholder="Telefon" {...field("phone")} />
+            <input maxLength={180} type="email" placeholder="E-mail" {...field("email")} />
+          </div>
+          <div className="chat-form-row">
+            <input maxLength={300} placeholder="Adres (opcjonalnie)" {...field("address")} />
+            <button
+              type="button"
+              className="chat-primary-action"
+              disabled={disabled || !draft.name.trim()}
+              onClick={() => void save()}
+            >
+              Dodaj kontakt
+            </button>
+          </div>
+          <textarea maxLength={2000} placeholder="Notatka (opcjonalnie)" {...field("notes")} />
         </div>
-        <div className="chat-form-row">
-          <input maxLength={120} placeholder="Rola, np. klient, pełnomocnik strony przeciwnej" {...field("role")} />
-          <input maxLength={60} type="tel" placeholder="Telefon" {...field("phone")} />
-          <input maxLength={180} type="email" placeholder="E-mail" {...field("email")} />
-        </div>
-        <div className="chat-form-row">
-          <input maxLength={300} placeholder="Adres (opcjonalnie)" {...field("address")} />
+      }
+    >
+      {contacts.map((contact) => (
+        <div className="matter-schedule-item" key={contact.contactId}>
+          <div className="matter-schedule-item-main">
+            <span className="matter-schedule-kind">
+              {contact.kind === "PERSON" ? "Osoba" : "Organizacja"}
+              {contact.role ? ` · ${contact.role}` : ""}
+            </span>
+            <strong>{contact.name}</strong>
+            <small className="matter-contact-lines">
+              {contact.phone ? <a href={`tel:${contact.phone.replace(/\s+/g, "")}`}>{contact.phone}</a> : null}
+              {contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : null}
+              {contact.address ? <span>{contact.address}</span> : null}
+            </small>
+            {contact.notes ? <p>{contact.notes}</p> : null}
+          </div>
           <button
             type="button"
-            className="chat-primary-action"
-            disabled={disabled || !draft.name.trim()}
-            onClick={() => void save()}
+            className="workspace-delete"
+            disabled={disabled}
+            onClick={() => void remove(contact.contactId)}
           >
-            Dodaj kontakt
+            Usuń
           </button>
         </div>
-        <textarea maxLength={2000} placeholder="Notatka (opcjonalnie)" {...field("notes")} />
-      </div>
-
-      {error ? <p className="chat-error">{error}</p> : null}
-
-      <div className="matter-schedule-list">
-        {!caseId ? (
-          <p>Wybierz sprawę, aby zobaczyć kontakty.</p>
-        ) : loading ? (
-          <p>Ładuję kontakty…</p>
-        ) : contacts.length === 0 ? (
-          <p>Brak kontaktów w tej sprawie.</p>
-        ) : (
-          contacts.map((contact) => (
-            <div className="matter-schedule-item" key={contact.contactId}>
-              <div className="matter-schedule-item-main">
-                <span className="matter-schedule-kind">
-                  {contact.kind === "PERSON" ? "Osoba" : "Organizacja"}
-                  {contact.role ? ` · ${contact.role}` : ""}
-                </span>
-                <strong>{contact.name}</strong>
-                <small className="matter-contact-lines">
-                  {contact.phone ? <a href={`tel:${contact.phone.replace(/\s+/g, "")}`}>{contact.phone}</a> : null}
-                  {contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : null}
-                  {contact.address ? <span>{contact.address}</span> : null}
-                </small>
-                {contact.notes ? <p>{contact.notes}</p> : null}
-              </div>
-              <button
-                type="button"
-                className="workspace-delete"
-                disabled={disabled}
-                onClick={() => void remove(contact.contactId)}
-              >
-                Usuń
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </article>
+      ))}
+    </CollapsibleCaseSection>
   );
 }

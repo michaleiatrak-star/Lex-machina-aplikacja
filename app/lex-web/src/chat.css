@@ -1525,6 +1525,73 @@
   white-space: pre-wrap;
 }
 
+.matter-collapsible > .matter-collapsible-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.matter-collapsible > .matter-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.matter-collapsible-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.matter-collapsible-heading .eyebrow {
+  display: block;
+}
+
+.matter-collapsible-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.matter-collapsible-title::before {
+  content: "\25B8";
+  display: inline-block;
+  margin-right: 8px;
+  color: #6e806f;
+  transition: transform 120ms ease;
+}
+
+.matter-collapsible[open] .matter-collapsible-title::before {
+  transform: rotate(90deg);
+}
+
+.matter-collapsible-count {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #edf4ea;
+  color: #285132;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.matter-add-entry {
+  margin-top: 14px;
+}
+
+.matter-add-entry > summary {
+  width: fit-content;
+  color: #285132;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.matter-collapsible-hint {
+  margin: 10px 0 0;
+  color: #657068;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .matter-schedule-kind {
   width: fit-content;
   padding: 3px 7px;
