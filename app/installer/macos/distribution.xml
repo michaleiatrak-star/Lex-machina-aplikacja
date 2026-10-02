@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Lex Machina</title>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="true" hostArchitectures="arm64"/>
+  <domains enable_localSystem="true"/>
+  <volume-check>
+    <allowed-os-versions>
+      <os-version min="14.0"/>
+    </allowed-os-versions>
+  </volume-check>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" title="Lex Machina">
+    <pkg-ref id="pl.lexmachina.desktop"/>
+  </choice>
+  <pkg-ref id="pl.lexmachina.desktop" version="0.1.10" onConclusion="none">LexMachina-component.pkg</pkg-ref>
+</installer-gui-script>

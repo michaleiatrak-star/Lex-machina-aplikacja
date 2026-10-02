@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 4,
+  "target": "macos-arm64",
+  "applicationVersion": "0.1.10",
+  "installerMode": "ONLINE_BOOTSTRAP_PKG_POSTINSTALL",
+  "applicationUpdate": {
+    "verification": "MANUAL_PKG_FROM_OFFICIAL_RELEASE",
+    "transaction": "USER_OPENS_NEW_PKG",
+    "policy": "NO_IN_APP_INSTALL_ON_MACOS_UNSIGNED_BUILD",
+    "temporaryUnsignedAllowed": true
+  },
+  "runtime": {
+    "node": {
+      "version": "24.21.0",
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+      "sha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
+    },
+    "python": {
+      "version": "3.13.16",
+      "delivery": "PYTHON_BUILD_STANDALONE_APP_LOCAL",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.13.16%2B20261001-aarch64-apple-darwin-install_only.tar.gz",
+      "sha256": "ca8aa2715d2c89a213b6fbf85f76ae0be7e8e8796f9c61f770d8154caf53bcec"
+    }
+  },
+  "pythonPackages": {
+    "paddleocr": "3.7.0",
+    "paddlepaddle": "3.2.2",
+    "PyMuPDF": "1.28.2",
+    "numpy": "2.3.5",
+    "Pillow": "12.3.0",
+    "stanza": "1.14.0",
+    "torch": "2.14.0",
+    "uv": "0.12.17",
+    "morfeusz2": "1.99.15"
+  },
+  "models": {
+    "paddle": [
+      "PP-LCNet_x1_0_doc_ori",
+      "UVDoc",
+      "PP-LCNet_x1_0_textline_ori",
+      "PP-OCRv6_medium_det",
+      "PP-OCRv6_medium_rec"
+    ],
+    "stanza": {
+      "language": "pl",
+      "processors": "tokenize,ner"
+    },
+    "localLlm": [
+      {
+        "id": "local/mistral-nemo-12b-q4km",
+        "updateFamily": "MISTRAL",
+        "displayName": "Mistral NeMo 12B Instruct Q4_K_M",
+        "sourceModel": "mistralai/Mistral-Nemo-Instruct-2407",
+        "ggufRepository": "second-state/Mistral-Nemo-Instruct-2407-GGUF",
+        "filename": "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+        "url": "https://huggingface.co/second-state/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf?download=true",
+        "sha256": "186ac886e5cf42a6ca0815e60504f13c7cc95446eb05ac2f1515e388976cebcf",
+        "quantization": "Q4_K_M",
+        "nativeContext": 131072,
+        "minimumContext": 32000,
+        "maximumRuntimeContext": 200000,
+        "contextExtension": {
+          "enabled": true,
+          "mode": "YARN",
+          "requiresExplicitUserChoiceAboveNative": true
+        },
+        "delivery": "ON_DEMAND_AFTER_INSTALL",
+        "license": "Apache-2.0"
+      },
+      {
+        "id": "local/bielik-11b-v3-q4km",
+        "updateFamily": "BIELIK",
+        "displayName": "Bielik 11B v3 Instruct Q4_K_M",
+        "sourceModel": "speakleash/Bielik-11B-v3.0-Instruct",
+        "ggufRepository": "speakleash/Bielik-11B-v3.0-Instruct-GGUF",
+        "filename": "Bielik-11B-v3.0-Instruct.Q4_K_M.gguf",
+        "url": "https://huggingface.co/speakleash/Bielik-11B-v3.0-Instruct-GGUF/resolve/main/Bielik-11B-v3.0-Instruct.Q4_K_M.gguf?download=true",
+        "sha256": "c16841621efe93c7c8ebf1b374709a96276f3741e649f83ed90131a7b5ad23a8",
+        "quantization": "Q4_K_M",
+        "nativeContext": 32768,
+        "minimumContext": 32000,
+        "maximumRuntimeContext": 200000,
+        "contextExtension": {
+          "enabled": true,
+          "mode": "YARN",
+          "requiresExplicitUserChoiceAboveNative": true
+        },
+        "delivery": "ON_DEMAND_AFTER_INSTALL",
+        "license": "Apache-2.0"
+      }
+    ],
+    "morphology": {
+      "engine": "Morfeusz2",
+      "version": "1.99.15",
+      "role": "LOCAL_POLISH_INFLECTION_FOR_PRIVATE_DEANONYMIZATION"
+    }
+  },
+  "localAi": {
+    "delivery": "NOT_AVAILABLE_ON_MACOS_YET",
+    "installRoot": "~/.lex-machina/local-ai",
+    "contextSelection": {
+      "minimum": 32000,
+      "maximum": 200000,
+      "step": 1000,
+      "recommendedProfiles": [
+        32000,
+        64000,
+        96000,
+        128000,
+        160000,
+        200000
+      ],
+      "default": 32000
+    },
+    "networkRequiredOnlyWhenProvisioning": false,
+    "applicationUsableWithoutLocalAi": true,
+    "backendSelection": {
+      "allowed": [
+        "AUTO",
+        "VULKAN_X64",
+        "CPU_X64_PORTABLE"
+      ],
+      "default": "AUTO",
+      "autoPolicy": "TRY_VULKAN_WHEN_ACCELERATOR_IS_DETECTED_THEN_CPU_FALLBACK",
+      "validation": "BACKEND_IS_ACTIVE_ONLY_AFTER_LLAMA_SERVER_HEALTH_AND_TOKENIZER_CALIBRATION"
+    },
+    "networkRequiredForCoreInference": false,
+    "networkRequiredForWebResearch": true,
+    "webResearch": {
+      "transport": "LLAMA_CPP_MCP_STDIO",
+      "tools": [
+        "web_search",
+        "web_fetch",
+        "web_research"
+      ],
+      "defaultSearchProvider": "DUCKDUCKGO_HTML",
+      "optionalSearchProvider": "BRAVE_SEARCH_API",
+      "citationPolicy": "FETCH_BEFORE_CITE_NO_INVENTED_URLS",
+      "mistralDirectLaunchPolicy": "SERVER_CHAT_TEMPLATE_GROUNDED",
+      "bielikDirectLaunchPolicy": "SERVER_CHAT_TEMPLATE_GROUNDED"
+    },
+    "legalSkills": {
+      "mode": "AUTO",
+      "transport": "LLAMA_CPP_MCP_STDIO",
+      "mediation": "DIRECT_LLAMA_SERVER_NO_LEX_TOOL_BROKER",
+      "sourceRoot": "runtime/corpus",
+      "skillCount": 32,
+      "requiredRouter": "prawny-router-v3",
+      "polishBaseline": [
+        "prawny-router-v3",
+        "prawo-polskie-v2",
+        "shared"
+      ],
+      "tools": [
+        "legal_auto_route",
+        "legal_skill_read",
+        "legal_skill_search",
+        "legal_skills_list"
+      ],
+      "policy": "ROUTER_FIRST_FAIL_CLOSED_THEN_WEB_VERIFY"
+    },
+    "privateDocuments": {
+      "transport": "LLAMA_CPP_MCP_STDIO",
+      "mediation": "DIRECT_LLAMA_SERVER_NO_LEX_TOOL_BROKER",
+      "ocr": {
+        "engine": "PaddleOCR PP-OCRv6_medium",
+        "execution": "LOCAL_ISOLATED_WORKER",
+        "tool": "documents_ocr_local_file"
+      },
+      "anonymization": {
+        "ner": "Stanza pl LOCAL",
+        "structuredIdentifiers": true,
+        "vault": "MACOS_KEYCHAIN_USER_BOUND",
+        "tools": [
+          "documents_privacy_anonymize_text",
+          "documents_privacy_ocr_anonymize_file"
+        ]
+      },
+      "deanonymization": {
+        "morphology": "Morfeusz2 1.99.15",
+        "grammarCases": [
+          "nom",
+          "gen",
+          "dat",
+          "acc",
+          "inst",
+          "loc",
+          "voc"
+        ],
+        "tools": [
+          "documents_privacy_inflect_token",
+          "documents_privacy_deanonymize_text",
+          "documents_privacy_finalize_document_file"
+        ],
+        "policy": "FINAL_LOCAL_STEP_FAIL_CLOSED_IN_STRICT_MODE"
+      }
+    },
+    "directMcp": {
+      "mediation": "DIRECT_LLAMA_SERVER_NO_LEX_TOOL_BROKER",
+      "servers": [
+        "web",
+        "legal",
+        "documents",
+        "isap",
+        "eurlex",
+        "saos",
+        "cbosa",
+        "krs",
+        "wl",
+        "nbp",
+        "eureka",
+        "sudop",
+        "uodo",
+        "uodo_official"
+      ],
+      "legalFederation": {
+        "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+        "sources": [
+          "isap",
+          "eurlex",
+          "saos",
+          "cbosa",
+          "krs",
+          "wl",
+          "nbp",
+          "eureka",
+          "sudop",
+          "uodo"
+        ],
+        "firstUseNetworkRequired": true,
+        "directConnectorServers": [
+          "isap",
+          "eurlex",
+          "saos",
+          "cbosa",
+          "krs",
+          "wl",
+          "nbp",
+          "eureka",
+          "sudop",
+          "uodo"
+        ]
+      },
+      "uodoOfficialFallback": true,
+      "directSourceTools": true
+    }
+  },
+  "systemPrerequisites": {
+    "macos": {
+      "minimumVersion": "14.0",
+      "architecture": "arm64"
+    }
+  },
+  "notes": {
+    "libreOffice": "Not a runtime prerequisite. DOCX/ODT generation and validation are implemented by the deterministic Lex renderer; LibreOffice remains optional release QA only.",
+    "networkAtInstall": "REQUIRED: the .pkg postinstall downloads Node, Python, pinned packages and OCR/NER models into ~/Library/Application Support/LexMachina/runtime",
+    "networkAfterBootstrapBeforeProviderUse": "OPTIONAL_FOR_USER_INITIATED_LOCAL_AI_PROVISIONING, LOCAL_AI_WEB_RESEARCH, DIRECT_LEGAL_MCP_FIRST_USE, ACCOUNT_SESSION_CLIENT_PROVISIONING, AND UPDATES",
+    "cachePolicy": "REUSE_ONLY_AFTER_SHA256_VERIFICATION",
+    "localAiContext": "The user chooses 64k-200k. Requests above a model's native context are explicit context extension, not native capability, and must pass runtime resource validation.",
+    "applicationUpdateSigning": "macOS build is ad-hoc signed (no Apple Developer ID); updates are installed by opening the new .pkg",
+    "skillUpdateSigning": "Skill self-update may use the official michaleiatrak-star/Lex-Machina GitHub Releases source without Ed25519. GitHub release asset SHA-256, index schema/version compatibility, bundle SHA-256/size, structural validation and atomic activation/rollback remain mandatory. Ed25519 is accepted when present.",
+    "modelPackUpdateSigning": "Temporary unsigned model-pack mode is enabled for 0.1.7: the official model-pack index may be accepted without Ed25519 while SHA-256 verification of downloaded model artifacts remains mandatory. Re-enable signed-index enforcement when the production trust root is configured.",
+    "pythonRuntime": "python-build-standalone (astral-sh) CPython for aarch64-apple-darwin, app-private, pinned by SHA-256",
+    "accountSessionClients": "Codex CLI and Claude Code are not bundled. Exact pinned clients are downloaded only when the user selects ChatGPT/Claude account-session login."
+  },
+  "modelPackUpdate": {
+    "verification": "SHA256_AND_OPTIONAL_ED25519_INDEX",
+    "trustedEd25519PublicKeys": [],
+    "indexAsset": "LexMachina-ModelPack-Index.json",
+    "signatureAsset": "LexMachina-ModelPack-Index.sig",
+    "activation": "VERIFY_INDEX_THEN_DOWNLOAD_SELECTED_MODEL_TO_STAGING",
+    "policy": "TEMPORARY_SHA256_ONLY_UNTIL_MODEL_PACK_SIGNER_IS_CONFIGURED",
+    "temporaryUnsignedAllowed": true
+  },
+  "skillUpdate": {
+    "verification": "SHA256_AND_OPTIONAL_ED25519_INDEX",
+    "trustedEd25519PublicKeys": [],
+    "indexAsset": "LexMachina-Skills-Index.json",
+    "signatureAsset": "LexMachina-Skills-Index.sig",
+    "activation": "VALIDATE_THEN_ATOMIC_SWITCH_WITH_ROLLBACK",
+    "policy": "OFFICIAL_GITHUB_RELEASE_SHA256_REQUIRED_ED25519_OPTIONAL",
+    "temporaryUnsignedAllowed": false,
+    "officialRepository": "michaleiatrak-star/Lex-Machina",
+    "officialSourceUnsignedAllowed": true
+  },
+  "legalSourceFederation": {
+    "transport": "MCP_STDIO_VIA_BUNDLED_NODE",
+    "connectorPackage": "audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs",
+    "role": "DISCOVERY_RESEARCH_ONLY",
+    "sources": [
+      "isap",
+      "eurlex",
+      "saos",
+      "cbosa",
+      "krs",
+      "wl",
+      "nbp",
+      "eureka",
+      "sudop",
+      "uodo",
+      "ceidg"
+    ],
+    "statutoryVerificationAuthority": "LEX_NATIVE_OFFICIAL_VERIFIER",
+    "firstUseNetworkRequired": true,
+    "networkPolicy": "CORE_RUNTIME_REMAINS_NETWORK_INDEPENDENT_AFTER_BOOTSTRAP; LIVE_MCP_SOURCE_CALLS_REQUIRE_NETWORK_WHEN_USER_OR_MODEL_INVOKES_LEGAL_RESEARCH",
+    "firstUseConnectorProvisioning": "BUNDLED_IN_SKILL_CORPUS_NO_DOWNLOAD; INSTALL_UNINSTALL_IN_SETTINGS_MCP_CONNECTORS; CEIDG_REQUIRES_USER_API_KEY",
+    "mediation": "DIRECT_LLAMA_SERVER_MCP",
+    "llamaServerConfigured": true
+  },
+  "accountSessionClients": {
+    "codex": {
+      "package": "@openai/codex",
+      "version": "0.154.0",
+      "model": "gpt-5.6-luna",
+      "delivery": "ON_DEMAND_AFTER_USER_SELECTS_CHATGPT_ACCOUNT",
+      "auth": "CHATGPT_ACCOUNT",
+      "installRoot": "~/.lex-machina/optional-tools/account-clients/openai",
+      "provisioner": "APP_PRIVATE_NPM_PINNED_VERSION"
+    },
+    "claude": {
+      "package": "@anthropic-ai/claude-code",
+      "version": "2.1.278",
+      "delivery": "ON_DEMAND_AFTER_USER_SELECTS_CLAUDE_ACCOUNT",
+      "auth": "CLAUDE_AI_SUBSCRIPTION",
+      "installRoot": "~/.lex-machina/optional-tools/account-clients/anthropic",
+      "provisioner": "APP_PRIVATE_NPM_PINNED_VERSION"
+    },
+    "bundledInInstaller": false,
+    "apiKeyProvidersNeedCli": false
+  }
+}

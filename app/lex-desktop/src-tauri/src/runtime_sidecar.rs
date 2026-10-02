@@ -22,15 +22,75 @@ fn runtime_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "SIDECAR_RUNTIME_ROOT_MISSING".to_string())
 }
 
-fn safe_relative_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
+/// Downloaded components (node, python, models, component lock). On Windows they
+/// live next to the code in the install directory; on macOS the code is inside
+/// the signed app bundle, so the online bootstrap puts them in the user's
+/// Application Support directory instead.
+fn components_root(code_root: &Path) -> PathBuf {
+    if let Some(configured) = env::var_os("LEX_COMPONENTS_ROOT") {
+        return PathBuf::from(configured);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = env::var_os("HOME") {
+            return PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join("LexMachina")
+                .join("runtime");
+        }
+    }
+    code_root.to_path_buf()
+}
+
+#[cfg(windows)]
+fn node_executable(components: &Path) -> PathBuf { components.join("node").join("node.exe") }
+#[cfg(not(windows))]
+fn node_executable(components: &Path) -> PathBuf { components.join("node").join("bin").join("node") }
+
+#[cfg(windows)]
+fn npm_executable(components: &Path) -> PathBuf { components.join("node").join("npm.cmd") }
+#[cfg(not(windows))]
+fn npm_executable(components: &Path) -> PathBuf { components.join("node").join("bin").join("npm") }
+
+#[cfg(windows)]
+fn python_executable(components: &Path) -> PathBuf { components.join("python").join("python.exe") }
+#[cfg(not(windows))]
+fn python_executable(components: &Path) -> PathBuf { components.join("python").join("bin").join("python3") }
+
+#[cfg(windows)]
+fn uvx_executable(components: &Path) -> PathBuf { components.join("python").join("Scripts").join("uvx.exe") }
+#[cfg(not(windows))]
+fn uvx_executable(components: &Path) -> PathBuf { components.join("python").join("bin").join("uvx") }
+
+#[cfg(windows)]
+fn runtime_search_path(components: &Path) -> Vec<PathBuf> {
+    vec![components.join("node"), components.join("python").join("Scripts"), components.join("python")]
+}
+#[cfg(not(windows))]
+fn runtime_search_path(components: &Path) -> Vec<PathBuf> {
+    vec![components.join("node").join("bin"), components.join("python").join("bin")]
+}
+
+#[cfg(windows)]
+const SIDECAR_FILE: &str = "lex-runtime-sidecar.exe";
+#[cfg(not(windows))]
+const SIDECAR_FILE: &str = "lex-runtime-sidecar";
+
+// Component-lock paths under these roots belong to the downloaded components;
+// the others (app, corpus, workers, sidecar) to the code root.
+const COMPONENT_DIRS: [&str; 3] = ["node", "python", "models"];
+
+fn safe_relative_path(code_root: &Path, components: &Path, relative: &str) -> Result<PathBuf, String> {
     if relative.is_empty() || relative.starts_with('/') || relative.starts_with('\\') || relative.contains(':') {
         return Err("SIDECAR_LOCK_PATH_INVALID".to_string());
     }
-    let normalized = relative.replace('/', "\\");
-    if normalized.split('\\').any(|part| part.is_empty() || part == "." || part == "..") {
+    let parts: Vec<&str> = relative.split(['/', '\\']).collect();
+    if parts.iter().any(|part| part.is_empty() || *part == "." || *part == "..") {
         return Err("SIDECAR_LOCK_PATH_INVALID".to_string());
     }
-    Ok(root.join(normalized))
+    let base = if COMPONENT_DIRS.contains(&parts[0]) { components } else { code_root };
+    Ok(parts.iter().fold(base.to_path_buf(), |path, part| path.join(part)))
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
@@ -48,8 +108,8 @@ fn sha256_file(path: &Path) -> Result<String, String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn validate_component_lock(root: &Path) -> Result<usize, String> {
-    let lock_path = required_file(root.join("component-lock.json"), "SIDECAR_COMPONENT_LOCK_MISSING")?;
+fn validate_component_lock(root: &Path, components_dir: &Path) -> Result<usize, String> {
+    let lock_path = required_file(components_dir.join("component-lock.json"), "SIDECAR_COMPONENT_LOCK_MISSING")?;
     let raw = fs::read(&lock_path)
         .map_err(|error| format!("SIDECAR_COMPONENT_LOCK_READ_FAILED:{error}"))?;
     let lock: serde_json::Value = serde_json::from_slice(&raw)
@@ -102,7 +162,7 @@ fn validate_component_lock(root: &Path) -> Result<usize, String> {
         if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err("SIDECAR_COMPONENT_LOCK_FILE_HASH_INVALID".to_string());
         }
-        let path = safe_relative_path(root, relative)?;
+        let path = safe_relative_path(root, components_dir, relative)?;
         if !path.is_file() {
             return Err(format!("SIDECAR_COMPONENT_FILE_MISSING:{relative}"));
         }
@@ -116,11 +176,13 @@ fn validate_component_lock(root: &Path) -> Result<usize, String> {
 }
 
 fn installed_skill_overlay() -> Option<PathBuf> {
-    let local = env::var_os("LOCALAPPDATA")?;
-    let root = PathBuf::from(local)
-        .join("LexMachina")
-        .join("skills")
-        .join("current");
+    // Same location as the runtime's localAppDataRoot(): %LOCALAPPDATA%\LexMachina
+    // on Windows, ~/.lex-machina elsewhere.
+    let base = match env::var_os("LOCALAPPDATA") {
+        Some(local) => PathBuf::from(local).join("LexMachina"),
+        None => PathBuf::from(env::var_os("HOME")?).join(".lex-machina"),
+    };
+    let root = base.join("skills").join("current");
     if root.join(".lex-skills-version.json").is_file() && root.is_dir() {
         Some(root)
     } else {
@@ -129,15 +191,17 @@ fn installed_skill_overlay() -> Option<PathBuf> {
 }
 
 fn self_test(root: &Path) -> Result<(), String> {
-    required_file(root.join("node").join("node.exe"), "SIDECAR_NODE_MISSING")?;
+    let components = components_root(root);
+    required_file(node_executable(&components), "SIDECAR_NODE_MISSING")?;
     required_file(root.join("app").join("dist").join("http").join("server.js"), "SIDECAR_SERVER_MISSING")?;
-    required_file(root.join("python").join("python.exe"), "SIDECAR_PYTHON_MISSING")?;
-    required_file(root.join("python").join("Scripts").join("uvx.exe"), "SIDECAR_UVX_MISSING")?;
+    required_file(python_executable(&components), "SIDECAR_PYTHON_MISSING")?;
+    required_file(uvx_executable(&components), "SIDECAR_UVX_MISSING")?;
+    required_file(root.join(SIDECAR_FILE), "SIDECAR_EXECUTABLE_MISSING")?;
     required_dir(root.join("corpus"), "SIDECAR_CORPUS_MISSING")?;
-    required_dir(root.join("models").join("paddle").join("official_models"), "SIDECAR_PADDLE_MODELS_MISSING")?;
-    required_dir(root.join("models").join("stanza").join("pl"), "SIDECAR_STANZA_MODELS_MISSING")?;
+    required_dir(components.join("models").join("paddle").join("official_models"), "SIDECAR_PADDLE_MODELS_MISSING")?;
+    required_dir(components.join("models").join("stanza").join("pl"), "SIDECAR_STANZA_MODELS_MISSING")?;
 
-    let verified_files = validate_component_lock(root)?;
+    let verified_files = validate_component_lock(root, &components)?;
     println!("{}", serde_json::json!({
         "gate": "G33_PAYLOAD_NATIVE_SELF_TEST",
         "result": "PASS",
@@ -151,24 +215,21 @@ fn self_test(root: &Path) -> Result<(), String> {
 }
 
 fn run_runtime(root: &Path) -> Result<i32, String> {
-    let node = required_file(root.join("node").join("node.exe"), "SIDECAR_NODE_MISSING")?;
+    let components = components_root(root);
+    let node = required_file(node_executable(&components), "SIDECAR_NODE_MISSING")?;
     let server = required_file(root.join("app").join("dist").join("http").join("server.js"), "SIDECAR_SERVER_MISSING")?;
-    let python = required_file(root.join("python").join("python.exe"), "SIDECAR_PYTHON_MISSING")?;
-    let uvx = required_file(root.join("python").join("Scripts").join("uvx.exe"), "SIDECAR_UVX_MISSING")?;
+    let python = required_file(python_executable(&components), "SIDECAR_PYTHON_MISSING")?;
+    let uvx = required_file(uvx_executable(&components), "SIDECAR_UVX_MISSING")?;
     let inherited_path = env::var_os("PATH").unwrap_or_default();
-    let mut runtime_paths = vec![
-        root.join("node"),
-        root.join("python").join("Scripts"),
-        root.join("python"),
-    ];
+    let mut runtime_paths = runtime_search_path(&components);
     runtime_paths.extend(env::split_paths(&inherited_path));
     let runtime_path = env::join_paths(runtime_paths)
         .map_err(|error| format!("SIDECAR_PATH_BUILD_FAILED:{error}"))?;
     let bundled_corpus = required_dir(root.join("corpus"), "SIDECAR_CORPUS_MISSING")?;
     let skills = installed_skill_overlay().unwrap_or(bundled_corpus);
-    let paddle = required_dir(root.join("models").join("paddle"), "SIDECAR_PADDLE_MODELS_MISSING")?;
+    let paddle = required_dir(components.join("models").join("paddle"), "SIDECAR_PADDLE_MODELS_MISSING")?;
     let paddle_official = required_dir(paddle.join("official_models"), "SIDECAR_PADDLE_OFFICIAL_MODELS_MISSING")?;
-    let stanza = required_dir(root.join("models").join("stanza"), "SIDECAR_STANZA_MODELS_MISSING")?;
+    let stanza = required_dir(components.join("models").join("stanza"), "SIDECAR_STANZA_MODELS_MISSING")?;
 
     let status = Command::new(node)
         .arg(server)
@@ -179,6 +240,8 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
         .env("LEX_NER_PYTHON", &python)
         .env("LEX_STORAGE_PYTHON", &python)
         .env("LEX_LEGAL_MCP_UVX", &uvx)
+        // Account-session clients are provisioned with the private npm.
+        .env("LEX_NPM_CLI", npm_executable(&components))
         .env("PATH", runtime_path)
         .env("PADDLE_PDX_CACHE_HOME", &paddle)
         .env("LEX_PADDLE_MODEL_DIR", &paddle_official)

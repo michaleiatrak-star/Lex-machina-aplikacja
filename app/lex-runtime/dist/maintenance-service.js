@@ -565,6 +565,10 @@ export class MaintenanceService {
         if (!status.installer) {
             throw new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED");
         }
+        // macOS: the update is installed by opening the new .pkg (no in-app runner).
+        if (process.platform === "darwin") {
+            throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
+        }
         const version = requireLatestVersion(status);
         const bytes = await downloadVerified(status.installer, this.fetchImpl);
         const root = applicationUpdateStagingRoot();
