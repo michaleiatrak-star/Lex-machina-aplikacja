@@ -30,8 +30,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 27 | `9b8e46a` | Gemini/Grok przez konto: uruchamianie npm.cmd i klientów .cmd na Windows |
 | hotfix 28 | `b44bf03` | Wyszukiwanie: podgląd ELI/EUR-Lex/KRS/NBP/biała lista/CEIDG, KRS po NIP/REGON, NBP kupno/sprzedaż, CBOSA data orzeczenia, SUDOP kolejka |
 | hotfix 29 | `01b82e5` | KIO (wyszukiwarka UZP), SAOS bez fałszywej niedostępności, przypisania/archiwum/nazwa spraw, Gemini: odmowa planu Google |
+| hotfix 30 | `d87b0ff` | Przepisy (RAG): PDF ELI ponad 600 stron, skany przez lokalny OCR (partiami, oznaczone), kodowanie starych Dz.U., „Artykuł N” |
 
 ---
+
+## hotfix 30
+
+- `CoreLawIndex`: własne limity PDF (5000 stron, 128 MB, 60 mln znaków), pobranie PDF 10 min; `LocalPdfTextExtractor` zwraca `pageTexts`, opcja `allowEmpty`.
+- Skan (≥ połowa stron < 40 znaków po nagłówkach albo brak artykułów): `OcrEngine.recognizePages` partiami po 20 stron, maks. 1000; `textSource: "ocr"`, `ocrPages`; `verifyFromCoreLaw` → `CORE_LAW_OCR_TEXT`; `coreLawEliCaution` z informacją o OCR.
+- `CoreLawPermanentError` (brak tekstu w ELI, brak OCR, limit OCR): ponowienie raz na dobę (`retryAt`), nie liczy się do blokady źródła.
+- `repairDzuPdfEncoding`, `splitArticles` z „Artykuł N”, `stripPdfPageHeaders` dla „Dziennik Ustaw Nr N — S — Poz. P”.
+- Sonda: DU/1965/232 to 1 strona (obraz) z odesłaniem do załącznika numeru; DU/2009/858 to 608 stron, tekst tylko na s. 1 i 608.
 
 ## hotfix 29
 
