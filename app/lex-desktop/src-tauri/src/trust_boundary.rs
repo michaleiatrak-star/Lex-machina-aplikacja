@@ -1438,6 +1438,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/core-law/acts/lookup"
         | "/api/core-law/acts/remove" => method == "POST",
         "/api/core-law/settings" => method == "PUT",
+        // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
+        "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
+        "/api/diagnostics/anomalies/export" => method == "GET",
         "/api/admin/provider-accounts/anthropic/oauth-token" => {
             matches!(method, "PUT" | "DELETE")
         }
@@ -1974,6 +1977,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/core-law/acts/remove"));
         assert!(!route_allowed("GET", "/api/core-law/acts"));
         assert!(!route_allowed("DELETE", "/api/core-law/acts/DU/2025/126"));
+        assert!(route_allowed("GET", "/api/diagnostics/anomalies"));
+        assert!(route_allowed("DELETE", "/api/diagnostics/anomalies"));
+        assert!(!route_allowed("POST", "/api/diagnostics/anomalies"));
+        assert!(route_allowed("GET", "/api/diagnostics/anomalies/export"));
+        assert!(!route_allowed("DELETE", "/api/diagnostics/anomalies/export"));
         assert!(route_allowed(
             "POST",
             "/api/provider-accounts/openai/login"

@@ -53,6 +53,8 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
   const [severity, setSeverity] = useState<AnomalySeverity | "">("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  // Błąd odczytu dziennika nie może wyglądać jak pusty dziennik ("0 błędów").
+  const [loadError, setLoadError] = useState("");
   const admin = user.appRole === "ADMIN";
 
   const load = useCallback(async () => {
@@ -63,9 +65,12 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
       const result = await getAnomalies({ since, limit: 100, ...(severity ? { severity } : {}) });
       setSummary(result.summary);
       setEntries(result.entries);
+      setLoadError("");
       setMessage("");
     } catch (failure) {
-      setMessage(failure instanceof ApiError ? failure.code : String(failure));
+      setSummary([]);
+      setEntries([]);
+      setLoadError(failure instanceof ApiError ? failure.code : String(failure));
     } finally {
       setBusy(false);
     }
@@ -108,8 +113,8 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
             błędne ścieżki skilli, blokady i błędy sesji · bez treści spraw
           </small>
         </div>
-        <span className={errors ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
-          {errors} błędów · {warnings} ostrzeżeń
+        <span className={errors || loadError ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
+          {loadError ? "dziennik niedostępny" : `${errors} błędów · ${warnings} ostrzeżeń`}
         </span>
       </div>
 
@@ -133,7 +138,9 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
         <button type="button" disabled={busy || !summary.length} onClick={() => void onClear()}>Wyczyść</button>
       </div>
 
-      {summary.length ? (
+      {loadError ? (
+        <p className="maintenance-error">Nie udało się wczytać dziennika: {loadError}</p>
+      ) : summary.length ? (
         <>
           <small>Powtarzające się (ten sam kod i plik):</small>
           <table className="anomaly-table">
