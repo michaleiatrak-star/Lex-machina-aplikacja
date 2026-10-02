@@ -1,5 +1,6 @@
 import {
   SupremeCourtCaseVerifier,
+  snUpstreamError,
   type CaseLawFetch
 } from "./case-law-verifier.js";
 
@@ -134,11 +135,15 @@ const transportTrace:
 const tracedFetch:
   CaseLawFetch =
   async (input, init) => {
+    const started =
+      Date.now();
     const response =
       await globalThis.fetch(
         input,
         init
       );
+    const elapsedMs =
+      Date.now() - started;
 
     const contentType =
       response.headers
@@ -147,6 +152,8 @@ const tracedFetch:
 
     let payloadShape:
       Shape | null = null;
+    let upstreamError:
+      string | null = null;
 
     if (
       contentType
@@ -154,12 +161,14 @@ const tracedFetch:
         .includes("json")
     ) {
       try {
+        const payload =
+          await response
+            .clone()
+            .json();
         payloadShape =
-          shape(
-            await response
-              .clone()
-              .json()
-          );
+          shape(payload);
+        upstreamError =
+          snUpstreamError(payload);
       } catch {
         payloadShape = null;
       }
@@ -174,6 +183,7 @@ const tracedFetch:
           ),
       status:
         response.status,
+      elapsedMs,
       contentType,
       locationHost:
         response.headers
@@ -184,7 +194,8 @@ const tracedFetch:
               String(input)
             ).hostname
           : null,
-      payloadShape
+      payloadShape,
+      upstreamError
     });
 
     return response;

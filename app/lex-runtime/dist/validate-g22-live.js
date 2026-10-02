@@ -1,4 +1,4 @@
-import { SupremeCourtCaseVerifier } from "./case-law-verifier.js";
+import { SupremeCourtCaseVerifier, snUpstreamError } from "./case-law-verifier.js";
 const signature = "II CSK 101/20";
 function shape(value, depth = 0) {
     if (value === null) {
@@ -62,19 +62,25 @@ function shape(value, depth = 0) {
 }
 const transportTrace = [];
 const tracedFetch = async (input, init) => {
+    const started = Date.now();
     const response = await globalThis.fetch(input, init);
+    const elapsedMs = Date.now() - started;
     const contentType = response.headers
         .get("content-type") ??
         "";
     let payloadShape = null;
+    let upstreamError = null;
     if (contentType
         .toLowerCase()
         .includes("json")) {
         try {
+            const payload = await response
+                .clone()
+                .json();
             payloadShape =
-                shape(await response
-                    .clone()
-                    .json());
+                shape(payload);
+            upstreamError =
+                snUpstreamError(payload);
         }
         catch {
             payloadShape = null;
@@ -84,13 +90,15 @@ const tracedFetch = async (input, init) => {
         url: String(input)
             .replace(/([?&]id=)[^&]+/u, "$1<redacted-id>"),
         status: response.status,
+        elapsedMs,
         contentType,
         locationHost: response.headers
             .get("location")
             ? new URL(response.headers
                 .get("location"), String(input)).hostname
             : null,
-        payloadShape
+        payloadShape,
+        upstreamError
     });
     return response;
 };
