@@ -32,8 +32,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 29 | `01b82e5` | KIO (wyszukiwarka UZP), SAOS bez fałszywej niedostępności, przypisania/archiwum/nazwa spraw, Gemini: odmowa planu Google |
 | hotfix 30 | `d87b0ff` | Przepisy (RAG): PDF ELI ponad 600 stron, skany przez lokalny OCR (partiami, oznaczone), kodowanie starych Dz.U., „Artykuł N” |
 | hotfix 31 | `ebebb89` | MCP: suma pakietu (CRLF z checkoutu na Windows), RAG: postęp OCR i „Bez tekstu w ELI”, konto: narzędzia w jednej rundzie, sprawy i kalendarz |
+| hotfix 32 | `81817b6` | Grok przez konto: kod limitu zapytań (ACP „Rate limited”), ponowienie po 15/45 s |
 
 ---
+
+## hotfix 32
+
+- `codedGrokFailure`: błąd JSON-RPC z `runGrokAcp` → `ACCOUNT_SESSION_CAPACITY:xai:1:…` (wcześniej `PROVIDER_UNCODED_FAILURE`).
+- `streamAccountSession`: `isTransientRateLimit` → ponowienie po 15 s i 45 s (z `abortSignal`); bez ponowień przy „usage limit”/quota.
+- Web: komunikat `ACCOUNT_SESSION_CAPACITY` z przyczyną i wyjściem.
 
 ## hotfix 31
 
