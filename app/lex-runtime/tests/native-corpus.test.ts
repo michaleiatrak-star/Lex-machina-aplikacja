@@ -203,6 +203,46 @@ describe("AUTO with native corpus access", () => {
     expect(seen[0]!.systemPrompt).toContain("mcp__lex__");
     expect(seen[1]!.messages.at(-1)!.content).toContain("mod-KK-kwalifikator-karnomaterialny.md");
     expect(result.output).toBe("poprawiona kwalifikacja");
-    expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", DR03]);
+    expect(seen[0]!.systemPrompt).toContain("# prawo\n");
+    expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "prawo-polskie-v2", DR03]);
+  });
+
+  it("gives the router and the Polish-law facade up front also without native corpus access", async () => {
+    const registry = corpus();
+    const runtime = new LegalCorpusToolRuntime(registry, { modelSelectsSkills: true });
+    const seen: ProviderStreamParams[] = [];
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "test",
+      capabilities: { streaming: true, tools: true, reasoning: false, modelDiscovery: false },
+      stream: async (params) => {
+        seen.push(params);
+        return { fullText: "odpowiedź" };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const engine = new LexExecutionEngine(registry, new ProviderGateway(providers));
+    await engine.executePolishLegalQuery({
+      query: "Utrata dowodu osobistego.",
+      provider: "openai",
+      model: "account",
+      modelSelectsSkills: true,
+      onCorpusPreloaded: (relativePath) => runtime.recordPreloaded(relativePath),
+      tools: [{ type: "function", function: { name: "read_legal_resource", description: "odczyt", parameters: {} } }],
+      runTools: async () => [],
+      route: { jurisdiction: "PL", primarySkill: DR02, mode: "PRAWNIK" }
+    });
+    const prompt = seen[0]!.systemPrompt;
+    expect(prompt).toContain("# ROUTER V3 HARD GATE");
+    expect(prompt).toContain("# prawo\n");
+    expect(prompt).toContain("już wczytany - nie czytaj ponownie");
+    expect(prompt).toContain("jeden odczyt = jeden plik");
+    expect(prompt).not.toContain("Runtime blokuje");
+    expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "prawo-polskie-v2"]);
+    expect(runtime.auditEvents()).toEqual([
+      { tool: "read_legal_resource", target: "prawny-router-v3/SKILL.md", decision: "ALLOW", detail: { preloaded: true } },
+      { tool: "read_legal_resource", target: "prawo-polskie-v2/SKILL.md", decision: "ALLOW", detail: { preloaded: true } }
+    ]);
   });
 });

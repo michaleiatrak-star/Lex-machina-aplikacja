@@ -1534,6 +1534,14 @@ export class SafeSessionExecutor implements SessionExecutor {
             modelSelectsSkills: true
           }
         : {}),
+      ...(request.modelSelectsSkills && !nativeCorpus
+        ? {
+            onCorpusPreloaded: (relativePath: string) => {
+              corpusTools.recordPreloaded(relativePath);
+              step("SKILLS", relativePath);
+            }
+          }
+        : {}),
       ...(nativeCorpus
         ? {
             nativeCorpus: {

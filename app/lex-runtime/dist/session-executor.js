@@ -720,6 +720,14 @@ export class SafeSessionExecutor {
                     modelSelectsSkills: true
                 }
                 : {}),
+            ...(request.modelSelectsSkills && !nativeCorpus
+                ? {
+                    onCorpusPreloaded: (relativePath) => {
+                        corpusTools.recordPreloaded(relativePath);
+                        step("SKILLS", relativePath);
+                    }
+                }
+                : {}),
             ...(nativeCorpus
                 ? {
                     nativeCorpus: {

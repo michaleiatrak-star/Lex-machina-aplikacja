@@ -195,6 +195,14 @@ export class LegalCorpusToolRuntime {
         }
         this.events.push({ tool: "Read", target: relativePath, decision: "ALLOW", detail: { native: true } });
     }
+    /** A SKILL.md the runtime put in the prompt up front (router v3, prawo-polskie-v2). */
+    recordPreloaded(relativePath) {
+        const skill = this.skillForPath(relativePath);
+        if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md") && !this.readSkills.includes(skill)) {
+            this.readSkills.push(skill);
+        }
+        this.events.push({ tool: READ_RESOURCE, target: relativePath, decision: "ALLOW", detail: { preloaded: true } });
+    }
     /**
      * A criminal-law skill was read natively without the qualifier: the
      * corpus path the model still has to read before qualifying the act.

@@ -321,6 +321,9 @@ export class LexExecutionEngine {
       onRead: (relativePath: string) => void;
       missingQualifier: () => string | null;
     };
+    // AUTO bez natywnego korpusu: router v3 i fasada prawo-polskie-v2 są podawane
+    // w prompcie z góry (jak przy natywnym korpusie) i zapisywane jako przeczytane.
+    onCorpusPreloaded?: (relativePath: string) => void;
     // Live draft of the model output (shown while gates are still pending).
     draftCallbacks?: StreamCallbacks;
     // Generowanie pisma: wynik to JSON AST (deterministic-workflow.ts, documentAstOutput).
@@ -1864,15 +1867,25 @@ export class LexExecutionEngine {
         const folder = native ? ` [${path.basename(skill.directory)}/]` : "";
         return `- ${skill.name}${folder}${version ? ` v${version}` : ""} :: ${text.length > 300 ? text.slice(0, 300) + "…" : text || "(brak opisu)"}`;
       });
-    // Native corpus: the router is given in full up front (router-v3 first by
-    // construction, one tool round less) and counted as read.
-    const router = native ? this.registry.get("prawny-router-v3") : undefined;
-    const routerText = router
-      ? fs.readFileSync(path.join(router.directory, "SKILL.md"), "utf8")
-      : null;
-    if (router && routerText) {
-      native!.onRead(`${path.basename(router.directory)}/SKILL.md`);
-    }
+    // The router v3 and the Polish-law facade (prawo-polskie-v2, the DR-01..16
+    // routing) are given in full up front - for every model, not only the
+    // native corpus - and counted as read: router-v3 first by construction and
+    // two tool rounds less on every legal question.
+    const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
+    const preloaded = onPreloaded
+      ? (["prawny-router-v3", "prawo-polskie-v2"] as const).flatMap((name) => {
+          const skill = this.registry.get(name);
+          if (!skill || !allowed(name)) return [];
+          const file = path.join(skill.directory, "SKILL.md");
+          if (!fs.existsSync(file)) return [];
+          const relative = `${path.basename(skill.directory)}/SKILL.md`;
+          onPreloaded(relative);
+          return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+        })
+      : [];
+    const preloadedPrompt = preloaded.map(
+      (item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`
+    );
     const toolNames = new Set(
       args.tools.map((tool) => tool.function.name)
     );
@@ -1919,7 +1932,7 @@ export class LexExecutionEngine {
             toolNames: new Set(args.tools.map((tool) => tool.function.name)),
             ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
           }),
-          ...(routerText ? [`# PRAWNY ROUTER V3 (prawny-router-v3/SKILL.md, już przeczytany)\n\n${routerText}`] : [])
+          ...preloadedPrompt
         ]
       : null;
     const promptParts = nativeParts ?? [
@@ -1927,7 +1940,14 @@ export class LexExecutionEngine {
         "# LEX MACHINA — AUTO: MODEL DOBIERA SKILLE",
         "Pracujesz jak asystent prawny z zainstalowanymi skillami: sam oceniasz, które skille i moduły są potrzebne, i wczytujesz je narzędziem read_legal_resource.",
         "Wiadomość bez kwestii prawnej (powitanie, test, krótkie polecenie, pytanie ogólne): odpowiedz bezpośrednio, bez wczytywania skilli.",
-        "Sprawa lub pytanie prawne: NAJPIERW wczytaj read_legal_resource skill=prawny-router-v3 path=SKILL.md i wykonaj jego HARD GATE i routing. Runtime blokuje odczyt innych skilli przed routerem.",
+        ...(preloaded.length
+          ? [
+              "Sprawa lub pytanie prawne: router prawny-router-v3 i fasada prawa polskiego prawo-polskie-v2 są wczytane na końcu tej instrukcji (liczą się jako przeczytane - nie wczytuj ich ponownie). Wykonaj HARD GATE i routing routera.",
+              "Metodyka doboru narzędzi: (1) z routera i prawo-polskie-v2 ustal domenę DR i ewentualny skill wykonawczy, do którego router kieruje ten typ zadania; (2) wczytaj sam SKILL.md tej domeny (jeden odczyt = jeden plik); w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę z routera lub prawo-polskie-v2, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w następnej rundzie wczytaj z SKILL.md tylko moduły potrzebne do tego zagadnienia, razem z pozostałą weryfikacją; (4) odpowiedz. Nie wczytuj skilli i modułów, do których router nie kieruje dla tego pytania, nie zgaduj nazw plików i nie przeglądaj całych katalogów."
+            ]
+          : [
+              "Sprawa lub pytanie prawne: NAJPIERW wczytaj read_legal_resource skill=prawny-router-v3 path=SKILL.md i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla)."
+            ]),
         "Następnie wczytaj SKILL.md właściwych domen DR i skilli wykonawczych oraz moduły, do których odsyłają (view modules/..., shared/...). Wczytuj to, czego rzeczywiście potrzebujesz; nie udawaj, że przeczytałeś plik, którego nie wczytałeś.",
         "Prawo karne (DR-03): runtime dołącza obowiązkowy kwalifikator karnomaterialny przy pierwszym SKILL.md DR-03; zastosuj go przed kwalifikacją.",
         "Przepisy cytuj wyłącznie po weryfikacji narzędziami (ELI), nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
@@ -1949,7 +1969,8 @@ export class LexExecutionEngine {
         catalog: false,
         toolNames: new Set(args.tools.map((tool) => tool.function.name)),
         ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
-      })
+      }),
+      ...preloadedPrompt
     ];
     if (args.documentContext) {
       promptParts.push(
