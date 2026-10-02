@@ -1886,6 +1886,18 @@ export class LexExecutionEngine {
     const preloadedPrompt = preloaded.map(
       (item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`
     );
+    // One selection methodology for every host (Claude with the native corpus,
+    // ChatGPT, Gemini, Grok, API keys): only the read/list tools differ.
+    const readTool = native ? "Read" : "read_legal_resource";
+    const listTool = native ? "Glob z dokładnym wzorcem" : "list_legal_resources";
+    const preloadedNames = preloaded.map((item) => item.name).join(" i ");
+    const methodology = [
+      preloaded.length
+        ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`
+        : `Sprawa lub pytanie prawne: NAJPIERW wczytaj ${native ? "Read prawny-router-v3/SKILL.md" : "read_legal_resource skill=prawny-router-v3 path=SKILL.md"} i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla).`,
+      `Metodyka doboru skilli i modułów (${readTool}): (1) z routera${preloaded.some((item) => item.name === "prawo-polskie-v2") ? " i prawo-polskie-v2" : ""} ustal wszystkie domeny DR, których dotyczy sprawa (może być kilka), oraz skille wykonawcze, do których router kieruje ten typ zadania; (2) wczytaj SKILL.md każdej z nich - jeden odczyt = jeden plik, kilka odczytów w jednej rundzie; w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w kolejnych rundach sam wczytuj moduły (modules/, shared/, references/) i dalsze skille, do których odsyłają wczytane SKILL.md i moduły, gdy są potrzebne do tego zagadnienia - razem z pozostałą weryfikacją, bez pytania użytkownika; (4) odpowiedz, gdy masz wszystko, czego wymaga zagadnienie.`,
+      `Nie wczytuj skilli i modułów, do których ani router, ani wczytane skille nie kierują dla tego pytania; nie zgaduj nazw plików (nazwy nie znasz: ${listTool}) i nie przeglądaj całych katalogów. Nie udawaj, że przeczytałeś plik, którego nie wczytałeś.`
+    ];
     const toolNames = new Set(
       args.tools.map((tool) => tool.function.name)
     );
@@ -1911,7 +1923,8 @@ export class LexExecutionEngine {
             "# LEX MACHINA — AUTO: MODEL DOBIERA SKILLE",
             "Pracujesz jak asystent prawny z zainstalowanymi skillami. Katalog roboczy to pełny korpus skilli prawnych Lex (tylko do odczytu): każdy skill to folder z SKILL.md i podfolderami (modules/, references/, shared/ i inne). Czytasz je narzędziami Read, Glob i Grep - masz dostęp do wszystkich plików i podfolderów.",
             "Wiadomość bez kwestii prawnej (powitanie, test, krótkie polecenie, pytanie ogólne): odpowiedz bezpośrednio, bez czytania skilli.",
-            "Sprawa lub pytanie prawne: wykonaj HARD GATE i routing prawnego routera v3 podanego niżej w całości, potem przeczytaj SKILL.md właściwych domen DR i skilli wykonawczych oraz moduły, do których odsyłają. Ścieżki podawaj względem katalogu roboczego (np. dr-02-.../SKILL.md). Czytaj to, czego rzeczywiście potrzebujesz; nie udawaj, że przeczytałeś plik, którego nie otworzyłeś.",
+            ...methodology,
+            "Ścieżki podawaj względem katalogu roboczego (np. dr-02-.../SKILL.md, dr-02-.../modules/<plik>).",
             `Prawo karne (DR-03): przed kwalifikacją przeczytaj obowiązkowy kwalifikator karnomaterialny <folder DR-03>/${CRIMINAL_QUALIFIER_INDEX} i zastosuj go.`,
             "Narzędzia Lex masz jako mcp__lex__<nazwa>: rdzeń aktów prawnych z tekstami z ELI (read_core_law_article, search_core_law - lokalnie, szybko), weryfikacja przepisów i orzeczeń, orzecznictwo (SAOS, CBOSA, SN) i źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne). Brzmienie przepisu bierz z rdzenia aktów albo weryfikacji ELI, nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
             "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z przeczytanego skilla.",
@@ -1940,15 +1953,8 @@ export class LexExecutionEngine {
         "# LEX MACHINA — AUTO: MODEL DOBIERA SKILLE",
         "Pracujesz jak asystent prawny z zainstalowanymi skillami: sam oceniasz, które skille i moduły są potrzebne, i wczytujesz je narzędziem read_legal_resource.",
         "Wiadomość bez kwestii prawnej (powitanie, test, krótkie polecenie, pytanie ogólne): odpowiedz bezpośrednio, bez wczytywania skilli.",
-        ...(preloaded.length
-          ? [
-              "Sprawa lub pytanie prawne: router prawny-router-v3 i fasada prawa polskiego prawo-polskie-v2 są wczytane na końcu tej instrukcji (liczą się jako przeczytane - nie wczytuj ich ponownie). Wykonaj HARD GATE i routing routera.",
-              "Metodyka doboru narzędzi: (1) z routera i prawo-polskie-v2 ustal domenę DR i ewentualny skill wykonawczy, do którego router kieruje ten typ zadania; (2) wczytaj sam SKILL.md tej domeny (jeden odczyt = jeden plik); w tej samej rundzie dołącz moduł tylko wtedy, gdy znasz jego dokładną nazwę z routera lub prawo-polskie-v2, oraz weryfikację przepisów, które już wiesz, że podasz; (3) w następnej rundzie wczytaj z SKILL.md tylko moduły potrzebne do tego zagadnienia, razem z pozostałą weryfikacją; (4) odpowiedz. Nie wczytuj skilli i modułów, do których router nie kieruje dla tego pytania, nie zgaduj nazw plików i nie przeglądaj całych katalogów."
-            ]
-          : [
-              "Sprawa lub pytanie prawne: NAJPIERW wczytaj read_legal_resource skill=prawny-router-v3 path=SKILL.md i wykonaj jego HARD GATE i routing (runtime dołącza router do pierwszego odczytu innego skilla)."
-            ]),
-        "Następnie wczytaj SKILL.md właściwych domen DR i skilli wykonawczych oraz moduły, do których odsyłają (view modules/..., shared/...). Wczytuj to, czego rzeczywiście potrzebujesz; nie udawaj, że przeczytałeś plik, którego nie wczytałeś.",
+        ...methodology,
+        "Polecenia skilli typu view modules/..., shared/... wykonujesz narzędziem read_legal_resource (skill=<nazwa> path=<ścieżka w skillu>).",
         "Prawo karne (DR-03): runtime dołącza obowiązkowy kwalifikator karnomaterialny przy pierwszym SKILL.md DR-03; zastosuj go przed kwalifikacją.",
         "Przepisy cytuj wyłącznie po weryfikacji narzędziami (ELI), nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
         "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z wczytanego skilla.",

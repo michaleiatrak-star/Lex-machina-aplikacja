@@ -201,6 +201,8 @@ describe("AUTO with native corpus access", () => {
     expect(seen[0]!.systemPrompt).toContain("# ROUTER V3 HARD GATE");
     expect(seen[0]!.systemPrompt).toContain("Read, Glob i Grep");
     expect(seen[0]!.systemPrompt).toContain("mcp__lex__");
+    expect(seen[0]!.systemPrompt).toContain("Metodyka doboru skilli i modułów (Read)");
+    expect(seen[0]!.systemPrompt).toContain("dalsze skille, do których odsyłają");
     expect(seen[1]!.messages.at(-1)!.content).toContain("mod-KK-kwalifikator-karnomaterialny.md");
     expect(result.output).toBe("poprawiona kwalifikacja");
     expect(seen[0]!.systemPrompt).toContain("# prawo\n");
@@ -238,6 +240,8 @@ describe("AUTO with native corpus access", () => {
     expect(prompt).toContain("# prawo\n");
     expect(prompt).toContain("już wczytany - nie czytaj ponownie");
     expect(prompt).toContain("jeden odczyt = jeden plik");
+    expect(prompt).toContain("Metodyka doboru skilli i modułów (read_legal_resource)");
+    expect(prompt).toContain("dalsze skille, do których odsyłają");
     expect(prompt).not.toContain("Runtime blokuje");
     expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "prawo-polskie-v2"]);
     expect(runtime.auditEvents()).toEqual([
