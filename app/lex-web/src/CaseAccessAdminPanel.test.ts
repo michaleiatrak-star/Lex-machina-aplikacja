@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignableCases, splitCasesForUser } from "./CaseAccessAdminPanel.js";
+import { assignableCases, caseMembersText, splitCasesForUser } from "./CaseAccessAdminPanel.js";
 import type { CaseAccessOverviewItem } from "./api.js";
 
 function item(caseId: string, members: string[]): CaseAccessOverviewItem {
@@ -21,6 +21,13 @@ function item(caseId: string, members: string[]): CaseAccessOverviewItem {
 }
 
 describe("uprawnienia do spraw: widok użytkownika", () => {
+  it("skraca skład sprawy w nagłówku karty", () => {
+    expect(caseMembersText(item("case_a", ["admin"]))).toBe("tylko właściciel");
+    expect(caseMembersText(item("case_a", ["admin", "marcin"]))).toBe("1 osoba: marcin (Podgląd)");
+    expect(caseMembersText(item("case_a", ["admin", "a", "b"]))).toBe("2 osoby: a (Podgląd), b (Podgląd)");
+    expect(caseMembersText(item("case_a", ["admin", "a", "b", "c", "d", "e"]))).toMatch(/^5 osób:/);
+  });
+
   it("dzieli sprawy na te z dostępem użytkownika i pozostałe", () => {
     const cases = [item("case_a", ["admin", "anna"]), item("case_b", ["jan"]), item("case_c", ["anna"])];
     const split = splitCasesForUser(cases, "anna");

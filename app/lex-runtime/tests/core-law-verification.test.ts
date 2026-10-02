@@ -67,6 +67,7 @@ function act(options: {
     articleCount: record.articleOrder.length,
     fetchedAt: record.fetchedAt,
     lastError: null,
+    unavailable: null,
     relationsCheckedAt: options.relationsCheckedAt ?? null,
     currentEli: options.eli,
     amendmentsAfter: options.amendmentsAfter ?? [],

@@ -1,0 +1,5 @@
+# Skille mają sumy kontrolne (CHECKSUMS.sha256) z bajtów repozytorium. Checkout na Windows
+# (core.autocrlf w CI) zamieniał LF na CRLF i pakiet lex-mcp.mjs w instalatorze był
+# "NIEZGODNY z sumą kontrolną skilla". Pliki skilli są kopiowane bez zmian końców linii.
+Wersja?rozwojowa?rozpakowana/** -text
+Wersja?stabilna?rozpakowana*/** -text

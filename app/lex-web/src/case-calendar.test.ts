@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CaseListItem } from "./api.js";
-import { casesNewestFirst, groupByDay, monthGrid } from "./case-calendar.js";
+import { casesNewestFirst, dayLabel, groupByDay, monthGrid, relativeDayText } from "./case-calendar.js";
 
 describe("case calendar", () => {
   it("builds Monday-first weeks covering the month", () => {
@@ -28,5 +28,15 @@ describe("case calendar", () => {
         item("b", "2026-06-01T00:00:00Z")
       ]).map((entry) => entry.caseId)
     ).toEqual(["b", "a"]);
+  });
+});
+
+describe("kalendarz: opis dnia", () => {
+  it("pokazuje datę słownie i odległość od dziś", () => {
+    expect(dayLabel("2026-10-02")).toBe("piątek, 2 października 2026");
+    expect(relativeDayText("2026-10-02", "2026-10-02")).toBe("dziś");
+    expect(relativeDayText("2026-10-03", "2026-10-02")).toBe("jutro");
+    expect(relativeDayText("2026-10-12", "2026-10-02")).toBe("za 10 dni");
+    expect(relativeDayText("2026-11-01", "2026-10-02")).toBe("za 30 dni");
   });
 });

@@ -68,6 +68,41 @@ async function settled(index: CoreLawIndex) {
 }
 
 describe("scanned ELI PDFs", () => {
+  it("shows OCR progress and resumes an interrupted OCR from the saved pages", async () => {
+    const pageTexts = [`${HEADER(1)}\nArtykuł 1\nNiniejsza Umowa określa zasady małego ruchu granicznego.`, ...Array.from({ length: 30 }, (_, index) => HEADER(index + 2))];
+    const pdf = { extract: async () => ({ text: "", pages: pageTexts.length, bytes: 4, pageTexts }) };
+    const seen: number[][] = [];
+    let fail = true;
+    let progress: unknown = null;
+    const store = tempDir("lex-core-scan-");
+    let index: CoreLawIndex;
+    const ocr = {
+      recognizePages: async (_data: Uint8Array, pages: number[], onPage?: (done: number) => void) => {
+        seen.push(pages);
+        onPage?.(1);
+        progress = index.status().progress;
+        if (fail && pages[0] !== 2) throw new Error("worker crashed");
+        return pages.map((page) => ({ page, text: page === 2 ? "Artykuł 2\nDefinicje." : `strona ${page}` }));
+      }
+    };
+    const { fetcher } = fakeEli({ "DU/2009/858": { title: "Umowa", status: "obowiązujący", textPDF: true } });
+    index = new CoreLawIndex(store, fetcher, pdf, () => Date.parse("2026-10-02T10:00:00Z"), 0, ocr);
+    index.load(tempDir("lex-core-scan-corpus-"));
+    index.addUserAct({ currentEli: "DU/2009/858", baseEli: "DU/2009/858", title: "Umowa" }, "admin");
+    await settled(index);
+    expect(progress).toEqual({ eli: "DU/2009/858", phase: "ocr", done: 26, total: 30 });
+    expect(index.summary("DU/2009/858")!.lastError).toContain("worker crashed");
+    expect(index.status().progress).toBeNull();
+
+    // Drugie podejście czyta tylko strony, których OCR nie zapisał.
+    fail = false;
+    seen.length = 0;
+    await index.refresh({ force: true, only: ["DU/2009/858"] });
+    expect(seen).toEqual([[27, 28, 29, 30, 31]]);
+    expect(index.currentRecord("DU/2009/858")?.articleOrder).toEqual(["1", "2"]);
+    expect(fs.readdirSync(path.join(store, "ocr-cache"))).toEqual([]);
+  });
+
   it("reads image pages with local OCR in batches and keeps the copy unverified", async () => {
     // DU/2009/858: strona 1 z warstwą tekstową (złe kodowanie), strony 2-46 to skany z samym nagłówkiem.
     const pageTexts = [
@@ -95,9 +130,8 @@ describe("scanned ELI PDFs", () => {
     await settled(index);
 
     expect(batches).toEqual([
-      Array.from({ length: 20 }, (_, i) => i + 2),
-      Array.from({ length: 20 }, (_, i) => i + 22),
-      Array.from({ length: 5 }, (_, i) => i + 42)
+      Array.from({ length: 25 }, (_, i) => i + 2),
+      Array.from({ length: 20 }, (_, i) => i + 27)
     ]);
     const record = index.currentRecord("DU/2009/858")!;
     expect(record.textSource).toBe("ocr");
@@ -127,7 +161,7 @@ describe("scanned ELI PDFs", () => {
       recognizePages: async (_data: Uint8Array, pages: number[]) =>
         pages.map((page) => ({
           page,
-          text: "KONWENCJA WIEDEŃSKA O STOSUNKACH DYPLOMATYCZNYCH\n(Tekst konwencji zamieszczony jest w załączniku do niniejszego numeru)."
+          text: "KONWENCJA WIEDEŃSKA O STOSUNKACH DYPLOMATYCZNYCH\n(Tekst konwencji zamieszczony jest w załączniku do niniejszego ńumeru)."
         }))
     };
     let now = Date.parse("2026-10-02T10:00:00Z");
@@ -137,7 +171,11 @@ describe("scanned ELI PDFs", () => {
     index.addUserAct({ currentEli: "DU/1965/232", baseEli: "DU/1965/232", title: "Konwencja wiedeńska o stosunkach dyplomatycznych" }, "admin");
     await settled(index);
 
-    expect(index.summary("DU/1965/232")!.lastError).toContain("w załączniku do numeru; załącznika nie ma w ELI");
+    // Brak tekstu w ELI to osobny stan, nie "błąd pobierania".
+    const act = index.status().acts.find((item) => item.eli === "DU/1965/232")!;
+    expect(act.state).toBe("UNAVAILABLE");
+    expect(act.lastError).toBeNull();
+    expect(act.unavailable).toContain("w załączniku do numeru; załącznika nie ma w ELI");
     expect(index.currentRecord("DU/1965/232")).toBeNull();
 
     const before = requested.length;

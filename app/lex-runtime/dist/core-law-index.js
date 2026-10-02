@@ -1,4 +1,5 @@
 import { CoreLawSearchIndex } from "./core-law-search.js";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -34,7 +35,7 @@ const PDF_TIMEOUT_MS = 10 * 60_000;
 // Strona, na której po usunięciu nagłówka Dz.U. zostaje mniej znaków, jest skanem.
 const OCR_MIN_PAGE_CHARS = 40;
 // OCR idzie partiami stron; partia to osobne wywołanie lokalnego OCR.
-const OCR_BATCH_PAGES = 20;
+const OCR_BATCH_PAGES = 25;
 const OCR_MAX_PAGES = 1_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const NOTE_CHARS = 400;
@@ -254,6 +255,12 @@ export function defaultCoreLawDir(env = process.env) {
 }
 /** Błąd, którego ponowienie za godzinę nic nie zmieni (np. ELI nie ma tekstu aktu). */
 class CoreLawPermanentError extends Error {
+    noText;
+    // noText: ELI nie ma tekstu aktu (stan UNAVAILABLE, nie "błąd pobierania").
+    constructor(message, noText = false) {
+        super(message);
+        this.noText = noText;
+    }
 }
 // Trwały błąd pobrania jest ponawiany raz na dobę, nie przy każdym cyklu.
 const PERMANENT_RETRY_MS = 24 * 60 * 60 * 1000;
@@ -272,6 +279,7 @@ export class CoreLawIndex {
     cache = new Map();
     searchIndex = null;
     refreshing = null;
+    progress = null;
     constructor(directory = defaultCoreLawDir(), fetcher = globalThis.fetch.bind(globalThis), 
     // Wiersze z PDF: splitArticles szuka "Art. N." na początku wiersza; bez nich tekst
     // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
@@ -341,6 +349,7 @@ export class CoreLawIndex {
                 articleCount: state?.articleCount ?? 0,
                 fetchedAt: state?.fetchedAt ?? null,
                 lastError: state?.lastError ?? null,
+                unavailable: state?.unavailable ?? null,
                 relationsCheckedAt: state?.relationsCheckedAt ?? null,
                 currentEli: state?.currentEli ?? ref.eli,
                 amendmentsAfter: state?.amendmentsAfter ?? [],
@@ -565,22 +574,25 @@ export class CoreLawIndex {
         const acts = this.summaries().map((act) => {
             const due = act.consolidated &&
                 (!act.relationsCheckedAt || this.now() - Date.parse(act.relationsCheckedAt) >= CHECK_AFTER_MS);
-            const state = act.articleCount === 0 && !act.fetchedAt
-                ? act.lastError
-                    ? "ERROR"
-                    : "MISSING"
-                : act.pendingConsolidated || act.pendingAmendments.length
-                    ? "UPDATE_AVAILABLE"
-                    : act.lastError
+            const state = act.articleCount === 0 && !act.fetchedAt && act.unavailable
+                ? "UNAVAILABLE"
+                : act.articleCount === 0 && !act.fetchedAt
+                    ? act.lastError
                         ? "ERROR"
-                        : due
-                            ? "CHECK_DUE"
-                            : "CURRENT";
+                        : "MISSING"
+                    : act.pendingConsolidated || act.pendingAmendments.length
+                        ? "UPDATE_AVAILABLE"
+                        : act.lastError
+                            ? "ERROR"
+                            : due
+                                ? "CHECK_DUE"
+                                : "CURRENT";
             return { ...act, state };
         });
         return {
             autoApply: this.autoApply,
             refreshing: this.refreshing !== null,
+            progress: this.progress,
             blockedUntil: this.state.blockedUntil,
             lastCheckAt: this.state.lastCheckAt ?? null,
             counts: {
@@ -609,7 +621,13 @@ export class CoreLawIndex {
         fs.renameSync(`${target}.tmp`, target);
     }
     async store(eli) {
-        const record = await this.fetchAct(eli);
+        let record;
+        try {
+            record = await this.fetchAct(eli);
+        }
+        finally {
+            this.progress = null;
+        }
         fs.writeFileSync(path.join(this.directory, fileNameFor(eli)), JSON.stringify(record));
         this.cache.delete(eli);
         this.searchIndex = null;
@@ -757,6 +775,7 @@ export class CoreLawIndex {
                 }
                 state.lastError = null;
                 state.retryAt = null;
+                state.unavailable = null;
                 consecutiveFailures = 0;
             }
             catch (error) {
@@ -765,6 +784,9 @@ export class CoreLawIndex {
                 if (error instanceof CoreLawPermanentError) {
                     // Brak tekstu w ELI to nie awaria źródła: nie blokuje pozostałych aktów.
                     state.retryAt = new Date(this.now() + PERMANENT_RETRY_MS).toISOString();
+                    state.unavailable = error.noText ? error.message : null;
+                    if (error.noText)
+                        state.lastError = null;
                 }
                 else {
                     consecutiveFailures += 1;
@@ -804,7 +826,8 @@ export class CoreLawIndex {
      * czyta lokalny OCR partiami po OCR_BATCH_PAGES stron, a tekst składa się
      * z powrotem w kolejności stron.
      */
-    async pdfText(bytes) {
+    async pdfText(eli, bytes) {
+        this.progress = { eli, phase: "extract", done: 0, total: 0 };
         const extracted = await this.pdf.extract(bytes);
         const pageTexts = (extracted.pageTexts ?? [extracted.text]).map((page) => stripPdfPageHeaders(repairDzuPdfEncoding(page)).trim());
         const joined = () => pageTexts.filter(Boolean).join("\n");
@@ -822,22 +845,44 @@ export class CoreLawIndex {
         if (scanned.length > OCR_MAX_PAGES) {
             throw new CoreLawPermanentError(`PDF w ELI jest skanem ${scanned.length} stron; limit OCR kopii to ${OCR_MAX_PAGES} stron.`);
         }
-        for (let start = 0; start < scanned.length; start += OCR_BATCH_PAGES) {
-            const batch = scanned.slice(start, start + OCR_BATCH_PAGES);
+        // Odczytane partie są zapisywane: przerwane OCR (zamknięcie aplikacji) wznawia się
+        // od pierwszej nieodczytanej strony tego samego pliku.
+        const cacheFile = path.join(this.directory, "ocr-cache", createHash("sha256").update(bytes).digest("hex") + ".json");
+        let cached = {};
+        try {
+            cached = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+        }
+        catch {
+            cached = {};
+        }
+        const todo = scanned.filter((page) => typeof cached[page] !== "string");
+        this.progress = { eli, phase: "ocr", done: scanned.length - todo.length, total: scanned.length };
+        for (let start = 0; start < todo.length; start += OCR_BATCH_PAGES) {
+            const batch = todo.slice(start, start + OCR_BATCH_PAGES);
+            const before = this.progress.done;
             let results;
             try {
-                results = await this.ocr.recognizePages(bytes, batch);
+                results = await this.ocr.recognizePages(bytes, batch, (done) => {
+                    if (this.progress?.eli === eli)
+                        this.progress.done = before + done;
+                });
             }
             catch (error) {
                 const detail = error instanceof Error ? error.message : String(error);
                 throw new Error(`OCR skanu ELI nie powiódł się (strony ${batch[0]}-${batch.at(-1)}): ${detail}`);
             }
-            for (const result of results) {
-                if (result.page >= 1 && result.page <= pageTexts.length) {
-                    pageTexts[result.page - 1] = stripPdfPageHeaders(result.text).trim();
-                }
+            for (const result of results)
+                cached[result.page] = result.text;
+            this.progress.done = before + batch.length;
+            fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+            fs.writeFileSync(cacheFile, JSON.stringify(cached));
+        }
+        for (const page of scanned) {
+            if (typeof cached[page] === "string" && page <= pageTexts.length) {
+                pageTexts[page - 1] = stripPdfPageHeaders(cached[page]).trim();
             }
         }
+        fs.rmSync(cacheFile, { force: true });
         return { text: joined(), pages: extracted.pages, ocrPages: scanned };
     }
     async fetchAct(eli) {
@@ -857,8 +902,9 @@ export class CoreLawIndex {
         let pages;
         if (splitArticles(body).order.length === 0 && meta.textPDF === true) {
             sourceUrl = `${base}/text.pdf`;
+            this.progress = { eli, phase: "download", done: 0, total: 0 };
             const bytes = new Uint8Array(await (await this.get(sourceUrl, "application/pdf", PDF_TIMEOUT_MS)).arrayBuffer());
-            const pdf = await this.pdfText(bytes);
+            const pdf = await this.pdfText(eli, bytes);
             body = pdf.text;
             ocrPages = pdf.ocrPages;
             pages = pdf.pages;
@@ -868,10 +914,11 @@ export class CoreLawIndex {
         if (textSource === "ocr" && order.length === 0) {
             // Np. DU/1965/232: w ELI jest tylko strona numeru z adnotacją, że tekst
             // umowy zamieszczono w załączniku do numeru (załącznika ELI nie publikuje).
-            const annex = /w\s+załączniku\s+do\s+niniejszego\s+numeru/iu.test(body);
+            // OCR myli litery ("ńumeru"), więc dopasowanie po tekście bez znaków diakrytycznych.
+            const annex = /zalacznik\p{L}*\s+do\s+niniejsz/u.test(normalizeForSearch(body));
             throw new CoreLawPermanentError(annex
                 ? `ELI udostępnia tylko skan ${pages} str. numeru Dz.U. z adnotacją, że tekst aktu zamieszczono w załączniku do numeru; załącznika nie ma w ELI.`
-                : `ELI udostępnia dla tego aktu tylko skan (${pages} str.); OCR nie znalazł w nim artykułów.`);
+                : `ELI udostępnia dla tego aktu tylko skan (${pages} str.) bez tekstu artykułów.`, true);
         }
         return {
             eli,

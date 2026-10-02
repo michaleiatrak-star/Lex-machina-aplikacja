@@ -79,3 +79,36 @@ export const MONTH_NAMES = [
   "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
   "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"
 ];
+
+const MONTH_GENITIVE = [
+  "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
+  "lipca", "sierpnia", "września", "października", "listopada", "grudnia"
+];
+
+const WEEKDAY_NAMES = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+
+/** "2026-10-02" -> "piątek, 2 października 2026". */
+export function dayLabel(key: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return key;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return `${WEEKDAY_NAMES[date.getDay()]}, ${date.getDate()} ${MONTH_GENITIVE[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Days from `today` to `key` (both "YYYY-MM-DD"); negative = past. */
+export function daysUntil(key: string, today: string): number {
+  const toDate = (value: string) => {
+    const [y, m, d] = value.split("-").map(Number);
+    return Date.UTC(y!, m! - 1, d!);
+  };
+  return Math.round((toDate(key) - toDate(today)) / 86_400_000);
+}
+
+/** "dziś", "jutro", "za 5 dni". */
+export function relativeDayText(key: string, today: string): string {
+  const days = daysUntil(key, today);
+  if (days === 0) return "dziś";
+  if (days === 1) return "jutro";
+  if (days === -1) return "wczoraj";
+  return days > 0 ? `za ${days} dni` : `${-days} dni temu`;
+}

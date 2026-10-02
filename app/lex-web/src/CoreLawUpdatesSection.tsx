@@ -11,6 +11,7 @@ import {
   type AuthenticatedUser,
   type CoreLawActLookup,
   type CoreLawActStatus,
+  type CoreLawProgress,
   type CoreLawStatus
 } from "./api.js";
 
@@ -19,8 +20,20 @@ const STATE_LABEL: Record<CoreLawActStatus["state"], string> = {
   UPDATE_AVAILABLE: "jest aktualizacja",
   CHECK_DUE: "do sprawdzenia",
   MISSING: "niepobrany",
-  ERROR: "błąd pobierania"
+  ERROR: "błąd pobierania",
+  UNAVAILABLE: "brak tekstu w ELI"
 };
+
+export function coreLawProgressText(progress: CoreLawProgress): string {
+  switch (progress.phase) {
+    case "download":
+      return "pobieranie PDF z ELI…";
+    case "extract":
+      return "odczyt tekstu PDF…";
+    case "ocr":
+      return `OCR skanu: ${progress.done}/${progress.total} stron`;
+  }
+}
 
 function day(value: string | null | undefined): string {
   return value ? value.slice(0, 10) : "—";
@@ -58,19 +71,22 @@ export function coreLawActErrorText(code: string): string {
   }
 }
 
-// Acts whose text in RAG is current, and acts that need an update or check.
+// Acts whose text in RAG is current, acts that need an update or check, and
+// acts whose text ELI does not publish (nothing to update, not an error).
 export function groupCoreLawActs(acts: CoreLawActStatus[]): {
   current: CoreLawActStatus[];
   needsUpdate: CoreLawActStatus[];
+  unavailable: CoreLawActStatus[];
 } {
   const current: CoreLawActStatus[] = [];
   const needsUpdate: CoreLawActStatus[] = [];
+  const unavailable: CoreLawActStatus[] = [];
   for (const act of acts) {
-    (act.state === "CURRENT" ? current : needsUpdate).push(act);
+    (act.state === "CURRENT" ? current : act.state === "UNAVAILABLE" ? unavailable : needsUpdate).push(act);
   }
   const order: CoreLawActStatus["state"][] = ["UPDATE_AVAILABLE", "ERROR", "MISSING", "CHECK_DUE", "CURRENT"];
   needsUpdate.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state));
-  return { current, needsUpdate };
+  return { current, needsUpdate, unavailable };
 }
 
 // Settings → Aplikacja i utrzymanie: the local copy of law (RAG). A newer
@@ -130,6 +146,7 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
           <small>
             lokalna kopia aktów z Sejm ELI · ostatnie sprawdzenie: {day(status?.lastCheckAt)}
             {status?.refreshing ? " · sprawdzanie w toku…" : ""}
+            {status?.progress ? ` · ${status.progress.eli}: ${coreLawProgressText(status.progress)}` : ""}
           </small>
         </div>
         <span>
@@ -337,7 +354,11 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                         {amendment.promulgation ? ` z ${day(amendment.promulgation)}` : ""} zostanie dodana do RAG.
                       </small>
                     ))}
-                    {act.lastError ? <small className="maintenance-error">Ostatni błąd: {act.lastError}</small> : null}
+                    {status.progress?.eli === act.currentEli || status.progress?.eli === act.eli ? (
+                      <small>W toku: {coreLawProgressText(status.progress)}</small>
+                    ) : act.lastError ? (
+                      <small className="maintenance-error">Ostatni błąd: {act.lastError}</small>
+                    ) : null}
                     {act.state === "CHECK_DUE" ? (
                       <small>Ostatnie sprawdzenie w ELI: {day(act.relationsCheckedAt)}</small>
                     ) : null}
@@ -357,6 +378,27 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
               <small>Brak.</small>
             )}
           </details>
+
+          {groups.unavailable.length ? (
+            <details className="core-law-list">
+              <summary>Bez tekstu w ELI ({groups.unavailable.length})</summary>
+              <small>
+                Sejm ELI nie publikuje tekstu tych aktów (np. tylko skan strony Dz.U. z odesłaniem do załącznika).
+                Przepisy tych aktów nie są w lokalnej kopii; ELI jest sprawdzane ponownie raz na dobę.
+              </small>
+              <ul>
+                {groups.unavailable.map((act) => (
+                  <li key={act.eli}>
+                    <div>
+                      <strong>{actName(act)}</strong> <small>{act.currentEli}</small>{" "}
+                      <span className="security-pill">{STATE_LABEL[act.state]}</span>
+                    </div>
+                    {act.unavailable ? <small>{act.unavailable}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
 
           <details className="core-law-list">
             <summary>Aktualne ({groups.current.length})</summary>

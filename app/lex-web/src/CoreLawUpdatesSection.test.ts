@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coreLawActErrorText, groupCoreLawActs } from "./CoreLawUpdatesSection.js";
+import { coreLawActErrorText, coreLawProgressText, groupCoreLawActs } from "./CoreLawUpdatesSection.js";
 import type { CoreLawActStatus } from "./api.js";
 
 function act(eli: string, state: CoreLawActStatus["state"]): CoreLawActStatus {
@@ -32,10 +32,18 @@ describe("karta przepisów (RAG)", () => {
       act("DU/2025/1", "CURRENT"),
       act("DU/2025/2", "CHECK_DUE"),
       act("DU/2025/3", "UPDATE_AVAILABLE"),
-      act("DU/2025/4", "ERROR")
+      act("DU/2025/4", "ERROR"),
+      act("DU/1965/232", "UNAVAILABLE")
     ]);
     expect(groups.current.map((a) => a.eli)).toEqual(["DU/2025/1"]);
     expect(groups.needsUpdate.map((a) => a.eli)).toEqual(["DU/2025/3", "DU/2025/4", "DU/2025/2"]);
+    expect(groups.unavailable.map((a) => a.eli)).toEqual(["DU/1965/232"]);
+  });
+
+  it("pokazuje postęp OCR skanu", () => {
+    expect(coreLawProgressText({ eli: "DU/2009/858", phase: "ocr", done: 120, total: 606 })).toBe(
+      "OCR skanu: 120/606 stron"
+    );
   });
 
   it("opisuje odmowy ELI przy dodawaniu aktu po polsku", () => {

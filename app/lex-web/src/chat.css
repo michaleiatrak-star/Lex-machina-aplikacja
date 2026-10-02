@@ -2564,30 +2564,126 @@ mark.restored {
 .case-access-admin-case {
   border: 1px solid rgba(127, 127, 127, 0.25);
   border-radius: 8px;
-  padding: 10px 12px;
-  display: grid;
-  gap: 6px;
 }
 
-.case-access-admin-case header {
+.case-access-admin-case > summary {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.case-access-admin-title {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.case-access-admin-case .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border-radius: 6px;
+.case-access-admin-meta {
+  font-size: 0.85em;
+  opacity: 0.75;
 }
 
-.case-access-admin-archive {
-  margin-left: auto;
+.case-access-admin-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.case-access-admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-access-admin-toolbar > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.case-access-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.case-access-admin-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+.case-access-admin-table th,
+.case-access-admin-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(127, 127, 127, 0.18);
+  vertical-align: middle;
+}
+
+.case-access-admin-table th {
+  font-size: 0.8em;
+  font-weight: 600;
+  opacity: 0.75;
+  border-top: none;
+}
+
+.case-access-admin-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.case-access-admin-add label:not(.case-reidentify-toggle) {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 180px;
+}
+
+.case-access-admin-add .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.case-access-admin-roles {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .case-access-admin-table thead {
+    display: none;
+  }
+  .case-access-admin-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    padding: 6px 0;
+    border-top: 1px solid rgba(127, 127, 127, 0.18);
+  }
+  .case-access-admin-table td {
+    border: none;
+    padding: 0;
+  }
 }
 
 .case-access-admin-rename,
@@ -2620,18 +2716,95 @@ mark.restored {
   margin: 0;
 }
 
-.case-access-admin-members {
+
+
+/* Kalendarz: znaczniki rodzajów zdarzeń, legenda, najbliższe terminy. */
+.lex-calendar-kinds {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+}
+
+.lex-calendar-kind {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8a948c;
+}
+
+.lex-calendar-kind.kind-court_hearing {
+  background: #285132;
+}
+
+.lex-calendar-kind.kind-deadline {
+  background: #b3261e;
+}
+
+.lex-calendar-kind.kind-client_meeting {
+  background: #2f5f9e;
+}
+
+.lex-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #66736a;
+}
+
+.lex-calendar-agenda {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
-.case-access-admin-members li,
-.case-access-admin-add {
+.lex-calendar-agenda li {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #e3e8e0;
+}
+
+.lex-calendar-agenda li.deadline strong {
+  color: #b3261e;
+}
+
+.lex-calendar-agenda-day {
+  display: grid;
+  justify-items: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lex-calendar-agenda-day small,
+.lex-calendar-agenda li > span small {
+  color: #66736a;
+}
+
+.matter-schedule-item-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .lex-calendar-agenda li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }

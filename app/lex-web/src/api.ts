@@ -1899,6 +1899,7 @@ export type CoreLawActStatus = {
   articleCount: number;
   fetchedAt: string | null;
   lastError: string | null;
+  unavailable?: string | null;
   relationsCheckedAt: string | null;
   currentEli: string;
   amendmentsAfter: CoreLawAmendment[];
@@ -1907,12 +1908,20 @@ export type CoreLawActStatus = {
   origin: "MAP" | "VERIFIED" | "USER";
   addedAt: string | null;
   addedBy: string | null;
-  state: "CURRENT" | "UPDATE_AVAILABLE" | "CHECK_DUE" | "MISSING" | "ERROR";
+  state: "CURRENT" | "UPDATE_AVAILABLE" | "CHECK_DUE" | "MISSING" | "ERROR" | "UNAVAILABLE";
+};
+
+export type CoreLawProgress = {
+  eli: string;
+  phase: "download" | "extract" | "ocr";
+  done: number;
+  total: number;
 };
 
 export type CoreLawStatus = {
   autoApply: boolean;
   refreshing: boolean;
+  progress?: CoreLawProgress | null;
   blockedUntil: string | null;
   lastCheckAt: string | null;
   counts: { consolidated: number; amendments: number; other: number; articles: number };

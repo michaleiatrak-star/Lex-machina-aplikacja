@@ -1896,6 +1896,10 @@ function buildAccountPrompt(params, toolTranscript) {
             "If a Lex runtime tool is required, output ONLY one line beginning with:",
             `${TOOL_SENTINEL}{"calls":[{"id":"call_1","name":"tool_name","input":{}}]}`,
             "Use only tool names listed in LEX_RUNTIME_TOOLS.",
+            // Each round of tool calls is a separate CLI run with the whole context, so
+            // independent reads and checks belong in one round (router, SKILL.md, modules,
+            // verification of unrelated provisions); only calls that depend on a result wait.
+            "Every tool round starts a new model run and costs the user tens of seconds. Put ALL tool calls you already know you need into ONE line (several entries in \"calls\"): e.g. the router together with the SKILL.md and modules you expect, or verification of several independent provisions. Make a further round only for calls that depend on results you have not seen yet.",
             "After tool results are supplied, continue the task. When no more tools are needed, return the final answer normally.",
             `LEX_RUNTIME_TOOLS=${toolSchemas}`
         ].join("\n")
