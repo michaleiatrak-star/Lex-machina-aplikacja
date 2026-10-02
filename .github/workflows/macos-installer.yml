@@ -86,6 +86,22 @@ jobs:
           curl -fsS -H "x-lex-desktop-bootstrap: $token" "$address/health"
           kill "$pid"
 
+      - name: Launch the installed app (it must start its runtime)
+        run: |
+          set -euo pipefail
+          open -a "/Applications/Lex Machina.app"
+          started=0
+          for _ in $(seq 1 90); do
+            if pgrep -f "Lex Machina.app/Contents/Resources/runtime/lex-runtime-sidecar" >/dev/null; then
+              started=1
+              break
+            fi
+            sleep 1
+          done
+          pgrep -fl "Lex Machina" || true
+          osascript -e 'tell application "Lex Machina" to quit' || pkill -f "Lex Machina.app" || true
+          [ "$started" = 1 ] || { echo "APP_DID_NOT_START_RUNTIME" >&2; exit 1; }
+
       - name: Receipt
         run: |
           mkdir -p mac-out
