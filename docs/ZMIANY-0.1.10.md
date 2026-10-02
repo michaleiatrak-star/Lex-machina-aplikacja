@@ -33,8 +33,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 30 | `d87b0ff` | Przepisy (RAG): PDF ELI ponad 600 stron, skany przez lokalny OCR (partiami, oznaczone), kodowanie starych Dz.U., „Artykuł N” |
 | hotfix 31 | `ebebb89` | MCP: suma pakietu (CRLF z checkoutu na Windows), RAG: postęp OCR i „Bez tekstu w ELI”, konto: narzędzia w jednej rundzie, sprawy i kalendarz |
 | hotfix 32 | `81817b6` | Grok przez konto: kod limitu zapytań (ACP „Rate limited”), ponowienie po 15/45 s |
+| hotfix 33 | `ee5fbed` | Router v3 dostarczany z pierwszym odczytem (bez straconej rundy), konta: bez powtórnych wyszukiwań |
 
 ---
+
+## hotfix 33
+
+- `LegalCorpusToolRuntime`: przy `modelSelectsSkills` zamiast `ROUTER_V3_REQUIRED_FIRST` → `requiredRouter` (SKILL.md routera) w wyniku pierwszego odczytu, zdarzenie `ALLOW` z `deliveredWith`; odczyt routera w rundzie wykonywany jako pierwszy (kolejność wyników bez zmian).
+- `buildAccountPrompt`: bez powtarzania wyszukiwań/odczytów, weryfikacja tylko cytowanych przepisów.
 
 ## hotfix 32
 
