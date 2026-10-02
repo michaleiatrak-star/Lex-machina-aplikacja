@@ -5,6 +5,7 @@ import { ToolBroker, ToolPolicy } from "./tool-broker.js";
 import { OFFICIAL_LEGAL_SOURCE_HOSTS, OfficialLegalSourceVerifier } from "./legal-source-verifier.js";
 import { verifyFromCoreLaw } from "./core-law-verification.js";
 import { describeEliAct } from "./eli-act-descriptor.js";
+import { verificationMarker, verificationSourceLink } from "./source-anchor.js";
 const TOOL_NAME = "verify_legal_reference";
 const CASE_SEARCH_TOOL_NAME = "search_case_law";
 const CASE_TOOL_NAME = "verify_case_reference";
@@ -308,14 +309,10 @@ function kind(value) {
 }
 function publicToolResult(record, act, freshness) {
     const marker = record.status === "VERIFIED"
-        ? "✅ [VER: " +
-            (record.sourceUrl ?? "official-source") +
-            ", " +
-            record.fetchedAt.slice(0, 10) +
-            (record.asOf
-                ? ", STAN NA " + record.asOf
-                : "") +
-            "]"
+        ? verificationMarker({
+            ...record,
+            sourceUrl: record.sourceUrl ?? "official-source"
+        })
         : "⚠️ [NIEWERYFIKOWANE]";
     return JSON.stringify({
         claim: record.claim,
@@ -339,15 +336,19 @@ function publicToolResult(record, act, freshness) {
             }
             : null,
         sourceUrl: record.sourceUrl ?? null,
+        sourceLink: verificationSourceLink(record) ?? null,
         sourceFormat: record.sourceFormat ?? null,
         evidence: record.evidence ?? null,
         fetchedAt: record.fetchedAt,
         marker,
         instruction: record.status === "VERIFIED"
-            ? "Copy the marker verbatim onto the same line as this exact legal reference. When the user asks for the wording of a statute provision, use the returned evidence as the official provision text and do not reconstruct it from model memory."
+            ? "Copy the marker verbatim onto the same line as this exact legal reference. " + STATUS_CONSISTENCY_INSTRUCTION + " When the user asks for the wording of a statute provision, use the returned evidence as the official provision text and do not reconstruct it from model memory."
             : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
     });
 }
+// Status źródła (✅/⚠️) to wynik sprawdzenia brzmienia w źródle; ocena, czy przepis
+// ma zastosowanie do faktów, jest osobną informacją i nie zmienia znacznika.
+export const STATUS_CONSISTENCY_INSTRUCTION = "The marker states only whether the provision text was verified at the official source (the link points to the provision itself where possible). It never expresses whether the provision applies to the facts: write that separately (e.g. 'Ocena zastosowania: ...') and never replace or add ⚠️ [NIEWERYFIKOWANE] because the application is uncertain. A provision keeps ONE status from the start to the end of the answer, summaries and tables included: repeat the same ✅ [VER: ...] marker wherever it is mentioned again.";
 export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "RUNTIME LEGAL-SOURCE VERIFICATION:",
     "- Before emitting any statutory citation (art. or Dz.U.), call verify_legal_reference.",
@@ -355,6 +356,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
     "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
     "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
+    "- " + STATUS_CONSISTENCY_INSTRUCTION,
     "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
@@ -827,14 +829,15 @@ export class LegalVerificationToolRuntime {
                     amendmentsAfter: 0
                 },
                 sourceUrl: record.sourceUrl ?? null,
+                sourceLink: verificationSourceLink(record) ?? null,
                 sourceFormat: record.sourceFormat ?? null,
                 evidence: record.evidence ?? null,
                 fetchedAt: record.fetchedAt,
                 marker: verified
-                    ? "✅ [VER: " + record.sourceUrl + ", " + record.fetchedAt.slice(0, 10) + "]"
+                    ? verificationMarker(record)
                     : "⚠️ [NIEWERYFIKOWANE]",
                 instruction: verified
-                    ? "Copy the marker verbatim onto the same line as this exact legal reference. Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
+                    ? "Copy the marker verbatim onto the same line as this exact legal reference. " + STATUS_CONSISTENCY_INSTRUCTION + " Use the returned evidence (official ELI consolidated text as of the copy date) as the provision wording; never reconstruct it from memory."
                     : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
             }) };
     }

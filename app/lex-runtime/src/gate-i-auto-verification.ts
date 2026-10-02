@@ -6,6 +6,9 @@ import type {
   NormalizedToolCall
 } from "./providers/types.js";
 import {
+  verificationMarker
+} from "./source-anchor.js";
+import {
   VerificationLedger,
   type VerificationRecord
 } from "./verification-ledger.js";
@@ -348,17 +351,9 @@ function marker(
     return null;
   }
 
-  return [
-    "✅ [VER: ",
-    record.sourceUrl,
-    ", ",
-    record.fetchedAt
-      .slice(0, 10),
-    record.asOf
-      ? `, STAN NA ${record.asOf}`
-      : "",
-    "]"
-  ].join("");
+  return verificationMarker(
+    record
+  );
 }
 
 export function applyAutomaticVerificationMarkers(

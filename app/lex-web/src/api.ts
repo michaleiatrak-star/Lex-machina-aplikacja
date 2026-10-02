@@ -926,6 +926,8 @@ export type EvidenceItem = {
   kind: "statute" | "journal" | "case" | "deadline" | "amount";
   status: "VERIFIED" | "SUPPORTED" | "UNVERIFIED";
   sourceUrl?: string;
+  // sourceUrl z kotwicą do artykułu/jednostki, gdy runtime ją ustalił.
+  sourceAnchorUrl?: string;
   sourceTier?: "R1" | "R2A" | "R2B" | "R3";
   fetchedAt: string;
   verificationMethod?:

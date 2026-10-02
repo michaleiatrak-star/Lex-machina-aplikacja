@@ -12,6 +12,7 @@ import {
   type PdfTextExtractor
 } from "./pdf-text-extractor.js";
 import type { OcrEngine } from "./document-ingestion.js";
+import { htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -20,6 +21,7 @@ import type { OcrEngine } from "./document-ingestion.js";
  * locally so every model (local ones included) can read the exact wording,
  * also offline. The text is never generated from model memory.
  */
+
 export type CoreActRef = {
   eli: string;
   // The map marks this reference as a consolidated text (t.j.).
@@ -46,6 +48,8 @@ export type CoreActRecord = {
   sourceUrl: string;
   articleOrder: string[];
   articles: Record<string, string>;
+  // Kotwica artykułu w sourceUrl: id jednostki HTML ELI albo "page=N" w PDF.
+  articleAnchors?: Record<string, string>;
   text: string;
 };
 
@@ -1061,7 +1065,10 @@ export class CoreLawIndex {
    * czyta lokalny OCR partiami po OCR_BATCH_PAGES stron, a tekst składa się
    * z powrotem w kolejności stron.
    */
-  private async pdfText(eli: string, bytes: Uint8Array): Promise<{ text: string; pages: number; ocrPages: number[] }> {
+  private async pdfText(
+    eli: string,
+    bytes: Uint8Array
+  ): Promise<{ text: string; pages: number; ocrPages: number[]; pageTexts: string[] }> {
     this.progress = { eli, phase: "extract", done: 0, total: 0 };
     const extracted = await this.pdf.extract(bytes);
     const pageTexts = (extracted.pageTexts ?? [extracted.text]).map((page) =>
@@ -1076,7 +1083,7 @@ export class CoreLawIndex {
       (scanned.length * 2 >= pageTexts.length || splitArticles(joined()).order.length === 0);
     if (!isScan) {
       if (!joined()) throw new Error("PDF w ELI nie zawiera tekstu.");
-      return { text: joined(), pages: extracted.pages, ocrPages: [] };
+      return { text: joined(), pages: extracted.pages, ocrPages: [], pageTexts };
     }
     if (!this.ocr) {
       throw new CoreLawPermanentError("PDF w ELI jest skanem bez warstwy tekstowej, a lokalny OCR jest niedostępny.");
@@ -1122,7 +1129,7 @@ export class CoreLawIndex {
       }
     }
     fs.rmSync(cacheFile, { force: true });
-    return { text: joined(), pages: extracted.pages, ocrPages: scanned };
+    return { text: joined(), pages: extracted.pages, ocrPages: scanned, pageTexts };
   }
 
   private async fetchAct(eli: string): Promise<CoreActRecord> {
@@ -1133,9 +1140,12 @@ export class CoreLawIndex {
     let body = "";
     let textSource: CoreActRecord["textSource"] = "none";
     let sourceUrl = base;
+    let html = "";
+    let pageTexts: string[] = [];
     if (meta.textHTML === true) {
       sourceUrl = `${base}/text.html`;
-      body = htmlToText(await (await this.get(sourceUrl, "text/html")).text());
+      html = await (await this.get(sourceUrl, "text/html")).text();
+      body = htmlToText(html);
       textSource = "html";
     }
     // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
@@ -1149,11 +1159,18 @@ export class CoreLawIndex {
       );
       const pdf = await this.pdfText(eli, bytes);
       body = pdf.text;
+      pageTexts = pdf.pageTexts;
       ocrPages = pdf.ocrPages;
       pages = pdf.pages;
       textSource = ocrPages.length ? "ocr" : "pdf";
     }
     const { order, articles } = splitArticles(body);
+    const articleAnchors =
+      textSource === "html"
+        ? htmlArticleAnchors(html, order)
+        : textSource === "pdf"
+          ? pdfArticleAnchors(pageTexts)
+          : {};
     if (textSource === "ocr" && order.length === 0) {
       // Np. DU/1965/232: w ELI jest tylko strona numeru z adnotacją, że tekst
       // umowy zamieszczono w załączniku do numeru (załącznika ELI nie publikuje).
@@ -1180,6 +1197,7 @@ export class CoreLawIndex {
       sourceUrl,
       articleOrder: order,
       articles,
+      ...(Object.keys(articleAnchors).length ? { articleAnchors } : {}),
       text: body
     };
   }

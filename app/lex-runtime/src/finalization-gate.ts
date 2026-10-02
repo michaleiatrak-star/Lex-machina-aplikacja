@@ -1,3 +1,5 @@
+import { verificationMarker } from "./source-anchor.js";
+import { statuteClaimsInLine } from "./status-consistency-gate.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -68,24 +70,7 @@ const CASE_SUPPORT_MARKER =
 function expectedVerificationMarker(
   record: VerificationRecord
 ): string | null {
-  if (
-    record.status !== "VERIFIED" ||
-    !record.sourceUrl?.trim() ||
-    !record.fetchedAt?.trim()
-  ) {
-    return null;
-  }
-
-  return [
-    "✅ [VER: ",
-    record.sourceUrl,
-    ", ",
-    record.fetchedAt.slice(0, 10),
-    record.asOf
-      ? `, STAN NA ${record.asOf}`
-      : "",
-    "]"
-  ].join("");
+  return verificationMarker(record);
 }
 
 const ARTICLE_PATTERN =
@@ -223,6 +208,15 @@ export class FinalizationGate {
                 Boolean(marker)
             )
         );
+      // Wyliczenie "art. 233 i 234 KK": znacznik drugiego przepisu też należy do wiersza.
+      for (const claim of statuteClaimsInLine(reference.lineText)) {
+        const enumerated = ledger.latest(claim);
+        const marker =
+          enumerated?.status === "VERIFIED"
+            ? expectedVerificationMarker(enumerated)
+            : null;
+        if (marker) allowedLineMarkers.add(marker);
+      }
       const unexpectedLineMarker =
         lineMarkers.some(
           (marker) =>

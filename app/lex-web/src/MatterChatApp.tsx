@@ -4602,12 +4602,12 @@ export default function MatterChatApp({
                             {item.sourceUrl ? (
                               <a
                                 className="source-inline-link"
-                                href={item.sourceUrl}
+                                href={item.sourceAnchorUrl ?? item.sourceUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(event) => {
                                   event.preventDefault();
-                                  void openExternalUrl(item.sourceUrl!);
+                                  void openExternalUrl(item.sourceAnchorUrl ?? item.sourceUrl!);
                                 }}
                               >
                                 Otwórz źródło w przeglądarce ↗

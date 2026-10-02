@@ -3,6 +3,11 @@ import {
   markUnverifiedReferences
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
+import { verificationSourceLink } from "./source-anchor.js";
+import {
+  evaluateStatusConsistency,
+  reconcileStatusMarkers
+} from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
 import type { EvidenceImage } from "./document-evidence.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
@@ -307,6 +312,7 @@ export type PublicEvidenceItem = {
   kind: VerificationRecord["kind"];
   status: VerificationRecord["status"];
   sourceUrl?: string;
+  sourceAnchorUrl?: string;
   sourceTier?: VerificationRecord["sourceTier"];
   fetchedAt: string;
   verificationMethod?: VerificationRecord["verificationMethod"];
@@ -613,6 +619,9 @@ export function publicEvidenceBundle(
     kind: record.kind,
     status: record.status,
     ...(record.sourceUrl ? { sourceUrl: record.sourceUrl } : {}),
+    ...(verificationSourceLink(record) !== record.sourceUrl
+      ? { sourceAnchorUrl: verificationSourceLink(record)! }
+      : {}),
     ...(record.sourceTier ? { sourceTier: record.sourceTier } : {}),
     fetchedAt: record.fetchedAt,
     ...(record.verificationMethod
@@ -2013,7 +2022,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         citedAnswer.text,
         ledger
       );
-    const processedDocumentCitations =
+    const markedAnswer =
       preFinalization.result === "BLOCKED"
         ? {
             ...citedAnswer,
@@ -2023,6 +2032,46 @@ export class SafeSessionExecutor implements SessionExecutor {
             )
           }
         : citedAnswer;
+    // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
+    // odpowiedzi. Sprzeczność z rejestrem VERIFIED jest naprawiana według rejestru;
+    // sprzeczność, której rejestr nie rozstrzyga, blokuje prezentację.
+    const statusReconciliation =
+      reconcileStatusMarkers(
+        markedAnswer.text,
+        ledger
+      );
+    const processedDocumentCitations =
+      statusReconciliation.repaired > 0
+        ? {
+            ...markedAnswer,
+            text: statusReconciliation.text
+          }
+        : markedAnswer;
+    const statusConsistency =
+      evaluateStatusConsistency(
+        processedDocumentCitations.text,
+        ledger
+      );
+    const statusConsistencyBlocked =
+      statusConsistency.result ===
+        "BLOCKED";
+    audit.record(
+      "gate",
+      statusConsistency.gate,
+      statusConsistencyBlocked
+        ? "BLOCKED"
+        : "OK",
+      {
+        repairedMarkers:
+          statusReconciliation.repaired,
+        provisions:
+          statusConsistency.provisions.length,
+        findings:
+          statusConsistency.findings,
+        orphanUnverifiedLines:
+          statusConsistency.orphanUnverifiedLines
+      }
+    );
     audit.record(
       "gate",
       "LOCAL_DOCUMENT_DEEP_LINKS",
@@ -2575,6 +2624,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     const workflowFinalizationBlocked =
       finalization.result !== "PASS" ||
+      statusConsistencyBlocked ||
       corpusBlocked ||
       workflowResourcesBlocked ||
       workflowOutputBlocked ||
@@ -2623,6 +2673,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // Still blocked after marking: a case-law claim without evidence or a
       // verification marker that does not match its source.
       finalization.result === "BLOCKED" ||
+      statusConsistencyBlocked ||
       corpusBlocked ||
       workflowResourcesBlocked ||
       workflowOutputBlocked ||
@@ -2636,6 +2687,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       {
         workflow: execution.workflowPlan.id,
         finalization: finalization.result,
+        statusConsistency: statusConsistency.result,
         corpusBlocked,
         workflowResourcesBlocked,
         workflowOutputBlocked,
@@ -2681,14 +2733,24 @@ export class SafeSessionExecutor implements SessionExecutor {
         finalization.references.length > 0 && Boolean(verificationTools),
       requireDeterministicWorkflow: true
     });
-    const blockedReferences = finalization.findings
+    const blockedReferences: PublicBlockedReference[] = finalization.findings
       .filter((finding) => finding.status !== "VERIFIED")
-      .map((finding) => ({
+      .map((finding): PublicBlockedReference => ({
         claim: finding.reference.claim,
         kind: finding.reference.kind,
         line: finding.reference.line,
         status: finding.status
-      }));
+      }))
+      .concat(
+        statusConsistency.findings.flatMap((finding) =>
+          finding.lines.map((line) => ({
+            claim: finding.key,
+            kind: "statute" as const,
+            line,
+            status: finding.code
+          }))
+        )
+      );
 
     step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
     // Every restored value is reported so the UI can mark it for review.

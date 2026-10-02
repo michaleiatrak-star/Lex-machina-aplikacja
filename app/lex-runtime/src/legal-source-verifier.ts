@@ -4,6 +4,12 @@ import {
   PdfTextExtractionError,
   type PdfTextExtractor
 } from "./pdf-text-extractor.js";
+import {
+  anchoredUrl,
+  htmlUnitFragment,
+  pageFragment,
+  pdfArticlePage
+} from "./source-anchor.js";
 import type {
   VerificationKind,
   VerificationRecord
@@ -370,6 +376,7 @@ export class OfficialLegalSourceVerifier {
       isPdfResponse(url, contentType);
 
     let body: string;
+    let pageTexts: string[] | undefined;
     if (pdfSource) {
       if (!this.pdfTextExtractor) {
         throw new LegalSourceVerificationError(
@@ -404,6 +411,7 @@ export class OfficialLegalSourceVerifier {
           0,
           MAX_SOURCE_CHARS
         );
+        pageTexts = extracted.pageTexts;
       } catch (error) {
         if (
           error instanceof
@@ -465,12 +473,24 @@ export class OfficialLegalSourceVerifier {
 
     const snapshotOnly =
       NSA_WSA_SNAPSHOT_HOSTS.has(host);
+    const sourceAnchorUrl =
+      matched && request.kind === "statute"
+        ? anchoredUrl(
+            sourceUrl,
+            pdfSource
+              ? pageTexts
+                ? pageFragment(pdfArticlePage(pageTexts, request.claim))
+                : undefined
+              : htmlUnitFragment(body, request.claim)
+          )
+        : undefined;
     const record: VerificationRecord = matched && !snapshotOnly
       ? {
           claim: request.claim,
           kind: request.kind,
           status: "VERIFIED",
           sourceUrl,
+          ...(sourceAnchorUrl ? { sourceAnchorUrl } : {}),
           sourceTier: sourceTier(host),
           fetchedAt,
           toolCallId: request.toolCallId,
