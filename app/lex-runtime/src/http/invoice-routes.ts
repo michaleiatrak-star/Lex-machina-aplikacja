@@ -12,13 +12,19 @@ import {
   type InvoiceRecord,
   type InvoiceSort
 } from "../invoice-store.js";
+import {
+  CATALOG_SECONDARY_SOURCES,
+  VAT_ACT_ELI,
+  VAT_INVOICE_ARTICLE,
+  findLegalText,
+  unverifiedReport,
+  verifyRequirements
+} from "../invoice-requirements.js";
 
 // Karta „Faktury” i Ustawienia → Faktury i KSeF. Dane każdego użytkownika są
 // szyfrowane jego kluczem głównym; token KSeF nie wraca do przeglądarki.
 
-// Ustawa o VAT (akt bazowy); isap_tekst przechodzi do aktualnego tekstu jednolitego.
-export const VAT_ACT_ELI = "DU/2004/535";
-export const VAT_INVOICE_ARTICLE = "106e";
+export { VAT_ACT_ELI, VAT_INVOICE_ARTICLE } from "../invoice-requirements.js";
 
 type LegalTextSource = {
   direct(request: {
@@ -132,14 +138,48 @@ export function registerInvoiceRoutes(
       tool: "isap_tekst",
       arguments: { eli: VAT_ACT_ELI, artykul: VAT_INVOICE_ARTICLE }
     });
-    res.status(reply.ok ? 200 : 503).json({
+    const retrievedAt = new Date().toISOString();
+    const legal = reply.ok ? findLegalText(reply.result) : null;
+    // Bez brzmienia z ELI katalog zostaje UNVERIFIED; nie uzupełniamy go z pamięci.
+    const report = legal
+      ? verifyRequirements(legal.text, {
+          retrievedAt,
+          ...(legal.sourceUrl ? { sourceUrl: legal.sourceUrl } : {}),
+          ...(legal.statusDate ? { statusDate: legal.statusDate } : {})
+        })
+      : unverifiedReport(reply.ok ? "INVOICE_LEGAL_TEXT_MISSING" : "INVOICE_LEGAL_SOURCE_UNAVAILABLE");
+    // 200 także przy awarii źródła: raport z błędem i statusem UNVERIFIED trafia do UI.
+    res.json({
       eli: VAT_ACT_ELI,
       article: VAT_INVOICE_ARTICLE,
       ok: reply.ok,
       result: reply.result,
-      retrievedAt: new Date().toISOString()
+      retrievedAt,
+      report,
+      secondarySources: CATALOG_SECONDARY_SOURCES
     });
   });
+
+  // Katalog pól generatora bez weryfikacji (status UNVERIFIED do czasu sprawdzenia przez ELI).
+  app.get("/api/invoices/requirements", (req, res) => {
+    try {
+      authService.authenticateAuthorization(req.get("authorization"));
+    } catch (error) {
+      failed(res, error);
+      return;
+    }
+    res.json({ report: unverifiedReport(), secondarySources: CATALOG_SECONDARY_SOURCES });
+  });
+
+  app.put("/api/invoices/settings/numbering", handle(async (context, key, req) => ({
+    numbering: await invoices.setNumbering(context.user.userId, key, req.body?.numbering ?? null)
+  })));
+
+  app.get("/api/invoices/next-number", handle(async (context, key, req) => {
+    const issueDate = String(req.query.issueDate ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) throw new InvoiceError("INVOICE_FIELD_INVALID:issueDate", 400);
+    return { number: await invoices.previewNumber(context.user.userId, key, issueDate) };
+  }));
 
   app.get("/api/invoices", handle(async (context, key, req) => {
     const sort = String(req.query.sort ?? "date-desc") as InvoiceSort;

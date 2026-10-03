@@ -28,7 +28,12 @@ function money(cents: bigint): string {
 
 export function lineNet(line: InvoiceLine): string | null {
   if (!QUANTITY.test(line.quantity.trim()) || !PRICE.test(line.unitNetPrice.trim())) return null;
-  return money(roundDiv(scaled(line.quantity.trim(), 6) * scaled(line.unitNetPrice.trim(), 2), 1_000_000n));
+  const discount = line.discount?.trim() ?? "";
+  if (discount && !PRICE.test(discount)) return null;
+  const net =
+    roundDiv(scaled(line.quantity.trim(), 6) * scaled(line.unitNetPrice.trim(), 2), 1_000_000n) -
+    (discount ? scaled(discount, 2) : 0n);
+  return net < 0n ? null : money(net);
 }
 
 export function previewTotals(lines: InvoiceLine[]): InvoiceTotals | null {
@@ -95,7 +100,8 @@ export function draftOf(invoice: InvoiceView): InvoiceDraft {
     paymentMethod: invoice.paymentMethod ?? "",
     paymentDueDate: invoice.paymentDueDate ?? "",
     bankAccount: invoice.bankAccount ?? "",
-    notes: invoice.notes ?? ""
+    notes: invoice.notes ?? "",
+    annotations: { ...invoice.annotations }
   };
 }
 
@@ -112,7 +118,8 @@ const FIELD_LABELS: Record<string, string> = {
   "buyer.address": "adres nabywcy",
   currency: "waluta",
   paymentDueDate: "termin płatności",
-  lines: "pozycje faktury"
+  lines: "pozycje faktury",
+  "annotations.exemptionBasis": "podstawa zwolnienia (pozycje ze stawką „zw”)"
 };
 
 function fieldLabel(field: string): string {
@@ -123,7 +130,8 @@ function fieldLabel(field: string): string {
       unit: "jednostka",
       quantity: "ilość",
       unitNetPrice: "cena netto",
-      vatRate: "stawka VAT"
+      vatRate: "stawka VAT",
+      discount: "opust"
     };
     return `pozycja ${Number(line[1]) + 1}: ${part[line[2]!] ?? line[2]}`;
   }
@@ -140,6 +148,13 @@ const ERRORS: Record<string, string> = {
   KSEF_TOKEN_INVALID: "Token KSeF nie może zawierać spacji ani przekraczać 2048 znaków.",
   KSEF_CONTEXT_NIP_INVALID: "NIP kontekstu musi mieć 10 cyfr.",
   KSEF_PRODUCTION_CONFIRMATION_REQUIRED: "Przełączenie na środowisko produkcyjne wymaga potwierdzenia.",
+  NUMBERING_NOT_CONFIGURED: "Autonumeracja nie jest ustawiona. Wpisz numer albo ustaw wzór w Ustawieniach → Faktury i KSeF.",
+  NUMBERING_PATTERN_INVALID: "Wzór numeracji jest pusty albo za długi (najwyżej 80 znaków).",
+  NUMBERING_PATTERN_NR_REQUIRED: "Wzór musi zawierać dokładnie jeden token {NR}.",
+  NUMBERING_PATTERN_UNKNOWN_TOKEN: "Dozwolone tokeny: {NR}, {DD}, {MM}, {RRRR}, {RR}.",
+  NUMBERING_PATTERN_YEAR_REQUIRED: "Przy resecie rocznym wzór musi zawierać rok ({RRRR} albo {RR}), inaczej numery się powtórzą.",
+  NUMBERING_PATTERN_MONTH_REQUIRED: "Przy resecie miesięcznym wzór musi zawierać miesiąc {MM} i rok ({RRRR} albo {RR}).",
+  NUMBERING_PADDING_INVALID: "Liczba cyfr licznika musi być od 1 do 8.",
   INVOICE_LEGAL_BASIS_UNAVAILABLE: "Konektor ISAP (ELI) jest niedostępny. Zainstaluj go w Ustawieniach → Konektory MCP."
 };
 
