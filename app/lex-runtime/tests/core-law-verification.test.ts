@@ -153,6 +153,13 @@ describe("verifyFromCoreLaw", () => {
     new VerificationLedger().add(outcome.record);
   });
 
+  it("sends an article flagged by the PDF extraction check to ELI instead of VERIFIED", () => {
+    const flagged = kw();
+    flagged.record.textSource = "pdf";
+    flagged.record.extractionCheck = { gaps: ["52"], outOfOrder: 0, duplicates: 0, suspectArticles: ["51"] };
+    expect(verify(index(flagged))).toMatchObject({ decision: "DENY", reason: "CORE_LAW_EXTRACTION_SUSPECT" });
+  });
+
   it("recognises the act by its inflected title, not only by an abbreviation", () => {
     const idx = index(kw(), trzezwosc());
     for (const name of [
