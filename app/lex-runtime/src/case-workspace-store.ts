@@ -67,6 +67,15 @@ export type WorkspaceThreadMessage = {
   restorations?: WorkspaceRestoration[];
   // A document generated in this message (chat card: download, preview, deanonymize).
   generatedDocument?: WorkspaceGeneratedDocument;
+  // Widgets shown with show_widget, re-rendered when the thread is reopened.
+  widgets?: WorkspaceWidget[];
+};
+
+export type WorkspaceWidget = {
+  title: string;
+  kind: "html" | "jsx";
+  code: string;
+  source?: string;
 };
 
 export type WorkspaceGeneratedDocument = {
@@ -255,6 +264,26 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     };
   });
 
+  const widgets = (input.widgets ?? []).slice(0, 3).map((widget) => {
+    if (
+      !widget ||
+      typeof widget.title !== "string" ||
+      widget.title.length > 200 ||
+      (widget.kind !== "html" && widget.kind !== "jsx") ||
+      typeof widget.code !== "string" ||
+      !widget.code.trim() ||
+      widget.code.length > 300_000 ||
+      (widget.source !== undefined && (typeof widget.source !== "string" || widget.source.length > 300))
+    ) {
+      throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
+    return {
+      title: widget.title,
+      kind: widget.kind,
+      code: widget.code,
+      ...(widget.source ? { source: widget.source } : {})
+    };
+  });
   const generated = input.generatedDocument;
   if (
     generated !== undefined &&
@@ -288,7 +317,8 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
         }
       : {}),
     ...(citations.length > 0 ? { documentCitations: citations } : {}),
-    ...(restorations.length > 0 ? { restorations } : {})
+    ...(restorations.length > 0 ? { restorations } : {}),
+    ...(widgets.length > 0 ? { widgets } : {})
   };
 }
 
@@ -736,7 +766,8 @@ export class EncryptedCaseWorkspaceStore {
         : {}),
       ...(item.restorations
         ? { restorations: item.restorations.map((restoration) => ({ ...restoration })) }
-        : {})
+        : {}),
+      ...(item.widgets ? { widgets: item.widgets.map((widget) => ({ ...widget })) } : {})
     }));
   }
 

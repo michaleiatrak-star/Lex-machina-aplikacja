@@ -69,6 +69,7 @@ import type {
   LegalSourceCrossCheckStatus,
   LegalSourceTier
 } from "./legal-source-policy.js";
+import { WidgetToolRuntime, type WidgetSpec } from "./widget-runtime.js";
 import {
   ReportBlueprintToolRuntime,
   type AcceptedReportBlueprint,
@@ -683,6 +684,8 @@ export type SessionExecutionResponse = {
   evidence: PublicEvidenceItem[];
   auxiliarySources?:
     PublicAuxiliarySourceItem[];
+  // Widgety pokazane narzędziem show_widget (czat renderuje je w izolowanej ramce).
+  widgets?: WidgetSpec[];
   audit: {
     result: "PASS" | "BLOCKED";
     eventCount: number;
@@ -1259,6 +1262,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     );
     const reportTools = new ReportBlueprintToolRuntime();
+    // Modele lokalne: bez widgetów (minimalny zestaw narzędzi i promptu).
+    const widgetTools = request.model.startsWith("local/")
+      ? undefined
+      : new WidgetToolRuntime(this.registry);
     // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
     // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
     // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
@@ -1445,6 +1452,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? coreLawTools.schemas()
         : []),
       ...reportTools.schemas(),
+      ...(widgetTools ? widgetTools.schemas() : []),
       ...(federationTools
         ? federationTools.schemas()
         : []),
@@ -1456,6 +1464,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? [coreLawTools.systemPromptAppendix()]
         : []),
       reportTools.systemPromptAppendix(),
+      ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
       ...(federationTools
         ? [federationTools.systemPromptAppendix()]
         : []),
@@ -1667,6 +1676,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
+        const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
         const federationCalls = calls.filter(
           (call) =>
             federationTools?.handles(
@@ -1684,6 +1694,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             !(coreLawTools?.handles(call.name) ?? false) &&
             !corpusTools.handles(call.name) &&
             !reportTools.handles(call.name) &&
+            !(widgetTools?.handles(call.name) ?? false) &&
             !(federationTools?.handles(call.name) ?? false)
         );
 
@@ -1699,6 +1710,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             : [];
         const reportResults = reportCalls.length > 0
           ? await reportTools.runTools(reportCalls)
+          : [];
+        const widgetResults = widgetTools && widgetCalls.length > 0
+          ? await widgetTools.runTools(widgetCalls)
           : [];
         const federationResults =
           federationTools &&
@@ -1758,6 +1772,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...corpusResults,
             ...coreLawResults,
             ...reportResults,
+            ...widgetResults,
             ...federationResults,
             ...verificationResults
           ].map((result) => [
@@ -2807,6 +2822,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             auxiliarySources:
               publicAuxiliarySources
           }
+        : {}),
+      ...(widgetTools && widgetTools.widgets().length > 0
+        ? { widgets: widgetTools.widgets() }
         : {}),
       context: {
         ...contextSelection.report

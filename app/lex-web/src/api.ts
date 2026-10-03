@@ -1,4 +1,4 @@
-import type { RestorationMark } from "./workspace-client.js";
+import type { ChatWidget, RestorationMark } from "./workspace-client.js";
 
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
@@ -995,6 +995,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
+  widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
     eventCount: number;
@@ -3369,6 +3370,15 @@ export type McpSourcePreview =
   | { kind: "pdf"; url: string; base64: string };
 
 // Page of an official source (search result) fetched by the runtime without scripts.
+// Widget: rejestracja ramki (zalogowany użytkownik) i adres ramki z własnym CSP runtime.
+export function registerChatWidget(widget: ChatWidget): Promise<{ widgetId: string }> {
+  return json("/api/widgets", { method: "POST", body: JSON.stringify({ widget }) });
+}
+
+export function chatWidgetFrameUrl(widgetId: string): string {
+  return `${apiBase()}/api/widgets/frame/${widgetId}`;
+}
+
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {
   return json<McpSourcePreview>("/api/mcp-search/source-preview", {
     method: "POST",

@@ -55,6 +55,15 @@ export type WorkspaceThreadMessage = {
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
+  widgets?: ChatWidget[];
+};
+
+// Widget shown with show_widget (skill corpus file or model code), rendered in an isolated frame.
+export type ChatWidget = {
+  title: string;
+  kind: "html" | "jsx";
+  code: string;
+  source?: string;
 };
 
 /** A value put back into model output locally (never sent to the model). */

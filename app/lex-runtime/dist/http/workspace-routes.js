@@ -1279,6 +1279,9 @@ export function registerWorkspaceRoutes(app, dependencies) {
                         restorations: raw.restorations
                     }
                     : {}),
+                ...(Array.isArray(raw.widgets)
+                    ? { widgets: raw.widgets }
+                    : {}),
                 ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
                     ? {
                         generatedDocument: raw.generatedDocument

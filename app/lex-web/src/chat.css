@@ -2875,3 +2875,32 @@ mark.restored {
     gap: 2px;
   }
 }
+
+.chat-widget-card {
+  margin-top: 10px;
+  border: 1px solid #dfe5e0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.chat-widget-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dfe5e0;
+}
+
+.chat-widget-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.chat-widget-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+}

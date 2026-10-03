@@ -12,6 +12,7 @@ import { McpSearchPanel } from "./McpSearchPanel.js";
 import { InvoicesPanel } from "./InvoicesPanel.js";
 import { downloadBlob } from "./download-file.js";
 import { ChatDocumentCard } from "./ChatDocumentCard.js";
+import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
@@ -855,6 +856,7 @@ function executionMessage(
           }
         : {}),
       documentCitations: execution.documentCitations,
+      ...(execution.widgets?.length ? { widgets: execution.widgets } : {}),
       ...(execution.restorations?.length
         ? {
             restorations:
@@ -4609,6 +4611,20 @@ export default function MatterChatApp({
                       }}
                     />
                   ) : null}
+                  {message.widgets?.map((widget, index) => (
+                    <ChatWidgetCard
+                      key={`${message.id}-widget-${index}`}
+                      widget={widget}
+                      onPrompt={(text) => {
+                        // Widget w trakcie odpowiedzi: tekst czeka w polu wiadomości.
+                        if (executing || caseBusy || !caseId) {
+                          setQuery(text);
+                          return;
+                        }
+                        void executeMessage(text);
+                      }}
+                    />
+                  ))}
                   {message.generatedDocument && caseId ? (
                     <ChatDocumentCard
                       caseId={caseId}

@@ -12,6 +12,7 @@ import { VerificationLedger } from "./verification-ledger.js";
 import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
+import { WidgetToolRuntime } from "./widget-runtime.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
@@ -527,6 +528,10 @@ export class SafeSessionExecutor {
             modelSelectsSkills: request.modelSelectsSkills === true
         });
         const reportTools = new ReportBlueprintToolRuntime();
+        // Modele lokalne: bez widgetów (minimalny zestaw narzędzi i promptu).
+        const widgetTools = request.model.startsWith("local/")
+            ? undefined
+            : new WidgetToolRuntime(this.registry);
         // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
@@ -631,6 +636,7 @@ export class SafeSessionExecutor {
                 ? coreLawTools.schemas()
                 : []),
             ...reportTools.schemas(),
+            ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
                 ? federationTools.schemas()
                 : []),
@@ -642,6 +648,7 @@ export class SafeSessionExecutor {
                 ? [coreLawTools.systemPromptAppendix()]
                 : []),
             reportTools.systemPromptAppendix(),
+            ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
             ...(federationTools
                 ? [federationTools.systemPromptAppendix()]
                 : []),
@@ -835,11 +842,13 @@ export class SafeSessionExecutor {
                 }
                 const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
                 const reportCalls = calls.filter((call) => reportTools.handles(call.name));
+                const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
                 const federationCalls = calls.filter((call) => federationTools?.handles(call.name) ?? false);
                 const coreLawCalls = calls.filter((call) => coreLawTools?.handles(call.name) ?? false);
                 const verificationCalls = calls.filter((call) => !(coreLawTools?.handles(call.name) ?? false) &&
                     !corpusTools.handles(call.name) &&
                     !reportTools.handles(call.name) &&
+                    !(widgetTools?.handles(call.name) ?? false) &&
                     !(federationTools?.handles(call.name) ?? false));
                 const corpusResults = corpusCalls.length > 0
                     ? await corpusTools.runTools(corpusCalls)
@@ -850,6 +859,9 @@ export class SafeSessionExecutor {
                     : [];
                 const reportResults = reportCalls.length > 0
                     ? await reportTools.runTools(reportCalls)
+                    : [];
+                const widgetResults = widgetTools && widgetCalls.length > 0
+                    ? await widgetTools.runTools(widgetCalls)
                     : [];
                 const federationResults = federationTools &&
                     federationCalls.length > 0
@@ -885,6 +897,7 @@ export class SafeSessionExecutor {
                     ...corpusResults,
                     ...coreLawResults,
                     ...reportResults,
+                    ...widgetResults,
                     ...federationResults,
                     ...verificationResults
                 ].map((result) => [
@@ -1505,6 +1518,9 @@ export class SafeSessionExecutor {
                 ? {
                     auxiliarySources: publicAuxiliarySources
                 }
+                : {}),
+            ...(widgetTools && widgetTools.widgets().length > 0
+                ? { widgets: widgetTools.widgets() }
                 : {}),
             context: {
                 ...contextSelection.report

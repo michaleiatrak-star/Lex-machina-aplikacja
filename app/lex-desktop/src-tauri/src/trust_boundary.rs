@@ -1353,7 +1353,8 @@ fn runtime_address_from_line(line: &str) -> Option<SocketAddr> {
 }
 
 fn requires_session(path: &str) -> bool {
-    if path.starts_with("/api/support/") {
+    // Ramka widgetu nie dostaje tokenu sesji: widget nie działa w imieniu użytkownika.
+    if path.starts_with("/api/support/") || is_widget_frame_route(path) {
         return false;
     }
     !matches!(
@@ -1474,8 +1475,17 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
         _ if is_mcp_route(method, path) => true,
         _ if is_invoice_route(method, path) => true,
+        "/api/widgets" => method == "POST",
+        _ if is_widget_frame_route(path) => method == "GET",
         _ => false,
     }
+}
+
+// Ramka widgetu: adres-klucz /api/widgets/frame/<32 znaki hex>, bez sesji użytkownika.
+fn is_widget_frame_route(path: &str) -> bool {
+    path.strip_prefix("/api/widgets/frame/")
+        .map(|id| id.len() == 32 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        .unwrap_or(false)
 }
 
 // Karta Faktury i Ustawienia → Faktury i KSeF: tylko te trasy i metody.
@@ -1861,6 +1871,9 @@ fn build_response(response: ProxiedResponse) -> Response<Vec<u8>> {
     let content_disposition = header_value(&response.headers, "content-disposition");
     let retry_after = header_value(&response.headers, "retry-after");
     let cache_control = header_value(&response.headers, "cache-control");
+    // Własne CSP ramki widgetu (bez sieci); inne odpowiedzi runtime go nie ustawiają.
+    let frame_policy = header_value(&response.headers, "content-security-policy")
+        .filter(|_| response_is_html(&response.headers));
 
     let mut builder = Response::builder()
         .status(response.status)
@@ -1884,12 +1897,21 @@ fn build_response(response: ProxiedResponse) -> Response<Vec<u8>> {
     if let Some(value) = cache_control {
         builder = builder.header("Cache-Control", value);
     }
+    if let Some(value) = frame_policy {
+        builder = builder.header("Content-Security-Policy", value);
+    }
 
     builder
         .body(response.body)
         .unwrap_or_else(|_| {
             json_error(StatusCode::INTERNAL_SERVER_ERROR, "DESKTOP_RESPONSE_BUILD_FAILED")
         })
+}
+
+fn response_is_html(headers: &[(String, String)]) -> bool {
+    header_value(headers, "content-type")
+        .map(|value| value.to_ascii_lowercase().starts_with("text/html"))
+        .unwrap_or(false)
 }
 
 fn header_value(headers: &[(String, String)], name: &str) -> Option<String> {
@@ -2101,6 +2123,13 @@ mod tests {
         assert!(route_allowed("PUT", "/api/invoices/settings/ksef-environment"));
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
         assert!(route_allowed("PUT", "/api/invoices/settings/defaults"));
+        assert!(route_allowed("POST", "/api/widgets"));
+        assert!(route_allowed("GET", &format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(!route_allowed("GET", "/api/widgets/frame/../auth/me"));
+        assert!(!route_allowed("GET", &format!("/api/widgets/frame/{}", "A1".repeat(16))));
+        assert!(!route_allowed("POST", &format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(!requires_session(&format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(requires_session("/api/widgets"));
         assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
         assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
         assert!(route_allowed("GET", &format!("/api/invoices/{id}")));

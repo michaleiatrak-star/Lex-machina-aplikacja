@@ -114,6 +114,24 @@ function safeMessage(input) {
             ...(item.agreement ? { agreement: item.agreement } : {})
         };
     });
+    const widgets = (input.widgets ?? []).slice(0, 3).map((widget) => {
+        if (!widget ||
+            typeof widget.title !== "string" ||
+            widget.title.length > 200 ||
+            (widget.kind !== "html" && widget.kind !== "jsx") ||
+            typeof widget.code !== "string" ||
+            !widget.code.trim() ||
+            widget.code.length > 300_000 ||
+            (widget.source !== undefined && (typeof widget.source !== "string" || widget.source.length > 300))) {
+            throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+        }
+        return {
+            title: widget.title,
+            kind: widget.kind,
+            code: widget.code,
+            ...(widget.source ? { source: widget.source } : {})
+        };
+    });
     const generated = input.generatedDocument;
     if (generated !== undefined &&
         (typeof generated !== "object" ||
@@ -142,7 +160,8 @@ function safeMessage(input) {
             }
             : {}),
         ...(citations.length > 0 ? { documentCitations: citations } : {}),
-        ...(restorations.length > 0 ? { restorations } : {})
+        ...(restorations.length > 0 ? { restorations } : {}),
+        ...(widgets.length > 0 ? { widgets } : {})
     };
 }
 export class EncryptedCaseWorkspaceStore {
@@ -461,7 +480,8 @@ export class EncryptedCaseWorkspaceStore {
                 : {}),
             ...(item.restorations
                 ? { restorations: item.restorations.map((restoration) => ({ ...restoration })) }
-                : {})
+                : {}),
+            ...(item.widgets ? { widgets: item.widgets.map((widget) => ({ ...widget })) } : {})
         }));
     }
     async appendThreadMessage(args) {

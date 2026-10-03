@@ -6,7 +6,8 @@ import path from "node:path";
 // "downloaded" in the chat never reached the disk. On desktop the runtime (the same
 // local user) saves it in the user's Downloads folder instead, like a browser would.
 
-const ALLOWED_EXTENSIONS = new Set(["docx", "odt", "pdf", "txt"]);
+// json, md, csv: eksport z widgetów skilli (pasek IO).
+const ALLOWED_EXTENSIONS = new Set(["docx", "odt", "pdf", "txt", "json", "md", "csv"]);
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com\d|lpt\d)$/i;
 
 export function downloadsDirectory(): string {

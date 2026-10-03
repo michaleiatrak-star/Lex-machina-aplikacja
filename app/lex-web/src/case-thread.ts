@@ -13,6 +13,7 @@ import type {
 import {
   appendCaseThreadMessage,
   getCaseThread,
+  type ChatWidget,
   type GeneratedDocumentRef,
   type RestorationMark,
   type WorkspaceDocumentCitation,
@@ -30,6 +31,7 @@ export type CaseChatMessage = {
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
+  widgets?: ChatWidget[];
 };
 
 function persistedMessageId(id: string): string {
@@ -56,7 +58,8 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
       : {}),
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
-      : {})
+      : {}),
+    ...(message.widgets?.length ? { widgets: message.widgets } : {})
   };
 }
 
@@ -75,7 +78,8 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
       : {}),
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
-      : {})
+      : {}),
+    ...(message.widgets?.length ? { widgets: message.widgets } : {})
   };
 }
 

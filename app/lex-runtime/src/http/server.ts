@@ -21,6 +21,8 @@ import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import { registerInvoiceRoutes } from "./invoice-routes.js";
+import { registerWidgetRoutes } from "./widget-routes.js";
+import { WidgetFrameStore } from "../widget-runtime.js";
 import { EncryptedInvoiceStore } from "../invoice-store.js";
 import {
   LexMcpConnectorStore,
@@ -764,6 +766,7 @@ export async function startLocalServer(options?: {
         )
     }
   );
+  registerWidgetRoutes(app, { authService, frames: new WidgetFrameStore() });
   registerInvoiceRoutes(app, {
     authService,
     invoices: new EncryptedInvoiceStore({
