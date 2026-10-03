@@ -62,6 +62,8 @@ describe("hosted model stream limits", () => {
       runTools: async (toolCalls) => toolCalls.map((call) => ({ tool_use_id: call.id, content: "WYNIK_NARZEDZIA" }))
     }, "Test");
     expect(result.fullText).toBe("Odpowiedź z wyników.");
+    // Two tool steps and the final pass, one input and one output token each.
+    expect(result.usage).toEqual({ inputTokens: 3, outputTokens: 3 });
     expect(calls).toHaveLength(3);
     expect(calls[2]!.toolChoice).toEqual({ type: "none" });
     expect(calls[2]!.prompt).toContain("WYNIK_NARZEDZIA");
@@ -88,5 +90,19 @@ describe("hosted model stream limits", () => {
       throw new Error("not called");
     });
     expect(result.fullText).toBe("Gotowe.");
+  });
+});
+
+describe("usage meter", () => {
+  it("adds up the tokens of every call in a metered turn and counts calls without tokens", async () => {
+    const { meterUsage, reportUsage } = await import("../src/providers/usage-meter.js");
+    const { usage } = await meterUsage(async () => {
+      reportUsage({ inputTokens: 100, outputTokens: 20 });
+      await Promise.resolve();
+      reportUsage({ inputTokens: 50, outputTokens: 5 });
+      reportUsage(null);
+    });
+    expect(usage).toEqual({ inputTokens: 150, outputTokens: 25, modelCalls: 3, unmeteredCalls: 1 });
+    reportUsage({ inputTokens: 1, outputTokens: 1 });
   });
 });

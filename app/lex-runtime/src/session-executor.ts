@@ -80,6 +80,7 @@ import {
 } from "./thread-evidence.js";
 import type { LegalActDescriptor } from "./legal-act-resolver.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
+import { meterUsage, type ModelUsage } from "./providers/usage-meter.js";
 import type { TemporalFreshnessResult } from "./temporal-source-freshness.js";
 import {
   ReportBlueprintToolRuntime,
@@ -669,6 +670,8 @@ export const SESSION_EXECUTION_INTERNAL =
 export type SessionExecutionResponse = {
   sessionId: string;
   status: "DRAFT_PRESENTABLE" | "BLOCKED";
+  // Model tokens of the turn; unmeteredCalls = calls through account clients.
+  usage?: ModelUsage;
   provider: ProviderId;
   model: string;
   modelRouting?: {
@@ -1222,6 +1225,15 @@ export class SafeSessionExecutor implements SessionExecutor {
   }
 
   async execute(
+    request: SessionExecutionRequest
+  ): Promise<SessionExecutionResponse> {
+    // Tokens of every model call in this turn (benchmark and cost display).
+    const { result, usage } = await meterUsage(() => this.executeTurn(request));
+    result.usage = usage;
+    return result;
+  }
+
+  private async executeTurn(
     request: SessionExecutionRequest
   ): Promise<SessionExecutionResponse> {
     const step: ExecutionStepReporter = request.onStep ?? (() => undefined);

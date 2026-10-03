@@ -16,6 +16,7 @@ import { WidgetToolRuntime } from "./widget-runtime.js";
 import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
+import { meterUsage } from "./providers/usage-meter.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
@@ -527,6 +528,12 @@ export class SafeSessionExecutor {
         };
     }
     async execute(request) {
+        // Tokens of every model call in this turn (benchmark and cost display).
+        const { result, usage } = await meterUsage(() => this.executeTurn(request));
+        result.usage = usage;
+        return result;
+    }
+    async executeTurn(request) {
         const step = request.onStep ?? (() => undefined);
         step("PREPARE", "anonimizacja wiadomości");
         if (request.documentAttachments?.length) {

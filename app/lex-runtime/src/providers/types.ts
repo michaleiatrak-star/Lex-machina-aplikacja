@@ -98,6 +98,8 @@ export type NativeCorpusAccess = {
 
 export type ProviderStreamResult = {
   fullText: string;
+  // Tokens of the whole call, when the adapter can tell (API keys).
+  usage?: { inputTokens: number; outputTokens: number };
 };
 
 export interface ProviderAdapter {

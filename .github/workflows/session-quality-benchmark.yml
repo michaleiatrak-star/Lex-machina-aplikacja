@@ -1,0 +1,126 @@
+name: Session quality benchmark (live ELI)
+
+# Anonymized questions (some in multi-message threads) through the runtime HTTP
+# API with live Sejm ELI verification. Needs the provider key as a repository
+# secret: ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY or GOOGLE_API_KEY.
+# Account models (ChatGPT/Claude/Grok through their clients) cannot run in CI.
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "anthropic | openai | xai | google"
+        required: true
+        default: "anthropic"
+        type: string
+      model:
+        description: "Model id, e.g. claude-opus-4-5"
+        required: true
+        type: string
+      cases:
+        description: "Optional comma-separated case ids (blank = all)"
+        required: false
+        default: ""
+        type: string
+      history_chars:
+        description: "Conversation budget in characters (blank = chat client budget; small values exercise the thread summary)"
+        required: false
+        default: ""
+        type: string
+      baseline_run_id:
+        description: "Optional run id of an earlier benchmark to compare with"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  benchmark:
+    name: Session quality (${{ inputs.provider }}/${{ inputs.model }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: app/lex-runtime
+    env:
+      LEX_DATA_DIR: ${{ runner.temp }}/lex-data
+      LEX_PORT: "4317"
+      LEX_SKILLS_PATH: ${{ github.workspace }}/Wersja rozwojowa rozpakowana
+      LEX_BENCH_PASSWORD: ${{ github.run_id }}-session-quality-benchmark-2026
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Install runtime dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Start runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$LEX_DATA_DIR"
+          HOME="$LEX_DATA_DIR" nohup npx tsx src/http/server.ts > "$RUNNER_TEMP/runtime.log" 2>&1 &
+          for _ in $(seq 1 90); do
+            curl -sf "http://127.0.0.1:$LEX_PORT/health" >/dev/null && exit 0
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/runtime.log"
+          exit 1
+
+      - name: Download baseline report
+        if: inputs.baseline_run_id != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: session-quality-report
+          path: ${{ runner.temp }}/baseline
+          run-id: ${{ inputs.baseline_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Run benchmark
+        shell: bash
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          CASES: ${{ inputs.cases }}
+          HISTORY_CHARS: ${{ inputs.history_chars }}
+          BASELINE: ${{ inputs.baseline_run_id != '' && format('{0}/baseline/report.json', runner.temp) || '' }}
+        run: |
+          set -euo pipefail
+          case "$PROVIDER" in
+            anthropic) key=ANTHROPIC_API_KEY ;;
+            openai) key=OPENAI_API_KEY ;;
+            xai) key=XAI_API_KEY ;;
+            google) key=GOOGLE_API_KEY ;;
+            *) echo "UNKNOWN_PROVIDER:$PROVIDER" >&2; exit 1 ;;
+          esac
+          [[ -n "${!key}" ]] || { echo "MISSING_SECRET:$key" >&2; exit 1; }
+          args=(--base-url "http://127.0.0.1:$LEX_PORT" --provider "$PROVIDER" --model "$MODEL" --initial-admin --api-key-env "$key" --out "$RUNNER_TEMP/session-quality-report")
+          [[ -n "$CASES" ]] && args+=(--cases "$CASES")
+          [[ -n "$HISTORY_CHARS" ]] && args+=(--history-chars "$HISTORY_CHARS")
+          [[ -n "$BASELINE" ]] && args+=(--baseline "$BASELINE")
+          npm run benchmark:session -- "${args[@]}"
+          cat "$RUNNER_TEMP/session-quality-report/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: session-quality-report
+          path: ${{ runner.temp }}/session-quality-report
+          if-no-files-found: warn
+
+      - name: Runtime log on failure
+        if: failure()
+        run: tail -200 "$RUNNER_TEMP/runtime.log"

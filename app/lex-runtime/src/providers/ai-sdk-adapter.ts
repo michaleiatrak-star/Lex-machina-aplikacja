@@ -1925,10 +1925,21 @@ export async function answerAfterToolLimit(
 ): Promise<StreamOnceResult> {
   if (first.finishReason !== "tool-calls" || !first.responseMessages?.length) return first;
   const answer = await final(first.responseMessages);
+  const usage = addUsage(first.usage, answer.usage);
   return {
     fullText: first.fullText.trim() ? `${first.fullText}\n\n${answer.fullText}` : answer.fullText,
-    ...(answer.finishReason ? { finishReason: answer.finishReason } : {})
+    ...(answer.finishReason ? { finishReason: answer.finishReason } : {}),
+    ...(usage ? { usage } : {})
   };
+}
+
+function addUsage(
+  left: ProviderStreamResult["usage"],
+  right: ProviderStreamResult["usage"]
+): ProviderStreamResult["usage"] {
+  if (!left) return right;
+  if (!right) return left;
+  return { inputTokens: left.inputTokens + right.inputTokens, outputTokens: left.outputTokens + right.outputTokens };
 }
 
 /**
@@ -1942,6 +1953,7 @@ export async function continueAtLength(
 ): Promise<ProviderStreamResult> {
   let text = first.fullText;
   let finishReason = first.finishReason;
+  let usage = first.usage;
   for (let round = 0; finishReason === "length" && round < MAX_LENGTH_CONTINUATIONS; round += 1) {
     const result = await next([
       ...messages,
@@ -1950,8 +1962,9 @@ export async function continueAtLength(
     ]);
     text += result.fullText;
     finishReason = result.finishReason;
+    usage = addUsage(usage, result.usage);
   }
-  return { fullText: finishReason === "length" ? text + LENGTH_TRUNCATED_NOTE : text };
+  return { fullText: finishReason === "length" ? text + LENGTH_TRUNCATED_NOTE : text, ...(usage ? { usage } : {}) };
 }
 
 function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean) {
@@ -2060,9 +2073,11 @@ async function streamModelOnce(
   }
 
   const finishReason = await result.finishReason;
+  const usage = await Promise.resolve(result.usage).catch(() => null);
   return {
     fullText,
     finishReason,
+    ...(usage ? { usage: { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 } } : {}),
     ...(finishReason === "tool-calls" ? { responseMessages: await result.responseMessages } : {})
   };
 }

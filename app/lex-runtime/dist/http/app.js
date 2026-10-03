@@ -5159,35 +5159,43 @@ export function createLexHttpApp(options) {
                     // Messages the client left out for the window: replaced with their summary.
                     const dropped = droppedMessageCount(request.query);
                     if (dropped && options.sessionExecutor.summarizeThread) {
-                        request.onStep?.("PREPARE", `streszczenie wcześniejszej części rozmowy (${dropped} wiadomości)`);
-                        const summarize = options.sessionExecutor.summarizeThread.bind(options.sessionExecutor);
-                        const result = await summaryForDroppedHistory({
-                            thread: memory.threadMessages,
-                            dropped,
-                            stored: memory.summary ?? null,
-                            chunkChars: SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
-                            now: new Date().toISOString(),
-                            summarize: (previousSummary, messages) => summarize({
-                                provider: request.provider,
-                                model: request.model,
-                                ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
-                                ...(previousSummary ? { previousSummary } : {}),
-                                messages,
-                                ...(threadEvidence ? { threadEvidence } : {})
-                            })
-                        });
-                        if (result) {
-                            if (result.generated) {
-                                await options.caseAccessService
-                                    .withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({
-                                    caseId: knowledge.caseId,
-                                    caseDataKey,
-                                    keyVersion: caseView.keyVersion,
-                                    summary: result.summary
-                                }))
-                                    .catch((error) => process.stderr.write(`CASE_SUMMARY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`));
+                        try {
+                            request.onStep?.("PREPARE", `streszczenie wcześniejszej części rozmowy (${dropped} wiadomości)`);
+                            const summarize = options.sessionExecutor.summarizeThread.bind(options.sessionExecutor);
+                            const result = await summaryForDroppedHistory({
+                                thread: memory.threadMessages,
+                                dropped,
+                                stored: memory.summary ?? null,
+                                chunkChars: SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
+                                now: new Date().toISOString(),
+                                summarize: (previousSummary, messages) => summarize({
+                                    provider: request.provider,
+                                    model: request.model,
+                                    ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+                                    ...(previousSummary ? { previousSummary } : {}),
+                                    messages,
+                                    ...(threadEvidence ? { threadEvidence } : {})
+                                })
+                            });
+                            if (result) {
+                                if (result.generated) {
+                                    await options.caseAccessService
+                                        .withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({
+                                        caseId: knowledge.caseId,
+                                        caseDataKey,
+                                        keyVersion: caseView.keyVersion,
+                                        summary: result.summary
+                                    }))
+                                        .catch((error) => process.stderr.write(`CASE_SUMMARY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`));
+                                }
+                                request.query = queryWithSummary(request.query, result.summary);
                             }
-                            request.query = queryWithSummary(request.query, result.summary);
+                        }
+                        catch (error) {
+                            // The answer goes on with the client's note instead of the summary.
+                            if (error instanceof CaseAccessError)
+                                throw error;
+                            process.stderr.write(`CASE_SUMMARY_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
                         }
                     }
                 }
