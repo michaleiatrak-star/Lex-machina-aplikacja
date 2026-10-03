@@ -6,7 +6,8 @@ import type { MatterComplexity } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import {
   evaluateStatusConsistency,
-  reconcileStatusMarkers
+  reconcileStatusMarkers,
+  stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
 import type { EvidenceImage } from "./document-evidence.js";
@@ -1801,6 +1802,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         execution.primarySkill =
           selection.primarySkill;
       }
+      // The model routed itself: the route is the DR it actually read
+      // (router-v3 only when it found no legal domain), not the placeholder.
+      audit.record(
+        "route",
+        selection.primarySkill ?? "prawny-router-v3",
+        "OK",
+        {
+          role: "primary-domain",
+          selection: "model-auto-selection",
+          domainSkills: selection.domainSkills
+        }
+      );
     }
 
     for (const event of coreLawTools?.auditEvents() ?? []) {
@@ -1969,9 +1982,16 @@ export class SafeSessionExecutor implements SessionExecutor {
         results.length;
     }
 
+    // Model-written ✅ markers are claims, not verification: only the ledger
+    // marker is shown, so a rewritten link or date cannot block the answer.
+    const ledgerBackedOutput =
+      stripUnbackedVerificationMarkers(
+        execution.output,
+        ledger
+      );
     const automaticVerification =
       applyAutomaticVerificationMarkers(
-        execution.output,
+        ledgerBackedOutput.text,
         ledger,
         requestedHistoricalAsOf
       );
@@ -1990,6 +2010,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           automaticVerificationExecuted,
         insertedMarkers:
           automaticVerification.inserted,
+        removedUnbackedMarkers:
+          ledgerBackedOutput.removed,
         skipped:
           automaticVerificationPlan.skipped
       }
