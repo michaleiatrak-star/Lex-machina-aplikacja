@@ -50,4 +50,10 @@ describe("invoice form", () => {
     expect(next.buyer.name).toBe("Spółka X");
     expect(next.lines[0]!.unitNetPrice).toBe("3000");
   });
+
+  it("subtracts the line discount and rejects discounts above the value", () => {
+    expect(lineNet({ name: "a", unit: "szt.", quantity: "2", unitNetPrice: "100", vatRate: "zw", discount: "20" })).toBe("180.00");
+    expect(lineNet({ name: "a", unit: "szt.", quantity: "1", unitNetPrice: "10", vatRate: "23", discount: "11" })).toBeNull();
+    expect(invoiceErrorText("NUMBERING_PATTERN_NR_REQUIRED")).toBe("Wzór musi zawierać dokładnie jeden token {NR}.");
+  });
 });

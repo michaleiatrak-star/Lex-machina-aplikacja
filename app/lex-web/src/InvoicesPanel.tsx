@@ -5,13 +5,14 @@ import {
   deleteInvoice,
   deleteInvoiceTemplate,
   duplicateInvoice,
-  getInvoiceLegalBasis,
   getInvoiceSettings,
   issueInvoice,
   listInvoiceTemplates,
   listInvoices,
   saveInvoiceTemplate,
+  previewInvoiceNumber,
   updateInvoice,
+  type InvoiceAnnotations,
   type InvoiceDraft,
   type InvoiceLine,
   type InvoiceParty,
@@ -39,6 +40,7 @@ import {
 } from "./invoice-form.js";
 import { CompanyNipField } from "./CompanyNipField.js";
 import type { CompanyLookup } from "./company-lookup.js";
+import { InvoiceRequirementsCard } from "./InvoiceRequirementsCard.js";
 import "./invoices.css";
 
 const SORTS: Array<[InvoiceSort, string]> = [
@@ -88,6 +90,25 @@ function PartyFields({
   );
 }
 
+// Treść oznaczeń jak w polu faktury; brzmienie wymogu sprawdza „Zweryfikuj przez ELI”.
+function annotationTexts(annotations: InvoiceAnnotations | undefined): string[] {
+  if (!annotations) return [];
+  return [
+    annotations.cashMethod ? "metoda kasowa" : "",
+    annotations.selfBilling ? "samofakturowanie" : "",
+    annotations.reverseCharge ? "odwrotne obciążenie" : "",
+    annotations.splitPayment ? "mechanizm podzielonej płatności" : "",
+    annotations.exemptionBasis ? `Podstawa zwolnienia: ${annotations.exemptionBasis}` : ""
+  ].filter(Boolean);
+}
+
+const ANNOTATION_FLAGS: Array<[keyof Omit<InvoiceAnnotations, "exemptionBasis">, string]> = [
+  ["cashMethod", "metoda kasowa"],
+  ["selfBilling", "samofakturowanie"],
+  ["reverseCharge", "odwrotne obciążenie"],
+  ["splitPayment", "mechanizm podzielonej płatności"]
+];
+
 function InvoiceDocument({
   invoice,
   settings
@@ -128,6 +149,7 @@ function InvoiceDocument({
             <th>J.m.</th>
             <th>Ilość</th>
             <th>Cena netto</th>
+            <th>Opust</th>
             <th>Wartość netto</th>
             <th>Stawka VAT</th>
           </tr>
@@ -140,6 +162,7 @@ function InvoiceDocument({
               <td>{line.unit}</td>
               <td>{line.quantity}</td>
               <td>{formatMoney(Number(line.unitNetPrice).toFixed(2), invoice.currency)}</td>
+              <td>{line.discount ? formatMoney(Number(line.discount).toFixed(2), invoice.currency) : "—"}</td>
               <td>{formatMoney(lineNet(line) ?? "0.00", invoice.currency)}</td>
               <td>{/^\d/.test(line.vatRate) ? `${line.vatRate}%` : line.vatRate}</td>
             </tr>
@@ -173,6 +196,7 @@ function InvoiceDocument({
           : invoice.paymentMethod ? <div>Sposób płatności: {invoice.paymentMethod}</div> : null}
         {invoice.paymentDueDate ? <div>Termin płatności: {invoice.paymentDueDate}</div> : null}
         {invoice.bankAccount ? <div>Rachunek: {invoice.bankAccount}</div> : null}
+        {annotationTexts(invoice.annotations).map((entry) => <div key={entry}><strong>{entry}</strong></div>)}
         {invoice.notes ? <p>{invoice.notes}</p> : null}
       </footer>
     </article>
@@ -189,7 +213,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
   const [selected, setSelected] = useState<InvoiceView | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [confirmIssue, setConfirmIssue] = useState(false);
-  const [legalBasis, setLegalBasis] = useState<string>("");
+  const [suggestedNumber, setSuggestedNumber] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -324,15 +348,30 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
     }, "Szkic faktury zapisany.");
   }
 
-  function loadLegalBasis(): void {
-    void run(async () => {
-      const basis = await getInvoiceLegalBasis();
-      const result = basis.result as { tekst?: string; text?: string; url?: string; source_url?: string };
-      setLegalBasis(
-        `ELI ${basis.eli}, art. ${basis.article} (pobrano ${new Date(basis.retrievedAt).toLocaleString("pl-PL")})\n\n` +
-          (result.tekst ?? result.text ?? JSON.stringify(basis.result, null, 2))
-      );
-    });
+  const editingIssueDate = editing?.draft.issueDate ?? "";
+  const autoNumbering = Boolean(settings?.numbering);
+  useEffect(() => {
+    if (!autoNumbering || !/^\d{4}-\d{2}-\d{2}$/.test(editingIssueDate)) {
+      setSuggestedNumber(null);
+      return;
+    }
+    let cancelled = false;
+    void previewInvoiceNumber(editingIssueDate)
+      .then((next) => {
+        if (!cancelled) setSuggestedNumber(next.number);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [autoNumbering, editingIssueDate]);
+
+  function patchAnnotations(change: Partial<InvoiceAnnotations>): void {
+    setEditing((current) =>
+      current
+        ? { ...current, draft: { ...current.draft, annotations: { ...current.draft.annotations, ...change } } }
+        : current
+    );
   }
 
   const totals = editing ? previewTotals(editing.draft.lines) : null;
@@ -414,7 +453,14 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
             <div className="invoice-grid">
               <label>
                 Numer faktury
-                <input value={editing.draft.number} onChange={(event) => patch({ number: event.target.value })} />
+                <input
+                  value={editing.draft.number}
+                  placeholder={suggestedNumber ? `auto: ${suggestedNumber}` : ""}
+                  onChange={(event) => patch({ number: event.target.value })}
+                />
+                {autoNumbering && !editing.draft.number.trim() ? (
+                  <small className="field-help">Puste pole = numer nadany automatycznie przy zapisie.</small>
+                ) : null}
               </label>
               <label>
                 Data wystawienia
@@ -450,6 +496,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                   <th>J.m.</th>
                   <th>Ilość</th>
                   <th>Cena netto</th>
+                  <th>Opust (kwota)</th>
                   <th>Stawka VAT</th>
                   <th>Wartość netto</th>
                   <th />
@@ -462,6 +509,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                     <td><input value={line.unit} onChange={(event) => patchLine(index, { unit: event.target.value })} /></td>
                     <td><input inputMode="decimal" value={line.quantity} onChange={(event) => patchLine(index, { quantity: event.target.value })} /></td>
                     <td><input inputMode="decimal" value={line.unitNetPrice} onChange={(event) => patchLine(index, { unitNetPrice: event.target.value })} /></td>
+                    <td><input inputMode="decimal" value={line.discount ?? ""} placeholder="0" onChange={(event) => patchLine(index, { discount: event.target.value })} /></td>
                     <td>
                       <select value={line.vatRate} aria-label="Stawka VAT" onChange={(event) => patchLine(index, { vatRate: event.target.value })}>
                         {line.vatRate === "" ? <option value="">wybierz</option> : null}
@@ -539,6 +587,30 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                 <textarea value={editing.draft.notes ?? ""} onChange={(event) => patch({ notes: event.target.value })} />
               </label>
             </div>
+            <fieldset className="invoice-party">
+              <legend>Oznaczenia na fakturze</legend>
+              {ANNOTATION_FLAGS.map(([flag, label]) => (
+                <label key={flag} className="invoice-flag">
+                  <input
+                    type="checkbox"
+                    checked={editing.draft.annotations?.[flag] === true}
+                    onChange={(event) => patchAnnotations({ [flag]: event.target.checked })}
+                  />
+                  <span>„{label}”</span>
+                </label>
+              ))}
+              <label>
+                Podstawa zwolnienia od podatku (wymagana przy pozycjach ze stawką „zw”)
+                <input
+                  value={editing.draft.annotations?.exemptionBasis ?? ""}
+                  onChange={(event) => patchAnnotations({ exemptionBasis: event.target.value })}
+                />
+              </label>
+            </fieldset>
+            <details className="invoice-requirements-details">
+              <summary>Sprawdź wymagane elementy faktury</summary>
+              <InvoiceRequirementsCard />
+            </details>
             <div className="chat-form-row">
               <button type="button" className="chat-primary-action" disabled={busy} onClick={save}>
                 Zapisz szkic
@@ -659,13 +731,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           <article className="chat-card invoice-no-print">
             <h2>Faktury</h2>
             <p>Wybierz fakturę z listy albo utwórz nową.</p>
-            <p className="field-help">
-              Lista wymaganych pól nie jest jeszcze zweryfikowana z ustawą. Aktualne brzmienie art. 106e ustawy o VAT pobierzesz przez ELI (konektor ISAP).
-            </p>
-            <button type="button" className="chat-secondary-action" disabled={busy} onClick={loadLegalBasis}>
-              Pokaż art. 106e (ELI)
-            </button>
-            {legalBasis ? <pre className="invoice-legal-basis">{legalBasis}</pre> : null}
+            <InvoiceRequirementsCard />
           </article>
         )}
       </div>

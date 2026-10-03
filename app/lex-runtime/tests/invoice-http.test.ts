@@ -99,9 +99,11 @@ describe("invoice routes", () => {
     await request(app).get("/api/invoices?sort=random").set("authorization", "Bearer user_alice").expect(400);
   });
 
-  it("fetches art. 106e through the ISAP (ELI) connector", async () => {
+  it("fetches art. 106e through the ISAP (ELI) connector and keeps the catalog unverified without text", async () => {
     const response = await request(app).get("/api/invoices/legal-basis").set("authorization", "Bearer user_alice").expect(200);
     expect(response.body).toMatchObject({ eli: "DU/2004/535", article: "106e", ok: true });
+    expect(response.body.report.error).toBe("INVOICE_LEGAL_TEXT_MISSING");
+    expect(new Set(response.body.report.requirements.map((entry: { status: string }) => entry.status))).toEqual(new Set(["UNVERIFIED"]));
     expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", artykul: "106e" } }]);
   });
 
@@ -163,5 +165,18 @@ describe("invoice routes", () => {
     ]) {
       await request(app).put("/api/invoices/settings/defaults").set("authorization", "Bearer user_alice").send({ defaults: bad }).expect(400);
     }
+  });
+
+  it("serves the catalog and previews the next auto number", async () => {
+    const catalog = await request(app).get("/api/invoices/requirements").set("authorization", "Bearer user_bob").expect(200);
+    expect(catalog.body.report.requirements[0]).toMatchObject({ point: "1", status: "UNVERIFIED" });
+    await request(app)
+      .put("/api/invoices/settings/numbering")
+      .set("authorization", "Bearer user_bob")
+      .send({ numbering: { pattern: "{NR}/{RRRR}", reset: "yearly", padding: 3 } })
+      .expect(200);
+    const next = await request(app).get("/api/invoices/next-number?issueDate=2026-10-03").set("authorization", "Bearer user_bob").expect(200);
+    expect(next.body.number).toBe("001/2026");
+    await request(app).get("/api/invoices/next-number?issueDate=x").set("authorization", "Bearer user_bob").expect(400);
   });
 });

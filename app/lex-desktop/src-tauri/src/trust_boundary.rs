@@ -1498,7 +1498,10 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
     };
     match segments.as_slice() {
         ["api", "invoices"] => matches!(method, "GET" | "POST"),
-        ["api", "invoices", "settings"] | ["api", "invoices", "legal-basis"] => method == "GET",
+        ["api", "invoices", "settings"]
+        | ["api", "invoices", "legal-basis"]
+        | ["api", "invoices", "requirements"]
+        | ["api", "invoices", "next-number"] => method == "GET",
         ["api", "invoices", "templates"] => matches!(method, "GET" | "POST"),
         ["api", "invoices", "templates", id] => {
             matches!(method, "PUT" | "DELETE")
@@ -1509,7 +1512,9 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
         ["api", "invoices", "settings", "ksef-token" | "logo"] => {
             matches!(method, "PUT" | "DELETE")
         }
-        ["api", "invoices", "settings", "ksef-environment" | "seller" | "defaults"] => method == "PUT",
+        ["api", "invoices", "settings", "ksef-environment" | "seller" | "defaults" | "numbering"] => {
+            method == "PUT"
+        }
         ["api", "invoices", id] => {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
@@ -2144,6 +2149,10 @@ mod tests {
         assert!(requires_session("/api/widgets"));
         assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
         assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/numbering"));
+        assert!(route_allowed("GET", "/api/invoices/requirements"));
+        assert!(route_allowed("GET", "/api/invoices/next-number"));
+        assert!(!route_allowed("POST", "/api/invoices/next-number"));
         assert!(route_allowed("GET", &format!("/api/invoices/{id}")));
         assert!(route_allowed("PUT", &format!("/api/invoices/{id}")));
         assert!(route_allowed("DELETE", &format!("/api/invoices/{id}")));

@@ -3486,6 +3486,42 @@ export type InvoiceLine = {
   quantity: string;
   unitNetPrice: string;
   vatRate: string;
+  discount?: string;
+};
+
+export type InvoiceAnnotations = {
+  cashMethod?: boolean;
+  selfBilling?: boolean;
+  reverseCharge?: boolean;
+  splitPayment?: boolean;
+  exemptionBasis?: string;
+};
+
+export type NumberingSettings = {
+  pattern: string;
+  reset: "monthly" | "yearly" | "never";
+  padding: number;
+};
+
+export type InvoiceRequirementStatus = "UNVERIFIED" | "VERIFIED" | "MISMATCH" | "NOT_FOUND";
+
+export type InvoiceRequirementsReport = {
+  eli: string;
+  article: string;
+  sourceUrl?: string;
+  statusDate?: string;
+  retrievedAt?: string;
+  requirements: Array<{
+    id: string;
+    point: string;
+    label: string;
+    fields: string[];
+    condition?: string;
+    status: InvoiceRequirementStatus;
+    excerpt?: string;
+  }>;
+  uncoveredPoints: Array<{ point: string; excerpt: string }>;
+  error?: string;
 };
 
 export type InvoiceLogo = {
@@ -3508,6 +3544,7 @@ export type InvoiceDraft = {
   paymentDueDate?: string;
   bankAccount?: string;
   notes?: string;
+  annotations?: InvoiceAnnotations;
 };
 
 export type InvoiceTotals = {
@@ -3541,6 +3578,7 @@ export type InvoiceSettingsResponse = {
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
   defaults?: InvoiceDefaults;
+  numbering?: NumberingSettings;
 };
 
 export function setInvoiceDefaults(defaults: InvoiceDefaults): Promise<{ defaults: InvoiceDefaults }> {
@@ -3670,6 +3708,28 @@ export function getInvoiceLegalBasis(topic?: "vat-rate"): Promise<{
   ok: boolean;
   result: unknown;
   retrievedAt: string;
+  report: InvoiceRequirementsReport;
+  secondarySources: string[];
 }> {
   return json(topic ? `/api/invoices/legal-basis?topic=${topic}` : "/api/invoices/legal-basis");
+}
+
+export function getInvoiceRequirements(): Promise<{
+  report: InvoiceRequirementsReport;
+  secondarySources: string[];
+}> {
+  return json("/api/invoices/requirements");
+}
+
+export function setInvoiceNumbering(
+  numbering: NumberingSettings | null
+): Promise<{ numbering: NumberingSettings | null }> {
+  return json("/api/invoices/settings/numbering", {
+    method: "PUT",
+    body: JSON.stringify({ numbering })
+  });
+}
+
+export function previewInvoiceNumber(issueDate: string): Promise<{ number: string | null }> {
+  return json(`/api/invoices/next-number?issueDate=${encodeURIComponent(issueDate)}`);
 }

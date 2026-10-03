@@ -722,6 +722,48 @@ async function refreshDocumentCitations(args) {
     }
     return citations.length;
 }
+/** The matter's files for the case file tools, on the caller's case access. */
+function createCaseFileAccess(args) {
+    const withKey = async (work) => {
+        const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+        return await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "ANALYZE", (caseDataKey) => work(caseDataKey, caseView.keyVersion));
+    };
+    // Restored locally once per turn: its key turns the document's aliases in
+    // the answer back into names.
+    const restored = new Set();
+    const restore = async (documentId, caseDataKey, keyVersion) => {
+        if (restored.has(documentId))
+            return;
+        await args.documentService.restoreDocument({ caseId: args.caseId, documentId, caseDataKey, keyVersion });
+        restored.add(documentId);
+    };
+    return {
+        caseId: args.caseId,
+        listDocuments: () => withKey((caseDataKey, keyVersion) => args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion })),
+        search: (query, limit) => withKey(async (caseDataKey, keyVersion) => {
+            const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit });
+            // Snippets carry the documents' symbols too.
+            for (const documentId of new Set(hits.map((hit) => hit.documentId))) {
+                await restore(documentId, caseDataKey, keyVersion);
+            }
+            return hits;
+        }),
+        readChunks: async (documentId, chunkIndices) => {
+            await withKey((caseDataKey, keyVersion) => restore(documentId, caseDataKey, keyVersion));
+            const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices });
+            return {
+                totalPages: resolved.totalPages ?? 0,
+                chunks: resolved.chunks.map((chunk) => ({
+                    index: chunk.index,
+                    pageStart: chunk.pageStart,
+                    pageEnd: chunk.pageEnd,
+                    text: chunk.text
+                }))
+            };
+        },
+        sharedKey: (documentId) => args.sharedMembers?.has(documentId) ?? false
+    };
+}
 export function createLexHttpApp(options) {
     const app = express();
     const routing = new RoutingCatalog(options.registry);
@@ -4966,6 +5008,7 @@ export function createLexHttpApp(options) {
             // Documents of one case on its shared key: the message is pseudonymized
             // with the same key, so a person has one symbol in the message and in
             // every attached document.
+            let sharedMembers = null;
             const attachmentCases = [
                 ...new Set(sessionAttachments
                     .map((attachment) => attachment.caseId)
@@ -4984,6 +5027,7 @@ export function createLexHttpApp(options) {
                 }));
                 if (shared && shared.members.size > 0) {
                     request.privacySeed = shared.snapshot;
+                    sharedMembers = shared.members;
                     for (const attachment of sessionAttachments) {
                         if (attachment.caseId === sharedCaseId && shared.members.has(attachment.documentId)) {
                             attachment.sharedKey = true;
@@ -4995,6 +5039,23 @@ export function createLexHttpApp(options) {
                 0) {
                 request.documentAttachments =
                     sessionAttachments;
+            }
+            // The excerpts above are cut to the window; with case search on, the
+            // model reaches the rest of the matter's files through tools.
+            if (knowledge.includeCase &&
+                knowledge.caseId &&
+                !localModel &&
+                options.caseAccessService &&
+                options.caseKnowledgeSearch?.listDocuments &&
+                options.documentService?.restoreDocument) {
+                request.caseFiles = createCaseFileAccess({
+                    caseId: knowledge.caseId,
+                    actor: responseAuthContext(res),
+                    caseAccessService: options.caseAccessService,
+                    caseKnowledgeSearch: options.caseKnowledgeSearch,
+                    documentService: options.documentService,
+                    sharedMembers: attachmentCases.length === 1 && attachmentCases[0] === knowledge.caseId ? sharedMembers : null
+                });
             }
             const localContextWindow = options.modelCatalog
                 .localContextWindow?.(request.model);
