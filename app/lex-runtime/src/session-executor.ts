@@ -71,6 +71,7 @@ import type {
   LegalSourceTier
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, type WidgetSpec } from "./widget-runtime.js";
+import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import {
   ReportBlueprintToolRuntime,
   type AcceptedReportBlueprint,
@@ -221,6 +222,9 @@ export type SessionExecutionRequest = {
   onDraft?: (text: string) => void;
   // Runtime-only: the stage of the turn and what was done in it (skills, tools).
   onStep?: ExecutionStepReporter;
+  // Runtime-only (never parsed from HTTP): the matter's full files for the
+  // case file tools, bound to the caller's access.
+  caseFiles?: CaseFileAccess;
   modelContextTokens?: number;
   tokenCharsPerToken?: number;
   // The current user message without chat history (grammar of placeholders).
@@ -784,31 +788,40 @@ export type SessionExecutionResponse = {
   [SESSION_EXECUTION_INTERNAL]?: SessionExecutionInternalState;
 };
 
-export function namespaceDocumentAttachmentTokens(
-  attachments: SessionDocumentAttachment[]
-): SessionDocumentAttachment[] {
-  const prefixes =
-    new Map<string, string>();
+/**
+ * Prefixes D01, D02... of own-key documents, in the order they reach the
+ * model (context first, then case files read by tools). Shared-key documents
+ * get none: their tokens are the chat's. Restoring an alias reads the
+ * document id at position n-1 of documentIds().
+ */
+export class DocumentAliasRegistry {
+  private readonly prefixes = new Map<string, string>();
 
-  const prefixFor = (
-    documentId: string
-  ): string => {
-    const existing =
-      prefixes.get(documentId);
-    if (existing) {
-      return existing;
-    }
-    const prefix =
-      "D" +
-      String(
-        prefixes.size + 1
-      ).padStart(2, "0");
-    prefixes.set(
-      documentId,
-      prefix
-    );
+  prefixFor(documentId: string): string {
+    const existing = this.prefixes.get(documentId);
+    if (existing) return existing;
+    const prefix = "D" + String(this.prefixes.size + 1).padStart(2, "0");
+    this.prefixes.set(documentId, prefix);
     return prefix;
-  };
+  }
+
+  documentIds(): string[] {
+    return [...this.prefixes.keys()];
+  }
+}
+
+export function namespaceChunkTokens(text: string, prefix: string): string {
+  return text.replace(
+    /\[PII:([A-Z_]+):(\d{4})\]/g,
+    (_token, kind, sequence) => `[LMPII:${prefix}:${kind}:${sequence}]`
+  );
+}
+
+export function namespaceDocumentAttachmentTokens(
+  attachments: SessionDocumentAttachment[],
+  registry = new DocumentAliasRegistry()
+): SessionDocumentAttachment[] {
+  const prefixFor = (documentId: string): string => registry.prefixFor(documentId);
 
   return attachments.map(
     (attachment) => {
@@ -837,12 +850,7 @@ export function namespaceDocumentAttachmentTokens(
           attachment.chunks.map(
             (chunk) => ({
               ...chunk,
-              text:
-                chunk.text.replace(
-                  /\[PII:([A-Z_]+):(\d{4})\]/g,
-                  (_token, kind, sequence) =>
-                    `[LMPII:${prefix}:${kind}:${sequence}]`
-                )
+              text: namespaceChunkTokens(chunk.text, prefix)
             })
           )
       };
@@ -1369,12 +1377,16 @@ export class SafeSessionExecutor implements SessionExecutor {
             }
           : {})
       });
+    const aliasRegistry =
+      new DocumentAliasRegistry();
     const attachments =
       namespaceDocumentAttachmentTokens(
-        contextSelection.attachments
+        contextSelection.attachments,
+        aliasRegistry
       );
+    // Chunks read by the case file tools are added after the model turn.
     const citationSources =
-      contextSelection.citationSources;
+      [...contextSelection.citationSources];
     // Page images of the attachments in context (masked evidence), for
     // models that see images; others work from the text.
     const evidence = selectEvidenceImages(request.documentAttachments ?? [], attachments);
@@ -1436,6 +1448,29 @@ export class SafeSessionExecutor implements SessionExecutor {
             this.coreLawIndex
           )
         : undefined;
+    // The context holds what fits the window; the tools reach the rest of the
+    // matter's files. Not for local models (window and tool reliability).
+    const caseFileTools =
+      request.caseFiles && !request.model.startsWith("local/")
+        ? new CaseFileToolRuntime(request.caseFiles, {
+            inContext: new Map(
+              attachments
+                .filter((attachment) => attachment.caseId === request.caseFiles!.caseId)
+                .map((attachment) => [attachment.documentId, new Set(attachment.chunks.map((chunk) => chunk.index))])
+            ),
+            prefixFor: (documentId) => aliasRegistry.prefixFor(documentId),
+            namespace: namespaceChunkTokens,
+            markPages,
+            ...(request.modelContextTokens
+              ? {
+                  maxTurnChars: Math.min(
+                    120_000,
+                    Math.floor(request.modelContextTokens * (request.tokenCharsPerToken ?? 3) * 0.3)
+                  )
+                }
+              : {})
+          })
+        : undefined;
     // Local 11-12B models call tools unreliably: they get the most relevant
     // core law articles in the prompt (retrieval, not training).
     const coreLawRag =
@@ -1452,6 +1487,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(coreLawTools
         ? coreLawTools.schemas()
         : []),
+      ...(caseFileTools ? caseFileTools.schemas() : []),
       ...reportTools.schemas(),
       ...(widgetTools ? widgetTools.schemas() : []),
       ...(federationTools
@@ -1464,6 +1500,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(coreLawTools
         ? [coreLawTools.systemPromptAppendix()]
         : []),
+      ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
       reportTools.systemPromptAppendix(),
       ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
       ...(federationTools
@@ -1677,6 +1714,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
+        const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
         const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
         const federationCalls = calls.filter(
           (call) =>
@@ -1695,6 +1733,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             !(coreLawTools?.handles(call.name) ?? false) &&
             !corpusTools.handles(call.name) &&
             !reportTools.handles(call.name) &&
+            !(caseFileTools?.handles(call.name) ?? false) &&
             !(widgetTools?.handles(call.name) ?? false) &&
             !(federationTools?.handles(call.name) ?? false)
         );
@@ -1711,6 +1750,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             : [];
         const reportResults = reportCalls.length > 0
           ? await reportTools.runTools(reportCalls)
+          : [];
+        const caseFileResults = caseFileTools && caseFileCalls.length > 0
+          ? await caseFileTools.runTools(caseFileCalls)
           : [];
         const widgetResults = widgetTools && widgetCalls.length > 0
           ? await widgetTools.runTools(widgetCalls)
@@ -1772,6 +1814,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           [
             ...corpusResults,
             ...coreLawResults,
+            ...caseFileResults,
             ...reportResults,
             ...widgetResults,
             ...federationResults,
@@ -1817,6 +1860,23 @@ export class SafeSessionExecutor implements SessionExecutor {
         execution.primarySkill =
           selection.primarySkill;
       }
+    }
+
+    for (const event of caseFileTools?.auditEvents() ?? []) {
+      audit.record(
+        event.tool === "read_case_file" ? "resource_read" : "tool_decision",
+        event.tool === "read_case_file" ? `local-document:${event.target}` : `case-files:${event.target}`,
+        event.decision === "ALLOW" ? "OK" : "BLOCKED",
+        { tool: event.tool, protectedOnly: true, ...(event.detail ?? {}) }
+      );
+    }
+    for (const read of caseFileTools?.readChunks() ?? []) {
+      citationSources.push({
+        caseId: request.caseFiles!.caseId,
+        documentId: read.documentId,
+        sourceScope: "CASE_KNOWLEDGE",
+        chunks: read.chunks
+      });
     }
 
     for (const event of coreLawTools?.auditEvents() ?? []) {
@@ -2891,14 +2951,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...event,
             ...(event.detail ? { detail: { ...event.detail } } : {})
           })),
-          documentAliasDocumentIds: [
-            ...new Set(
-              attachments.map(
-                (attachment) =>
-                  attachment.documentId
-              )
-            )
-          ]
+          // Own-key documents by prefix (D01 = [0]); shared-key ones have none.
+          documentAliasDocumentIds:
+            aliasRegistry.documentIds()
         } satisfies SessionExecutionInternalState,
         enumerable: false,
         configurable: false,
