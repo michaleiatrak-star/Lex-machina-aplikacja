@@ -19,6 +19,8 @@ import {
 // Ustawa o VAT (akt bazowy); isap_tekst przechodzi do aktualnego tekstu jednolitego.
 export const VAT_ACT_ELI = "DU/2004/535";
 export const VAT_INVOICE_ARTICLE = "106e";
+// Stawka VAT: fragmenty ustawy z frazą stawki, wyszukane w ELI (bez numeru artykułu z pamięci).
+export const VAT_RATE_SEARCH = "23%";
 
 type LegalTextSource = {
   direct(request: {
@@ -106,6 +108,10 @@ export function registerInvoiceRoutes(
     seller: await invoices.setSeller(context.user.userId, key, req.body?.seller)
   })));
 
+  app.put("/api/invoices/settings/defaults", handle(async (context, key, req) => ({
+    defaults: await invoices.setDefaults(context.user.userId, key, req.body?.defaults)
+  })));
+
   app.put("/api/invoices/settings/logo", handle(async (context, key, req) => ({
     logo: await invoices.setLogo(context.user.userId, key, req.body ?? {})
   })));
@@ -127,14 +133,17 @@ export function registerInvoiceRoutes(
       res.status(503).json({ error: "INVOICE_LEGAL_BASIS_UNAVAILABLE" });
       return;
     }
+    const rate = req.query.topic === "vat-rate";
     const reply = await legalText.direct({
       source: "isap",
       tool: "isap_tekst",
-      arguments: { eli: VAT_ACT_ELI, artykul: VAT_INVOICE_ARTICLE }
+      arguments: rate
+        ? { eli: VAT_ACT_ELI, szukaj: VAT_RATE_SEARCH }
+        : { eli: VAT_ACT_ELI, artykul: VAT_INVOICE_ARTICLE }
     });
     res.status(reply.ok ? 200 : 503).json({
       eli: VAT_ACT_ELI,
-      article: VAT_INVOICE_ARTICLE,
+      ...(rate ? { search: VAT_RATE_SEARCH } : { article: VAT_INVOICE_ARTICLE }),
       ok: reply.ok,
       result: reply.result,
       retrievedAt: new Date().toISOString()

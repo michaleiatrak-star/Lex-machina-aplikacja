@@ -4017,7 +4017,9 @@ export function createLexHttpApp(options) {
             });
             res.setHeader("Content-Type", result.artifact.mediaType);
             res.setHeader("Content-Length", String(result.data.byteLength));
-            res.setHeader("Content-Disposition", `attachment; filename="${result.artifact.filename.replace(/"/g, "")}"`);
+            res.setHeader("Content-Disposition", 
+            // Non-Latin-1 names (Polish letters) would fail in setHeader.
+            `attachment; filename="${result.artifact.filename.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(result.artifact.filename)}`);
             res.status(200).send(result.data);
         }
         catch (error) {

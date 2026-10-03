@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, invoiceErrorText, lineNet, previewTotals } from "./invoice-form.js";
+import { addDays, emptyDraft, formatMoney, invoiceErrorText, lineNet, previewTotals, termDaysOf } from "./invoice-form.js";
 
 describe("invoice form", () => {
   it("previews totals like the runtime", () => {
@@ -16,5 +16,16 @@ describe("invoice form", () => {
     expect(formatMoney("1234567.50", "PLN")).toBe("1 234 567,50 PLN");
     expect(invoiceErrorText("INVOICE_FIELD_REQUIRED:buyer.address")).toBe("Uzupełnij pole: adres nabywcy.");
     expect(invoiceErrorText("INVOICE_FIELD_INVALID:lines.1.unitNetPrice")).toBe("Nieprawidłowa wartość pola: pozycja 2: cena netto.");
+  });
+
+  it("computes the transfer due date from the issue date and defaults", () => {
+    expect(addDays("2026-12-25", 14)).toBe("2027-01-08");
+    expect(termDaysOf("2026-10-03", "2026-10-17")).toBe(14);
+    expect(termDaysOf("2026-10-03", "2026-10-18")).toBeNull();
+    const draft = emptyDraft(undefined, "2026-10-03", { paymentMethod: "przelew", paymentTermDays: 7, vatRate: "8" });
+    expect(draft).toMatchObject({ paymentMethod: "przelew", paymentDueDate: "2026-10-10" });
+    expect(draft.lines[0]!.vatRate).toBe("8");
+    expect(emptyDraft(undefined, "2026-10-03", { paymentMethod: "zapłacono", paymentTermDays: 7, vatRate: "23" }).paymentDueDate).toBe("");
+    expect(emptyDraft(undefined, "2026-10-03").lines[0]!.vatRate).toBe("23");
   });
 });

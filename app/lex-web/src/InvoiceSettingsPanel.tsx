@@ -3,16 +3,26 @@ import {
   ApiError,
   clearInvoiceLogo,
   clearKsefToken,
+  getInvoiceLegalBasis,
   getInvoiceSettings,
+  setInvoiceDefaults,
   setInvoiceLogo,
   setInvoiceSeller,
   setKsefEnvironment,
   setKsefToken,
+  type InvoiceDefaults,
   type InvoiceParty,
   type InvoiceSettingsResponse
 } from "./api.js";
 import { CompanyNipField } from "./CompanyNipField.js";
-import { emptyParty, invoiceErrorText } from "./invoice-form.js";
+import {
+  FACTORY_DEFAULTS,
+  PAYMENT_METHODS,
+  PAYMENT_TERMS,
+  VAT_RATES,
+  emptyParty,
+  invoiceErrorText
+} from "./invoice-form.js";
 import "./invoices.css";
 
 const PRODUCTION_PHRASE = "PRODUKCJA";
@@ -39,6 +49,8 @@ export function InvoiceSettingsPanel() {
   const [token, setToken] = useState("");
   const [contextNip, setContextNip] = useState("");
   const [seller, setSeller] = useState<InvoiceParty>(emptyParty());
+  const [defaults, setDefaults] = useState<InvoiceDefaults>(FACTORY_DEFAULTS);
+  const [rateBasis, setRateBasis] = useState("");
   const [productionPhrase, setProductionPhrase] = useState("");
   const [askProduction, setAskProduction] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,6 +63,7 @@ export function InvoiceSettingsPanel() {
         setSettings(next);
         setContextNip(next.ksef.contextNip ?? "");
         if (next.seller) setSeller({ ...next.seller, nip: next.seller.nip ?? "" });
+        if (next.defaults) setDefaults(next.defaults);
       })
       .catch((failure) => setError(failureText(failure)));
   }, []);
@@ -226,6 +239,76 @@ export function InvoiceSettingsPanel() {
         >
           Zapisz dane sprzedawcy
         </button>
+      </section>
+
+      <section>
+        <h3>Domyślne na nowej fakturze</h3>
+        <p className="field-help">
+          {settings?.defaults ? "Zapisane ustawienia." : "Ustawienia fabryczne (niezapisane)."} Na fakturze każdą wartość można zmienić.
+        </p>
+        <div className="invoice-grid">
+          <label>
+            Sposób płatności
+            <select
+              value={defaults.paymentMethod}
+              onChange={(event) => setDefaults({ ...defaults, paymentMethod: event.target.value as InvoiceDefaults["paymentMethod"] })}
+            >
+              {PAYMENT_METHODS.map(([method, label]) => <option key={method} value={method}>{label}</option>)}
+            </select>
+          </label>
+          <label>
+            Termin płatności przelewu
+            <select
+              value={defaults.paymentTermDays}
+              disabled={defaults.paymentMethod !== "przelew"}
+              onChange={(event) => setDefaults({ ...defaults, paymentTermDays: Number(event.target.value) })}
+            >
+              {[...new Set([...PAYMENT_TERMS, defaults.paymentTermDays])].sort((a, b) => a - b).map((days) => (
+                <option key={days} value={days}>{days} dni od wystawienia</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Stawka VAT
+            <select value={defaults.vatRate} onChange={(event) => setDefaults({ ...defaults, vatRate: event.target.value })}>
+              {VAT_RATES.map(([rate, label]) => <option key={rate} value={rate}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="chat-form-row">
+          <button
+            type="button"
+            className="chat-primary-action"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const next = await setInvoiceDefaults(defaults);
+                setSettings((current) => (current ? { ...current, defaults: next.defaults } : current));
+              }, "Ustawienia domyślne zapisane.")
+            }
+          >
+            Zapisz domyślne
+          </button>
+          <button
+            type="button"
+            className="chat-secondary-action"
+            disabled={busy}
+            title="Fragmenty aktualnego tekstu ustawy o VAT z wyszukiwania w Sejm ELI"
+            onClick={() =>
+              void run(async () => {
+                const basis = await getInvoiceLegalBasis("vat-rate");
+                const result = basis.result as { tekst?: string; text?: string; fragmenty?: unknown };
+                setRateBasis(
+                  `Ustawa o VAT, ELI ${basis.eli}, wyszukiwanie „${basis.search}” (pobrano ${new Date(basis.retrievedAt).toLocaleString("pl-PL")})\n\n` +
+                    (result.tekst ?? result.text ?? JSON.stringify(basis.result, null, 2))
+                );
+              }, "")
+            }
+          >
+            Sprawdź stawkę w ELI
+          </button>
+        </div>
+        {rateBasis ? <pre className="invoice-legal-basis">{rateBasis}</pre> : null}
       </section>
 
       <section>

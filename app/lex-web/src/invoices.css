@@ -248,3 +248,8 @@
 .company-nip-warning {
   color: #9a3412;
 }
+
+.invoice-paid-mark {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}

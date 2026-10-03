@@ -2,6 +2,8 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:cr
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+// Domyślne wartości nowej faktury (Ustawienia → Faktury i KSeF).
+export const INVOICE_PAYMENT_METHODS = ["przelew", "gotówka", "zapłacono"];
 export const INVOICE_SORTS = [
     "date-desc",
     "date-asc",
@@ -111,6 +113,23 @@ function line(value, index) {
         unitNetPrice: pattern(typeof raw.unitNetPrice === "string" ? raw.unitNetPrice.replace(",", ".") : raw.unitNetPrice, field("unitNetPrice"), PRICE, true),
         vatRate
     };
+}
+export function validateInvoiceDefaults(value) {
+    if (!value || typeof value !== "object")
+        throw new InvoiceError("INVOICE_DEFAULTS_INVALID", 400);
+    const raw = value;
+    const paymentMethod = INVOICE_PAYMENT_METHODS.find((method) => method === raw.paymentMethod);
+    if (!paymentMethod)
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentMethod", 400);
+    const days = raw.paymentTermDays;
+    if (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365) {
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentTermDays", 400);
+    }
+    const vatRate = typeof raw.vatRate === "string" ? raw.vatRate.trim().toLowerCase() : "";
+    if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.vatRate", 400);
+    }
+    return { paymentMethod, paymentTermDays: days, vatRate };
 }
 export function validateInvoiceInput(value) {
     if (!value || typeof value !== "object") {
@@ -395,8 +414,16 @@ export class EncryptedInvoiceStore {
         const state = await this.read(userId, userMasterKey);
         return {
             ...(state.seller ? { seller: state.seller } : {}),
-            ...(state.logo ? { logo: state.logo } : {})
+            ...(state.logo ? { logo: state.logo } : {}),
+            ...(state.defaults ? { defaults: state.defaults } : {})
         };
+    }
+    setDefaults(userId, userMasterKey, defaults) {
+        const cleaned = validateInvoiceDefaults(defaults);
+        return this.mutate(userId, userMasterKey, (state) => {
+            state.defaults = cleaned;
+            return cleaned;
+        });
     }
     setSeller(userId, userMasterKey, seller) {
         const cleaned = party(seller, "seller");

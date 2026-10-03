@@ -3518,11 +3518,27 @@ export type InvoiceView = InvoiceDraft & {
 
 export type InvoiceSort = "date-desc" | "date-asc" | "client-asc" | "client-desc";
 
+export type InvoicePaymentMethod = "przelew" | "gotówka" | "zapłacono";
+
+export type InvoiceDefaults = {
+  paymentMethod: InvoicePaymentMethod;
+  paymentTermDays: number;
+  vatRate: string;
+};
+
 export type InvoiceSettingsResponse = {
   ksef: KsefSettings;
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
+  defaults?: InvoiceDefaults;
 };
+
+export function setInvoiceDefaults(defaults: InvoiceDefaults): Promise<{ defaults: InvoiceDefaults }> {
+  return json("/api/invoices/settings/defaults", {
+    method: "PUT",
+    body: JSON.stringify({ defaults })
+  });
+}
 
 export function getInvoiceSettings(): Promise<InvoiceSettingsResponse> {
   return json<InvoiceSettingsResponse>("/api/invoices/settings");
@@ -3600,12 +3616,14 @@ export function duplicateInvoice(invoiceId: string): Promise<{ invoice: InvoiceV
   return json(`/api/invoices/${encodeURIComponent(invoiceId)}/duplicate`, { method: "POST" });
 }
 
-export function getInvoiceLegalBasis(): Promise<{
+// Bez tematu: art. 106e; "vat-rate": fragmenty ustawy o VAT z frazą stawki, z ELI.
+export function getInvoiceLegalBasis(topic?: "vat-rate"): Promise<{
   eli: string;
-  article: string;
+  article?: string;
+  search?: string;
   ok: boolean;
   result: unknown;
   retrievedAt: string;
 }> {
-  return json("/api/invoices/legal-basis");
+  return json(topic ? `/api/invoices/legal-basis?topic=${topic}` : "/api/invoices/legal-basis");
 }

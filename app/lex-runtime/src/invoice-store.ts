@@ -64,6 +64,17 @@ export type InvoiceInput = Omit<
   "invoiceId" | "status" | "createdAt" | "updatedAt" | "basedOnInvoiceId"
 >;
 
+// Domyślne wartości nowej faktury (Ustawienia → Faktury i KSeF).
+export const INVOICE_PAYMENT_METHODS = ["przelew", "gotówka", "zapłacono"] as const;
+export type InvoicePaymentMethod = (typeof INVOICE_PAYMENT_METHODS)[number];
+
+export type InvoiceDefaults = {
+  paymentMethod: InvoicePaymentMethod;
+  // Termin płatności w dniach od daty wystawienia (przy przelewie).
+  paymentTermDays: number;
+  vatRate: string;
+};
+
 export type InvoiceLogo = {
   mediaType: "image/png" | "image/jpeg";
   fileName: string;
@@ -84,6 +95,7 @@ type StoredInvoices = {
   ksef: StoredKsef;
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
+  defaults?: InvoiceDefaults;
   invoices: InvoiceRecord[];
 };
 
@@ -242,6 +254,22 @@ function line(value: unknown, index: number): InvoiceLine {
     )!,
     vatRate
   };
+}
+
+export function validateInvoiceDefaults(value: unknown): InvoiceDefaults {
+  if (!value || typeof value !== "object") throw new InvoiceError("INVOICE_DEFAULTS_INVALID", 400);
+  const raw = value as Record<string, unknown>;
+  const paymentMethod = INVOICE_PAYMENT_METHODS.find((method) => method === raw.paymentMethod);
+  if (!paymentMethod) throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentMethod", 400);
+  const days = raw.paymentTermDays;
+  if (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentTermDays", 400);
+  }
+  const vatRate = typeof raw.vatRate === "string" ? raw.vatRate.trim().toLowerCase() : "";
+  if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.vatRate", 400);
+  }
+  return { paymentMethod, paymentTermDays: days, vatRate };
 }
 
 export function validateInvoiceInput(value: unknown): InvoiceInput {
@@ -557,12 +585,24 @@ export class EncryptedInvoiceStore {
     return { ...(await this.read(userId, userMasterKey)).ksef };
   }
 
-  async profile(userId: string, userMasterKey: Buffer): Promise<{ seller?: InvoiceParty; logo?: InvoiceLogo }> {
+  async profile(
+    userId: string,
+    userMasterKey: Buffer
+  ): Promise<{ seller?: InvoiceParty; logo?: InvoiceLogo; defaults?: InvoiceDefaults }> {
     const state = await this.read(userId, userMasterKey);
     return {
       ...(state.seller ? { seller: state.seller } : {}),
-      ...(state.logo ? { logo: state.logo } : {})
+      ...(state.logo ? { logo: state.logo } : {}),
+      ...(state.defaults ? { defaults: state.defaults } : {})
     };
+  }
+
+  setDefaults(userId: string, userMasterKey: Buffer, defaults: unknown): Promise<InvoiceDefaults> {
+    const cleaned = validateInvoiceDefaults(defaults);
+    return this.mutate(userId, userMasterKey, (state) => {
+      state.defaults = cleaned;
+      return cleaned;
+    });
   }
 
   setSeller(userId: string, userMasterKey: Buffer, seller: unknown): Promise<InvoiceParty> {

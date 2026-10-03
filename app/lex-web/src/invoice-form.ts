@@ -1,4 +1,5 @@
 import type {
+  InvoiceDefaults,
   InvoiceDraft,
   InvoiceLine,
   InvoiceParty,
@@ -58,25 +59,65 @@ export function formatMoney(value: string, currency: string): string {
   return `${grouped},${fraction ?? "00"} ${currency}`;
 }
 
-export function emptyLine(): InvoiceLine {
-  return { name: "", unit: "szt.", quantity: "1", unitNetPrice: "", vatRate: "" };
+export const PAYMENT_METHODS: Array<[InvoiceDefaults["paymentMethod"], string]> = [
+  ["przelew", "Przelew na rachunek"],
+  ["gotówka", "Gotówka"],
+  ["zapłacono", "Zapłacono (faktura opłacona)"]
+];
+
+export const PAYMENT_TERMS = [7, 14, 21, 30];
+
+export const VAT_RATES: Array<[string, string]> = [
+  ["23", "23%"],
+  ["8", "8%"],
+  ["5", "5%"],
+  ["0", "0%"],
+  ["zw", "zw (zwolnione)"],
+  ["np", "np (nie podlega)"],
+  ["oo", "oo (odwrotne obciążenie)"]
+];
+
+// Ustawienia fabryczne, gdy użytkownik nie zapisał własnych. Stawkę sprawdza się
+// w ELI przyciskiem w Ustawieniach (wyszukanie w ustawie o VAT), nie z pamięci.
+export const FACTORY_DEFAULTS: InvoiceDefaults = { paymentMethod: "przelew", paymentTermDays: 14, vatRate: "23" };
+
+export function addDays(date: string, days: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return result.toISOString().slice(0, 10);
+}
+
+// Liczba dni między wystawieniem a terminem, gdy to jeden z terminów do wyboru.
+export function termDaysOf(issueDate: string, dueDate: string | undefined): number | null {
+  if (!dueDate) return null;
+  return PAYMENT_TERMS.find((days) => addDays(issueDate, days) === dueDate) ?? null;
+}
+
+export function emptyLine(vatRate = ""): InvoiceLine {
+  return { name: "", unit: "szt.", quantity: "1", unitNetPrice: "", vatRate };
 }
 
 export function emptyParty(): InvoiceParty {
   return { name: "", nip: "", address: "" };
 }
 
-export function emptyDraft(seller: InvoiceParty | undefined, today: string): InvoiceDraft {
+export function emptyDraft(
+  seller: InvoiceParty | undefined,
+  today: string,
+  defaults: InvoiceDefaults = FACTORY_DEFAULTS
+): InvoiceDraft {
+  const transfer = defaults.paymentMethod === "przelew";
   return {
     number: "",
     issueDate: today,
     saleDate: today,
     seller: seller ? { ...seller } : emptyParty(),
     buyer: emptyParty(),
-    lines: [emptyLine()],
+    lines: [emptyLine(defaults.vatRate)],
     currency: "PLN",
-    paymentMethod: "przelew",
-    paymentDueDate: "",
+    paymentMethod: defaults.paymentMethod,
+    paymentDueDate: transfer ? addDays(today, defaults.paymentTermDays) : "",
     bankAccount: "",
     notes: ""
   };
@@ -112,6 +153,9 @@ const FIELD_LABELS: Record<string, string> = {
   "buyer.address": "adres nabywcy",
   currency: "waluta",
   paymentDueDate: "termin płatności",
+  "defaults.paymentMethod": "domyślny sposób płatności",
+  "defaults.paymentTermDays": "domyślny termin płatności (dni)",
+  "defaults.vatRate": "domyślna stawka VAT",
   lines: "pozycje faktury"
 };
 
@@ -139,6 +183,7 @@ const ERRORS: Record<string, string> = {
   KSEF_TOKEN_REQUIRED: "Wklej token KSeF.",
   KSEF_TOKEN_INVALID: "Token KSeF nie może zawierać spacji ani przekraczać 2048 znaków.",
   KSEF_CONTEXT_NIP_INVALID: "NIP kontekstu musi mieć 10 cyfr.",
+  INVOICE_DEFAULTS_INVALID: "Nieprawidłowe ustawienia domyślne faktury.",
   KSEF_PRODUCTION_CONFIRMATION_REQUIRED: "Przełączenie na środowisko produkcyjne wymaga potwierdzenia.",
   INVOICE_LEGAL_BASIS_UNAVAILABLE: "Konektor ISAP (ELI) jest niedostępny. Zainstaluj go w Ustawieniach → Konektory MCP."
 };

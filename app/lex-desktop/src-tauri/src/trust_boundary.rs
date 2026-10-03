@@ -1492,7 +1492,7 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
         ["api", "invoices", "settings", "ksef-token" | "logo"] => {
             matches!(method, "PUT" | "DELETE")
         }
-        ["api", "invoices", "settings", "ksef-environment" | "seller"] => method == "PUT",
+        ["api", "invoices", "settings", "ksef-environment" | "seller" | "defaults"] => method == "PUT",
         ["api", "invoices", id] => {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
@@ -2100,6 +2100,7 @@ mod tests {
         assert!(route_allowed("DELETE", "/api/invoices/settings/ksef-token"));
         assert!(route_allowed("PUT", "/api/invoices/settings/ksef-environment"));
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/defaults"));
         assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
         assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
         assert!(route_allowed("GET", &format!("/api/invoices/{id}")));

@@ -17,10 +17,16 @@ import {
   type InvoiceView
 } from "./api.js";
 import {
+  FACTORY_DEFAULTS,
+  PAYMENT_METHODS,
+  PAYMENT_TERMS,
+  VAT_RATES,
+  addDays,
   draftOf,
   emptyDraft,
   emptyLine,
   formatMoney,
+  termDaysOf,
   invoiceErrorText,
   lineNet,
   previewTotals
@@ -156,7 +162,9 @@ function InvoiceDocument({
         </tbody>
       </table>
       <footer>
-        {invoice.paymentMethod ? <div>Sposób płatności: {invoice.paymentMethod}</div> : null}
+        {invoice.paymentMethod === "zapłacono"
+          ? <div className="invoice-paid-mark">Zapłacono</div>
+          : invoice.paymentMethod ? <div>Sposób płatności: {invoice.paymentMethod}</div> : null}
         {invoice.paymentDueDate ? <div>Termin płatności: {invoice.paymentDueDate}</div> : null}
         {invoice.bankAccount ? <div>Rachunek: {invoice.bankAccount}</div> : null}
         {invoice.notes ? <p>{invoice.notes}</p> : null}
@@ -220,7 +228,26 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
   function startNew(): void {
     setSelected(null);
     setConfirmIssue(false);
-    setEditing({ invoiceId: null, draft: emptyDraft(settings?.seller, today()) });
+    setEditing({ invoiceId: null, draft: emptyDraft(settings?.seller, today(), defaults) });
+  }
+
+  const defaults = settings?.defaults ?? FACTORY_DEFAULTS;
+
+  // Termin przelewu: wybór liczby dni od daty wystawienia albo własna data.
+  function setTerm(value: string, draft: InvoiceDraft): void {
+    if (value === "custom") return patch({ paymentDueDate: draft.paymentDueDate || addDays(draft.issueDate, defaults.paymentTermDays) });
+    patch({ paymentDueDate: addDays(draft.issueDate, Number(value)) });
+  }
+
+  function setIssueDate(issueDate: string, draft: InvoiceDraft): void {
+    const days = draft.paymentMethod === "przelew" ? termDaysOf(draft.issueDate, draft.paymentDueDate) : null;
+    patch(days === null ? { issueDate } : { issueDate, paymentDueDate: addDays(issueDate, days) });
+  }
+
+  function setPaymentMethod(paymentMethod: string, draft: InvoiceDraft): void {
+    patch(paymentMethod === "przelew"
+      ? { paymentMethod, paymentDueDate: draft.paymentDueDate || addDays(draft.issueDate, defaults.paymentTermDays) }
+      : { paymentMethod, paymentDueDate: "", bankAccount: "" });
   }
 
   function patch(change: Partial<InvoiceDraft>): void {
@@ -320,7 +347,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               </label>
               <label>
                 Data wystawienia
-                <input type="date" value={editing.draft.issueDate} onChange={(event) => patch({ issueDate: event.target.value })} />
+                <input type="date" value={editing.draft.issueDate} onChange={(event) => setIssueDate(event.target.value, editing.draft)} />
               </label>
               <label>
                 Data sprzedaży / wykonania usługi
@@ -338,7 +365,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                 onChange={(seller) => patch({ seller })}
                 onFound={(lookup) => {
                   // Jedyny rachunek sprzedawcy z wykazu VAT trafia do pustego pola rachunku.
-                  if (editing.draft.bankAccount?.trim() || lookup.accounts.length !== 1) return null;
+                  if (editing.draft.paymentMethod !== "przelew" || editing.draft.bankAccount?.trim() || lookup.accounts.length !== 1) return null;
                   patch({ bankAccount: lookup.accounts[0] });
                   return "Rachunek z wykazu VAT wstawiony.";
                 }}
@@ -364,7 +391,15 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                     <td><input value={line.unit} onChange={(event) => patchLine(index, { unit: event.target.value })} /></td>
                     <td><input inputMode="decimal" value={line.quantity} onChange={(event) => patchLine(index, { quantity: event.target.value })} /></td>
                     <td><input inputMode="decimal" value={line.unitNetPrice} onChange={(event) => patchLine(index, { unitNetPrice: event.target.value })} /></td>
-                    <td><input value={line.vatRate} placeholder="%" onChange={(event) => patchLine(index, { vatRate: event.target.value })} /></td>
+                    <td>
+                      <select value={line.vatRate} aria-label="Stawka VAT" onChange={(event) => patchLine(index, { vatRate: event.target.value })}>
+                        {line.vatRate === "" ? <option value="">wybierz</option> : null}
+                        {line.vatRate && !VAT_RATES.some(([rate]) => rate === line.vatRate)
+                          ? <option value={line.vatRate}>{line.vatRate}</option>
+                          : null}
+                        {VAT_RATES.map(([rate, label]) => <option key={rate} value={rate}>{label}</option>)}
+                      </select>
+                    </td>
                     <td>{lineNet(line) ?? "—"}</td>
                     <td>
                       <button
@@ -383,7 +418,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
             <button
               type="button"
               className="chat-secondary-action"
-              onClick={() => patch({ lines: [...editing.draft.lines, emptyLine()] })}
+              onClick={() => patch({ lines: [...editing.draft.lines, emptyLine(defaults.vatRate)] })}
             >
               Dodaj pozycję
             </button>
@@ -399,16 +434,35 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               </label>
               <label>
                 Sposób płatności
-                <input value={editing.draft.paymentMethod ?? ""} onChange={(event) => patch({ paymentMethod: event.target.value })} />
+                <select value={editing.draft.paymentMethod ?? ""} onChange={(event) => setPaymentMethod(event.target.value, editing.draft)}>
+                  {editing.draft.paymentMethod && !PAYMENT_METHODS.some(([method]) => method === editing.draft.paymentMethod)
+                    ? <option value={editing.draft.paymentMethod}>{editing.draft.paymentMethod}</option>
+                    : null}
+                  {PAYMENT_METHODS.map(([method, label]) => <option key={method} value={method}>{label}</option>)}
+                </select>
               </label>
-              <label>
-                Termin płatności
-                <input type="date" value={editing.draft.paymentDueDate ?? ""} onChange={(event) => patch({ paymentDueDate: event.target.value })} />
-              </label>
-              <label>
-                Numer rachunku
-                <input value={editing.draft.bankAccount ?? ""} onChange={(event) => patch({ bankAccount: event.target.value })} />
-              </label>
+              {editing.draft.paymentMethod === "przelew" ? (
+                <>
+                  <label>
+                    Termin płatności
+                    <select
+                      value={String(termDaysOf(editing.draft.issueDate, editing.draft.paymentDueDate) ?? "custom")}
+                      onChange={(event) => setTerm(event.target.value, editing.draft)}
+                    >
+                      {PAYMENT_TERMS.map((days) => <option key={days} value={days}>{days} dni</option>)}
+                      <option value="custom">inna data</option>
+                    </select>
+                  </label>
+                  <label>
+                    Data płatności
+                    <input type="date" value={editing.draft.paymentDueDate ?? ""} onChange={(event) => patch({ paymentDueDate: event.target.value })} />
+                  </label>
+                  <label>
+                    Numer rachunku
+                    <input value={editing.draft.bankAccount ?? ""} onChange={(event) => patch({ bankAccount: event.target.value })} />
+                  </label>
+                </>
+              ) : null}
               <label className="invoice-wide">
                 Uwagi
                 <textarea value={editing.draft.notes ?? ""} onChange={(event) => patch({ notes: event.target.value })} />

@@ -104,4 +104,34 @@ describe("invoice routes", () => {
     expect(response.body).toMatchObject({ eli: "DU/2004/535", article: "106e", ok: true });
     expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", artykul: "106e" } }]);
   });
+
+  it("searches the VAT act in ELI for the rate instead of a remembered article", async () => {
+    legalCalls.length = 0;
+    const response = await request(app)
+      .get("/api/invoices/legal-basis?topic=vat-rate")
+      .set("authorization", "Bearer user_alice")
+      .expect(200);
+    expect(response.body).toMatchObject({ eli: "DU/2004/535", search: "23%", ok: true });
+    expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", szukaj: "23%" } }]);
+  });
+
+  it("stores invoice defaults per user and rejects unknown values", async () => {
+    const defaults = { paymentMethod: "przelew", paymentTermDays: 14, vatRate: "23" };
+    await request(app)
+      .put("/api/invoices/settings/defaults")
+      .set("authorization", "Bearer user_alice")
+      .send({ defaults })
+      .expect(200, { defaults });
+    const settings = await request(app).get("/api/invoices/settings").set("authorization", "Bearer user_alice").expect(200);
+    expect(settings.body.defaults).toEqual(defaults);
+    const other = await request(app).get("/api/invoices/settings").set("authorization", "Bearer user_bob").expect(200);
+    expect(other.body.defaults).toBeUndefined();
+    for (const bad of [
+      { ...defaults, paymentMethod: "karta" },
+      { ...defaults, paymentTermDays: 1.5 },
+      { ...defaults, vatRate: "abc1" }
+    ]) {
+      await request(app).put("/api/invoices/settings/defaults").set("authorization", "Bearer user_alice").send({ defaults: bad }).expect(400);
+    }
+  });
 });
