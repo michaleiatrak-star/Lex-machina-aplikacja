@@ -11,6 +11,7 @@ import {
   type InvoiceParty,
   type InvoiceSettingsResponse
 } from "./api.js";
+import { CompanyNipField } from "./CompanyNipField.js";
 import { emptyParty, invoiceErrorText } from "./invoice-form.js";
 import "./invoices.css";
 
@@ -206,10 +207,7 @@ export function InvoiceSettingsPanel() {
             Nazwa
             <input value={seller.name} onChange={(event) => setSeller({ ...seller, name: event.target.value })} />
           </label>
-          <label>
-            NIP
-            <input inputMode="numeric" value={seller.nip ?? ""} onChange={(event) => setSeller({ ...seller, nip: event.target.value })} />
-          </label>
+          <CompanyNipField party={seller} onChange={setSeller} />
           <label className="invoice-wide">
             Adres
             <input value={seller.address} onChange={(event) => setSeller({ ...seller, address: event.target.value })} />

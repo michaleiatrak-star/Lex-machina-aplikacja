@@ -25,6 +25,8 @@ import {
   lineNet,
   previewTotals
 } from "./invoice-form.js";
+import { CompanyNipField } from "./CompanyNipField.js";
+import type { CompanyLookup } from "./company-lookup.js";
 import "./invoices.css";
 
 const SORTS: Array<[InvoiceSort, string]> = [
@@ -50,22 +52,21 @@ function failureText(error: unknown): string {
 function PartyFields({
   title,
   party,
-  onChange
+  onChange,
+  onFound
 }: {
   title: string;
   party: InvoiceParty;
   onChange: (next: InvoiceParty) => void;
+  onFound?: (lookup: CompanyLookup) => string | null;
 }) {
   return (
     <fieldset className="invoice-party">
       <legend>{title}</legend>
+      <CompanyNipField party={party} onChange={onChange} onFound={onFound} />
       <label>
         Nazwa
         <input value={party.name} onChange={(event) => onChange({ ...party, name: event.target.value })} />
-      </label>
-      <label>
-        NIP
-        <input inputMode="numeric" value={party.nip ?? ""} onChange={(event) => onChange({ ...party, nip: event.target.value })} />
       </label>
       <label>
         Adres
@@ -331,7 +332,17 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               </label>
             </div>
             <div className="invoice-parties">
-              <PartyFields title="Sprzedawca" party={editing.draft.seller} onChange={(seller) => patch({ seller })} />
+              <PartyFields
+                title="Sprzedawca"
+                party={editing.draft.seller}
+                onChange={(seller) => patch({ seller })}
+                onFound={(lookup) => {
+                  // Jedyny rachunek sprzedawcy z wykazu VAT trafia do pustego pola rachunku.
+                  if (editing.draft.bankAccount?.trim() || lookup.accounts.length !== 1) return null;
+                  patch({ bankAccount: lookup.accounts[0] });
+                  return "Rachunek z wykazu VAT wstawiony.";
+                }}
+              />
               <PartyFields title="Nabywca" party={editing.draft.buyer} onChange={(buyer) => patch({ buyer })} />
             </div>
             <table className="invoice-lines">

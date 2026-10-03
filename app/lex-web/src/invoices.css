@@ -221,3 +221,30 @@
     border: none;
   }
 }
+
+.company-nip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.company-nip label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.company-nip-row {
+  display: flex;
+  gap: 6px;
+}
+
+.company-nip-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.company-nip-warning {
+  color: #9a3412;
+}
