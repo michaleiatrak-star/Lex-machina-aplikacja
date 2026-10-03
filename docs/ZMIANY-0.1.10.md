@@ -43,8 +43,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 41 | `cd1353f` | Faktury: dane kontrahenta po NIP (biała lista VAT, CEIDG), sposób płatności, termin, stawka VAT z listy, domyślne w ustawieniach |
 | hotfix 42 | `52a00a2` | Widgety skilli (show_widget) w izolowanej ramce, wzory faktur, parser wywołań ChatGPT/Codex |
 | hotfix 43 | `b9d3144` | Akta sprawy dla modelu (narzędzia), poprawka aliasów D01, kontynuacja uciętych odpowiedzi API, generator faktur, poprawki G8; tylko Windows |
+| hotfix 44 | `29d4c62` | Pamięć sprawy (przepisy po kontroli ELI, streszczenie starszej części wątku), miernik jakości sesji, tokeny tury; tylko Windows |
 
 ---
+
+## hotfix 44
+
+- `thread-evidence.ts`: `memory.evidence` w zaszyfrowanym indeksie sprawy (rekord VERIFIED/CURRENT z `currentEli` i `actDescriptor`); ponowne użycie po `TemporalSourceFreshnessChecker` (ten sam t.j., bez nowelizacji), zdarzenie `THREAD_EVIDENCE_REUSE`.
+- `thread-summary.ts`, `summarizeThread`: notatka klienta o pominięciu → streszczenie (`memory.summary`), statusy z rejestru; `GET/DELETE /api/cases/:caseId/memory`, `PATCH /memory/summary`; karta `CaseMemoryCard`.
+- `session-quality-benchmark.ts`, `benchmark:session`, `session-quality-v1.json`, workflow `session-quality-benchmark.yml` (sekret klucza API).
+- `usage-meter.ts`: `usage` w odpowiedzi sesji (tokeny z AI SDK, `unmeteredCalls` dla kont).
 
 ## hotfix 43
 
