@@ -2,7 +2,8 @@ import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN = /✅\s*\[VER:[^\]\r\n]+\]/giu;
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/iu;
+// 🟨 KOTWICA URZĘDOWA (kanon PRAWO-HARDGATE-BLOKADA) nie jest ✅: liczy się jak oznaczony ⚠️.
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
 const CASE_QUOTE_MARKER = /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER = /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
 export function expectedVerificationMarker(record) {

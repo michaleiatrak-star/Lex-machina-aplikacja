@@ -6,7 +6,8 @@ const REFERENCE = new RegExp(`(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:
 const ENUMERATION_ITEM = new RegExp(UNIT, "gu");
 const RANGE_SEPARATOR = /^\s*[–-]\s*$/u;
 const VERIFIED_MARKER = /✅\s*\[VER:[^\]\r\n]*\]/gu;
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/gu;
+// 🟨 [KOTWICA-URZĘDOWA: …] to status niezweryfikowany (nie ✅), jak ⚠️.
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu;
 const APPLICATION_HEDGE = /\b(?:potencjaln\p{L}*|ewentualn\p{L}*|prawdopodobn\p{L}*|hipotetyczn\p{L}*|mo(?:że|gą|głoby|głyby)\s+(?:mieć\s+zastosowanie|wypełni\p{L}*|stanowić|wchodzić\s+w\s+grę|znaleźć\s+zastosowanie)|w\s+zależności\s+od\s+okoliczności)/iu;
 function compact(value) {
     return value

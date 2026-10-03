@@ -37,6 +37,7 @@ import {
   verifyFromCoreLaw,
   type CoreLawVerificationIndex
 } from "./core-law-verification.js";
+import { SubstituteSourceError, verifySubstituteSources, type ConsolidatedIdentity, type SubstituteOutcome } from "./substitute-source.js";
 import type { CoreLawUseCheck } from "./core-law-index.js";
 import { describeEliAct } from "./eli-act-descriptor.js";
 import {
@@ -120,11 +121,21 @@ const TOOL_SCHEMA: NormalizedToolSchema = {
           type: "string",
           description:
             "Optional exact wording you intend to quote from the provision. It is checked against the official ELI text; a mismatch makes the reference UNVERIFIED."
+        },
+        substituteSourceUrls: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 3,
+          description:
+            "Only after a result with `substitute` (RZĄD 1 / Sejm ELI unavailable): https URLs of the same article. E-3: one RZĄD 2A source (LEX/Legalis, official databases) gives ✅ [VER]. E-4: two independent RZĄD 2B portals (e.g. arslege.pl, lexlege.pl) showing the t.j. Dz.U. number give at most 🟨 [KOTWICA-URZĘDOWA] (K-1…K-4). RZĄD 3 is refused."
         }
       }
     }
   }
 };
+
+const SUBSTITUTE_HINT =
+  "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
 
 
 const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
@@ -544,6 +555,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
   "- " + STATUS_CONSISTENCY_INSTRUCTION,
   "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
+  "- Source canon E-1…E-5 (shared/HIERARCHIA-ZRODEL.md): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
   "- Never invent a verification marker, source URL, or tool result.",
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
@@ -560,6 +572,9 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
 ].join("\n");
 
 export class LegalVerificationToolRuntime {
+  // Pobieranie źródła zastępczego (testy podstawiają własne).
+  substituteFetcher: typeof fetch | null = null;
+
   private readonly broker: ToolBroker;
   private readonly resolverAudit: ToolAuditEvent[] = [];
 
@@ -1113,28 +1128,115 @@ export class LegalVerificationToolRuntime {
    * informacją w wyniku; odmowa kopii zostaje odmową. Model lokalny próbował kopii już
    * wcześniej, więc tu tylko odmowa z przyczyną.
    */
-  private eliOutageFallback(
+  private async eliOutageFallback(
     call: NormalizedToolCall,
     actInput: string,
     asOf: string,
     cause: string,
     localCopy: string | undefined
-  ): string {
-    if (this.localModel || !this.coreLaw) {
-      return JSON.stringify({
-        status: "DENIED",
-        error: cause,
-        ...(localCopy ? { localCopy } : {})
-      });
+  ): Promise<string> {
+    let denied = localCopy;
+    let localResult: Record<string, unknown> | null = null;
+    if (!this.localModel && this.coreLaw) {
+      const local = this.verifyWithCoreLaw(call, actInput, asOf);
+      if (!local.denied) {
+        localResult = withEliOutageNotice(JSON.parse(local.content) as Record<string, unknown>, cause);
+        if (localResult.status === "VERIFIED") return JSON.stringify(localResult);
+      } else {
+        denied = local.denied;
+      }
     }
-    const local = this.verifyWithCoreLaw(call, actInput, asOf);
-    if (local.denied) {
-      return JSON.stringify({ status: "DENIED", error: cause, localCopy: local.denied });
+    // BRAK-AKTU w RZĘDZIE 1 (ELI nie działa, kopia nie potwierdza): źródła zastępcze
+    // wskazane przez model wg kanonu E-3/E-4.
+    const substitute = Array.isArray(call.input.substituteSourceUrls)
+      ? call.input.substituteSourceUrls.filter((item): item is string => typeof item === "string")
+      : [];
+    if (substitute.length > 0 && !asOf) {
+      return this.verifyWithSubstitute(call, actInput, substitute, cause);
     }
-    return JSON.stringify(
-      withEliOutageNotice(JSON.parse(local.content) as Record<string, unknown>, cause)
-    );
+    if (localResult) {
+      return JSON.stringify({ ...localResult, substitute: SUBSTITUTE_HINT });
+    }
+    return JSON.stringify({
+      status: "DENIED",
+      error: cause,
+      ...(denied ? { localCopy: denied } : {}),
+      ...(asOf ? {} : { substitute: SUBSTITUTE_HINT })
+    });
   }
+
+  private async verifyWithSubstitute(
+    call: NormalizedToolCall,
+    actInput: string,
+    urls: string[],
+    cause: string
+  ): Promise<string> {
+    const claim = typeof call.input.claim === "string" ? call.input.claim.trim() : "";
+    const verificationKind = kind(call.input.kind);
+    const quote = typeof call.input.quote === "string" ? call.input.quote.trim() : "";
+    if (!claim || !verificationKind) {
+      return JSON.stringify({ status: "DENIED", error: "INVALID_VERIFICATION_INPUT" });
+    }
+    let outcome: SubstituteOutcome;
+    try {
+      outcome = await verifySubstituteSources({
+        urls,
+        claim,
+        kind: verificationKind,
+        ...(quote ? { quote } : {}),
+        identity: this.consolidatedIdentity(actInput),
+        r1Cause: cause,
+        toolCallId: call.id,
+        ...(this.substituteFetcher ? { fetcher: this.substituteFetcher } : {})
+      });
+    } catch (error) {
+      const code = error instanceof SubstituteSourceError ? error.code : "SUBSTITUTE_FAILED";
+      this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: TOOL_NAME, capability: "read", decision: "DENY", reason: code });
+      return JSON.stringify({ status: "DENIED", error: cause, substituteError: code });
+    }
+    this.ledger.add(outcome.record);
+    this.resolverAudit.push({
+      sequence: this.resolverAudit.length + 1,
+      tool: TOOL_NAME,
+      capability: "read",
+      decision: outcome.status === "NIEWERYFIKOWANE" ? "DENY" : "ALLOW",
+      reason: `SUBSTITUTE_${outcome.status}`
+    });
+    return JSON.stringify({
+      claim: outcome.record.claim,
+      status: outcome.record.status,
+      sourceStatus: outcome.status,
+      sourceTier: outcome.record.sourceTier ?? null,
+      substituteFor: "R1",
+      r1Unavailable: cause,
+      sourceUrl: outcome.record.sourceUrl ?? null,
+      evidence: outcome.record.evidence ?? null,
+      fetchedAt: outcome.record.fetchedAt,
+      marker: outcome.marker,
+      ...(outcome.reasons.length ? { reasons: outcome.reasons } : {}),
+      instruction:
+        "Copy the marker verbatim onto the line with the citation. K-4: say explicitly that RZĄD 1 (Sejm ELI) was unavailable and why (" +
+        cause +
+        "). " +
+        (outcome.status === "VER"
+          ? "Confirmed in a RZĄD 2A source (E-3)."
+          : outcome.status === "KOTWICA"
+            ? "🟨 KOTWICA URZĘDOWA is not ✅: present the wording as read from RZĄD 2B; in a pleading it needs closure (HYBRID-VALIDATION)."
+            : "Not confirmed: present the provision as ⚠️ [NIEWERYFIKOWANE]; never quote it from memory.")
+    });
+  }
+
+  // K-1: numer aktualnego t.j. z indeksu RZĘDU 1 zapisanego w kopii ELI.
+  private consolidatedIdentity(actInput: string): ConsolidatedIdentity | null {
+    const index = this.coreLaw;
+    if (!index) return null;
+    const eli = index.resolve(actInput)?.eli ?? resolveActByTitle(index, actInput);
+    const summary = eli ? index.summary(eli) : null;
+    const current = summary?.consolidated ? (summary.currentEli ?? summary.eli) : null;
+    const match = current ? /^DU\/(\d{4})\/(\d+)$/.exec(current) : null;
+    return match ? { year: match[1]!, position: match[2]! } : null;
+  }
+
 
   /**
    * Model lokalny: przed użyciem kopii sprawdzenie w ELI, czy nie ma nowszego t.j. albo
@@ -1602,7 +1704,7 @@ export class LegalVerificationToolRuntime {
           if (described.outage) {
             results.push({
               tool_use_id: call.id,
-              content: this.eliOutageFallback(
+              content: await this.eliOutageFallback(
                 call,
                 actInput,
                 asOf,
@@ -1674,7 +1776,7 @@ export class LegalVerificationToolRuntime {
         ) {
           results.push({
             tool_use_id: call.id,
-            content: this.eliOutageFallback(
+            content: await this.eliOutageFallback(
               call,
               actInput,
               asOf,
@@ -1763,7 +1865,7 @@ export class LegalVerificationToolRuntime {
       ) {
         results.push({
           tool_use_id: call.id,
-          content: this.eliOutageFallback(
+          content: await this.eliOutageFallback(
             call,
             actInput,
             asOf,

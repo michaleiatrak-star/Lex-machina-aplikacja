@@ -58,6 +58,10 @@ export type VerificationRecord = {
   // NSA/WSA (CBOSA) material is kept as a dated snapshot and never promoted
   // to VERIFIED/SUPPORTED.
   verificationCeiling?: "SNAPSHOT_NO_PROMOTION";
+  // Źródło zastępcze przy BRAKU-AKTU w RZĘDZIE 1 (kanon E-3/E-4): RZĄD 2A daje VERIFIED,
+  // RZĄD 2B najwyżej 🟨 KOTWICA URZĘDOWA (officialAnchor, status UNVERIFIED).
+  substituteFor?: "R1";
+  officialAnchor?: true;
 };
 
 function normalizeClaim(value: string): string {
