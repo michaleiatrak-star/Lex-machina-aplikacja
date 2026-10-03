@@ -40,8 +40,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
 | hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
 | hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
+| hotfix 40 | `d2f027e` | Dziennik nieprawidłowości na desktopie (allowlista proxy), PR #6-#15 |
 
 ---
+
+## hotfix 40
+
+- `trust_boundary.rs`: `/api/diagnostics/anomalies` (GET, DELETE) i `/api/diagnostics/anomalies/export` (GET) w `route_allowed`; wcześniej `DESKTOP_ROUTE_NOT_ALLOWED`. `AnomalyJournalSection.tsx`: błąd wczytania zamiast pustego dziennika.
+- CI: `check-route-allowlist.py` w `lex-runtime.yml` (każda trasa runtime ma wpis w allowliście).
+- Scalone: #6/#8 (walidator statusów przepisów, ELI jako źródło, kopia jako cache), #9 (Claude Desktop MSIX), #10, #11, #12, #13 (faktury KSeF, etap 1), #14 (polityka prywatności), #15 (`SN_UPSTREAM_ERROR`).
+- `publish-0.1.10-hotfix40.yml`: `sn_live_advisory: true` (sn.pl zwraca błąd wewnętrzny od 2026-10-02 ok. 17:00 UTC).
 
 ## hotfix 39
 
