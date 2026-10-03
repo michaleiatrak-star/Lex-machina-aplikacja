@@ -573,6 +573,39 @@ describe("SafeSessionExecutor", () => {
     expect(escape.audit.blockedEvents).toContain("gate: G36_LEGAL_CORPUS_RUNTIME");
   });
 
+  it("AUTO with model-selected skills records route, preflight and provider completion", async () => {
+    const adapter: ProviderAdapter = {
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(params) {
+        await params.runTools?.([{ id: "c1", name: "read_legal_resource", input: { skill: DR, path: "SKILL.md" } }]);
+        return { fullText: "Odpowiedź bez powołań." };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const executor = new SafeSessionExecutor(fixture(), new ProviderGateway(providers));
+    const result = await executor.execute({
+      query: "Jaki jest termin przedawnienia roszczenia?",
+      provider: "openai",
+      model: "account",
+      primarySkill: "dr-01-placeholder",
+      modelSelectsSkills: true,
+      mode: "PRAWNIK"
+    });
+    const events = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+
+    expect(result.audit.missing).not.toEqual(
+      expect.arrayContaining(["route"])
+    );
+    expect(result.audit.missing.filter((item: string) => item.startsWith("g39h_"))).toEqual([]);
+    expect(events.find((event) => event.type === "route")?.target).toBe(DR);
+    expect(events.find((event) => event.target === "G39H_WORKFLOW_PREFLIGHT")?.status).toBe("OK");
+    expect(events.find((event) => event.target === "G39H_WORKFLOW_PROVIDER_COMPLETE")?.status).toBe("OK");
+    expect(events.find((event) => event.target === "G39I_TURN_STATE")?.status).toBe("OK");
+  });
+
   it("G39I input completeness reads only the newest user turn, not the history", async () => {
     const adapter: ProviderAdapter = {
       id: "openai",

@@ -1802,6 +1802,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         execution.primarySkill =
           selection.primarySkill;
       }
+      // The model routed itself: the route is the DR it actually read
+      // (router-v3 only when it found no legal domain), not the placeholder.
+      audit.record(
+        "route",
+        selection.primarySkill ?? "prawny-router-v3",
+        "OK",
+        {
+          role: "primary-domain",
+          selection: "model-auto-selection",
+          domainSkills: selection.domainSkills
+        }
+      );
     }
 
     for (const event of coreLawTools?.auditEvents() ?? []) {

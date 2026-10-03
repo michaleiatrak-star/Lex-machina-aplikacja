@@ -1990,6 +1990,15 @@ export class LexExecutionEngine {
     }
 
     emit("gate", "MODEL_SKILL_SELECTION", "OK", `catalog=${catalog.length}`);
+    // The model routes itself, so this turn runs the general legal workflow;
+    // the route event follows from the audited corpus reads (session executor).
+    const workflowPlan = createDeterministicWorkflowPlan(this.registry, null);
+    emit(
+      "gate",
+      "G39H_WORKFLOW_PREFLIGHT",
+      "OK",
+      `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`
+    );
     emit("provider_start", args.provider, "OK", args.model);
     const response = await this.providers.stream(
       args.provider,
@@ -2061,6 +2070,12 @@ export class LexExecutionEngine {
       }
     }
     emit("provider_end", args.provider, "OK", args.model);
+    emit(
+      "gate",
+      "G39H_WORKFLOW_PROVIDER_COMPLETE",
+      response.fullText.trim() ? "OK" : "BLOCKED",
+      `workflow=${workflowPlan.id}`
+    );
     if (!response.fullText.trim()) {
       throw new LexExecutionError(
         "Provider returned an empty answer.",
@@ -2077,7 +2092,7 @@ export class LexExecutionEngine {
       loadedSkills: [],
       executionSkills: [],
       domainSkills: [],
-      workflowPlan: createDeterministicWorkflowPlan(this.registry, null),
+      workflowPlan,
       output: response.fullText,
       events
     };
