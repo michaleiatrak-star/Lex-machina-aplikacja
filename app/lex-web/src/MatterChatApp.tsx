@@ -4584,6 +4584,7 @@ export default function MatterChatApp({
                     content={message.content}
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
+                    markdown={message.role === "assistant"}
                   />
                   {message.role === "assistant" &&
                   (message.restorations?.length ||
