@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { FinalizationGate } from "./finalization-gate.js";
+import {
+  FinalizationGate,
+  markUnverifiedReferences
+} from "./finalization-gate.js";
+import { applyAutomaticVerificationMarkers } from "./gate-i-auto-verification.js";
 import {
   evaluateStatusConsistency,
-  reconcileStatusMarkers
+  reconcileStatusMarkers,
+  stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
 import { VerificationLedger } from "./verification-ledger.js";
 
@@ -155,5 +160,65 @@ describe("G39I status consistency gate", () => {
       new VerificationLedger()
     );
     expect(report.provisions.map((item) => item.key)).toEqual(["art. 233 kk"]);
+  });
+
+  // Kolejność jak w SafeSessionExecutor po szkicu modelu.
+  function finalize(text: string, ledger: VerificationLedger) {
+    const stripped = stripUnbackedVerificationMarkers(text, ledger);
+    const auto = applyAutomaticVerificationMarkers(stripped.text, ledger);
+    const pre = new FinalizationGate().evaluate(auto.text, ledger);
+    const marked = pre.result === "BLOCKED" ? markUnverifiedReferences(auto.text, pre) : auto.text;
+    const reconciled = reconcileStatusMarkers(marked, ledger).text;
+    return {
+      text: reconciled,
+      removed: stripped.removed,
+      finalization: new FinalizationGate().evaluate(reconciled, ledger).result,
+      status: evaluateStatusConsistency(reconciled, ledger).result
+    };
+  }
+
+  // Błąd zgłoszony 2026-10-03: model sam dopisał ✅ z linkiem do aktu bez kotwicy.
+  it("replaces a model-written VER marker with the ledger marker instead of blocking", () => {
+    const result = finalize(`Art. 233 KK ✅ [VER: ${KK}, 2026-10-03] chroni wymiar sprawiedliwości.`, ledgerWithKk());
+
+    expect(result.removed).toBe(1);
+    expect(result.finalization).toBe("PASS");
+    expect(result.status).toBe("PASS");
+    expect(result.text).toBe(`Art. 233 KK chroni wymiar sprawiedliwości. ${VER_233}`);
+  });
+
+  it("keeps a ledger marker the model copied exactly", () => {
+    const text = `Art. 234 KK ${VER_234} dotyczy fałszywego oskarżenia.`;
+    expect(stripUnbackedVerificationMarkers(text, ledgerWithKk())).toEqual({ text, removed: 0 });
+  });
+
+  it("never turns a model-written VER marker into verification", () => {
+    const result = finalize(`Art. 238 KK ✅ [VER: ${KK}, 2026-10-03] dotyczy fałszywego zawiadomienia.`, ledgerWithKk());
+
+    expect(result.text).not.toContain("✅");
+    expect(result.text).toContain("Art. 238 KK ⚠️ [NIEWERYFIKOWANE]");
+    expect(result.finalization).toBe("DEGRADED");
+  });
+
+  it("marks a verified paragraph next to an unverified one in the same enumeration", () => {
+    const ledger = ledgerWithKk();
+    ledger.add({
+      claim: "art. 233 § 1 KK",
+      kind: "statute",
+      status: "VERIFIED",
+      sourceUrl: KK,
+      sourceAnchorUrl: `${KK}#page=97`,
+      sourceTier: "R1",
+      fetchedAt: "2026-10-02T10:00:00.000Z",
+      verificationMethod: "web_fetch_pdf",
+      sourceFormat: "PDF",
+      temporalMode: "CURRENT",
+      temporalFreshnessStatus: "CURRENT"
+    });
+    const result = finalize("Art. 233 § 1 KK i art. 233 § 6 KK oraz art. 234 KK.", ledger);
+
+    expect(result.status).toBe("PASS");
+    expect(result.finalization).toBe("DEGRADED");
+    expect(result.text).toContain(`Art. 233 § 1 KK ${VER_233} i art. 233 § 6 KK ⚠️ [NIEWERYFIKOWANE]`);
   });
 });

@@ -336,6 +336,21 @@ describe("skill selection", () => {
         expect(selected.workflowExecutionSkill)
             .toBe("analizator-przepisow-v2");
     });
+    it("does not let earlier turns start a workflow for the current question", () => {
+        const registry = registryWithSkills();
+        const history = "Użytkownik: Jak pokazujesz źródła?\n\n" +
+            "Asystent: Porządkuję chronologię sprawy na osi czasu, z datami i proweniencją dowodów.";
+        const selected = resolveAdditionalSkills(registry, history +
+            "\n\nUżytkownik: Wykaż różnice pomiędzy 233 kk, 234 kk i 238 kk.", "dr-03-prawo-procesowe", true, []);
+        expect(selected.executionSkills)
+            .not.toContain("chronologia-sprawy-v1");
+        expect(selected.workflowExecutionSkill)
+            .not.toBe("chronologia-sprawy-v1");
+        const requested = resolveAdditionalSkills(registry, history +
+            "\n\nUżytkownik: Zbuduj chronologię sprawy i oś czasu zdarzeń.", "dr-03-prawo-procesowe", true, []);
+        expect(requested.workflowExecutionSkill)
+            .toBe("chronologia-sprawy-v1");
+    });
     it("routes a specific statutory interpretation request to the statute analyzer", () => {
         const registry = registryWithSkills();
         const selected = resolveAdditionalSkills(registry, "Zweryfikuj art. 415 KC i wyjaśnij przesłanki oraz wykładnię przepisu.", "dr-02-prawo-cywilne", true, []);

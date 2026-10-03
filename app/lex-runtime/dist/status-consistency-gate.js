@@ -1,3 +1,4 @@
+import { detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
 const UNIT = "\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
@@ -298,10 +299,12 @@ export function reconcileStatusMarkers(text, ledger) {
                 continue;
             }
             // Grupa mieszana: ✅ bezpośrednio po zweryfikowanym przepisie, ⚠️ zostaje przy reszcie.
+            // Ten sam ✅ w innym miejscu wiersza (np. dopisany na końcu) nie należy do tej grupy.
+            const groupMarkers = new Set(group.markers.map((marker) => line.text.slice(marker.start, marker.end)));
             group.references.forEach((reference, index) => {
                 const record = records[index];
-                const marker = record ? missing(record) : null;
-                if (!marker)
+                const marker = record ? verificationMarker(record) : null;
+                if (!marker || groupMarkers.has(marker))
                     return;
                 edits.push({ start: reference.end, end: reference.end, insert: ` ${marker}` });
                 repaired += 1;
@@ -316,4 +319,30 @@ export function reconcileStatusMarkers(text, ledger) {
         return next;
     });
     return { text: repaired > 0 ? output.join("\n") : text, repaired };
+}
+/**
+ * Znacznik ✅ [VER: …] przy przepisie, którego nie da się odtworzyć z rekordu VERIFIED
+ * w rejestrze, jest deklaracją modelu, nie weryfikacją (np. sam link do aktu bez kotwicy
+ * albo inna data). Usuwany przed wstawieniem znaczników z rejestru: przepis zweryfikowany
+ * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE]. Wiersz z sygnaturą
+ * orzeczenia zostaje bez zmian: zmieniony znacznik orzeczenia nadal blokuje (G22).
+ */
+export function stripUnbackedVerificationMarkers(text, ledger) {
+    const ledgerMarkers = new Set(ledger
+        .all()
+        .map((record) => verificationMarker(record))
+        .filter((marker) => Boolean(marker)));
+    const caseLines = new Set(detectLegalReferences(text)
+        .filter((reference) => reference.kind === "case")
+        .map((reference) => reference.line));
+    let removed = 0;
+    const lines = text.split(/\r?\n/u).map((line, index) => caseLines.has(index + 1)
+        ? line
+        : line.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
+            if (ledgerMarkers.has(match.trimStart()))
+                return match;
+            removed += 1;
+            return "";
+        }));
+    return { text: removed > 0 ? lines.join("\n") : text, removed };
 }

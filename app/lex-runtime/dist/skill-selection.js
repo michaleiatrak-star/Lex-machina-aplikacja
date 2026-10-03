@@ -14,6 +14,16 @@ const EXECUTION_SKILL_NAME_OVERRIDES = new Set([
     "przesluchanie-swiadkow-v2-min90",
     "raport-klienta-v1"
 ]);
+const USER_TURN_MARKER = "\n\nUżytkownik: ";
+// The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
+// history; only the newest user turn carries the current intent.
+export function latestUserTurn(query) {
+    const index = query.lastIndexOf(USER_TURN_MARKER);
+    return index >= 0
+        ? query.slice(index +
+            USER_TURN_MARKER.length)
+        : query;
+}
 function normalize(value) {
     return value
         .normalize("NFKD")
@@ -402,13 +412,19 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
     }
     if (automatic) {
         const queryTokens = tokens(query);
+        // A stateful workflow is the current request's choice. Earlier turns,
+        // above all the assistant's own replies, must not start one: a reply
+        // about sources and dates would otherwise pin CHRONOLOGY_V1 on an
+        // unrelated statute question.
+        const currentTurn = latestUserTurn(query);
+        const executionTokens = tokens(currentTurn);
         const candidates = [...registry.skills.values()]
             .filter((skill) => !core.has(skill.name) &&
             skill.name !== "shared");
         const executionCandidates = candidates.filter((skill) => isExecutionSkill(skill) &&
             executionAllowed(skill.name));
-        const rankedExecution = rankSkills(executionCandidates, queryTokens);
-        const explicitExecution = explicitExecutionSkillHints(query, executionCandidates);
+        const rankedExecution = rankSkills(executionCandidates, executionTokens);
+        const explicitExecution = explicitExecutionSkillHints(currentTurn, executionCandidates);
         for (const name of explicitExecution) {
             if (executionSkills.size >= 4)
                 break;
@@ -429,7 +445,7 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
             // Keep trivial/non-semantic chat turns free of stateful legal workflows.
             // A genuinely vague legal question can still use the general guide, but
             // a command such as "napisz ok" has too little legal signal to do so.
-            if (queryTokens.size >= 2) {
+            if (executionTokens.size >= 2) {
                 const fallback = executionCandidates.find((skill) => skill.name ===
                     "przewodnik-prawny-v2");
                 if (fallback) {
