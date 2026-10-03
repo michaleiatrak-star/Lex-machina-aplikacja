@@ -1,4 +1,5 @@
 import type { LegalActDescriptor } from "./legal-act-resolver.js";
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import {
   assertVerificationTierPolicy,
   type LegalSourceCrossCheckStatus,
@@ -68,8 +69,7 @@ export type VerificationRecord = {
 };
 
 function normalizeClaim(value: string): string {
-  return value
-    .normalize("NFKC")
+  return compactActAbbreviations(value.normalize("NFKC"))
     .toLocaleLowerCase("pl")
     .replace(/[.,;:()[\]{}]/g, " ")
     .replace(/\s+/g, " ")

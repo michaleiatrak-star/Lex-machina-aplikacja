@@ -1,3 +1,4 @@
+import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
@@ -9,7 +10,7 @@ const CASE_SUPPORT_MARKER = /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
 export function expectedVerificationMarker(record) {
     return verificationMarker(record);
 }
-const ARTICLE_PATTERN = /\bart\.?\s+\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\s*§\s*\d+[a-zA-Z]*)?(?:\s+(?:KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP))?/giu;
+const ARTICLE_PATTERN = new RegExp(`\\bart\\.?\\s+\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`, "giu");
 const DZU_PATTERN = /\bDz\.?\s*U\.?\s*(?:(?:z\s+)?\d{4}\s*r?\.?\s*)?poz\.?\s*\d+/giu;
 const CASE_PATTERN = /\bsygn\.?\s*(?:akt\s*)?[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,12}){0,3}\s+\d+\/\d{2,4}\b/gu;
 function normalizeEvidenceText(value) {
@@ -24,7 +25,8 @@ function collectMatches(lineText, line, kind, pattern) {
     const references = [];
     pattern.lastIndex = 0;
     for (const match of lineText.matchAll(pattern)) {
-        const claim = match[0]?.trim();
+        // "art. 233 k.k." and "art. 233 KK" are one provision.
+        const claim = kind === "statute" ? compactActAbbreviations(match[0]?.trim() ?? "") : match[0]?.trim();
         if (!claim)
             continue;
         references.push({ claim, kind, line, lineText });

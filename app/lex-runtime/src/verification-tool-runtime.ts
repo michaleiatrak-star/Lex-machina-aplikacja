@@ -597,8 +597,9 @@ export class LegalVerificationToolRuntime {
       init?: RequestInit
     ) => Promise<Response> =
       globalThis.fetch.bind(globalThis),
-    // Akt zweryfikowany w źródle, którego nie ma w lokalnej kopii (albo ma tam starszy
-    // tekst): dołączany do kopii i RAG, jak akty z map DR.
+    // Każdy akt zweryfikowany w źródle: brak w lokalnej kopii -> dołączany do kopii
+    // i RAG; starszy t.j. w kopii niż w ELI -> pobranie nowego (adopt nic nie robi,
+    // gdy kopia jest zgodna).
     private readonly adoptAct:
       | ((act: LegalActDescriptor) => void)
       | null = null,
@@ -1879,7 +1880,6 @@ export class LegalVerificationToolRuntime {
 
       if (
         result.ok &&
-        (resolvedAct.id === "ELI" || this.localModel) &&
         this.adoptAct
       ) {
         try {

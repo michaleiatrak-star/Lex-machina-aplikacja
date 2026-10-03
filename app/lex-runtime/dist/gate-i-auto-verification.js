@@ -1,3 +1,4 @@
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACT_ALIAS = /\b(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)\b/giu;
@@ -46,14 +47,14 @@ function aliases(value) {
     ];
 }
 function uniqueActAlias(reference) {
-    const claimAliases = aliases(reference.claim);
+    const claimAliases = aliases(compactActAbbreviations(reference.claim));
     if (claimAliases.length === 1) {
         return claimAliases[0];
     }
     if (claimAliases.length > 1) {
         return null;
     }
-    const lineAliases = aliases(reference.lineText);
+    const lineAliases = aliases(compactActAbbreviations(reference.lineText));
     return lineAliases.length === 1
         ? lineAliases[0]
         : null;
@@ -66,6 +67,29 @@ function caseSignature(reference) {
     return reference.claim
         .match(CASE_SIGNATURE)?.[1]
         ?.trim() ?? null;
+}
+/**
+ * A ⚠️ [NIEWERYFIKOWANE] the model wrote at a statute is its own guess, not a
+ * status: the registry decides. The marker is released so the provision is
+ * verified automatically (fresh, from the thread's evidence memory or the ELI
+ * copy); the final gate puts the marker back where verification fails.
+ * Lines with a case citation keep theirs (court records have their own rules).
+ */
+export function releaseModelUnverifiedMarkers(text) {
+    let released = 0;
+    const lines = text.split(/\r?\n/u).map((line) => {
+        if (!line.includes("NIEWERYFIKOWANE"))
+            return line;
+        const plain = line.replace(/⚠️?\s*\[NIEWERYFIKOWANE\]/gu, "");
+        const references = detectLegalReferences(plain);
+        if (!references.some((reference) => reference.kind === "statute" || reference.kind === "journal"))
+            return line;
+        if (references.some((reference) => reference.kind === "case"))
+            return line;
+        released += (line.match(/⚠️?\s*\[NIEWERYFIKOWANE\]/gu) ?? []).length;
+        return plain.replace(/[ \t]{2,}/g, " ").replace(/ +([,.;:)])/g, "$1").trimEnd();
+    });
+    return { text: lines.join("\n"), released };
 }
 export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
     const references = detectLegalReferences(text);

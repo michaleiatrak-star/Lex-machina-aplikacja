@@ -415,8 +415,9 @@ export class LegalVerificationToolRuntime {
     broker;
     resolverAudit = [];
     constructor(ledger, verifier = new OfficialLegalSourceVerifier(), resolver = new DeterministicLegalActResolver(), freshnessChecker = null, caseVerifier = new SupremeCourtCaseVerifier(), caseLawSearch = new CaseLawSearchService(), coreLaw = null, eliFetch = globalThis.fetch.bind(globalThis), 
-    // Akt zweryfikowany w źródle, którego nie ma w lokalnej kopii (albo ma tam starszy
-    // tekst): dołączany do kopii i RAG, jak akty z map DR.
+    // Każdy akt zweryfikowany w źródle: brak w lokalnej kopii -> dołączany do kopii
+    // i RAG; starszy t.j. w kopii niż w ELI -> pobranie nowego (adopt nic nie robi,
+    // gdy kopia jest zgodna).
     adoptAct = null, 
     // Model lokalny (Bielik, Mistral): lokalna kopia ELI (RAG) pierwsza.
     localModel = false) {
@@ -1335,7 +1336,6 @@ export class LegalVerificationToolRuntime {
                 continue;
             }
             if (result.ok &&
-                (resolvedAct.id === "ELI" || this.localModel) &&
                 this.adoptAct) {
                 try {
                     if (JSON.parse(String(result.output ?? ""))

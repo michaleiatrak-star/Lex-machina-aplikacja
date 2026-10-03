@@ -1,3 +1,4 @@
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import {
   detectLegalReferences,
   type DetectedLegalReference
@@ -106,7 +107,7 @@ function uniqueActAlias(
 ): string | null {
   const claimAliases =
     aliases(
-      reference.claim
+      compactActAbbreviations(reference.claim)
     );
   if (
     claimAliases.length === 1
@@ -121,7 +122,7 @@ function uniqueActAlias(
 
   const lineAliases =
     aliases(
-      reference.lineText
+      compactActAbbreviations(reference.lineText)
     );
   return lineAliases.length === 1
     ? lineAliases[0]!
@@ -159,6 +160,27 @@ export type GateIAutoVerificationPlan = {
       | "UNSUPPORTED_KIND";
   }>;
 };
+
+/**
+ * A ⚠️ [NIEWERYFIKOWANE] the model wrote at a statute is its own guess, not a
+ * status: the registry decides. The marker is released so the provision is
+ * verified automatically (fresh, from the thread's evidence memory or the ELI
+ * copy); the final gate puts the marker back where verification fails.
+ * Lines with a case citation keep theirs (court records have their own rules).
+ */
+export function releaseModelUnverifiedMarkers(text: string): { text: string; released: number } {
+  let released = 0;
+  const lines = text.split(/\r?\n/u).map((line) => {
+    if (!line.includes("NIEWERYFIKOWANE")) return line;
+    const plain = line.replace(/⚠️?\s*\[NIEWERYFIKOWANE\]/gu, "");
+    const references = detectLegalReferences(plain);
+    if (!references.some((reference) => reference.kind === "statute" || reference.kind === "journal")) return line;
+    if (references.some((reference) => reference.kind === "case")) return line;
+    released += (line.match(/⚠️?\s*\[NIEWERYFIKOWANE\]/gu) ?? []).length;
+    return plain.replace(/[ \t]{2,}/g, " ").replace(/ +([,.;:)])/g, "$1").trimEnd();
+  });
+  return { text: lines.join("\n"), released };
+}
 
 export function planAutomaticLegalVerification(
   text: string,

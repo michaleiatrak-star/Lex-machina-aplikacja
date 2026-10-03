@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ProviderGateway, ProviderRegistry } from "../src/providers/gateway.js";
 import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
+import type { VerificationLedger } from "../src/verification-ledger.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import {
   evaluateMandatoryPath,
@@ -145,7 +146,23 @@ describe("mandatory path in a session", () => {
         return { fullText: "Art. 233 KK — fałszywe zeznanie.\n\nTo ogólna informacja prawna, nie indywidualna porada prawna." };
       }
     });
-    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    // The question's "233 kk" is verified before the answer.
+    const verified: string[] = [];
+    const verification = (ledger: VerificationLedger) =>
+      ({
+        schemas: () => [],
+        systemPromptAppendix: () => "",
+        auditEvents: () => [],
+        async runTools(calls: Array<{ id: string; input: Record<string, unknown> }>) {
+          return calls.map((call) => {
+            const claim = String(call.input.claim);
+            verified.push(claim);
+            ledger.add({ claim, kind: "statute", status: "VERIFIED", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf", fetchedAt: "2026-10-03T10:00:00Z", verificationMethod: "web_fetch_pdf" });
+            return { tool_use_id: call.id, content: JSON.stringify({ status: "VERIFIED", claim }) };
+          });
+        }
+      }) as never;
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
     const decision = detectQueryMode("Wykaż różnice pomiędzy 233 kk, 234 kk i 238 kk.", signals, null);
     const result = await executor.execute({
       query: "Wykaż różnice pomiędzy 233 kk, 234 kk i 238 kk.",
@@ -162,5 +179,6 @@ describe("mandatory path in a session", () => {
     expect(result.mandatoryPath).toMatchObject({ profile: "PELNY" });
     expect(result.mandatoryPath!.steps.find((step) => step.id === "PELNY:MOD-CN-GATE")).toMatchObject({ status: "MET", by: "APLIKACJA" });
     expect(result.modeDecision?.mode).toBe("PRAWNIK");
+    expect(verified).toEqual(expect.arrayContaining(["art. 233 KK", "art. 234 KK", "art. 238 KK"]));
   }, 60_000);
 });

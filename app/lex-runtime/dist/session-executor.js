@@ -2,6 +2,7 @@ import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferenc
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
+import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
 import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import { restoreWithReport } from "./privacy/restoration-report.js";
@@ -29,7 +30,7 @@ import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { detectLegalReferences } from "./finalization-gate.js";
-import { applyAutomaticVerificationMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
+import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
 import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseudonymizer.js";
@@ -579,8 +580,12 @@ export class SafeSessionExecutor {
         let protectedQuery;
         let protectedAuxiliaryText;
         try {
+            // Example data the assistant wrote earlier (a model letter) stays as written.
+            const exampleData = /(?:^|\n\n)Asystent: /.test(request.query)
+                ? exampleDataKeepDirectives(request.query, (await new LocalPolishPseudonymizer(new PseudonymizationVault(request.privacySeed), this.chatRecognizerFor(request.model), this.personMorphology).pseudonymize(request.query)).findings, request.auxiliaryText ?? "")
+                : [];
             const protectedPrimary = await chatPseudonymizer
-                .pseudonymize(request.query);
+                .pseudonymize(request.query, exampleData);
             protectedQuery =
                 protectedPrimary.text;
             if (request.auxiliaryText !==
@@ -599,6 +604,7 @@ export class SafeSessionExecutor {
             audit.record("gate", "G39I_CHAT_PRIVACY", "OK", {
                 pseudonymized: protectedPrimary
                     .findings.length,
+                exampleDataKept: exampleData.length,
                 kinds: Object.keys(protectedPrimary
                     .counts).sort(),
                 vaultTokens: chatPrivacyVault
@@ -1228,7 +1234,10 @@ export class SafeSessionExecutor {
             observed: workflowReads.observed,
             missing: workflowReads.missing
         });
-        const automaticVerificationPlan = planAutomaticLegalVerification(execution.output, ledger, requestedHistoricalAsOf);
+        // The model's own ⚠️ at a statute does not stop the application from
+        // verifying it: status comes from the registry only.
+        const releasedDraft = releaseModelUnverifiedMarkers(execution.output);
+        const automaticVerificationPlan = planAutomaticLegalVerification(releasedDraft.text, ledger, requestedHistoricalAsOf);
         let automaticVerificationExecuted = 0;
         if (automaticVerificationPlan.calls.length > 0 &&
             verificationTools) {
@@ -1238,7 +1247,7 @@ export class SafeSessionExecutor {
         }
         // Model-written ✅ markers are claims, not verification: only the ledger
         // marker is shown, so a rewritten link or date cannot block the answer.
-        const ledgerBackedOutput = stripUnbackedVerificationMarkers(execution.output, ledger);
+        const ledgerBackedOutput = stripUnbackedVerificationMarkers(releasedDraft.text, ledger);
         const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf);
         audit.record("gate", "G39I_AUTO_POST_DRAFT_VERIFICATION", automaticVerificationPlan.calls.length > 0 &&
             !verificationTools
@@ -1248,6 +1257,7 @@ export class SafeSessionExecutor {
             executed: automaticVerificationExecuted,
             insertedMarkers: automaticVerification.inserted,
             removedUnbackedMarkers: ledgerBackedOutput.removed,
+            releasedModelUnverifiedMarkers: releasedDraft.released,
             skipped: automaticVerificationPlan.skipped
         });
         if (verificationTools) {

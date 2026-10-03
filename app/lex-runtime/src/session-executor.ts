@@ -11,6 +11,7 @@ import {
   stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
+import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import type { EvidenceImage } from "./document-evidence.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
 import {
@@ -155,6 +156,7 @@ import {
 import { detectLegalReferences } from "./finalization-gate.js";
 import {
   applyAutomaticVerificationMarkers,
+  releaseModelUnverifiedMarkers,
   detectHistoricalAsOf,
   planAutomaticLegalVerification
 } from "./gate-i-auto-verification.js";
@@ -1307,10 +1309,26 @@ export class SafeSessionExecutor implements SessionExecutor {
     let protectedAuxiliaryText:
       string | undefined;
     try {
+      // Example data the assistant wrote earlier (a model letter) stays as written.
+      const exampleData =
+        /(?:^|\n\n)Asystent: /.test(request.query)
+          ? exampleDataKeepDirectives(
+              request.query,
+              (
+                await new LocalPolishPseudonymizer(
+                  new PseudonymizationVault(request.privacySeed),
+                  this.chatRecognizerFor(request.model),
+                  this.personMorphology
+                ).pseudonymize(request.query)
+              ).findings,
+              request.auxiliaryText ?? ""
+            )
+          : [];
       const protectedPrimary =
         await chatPseudonymizer
           .pseudonymize(
-            request.query
+            request.query,
+            exampleData
           );
       protectedQuery =
         protectedPrimary.text;
@@ -1344,6 +1362,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           pseudonymized:
             protectedPrimary
               .findings.length,
+          exampleDataKept:
+            exampleData.length,
           kinds:
             Object.keys(
               protectedPrimary
@@ -2236,9 +2256,12 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     );
 
+    // The model's own ⚠️ at a statute does not stop the application from
+    // verifying it: status comes from the registry only.
+    const releasedDraft = releaseModelUnverifiedMarkers(execution.output);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
-        execution.output,
+        releasedDraft.text,
         ledger,
         requestedHistoricalAsOf
       );
@@ -2260,7 +2283,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // marker is shown, so a rewritten link or date cannot block the answer.
     const ledgerBackedOutput =
       stripUnbackedVerificationMarkers(
-        execution.output,
+        releasedDraft.text,
         ledger
       );
     const automaticVerification =
@@ -2286,6 +2309,8 @@ export class SafeSessionExecutor implements SessionExecutor {
           automaticVerification.inserted,
         removedUnbackedMarkers:
           ledgerBackedOutput.removed,
+        releasedModelUnverifiedMarkers:
+          releasedDraft.released,
         skipped:
           automaticVerificationPlan.skipped
       }
