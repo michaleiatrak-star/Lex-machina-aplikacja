@@ -259,6 +259,34 @@ function nestedSnSearchRecords(value, depth = 0) {
 function searchRecords(payload) {
     return nestedSnSearchRecords(payload);
 }
+// sn.pl snproxy reports a failed upstream call inside a successful com_ajax
+// envelope: root.data[0].data = { error, debug }. That is an outage on the
+// sn.pl side, not a schema change, and must not be reported as drift.
+export function snUpstreamError(payload) {
+    let current = payload;
+    for (let depth = 0; depth <= 4; depth += 1) {
+        const node = object(current) ??
+            object(array(current)[0]);
+        if (!node) {
+            return null;
+        }
+        const error = node.error;
+        if (error !== undefined &&
+            error !== null &&
+            error !== false &&
+            !("sygnatura_sprawy" in node)) {
+            const text = typeof error === "string"
+                ? error
+                : JSON.stringify(error);
+            return text
+                .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+                .trim()
+                .slice(0, 300) || "UNKNOWN";
+        }
+        current = node.data;
+    }
+    return null;
+}
 function rawFullText(payload) {
     const root = object(payload);
     const first = object(array(root?.data)[0]);
@@ -387,6 +415,15 @@ export class SupremeCourtCaseVerifier {
             };
         }
         const records = searchRecords(searchPayload);
+        if (!records &&
+            snUpstreamError(searchPayload) !== null) {
+            return {
+                status: "OUT_OF_SCOPE",
+                normalizedSignature,
+                rejectedNearMatches: [],
+                reason: "SN_UPSTREAM_ERROR"
+            };
+        }
         if (!records) {
             return {
                 status: "OUT_OF_SCOPE",

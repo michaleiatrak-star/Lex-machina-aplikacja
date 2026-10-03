@@ -260,6 +260,47 @@ describe("SupremeCourtCaseVerifier", () => {
     );
   });
 
+  it("reports an sn.pl snproxy error envelope as an upstream error, not schema drift", async () => {
+    const fetcher = vi.fn(
+      async () =>
+        json({
+          success: true,
+          message: null,
+          messages: null,
+          data: [{
+            success: true,
+            message: null,
+            messages: null,
+            data: {
+              error: "fixture: upstream unavailable",
+              debug: null
+            }
+          }]
+        })
+    );
+
+    const result =
+      await new SupremeCourtCaseVerifier(
+        fetcher
+      ).verify({
+        claim:
+          "sygn. II CSK 101/20",
+        signature:
+          "II CSK 101/20",
+        toolCallId:
+          "case-tool-upstream"
+      });
+
+    expect(result).toMatchObject({
+      status: "OUT_OF_SCOPE",
+      reason:
+        "SN_UPSTREAM_ERROR"
+    });
+    expect(fetcher).toHaveBeenCalledTimes(
+      1
+    );
+  });
+
   it("verifies an exact quote against the already verified official SN full text", async () => {
     const quote =
       "pełny tekst orzeczenia zawiera tę dokładną wypowiedź";
