@@ -1720,6 +1720,45 @@ export function renameCase(
   );
 }
 
+export type CaseThreadSummary = {
+  text: string;
+  coveredMessages: number;
+  updatedAt: string;
+  editedByUser?: boolean;
+};
+
+export type CaseMemory = {
+  summary: CaseThreadSummary | null;
+  evidence: {
+    updatedAt: string;
+    provisions: Array<{
+      claim: string;
+      status: string;
+      sourceUrl: string | null;
+      consolidatedText: string | null;
+      fetchedAt: string;
+      freshnessCheckedAt: string | null;
+    }>;
+    sources: Array<{ claim: string; status: string; url: string; fetchedAt: string }>;
+    skills: string[];
+  } | null;
+};
+
+export function getCaseMemory(caseId: string): Promise<CaseMemory> {
+  return json<CaseMemory>(`/api/cases/${caseId}/memory`);
+}
+
+export function updateCaseSummary(caseId: string, text: string): Promise<{ summary: CaseThreadSummary }> {
+  return json(`/api/cases/${caseId}/memory/summary`, {
+    method: "PATCH",
+    body: JSON.stringify({ text })
+  });
+}
+
+export function clearCaseMemory(caseId: string): Promise<{ cleared: true }> {
+  return json(`/api/cases/${caseId}/memory`, { method: "DELETE" });
+}
+
 export function listCaseSchedule(
   caseId: string
 ): Promise<CaseScheduleResponse> {

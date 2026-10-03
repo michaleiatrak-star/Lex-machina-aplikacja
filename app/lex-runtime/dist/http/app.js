@@ -11,6 +11,7 @@ import { MissingProviderCredentialError, providerConfigurationStatus } from "../
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
+import { MAX_SUMMARY_CHARS, SUMMARY_CHUNK_CHARS, droppedMessageCount, queryWithSummary, summaryForDroppedHistory } from "../thread-summary.js";
 import { RoutingCatalog } from "./routing-catalog.js";
 import { decodeUploadFilename } from "../case-file-store.js";
 import { AuthError } from "../auth/service.js";
@@ -1815,6 +1816,87 @@ export function createLexHttpApp(options) {
                     error: "CASE_RENAME_FAILED"
                 });
             }
+        }
+    });
+    // Pamięć sprawy: streszczenie starszej części wątku (do poprawy) i pamięć dowodowa (podgląd).
+    const withCaseMemory = async (res, caseId, action, work) => {
+        const actor = responseAuthContext(res);
+        const caseView = options.caseAccessService.openCase(actor, caseId);
+        return await options.caseAccessService.withCaseDataKey(actor, caseId, action, (caseDataKey) => work({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+    };
+    app.get("/api/cases/:caseId/memory", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore.getCaseMemory(key));
+            res.json({
+                summary: memory.summary ?? null,
+                evidence: memory.evidence
+                    ? {
+                        updatedAt: memory.evidence.updatedAt,
+                        provisions: memory.evidence.provisions.map((record) => ({
+                            claim: record.claim,
+                            status: record.status,
+                            sourceUrl: record.sourceAnchorUrl ?? record.sourceUrl ?? null,
+                            consolidatedText: record.currentEli ?? null,
+                            fetchedAt: record.fetchedAt,
+                            freshnessCheckedAt: record.freshnessCheckedAt ?? null
+                        })),
+                        sources: memory.evidence.sources,
+                        skills: memory.evidence.skills
+                    }
+                    : null
+            });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+        }
+    });
+    app.patch("/api/cases/:caseId/memory/summary", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+        if (!text || text.length > MAX_SUMMARY_CHARS) {
+            res.status(400).json({ error: "CASE_SUMMARY_INVALID", maxChars: MAX_SUMMARY_CHARS });
+            return;
+        }
+        try {
+            const summary = await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", async (key) => {
+                const current = (await options.caseMemoryStore.getCaseMemory(key)).summary;
+                if (!current)
+                    return null;
+                const next = { ...current, text, updatedAt: new Date().toISOString(), editedByUser: true };
+                await options.caseMemoryStore.saveCaseMemory({ ...key, summary: next });
+                return next;
+            });
+            if (!summary) {
+                res.status(404).json({ error: "CASE_SUMMARY_NOT_FOUND" });
+                return;
+            }
+            res.json({ summary });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
+        }
+    });
+    app.delete("/api/cases/:caseId/memory", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null }));
+            res.json({ cleared: true });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
         }
     });
     app.get("/api/cases/:caseId/schedule", async (req, res) => {
@@ -5074,6 +5156,40 @@ export function createLexHttpApp(options) {
                     threadEvidence = memory.evidence ?? null;
                     if (threadEvidence)
                         request.threadEvidence = threadEvidence;
+                    // Messages the client left out for the window: replaced with their summary.
+                    const dropped = droppedMessageCount(request.query);
+                    if (dropped && options.sessionExecutor.summarizeThread) {
+                        request.onStep?.("PREPARE", `streszczenie wcześniejszej części rozmowy (${dropped} wiadomości)`);
+                        const summarize = options.sessionExecutor.summarizeThread.bind(options.sessionExecutor);
+                        const result = await summaryForDroppedHistory({
+                            thread: memory.threadMessages,
+                            dropped,
+                            stored: memory.summary ?? null,
+                            chunkChars: SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
+                            now: new Date().toISOString(),
+                            summarize: (previousSummary, messages) => summarize({
+                                provider: request.provider,
+                                model: request.model,
+                                ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+                                ...(previousSummary ? { previousSummary } : {}),
+                                messages,
+                                ...(threadEvidence ? { threadEvidence } : {})
+                            })
+                        });
+                        if (result) {
+                            if (result.generated) {
+                                await options.caseAccessService
+                                    .withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({
+                                    caseId: knowledge.caseId,
+                                    caseDataKey,
+                                    keyVersion: caseView.keyVersion,
+                                    summary: result.summary
+                                }))
+                                    .catch((error) => process.stderr.write(`CASE_SUMMARY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`));
+                            }
+                            request.query = queryWithSummary(request.query, result.summary);
+                        }
+                    }
                 }
                 catch (error) {
                     if (error instanceof CaseAccessError)

@@ -2904,3 +2904,19 @@ mark.restored {
   width: 100%;
   border: 0;
 }
+
+.case-memory-summary {
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #dfe5e0;
+  border-radius: 6px;
+}
+
+.case-memory-list {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}

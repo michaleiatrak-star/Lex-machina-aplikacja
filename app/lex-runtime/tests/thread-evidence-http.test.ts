@@ -134,3 +134,112 @@ describe("evidence memory over HTTP", () => {
     expect(JSON.stringify(second.body)).not.toContain("threadEvidence");
   });
 });
+
+describe("thread summary over HTTP", () => {
+  it("replaces omitted messages with a stored summary, reuses it, and lets the user correct it", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-summary-http-data-"));
+    roots.push(root);
+    const authStore = new LocalAuthStore({ rootDir: root });
+    const auth = new LocalAuthService(authStore, {
+      sessionManager: new AuthSessionManager({ scheduleExpiryTimers: false }),
+      kdf: { memoryKiB: 1024, iterations: 1, parallelism: 1, keyLength: 32, version: 1 }
+    });
+    const files = new LocalCaseFileStore({ rootDir: root });
+    const cases = new LocalCaseAccessService(authStore, auth, files);
+    const workspace = new EncryptedCaseWorkspaceStore({ rootDir: root });
+    const queries: string[] = [];
+    const summarized: string[][] = [];
+    const executor = {
+      execute: vi.fn(async (input: SessionExecutionRequest) => {
+        queries.push(input.query);
+        const result: SessionExecutionResponse = {
+          sessionId: "s",
+          status: "DRAFT_PRESENTABLE",
+          provider: input.provider,
+          model: input.model,
+          primarySkill: input.primarySkill,
+          answer: "Odpowiedź.",
+          finalization: "PASS",
+          blockedReferences: [],
+          verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+          evidence: [],
+          audit: { result: "PASS", eventCount: 0, closed: true }
+        };
+        Object.defineProperty(result, SESSION_EXECUTION_INTERNAL, { value: { verificationRecords: [], auditEvents: [] }, enumerable: false });
+        return result;
+      }),
+      summarizeThread: vi.fn(async (input: { messages: Array<{ content: string }> }) => {
+        summarized.push(input.messages.map((message) => message.content));
+        return "## Fakty\n- szkoda z 2026-05-01";
+      })
+    };
+    const app = createLexHttpApp({
+      registry: registry(),
+      modelCatalog: { list: vi.fn(async () => []) },
+      authService: auth,
+      caseFileStore: files,
+      caseAccessService: cases,
+      caseMemoryStore: workspace,
+      sessionExecutor: executor
+    });
+    const owner = await request(app)
+      .post("/api/auth/bootstrap")
+      .send({ loginName: "summary", displayName: "Owner", password: "Summary strong password 2026" })
+      .expect(201);
+    const authorization = `Bearer ${String(owner.body.sessionToken)}`;
+    const created = await request(app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Streszczenie" }).expect(201);
+    const caseId = String(created.body.caseId);
+    const actor = auth.authenticateAuthorization(authorization)!;
+    const view = cases.openCase(actor, caseId);
+    for (let index = 0; index < 4; index += 1) {
+      await cases.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) =>
+        workspace.appendThreadMessage({
+          caseId,
+          caseDataKey,
+          keyVersion: view.keyVersion,
+          message: {
+            messageId: `message_${String(index).padStart(16, "0")}`,
+            role: index % 2 === 0 ? "user" : "assistant",
+            content: `wiadomość ${index}`,
+            createdAt: "2026-10-03T00:00:00Z"
+          }
+        })
+      );
+    }
+    const send = () =>
+      request(app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({
+          query: "[Wcześniejsza część rozmowy pominięta (2 wiadomości) — nie mieści się w oknie modelu.]\n\nUżytkownik: wiadomość 2\n\nAsystent: wiadomość 3\n\nUżytkownik: Co dalej ze szkodą?",
+          provider: "openai",
+          model: "gpt-test",
+          primarySkill: DR,
+          mode: "PRAWNIK",
+          knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+        })
+        .expect(200);
+
+    await send();
+    expect(summarized).toEqual([["wiadomość 0", "wiadomość 1"]]);
+    expect(queries[0]).toContain("## Fakty\n- szkoda z 2026-05-01");
+    expect(queries[0]).not.toContain("pominięta");
+
+    await send();
+    expect(summarized).toHaveLength(1);
+    expect(queries[1]).toContain("szkoda z 2026-05-01");
+
+    const memory = await request(app).get(`/api/cases/${caseId}/memory`).set("Authorization", authorization).expect(200);
+    expect(memory.body.summary).toMatchObject({ coveredMessages: 2 });
+    await request(app)
+      .patch(`/api/cases/${caseId}/memory/summary`)
+      .set("Authorization", authorization)
+      .send({ text: "## Fakty\n- szkoda z 2026-05-02 (poprawione)" })
+      .expect(200);
+    await send();
+    expect(queries[2]).toContain("2026-05-02 (poprawione)");
+    expect(queries[2]).toContain("poprawione przez użytkownika");
+    await request(app).delete(`/api/cases/${caseId}/memory`).set("Authorization", authorization).expect(200);
+    expect((await request(app).get(`/api/cases/${caseId}/memory`).set("Authorization", authorization)).body.summary).toBeNull();
+  });
+});

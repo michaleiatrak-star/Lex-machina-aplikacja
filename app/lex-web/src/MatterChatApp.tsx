@@ -14,6 +14,7 @@ import { downloadBlob } from "./download-file.js";
 import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
+import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -968,6 +969,7 @@ export default function MatterChatApp({
   const [deletePhrase, setDeletePhrase] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
+  const [memoryRefresh, setMemoryRefresh] = useState(0);
   // Current names of documents made by a model (renamed in the case files or
   // in the chat card); the thread keeps the name given at generation.
   const [artifactNames, setArtifactNames] =
@@ -3041,6 +3043,8 @@ export default function MatterChatApp({
       }, executionId).finally(
         stopDraftPolling
       ) as ExtendedExecution;
+      // The answer updated the matter's memory (provisions, summary).
+      setMemoryRefresh((value) => value + 1);
 
       setExecutionStage(
         "Finalizacja odpowiedzi"
@@ -5941,6 +5945,14 @@ export default function MatterChatApp({
                 </label>
               </div>
             </article>
+
+            {selectedCase ? (
+              <CaseMemoryCard
+                caseId={caseId}
+                canWrite={canWriteCase(selectedCase)}
+                refreshToken={memoryRefresh}
+              />
+            ) : null}
 
             {selectedCase ? (
               <WorkspaceManager

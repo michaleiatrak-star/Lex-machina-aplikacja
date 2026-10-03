@@ -79,6 +79,7 @@ import {
   type ThreadEvidence
 } from "./thread-evidence.js";
 import type { LegalActDescriptor } from "./legal-act-resolver.js";
+import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
 import type { TemporalFreshnessResult } from "./temporal-source-freshness.js";
 import {
   ReportBlueprintToolRuntime,
@@ -1047,11 +1048,33 @@ export function createDraftCallbacks(
   };
 }
 
+export type ThreadSummaryRequest = {
+  provider: ProviderId;
+  model: string;
+  privacySeed?: PseudonymizationVaultSnapshot;
+  // Summary so far (also one corrected by the user); updated, not replaced.
+  previousSummary?: string;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  threadEvidence?: ThreadEvidence;
+};
+
+export const THREAD_SUMMARY_PROMPT = [
+  "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
+  "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
+  "- Tylko to, co jest w rozmowie; nic nie dopisuj, nie oceniaj na nowo i nie rozstrzygaj.",
+  "- Ustalenia prawne: przepis z oznaczeniem aktu tak, jak w rozmowie. Nie przepisuj znaczników weryfikacji i nie podawaj brzmienia przepisów; status nada aplikacja z rejestru weryfikacji.",
+  "- Symbole [PII:...] przepisuj dokładnie; nie zgaduj, kto się pod nimi kryje.",
+  "- Jeśli jest dotychczasowe streszczenie, zaktualizuj je o nowe wiadomości i zachowaj jego poprawki (mogła je wprowadzić osoba prowadząca sprawę).",
+  "- Najwyżej ok. 6000 znaków; zwięźle, w punktach."
+].join("\n");
+
 export interface SessionExecutor {
   resolveAutoRouting?(
     request: SessionExecutionRequest
   ): Promise<ModelAutoRoutingResult>;
   execute(request: SessionExecutionRequest): Promise<SessionExecutionResponse>;
+  // Structured summary of older thread messages (pseudonymized for the model).
+  summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
 }
 
 export class SafeSessionExecutor implements SessionExecutor {
@@ -1080,6 +1103,39 @@ export class SafeSessionExecutor implements SessionExecutor {
         registry,
         providers
       );
+  }
+
+  /**
+   * Summary of older thread messages: the text goes to the model
+   * pseudonymized like a chat message, without tools; provisions in the
+   * summary get their status from the verification registry only (reused
+   * evidence after the ELI check, otherwise NIEWERYFIKOWANE).
+   */
+  async summarizeThread(request: ThreadSummaryRequest): Promise<string> {
+    const vault = new PseudonymizationVault(request.privacySeed);
+    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
+    const transcript = [
+      ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
+      "[WIADOMOŚCI DO STRESZCZENIA]",
+      ...request.messages.map((message) => `${message.role === "user" ? "Użytkownik" : "Asystent"}: ${message.content}`)
+    ].join("\n\n");
+    const protectedText = (await pseudonymizer.pseudonymize(transcript)).text;
+    const ledger = new VerificationLedger();
+    if (request.threadEvidence?.provisions.length && this.actFreshness) {
+      for (const record of (await revalidateThreadEvidence(request.threadEvidence, this.actFreshness)).reused) ledger.add(record);
+    }
+    const key = placeholderKeyPrompt(placeholderGrammar(protectedText, vault));
+    const response = await this.providers.stream(request.provider, {
+      model: request.model,
+      systemPrompt: [...(key ? [key] : []), THREAD_SUMMARY_PROMPT].join("\n\n"),
+      messages: [{ role: "user", content: protectedText }],
+      accountContinuity: "none",
+      reasoning: "none"
+    });
+    let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
+    const gate = new FinalizationGate().evaluate(text, ledger);
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate), gate), ledger).text;
+    return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
   // A local primary model keeps the text on this machine, so the chat does
