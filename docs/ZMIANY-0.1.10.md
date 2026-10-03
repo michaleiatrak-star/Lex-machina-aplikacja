@@ -45,8 +45,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 43 | `b9d3144` | Akta sprawy dla modelu (narzędzia), poprawka aliasów D01, kontynuacja uciętych odpowiedzi API, generator faktur, poprawki G8; tylko Windows |
 | hotfix 44 | `29d4c62` | Pamięć sprawy (przepisy po kontroli ELI, streszczenie starszej części wątku), miernik jakości sesji, tokeny tury; tylko Windows |
 | hotfix 45 | `2e54c13` | Tabele Markdown w czacie, podgląd przepisu z lokalnej kopii z zaznaczeniem, miernik jakości w aplikacji (konto); tylko Windows |
+| hotfix 46 | `d239272` | Ścieżka obowiązkowa routera, tryb LAIK/PRAWNIK na wejściu, status przepisów z rejestru przy ponownym pytaniu (k.k. = KK), wzory bez pseudonimizacji; tylko Windows |
 
 ---
+
+## hotfix 46
+
+- `mandatory-path.ts`: model ścieżki (PROFIL-LEKKI R-1…R-5, ŁADOWANE ZAWSZE, bramki z krokami), `pathProfile`, `preloadForTurn`, `evaluateMandatoryPath` (ROUTER/SKILL/VERIFICATION/HARD_GATE, `DEKLARACJE-WYKONANIA`).
+- `query-mode.ts`: `detectQueryMode` z tabeli KROK 1 (`PRAWNIK`/`LAIK`/`POPRZEDNI`/`ODPOWIEDZ_NA_PYTANIE`/`NIEROZSTRZYGNIETY`).
+- `legal-act-abbreviations.ts`: `k.k.` → `KK` w detekcji, planie i rejestrze; `provisionsForDetection` ("233 kk" → "art. 233 KK") w prelude Gate I.
+- `releaseModelUnverifiedMarkers`: znacznik modelu przy przepisie nie blokuje weryfikacji. `adoptAct` dla każdego aktu zweryfikowanego w ELI.
+- `privacy/example-data.ts`: KEEP dla danych przykładowych asystenta (PERSON, ADDRESS, BIRTH_DATE, EMAIL, PHONE).
 
 ## hotfix 45
 
