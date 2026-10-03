@@ -1,4 +1,4 @@
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import {
   MissingProviderCredentialError,
@@ -26,6 +26,8 @@ const MAX_OUTPUT_TOKENS = 16_384;
 const MAX_LENGTH_CONTINUATIONS = 3;
 export const LENGTH_CONTINUATION_PROMPT =
   "Twoja poprzednia odpowiedź została ucięta na limicie długości. Kontynuuj dokładnie od miejsca przerwania: bez powtarzania, bez wstępu i bez podsumowania tego, co już napisałeś.";
+export const TOOL_LIMIT_FINAL_PROMPT =
+  "Limit wywołań narzędzi w tej odpowiedzi został wyczerpany. Odpowiedz teraz na pytanie na podstawie wyników narzędzi, które już masz, bez kolejnych wywołań. Czego nie zweryfikowałeś, oznacz jako niezweryfikowane.";
 export const LENGTH_TRUNCATED_NOTE =
   "\n\n[ODPOWIEDŹ UCIĘTA: model osiągnął limit długości odpowiedzi także po kontynuacji. Poproś o dalszą część albo zawęź pytanie.]";
 const LOCAL_DEFAULT_OUTPUT_TOKENS =
@@ -1863,7 +1865,7 @@ function providerCapabilities(): ProviderCapabilities {
   };
 }
 
-async function streamModel(
+export async function streamModel(
   model: LanguageModel,
   params: ProviderStreamParams,
   label: string
@@ -1892,6 +1894,14 @@ async function streamModel(
     withImages = false;
     first = await streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => {});
   }
+  // The tool loop stopped at its step limit on a tool call: no answer yet.
+  first = await answerAfterToolLimit(first, (history) =>
+    // Tools stay defined (the history holds tool calls) but cannot be called.
+    streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, () => {}, {
+      messages: [...history, { role: "user", content: TOOL_LIMIT_FINAL_PROMPT }],
+      toolChoice: "none"
+    })
+  );
   return await continueAtLength(
     first,
     (messages) => streamModelOnce(sdk, model, { ...params, messages }, label, tools, reasoning, withImages, () => {}),
@@ -1899,7 +1909,27 @@ async function streamModel(
   );
 }
 
-type StreamOnceResult = ProviderStreamResult & { finishReason?: string };
+type StreamOnceResult = ProviderStreamResult & {
+  finishReason?: string;
+  // Assistant and tool messages of all steps (tool results included).
+  responseMessages?: ModelMessage[];
+};
+
+/**
+ * When the steps ran out on a tool call, one more turn without tools asks
+ * for the answer from the tool results already gathered.
+ */
+export async function answerAfterToolLimit(
+  first: StreamOnceResult,
+  final: (history: ModelMessage[]) => Promise<StreamOnceResult>
+): Promise<StreamOnceResult> {
+  if (first.finishReason !== "tool-calls" || !first.responseMessages?.length) return first;
+  const answer = await final(first.responseMessages);
+  return {
+    fullText: first.fullText.trim() ? `${first.fullText}\n\n${answer.fullText}` : answer.fullText,
+    ...(answer.finishReason ? { finishReason: answer.finishReason } : {})
+  };
+}
 
 /**
  * An answer cut at the output limit ("length") is continued from where it
@@ -1950,13 +1980,16 @@ async function streamModelOnce(
   tools: Awaited<ReturnType<typeof toAiSdkTools>>,
   reasoning: "provider-default" | "none" | "low" | "medium" | "high" | "xhigh",
   images: boolean,
-  onText: (text: string) => void
+  onText: (text: string) => void,
+  // Messages after the request's own (tool steps of an earlier call).
+  extra: { messages: ModelMessage[]; toolChoice?: "none" } = { messages: [] }
 ): Promise<StreamOnceResult> {
   const result = sdk.streamText({
     model,
     system: params.systemPrompt,
-    messages: sdkMessages(params.messages, images),
+    messages: [...(sdkMessages(params.messages, images) as ModelMessage[]), ...extra.messages],
     ...(tools ? { tools } : {}),
+    ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     stopWhen: sdk.stepCountIs(params.maxIterations ?? 10),
     ...(params.abortSignal
@@ -2026,7 +2059,12 @@ async function streamModelOnce(
     params.callbacks?.onReasoningBlockEnd?.();
   }
 
-  return { fullText, finishReason: await result.finishReason };
+  const finishReason = await result.finishReason;
+  return {
+    fullText,
+    finishReason,
+    ...(finishReason === "tool-calls" ? { responseMessages: await result.responseMessages } : {})
+  };
 }
 
 export function shouldRetryLocalAtMinimumContext(

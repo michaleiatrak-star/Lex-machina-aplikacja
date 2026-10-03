@@ -1150,7 +1150,7 @@ export default function ChatApp({
             <article className="chat-card">
               <p className="eyebrow">Wiedza w sesji</p>
               <div className="chat-check-row">
-                <label>
+                <label title="Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam przeszukiwać i czytać całe akta sprawy (tekst spseudonimizowany).">
                   <input
                     type="checkbox"
                     checked={includeCaseKnowledge}

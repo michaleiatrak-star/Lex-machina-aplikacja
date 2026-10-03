@@ -6,6 +6,7 @@ const MAX_OUTPUT_TOKENS = 16_384;
 // An answer cut at MAX_OUTPUT_TOKENS is continued at most this many times.
 const MAX_LENGTH_CONTINUATIONS = 3;
 export const LENGTH_CONTINUATION_PROMPT = "Twoja poprzednia odpowiedź została ucięta na limicie długości. Kontynuuj dokładnie od miejsca przerwania: bez powtarzania, bez wstępu i bez podsumowania tego, co już napisałeś.";
+export const TOOL_LIMIT_FINAL_PROMPT = "Limit wywołań narzędzi w tej odpowiedzi został wyczerpany. Odpowiedz teraz na pytanie na podstawie wyników narzędzi, które już masz, bez kolejnych wywołań. Czego nie zweryfikowałeś, oznacz jako niezweryfikowane.";
 export const LENGTH_TRUNCATED_NOTE = "\n\n[ODPOWIEDŹ UCIĘTA: model osiągnął limit długości odpowiedzi także po kontynuacji. Poproś o dalszą część albo zawęź pytanie.]";
 const LOCAL_DEFAULT_OUTPUT_TOKENS = 4_096;
 const LOCAL_CONTEXT_SAFETY_TOKENS = 1_024;
@@ -996,7 +997,7 @@ function providerCapabilities() {
         modelDiscovery: false
     };
 }
-async function streamModel(model, params, label) {
+export async function streamModel(model, params, label) {
     const sdk = await import("ai");
     const tools = await toAiSdkTools(params);
     const reasoning = (params.reasoning ?? "none");
@@ -1016,7 +1017,27 @@ async function streamModel(model, params, label) {
         withImages = false;
         first = await streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => { });
     }
+    // The tool loop stopped at its step limit on a tool call: no answer yet.
+    first = await answerAfterToolLimit(first, (history) => 
+    // Tools stay defined (the history holds tool calls) but cannot be called.
+    streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, () => { }, {
+        messages: [...history, { role: "user", content: TOOL_LIMIT_FINAL_PROMPT }],
+        toolChoice: "none"
+    }));
     return await continueAtLength(first, (messages) => streamModelOnce(sdk, model, { ...params, messages }, label, tools, reasoning, withImages, () => { }), params.messages);
+}
+/**
+ * When the steps ran out on a tool call, one more turn without tools asks
+ * for the answer from the tool results already gathered.
+ */
+export async function answerAfterToolLimit(first, final) {
+    if (first.finishReason !== "tool-calls" || !first.responseMessages?.length)
+        return first;
+    const answer = await final(first.responseMessages);
+    return {
+        fullText: first.fullText.trim() ? `${first.fullText}\n\n${answer.fullText}` : answer.fullText,
+        ...(answer.finishReason ? { finishReason: answer.finishReason } : {})
+    };
 }
 /**
  * An answer cut at the output limit ("length") is continued from where it
@@ -1051,12 +1072,15 @@ function sdkMessages(messages, images) {
         }
         : { role: message.role, content: message.content });
 }
-async function streamModelOnce(sdk, model, params, label, tools, reasoning, images, onText) {
+async function streamModelOnce(sdk, model, params, label, tools, reasoning, images, onText, 
+// Messages after the request's own (tool steps of an earlier call).
+extra = { messages: [] }) {
     const result = sdk.streamText({
         model,
         system: params.systemPrompt,
-        messages: sdkMessages(params.messages, images),
+        messages: [...sdkMessages(params.messages, images), ...extra.messages],
         ...(tools ? { tools } : {}),
+        ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         stopWhen: sdk.stepCountIs(params.maxIterations ?? 10),
         ...(params.abortSignal
@@ -1111,7 +1135,12 @@ async function streamModelOnce(sdk, model, params, label, tools, reasoning, imag
         openReasoning.delete(id);
         params.callbacks?.onReasoningBlockEnd?.();
     }
-    return { fullText, finishReason: await result.finishReason };
+    const finishReason = await result.finishReason;
+    return {
+        fullText,
+        finishReason,
+        ...(finishReason === "tool-calls" ? { responseMessages: await result.responseMessages } : {})
+    };
 }
 export function shouldRetryLocalAtMinimumContext(error, currentContextTokens, minimumContextTokens) {
     if (currentContextTokens <=
