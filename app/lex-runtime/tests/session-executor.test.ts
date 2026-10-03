@@ -596,10 +596,9 @@ describe("SafeSessionExecutor", () => {
     });
     const events = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
 
-    expect(result.audit.missing).not.toEqual(
-      expect.arrayContaining(["route"])
-    );
-    expect(result.audit.missing.filter((item: string) => item.startsWith("g39h_"))).toEqual([]);
+    const missing = result.audit.missing ?? [];
+    expect(missing).not.toContain("route");
+    expect(missing.filter((item) => item.startsWith("g39h_"))).toEqual([]);
     expect(events.find((event) => event.type === "route")?.target).toBe(DR);
     expect(events.find((event) => event.target === "G39H_WORKFLOW_PREFLIGHT")?.status).toBe("OK");
     expect(events.find((event) => event.target === "G39H_WORKFLOW_PROVIDER_COMPLETE")?.status).toBe("OK");
