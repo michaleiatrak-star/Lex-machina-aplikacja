@@ -1,3 +1,4 @@
+import { detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 import {
   VerificationLedger,
@@ -430,10 +431,11 @@ export function reconcileStatusMarkers(
 }
 
 /**
- * Znacznik ✅ [VER: …], którego nie da się odtworzyć z rekordu VERIFIED w rejestrze,
- * jest deklaracją modelu, nie weryfikacją (np. sam link do aktu bez kotwicy albo
- * inna data). Usuwany przed wstawieniem znaczników z rejestru: przepis zweryfikowany
- * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE].
+ * Znacznik ✅ [VER: …] przy przepisie, którego nie da się odtworzyć z rekordu VERIFIED
+ * w rejestrze, jest deklaracją modelu, nie weryfikacją (np. sam link do aktu bez kotwicy
+ * albo inna data). Usuwany przed wstawieniem znaczników z rejestru: przepis zweryfikowany
+ * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE]. Wiersz z sygnaturą
+ * orzeczenia zostaje bez zmian: zmieniony znacznik orzeczenia nadal blokuje (G22).
  */
 export function stripUnbackedVerificationMarkers(
   text: string,
@@ -445,14 +447,20 @@ export function stripUnbackedVerificationMarkers(
       .map((record) => verificationMarker(record))
       .filter((marker): marker is string => Boolean(marker))
   );
-  let removed = 0;
-  const next = text.replace(
-    / ?✅\s*\[VER:[^\]\r\n]*\]/gu,
-    (match) => {
-      if (ledgerMarkers.has(match.trimStart())) return match;
-      removed += 1;
-      return "";
-    }
+  const caseLines = new Set(
+    detectLegalReferences(text)
+      .filter((reference) => reference.kind === "case")
+      .map((reference) => reference.line)
   );
-  return { text: removed > 0 ? next : text, removed };
+  let removed = 0;
+  const lines = text.split(/\r?\n/u).map((line, index) =>
+    caseLines.has(index + 1)
+      ? line
+      : line.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
+          if (ledgerMarkers.has(match.trimStart())) return match;
+          removed += 1;
+          return "";
+        })
+  );
+  return { text: removed > 0 ? lines.join("\n") : text, removed };
 }
