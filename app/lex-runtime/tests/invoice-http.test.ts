@@ -115,6 +115,36 @@ describe("invoice routes", () => {
     expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", szukaj: "23%" } }]);
   });
 
+  it("saves reusable invoice templates per user", async () => {
+    const template = {
+      name: "Stała obsługa Spółki X",
+      buyer: { name: "Spółka X", nip: "5260250274", address: "ul. Krzywa 2, 30-001 Kraków" },
+      lines: [{ name: "Obsługa prawna (ryczałt)", unit: "mies.", quantity: "1", unitNetPrice: "3000", vatRate: "23" }],
+      currency: "PLN",
+      paymentMethod: "przelew",
+      paymentTermDays: 14
+    };
+    const auth = { authorization: "Bearer user_alice" };
+    const created = await request(app).post("/api/invoices/templates").set(auth).send({ template }).expect(200);
+    expect(created.body.template).toMatchObject({ name: template.name, paymentTermDays: 14 });
+    expect(created.body.template.templateId).toMatch(/^tpl_[0-9a-f]{32}$/);
+    await request(app).post("/api/invoices/templates").set(auth).send({ template: { ...template, name: "stała obsługa spółki x" } }).expect(409);
+    const id = created.body.template.templateId;
+    await request(app)
+      .put(`/api/invoices/templates/${id}`)
+      .set(auth)
+      .send({ template: { ...template, paymentTermDays: 30 } })
+      .expect(200);
+    const list = await request(app).get("/api/invoices/templates").set(auth).expect(200);
+    expect(list.body.templates).toHaveLength(1);
+    expect(list.body.templates[0].paymentTermDays).toBe(30);
+    const other = await request(app).get("/api/invoices/templates").set("authorization", "Bearer user_bob").expect(200);
+    expect(other.body.templates).toEqual([]);
+    await request(app).post("/api/invoices/templates").set(auth).send({ template: { ...template, name: "Bez pozycji", lines: [] } }).expect(400);
+    await request(app).delete(`/api/invoices/templates/${id}`).set(auth).expect(200);
+    await request(app).delete(`/api/invoices/templates/${id}`).set(auth).expect(404);
+  });
+
   it("stores invoice defaults per user and rejects unknown values", async () => {
     const defaults = { paymentMethod: "przelew", paymentTermDays: 14, vatRate: "23" };
     await request(app)

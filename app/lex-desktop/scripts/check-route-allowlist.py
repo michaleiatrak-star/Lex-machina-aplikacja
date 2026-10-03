@@ -24,6 +24,7 @@ SAMPLE = {
     ":executionId": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
     ":invoiceId": "inv_0123456789abcdef0123456789abcdef",
     ":widgetId": "0123456789abcdef0123456789abcdef",
+    ":templateId": "tpl_0123456789abcdef0123456789abcdef",
 }
 
 

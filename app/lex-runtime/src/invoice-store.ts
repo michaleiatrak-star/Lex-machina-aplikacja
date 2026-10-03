@@ -75,6 +75,25 @@ export type InvoiceDefaults = {
   vatRate: string;
 };
 
+// Wzór faktury do wielokrotnego użytku: stały nabywca, pozycje i płatność.
+// Daty, numer i sprzedawca pochodzą z nowej faktury i ustawień, nie ze wzoru.
+export type InvoiceTemplate = {
+  templateId: string;
+  name: string;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  currency: string;
+  paymentMethod?: string;
+  paymentTermDays?: number;
+  bankAccount?: string;
+  placeOfIssue?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const MAX_TEMPLATES = 100;
+
 export type InvoiceLogo = {
   mediaType: "image/png" | "image/jpeg";
   fileName: string;
@@ -96,6 +115,7 @@ type StoredInvoices = {
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
   defaults?: InvoiceDefaults;
+  templates?: InvoiceTemplate[];
   invoices: InvoiceRecord[];
 };
 
@@ -270,6 +290,35 @@ export function validateInvoiceDefaults(value: unknown): InvoiceDefaults {
     throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.vatRate", 400);
   }
   return { paymentMethod, paymentTermDays: days, vatRate };
+}
+
+export function validateInvoiceTemplate(
+  value: unknown
+): Omit<InvoiceTemplate, "templateId" | "createdAt" | "updatedAt"> {
+  if (!value || typeof value !== "object") throw new InvoiceError("INVOICE_TEMPLATE_INVALID", 400);
+  const raw = value as Record<string, unknown>;
+  if (!Array.isArray(raw.lines) || raw.lines.length === 0) {
+    throw new InvoiceError("INVOICE_FIELD_REQUIRED:lines", 400);
+  }
+  if (raw.lines.length > MAX_LINES) throw new InvoiceError("INVOICE_FIELD_TOO_LONG:lines", 400);
+  const days = raw.paymentTermDays;
+  if (days !== undefined && days !== null && (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365)) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:paymentTermDays", 400);
+  }
+  const optional = {
+    paymentMethod: text(raw.paymentMethod, "paymentMethod", false),
+    bankAccount: text(raw.bankAccount, "bankAccount", false),
+    placeOfIssue: text(raw.placeOfIssue, "placeOfIssue", false),
+    notes: text(raw.notes, "notes", false)
+  };
+  return {
+    name: text(raw.name, "templateName", true)!,
+    buyer: party(raw.buyer, "buyer"),
+    lines: raw.lines.map(line),
+    currency: pattern(raw.currency, "currency", /^[A-Z]{3}$/, false) ?? "PLN",
+    ...(typeof days === "number" ? { paymentTermDays: days } : {}),
+    ...Object.fromEntries(Object.entries(optional).filter(([, entry]) => entry !== undefined))
+  };
 }
 
 export function validateInvoiceInput(value: unknown): InvoiceInput {
@@ -670,6 +719,42 @@ export class EncryptedInvoiceStore {
       };
       state.invoices[index] = record;
       return record;
+    });
+  }
+
+  async templates(userId: string, userMasterKey: Buffer): Promise<InvoiceTemplate[]> {
+    const state = await this.read(userId, userMasterKey);
+    return [...(state.templates ?? [])].sort((left, right) => compareText(left.name, right.name));
+  }
+
+  saveTemplate(userId: string, userMasterKey: Buffer, input: unknown, templateId?: string): Promise<InvoiceTemplate> {
+    const cleaned = validateInvoiceTemplate(input);
+    return this.mutate(userId, userMasterKey, (state) => {
+      const templates = (state.templates ??= []);
+      const same = (item: InvoiceTemplate) => item.name.toLocaleLowerCase("pl") === cleaned.name.toLocaleLowerCase("pl");
+      if (templates.some((item) => same(item) && item.templateId !== templateId)) {
+        throw new InvoiceError("INVOICE_TEMPLATE_NAME_TAKEN", 409);
+      }
+      const now = this.stamp();
+      if (templateId) {
+        const index = templates.findIndex((item) => item.templateId === templateId);
+        if (index < 0) throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+        const record = { ...cleaned, templateId, createdAt: templates[index]!.createdAt, updatedAt: now };
+        templates[index] = record;
+        return record;
+      }
+      if (templates.length >= MAX_TEMPLATES) throw new InvoiceError("INVOICE_TEMPLATE_LIMIT", 400);
+      const record = { ...cleaned, templateId: `tpl_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now };
+      templates.push(record);
+      return record;
+    });
+  }
+
+  removeTemplate(userId: string, userMasterKey: Buffer, templateId: string): Promise<void> {
+    return this.mutate(userId, userMasterKey, (state) => {
+      const index = (state.templates ?? []).findIndex((item) => item.templateId === templateId);
+      if (index < 0) throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+      state.templates!.splice(index, 1);
     });
   }
 

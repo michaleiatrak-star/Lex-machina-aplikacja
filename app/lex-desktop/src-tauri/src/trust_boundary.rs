@@ -1499,6 +1499,13 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
     match segments.as_slice() {
         ["api", "invoices"] => matches!(method, "GET" | "POST"),
         ["api", "invoices", "settings"] | ["api", "invoices", "legal-basis"] => method == "GET",
+        ["api", "invoices", "templates"] => matches!(method, "GET" | "POST"),
+        ["api", "invoices", "templates", id] => {
+            matches!(method, "PUT" | "DELETE")
+                && id.len() == 36
+                && id.starts_with("tpl_")
+                && id[4..].bytes().all(|b| b.is_ascii_hexdigit())
+        }
         ["api", "invoices", "settings", "ksef-token" | "logo"] => {
             matches!(method, "PUT" | "DELETE")
         }
@@ -2124,6 +2131,11 @@ mod tests {
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
         assert!(route_allowed("PUT", "/api/invoices/settings/defaults"));
         assert!(route_allowed("POST", "/api/widgets"));
+        assert!(route_allowed("GET", "/api/invoices/templates"));
+        assert!(route_allowed("POST", "/api/invoices/templates"));
+        assert!(route_allowed("PUT", &format!("/api/invoices/templates/tpl_{}", "ab".repeat(16))));
+        assert!(route_allowed("DELETE", &format!("/api/invoices/templates/tpl_{}", "ab".repeat(16))));
+        assert!(!route_allowed("PUT", "/api/invoices/templates/inv_x"));
         assert!(route_allowed("GET", &format!("/api/widgets/frame/{}", "a1".repeat(16))));
         assert!(!route_allowed("GET", "/api/widgets/frame/../auth/me"));
         assert!(!route_allowed("GET", &format!("/api/widgets/frame/{}", "A1".repeat(16))));

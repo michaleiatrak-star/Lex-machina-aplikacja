@@ -1,6 +1,8 @@
 import type {
   InvoiceDefaults,
   InvoiceDraft,
+  InvoiceTemplate,
+  InvoiceTemplateInput,
   InvoiceLine,
   InvoiceParty,
   InvoiceTotals,
@@ -123,6 +125,47 @@ export function emptyDraft(
   };
 }
 
+// Wzór z bieżącej faktury: bez numeru, dat i sprzedawcy; termin przelewu w dniach.
+export function templateFromDraft(draft: InvoiceDraft, name: string): InvoiceTemplateInput {
+  const days = draft.paymentMethod === "przelew" && draft.paymentDueDate
+    ? Math.round((Date.parse(draft.paymentDueDate) - Date.parse(draft.issueDate)) / 86_400_000)
+    : null;
+  return {
+    name: name.trim(),
+    buyer: { ...draft.buyer },
+    lines: draft.lines.map((line) => ({ ...line })),
+    currency: draft.currency,
+    ...(draft.paymentMethod ? { paymentMethod: draft.paymentMethod } : {}),
+    ...(days !== null && days >= 0 && days <= 365 ? { paymentTermDays: days } : {}),
+    ...(draft.bankAccount?.trim() ? { bankAccount: draft.bankAccount } : {}),
+    ...(draft.placeOfIssue?.trim() ? { placeOfIssue: draft.placeOfIssue } : {}),
+    ...(draft.notes?.trim() ? { notes: draft.notes } : {})
+  };
+}
+
+// Nowa faktura ze wzoru: dzisiejsze daty, sprzedawca z ustawień, pusty numer.
+export function draftFromTemplate(
+  template: InvoiceTemplate,
+  seller: InvoiceParty | undefined,
+  today: string,
+  defaults: InvoiceDefaults = FACTORY_DEFAULTS
+): InvoiceDraft {
+  const base = emptyDraft(seller, today, defaults);
+  const paymentMethod = template.paymentMethod ?? base.paymentMethod;
+  const days = template.paymentTermDays ?? defaults.paymentTermDays;
+  return {
+    ...base,
+    buyer: { ...template.buyer, nip: template.buyer.nip ?? "" },
+    lines: template.lines.map((line) => ({ ...line })),
+    currency: template.currency,
+    paymentMethod,
+    paymentDueDate: paymentMethod === "przelew" ? addDays(today, days) : "",
+    bankAccount: paymentMethod === "przelew" ? template.bankAccount ?? "" : "",
+    placeOfIssue: template.placeOfIssue ?? "",
+    notes: template.notes ?? ""
+  };
+}
+
 export function draftOf(invoice: InvoiceView): InvoiceDraft {
   return {
     number: invoice.number,
@@ -153,6 +196,7 @@ const FIELD_LABELS: Record<string, string> = {
   "buyer.address": "adres nabywcy",
   currency: "waluta",
   paymentDueDate: "termin płatności",
+  templateName: "nazwa wzoru",
   "defaults.paymentMethod": "domyślny sposób płatności",
   "defaults.paymentTermDays": "domyślny termin płatności (dni)",
   "defaults.vatRate": "domyślna stawka VAT",
@@ -183,6 +227,9 @@ const ERRORS: Record<string, string> = {
   KSEF_TOKEN_REQUIRED: "Wklej token KSeF.",
   KSEF_TOKEN_INVALID: "Token KSeF nie może zawierać spacji ani przekraczać 2048 znaków.",
   KSEF_CONTEXT_NIP_INVALID: "NIP kontekstu musi mieć 10 cyfr.",
+  INVOICE_TEMPLATE_NAME_TAKEN: "Wzór o tej nazwie już istnieje.",
+  INVOICE_TEMPLATE_NOT_FOUND: "Nie znaleziono wzoru faktury.",
+  INVOICE_TEMPLATE_LIMIT: "Można zapisać najwyżej 100 wzorów.",
   INVOICE_DEFAULTS_INVALID: "Nieprawidłowe ustawienia domyślne faktury.",
   KSEF_PRODUCTION_CONFIRMATION_REQUIRED: "Przełączenie na środowisko produkcyjne wymaga potwierdzenia.",
   INVOICE_LEGAL_BASIS_UNAVAILABLE: "Konektor ISAP (ELI) jest niedostępny. Zainstaluj go w Ustawieniach → Konektory MCP."

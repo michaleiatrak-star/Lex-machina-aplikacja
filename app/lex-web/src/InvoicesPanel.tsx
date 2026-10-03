@@ -3,17 +3,21 @@ import {
   ApiError,
   createInvoice,
   deleteInvoice,
+  deleteInvoiceTemplate,
   duplicateInvoice,
   getInvoiceLegalBasis,
   getInvoiceSettings,
   issueInvoice,
+  listInvoiceTemplates,
   listInvoices,
+  saveInvoiceTemplate,
   updateInvoice,
   type InvoiceDraft,
   type InvoiceLine,
   type InvoiceParty,
   type InvoiceSettingsResponse,
   type InvoiceSort,
+  type InvoiceTemplate,
   type InvoiceView
 } from "./api.js";
 import {
@@ -22,10 +26,12 @@ import {
   PAYMENT_TERMS,
   VAT_RATES,
   addDays,
+  draftFromTemplate,
   draftOf,
   emptyDraft,
   emptyLine,
   formatMoney,
+  templateFromDraft,
   termDaysOf,
   invoiceErrorText,
   lineNet,
@@ -187,6 +193,19 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState<string | null>(null);
+
+  const refreshTemplates = useCallback(async () => {
+    const next = await listInvoiceTemplates();
+    setTemplates(next.templates);
+    setTemplateId((current) => (next.templates.some((item) => item.templateId === current) ? current : next.templates[0]?.templateId ?? ""));
+  }, []);
+
+  useEffect(() => {
+    void refreshTemplates().catch((failure) => setError(failureText(failure)));
+  }, [refreshTemplates]);
 
   const refresh = useCallback(async () => {
     const next = await listInvoices(query, sort);
@@ -223,6 +242,38 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
     setSelected(invoice);
     setEditing(null);
     setConfirmIssue(false);
+  }
+
+  function startFromTemplate(): void {
+    const template = templates.find((item) => item.templateId === templateId);
+    if (!template) return;
+    setSelected(null);
+    setConfirmIssue(false);
+    setTemplateName(null);
+    setEditing({ invoiceId: null, draft: draftFromTemplate(template, settings?.seller, today(), defaults) });
+    setMessage(`Nowa faktura ze wzoru „${template.name}”. Uzupełnij numer i sprawdź pozycje.`);
+  }
+
+  // Zapis jako wzór; wzór o tej samej nazwie jest aktualizowany.
+  function saveTemplate(): void {
+    if (!editing || templateName === null || !templateName.trim()) return;
+    const name = templateName.trim();
+    const existing = templates.find((item) => item.name.toLocaleLowerCase("pl") === name.toLocaleLowerCase("pl"));
+    void run(async () => {
+      const saved = await saveInvoiceTemplate(templateFromDraft(editing.draft, name), existing?.templateId);
+      await refreshTemplates();
+      setTemplateId(saved.template.templateId);
+      setTemplateName(null);
+    }, existing ? `Wzór „${name}” zaktualizowany.` : `Wzór „${name}” zapisany.`);
+  }
+
+  function removeTemplate(): void {
+    const template = templates.find((item) => item.templateId === templateId);
+    if (!template || !window.confirm(`Usunąć wzór „${template.name}”? Faktury utworzone ze wzoru zostają.`)) return;
+    void run(async () => {
+      await deleteInvoiceTemplate(template.templateId);
+      await refreshTemplates();
+    }, `Wzór „${template.name}” usunięty.`);
   }
 
   function startNew(): void {
@@ -334,6 +385,26 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           ))}
           {invoices.length === 0 ? <li className="field-help">Brak faktur.</li> : null}
         </ul>
+        <div className="invoice-templates">
+          <h3>Wzory faktur</h3>
+          {templates.length ? (
+            <>
+              <select value={templateId} aria-label="Wzór faktury" onChange={(event) => setTemplateId(event.target.value)}>
+                {templates.map((item) => <option key={item.templateId} value={item.templateId}>{item.name}</option>)}
+              </select>
+              <div className="chat-form-row">
+                <button type="button" className="chat-primary-action" disabled={busy || !templateId} onClick={startFromTemplate}>
+                  Nowa ze wzoru
+                </button>
+                <button type="button" className="chat-secondary-action" disabled={busy || !templateId} onClick={removeTemplate}>
+                  Usuń wzór
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="field-help">Brak wzorów. W edytorze faktury użyj „Zapisz jako wzór”, aby zapisać stałego klienta z pozycjami i płatnością.</p>
+          )}
+        </div>
       </aside>
 
       <div className="invoice-main">
@@ -475,7 +546,29 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setEditing(null)}>
                 Anuluj
               </button>
+              <button
+                type="button"
+                className="chat-secondary-action"
+                disabled={busy}
+                onClick={() => setTemplateName(templateName === null ? editing.draft.buyer.name : null)}
+              >
+                Zapisz jako wzór…
+              </button>
             </div>
+            {templateName !== null ? (
+              <div className="chat-form-row invoice-template-save">
+                <label>
+                  Nazwa wzoru
+                  <input value={templateName} maxLength={200} onChange={(event) => setTemplateName(event.target.value)} />
+                </label>
+                <button type="button" className="chat-primary-action" disabled={busy || !templateName.trim()} onClick={saveTemplate}>
+                  {templates.some((item) => item.name.toLocaleLowerCase("pl") === templateName.trim().toLocaleLowerCase("pl"))
+                    ? "Zaktualizuj wzór"
+                    : "Zapisz wzór"}
+                </button>
+                <span className="field-help">Wzór zapisuje nabywcę, pozycje, płatność (termin w dniach), miejsce wystawienia i uwagi; bez numeru i dat.</span>
+              </div>
+            ) : null}
           </article>
         ) : selected ? (
           <>

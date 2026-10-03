@@ -3622,6 +3622,42 @@ export function issueInvoice(invoiceId: string): Promise<{ invoice: InvoiceView 
   return json(`/api/invoices/${encodeURIComponent(invoiceId)}/issue`, { method: "POST" });
 }
 
+// Wzór faktury do wielokrotnego użytku (nabywca, pozycje, płatność).
+export type InvoiceTemplate = {
+  templateId: string;
+  name: string;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  currency: string;
+  paymentMethod?: string;
+  paymentTermDays?: number;
+  bankAccount?: string;
+  placeOfIssue?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InvoiceTemplateInput = Omit<InvoiceTemplate, "templateId" | "createdAt" | "updatedAt">;
+
+export function listInvoiceTemplates(): Promise<{ templates: InvoiceTemplate[] }> {
+  return json("/api/invoices/templates");
+}
+
+export function saveInvoiceTemplate(
+  template: InvoiceTemplateInput,
+  templateId?: string
+): Promise<{ template: InvoiceTemplate }> {
+  return json(templateId ? `/api/invoices/templates/${encodeURIComponent(templateId)}` : "/api/invoices/templates", {
+    method: templateId ? "PUT" : "POST",
+    body: JSON.stringify({ template })
+  });
+}
+
+export function deleteInvoiceTemplate(templateId: string): Promise<{ ok: true }> {
+  return json(`/api/invoices/templates/${encodeURIComponent(templateId)}`, { method: "DELETE" });
+}
+
 export function duplicateInvoice(invoiceId: string): Promise<{ invoice: InvoiceView }> {
   return json(`/api/invoices/${encodeURIComponent(invoiceId)}/duplicate`, { method: "POST" });
 }

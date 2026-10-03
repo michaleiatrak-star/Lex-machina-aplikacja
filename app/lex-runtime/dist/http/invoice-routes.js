@@ -100,6 +100,20 @@ export function registerInvoiceRoutes(app, dependencies) {
         const list = await invoices.list(context.user.userId, key, query, sort);
         return { invoices: list.map(withTotals) };
     }));
+    // Wzory przed /api/invoices/:invoiceId, żeby "templates" nie było identyfikatorem faktury.
+    app.get("/api/invoices/templates", handle(async (context, key) => ({
+        templates: await invoices.templates(context.user.userId, key)
+    })));
+    app.post("/api/invoices/templates", handle(async (context, key, req) => ({
+        template: await invoices.saveTemplate(context.user.userId, key, req.body?.template)
+    })));
+    app.put("/api/invoices/templates/:templateId", handle(async (context, key, req) => ({
+        template: await invoices.saveTemplate(context.user.userId, key, req.body?.template, String(req.params.templateId ?? ""))
+    })));
+    app.delete("/api/invoices/templates/:templateId", handle(async (context, key, req) => {
+        await invoices.removeTemplate(context.user.userId, key, String(req.params.templateId ?? ""));
+        return { ok: true };
+    }));
     app.post("/api/invoices", handle(async (context, key, req) => ({
         invoice: withTotals(await invoices.create(context.user.userId, key, req.body?.invoice))
     })));

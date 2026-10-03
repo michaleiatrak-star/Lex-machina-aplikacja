@@ -253,3 +253,29 @@
   font-weight: 700;
   letter-spacing: 0.05em;
 }
+
+.invoice-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #dfe5e0;
+}
+
+.invoice-templates h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.invoice-template-save {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.invoice-template-save label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}

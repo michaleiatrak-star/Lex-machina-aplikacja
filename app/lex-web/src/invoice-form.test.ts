@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, emptyDraft, formatMoney, invoiceErrorText, lineNet, previewTotals, termDaysOf } from "./invoice-form.js";
+import { addDays, draftFromTemplate, emptyDraft, formatMoney, invoiceErrorText, lineNet, previewTotals, templateFromDraft, termDaysOf } from "./invoice-form.js";
 
 describe("invoice form", () => {
   it("previews totals like the runtime", () => {
@@ -27,5 +27,27 @@ describe("invoice form", () => {
     expect(draft.lines[0]!.vatRate).toBe("8");
     expect(emptyDraft(undefined, "2026-10-03", { paymentMethod: "zapłacono", paymentTermDays: 7, vatRate: "23" }).paymentDueDate).toBe("");
     expect(emptyDraft(undefined, "2026-10-03").lines[0]!.vatRate).toBe("23");
+  });
+
+  it("round-trips a reusable template without number, dates or seller", () => {
+    const seller = { name: "Kancelaria", nip: "5260250274", address: "ul. Prosta 1" };
+    const draft = {
+      ...emptyDraft(seller, "2026-10-03", { paymentMethod: "przelew", paymentTermDays: 21, vatRate: "23" }),
+      number: "FV/1/10/2026",
+      buyer: { name: "Spółka X", nip: "1234563218", address: "ul. Krzywa 2" },
+      lines: [{ name: "Obsługa prawna", unit: "mies.", quantity: "1", unitNetPrice: "3000", vatRate: "23" }]
+    };
+    const template = templateFromDraft(draft, "  Spółka X — ryczałt ");
+    expect(template).toMatchObject({ name: "Spółka X — ryczałt", paymentMethod: "przelew", paymentTermDays: 21 });
+    expect(template).not.toHaveProperty("number");
+    const next = draftFromTemplate(
+      { ...template, templateId: "tpl_x", createdAt: "", updatedAt: "" },
+      { ...seller, name: "Kancelaria (nowa nazwa)" },
+      "2026-11-02"
+    );
+    expect(next).toMatchObject({ number: "", issueDate: "2026-11-02", paymentDueDate: "2026-11-23" });
+    expect(next.seller.name).toBe("Kancelaria (nowa nazwa)");
+    expect(next.buyer.name).toBe("Spółka X");
+    expect(next.lines[0]!.unitNetPrice).toBe("3000");
   });
 });
