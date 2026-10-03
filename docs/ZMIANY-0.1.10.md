@@ -42,8 +42,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
 | hotfix 41 | `cd1353f` | Faktury: dane kontrahenta po NIP (biała lista VAT, CEIDG), sposób płatności, termin, stawka VAT z listy, domyślne w ustawieniach |
 | hotfix 42 | `52a00a2` | Widgety skilli (show_widget) w izolowanej ramce, wzory faktur, parser wywołań ChatGPT/Codex |
+| hotfix 43 | `b9d3144` | Akta sprawy dla modelu (narzędzia), poprawka aliasów D01, kontynuacja uciętych odpowiedzi API, generator faktur, poprawki G8; tylko Windows |
 
 ---
+
+## hotfix 43
+
+- `case-file-tool-runtime.ts`: `list_case_files`, `search_case_files`, `read_case_file` przy `knowledge.includeCase` (bez modeli lokalnych); limit 120 tys. znaków/turę; odczyt odtwarza dokument lokalnie (aliasy), fragmenty w `citationSources`.
+- `DocumentAliasRegistry`: `documentAliasDocumentIds` tylko dla dokumentów z własnym kluczem (wcześniej przesunięcie przy dokumencie na kluczu współdzielonym).
+- `ai-sdk-adapter.ts`: `finishReason` "length" → do 3 kontynuacji, potem `[ODPOWIEDŹ UCIĘTA: …]`; "tool-calls" na limicie kroków → przejście z `toolChoice: "none"`.
+- Scalone: generator faktur (`a46b2a7`), poprawki G8/routingu/audytu AUTO (`blokada-odpowiedzi-kk`), zamienniki E-3/E-4, RAG po ustępach.
+- Bez instalatora macOS.
 
 ## hotfix 42
 
