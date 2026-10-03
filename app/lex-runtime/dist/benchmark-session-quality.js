@@ -5,7 +5,7 @@
  *
  * npm run benchmark:session -- --base-url http://127.0.0.1:4317 \
  *   --provider anthropic --model claude-... --out reports/session-quality \
- *   [--corpus tests/fixtures/session-quality-v1.json] [--baseline old/report.json]
+ *   [--corpus own-corpus.json] [--baseline old/report.json]
  *   [--history-chars 4000] [--cases kc-delikt-szkoda,kp-wypowiedzenie]
  *
  * Login: LEX_BENCH_LOGIN / LEX_BENCH_PASSWORD; on an empty runtime
@@ -16,7 +16,8 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { compareSummaries, conversationQuery, reportMarkdown, scoreTurn, summarizeScores, validateSessionQualityCorpus } from "./session-quality-benchmark.js";
+import { compareSummaries, reportMarkdown, runSessionQuality, validateSessionQualityCorpus } from "./session-quality-benchmark.js";
+import { SESSION_QUALITY_CORPUS_V1 } from "./session-quality-corpus.js";
 // Chat client budgets (lex-web conversation-context.ts).
 const CLIENT_HISTORY_CHARS = { anthropic: 300_000, google: 300_000, openai: 150_000, xai: 150_000 };
 function argument(name) {
@@ -49,14 +50,14 @@ async function main() {
     const provider = required("provider");
     const model = required("model");
     const outDir = path.resolve(argument("out") ?? "session-quality-report");
-    const corpusPath = path.resolve(argument("corpus") ?? "tests/fixtures/session-quality-v1.json");
+    const corpusPath = argument("corpus");
     const historyChars = Number(argument("history-chars") ?? CLIENT_HISTORY_CHARS[provider] ?? 28_000);
     const only = argument("cases")?.split(",").filter(Boolean);
     const login = process.env.LEX_BENCH_LOGIN ?? "benchmark";
     const password = process.env.LEX_BENCH_PASSWORD;
     if (!password)
         throw new Error("MISSING_ENV:LEX_BENCH_PASSWORD");
-    const corpus = validateSessionQualityCorpus(JSON.parse(await readFile(corpusPath, "utf8")));
+    const corpus = validateSessionQualityCorpus(corpusPath ? JSON.parse(await readFile(path.resolve(corpusPath), "utf8")) : SESSION_QUALITY_CORPUS_V1);
     // --initial-admin: a fresh desktop runtime starts with admin/admin pending a
     // new password; the benchmark sets LEX_BENCH_PASSWORD and logs in again.
     if (process.argv.includes("--initial-admin")) {
@@ -79,54 +80,18 @@ async function main() {
             throw new Error(`MISSING_ENV:${keyEnv}`);
         await call(baseUrl, token, "PUT", `/api/admin/providers/${provider}/credential`, { apiKey });
     }
-    const scores = [];
-    const answers = [];
-    for (const item of corpus.cases.filter((entry) => !only || only.includes(entry.id))) {
-        const created = await call(baseUrl, token, "POST", "/api/cases", { displayName: `Miernik ${item.id}` });
-        const history = [];
-        for (const [index, turn] of item.turns.entries()) {
-            const started = Date.now();
-            let observed;
-            try {
-                const result = await call(baseUrl, token, "POST", "/api/sessions/execute", {
-                    query: conversationQuery(history, turn.question, historyChars),
-                    auxiliaryText: turn.question,
-                    provider,
-                    model,
-                    primarySkill: "AUTO",
-                    mode: "PRAWNIK",
-                    knowledge: { caseId: created.caseId, includeCase: false, includeFirm: false, limit: 8 }
-                });
-                observed = {
-                    status: result.status,
-                    answer: result.answer ?? "",
-                    timeMs: Date.now() - started,
-                    ...(result.usage ? { usage: result.usage } : {})
-                };
-            }
-            catch (error) {
-                observed = { status: "ERROR", answer: "", timeMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) };
-            }
-            const score = scoreTurn(item.id, index, turn, observed);
-            scores.push(score);
-            answers.push({ caseId: item.id, turn: index + 1, status: observed.status, answer: observed.answer });
-            process.stdout.write(`${item.id}#${index + 1}: ${observed.status} wynik=${score.score.toFixed(2)} czas=${Math.round(observed.timeMs / 1000)}s\n`);
-            // The thread of the matter, as the chat client keeps it.
-            for (const message of [
-                { role: "user", content: turn.question },
-                { role: "assistant", content: observed.answer || observed.error || "" }
-            ]) {
-                history.push(message);
-                await call(baseUrl, token, "POST", `/api/cases/${created.caseId}/workspace/thread/messages`, {
-                    messageId: messageId(),
-                    role: message.role,
-                    content: message.content.slice(0, 200_000),
-                    createdAt: new Date().toISOString()
-                });
-            }
-        }
-    }
-    const summary = summarizeScores(scores);
+    const run = await runSessionQuality({
+        call: (method, route, body) => call(baseUrl, token, method, route, body),
+        corpus,
+        provider,
+        model,
+        historyChars,
+        ...(only ? { cases: only } : {}),
+        messageId,
+        onTurn: ({ caseId, turn, score }) => process.stdout.write(`${caseId}#${turn}: ${score.error ? "ERROR" : score.blocked ? "BLOCKED" : "OK"} wynik=${score.score.toFixed(2)} czas=${Math.round(score.timeMs / 1000)}s\n`)
+    });
+    const { scores, answers } = run;
+    const summary = run.summary;
     const baselinePath = argument("baseline");
     const baseline = baselinePath
         ? JSON.parse(await readFile(path.resolve(baselinePath), "utf8")).summary

@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   compareSummaries,
@@ -10,10 +8,9 @@ import {
   validateSessionQualityCorpus
 } from "../src/session-quality-benchmark.js";
 import { droppedMessageCount } from "../src/thread-summary.js";
+import { SESSION_QUALITY_CORPUS_V1 } from "../src/session-quality-corpus.js";
 
-const corpus = validateSessionQualityCorpus(
-  JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "session-quality-v1.json"), "utf8"))
-);
+const corpus = validateSessionQualityCorpus(SESSION_QUALITY_CORPUS_V1);
 
 describe("session quality benchmark", () => {
   it("has a valid corpus across domains with multi-message threads", () => {
@@ -84,5 +81,15 @@ describe("session quality benchmark", () => {
     expect(comparison.find((item) => item.metric === "blockedRate")?.regression).toBe(true);
     expect(comparison.find((item) => item.metric === "score")?.regression).toBe(false);
     expect(reportMarkdown({ provider: "p", model: "m", corpus, scores: [], summary: worse, comparison })).toContain("| topicCoverage |");
+  });
+});
+
+describe("benchmark error codes", () => {
+  it("names the gate or provider failure behind a turn", async () => {
+    const { errorCode } = await import("../src/session-quality-benchmark.js");
+    expect(errorCode('HTTP_409:{"error":"CONTRACT_STATE_REQUIRED"}')).toBe("CONTRACT_STATE_REQUIRED");
+    expect(errorCode('HTTP_502:{"error":"PROVIDER_EXECUTION_FAILED","provider":"openai","reason":"ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH"}')).toBe(
+      "PROVIDER_EXECUTION_FAILED/ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH"
+    );
   });
 });

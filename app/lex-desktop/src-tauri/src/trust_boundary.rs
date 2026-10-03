@@ -1432,6 +1432,10 @@ fn route_allowed(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
         "/api/admin/case-access" => method == "GET",
+        // Miernik jakości (Ustawienia -> Konserwacja, tylko administrator).
+        "/api/admin/quality-benchmark" => matches!(method, "GET" | "POST"),
+        "/api/admin/quality-benchmark/cancel" => method == "POST",
+        _ if path.starts_with("/api/admin/quality-benchmark/reports/") => method == "GET",
         "/api/core-law/status" => method == "GET",
         "/api/core-law/check"
         | "/api/core-law/apply"
@@ -2016,6 +2020,11 @@ mod tests {
         assert!(!route_allowed("GET", "/api/privacy/name-forms"));
         assert!(route_allowed("GET", "/api/cases"));
         assert!(route_allowed("GET", "/api/schedule/upcoming"));
+        assert!(route_allowed("GET", "/api/admin/quality-benchmark"));
+        assert!(route_allowed("POST", "/api/admin/quality-benchmark"));
+        assert!(route_allowed("POST", "/api/admin/quality-benchmark/cancel"));
+        assert!(route_allowed("GET", "/api/admin/quality-benchmark/reports/qb_20261003120000000_0a1b2c3d"));
+        assert!(!route_allowed("DELETE", "/api/admin/quality-benchmark"));
         assert!(!route_allowed("POST", "/api/schedule/upcoming"));
         assert!(route_allowed("POST", "/api/cases/case_abc/contacts"));
         assert!(route_allowed("POST", "/api/cases/case_abc/files"));

@@ -11,6 +11,8 @@ import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
+import { registerQualityBenchmarkRoutes } from "./quality-benchmark-routes.js";
+import { QualityBenchmarkService } from "../quality-benchmark-service.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
 import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
@@ -376,6 +378,16 @@ export async function startLocalServer(options) {
         authService,
         index: coreLawIndex
     });
+    // Miernik jakości: runtime woła własne API (adres znany po starcie nasłuchu).
+    let selfBaseUrl = "";
+    registerQualityBenchmarkRoutes(app, {
+        authService,
+        benchmark: new QualityBenchmarkService({
+            rootDir: caseFileStore.rootDir,
+            baseUrl: () => selfBaseUrl,
+            ...(process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim() ? { desktopBootstrapToken: process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN.trim() } : {})
+        })
+    });
     registerMcpConnectorRoutes(app, {
         authService,
         connectors: mcpConnectors,
@@ -409,6 +421,7 @@ export async function startLocalServer(options) {
             const actualPort = typeof address === "object" && address
                 ? address.port
                 : port;
+            selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
             resolve({
                 host,
                 port: actualPort,

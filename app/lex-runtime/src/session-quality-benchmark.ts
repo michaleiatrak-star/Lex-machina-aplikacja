@@ -31,6 +31,7 @@ export type SessionQualityCorpus = {
   corpusId: string;
   corpusVersion: string;
   confidentiality: "SYNTHETIC" | "EXPERT_PRIVATE";
+  note?: string;
   cases: SessionQualityCase[];
 };
 
@@ -258,6 +259,13 @@ export function conversationQuery(
   return `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: true, manual: [] })}\n${body}`;
 }
 
+// "HTTP_409:{"error":"CONTRACT_STATE_REQUIRED"}" -> CONTRACT_STATE_REQUIRED (with the reason when given).
+export function errorCode(error: string): string {
+  const reason = /"reason":"([A-Z0-9_]+)"/.exec(error)?.[1];
+  const code = /"error":"([A-Z0-9_]+)"/.exec(error)?.[1] ?? /^([A-Z0-9_]+)/.exec(error)?.[1] ?? "?";
+  return reason ? `${code}/${reason}` : code;
+}
+
 const percent = (value: number | null): string => (value === null ? "—" : `${Math.round(value * 100)}%`);
 
 export function reportMarkdown(args: {
@@ -270,7 +278,7 @@ export function reportMarkdown(args: {
 }): string {
   const rows = args.scores.map(
     (item) =>
-      `| ${item.caseId} | ${item.turn} | ${item.error ? "BŁĄD" : item.blocked ? "BLOKADA" : "ok"} | ${percent(item.score)} | ${percent(item.verificationRate)} (${item.verifiedMarkers}/${item.unverifiedMarkers}) | ${percent(item.topicCoverage)} | ${percent(item.actCoverage)} | ${percent(item.recall)} | ${Math.round(item.timeMs / 1000)} s | ${item.inputTokens ?? "—"}/${item.outputTokens ?? "—"} |`
+      `| ${item.caseId} | ${item.turn} | ${item.error ? `BŁĄD ${errorCode(item.error)}` : item.blocked ? "BLOKADA" : "ok"} | ${percent(item.score)} | ${percent(item.verificationRate)} (${item.verifiedMarkers}/${item.unverifiedMarkers}) | ${percent(item.topicCoverage)} | ${percent(item.actCoverage)} | ${percent(item.recall)} | ${Math.round(item.timeMs / 1000)} s | ${item.inputTokens ?? "—"}/${item.outputTokens ?? "—"} |`
   );
   return [
     `# Miernik jakości sesji — ${args.corpus.corpusId} ${args.corpus.corpusVersion}`,
@@ -297,4 +305,93 @@ export function reportMarkdown(args: {
     ...rows,
     ""
   ].join("\n");
+}
+
+export type BenchmarkCall = <T>(method: string, route: string, body?: unknown) => Promise<T>;
+
+export type SessionQualityRun = {
+  scores: SessionTurnScore[];
+  answers: Array<{ caseId: string; turn: number; status: string; answer: string }>;
+  summary: SessionQualitySummary;
+  cancelled: boolean;
+};
+
+/**
+ * One benchmark run through the runtime API: a matter per case, each turn
+ * sent like the chat client and stored in the matter's thread. Matters are
+ * archived afterwards. `call` carries the caller's session.
+ */
+export async function runSessionQuality(args: {
+  call: BenchmarkCall;
+  corpus: SessionQualityCorpus;
+  provider: string;
+  model: string;
+  historyChars: number;
+  cases?: string[];
+  onTurn?: (progress: { caseId: string; turn: number; done: number; total: number; score: SessionTurnScore }) => void;
+  cancelled?: () => boolean;
+  messageId: () => string;
+}): Promise<SessionQualityRun> {
+  const cases = args.corpus.cases.filter((item) => !args.cases?.length || args.cases.includes(item.id));
+  const total = cases.reduce((sum, item) => sum + item.turns.length, 0);
+  const scores: SessionTurnScore[] = [];
+  const answers: SessionQualityRun["answers"] = [];
+  let cancelled = false;
+  for (const item of cases) {
+    if (args.cancelled?.()) {
+      cancelled = true;
+      break;
+    }
+    const created = await args.call<{ caseId: string }>("POST", "/api/cases", { displayName: `Miernik ${item.id}` });
+    const history: Array<{ role: "user" | "assistant"; content: string }> = [];
+    try {
+      for (const [index, turn] of item.turns.entries()) {
+        if (args.cancelled?.()) {
+          cancelled = true;
+          break;
+        }
+        const started = Date.now();
+        let observed: SessionTurnObservation;
+        try {
+          const result = await args.call<{ status: string; answer?: string; usage?: SessionTurnObservation["usage"] }>(
+            "POST",
+            "/api/sessions/execute",
+            {
+              query: conversationQuery(history, turn.question, args.historyChars),
+              auxiliaryText: turn.question,
+              provider: args.provider,
+              model: args.model,
+              primarySkill: "AUTO",
+              mode: "PRAWNIK",
+              knowledge: { caseId: created.caseId, includeCase: false, includeFirm: false, limit: 8 }
+            }
+          );
+          observed = { status: result.status, answer: result.answer ?? "", timeMs: Date.now() - started, ...(result.usage ? { usage: result.usage } : {}) };
+        } catch (error) {
+          observed = { status: "ERROR", answer: "", timeMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) };
+        }
+        const score = scoreTurn(item.id, index, turn, observed);
+        scores.push(score);
+        answers.push({ caseId: item.id, turn: index + 1, status: observed.status, answer: observed.answer || observed.error || "" });
+        args.onTurn?.({ caseId: item.id, turn: index + 1, done: scores.length, total, score });
+        // The thread of the matter, as the chat client keeps it.
+        for (const message of [
+          { role: "user" as const, content: turn.question },
+          { role: "assistant" as const, content: observed.answer || observed.error || "" }
+        ]) {
+          history.push(message);
+          await args.call("POST", `/api/cases/${created.caseId}/workspace/thread/messages`, {
+            messageId: args.messageId(),
+            role: message.role,
+            content: message.content.slice(0, 200_000),
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+    } finally {
+      await args.call("POST", `/api/cases/${created.caseId}/archive`, {}).catch(() => undefined);
+    }
+    if (cancelled) break;
+  }
+  return { scores, answers, summary: summarizeScores(scores), cancelled };
 }
