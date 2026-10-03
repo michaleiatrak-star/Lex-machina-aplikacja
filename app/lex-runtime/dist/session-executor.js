@@ -1,6 +1,6 @@
 import { FinalizationGate, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
-import { evaluateStatusConsistency, reconcileStatusMarkers } from "./status-consistency-gate.js";
+import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
 import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
@@ -1008,7 +1008,10 @@ export class SafeSessionExecutor {
             automaticVerificationExecuted =
                 results.length;
         }
-        const automaticVerification = applyAutomaticVerificationMarkers(execution.output, ledger, requestedHistoricalAsOf);
+        // Model-written ✅ markers are claims, not verification: only the ledger
+        // marker is shown, so a rewritten link or date cannot block the answer.
+        const ledgerBackedOutput = stripUnbackedVerificationMarkers(execution.output, ledger);
+        const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf);
         audit.record("gate", "G39I_AUTO_POST_DRAFT_VERIFICATION", automaticVerificationPlan.calls.length > 0 &&
             !verificationTools
             ? "BLOCKED"
@@ -1016,6 +1019,7 @@ export class SafeSessionExecutor {
             planned: automaticVerificationPlan.calls.length,
             executed: automaticVerificationExecuted,
             insertedMarkers: automaticVerification.inserted,
+            removedUnbackedMarkers: ledgerBackedOutput.removed,
             skipped: automaticVerificationPlan.skipped
         });
         if (verificationTools) {

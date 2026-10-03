@@ -297,10 +297,12 @@ export function reconcileStatusMarkers(text, ledger) {
                 continue;
             }
             // Grupa mieszana: ✅ bezpośrednio po zweryfikowanym przepisie, ⚠️ zostaje przy reszcie.
+            // Ten sam ✅ w innym miejscu wiersza (np. dopisany na końcu) nie należy do tej grupy.
+            const groupMarkers = new Set(group.markers.map((marker) => line.text.slice(marker.start, marker.end)));
             group.references.forEach((reference, index) => {
                 const record = records[index];
-                const marker = record ? missing(record) : null;
-                if (!marker)
+                const marker = record ? verificationMarker(record) : null;
+                if (!marker || groupMarkers.has(marker))
                     return;
                 edits.push({ start: reference.end, end: reference.end, insert: ` ${marker}` });
                 repaired += 1;
@@ -315,4 +317,24 @@ export function reconcileStatusMarkers(text, ledger) {
         return next;
     });
     return { text: repaired > 0 ? output.join("\n") : text, repaired };
+}
+/**
+ * Znacznik ✅ [VER: …], którego nie da się odtworzyć z rekordu VERIFIED w rejestrze,
+ * jest deklaracją modelu, nie weryfikacją (np. sam link do aktu bez kotwicy albo
+ * inna data). Usuwany przed wstawieniem znaczników z rejestru: przepis zweryfikowany
+ * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE].
+ */
+export function stripUnbackedVerificationMarkers(text, ledger) {
+    const ledgerMarkers = new Set(ledger
+        .all()
+        .map((record) => verificationMarker(record))
+        .filter((marker) => Boolean(marker)));
+    let removed = 0;
+    const next = text.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
+        if (ledgerMarkers.has(match.trimStart()))
+            return match;
+        removed += 1;
+        return "";
+    });
+    return { text: removed > 0 ? next : text, removed };
 }
