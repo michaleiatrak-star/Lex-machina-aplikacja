@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { AuthError, type AuthService } from "../auth/service.js";
 import type { CoreLawIndex } from "../core-law-index.js";
+import { provisionPreview } from "../core-law-preview.js";
 import { CoreLawActLookupError, lookupCoreLawAct, type EliFetch } from "../core-law-act-lookup.js";
 
 // Settings → Aktualizacje: state of the local copy of law (RAG) and its
@@ -61,6 +62,23 @@ export function registerCoreLawRoutes(
     }
     throw error;
   }
+
+  // Podgląd przepisu z lokalnej kopii ELI: cały artykuł, cytowana jednostka zaznaczona z kotwicą.
+  app.post("/api/core-law/provision-preview", (req, res) => {
+    if (!actor(req, res, authService, false)) return;
+    const claim = typeof req.body?.claim === "string" ? req.body.claim.trim() : "";
+    const sourceUrl = typeof req.body?.sourceUrl === "string" ? req.body.sourceUrl.trim() : undefined;
+    if (!claim || claim.length > 300 || (sourceUrl && sourceUrl.length > 1000)) {
+      res.status(400).json({ error: "PROVISION_PREVIEW_INVALID" });
+      return;
+    }
+    const preview = provisionPreview(index, claim, sourceUrl);
+    if (!preview) {
+      res.status(404).json({ error: "PROVISION_NOT_IN_LOCAL_COPY" });
+      return;
+    }
+    res.json(preview);
+  });
 
   app.get("/api/core-law/status", (req, res) => {
     if (actor(req, res, authService, false) === null) return;

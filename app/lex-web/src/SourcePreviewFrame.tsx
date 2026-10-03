@@ -27,7 +27,8 @@ export function SourcePreviewFrame(props: { target: SourcePreviewTarget }) {
     setState({ kind: "loading" });
     if (target.kind === "record") {
       blobUrl = URL.createObjectURL(new Blob([target.html], { type: "text/html;charset=utf-8" }));
-      setState({ kind: "html", blobUrl });
+      // The frame opens scrolled to the anchored passage.
+      setState({ kind: "html", blobUrl: target.anchor ? `${blobUrl}#${target.anchor}` : blobUrl });
       return () => {
         if (blobUrl) URL.revokeObjectURL(blobUrl);
       };

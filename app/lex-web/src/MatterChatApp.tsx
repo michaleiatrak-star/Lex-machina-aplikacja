@@ -14,6 +14,7 @@ import { downloadBlob } from "./download-file.js";
 import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
+import { ProvisionPreview } from "./ProvisionPreview.js";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
@@ -970,6 +971,8 @@ export default function MatterChatApp({
   const [deletePassword, setDeletePassword] = useState("");
   const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
   const [memoryRefresh, setMemoryRefresh] = useState(0);
+  // Evidence item whose provision preview is open ("<messageId>:<index>").
+  const [provisionPreview, setProvisionPreview] = useState<string | null>(null);
   // Current names of documents made by a model (renamed in the case files or
   // in the chat card); the thread keeps the name given at generation.
   const [artifactNames, setArtifactNames] =
@@ -4677,6 +4680,23 @@ export default function MatterChatApp({
                               >
                                 Otwórz źródło w przeglądarce ↗
                               </a>
+                            ) : null}
+                            {item.kind === "statute" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="chat-secondary-action chat-provision-preview-toggle"
+                                  onClick={() => {
+                                    const key = `${message.id}:${index}`;
+                                    setProvisionPreview((current) => (current === key ? null : key));
+                                  }}
+                                >
+                                  {provisionPreview === `${message.id}:${index}` ? "Zwiń podgląd" : "Podgląd z zaznaczeniem"}
+                                </button>
+                                {provisionPreview === `${message.id}:${index}` ? (
+                                  <ProvisionPreview claim={item.claim} {...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {})} />
+                                ) : null}
+                              </>
                             ) : null}
                           </li>
                         ))}

@@ -3418,6 +3418,25 @@ export function chatWidgetFrameUrl(widgetId: string): string {
   return `${apiBase()}/api/widgets/frame/${widgetId}`;
 }
 
+export type ProvisionPreview = {
+  kind: "html";
+  html: string;
+  anchor: string;
+  eli: string;
+  article: string;
+  unit: string | null;
+  unitFound: boolean;
+  copyFetchedAt: string;
+  sourceUrl: string;
+};
+
+export function previewProvision(claim: string, sourceUrl?: string): Promise<ProvisionPreview> {
+  return json<ProvisionPreview>("/api/core-law/provision-preview", {
+    method: "POST",
+    body: JSON.stringify({ claim, ...(sourceUrl ? { sourceUrl } : {}) })
+  });
+}
+
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {
   return json<McpSourcePreview>("/api/mcp-search/source-preview", {
     method: "POST",
