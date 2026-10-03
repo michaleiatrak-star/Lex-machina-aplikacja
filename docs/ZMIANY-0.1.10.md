@@ -41,8 +41,16 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
 | hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
 | hotfix 41 | `cd1353f` | Faktury: dane kontrahenta po NIP (biała lista VAT, CEIDG), sposób płatności, termin, stawka VAT z listy, domyślne w ustawieniach |
+| hotfix 42 | `52a00a2` | Widgety skilli (show_widget) w izolowanej ramce, wzory faktur, parser wywołań ChatGPT/Codex |
 
 ---
+
+## hotfix 42
+
+- `widget-runtime.ts`: narzędzie `show_widget` (plik z korpusu albo kod HTML/JSX modelu), JSX przez sucrase do Preact 10 (UMD w ramce); `POST /api/widgets` (sesja) → klucz 128-bit, `GET /api/widgets/frame/:id` z CSP bez sieci i `sandbox allow-scripts`; proxy desktopu bez tokenu sesji dla ramki, przekazuje CSP odpowiedzi HTML; `frame-src` z `lex-api`.
+- Most ramki: `window.sendPrompt` → wiadomość w czacie; `<a download>` (Blob/data URL) → Pobrane (`json`, `md`, `csv` dopuszczone); widgety w wątku sprawy.
+- Wzory faktur: `/api/invoices/templates` (GET, POST), `/templates/:id` (PUT, DELETE).
+- `account-session.ts`: kilka bloków `LEX_TOOL_CALLS_JSON:` w jednej odpowiedzi łączone, tekst po JSON pomijany.
 
 ## hotfix 41
 
