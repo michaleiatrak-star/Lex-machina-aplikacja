@@ -44,8 +44,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 42 | `52a00a2` | Widgety skilli (show_widget) w izolowanej ramce, wzory faktur, parser wywołań ChatGPT/Codex |
 | hotfix 43 | `b9d3144` | Akta sprawy dla modelu (narzędzia), poprawka aliasów D01, kontynuacja uciętych odpowiedzi API, generator faktur, poprawki G8; tylko Windows |
 | hotfix 44 | `29d4c62` | Pamięć sprawy (przepisy po kontroli ELI, streszczenie starszej części wątku), miernik jakości sesji, tokeny tury; tylko Windows |
+| hotfix 45 | `2e54c13` | Tabele Markdown w czacie, podgląd przepisu z lokalnej kopii z zaznaczeniem, miernik jakości w aplikacji (konto); tylko Windows |
 
 ---
+
+## hotfix 45
+
+- `MarkdownContent.tsx`: tabele (tekst za ostatnią kreską do ostatniej komórki), nagłówki, listy, pogrubienia; bez HTML z odpowiedzi.
+- `core-law-preview.ts`, `POST /api/core-law/provision-preview`, `ProvisionPreview.tsx`: artykuł z kopii ELI, `<mark id="lex-provision">` na § / ust., ramka z kotwicą.
+- `quality-benchmark-service.ts`, `/api/admin/quality-benchmark[/cancel|/reports/:id]`, `QualityBenchmarkSection.tsx`: miernik przez własne API runtime (sesja administratora, `LEX_DESKTOP_BOOTSTRAP_TOKEN`); korpus w `session-quality-corpus.ts`.
 
 ## hotfix 44
 
