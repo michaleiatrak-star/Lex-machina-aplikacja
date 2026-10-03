@@ -1488,11 +1488,16 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
     };
     match segments.as_slice() {
         ["api", "invoices"] => matches!(method, "GET" | "POST"),
-        ["api", "invoices", "settings"] | ["api", "invoices", "legal-basis"] => method == "GET",
+        ["api", "invoices", "settings"]
+        | ["api", "invoices", "legal-basis"]
+        | ["api", "invoices", "requirements"]
+        | ["api", "invoices", "next-number"] => method == "GET",
         ["api", "invoices", "settings", "ksef-token" | "logo"] => {
             matches!(method, "PUT" | "DELETE")
         }
-        ["api", "invoices", "settings", "ksef-environment" | "seller"] => method == "PUT",
+        ["api", "invoices", "settings", "ksef-environment" | "seller" | "numbering"] => {
+            method == "PUT"
+        }
         ["api", "invoices", id] => {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
@@ -2102,6 +2107,10 @@ mod tests {
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
         assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
         assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/numbering"));
+        assert!(route_allowed("GET", "/api/invoices/requirements"));
+        assert!(route_allowed("GET", "/api/invoices/next-number"));
+        assert!(!route_allowed("POST", "/api/invoices/next-number"));
         assert!(route_allowed("GET", &format!("/api/invoices/{id}")));
         assert!(route_allowed("PUT", &format!("/api/invoices/{id}")));
         assert!(route_allowed("DELETE", &format!("/api/invoices/{id}")));
