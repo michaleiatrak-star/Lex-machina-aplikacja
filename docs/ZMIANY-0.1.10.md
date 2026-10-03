@@ -40,8 +40,15 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
 | hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
 | hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
+| hotfix 41 | `HEAD` | Faktury: dane kontrahenta po NIP (biała lista VAT, CEIDG), sposób płatności, termin, stawka VAT z listy, domyślne w ustawieniach |
 
 ---
+
+## hotfix 41
+
+- `company-lookup.ts`, `CompanyNipField.tsx`: NIP → `wl_sprawdz_nip`, potem `ceidg_szukaj_firmy` przez `/api/mcp-search/query`; suma kontrolna NIP lokalnie, odrzucenie odpowiedzi z innym NIP.
+- `invoice-store.ts`: `defaults` (sposób płatności, termin w dniach, stawka VAT), `PUT /api/invoices/settings/defaults` (allowlista desktopu); `GET /api/invoices/legal-basis?topic=vat-rate` szuka „23%” w ustawie o VAT przez ELI.
+- Formularz: listy sposobu płatności (przelew, gotówka, zapłacono), terminu (7/14/21/30 dni, inna data) i stawki VAT.
 
 ## hotfix 39
 
