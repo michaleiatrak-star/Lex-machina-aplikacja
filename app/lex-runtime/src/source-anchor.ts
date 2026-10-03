@@ -212,6 +212,7 @@ export function verificationMarker(record: {
   sourceAnchorUrl?: string;
   fetchedAt?: string;
   asOf?: string;
+  interpretationStatus?: string;
 }): string | null {
   const link = verificationSourceLink(record);
   if (record.status !== "VERIFIED" || !link || !record.fetchedAt?.trim()) return null;
@@ -221,6 +222,10 @@ export function verificationMarker(record: {
     ", ",
     record.fetchedAt.slice(0, 10),
     record.asOf ? `, STAN NA ${record.asOf}` : "",
+    // Interpretacja istnieje, ale EUREKA nie podaje jej jako aktualnej.
+    record.interpretationStatus && record.interpretationStatus !== "Aktualna"
+      ? `, EUREKA: ${record.interpretationStatus.toLocaleUpperCase("pl")}`
+      : "",
     "]"
   ].join("");
 }

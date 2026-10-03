@@ -1,3 +1,4 @@
+import { reportUsage } from "./usage-meter.js";
 export class ProviderGatewayError extends Error {
     code;
     provider;
@@ -50,7 +51,9 @@ export class ProviderGateway {
             throw new ProviderGatewayError("REASONING_UNSUPPORTED", `Provider ${providerId} does not support reasoning controls.`, providerId);
         }
         try {
-            return await provider.stream(params);
+            const result = await provider.stream(params);
+            reportUsage(result.usage ?? null);
+            return result;
         }
         catch (error) {
             if (error instanceof ProviderGatewayError)

@@ -22,6 +22,7 @@ import {
 } from "./use-floating-panel.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
+import { QualityBenchmarkSection } from "./QualityBenchmarkSection.js";
 import "./maintenance.css";
 
 const CHANNEL_LABEL: Record<SkillChannel, string> = {
@@ -485,6 +486,8 @@ export function MaintenancePanel({
         <CoreLawUpdatesSection user={user} />
 
         <AnomalyJournalSection user={user} />
+
+        <QualityBenchmarkSection user={user} />
 
         <button
           type="button"

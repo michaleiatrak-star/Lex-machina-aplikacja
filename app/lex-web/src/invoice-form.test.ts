@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, invoiceErrorText, lineNet, previewTotals } from "./invoice-form.js";
+import { addDays, draftFromTemplate, emptyDraft, formatMoney, invoiceErrorText, lineNet, previewTotals, templateFromDraft, termDaysOf } from "./invoice-form.js";
 
 describe("invoice form", () => {
   it("previews totals like the runtime", () => {
@@ -16,5 +16,44 @@ describe("invoice form", () => {
     expect(formatMoney("1234567.50", "PLN")).toBe("1 234 567,50 PLN");
     expect(invoiceErrorText("INVOICE_FIELD_REQUIRED:buyer.address")).toBe("Uzupełnij pole: adres nabywcy.");
     expect(invoiceErrorText("INVOICE_FIELD_INVALID:lines.1.unitNetPrice")).toBe("Nieprawidłowa wartość pola: pozycja 2: cena netto.");
+  });
+
+  it("computes the transfer due date from the issue date and defaults", () => {
+    expect(addDays("2026-12-25", 14)).toBe("2027-01-08");
+    expect(termDaysOf("2026-10-03", "2026-10-17")).toBe(14);
+    expect(termDaysOf("2026-10-03", "2026-10-18")).toBeNull();
+    const draft = emptyDraft(undefined, "2026-10-03", { paymentMethod: "przelew", paymentTermDays: 7, vatRate: "8" });
+    expect(draft).toMatchObject({ paymentMethod: "przelew", paymentDueDate: "2026-10-10" });
+    expect(draft.lines[0]!.vatRate).toBe("8");
+    expect(emptyDraft(undefined, "2026-10-03", { paymentMethod: "zapłacono", paymentTermDays: 7, vatRate: "23" }).paymentDueDate).toBe("");
+    expect(emptyDraft(undefined, "2026-10-03").lines[0]!.vatRate).toBe("23");
+  });
+
+  it("round-trips a reusable template without number, dates or seller", () => {
+    const seller = { name: "Kancelaria", nip: "5260250274", address: "ul. Prosta 1" };
+    const draft = {
+      ...emptyDraft(seller, "2026-10-03", { paymentMethod: "przelew", paymentTermDays: 21, vatRate: "23" }),
+      number: "FV/1/10/2026",
+      buyer: { name: "Spółka X", nip: "1234563218", address: "ul. Krzywa 2" },
+      lines: [{ name: "Obsługa prawna", unit: "mies.", quantity: "1", unitNetPrice: "3000", vatRate: "23" }]
+    };
+    const template = templateFromDraft(draft, "  Spółka X — ryczałt ");
+    expect(template).toMatchObject({ name: "Spółka X — ryczałt", paymentMethod: "przelew", paymentTermDays: 21 });
+    expect(template).not.toHaveProperty("number");
+    const next = draftFromTemplate(
+      { ...template, templateId: "tpl_x", createdAt: "", updatedAt: "" },
+      { ...seller, name: "Kancelaria (nowa nazwa)" },
+      "2026-11-02"
+    );
+    expect(next).toMatchObject({ number: "", issueDate: "2026-11-02", paymentDueDate: "2026-11-23" });
+    expect(next.seller.name).toBe("Kancelaria (nowa nazwa)");
+    expect(next.buyer.name).toBe("Spółka X");
+    expect(next.lines[0]!.unitNetPrice).toBe("3000");
+  });
+
+  it("subtracts the line discount and rejects discounts above the value", () => {
+    expect(lineNet({ name: "a", unit: "szt.", quantity: "2", unitNetPrice: "100", vatRate: "zw", discount: "20" })).toBe("180.00");
+    expect(lineNet({ name: "a", unit: "szt.", quantity: "1", unitNetPrice: "10", vatRate: "23", discount: "11" })).toBeNull();
+    expect(invoiceErrorText("NUMBERING_PATTERN_NR_REQUIRED")).toBe("Wzór musi zawierać dokładnie jeden token {NR}.");
   });
 });

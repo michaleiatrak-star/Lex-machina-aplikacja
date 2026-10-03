@@ -13,6 +13,12 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  NumberingError,
+  nextAutoNumber,
+  validateNumbering,
+  type NumberingSettings
+} from "./invoice-numbering.js";
 
 // Faktury, ustawienia KSeF i wzór faktury jednego użytkownika: jeden plik
 // zaszyfrowany kluczem wyprowadzonym z klucza głównego użytkownika (UMK).
@@ -35,6 +41,18 @@ export type InvoiceLine = {
   unitNetPrice: string;
   // Stawka w procentach ("23") albo oznaczenie bez stawki ("zw", "np").
   vatRate: string;
+  // Opust kwotowo (netto, cała pozycja), gdy nie jest wliczony w cenę jednostkową.
+  discount?: string;
+};
+
+// Oznaczenia faktury wybierane przez użytkownika (art. 106e ust. 1 pkt 16–19,
+// mapowanie weryfikowane na żywo przez ELI, zob. invoice-requirements.ts).
+export type InvoiceAnnotations = {
+  cashMethod?: boolean;
+  selfBilling?: boolean;
+  reverseCharge?: boolean;
+  splitPayment?: boolean;
+  exemptionBasis?: string;
 };
 
 export type InvoiceStatus = "DRAFT" | "ISSUED";
@@ -53,6 +71,7 @@ export type InvoiceRecord = {
   paymentDueDate?: string;
   bankAccount?: string;
   notes?: string;
+  annotations?: InvoiceAnnotations;
   status: InvoiceStatus;
   basedOnInvoiceId?: string;
   createdAt: string;
@@ -63,6 +82,36 @@ export type InvoiceInput = Omit<
   InvoiceRecord,
   "invoiceId" | "status" | "createdAt" | "updatedAt" | "basedOnInvoiceId"
 >;
+
+// Domyślne wartości nowej faktury (Ustawienia → Faktury i KSeF).
+export const INVOICE_PAYMENT_METHODS = ["przelew", "gotówka", "zapłacono"] as const;
+export type InvoicePaymentMethod = (typeof INVOICE_PAYMENT_METHODS)[number];
+
+export type InvoiceDefaults = {
+  paymentMethod: InvoicePaymentMethod;
+  // Termin płatności w dniach od daty wystawienia (przy przelewie).
+  paymentTermDays: number;
+  vatRate: string;
+};
+
+// Wzór faktury do wielokrotnego użytku: stały nabywca, pozycje i płatność.
+// Daty, numer i sprzedawca pochodzą z nowej faktury i ustawień, nie ze wzoru.
+export type InvoiceTemplate = {
+  templateId: string;
+  name: string;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  currency: string;
+  paymentMethod?: string;
+  paymentTermDays?: number;
+  bankAccount?: string;
+  placeOfIssue?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const MAX_TEMPLATES = 100;
 
 export type InvoiceLogo = {
   mediaType: "image/png" | "image/jpeg";
@@ -84,6 +133,9 @@ type StoredInvoices = {
   ksef: StoredKsef;
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
+  defaults?: InvoiceDefaults;
+  templates?: InvoiceTemplate[];
+  numbering?: NumberingSettings;
   invoices: InvoiceRecord[];
 };
 
@@ -221,6 +273,12 @@ function line(value: unknown, index: number): InvoiceLine {
   if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
     throw new InvoiceError(`INVOICE_FIELD_INVALID:${field("vatRate")}`, 400);
   }
+  const discount = pattern(
+    typeof raw.discount === "string" ? raw.discount.replace(",", ".") : raw.discount,
+    field("discount"),
+    PRICE,
+    false
+  );
   const quantity = pattern(
     typeof raw.quantity === "string" ? raw.quantity.replace(",", ".") : raw.quantity,
     field("quantity"),
@@ -240,11 +298,76 @@ function line(value: unknown, index: number): InvoiceLine {
       PRICE,
       true
     )!,
-    vatRate
+    vatRate,
+    ...(discount && toScaled(discount, 2) > 0n ? { discount } : {})
   };
 }
 
-export function validateInvoiceInput(value: unknown): InvoiceInput {
+export function validateInvoiceDefaults(value: unknown): InvoiceDefaults {
+  if (!value || typeof value !== "object") throw new InvoiceError("INVOICE_DEFAULTS_INVALID", 400);
+  const raw = value as Record<string, unknown>;
+  const paymentMethod = INVOICE_PAYMENT_METHODS.find((method) => method === raw.paymentMethod);
+  if (!paymentMethod) throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentMethod", 400);
+  const days = raw.paymentTermDays;
+  if (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentTermDays", 400);
+  }
+  const vatRate = typeof raw.vatRate === "string" ? raw.vatRate.trim().toLowerCase() : "";
+  if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.vatRate", 400);
+  }
+  return { paymentMethod, paymentTermDays: days, vatRate };
+}
+
+export function validateInvoiceTemplate(
+  value: unknown
+): Omit<InvoiceTemplate, "templateId" | "createdAt" | "updatedAt"> {
+  if (!value || typeof value !== "object") throw new InvoiceError("INVOICE_TEMPLATE_INVALID", 400);
+  const raw = value as Record<string, unknown>;
+  if (!Array.isArray(raw.lines) || raw.lines.length === 0) {
+    throw new InvoiceError("INVOICE_FIELD_REQUIRED:lines", 400);
+  }
+  if (raw.lines.length > MAX_LINES) throw new InvoiceError("INVOICE_FIELD_TOO_LONG:lines", 400);
+  const days = raw.paymentTermDays;
+  if (days !== undefined && days !== null && (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365)) {
+    throw new InvoiceError("INVOICE_FIELD_INVALID:paymentTermDays", 400);
+  }
+  const optional = {
+    paymentMethod: text(raw.paymentMethod, "paymentMethod", false),
+    bankAccount: text(raw.bankAccount, "bankAccount", false),
+    placeOfIssue: text(raw.placeOfIssue, "placeOfIssue", false),
+    notes: text(raw.notes, "notes", false)
+  };
+  return {
+    name: text(raw.name, "templateName", true)!,
+    buyer: party(raw.buyer, "buyer"),
+    lines: raw.lines.map(line),
+    currency: pattern(raw.currency, "currency", /^[A-Z]{3}$/, false) ?? "PLN",
+    ...(typeof days === "number" ? { paymentTermDays: days } : {}),
+    ...Object.fromEntries(Object.entries(optional).filter(([, entry]) => entry !== undefined))
+  };
+}
+
+function annotations(value: unknown): InvoiceAnnotations | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object") throw new InvoiceError("INVOICE_FIELD_INVALID:annotations", 400);
+  const raw = value as Record<string, unknown>;
+  const result: InvoiceAnnotations = {};
+  for (const flag of ["cashMethod", "selfBilling", "reverseCharge", "splitPayment"] as const) {
+    if (raw[flag] !== undefined && typeof raw[flag] !== "boolean") {
+      throw new InvoiceError(`INVOICE_FIELD_INVALID:annotations.${flag}`, 400);
+    }
+    if (raw[flag] === true) result[flag] = true;
+  }
+  const basis = text(raw.exemptionBasis, "annotations.exemptionBasis", false);
+  if (basis) result.exemptionBasis = basis;
+  return Object.keys(result).length ? result : undefined;
+}
+
+export function validateInvoiceInput(
+  value: unknown,
+  options: { allowAutoNumber?: boolean } = {}
+): InvoiceInput {
   if (!value || typeof value !== "object") {
     throw new InvoiceError("INVOICE_INVALID", 400);
   }
@@ -263,14 +386,20 @@ export function validateInvoiceInput(value: unknown): InvoiceInput {
     paymentMethod: text(raw.paymentMethod, "paymentMethod", false),
     paymentDueDate: pattern(raw.paymentDueDate, "paymentDueDate", DATE, false),
     bankAccount: text(raw.bankAccount, "bankAccount", false),
-    notes: text(raw.notes, "notes", false)
+    notes: text(raw.notes, "notes", false),
+    annotations: annotations(raw.annotations)
   };
+  const lines = raw.lines.map(line);
+  lines.forEach((entry, index) => {
+    if (lineNetCents(entry) < 0n) throw new InvoiceError(`INVOICE_FIELD_INVALID:lines.${index}.discount`, 400);
+  });
   return {
-    number: text(raw.number, "number", true)!,
+    // Pusty numer = autonumeracja (jeśli ustawiona) przy zapisie.
+    number: text(raw.number, "number", !options.allowAutoNumber) ?? "",
     issueDate: pattern(raw.issueDate, "issueDate", DATE, true)!,
     seller,
     buyer: party(raw.buyer, "buyer"),
-    lines: raw.lines.map(line),
+    lines,
     currency: (pattern(raw.currency, "currency", /^[A-Z]{3}$/, false) ?? "PLN"),
     ...Object.fromEntries(
       Object.entries(optional).filter(([, entry]) => entry !== undefined)
@@ -295,8 +424,9 @@ function money(cents: bigint): string {
 }
 
 export function lineNetCents(entry: InvoiceLine): bigint {
-  // ilość (×10^6) · cena (×10^2) → ×10^8, zaokrąglenie do groszy.
-  return roundDiv(toScaled(entry.quantity, 6) * toScaled(entry.unitNetPrice, 2), 1_000_000n);
+  // ilość (×10^6) · cena (×10^2) → ×10^8, zaokrąglenie do groszy, minus opust.
+  return roundDiv(toScaled(entry.quantity, 6) * toScaled(entry.unitNetPrice, 2), 1_000_000n) -
+    (entry.discount ? toScaled(entry.discount, 2) : 0n);
 }
 
 // Podatek liczony od sumy wartości netto w danej stawce.
@@ -557,12 +687,40 @@ export class EncryptedInvoiceStore {
     return { ...(await this.read(userId, userMasterKey)).ksef };
   }
 
-  async profile(userId: string, userMasterKey: Buffer): Promise<{ seller?: InvoiceParty; logo?: InvoiceLogo }> {
+  async profile(
+    userId: string,
+    userMasterKey: Buffer
+  ): Promise<{ seller?: InvoiceParty; logo?: InvoiceLogo; defaults?: InvoiceDefaults; numbering?: NumberingSettings }> {
     const state = await this.read(userId, userMasterKey);
     return {
       ...(state.seller ? { seller: state.seller } : {}),
-      ...(state.logo ? { logo: state.logo } : {})
+      ...(state.logo ? { logo: state.logo } : {}),
+      ...(state.defaults ? { defaults: state.defaults } : {}),
+      ...(state.numbering ? { numbering: state.numbering } : {})
     };
+  }
+
+  setDefaults(userId: string, userMasterKey: Buffer, defaults: unknown): Promise<InvoiceDefaults> {
+    const cleaned = validateInvoiceDefaults(defaults);
+    return this.mutate(userId, userMasterKey, (state) => {
+      state.defaults = cleaned;
+      return cleaned;
+    });
+  }
+
+  setNumbering(userId: string, userMasterKey: Buffer, input: unknown): Promise<NumberingSettings | null> {
+    const cleaned = input === null ? null : numberingOrThrow(input);
+    return this.mutate(userId, userMasterKey, (state) => {
+      if (cleaned) state.numbering = cleaned;
+      else delete state.numbering;
+      return cleaned;
+    });
+  }
+
+  // Podgląd numeru, który dostanie nowa faktura z tą datą (bez rezerwacji).
+  async previewNumber(userId: string, userMasterKey: Buffer, issueDate: string): Promise<string | null> {
+    const state = await this.read(userId, userMasterKey);
+    return state.numbering ? autoNumber(state, issueDate) : null;
   }
 
   setSeller(userId: string, userMasterKey: Buffer, seller: unknown): Promise<InvoiceParty> {
@@ -598,8 +756,12 @@ export class EncryptedInvoiceStore {
   }
 
   create(userId: string, userMasterKey: Buffer, input: unknown): Promise<InvoiceRecord> {
-    const cleaned = validateInvoiceInput(input);
+    const cleaned = validateInvoiceInput(input, { allowAutoNumber: true });
     return this.mutate(userId, userMasterKey, (state) => {
+      if (!cleaned.number) {
+        if (!state.numbering) throw new InvoiceError("INVOICE_FIELD_REQUIRED:number", 400);
+        cleaned.number = autoNumber(state, cleaned.issueDate);
+      }
       assertNumberFree(state.invoices, cleaned.number);
       const now = this.stamp();
       const record: InvoiceRecord = {
@@ -633,6 +795,42 @@ export class EncryptedInvoiceStore {
     });
   }
 
+  async templates(userId: string, userMasterKey: Buffer): Promise<InvoiceTemplate[]> {
+    const state = await this.read(userId, userMasterKey);
+    return [...(state.templates ?? [])].sort((left, right) => compareText(left.name, right.name));
+  }
+
+  saveTemplate(userId: string, userMasterKey: Buffer, input: unknown, templateId?: string): Promise<InvoiceTemplate> {
+    const cleaned = validateInvoiceTemplate(input);
+    return this.mutate(userId, userMasterKey, (state) => {
+      const templates = (state.templates ??= []);
+      const same = (item: InvoiceTemplate) => item.name.toLocaleLowerCase("pl") === cleaned.name.toLocaleLowerCase("pl");
+      if (templates.some((item) => same(item) && item.templateId !== templateId)) {
+        throw new InvoiceError("INVOICE_TEMPLATE_NAME_TAKEN", 409);
+      }
+      const now = this.stamp();
+      if (templateId) {
+        const index = templates.findIndex((item) => item.templateId === templateId);
+        if (index < 0) throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+        const record = { ...cleaned, templateId, createdAt: templates[index]!.createdAt, updatedAt: now };
+        templates[index] = record;
+        return record;
+      }
+      if (templates.length >= MAX_TEMPLATES) throw new InvoiceError("INVOICE_TEMPLATE_LIMIT", 400);
+      const record = { ...cleaned, templateId: `tpl_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now };
+      templates.push(record);
+      return record;
+    });
+  }
+
+  removeTemplate(userId: string, userMasterKey: Buffer, templateId: string): Promise<void> {
+    return this.mutate(userId, userMasterKey, (state) => {
+      const index = (state.templates ?? []).findIndex((item) => item.templateId === templateId);
+      if (index < 0) throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+      state.templates!.splice(index, 1);
+    });
+  }
+
   remove(userId: string, userMasterKey: Buffer, invoiceId: string): Promise<void> {
     return this.mutate(userId, userMasterKey, (state) => {
       state.invoices.splice(draftIndex(state.invoices, invoiceId), 1);
@@ -643,7 +841,8 @@ export class EncryptedInvoiceStore {
   issue(userId: string, userMasterKey: Buffer, invoiceId: string): Promise<InvoiceRecord> {
     return this.mutate(userId, userMasterKey, (state) => {
       const index = draftIndex(state.invoices, invoiceId);
-      // Pola formularza są sprawdzane przy każdym zapisie szkicu.
+      // Pola formularza są sprawdzane przy każdym zapisie szkicu; tu warunki całej faktury.
+      assertIssuable(state.invoices[index]!);
       const record: InvoiceRecord = { ...state.invoices[index]!, status: "ISSUED", updatedAt: this.stamp() };
       state.invoices[index] = record;
       return record;
@@ -659,7 +858,7 @@ export class EncryptedInvoiceStore {
       const now = this.stamp();
       const today = now.slice(0, 10);
       const record: InvoiceRecord = {
-        number: nextNumber(state.invoices, source.number),
+        number: state.numbering ? autoNumber(state, today) : nextNumber(state.invoices, source.number),
         issueDate: today,
         saleDate: today,
         ...(source.placeOfIssue ? { placeOfIssue: source.placeOfIssue } : {}),
@@ -670,6 +869,7 @@ export class EncryptedInvoiceStore {
         ...(source.paymentMethod ? { paymentMethod: source.paymentMethod } : {}),
         ...(source.bankAccount ? { bankAccount: source.bankAccount } : {}),
         ...(source.notes ? { notes: source.notes } : {}),
+        ...(source.annotations ? { annotations: { ...source.annotations } } : {}),
         invoiceId: `inv_${randomBytes(16).toString("hex")}`,
         status: "DRAFT",
         basedOnInvoiceId: source.invoiceId,
@@ -690,6 +890,30 @@ function ksefView(ksef: StoredKsef): KsefSettingsView {
     ...(ksef.tokenSetAt ? { tokenSetAt: ksef.tokenSetAt } : {}),
     ...(ksef.contextNip ? { contextNip: ksef.contextNip } : {})
   };
+}
+
+function numberingOrThrow(input: unknown): NumberingSettings {
+  try {
+    return validateNumbering(input);
+  } catch (error) {
+    if (error instanceof NumberingError) throw new InvoiceError(error.code, 400);
+    throw error;
+  }
+}
+
+function autoNumber(state: StoredInvoices, issueDate: string): string {
+  if (!state.numbering) throw new InvoiceError("NUMBERING_NOT_CONFIGURED", 400);
+  return nextAutoNumber(state.invoices.map((entry) => entry.number), state.numbering, issueDate);
+}
+
+// Warunki dotyczące całej faktury, sprawdzane przy wystawieniu.
+export function assertIssuable(invoice: InvoiceRecord): void {
+  if (
+    invoice.lines.some((entry) => entry.vatRate === "zw") &&
+    !invoice.annotations?.exemptionBasis
+  ) {
+    throw new InvoiceError("INVOICE_FIELD_REQUIRED:annotations.exemptionBasis", 400);
+  }
 }
 
 function sameNumber(left: string, right: string): boolean {

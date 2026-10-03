@@ -1,3 +1,4 @@
+import { reportUsage } from "./usage-meter.js";
 import type {
   ProviderAdapter,
   ProviderId,
@@ -87,7 +88,9 @@ export class ProviderGateway {
     }
 
     try {
-      return await provider.stream(params);
+      const result = await provider.stream(params);
+      reportUsage(result.usage ?? null);
+      return result;
     } catch (error) {
       if (error instanceof ProviderGatewayError) throw error;
       throw new ProviderGatewayError(

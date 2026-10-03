@@ -8,11 +8,13 @@ import {
 } from "react";
 import type {
   AuxiliarySourceItem,
-  EvidenceItem
+  EvidenceItem,
+  MandatoryPathView
 } from "./api.js";
 import {
   appendCaseThreadMessage,
   getCaseThread,
+  type ChatWidget,
   type GeneratedDocumentRef,
   type RestorationMark,
   type WorkspaceDocumentCitation,
@@ -24,12 +26,14 @@ export type CaseChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   evidence?: EvidenceItem[];
+  mandatoryPath?: MandatoryPathView;
   auxiliarySources?:
     AuxiliarySourceItem[];
   meta?: string;
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
+  widgets?: ChatWidget[];
 };
 
 function persistedMessageId(id: string): string {
@@ -56,7 +60,8 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
       : {}),
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
-      : {})
+      : {}),
+    ...(message.widgets?.length ? { widgets: message.widgets } : {})
   };
 }
 
@@ -75,7 +80,8 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
       : {}),
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
-      : {})
+      : {}),
+    ...(message.widgets?.length ? { widgets: message.widgets } : {})
   };
 }
 

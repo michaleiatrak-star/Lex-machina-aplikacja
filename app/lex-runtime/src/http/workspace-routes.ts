@@ -1988,6 +1988,9 @@ export function registerWorkspaceRoutes(
                 >
             }
           : {}),
+        ...(Array.isArray(raw.widgets)
+          ? { widgets: raw.widgets as NonNullable<WorkspaceThreadMessage["widgets"]> }
+          : {}),
         ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
           ? {
               generatedDocument:

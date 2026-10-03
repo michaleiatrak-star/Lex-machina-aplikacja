@@ -1,3 +1,4 @@
+import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 function parseToolPayload(result) {
     if (typeof result.content !==
@@ -54,7 +55,7 @@ function boundedJson(value, maxChars = 12_000) {
 export async function runGateIRuntimePrelude(args) {
     const actions = [];
     const appendix = [];
-    const verificationPlan = planAutomaticLegalVerification(args.query, args.ledger);
+    const verificationPlan = planAutomaticLegalVerification(provisionsForDetection(args.query), args.ledger);
     if (verificationPlan
         .calls.length > 0) {
         if (!args.runTools) {

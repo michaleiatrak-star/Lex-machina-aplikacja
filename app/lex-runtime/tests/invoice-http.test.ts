@@ -99,9 +99,84 @@ describe("invoice routes", () => {
     await request(app).get("/api/invoices?sort=random").set("authorization", "Bearer user_alice").expect(400);
   });
 
-  it("fetches art. 106e through the ISAP (ELI) connector", async () => {
+  it("fetches art. 106e through the ISAP (ELI) connector and keeps the catalog unverified without text", async () => {
     const response = await request(app).get("/api/invoices/legal-basis").set("authorization", "Bearer user_alice").expect(200);
     expect(response.body).toMatchObject({ eli: "DU/2004/535", article: "106e", ok: true });
+    expect(response.body.report.error).toBe("INVOICE_LEGAL_TEXT_MISSING");
+    expect(new Set(response.body.report.requirements.map((entry: { status: string }) => entry.status))).toEqual(new Set(["UNVERIFIED"]));
     expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", artykul: "106e" } }]);
+  });
+
+  it("searches the VAT act in ELI for the rate instead of a remembered article", async () => {
+    legalCalls.length = 0;
+    const response = await request(app)
+      .get("/api/invoices/legal-basis?topic=vat-rate")
+      .set("authorization", "Bearer user_alice")
+      .expect(200);
+    expect(response.body).toMatchObject({ eli: "DU/2004/535", search: "23%", ok: true });
+    expect(legalCalls).toEqual([{ source: "isap", tool: "isap_tekst", arguments: { eli: "DU/2004/535", szukaj: "23%" } }]);
+  });
+
+  it("saves reusable invoice templates per user", async () => {
+    const template = {
+      name: "Stała obsługa Spółki X",
+      buyer: { name: "Spółka X", nip: "5260250274", address: "ul. Krzywa 2, 30-001 Kraków" },
+      lines: [{ name: "Obsługa prawna (ryczałt)", unit: "mies.", quantity: "1", unitNetPrice: "3000", vatRate: "23" }],
+      currency: "PLN",
+      paymentMethod: "przelew",
+      paymentTermDays: 14
+    };
+    const auth = { authorization: "Bearer user_alice" };
+    const created = await request(app).post("/api/invoices/templates").set(auth).send({ template }).expect(200);
+    expect(created.body.template).toMatchObject({ name: template.name, paymentTermDays: 14 });
+    expect(created.body.template.templateId).toMatch(/^tpl_[0-9a-f]{32}$/);
+    await request(app).post("/api/invoices/templates").set(auth).send({ template: { ...template, name: "stała obsługa spółki x" } }).expect(409);
+    const id = created.body.template.templateId;
+    await request(app)
+      .put(`/api/invoices/templates/${id}`)
+      .set(auth)
+      .send({ template: { ...template, paymentTermDays: 30 } })
+      .expect(200);
+    const list = await request(app).get("/api/invoices/templates").set(auth).expect(200);
+    expect(list.body.templates).toHaveLength(1);
+    expect(list.body.templates[0].paymentTermDays).toBe(30);
+    const other = await request(app).get("/api/invoices/templates").set("authorization", "Bearer user_bob").expect(200);
+    expect(other.body.templates).toEqual([]);
+    await request(app).post("/api/invoices/templates").set(auth).send({ template: { ...template, name: "Bez pozycji", lines: [] } }).expect(400);
+    await request(app).delete(`/api/invoices/templates/${id}`).set(auth).expect(200);
+    await request(app).delete(`/api/invoices/templates/${id}`).set(auth).expect(404);
+  });
+
+  it("stores invoice defaults per user and rejects unknown values", async () => {
+    const defaults = { paymentMethod: "przelew", paymentTermDays: 14, vatRate: "23" };
+    await request(app)
+      .put("/api/invoices/settings/defaults")
+      .set("authorization", "Bearer user_alice")
+      .send({ defaults })
+      .expect(200, { defaults });
+    const settings = await request(app).get("/api/invoices/settings").set("authorization", "Bearer user_alice").expect(200);
+    expect(settings.body.defaults).toEqual(defaults);
+    const other = await request(app).get("/api/invoices/settings").set("authorization", "Bearer user_bob").expect(200);
+    expect(other.body.defaults).toBeUndefined();
+    for (const bad of [
+      { ...defaults, paymentMethod: "karta" },
+      { ...defaults, paymentTermDays: 1.5 },
+      { ...defaults, vatRate: "abc1" }
+    ]) {
+      await request(app).put("/api/invoices/settings/defaults").set("authorization", "Bearer user_alice").send({ defaults: bad }).expect(400);
+    }
+  });
+
+  it("serves the catalog and previews the next auto number", async () => {
+    const catalog = await request(app).get("/api/invoices/requirements").set("authorization", "Bearer user_bob").expect(200);
+    expect(catalog.body.report.requirements[0]).toMatchObject({ point: "1", status: "UNVERIFIED" });
+    await request(app)
+      .put("/api/invoices/settings/numbering")
+      .set("authorization", "Bearer user_bob")
+      .send({ numbering: { pattern: "{NR}/{RRRR}", reset: "yearly", padding: 3 } })
+      .expect(200);
+    const next = await request(app).get("/api/invoices/next-number?issueDate=2026-10-03").set("authorization", "Bearer user_bob").expect(200);
+    expect(next.body.number).toBe("001/2026");
+    await request(app).get("/api/invoices/next-number?issueDate=x").set("authorization", "Bearer user_bob").expect(400);
   });
 });

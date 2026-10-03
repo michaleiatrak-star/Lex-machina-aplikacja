@@ -1829,25 +1829,66 @@ export function accountSessionClientModel(provider, model) {
         ? id
         : null;
 }
-function parseToolCalls(text) {
-    let normalized = text.trim();
-    if (normalized.startsWith("```") &&
-        normalized.endsWith("```")) {
-        normalized = normalized
-            .replace(/^\`\`\`(?:json)?\s*/i, "")
-            .replace(/\s*\`\`\`$/, "")
-            .trim();
+// Jeden obiekt JSON od pozycji `from` (nawiasy liczone poza napisami); null, gdy niedomknięty.
+function jsonObjectAt(text, from) {
+    const open = text.indexOf("{", from);
+    if (open < 0 || text.slice(from, open).trim())
+        return null;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = open; index < text.length; index += 1) {
+        const char = text[index];
+        if (inString) {
+            if (escaped)
+                escaped = false;
+            else if (char === "\\")
+                escaped = true;
+            else if (char === '"')
+                inString = false;
+            continue;
+        }
+        if (char === '"')
+            inString = true;
+        else if (char === "{")
+            depth += 1;
+        else if (char === "}" && --depth === 0)
+            return { json: text.slice(open, index + 1), end: index + 1 };
     }
+    return null;
+}
+// Model proszony o wszystkie wywołania w jednej rundzie bywa, że zapisuje kilka linii
+// z prefiksem (każda z własnym JSON) albo dopisuje tekst po JSON; wywołania ze wszystkich
+// bloków są łączone, tekst poza blokami pomijany.
+export function parseToolCalls(text) {
+    const normalized = text
+        .trim()
+        .replace(/^\`\`\`(?:json)?[ \t]*$/gim, "")
+        .trim();
     if (!normalized.startsWith(TOOL_SENTINEL)) {
         return null;
     }
-    const payload = normalized
-        .slice(TOOL_SENTINEL.length)
-        .trim();
-    const parsed = JSON.parse(payload);
-    if (!Array.isArray(parsed.calls)) {
-        throw new Error("ACCOUNT_SESSION_TOOL_PROTOCOL_INVALID");
+    const calls = [];
+    let at = 0;
+    while ((at = normalized.indexOf(TOOL_SENTINEL, at)) >= 0) {
+        const block = jsonObjectAt(normalized, at + TOOL_SENTINEL.length);
+        if (!block)
+            throw new Error("ACCOUNT_SESSION_TOOL_PROTOCOL_INVALID");
+        let parsed;
+        try {
+            parsed = JSON.parse(block.json);
+        }
+        catch {
+            throw new Error("ACCOUNT_SESSION_TOOL_PROTOCOL_INVALID");
+        }
+        if (!Array.isArray(parsed.calls)) {
+            throw new Error("ACCOUNT_SESSION_TOOL_PROTOCOL_INVALID");
+        }
+        calls.push(...parsed.calls);
+        at = block.end;
     }
+    const parsed = { calls };
+    const seen = new Set();
     return parsed.calls.map((item, index) => {
         if (!item ||
             typeof item !== "object" ||
@@ -1858,10 +1899,14 @@ function parseToolCalls(text) {
         const name = typeof record.name === "string"
             ? record.name
             : "";
-        const id = typeof record.id === "string" &&
+        let id = typeof record.id === "string" &&
             record.id
             ? record.id
             : `account_tool_${index + 1}`;
+        // Kolejne bloki zwykle znów zaczynają od "call_1".
+        if (seen.has(id))
+            id = `${id}_${index + 1}`;
+        seen.add(id);
         const input = record.input &&
             typeof record.input === "object" &&
             !Array.isArray(record.input)
@@ -1940,7 +1985,7 @@ function buildAccountPrompt(params, toolTranscript) {
             // Each round of tool calls is a separate CLI run with the whole context, so
             // independent reads and checks belong in one round (router, SKILL.md, modules,
             // verification of unrelated provisions); only calls that depend on a result wait.
-            "Every tool round starts a new model run and costs the user tens of seconds. Put ALL tool calls you already know you need into ONE line (several entries in \"calls\"): e.g. the router together with the SKILL.md and modules you expect, or verification of several independent provisions. Make a further round only for calls that depend on results you have not seen yet.",
+            "Every tool round starts a new model run and costs the user tens of seconds. Put ALL tool calls you already know you need into ONE line with the prefix written once (several entries in one \"calls\" array, never a second prefix or text after the JSON): e.g. the router together with the SKILL.md and modules you expect, or verification of several independent provisions. Make a further round only for calls that depend on results you have not seen yet.",
             "Do not repeat a search or read whose result is already in LEX_RUNTIME_TOOL_TRANSCRIPT. Verify only the provisions you will actually cite in the answer.",
             "After tool results are supplied, continue the task. When no more tools are needed, return the final answer normally.",
             `LEX_RUNTIME_TOOLS=${toolSchemas}`

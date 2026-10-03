@@ -37,6 +37,8 @@ import {
   verifyFromCoreLaw,
   type CoreLawVerificationIndex
 } from "./core-law-verification.js";
+import { canonicalInterpretationSignature, verifyInterpretation } from "./interpretation-verifier.js";
+import { SubstituteSourceError, verifySubstituteSources, type ConsolidatedIdentity, type SubstituteOutcome } from "./substitute-source.js";
 import type { CoreLawUseCheck } from "./core-law-index.js";
 import { describeEliAct } from "./eli-act-descriptor.js";
 import {
@@ -74,6 +76,34 @@ function withEliOutageNotice(
       String(payload.instruction ?? "")
   };
 }
+const INTERPRETATION_TOOL_NAME = "verify_interpretation";
+
+const INTERPRETATION_TOOL_SCHEMA: NormalizedToolSchema = {
+  type: "function",
+  function: {
+    name: INTERPRETATION_TOOL_NAME,
+    description:
+      "Verify a Polish tax interpretation (individual or general, KIS/MF) by its exact signature in EUREKA (eureka.mf.gov.pl, RZĄD 2A). " +
+      "Call before citing any interpretation signature. VERIFIED confirms the document exists under exactly this signature and returns its thesis, date and EUREKA status (current or not); " +
+      "never supply a URL. An interpretation is not a source of law: the provision it applies is still verified with verify_legal_reference.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["signature"],
+      properties: {
+        signature: {
+          type: "string",
+          description: "Exact signature, e.g. 0114-KDIP1-2.4012.345.2024.1.RD, IPPP1/4512-123/15-2/AW or DD10.8201.1.2020."
+        },
+        quote: {
+          type: "string",
+          description: "Optional exact wording you intend to quote from the interpretation; a mismatch makes it UNVERIFIED."
+        }
+      }
+    }
+  }
+};
+
 const CASE_SEARCH_TOOL_NAME =
   "search_case_law";
 const CASE_TOOL_NAME = "verify_case_reference";
@@ -120,11 +150,21 @@ const TOOL_SCHEMA: NormalizedToolSchema = {
           type: "string",
           description:
             "Optional exact wording you intend to quote from the provision. It is checked against the official ELI text; a mismatch makes the reference UNVERIFIED."
+        },
+        substituteSourceUrls: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 3,
+          description:
+            "Only after a result with `substitute` (RZĄD 1 / Sejm ELI unavailable): https URLs of the same article. E-3: one RZĄD 2A source (LEX/Legalis, official databases) gives ✅ [VER]. E-4: two independent RZĄD 2B portals (e.g. arslege.pl, lexlege.pl) showing the t.j. Dz.U. number give at most 🟨 [KOTWICA-URZĘDOWA] (K-1…K-4). RZĄD 3 is refused."
         }
       }
     }
   }
 };
+
+const SUBSTITUTE_HINT =
+  "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
 
 
 const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
@@ -540,16 +580,18 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- Before emitting any statutory citation (art. or Dz.U.), call verify_legal_reference.",
   "- Pass only claim + kind + legal act identity/alias. Never invent or supply an official-source URL.",  "- The runtime resolves the canonical official source and checks temporal freshness before reading the citation.",
   "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
-  "- If the user explicitly asks for a past legal state, pass asOf=YYYY-MM-DD. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
+  "- If the user explicitly asks for a past legal state, or the matter turns on an event in the past (PRAWO-HARDGATE KROK 4: the wording in force on the event date), pass asOf=YYYY-MM-DD for the provisions that decide it. The application also re-checks provisions verified in their current wording on event dates found in the question and reports a different wording in the mandatory-path register. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
   "- " + STATUS_CONSISTENCY_INSTRUCTION,
   "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
+  "- Source canon E-1…E-5 (shared/HIERARCHIA-ZRODEL.md): RZĄD 1 (Sejm ELI) first. Only when verify_legal_reference returns `substitute` (BRAK-AKTU in RZĄD 1), pass substituteSourceUrls: E-3 one RZĄD 2A source (LEX/Legalis, official databases) -> ✅ [VER]; E-4 two independent RZĄD 2B portals with the t.j. number -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …]; otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 is auxiliary only. The status hierarchy is closed (✅ > 🟨 > ⚠️ > ⬛): never create another label. Copy the returned marker verbatim and state that RZĄD 1 was unavailable (K-4).",
   "- Never invent a verification marker, source URL, or tool result.",
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
   "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
   "- NSA/WSA (CBOSA) material is a dated SNAPSHOT: present it as a snapshot and never promote it to VERIFIED. A CBOSA search with no hits is OUT_OF_SCOPE, never evidence that no judgment exists.",
   "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
+  "- Before citing a tax interpretation (KIS/MF signature, e.g. 0114-KDIP1-2.4012.345.2024.1.RD), call verify_interpretation and copy the returned marker onto the SAME LINE as the signature. Say whether it is an interpretation of an authority (not binding on a court, 📋) or a court ruling (⚖️); an interpretation EUREKA does not list as current is never presented as the authority's current position. Without VERIFIED: ⚠️ [NIEWERYFIKOWANE] or omit the signature.",
   "- Before emitting a case signature (sygn.), call verify_case_reference.",
   "- The first supported courtFamily is SN. Pass only claim + signature + courtFamily; never invent or supply the sn.pl URL.",
   "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
@@ -560,6 +602,9 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
 ].join("\n");
 
 export class LegalVerificationToolRuntime {
+  // Pobieranie źródła zastępczego (testy podstawiają własne).
+  substituteFetcher: typeof fetch | null = null;
+
   private readonly broker: ToolBroker;
   private readonly resolverAudit: ToolAuditEvent[] = [];
 
@@ -582,8 +627,9 @@ export class LegalVerificationToolRuntime {
       init?: RequestInit
     ) => Promise<Response> =
       globalThis.fetch.bind(globalThis),
-    // Akt zweryfikowany w źródle, którego nie ma w lokalnej kopii (albo ma tam starszy
-    // tekst): dołączany do kopii i RAG, jak akty z map DR.
+    // Każdy akt zweryfikowany w źródle: brak w lokalnej kopii -> dołączany do kopii
+    // i RAG; starszy t.j. w kopii niż w ELI -> pobranie nowego (adopt nic nie robi,
+    // gdy kopia jest zgodna).
     private readonly adoptAct:
       | ((act: LegalActDescriptor) => void)
       | null = null,
@@ -1028,7 +1074,8 @@ export class LegalVerificationToolRuntime {
                     : {})
                 }
               : {}),
-            ...(asOf ? { asOf } : {})
+            ...(asOf ? { asOf } : {}),
+            actDescriptor: { ...act }
           };
 
         this.ledger.add(
@@ -1074,6 +1121,7 @@ export class LegalVerificationToolRuntime {
   schemas(): NormalizedToolSchema[] {
     return [
       TOOL_SCHEMA,
+      INTERPRETATION_TOOL_SCHEMA,
       CASE_SEARCH_TOOL_SCHEMA,
       CASE_TOOL_SCHEMA,
       CASE_QUOTE_TOOL_SCHEMA,
@@ -1113,28 +1161,115 @@ export class LegalVerificationToolRuntime {
    * informacją w wyniku; odmowa kopii zostaje odmową. Model lokalny próbował kopii już
    * wcześniej, więc tu tylko odmowa z przyczyną.
    */
-  private eliOutageFallback(
+  private async eliOutageFallback(
     call: NormalizedToolCall,
     actInput: string,
     asOf: string,
     cause: string,
     localCopy: string | undefined
-  ): string {
-    if (this.localModel || !this.coreLaw) {
-      return JSON.stringify({
-        status: "DENIED",
-        error: cause,
-        ...(localCopy ? { localCopy } : {})
-      });
+  ): Promise<string> {
+    let denied = localCopy;
+    let localResult: Record<string, unknown> | null = null;
+    if (!this.localModel && this.coreLaw) {
+      const local = this.verifyWithCoreLaw(call, actInput, asOf);
+      if (!local.denied) {
+        localResult = withEliOutageNotice(JSON.parse(local.content) as Record<string, unknown>, cause);
+        if (localResult.status === "VERIFIED") return JSON.stringify(localResult);
+      } else {
+        denied = local.denied;
+      }
     }
-    const local = this.verifyWithCoreLaw(call, actInput, asOf);
-    if (local.denied) {
-      return JSON.stringify({ status: "DENIED", error: cause, localCopy: local.denied });
+    // BRAK-AKTU w RZĘDZIE 1 (ELI nie działa, kopia nie potwierdza): źródła zastępcze
+    // wskazane przez model wg kanonu E-3/E-4.
+    const substitute = Array.isArray(call.input.substituteSourceUrls)
+      ? call.input.substituteSourceUrls.filter((item): item is string => typeof item === "string")
+      : [];
+    if (substitute.length > 0 && !asOf) {
+      return this.verifyWithSubstitute(call, actInput, substitute, cause);
     }
-    return JSON.stringify(
-      withEliOutageNotice(JSON.parse(local.content) as Record<string, unknown>, cause)
-    );
+    if (localResult) {
+      return JSON.stringify({ ...localResult, substitute: SUBSTITUTE_HINT });
+    }
+    return JSON.stringify({
+      status: "DENIED",
+      error: cause,
+      ...(denied ? { localCopy: denied } : {}),
+      ...(asOf ? {} : { substitute: SUBSTITUTE_HINT })
+    });
   }
+
+  private async verifyWithSubstitute(
+    call: NormalizedToolCall,
+    actInput: string,
+    urls: string[],
+    cause: string
+  ): Promise<string> {
+    const claim = typeof call.input.claim === "string" ? call.input.claim.trim() : "";
+    const verificationKind = kind(call.input.kind);
+    const quote = typeof call.input.quote === "string" ? call.input.quote.trim() : "";
+    if (!claim || !verificationKind) {
+      return JSON.stringify({ status: "DENIED", error: "INVALID_VERIFICATION_INPUT" });
+    }
+    let outcome: SubstituteOutcome;
+    try {
+      outcome = await verifySubstituteSources({
+        urls,
+        claim,
+        kind: verificationKind,
+        ...(quote ? { quote } : {}),
+        identity: this.consolidatedIdentity(actInput),
+        r1Cause: cause,
+        toolCallId: call.id,
+        ...(this.substituteFetcher ? { fetcher: this.substituteFetcher } : {})
+      });
+    } catch (error) {
+      const code = error instanceof SubstituteSourceError ? error.code : "SUBSTITUTE_FAILED";
+      this.resolverAudit.push({ sequence: this.resolverAudit.length + 1, tool: TOOL_NAME, capability: "read", decision: "DENY", reason: code });
+      return JSON.stringify({ status: "DENIED", error: cause, substituteError: code });
+    }
+    this.ledger.add(outcome.record);
+    this.resolverAudit.push({
+      sequence: this.resolverAudit.length + 1,
+      tool: TOOL_NAME,
+      capability: "read",
+      decision: outcome.status === "NIEWERYFIKOWANE" ? "DENY" : "ALLOW",
+      reason: `SUBSTITUTE_${outcome.status}`
+    });
+    return JSON.stringify({
+      claim: outcome.record.claim,
+      status: outcome.record.status,
+      sourceStatus: outcome.status,
+      sourceTier: outcome.record.sourceTier ?? null,
+      substituteFor: "R1",
+      r1Unavailable: cause,
+      sourceUrl: outcome.record.sourceUrl ?? null,
+      evidence: outcome.record.evidence ?? null,
+      fetchedAt: outcome.record.fetchedAt,
+      marker: outcome.marker,
+      ...(outcome.reasons.length ? { reasons: outcome.reasons } : {}),
+      instruction:
+        "Copy the marker verbatim onto the line with the citation. K-4: say explicitly that RZĄD 1 (Sejm ELI) was unavailable and why (" +
+        cause +
+        "). " +
+        (outcome.status === "VER"
+          ? "Confirmed in a RZĄD 2A source (E-3)."
+          : outcome.status === "KOTWICA"
+            ? "🟨 KOTWICA URZĘDOWA is not ✅: present the wording as read from RZĄD 2B; in a pleading it needs closure (HYBRID-VALIDATION)."
+            : "Not confirmed: present the provision as ⚠️ [NIEWERYFIKOWANE]; never quote it from memory.")
+    });
+  }
+
+  // K-1: numer aktualnego t.j. z indeksu RZĘDU 1 zapisanego w kopii ELI.
+  private consolidatedIdentity(actInput: string): ConsolidatedIdentity | null {
+    const index = this.coreLaw;
+    if (!index) return null;
+    const eli = index.resolve(actInput)?.eli ?? resolveActByTitle(index, actInput);
+    const summary = eli ? index.summary(eli) : null;
+    const current = summary?.consolidated ? (summary.currentEli ?? summary.eli) : null;
+    const match = current ? /^DU\/(\d{4})\/(\d+)$/.exec(current) : null;
+    return match ? { year: match[1]!, position: match[2]! } : null;
+  }
+
 
   /**
    * Model lokalny: przed użyciem kopii sprawdzenie w ELI, czy nie ma nowszego t.j. albo
@@ -1244,6 +1379,70 @@ export class LegalVerificationToolRuntime {
     };
   }
 
+  // Pobieranie EUREKA (testy podstawiają własne).
+  interpretationFetcher: typeof fetch | null = null;
+
+  private async verifyInterpretationCall(call: NormalizedToolCall): Promise<string> {
+    const signature = typeof call.input.signature === "string" ? call.input.signature.trim() : "";
+    const quote = typeof call.input.quote === "string" ? call.input.quote : undefined;
+    const audit = (decision: "ALLOW" | "DENY", reason?: string) =>
+      this.resolverAudit.push({
+        sequence: this.resolverAudit.length + 1,
+        tool: INTERPRETATION_TOOL_NAME,
+        capability: "network",
+        decision,
+        ...(reason ? { reason } : {})
+      });
+    if (!signature) {
+      audit("DENY", "INVALID_INTERPRETATION_INPUT");
+      return JSON.stringify({ status: "DENIED", error: "INVALID_INTERPRETATION_INPUT" });
+    }
+    const outcome = await verifyInterpretation({
+      signature,
+      ...(quote ? { quote } : {}),
+      toolCallId: call.id,
+      ...(this.interpretationFetcher ? { fetcher: this.interpretationFetcher } : {})
+    });
+    const claim = canonicalInterpretationSignature(signature);
+    if (outcome.status !== "VERIFIED" || !outcome.record) {
+      audit("DENY", outcome.reason ?? outcome.status);
+      // Brak potwierdzenia też trafia do rejestru: G8 wymaga wtedy ⚠️ przy sygnaturze.
+      this.ledger.add({
+        claim,
+        kind: "interpretation",
+        status: "UNVERIFIED",
+        fetchedAt: new Date().toISOString(),
+        toolCallId: call.id,
+        ...(outcome.eurekaStatus ? { interpretationStatus: outcome.eurekaStatus } : {})
+      });
+      return JSON.stringify({
+        status: outcome.status === "SOURCE_UNAVAILABLE" ? "UNVERIFIED" : outcome.status,
+        error: outcome.reason ?? null,
+        marker: "⚠️ [NIEWERYFIKOWANE]",
+        instruction:
+          outcome.status === "NOT_FOUND"
+            ? "EUREKA has no document under exactly this signature (EUREKA does not hold every ruling; no hit is not proof it does not exist). Do not cite it as verified."
+            : "Do not present this interpretation as verified; if it must be mentioned, put ⚠️ [NIEWERYFIKOWANE] next to the signature."
+      });
+    }
+    audit("ALLOW");
+    this.ledger.add(outcome.record);
+    return JSON.stringify({
+      status: "VERIFIED",
+      signature: claim,
+      sourceUrl: outcome.record.sourceUrl,
+      issuedAt: outcome.issuedAt ?? null,
+      thesis: outcome.thesis ?? null,
+      eurekaStatus: outcome.eurekaStatus,
+      current: outcome.current,
+      evidence: outcome.record.evidence,
+      marker: verificationMarker(outcome.record),
+      instruction: outcome.current
+        ? "Copy the marker verbatim onto the SAME LINE as the signature. It is an interpretation of an authority (📋, binding only on its addressee), not a source of law."
+        : `EUREKA status: ${outcome.eurekaStatus}. The interpretation is NOT current: never present it as the authority's current position; copy the marker verbatim (it states the status).`
+    });
+  }
+
   auditEvents(): readonly ToolAuditEvent[] {
     return [
       ...this.resolverAudit.map((event) => ({ ...event })),
@@ -1260,6 +1459,10 @@ export class LegalVerificationToolRuntime {
     const results: NormalizedToolResult[] = [];
 
     for (const call of calls) {
+      if (call.name === INTERPRETATION_TOOL_NAME) {
+        results.push({ tool_use_id: call.id, content: await this.verifyInterpretationCall(call) });
+        continue;
+      }
       if (
         call.name ===
         CASE_SEARCH_TOOL_NAME
@@ -1602,7 +1805,7 @@ export class LegalVerificationToolRuntime {
           if (described.outage) {
             results.push({
               tool_use_id: call.id,
-              content: this.eliOutageFallback(
+              content: await this.eliOutageFallback(
                 call,
                 actInput,
                 asOf,
@@ -1674,7 +1877,7 @@ export class LegalVerificationToolRuntime {
         ) {
           results.push({
             tool_use_id: call.id,
-            content: this.eliOutageFallback(
+            content: await this.eliOutageFallback(
               call,
               actInput,
               asOf,
@@ -1763,7 +1966,7 @@ export class LegalVerificationToolRuntime {
       ) {
         results.push({
           tool_use_id: call.id,
-          content: this.eliOutageFallback(
+          content: await this.eliOutageFallback(
             call,
             actInput,
             asOf,
@@ -1776,7 +1979,6 @@ export class LegalVerificationToolRuntime {
 
       if (
         result.ok &&
-        (resolvedAct.id === "ELI" || this.localModel) &&
         this.adoptAct
       ) {
         try {

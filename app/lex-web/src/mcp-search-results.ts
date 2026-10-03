@@ -20,7 +20,7 @@ export type SearchItem = {
 
 export type SourcePreviewTarget =
   | { kind: "url"; url: string }
-  | { kind: "record"; key: string; html: string };
+  | { kind: "record"; key: string; html: string; anchor?: string };
 
 export type SearchDocument = {
   title: string;

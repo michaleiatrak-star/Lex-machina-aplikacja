@@ -253,7 +253,9 @@ export function withAnomalyJournal(
     }
     return response;
   };
-  return inner.resolveAutoRouting
-    ? { execute, resolveAutoRouting: (request) => inner.resolveAutoRouting!(request) }
-    : { execute };
+  return {
+    execute,
+    ...(inner.resolveAutoRouting ? { resolveAutoRouting: (request) => inner.resolveAutoRouting!(request) } : {}),
+    ...(inner.summarizeThread ? { summarizeThread: (request) => inner.summarizeThread!(request) } : {})
+  };
 }

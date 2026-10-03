@@ -23,6 +23,8 @@ SAMPLE = {
     ":server": "nbp",
     ":executionId": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
     ":invoiceId": "inv_0123456789abcdef0123456789abcdef",
+    ":widgetId": "0123456789abcdef0123456789abcdef",
+    ":templateId": "tpl_0123456789abcdef0123456789abcdef",
 }
 
 
@@ -47,7 +49,7 @@ def main() -> int:
             routes.add((match.group(1).upper(), match.group(2)))
     trust = open(TRUST, encoding="utf8").read()
     helpers = [name for name in re.findall(r"^fn (\w+)\(", trust, re.M)
-               if name in {"route_allowed", "is_mcp_route", "is_invoice_route", "is_execution_progress_route"}]
+               if name in {"route_allowed", "is_mcp_route", "is_invoice_route", "is_widget_frame_route", "is_execution_progress_route"}]
     rows = []
     for method, route in sorted(routes):
         sample = route

@@ -1,3 +1,6 @@
+import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
+import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
+import { detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 import {
   VerificationLedger,
@@ -59,7 +62,8 @@ const REFERENCE = new RegExp(
 const ENUMERATION_ITEM = new RegExp(UNIT, "gu");
 const RANGE_SEPARATOR = /^\s*[–-]\s*$/u;
 const VERIFIED_MARKER = /✅\s*\[VER:[^\]\r\n]*\]/gu;
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/gu;
+// 🟨 [KOTWICA-URZĘDOWA: …] to status niezweryfikowany (nie ✅), jak ⚠️.
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu;
 const APPLICATION_HEDGE =
   /\b(?:potencjaln\p{L}*|ewentualn\p{L}*|prawdopodobn\p{L}*|hipotetyczn\p{L}*|mo(?:że|gą|głoby|głyby)\s+(?:mieć\s+zastosowanie|wypełni\p{L}*|stanowić|wchodzić\s+w\s+grę|znaleźć\s+zastosowanie)|w\s+zależności\s+od\s+okoliczności)/iu;
 
@@ -120,12 +124,18 @@ function lineTokens(lineText: string): Token[] {
       });
     });
   }
+  // ⚠️ tuż za stawką, terminem, karą albo sygnaturą interpretacji należy do niej, nie do przepisu.
+  const signatureEnds = interpretationSignaturesInLine(lineText)
+    .filter((signature) => lineText.includes(signature))
+    .map((signature) => lineText.indexOf(signature) + signature.length);
+  const amountMarkers = [...amountMarkerSpans(lineText), ...markerSpansAfter(lineText, signatureEnds)];
   for (const [pattern, status] of [
     [VERIFIED_MARKER, "VERIFIED"],
     [UNVERIFIED_MARKER, "UNVERIFIED"]
   ] as const) {
     pattern.lastIndex = 0;
     for (const match of lineText.matchAll(pattern)) {
+      if (status === "UNVERIFIED" && amountMarkers.some((span) => span.start === match.index)) continue;
       tokens.push({
         type: "marker",
         start: match.index!,
@@ -407,10 +417,14 @@ export function reconcileStatusMarkers(
         continue;
       }
       // Grupa mieszana: ✅ bezpośrednio po zweryfikowanym przepisie, ⚠️ zostaje przy reszcie.
+      // Ten sam ✅ w innym miejscu wiersza (np. dopisany na końcu) nie należy do tej grupy.
+      const groupMarkers = new Set(
+        group.markers.map((marker) => line.text.slice(marker.start, marker.end))
+      );
       group.references.forEach((reference, index) => {
         const record = records[index];
-        const marker = record ? missing(record) : null;
-        if (!marker) return;
+        const marker = record ? verificationMarker(record) : null;
+        if (!marker || groupMarkers.has(marker)) return;
         edits.push({ start: reference.end, end: reference.end, insert: ` ${marker}` });
         repaired += 1;
       });
@@ -423,4 +437,39 @@ export function reconcileStatusMarkers(
     return next;
   });
   return { text: repaired > 0 ? output.join("\n") : text, repaired };
+}
+
+/**
+ * Znacznik ✅ [VER: …] przy przepisie, którego nie da się odtworzyć z rekordu VERIFIED
+ * w rejestrze, jest deklaracją modelu, nie weryfikacją (np. sam link do aktu bez kotwicy
+ * albo inna data). Usuwany przed wstawieniem znaczników z rejestru: przepis zweryfikowany
+ * dostaje znacznik z rejestru, niezweryfikowany ⚠️ [NIEWERYFIKOWANE]. Wiersz z sygnaturą
+ * orzeczenia zostaje bez zmian: zmieniony znacznik orzeczenia nadal blokuje (G22).
+ */
+export function stripUnbackedVerificationMarkers(
+  text: string,
+  ledger: VerificationLedger
+): { text: string; removed: number } {
+  const ledgerMarkers = new Set(
+    ledger
+      .all()
+      .map((record) => verificationMarker(record))
+      .filter((marker): marker is string => Boolean(marker))
+  );
+  const caseLines = new Set(
+    detectLegalReferences(text)
+      .filter((reference) => reference.kind === "case")
+      .map((reference) => reference.line)
+  );
+  let removed = 0;
+  const lines = text.split(/\r?\n/u).map((line, index) =>
+    caseLines.has(index + 1)
+      ? line
+      : line.replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) => {
+          if (ledgerMarkers.has(match.trimStart())) return match;
+          removed += 1;
+          return "";
+        })
+  );
+  return { text: removed > 0 ? lines.join("\n") : text, removed };
 }

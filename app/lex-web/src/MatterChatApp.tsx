@@ -12,7 +12,11 @@ import { McpSearchPanel } from "./McpSearchPanel.js";
 import { InvoicesPanel } from "./InvoicesPanel.js";
 import { downloadBlob } from "./download-file.js";
 import { ChatDocumentCard } from "./ChatDocumentCard.js";
+import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
+import { ProvisionPreview } from "./ProvisionPreview.js";
+import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
+import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
 import {
@@ -784,8 +788,9 @@ export function blockedReasonText(
   execution: Pick<
     ExtendedExecution,
     "status" | "answer" | "audit" | "workflow" | "gateI" | "finalization"
-  >
+  > & { blockedReferences?: ExtendedExecution["blockedReferences"] }
 ): string {
+  const references = (execution.blockedReferences ?? []).slice(0, 12);
   const lines = [
     `status=${execution.status}; finalization=${execution.finalization}; audit=${execution.audit?.result ?? "?"}; answer=${execution.answer ? "present" : "missing"}` +
       (execution.workflow ? `; workflow=${execution.workflow.id}:${execution.workflow.result}` : "") +
@@ -794,6 +799,9 @@ export function blockedReasonText(
     ...(execution.audit?.violations?.length ? [`audit.violations: ${execution.audit.violations.join(", ")}`] : []),
     ...(execution.workflow?.missingResources.length
       ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
+      : []),
+    ...(references.length
+      ? [`odwołania zablokowane przez G8: ${references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ")}`]
       : []),
     ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
   ];
@@ -848,6 +856,7 @@ function executionMessage(
         verificationWarning +
         execution.answer,
       evidence: execution.evidence,
+      ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -855,6 +864,7 @@ function executionMessage(
           }
         : {}),
       documentCitations: execution.documentCitations,
+      ...(execution.widgets?.length ? { widgets: execution.widgets } : {}),
       ...(execution.restorations?.length
         ? {
             restorations:
@@ -875,6 +885,10 @@ function executionMessage(
         citationMeta +
         workflowMeta +
         modelRoutingMeta +
+        (execution.modeDecision ? ` · tryb ${execution.modeDecision.mode}` : "") +
+        (execution.mandatoryPath
+          ? ` · ścieżka ${execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA"} ${execution.mandatoryPath.steps.filter((step) => step.status === "MET").length}/${execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length}`
+          : "") +
         ` · VERIFIED ${execution.verification.verified}` +
         ` · SUPPORTED ${execution.verification.supported}` +
         (verificationDegraded
@@ -962,6 +976,9 @@ export default function MatterChatApp({
   const [deletePhrase, setDeletePhrase] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [workspaceRefresh, setWorkspaceRefresh] = useState(0);
+  const [memoryRefresh, setMemoryRefresh] = useState(0);
+  // Evidence item whose provision preview is open ("<messageId>:<index>").
+  const [provisionPreview, setProvisionPreview] = useState<string | null>(null);
   // Current names of documents made by a model (renamed in the case files or
   // in the chat card); the thread keeps the name given at generation.
   const [artifactNames, setArtifactNames] =
@@ -3035,6 +3052,8 @@ export default function MatterChatApp({
       }, executionId).finally(
         stopDraftPolling
       ) as ExtendedExecution;
+      // The answer updated the matter's memory (provisions, summary).
+      setMemoryRefresh((value) => value + 1);
 
       setExecutionStage(
         "Finalizacja odpowiedzi"
@@ -4574,6 +4593,7 @@ export default function MatterChatApp({
                     content={message.content}
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
+                    markdown={message.role === "assistant"}
                   />
                   {message.role === "assistant" &&
                   (message.restorations?.length ||
@@ -4609,6 +4629,20 @@ export default function MatterChatApp({
                       }}
                     />
                   ) : null}
+                  {message.widgets?.map((widget, index) => (
+                    <ChatWidgetCard
+                      key={`${message.id}-widget-${index}`}
+                      widget={widget}
+                      onPrompt={(text) => {
+                        // Widget w trakcie odpowiedzi: tekst czeka w polu wiadomości.
+                        if (executing || caseBusy || !caseId) {
+                          setQuery(text);
+                          return;
+                        }
+                        void executeMessage(text);
+                      }}
+                    />
+                  ))}
                   {message.generatedDocument && caseId ? (
                     <ChatDocumentCard
                       caseId={caseId}
@@ -4653,11 +4687,29 @@ export default function MatterChatApp({
                                 Otwórz źródło w przeglądarce ↗
                               </a>
                             ) : null}
+                            {item.kind === "statute" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="chat-secondary-action chat-provision-preview-toggle"
+                                  onClick={() => {
+                                    const key = `${message.id}:${index}`;
+                                    setProvisionPreview((current) => (current === key ? null : key));
+                                  }}
+                                >
+                                  {provisionPreview === `${message.id}:${index}` ? "Zwiń podgląd" : "Podgląd z zaznaczeniem"}
+                                </button>
+                                {provisionPreview === `${message.id}:${index}` ? (
+                                  <ProvisionPreview claim={item.claim} {...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {})} />
+                                ) : null}
+                              </>
+                            ) : null}
                           </li>
                         ))}
                       </ul>
                     </details>
                   ) : null}
+                  {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
                       <summary>
@@ -5893,7 +5945,7 @@ export default function MatterChatApp({
             <article className="chat-card">
               <p className="eyebrow">Wiedza w sesji</p>
               <div className="chat-check-row">
-                <label>
+                <label title="Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam przeszukiwać i czytać całe akta sprawy (tekst spseudonimizowany).">
                   <input
                     type="checkbox"
                     checked={includeCaseKnowledge}
@@ -5921,6 +5973,14 @@ export default function MatterChatApp({
                 </label>
               </div>
             </article>
+
+            {selectedCase ? (
+              <CaseMemoryCard
+                caseId={caseId}
+                canWrite={canWriteCase(selectedCase)}
+                refreshToken={memoryRefresh}
+              />
+            ) : null}
 
             {selectedCase ? (
               <WorkspaceManager

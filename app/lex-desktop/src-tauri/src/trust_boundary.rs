@@ -1353,7 +1353,8 @@ fn runtime_address_from_line(line: &str) -> Option<SocketAddr> {
 }
 
 fn requires_session(path: &str) -> bool {
-    if path.starts_with("/api/support/") {
+    // Ramka widgetu nie dostaje tokenu sesji: widget nie działa w imieniu użytkownika.
+    if path.starts_with("/api/support/") || is_widget_frame_route(path) {
         return false;
     }
     !matches!(
@@ -1431,12 +1432,17 @@ fn route_allowed(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
         "/api/admin/case-access" => method == "GET",
+        // Miernik jakości (Ustawienia -> Konserwacja, tylko administrator).
+        "/api/admin/quality-benchmark" => matches!(method, "GET" | "POST"),
+        "/api/admin/quality-benchmark/cancel" => method == "POST",
+        _ if path.starts_with("/api/admin/quality-benchmark/reports/") => method == "GET",
         "/api/core-law/status" => method == "GET",
         "/api/core-law/check"
         | "/api/core-law/apply"
         | "/api/core-law/acts"
         | "/api/core-law/acts/lookup"
-        | "/api/core-law/acts/remove" => method == "POST",
+        | "/api/core-law/acts/remove"
+        | "/api/core-law/provision-preview" => method == "POST",
         "/api/core-law/settings" => method == "PUT",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
@@ -1474,8 +1480,17 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/sensitive-download/") => method == "GET",
         _ if is_mcp_route(method, path) => true,
         _ if is_invoice_route(method, path) => true,
+        "/api/widgets" => method == "POST",
+        _ if is_widget_frame_route(path) => method == "GET",
         _ => false,
     }
+}
+
+// Ramka widgetu: adres-klucz /api/widgets/frame/<32 znaki hex>, bez sesji użytkownika.
+fn is_widget_frame_route(path: &str) -> bool {
+    path.strip_prefix("/api/widgets/frame/")
+        .map(|id| id.len() == 32 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        .unwrap_or(false)
 }
 
 // Karta Faktury i Ustawienia → Faktury i KSeF: tylko te trasy i metody.
@@ -1488,11 +1503,23 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
     };
     match segments.as_slice() {
         ["api", "invoices"] => matches!(method, "GET" | "POST"),
-        ["api", "invoices", "settings"] | ["api", "invoices", "legal-basis"] => method == "GET",
+        ["api", "invoices", "settings"]
+        | ["api", "invoices", "legal-basis"]
+        | ["api", "invoices", "requirements"]
+        | ["api", "invoices", "next-number"] => method == "GET",
+        ["api", "invoices", "templates"] => matches!(method, "GET" | "POST"),
+        ["api", "invoices", "templates", id] => {
+            matches!(method, "PUT" | "DELETE")
+                && id.len() == 36
+                && id.starts_with("tpl_")
+                && id[4..].bytes().all(|b| b.is_ascii_hexdigit())
+        }
         ["api", "invoices", "settings", "ksef-token" | "logo"] => {
             matches!(method, "PUT" | "DELETE")
         }
-        ["api", "invoices", "settings", "ksef-environment" | "seller"] => method == "PUT",
+        ["api", "invoices", "settings", "ksef-environment" | "seller" | "defaults" | "numbering"] => {
+            method == "PUT"
+        }
         ["api", "invoices", id] => {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
@@ -1861,6 +1888,9 @@ fn build_response(response: ProxiedResponse) -> Response<Vec<u8>> {
     let content_disposition = header_value(&response.headers, "content-disposition");
     let retry_after = header_value(&response.headers, "retry-after");
     let cache_control = header_value(&response.headers, "cache-control");
+    // Własne CSP ramki widgetu (bez sieci); inne odpowiedzi runtime go nie ustawiają.
+    let frame_policy = header_value(&response.headers, "content-security-policy")
+        .filter(|_| response_is_html(&response.headers));
 
     let mut builder = Response::builder()
         .status(response.status)
@@ -1884,12 +1914,21 @@ fn build_response(response: ProxiedResponse) -> Response<Vec<u8>> {
     if let Some(value) = cache_control {
         builder = builder.header("Cache-Control", value);
     }
+    if let Some(value) = frame_policy {
+        builder = builder.header("Content-Security-Policy", value);
+    }
 
     builder
         .body(response.body)
         .unwrap_or_else(|_| {
             json_error(StatusCode::INTERNAL_SERVER_ERROR, "DESKTOP_RESPONSE_BUILD_FAILED")
         })
+}
+
+fn response_is_html(headers: &[(String, String)]) -> bool {
+    header_value(headers, "content-type")
+        .map(|value| value.to_ascii_lowercase().starts_with("text/html"))
+        .unwrap_or(false)
 }
 
 fn header_value(headers: &[(String, String)], name: &str) -> Option<String> {
@@ -1981,6 +2020,11 @@ mod tests {
         assert!(!route_allowed("GET", "/api/privacy/name-forms"));
         assert!(route_allowed("GET", "/api/cases"));
         assert!(route_allowed("GET", "/api/schedule/upcoming"));
+        assert!(route_allowed("GET", "/api/admin/quality-benchmark"));
+        assert!(route_allowed("POST", "/api/admin/quality-benchmark"));
+        assert!(route_allowed("POST", "/api/admin/quality-benchmark/cancel"));
+        assert!(route_allowed("GET", "/api/admin/quality-benchmark/reports/qb_20261003120000000_0a1b2c3d"));
+        assert!(!route_allowed("DELETE", "/api/admin/quality-benchmark"));
         assert!(!route_allowed("POST", "/api/schedule/upcoming"));
         assert!(route_allowed("POST", "/api/cases/case_abc/contacts"));
         assert!(route_allowed("POST", "/api/cases/case_abc/files"));
@@ -2100,8 +2144,25 @@ mod tests {
         assert!(route_allowed("DELETE", "/api/invoices/settings/ksef-token"));
         assert!(route_allowed("PUT", "/api/invoices/settings/ksef-environment"));
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/defaults"));
+        assert!(route_allowed("POST", "/api/widgets"));
+        assert!(route_allowed("GET", "/api/invoices/templates"));
+        assert!(route_allowed("POST", "/api/invoices/templates"));
+        assert!(route_allowed("PUT", &format!("/api/invoices/templates/tpl_{}", "ab".repeat(16))));
+        assert!(route_allowed("DELETE", &format!("/api/invoices/templates/tpl_{}", "ab".repeat(16))));
+        assert!(!route_allowed("PUT", "/api/invoices/templates/inv_x"));
+        assert!(route_allowed("GET", &format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(!route_allowed("GET", "/api/widgets/frame/../auth/me"));
+        assert!(!route_allowed("GET", &format!("/api/widgets/frame/{}", "A1".repeat(16))));
+        assert!(!route_allowed("POST", &format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(!requires_session(&format!("/api/widgets/frame/{}", "a1".repeat(16))));
+        assert!(requires_session("/api/widgets"));
         assert!(route_allowed("PUT", "/api/invoices/settings/logo"));
         assert!(route_allowed("DELETE", "/api/invoices/settings/logo"));
+        assert!(route_allowed("PUT", "/api/invoices/settings/numbering"));
+        assert!(route_allowed("GET", "/api/invoices/requirements"));
+        assert!(route_allowed("GET", "/api/invoices/next-number"));
+        assert!(!route_allowed("POST", "/api/invoices/next-number"));
         assert!(route_allowed("GET", &format!("/api/invoices/{id}")));
         assert!(route_allowed("PUT", &format!("/api/invoices/{id}")));
         assert!(route_allowed("DELETE", &format!("/api/invoices/{id}")));

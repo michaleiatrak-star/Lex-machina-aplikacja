@@ -121,6 +121,24 @@ export class LocalCaseKnowledgeSearch {
       options.maxQueryChars ?? 500;
   }
 
+  /** The case's documents: pages and chunk count (no text, no titles). */
+  async listDocuments(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+  }): Promise<Array<{ documentId: string; totalPages: number; chunks: number }>> {
+    const documentIds = await this.documents.listDocumentIds(args.caseId);
+    if (documentIds.length > this.maxDocuments) {
+      throw new Error("KNOWLEDGE_DOCUMENT_LIMIT_EXCEEDED");
+    }
+    const result: Array<{ documentId: string; totalPages: number; chunks: number }> = [];
+    for (const documentId of documentIds) {
+      const document = await this.documents.loadProtected({ ...args, documentId });
+      result.push({ documentId, totalPages: document.totalPages, chunks: document.chunks.length });
+    }
+    return result;
+  }
+
   async search(args: {
     caseId: string;
     caseDataKey: Buffer;

@@ -30,6 +30,32 @@ function safeFilename(value) {
     }
     return candidate;
 }
+// A user-chosen name for a generated document: Windows-safe and with the
+// original extension kept (an edited or missing extension gets it back).
+const WINDOWS_FORBIDDEN = /[<>:"/\\|?*\x00-\x1f\x7f]/;
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+export function artifactRenameFilename(currentFilename, requested) {
+    const dot = currentFilename.lastIndexOf(".");
+    const extension = dot > 0 ? currentFilename.slice(dot) : "";
+    let stem = requested.normalize("NFKC").trim();
+    if (extension &&
+        stem.toLowerCase().endsWith(extension.toLowerCase())) {
+        stem = stem.slice(0, -extension.length);
+    }
+    stem = stem.trimEnd();
+    if (!stem)
+        throw new Error("ARTIFACT_FILENAME_EMPTY_INVALID");
+    if (WINDOWS_FORBIDDEN.test(stem)) {
+        throw new Error("ARTIFACT_FILENAME_CHARACTERS_INVALID");
+    }
+    if (/[. ]$/.test(stem) || WINDOWS_RESERVED.test(stem.split(".")[0] ?? "")) {
+        throw new Error("ARTIFACT_FILENAME_RESERVED_INVALID");
+    }
+    const filename = stem + extension;
+    if (filename.length > 180)
+        throw new Error("ARTIFACT_FILENAME_TOO_LONG_INVALID");
+    return filename;
+}
 function manifestIdentity(caseId, artifactId, keyVersion) {
     return {
         caseId,
@@ -232,6 +258,30 @@ export class SecureCaseArtifactStore {
             caseDataKey: args.caseDataKey,
             maxBytes: args.maxBytes
         });
+    }
+    // Renames a generated document: only the encrypted manifest is rewritten,
+    // the payload and its identity stay unchanged.
+    async renameArtifact(args) {
+        const current = (await this.listArtifacts(args)).find((item) => item.artifactId === args.artifactId);
+        if (!current)
+            throw new Error("ARTIFACT_NOT_FOUND");
+        const renamed = {
+            ...current,
+            filename: artifactRenameFilename(current.filename, args.filename)
+        };
+        const manifestBytes = Buffer.from(JSON.stringify(renamed), "utf8");
+        try {
+            await writeCaseBlob({
+                targetFile: path.join(this.artifactDir(args.caseId, args.artifactId), "manifest.lme"),
+                identity: manifestIdentity(args.caseId, args.artifactId, args.keyVersion),
+                caseDataKey: args.caseDataKey,
+                data: manifestBytes
+            });
+        }
+        finally {
+            manifestBytes.fill(0);
+        }
+        return { ...renamed };
     }
     async deleteArtifact(args) {
         await this

@@ -72,6 +72,19 @@ export class LocalCaseKnowledgeSearch {
         this.maxQueryChars =
             options.maxQueryChars ?? 500;
     }
+    /** The case's documents: pages and chunk count (no text, no titles). */
+    async listDocuments(args) {
+        const documentIds = await this.documents.listDocumentIds(args.caseId);
+        if (documentIds.length > this.maxDocuments) {
+            throw new Error("KNOWLEDGE_DOCUMENT_LIMIT_EXCEEDED");
+        }
+        const result = [];
+        for (const documentId of documentIds) {
+            const document = await this.documents.loadProtected({ ...args, documentId });
+            result.push({ documentId, totalPages: document.totalPages, chunks: document.chunks.length });
+        }
+        return result;
+    }
     async search(args) {
         const query = args.query.trim();
         if (query.length < 2 ||
