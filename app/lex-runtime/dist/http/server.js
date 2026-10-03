@@ -301,7 +301,9 @@ export async function startLocalServer(options) {
     }
     // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
     const anomalyJournal = new AnomalyJournal(caseFileStore.rootDir);
-    const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology), anomalyJournal);
+    // Pamięć dowodowa wątku: przepis z poprzedniej wiadomości tylko przy tym samym t.j. w ELI.
+    const actFreshness = new TemporalSourceFreshnessChecker();
+    const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)));
     const coreApp = createLexHttpApp({
@@ -320,6 +322,7 @@ export async function startLocalServer(options) {
         chronologyWorkflowStore: workspaceStore,
         contractWorkflowStore: workspaceStore,
         orderedCaseWorkflowStore: workspaceStore,
+        caseMemoryStore: workspaceStore,
         documentGenerationState,
         caseFileStore,
         secureCaseUploadStore,

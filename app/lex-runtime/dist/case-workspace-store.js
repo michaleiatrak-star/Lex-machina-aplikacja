@@ -1,3 +1,5 @@
+import { validThreadEvidence } from "./thread-evidence.js";
+import { validThreadSummary } from "./thread-summary.js";
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -586,6 +588,42 @@ export class EncryptedCaseWorkspaceStore {
         delete workflows.courtAnalysis;
         await this.write(index, args.caseDataKey, args.keyVersion);
         return true;
+    }
+    async getCaseMemory(args) {
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        const evidence = validThreadEvidence(index.memory?.evidence);
+        const summary = validThreadSummary(index.memory?.summary);
+        return {
+            ...(evidence ? { evidence } : {}),
+            ...(summary ? { summary } : {}),
+            threadMessages: index.thread.messages.map((message) => ({ ...message }))
+        };
+    }
+    /** Replaces the given parts of the memory; null removes a part. */
+    async saveCaseMemory(args) {
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        const memory = { ...(index.memory ?? {}) };
+        if (args.evidence !== undefined) {
+            const evidence = args.evidence === null ? null : validThreadEvidence(args.evidence);
+            if (args.evidence !== null && !evidence)
+                throw new Error("CASE_MEMORY_EVIDENCE_INVALID");
+            if (evidence)
+                memory.evidence = evidence;
+            else
+                delete memory.evidence;
+        }
+        if (args.summary !== undefined) {
+            const summary = args.summary === null ? null : validThreadSummary(args.summary);
+            if (args.summary !== null && !summary)
+                throw new Error("CASE_MEMORY_SUMMARY_INVALID");
+            if (summary)
+                memory.summary = summary;
+            else
+                delete memory.summary;
+        }
+        index.memory = memory;
+        await this.write(index, args.caseDataKey, args.keyVersion);
+        return memory;
     }
     async getChronologyState(args) {
         const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);

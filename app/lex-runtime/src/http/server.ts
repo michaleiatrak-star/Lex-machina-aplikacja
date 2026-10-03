@@ -607,6 +607,8 @@ export async function startLocalServer(options?: {
   // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
   const anomalyJournal =
     new AnomalyJournal(caseFileStore.rootDir);
+  // Pamięć dowodowa wątku: przepis z poprzedniej wiadomości tylko przy tym samym t.j. w ELI.
+  const actFreshness = new TemporalSourceFreshnessChecker();
   const sessionExecutor = withAnomalyJournal(
     new SafeSessionExecutor(
       registry,
@@ -628,7 +630,8 @@ export async function startLocalServer(options?: {
       privacyNamedEntities,
       legalFederationTools,
       coreLawIndex,
-      personMorphology
+      personMorphology,
+      (act) => actFreshness.check(act)
     ),
     anomalyJournal
   );
@@ -680,6 +683,8 @@ export async function startLocalServer(options?: {
     contractWorkflowStore:
       workspaceStore,
     orderedCaseWorkflowStore:
+      workspaceStore,
+    caseMemoryStore:
       workspaceStore,
     documentGenerationState,
     caseFileStore,

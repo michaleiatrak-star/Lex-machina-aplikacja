@@ -1,3 +1,5 @@
+import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
+import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -104,6 +106,11 @@ export type WorkspaceRestoration = {
   agreement?: string;
 };
 
+export type CaseMemory = {
+  evidence?: ThreadEvidence;
+  summary?: ThreadSummary;
+};
+
 export type CaseWorkspaceIndex = {
   schemaVersion: 1;
   caseId: string;
@@ -113,6 +120,8 @@ export type CaseWorkspaceIndex = {
   thread: {
     messages: WorkspaceThreadMessage[];
   };
+  // Pamięć sprawy: dowody z poprzednich odpowiedzi i streszczenie starszej części wątku.
+  memory?: CaseMemory;
   workflows?: {
     processPleading?: ProcessPleadingState;
     courtAnalysis?: CourtAnalysisState;
@@ -1006,6 +1015,48 @@ export class EncryptedCaseWorkspaceStore {
       args.keyVersion
     );
     return true;
+  }
+
+  async getCaseMemory(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+  }): Promise<CaseMemory & { threadMessages: WorkspaceThreadMessage[] }> {
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const evidence = validThreadEvidence(index.memory?.evidence);
+    const summary = validThreadSummary(index.memory?.summary);
+    return {
+      ...(evidence ? { evidence } : {}),
+      ...(summary ? { summary } : {}),
+      threadMessages: index.thread.messages.map((message) => ({ ...message }))
+    };
+  }
+
+  /** Replaces the given parts of the memory; null removes a part. */
+  async saveCaseMemory(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    evidence?: ThreadEvidence | null;
+    summary?: ThreadSummary | null;
+  }): Promise<CaseMemory> {
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const memory: CaseMemory = { ...(index.memory ?? {}) };
+    if (args.evidence !== undefined) {
+      const evidence = args.evidence === null ? null : validThreadEvidence(args.evidence);
+      if (args.evidence !== null && !evidence) throw new Error("CASE_MEMORY_EVIDENCE_INVALID");
+      if (evidence) memory.evidence = evidence;
+      else delete memory.evidence;
+    }
+    if (args.summary !== undefined) {
+      const summary = args.summary === null ? null : validThreadSummary(args.summary);
+      if (args.summary !== null && !summary) throw new Error("CASE_MEMORY_SUMMARY_INVALID");
+      if (summary) memory.summary = summary;
+      else delete memory.summary;
+    }
+    index.memory = memory;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return memory;
   }
 
   async getChronologyState(args: {

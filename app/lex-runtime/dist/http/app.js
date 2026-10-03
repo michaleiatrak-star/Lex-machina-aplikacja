@@ -10,6 +10,7 @@ import { saveToDownloads } from "../download-save.js";
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
+import { mergeThreadEvidence } from "../thread-evidence.js";
 import { RoutingCatalog } from "./routing-catalog.js";
 import { decodeUploadFilename } from "../case-file-store.js";
 import { AuthError } from "../auth/service.js";
@@ -721,6 +722,29 @@ async function refreshDocumentCitations(args) {
         }
     }
     return citations.length;
+}
+/**
+ * After an answer: the provisions it verified and the skills it read join the
+ * matter's evidence memory. A caller without write access, or a failed write,
+ * leaves the memory as it was; the answer is not affected.
+ */
+async function rememberThreadEvidence(args) {
+    const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
+    const skills = args.result.loadedSkills ?? [];
+    if (records.length === 0 && skills.length === 0)
+        return;
+    try {
+        const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+        await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "WRITE", (caseDataKey) => args.store.saveCaseMemory({
+            caseId: args.caseId,
+            caseDataKey,
+            keyVersion: caseView.keyVersion,
+            evidence: mergeThreadEvidence(args.previous, records, skills, new Date().toISOString())
+        }));
+    }
+    catch (error) {
+        process.stderr.write(`CASE_MEMORY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`);
+    }
 }
 /** The matter's files for the case file tools, on the caller's case access. */
 function createCaseFileAccess(args) {
@@ -5040,6 +5064,23 @@ export function createLexHttpApp(options) {
                 request.documentAttachments =
                     sessionAttachments;
             }
+            // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
+            let threadEvidence = null;
+            if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    const memory = await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                    threadEvidence = memory.evidence ?? null;
+                    if (threadEvidence)
+                        request.threadEvidence = threadEvidence;
+                }
+                catch (error) {
+                    if (error instanceof CaseAccessError)
+                        throw error;
+                    process.stderr.write(`CASE_MEMORY_NOT_READ:${error instanceof Error ? error.message : String(error)}\n`);
+                }
+            }
             // The excerpts above are cut to the window; with case search on, the
             // model reaches the rest of the matter's files through tools.
             if (knowledge.includeCase &&
@@ -6160,6 +6201,16 @@ export function createLexHttpApp(options) {
                         ...state.checkpoints
                     }
                 };
+            }
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
+                await rememberThreadEvidence({
+                    store: options.caseMemoryStore,
+                    caseAccessService: options.caseAccessService,
+                    actor: responseAuthContext(res),
+                    caseId: knowledge.caseId,
+                    previous: threadEvidence,
+                    result
+                });
             }
             restoreSessionDocumentAliases(result, options.documentService);
             res.json(result);

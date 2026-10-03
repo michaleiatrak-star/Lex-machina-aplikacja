@@ -14,6 +14,7 @@ import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
 import { WidgetToolRuntime } from "./widget-runtime.js";
 import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
+import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
@@ -421,9 +422,12 @@ export class SafeSessionExecutor {
     legalFederationTools;
     coreLawIndex;
     personMorphology;
+    actFreshness;
     engine;
     autoRouter;
-    constructor(registry, providers, finalizer = new AuditedFinalizer(), verificationToolFactory, chatNamedEntityRecognizer, legalFederationTools, coreLawIndex, personMorphology) {
+    constructor(registry, providers, finalizer = new AuditedFinalizer(), verificationToolFactory, chatNamedEntityRecognizer, legalFederationTools, coreLawIndex, personMorphology, 
+    // Current consolidated text of an act in Sejm ELI (evidence memory reuse).
+    actFreshness) {
         this.registry = registry;
         this.providers = providers;
         this.finalizer = finalizer;
@@ -432,6 +436,7 @@ export class SafeSessionExecutor {
         this.legalFederationTools = legalFederationTools;
         this.coreLawIndex = coreLawIndex;
         this.personMorphology = personMorphology;
+        this.actFreshness = actFreshness;
         this.engine = new LexExecutionEngine(registry, providers);
         this.autoRouter =
             new ModelAutoRouter(registry, providers);
@@ -534,6 +539,25 @@ export class SafeSessionExecutor {
         }
         const requestedHistoricalAsOf = detectHistoricalAsOf(protectedQuery);
         const ledger = new VerificationLedger();
+        // Evidence memory: provisions verified in earlier messages are reused only
+        // when ELI still has the same consolidated text and no amendment after it.
+        let evidencePrompt = null;
+        const memory = request.threadEvidence;
+        if (memory &&
+            !request.model.startsWith("local/") &&
+            (memory.provisions.length || memory.sources.length || memory.skills.length)) {
+            const reuse = this.actFreshness
+                ? await revalidateThreadEvidence(memory, this.actFreshness)
+                : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: "ELI_CHECK_UNAVAILABLE" })) };
+            for (const record of reuse.reused)
+                ledger.add(record);
+            evidencePrompt = threadEvidencePrompt(memory, reuse);
+            step("VERIFY", `pamięć sprawy: ${reuse.reused.length} przepisów aktualnych w ELI, ${reuse.recheck.length} do ponownej weryfikacji`);
+            audit.record("gate", "THREAD_EVIDENCE_REUSE", "OK", {
+                reused: reuse.reused.map((record) => record.claim),
+                recheck: reuse.recheck
+            });
+        }
         // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
         const verificationTools = this.verificationToolFactory?.(ledger, {
             localModel: request.model.startsWith("local/")
@@ -677,6 +701,7 @@ export class SafeSessionExecutor {
             ...(verificationTools ? verificationTools.schemas() : [])
         ];
         const toolPrompt = [
+            ...(evidencePrompt ? [evidencePrompt] : []),
             ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
             ...(coreLawTools
                 ? [coreLawTools.systemPromptAppendix()]

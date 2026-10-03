@@ -707,7 +707,8 @@ export class LegalVerificationToolRuntime {
                                 : {})
                         }
                         : {}),
-                    ...(asOf ? { asOf } : {})
+                    ...(asOf ? { asOf } : {}),
+                    actDescriptor: { ...act }
                 };
                 this.ledger.add(statutoryRecord);
                 return publicToolResult({

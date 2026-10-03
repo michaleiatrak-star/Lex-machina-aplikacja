@@ -51,6 +51,7 @@ import {
   type SessionExecutionResponse
 } from "../session-executor.js";
 import type { CaseFileAccess } from "../case-file-tool-runtime.js";
+import { mergeThreadEvidence, type ThreadEvidence } from "../thread-evidence.js";
 import type {
   DocumentChunkSelection,
   DocumentSecurityContext,
@@ -503,6 +504,8 @@ export type LexHttpAppOptions = {
     | "getContractAnalysisState"
     | "saveContractAnalysisState"
   >;
+  // Pamięć sprawy (dowody z poprzednich odpowiedzi, streszczenie wątku).
+  caseMemoryStore?: Pick<EncryptedCaseWorkspaceStore, "getCaseMemory" | "saveCaseMemory">;
   orderedCaseWorkflowStore?: Pick<
     EncryptedCaseWorkspaceStore,
     | "getOrderedCaseWorkflowState"
@@ -1592,6 +1595,37 @@ async function refreshDocumentCitations(args: {
   }
 
   return citations.length;
+}
+
+/**
+ * After an answer: the provisions it verified and the skills it read join the
+ * matter's evidence memory. A caller without write access, or a failed write,
+ * leaves the memory as it was; the answer is not affected.
+ */
+async function rememberThreadEvidence(args: {
+  store: Pick<EncryptedCaseWorkspaceStore, "saveCaseMemory">;
+  caseAccessService: Pick<LocalCaseAccessService, "openCase" | "withCaseDataKey">;
+  actor: AuthenticatedContext;
+  caseId: string;
+  previous: ThreadEvidence | null;
+  result: SessionExecutionResponse;
+}): Promise<void> {
+  const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
+  const skills = args.result.loadedSkills ?? [];
+  if (records.length === 0 && skills.length === 0) return;
+  try {
+    const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+    await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "WRITE", (caseDataKey) =>
+      args.store.saveCaseMemory({
+        caseId: args.caseId,
+        caseDataKey,
+        keyVersion: caseView.keyVersion,
+        evidence: mergeThreadEvidence(args.previous, records, skills, new Date().toISOString())
+      })
+    );
+  } catch (error) {
+    process.stderr.write(`CASE_MEMORY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`);
+  }
 }
 
 /** The matter's files for the case file tools, on the caller's case access. */
@@ -8713,6 +8747,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           sessionAttachments;
       }
 
+      // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
+      let threadEvidence: ThreadEvidence | null = null;
+      if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
+        try {
+          const actor = responseAuthContext(res);
+          const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+          const memory = await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) =>
+            options.caseMemoryStore!.getCaseMemory({ caseId: knowledge.caseId!, caseDataKey, keyVersion: caseView.keyVersion })
+          );
+          threadEvidence = memory.evidence ?? null;
+          if (threadEvidence) request.threadEvidence = threadEvidence;
+        } catch (error) {
+          if (error instanceof CaseAccessError) throw error;
+          process.stderr.write(`CASE_MEMORY_NOT_READ:${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      }
+
       // The excerpts above are cut to the window; with case search on, the
       // model reaches the rest of the matter's files through tools.
       if (
@@ -10656,6 +10707,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             ...state.checkpoints
           }
         };
+      }
+
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
+        await rememberThreadEvidence({
+          store: options.caseMemoryStore,
+          caseAccessService: options.caseAccessService,
+          actor: responseAuthContext(res),
+          caseId: knowledge.caseId,
+          previous: threadEvidence,
+          result
+        });
       }
 
       restoreSessionDocumentAliases(

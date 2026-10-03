@@ -74,6 +74,13 @@ import type {
 import { WidgetToolRuntime, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import {
+  revalidateThreadEvidence,
+  threadEvidencePrompt,
+  type ThreadEvidence
+} from "./thread-evidence.js";
+import type { LegalActDescriptor } from "./legal-act-resolver.js";
+import type { TemporalFreshnessResult } from "./temporal-source-freshness.js";
+import {
   ReportBlueprintToolRuntime,
   type AcceptedReportBlueprint,
   type ReportBlueprintKind
@@ -226,6 +233,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's full files for the
   // case file tools, bound to the caller's access.
   caseFiles?: CaseFileAccess;
+  // Runtime-only (never parsed from HTTP): the matter's evidence memory from
+  // the encrypted case workspace.
+  threadEvidence?: ThreadEvidence;
   modelContextTokens?: number;
   tokenCharsPerToken?: number;
   // The current user message without chat history (grammar of placeholders).
@@ -1057,7 +1067,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     private readonly chatNamedEntityRecognizer?: NamedEntityRecognizer,
     private readonly legalFederationTools?: LegalFederationToolRuntime,
     private readonly coreLawIndex?: CoreLawIndex,
-    private readonly personMorphology?: PersonMorphology
+    private readonly personMorphology?: PersonMorphology,
+    // Current consolidated text of an act in Sejm ELI (evidence memory reuse).
+    private readonly actFreshness?: (act: LegalActDescriptor) => Promise<TemporalFreshnessResult>
   ) {
     this.engine = new LexExecutionEngine(
       registry,
@@ -1260,6 +1272,26 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
 
     const ledger = new VerificationLedger();
+    // Evidence memory: provisions verified in earlier messages are reused only
+    // when ELI still has the same consolidated text and no amendment after it.
+    let evidencePrompt: string | null = null;
+    const memory = request.threadEvidence;
+    if (
+      memory &&
+      !request.model.startsWith("local/") &&
+      (memory.provisions.length || memory.sources.length || memory.skills.length)
+    ) {
+      const reuse = this.actFreshness
+        ? await revalidateThreadEvidence(memory, this.actFreshness)
+        : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: "ELI_CHECK_UNAVAILABLE" })) };
+      for (const record of reuse.reused) ledger.add(record);
+      evidencePrompt = threadEvidencePrompt(memory, reuse);
+      step("VERIFY", `pamięć sprawy: ${reuse.reused.length} przepisów aktualnych w ELI, ${reuse.recheck.length} do ponownej weryfikacji`);
+      audit.record("gate", "THREAD_EVIDENCE_REUSE", "OK", {
+        reused: reuse.reused.map((record) => record.claim),
+        recheck: reuse.recheck
+      });
+    }
     // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
     const verificationTools = this.verificationToolFactory?.(ledger, {
       localModel: request.model.startsWith("local/")
@@ -1497,6 +1529,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(verificationTools ? verificationTools.schemas() : [])
     ];
     const toolPrompt = [
+      ...(evidencePrompt ? [evidencePrompt] : []),
       ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
       ...(coreLawTools
         ? [coreLawTools.systemPromptAppendix()]

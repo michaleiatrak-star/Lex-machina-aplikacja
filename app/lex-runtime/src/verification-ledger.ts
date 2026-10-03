@@ -1,3 +1,4 @@
+import type { LegalActDescriptor } from "./legal-act-resolver.js";
 import {
   assertVerificationTierPolicy,
   type LegalSourceCrossCheckStatus,
@@ -62,6 +63,8 @@ export type VerificationRecord = {
   // RZĄD 2B najwyżej 🟨 KOTWICA URZĘDOWA (officialAnchor, status UNVERIFIED).
   substituteFor?: "R1";
   officialAnchor?: true;
+  // Akt, którego aktualny t.j. sprawdzono (pamięć dowodowa wątku sprawdza go ponownie w ELI).
+  actDescriptor?: LegalActDescriptor;
 };
 
 function normalizeClaim(value: string): string {
