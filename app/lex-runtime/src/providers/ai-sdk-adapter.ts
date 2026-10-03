@@ -22,6 +22,12 @@ import {
 } from "./account-session.js";
 
 const MAX_OUTPUT_TOKENS = 16_384;
+// An answer cut at MAX_OUTPUT_TOKENS is continued at most this many times.
+const MAX_LENGTH_CONTINUATIONS = 3;
+export const LENGTH_CONTINUATION_PROMPT =
+  "Twoja poprzednia odpowiedź została ucięta na limicie długości. Kontynuuj dokładnie od miejsca przerwania: bez powtarzania, bez wstępu i bez podsumowania tego, co już napisałeś.";
+export const LENGTH_TRUNCATED_NOTE =
+  "\n\n[ODPOWIEDŹ UCIĘTA: model osiągnął limit długości odpowiedzi także po kontynuacji. Poproś o dalszą część albo zawęź pytanie.]";
 const LOCAL_DEFAULT_OUTPUT_TOKENS =
   4_096;
 const LOCAL_CONTEXT_SAFETY_TOKENS =
@@ -1872,18 +1878,50 @@ async function streamModel(
     | "high"
     | "xhigh";
 
-  const withImages = params.messages.some((message) => message.images?.length);
+  let withImages = params.messages.some((message) => message.images?.length);
   let fullText = "";
+  let first: StreamOnceResult;
   try {
-    return await streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, (text) => {
+    first = await streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, (text) => {
       fullText += text;
     });
   } catch (error) {
     // A model without vision rejects the images: answer from the text alone.
     if (!withImages || fullText || (error as Error)?.name === "AbortError") throw error;
     process.stderr.write(`PROVIDER_IMAGES_REJECTED:${label}:${String((error as Error)?.message ?? error).slice(0, 300)}\n`);
-    return streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => {});
+    withImages = false;
+    first = await streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => {});
   }
+  return await continueAtLength(
+    first,
+    (messages) => streamModelOnce(sdk, model, { ...params, messages }, label, tools, reasoning, withImages, () => {}),
+    params.messages
+  );
+}
+
+type StreamOnceResult = ProviderStreamResult & { finishReason?: string };
+
+/**
+ * An answer cut at the output limit ("length") is continued from where it
+ * stopped; one still cut after the last continuation says so in the text.
+ */
+export async function continueAtLength(
+  first: StreamOnceResult,
+  next: (messages: ProviderStreamParams["messages"]) => Promise<StreamOnceResult>,
+  messages: ProviderStreamParams["messages"]
+): Promise<ProviderStreamResult> {
+  let text = first.fullText;
+  let finishReason = first.finishReason;
+  for (let round = 0; finishReason === "length" && round < MAX_LENGTH_CONTINUATIONS; round += 1) {
+    const result = await next([
+      ...messages,
+      { role: "assistant", content: text },
+      { role: "user", content: LENGTH_CONTINUATION_PROMPT }
+    ]);
+    text += result.fullText;
+    finishReason = result.finishReason;
+  }
+  return { fullText: finishReason === "length" ? text + LENGTH_TRUNCATED_NOTE : text };
 }
 
 function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean) {
@@ -1913,7 +1951,7 @@ async function streamModelOnce(
   reasoning: "provider-default" | "none" | "low" | "medium" | "high" | "xhigh",
   images: boolean,
   onText: (text: string) => void
-): Promise<ProviderStreamResult> {
+): Promise<StreamOnceResult> {
   const result = sdk.streamText({
     model,
     system: params.systemPrompt,
@@ -1988,7 +2026,7 @@ async function streamModelOnce(
     params.callbacks?.onReasoningBlockEnd?.();
   }
 
-  return { fullText };
+  return { fullText, finishReason: await result.finishReason };
 }
 
 export function shouldRetryLocalAtMinimumContext(

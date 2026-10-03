@@ -204,7 +204,7 @@ describe("case file tools in a session", () => {
   it("offers no case file tools to local models", async () => {
     let params: ProviderStreamParams | undefined;
     const adapter: ProviderAdapter = {
-      id: "local",
+      id: "openai",
       label: "local",
       capabilities: { streaming: true, tools: true, reasoning: false, modelDiscovery: false },
       async stream(received) {
@@ -218,7 +218,7 @@ describe("case file tools in a session", () => {
     await executor.execute({
       query: "Czy w aktach jest mowa o terminie zapłaty?",
       caseFiles: access(),
-      provider: "local",
+      provider: "openai",
       model: "local/bielik",
       primarySkill: DR,
       mode: "PRAWNIK"
