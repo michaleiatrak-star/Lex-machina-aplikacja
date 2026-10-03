@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MockLanguageModelV4, convertArrayToReadableStream } from "ai/test";
+
+type StreamPart =
+  Awaited<ReturnType<InstanceType<typeof MockLanguageModelV4>["doStream"]>>["stream"] extends ReadableStream<infer Part> ? Part : never;
 import {
   LENGTH_CONTINUATION_PROMPT,
   TOOL_LIMIT_FINAL_PROMPT,
@@ -13,7 +16,7 @@ const usage = {
 };
 
 function text(id: string, value: string, reason: "stop" | "length") {
-  return convertArrayToReadableStream([
+  return convertArrayToReadableStream<StreamPart>([
     { type: "stream-start", warnings: [] },
     { type: "text-start", id },
     { type: "text-delta", id, delta: value },
@@ -23,7 +26,7 @@ function text(id: string, value: string, reason: "stop" | "length") {
 }
 
 function toolCall(id: string) {
-  return convertArrayToReadableStream([
+  return convertArrayToReadableStream<StreamPart>([
     { type: "stream-start", warnings: [] },
     { type: "tool-call", toolCallId: id, toolName: "search_case_files", input: JSON.stringify({ query: "termin" }) },
     { type: "finish", finishReason: { unified: "tool-calls", raw: "tool_use" }, usage }
