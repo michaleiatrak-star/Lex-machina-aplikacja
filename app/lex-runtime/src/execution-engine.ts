@@ -28,9 +28,12 @@ import type {
 } from "./providers/types.js";
 import {
   MANDATORY_SESSION_SKILLS,
+  latestUserTurn,
   parseSkillSelectionEnvelope,
   resolveAdditionalSkills
 } from "./skill-selection.js";
+
+export { latestUserTurn };
 import {
   createDeterministicWorkflowPlan,
   deterministicWorkflowPrompt,
@@ -114,25 +117,6 @@ export class LexExecutionError extends Error {
   }
 }
 
-const USER_TURN_MARKER =
-  "\n\nUżytkownik: ";
-
-// The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
-// history; only the newest user turn decides whether it is trivial chat.
-export function latestUserTurn(
-  query: string
-): string {
-  const index =
-    query.lastIndexOf(
-      USER_TURN_MARKER
-    );
-  return index >= 0
-    ? query.slice(
-        index +
-          USER_TURN_MARKER.length
-      )
-    : query;
-}
 
 /**
  * Legal gate: an exact trivial chat command (greeting, test, thanks, "napisz

@@ -4,7 +4,8 @@ import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { LegalSession } from "./legal-session.js";
 import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources } from "./quick-legal-question.js";
 import { assessMatterComplexity } from "./matter-complexity.js";
-import { MANDATORY_SESSION_SKILLS, parseSkillSelectionEnvelope, resolveAdditionalSkills } from "./skill-selection.js";
+import { MANDATORY_SESSION_SKILLS, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills } from "./skill-selection.js";
+export { latestUserTurn };
 import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./deterministic-workflow.js";
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
@@ -17,16 +18,6 @@ export class LexExecutionError extends Error {
         this.events = events;
         this.name = "LexExecutionError";
     }
-}
-const USER_TURN_MARKER = "\n\nUżytkownik: ";
-// The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
-// history; only the newest user turn decides whether it is trivial chat.
-export function latestUserTurn(query) {
-    const index = query.lastIndexOf(USER_TURN_MARKER);
-    return index >= 0
-        ? query.slice(index +
-            USER_TURN_MARKER.length)
-        : query;
 }
 /**
  * Legal gate: an exact trivial chat command (greeting, test, thanks, "napisz
