@@ -29,7 +29,9 @@ const METRICS: Array<[keyof QualityBenchmarkReportSummary["summary"], string]> =
   ["verificationRate", "przepisy zweryfikowane"],
   ["topicCoverage", "kompletność"],
   ["actCoverage", "akty"],
-  ["continuity", "ciągłość wątku"]
+  ["continuity", "ciągłość wątku"],
+  ["pathCoverage", "ścieżka obowiązkowa"],
+  ["unbackedClaimRate", "opisy odpytań bez wywołania"]
 ];
 
 const percent = (value: number | null | undefined) => (value === null || value === undefined ? "—" : `${Math.round(value * 100)}%`);
@@ -137,7 +139,7 @@ export function QualityBenchmarkSection({ user }: { user: AuthenticatedUser }) {
       <div className="chat-check-row">
         <label>
           <input type="checkbox" checked={quick} disabled={Boolean(job)} onChange={(event) => setQuick(event.target.checked)} />
-          Szybki zestaw (5 spraw, 10 wiadomości) zamiast pełnego (18 spraw)
+          Szybki zestaw (5 spraw, 10 wiadomości) zamiast pełnego (19 spraw)
         </label>
         <label>
           <input type="checkbox" checked={summaryTest} disabled={Boolean(job)} onChange={(event) => setSummaryTest(event.target.checked)} />

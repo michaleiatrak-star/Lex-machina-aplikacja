@@ -1,6 +1,8 @@
 import type { LegalActDescriptor } from "./legal-act-resolver.js";
 import type { TemporalFreshnessResult } from "./temporal-source-freshness.js";
 import type { VerificationRecord } from "./verification-ledger.js";
+import { mandatoryPathPrompt, type MandatoryPathReport } from "./mandatory-path.js";
+import type { QueryMode } from "./query-mode.js";
 
 /**
  * Evidence memory of a matter's thread: provisions verified in earlier
@@ -14,6 +16,10 @@ export type ThreadEvidence = {
   provisions: VerificationRecord[];
   skills: string[];
   sources: Array<{ claim: string; status: string; url: string; fetchedAt: string }>;
+  // Mode of the matter decided at the entry (kept when a later question is ambiguous).
+  mode?: QueryMode;
+  // The register of the last answer's mandatory path.
+  lastPath?: { at: string; report: MandatoryPathReport };
 };
 
 const MAX_PROVISIONS = 80;
@@ -44,7 +50,8 @@ export function mergeThreadEvidence(
   previous: ThreadEvidence | null,
   records: VerificationRecord[],
   skills: string[],
-  now: string
+  now: string,
+  turn: { mode?: QueryMode; path?: MandatoryPathReport } = {}
 ): ThreadEvidence {
   const provisions = new Map<string, VerificationRecord>();
   for (const record of [...(previous?.provisions ?? []), ...records.filter(reusableProvision)]) {
@@ -67,7 +74,9 @@ export function mergeThreadEvidence(
     updatedAt: now,
     provisions: [...provisions.values()].slice(-MAX_PROVISIONS),
     skills: [...new Set([...(previous?.skills ?? []), ...skills])].slice(-MAX_SKILLS),
-    sources: [...sources.values()].slice(-MAX_SOURCES)
+    sources: [...sources.values()].slice(-MAX_SOURCES),
+    ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode)! } : {}),
+    ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {})
   };
 }
 
@@ -93,7 +102,9 @@ export function validThreadEvidence(value: unknown): ThreadEvidence | null {
     skills: raw.skills.filter((skill): skill is string => typeof skill === "string"),
     sources: raw.sources.filter(
       (source) => Boolean(source) && typeof source.claim === "string" && typeof source.url === "string"
-    )
+    ),
+    ...(raw.mode === "LAIK" || raw.mode === "PRAWNIK" ? { mode: raw.mode } : {}),
+    ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {})
   };
 }
 
@@ -177,6 +188,9 @@ export function threadEvidencePrompt(evidence: ThreadEvidence, reuse: ThreadEvid
   }
   if (evidence.skills.length) {
     lines.push(`Skille przeczytane wcześniej w tej sprawie: ${evidence.skills.join(", ")}.`);
+  }
+  if (evidence.lastPath) {
+    lines.push("", mandatoryPathPrompt(evidence.lastPath.report, evidence.lastPath.at));
   }
   return lines.join("\n");
 }

@@ -35,6 +35,7 @@ import { AuditedFinalizer } from "./audited-finalizer.js";
 import {
   LexExecutionEngine,
   latestUserTurn,
+  isTrivialChatCommand,
   type ExecutionEvent
 } from "./execution-engine.js";
 import { ProviderGateway } from "./providers/gateway.js";
@@ -80,6 +81,19 @@ import {
 } from "./thread-evidence.js";
 import type { LegalActDescriptor } from "./legal-act-resolver.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
+import fs from "node:fs";
+import {
+  ROUTER_SKILL,
+  evaluateMandatoryPath,
+  loadMandatoryPathModel,
+  mandatoryPathInstructions,
+  pathProfile,
+  preloadForTurn,
+  type MandatoryPathModel,
+  type MandatoryPathReport,
+  type PathProfile
+} from "./mandatory-path.js";
+import { queryModePrompt, type QueryModeDecision } from "./query-mode.js";
 import { meterUsage, type ModelUsage } from "./providers/usage-meter.js";
 import type { TemporalFreshnessResult } from "./temporal-source-freshness.js";
 import {
@@ -238,6 +252,8 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
   // the encrypted case workspace.
   threadEvidence?: ThreadEvidence;
+  // Runtime-only: LAIK / PRAWNIK decided at the entry from the question (KROK 1).
+  modeDecision?: QueryModeDecision;
   modelContextTokens?: number;
   tokenCharsPerToken?: number;
   // The current user message without chat history (grammar of placeholders).
@@ -672,6 +688,9 @@ export type SessionExecutionResponse = {
   status: "DRAFT_PRESENTABLE" | "BLOCKED";
   // Model tokens of the turn; unmeteredCalls = calls through account clients.
   usage?: ModelUsage;
+  // Mandatory path of the turn (router, skills, verification, hard gate) from the audit.
+  mandatoryPath?: MandatoryPathReport;
+  modeDecision?: QueryModeDecision;
   provider: ProviderId;
   model: string;
   modelRouting?: {
@@ -1108,6 +1127,31 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
   }
 
+  private mandatoryModelCache: { root: string; model: MandatoryPathModel } | null = null;
+
+  // Corpus files of the mandatory path, by canonical path (router-relative or skill-qualified).
+  private readCorpus(resource: string): string | null {
+    const relative = resource.startsWith(`${ROUTER_SKILL}/`) ? resource.slice(ROUTER_SKILL.length + 1) : resource;
+    const resolved = this.registry.resolveResource(ROUTER_SKILL, relative);
+    if (!resolved) return null;
+    try {
+      return fs.readFileSync(resolved, "utf8");
+    } catch {
+      return null;
+    }
+  }
+
+  private mandatoryModel(): MandatoryPathModel | null {
+    if (this.mandatoryModelCache?.root === this.registry.root) return this.mandatoryModelCache.model;
+    try {
+      const model = loadMandatoryPathModel((resource) => this.readCorpus(resource));
+      this.mandatoryModelCache = { root: this.registry.root, model };
+      return model;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Summary of older thread messages: the text goes to the model
    * pseudonymized like a chat message, without tools; provisions in the
@@ -1347,7 +1391,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     if (
       memory &&
       !request.model.startsWith("local/") &&
-      (memory.provisions.length || memory.sources.length || memory.skills.length)
+      (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)
     ) {
       const reuse = this.actFreshness
         ? await revalidateThreadEvidence(memory, this.actFreshness)
@@ -1596,7 +1640,60 @@ export class SafeSessionExecutor implements SessionExecutor {
         : []),
       ...(verificationTools ? verificationTools.schemas() : [])
     ];
+    // Mandatory path (hosted models): the profile, the corpus files the router's
+    // mandatory gates require, loaded up front, and the mode decided at the entry.
+    const mandatoryModel = request.model.startsWith("local/") ? null : this.mandatoryModel();
+    const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(latestUserTurn(request.query));
+    const pathFacts = {
+      query: request.auxiliaryText ?? latestUserTurn(request.query),
+      legal: legalTurn,
+      criminal: request.primarySkill.startsWith("dr-03-"),
+      documents: attachments.length > 0,
+      documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
+      documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
+      foreignJurisdiction: false
+    };
+    const profile: PathProfile = pathProfile({
+      mode: request.modeDecision?.mode ?? request.mode,
+      simple: request.matterComplexity?.level === "SIMPLE",
+      criminal: pathFacts.criminal,
+      documentGeneration: pathFacts.documentGeneration
+    });
+    // Already in the model's context: the router skill and the core legal resources.
+    const contextResources = new Set<string>([
+      `${ROUTER_SKILL}/SKILL.md`,
+      "shared/PRAWO-HARDGATE.md",
+      `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
+      `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
+      ...(pathFacts.criminal ? ["dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md"] : [])
+    ]);
+    const pathSections: string[] = [];
+    if (mandatoryModel && legalTurn) {
+      const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
+      for (const resource of preloaded) {
+        const content = this.readCorpus(resource);
+        if (!content) {
+          audit.record("resource_read", resource, "BLOCKED", { detail: "runtime-preload;mandatory-path;missing" });
+          continue;
+        }
+        contextResources.add(resource);
+        audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
+        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+      }
+      step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
+      pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
+    }
+    const identityPrompt = [
+      "# MODEL TEJ SESJI (podaje aplikacja)",
+      `Dostawca: ${request.provider}; identyfikator modelu w aplikacji: ${request.model}.` +
+        (request.model.startsWith("account/") ? " Przy koncie konkretną wersję wybiera klient dostawcy; aplikacja jej nie zna." : ""),
+      "Pytany, jakim jesteś modelem, podaj te dane; nie zgaduj nazwy ani wersji z pamięci."
+    ].join("\n");
+
     const toolPrompt = [
+      identityPrompt,
+      ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      ...pathSections,
       ...(evidencePrompt ? [evidencePrompt] : []),
       ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
       ...(coreLawTools
@@ -2900,6 +2997,34 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     );
 
+    // The register of the mandatory path, from what really happened in the turn.
+    const mandatoryPath =
+      mandatoryModel && legalTurn
+        ? evaluateMandatoryPath(mandatoryModel, {
+            ...pathFacts,
+            profile,
+            contextResources,
+            answer: processedDocumentCitations.text,
+            records: ledger.all(),
+            events: audit.events.map((event) => ({
+              type: event.type,
+              target: event.target,
+              status: event.status,
+              ...(event.detail ? { detail: event.detail } : {})
+            })),
+            loadedSkills: execution.loadedSkills ?? [],
+            primarySkill: execution.primarySkill,
+            finalization: finalization.result,
+            federationTools: Boolean(federationTools)
+          })
+        : undefined;
+    if (mandatoryPath) {
+      audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
+        profile: mandatoryPath.profile,
+        missing: mandatoryPath.missing
+      });
+    }
+
     const safeToPresent =
       !presentationBlocked;
     audit.record(
@@ -2976,6 +3101,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
+      ...(mandatoryPath ? { mandatoryPath } : {}),
+      ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,
       model: request.model,
       modelRouting: {

@@ -8,7 +8,8 @@ import {
 } from "react";
 import type {
   AuxiliarySourceItem,
-  EvidenceItem
+  EvidenceItem,
+  MandatoryPathView
 } from "./api.js";
 import {
   appendCaseThreadMessage,
@@ -25,6 +26,7 @@ export type CaseChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   evidence?: EvidenceItem[];
+  mandatoryPath?: MandatoryPathView;
   auxiliarySources?:
     AuxiliarySourceItem[];
   meta?: string;

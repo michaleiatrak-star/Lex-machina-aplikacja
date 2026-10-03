@@ -15,6 +15,7 @@ import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
+import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
@@ -855,6 +856,7 @@ function executionMessage(
         verificationWarning +
         execution.answer,
       evidence: execution.evidence,
+      ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -883,6 +885,10 @@ function executionMessage(
         citationMeta +
         workflowMeta +
         modelRoutingMeta +
+        (execution.modeDecision ? ` · tryb ${execution.modeDecision.mode}` : "") +
+        (execution.mandatoryPath
+          ? ` · ścieżka ${execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA"} ${execution.mandatoryPath.steps.filter((step) => step.status === "MET").length}/${execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length}`
+          : "") +
         ` · VERIFIED ${execution.verification.verified}` +
         ` · SUPPORTED ${execution.verification.supported}` +
         (verificationDegraded
@@ -4703,6 +4709,7 @@ export default function MatterChatApp({
                       </ul>
                     </details>
                   ) : null}
+                  {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
                       <summary>

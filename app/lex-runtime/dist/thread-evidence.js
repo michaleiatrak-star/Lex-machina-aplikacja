@@ -1,3 +1,4 @@
+import { mandatoryPathPrompt } from "./mandatory-path.js";
 const MAX_PROVISIONS = 80;
 const MAX_SKILLS = 40;
 const MAX_SOURCES = 40;
@@ -17,7 +18,7 @@ export function reusableProvision(record) {
 }
 const claimKey = (claim) => claim.replace(/\s+/g, " ").trim().toLowerCase();
 /** Previous evidence updated with one answer's records; newest wins per claim. */
-export function mergeThreadEvidence(previous, records, skills, now) {
+export function mergeThreadEvidence(previous, records, skills, now, turn = {}) {
     const provisions = new Map();
     for (const record of [...(previous?.provisions ?? []), ...records.filter(reusableProvision)]) {
         const key = claimKey(record.claim);
@@ -39,7 +40,9 @@ export function mergeThreadEvidence(previous, records, skills, now) {
         updatedAt: now,
         provisions: [...provisions.values()].slice(-MAX_PROVISIONS),
         skills: [...new Set([...(previous?.skills ?? []), ...skills])].slice(-MAX_SKILLS),
-        sources: [...sources.values()].slice(-MAX_SOURCES)
+        sources: [...sources.values()].slice(-MAX_SOURCES),
+        ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode) } : {}),
+        ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {})
     };
 }
 export function validThreadEvidence(value) {
@@ -58,7 +61,9 @@ export function validThreadEvidence(value) {
         updatedAt: raw.updatedAt,
         provisions: raw.provisions.filter((record) => Boolean(record) && typeof record.claim === "string" && typeof record.fetchedAt === "string" && reusableProvision(record)),
         skills: raw.skills.filter((skill) => typeof skill === "string"),
-        sources: raw.sources.filter((source) => Boolean(source) && typeof source.claim === "string" && typeof source.url === "string")
+        sources: raw.sources.filter((source) => Boolean(source) && typeof source.claim === "string" && typeof source.url === "string"),
+        ...(raw.mode === "LAIK" || raw.mode === "PRAWNIK" ? { mode: raw.mode } : {}),
+        ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {})
     };
 }
 /**
@@ -121,6 +126,9 @@ export function threadEvidencePrompt(evidence, reuse) {
     }
     if (evidence.skills.length) {
         lines.push(`Skille przeczytane wcześniej w tej sprawie: ${evidence.skills.join(", ")}.`);
+    }
+    if (evidence.lastPath) {
+        lines.push("", mandatoryPathPrompt(evidence.lastPath.report, evidence.lastPath.at));
     }
     return lines.join("\n");
 }

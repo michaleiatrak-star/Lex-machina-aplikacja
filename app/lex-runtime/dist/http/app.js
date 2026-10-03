@@ -7,10 +7,13 @@ import { createHash } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import { saveToDownloads } from "../download-save.js";
+import fs from "node:fs";
+import { latestUserTurn } from "../execution-engine.js";
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
+import { detectQueryMode, parseModeSignals } from "../query-mode.js";
 import { MAX_SUMMARY_CHARS, SUMMARY_CHUNK_CHARS, droppedMessageCount, queryWithSummary, summaryForDroppedHistory } from "../thread-summary.js";
 import { RoutingCatalog } from "./routing-catalog.js";
 import { decodeUploadFilename } from "../case-file-store.js";
@@ -732,7 +735,7 @@ async function refreshDocumentCitations(args) {
 async function rememberThreadEvidence(args) {
     const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
     const skills = args.result.loadedSkills ?? [];
-    if (records.length === 0 && skills.length === 0)
+    if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision)
         return;
     try {
         const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
@@ -740,12 +743,33 @@ async function rememberThreadEvidence(args) {
             caseId: args.caseId,
             caseDataKey,
             keyVersion: caseView.keyVersion,
-            evidence: mergeThreadEvidence(args.previous, records, skills, new Date().toISOString())
+            evidence: mergeThreadEvidence(args.previous, records, skills, new Date().toISOString(), {
+                ...(args.result.modeDecision && args.result.modeDecision.decision !== "NIEROZSTRZYGNIETY"
+                    ? { mode: args.result.modeDecision.mode }
+                    : {}),
+                ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {})
+            })
         }));
     }
     catch (error) {
         process.stderr.write(`CASE_MEMORY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`);
     }
+}
+// KROK 1 signal table of the current corpus (re-read after a skill update).
+let modeSignalsCache = null;
+function modeSignals(registry) {
+    if (modeSignalsCache?.root === registry.root)
+        return modeSignalsCache.signals;
+    let signals = null;
+    try {
+        const file = registry.resolveResource("prawny-router-v3", "references/KROK1-detekcja.md");
+        signals = file ? parseModeSignals(fs.readFileSync(file, "utf8")) : null;
+    }
+    catch {
+        signals = null;
+    }
+    modeSignalsCache = { root: registry.root, signals };
+    return signals;
 }
 /** The matter's files for the case file tools, on the caller's case access. */
 function createCaseFileAccess(args) {
@@ -5203,6 +5227,17 @@ export function createLexHttpApp(options) {
                     if (error instanceof CaseAccessError)
                         throw error;
                     process.stderr.write(`CASE_MEMORY_NOT_READ:${error instanceof Error ? error.message : String(error)}\n`);
+                }
+            }
+            // LAIK / PRAWNIK from the content of the question, at the entry (KROK 1 signals);
+            // an ambiguous question keeps the matter's earlier mode.
+            if (!trivialChat) {
+                const signals = modeSignals(options.registry);
+                if (signals) {
+                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null);
+                    request.mode = decision.mode;
+                    request.modeDecision = decision;
+                    request.onStep?.("ROUTING", `tryb ${decision.mode} (${decision.decision.toLowerCase().replaceAll("_", " ")})`);
                 }
             }
             // The excerpts above are cut to the window; with case search on, the

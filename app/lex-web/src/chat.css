@@ -2977,3 +2977,7 @@ mark.restored {
 .chat-provision-preview-toggle {
   margin-left: 8px;
 }
+
+.chat-mandatory-path li.chat-mandatory-missing b {
+  color: #a33;
+}

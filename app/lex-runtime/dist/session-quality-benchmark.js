@@ -62,7 +62,8 @@ export function scoreTurn(caseId, turnIndex, turn, observed) {
     const provisionsVerified = turn.expectedProvisions?.length
         ? turn.expectedProvisions.filter((provision) => lines.some((line) => normalize(line).includes(normalize(provision)) && /✅\s*\[VER/.test(line))).length / turn.expectedProvisions.length
         : null;
-    const parts = [topicCoverage, actCoverage, verificationRate, recall, provisionsVerified].filter((value) => value !== null);
+    const pathCoverage = observed.path && observed.path.counted > 0 ? observed.path.met / observed.path.counted : null;
+    const parts = [topicCoverage, actCoverage, verificationRate, recall, provisionsVerified, pathCoverage].filter((value) => value !== null);
     return {
         caseId,
         turn: turnIndex + 1,
@@ -77,7 +78,10 @@ export function scoreTurn(caseId, turnIndex, turn, observed) {
         actCoverage,
         recall,
         provisionsVerified,
-        score: blocked ? 0 : parts.reduce((sum, value) => sum + value, 0) / parts.length,
+        pathCoverage,
+        unbackedClaims: observed.path?.unbackedClaims ?? false,
+        // A described source query with no call behind it halves the turn.
+        score: blocked ? 0 : (parts.reduce((sum, value) => sum + value, 0) / parts.length) * (observed.path?.unbackedClaims ? 0.5 : 1),
         timeMs: observed.timeMs,
         inputTokens: observed.usage && observed.usage.unmeteredCalls === 0 ? observed.usage.inputTokens : null,
         outputTokens: observed.usage && observed.usage.unmeteredCalls === 0 ? observed.usage.outputTokens : null
@@ -97,13 +101,15 @@ export function summarizeScores(scores) {
         topicCoverage: mean(scores.map((item) => item.topicCoverage)) ?? 0,
         actCoverage: mean(scores.map((item) => item.actCoverage)),
         continuity: mean(scores.map((item) => item.recall)),
+        pathCoverage: mean(scores.map((item) => item.pathCoverage)),
+        unbackedClaimRate: scores.filter((item) => item.unbackedClaims).length / Math.max(1, scores.length),
         meanTimeMs: mean(scores.map((item) => item.timeMs)) ?? 0,
         inputTokens: sum(scores.map((item) => item.inputTokens)),
         outputTokens: sum(scores.map((item) => item.outputTokens))
     };
 }
 // Higher is better except these.
-const LOWER_IS_BETTER = new Set(["blockedRate", "meanTimeMs", "inputTokens", "outputTokens"]);
+const LOWER_IS_BETTER = new Set(["blockedRate", "unbackedClaimRate", "meanTimeMs", "inputTokens", "outputTokens"]);
 const QUALITY_TOLERANCE = 0.05;
 export function compareSummaries(baseline, current) {
     return Object.keys(current)
@@ -115,7 +121,7 @@ export function compareSummaries(baseline, current) {
         const relative = delta === null || !before ? null : delta / Math.abs(before);
         const regression = delta !== null &&
             (LOWER_IS_BETTER.has(metric)
-                ? metric === "blockedRate"
+                ? metric === "blockedRate" || metric === "unbackedClaimRate"
                     ? delta > QUALITY_TOLERANCE
                     : relative !== null && relative > 0.25
                 : delta < -QUALITY_TOLERANCE);
@@ -157,7 +163,7 @@ export function reportMarkdown(args) {
         "",
         `Model: ${args.provider}/${args.model}. Tury: ${args.summary.turns}.`,
         "",
-        `Wynik ${percent(args.summary.score)}, blokady ${percent(args.summary.blockedRate)}, przepisy zweryfikowane ${percent(args.summary.verificationRate)}, kompletność ${percent(args.summary.topicCoverage)}, akty ${percent(args.summary.actCoverage)}, ciągłość wątku ${percent(args.summary.continuity)}, średni czas ${Math.round(args.summary.meanTimeMs / 1000)} s, tokeny ${args.summary.inputTokens ?? "—"}/${args.summary.outputTokens ?? "—"}.`,
+        `Wynik ${percent(args.summary.score)}, blokady ${percent(args.summary.blockedRate)}, przepisy zweryfikowane ${percent(args.summary.verificationRate)}, kompletność ${percent(args.summary.topicCoverage)}, akty ${percent(args.summary.actCoverage)}, ciągłość wątku ${percent(args.summary.continuity)}, ścieżka obowiązkowa ${percent(args.summary.pathCoverage)}, opisy odpytań bez wywołania ${percent(args.summary.unbackedClaimRate)}, średni czas ${Math.round(args.summary.meanTimeMs / 1000)} s, tokeny ${args.summary.inputTokens ?? "—"}/${args.summary.outputTokens ?? "—"}.`,
         "",
         ...(args.comparison
             ? [
@@ -211,7 +217,23 @@ export async function runSessionQuality(args) {
                         mode: "PRAWNIK",
                         knowledge: { caseId: created.caseId, includeCase: false, includeFirm: false, limit: 8 }
                     });
-                    observed = { status: result.status, answer: result.answer ?? "", timeMs: Date.now() - started, ...(result.usage ? { usage: result.usage } : {}) };
+                    const path = result.mandatoryPath;
+                    observed = {
+                        status: result.status,
+                        answer: result.answer ?? "",
+                        timeMs: Date.now() - started,
+                        ...(result.usage ? { usage: result.usage } : {}),
+                        ...(path
+                            ? {
+                                path: {
+                                    profile: path.profile,
+                                    met: path.steps.filter((step) => step.status === "MET").length,
+                                    counted: path.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length,
+                                    unbackedClaims: path.steps.some((step) => step.id === "DEKLARACJE-WYKONANIA" && step.status === "MISSING")
+                                }
+                            }
+                            : {})
+                    };
                 }
                 catch (error) {
                     observed = { status: "ERROR", answer: "", timeMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) };

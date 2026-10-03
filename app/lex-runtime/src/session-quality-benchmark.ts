@@ -40,6 +40,8 @@ export type SessionTurnObservation = {
   answer: string;
   timeMs: number;
   usage?: { inputTokens: number; outputTokens: number; modelCalls: number; unmeteredCalls: number };
+  // The application's register of the mandatory path (response.mandatoryPath).
+  path?: { profile: string; met: number; counted: number; unbackedClaims: boolean };
   error?: string;
 };
 
@@ -57,6 +59,8 @@ export type SessionTurnScore = {
   actCoverage: number | null;
   recall: number | null;
   provisionsVerified: number | null;
+  pathCoverage: number | null;
+  unbackedClaims: boolean;
   score: number;
   timeMs: number;
   inputTokens: number | null;
@@ -143,7 +147,8 @@ export function scoreTurn(
         lines.some((line) => normalize(line).includes(normalize(provision)) && /✅\s*\[VER/.test(line))
       ).length / turn.expectedProvisions.length
     : null;
-  const parts = [topicCoverage, actCoverage, verificationRate, recall, provisionsVerified].filter(
+  const pathCoverage = observed.path && observed.path.counted > 0 ? observed.path.met / observed.path.counted : null;
+  const parts = [topicCoverage, actCoverage, verificationRate, recall, provisionsVerified, pathCoverage].filter(
     (value): value is number => value !== null
   );
   return {
@@ -160,7 +165,10 @@ export function scoreTurn(
     actCoverage,
     recall,
     provisionsVerified,
-    score: blocked ? 0 : parts.reduce((sum, value) => sum + value, 0) / parts.length,
+    pathCoverage,
+    unbackedClaims: observed.path?.unbackedClaims ?? false,
+    // A described source query with no call behind it halves the turn.
+    score: blocked ? 0 : (parts.reduce((sum, value) => sum + value, 0) / parts.length) * (observed.path?.unbackedClaims ? 0.5 : 1),
     timeMs: observed.timeMs,
     inputTokens: observed.usage && observed.usage.unmeteredCalls === 0 ? observed.usage.inputTokens : null,
     outputTokens: observed.usage && observed.usage.unmeteredCalls === 0 ? observed.usage.outputTokens : null
@@ -183,6 +191,8 @@ export type SessionQualitySummary = {
   topicCoverage: number;
   actCoverage: number | null;
   continuity: number | null;
+  pathCoverage: number | null;
+  unbackedClaimRate: number;
   meanTimeMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
@@ -197,6 +207,8 @@ export function summarizeScores(scores: SessionTurnScore[]): SessionQualitySumma
     topicCoverage: mean(scores.map((item) => item.topicCoverage)) ?? 0,
     actCoverage: mean(scores.map((item) => item.actCoverage)),
     continuity: mean(scores.map((item) => item.recall)),
+    pathCoverage: mean(scores.map((item) => item.pathCoverage)),
+    unbackedClaimRate: scores.filter((item) => item.unbackedClaims).length / Math.max(1, scores.length),
     meanTimeMs: mean(scores.map((item) => item.timeMs)) ?? 0,
     inputTokens: sum(scores.map((item) => item.inputTokens)),
     outputTokens: sum(scores.map((item) => item.outputTokens))
@@ -212,7 +224,7 @@ export type SessionQualityComparison = {
 };
 
 // Higher is better except these.
-const LOWER_IS_BETTER = new Set<keyof SessionQualitySummary>(["blockedRate", "meanTimeMs", "inputTokens", "outputTokens"]);
+const LOWER_IS_BETTER = new Set<keyof SessionQualitySummary>(["blockedRate", "unbackedClaimRate", "meanTimeMs", "inputTokens", "outputTokens"]);
 const QUALITY_TOLERANCE = 0.05;
 
 export function compareSummaries(baseline: SessionQualitySummary, current: SessionQualitySummary): SessionQualityComparison[] {
@@ -226,7 +238,7 @@ export function compareSummaries(baseline: SessionQualitySummary, current: Sessi
       const regression =
         delta !== null &&
         (LOWER_IS_BETTER.has(metric)
-          ? metric === "blockedRate"
+          ? metric === "blockedRate" || metric === "unbackedClaimRate"
             ? delta > QUALITY_TOLERANCE
             : relative !== null && relative > 0.25
           : delta < -QUALITY_TOLERANCE);
@@ -285,7 +297,7 @@ export function reportMarkdown(args: {
     "",
     `Model: ${args.provider}/${args.model}. Tury: ${args.summary.turns}.`,
     "",
-    `Wynik ${percent(args.summary.score)}, blokady ${percent(args.summary.blockedRate)}, przepisy zweryfikowane ${percent(args.summary.verificationRate)}, kompletność ${percent(args.summary.topicCoverage)}, akty ${percent(args.summary.actCoverage)}, ciągłość wątku ${percent(args.summary.continuity)}, średni czas ${Math.round(args.summary.meanTimeMs / 1000)} s, tokeny ${args.summary.inputTokens ?? "—"}/${args.summary.outputTokens ?? "—"}.`,
+    `Wynik ${percent(args.summary.score)}, blokady ${percent(args.summary.blockedRate)}, przepisy zweryfikowane ${percent(args.summary.verificationRate)}, kompletność ${percent(args.summary.topicCoverage)}, akty ${percent(args.summary.actCoverage)}, ciągłość wątku ${percent(args.summary.continuity)}, ścieżka obowiązkowa ${percent(args.summary.pathCoverage)}, opisy odpytań bez wywołania ${percent(args.summary.unbackedClaimRate)}, średni czas ${Math.round(args.summary.meanTimeMs / 1000)} s, tokeny ${args.summary.inputTokens ?? "—"}/${args.summary.outputTokens ?? "—"}.`,
     "",
     ...(args.comparison
       ? [
@@ -353,7 +365,12 @@ export async function runSessionQuality(args: {
         const started = Date.now();
         let observed: SessionTurnObservation;
         try {
-          const result = await args.call<{ status: string; answer?: string; usage?: SessionTurnObservation["usage"] }>(
+          const result = await args.call<{
+            status: string;
+            answer?: string;
+            usage?: SessionTurnObservation["usage"];
+            mandatoryPath?: { profile: string; steps: Array<{ id: string; status: string }> };
+          }>(
             "POST",
             "/api/sessions/execute",
             {
@@ -366,7 +383,23 @@ export async function runSessionQuality(args: {
               knowledge: { caseId: created.caseId, includeCase: false, includeFirm: false, limit: 8 }
             }
           );
-          observed = { status: result.status, answer: result.answer ?? "", timeMs: Date.now() - started, ...(result.usage ? { usage: result.usage } : {}) };
+          const path = result.mandatoryPath;
+          observed = {
+            status: result.status,
+            answer: result.answer ?? "",
+            timeMs: Date.now() - started,
+            ...(result.usage ? { usage: result.usage } : {}),
+            ...(path
+              ? {
+                  path: {
+                    profile: path.profile,
+                    met: path.steps.filter((step) => step.status === "MET").length,
+                    counted: path.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length,
+                    unbackedClaims: path.steps.some((step) => step.id === "DEKLARACJE-WYKONANIA" && step.status === "MISSING")
+                  }
+                }
+              : {})
+          };
         } catch (error) {
           observed = { status: "ERROR", answer: "", timeMs: Date.now() - started, error: error instanceof Error ? error.message : String(error) };
         }

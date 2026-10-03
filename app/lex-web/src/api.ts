@@ -949,8 +949,35 @@ export type EvidenceItem = {
   supportQuoteHash?: string;
 };
 
+export type MandatoryPathStep = {
+  layer: "ROUTER" | "SKILL" | "VERIFICATION" | "HARD_GATE";
+  id: string;
+  label: string;
+  requirement: "CORE" | "TRIGGERED" | "CONDITIONAL";
+  status: "MET" | "MISSING" | "NOT_TRIGGERED" | "NOT_EVALUATED";
+  by?: "APLIKACJA" | "MODEL";
+  evidence: string;
+};
+
+export type MandatoryPathView = {
+  source: string;
+  profile: "LEKKI" | "PELNY";
+  complete: boolean;
+  degraded: boolean;
+  steps: MandatoryPathStep[];
+  missing: string[];
+};
+
+export type QueryModeDecisionView = {
+  mode: "LAIK" | "PRAWNIK";
+  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY";
+  signals: { laik: string[]; prawnik: string[]; direct: string[] };
+};
+
 export type SessionExecutionResponse = {
   sessionId: string;
+  mandatoryPath?: MandatoryPathView;
+  modeDecision?: QueryModeDecisionView;
   // Values restored locally into the answer, for highlighting and correction.
   restorations?: RestorationMark[];
   unresolvedTokens?: string[];
@@ -2707,6 +2734,8 @@ export type QualitySummary = {
   topicCoverage: number;
   actCoverage: number | null;
   continuity: number | null;
+  pathCoverage?: number | null;
+  unbackedClaimRate?: number;
   meanTimeMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
