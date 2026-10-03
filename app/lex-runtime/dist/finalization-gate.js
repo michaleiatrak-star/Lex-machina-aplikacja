@@ -5,7 +5,7 @@ const VERIFIED_MARKER_TOKEN = /✅\s*\[VER:[^\]\r\n]+\]/giu;
 const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/iu;
 const CASE_QUOTE_MARKER = /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER = /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
-function expectedVerificationMarker(record) {
+export function expectedVerificationMarker(record) {
     return verificationMarker(record);
 }
 const ARTICLE_PATTERN = /\bart\.?\s+\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\s*§\s*\d+[a-zA-Z]*)?(?:\s+(?:KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP))?/giu;
@@ -329,6 +329,37 @@ export function markUnverifiedReferences(text, report) {
             lineText = `${lineText.slice(0, end)} ${UNVERIFIED_MARKER_TEXT}${lineText.slice(end)}`;
         }
         lines[line - 1] = lineText;
+    }
+    return lines.join("\n");
+}
+/**
+ * A provision verified in this turn but cited again without its marker (another
+ * paragraph, a comparison table) gets the marker of its VERIFIED record from the
+ * ledger. Only true ledger markers are added; a fabricated marker is not touched.
+ * In a table row the markers go into the last cell, keeping the row valid.
+ */
+export function addMissingVerificationMarkers(text, report) {
+    const byLine = new Map();
+    for (const finding of report.findings) {
+        if (finding.status !== "MISSING_VERIFICATION_MARKER" && finding.status !== "VERIFICATION_MARKER_MISMATCH")
+            continue;
+        const marker = finding.record ? expectedVerificationMarker(finding.record) : null;
+        if (!marker)
+            continue;
+        byLine.set(finding.reference.line, (byLine.get(finding.reference.line) ?? new Set()).add(marker));
+    }
+    if (byLine.size === 0)
+        return text;
+    const lines = text.split(/\r?\n/u);
+    for (const [line, markers] of byLine) {
+        const current = lines[line - 1] ?? "";
+        const missing = [...markers].filter((marker) => !current.includes(marker));
+        if (missing.length === 0)
+            continue;
+        const insert = missing.join(" ");
+        lines[line - 1] = /\|\s*$/u.test(current)
+            ? current.replace(/\s*\|\s*$/u, ` ${insert} |`)
+            : `${current.trimEnd()} ${insert}`;
     }
     return lines.join("\n");
 }

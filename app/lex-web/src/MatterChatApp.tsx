@@ -785,8 +785,9 @@ export function blockedReasonText(
   execution: Pick<
     ExtendedExecution,
     "status" | "answer" | "audit" | "workflow" | "gateI" | "finalization"
-  >
+  > & { blockedReferences?: ExtendedExecution["blockedReferences"] }
 ): string {
+  const references = (execution.blockedReferences ?? []).slice(0, 12);
   const lines = [
     `status=${execution.status}; finalization=${execution.finalization}; audit=${execution.audit?.result ?? "?"}; answer=${execution.answer ? "present" : "missing"}` +
       (execution.workflow ? `; workflow=${execution.workflow.id}:${execution.workflow.result}` : "") +
@@ -795,6 +796,9 @@ export function blockedReasonText(
     ...(execution.audit?.violations?.length ? [`audit.violations: ${execution.audit.violations.join(", ")}`] : []),
     ...(execution.workflow?.missingResources.length
       ? [`workflow.missingResources: ${execution.workflow.missingResources.join(", ")}`]
+      : []),
+    ...(references.length
+      ? [`odwołania zablokowane przez G8: ${references.map((item) => `${item.claim} (${item.status}, wiersz ${item.line})`).join("; ")}`]
       : []),
     ...(execution.audit?.blockedEvents ?? []).map((event) => `blokada: ${event}`)
   ];

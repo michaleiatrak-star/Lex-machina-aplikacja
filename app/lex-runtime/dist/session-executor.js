@@ -1,4 +1,4 @@
-import { FinalizationGate, markUnverifiedReferences } from "./finalization-gate.js";
+import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, reconcileStatusMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
@@ -1047,7 +1047,9 @@ export class SafeSessionExecutor {
         const markedAnswer = preFinalization.result === "BLOCKED"
             ? {
                 ...citedAnswer,
-                text: markUnverifiedReferences(citedAnswer.text, preFinalization)
+                // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
+                // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
+                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization), preFinalization)
             }
             : citedAnswer;
         // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
@@ -1469,7 +1471,16 @@ export class SafeSessionExecutor {
             kind: "statute",
             line,
             status: finding.code
-        }))));
+        }))))
+            // Znaczniki orzeczeń bez dowodu (zmyślone albo cytat zmieniony po weryfikacji).
+            .concat([...finalization.caseQuoteFindings.filter((finding) => finding.status !== "VERIFIED"),
+            ...finalization.caseSupportFindings.filter((finding) => finding.status !== "SUPPORTED")]
+            .map((finding) => ({
+            claim: finding.record?.caseSignature ?? `znacznik orzeczenia ${finding.evidenceHash}`,
+            kind: "case",
+            line: finding.line,
+            status: finding.status
+        })));
         step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
         // Every restored value is reported so the UI can mark it for review.
         const restoredAnswer = restoreWithReport(processedDocumentCitations.text, chatPrivacyVault);

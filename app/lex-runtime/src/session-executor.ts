@@ -1,5 +1,6 @@
 import {
   FinalizationGate,
+  addMissingVerificationMarkers,
   markUnverifiedReferences
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
@@ -2041,8 +2042,13 @@ export class SafeSessionExecutor implements SessionExecutor {
       preFinalization.result === "BLOCKED"
         ? {
             ...citedAnswer,
-            text: markUnverifiedReferences(
-              citedAnswer.text,
+            // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
+            // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
+            text: addMissingVerificationMarkers(
+              markUnverifiedReferences(
+                citedAnswer.text,
+                preFinalization
+              ),
               preFinalization
             )
           }
@@ -2765,6 +2771,17 @@ export class SafeSessionExecutor implements SessionExecutor {
             status: finding.code
           }))
         )
+      )
+      // Znaczniki orzeczeń bez dowodu (zmyślone albo cytat zmieniony po weryfikacji).
+      .concat(
+        [...finalization.caseQuoteFindings.filter((finding) => finding.status !== "VERIFIED"),
+          ...finalization.caseSupportFindings.filter((finding) => finding.status !== "SUPPORTED")]
+          .map((finding) => ({
+            claim: finding.record?.caseSignature ?? `znacznik orzeczenia ${finding.evidenceHash}`,
+            kind: "case" as const,
+            line: finding.line,
+            status: finding.status
+          }))
       );
 
     step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");

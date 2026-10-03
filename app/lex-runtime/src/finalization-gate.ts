@@ -67,7 +67,7 @@ const CASE_QUOTE_MARKER =
 const CASE_SUPPORT_MARKER =
   /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
 
-function expectedVerificationMarker(
+export function expectedVerificationMarker(
   record: VerificationRecord
 ): string | null {
   return verificationMarker(record);
@@ -558,3 +558,35 @@ export function markUnverifiedReferences(
   }
   return lines.join("\n");
 }
+
+/**
+ * A provision verified in this turn but cited again without its marker (another
+ * paragraph, a comparison table) gets the marker of its VERIFIED record from the
+ * ledger. Only true ledger markers are added; a fabricated marker is not touched.
+ * In a table row the markers go into the last cell, keeping the row valid.
+ */
+export function addMissingVerificationMarkers(
+  text: string,
+  report: FinalizationReport
+): string {
+  const byLine = new Map<number, Set<string>>();
+  for (const finding of report.findings) {
+    if (finding.status !== "MISSING_VERIFICATION_MARKER" && finding.status !== "VERIFICATION_MARKER_MISMATCH") continue;
+    const marker = finding.record ? expectedVerificationMarker(finding.record) : null;
+    if (!marker) continue;
+    byLine.set(finding.reference.line, (byLine.get(finding.reference.line) ?? new Set()).add(marker));
+  }
+  if (byLine.size === 0) return text;
+  const lines = text.split(/\r?\n/u);
+  for (const [line, markers] of byLine) {
+    const current = lines[line - 1] ?? "";
+    const missing = [...markers].filter((marker) => !current.includes(marker));
+    if (missing.length === 0) continue;
+    const insert = missing.join(" ");
+    lines[line - 1] = /\|\s*$/u.test(current)
+      ? current.replace(/\s*\|\s*$/u, ` ${insert} |`)
+      : `${current.trimEnd()} ${insert}`;
+  }
+  return lines.join("\n");
+}
+
