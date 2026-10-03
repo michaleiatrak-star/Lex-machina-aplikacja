@@ -12,7 +12,8 @@ export type VerificationKind =
   | "journal"
   | "case"
   | "deadline"
-  | "amount";
+  | "amount"
+  | "interpretation";
 
 export type VerificationStatus =
   | "VERIFIED"
@@ -66,6 +67,8 @@ export type VerificationRecord = {
   officialAnchor?: true;
   // Akt, którego aktualny t.j. sprawdzono (pamięć dowodowa wątku sprawdza go ponownie w ELI).
   actDescriptor?: LegalActDescriptor;
+  // Interpretacja (EUREKA): status aktualności w dniu sprawdzenia, np. "Aktualna".
+  interpretationStatus?: string;
 };
 
 function normalizeClaim(value: string): string {

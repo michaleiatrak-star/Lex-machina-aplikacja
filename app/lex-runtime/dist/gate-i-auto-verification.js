@@ -23,13 +23,16 @@ function ledgerRecordForScope(ledger, claim, asOf) {
     const records = ledger.find(claim);
     return [...records]
         .reverse()
-        .find((record) => asOf
-        ? record.asOf === asOf &&
-            record.temporalMode ===
-                "HISTORICAL"
-        : !record.asOf &&
-            record.temporalMode !==
-                "HISTORICAL");
+        .find((record) => 
+    // Interpretacja nie ma stanu prawnego na dzień: liczy się jej sygnatura.
+    record.kind === "interpretation" ||
+        (asOf
+            ? record.asOf === asOf &&
+                record.temporalMode ===
+                    "HISTORICAL"
+            : !record.asOf &&
+                record.temporalMode !==
+                    "HISTORICAL"));
 }
 function normalizedClaim(value) {
     return value
@@ -173,6 +176,15 @@ export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
                     signature,
                     courtFamily: "SN"
                 }
+            });
+            continue;
+        }
+        // Interpretacja podatkowa: sygnatura sprawdzana w EUREKA przez aplikację.
+        if (reference.kind === "interpretation") {
+            calls.push({
+                id: `gate-i-auto-${calls.length + 1}`,
+                name: "verify_interpretation",
+                input: { signature: reference.claim }
             });
             continue;
         }

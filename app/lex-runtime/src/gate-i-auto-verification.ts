@@ -57,13 +57,15 @@ function ledgerRecordForScope(
     .reverse()
     .find(
       (record) =>
-        asOf
+        // Interpretacja nie ma stanu prawnego na dzień: liczy się jej sygnatura.
+        record.kind === "interpretation" ||
+        (asOf
           ? record.asOf === asOf &&
             record.temporalMode ===
               "HISTORICAL"
           : !record.asOf &&
             record.temporalMode !==
-              "HISTORICAL"
+              "HISTORICAL")
     );
 }
 
@@ -331,6 +333,16 @@ export function planAutomaticLegalVerification(
           courtFamily:
             "SN"
         }
+      });
+      continue;
+    }
+
+    // Interpretacja podatkowa: sygnatura sprawdzana w EUREKA przez aplikację.
+    if (reference.kind === "interpretation") {
+      calls.push({
+        id: `gate-i-auto-${calls.length + 1}`,
+        name: "verify_interpretation",
+        input: { signature: reference.claim }
       });
       continue;
     }

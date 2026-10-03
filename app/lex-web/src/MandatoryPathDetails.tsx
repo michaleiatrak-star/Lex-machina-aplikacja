@@ -29,6 +29,12 @@ export function MandatoryPathDetails({ path }: { path: MandatoryPathView }) {
         {path.complete ? "" : ` · brak: ${path.missing.length}`}
       </summary>
       <p className="field-help">Rejestr prowadzi aplikacja na podstawie audytu tej odpowiedzi; źródło modelu ścieżki: {path.source}.</p>
+      {path.routingTrace ? (
+        <div>
+          <strong>Ślad routingu (KROK 3A)</strong>
+          <pre className="chat-routing-trace">{path.routingTrace}</pre>
+        </div>
+      ) : null}
       {LAYERS.map(([layer, title]) => {
         const steps = path.steps.filter((step) => step.layer === layer && step.status !== "NOT_TRIGGERED");
         if (!steps.length) return null;

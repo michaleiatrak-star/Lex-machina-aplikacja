@@ -886,7 +886,7 @@ export type SkillUpdateApplyResponse = {
 
 export type BlockedReference = {
   claim: string;
-  kind: "statute" | "journal" | "case";
+  kind: "statute" | "journal" | "case" | "interpretation" | "amount";
   line: number;
   status: string;
 };
@@ -923,7 +923,7 @@ export type AuxiliarySourceItem = {
 
 export type EvidenceItem = {
   claim: string;
-  kind: "statute" | "journal" | "case" | "deadline" | "amount";
+  kind: "statute" | "journal" | "case" | "deadline" | "amount" | "interpretation";
   status: "VERIFIED" | "SUPPORTED" | "UNVERIFIED";
   sourceUrl?: string;
   // sourceUrl z kotwicą do artykułu/jednostki, gdy runtime ją ustalił.
@@ -966,6 +966,8 @@ export type MandatoryPathView = {
   degraded: boolean;
   steps: MandatoryPathStep[];
   missing: string[];
+  // KROK 3A wypisany przez aplikację z audytu.
+  routingTrace?: string;
 };
 
 export type QueryModeDecisionView = {

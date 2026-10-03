@@ -1,4 +1,6 @@
 import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
+import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 import {
@@ -6,9 +8,13 @@ import {
   type VerificationRecord
 } from "./verification-ledger.js";
 
+// "amount": stawka, termin, kara albo sankcja liczbowo (PRAWO-HARDGATE, ZASADA ABSOLUTNA);
+// tylko w findings bramki, nie w references (to nie jest osobne powołanie źródła).
+export type LegalReferenceKind = "statute" | "journal" | "case" | "interpretation" | "amount";
+
 export type DetectedLegalReference = {
   claim: string;
-  kind: "statute" | "journal" | "case";
+  kind: LegalReferenceKind;
   line: number;
   lineText: string;
 };
@@ -123,7 +129,8 @@ export function detectLegalReferences(text: string): DetectedLegalReference[] {
     references.push(
       ...collectMatches(lineText, line, "statute", ARTICLE_PATTERN),
       ...collectMatches(lineText, line, "journal", DZU_PATTERN),
-      ...collectMatches(lineText, line, "case", CASE_PATTERN)
+      ...collectMatches(lineText, line, "case", CASE_PATTERN),
+      ...interpretationSignaturesInLine(lineText).map((claim) => ({ claim, kind: "interpretation" as const, line, lineText }))
     );
   });
 
@@ -162,6 +169,24 @@ function coveringVerifiedRecord(
     });
   const claims = new Set(covering.map((record) => comparableClaim(record.claim)));
   return claims.size === 1 ? covering.at(-1) : undefined;
+}
+
+// ⚠️ przypięty do wartości liczbowej albo do innej sygnatury interpretacji nie oznacza
+// powołania, które sprawdzamy (każde ma mieć własny znacznik).
+function withoutAttachedMarkers(reference: DetectedLegalReference): string {
+  const line = reference.lineText;
+  const signatures = interpretationSignaturesInLine(line).filter((signature) => signature !== reference.claim && line.includes(signature));
+  const spans = [
+    ...amountMarkerSpans(line),
+    ...markerSpansAfter(line, signatures.map((signature) => line.indexOf(signature) + signature.length))
+  ];
+  if (reference.kind === "interpretation" && line.includes(reference.claim)) {
+    // Sygnatura sprawdzana: liczy się wyłącznie ⚠️ tuż za nią.
+    return markerSpansAfter(line, [line.indexOf(reference.claim) + reference.claim.length]).length ? "⚠️ [NIEWERYFIKOWANE]" : "";
+  }
+  return spans
+    .sort((a, b) => b.start - a.start)
+    .reduce((text, span) => text.slice(0, span.start) + text.slice(span.end), line);
 }
 
 export class FinalizationGate {
@@ -235,7 +260,8 @@ export class FinalizationGate {
         coveringVerifiedRecord(ledger, reference, lineMarkers);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
-      if (!record && UNVERIFIED_MARKER.test(reference.lineText)) {
+      const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
+      if (!record && ownUnverified) {
         findings.push({
           reference,
           status: "UNVERIFIED_MARKED"
@@ -285,7 +311,7 @@ export class FinalizationGate {
         continue;
       }
 
-      if (UNVERIFIED_MARKER.test(reference.lineText)) {
+      if (ownUnverified) {
         findings.push({
           reference,
           status: "UNVERIFIED_MARKED",
@@ -301,6 +327,33 @@ export class FinalizationGate {
     }
 
     const lines = text.split(/\r?\n/u);
+
+    // Stawka, termin, kara: potwierdzona brzmieniem przepisu VERIFIED z tego wiersza.
+    lines.forEach((lineText, index) => {
+      const amounts = amountMatches(lineText);
+      if (amounts.length === 0) return;
+      const lineRecords = [
+        ...references.filter((reference) => reference.line === index + 1 && reference.kind === "statute").map((reference) => reference.claim),
+        ...statuteClaimsInLine(lineText)
+      ]
+        .map((claim) => ledger.latest(claim))
+        .filter((record): record is VerificationRecord => record?.status === "VERIFIED" && Boolean(record.evidence));
+      const marked = amountMarkerSpans(lineText);
+      for (const amount of amounts) {
+        const reference: DetectedLegalReference = { claim: amount.text, kind: "amount", line: index + 1, lineText };
+        const record = lineRecords.find((candidate) => evidenceHasAmount(candidate.evidence!, amount.key));
+        if (record) {
+          findings.push({ reference, status: "VERIFIED", record });
+        } else if (
+          marked.some((span) => span.start >= amount.end && span.start <= amount.end + 3) ||
+          (lineRecords.length === 0 && !VERIFIED_MARKER.test(lineText) && UNVERIFIED_MARKER.test(lineText))
+        ) {
+          findings.push({ reference, status: "UNVERIFIED_MARKED" });
+        } else {
+          findings.push({ reference, status: "UNVERIFIED_NOT_MARKED" });
+        }
+      }
+    });
 
     lines.forEach((lineText, index) => {
       CASE_QUOTE_MARKER.lastIndex = 0;

@@ -1,3 +1,5 @@
+import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
+import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
@@ -50,12 +52,19 @@ function lineTokens(lineText) {
             });
         });
     }
+    // ⚠️ tuż za stawką, terminem, karą albo sygnaturą interpretacji należy do niej, nie do przepisu.
+    const signatureEnds = interpretationSignaturesInLine(lineText)
+        .filter((signature) => lineText.includes(signature))
+        .map((signature) => lineText.indexOf(signature) + signature.length);
+    const amountMarkers = [...amountMarkerSpans(lineText), ...markerSpansAfter(lineText, signatureEnds)];
     for (const [pattern, status] of [
         [VERIFIED_MARKER, "VERIFIED"],
         [UNVERIFIED_MARKER, "UNVERIFIED"]
     ]) {
         pattern.lastIndex = 0;
         for (const match of lineText.matchAll(pattern)) {
+            if (status === "UNVERIFIED" && amountMarkers.some((span) => span.start === match.index))
+                continue;
             tokens.push({
                 type: "marker",
                 start: match.index,

@@ -18,7 +18,8 @@ import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
 import fs from "node:fs";
-import { ROUTER_SKILL, evaluateMandatoryPath, loadMandatoryPathModel, mandatoryPathInstructions, pathProfile, preloadForTurn } from "./mandatory-path.js";
+import path from "node:path";
+import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, mandatoryPathInstructions, missingGateBlocks, pathProfile, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
@@ -30,6 +31,8 @@ import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { detectLegalReferences } from "./finalization-gate.js";
+import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
+import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -37,6 +40,15 @@ import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseud
 import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { parseSkillSelectionEnvelope } from "./skill-selection.js";
+// Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
+function duplicateSkills(names) {
+    const byBase = new Map();
+    for (const name of names) {
+        const base = name.replace(/-v\d+$/u, "");
+        byBase.set(base, [...(byBase.get(base) ?? []), name]);
+    }
+    return [...byBase.values()].filter((group) => group.length > 1).map((group) => group.sort().join(" i "));
+}
 export function publicAuxiliarySourceFromToolResult(result) {
     let payload;
     try {
@@ -1234,9 +1246,66 @@ export class SafeSessionExecutor {
             observed: workflowReads.observed,
             missing: workflowReads.missing
         });
+        // Mandatory path, profile PEŁNY: the router's gate blocks (CN, REM, WYJ) must be
+        // visible in the answer. One correcting round with the gate modules; what is
+        // still missing after it degrades the answer (⛔ TRYB ZDEGRADOWANY).
+        let modelOutput = execution.output;
+        // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
+        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
+        const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0);
+        const missingGates = mandatoryModel &&
+            legalTurn &&
+            !request.model.startsWith("local/") &&
+            // Plain legal chat only: structured outputs and workflow checkpoints have their own contracts.
+            !request.documentAstOutput &&
+            !request.guideContext &&
+            !request.processWorkflowContext &&
+            !request.courtWorkflowContext &&
+            !request.chronologyWorkflowContext &&
+            !request.contractWorkflowContext &&
+            !request.orderedCaseWorkflowContext &&
+            legalAnswer(modelOutput)
+            ? missingGateBlocks(mandatoryModel, profile, modelOutput)
+            : [];
+        if (missingGates.length) {
+            step("MODEL", `ścieżka obowiązkowa: uzupełnienie bramek ${missingGates.map((item) => item.block).join(", ")}`);
+            try {
+                const corrected = await this.providers.stream(request.provider, {
+                    model: request.model,
+                    systemPrompt: [
+                        ...(placeholderKey ? [placeholderKey] : []),
+                        identityPrompt,
+                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                        ...pathSections
+                    ].join("\n\n"),
+                    messages: [
+                        { role: "user", content: protectedQuery },
+                        { role: "assistant", content: modelOutput },
+                        { role: "user", content: gateCorrectionPrompt(missingGates) }
+                    ],
+                    accountContinuity: "none",
+                    reasoning: "none"
+                });
+                const text = corrected.fullText.trim();
+                const remaining = text ? missingGateBlocks(mandatoryModel, profile, text) : missingGates;
+                const accepted = Boolean(text) && remaining.length < missingGates.length;
+                if (accepted)
+                    modelOutput = text;
+                audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
+                    missing: missingGates.map((item) => item.block),
+                    remaining: (accepted ? remaining : missingGates).map((item) => item.block)
+                });
+            }
+            catch (error) {
+                audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {
+                    missing: missingGates.map((item) => item.block),
+                    error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
+                });
+            }
+        }
         // The model's own ⚠️ at a statute does not stop the application from
         // verifying it: status comes from the registry only.
-        const releasedDraft = releaseModelUnverifiedMarkers(execution.output);
+        const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
         const automaticVerificationPlan = planAutomaticLegalVerification(releasedDraft.text, ledger, requestedHistoricalAsOf);
         let automaticVerificationExecuted = 0;
         if (automaticVerificationPlan.calls.length > 0 &&
@@ -1663,13 +1732,43 @@ export class SafeSessionExecutor {
             guideOutputBlocked,
             reportBlueprintBlocked
         });
+        // KROK 4: provisions verified in their current wording, checked again on the
+        // event date from the question (separate ledger: answer markers stay as they are).
+        const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
+            ? eventDates(pathFacts.query, new Date().toISOString().slice(0, 10))
+            : [];
+        const eventDateCheck = dates.length
+            ? await checkProvisionsAtEventDates({
+                records: ledger.all(),
+                dates,
+                runTools: (calls) => this.verificationToolFactory(new VerificationLedger(), { localModel: false }).runTools(calls)
+            })
+            : undefined;
+        if (eventDateCheck?.items.length) {
+            audit.record("gate", "EVENT_DATE_CHECK", eventDateCheck.items.every((item) => item.result === "SAME") ? "OK" : "DEGRADED", {
+                dates: eventDateCheck.dates,
+                items: eventDateCheck.items.map((item) => `${item.claim}@${item.asOf}:${item.result}`)
+            });
+        }
+        // KROK 7: the disclaimer from shared/DISCLAIMER.md is the last element of a
+        // legal answer; the application adds it when the model did not end with it.
+        const mode = request.modeDecision?.mode ?? request.mode;
+        // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
+        const freeText = !request.documentAstOutput && !reportBlueprint;
+        const disclaimerTexts = legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+        const disclaimed = disclaimerTexts
+            ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
+            : { text: processedDocumentCitations.text, appended: false };
+        if (disclaimed.appended)
+            audit.record("gate", "DISCLAIMER_LAST", "OK", { by: "APLIKACJA", mode });
         // The register of the mandatory path, from what really happened in the turn.
-        const mandatoryPath = mandatoryModel && legalTurn
+        const evaluatedPath = mandatoryModel && legalTurn
             ? evaluateMandatoryPath(mandatoryModel, {
                 ...pathFacts,
                 profile,
                 contextResources,
                 answer: processedDocumentCitations.text,
+                ...(disclaimerTexts ? { disclaimerBy: disclaimed.appended ? "APLIKACJA" : "MODEL" } : {}),
                 records: ledger.all(),
                 events: audit.events.map((event) => ({
                     type: event.type,
@@ -1680,9 +1779,36 @@ export class SafeSessionExecutor {
                 loadedSkills: execution.loadedSkills ?? [],
                 primarySkill: execution.primarySkill,
                 finalization: finalization.result,
-                federationTools: Boolean(federationTools)
+                federationTools: Boolean(federationTools),
+                ...(eventDateCheck ? { eventDateCheck } : {})
             })
             : undefined;
+        // KROK 3A written by the application from the audit.
+        const trace = evaluatedPath
+            ? routingTrace({
+                mode,
+                report: evaluatedPath,
+                primarySkill: execution.primarySkill,
+                loadedSkills: execution.loadedSkills ?? [],
+                events: audit.events.map((event) => ({ type: event.type, target: event.target, status: event.status })),
+                routerVersion: String(this.registry.get(ROUTER_SKILL)?.frontmatter.version ?? "") || null,
+                sharedRoot: `${path.basename(this.registry.root)}/shared`,
+                duplicates: duplicateSkills([...this.registry.skills.keys()])
+            })
+            : null;
+        const mandatoryPath = evaluatedPath && trace ? { ...evaluatedPath, routingTrace: trace.text } : evaluatedPath;
+        // Router: a missing mandatory read or gate is declared, never silent.
+        const degradedReasons = mandatoryPath
+            ? [
+                ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
+                ...(mandatoryPath.degraded
+                    ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
+                    : [])
+            ]
+            : [];
+        const presentedText = degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
+            ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+            : disclaimed.text;
         if (mandatoryPath) {
             audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
                 profile: mandatoryPath.profile,
@@ -1738,7 +1864,7 @@ export class SafeSessionExecutor {
         })));
         step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
         // Every restored value is reported so the UI can mark it for review.
-        const restoredAnswer = restoreWithReport(processedDocumentCitations.text, chatPrivacyVault);
+        const restoredAnswer = restoreWithReport(presentedText, chatPrivacyVault);
         const response = {
             sessionId: audit.sessionId,
             status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",

@@ -949,6 +949,7 @@ export class LexExecutionEngine {
             ["lista skilli", "list_legal_skills"],
             ["weryfikacja przepisu przez ELI / ISAP", "verify_legal_reference"],
             ["wyszukanie orzeczeń (SAOS, CBOSA, SN)", "search_case_law"],
+            ["weryfikacja sygnatury interpretacji podatkowej (EUREKA)", "verify_interpretation"],
             ["weryfikacja sygnatury, cytatu i tezy orzeczenia", "verify_case_reference, verify_case_quote, verify_case_proposition"],
             ["źródła prawne przez MCP (ISAP, EUR-Lex, KRS i inne)", "list_federated_legal_sources, search_federated_legal_sources, get_federated_legal_document, call_federated_legal_source"],
             ["web_search / wyszukiwanie w internecie", "web_search"]

@@ -136,6 +136,7 @@ describe("mandatory path in a session", () => {
     const registry = new LexSkillRegistry(CORPUS);
     registry.scan();
     let params: ProviderStreamParams | undefined;
+    const calls: ProviderStreamParams[] = [];
     const providers = new ProviderRegistry();
     providers.register({
       id: "openai",
@@ -143,6 +144,7 @@ describe("mandatory path in a session", () => {
       capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
       async stream(received) {
         params = received;
+        calls.push(received);
         return { fullText: "Art. 233 KK — fałszywe zeznanie.\n\nTo ogólna informacja prawna, nie indywidualna porada prawna." };
       }
     });
@@ -180,5 +182,13 @@ describe("mandatory path in a session", () => {
     expect(result.mandatoryPath!.steps.find((step) => step.id === "PELNY:MOD-CN-GATE")).toMatchObject({ status: "MET", by: "APLIKACJA" });
     expect(result.modeDecision?.mode).toBe("PRAWNIK");
     expect(verified).toEqual(expect.arrayContaining(["art. 233 KK", "art. 234 KK", "art. 238 KK"]));
+    // PEŁNY without visible gate blocks: one correcting round, then ⛔ TRYB ZDEGRADOWANY.
+    expect(calls).toHaveLength(2);
+    expect(String(calls[1]!.messages.at(-1)!.content)).toContain("CN-GATE");
+    expect(result.answer).toMatch(/^⛔ TRYB ZDEGRADOWANY — brak obowiązkowego kroku: .*CN-GATE-BLOK/u);
+    // KROK 7 and KROK 3A by the application.
+    expect(result.answer).toMatch(/Zastrzeżenie[\s\S]*nie stanowi\s+porady prawnej[\s\S]*$/iu);
+    expect(result.mandatoryPath!.routingTrace).toContain("TRYB: PRAWNIK");
+    expect(result.mandatoryPath!.steps.find((step) => step.id === "DISCLAIMER-OSTATNI")).toMatchObject({ by: "APLIKACJA" });
   }, 60_000);
 });

@@ -1,3 +1,4 @@
+import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
 import type { VerificationRecord } from "./verification-ledger.js";
 
@@ -35,6 +36,8 @@ export type MandatoryPathReport = {
   degraded: boolean;
   steps: PathStep[];
   missing: string[];
+  // KROK 3A, wypisany przez aplikację z audytu.
+  routingTrace?: string;
 };
 
 export type MandatoryPathModel = {
@@ -164,6 +167,10 @@ export type TurnFacts = {
   loadedSkills: string[];
   primarySkill: string;
   finalization: string;
+  // PRAWO-HARDGATE KROK 4: brzmienie na dzień zdarzenia z pytania (aplikacja, ELI asOf).
+  eventDateCheck?: EventDateCheck;
+  // KROK 7: kto dał disclaimer na końcu odpowiedzi (aplikacja dokłada brakujący).
+  disclaimerBy?: "MODEL" | "APLIKACJA";
 };
 
 const DATE = /\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b|\b\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+\d{4}\b/giu;
@@ -450,6 +457,34 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
       : "brak rekordów weryfikacji"
   });
 
+  const eventCheck = facts.eventDateCheck;
+  if (legal && eventCheck && eventCheck.dates.length > 0) {
+    const open = eventCheck.items.filter((item) => item.result !== "SAME");
+    steps.push({
+      layer: "VERIFICATION",
+      id: "KROK-4-DATA-ZDARZENIA",
+      label: `Brzmienie przepisów na dzień zdarzenia (${eventCheck.dates.join(", ")})`,
+      requirement: "CONDITIONAL",
+      status: eventCheck.items.length === 0 ? "NOT_TRIGGERED" : open.length === 0 ? "MET" : "MISSING",
+      by: "APLIKACJA",
+      evidence: eventCheck.items.length
+        ? eventCheck.items.map((item) => `${item.claim}: ${item.detail}`).join("; ")
+        : "brak przepisów zweryfikowanych w brzmieniu aktualnym"
+    });
+  }
+
+  if (legal && facts.disclaimerBy) {
+    steps.push({
+      layer: "HARD_GATE",
+      id: "DISCLAIMER-OSTATNI",
+      label: "Disclaimer z shared/DISCLAIMER.md jako ostatni element odpowiedzi (KROK 7)",
+      requirement: "CORE",
+      status: "MET",
+      by: facts.disclaimerBy,
+      evidence: facts.disclaimerBy === "APLIKACJA" ? "model go nie dał; dołożyła aplikacja (wariant trybu)" : "na końcu odpowiedzi modelu"
+    });
+  }
+
   // HARD GATE: finalization and claims of running a source.
   steps.push({
     layer: "HARD_GATE",
@@ -522,4 +557,74 @@ export function mandatoryPathPrompt(report: MandatoryPathReport, at: string): st
     ...relevant.map((step) => `- [${step.layer}] ${step.label}: ${MARK[step.status]}${step.by ? ` (${step.by})` : ""} — ${step.evidence}`),
     report.complete ? "Wszystkie wyzwolone kroki spełnione." : `Brakujące kroki: ${report.missing.join(", ")}.`
   ].join("\n");
+}
+
+/** PEŁNY: gate blocks of the router's mandatory modules missing from the answer, with their missing steps. */
+export function missingGateBlocks(model: MandatoryPathModel, profile: PathProfile, answer: string): Array<{ block: string; resource: string; steps: string[] }> {
+  if (profile !== "PELNY") return [];
+  const missing: Array<{ block: string; resource: string; steps: string[] }> = [];
+  for (const item of model.full) {
+    if (!item.block || item.block === "ST" || item.whenDocuments) continue;
+    if (item.block === "WYJ-GATE" && !ARTICLE.test(answer)) continue;
+    const visible = new RegExp(item.block.replace("-", "[- ]?"), "i").test(answer);
+    const absent = item.steps.filter((step) => !new RegExp(`\\b${step}\\b`).test(answer));
+    if (!visible || absent.length) missing.push({ block: item.block, resource: item.resource, steps: visible ? absent : item.steps });
+  }
+  return missing;
+}
+
+/** The correcting request for one more model round (the gates the router requires, shown visibly). */
+export function gateCorrectionPrompt(missing: Array<{ block: string; resource: string; steps: string[] }>): string {
+  return [
+    "Ścieżka obowiązkowa routera (profil PEŁNY): w odpowiedzi brakuje widocznych bloków bramek obowiązkowych.",
+    ...missing.map((item) => `- ${item.block}${item.steps.length ? ` z krokami ${item.steps.join(", ")}` : ""} (${basename(item.resource)})`),
+    "Wykonaj te bramki według modułów podanych w instrukcji i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian), z blokami i krokami w treści.",
+    "Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."
+  ].join("\n");
+}
+
+/**
+ * KROK 3A trace written by the application from the audit (the model's own
+ * account is not evidence). ODRZUCONE: the candidates the model weighed are
+ * not visible to the application, which says so instead of guessing.
+ */
+export function routingTrace(args: {
+  mode: "LAIK" | "PRAWNIK";
+  report: MandatoryPathReport;
+  primarySkill: string;
+  loadedSkills: string[];
+  events: TurnFacts["events"];
+  routerVersion: string | null;
+  sharedRoot: string;
+  duplicates: string[];
+}): { text: string; primaryRead: boolean } {
+  const skipped = new Set([ROUTER_SKILL, "prawo-polskie-v2", "AUTO", ""]);
+  const read = (skill: string) =>
+    args.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target === skill);
+  const readSkills = args.events
+    .filter((event) => event.type === "skill_read" && event.status === "OK" && !skipped.has(event.target))
+    .map((event) => event.target);
+  const primary = !skipped.has(args.primarySkill)
+    ? args.primarySkill
+    : readSkills[0] ?? (read("prawo-polskie-v2") ? "prawo-polskie-v2" : "");
+  const primaryRead = Boolean(primary) && read(primary);
+  const secondary = [...new Set([...args.loadedSkills, ...readSkills])].filter((skill) => !skipped.has(skill) && skill !== primary);
+  const core = args.report.steps.filter((step) => step.layer === "ROUTER" && /^R-\d$/.test(step.id));
+  const coreMet = core.length > 0 && core.every((step) => step.status === "MET");
+  const deferred = args.report.steps
+    .filter((step) => step.requirement === "TRIGGERED" && step.status === "NOT_TRIGGERED")
+    .map((step) => step.id);
+  return {
+    primaryRead,
+    text: [
+      `TRYB: ${args.mode}`,
+      `PRIMARY: ${primary || "BRAK"} — ROUTER-WCZYTANY: ${primaryRead ? `TAK: ${primary}/SKILL.md` : "NIE"}`,
+      `SECONDARY: ${secondary.length ? secondary.map((skill) => `${skill} (${read(skill) ? "TAK" : "NIE"})`).join(", ") : "BRAK"} — ROUTER-WCZYTANY: ${secondary.length ? (secondary.every(read) ? "TAK" : "NIE") : "N-D"}`,
+      "ODRZUCONE: brak danych aplikacji — kandydatów rozważa model; aplikacja rejestruje tylko faktyczne odczyty",
+      `PROFIL: ${args.report.profile === "PELNY" ? "PEŁNY" : "LEKKI"} — rdzeń R-1…R-5: ${coreMet ? "TAK" : `NIE (${core.filter((step) => step.status !== "MET").map((step) => step.id).join(", ")})`}`,
+      `ODROCZONE: ${deferred.length ? deferred.join(", ") : "BRAK"}`,
+      `WERSJA ROUTERA: ${args.routerVersion ?? "nieznana"}`,
+      `RESOLVER: shared → ${args.sharedRoot}; DUPLIKATY: ${args.duplicates.length ? args.duplicates.join(", ") : "BRAK"}`
+    ].join("\n")
+  };
 }

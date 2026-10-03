@@ -2981,3 +2981,10 @@ mark.restored {
 .chat-mandatory-path li.chat-mandatory-missing b {
   color: #a33;
 }
+
+.chat-mandatory-path .chat-routing-trace {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85em;
+  margin: 4px 0 8px;
+}

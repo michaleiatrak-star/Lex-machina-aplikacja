@@ -631,7 +631,7 @@ export class LegalFederationToolRuntime {
             "For R3 material, check publication/update date. Missing date or material older than 24 months requires an explicit staleness warning.",
             "For Polish statutory citations and current legal wording, verify_legal_reference remains authoritative. For Sąd Najwyższy signatures/quotes/propositions, use verify_case_reference / verify_case_quote / verify_case_proposition.",
             "SAOS, CBOSA and ISAP connector results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",
-            "EUREKA interpretations, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law.",
+            "EUREKA interpretations, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law. EUREKA search is discovery only: before citing an interpretation signature, call verify_interpretation (native Lex verification).",
             "After an empty federated search, call federated_legal_coverage before concluding that material is absent.",
             "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the MCP connectors (they call public APIs). Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
             "If a federated result conflicts with a native official-source verifier, the native official verification path is authoritative; fail closed until the conflict is resolved.",
