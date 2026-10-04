@@ -108,6 +108,17 @@ describe("core law index", () => {
     expect(index.reloadMapsIfChanged()).toEqual(["DU/2013/1624"]);
   });
 
+  it("names an act by its own row, never by a status note or by the row of another act", () => {
+    const root = corpus();
+    fs.writeFileSync(
+      path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"),
+      "| ✅ **DODANE 2026-10-04 (AUDYT-2026-10-04h):** Umowa o małym ruchu granicznym PL–UA | **Dz.U. 2009 nr 103 poz. 858** — ⛔ Nie mylić z umową o zabezpieczeniu społecznym (Dz.U. 2013 poz. 1373) | x | ✅ |\n"
+    );
+    const acts = extractCoreActs(root);
+    expect(acts.find((act) => act.eli === "DU/2009/858")?.labels).toEqual(["Umowa o małym ruchu granicznym PL–UA"]);
+    expect(acts.find((act) => act.eli === "DU/2013/1373")?.labels).toEqual([]);
+  });
+
   it("collects every Dz.U. act from the domain maps and the routing map", () => {
     const acts = extractCoreActs(corpus());
     expect(acts.map((act) => act.eli)).toEqual([

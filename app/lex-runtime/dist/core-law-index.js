@@ -61,12 +61,14 @@ function cleanNote(line) {
         .trim()
         .slice(0, NOTE_CHARS);
 }
+// "✅ DODANE 2026-10-04 (AUDYT-2026-10-04h):" — a status note of the map, not the act's name.
+const STATUS_NOTE = /^[\s✅⚠⛔🟨⬛\uFE0F]*(?:DODANE|DODANY|NOWY|NOWE|ZMIANA|ZMIENIONE|UWAGA|AKTUALIZACJA|SYNCHRONIZACJA|KOREKTA)\b[^:]*:\s*/iu;
 function labelFor(line) {
     const bold = /\*\*(?:Baza\s+)?([^*:]{1,40}):\*\*/.exec(line);
-    if (bold?.[1])
+    if (bold?.[1] && !STATUS_NOTE.test(`${bold[1]}:`))
         return bold[1].trim();
     if (line.trim().startsWith("|")) {
-        const cell = line.split("|")[1]?.replace(/\*\*/g, "").trim();
+        const cell = line.split("|")[1]?.replace(/\*\*/g, "").replace(STATUS_NOTE, "").trim();
         if (cell && !/^-+$/.test(cell) && !/^Akt prawny$/i.test(cell) && !/^Zakres$/i.test(cell)) {
             return cell.slice(0, 80);
         }
@@ -108,11 +110,15 @@ export function extractCoreActs(corpusRoot) {
         for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
             const label = labelFor(line);
             const note = cleanNote(line);
+            // The row's name belongs to its first act; the others in the row (amendments,
+            // "nie mylić z ...") are named by their ELI title, not by this row.
+            let first = true;
             for (const match of line.matchAll(REF_PATTERN)) {
                 const year = match[1];
                 const tail = match[3] ?? "";
                 const consolidated = Boolean(match[4]) && tail.trim() === "";
-                add(`DU/${year}/${Number(match[2])}`, consolidated, domain, label, note);
+                add(`DU/${year}/${Number(match[2])}`, consolidated, domain, first ? label : null, note);
+                first = false;
                 let currentYear = year;
                 for (const item of tail.split(/,|\si\s/).map((part) => part.trim()).filter(Boolean)) {
                     const withYear = /^(\d{4})\s?poz\.\s?(\d+)$/.exec(item);
