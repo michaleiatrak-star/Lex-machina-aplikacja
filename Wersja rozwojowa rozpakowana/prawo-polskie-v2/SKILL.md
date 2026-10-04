@@ -1,6 +1,6 @@
 ---
 name: prawo-polskie-v2
-version: "6.39"
+version: "6.40"
 type: domain-router
 status: production
 compatibility: "live_web_lookup, cross_skill_file_read"
@@ -10,8 +10,8 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.39 (2026-10-04j, AUDYT-2026-10-04j): ROUTING-MAP — wiersz umowy PL–UA o zabezpieczeniu społecznym uzupełniony o instytucje z porozumienia administracyjnego; wiersz MRG PL–Rosja o zweryfikowany limit pobytu (art. 4 ust. 1). RZĄD 1 ELI.
-  Poprzednia: 6.38 (2026-10-04i, AUDYT-2026-10-04i): nowe wiersze KK art. 278–295 i umowa PL–UA o zabezpieczeniu społecznym; przekierowanie wiersza art. 286.
+  Wersja bieżąca: 6.40 (2026-10-04l, AUDYT-2026-10-04l): ROUTING-MAP — wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony z sekcji DR-14 do DR-04 (moduł leży w DR-04; T2 check_rejestracja_modulow); w wierszu MRG PL–UA nieaktualne „brak modułu w systemie” zastąpione odesłaniem do modułu DR-04. Bez zmian numerów Dz.U.
+  Poprzednia: 6.39 (2026-10-04j, AUDYT-2026-10-04j): ROUTING-MAP — wiersz umowy PL–UA o zabezpieczeniu społecznym uzupełniony o instytucje z porozumienia administracyjnego; wiersz MRG PL–Rosja o zweryfikowany limit pobytu (art. 4 ust. 1). RZĄD 1 ELI.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

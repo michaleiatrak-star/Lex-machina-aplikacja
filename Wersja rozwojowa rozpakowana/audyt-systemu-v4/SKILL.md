@@ -5,7 +5,7 @@ dependencies:
   requires:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
-version: "6.170"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
+version: "6.171"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
                   # parsuje jako float 6.1 — czyli numer NIŻSZY niż 6.9, co cicho
                   # odwraca porządek wersji. Wykryte przy walidacji 2026-08-20z.
                   # Każda kolejna wersja z dwucyfrowym minor — też w cudzysłowie.
@@ -1500,7 +1500,7 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.170 | Ostatnia aktualizacja: 2026-10-04k (zgłoszenie #83: polskie litery Mac CE w Dz.U./M.P. 2000–2009 — naprawa w serwerze MCP i w `check_wyjatek_gate_eli.py`, przebudowany `dist`, test T46, konwerter `napraw_tekst_dzu.py`; nowa F-234); poprzednio 2026-10-04j (F-233 zamknięta)*
+*Wersja: 6.171 | Ostatnia aktualizacja: 2026-10-04l (T2: wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony do sekcji DR-04 ROUTING-MAP); poprzednio 2026-10-04k (zgłoszenie #83: polskie litery Mac CE w Dz.U./M.P. 2000–2009 — naprawa w serwerze MCP i w `check_wyjatek_gate_eli.py`, przebudowany `dist`, test T46, konwerter `napraw_tekst_dzu.py`; nowa F-234); poprzednio 2026-10-04j (F-233 zamknięta)*
 
 *(Stopka podawała „5.0 | 2026-07-04" przy `version: 6.8` w YAML — rozjazd
 9 wersji, naprawiony 2026-08-20y. **Stopkę aktualizuj razem z polem `version`**;

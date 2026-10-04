@@ -69891,6 +69891,22 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-04l — TRYB STRUKTURA: wiersz ROUTING-MAP umowy PL–UA o zabezpieczeniu społecznym we właściwej sekcji (6.171)
+
+### 1. ŹRÓDŁO
+CI aplikacji (F-138, `check_rejestracja_modulow.py`): `dr-04 … brak w ROUTING-MAP: mod-umowa-PL-UA-zabezpieczenie-spoleczne`.
+
+### 2. PRZYCZYNA
+Wiersz dodany w AUDYT-2026-10-04i stał w sekcji `## DR-14` (obok wiersza MRG PL–UA), a T2 szuka modułów DR-04 w sekcji `## DR-04`.
+
+### 3. ZMIANA (prawo-polskie-v2 6.40)
+- Wiersz przeniesiony bez zmian treści na koniec tabeli sekcji DR-04 (adnotacja o przeniesieniu w kolumnie statusu).
+- Wiersz MRG PL–UA (DR-14): „brak modułu w systemie” przy umowie o zabezpieczeniu społecznym → odesłanie do modułu DR-04 (stan nieaktualny od AUDYT-2026-10-04i).
+- Numery Dz.U. bez zmian; status [VER] pochodzi z odczytu ELI w AUDYT-2026-10-04i (w tej sesji ELI niedostępne — HTTP 403).
+
+### 4. WYNIK
+T2: 0 rozbieżności w 16 dziedzinach.
+
 ## AUDYT-2026-10-04k — ZGŁOSZENIE #83: polskie litery w Dz.U./M.P. 2000–2009 naprawione w obu ścieżkach, konwerter dla użytkownika, test T46 (6.170)
 
 ### 1. ŹRÓDŁO ZLECENIA
