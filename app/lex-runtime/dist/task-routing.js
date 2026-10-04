@@ -1,4 +1,4 @@
-import { matchSchema } from "./skill-schema-catalog.js";
+import { asksAbout, draftingSchema, matchSchema, repliesToDemand } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 const ROW = /^###\s+\[(\d{1,2})\]\s+(.+)$/u;
 export function parseRoutingTable(router) {
@@ -188,6 +188,30 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
     if (handoff)
         return { source: "MATRIX", primary: handoff, then: null, reason: "następny etap pipeline'u wskazany przez użytkownika" };
     const question = provisionsForDetection(rawQuestion);
+    // One's own simple letter to check or improve ("sprawdź mój sprzeciw od nakazu"):
+    // pisma-proste-v2 with that letter's schema, not the pleading redaction of Test A.
+    const ownSimple = simpleLetters && OWN_DOCUMENT.test(question) ? matchSchema(simpleLetters.entries, question) : null;
+    if (ownSimple && simpleLetters && !materials.some((material) => material.category === "PISMO_PROCESOWE")) {
+        return {
+            source: "SKILL",
+            primary: simpleLetters.skill,
+            then: null,
+            reason: `sprawdzenie własnego pisma prostego (${ownSimple.why}; M8 lista kontrolna)`,
+            modules: ownSimple.resources
+        };
+    }
+    // A reply to a payment demand: the demand is assessed first, then the reply drafted.
+    if (simpleLetters && repliesToDemand(question)) {
+        const demand = materials.some((material) => material.kind === "WEZWANIE");
+        return {
+            source: "SKILL",
+            primary: demand ? "analizator-dowodow-v3" : simpleLetters.skill,
+            then: demand ? simpleLetters.skill : null,
+            reason: demand
+                ? "odpowiedź na otrzymane wezwanie do zapłaty: najpierw ocena wezwania, potem pismo (bez schematu wezwania wierzyciela SPE)"
+                : "odpowiedź na wezwanie do zapłaty (pismo proste, bez schematu wezwania wierzyciela SPE)"
+        };
+    }
     // Test A: a finished pleading delivered (or "my letter") and a request about its form.
     if (redaction && !NEW_SUBSTANCE.test(question)) {
         const ownPleading = materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question);
@@ -209,7 +233,7 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
     // klauzula, egzekucja, wezwanie, uzasadnienie, zabezpieczenie, SPH...): that skill with
     // that one schema, unless the request is a full pleading ("napisz pozew / apelację").
     if (simpleLetters) {
-        const schema = matchSchema(simpleLetters.entries, question);
+        const schema = draftingSchema(simpleLetters.entries, question, { demand: materials.some((material) => material.kind === "WEZWANIE") });
         const fullPleading = matrix.some((rule) => rule.primary === "pisma-procesowe-v3" && rule.phrases.some((phrase) => stemPhrase(phrase)?.test(question)));
         if (schema && !fullPleading) {
             const decisionDelivered = materials.some((material) => material.category === "ORZECZENIE");
@@ -274,6 +298,16 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
         return { source: "MATRIX", primary: implied.primary, then: null, reason: `macierz aktywacji: ${implied.row}` };
     // No matrix row: the router table on the question and the kinds of the documents.
     const byDocuments = routerPick ?? classifyTask(routes, `${rawQuestion}\n${materials.map((material) => material.label).join(" / ")}`);
+    // The router row names a letter ("wezwanie do zapłaty"), but the user asks about one
+    // ("dostałem wezwanie, czy muszę płacić?"): an explanation, not drafting.
+    if (byDocuments && /^pisma-/.test(byDocuments.route.primary) && asksAbout(question) && known.has("przewodnik-prawny-v2")) {
+        return {
+            source: "ROUTER",
+            primary: "przewodnik-prawny-v2",
+            then: null,
+            reason: `pytanie o pismo, nie prośba o jego napisanie (routing [${byDocuments.route.id}] wskazywał ${byDocuments.route.primary})`
+        };
+    }
     return byDocuments
         ? { source: "ROUTER", primary: byDocuments.route.primary, then: null, reason: `routing [${byDocuments.route.id}] ${byDocuments.route.title} (${byDocuments.matched.join(", ")})`, route: byDocuments.route }
         : null;

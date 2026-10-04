@@ -72,6 +72,44 @@ describe("pisma-proste-v2: every category of its schema catalogue", () => {
   });
 });
 
+describe("drafting a letter vs analysing one", () => {
+  const routes = parseRoutingTable(read("prawny-router-v3/SKILL.md"));
+  const matrix = parseActivationMatrix(read("shared/ACTIVATION-MATRIX.md"));
+  const redaction = parseRedactionTest(read("pisma-procesowe-v3/SKILL.md"));
+  const simple = { skill: "pisma-proste-v2", entries: schemaCatalog(registry, "pisma-proste-v2") };
+  const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kwoty 5000 zł" });
+  const order = classifyDocument({ text: "NAKAZ ZAPŁATY W POSTĘPOWANIU UPOMINAWCZYM\nSygn. akt I Nc 1/24" });
+  const pick = (question: string, materials: Parameters<typeof decideTask>[3] = []) => {
+    const decision = decideTask(routes, matrix, question, materials, redaction, simple);
+    return [decision?.primary, decision?.then, (decision?.modules ?? []).map((module) => module.split("/").pop()).join(",")].filter(Boolean).join(" | ");
+  };
+
+  it.each([
+    ["Napisz wezwanie do zapłaty", [], "pisma-proste-v2 | SPC-SPD-SPE.md"],
+    ["Przeanalizuj to wezwanie do zapłaty", [demand], "analizator-dowodow-v3"],
+    ["Oceń, czy to wezwanie do zapłaty jest zasadne", [demand], "analizator-dowodow-v3"],
+    ["Dostałem wezwanie do zapłaty, co mam zrobić?", [demand], "przewodnik-prawny-v2"],
+    ["Czy muszę zapłacić? Dostałem wezwanie do zapłaty", [], "przewodnik-prawny-v2"],
+    ["Odpowiedz na to wezwanie do zapłaty", [demand], "analizator-dowodow-v3 | pisma-proste-v2"],
+    ["Przeanalizuj nakaz zapłaty", [order], "analiza-sadowa-v6"],
+    ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"]
+  ] as const)("%s", (question, materials, expected) => {
+    expect(pick(question, [...materials])).toBe(expected);
+  });
+
+  it("no drafting schema in the module map for a question about a received demand", () => {
+    expect(skillModules(registry, "pisma-proste-v2", { text: "Przeanalizuj to wezwanie do zapłaty" }).some((item) => /SPC-SPD-SPE/.test(item.resource))).toBe(false);
+  });
+});
+
+describe("pipeline stages: shared modules named in stage headings", () => {
+  it("pisma-procesowe-v3 W1 requires its strategy and red-team modules", () => {
+    const w1 = moduleMap(registry, "pisma-procesowe-v3").filter((entry) => entry.stage === "W1" && entry.always).map((entry) => entry.resource);
+    expect(w1).toEqual(expect.arrayContaining(["shared/MOD-STRATEGIA-WYBOR.md", "shared/MOD-WARIANTY-POZWU.md", "shared/MOD-RED-TEAM-WLASNY.md"]));
+  });
+});
+
 describe("DR domains: flash routing of prawo-polskie-v2 and act modules of MAPA-AKTOW", () => {
   const rows = parseFlashRouting(read("prawo-polskie-v2/SKILL.md"));
 

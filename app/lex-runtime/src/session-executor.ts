@@ -1953,6 +1953,22 @@ export class SafeSessionExecutor implements SessionExecutor {
           });
           pathSections.push(contractPrompt(loaded));
         }
+        // Shared files every executive skill names for this case: the runtime adapter
+        // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
+        // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
+        const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
+        const sharedForSkill = [
+          "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
+          ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])
+        ];
+        for (const resource of sharedForSkill) {
+          if (contextResources.has(resource)) continue;
+          const content = this.readCorpus(resource);
+          if (!content) continue;
+          contextResources.add(resource);
+          audit.record("resource_read", resource, "OK", { detail: "runtime-preload;executive-shared" });
+          pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${content}`);
+        }
         // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
         for (const resource of taskRoute.modules ?? []) {
           if (contextResources.has(resource)) continue;

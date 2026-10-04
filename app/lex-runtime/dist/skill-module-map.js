@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { matchSchema, parseSchemaCatalog } from "./skill-schema-catalog.js";
+import { draftingSchema, parseSchemaCatalog } from "./skill-schema-catalog.js";
 const MAP_HEADING = /MODUŁ|MODUL|WCZYT|REFERENCES|LAZY|MAPA/iu;
 const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|[a-z0-9-]+-v\d+(?:-min90)?\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b/g;
 const STAGE = /\b(W[1-6])(?:\.\d+[a-z]?)?\b/u;
@@ -61,7 +61,7 @@ export function moduleMap(registry, skill) {
             entries.push({ resource, condition, heading, stage, always: /\bzawsze\b|ZAWSZE|OBOWIĄZKOW/iu.test(condition) && !/\bgdy\b/iu.test(condition) });
         }
     }
-    entries.push(...decisionTreeEntries(registry, skill, record.directory, lines), ...loadInstructions(registry, skill, lines, entries));
+    entries.push(...decisionTreeEntries(registry, skill, record.directory, lines), ...loadInstructions(registry, skill, lines, entries), ...stageModuleNames(registry, skill, lines));
     // One entry per module and stage; "zawsze" anywhere in SKILL.md makes it always.
     const unique = entries
         .filter((entry, position) => entries.findIndex((other) => other.resource === entry.resource && other.stage === entry.stage) === position)
@@ -166,6 +166,41 @@ function loadInstructions(registry, skill, lines, known) {
     }
     return entries;
 }
+/**
+ * Shared modules named without a path inside a pipeline stage ("### W1.2b —
+ * MOD-STRATEGIA-WYBOR (obligatoryjna ...)", "W1.6 (MOD-RED-TEAM-WLASNY)"): steps of
+ * that stage, required in it unless the line makes them conditional.
+ */
+function stageModuleNames(registry, skill, lines) {
+    const entries = [];
+    let heading = "";
+    let stage = null;
+    let skip = false;
+    for (const line of lines) {
+        const title = /^#{1,5}\s+(.*)$/.exec(line);
+        if (title) {
+            heading = title[1].trim();
+            stage = STAGE.exec(heading)?.[1] ?? null;
+            skip = /ADAPTER|CHANGELOG|PORTABILITY|HISTORIA ZMIAN/iu.test(heading);
+        }
+        if (!stage || skip)
+            continue;
+        for (const match of line.matchAll(/(?<![\w/-])(MOD-[A-Z0-9]+(?:-[A-Z0-9]+)*)(?![\w.-])/gu)) {
+            const resource = `shared/${match[1]}.md`;
+            if (!registry.resolveResource(skill, resource))
+                continue;
+            const conditional = /\b(?:gdy|jeśli|jeżeli|opcjonaln\p{L}*)\b/iu.test(line);
+            entries.push({
+                resource,
+                condition: line.replace(/[#`*]/g, " ").replace(/\s+/g, " ").trim(),
+                heading,
+                stage,
+                always: !conditional
+            });
+        }
+    }
+    return entries;
+}
 // One group of variants per condition word ("najem" -> "naj", "najm").
 function stems(text) {
     return [...new Set(text.toLocaleLowerCase("pl").match(/\p{L}{5,}/gu) ?? [])]
@@ -222,7 +257,7 @@ export function schemaCatalog(registry, skill) {
 }
 /** The modules this turn needs: the one schema the request names, then the module map's. */
 export function skillModules(registry, skill, args) {
-    const schema = matchSchema(schemaCatalog(registry, skill), args.text);
+    const schema = draftingSchema(schemaCatalog(registry, skill), args.text);
     const fromSchema = (schema?.resources ?? []).map((resource) => ({
         resource,
         condition: schema.label,

@@ -71,6 +71,12 @@ export function matchSchema(entries, text) {
             const matched = words.filter((word) => wordPattern(word).test(text));
             if (matched.length < Math.min(words.length, 2))
                 continue;
+            // The word naming the kind of letter ("sprzeciw", "zarzuty", "wezwanie") must be
+            // there: "nakaz zapłaty" alone is no "sprzeciw od nakazu zapłaty". A verbal noun
+            // ("nadanie klauzuli") may be left out, and so may one word of a long name.
+            const head = words[0];
+            if (!matched.includes(head) && !/(?:anie|enie|cie)$/u.test(head) && !(words.length >= 4 && matched.length >= 3))
+                continue;
             const ratio = matched.length / words.length;
             if (!best || matched.length > best.hits || (matched.length === best.hits && ratio > best.ratio)) {
                 best = { entry, hits: matched.length, ratio, words: matched };
@@ -78,4 +84,37 @@ export function matchSchema(entries, text) {
         }
     }
     return best ? { ...best.entry, why: `schemat ${best.entry.code}: ${best.entry.label} (${best.words.join(", ")})` } : null;
+}
+const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz|zrób|wyślij|złóż|wnieś|projekt\p{L}*|wzór|wzoru|szablon\p{L}*)(?![\p{L}])/iu;
+const REVIEW = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|jest|są|należy|powinien\p{L}*|trzeba)|co\s+(?:mam\s+)?(?:zrobić|robić))(?![\p{L}])/iu;
+const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu;
+/**
+ * The schema to draft with, only when the user asks to draft that letter: a
+ * question about a received letter ("przeanalizuj to wezwanie", "dostałem
+ * wezwanie, czy muszę płacić?") is an analysis, and a reply to a payment demand
+ * is not the creditor's demand (SPE).
+ */
+export function draftingSchema(entries, text, delivered = {}) {
+    const schema = matchSchema(entries, text);
+    if (!schema)
+        return null;
+    const demand = schema.code === "SPE" || schema.code === "SPE-O";
+    if (demand && REPLY_TO_DEMAND.test(text))
+        return null;
+    if (DRAFT.test(text))
+        return schema;
+    // No drafting verb: a question about the letter, or the same letter delivered, is analysis.
+    if (REVIEW.test(text) || (demand && delivered.demand))
+        return null;
+    return schema;
+}
+export function asksToDraft(text) {
+    return DRAFT.test(text);
+}
+/** A question about a letter (received or one's own), not a request to draft it. */
+export function asksAbout(text) {
+    return REVIEW.test(text) && !DRAFT.test(text);
+}
+export function repliesToDemand(text) {
+    return REPLY_TO_DEMAND.test(text);
 }

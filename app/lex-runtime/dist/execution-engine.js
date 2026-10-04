@@ -448,7 +448,11 @@ export class LexExecutionEngine {
                     ...workflowPlan.semanticContextResources
                 ]);
                 const loaded = loadContract(this.registry, contract, {
-                    extra: workflowPlan.requiredFreshResources,
+                    // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
+                    extra: [
+                        ...workflowPlan.requiredFreshResources,
+                        ...(/^pisma-/.test(contract.skill) && args.documentContext ? ["shared/FAKTY_v2.md"] : [])
+                    ],
                     inContext
                 });
                 for (const item of loaded.loaded)
