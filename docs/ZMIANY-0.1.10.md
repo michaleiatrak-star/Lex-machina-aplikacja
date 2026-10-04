@@ -49,8 +49,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 47 | `3fd177c` | G8: akt dla przepisu bez skrótu (porównanie art. 233/234/238), artykuł i paragraf z jednym znacznikiem, bez dubla w źródłach; tylko Windows |
 | **0.1.11** | tag `v0.1.11` | Nowe wydanie zbiorcze (hotfix 1–47), wersja aplikacji 0.1.11; tylko Windows |
 | **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (także źródła pomocnicze z tych serwisów): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; pozostałe źródła tylko link; eksport faktury do PDF z logo; tylko Windows |
+| **0.1.13** | gałąź `claude/modest-knuth-re40mu` | Rodzaj dokumentu i materiałów dowodowych, macierz aktywacji, kontrakty skilli wykonawczych, moduły warunkowe i etapowe, następny etap, wzory domyślne kancelarii, hard gate (interpretacje, stawki i terminy, data zdarzenia, ścieżka obowiązkowa jako bramka), prywatność danych przykładowych; Windows i macOS |
 
 ---
+
+## 0.1.13
+
+- `document-kind.ts`: rodzaj załącznika (orzeczenia, pisma, umowa, regulamin, wezwanie, dowody); `task-routing.ts`: `parseActivationMatrix`, `decideTask` (macierz przed [1]–[11]), `parseCombinations`, `pipelineNext`, jawne przejście `Następny etap pipeline'u:`.
+- `executive-skill-contract.ts`: kontrakt skilla z jego SKILL.md (tryb mechaniczny i AUTO); `skill-module-map.ts`: moduły warunkowe i etapowe (W1–W3).
+- `template-roles.ts`, `PUT /api/shared/templates/:id/role`: rodzaj wzoru i wzór domyślny; `draftingTarget` + `defaultTemplateFor` w czacie i generatorze (`firmTemplateApplied`).
+- Hard gate: `interpretation-verifier.ts` (EUREKA), `amount-references.ts`, `event-date-check.ts`, `legal-disclaimer.ts`, runda poprawkowa bramek i ślad KROKU 3A w `mandatory-path.ts`; `matter-signals.ts` (karne z pytania).
+- Prywatność: `realValueHashes` w pamięci sprawy (`privacy/example-data.ts`).
 
 ## 0.1.12
 
