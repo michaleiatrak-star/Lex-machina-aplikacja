@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.61"
+version: "3.62"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,8 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.61 (2026-10-04m, AUDYT-2026-10-04m): KROK0A-anonimizer.md oznaczony `<!-- lex:wykonuje-aplikacja: ANONIMIZACJA -->`, „PATH-SELFTEST — RESOLVER” oznaczony RESOLVER (aplikacja rozwiązuje adresy korpusu sama) — w aplikacji Lex Machina pseudonimizacja działa zawsze lokalnie przed wysłaniem do modelu. Treść bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.
-  Poprzednia: 3.60 (2026-10-04c, AUDYT-2026-10-04c): F-226 — usunięte archiwum legacy-material-router (8 plików); 4 tematy bez odpowiednika w DR → F-228 (FAZA 3E).
+  Wersja bieżąca: 3.62 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -610,7 +609,3 @@ Tylko gdy: pytanie o dostępność modułu, audyt systemu, budowanie kombinacji 
 
 Mosty dziedzinowe (8 skrótów do kanonu DR/shared): rejestr w `references/pokrycie-dziedzinowe.md`,
 sekcja MOSTY.
-
-## CHANGELOG
-
-`view prawny-router-v3/references/CHANGELOG.md`

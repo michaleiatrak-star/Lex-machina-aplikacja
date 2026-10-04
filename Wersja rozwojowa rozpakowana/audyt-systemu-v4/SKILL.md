@@ -5,7 +5,7 @@ dependencies:
   requires:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
-version: "6.172"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
+version: "6.173"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
                   # parsuje jako float 6.1 — czyli numer NIŻSZY niż 6.9, co cicho
                   # odwraca porządek wersji. Wykryte przy walidacji 2026-08-20z.
                   # Każda kolejna wersja z dwucyfrowym minor — też w cudzysłowie.
@@ -23,6 +23,7 @@ widgets:
 references:
   - references/AUDIT-JOURNAL.md
   - references/F-113-PREFLIGHT-2026-08-26.md
+  - references/HISTORIA-ZMIAN-PLIKOW.md   # historia zmian SKILL.md (2026-10-04n, AUDYT-2026-10-04n); plik historyczny, nie czytany przy pracy
   - references/CHANGELOG.md   # ⚡ REJESTROWANE 2026-08-23g (F-124) — plik-sierota mimo że ZASADA 15
                                           # czyni go JEDYNĄ lokalizacją kanoniczną historii wersji tego skilla
                                           # i mimo że drzewo w sekcji STRUKTURA KATALOGU już go wymieniało;
@@ -1500,22 +1501,9 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.172 | Ostatnia aktualizacja: 2026-10-04m (znaczniki sekcji wykonywanych przez aplikację: lex:wykonuje-aplikacja); poprzednio 2026-10-04l (T2: wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony do sekcji DR-04 ROUTING-MAP); poprzednio 2026-10-04k (zgłoszenie #83: polskie litery Mac CE w Dz.U./M.P. 2000–2009 — naprawa w serwerze MCP i w `check_wyjatek_gate_eli.py`, przebudowany `dist`, test T46, konwerter `napraw_tekst_dzu.py`; nowa F-234); poprzednio 2026-10-04j (F-233 zamknięta)*
+*Wersja: 6.173 | Ostatnia aktualizacja: 2026-10-04n (historia zmian plików w references/HISTORIA-ZMIAN-PLIKOW.md każdego skilla); poprzednio 2026-10-04m (znaczniki sekcji wykonywanych przez aplikację: lex:wykonuje-aplikacja); poprzednio 2026-10-04l (T2: wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony do sekcji DR-04 ROUTING-MAP); poprzednio 2026-10-04k (zgłoszenie #83: polskie litery Mac CE w Dz.U./M.P. 2000–2009 — naprawa w serwerze MCP i w `check_wyjatek_gate_eli.py`, przebudowany `dist`, test T46, konwerter `napraw_tekst_dzu.py`; nowa F-234); poprzednio 2026-10-04j (F-233 zamknięta)*
 
 *(Stopka podawała „5.0 | 2026-07-04" przy `version: 6.8` w YAML — rozjazd
 9 wersji, naprawiony 2026-08-20y. **Stopkę aktualizuj razem z polem `version`**;
 jeśli znów zacznie się rozjeżdżać, kandyduje do usunięcia jako pole martwe —
 tak jak stopkę AUDIT-JOURNAL.md w korekcie 2026-08-15p.)*
-
-## CHANGELOG
-
-⛔ **Historia zmian tego skilla NIE mieszka w tym pliku.** Pełny changelog:
-
-```
-view audyt-systemu-v4/references/CHANGELOG.md
-```
-
-Skrót bieżącej wersji — pole `changelog:` we frontmatterze powyżej.
-Standard systemowy (2026-08-20z4): `references/CHANGELOG.md` jest jedyną
-lokalizacją kanoniczną historii; zakaz odtwarzania sekcji changelogu w korpusie
-SKILL.md i zakaz trzymania pełnej listy wpisów w YAML.

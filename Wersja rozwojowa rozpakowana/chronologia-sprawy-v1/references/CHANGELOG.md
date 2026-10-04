@@ -1,5 +1,7 @@
 # CHANGELOG — chronologia-sprawy-v1
 
+- 1.15 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+
 - 1.14 (2026-10-04m, AUDYT-2026-10-04m): Sekcja „Historia wersji” oznaczona `<!-- lex:wykonuje-aplikacja: HISTORIA -->` (metadane pomijane w prompcie aplikacji). Treść bez zmian. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04m.
 
 - 1.13 (2026-10-01b, AUDYT-2026-10-01b): **TRYB C — graf przyczynowy.** Zdarzenie ma `id` (Z-nnn — wspólny z MP13 i grafem) i opcjonalne `przyczyny` (tylko przy dowodzie mechanizmu; kolejność dat ≠ przyczyna). TRYB C: `shared/MOD-GRAF-PRZYCZYNOWY.md` + widget `assets/widget-graf-przyczynowy.html` (SVG, scenariusze obalony/udowodniony z przeliczeniem, pasek MOD-WIDGET-IO JSON/MD; silnik 1:1 z Pythonem — T42). `widget-timeline.html`: dane osób trzecich z prawdziwej sprawy (nazwisko, numer telefonu, firma) zastąpione znacznikami.

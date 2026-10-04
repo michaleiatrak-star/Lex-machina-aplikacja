@@ -1,6 +1,6 @@
 ---
 name: analizator-dowodow-v3
-version: "5.16.19"
+version: "5.16.20"
 type: executive-analiza
 status: production
 description: "Ocena dowodów, dokumentów, zeznań i akt: siła dowodowa, hierarchia A-D, pokrycie przesłanek, sprzeczności, terminy procesowe i analiza śledcza."
@@ -39,8 +39,7 @@ pipeline:
     - AD-KROK3-WYKONANIE
     - AD-KROK4-DASHBOARD
 changelog: |
-  Wersja bieżąca: 5.16.19 (2026-10-04b, AUDYT-2026-10-04b): F-225 — usunięte duplikaty MOD-NAZEWNICTWO-STRON i MD7 (gałąź 5.17.0); powiązany contradictory-evidence-engine-v10 i 3 szablony (KROK 3 pkt 4).
-  Poprzednia: 5.16.18 (2026-10-01b, AUDYT-2026-10-01b): MP13 §13.2a — graf przyczynowy (shared/MOD-GRAF-PRZYCZYNOWY.md); rachunek siły łańcucha doprecyzowany.
+  Wersja bieżąca: 5.16.20 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

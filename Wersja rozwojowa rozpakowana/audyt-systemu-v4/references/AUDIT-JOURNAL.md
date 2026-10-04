@@ -69891,6 +69891,23 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-04n — TRYB STRUKTURA: historia zmian poza plikami roboczymi skilli (6.173)
+
+### 1. ŹRÓDŁO
+Decyzja użytkownika: historia zmian SKILL.md i modułów w osobnym pliku każdego skilla; model nie czyta jej podczas pracy.
+
+### 2. POMIAR PRZED ZMIANĄ
+158 tys. znaków historii w 108 plikach roboczych 21 skilli (shared 54 tys., DR-09 18 tys., DR-06 16 tys.); w tej historii 32 odwołania do numerów Dz.U./pozycji, w tym celowo opisane nieaktualne teksty jednolite.
+
+### 3. ZMIANA
+- Sekcje `## CHANGELOG`, `## HISTORIA ZMIAN`, `## HISTORIA WERSJI`, `## Historia wersji`, `## HISTORIA NAZWY`, `## METRYCZKA PLIKU` (także z numerem, np. `## 8. Historia zmian`), wiersze `Poprzednia:` pola `changelog:` w YAML i wiersze `> **Wersja poprzednia:**` → `references/HISTORIA-ZMIAN-PLIKOW.md` danego skilla, z nagłówkiem wskazującym plik źródłowy. Treść robocza (reguły, tabele, mapy) bez zmian.
+- `references/CHANGELOG.md` bez zmian struktury (T12 liczy z niego najwyższy numer wersji skilla — numery modułów zafałszowałyby wynik).
+- Skrypty: nowy plik traktowany jak CHANGELOG w T43 (`check_sieroty.py`), `check_osiagalnosc_shared.py`, `build_ramie_kontrolne.py`, `check_status_podstaw.py`, `check_wartosci_prawne.py`. T30 (`check_utrata_tresci.py`) bez wyłączenia — numer obecny wyłącznie w historii nadal jest liczony jako obecny w skillu.
+- Wersje: 21 skilli +1 (lista w CHANGELOG każdego skilla).
+
+### 4. BŁĄD WYKRYTY PRZEZ T35 I NAPRAWIONY
+W `chronologia-sprawy-v1/SKILL.md` sekcja „Historia wersji” kończyła się blokiem kodu, a za nim — bez nagłówka — stała treść robocza (bramka HARD GATE „zakaz cytowania prawa z pamięci” z `view shared/PRAWO-HARDGATE.md` i bramka [WEJŚCIE-DOKUMENTU]). Reguła „sekcja do następnego nagłówka” przeniosła ją razem z historią; T35 wykrył brak wywołania MOD-WEJSCIE-DOKUMENTU. Treść przywrócona przed „## ARCHITEKTURA SKILLA”. Kontrola wszystkich 108 bloków: odwołania do plików, które zniknęłyby z pliku roboczego, oraz tekst za ostatnim blokiem kodu — poza chronologią wyłącznie wzmianki historyczne.
+
 ## AUDYT-2026-10-04m — TRYB STRUKTURA: znaczniki sekcji wykonywanych przez aplikację (6.172)
 
 ### 1. ŹRÓDŁO

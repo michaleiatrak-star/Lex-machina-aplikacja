@@ -1,5 +1,7 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.41 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+
 - 6.40 (2026-10-04l, AUDYT-2026-10-04l): ROUTING-MAP — wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony z sekcji DR-14 do DR-04 (moduł leży w DR-04; T2 check_rejestracja_modulow); w wierszu MRG PL–UA nieaktualne „brak modułu w systemie” zastąpione odesłaniem do modułu DR-04. Bez zmian numerów Dz.U. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04l.
 
 - 6.39 (2026-10-04j, AUDYT-2026-10-04j): ROUTING-MAP — (1) wiersz umowy PL–UA o zabezpieczeniu społecznym uzupełniony o instytucje wskazane w porozumieniu administracyjnym Dz.U. 2013 poz. 1375 (ZUS Centrala, KRUS Centrala, MPiPS jako instytucje łącznikowe; ZUS, KRUS i wojewódzkie urzędy pracy jako właściwe; zaświadczenie o ustawodawstwie właściwym z art. 4); (2) wiersz umowy MRG PL–Rosja (Dz.U. 2012 poz. 814) opatrzony znacznikiem weryfikacji i limitem pobytu z art. 4 ust. 1 (30 dni każdorazowo, łącznie 90 dni w 6 miesiącach) — F-233.

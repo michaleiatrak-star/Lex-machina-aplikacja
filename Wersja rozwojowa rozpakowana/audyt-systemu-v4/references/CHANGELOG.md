@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.173 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+
 - 6.172 (2026-10-04m, AUDYT-2026-10-04m): Konwencja `<!-- lex:wykonuje-aplikacja: KOMPONENT -->` — sekcje, które aplikacja Lex Machina wykonuje sama lub które są metadanymi, trafiają do modelu jako jednolinijkowe odesłanie. Pierwsze znaczniki: shared 3.99.6, prawny-router-v3 3.61, chronologia-sprawy-v1 1.14, pisma-proste-v2 2.26.
 
 - 6.171 (2026-10-04l, AUDYT-2026-10-04l): T2 (`check_rejestracja_modulow.py`, F-138 w CI aplikacji) — moduł `dr-04/mod-umowa-PL-UA-zabezpieczenie-spoleczne` zgłaszany jako „brak w ROUTING-MAP”: wiersz istniał, ale w sekcji DR-14; przeniesiony do sekcji DR-04 (prawo-polskie-v2 6.40). Wiersz MRG PL–UA: „brak modułu w systemie” → odesłanie do modułu DR-04.

@@ -1,5 +1,7 @@
 # CHANGELOG — pisma-proste-v2
 
+- 2.27 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+
 - 2.26 (2026-10-04m, AUDYT-2026-10-04m): Sekcja „CHANGELOG” w SKILL.md oznaczona `<!-- lex:wykonuje-aplikacja: HISTORIA -->` (metadane pomijane w prompcie aplikacji). Treść bez zmian. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04m.
 
 - 2.25 (2026-10-04b, AUDYT-2026-10-04b): **Sieroty (F-225).** `references/SPL-interpretacja-GIP.md` i `references/SPM-interpretacja-podatkowa.md` osierocone przez kolizję kodów (SPL = skarga na komornika, SPM = oświadczenie SKD) — zarejestrowane w tabeli jako SPL-GIP i SPM-KIS. M9-format: zerwane odwołanie `references/HYBRID-VALIDATION.md` (kopia usunięta 2026-07-12) → `shared/HYBRID-VALIDATION.md`. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04b.
