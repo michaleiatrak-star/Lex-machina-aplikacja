@@ -188,6 +188,18 @@ function dzuPairs(text: string): Array<[string, string]> {
   return pairs;
 }
 
+// The row's distinctive word (the longest one that is not generic): a module covering
+// the act names it ("elektromobilność", "łowieckie", "zachowek").
+function distinctive(label: string): RegExp | null {
+  const words = (label.replace(/\([^)]*\)/g, " ").match(/\p{L}{5,}/gu) ?? [])
+    .filter((word) => !GENERIC.has(word.toLocaleLowerCase("pl")) && !/^(?:ustaw|kodeks|przepis)/iu.test(word))
+    .sort((a, b) => b.length - a.length);
+  if (!words.length) return null;
+  const folded = fold(words[0]!);
+  const stem = folded.slice(0, Math.max(5, folded.length - 3));
+  return new RegExp(`(?<![a-z])${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u");
+}
+
 function moduleText(registry: LexSkillRegistry, resource: string): string {
   try {
     const file = registry.resolveResource(resource.split("/")[0]!, resource);
@@ -230,8 +242,8 @@ export function resolveActModulesWithChecks(
     const pattern = new RegExp(`Dz\\.\\s?U\\.\\s*(?:z\\s*)?${year}\\s*(?:r\\.)?\\s*,?\\s*poz\\.\\s*${position}(?!\\d)`, "u");
     for (const row of rows.filter((item) => pattern.test(item.basis) || pattern.test(item.label))) {
       // The row may list several acts: the module must carry this one (number or the row's phrase).
-      const phrase = row.phrases[0];
-      const mention = new RegExp(`${year}\\s*(?:r\\.)?\\s*,?\\s*poz\\.\\s*${position}(?!\\d)|${year}\\/${position}(?!\\d)${phrase ? `|${phrase.source.replace(/^\(\?<!\[a-z\]\)/, "")}` : ""}`, "u");
+      const word = distinctive(row.label);
+      const mention = new RegExp(`${year}\\s*(?:r\\.)?\\s*,?\\s*poz\\.\\s*${position}(?!\\d)|${year}\\/${position}(?!\\d)${word ? `|${word.source}` : ""}`, "u");
       add(row, "DZU", `Dz.U. ${year} poz. ${position} → ${row.label}`, mention);
     }
   }
@@ -254,7 +266,7 @@ export function resolveActModulesWithChecks(
   const folded = fold(text);
   for (const row of rows) {
     const phrase = row.phrases.find((pattern) => pattern.test(folded));
-    if (phrase) add(row, "NAZWA", `„${row.label}” w treści sprawy`, new RegExp(phrase.source.replace(/^\(\?<!\[a-z\]\)/, ""), "u"));
+    if (phrase) add(row, "NAZWA", `„${row.label}” w treści sprawy`, distinctive(row.label) ?? undefined);
   }
   return { modules: found, rejected };
 }

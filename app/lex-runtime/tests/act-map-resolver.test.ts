@@ -26,10 +26,26 @@ describe("MAPA-AKTOW resolved mechanically", () => {
     expect(names("Spadek po ojcu — zachowek")).toEqual(["NAZWA:mod-KC-spadki-zachowek-dzial-rozrzadzenia.md"]);
   });
 
-  it("a map row pointing to a module that does not cover the act is rejected", () => {
+  it("electromobility goes to the transport module (map row fixed in DR-09 3.43)", () => {
     const result = pick("ustawa o elektromobilności i paliwach alternatywnych");
+    expect(result.modules.map((item) => path.basename(item.resource))).toEqual(["mod-ustawa-transport-drogowy-kolejowy-lotniczy-morski.md"]);
+    expect(result.rejected).toEqual([]);
+  });
+
+  it("a map row pointing to a module that does not cover the act is rejected", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "act-map-"));
+    const skill = path.join(root, "dr-09-test");
+    fs.mkdirSync(path.join(skill, "modules"), { recursive: true });
+    fs.writeFileSync(path.join(skill, "SKILL.md"), "---\nname: dr-09-test\ndescription: test\nversion: \"1.0\"\n---\n# DR\n");
+    fs.writeFileSync(path.join(skill, "MAPA-AKTOW.md"), "| Akt / zakres | Bieżąca podstawa | Moduł / routing | Status |\n|---|---|---|---|\n| Ustawa o elektromobilności i paliwach alternatywnych | Dz.U. 2026 poz. 1243 | `mod-inny` | ✅ |\n");
+    fs.writeFileSync(path.join(skill, "modules", "mod-inny.md"), "# Inny moduł\nCertyfikaty budynków.\n");
+    const local = new LexSkillRegistry(root);
+    local.scan();
+    const result = resolveActModulesWithChecks(local, "ustawa o elektromobilności i paliwach alternatywnych");
     expect(result.modules).toEqual([]);
-    expect(result.rejected.map((item) => path.basename(item.resource))).toEqual(["mod-ustawa-charakterystyka-energetyczna.md"]);
+    expect(result.rejected.map((item) => path.basename(item.resource))).toEqual(["mod-inny.md"]);
   });
 
   it("nothing for questions that name no act, article or scope", () => {
