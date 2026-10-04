@@ -353,7 +353,7 @@ Zero trafień poza tym oknem to **OUT_OF_SCOPE, nigdy NOT_FOUND** (K-SYG-1).
 | sądy powszechne | 2026 (bieżąco) | źródło aktualne |
 | **Sąd Najwyższy** | **2016** (0 od 2017) | sygnatura SN z 2017+ → OUT_OF_SCOPE; źródło: sn.pl (sekcja SN niżej) |
 | **Trybunał Konstytucyjny** | **2015** (0 od 2016) | → ipo.trybunal.gov.pl |
-| **KIO** | **2018 częściowo** (855), 0 od 2019 | → orzeczenia.uzp.gov.pl (F-212 pkt 5) |
+| **KIO** | **2018 częściowo** (855; ostatnie 2018-09-06), 0 od 2019 | → `kio_sprawdz_sygnature` / `kio_szukaj` (wyszukiwarka UZP, od 2026-10-02) |
 
 Brak trafienia SAOS dla sygnatury SN/TK/KIO spoza tych lat NIE jest dowodem nieistnienia (serwer `saos-example`
 ≥1.2 zwraca wtedy OUT_OF_SCOPE). Wyszukiwarka zwraca w `textContent` tylko FRAGMENT (~400 zn.; pełna treść:
@@ -580,7 +580,7 @@ z `shared/WERYFIKACJA-SLAD.md`.
 Pełny kontrakt: `shared/SYGNATURY.md`, V-SYG-0.5.
 | `ipo.trybunal.gov.pl`, `otkzu.trybunal.gov.pl` | HTML | osiągalne (`/ipo/Szukaj` → 200). ⛔ Wyszukiwarka to JSF/PrimeFaces z `ViewState` — **POST-only**, `Sprawa?sygnatura=` nie jest kluczem. Brak kontroli po sygnaturze (F-184) |
 | `hudoc.echr.coe.int` | ⚠️ HTML | ⛔ **Sprostowanie (F-186a, zamknięta 2026-09-13c):** ścieżka `/app/query/results` zwraca **404** (zmierzone w dwóch wariantach zapytania) — zapis z wersji 1.0 był nieprawdziwy. ✅ Działa pobranie dokumentu po `itemid`: `GET /app/conversion/docx/html/body?library=ECHR&id=001-57619` → 200, pełny tekst HTML (zmierzone: 177 kB). Wyszukiwanie po frazie pozostaje nierozstrzygnięte maszynowo |
-| `orzeczenia.uzp.gov.pl` | HTML | ⛔ **`Sign=` NIE FILTRUJE.** Formularz `GET /Home/Search` ma pola `Sign, Phrase, Dt, Fle, SCnt, Art, ThIdx`, ale zmierzone `Sign=KIO 827/18` i `Sign=KIO 99999/18` zwracają **tę samą stronę** (57 635 vs 57 637 B — różnica to echo wpisanej wartości), 0 odnośników do wyników. Brak kontroli po sygnaturze (F-185) |
+| `orzeczenia.uzp.gov.pl` | HTML (fragment przez XHR) | ✅ **od 2026-10-02 (AUDYT-2026-10-02) — konektor `kio-example`.** `GET /Home/Search` nie zawiera wyników (stąd wcześniejszy wniosek F-185 „Sign nie filtruje” — dotyczył złego endpointu); wyniki: **`POST /Home/GetResults`** (`Phrase`, `Fle`, `SCnt`, `Sign`, `Dt` „DD-MM-YYYY - DD-MM-YYYY”, `Kind` KIO/SO/SA/SN, `Pg`, `CountStats`). `Sign` filtruje dokładnie (KIO 82/18 → 1, KIO 99999/18 → 0). Sprawy łączone: sygnatury rozdzielone `\|`. Metryka `/Home/Details/{id}`; wyrok sądu na skargę ma pole „Sygnatura KIO” (kontrola sądowa, art. 579–580 Pzp). ⚠️ Daty w źródle bywają błędne (KIO 4983/25: „7 grudnia 2026”, pomiar 2026-10-02) |
 
 ### ⭐ UODO — `orzeczenia.uodo.gov.pl`
 
@@ -605,7 +605,7 @@ w `refid` (`urn:ndoc:gov:pl:uodo:…`). Okno: `1M`, `1Y`.
 | Źródło | Kanał | Wymóg |
 |---|---|---|
 | **KRS** | ✅ `api-krs.ms.gov.pl/api/krs/{OdpisAktualny\|OdpisPelny}/{nr}?rejestr=P\|S&format=json` | bez klucza; numer dopełniony zerami do 10 cyfr |
-| **CEIDG v3** | ⛔ `dane.biznes.gov.pl/api/ceidg/v3/firmy` | **Bearer JWT** z konta biznes.gov.pl; 401 bez tokenu = API żyje, nie awaria. Limit ~50/180 s liczony od OSTATNIEGO żądania — ponawianie **przedłuża** blokadę |
+| **CEIDG v3** | ✅ z tokenem `dane.biznes.gov.pl/api/ceidg/v3/firmy?nip=` (zmierzone 2026-09-29, F-214; ponownie 2026-10-01) | **Bearer JWT** — klucz: Hurtownia danych CEIDG `https://dane.biznes.gov.pl/pl/portal/034872` (wniosek o dostęp, Profil Zaufany). 401 bez tokenu = API żyje, nie awaria. **200** → `firmy[]` z NIP/REGON w `wlasciciel.{nip,regon}` (nie w `firmy[].nip`); **204 bez treści** = brak wpisu (np. spółka z KRS); **400** `NIEPOPRAWNY_NUMER_NIP` = zła suma kontrolna. Limit ~50/180 s liczony od OSTATNIEGO żądania — ponawianie **przedłuża** blokadę. ⛔ Ładunek JWT (base64) zawiera PESEL właściciela — tokenu nie zapisuje się w repozytorium (T40) |
 | **KW** | `ekw.ms.gov.pl/eukw_ogol/menu.do` | root pętli; brak API |
 | **KRZ**, **wyszukiwarka KRS** | ⛔ 403 WAF | odczyt KRS i tak przez `api-krs` |
 | **SUDOP** | ✅ `sudop.uokik.gov.pl` | pomoc publiczna, NIE decyzje |

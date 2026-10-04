@@ -65,3 +65,26 @@
 3. Lokalna `MAPA-POKRYCIA.md` odpowiada: **jaki jest aktualny faktyczny poziom pokrycia** i jest jedynym źródłem tego statusu w runtime.
 4. Historia zmian nie bierze udziału w routingu ani w ocenie bieżącego pokrycia.
 5. Żaden status strukturalny nie zwalnia z fresh hard gate do ELI/ISAP/EUR-Lex przed użyciem przepisu.
+
+## MOSTY DZIEDZINOWE (rejestr — AUDYT-2026-10-04b; przeniesiony z SKILL.md, limit korpusu T17)
+
+Mosty nie zawierają prawa — wskazują kanoniczny moduł DR/shared. Wczytaj most tylko,
+gdy KROK 1 wskazał jedną z tych dziedzin, a `prawo-polskie-v2/ROUTING-MAP.md` nie jest
+w kontekście; inaczej idź wprost do modułu z ROUTING-MAP.
+
+```text
+view prawny-router-v3/references/cyberprzestepstwa.md          → dr-03 (art. 267–269c KK)
+view prawny-router-v3/references/kwalifikator-karnomaterialny.md → dr-03 kwalifikator
+view prawny-router-v3/references/mobbing-dyskryminacja.md       → dr-04 mobbing/dyskryminacja
+view prawny-router-v3/references/przemoc-domowa.md              → dr-03 (art. 207 KK)
+view prawny-router-v3/references/przesluchanie-swiadkow.md      → shared/PRZESLUCHANIE-SWIADKOW-KPC.md
+view prawny-router-v3/references/stalking-nekanie.md            → dr-03 (art. 190a KK) + shared/STALKING-NEKANIE.md
+view prawny-router-v3/references/tryby-scigania.md              → dr-03 tryby ścigania
+view prawny-router-v3/references/wykroczenia.md                 → dr-03 KW/KPW
+```
+
+Archiwum `references/legacy-material-router/` (8 plików, treść sprzed przeniesienia do DR,
+merge `d3385b9`) **usunięte w 3.60 (AUDYT-2026-10-04c, F-226)** — porównanie z modułami
+wskazanymi przez mosty: kanon obejmuje treść archiwum (kwalifikator: archiwum v1.0 wobec
+v3.0 w DR-03); 4 tematy bez odpowiednika w DR przekazane do FAZY 3E jako F-228 (nie
+przeniesione — treść archiwum nie przechodziła T28). Historia: git `main` do `f66715f`.

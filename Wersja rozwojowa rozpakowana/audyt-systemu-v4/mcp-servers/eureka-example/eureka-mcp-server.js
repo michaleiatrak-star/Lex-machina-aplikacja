@@ -29,6 +29,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { sygnal, owinSerwer, budzetWyczerpany } from "../wspolne/budzet.mjs";
 
 const BASE = "https://eureka.mf.gov.pl/api/public/v1";
 const PORTAL = "https://eureka.mf.gov.pl/informacje/podglad";
@@ -146,7 +147,7 @@ async function http(url, init = {}) {
   let ostatni;
   for (let proba = 1; proba <= 3; proba++) {
     try {
-      const resp = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(30000) });
+      const resp = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers ?? {}) }, signal: sygnal(15000) /* 2026-10-01: norma <1 s; 3×15 s mieści się w budżecie 50 s */ });
       const typ = resp.headers.get("content-type") ?? "";
       if (!resp.ok) throw new Error(`EUREKA HTTP ${resp.status}`);
       if (!typ.includes("json")) throw new Error(`EUREKA zwróciła ${typ || "brak typu"} zamiast JSON (powłoka SPA?)`);
@@ -156,6 +157,7 @@ async function http(url, init = {}) {
   throw ostatni;
 }
 
+// ⚠️ 2026-10-01: tryb frazy jest wrażliwy na szyk („alkohol akcyza” → 8 trafień) — opisane w narzędziu.
 // ⛔ POPRAWKA 2026-09-30: searchInFullPhrase:false szuka słów osobno — „akcyza alkohol” dawało
 //    3722 trafień posortowanych po dacie (podział spółek, ryczałt…). Portal EUREKA szuka frazy
 //    w całości: 454 trafienia, te same co na stronie (pomiar na żywym API, CI 36761874591).
@@ -170,7 +172,7 @@ async function szukaj({ filtr = {}, fraza, rozmiar = 10 }) {
 const blad = (e) => ({ status: "ERROR", query_type: "interpretacja", source: "eureka", detail: String(e?.message ?? e), retrieved_at: new Date().toISOString() });
 const tekst = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
 
-const server = globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "eureka-connector", version: "1.0.0" });
+const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "eureka-connector", version: "1.0.0" }));
 
 server.registerTool("eureka_sprawdz_sygnature", {
   title: "EUREKA — kontrola istnienia sygnatury interpretacji",
@@ -185,6 +187,9 @@ server.registerTool("eureka_sprawdz_sygnature", {
 server.registerTool("eureka_szukaj", {
   title: "EUREKA — wyszukiwanie interpretacji i objaśnień",
   description: "Fraza + filtry. Zwraca KANDYDATÓW z jawnym statusem aktualności każdej pozycji. " +
+    "Fraza jest szukana W CAŁOŚCI i w podanym SZYKU słów (pomiar 2026-10-01: „akcyza alkohol” 454, „alkohol akcyza” 8) — " +
+    "przy małej liczbie trafień spróbuj innego szyku lub krótszej frazy. Pojedyncze słowo daje bardzo szeroki zbiór " +
+    "sortowany po dacie (nie po trafności) — zawężaj filtrami. " +
     "kategoria: 1 = interpretacja indywidualna, 3 = ogólna, 11 = objaśnienia podatkowe.",
   inputSchema: {
     fraza: z.string().min(2).describe("Fraza wyszukiwania"),

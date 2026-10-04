@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.98"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.5"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -44,13 +44,14 @@ limitations:
     opisane tu jawnie, żeby FAZA 2E w trybie deklarowanym go NIE zgubiła.
     Decyzja architektoniczna (uznać jako świadomy wzorzec 'plik-most' czy
     wydzielić poza shared/) pozostaje OTWARTA — do następnego audytu."
-  - rozmiar (193 pliki, ~2,8 MB — stan 2026-09-27e, z .claude-plugin/plugin.json) — każda zmiana pliku kanonicznego ma
+  - rozmiar (190 plików — stan 2026-10-04b po usunięciu 7 reliktów, F-225; wcześniej 197 — stan 2026-10-01b, z .claude-plugin/plugin.json) — każda zmiana pliku kanonicznego ma
     potencjalnie systemowy promień rażenia; edytować tylko przez
     audyt-systemu-v4 z pełną weryfikacją CHECKLIST-DEDUP.md
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.98 (2026-09-27t, AUDYT-2026-09-27t): DOSTEP-MASZYNOWY-API: zasięg czasowy SAOS (SN do 2016, TK do 2015, KIO do 2018); fraza w cudzysłowie; MCP-INTEGRACJA i KONEKTORY zaktualizowane.
+  Wersja bieżąca: 3.99.5 (2026-10-04c, AUDYT-2026-10-04c): Osiągalność z zewnętrznych skilli: powiązane MOD-GENERATOR-AKTU, AUDIT-TRAIL-SPEC i bramka eksportu (MOD-AUDIT-BUNDLE), przyklad-adapter (MCP-INTEGRACJA).
+  Poprzednia: 3.99.4 (2026-10-04b, AUDYT-2026-10-04b): F-225 — usunięte 7 reliktów (3.19/2.6) wskrzeszonych nakładką; powiązane ORKA-BAS-001-125.json i MOD-AUDIT-BUNDLE.md; 197 → 190 plików.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -133,11 +134,15 @@ Wszystkie pliki są kanoniczne — nie istnieją stuby ani kopie w innych lokali
 | Plik | Rola |
 |------|------|
 | `tools/eli_art_extract.py` | Deterministyczny odczyt jednostki redakcyjnej z ELI po strukturze HTML (`data-id`), z pominięciem treści obwieszczenia i przypisów; pole `aktualnosc` wykrywa najnowszy t.j. dostępny tylko w PDF. Statusy FOUND/NOT_FOUND/AMBIGUOUS/OUT_OF_SCOPE. Testy: `tools/test_eli_art_extract.py` (unittest, tryb live `LEX_LIVE=1`). Dodane 2026-09-26, F-201 |
+| `tools/kontrakt_rachunek.py` | Deterministyczny rachunek i kontrole liczbowe umowy (stdlib, offline): `oblicz`, `ekspozycja` (R-EKS E1–E4; liczba bez `zrodlo` = BRAK_ZRODLA), `slownie` (kwota cyfrą ↔ słownie, polska odmiana), `odeslania` (martwe odesłania §/ust./załączniki), `cytaty` (WD-2: dosłowność cytatu). Testy: `tools/test_kontrakt_rachunek.py` (13); regresja T39. Dodane 2026-09-29 (F-215), do repozytorium dopiero 2026-10-01b (odtworzone z zapisu sesji) |
+| `tools/graf_przyczynowy.py` | Silnik `MOD-GRAF-PRZYCZYNOWY.md`: wsparcie węzłów (bramy I/LUB), ścieżki i najsłabsze ogniwa, ogniwa krytyczne, scenariusze „co jeśli”, sprzężenia (cykle), flagi art. 361 § 1/362/441 KC i art. 2 KK; MD/JSON/Mermaid; `--selftest`; parytet z widgetem chronologii — T42. Dodane 2026-10-01b |
 | `tools/adapter_krs_vat.py` | Własny adapter KRS (`api-krs.ms.gov.pl`) + Biała lista VAT (`wl-api.mf.gov.pl`), bez serwerów zewnętrznych, bez klucza (F-204). Waliduje NIP (suma kontrolna) i dopełnia numer KRS zerami; zwraca FOUND/NOT_FOUND/INVALID_INPUT/ERROR — nigdy sam nie awansuje do statusu weryfikacji prawnej. ⚠️ Schemat KRS zmierzony LIVE 2026-09-26; schemat WL NIE zmierzony ponownie w tej sesji (blokada WAF Incapsula na kanale kodu z tego środowiska — zob. nagłówek pliku), przejęty z pomiaru zapisanego w `DOSTEP-MASZYNOWY-API.md` §4. Testy: `tools/test_adapter_krs_vat.py` (22 testy, w tym 2 live `LEX_LIVE=1`) |
 | `tools/walidator_cytowan.py` | Deterministyczna bramka: sprawdza, czy każde powołanie w gotowym piśmie ma odpowiadający log web_fetch. Pełny opis: `tools/README.md`. ✅ **F-206 ZAMKNIĘTA 2026-09-26d** — przywrócony bajt-w-bajt z historii git repozytorium (usunięty z drzewa rozwojowego mergem `d3385b9`, 2026-08-27; odzyskany z równoległej migawki stabilnej sprzed jej osobnego usunięcia w `6dbe7a0`, 2026-09-08 — potwierdzona identyczność treści `diff`), usunięty wraz z 7 innymi narzędziami; zweryfikowany na fixture'ach `tools/przyklady/` (4/4 przypadki zgodne z opisem w `tools/README.md`) |
 | `tools/extract_api_verification_log.py` | Buduje `sesja.json` (log zdarzeń weryfikacji) z surowej konwersacji API; wejście dla `walidator_cytowan.py`. ✅ Przywrócony 2026-09-26d (F-206), `--self-test` PASS (2/2 zdarzenia poprawnie wydobyte) |
 | `tools/export_gate.py` | Łączy `extract_api_verification_log.py` + `walidator_cytowan.py` w jedną bramkę eksportu (exit 1 = zablokuj eksport). ✅ Przywrócony 2026-09-26d (F-206), `--self-test` PASS |
 | `tools/append_event.py` + `tools/hash_chain_verify.py` + `tools/router_event_parser.py` | Log audytowy hash-chain: zapis zdarzenia, weryfikacja integralności łańcucha, parsowanie znaczników. Referencyjne dla developera portalu (`shared/AUDIT-TRAIL-SPEC.md`). ✅ Przywrócone 2026-09-26d (F-206) — dodatkowo znalezione jako NIEOBECNE poza zakresem pierwotnego opisu F-206 w `WARN-OTWARTE.md` (ten sam commit usuwający, ta sama data). Zweryfikowane end-to-end: `append_event.py` zapisał 3-wpisowy łańcuch, `hash_chain_verify.py` potwierdził integralność, a po ręcznym spreparowaniu naruszenia (zmiana `payload` we wpisie seq=2) poprawnie wykrył pierwszy niezgodny wpis |
+| `MOD-AUDIT-BUNDLE.md` | Paczka audytowa outputu (AI Act art. 12) — składa wyniki WERYFIKACJA-SLAD, MOD-STEP-TRACKER i bramek walidacji w jeden artefakt z manifestem; deliverable dla audytora, nigdy dla sądu. Wołany przez `pisma-procesowe-v3` po ST-FINAL (tryb PRAWNIK / żądanie użytkownika) — podpięty 2026-10-04b (F-225; od 3.19 bez wywołania) |
+| `ORKA-BAS-001-125.json` | Dane maszynowe leksykonu ORKA (125 rekordów `id/haslo/modul/definicja`; 41 bez odpowiednika w `orka-bas-leksykon/*.md`) — wskazany z `ORKA-BAS-LEKSYKON.md` (2026-10-04b, F-225) |
 | `tools/test_mcp_protocol.py` + `tools/connector_health_check.py` | Klasyfikacja odpowiedzi connectora MCP (testy jednostkowe) + health-check dostępności connectorów. Referencyjne, poza LLM (`shared/MCP-INTEGRACJA.md`). ✅ Przywrócone 2026-09-26d (F-206) — jak wyżej, poza pierwotnym zakresem F-206. `test_mcp_protocol.py`: 6/6 testów PASS (`python3 -m unittest test_mcp_protocol`). `connector_health_check.py --self-test`: PASS |
 
 ## Jak korzystać

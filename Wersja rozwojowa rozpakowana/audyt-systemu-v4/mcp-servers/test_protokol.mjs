@@ -14,7 +14,7 @@ const SERWERY = [
   ["eureka-example", "eureka-mcp-server.js", ["eureka_pobierz", "eureka_sprawdz_sygnature", "eureka_szukaj"]],
   ["eurlex-example", "eurlex-mcp-server.js", ["eurlex_lookup", "eurlex_tsue"]],
   ["isap-eli-example", "isap-eli-mcp-server.js", ["isap_lookup", "isap_tekst"]],
-  ["kio-example", "kio-mcp-server.js", ["kio_pobierz", "kio_sprawdz_sygnature", "kio_szukaj"]],
+  ["kio-example", "kio-mcp-server.js", ["kio_kontrola_sadowa", "kio_pobierz", "kio_sprawdz_sygnature", "kio_szukaj"]],
   ["krs-example", "krs-mcp-server.js", ["krs_lookup", "krs_reprezentacja", "krs_szukaj"]],
   ["nbp-example", "nbp-mcp-server.js", ["nbp_kurs_waluty"]],
   ["saos-example", "saos-mcp-server.js", ["saos_cytator", "saos_search"]],

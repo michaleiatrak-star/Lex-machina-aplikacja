@@ -1326,10 +1326,10 @@ jest odpowiedzią na pomiar z claude.ai 2026-09-27 (4 z 32 pluginów, jedyna cec
 
 | Test | Co mierzy | Waga | Zależność |
 |---|---|---|---|
-| T39 | (1) `shared/tools/test_kontrakt_rachunek.py` — 14 testów: `oblicz` (bezpieczeństwo AST), `ekspozycja` na liczbach umowy 04 = manifest złotego standardu (60 800 / 729 600 / 243,20 / 201,40 / NIEOGRANICZONA / data okna 2027-02-01), liczba bez źródła = BRAK_ZRODLA, odmiana liczebników, martwe odesłania, wykaz załączników w 2 liniach, cytaty; (2) korpus `analizator-umow-v1/benchmark/posiane-wady/`: 05 i3+i6 wykryte, 01 zero alarmów, 04 pary zgodne | KRYTYCZNY (BLOKER) | offline |
+| T39 | (1) `shared/tools/test_kontrakt_rachunek.py` — 13 testów: `oblicz` (bezpieczeństwo AST), `ekspozycja` na liczbach umowy 04 = manifest złotego standardu (60 800 / 729 600 / 243,20 / 201,40 / NIEOGRANICZONA / data okna 2027-02-01), liczba bez źródła = BRAK_ZRODLA, odmiana liczebników, martwe odesłania, wykaz załączników w 2 liniach, cytaty; (2) korpus `analizator-umow-v1/benchmark/posiane-wady/`: 05 i3+i6 wykryte, 01 zero alarmów, 04 pary zgodne | KRYTYCZNY (BLOKER) | offline |
 
 **Wykonanie:** `python3 audyt-systemu-v4/scripts/check_kontrakt_rachunek.py --repo-root <drzewo>`.
-**Pomiar walidacyjny (2026-09-29):** 14/14 + 5/5 kontroli korpusu. Pierwszy przebieg wykrył fałszywy alarm
+**Pomiar walidacyjny (2026-09-29):** 13/13 (wpis pierwotnie podawał 14 — korekta 2026-10-01b wg zapisu sesji) + 5/5 kontroli korpusu. Pierwszy przebieg wykrył fałszywy alarm
 narzędzia na umowie kontrolnej 01 (wykaz załączników zawinięty na 2 linie) — naprawiony, przypadek w testach.
 ⚠️ **Ograniczenia jawne.** Narzędzie liczy wg brzmienia umowy; wyekstrahowanie liczb do JSON robi model
 (błąd ekstrakcji ≠ błąd rachunku — dlatego każda liczba niesie `zrodlo`). `odeslania` widzi tylko
@@ -1361,4 +1361,28 @@ nie jest zgłaszany (inaczej lawina fałszywych trafień na NIP/REGON/numerach r
 `shared` 195 → WARN (zapas 4 pliki na przyszłe wydania).
 ⚠️ **Ograniczenie jawne.** T41 liczy pliki, nie ocenia, które są zbędne; redukcja wymaga ustalenia (CHANGELOG,
 równoważność treści), a scalanie — zachowania treści w całości.
+
+## T42 — graf przyczynowy: silnik, parytet widgetu, rachunek łańcucha (dodany 2026-10-01b, AUDYT-2026-10-01b)
+
+| Test | Co mierzy | Waga | Zależność |
+|---|---|---|---|
+| T42 | (A) selftest `shared/tools/graf_przyczynowy.py` — szereg 3×0,9 = 0,729, równolegle 0,999, csqn, cykle, błąd czasu, flagi art. 361/362/441 KC i art. 2 KK, brak fałszywych flag bez jawnych oznaczeń; od 2026-10-02 także NESS (przyczyny nadmiarowe), zaniechanie hipotetyczne, obiektywne przypisanie i art. 5 § 2 KPK, model wykluczeniowy, niezależność dowodów, MET-ACH (niediagnostyczne, ważona niespójność, dowody krytyczne); (B) parytet z blokiem ENGINE widgetu `chronologia-sprawy-v1/assets/widget-graf-przyczynowy.html` na 4 grafach (±1e-6); (C) brak formuły „× 0,9 = 0,27” w MOD-LANCUCH-DOWODOWY i podpięcia MP13 §13.2a, TRYB C, MET-PT | KRYTYCZNY (BLOKER) | offline; Node dla (B) — bez Node WARN |
+
+**Wykonanie:** `python3 audyt-systemu-v4/scripts/check_graf_przyczynowy.py --repo-root <drzewo>`.
+**Pomiar walidacyjny (2026-10-01b):** PASS (11+1 przypadków selftestu, 4/4 grafy zgodne); widget dodatkowo
+uruchomiony w jsdom: 0 błędów JS, 5 węzłów / 4 krawędzie, scenariusz „obalony Z-003” 0,72 → 0,12 — ta sama
+wartość co silnik Python na tych samych danych.
+⚠️ **Ograniczenie jawne.** T42 sprawdza rachunek i spójność kodu, nie trafność ocen wprowadzonych do grafu
+(pewność węzłów, dowód połączenia, csqn) — te pochodzą z analizy materiału i podlegają MP13 §13.7.
+
+## T43 — sieroty: pliki bez ścieżki wywołania (dodany 2026-10-04b, AUDYT-2026-10-04b, F-225)
+
+| Test | Co sprawdza | Waga | Uruchomienie |
+|---|---|---|---|
+| T43 | Każdy plik każdego skilla (poza infrastrukturą: SKILL.md, CHECKSUMS, manifesty, README, CHANGELOG) ma odwołanie z innego pliku, który nie jest zapisem historycznym (dziennik, changelog, CHECKSUMS, mapy Dz.U., WARN-OTWARTE, DEDUPLICATION-POLICY, CHECKLIST-DEDUP). Nazwa unikalna w systemie → wystarczy nazwa lub rdzeń; nazwa NIEunikalna → wymagana ścieżka rozstrzygająca (`<skill>/<rel>`, `shared/<rel>`, `dr-NN/<rel>`). Rejestracja folderu w SKILL.md/MANIFEST.md rejestruje jego pliki; moduły wołane kodem (`MD2`, `MP7`, `MD-NARR`) liczone po kodzie w obrębie skilla | KRYTYCZNY (BLOKER) | `python3 scripts/check_sieroty.py --repo-root <katalog skilli>` |
+
+Wynik FAIL = plik do **powiązania** (żywa treść) albo **usunięcia** z wpisem w CHANGELOG (relikt, duplikat).
+Allowlista mieszka w skrypcie; każdy wpis wymaga uzasadnienia. ⚠️ **Ograniczenie jawne.** Test mierzy
+istnienie odwołania, nie to, czy odwołanie jest w ścieżce wykonania (wzmianka w tabeli rejestru liczy się
+tak samo jak `view`). Pierwszy przebieg (2026-10-04b): 65 sierot przed naprawą, 0 po (1 na allowliście).
 

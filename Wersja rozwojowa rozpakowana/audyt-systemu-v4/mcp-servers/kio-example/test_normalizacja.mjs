@@ -31,4 +31,22 @@ const F = JSON.parse(readFileSync(new URL("./fixtures/uzp.json", import.meta.url
   assert.strictEqual(dataIso("07-12-2026"), "2026-12-07");
   console.log("OK: daty formularza, normalizacja sygnatury"); }
 
+
+// AUDYT-2026-10-02 — sprawy łączone, wyrok sądu na skargę, kontrola daty (fragmenty prawdziwych odpowiedzi)
+import { rozbijSygnatury, ostrzezenieDaty } from "./kio-mcp-server.js";
+{ const w = parsujWyniki(F.wyniki_laczone);
+  assert.strictEqual(w.pozycje.length, 1);
+  assert.deepStrictEqual(rozbijSygnatury(w.pozycje[0].sygnatura), ["KIO 2304/23", "KIO 2306/23"]);
+  assert.deepStrictEqual(rozbijSygnatury("KIO 3335/25 | KIO 3339/25, KIO 3341/25"), ["KIO 3335/25", "KIO 3339/25", "KIO 3341/25"]);
+  console.log("OK: sprawa łączona — sygnatury rozdzielone „|” (wcześniej fałszywe OUT_OF_SCOPE dla drugiej)"); }
+{ const m = parsujMetryke(F.szczegoly_sad);
+  assert.match(m.organ, /Sąd Okręgowy/);
+  assert.deepStrictEqual(m.sygnatury, ["I Ca 117/12"]);
+  assert.deepStrictEqual(m.sygnatury_kio, ["KIO 44/12"]);
+  assert.match(m.sposob_rozstrzygniecia[0], /zmienia/);
+  console.log("OK: metryka wyroku sądu — sygnatura sądu, sygnatura KIO, sposób rozstrzygnięcia"); }
+{ assert.match(ostrzezenieDaty("2026-12-07", ["KIO 4983/25"], "2026-10-02"), /PÓŹNIEJSZA/);
+  assert.match(ostrzezenieDaty("2024-05-01", ["KIO 10/25"], "2026-10-02"), /wcześniejsza niż rok sygnatury/);
+  assert.strictEqual(ostrzezenieDaty("2025-12-07", ["KIO 4983/25"], "2026-10-02"), null);
+  console.log("OK: kontrola wiarygodności daty ze źródła"); }
 console.log("\nWSZYSTKIE TESTY JEDNOSTKOWE (bez sieci) PRZESZŁY");

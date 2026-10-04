@@ -5,7 +5,7 @@ dependencies:
   requires:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
-version: "6.153"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
+version: "6.162"   # ⛔ CUDZYSŁOWY OBOWIĄZKOWE od 6.10: niecytowane `6.10` YAML
                   # parsuje jako float 6.1 — czyli numer NIŻSZY niż 6.9, co cicho
                   # odwraca porządek wersji. Wykryte przy walidacji 2026-08-20z.
                   # Każda kolejna wersja z dwucyfrowym minor — też w cudzysłowie.
@@ -49,7 +49,9 @@ references:
   - references/WARN-OTWARTE.md   # rejestr żywy TYLKO otwartych flag (WARN + strukturalne) — dodane 2026-07-07, ZASADA 10; ⚡ od 2026-08-15w zaczyna się TABLICĄ STERUJĄCĄ (indeks wszystkich flag + następny krok w jednym zdaniu) — czytaj ją PIERWSZĄ przy pytaniu „co jest do zrobienia"
   - references/SPROSTOWANIE-LM-2026-08-23.md   # dokument do wysłania autorowi raportów TEST1-3 — realizacja F-116 część 3/3, bez treści proceduralnej systemu — dodane 2026-08-23f
   - references/CHECKLIST-DEDUP.md   # mapa pojęć → lokalizacje (5 not, NOTA-6 ORPHAN dodana 06-14g)
-  - references/mapa_dzu_2026-09-22.md      # ⭐ GENERACJA BIEŻĄCA (F-193) — wiersz 2026/26 z etapami
+  - references/mapa_dzu_2026-10-04.md      # ⭐ GENERACJA BIEŻĄCA (AUDYT-2026-10-04) — 2026/1161 (samorządy
+                                          # architektów/inżynierów + PrBud), 2002/690 rozp. WT — UCH od 20.09.2026 (F-224)
+  - references/mapa_dzu_2026-09-22.md      # generacja POPRZEDNIA (F-193) — wiersz 2026/26 z etapami
                                           # + MONITORING etapów 1.10.2026 i 1.01.2027 (sesja TARGETED)
   - references/mapa_dzu_2026-09-10.md      # generacja POPRZEDNIA (F-148a) — +5 pozycji, w tym trzy
                                           # wchodzące jako skutek DWÓCH błędów podmiany aktu
@@ -90,7 +92,7 @@ references:
                                           # do wpisania do mapy centralnej, po kwalifikacji numer GŁÓWNY vs POBOCZNY;
                                           # zawiera opis pułapki parsowania (mapa trzyma numer w DWÓCH formatach:
                                           # prozą `poz. N` i w kolumnach tabeli) — dodane 2026-08-21
-  - references/raporty-pokrycia-2026-08-13/   # 12 raportów + indeks = 13 plików; licznik potwierdzony ze stanem dysku 2026-08-26
+  - references/raporty-pokrycia-2026-08-13/   # 10 raportów + indeks = 11 plików (2026-10-04b: KPK i KRO — relikty F-81/F-73 usunięte); wcześniej 13
   - references/PLAN-POMIARU-BRAMEK-UNIWERSALNY.md   # F-167 (27f): projekt pomiaru DOWOLNEJ bramki;
                                           # uogólnia PLAN-TESTU-BRAMEK-F113 — REJESTROWANE 2026-09-27j (T22, plik-sierota od 27f)
   - references/REJESTR-BRAMEK-POMIAR.json # F-167 (27f): rejestr bramek i wycięć dla build_ramie_kontrolne.py — REJESTROWANE 27j (T22)
@@ -131,6 +133,12 @@ scripts:
   - scripts/check_sekrety.py              # T40 — JWT (również PESEL zakodowany w ładunku), klucze PEM, tokeny
                                           # API, PESEL z poprawną sumą kontrolną; wartości maskowane. Offline,
                                           # selftest 6/6; BLOKER od 2026-09-29 (F-216, F-217)
+  - scripts/check_graf_przyczynowy.py     # T42 — MOD-GRAF-PRZYCZYNOWY: selftest silnika shared/tools/graf_przyczynowy.py,
+                                          # parytet z silnikiem JS widgetu chronologii (±1e-6), regresja błędu
+                                          # „× 0,9 = 0,27” w MOD-LANCUCH-DOWODOWY, podpięcia MP13/TRYB C/MET-PT.
+                                          # Offline (Node opcjonalny: bez niego WARN); BLOKER od 2026-10-01b
+  - scripts/check_sieroty.py             # T43 — sieroty: plik bez ścieżki wywołania (ścieżkowo, odróżnia
+                                          # pliki o tej samej nazwie); allowlista z uzasadnieniem w skrypcie
   - scripts/check_limit_plikow.py         # T41 — każdy skill < 200 plików (reguła użytkownika), WARN od 190;
                                           # przed redukcją szukaj RELIKTÓW (pliki usunięte, a wskrzeszone przez
                                           # instalację „na nakładkę”). Offline, selftest; BLOKER od 2026-09-29c
@@ -1119,6 +1127,19 @@ z WARN-OTWARTE.md, dodaj pełny wpis do AUDIT-JOURNAL.md.
    > (plik wynikowy). Żadna z nich nie może być ścieżką założoną dla jednego
    > hosta.
    >
+   > ⛔ **`SKILL_SOURCE` = repozytorium (`main`), NIGDY kopia zainstalowana
+   > w hoście (F-221/F-223, od 6.158).** claude.ai przy imporcie z marketplace
+   > serializuje frontmatter `SKILL.md` ponownie: usuwa komentarze YAML, zdejmuje
+   > wcięcia list, zamienia skalary blokowe na ciągi z literalnym `\n`. Pozostałe
+   > pliki są bajtowo zgodne z `main`. Wydanie 6.157 zbudowane z takiej kopii
+   > straciło 181 linii frontmatteru audytu i podniosło T22 na `main` z 6 do 113
+   > rozjazdów. Gdy repozytorium nie jest dostępne, a kopia zainstalowana tak —
+   > pobierz `SKILL.md` z `main` (raw GitHub) i nanieś zmiany na niego.
+   > `dostarcz_skill.sh` odmawia spakowania skilla, który nie przechodzi T22.
+   > Audyt prowadzony NA kopii zainstalowanej: T21 i T22 przełączają się same
+   > w tryb kopii (układ `plugin:skill`); `SKILL.md` weryfikuje wtedy wyłącznie
+   > T21 z `--repo-ref <katalog skilli repozytorium>` (od 6.159).
+   >
    > ```bash
    > # 1. Stan wejściowy
    > find "$SKILL_SOURCE" -type f | sort > before.files
@@ -1268,7 +1289,8 @@ z WARN-OTWARTE.md, dodaj pełny wpis do AUDIT-JOURNAL.md.
     użytkownika) — moduł przekraczający 1000 linii MUSI zostać
     podzielony wg rozdziałów aktu, który opisuje.**
 
-    **Kiedy sprawdzać:** (a) po KAŻDYM utworzeniu nowego modułu — `wc -l`
+    **Kiedy sprawdzać:** (a) po KAŻDYM utworzeniu nowego modułu (budowa wg
+    `shared/MOD-GENERATOR-AKTU.md` G-1…G-8) — `wc -l`
     na plik zaraz po `create_file`, PRZED rejestracją w SKILL.md/mapie/
     ROUTING-MAP; (b) po KAŻDYM rozbudowaniu istniejącego modułu (kolejna
     sesja FAZA 3E, dopisanie nowego rozdziału/artykułów) — sprawdzić
@@ -1410,6 +1432,7 @@ z WARN-OTWARTE.md, dodaj pełny wpis do AUDIT-JOURNAL.md.
 > `dist/lex-mcp.mjs`, manifest rozszerzenia MCPB, instalator, skrypt budowy, README) — łącznie **192 pliki** (6.144: +`mcp-servers/LICENSE`). Drzewo niżej nie
 > rozpisuje `mcp-servers/` — opis w `mcp-servers/README.md`. Licznik w pierwszej linii drzewa jest
 > historyczny (stan 2026-09-09b).
+> ⚡ **2026-10-04b:** usunięte 40 reliktów (30 `mcp-servers/*-example/*`, 2 `.pyc`, 6 `references/` z 6.146, raporty pokrycia KPK/KRO), dodany `scripts/check_sieroty.py` (T43) — **187 plików**.
 > ⚡ **2026-09-27s:** `mcp-servers/` scalony — wspólne `package.json`/`package-lock.json` i jeden `test_protokol.mjs` zamiast 10 kopii; 11 serwerów (+`wl-example`). Liczba plików skilla: `find . -type f | wc -l` (limit wydania 200).
 
 ```
@@ -1453,7 +1476,8 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
     ├── F-108-verification-2026-08-28.md         ← raport źródłowy re-audytu F-108
     ├── F-104-lista-robocza-mapa-dzu.md         ← lista robocza F-104, rocznik 2026
     ├── F-104-lista-robocza-roczniki-starsze.md ← lista robocza F-104, roczniki 2013-2025 (F-124)
-    ├── mapa_dzu_2026-09-22.md                  ← mapa Dz.U. AKTUALNA (F-193)
+    ├── mapa_dzu_2026-10-04.md                  ← mapa Dz.U. AKTUALNA (AUDYT-2026-10-04, 2026/1161)
+    ├── mapa_dzu_2026-09-22.md                  ← generacja poprzednia (F-193)
     ├── mapa_dzu_2026-09-10.md                  ← generacja poprzednia (F-148a)
     ├── mapa_dzu_2026-09-09.md                  ← generacja poprzednia (F-172)
     ├── mapa_dzu_2026-08-28.md                  ← POPRZEDNIA generacja
@@ -1464,7 +1488,7 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.153 | Ostatnia aktualizacja: 2026-09-29c (209 → 179 plików: 30 reliktów sprzed 6.149 usuniętych; T41 limit < 200 plików)*
+*Wersja: 6.162 | Ostatnia aktualizacja: 2026-10-04c (F-226 i F-227 zamknięte; pomiar osiągalności `shared` ze skilli produkcyjnych; F-228 otwarta). Poprzednio 6.161 — 2026-10-04b (TRYB STRUKTURA: sieroty i relikty, T43).*
 
 *(Stopka podawała „5.0 | 2026-07-04" przy `version: 6.8` w YAML — rozjazd
 9 wersji, naprawiony 2026-08-20y. **Stopkę aktualizuj razem z polem `version`**;

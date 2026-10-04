@@ -1,6 +1,6 @@
 ---
 name: dr-12-sadownictwo-prokuratura-zawody-prawnicze
-version: "4.19"
+version: "4.22"
 description: "Sądownictwo, prokuratura i zawody prawnicze: ustrój sądów, prokuratura, adwokaci, radcowie, notariusze, komornicy, koszty i odpowiedzialność zawodowa."
 dependencies:
   requires:
@@ -231,6 +231,20 @@ orzeczeń"/"orzecznictwo" systematycznie pomija format "pojedyncze
 ogłoszenia w aktualnościach" — przy kolejnych audytach warto dodatkowo
 szukać po wzorcu sygnatury (np. "SD [numer]/[rok]") i słowie "ogłoszenia",
 nie tylko po nazwach sekcji typu "archiwum".
+
+ADWOKATURA-ORZECZENIA — DWUNASTA TURA (2026-10-03, na żądanie użytkownika:
+„nowa ORA Kielce — dodaj do obserwacji”): ⚠️ PRZESŁANKA ŻĄDANIA SKORYGOWANA —
+Kielce NIE są nową izbą: lista NRA (adwokatura.pl/izby-adwokackie/) podaje
+Izbę Adwokacką w Kielcach jako poz. 7 z 24, a podtabela miała ją od tury IX.
+Wykonano: (1) rewalidację Kielc pełnym fetchem menu i paginacji aktualności
+(lekcja Poznania) — ❌ potwierdzone ponownie, wiersz wydzielony z 👁 OBSERWACJĄ;
+(2) zestawienie podtabeli z listą NRA — WYKRYTY BŁĄD: Łódź (poz. 11) nie
+występowała w podtabeli wcale, a wiersz „9 z 24” wymieniał 8 izb. Łódź
+sprawdzona bezpośrednio — ❌, jedyny materiał to komunikat rzecznika z 2016 r.
+o wszczęciu (RD 84/16), nie orzeczenie. Stan: 16/24 sprawdzonych bezpośrednio,
+15/16 negatywnie, 1/16 (Poznań) wybiórczo; 8/24 nadal bez pełnego fetchu.
+LEKCJA: bramka kompletności listy — przed każdym wnioskiem „N z 24” zestawić
+podtabelę z aktualną listą izb NRA, a nie z poprzednią wersją podtabeli.
 ```
 
 ## DEFINICJE — shared/definicje/
@@ -330,6 +344,16 @@ view dr-12-sadownictwo-prokuratura-zawody-prawnicze/modules/[nazwa-modulu].md
 
 ```
 view dr-12-sadownictwo-prokuratura-zawody-prawnicze/MAPA-AKTOW.md
+```
+
+## Mapa pokrycia treściowego (planowanie rozwoju skilla)
+
+Rejestr informacyjny — NIE krok obowiązkowy przy obsłudze konkretnej sprawy.
+Jedyne bieżące źródło statusu pokrycia tego DR (por. `prawny-router-v3/references/pokrycie-dziedzinowe.md`);
+przy nowelizacji pokazuje, czy dotknięty fragment ma treść do zaktualizowania:
+
+```
+view dr-12-sadownictwo-prokuratura-zawody-prawnicze/MAPA-POKRYCIA.md
 ```
 
 ## Powiązania zewnętrzne

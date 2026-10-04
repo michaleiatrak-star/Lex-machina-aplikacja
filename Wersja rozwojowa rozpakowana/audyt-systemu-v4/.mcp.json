@@ -56,13 +56,6 @@
         "cbosa"
       ]
     },
-    "lex-kio": {
-      "command": "node",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/mcp-servers/dist/lex-mcp.mjs",
-        "kio"
-      ]
-    },
     "lex-uodo": {
       "command": "node",
       "args": [
