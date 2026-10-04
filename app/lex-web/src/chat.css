@@ -2996,3 +2996,10 @@ mark.restored {
   gap: 8px;
   margin-top: 6px;
 }
+
+.workspace-template-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

@@ -337,7 +337,37 @@ export type SharedTemplateManifest = {
   createdAt: string;
   createdByUserId: string;
   generationReady: false;
+  // Set by the firm: document kind and default for that kind.
+  role?: { kind: TemplateKindId; isDefault: boolean };
 };
+
+// Same list as the runtime's TEMPLATE_KINDS (template-roles.ts).
+export const TEMPLATE_KINDS = [
+  ["pozew", "Pozew"],
+  ["apelacja", "Apelacja"],
+  ["zazalenie", "Zażalenie"],
+  ["sprzeciw", "Sprzeciw / zarzuty"],
+  ["odpowiedz_na_pozew", "Odpowiedź na pozew"],
+  ["wniosek", "Wniosek / pismo procesowe"],
+  ["wezwanie", "Wezwanie"],
+  ["pismo", "Pismo / list"],
+  ["umowa", "Umowa"],
+  ["regulamin", "Regulamin"],
+  ["opinia", "Opinia prawna"],
+  ["pelnomocnictwo", "Pełnomocnictwo"],
+  ["inne", "Inny dokument"]
+] as const;
+export type TemplateKindId = (typeof TEMPLATE_KINDS)[number][0];
+
+export function setSharedTemplateRole(
+  templateId: string,
+  role: { kind: TemplateKindId; isDefault: boolean } | null
+): Promise<SharedTemplateListResponse> {
+  return json<SharedTemplateListResponse>(`/api/shared/templates/${encodeURIComponent(templateId)}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role })
+  });
+}
 
 export type SharedTemplateListResponse = {
   templates: SharedTemplateManifest[];
@@ -983,6 +1013,8 @@ export type SessionExecutionResponse = {
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
   pipelineNext?: { skill: string; reason: string };
+  // The firm's default template the application used (none picked).
+  firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecisionView;
   // Values restored locally into the answer, for highlighting and correction.
   restorations?: RestorationMark[];

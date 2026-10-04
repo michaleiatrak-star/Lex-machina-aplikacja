@@ -25,6 +25,7 @@ SAMPLE = {
     ":invoiceId": "inv_0123456789abcdef0123456789abcdef",
     ":widgetId": "0123456789abcdef0123456789abcdef",
     ":templateId": "tpl_0123456789abcdef0123456789abcdef",
+    ":sharedTemplateId": "template_0123456789abcdef0123456789abcdef",
 }
 
 

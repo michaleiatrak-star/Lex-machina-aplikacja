@@ -14,6 +14,7 @@ import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
 import { realValueHashes } from "../privacy/example-data.js";
+import { defaultTemplateFor, draftingTarget, validTemplateRole } from "../template-roles.js";
 import { detectQueryMode, parseModeSignals } from "../query-mode.js";
 import { MAX_SUMMARY_CHARS, SUMMARY_CHUNK_CHARS, droppedMessageCount, queryWithSummary, summaryForDroppedHistory } from "../thread-summary.js";
 import { RoutingCatalog } from "./routing-catalog.js";
@@ -1573,6 +1574,31 @@ export function createLexHttpApp(options) {
             res.status(500).json({
                 error: "SHARED_TEMPLATE_LIST_FAILED"
             });
+        }
+    });
+    // The firm sets what a template is for and its default per document kind.
+    app.put("/api/shared/templates/:sharedTemplateId/role", express.json({ limit: "4kb" }), async (req, res) => {
+        if (!options.sharedTemplateStore) {
+            res.status(503).json({ error: "SHARED_TEMPLATE_STORE_UNAVAILABLE" });
+            return;
+        }
+        if (responseAuthContext(res).user.appRole !== "ADMIN") {
+            res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+            return;
+        }
+        const role = req.body?.role === null ? null : validTemplateRole(req.body?.role);
+        if (role === null && req.body?.role !== null) {
+            res.status(400).json({ error: "TEMPLATE_ROLE_INVALID" });
+            return;
+        }
+        try {
+            if (!options.sharedTemplateStore.setRole)
+                throw new Error("TEMPLATE_ROLES_UNAVAILABLE");
+            await options.sharedTemplateStore.setRole(String(req.params.sharedTemplateId ?? ""), role);
+            res.json({ templates: await options.sharedTemplateStore.listTemplates() });
+        }
+        catch {
+            res.status(404).json({ error: "SHARED_TEMPLATE_NOT_FOUND" });
         }
     });
     const sharedTemplateBody = express.raw({
@@ -3810,6 +3836,15 @@ export function createLexHttpApp(options) {
         const sessionRequest = parseSessionRequest(req.body);
         const attachments = parseDocumentAttachments(req.body?.attachments);
         const firmTemplates = parseFirmTemplates(req.body?.firmTemplates);
+        // No template picked: the firm's default for the requested document
+        // (its layout for the model, its styles for the file).
+        const generationTemplate = sessionRequest && firmTemplates && firmTemplates.length === 0
+            ? await firmDefaultTemplate(res, sessionRequest.query, ["pleading", "contract", "opinion", "letter", "report", "other"].includes(String(req.body?.documentType))
+                ? req.body.documentType
+                : undefined)
+            : null;
+        if (generationTemplate)
+            firmTemplates.push(generationTemplate.templateId);
         // Firm templates and firm files may shape the document; they are not
         // case sources, so they get no aliases.
         const firmCaseId = firmTemplates?.length ||
@@ -3827,7 +3862,7 @@ export function createLexHttpApp(options) {
             ? req.body
                 .templateId
                 .trim()
-            : undefined;
+            : generationTemplate?.templateId;
         const requestedStyleValid = [
             "lex-classic-clean-v1",
             "lex-light-legal-design-v1",
@@ -4044,6 +4079,7 @@ export function createLexHttpApp(options) {
                         : {})
                 }));
                 res.status(201).json({
+                    ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
                     sessionId: generated
                         .sessionId,
                     artifact: ready.artifact,
@@ -4086,6 +4122,7 @@ export function createLexHttpApp(options) {
                     : {})
             }));
             res.status(201).json({
+                ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
                 sessionId: generated
                     .sessionId,
                 artifact: tokenized
@@ -4841,6 +4878,26 @@ export function createLexHttpApp(options) {
         }
         return picked;
     };
+    // The firm's default template for the document the message asks to draft (none
+    // picked by the user): used as a firm template and, for a file, as its style.
+    async function firmDefaultTemplate(res, query, documentType) {
+        if (!options.sharedTemplateStore || !options.caseAccessService)
+            return null;
+        const kind = draftingTarget(latestUserTurn(parseSkillSelectionEnvelope(query).query), documentType);
+        if (!kind)
+            return null;
+        try {
+            const firm = options.caseAccessService.getFirmKnowledgeWorkspace(responseAuthContext(res));
+            if (!firm)
+                return null;
+            options.caseAccessService.assertAccess(responseAuthContext(res), firm.caseId, "READ");
+            const template = defaultTemplateFor(await options.sharedTemplateStore.listTemplates(), kind);
+            return template ? { templateId: template.templateId, filename: template.filename, kind } : null;
+        }
+        catch {
+            return null;
+        }
+    }
     // Checked while the user picks files: do they fit the chosen model?
     app.post("/api/sessions/document-fit", async (req, res) => {
         const attachments = parseDocumentAttachments(req.body?.attachments);
@@ -4909,6 +4966,10 @@ export function createLexHttpApp(options) {
         const documentLimit = localModel
             ? LOCAL_MAX_DOCUMENT_ATTACHMENTS
             : MAX_DOCUMENT_ATTACHMENTS;
+        // "Napisz umowę najmu" without a picked template: the firm's default for umowa.
+        const appliedTemplate = firmTemplates.length === 0 && !localModel ? await firmDefaultTemplate(res, request.query) : null;
+        if (appliedTemplate)
+            firmTemplates.push(appliedTemplate.templateId);
         if (attachments.length + firmTemplates.length > documentLimit) {
             res.status(422).json({
                 error: "TOO_MANY_DOCUMENT_ATTACHMENTS",
@@ -6370,6 +6431,8 @@ export function createLexHttpApp(options) {
                 };
             }
             const restoredFromDocuments = restoreSessionDocumentAliases(result, options.documentService);
+            if (appliedTemplate)
+                result.firmTemplateApplied = appliedTemplate;
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
                 await rememberThreadEvidence({
                     store: options.caseMemoryStore,

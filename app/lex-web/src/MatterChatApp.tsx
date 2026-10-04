@@ -891,6 +891,9 @@ function executionMessage(
         workflowMeta +
         modelRoutingMeta +
         (execution.modeDecision ? ` · tryb ${execution.modeDecision.mode}` : "") +
+        (execution.firmTemplateApplied
+          ? ` · wzór kancelarii: ${execution.firmTemplateApplied.filename} (domyślny: ${execution.firmTemplateApplied.kind})`
+          : "") +
         (execution.mandatoryPath
           ? ` · ścieżka ${execution.mandatoryPath.profile === "PELNY" ? "PEŁNA" : "LEKKA"} ${execution.mandatoryPath.steps.filter((step) => step.status === "MET").length}/${execution.mandatoryPath.steps.filter((step) => step.status === "MET" || step.status === "MISSING").length}`
           : "") +

@@ -766,6 +766,8 @@ export type SessionExecutionResponse = {
   mandatoryPath?: MandatoryPathReport;
   // ACTIVATION-MATRIX: the next skill of the pipeline after this one (entry -> next).
   pipelineNext?: { skill: string; reason: string };
+  // The firm's default template the application used (none picked by the user).
+  firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecision;
   provider: ProviderId;
   model: string;

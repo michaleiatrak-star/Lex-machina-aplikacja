@@ -1428,6 +1428,13 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/firm-knowledge" | "/api/shared/templates" => {
             method == "GET" || method == "POST"
         }
+        // Rodzaj wzoru kancelarii i wzór domyślny dla rodzaju (administrator).
+        _ if path.starts_with("/api/shared/templates/template_") && path.ends_with("/role") => {
+            let id = &path["/api/shared/templates/".len()..path.len() - "/role".len()];
+            method == "PUT"
+                && id.len() == "template_".len() + 32
+                && id["template_".len()..].bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        }
         _ if path.starts_with("/api/admin/users") => {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
@@ -2148,6 +2155,8 @@ mod tests {
         assert!(route_allowed("PUT", "/api/invoices/settings/seller"));
         assert!(route_allowed("PUT", "/api/invoices/settings/defaults"));
         assert!(route_allowed("POST", "/api/widgets"));
+        assert!(route_allowed("PUT", &format!("/api/shared/templates/template_{}/role", "ab".repeat(16))));
+        assert!(!route_allowed("PUT", "/api/shared/templates/template_x/role"));
         assert!(route_allowed("GET", "/api/invoices/templates"));
         assert!(route_allowed("POST", "/api/invoices/templates"));
         assert!(route_allowed("PUT", &format!("/api/invoices/templates/tpl_{}", "ab".repeat(16))));

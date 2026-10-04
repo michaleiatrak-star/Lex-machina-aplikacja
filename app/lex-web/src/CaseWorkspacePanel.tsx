@@ -5,8 +5,11 @@ import {
 import {
   listCaseFiles,
   listCaseTemplates,
+  setSharedTemplateRole,
   uploadSharedTemplate,
+  TEMPLATE_KINDS,
   type SharedTemplateManifest,
+  type TemplateKindId,
   type StoredUploadResponse
 } from "./api.js";
 
@@ -96,6 +99,22 @@ export function CaseWorkspacePanel({
     }
   }
 
+  // The firm decides what a template is for and which one is the default per kind.
+  async function changeRole(
+    template: SharedTemplateManifest,
+    role: { kind: TemplateKindId; isDefault: boolean } | null
+  ): Promise<void> {
+    setLoading(true);
+    setError("");
+    try {
+      setTemplates((await setSharedTemplateRole(template.templateId, role)).templates);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="case-workspace-browser">
       <div className="case-workspace-column">
@@ -162,7 +181,7 @@ export function CaseWorkspacePanel({
         </p>
         <h3>Wzory kancelarii</h3>
         <p className="field-help">
-          Jeden wzór jest przechowywany raz i może być referencjonowany z każdej sprawy, do której użytkownik ma dostęp.
+          Jeden wzór jest przechowywany raz i może być referencjonowany z każdej sprawy, do której użytkownik ma dostęp. Wzór domyślny dla rodzaju (np. umowa, regulamin, pozew) jest używany automatycznie, gdy użytkownik zleca sporządzenie takiego dokumentu bez wybrania wzoru.
         </p>
 
         {isAdmin && caseId && (
@@ -208,11 +227,43 @@ export function CaseWorkspacePanel({
                       "pl-PL"
                     )} B
                   </span>
-                  <small>
-                    {template.generationReady
-                      ? "gotowy do generatora"
-                      : "biblioteka gotowa; integracja z generatorem w G35C"}
-                  </small>
+                  {isAdmin ? (
+                    <span className="workspace-template-role">
+                      <select
+                        aria-label={`Rodzaj dokumentu: ${template.filename}`}
+                        value={template.role?.kind ?? ""}
+                        disabled={loading}
+                        onChange={(event) => {
+                          const kind = event.target.value as TemplateKindId | "";
+                          void changeRole(template, kind ? { kind, isDefault: template.role?.isDefault ?? false } : null);
+                        }}
+                      >
+                        <option value="">rodzaj: nie ustawiono</option>
+                        {TEMPLATE_KINDS.map(([id, label]) => (
+                          <option key={id} value={id}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={template.role?.isDefault ?? false}
+                          disabled={loading || !template.role}
+                          onChange={(event) => {
+                            if (template.role) void changeRole(template, { kind: template.role.kind, isDefault: event.target.checked });
+                          }}
+                        />{" "}
+                        domyślny dla tego rodzaju
+                      </label>
+                    </span>
+                  ) : (
+                    <small>
+                      {template.role
+                        ? `${TEMPLATE_KINDS.find(([id]) => id === template.role!.kind)?.[1] ?? template.role.kind}${template.role.isDefault ? " · domyślny" : ""}`
+                        : "rodzaj nieustawiony"}
+                    </small>
+                  )}
                 </li>
               )
             )}
