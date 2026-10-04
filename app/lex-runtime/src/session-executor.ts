@@ -1,3 +1,4 @@
+import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   addMissingVerificationMarkers,
@@ -302,6 +303,8 @@ export type SessionExecutionRequest = {
     stage: ProcessPleadingStage;
     checkpoint: ProcessPleadingCheckpoint;
     mode: ProcessPleadingMode;
+    // The case's checkpoint register (closed / N/A with reason / open), from the workflow state.
+    register?: CheckpointRegisterEntry[];
   };
   courtWorkflowContext?: {
     stage: Exclude<

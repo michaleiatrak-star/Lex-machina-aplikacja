@@ -1,3 +1,4 @@
+import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
 import {
   PERSON_CASES,
@@ -172,6 +173,7 @@ import type {
 } from "../process-pleading-state.js";
 import {
   completeProcessExecution,
+  processCheckpointRegister,
   requireProcessExecutionPermit,
   type ProcessExecutionPermit
 } from "../process-pleading-execution-gate.js";
@@ -9249,7 +9251,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           stage: permit.stage,
           checkpoint:
             permit.checkpoint,
-          mode: permit.mode
+          mode: permit.mode,
+          register: processCheckpointRegister(state!)
         };
         processContext = {
           caseId:
@@ -9998,7 +10001,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   ),
             execute:
               async (
-                permit
+                permit,
+                current
               ) => {
                 const nodeRequest:
                   SessionExecutionRequest = {
@@ -10009,7 +10013,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       checkpoint:
                         permit.checkpoint,
                       mode:
-                        permit.mode
+                        permit.mode,
+                      register: processCheckpointRegister(current)
                     }
                   };
                 const nodeResult =
@@ -10033,7 +10038,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 return {
                   result:
                     nodeResult,
-                  commit
+                  commit,
+                  notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
                 };
               },
             persist:
@@ -10930,7 +10936,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     completeProcessExecution(
                       current,
                       processContext!
-                        .permit
+                        .permit,
+                      evaluateCheckpointOutput(processContext!.permit.checkpoint, result.answer ?? "").notApplicable
                     );
                   return await options
                     .processWorkflowStore!

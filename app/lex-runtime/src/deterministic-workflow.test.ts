@@ -432,7 +432,7 @@ describe("deterministic legal workflow", () => {
       const report =
         evaluateDeterministicWorkflowOutput(
           plan,
-          "RAPORT W1\nAnaliza faktów i dowodów. Pismo pozostaje projektem.",
+          "RAPORT W1\nAnaliza faktów i dowodów. Pismo pozostaje projektem.\n✅ CHECKPOINT [CP-W1] RAPORT W1 KOŃCOWY — ZAKOŃCZONY",
           {
             processCheckpoint:
               "CP-W1"
@@ -447,6 +447,10 @@ describe("deterministic legal workflow", () => {
         );
       expect(report.missing)
         .toEqual([]);
+      // Without the checkpoint report the checkpoint is not closed.
+      expect(
+        evaluateDeterministicWorkflowOutput(plan, "Analiza faktów i dowodów.", { processCheckpoint: "CP-W1" }).missing
+      ).toEqual(["RAPORT_CP-W1"]);
     }
   );
 

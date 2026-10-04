@@ -54,7 +54,7 @@ export async function runBoundedProcessAutoSequence(args) {
                 blockedResult: node.result
             };
         }
-        const next = completeProcessExecution(state, permit);
+        const next = completeProcessExecution(state, permit, node.notApplicable ?? null);
         const persisted = validateProcessPleadingState(await args.persist(state, next));
         assertSameWorkflow(state, persisted);
         if (persisted.revision !==

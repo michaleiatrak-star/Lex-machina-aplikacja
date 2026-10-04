@@ -1,4 +1,4 @@
-import { markProcessCheckpointReady, nextRequiredProcessCheckpoint, validateProcessPleadingState } from "./process-pleading-state.js";
+import { markProcessCheckpointNotApplicable, markProcessCheckpointReady, nextRequiredProcessCheckpoint, validateProcessPleadingState } from "./process-pleading-state.js";
 export function requireProcessExecutionPermit(input) {
     if (!input) {
         throw new Error("PROCESS_PLEADING_STATE_REQUIRED");
@@ -24,7 +24,9 @@ export function requireProcessExecutionPermit(input) {
         mode: state.mode
     };
 }
-export function completeProcessExecution(input, permit) {
+export function completeProcessExecution(input, permit, 
+// A conditional checkpoint the answer found not applicable (with its reason).
+notApplicable = null) {
     const state = validateProcessPleadingState(input);
     if (state.revision !==
         permit.revision) {
@@ -39,5 +41,19 @@ export function completeProcessExecution(input, permit) {
         permit.checkpoint) {
         throw new Error("PROCESS_PLEADING_CHECKPOINT_CONFLICT");
     }
+    if (notApplicable && !MAIN_CHECKPOINTS.has(permit.checkpoint)) {
+        return markProcessCheckpointNotApplicable(state, permit.checkpoint, notApplicable);
+    }
     return markProcessCheckpointReady(state, permit.checkpoint);
+}
+// Checkpoints the state machine never allows as N/A (CP-W1, CP-PRE-W2, CP-ATAK, W3).
+const MAIN_CHECKPOINTS = new Set(["CP-1a", "CP-W1", "CP-PRE-W2", "CP-ATAK", "CP-PODMIOT", "CP-QUALITY", "CP-AUDYT", "CP-PEER"]);
+/** The case's checkpoint register for the model (closed, N/A with reason, open). */
+export function processCheckpointRegister(input) {
+    const state = validateProcessPleadingState(input);
+    return Object.keys(state.checkpoints).map((checkpoint) => {
+        const status = state.checkpoints[checkpoint];
+        const reason = status === "NA" ? [...state.history].reverse().find((event) => event.type === "CHECKPOINT_NA" && event.checkpoint === checkpoint)?.reason : undefined;
+        return { checkpoint, status, ...(reason ? { reason } : {}) };
+    });
 }

@@ -1,3 +1,4 @@
+import { evaluateCheckpointOutput } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import type { LegalCorpusAuditEvent } from "./legal-corpus-tool-runtime.js";
 import type { LexSkillRegistry } from "./registry.js";
@@ -609,31 +610,34 @@ export function evaluateDeterministicWorkflowOutput(
       context?.processCheckpoint ===
         "CP-PEER";
 
+    // The active checkpoint's report contract (process-checkpoint-contract).
+    const contract = context?.processCheckpoint
+      ? evaluateCheckpointOutput(context.processCheckpoint, text)
+      : null;
     if (!finalCheckpoint) {
       const prematureFinalStatus =
         /STATUS\s+PISMA\s*[:=]\s*(?:✅\s*)?(?:FINAL\s*[—-]\s*)?GOTOWE(?:\s+DO\s+ZŁOŻENIA)?/u
           .test(normalized);
+      const missing = [
+        ...(prematureFinalStatus ? ["CP-PEER_REQUIRED_FOR_FINAL_STATUS"] : []),
+        ...(contract?.missing ?? [])
+      ];
       return {
         workflow: plan.id,
         mode:
           "PROCESS_CHECKPOINT",
-        required: [],
+        required: context?.processCheckpoint ? [`RAPORT_${context.processCheckpoint}`] : [],
         observed:
           prematureFinalStatus
             ? [
                 "PREMATURE_FINAL_STATUS"
               ]
             : [],
-        missing:
-          prematureFinalStatus
-            ? [
-                "CP-PEER_REQUIRED_FOR_FINAL_STATUS"
-              ]
-            : [],
+        missing,
         orderValid:
           !prematureFinalStatus,
         result:
-          prematureFinalStatus
+          missing.length
             ? "BLOCKED"
             : "PASS"
       };
@@ -672,6 +676,7 @@ export function evaluateDeterministicWorkflowOutput(
             positions[index - 1]!
       );
 
+    const finalMissing = [...missing, ...(contract?.missing ?? [])];
     return {
       workflow: plan.id,
       mode: "PROCESS_FINAL",
@@ -679,12 +684,10 @@ export function evaluateDeterministicWorkflowOutput(
       observed: [
         ...observed
       ],
-      missing: [
-        ...missing
-      ],
+      missing: finalMissing,
       orderValid,
       result:
-        missing.length === 0 &&
+        finalMissing.length === 0 &&
         orderValid
           ? "PASS"
           : "BLOCKED"

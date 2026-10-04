@@ -1,3 +1,4 @@
+import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import { PERSON_CASES } from "../privacy/person-morphology.js";
 import { LocalOfficeEditor, editableMediaType } from "../office-edit.js";
 import { deanonymizeModel } from "../deanonymize-file.js";
@@ -33,7 +34,7 @@ import { parseSkillSelectionEnvelope, resolveAdditionalSkills, SKILL_SELECTION_E
 import { isTrivialChatCommand } from "../execution-engine.js";
 import { assessMatterComplexity, describeMatterComplexity } from "../matter-complexity.js";
 import { createDeterministicWorkflowPlan } from "../deterministic-workflow.js";
-import { completeProcessExecution, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
+import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
 import { PROCESS_AUTO_MAX_STEPS, runBoundedProcessAutoSequence } from "../process-pleading-auto-runner.js";
 import { applyDeterministicProcessApplicability, evidenceInventoryFromUploads } from "../process-pleading-applicability.js";
 import { createCourtAnalysisState, nextCourtAnalysisCheckpoint } from "../court-analysis-state.js";
@@ -5432,7 +5433,8 @@ export function createLexHttpApp(options) {
                 request.processWorkflowContext = {
                     stage: permit.stage,
                     checkpoint: permit.checkpoint,
-                    mode: permit.mode
+                    mode: permit.mode,
+                    register: processCheckpointRegister(state)
                 };
                 processContext = {
                     caseId: processCaseId,
@@ -5809,13 +5811,14 @@ export function createLexHttpApp(options) {
                             expectedRevision: current.revision
                         });
                     }),
-                    execute: async (permit) => {
+                    execute: async (permit, current) => {
                         const nodeRequest = {
                             ...request,
                             processWorkflowContext: {
                                 stage: permit.stage,
                                 checkpoint: permit.checkpoint,
-                                mode: permit.mode
+                                mode: permit.mode,
+                                register: processCheckpointRegister(current)
                             }
                         };
                         const nodeResult = await options
@@ -5832,7 +5835,8 @@ export function createLexHttpApp(options) {
                                 "PASS";
                         return {
                             result: nodeResult,
-                            commit
+                            commit,
+                            notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
                         };
                     },
                     persist: async (previous, next) => await options
@@ -6404,7 +6408,7 @@ export function createLexHttpApp(options) {
                                 throw new Error("PROCESS_PLEADING_STATE_CONFLICT");
                             }
                             const next = completeProcessExecution(current, processContext
-                                .permit);
+                                .permit, evaluateCheckpointOutput(processContext.permit.checkpoint, result.answer ?? "").notApplicable);
                             return await options
                                 .processWorkflowStore
                                 .saveProcessPleadingState({

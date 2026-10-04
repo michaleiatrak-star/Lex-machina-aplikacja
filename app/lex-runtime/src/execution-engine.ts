@@ -1,7 +1,9 @@
+import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
+import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -336,6 +338,7 @@ export class LexExecutionEngine {
       stage: ProcessPleadingStage;
       checkpoint: ProcessPleadingCheckpoint;
       mode: ProcessPleadingMode;
+      register?: CheckpointRegisterEntry[];
     };
     courtWorkflowContext?: {
       stage: Exclude<
@@ -1091,6 +1094,19 @@ export class LexExecutionEngine {
           executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
         }
       }
+    }
+    // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
+    // (CP-REJESTR) and what its report must show, with the case's register.
+    if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
+      const checkpointFiles = loadCheckpointResources(this.registry, args.processWorkflowContext.checkpoint, new Set(CORE_LEGAL_RESOURCES));
+      for (const item of checkpointFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
+      emit(
+        "gate",
+        "PROCESS_CHECKPOINT_RESOURCES",
+        "OK",
+        `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`
+      );
+      executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
     }
     // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
     if (!args.model.startsWith("local/")) {
@@ -1864,6 +1880,47 @@ export class LexExecutionEngine {
       );
     }
 
+    // The checkpoint's report contract: one correcting round, then the output gate decides.
+    let output = response.fullText;
+    if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
+      const checkpoint = args.processWorkflowContext.checkpoint;
+      const first = evaluateCheckpointOutput(checkpoint, output);
+      if (first.result === "BLOCKED") {
+        let remaining = first.missing;
+        try {
+          const corrected = await this.providers.stream(args.provider, {
+            model: args.model,
+            systemPrompt,
+            messages: [
+              ...(args.documentContext
+                ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
+                : []),
+              { role: "user", content: effectiveQuery },
+              { role: "assistant", content: output },
+              { role: "user", content: checkpointCorrectionPrompt(checkpoint, first.missing) }
+            ],
+            reasoning: "none"
+          });
+          const text = corrected.fullText.trim();
+          if (text) {
+            const second = evaluateCheckpointOutput(checkpoint, text);
+            if (second.missing.length < first.missing.length) {
+              output = text;
+              remaining = second.missing;
+            }
+          }
+        } catch {
+          remaining = first.missing;
+        }
+        emit(
+          "gate",
+          "PROCESS_CHECKPOINT_CORRECTION",
+          remaining.length ? "BLOCKED" : "OK",
+          `checkpoint=${checkpoint};missing=${first.missing.join(",")};remaining=${remaining.join(",")}`
+        );
+      }
+    }
+
     emit(
       "gate",
       "G7_VERTICAL_SLICE",
@@ -1877,7 +1934,7 @@ export class LexExecutionEngine {
       executionSkills: skillSelection.executionSkills,
       domainSkills: skillSelection.domainSkills,
       workflowPlan,
-      output: response.fullText,
+      output,
       events
     };
   }
