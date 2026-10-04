@@ -1045,6 +1045,7 @@ export type SessionExecutionResponse = {
     estimatedDocumentTokens: number;
     instructionChars?: number;
     instructionSections?: Array<{ label: string; chars: number }>;
+    charsPerTokenEstimate?: number;
     selectedChunks: number;
     omittedChunks: number;
     selectedDocuments: number;
