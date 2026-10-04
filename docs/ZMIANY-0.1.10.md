@@ -49,9 +49,17 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 47 | `3fd177c` | G8: akt dla przepisu bez skrótu (porównanie art. 233/234/238), artykuł i paragraf z jednym znacznikiem, bez dubla w źródłach; tylko Windows |
 | **0.1.11** | tag `v0.1.11` | Nowe wydanie zbiorcze (hotfix 1–47), wersja aplikacji 0.1.11; tylko Windows |
 | **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (także źródła pomocnicze z tych serwisów): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; pozostałe źródła tylko link; eksport faktury do PDF z logo; tylko Windows |
+| **0.1.14** | gałąź `claude/modest-knuth-re40mu` | Pisma procesowe: moduły i kontrakt każdego checkpointu, N/A z powodem, rejestr kroków; pisma proste według katalogu schematów, redagowanie a analiza pisma, moduły DR z mapy aktów, moduły shared skilli i etapów; Windows i macOS |
 | **0.1.13** | gałąź `claude/modest-knuth-re40mu` | Rodzaj dokumentu i materiałów dowodowych, macierz aktywacji, kontrakty skilli wykonawczych, moduły warunkowe i etapowe, następny etap, wzory domyślne kancelarii, hard gate (interpretacje, stawki i terminy, data zdarzenia, ścieżka obowiązkowa jako bramka), prywatność danych przykładowych; Windows i macOS |
 
 ---
+
+## 0.1.14
+
+- `process-checkpoint-contract.ts`: pliki każdego checkpointu (CP-REJESTR), kontrakt raportu (PRE-W2, RAPORT D, izolacja W2, ST-FINAL), runda poprawkowa; N/A checkpointu warunkowego w stanie (`completeProcessExecution`), rejestr w `processWorkflowContext.register`.
+- `skill-schema-catalog.ts`: schematy pism prostych, `draftingSchema` (redagowanie a analiza); `domain-module-map.ts`: routing błyskawiczny i MAPA-AKTOW, krok MODUŁ-AKTU.
+- `skill-module-map.ts`: drzewa diagnostyczne z kodami, instrukcje „wczytaj”, moduły MOD-* etapów W1–W3; `executive-skill-contract.ts`: `dependencies.required`.
+- `task-routing.ts`: Test A, porozumienia, protokoły przesłuchań, analiza całościowa, raporty.
 
 ## 0.1.13
 
