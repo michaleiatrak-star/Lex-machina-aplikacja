@@ -45,3 +45,59 @@ describe("AUTO: the matter is identified from the question, not from a placehold
     expect(result.mandatoryPath?.routingTrace).not.toContain("dr-01");
   }, 60_000);
 });
+
+describe("AUTO: a skill counts as read only when its SKILL.md was read to the end", () => {
+  async function run(parts: number) {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const providers = new ProviderRegistry();
+    const results: Array<Record<string, unknown>> = [];
+    providers.register({
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        if (received.runTools && received.tools?.length) {
+          let offset = 0;
+          for (let part = 0; part < parts; part += 1) {
+            const [result] = await received.runTools([
+              { id: `r${part}`, name: "read_legal_resource", input: { skill: "dr-02-prawo-cywilne-rodzinne-gospodarcze", path: "SKILL.md", offset } }
+            ]);
+            const payload = JSON.parse(result!.content) as Record<string, unknown>;
+            results.push(payload);
+            offset = Number(payload.nextOffset ?? 0);
+          }
+        }
+        return { fullText: "Odpowiedzialność deliktowa: art. 415 KC." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    const result = await executor.execute({
+      query: "Sąsiad uszkodził mi samochód, czy należy mi się odszkodowanie?",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "PRAWNIK"
+    });
+    return { result, results };
+  }
+
+  it("a first part only: the register says so and the model is told to read on", async () => {
+    const { result, results } = await run(1);
+    expect(String(results[0]!.instruction)).toContain("does not count as read");
+    expect(result.mandatoryPath!.steps.find((step) => step.id === "SKILL:dr-02-prawo-cywilne-rodzinne-gospodarcze")).toMatchObject({
+      status: "MISSING",
+      evidence: expect.stringContaining("tylko w części")
+    });
+    expect(result.mandatoryPath!.routingTrace).toContain("ROUTER-WCZYTANY: NIE");
+  }, 60_000);
+
+  it("the whole file: the domain skill and the preloaded facade are read", async () => {
+    const { result } = await run(2);
+    const steps = result.mandatoryPath!.steps;
+    expect(steps.find((step) => step.id === "SKILL:dr-02-prawo-cywilne-rodzinne-gospodarcze")).toMatchObject({ status: "MET", by: "MODEL" });
+    expect(steps.find((step) => step.id === "SKILL:prawo-polskie-v2")).toMatchObject({ status: "MET", by: "APLIKACJA" });
+    expect(result.mandatoryPath!.routingTrace).toContain("PRIMARY: dr-02-prawo-cywilne-rodzinne-gospodarcze — ROUTER-WCZYTANY: TAK");
+  }, 60_000);
+});

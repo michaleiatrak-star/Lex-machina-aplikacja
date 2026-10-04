@@ -316,15 +316,26 @@ export function evaluateMandatoryPath(model, facts) {
     }
     // SKILL: the skills called in the turn and their runtime-required reads.
     for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => name && name !== "AUTO")) {
-        const read = facts.events.some((event) => event.type === "skill_read" && event.target === skill && event.status === "OK");
+        const events = facts.events.filter((event) => event.type === "skill_read" && event.target === skill);
+        const read = events.find((event) => event.status === "OK");
+        const partial = events.find((event) => event.status === "DEGRADED");
+        const how = String(read?.detail?.how ?? "");
         steps.push({
             layer: "SKILL",
             id: `SKILL:${skill}`,
             label: `${skill}/SKILL.md`,
             requirement: "CORE",
             status: read ? "MET" : "MISSING",
-            by: "APLIKACJA",
-            evidence: read ? "wczytany do kontekstu" : "brak odczytu skilla"
+            by: how === "tool" || how === "native" ? "MODEL" : "APLIKACJA",
+            evidence: read
+                ? how === "tool"
+                    ? `przeczytany w całości (${String(read.detail?.totalChars ?? "")} znaków)`
+                    : how === "native"
+                        ? "odczyt modelu narzędziem Read"
+                        : "wczytany do kontekstu"
+                : partial
+                    ? `przeczytany tylko w części: ${String(partial.detail?.readChars ?? "?")} z ${String(partial.detail?.totalChars ?? "?")} znaków (dalsza część przez nextOffset)`
+                    : "brak odczytu skilla"
         });
     }
     for (const event of facts.events.filter((item) => item.target === "G39H_WORKFLOW_RESOURCE_READS")) {
@@ -457,6 +468,7 @@ export function mandatoryPathPrompt(report, at) {
         `# PRZEBIEG POPRZEDNIEJ ODPOWIEDZI (rejestr aplikacji, profil ${report.profile === "PELNY" ? "PEŁNY" : "LEKKI"}, ${at.slice(0, 16).replace("T", " ")})`,
         "Rejestr kroków obowiązkowych prowadzi aplikacja na podstawie audytu, nie relacji modelu. Pytany o przebieg, odpowiadaj z tego rejestru; nie twierdź, że krok nie przeszedł, gdy rejestr go potwierdza, i odwrotnie.",
         ...relevant.map((step) => `- [${step.layer}] ${step.label}: ${MARK[step.status]}${step.by ? ` (${step.by})` : ""} — ${step.evidence}`),
+        ...(report.routingTrace ? ["Ślad routingu (KROK 3A, wypisany przez aplikację):", report.routingTrace] : []),
         report.complete ? "Wszystkie wyzwolone kroki spełnione." : `Brakujące kroki: ${report.missing.join(", ")}.`
     ].join("\n");
 }

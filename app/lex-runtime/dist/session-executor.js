@@ -1191,6 +1191,16 @@ export class SafeSessionExecutor {
                 selection.domainSkills;
             execution.executionSkills =
                 selection.executionSkills;
+            // Every skill the model read (or the app preloaded) is a skill_read in the
+            // audit; a SKILL.md read only in part is DEGRADED, not a read skill.
+            for (const read of corpusTools.skillReads()) {
+                if (audit.events.some((event) => event.type === "skill_read" && event.target === read.skill && event.status === "OK"))
+                    continue;
+                audit.record("skill_read", read.skill, read.complete ? "OK" : "DEGRADED", {
+                    how: read.how,
+                    ...(read.how === "tool" ? { readChars: read.read, totalChars: read.total } : {})
+                });
+            }
             // Never the placeholder: the DR the model read, else the router.
             execution.primarySkill =
                 selection.primarySkill ?? ROUTER_SKILL;

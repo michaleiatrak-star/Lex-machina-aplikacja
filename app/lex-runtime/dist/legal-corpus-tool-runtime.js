@@ -271,6 +271,35 @@ export class LegalCorpusToolRuntime {
     events = [];
     // Skills whose SKILL.md the model read, in order.
     readSkills = [];
+    // SKILL.md coverage: characters read of the whole file (a truncated first
+    // part is not a read skill; the gates and pipeline often sit at the end).
+    skillCoverage = new Map();
+    cover(skill, total, from, to, how) {
+        const entry = this.skillCoverage.get(skill) ?? { total, ranges: [], how };
+        entry.total = total;
+        entry.ranges.push([from, to]);
+        if (how !== "tool")
+            entry.how = how;
+        this.skillCoverage.set(skill, entry);
+    }
+    /** Per read skill: characters read, total, complete. */
+    skillReads() {
+        return this.readSkills.map((skill) => {
+            const entry = this.skillCoverage.get(skill);
+            if (!entry || entry.how !== "tool")
+                return { skill, read: entry?.total ?? 0, total: entry?.total ?? 0, complete: true, how: entry?.how ?? "preloaded" };
+            const ranges = [...entry.ranges].sort((a, b) => a[0] - b[0]);
+            let read = 0;
+            let end = 0;
+            for (const [from, to] of ranges) {
+                if (to <= end)
+                    continue;
+                read += to - Math.max(from, end);
+                end = to;
+            }
+            return { skill, read, total: entry.total, complete: read >= entry.total, how: "tool" };
+        });
+    }
     qualifierDelivered = false;
     constructor(registry, 
     // AUTO for account/API models: the model picks skills itself; the runtime
@@ -298,6 +327,9 @@ export class LegalCorpusToolRuntime {
         if (skill && parts.length === 2 && parts[1] === "SKILL.md" && !this.readSkills.includes(skill)) {
             this.readSkills.push(skill);
         }
+        // The host's own Read returns the file (line-limited); its coverage is not visible here.
+        if (skill && parts.length === 2 && parts[1] === "SKILL.md")
+            this.cover(skill, 0, 0, 0, "native");
         if (skill?.startsWith(CRIMINAL_DOMAIN_PREFIX) && relativePath.endsWith(`/${CRIMINAL_QUALIFIER_INDEX}`)) {
             this.qualifierDelivered = true;
         }
@@ -318,6 +350,8 @@ export class LegalCorpusToolRuntime {
         if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md") && !this.readSkills.includes(skill)) {
             this.readSkills.push(skill);
         }
+        if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md"))
+            this.cover(skill, 0, 0, 0, "preloaded");
         this.events.push({ tool: READ_RESOURCE, target: relativePath, decision: "ALLOW", detail: { preloaded: true } });
     }
     /**
@@ -618,6 +652,8 @@ export class LegalCorpusToolRuntime {
                 !this.readSkills.includes(targetSkill)) {
                 this.readSkills.push(targetSkill);
             }
+            if (isSkillEntry)
+                this.cover(targetSkill, text.length, offset, offset + content.length, "tool");
             // A criminal-law matter always goes through the qualifier: it is
             // delivered with the first DR-03 skill entry, not left to the model.
             let requiredModule;
@@ -669,6 +705,11 @@ export class LegalCorpusToolRuntime {
                 totalChars: text.length,
                 nextOffset,
                 content,
+                ...(isSkillEntry && nextOffset !== null
+                    ? {
+                        instruction: `SKILL.md of ${targetSkill} continues (${text.length} characters). Read the rest with offset=${nextOffset} before applying the skill: a skill read only in part does not count as read, and its pipeline and gates are often at the end.`
+                    }
+                    : {}),
                 ...(requiredRouter
                     ? {
                         requiredRouter: {
