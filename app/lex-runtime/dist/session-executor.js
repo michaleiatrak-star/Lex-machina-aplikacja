@@ -1,3 +1,4 @@
+import { compactForModel } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
@@ -1002,6 +1003,19 @@ export class SafeSessionExecutor {
                 step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
             }
         }
+        // Sections the skill's author marked as executed by the application go to the
+        // model as a one-line reference (skill-sections.ts); the audit names them.
+        const forModel = (resource, content) => {
+            const result = compactForModel(content);
+            if (result.compacted.length) {
+                audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
+                    resource,
+                    sections: result.compacted.map((item) => `${item.component}:${item.heading}`),
+                    chars: result.compacted.reduce((sum, item) => sum + item.chars, 0)
+                });
+            }
+            return result.text;
+        };
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
@@ -1012,7 +1026,7 @@ export class SafeSessionExecutor {
                 }
                 contextResources.add(resource);
                 audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
-                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
             }
             step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
             pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
@@ -1065,7 +1079,7 @@ export class SafeSessionExecutor {
                     ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2" || taskRoute.then === "pisma-procesowe-v3"
                         ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
                         : []),
-                    text
+                    forModel(`${skill}/SKILL.md`, text)
                 ].join("\n\n"));
                 const contract = executiveContract(this.registry, skill);
                 if (contract) {
@@ -1095,7 +1109,7 @@ export class SafeSessionExecutor {
                         continue;
                     contextResources.add(resource);
                     audit.record("resource_read", resource, "OK", { detail: "runtime-preload;executive-shared" });
-                    pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${content}`);
+                    pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${forModel(resource, content)}`);
                 }
                 // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
                 for (const resource of taskRoute.modules ?? []) {
@@ -1569,7 +1583,7 @@ export class SafeSessionExecutor {
                     continue;
                 contextResources.add(resource);
                 audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path;escalated", profile: effectiveProfile });
-                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
             }
             pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
         }

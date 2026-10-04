@@ -1,3 +1,4 @@
+import { compactForModel } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
@@ -1047,7 +1048,11 @@ export class LexExecutionEngine {
                     return [];
                 const relative = `${path.basename(skill.directory)}/SKILL.md`;
                 onPreloaded(relative);
-                return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+                const compact = compactForModel(fs.readFileSync(file, "utf8"));
+                if (compact.compacted.length) {
+                    emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+                }
+                return [{ name, relative, text: compact.text }];
             })
             : [];
         const preloadedPrompt = preloaded.map((item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`);

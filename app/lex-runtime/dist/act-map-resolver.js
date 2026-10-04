@@ -1,3 +1,4 @@
+import { compactForModel } from "./skill-sections.js";
 import fs from "node:fs";
 import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
@@ -339,6 +340,7 @@ export function loadActModules(registry, modules, inContext, budget = ACT_MODULE
         }
         if (!content.trim())
             continue;
+        content = compactForModel(content).text;
         if (content.length > left) {
             toRead.push(module);
             continue;

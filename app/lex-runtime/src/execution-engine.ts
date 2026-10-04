@@ -1,3 +1,4 @@
+import { compactForModel } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -2020,7 +2021,11 @@ export class LexExecutionEngine {
           if (!fs.existsSync(file)) return [];
           const relative = `${path.basename(skill.directory)}/SKILL.md`;
           onPreloaded(relative);
-          return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+          const compact = compactForModel(fs.readFileSync(file, "utf8"));
+          if (compact.compacted.length) {
+            emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+          }
+          return [{ name, relative, text: compact.text }];
         })
       : [];
     const preloadedPrompt = preloaded.map(
