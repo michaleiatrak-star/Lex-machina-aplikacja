@@ -1,3 +1,5 @@
+import { compactForModel } from "./skill-sections.js";
+import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
@@ -161,7 +163,7 @@ import {
 } from "./model-task-ownership.js";
 import { detectLegalReferences, type LegalReferenceKind } from "./finalization-gate.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
-import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
+import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
@@ -1913,6 +1915,19 @@ export class SafeSessionExecutor implements SessionExecutor {
         step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
       }
     }
+    // Sections the skill's author marked as executed by the application go to the
+    // model as a one-line reference (skill-sections.ts); the audit names them.
+    const forModel = (resource: string, content: string): string => {
+      const result = compactForModel(content);
+      if (result.compacted.length) {
+        audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
+          resource,
+          sections: result.compacted.map((item) => `${item.component}:${item.heading}`),
+          chars: result.compacted.reduce((sum, item) => sum + item.chars, 0)
+        });
+      }
+      return result.text;
+    };
     if (mandatoryModel && legalTurn) {
       const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
       for (const resource of preloaded) {
@@ -1923,7 +1938,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         contextResources.add(resource);
         audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
-        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
       }
       step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
       pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
@@ -1932,6 +1947,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the router requires; the app loads it in full with its contract (mechanically,
     // as in the mechanical mode) instead of leaving the choice to the model.
     let taskRoute: TaskDecision | null = null;
+    let routingMaterials: Array<{ category: string; evidence: boolean; label: string; kind?: string }> = [];
     if (
       mandatoryModel &&
       legalTurn &&
@@ -1953,6 +1969,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
           : [])
       ];
+      routingMaterials = materials;
       taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest(), {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
@@ -1977,7 +1994,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2" || taskRoute.then === "pisma-procesowe-v3"
               ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
               : []),
-            text
+            forModel(`${skill}/SKILL.md`, text)
           ].join("\n\n")
         );
         const contract = executiveContract(this.registry, skill);
@@ -2006,7 +2023,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           if (!content) continue;
           contextResources.add(resource);
           audit.record("resource_read", resource, "OK", { detail: "runtime-preload;executive-shared" });
-          pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${content}`);
+          pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${forModel(resource, content)}`);
         }
         // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
         for (const resource of taskRoute.modules ?? []) {
@@ -2628,7 +2645,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (!content) continue;
         contextResources.add(resource);
         audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path;escalated", profile: effectiveProfile });
-        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+        pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
       }
       pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
     }
@@ -2690,6 +2707,14 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // The model's own ⚠️ at a statute does not stop the application from
     // verifying it: status comes from the registry only.
+    // KROK 7: the model's closing disclaimer is the fixed text of shared/DISCLAIMER.md.
+    // It is cut off before the gates and put back after them (the canonical text, or
+    // the model's own when the application adds none).
+    const modelDisclaimer =
+      legalTurn && !request.documentAstOutput && !request.model.startsWith("local/")
+        ? splitTrailingDisclaimer(modelOutput)
+        : { body: modelOutput, disclaimer: null };
+    if (modelDisclaimer.disclaimer) modelOutput = modelDisclaimer.body;
     const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
@@ -3483,8 +3508,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
-      : { text: processedDocumentCitations.text, appended: false };
-    if (disclaimed.appended) audit.record("gate", "DISCLAIMER_LAST", "OK", { by: "APLIKACJA", mode });
+      : modelDisclaimer.disclaimer
+        ? { text: `${processedDocumentCitations.text.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
+        : { text: processedDocumentCitations.text, appended: false };
+    const disclaimerBy = modelDisclaimer.disclaimer ? "MODEL" : disclaimed.appended ? "APLIKACJA" : "MODEL";
+    if (disclaimed.appended) audit.record("gate", "DISCLAIMER_LAST", "OK", { by: disclaimerBy, mode, canonical: true });
 
     // The register of the mandatory path, from what really happened in the turn.
     const evaluatedPath =
@@ -3495,7 +3523,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             profile: effectiveProfile,
             contextResources,
             answer: processedDocumentCitations.text,
-            ...(disclaimerTexts ? { disclaimerBy: disclaimed.appended ? "APLIKACJA" : "MODEL" } : {}),
+            ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),
             events: audit.events.map((event) => ({
               type: event.type,
@@ -3619,10 +3647,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     );
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
+    const nextContext = { question: pathFacts.query, materials: routingMaterials };
     const next = taskRoute
-      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations())
+      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
       : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations())
+        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
         : null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
@@ -3681,7 +3710,13 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? { widgets: widgetTools.widgets() }
         : {}),
       context: {
-        ...contextSelection.report
+        ...contextSelection.report,
+        ...(() => {
+          const budget = decodePromptBudget(
+            String([...execution.events].reverse().find((event) => event.target === "PROMPT_BUDGET")?.detail ?? "")
+          );
+          return budget ? { instructionChars: budget.chars, instructionSections: budget.sections } : {};
+        })()
       },
       audit: {
         result: completeness.result,

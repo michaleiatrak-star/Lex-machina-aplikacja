@@ -69891,6 +69891,57 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-04n — TRYB STRUKTURA: historia zmian poza plikami roboczymi skilli (6.173)
+
+### 1. ŹRÓDŁO
+Decyzja użytkownika: historia zmian SKILL.md i modułów w osobnym pliku każdego skilla; model nie czyta jej podczas pracy.
+
+### 2. POMIAR PRZED ZMIANĄ
+158 tys. znaków historii w 108 plikach roboczych 21 skilli (shared 54 tys., DR-09 18 tys., DR-06 16 tys.); w tej historii 32 odwołania do numerów Dz.U./pozycji, w tym celowo opisane nieaktualne teksty jednolite.
+
+### 3. ZMIANA
+- Sekcje `## CHANGELOG`, `## HISTORIA ZMIAN`, `## HISTORIA WERSJI`, `## Historia wersji`, `## HISTORIA NAZWY`, `## METRYCZKA PLIKU` (także z numerem, np. `## 8. Historia zmian`), wiersze `Poprzednia:` pola `changelog:` w YAML i wiersze `> **Wersja poprzednia:**` → `references/HISTORIA-ZMIAN-PLIKOW.md` danego skilla, z nagłówkiem wskazującym plik źródłowy. Treść robocza (reguły, tabele, mapy) bez zmian.
+- `references/CHANGELOG.md` bez zmian struktury (T12 liczy z niego najwyższy numer wersji skilla — numery modułów zafałszowałyby wynik).
+- Skrypty: nowy plik traktowany jak CHANGELOG w T43 (`check_sieroty.py`), `check_osiagalnosc_shared.py`, `build_ramie_kontrolne.py`, `check_status_podstaw.py`, `check_wartosci_prawne.py`. T30 (`check_utrata_tresci.py`) bez wyłączenia — numer obecny wyłącznie w historii nadal jest liczony jako obecny w skillu.
+- Wersje: 21 skilli +1 (lista w CHANGELOG każdego skilla).
+
+### 4. BŁĄD WYKRYTY PRZEZ T35 I NAPRAWIONY
+W `chronologia-sprawy-v1/SKILL.md` sekcja „Historia wersji” kończyła się blokiem kodu, a za nim — bez nagłówka — stała treść robocza (bramka HARD GATE „zakaz cytowania prawa z pamięci” z `view shared/PRAWO-HARDGATE.md` i bramka [WEJŚCIE-DOKUMENTU]). Reguła „sekcja do następnego nagłówka” przeniosła ją razem z historią; T35 wykrył brak wywołania MOD-WEJSCIE-DOKUMENTU. Treść przywrócona przed „## ARCHITEKTURA SKILLA”. Kontrola wszystkich 108 bloków: odwołania do plików, które zniknęłyby z pliku roboczego, oraz tekst za ostatnim blokiem kodu — poza chronologią wyłącznie wzmianki historyczne.
+
+## AUDYT-2026-10-04m — TRYB STRUKTURA: znaczniki sekcji wykonywanych przez aplikację (6.172)
+
+### 1. ŹRÓDŁO
+Decyzja użytkownika: przenoszenie procedur ze SKILL.md do aplikacji (etap 1 planu mechanizacji). Pomiar aplikacji: zwykła tura wysyła modelowi 200–300 tys. znaków instrukcji.
+
+### 2. KONWENCJA
+`<!-- lex:wykonuje-aplikacja: KOMPONENT -->` w linii bezpośrednio nad nagłówkiem sekcji. Aplikacja zastępuje sekcję jednolinijkowym odesłaniem tylko dla komponentów, które wykonuje (ANONIMIZACJA, ROUTING, PROFIL, RESOLVER, REJESTR-KROKOW, MAPA-AKTOW, WERYFIKACJA-ELI, G8, DISCLAIMER, CHECKPOINTY-PISM) albo HISTORIA (metadane). Poza aplikacją (claude.ai, Claude Code) znacznik jest niewidocznym komentarzem HTML — skill działa bez zmian.
+
+### 3. OZNACZONE SEKCJE (treść bez zmian)
+- `prawny-router-v3/references/KROK0A-anonimizer.md` — cały plik — ANONIMIZACJA (pseudonimizacja lokalna działa zawsze).
+- `shared/HIERARCHIA-ZRODEL.md` — metryczka wersji ujęta w sekcję „METRYCZKA PLIKU” — HISTORIA.
+- `shared/MOD-STEP-TRACKER.md` „HISTORIA ZMIAN”, `shared/MOD-WYJATEK-GATE.md` „HISTORIA NAZWY”, `chronologia-sprawy-v1/SKILL.md` „Historia wersji”, `pisma-proste-v2/SKILL.md` „CHANGELOG” — HISTORIA.
+- `shared/DISCLAIMER.md` „MECHANIZM AWARYJNY” — PROFIL (aplikacja zawsze wczytuje plik).
+- `shared/UNIVERSAL-RUNTIME-ADAPTER.md` §1A RESOLVER-SKILLI i `prawny-router-v3/SKILL.md` „PATH-SELFTEST — RESOLVER” — RESOLVER (wyszukiwanie kopii skilli na hostach; w aplikacji jedna kopia korpusu, wynik w śladzie KROK 3A).
+
+### 4. NIEOZNACZONE ŚWIADOMIE
+HIERARCHIA-ZRODEL „REALIA DOSTĘPNOŚCI RZĘDU 1” (zamknięta hierarchia czterech statusów wiąże model), „PROCEDURA” H-1…H-4 (dołączanie znaczników), ZRODLA-AKTOW-FALLBACK E-1…E-5 (kontrola temporalna wg daty czynu), router KROK 2 (gdy aplikacja nie wybierze skilla, routuje model), DISCLAIMER „TREŚĆ” (model lokalny i dokument strukturalny nie dostają zastrzeżenia od aplikacji).
+
+## AUDYT-2026-10-04l — TRYB STRUKTURA: wiersz ROUTING-MAP umowy PL–UA o zabezpieczeniu społecznym we właściwej sekcji (6.171)
+
+### 1. ŹRÓDŁO
+CI aplikacji (F-138, `check_rejestracja_modulow.py`): `dr-04 … brak w ROUTING-MAP: mod-umowa-PL-UA-zabezpieczenie-spoleczne`.
+
+### 2. PRZYCZYNA
+Wiersz dodany w AUDYT-2026-10-04i stał w sekcji `## DR-14` (obok wiersza MRG PL–UA), a T2 szuka modułów DR-04 w sekcji `## DR-04`.
+
+### 3. ZMIANA (prawo-polskie-v2 6.40)
+- Wiersz przeniesiony bez zmian treści na koniec tabeli sekcji DR-04 (adnotacja o przeniesieniu w kolumnie statusu).
+- Wiersz MRG PL–UA (DR-14): „brak modułu w systemie” przy umowie o zabezpieczeniu społecznym → odesłanie do modułu DR-04 (stan nieaktualny od AUDYT-2026-10-04i).
+- Numery Dz.U. bez zmian; status [VER] pochodzi z odczytu ELI w AUDYT-2026-10-04i (w tej sesji ELI niedostępne — HTTP 403).
+
+### 4. WYNIK
+T2: 0 rozbieżności w 16 dziedzinach.
+
 ## AUDYT-2026-10-04k — ZGŁOSZENIE #83: polskie litery w Dz.U./M.P. 2000–2009 naprawione w obu ścieżkach, konwerter dla użytkownika, test T46 (6.170)
 
 ### 1. ŹRÓDŁO ZLECENIA
@@ -69952,6 +70003,40 @@ Punkty 1 i 2 wyszły z uruchomienia kodu na realnym akcie, nie z lektury — zap
 
 ### 9. CO ZOSTAJE NIEROZWIĄZANE → F-234
 PDF pojedynczej pozycji obejmuje CAŁE strony zeszytu, na których ją wydrukowano, więc tekst zawiera fragmenty sąsiednich pozycji (DU/2003/991 zaczyna się załącznikiem do poz. 990). Żadna z poprawek tego nie dotyka i zgłoszenie też nie podaje gotowego rozwiązania. Zarejestrowane jako **F-234**.
+
+### 9A. DRUGIE PODEJŚCIE — „czy wynik może być lepszy?” (pytanie użytkownika, ten sam dzień)
+Pierwszy pomiar potraktowałem jako koniec pracy. Na pytanie, czy da się lepiej, przeprowadziłem diagnozę BRAKUJĄCYCH słów i znalazłem trzy rzeczy — jedną do naprawy, dwie do odrzucenia:
+
+**(1) NAPRAWIONE — próg wykrycia był za ostry dla stron ubogich w polski tekst.** Diagnoza na 19 aktach: po naprawie zostały 2 nieprzeliczone znaki, oba na DU/2000/1097 str. 10 — „Za∏àcznik nr 3” nad wykazem substancji psychotropowych. Strona miała JEDEN marker i zero polskich liter, więc nie przechodziła progu `>= 2`. Font jest jednak własnością zeszytu, nie strony, więc dołożona **propagacja w obrębie dokumentu**: gdy choć jedna strona jest rozpoznana, pozostałe dziedziczą rozpoznanie pod warunkiem, że mają co najmniej jeden marker i zero polskich znaków diakrytycznych. Strona bez markerów (wyłącznie obcojęzyczna) zostaje nietknięta — osobna asercja w T46. ZMIERZONE: nieprzeliczonych znaków **2 → 0**; miara pokrycia bez zmian (0,813 / 0,940), bo te strony to wykazy nazw chemicznych, prawie bez słów wzorca. ⇒ poprawka POPRAWNOŚCI, nie wyniku liczbowego — i tak została opisana.
+
+**(2) ODRZUCONE — tryb `-raw`.** Daje lepszą kolejność (0,850 wobec 0,813), ale gorszą kompletność (0,900 wobec 0,940). Rozstrzygnięte miarą bliższą zastosowaniu niż LCS: czy 5-wyrazowa fraza ze wzorca znajduje się w tekście z PDF (proxy dla `szukaj`, 1325 fraz z 53 aktów):
+| tryb | trafialność frazy |
+|---|---|
+| `-layout` (stan sprzed poprawki) | 0,462 |
+| **domyślny (bez `-layout`)** | **0,785** |
+| `-raw` | 0,654 |
+⇒ zostaje tryb domyślny. Usterka zgłoszona w #83 to „szukaj nie znajduje fraz”, więc o wyborze decyduje ta miara, nie LCS.
+
+**(3) ODRZUCONE — sklejanie wyrazów przeniesionych z dywizem.** Zmierzone: trafialność frazy 0,785 przed i po. Bez wpływu, bo czytanie bez `-layout` już je łączy. Pozostaje tylko w konwerterze, gdzie służy czytelności.
+
+**Skąd bierze się reszta luki (0,813, nie 1,0) — i dlaczego NIE jest to wada ekstrakcji.** Wykaz najczęściej brakujących słów wzorca: `wymienionej` ×170, `przypisie` ×167, `ustalonym` ×104, `dodany` ×50, `czyli` ×42, `weszła` ×35. To słownictwo APARATU REDAKCYJNEGO ISAP („w brzmieniu ustalonym przez art. … ustawy wymienionej w przypisie 1, która weszła w życie z dniem …”), którego w PDF nie ma w ogóle. W drugą stronę: tylko **0,708** słów z PDF występuje w HTML — to z kolei treść sąsiednich pozycji wydrukowanych na tych samych stronach (F-234). ⇒ Obie miary mają sufit poniżej 1,0 z przyczyn strukturalnych, a największą pozostałą dźwignią nie jest ekstrakcja, tylko **wycięcie aktu z zeszytu (F-234)**.
+
+**Kontrola ryzyka dla tekstów obcojęzycznych.** Sprawdzone osobno: w próbie są trzy akty z „«…»”, ale to polski cudzysłów ówczesnego składu („«oraz Fundusz LeÊny»”), a wszystkie à/ç na tych stronach to mojibake. Fałszywego przeliczenia tekstu francuskiego nie stwierdzono.
+
+### 9B. DWA DALSZE POMYSŁY SPRAWDZONE NA ŻĄDANIE UŻYTKOWNIKA
+
+**(a) „A gdyby zastosować wzorzec liter?” — SPRAWDZONE I ODRZUCONE.** Zbudowany profil częstości liter polszczyzny z 515 666 znaków oficjalnego HTML (najczęstsze: a 8,7%, o 8,0%, i 7,4%, e 7,0%; znaki diakrytyczne 5,1% liter). Kryterium: mapuj, jeżeli po mapowaniu tekst jest BLIŻEJ tego profilu (odległość całkowitego wahania).
+- Na danych rzeczywistych nie wnosi nic: **0 rozbieżności** z regułą markerową na 292 stronach z lat 2000–2009 i 285 stronach z lat 2015–2023.
+- Jest SŁABSZE w dwóch miejscach: na 15 stronach ubogich w litery (poniżej 60) nie wydaje decyzji w ogóle, a w teście kontrolowanym **fałszywie mapuje tekst francuski** — i w wersji liczącej tylko alfabet polski, i w wersji z masą znaków mojibake (odległość maleje, bo à→ą i ç→ć przesuwają rozkład w stronę polszczyzny). Reguła markerowa francuskiego nie rusza.
+⇒ Profil statystyczny zostaje odrzucony. Przyczyna jest zrozumiała: wykrycie ma rozstrzygać o OBECNOŚCI konkretnej usterki kodowania, a nie o tym, „jak bardzo tekst przypomina polski”; znaki ¢ ´ ¸ ∏ ¡ ƒ Â Ê ˚ ˝ są jej bezpośrednim świadectwem, a rozkład liter — poszlaką.
+
+**(b) Konstrukcja tabeli z kodeków w czasie działania — PRZYJĘTE (propozycja użytkownika).** Zamiast dwóch ciągów wpisanych w kod tabela powstaje przy starcie:
+```python
+TABELA_MAC_CE = str.maketrans({bytes([b]).decode("mac_roman"): bytes([b]).decode("mac_latin2")
+                               for b in range(128, 256) if bytes([b]).decode("mac_latin2") in "ąćęłńśźżĄĆĘŁŃŚŹŻ"})
+```
+Sprawdzone: daje **dokładnie te same 16 pozycji** co tabela dotychczasowa, a w zakresie bajtów 128–255 żaden znak Mac Roman nie ma niejednoznacznego odpowiednika w Mac CE. Zysk jest w utrzymaniu: błędu literowego w ręcznie wpisanym ciągu nie da się wychwycić wzrokiem, a tu nie ma czego wpisywać. Ó/ó wypadają z filtra same.
+⛔ KOREKTA WŁASNA: zapowiedziałem przy tym użytkownikowi, że `str.translate` będzie szybszy — **nieprawda**. Zmierzone na 273 940 znakach z 8 680 podmianami: `translate` 21,2 ms, `re.sub` z klasą znaków 3,5 ms, czyli ~6× na korzyść `re.sub` (translate sprawdza każdy znak w słowniku, wyrażenie skanuje w C i woła funkcję tylko na trafieniach). Pierwszy pomiar zrobiłem na tekście JUŻ naprawionym, gdzie `re.sub` nie miał czego podmieniać — wynik był bezwartościowy i został powtórzony. Wdrożone rozwiązanie: tabela z kodeków (propozycja użytkownika) + zastosowanie przez `re.sub`, przy czym klasa znaków jest BUDOWANA Z TABELI, więc źródło prawdy pozostaje jedno. W JS tabela zostaje wpisana (brak tych kodeków w środowisku), a jej zgodność z kodekami pilnuje T46.
 
 ### 10. CO ZWERYFIKOWANO, A CZEGO NIE
 Zweryfikowane: mapa liter (kodeki), zachowanie wykrycia na dwóch korpusach, skuteczność obu ścieżek wobec oficjalnego HTML, działanie poprawionych funkcji uruchomionych z PLIKÓW REPOZYTORIUM (nie z kopii roboczych), obecność poprawki w zbudowanym pakiecie.

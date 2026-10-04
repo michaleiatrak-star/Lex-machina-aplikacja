@@ -23,6 +23,27 @@ export function endsWithDisclaimer(answer) {
     const paragraphs = answer.trim().split(/\n\s*\n/u).filter((paragraph) => !/^\s*(?:-{3,}|\*{3,})\s*$/u.test(paragraph));
     return CLOSING.test(paragraphs.slice(-2).join("\n"));
 }
+const OPENING = /^\s*(?:-{3,}\s*\n\s*)?(?:⚖️|⚠️\s*\*\*Przed podpisaniem|\*\*(?:Zastrzeżenie|Ważna informacja)|Zastrzeżenie\s*:)/u;
+/**
+ * The model's closing disclaimer, cut off: it is the fixed text of
+ * shared/DISCLAIMER.md (acts verified there in ELI), so the gates check the
+ * analysis without it and the application appends the canonical text.
+ */
+export function splitTrailingDisclaimer(answer) {
+    const text = answer.trimEnd();
+    const starts = [0, ...[...text.matchAll(/\n\s*\n/gu)].map((match) => match.index + match[0].length)];
+    // The earliest of the last few paragraphs that opens the disclaimer.
+    for (const start of starts.slice(-4)) {
+        const tail = text.slice(start);
+        if (!OPENING.test(tail) || !CLOSING.test(tail) || tail.length > 2500)
+            continue;
+        let body = text.slice(0, start).trimEnd();
+        // A "---" rule left alone above it belongs to the disclaimer.
+        body = body.replace(/\n\s*(?:-{3,}|\*{3,})\s*$/u, "").trimEnd();
+        return { body, disclaimer: tail };
+    }
+    return { body: answer, disclaimer: null };
+}
 export function withDisclaimer(answer, texts, options) {
     if (endsWithDisclaimer(answer))
         return { text: answer, appended: false };

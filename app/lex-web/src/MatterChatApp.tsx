@@ -79,6 +79,7 @@ import {
   listCaseSchedule,
   listCases,
   loginProviderAccount,
+  logoutProviderAccount,
   startProviderAccountProvision,
   getProviderAccountProvision,
   provisionLocalModel,
@@ -832,6 +833,10 @@ function executionMessage(
         : execution.context
           ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.`
           : "";
+    // Instruction text of the turn (measure for moving skill procedure into the app).
+    const instructionMeta = execution.context?.instructionChars
+      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString("pl-PL")} tok.`
+      : "";
     const citationMeta =
       execution.documentCitationFreshness
         ? ` · cytaty odświeżone: ${execution.documentCitationFreshness.checked}`
@@ -887,6 +892,7 @@ function executionMessage(
         skillMeta +
         domainMeta +
         contextMeta +
+        instructionMeta +
         citationMeta +
         workflowMeta +
         modelRoutingMeta +
@@ -2295,6 +2301,22 @@ export default function MatterChatApp({
         ProviderAccountSessionStatus
       >
     );
+  }
+
+  async function disconnectProviderAccount(): Promise<void> {
+    if (!isAccountPrimarySource(provider) || user.appRole !== "ADMIN" || providerAccountBusy) return;
+    setProviderAccountBusy(true);
+    try {
+      await logoutProviderAccount(runtimeProvider);
+      setProviderAccountMessage("Wylogowano konto w kliencie dostawcy.");
+    } catch {
+      setProviderAccountMessage(
+        "Nie udało się wylogować: sesja nadal jest aktywna (np. token ze środowiska albo klient bez polecenia wylogowania). Wyloguj w oficjalnym kliencie dostawcy."
+      );
+    } finally {
+      await refreshProviderAccountStatus().catch(() => undefined);
+      setProviderAccountBusy(false);
+    }
   }
 
   function switchAccountToApi(): void {
@@ -6565,6 +6587,16 @@ export default function MatterChatApp({
                       >
                         Sprawdź ponownie
                       </button>
+                      {accountSession?.authenticated ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={providerAccountBusy}
+                          onClick={() => void disconnectProviderAccount()}
+                        >
+                          Wyloguj
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"
@@ -6581,8 +6613,7 @@ export default function MatterChatApp({
                   )}
                   {accountSession?.authenticated ? (
                     <small>
-                      Aby zmienić konto, wyloguj lub przełącz konto w oficjalnym
-                      kliencie dostawcy, a następnie kliknij „Sprawdź ponownie”.
+                      Aby zmienić konto, kliknij „Wyloguj”, a potem „Połącz konto”.
                     </small>
                   ) : null}
                   <AccountConnectProgress

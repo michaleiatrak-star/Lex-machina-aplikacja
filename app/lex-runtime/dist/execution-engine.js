@@ -1,3 +1,5 @@
+import { compactForModel } from "./skill-sections.js";
+import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
@@ -913,6 +915,7 @@ export class LexExecutionEngine {
             promptParts.push(args.toolSystemPromptAppendix);
         }
         const systemPrompt = promptParts.join("\n\n");
+        emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
         emit("provider_start", args.provider, "OK", args.model);
         const response = await this.providers.stream(args.provider, {
             model: args.model,
@@ -1045,7 +1048,11 @@ export class LexExecutionEngine {
                     return [];
                 const relative = `${path.basename(skill.directory)}/SKILL.md`;
                 onPreloaded(relative);
-                return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+                const compact = compactForModel(fs.readFileSync(file, "utf8"));
+                if (compact.compacted.length) {
+                    emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+                }
+                return [{ name, relative, text: compact.text }];
             })
             : [];
         const preloadedPrompt = preloaded.map((item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`);
@@ -1163,6 +1170,7 @@ export class LexExecutionEngine {
         // the route event follows from the audited corpus reads (session executor).
         const workflowPlan = createDeterministicWorkflowPlan(this.registry, null);
         emit("gate", "G39H_WORKFLOW_PREFLIGHT", "OK", `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`);
+        emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(promptParts.join("\n\n"))));
         emit("provider_start", args.provider, "OK", args.model);
         const response = await this.providers.stream(args.provider, {
             model: args.model,

@@ -11,6 +11,7 @@ on:
       - ".github/workflows/lex-installer.yml"
       - ".github/workflows/offline-windows-installer.yml"
       - ".github/workflows/publish-windows-installers.yml"
+      - ".github/workflows/macos-installer.yml"
   workflow_dispatch:
 
 permissions:
@@ -21,6 +22,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      released: ${{ steps.read.outputs.released }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # A skill update pushed to main after the release: validation runs, the installers are not rebuilt.
+      - id: read
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(jq -r .applicationVersion app/installer/windows-release-source.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version already published; installers are not rebuilt (bump applicationVersion for a new release)."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # One release carries Windows and macOS: a separate macOS publish workflow raced this
+  # one for the tag (0.1.14 lost its macOS package that way).
+  macos:
+    needs: version
+    if: needs.version.outputs.released != 'true'
+    uses: ./.github/workflows/macos-installer.yml
+    with:
+      asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Online.pkg
+
   runtime:
     uses: ./.github/workflows/lex-runtime.yml
     secrets: inherit
@@ -30,10 +64,14 @@ jobs:
     secrets: inherit
 
   online:
+    needs: version
+    if: needs.version.outputs.released != 'true'
     uses: ./.github/workflows/lex-installer.yml
     secrets: inherit
 
   offline:
+    needs: version
+    if: needs.version.outputs.released != 'true'
     uses: ./.github/workflows/offline-windows-installer.yml
     secrets: inherit
 
@@ -44,6 +82,7 @@ jobs:
       - structural_audit
       - online
       - offline
+      - macos
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -81,6 +120,12 @@ jobs:
         with:
           name: LexMachina-Windows-Offline-Setup
           path: release-input/offline
+
+      - name: Download accepted macOS installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-macOS-Online-Installer
+          path: release-input/macos
 
       - name: Verify acceptance receipts and normalize asset names
         id: assets
@@ -126,13 +171,23 @@ jobs:
           cp "$offline_receipt" "$out/SHA256-OFFLINE.txt"
           cp "app/installer/windows-release-source.json" "$out/windows-release-source.json"
 
+          mac_name="Lex-Machina-${version}-macOS-arm64-Online.pkg"
+          mac_pkg="release-input/macos/$mac_name"
+          mac_expected="$(awk -F= '$1=="sha256"{print $2}' release-input/macos/SHA256.txt | tr -d '\r\n ')"
+          if [[ ! -f "$mac_pkg" || "$(sha256sum "$mac_pkg" | awk '{print $1}')" != "$mac_expected" ]]; then
+            echo "RELEASE_MACOS_HASH_MISMATCH:$mac_name" >&2
+            exit 1
+          fi
+          cp "$mac_pkg" "$out/$mac_name"
+
           (
             cd "$out"
-            sha256sum "$online_name" "$offline_name" "windows-release-source.json" > SHA256SUMS.txt
+            sha256sum "$online_name" "$offline_name" "$mac_name" "windows-release-source.json" > SHA256SUMS.txt
           )
 
           echo "online=$online_name" >> "$GITHUB_OUTPUT"
           echo "offline=$offline_name" >> "$GITHUB_OUTPUT"
+          echo "macos=$mac_name" >> "$GITHUB_OUTPUT"
 
       - name: Refuse duplicate release tag
         env:
@@ -150,12 +205,13 @@ jobs:
         shell: bash
         run: |
           cat > release-assets/RELEASE-NOTES.md <<'EOF'
-          ## Lex Machina Windows installers
+          ## Lex Machina installers
 
-          This release contains two accepted Windows installers:
+          This release contains two accepted Windows installers and the macOS online package:
 
           - **Online** — small core installer; downloads and verifies missing runtime components during installation.
           - **Offline** — standalone installer with the complete core runtime bundle for a network-blocked installation.
+          - **macOS (Apple silicon) online** — `.pkg`; downloads and verifies the runtime components on first start.
 
           ### Local AI
 
@@ -186,6 +242,7 @@ jobs:
             --notes-file release-assets/RELEASE-NOTES.md \
             --prerelease \
             release-assets/*.exe \
+            release-assets/*.pkg \
             release-assets/SHA256-ONLINE.txt \
             release-assets/SHA256-OFFLINE.txt \
             release-assets/SHA256SUMS.txt \

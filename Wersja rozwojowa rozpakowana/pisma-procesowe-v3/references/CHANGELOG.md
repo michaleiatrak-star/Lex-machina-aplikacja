@@ -1,5 +1,7 @@
 # CHANGELOG — pisma-procesowe-v3
 
+- 5.34 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+
 - 5.33 (2026-10-04b, AUDYT-2026-10-04b): **Sieroty (F-225).** Usunięty stub `modules/MOD-WALIDACJA.md` (deklarowany jako usunięty 2026-07-12 w DEDUPLICATION-POLICY). Powiązane: `references/engines/pleading-engine-v8.md` (SKILL.md W1.2 + MODULY-MAPA), szablony eksperckie `references/templates/` (MOD-SZABLONY SZ1/SZ3), `modules/MOD-ROUTE.md` (MODULY-MAPA — wyłącznie informacyjnie), `shared/MOD-AUDIT-BUNDLE.md` po ST-FINAL w trybie PRAWNIK. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04b.
 
 - 5.32 (2026-09-27o, AUDYT-2026-09-27o): W3-WERYFIKACJA — nazwa narzędzia MCP do weryfikacji sygnatur: `verify_signature` (konektor obcy, nieobecny w systemie) → `saos_search` / `cbosa_sprawdz_sygnature` (Lex Machina), obce jako alternatywa.

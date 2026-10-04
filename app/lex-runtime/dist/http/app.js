@@ -3345,6 +3345,28 @@ export function createLexHttpApp(options) {
             });
         }
     });
+    app.post("/api/provider-accounts/:provider/logout", async (req, res) => {
+        const context = responseAuthContext(res);
+        if (context.user.appRole !== "ADMIN") {
+            res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+            return;
+        }
+        if (!options.accountSessions) {
+            res.status(503).json({ error: "PROVIDER_ACCOUNT_SESSION_UNAVAILABLE" });
+            return;
+        }
+        const provider = String(req.params.provider ?? "").trim();
+        if (!isProviderId(provider)) {
+            res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+            return;
+        }
+        try {
+            res.json(await options.accountSessions.logout(provider));
+        }
+        catch {
+            res.status(422).json({ error: "ACCOUNT_SESSION_LOGOUT_FAILED", provider });
+        }
+    });
     // Downloads the pinned account client (first Gemini CLI / Grok Build
     // install takes minutes) as a background job; the UI polls its stage.
     const provisionRoute = (action) => (req, res) => {

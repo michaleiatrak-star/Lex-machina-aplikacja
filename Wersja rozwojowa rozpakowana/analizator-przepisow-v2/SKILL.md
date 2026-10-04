@@ -1,6 +1,6 @@
 ---
 name: analizator-przepisow-v2
-version: "2.9"
+version: "2.10"
 type: executive-analiza
 status: production
 compatibility: "live_web_lookup, file_read, optional_interactive_ui"
@@ -600,19 +600,3 @@ view shared/QUALITY-CHECK.md
 ```
 
 Nie dubluj logiki shared w lokalnych plikach. Lokalne moduły mogą tylko doprecyzować analizę dziedzinową.
-
----
-
-## CHANGELOG
-
-⛔ **Historia zmian tego skilla NIE mieszka w tym pliku** (ZASADA 15,
-`audyt-systemu-v4/SKILL.md`). Jedyna lokalizacja kanoniczna:
-
-```
-view analizator-przepisow-v2/references/CHANGELOG.md
-```
-
-*(Wpisy 2.4 … 2.1 przeniesione stąd 1:1 do `references/CHANGELOG.md`
-dnia 2026-08-24, flaga F-126 — usunięcie stanu przejściowego, w którym
-historia mieszkała w DWÓCH miejscach. Treść nie została przeredagowana
-ani odtworzona z pamięci; przeniesiony został istniejący tekst.)*

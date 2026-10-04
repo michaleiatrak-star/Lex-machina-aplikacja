@@ -1,3 +1,5 @@
+import { compactForModel } from "./skill-sections.js";
+import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
@@ -1828,6 +1830,7 @@ export class LexExecutionEngine {
       promptParts.push(args.toolSystemPromptAppendix);
     }
     const systemPrompt = promptParts.join("\n\n");
+    emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
 
     emit(
       "provider_start",
@@ -2018,7 +2021,11 @@ export class LexExecutionEngine {
           if (!fs.existsSync(file)) return [];
           const relative = `${path.basename(skill.directory)}/SKILL.md`;
           onPreloaded(relative);
-          return [{ name, relative, text: fs.readFileSync(file, "utf8") }];
+          const compact = compactForModel(fs.readFileSync(file, "utf8"));
+          if (compact.compacted.length) {
+            emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+          }
+          return [{ name, relative, text: compact.text }];
         })
       : [];
     const preloadedPrompt = preloaded.map(
@@ -2153,6 +2160,7 @@ export class LexExecutionEngine {
       "OK",
       `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`
     );
+    emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(promptParts.join("\n\n"))));
     emit("provider_start", args.provider, "OK", args.model);
     const response = await this.providers.stream(
       args.provider,

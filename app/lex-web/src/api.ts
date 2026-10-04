@@ -1043,6 +1043,9 @@ export type SessionExecutionResponse = {
     reservedSystemTokens?: number;
     documentBudgetTokens?: number;
     estimatedDocumentTokens: number;
+    instructionChars?: number;
+    instructionSections?: Array<{ label: string; chars: number }>;
+    charsPerTokenEstimate?: number;
     selectedChunks: number;
     omittedChunks: number;
     selectedDocuments: number;
@@ -2585,6 +2588,15 @@ export function loginProviderAccount(
     {
       method: "POST"
     }
+  );
+}
+
+export function logoutProviderAccount(
+  provider: ProviderId
+): Promise<ProviderAccountSessionStatus> {
+  return json<ProviderAccountSessionStatus>(
+    `/api/provider-accounts/${provider}/logout`,
+    { method: "POST" }
   );
 }
 

@@ -2138,6 +2138,12 @@ export function accountLoginArgs(
   return ["login"];
 }
 
+export function accountLogoutArgs(
+  provider: ProviderId
+): string[] {
+  return provider === "anthropic" ? ["auth", "logout"] : ["logout"];
+}
+
 export function accountLoginFallbackArgs(
   provider: ProviderId
 ): string[] | null {
@@ -3429,6 +3435,36 @@ export class AccountSessionManager {
           }
         : {})
     };
+  }
+
+  /**
+   * Signs the provider account out of its official client (codex logout,
+   * claude auth logout, grok logout; Gemini CLI keeps its Google login in
+   * ~/.gemini/oauth_creds.json, which is removed). The result is the status
+   * read again from the client, not assumed.
+   */
+  async logout(
+    provider: ProviderId
+  ): Promise<ProviderAccountSessionStatus> {
+    if (provider === "anthropic") {
+      this.clearAnthropicOAuthToken();
+      this.anthropicInteractiveLoginConfirmed = false;
+    }
+    if (provider === "google") {
+      for (const name of ["oauth_creds.json", "google_accounts.json"]) {
+        await fsp.rm(path.join(geminiHome(), name), { force: true });
+      }
+    } else if (await resolveAccountExecutable(provider)) {
+      const args = accountLogoutArgs(provider);
+      await runCli(provider, args, undefined, STATUS_TIMEOUT_MS).catch(() => undefined);
+    }
+    const after = await this.status(provider);
+    if (after.authenticated) {
+      // Still signed in: a session provisioned in the environment
+      // (CLAUDE_CODE_OAUTH_TOKEN, API key) or a client without a logout command.
+      throw new Error(`ACCOUNT_SESSION_LOGOUT_FAILED:${provider}`);
+    }
+    return after;
   }
 
   async statusAll(): Promise<ProviderAccountSessionStatus[]> {

@@ -1,3 +1,4 @@
+import { compactForModel } from "./skill-sections.js";
 import fs from "node:fs";
 import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
@@ -26,7 +27,8 @@ const GENERIC = new Set([
     "przekrojowy", "uzupełnienie", "pokrycia", "rozdziały", "działy", "inne", "ogólne", "sprawy", "sprawach",
     // Too general to select a module alone (single-word map phrases).
     "podstawa", "podstawy", "zdrowie", "terminy", "sankcje", "nadzorca", "nadzór", "lotniczy", "morski", "obrona", "opieka",
-    "układ", "media", "plany", "zwrot", "umowy", "umowa", "osoba", "obrót", "norma", "mienie", "zapłata", "poczta", "obwody"
+    "układ", "media", "plany", "zwrot", "umowy", "umowa", "osoba", "obrót", "norma", "mienie", "zapłata", "poczta", "obwody",
+    "zabezpieczenie", "zabezpieczenia", "wykonanie"
 ]);
 function parseNumber(value) {
     const match = /^(\d+)([a-z]*)$/u.exec(value) ?? ["", "0", ""];
@@ -67,10 +69,25 @@ function ranges(text) {
     }
     return result;
 }
+function stemPattern(word) {
+    const lower = fold(word);
+    const stem = lower.length <= 4 ? lower : lower.slice(0, Math.max(4, lower.length - 2));
+    return `${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z]*`;
+}
+// Parts of the label with at least three distinctive words, as a set of stems.
+function bags(label) {
+    return label
+        .replace(/\([^)]*\)/g, " ")
+        .split(/\s+—\s+|\s*\/\s*|\s*\+\s*|,|;/u)
+        .map((part) => (part.match(/\p{L}{4,}/gu) ?? []).filter((word) => !GENERIC.has(word.toLocaleLowerCase("pl")) && !(CODE_TOKEN.lastIndex = 0, CODE_TOKEN.test(word))))
+        .filter((words) => words.length >= 3)
+        .map((words) => words.map((word) => new RegExp(`(?<![a-z])${stemPattern(word)}`, "u")));
+}
 // The row's phrases: each part of the label ("Prawo łowieckie — szkody łowieckie",
 // "Wycinka / odpady niebezpieczne") as a sequence of word stems.
 function phrases(label) {
     const result = [];
+    const single = [];
     const parts = label
         .replace(/\([^)]*\)/g, " ")
         .replace(/\bart\.?\s*\d+[a-z]*(?:\s*[–-]\s*\d+[a-z]*)?/giu, " ")
@@ -88,11 +105,40 @@ function phrases(label) {
             const stem = lower.length <= 4 ? lower : lower.slice(0, Math.max(4, lower.length - 2));
             return `${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z]*`;
         });
-        result.push(new RegExp(`(?<![a-z])${stems.join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u"));
+        const pattern = new RegExp(`(?<![a-z])${stems.join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u");
+        if (words.length === 1) {
+            // One word: its stem with a short ending only ("zachowek", "zachowku", not "zachowanie").
+            const folded = fold(words[0]);
+            const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const stems = [folded.slice(0, Math.max(5, folded.length - 1))];
+            // Mobile e: "zachowek" -> "zachowku", "kupiec" -> "kupca".
+            if (/e[a-z]$/.test(folded))
+                stems.push(folded.slice(0, -2) + folded.slice(-1));
+            single.push(new RegExp(`(?<![a-z])(?:${stems.map(escape).join("|")})[a-z]{0,3}(?![a-z])`, "u"));
+        }
+        else {
+            result.push(pattern);
+        }
     }
-    return result;
+    return { multi: result, single };
+}
+// "KC — zachowek / dział": the part before " — ". An abbreviation ("KC", "VAT", "PrUp") is
+// matched as written, words by their stems.
+function headOf(label) {
+    const parts = label.replace(/\([^)]*\)/g, " ").split(/\s+—\s+/u);
+    if (parts.length < 2)
+        return null;
+    const head = parts[0].replace(/[⛔✅⚠️🟢🟨\uFE0F*]/gu, " ").replace(/\bart\.?\s*\d+[a-z]*(?:\s*[–-]\s*\d+[a-z]*)?/giu, " ").trim();
+    const tokens = head.match(/\p{L}+/gu) ?? [];
+    const abbreviations = tokens.filter((token) => token.length <= 6 && /\p{Lu}/u.test(token.slice(1) || token) && token !== token.toLocaleLowerCase("pl"));
+    if (abbreviations.length) {
+        return new RegExp(`(?<![\\p{L}])(?:${abbreviations.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![\\p{L}])`, "u");
+    }
+    const words = tokens.filter((token) => token.length >= 4 && !GENERIC.has(token.toLocaleLowerCase("pl")));
+    return words.length ? new RegExp(`(?<![a-z])${words.map(stemPattern).join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u") : null;
 }
 const cache = new Map();
+const RARE_IN_MODULES = 10;
 function actRows(registry) {
     const skills = [...registry.skills.values()].filter((skill) => /^dr-\d{2}-/.test(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
     const bodies = skills.map((skill) => {
@@ -149,10 +195,32 @@ function actRows(registry) {
                 ranges: resources.map((resource) => declaredRanges(registry, resource)).find((declared) => declared !== null) ??
                     ranges([label, ...resources.map((resource) => path.basename(resource))].join(" ")),
                 index: /indeks|current-state|moduł\s+główny/iu.test(label) || resources.some((resource) => /current-state-COV/.test(resource)),
-                phrases: phrases(label)
+                ...(() => {
+                    const found = phrases(label);
+                    return { phrases: found.multi, singles: found.single };
+                })(),
+                bags: bags(label),
+                unique: [],
+                head: headOf(label)
             });
         }
     });
+    // A one-word part stands alone when no other row's label holds it and few DR
+    // modules use it at all: "zachowek" yes, "odszkodowania" (115 of 455 modules) no.
+    const labels = rows.map((row) => fold(row.label));
+    const moduleTexts = skills.flatMap((skill) => {
+        const dir = path.join(skill.directory, "modules");
+        try {
+            return fs.readdirSync(dir).filter((name) => name.endsWith(".md")).map((name) => fold(fs.readFileSync(path.join(dir, name), "utf8")));
+        }
+        catch {
+            return [];
+        }
+    });
+    for (const [position, row] of rows.entries()) {
+        row.unique = row.singles.filter((pattern) => labels.every((label, other) => other === position || !pattern.test(label)) &&
+            moduleTexts.filter((text) => pattern.test(text)).length <= RARE_IN_MODULES);
+    }
     cache.set(key, rows);
     return rows;
 }
@@ -228,9 +296,12 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
         const holding = ofCode
             .flatMap((row) => row.ranges.filter((range) => compare(range.from, article) <= 0 && compare(article, range.to) <= 0).map((range) => ({ row, width: range.to[0] - range.from[0] })))
             .sort((a, b) => a.width - b.width);
+        // Every row whose range holds the article, the narrowest first (art. 291 KK: paserstwo in 278–295 and 291–293).
+        for (const item of holding)
+            add(item.row, "PRZEPIS", `art. ${match[1]} ${code} → ${item.row.label}`);
         if (holding.length)
-            add(holding[0].row, "PRZEPIS", `art. ${match[1]} ${code} → ${holding[0].row.label}`);
-        else {
+            continue;
+        {
             const index = ofCode.find((row) => row.index);
             if (index)
                 add(index, "PRZEPIS", `art. ${match[1]} ${code} → ${index.label} (brak wiersza z tym artykułem)`);
@@ -238,8 +309,14 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
     }
     // NAZWA: a phrase of the row's label in the case.
     const folded = fold(text);
+    const sentences = folded.split(/[.!?\n]+/u);
     for (const row of rows) {
-        const phrase = row.phrases.find((pattern) => pattern.test(folded));
+        const singles = row.singles.filter((pattern) => pattern.test(folded));
+        const headed = row.head ? (row.head.flags.includes("u") && /\\p\{L\}/u.test(row.head.source) ? row.head.test(text) : row.head.test(folded)) : false;
+        const phrase = row.phrases.find((pattern) => pattern.test(folded)) ??
+            row.bags.find((bag) => sentences.some((sentence) => bag.every((stem) => stem.test(sentence))))?.[0] ??
+            (singles.length && (headed || singles.length >= 2) ? singles[0] : undefined) ??
+            row.unique.find((pattern) => pattern.test(folded));
         if (phrase)
             add(row, "NAZWA", `„${row.label}” w treści sprawy`, distinctive(row.label) ?? undefined);
     }
@@ -263,6 +340,7 @@ export function loadActModules(registry, modules, inContext, budget = ACT_MODULE
         }
         if (!content.trim())
             continue;
+        content = compactForModel(content).text;
         if (content.length > left) {
             toRead.push(module);
             continue;

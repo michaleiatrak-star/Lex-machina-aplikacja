@@ -1,6 +1,6 @@
 ---
 name: pisma-procesowe-v3
-version: "5.33"
+version: "5.34"
 type: executive-pisma
 status: production
 description: "Zaawansowane pisma procesowe: pozwy, odpowiedzi, apelacje, zażalenia i inne pisma wymagające strategii, faktów, dowodów, weryfikacji prawa i finalnej walidacji dokumentu."
@@ -868,20 +868,3 @@ też `theory-of-case-engine.md`.
 
 > Matryca aktywacji V10, sekwencja 6 modułów engines, obsługa KPA/PPSA/WSA/NSA:
 > `view pisma-procesowe-v3/references/DODATKI.md`
-
-
----
-
-## CHANGELOG
-
-⛔ **Historia zmian tego skilla NIE mieszka w tym pliku** (ZASADA 15,
-`audyt-systemu-v4/SKILL.md`). Jedyna lokalizacja kanoniczna:
-
-```
-view pisma-procesowe-v3/references/CHANGELOG.md
-```
-
-*(Wpisy 5.15 … 5.12 wraz z blokiem odsyłającym przeniesione stąd 1:1 do `references/CHANGELOG.md`
-dnia 2026-08-24, flaga F-126 — usunięcie stanu przejściowego, w którym
-historia mieszkała w DWÓCH miejscach. Treść nie została przeredagowana
-ani odtworzona z pamięci; przeniesiony został istniejący tekst.)*

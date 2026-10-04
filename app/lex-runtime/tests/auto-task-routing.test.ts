@@ -222,4 +222,28 @@ describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
     expect(pipelineNext("analiza-sadowa-v6", "pisma-procesowe-v3", combinations)?.skill).toBe("pisma-procesowe-v3");
     expect(decideTask(routes, matrix, `${PIPELINE_HANDOFF} pisma-procesowe-v3. Kontynuuj na podstawie powyższego wyniku.`)?.primary).toBe("pisma-procesowe-v3");
   });
+
+  it("offers a combination only when its parts are in the case (no Przepis + pismo without a letter)", () => {
+    const plain = { question: "Wykaż różnice pomiędzy 233 kk, 234 kk i 238 kk.", materials: [] };
+    expect(pipelineNext("analizator-przepisow-v2", null, combinations, plain)).toBeNull();
+    const letter = { question: "Co mówi art. 238 KK? Napisz zawiadomienie.", materials: [] };
+    expect(pipelineNext("analizator-przepisow-v2", null, combinations, letter)?.reason).toContain("Przepis + pismo");
+  });
+});
+
+describe("case law next to a provision (ACTIVATION-MATRIX: orzeczenia-sadowe-v2 vs analiza)", () => {
+  const matrix = parseActivationMatrix(fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8"));
+
+  it.each([
+    ["Wykaż różnice pomiędzy 233 kk, 234 kk i 238 kk.", "analizator-przepisow-v2", null],
+    ["Jakie jest orzecznictwo do art. 233 KK?", "orzeczenia-sadowe-v2", null],
+    ["Jak sądy interpretują art. 234 kk?", "orzeczenia-sadowe-v2", null],
+    ["Wykaż różnice między 233 kk i 234 kk i podaj orzecznictwo SN", "analizator-przepisow-v2", "orzeczenia-sadowe-v2"],
+    ["Sprawdź sygnaturę II KK 123/20", "orzeczenia-sadowe-v2", null],
+    ["Co mówi art. 415 kc?", "analizator-przepisow-v2", null]
+  ])("%s -> %s then %s", (question, primary, then) => {
+    const decision = decideTask(routes, matrix, question);
+    expect(decision?.primary).toBe(primary);
+    expect(decision?.then ?? null).toBe(then);
+  });
 });

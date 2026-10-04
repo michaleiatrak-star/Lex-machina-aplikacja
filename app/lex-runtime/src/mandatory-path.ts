@@ -571,7 +571,10 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
       requirement: "CORE",
       status: "MET",
       by: facts.disclaimerBy,
-      evidence: facts.disclaimerBy === "APLIKACJA" ? "model go nie dał; dołożyła aplikacja (wariant trybu)" : "na końcu odpowiedzi modelu"
+      evidence:
+        facts.disclaimerBy === "APLIKACJA"
+          ? "model go nie dał; dołożyła aplikacja (wariant trybu)"
+          : "na końcu odpowiedzi modelu; aplikacja podstawia tekst kanoniczny po bramkach (akty zweryfikowane w pliku)"
     });
   }
 
