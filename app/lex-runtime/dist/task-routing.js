@@ -164,6 +164,22 @@ const OWN_DOCUMENT = /(?<![\p{L}])(?:m[oó]j|moj[ae]|nasz[ae]?|własn\p{L}*|to\s
  * and the materials delivered), then the router table on the question and the
  * kinds of the delivered documents.
  */
+// What the matrix means by its rows, said differently: a whole-case analysis is
+// "akta" (analiza-sadowa-v6), preparing for a hearing is the hearing skill, a
+// report with no addressee is "raport ogólny".
+const IMPLIED_ROWS = [
+    {
+        pattern: /(?<![\p{L}])(?:(?:całościow|kompleksow)\p{L}*\s+(?:\p{L}+\s+)?analiz|analiz\p{L}*\s+(?:całościow|kompleksow|(?:całej\s+)?sprawy))/iu,
+        primary: "analiza-sadowa-v6",
+        row: "dostarcza akta / wyrok / pismo przeciwnika (analiza całościowa sprawy)"
+    },
+    {
+        pattern: /(?<![\p{L}])(?:przygot\p{L}*|pytani\p{L}*)(?:\s+\p{L}+){0,4}\s+(?:do|na|przed)\s+(?:\p{L}+\s+)?przesłuchani\p{L}*/iu,
+        primary: "przesluchanie-swiadkow-v2-min90",
+        row: "świadek / pytania do przesłuchania / cross-examination (przygotowanie do przesłuchania)"
+    },
+    { pattern: /(?<![\p{L}])raport\p{L}*(?![\p{L}])/iu, primary: "raport-sytuacyjny-v2", row: "\"stan sprawy\" / \"aktualny status\" / raport ogólny" }
+];
 export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null) {
     // The user pressed "continue" on a pipeline step: that skill, explicitly.
     const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
@@ -231,6 +247,10 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
         }
         return { source: "MATRIX", primary: best.rule.primary, then: best.rule.then, reason: `macierz aktywacji: ${best.rule.signal} (${best.why.join(", ")})` };
     }
+    // Matrix rows the question names in other words.
+    const implied = IMPLIED_ROWS.find((row) => row.pattern.test(question) && known.has(row.primary));
+    if (implied)
+        return { source: "MATRIX", primary: implied.primary, then: null, reason: `macierz aktywacji: ${implied.row}` };
     // No matrix row: the router table on the question and the kinds of the documents.
     const byDocuments = routerPick ?? classifyTask(routes, `${rawQuestion}\n${materials.map((material) => material.label).join(" / ")}`);
     return byDocuments

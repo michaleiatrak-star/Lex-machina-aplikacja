@@ -158,6 +158,13 @@ describe("coverage of executive skills (documents and tasks)", () => {
     expect(pick("Ułóż oś czasu sprawy")).toBe("chronologia-sprawy-v1");
     expect(pick("Przygotuj raport dla klienta")).toBe("raport-klienta-v1");
     expect(pick("Przygotuj raport o stanie sprawy")).toBe("raport-sytuacyjny-v2");
+    expect(pick("Przygotuj raport")).toBe("raport-sytuacyjny-v2");
+  });
+
+  it("the matrix rows said in other words, without materials", () => {
+    expect(pick("Zrób całościową analizę sprawy")).toBe("analiza-sadowa-v6");
+    expect(pick("Przygotuj klienta do przesłuchania jako strony")).toBe("przesluchanie-swiadkow-v2-min90");
+    expect(pick("Co to znaczy przedawnienie?")).toBe("przewodnik-prawny-v2");
   });
 });
 
