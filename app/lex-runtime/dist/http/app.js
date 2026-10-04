@@ -13,6 +13,7 @@ import { MissingProviderCredentialError, providerConfigurationStatus } from "../
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
+import { realValueHashes } from "../privacy/example-data.js";
 import { detectQueryMode, parseModeSignals } from "../query-mode.js";
 import { MAX_SUMMARY_CHARS, SUMMARY_CHUNK_CHARS, droppedMessageCount, queryWithSummary, summaryForDroppedHistory } from "../thread-summary.js";
 import { RoutingCatalog } from "./routing-catalog.js";
@@ -614,15 +615,17 @@ function parseSessionRequest(body) {
             : {})
     };
 }
+// Returns the values restored from the documents' vaults (real data).
 function restoreSessionDocumentAliases(result, documentService) {
+    const restored = [];
     if (!documentService
         ?.deanonymize) {
-        return;
+        return restored;
     }
     const documentIds = result[SESSION_EXECUTION_INTERNAL]?.documentAliasDocumentIds ??
         [];
     if (documentIds.length === 0) {
-        return;
+        return restored;
     }
     const restoreText = (text) => text.replace(/\[LMPII:D(\d{2}):([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g, (token, documentNumber, kind, sequence, requestedCase) => {
         const index = Number(documentNumber) - 1;
@@ -635,8 +638,11 @@ function restoreSessionDocumentAliases(result, documentService) {
             ? `[PII:${kind}:${sequence}|${requestedCase}]`
             : `[PII:${kind}:${sequence}]`;
         try {
-            return documentService
+            const value = documentService
                 .deanonymize(documentId, sourceToken);
+            if (value !== token)
+                restored.push(value);
+            return value;
         }
         catch {
             // Keep the opaque alias when the matching local vault is unavailable.
@@ -680,6 +686,7 @@ function restoreSessionDocumentAliases(result, documentService) {
         result.reportBlueprint =
             visit(result.reportBlueprint);
     }
+    return restored;
 }
 async function refreshDocumentCitations(args) {
     const citations = args.result.documentCitations ?? [];
@@ -735,7 +742,7 @@ async function refreshDocumentCitations(args) {
 async function rememberThreadEvidence(args) {
     const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
     const skills = args.result.loadedSkills ?? [];
-    if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision)
+    if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision && !args.realValues?.length)
         return;
     try {
         const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
@@ -747,7 +754,8 @@ async function rememberThreadEvidence(args) {
                 ...(args.result.modeDecision && args.result.modeDecision.decision !== "NIEROZSTRZYGNIETY"
                     ? { mode: args.result.modeDecision.mode }
                     : {}),
-                ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {})
+                ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {}),
+                realValueHashes: realValueHashes(args.realValues ?? [])
             })
         }));
     }
@@ -6361,6 +6369,7 @@ export function createLexHttpApp(options) {
                     }
                 };
             }
+            const restoredFromDocuments = restoreSessionDocumentAliases(result, options.documentService);
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
                 await rememberThreadEvidence({
                     store: options.caseMemoryStore,
@@ -6368,10 +6377,11 @@ export function createLexHttpApp(options) {
                     actor: responseAuthContext(res),
                     caseId: knowledge.caseId,
                     previous: threadEvidence,
-                    result
+                    result,
+                    // Real data restored into this answer: never "example data" later.
+                    realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
                 });
             }
-            restoreSessionDocumentAliases(result, options.documentService);
             res.json(result);
         }
         catch (error) {

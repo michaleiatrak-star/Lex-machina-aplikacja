@@ -20,7 +20,11 @@ export type ThreadEvidence = {
   mode?: QueryMode;
   // The register of the last answer's mandatory path.
   lastPath?: { at: string; report: MandatoryPathReport };
+  // Hashes of real values restored into answers (privacy/example-data.ts).
+  realValueHashes?: string[];
 };
+
+const MAX_REAL_VALUE_HASHES = 4_000;
 
 const MAX_PROVISIONS = 80;
 const MAX_SKILLS = 40;
@@ -51,7 +55,7 @@ export function mergeThreadEvidence(
   records: VerificationRecord[],
   skills: string[],
   now: string,
-  turn: { mode?: QueryMode; path?: MandatoryPathReport } = {}
+  turn: { mode?: QueryMode; path?: MandatoryPathReport; realValueHashes?: string[] } = {}
 ): ThreadEvidence {
   const provisions = new Map<string, VerificationRecord>();
   for (const record of [...(previous?.provisions ?? []), ...records.filter(reusableProvision)]) {
@@ -76,7 +80,8 @@ export function mergeThreadEvidence(
     skills: [...new Set([...(previous?.skills ?? []), ...skills])].slice(-MAX_SKILLS),
     sources: [...sources.values()].slice(-MAX_SOURCES),
     ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode)! } : {}),
-    ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {})
+    ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {}),
+    realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES)
   };
 }
 
@@ -104,7 +109,10 @@ export function validThreadEvidence(value: unknown): ThreadEvidence | null {
       (source) => Boolean(source) && typeof source.claim === "string" && typeof source.url === "string"
     ),
     ...(raw.mode === "LAIK" || raw.mode === "PRAWNIK" ? { mode: raw.mode } : {}),
-    ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {})
+    ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {}),
+    ...(Array.isArray(raw.realValueHashes)
+      ? { realValueHashes: raw.realValueHashes.filter((value): value is string => typeof value === "string" && /^[0-9a-f]{16}$/.test(value)) }
+      : {})
   };
 }
 

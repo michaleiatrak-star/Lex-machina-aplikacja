@@ -54,6 +54,7 @@ import {
 } from "../session-executor.js";
 import type { CaseFileAccess } from "../case-file-tool-runtime.js";
 import { mergeThreadEvidence, type ThreadEvidence } from "../thread-evidence.js";
+import { realValueHashes } from "../privacy/example-data.js";
 import { detectQueryMode, parseModeSignals, type ModeSignals } from "../query-mode.js";
 import {
   MAX_SUMMARY_CHARS,
@@ -1372,16 +1373,18 @@ function parseSessionRequest(
   };
 }
 
+// Returns the values restored from the documents' vaults (real data).
 function restoreSessionDocumentAliases(
   result: SessionExecutionResponse,
   documentService:
     DocumentService | undefined
-): void {
+): string[] {
+  const restored: string[] = [];
   if (
     !documentService
       ?.deanonymize
   ) {
-    return;
+    return restored;
   }
 
   const documentIds =
@@ -1392,7 +1395,7 @@ function restoreSessionDocumentAliases(
   if (
     documentIds.length === 0
   ) {
-    return;
+    return restored;
   }
 
   const restoreText = (
@@ -1422,11 +1425,13 @@ function restoreSessionDocumentAliases(
             ? `[PII:${kind}:${sequence}|${requestedCase}]`
             : `[PII:${kind}:${sequence}]`;
         try {
-          return documentService
+          const value = documentService
             .deanonymize!(
               documentId,
               sourceToken
             );
+          if (value !== token) restored.push(value);
+          return value;
         } catch {
           // Keep the opaque alias when the matching local vault is unavailable.
           // Never guess or substitute PII from another document.
@@ -1513,6 +1518,7 @@ function restoreSessionDocumentAliases(
       ) as
         typeof result.reportBlueprint;
   }
+  return restored;
 }
 
 async function refreshDocumentCitations(args: {
@@ -1619,10 +1625,11 @@ async function rememberThreadEvidence(args: {
   caseId: string;
   previous: ThreadEvidence | null;
   result: SessionExecutionResponse;
+  realValues?: string[];
 }): Promise<void> {
   const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
   const skills = args.result.loadedSkills ?? [];
-  if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision) return;
+  if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision && !args.realValues?.length) return;
   try {
     const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
     await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "WRITE", (caseDataKey) =>
@@ -1634,7 +1641,8 @@ async function rememberThreadEvidence(args: {
           ...(args.result.modeDecision && args.result.modeDecision.decision !== "NIEROZSTRZYGNIETY"
             ? { mode: args.result.modeDecision.mode }
             : {}),
-          ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {})
+          ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {}),
+          realValueHashes: realValueHashes(args.realValues ?? [])
         })
       })
     );
@@ -10889,6 +10897,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         };
       }
 
+      const restoredFromDocuments = restoreSessionDocumentAliases(
+        result,
+        options.documentService
+      );
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
         await rememberThreadEvidence({
           store: options.caseMemoryStore,
@@ -10896,14 +10908,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           actor: responseAuthContext(res),
           caseId: knowledge.caseId,
           previous: threadEvidence,
-          result
+          result,
+          // Real data restored into this answer: never "example data" later.
+          realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
         });
       }
-
-      restoreSessionDocumentAliases(
-        result,
-        options.documentService
-      );
       res.json(result);
     } catch (error) {
       if (

@@ -3,7 +3,7 @@ import { compactActAbbreviations, provisionsForDetection } from "../src/legal-ac
 import { planAutomaticLegalVerification, releaseModelUnverifiedMarkers } from "../src/gate-i-auto-verification.js";
 import { detectLegalReferences } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
-import { exampleDataKeepDirectives } from "../src/privacy/example-data.js";
+import { exampleDataKeepDirectives, realValueHashes } from "../src/privacy/example-data.js";
 import { LocalPolishPseudonymizer, PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
 
 describe("dotted act abbreviations", () => {
@@ -54,16 +54,25 @@ describe("example data written by the assistant", () => {
     { kind: "PESEL" as const, start: conversation.indexOf("Polna"), end: conversation.indexOf("Polna") + 5 }
   ];
 
-  it("is kept when it appears nowhere the user supplied", () => {
-    expect(exampleDataKeepDirectives(conversation, findings)).toEqual([{ start: findings[0]!.start, end: findings[0]!.end, action: "KEEP" }]);
+  const known = new Set<string>();
+
+  it("is kept when it appears nowhere the user supplied and the app did not restore it", () => {
+    expect(exampleDataKeepDirectives(conversation, findings, "", known)).toEqual([{ start: findings[0]!.start, end: findings[0]!.end, action: "KEEP" }]);
   });
 
   it("is protected when the user gave it, a document holds it or the history is incomplete", () => {
     const withUser = `Użytkownik: Dłużnik: Kowalskiego Jan.\n\n${conversation}`;
     const at = withUser.indexOf("Jan Kowalski,");
-    expect(exampleDataKeepDirectives(withUser, [{ kind: "PERSON", start: at, end: at + 12 }])).toEqual([]);
-    expect(exampleDataKeepDirectives(conversation, findings, "umowa z Janem Kowalskim")).toEqual([]);
-    expect(exampleDataKeepDirectives(`[Wcześniejsza część rozmowy pominięta (4 wiadomości) — nie mieści się w oknie modelu.]\n\n${conversation}`, findings)).toEqual([]);
+    expect(exampleDataKeepDirectives(withUser, [{ kind: "PERSON", start: at, end: at + 12 }], "", known)).toEqual([]);
+    expect(exampleDataKeepDirectives(conversation, findings, "umowa z Janem Kowalskim", known)).toEqual([]);
+    expect(exampleDataKeepDirectives(`[Wcześniejsza część rozmowy pominięta (4 wiadomości) — nie mieści się w oknie modelu.]\n\n${conversation}`, findings, "", known)).toEqual([]);
+  });
+
+  it("is protected when the app restored it into an earlier answer, or nothing is known", () => {
+    // A document attached in an earlier message: its name came back into the answer.
+    expect(exampleDataKeepDirectives(conversation, findings, "", new Set(realValueHashes(["Jana Kowalskiego"])))).toEqual([]);
+    // No case memory (or memory from before this record): everything pseudonymized.
+    expect(exampleDataKeepDirectives(conversation, findings)).toEqual([]);
   });
 
   it("goes to the model as written", async () => {

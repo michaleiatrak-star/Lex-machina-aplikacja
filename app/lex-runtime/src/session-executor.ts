@@ -1379,7 +1379,8 @@ export class SafeSessionExecutor implements SessionExecutor {
                   this.personMorphology
                 ).pseudonymize(request.query)
               ).findings,
-              request.auxiliaryText ?? ""
+              request.auxiliaryText ?? "",
+              request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null
             )
           : [];
       const protectedPrimary =

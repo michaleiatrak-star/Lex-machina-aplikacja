@@ -1,4 +1,5 @@
 import { mandatoryPathPrompt } from "./mandatory-path.js";
+const MAX_REAL_VALUE_HASHES = 4_000;
 const MAX_PROVISIONS = 80;
 const MAX_SKILLS = 40;
 const MAX_SOURCES = 40;
@@ -42,7 +43,8 @@ export function mergeThreadEvidence(previous, records, skills, now, turn = {}) {
         skills: [...new Set([...(previous?.skills ?? []), ...skills])].slice(-MAX_SKILLS),
         sources: [...sources.values()].slice(-MAX_SOURCES),
         ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode) } : {}),
-        ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {})
+        ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {}),
+        realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES)
     };
 }
 export function validThreadEvidence(value) {
@@ -63,7 +65,10 @@ export function validThreadEvidence(value) {
         skills: raw.skills.filter((skill) => typeof skill === "string"),
         sources: raw.sources.filter((source) => Boolean(source) && typeof source.claim === "string" && typeof source.url === "string"),
         ...(raw.mode === "LAIK" || raw.mode === "PRAWNIK" ? { mode: raw.mode } : {}),
-        ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {})
+        ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {}),
+        ...(Array.isArray(raw.realValueHashes)
+            ? { realValueHashes: raw.realValueHashes.filter((value) => typeof value === "string" && /^[0-9a-f]{16}$/.test(value)) }
+            : {})
     };
 }
 /**

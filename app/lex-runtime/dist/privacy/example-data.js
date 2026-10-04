@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 /**
  * Example data written by the assistant in earlier answers (a model letter
  * with "Jan Kowalski, ul. Polna 1"): it is no one's data, so it stays as
@@ -26,7 +27,23 @@ function stems(value) {
         .filter((word) => word.length >= 3)
         .map((word) => (/^\p{N}+$/u.test(word) ? word : word.slice(0, Math.max(3, word.length - 3))));
 }
-export function exampleDataKeepDirectives(text, findings, otherUserText = "") {
+const hash = (stem) => crypto.createHash("sha256").update(`lex-real-value:${stem}`).digest("hex").slice(0, 16);
+/**
+ * Hashes of the word stems of values the application restored into an answer
+ * (real data from the chat key or a document): kept in the case memory, so a
+ * restored name is never mistaken later for example data the model wrote.
+ */
+export function realValueHashes(values) {
+    return [...new Set(values.flatMap((value) => stems(value)).map(hash))];
+}
+/**
+ * Example data is kept only when the application knows which values it restored
+ * in this matter (knownReal); without that record (no case memory, older memory)
+ * everything stays pseudonymized.
+ */
+export function exampleDataKeepDirectives(text, findings, otherUserText = "", knownReal = null) {
+    if (!knownReal)
+        return [];
     if (INCOMPLETE_HISTORY.test(text))
         return [];
     const ranges = assistantRanges(text);
@@ -46,7 +63,7 @@ export function exampleDataKeepDirectives(text, findings, otherUserText = "") {
         if (!ranges.some((range) => finding.start >= range.start && finding.end <= range.end))
             continue;
         const words = stems(text.slice(finding.start, finding.end));
-        if (!words.length || words.some((word) => supplied.includes(word)))
+        if (!words.length || words.some((word) => supplied.includes(word) || knownReal.has(hash(word))))
             continue;
         if (keep.some((item) => item.start < finding.end && finding.start < item.end))
             continue;

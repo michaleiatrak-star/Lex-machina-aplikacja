@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { ManualPrivacyDirective, PiiKind, PseudonymizationFinding } from "./pseudonymizer.js";
 
 /**
@@ -34,11 +35,29 @@ function stems(value: string): string[] {
     .map((word) => (/^\p{N}+$/u.test(word) ? word : word.slice(0, Math.max(3, word.length - 3))));
 }
 
+const hash = (stem: string): string => crypto.createHash("sha256").update(`lex-real-value:${stem}`).digest("hex").slice(0, 16);
+
+/**
+ * Hashes of the word stems of values the application restored into an answer
+ * (real data from the chat key or a document): kept in the case memory, so a
+ * restored name is never mistaken later for example data the model wrote.
+ */
+export function realValueHashes(values: string[]): string[] {
+  return [...new Set(values.flatMap((value) => stems(value)).map(hash))];
+}
+
+/**
+ * Example data is kept only when the application knows which values it restored
+ * in this matter (knownReal); without that record (no case memory, older memory)
+ * everything stays pseudonymized.
+ */
 export function exampleDataKeepDirectives(
   text: string,
   findings: Array<Pick<PseudonymizationFinding, "kind" | "start" | "end">>,
-  otherUserText = ""
+  otherUserText = "",
+  knownReal: ReadonlySet<string> | null = null
 ): ManualPrivacyDirective[] {
+  if (!knownReal) return [];
   if (INCOMPLETE_HISTORY.test(text)) return [];
   const ranges = assistantRanges(text);
   if (!ranges.length) return [];
@@ -54,7 +73,7 @@ export function exampleDataKeepDirectives(
     if (!EXAMPLE_KINDS.has(finding.kind)) continue;
     if (!ranges.some((range) => finding.start >= range.start && finding.end <= range.end)) continue;
     const words = stems(text.slice(finding.start, finding.end));
-    if (!words.length || words.some((word) => supplied.includes(word))) continue;
+    if (!words.length || words.some((word) => supplied.includes(word) || knownReal.has(hash(word)))) continue;
     if (keep.some((item) => item.start < finding.end && finding.start < item.end)) continue;
     keep.push({ start: finding.start, end: finding.end, action: "KEEP" });
   }

@@ -631,7 +631,7 @@ export class SafeSessionExecutor {
         try {
             // Example data the assistant wrote earlier (a model letter) stays as written.
             const exampleData = /(?:^|\n\n)Asystent: /.test(request.query)
-                ? exampleDataKeepDirectives(request.query, (await new LocalPolishPseudonymizer(new PseudonymizationVault(request.privacySeed), this.chatRecognizerFor(request.model), this.personMorphology).pseudonymize(request.query)).findings, request.auxiliaryText ?? "")
+                ? exampleDataKeepDirectives(request.query, (await new LocalPolishPseudonymizer(new PseudonymizationVault(request.privacySeed), this.chatRecognizerFor(request.model), this.personMorphology).pseudonymize(request.query)).findings, request.auxiliaryText ?? "", request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null)
                 : [];
             const protectedPrimary = await chatPseudonymizer
                 .pseudonymize(request.query, exampleData);
