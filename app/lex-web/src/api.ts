@@ -947,6 +947,8 @@ export type EvidenceItem = {
   caseSignature?: string;
   evidenceHash?: string;
   supportQuoteHash?: string;
+  // Fragment orzeczenia sprawdzony w oficjalnym tekście (zaznaczany w podglądzie).
+  passage?: string;
 };
 
 export type MandatoryPathStep = {
@@ -3534,6 +3536,24 @@ export function previewProvision(claim: string, sourceUrl?: string): Promise<Pro
   });
 }
 
+export type CaseLawPreview = {
+  url: string;
+  html: string;
+  anchor: string;
+  match: "EXACT" | "PARTIAL" | "SIGNATURE" | "NONE";
+  chars: number;
+};
+
+// Pełny tekst orzeczenia/interpretacji z oficjalnego źródła, cytowany fragment zaznaczony.
+export function previewCaseLaw(input: {
+  sourceUrl: string;
+  passage?: string;
+  signature?: string;
+  attributed?: string;
+}): Promise<CaseLawPreview> {
+  return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
+}
+
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {
   return json<McpSourcePreview>("/api/mcp-search/source-preview", {
     method: "POST",
@@ -3598,6 +3618,19 @@ export function getAnomalies(filter: { severity?: AnomalySeverity; since?: strin
   if (filter.limit) params.set("limit", String(filter.limit));
   const query = params.toString();
   return json(`/api/diagnostics/anomalies${query ? `?${query}` : ""}`);
+}
+
+// Faktura w PDF z logo wystawcy (z ustawień). logoOmitted: logo, którego nie dało się osadzić.
+export async function exportInvoicePdf(invoiceId: string): Promise<{ blob: Blob; filename: string; logoOmitted: boolean }> {
+  const response = await fetch(`${apiBase()}/api/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `HTTP_${response.status}`, response.status);
+  }
+  const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "Faktura.pdf";
+  return { blob: await response.blob(), filename, logoOmitted: Boolean(response.headers.get("x-lex-invoice-logo")) };
 }
 
 export async function exportAnomalies(): Promise<Blob> {

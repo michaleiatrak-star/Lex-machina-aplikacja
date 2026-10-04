@@ -1,4 +1,5 @@
 import { AuthError } from "../auth/service.js";
+import { invoicePdf, invoicePdfFileName } from "../invoice-pdf.js";
 import { INVOICE_SORTS, InvoiceError, invoiceTotals } from "../invoice-store.js";
 import { CATALOG_SECONDARY_SOURCES, VAT_ACT_ELI, VAT_INVOICE_ARTICLE, findLegalText, unverifiedReport, verifyRequirements } from "../invoice-requirements.js";
 // Karta „Faktury” i Ustawienia → Faktury i KSeF. Dane każdego użytkownika są
@@ -165,4 +166,25 @@ export function registerInvoiceRoutes(app, dependencies) {
     app.post("/api/invoices/:invoiceId/duplicate", handle(async (context, key, req) => ({
         invoice: withTotals(await invoices.duplicate(context.user.userId, key, id(req)))
     })));
+    // Eksport faktury do PDF, z logo wystawcy z ustawień (gdy jest ustawione).
+    app.get("/api/invoices/:invoiceId/pdf", async (req, res) => {
+        try {
+            const context = authService.authenticateAuthorization(req.get("authorization"));
+            const { invoice, logo } = await authService.withSessionUserMasterKey(context.session.sessionId, async (userMasterKey) => ({
+                invoice: await invoices.get(context.user.userId, userMasterKey, id(req)),
+                logo: (await invoices.profile(context.user.userId, userMasterKey)).logo
+            }));
+            const { pdf, logoOmitted } = invoicePdf(invoice, logo ? { logo } : {});
+            res
+                .status(200)
+                .type("application/pdf")
+                .set("Content-Disposition", `attachment; filename="${invoicePdfFileName(invoice)}"`)
+                .set("Cache-Control", "no-store")
+                .set(logoOmitted ? { "X-Lex-Invoice-Logo": `OMITTED:${logoOmitted}` } : {})
+                .send(pdf);
+        }
+        catch (error) {
+            failed(res, error);
+        }
+    });
 }

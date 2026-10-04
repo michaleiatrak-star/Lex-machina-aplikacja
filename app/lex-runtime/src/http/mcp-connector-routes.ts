@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { CaseLawPreviewService } from "../case-law-preview.js";
 import {
   AuthError,
   type AuthService
@@ -96,6 +97,7 @@ export function registerMcpConnectorRoutes(
   }
 ): void {
   const { authService, connectors, search, previewFetch } = dependencies;
+  const caseLawPreview = new CaseLawPreviewService(previewFetch);
 
   app.get(
     "/api/admin/mcp-connectors",
@@ -245,6 +247,39 @@ export function registerMcpConnectorRoutes(
       }
       const reply = await search.direct({ source, tool, arguments: args ?? {} });
       res.json({ source, tool, ok: reply.ok, result: reply.result });
+    }
+  );
+
+  // Pełny tekst orzeczenia / interpretacji (SN, NSA/WSA, SAOS, KIO, EUREKA, UODO, TSUE)
+  // z zaznaczonym fragmentem przywołanym w odpowiedzi, do ręcznej weryfikacji kontekstu.
+  app.post(
+    "/api/case-law/preview",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const text = (value: unknown, max: number) =>
+        typeof value === "string" && value.trim() && value.length <= max ? value.trim() : undefined;
+      const sourceUrl = text(req.body?.sourceUrl, 2000);
+      const passage = text(req.body?.passage, 8000);
+      const signature = text(req.body?.signature, 200);
+      const attributed = text(req.body?.attributed, 4000);
+      if (!sourceUrl || (req.body?.passage !== undefined && !passage && req.body.passage !== "")) {
+        res.status(400).json({ error: "CASE_PREVIEW_INVALID" });
+        return;
+      }
+      try {
+        res.json(
+          await caseLawPreview.preview({
+            sourceUrl,
+            ...(passage ? { passage } : {}),
+            ...(signature ? { signature } : {}),
+            ...(attributed ? { attributed } : {})
+          })
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT)_[A-Z0-9_]+$/.test(message) ? message : "CASE_PREVIEW_FAILED";
+        res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
+      }
     }
   );
 

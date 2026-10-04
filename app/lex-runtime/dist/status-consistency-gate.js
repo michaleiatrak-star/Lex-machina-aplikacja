@@ -1,11 +1,12 @@
 import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { detectLegalReferences } from "./finalization-gate.js";
+import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
 const UNIT = "\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
 // "art. 233", "art. 233 § 1 KK", "art. 233 i 234 KK", "art. 233, 234 oraz 235 KK", "art. 233–234 KK".
-const REFERENCE = new RegExp(`(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:\\s*(?:,|i|oraz|lub|albo|a także|–|-)\\s*(?:art\\.?\\s+)?${UNIT})*)(?:\\s+(${ACTS})\\b)?`, "giu");
+const REFERENCE = new RegExp(`(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:\\s*(?:,|i|oraz|lub|albo|a także|–|-)\\s*(?:art\\.?\\s+)?${UNIT})*)(?:\\s+(${DOTTED_ACT_ALTERNATIVES}|${ACTS})(?![\\p{L}]))?`, "giu");
 const ENUMERATION_ITEM = new RegExp(UNIT, "gu");
 const RANGE_SEPARATOR = /^\s*[–-]\s*$/u;
 const VERIFIED_MARKER = /✅\s*\[VER:[^\]\r\n]*\]/gu;
@@ -25,7 +26,8 @@ function lineTokens(lineText) {
     REFERENCE.lastIndex = 0;
     for (const match of lineText.matchAll(REFERENCE)) {
         const body = match[1] ?? "";
-        const act = match[2]?.toLocaleUpperCase("pl") ?? null;
+        // "k.k." is KK.
+        const act = match[2] ? compactActAbbreviations(match[2]).toLocaleUpperCase("pl") : null;
         const bodyStart = match.index + match[0].indexOf(body);
         const items = [...body.matchAll(ENUMERATION_ITEM)];
         items.forEach((item, index) => {
@@ -137,7 +139,16 @@ function parse(text) {
 }
 // Przepis bez skrótu aktu ("art. 233") przyjmuje skrót, gdy w odpowiedzi ten numer
 // artykułu występuje z dokładnie jednym aktem; inaczej pozostaje osobnym kluczem.
-function keyResolver(lines) {
+function keyResolver(lines, text) {
+    // The act G8 resolved for an act-less article (the only act of the line or the answer).
+    const resolvedActs = new Map();
+    for (const reference of detectLegalReferences(text)) {
+        if (reference.kind !== "statute" || !reference.span)
+            continue;
+        const act = /\s(\S+)$/u.exec(reference.claim)?.[1];
+        if (act)
+            resolvedActs.set(`${reference.line}\u0000${compact(reference.span)}`, act);
+    }
     const actsByUnit = new Map();
     for (const line of lines) {
         for (const group of line.groups) {
@@ -149,12 +160,15 @@ function keyResolver(lines) {
             }
         }
     }
-    return (reference) => {
+    return (reference, line) => {
         if (reference.act)
             return compact(reference.claim);
         const unit = compact(reference.claim);
         const acts = actsByUnit.get(unit);
-        return acts?.size === 1 ? `${unit} ${[...acts][0].toLocaleLowerCase("pl")}` : unit;
+        if (acts?.size === 1)
+            return `${unit} ${[...acts][0].toLocaleLowerCase("pl")}`;
+        const resolved = resolvedActs.get(`${line}\u0000${unit}`);
+        return resolved ? `${unit} ${resolved.toLocaleLowerCase("pl")}` : unit;
     };
 }
 function verifiedRecord(ledger, claims) {
@@ -172,14 +186,14 @@ function ledgerClaims(reference, key) {
 }
 function occurrences(text) {
     const lines = parse(text);
-    const resolve = keyResolver(lines);
+    const resolve = keyResolver(lines, text);
     const items = [];
     for (const line of lines) {
         const applicationHedge = APPLICATION_HEDGE.test(line.text);
         for (const group of line.groups) {
             const status = groupStatus(group);
             for (const reference of group.references) {
-                const key = resolve(reference);
+                const key = resolve(reference, line.line);
                 items.push({
                     key,
                     claim: reference.claim,
@@ -257,7 +271,7 @@ export function evaluateStatusConsistency(text, ledger) {
  */
 export function reconcileStatusMarkers(text, ledger) {
     const lines = parse(text);
-    const resolve = keyResolver(lines);
+    const resolve = keyResolver(lines, text);
     const ledgerMarkers = new Set(ledger
         .all()
         .map((record) => verificationMarker(record))
@@ -269,7 +283,7 @@ export function reconcileStatusMarkers(text, ledger) {
             const status = groupStatus(group);
             if (status !== "UNVERIFIED" && status !== "CONFLICT")
                 continue;
-            const records = group.references.map((reference) => verifiedRecord(ledger, ledgerClaims(reference, resolve(reference))));
+            const records = group.references.map((reference) => verifiedRecord(ledger, ledgerClaims(reference, resolve(reference, line.line))));
             if (records.every((record) => !record)) {
                 // Nic w grupie nie jest zweryfikowane: ✅ bez rekordu VERIFIED w rejestrze jest
                 // zmyślony i znika, ⚠️ zostaje. Prawdziwy ✅ innego przepisu zostaje (blokada).

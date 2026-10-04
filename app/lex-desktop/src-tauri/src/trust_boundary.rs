@@ -1442,7 +1442,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/core-law/acts"
         | "/api/core-law/acts/lookup"
         | "/api/core-law/acts/remove"
-        | "/api/core-law/provision-preview" => method == "POST",
+        | "/api/core-law/provision-preview"
+        | "/api/case-law/preview" => method == "POST",
         "/api/core-law/settings" => method == "PUT",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
@@ -1524,6 +1525,7 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
         ["api", "invoices", id, "issue" | "duplicate"] => method == "POST" && invoice_id(id),
+        ["api", "invoices", id, "pdf"] => method == "GET" && invoice_id(id),
         _ => false,
     }
 }
