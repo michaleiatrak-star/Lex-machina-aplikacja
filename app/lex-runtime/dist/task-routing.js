@@ -57,12 +57,17 @@ function stemPhrase(phrase) {
         return ARTICLE;
     if (phrase === "§ y")
         return null;
-    // Word starts: "wyrok" matches "wyroku", "apelacja" matches "apelację".
+    // Word starts: "wyrok" matches "wyroku", "apelacja" matches "apelację";
+    // a mobile "e" drops: "świadek" matches "świadka", "pozew" matches "pozwu".
     const words = phrase
         .split(/\s+/u)
         .map((word) => word.replace(/[^\p{L}\p{N}.-]/gu, ""))
         .filter(Boolean)
-        .map((word) => (word.length >= 8 ? word.slice(0, word.length - 2) : word.length >= 5 ? word.slice(0, word.length - 1) : word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        .map((word) => {
+        const base = (word.length >= 8 ? word.slice(0, word.length - 2) : word.length >= 5 ? word.slice(0, word.length - 1) : word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const dropped = /e[^aeiouyąęó\W\d]$/iu.test(word) && word.length >= 5 ? (word.slice(0, -2) + word.slice(-1)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : null;
+        return dropped ? `(?:${base}|${dropped})` : base;
+    });
     if (!words.length)
         return null;
     return new RegExp(`(?<![\\p{L}])${words.join("\\p{L}*\\s+")}`, "iu");
@@ -99,7 +104,12 @@ export function parseActivationMatrix(markdown) {
         const skills = [...cells[2].matchAll(/`([a-z0-9-]+)`/gu)].map((match) => match[1]);
         if (!skills[0] || !/-v\d|min90/.test(skills[0]))
             continue;
-        const phrases = [...signal.matchAll(/"([^"]+)"/gu)].flatMap((match) => match[1].split(/\s*\/\s*/u).map((phrase) => phrase.trim().toLocaleLowerCase("pl")).filter((phrase) => phrase.length >= 3));
+        const quoted = [...signal.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+        // Rows without quotes ("świadek / pytania do przesłuchania / cross-examination",
+        // "chronologia / oś czasu / timeline") are phrase lists too; "dostarcza ..." and
+        // "a + b" rows describe materials and combinations, not phrases.
+        const plain = !quoted.length && !/dostarcz|\+/iu.test(signal) ? [signal.replace(/\(.*?\)/gu, "")] : [];
+        const phrases = [...quoted, ...plain].flatMap((text) => text.split(/\s*\/\s*/u).map((phrase) => phrase.trim().toLocaleLowerCase("pl")).filter((phrase) => phrase.length >= 4));
         // "napisz pozew / apelację / zażalenie" in quotes is one verb with alternatives.
         const expanded = phrases.flatMap((phrase, index) => {
             const head = phrases[0].split(/\s+/u)[0];
@@ -126,6 +136,8 @@ export function parseActivationMatrix(markdown) {
 // What a delivered document counts as in the matrix's words.
 function deliveryWords(material) {
     switch (material.category) {
+        case "AKTA":
+            return ["akta"];
         case "ORZECZENIE":
             return ["akta", "wyrok", material.label];
         case "PISMO_PROCESOWE":
@@ -134,18 +146,48 @@ function deliveryWords(material) {
             return material.evidence ? ["dowody", material.label] : [material.label];
     }
 }
+export function parseRedactionTest(skillMarkdown, skill = "pisma-procesowe-v3") {
+    const section = /### Test A[\s\S]*?(?=\n### )/u.exec(skillMarkdown)?.[0] ?? "";
+    const signalsText = /Sygnały:([\s\S]*?)(?:\n\s*\n|→)/u.exec(section)?.[1] ?? "";
+    const signals = [...signalsText.matchAll(/"([^"]+)"/gu)].map((match) => match[1].toLocaleLowerCase("pl").split(/\s+na\s+/u)[0].trim()).filter(Boolean);
+    const module = /`(modules\/MOD-REDAKCJA\.md)`/u.exec(section)?.[1];
+    return signals.length && module ? { skill, module: `${skill}/${module}`, signals } : null;
+}
+// A request to analyse or assess (not to prepare or draft).
+export const ANALYSIS_INTENT = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|zbadaj|całościow\p{L}*|kompleksow\p{L}*|szans\p{L}*)(?![\p{L}])/iu;
+// New substance (theses, provisions, case law) is not a Test A edit.
+const NEXT_STEP = /co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:zrobić|robić)|co\s+dalej|od\s+czego\s+zacząć/iu;
+const NEW_SUBSTANCE = /(?<![\p{L}])(?:dodaj|dopisz|nowy\s+zarzut|nowe\s+zarzuty|nowe\s+przepisy|orzeczni\p{L}*|argument\p{L}*)(?![\p{L}])/iu;
+const OWN_DOCUMENT = /(?<![\p{L}])(?:m[oó]j|moj[ae]|nasz[ae]?|własn\p{L}*|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
 /**
  * Entry point for the task: the activation matrix first (phrases of the question
  * and the materials delivered), then the router table on the question and the
  * kinds of the delivered documents.
  */
-export function decideTask(routes, matrix, rawQuestion, materials = []) {
+export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null) {
     // The user pressed "continue" on a pipeline step: that skill, explicitly.
     const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
     const handoff = explicitHandoff(rawQuestion, (skill) => known.has(skill));
     if (handoff)
         return { source: "MATRIX", primary: handoff, then: null, reason: "następny etap pipeline'u wskazany przez użytkownika" };
     const question = provisionsForDetection(rawQuestion);
+    // Test A: a finished pleading delivered (or "my letter") and a request about its form.
+    if (redaction && !NEW_SUBSTANCE.test(question)) {
+        const ownPleading = materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question);
+        // The skill's signals, and their verbs ("popraw", "zredaguj", "skróć"...) for the user's own letter.
+        const verbs = [...new Set(redaction.signals.map((phrase) => phrase.split(/\s+/u)[0]))];
+        const signal = redaction.signals.find((phrase) => stemPhrase(phrase)?.test(question)) ??
+            (OWN_DOCUMENT.test(question) ? verbs.find((verb) => stemPhrase(verb)?.test(question)) : undefined);
+        if (signal && ownPleading) {
+            return {
+                source: "SKILL",
+                primary: redaction.skill,
+                then: null,
+                reason: `redakcja istniejącego pisma (${redaction.skill}, KROK 0 Test A: „${signal}”)`,
+                modules: [redaction.module]
+            };
+        }
+    }
     const delivered = new Set(materials.flatMap(deliveryWords));
     const pleadingDelivered = materials.some((material) => material.category === "ORZECZENIE" || material.category === "PISMO_PROCESOWE");
     const routerPick = classifyTask(routes, rawQuestion);
@@ -156,17 +198,37 @@ export function decideTask(routes, matrix, rawQuestion, materials = []) {
         const deliveredHits = rule.delivers.filter((word) => delivered.has(word));
         if (rule.withoutPleading && pleadingDelivered)
             continue;
+        // ACTIVATION-MATRIX, nakładania: "pismo + dowody + »co zrobić dalej«" -> analiza-sadowa-v6, not the guide.
+        if (pleadingDelivered && rule.primary === "przewodnik-prawny-v2" && NEXT_STEP.test(question))
+            continue;
         // "pismo procesowe + dostarczone akta": a pleading task with case files.
         if (/pismo\s+procesowe\s*\+/iu.test(rule.signal) && !(pleadingTask && deliveredHits.length))
             continue;
         if (!phrases.length && !deliveredHits.length)
             continue;
-        const score = phrases.reduce((sum, phrase) => sum + phrase.length, 0) + deliveredHits.length * 25 + (rule.then ? 30 : 0);
+        // What the user asks for (a phrase of the question) outranks what was delivered;
+        // a single generic word ("świadek") weighs less than a phrase, and a request to
+        // analyse puts the delivered material first ("przeanalizuj protokół").
+        const analysis = ANALYSIS_INTENT.test(question);
+        const score = phrases.reduce((sum, phrase) => sum + (phrase.includes(" ") ? 100 : 40) + phrase.length, 0) +
+            deliveredHits.length * (analysis ? 50 : 25) +
+            (rule.then ? 30 : 0);
         if (!best || score > best.score) {
             best = { rule, score, why: [...phrases.map((phrase) => `fraza „${phrase}”`), ...deliveredHits.map((word) => `dostarczono: ${word}`)] };
         }
     }
     if (best) {
+        // Asked to draft from a delivered decision / opponent's pleading ("napisz apelację" + wyrok):
+        // the delivery row comes first and hands over to the drafting skill.
+        const first = matrix.find((rule) => rule !== best.rule && rule.then === best.rule.primary && rule.delivers.some((word) => delivered.has(word)));
+        if (first && !best.rule.delivers.some((word) => delivered.has(word))) {
+            return {
+                source: "MATRIX",
+                primary: first.primary,
+                then: best.rule.primary,
+                reason: `macierz aktywacji: ${first.signal} → ${best.rule.signal} (${best.why.join(", ")})`
+            };
+        }
         return { source: "MATRIX", primary: best.rule.primary, then: best.rule.then, reason: `macierz aktywacji: ${best.rule.signal} (${best.why.join(", ")})` };
     }
     // No matrix row: the router table on the question and the kinds of the documents.

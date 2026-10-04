@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRoutingTable, pipelineNext } from "../src/task-routing.js";
+import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "../src/task-routing.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const routes = parseRoutingTable(fs.readFileSync(path.join(CORPUS, "prawny-router-v3/SKILL.md"), "utf8"));
@@ -93,6 +93,71 @@ describe("materials the user delivers (documents and evidence)", () => {
     expect(decideTask(routes, matrix, "Proszę o analizę", [contract])?.primary).toBe("analizator-umow-v1");
     // Evidence next to a judgment is not "evidence without a pleading".
     expect(decideTask(routes, matrix, "Oceń te materiały", [judgment, invoice])?.primary).toBe("analiza-sadowa-v6");
+  });
+});
+
+describe("coverage of executive skills (documents and tasks)", () => {
+  const matrix = parseActivationMatrix(fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8"));
+  const redaction = parseRedactionTest(fs.readFileSync(path.join(CORPUS, "pisma-procesowe-v3/SKILL.md"), "utf8"));
+  const kind = (text: string) => classifyDocument({ text });
+  const terms = kind("REGULAMIN SKLEPU INTERNETOWEGO\n§ 1 Postanowienia ogólne");
+  const settlement = kind("POROZUMIENIE\nzawarte w dniu 1 marca 2024 r. pomiędzy stronami\n§ 1");
+  const contract = kind("UMOWA NAJMU\nzawarta w dniu 1 lutego 2024 r.\n§ 1 Przedmiot");
+  const hearing = kind("PROTOKÓŁ ROZPRAWY\nŚwiadek [PII:PERSON:0001] zeznaje: ...");
+  const claim = kind("POZEW O ZAPŁATĘ\nWartość przedmiotu sporu: 10 000 zł");
+  const judgment = kind("Sygn. akt I C 1/24\nWYROK\nW IMIENIU RZECZYPOSPOLITEJ POLSKIEJ");
+  const mail = kind("Od: x\nDo: y\nTemat: z");
+  const caseFiles = { category: "AKTA" as const, evidence: false, label: "akta sprawy" };
+  const pick = (question: string, materials: Parameters<typeof decideTask>[3] = []) => {
+    const decision = decideTask(routes, matrix, question, materials, redaction);
+    return decision ? [decision.primary, decision.then].filter(Boolean).join(" -> ") : null;
+  };
+
+  it("recognises settlements and hearing protocols", () => {
+    expect([terms, settlement, contract, hearing].map((item) => item.kind)).toEqual(["REGULAMIN", "POROZUMIENIE", "UMOWA", "PROTOKOL_PRZESLUCHANIA"]);
+    expect(hearing.evidence).toBe(true);
+  });
+
+  it("reads Test A of pisma-procesowe-v3 with its redaction module", () => {
+    expect(redaction).toMatchObject({ skill: "pisma-procesowe-v3", module: "pisma-procesowe-v3/modules/MOD-REDAKCJA.md" });
+    expect(redaction!.signals).toEqual(expect.arrayContaining(["zredaguj", "skróć"]));
+  });
+
+  it("contracts, terms and settlements go to analizator-umow-v1", () => {
+    expect(pick("Przeanalizuj ten regulamin", [terms])).toBe("analizator-umow-v1");
+    expect(pick("Oceń to porozumienie", [settlement])).toBe("analizator-umow-v1");
+    expect(pick("Czy mogę podpisać tę umowę?", [contract])).toBe("analizator-umow-v1");
+  });
+
+  it("a whole-case analysis goes to analiza-sadowa-v6", () => {
+    expect(pick("Zrób całościową analizę sprawy", [claim, judgment, mail])).toBe("analiza-sadowa-v6");
+    expect(pick("Zrób całościową analizę sprawy", [caseFiles])).toBe("analiza-sadowa-v6");
+    expect(pick("Przeanalizuj pismo przeciwnika", [claim])).toBe("analiza-sadowa-v6");
+  });
+
+  it("an analysed hearing protocol is evidence, questions for a witness are a hearing preparation", () => {
+    expect(pick("Przeanalizuj protokół przesłuchania świadka", [hearing])).toBe("analizator-dowodow-v3");
+    expect(pick("Przygotuj pytania do świadka na rozprawę", [hearing])).toBe("przesluchanie-swiadkow-v2-min90");
+    expect(pick("Przygotuj mnie do przesłuchania w charakterze świadka")).toBe("przesluchanie-swiadkow-v2-min90");
+  });
+
+  it("improving one's own pleading is a redaction (Test A) unless new substance is asked for", () => {
+    const decision = decideTask(routes, matrix, "Popraw mój pozew", [claim], redaction);
+    expect(decision).toMatchObject({ source: "SKILL", primary: "pisma-procesowe-v3", modules: ["pisma-procesowe-v3/modules/MOD-REDAKCJA.md"] });
+    expect(pick("Skróć i wzmocnij ton tego pisma", [claim])).toBe("pisma-procesowe-v3");
+    expect(pick("Popraw mój pozew, dodaj zarzut przedawnienia", [claim])).toBe("analiza-sadowa-v6 -> pisma-procesowe-v3");
+  });
+
+  it("an appeal from a delivered judgment starts with its analysis", () => {
+    expect(pick("Napisz apelację", [judgment])).toBe("analiza-sadowa-v6 -> pisma-procesowe-v3");
+    expect(pick("Napisz apelację")).toBe("pisma-procesowe-v3");
+  });
+
+  it("chronology and reports", () => {
+    expect(pick("Wyciągnij chronologię zdarzeń z dokumentów", [mail, claim])).toBe("chronologia-sprawy-v1");
+    expect(pick("Ułóż oś czasu sprawy")).toBe("chronologia-sprawy-v1");
+    expect(pick("Przygotuj raport dla klienta")).toBe("raport-klienta-v1");
+    expect(pick("Przygotuj raport o stanie sprawy")).toBe("raport-sytuacyjny-v2");
   });
 });
 

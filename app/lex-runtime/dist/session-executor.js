@@ -36,7 +36,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
-import { decideTask, parseActivationMatrix, parseCombinations, parseRoutingTable, pipelineNext } from "./task-routing.js";
+import { ANALYSIS_INTENT, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
@@ -540,6 +540,22 @@ export class SafeSessionExecutor {
         this.combinationsCache = { root: this.registry.root, rows };
         return rows;
     }
+    redactionCache = null;
+    // pisma-procesowe-v3 KROK 0 Test A (editing a finished pleading), from the corpus.
+    redactionTest() {
+        if (this.redactionCache?.root === this.registry.root)
+            return this.redactionCache.test;
+        const record = this.registry.get("pisma-procesowe-v3");
+        let test = null;
+        try {
+            test = record ? parseRedactionTest(fs.readFileSync(record.skillFile, "utf8")) : null;
+        }
+        catch {
+            test = null;
+        }
+        this.redactionCache = { root: this.registry.root, test };
+        return test;
+    }
     activationMatrixCache = null;
     // shared/ACTIVATION-MATRIX.md, re-read after a skill update.
     activationMatrix() {
@@ -956,7 +972,15 @@ export class SafeSessionExecutor {
             !request.orderedCaseWorkflowContext) {
             // ACTIVATION-MATRIX first (phrases and delivered materials), then the
             // router table [1]–[11] on the question and the documents' kinds.
-            taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, recognisedDocuments);
+            // The matter's own files (case search on) count as delivered case files for a
+            // request to analyse the matter ("całościowa analiza sprawy").
+            const materials = [
+                ...recognisedDocuments,
+                ...(request.caseFiles && !recognisedDocuments.length && ANALYSIS_INTENT.test(pathFacts.query)
+                    ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
+                    : [])
+            ];
+            taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest());
             const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
             if (taskRoute && record) {
                 const skill = record.name;
@@ -989,6 +1013,17 @@ export class SafeSessionExecutor {
                         detail: `skill=${skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
                     });
                     pathSections.push(contractPrompt(loaded));
+                }
+                // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
+                for (const resource of taskRoute.modules ?? []) {
+                    if (contextResources.has(resource))
+                        continue;
+                    const content = this.readCorpus(resource);
+                    if (!content)
+                        continue;
+                    contextResources.add(resource);
+                    audit.record("resource_read", resource, "OK", { detail: "runtime-preload;task-decision" });
+                    pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
                 }
                 // Conditional modules of the skill's module map that this case triggers.
                 const modules = loadModules(this.registry, skill, triggeredModules(moduleMap(this.registry, skill), {

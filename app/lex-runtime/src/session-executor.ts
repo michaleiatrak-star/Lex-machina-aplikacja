@@ -164,12 +164,15 @@ import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
+  ANALYSIS_INTENT,
   decideTask,
   parseActivationMatrix,
   parseCombinations,
+  parseRedactionTest,
   parseRoutingTable,
   pipelineNext,
   type MatrixRule,
+  type RedactionTest,
   type SkillCombination,
   type TaskDecision,
   type TaskRoute
@@ -1238,6 +1241,22 @@ export class SafeSessionExecutor implements SessionExecutor {
     return rows;
   }
 
+  private redactionCache: { root: string; test: RedactionTest | null } | null = null;
+
+  // pisma-procesowe-v3 KROK 0 Test A (editing a finished pleading), from the corpus.
+  private redactionTest(): RedactionTest | null {
+    if (this.redactionCache?.root === this.registry.root) return this.redactionCache.test;
+    const record = this.registry.get("pisma-procesowe-v3");
+    let test: RedactionTest | null = null;
+    try {
+      test = record ? parseRedactionTest(fs.readFileSync(record.skillFile, "utf8")) : null;
+    } catch {
+      test = null;
+    }
+    this.redactionCache = { root: this.registry.root, test };
+    return test;
+  }
+
   private activationMatrixCache: { root: string; rules: MatrixRule[] } | null = null;
 
   // shared/ACTIVATION-MATRIX.md, re-read after a skill update.
@@ -1862,7 +1881,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     ) {
       // ACTIVATION-MATRIX first (phrases and delivered materials), then the
       // router table [1]–[11] on the question and the documents' kinds.
-      taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, recognisedDocuments);
+      // The matter's own files (case search on) count as delivered case files for a
+      // request to analyse the matter ("całościowa analiza sprawy").
+      const materials = [
+        ...recognisedDocuments,
+        ...(request.caseFiles && !recognisedDocuments.length && ANALYSIS_INTENT.test(pathFacts.query)
+          ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
+          : [])
+      ];
+      taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest());
       const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
         const skill = record.name;
@@ -1897,6 +1924,15 @@ export class SafeSessionExecutor implements SessionExecutor {
             detail: `skill=${skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
           });
           pathSections.push(contractPrompt(loaded));
+        }
+        // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
+        for (const resource of taskRoute.modules ?? []) {
+          if (contextResources.has(resource)) continue;
+          const content = this.readCorpus(resource);
+          if (!content) continue;
+          contextResources.add(resource);
+          audit.record("resource_read", resource, "OK", { detail: "runtime-preload;task-decision" });
+          pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
         }
         // Conditional modules of the skill's module map that this case triggers.
         const modules = loadModules(
