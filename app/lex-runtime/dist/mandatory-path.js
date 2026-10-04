@@ -339,28 +339,44 @@ export function evaluateMandatoryPath(model, facts) {
         });
     }
     // prawo-polskie-v2: after a domain's SKILL.md, an act module of that domain
-    // (its MAPA-AKTOW). Shown, not blocking: the right module is the model's choice.
+    // (its MAPA-AKTOW). Modules the application resolved mechanically from the map
+    // (Dz.U. number, article, act named) are required; otherwise the step is shown.
     const hint = facts.events.find((event) => event.type === "gate" && event.target === "DOMAIN_HINT");
     const hinted = (skill) => (new RegExp(`(?:^|;)${skill}:([^;]*)`).exec(String(hint?.detail?.detail ?? ""))?.[1] ?? "").split(",").filter(Boolean);
-    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => /^dr-\d{2}-/.test(name ?? ""))) {
-        if (!facts.events.some((event) => event.type === "skill_read" && event.target === skill && event.status === "OK"))
+    const actGate = facts.events.find((event) => event.type === "gate" && event.target === "ACT_MAP_MODULES");
+    const mechanical = String(actGate?.detail?.detail ?? "")
+        .split(";")
+        .filter((item) => item && !item.startsWith("ODRZUCONY:"))
+        .map((item) => {
+        const [skill, resource, rule] = item.split(":");
+        return { skill: skill, resource: resource, rule: rule ?? "" };
+    });
+    const domains = new Set([
+        ...[facts.primarySkill, ...facts.loadedSkills].filter((name) => /^dr-\d{2}-/.test(name ?? "")),
+        ...mechanical.map((item) => item.skill)
+    ]);
+    for (const skill of domains) {
+        const required = mechanical.filter((item) => item.skill === skill);
+        if (!required.length && !facts.events.some((event) => event.type === "skill_read" && event.target === skill && event.status === "OK"))
             continue;
-        const modules = [
-            ...new Set(facts.events
-                .filter((event) => event.type === "resource_read" && event.status === "OK" && canonicalPath(event.target).startsWith(`${skill}/modules/`))
-                .map((event) => canonicalPath(event.target).slice(skill.length + 9)))
-        ];
+        const reads = facts.events.filter((event) => event.type === "resource_read" && event.status === "OK" && canonicalPath(event.target).startsWith(`${skill}/modules/`));
+        const modules = [...new Set(reads.map((event) => canonicalPath(event.target).slice(skill.length + 9)))];
+        const missing = required.filter((item) => !reads.some((event) => canonicalPath(event.target) === item.resource));
         const suggested = hinted(skill);
         steps.push({
             layer: "SKILL",
             id: `MODUŁ-AKTU:${skill}`,
-            label: `Moduł aktu prawnego dziedziny ${skill} (MAPA-AKTOW)`,
-            requirement: "TRIGGERED",
-            status: modules.length ? "MET" : "MISSING",
-            by: "MODEL",
-            evidence: modules.length
-                ? `przeczytane: ${modules.join(", ")}`
-                : `brak odczytu modułu aktu${suggested.length ? `; wskazane przez aplikację: ${suggested.join(", ")}` : ""}`
+            label: required.length
+                ? `Moduły aktów ${skill} wskazane mechanicznie z MAPA-AKTOW (${[...new Set(required.map((item) => item.rule))].join(", ")})`
+                : `Moduł aktu prawnego dziedziny ${skill} (MAPA-AKTOW)`,
+            requirement: required.length ? "CORE" : "TRIGGERED",
+            status: required.length ? (missing.length ? "MISSING" : "MET") : modules.length ? "MET" : "MISSING",
+            by: reads.length && reads.every((event) => /runtime-preload/.test(String(event.detail?.detail ?? ""))) ? "APLIKACJA" : "MODEL",
+            evidence: missing.length
+                ? `nie wczytano: ${missing.map((item) => item.resource.split("/").pop()).join(", ")}`
+                : modules.length
+                    ? `przeczytane: ${modules.join(", ")}`
+                    : `brak odczytu modułu aktu${suggested.length ? `; wskazane przez aplikację: ${suggested.join(", ")}` : ""}`
         });
     }
     // Executive skill contract (mechanical mode, or the task type in AUTO): the gates

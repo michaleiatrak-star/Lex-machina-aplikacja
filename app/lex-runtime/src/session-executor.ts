@@ -181,6 +181,7 @@ import {
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, parseFlashRouting, rankDomains, type FlashRoute } from "./domain-module-map.js";
+import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -1867,6 +1868,41 @@ export class SafeSessionExecutor implements SessionExecutor {
     // (MAPA-AKTOW) the case points to; the model decides and reads them.
     const caseText = [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n");
     corpusTools.setCaseText(caseText);
+    // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
+    // named): those modules are loaded and required; the hint below covers the rest.
+    if (mandatoryModel && legalTurn) {
+      const documentText = attachments
+        .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+        .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+        .join("\n")
+        .slice(0, 30_000);
+      const acts = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"));
+      if (acts.modules.length || acts.rejected.length) {
+        const loaded = loadActModules(this.registry, acts.modules, contextResources);
+        for (const item of loaded.loaded) {
+          contextResources.add(item.resource);
+          audit.record("resource_read", item.resource, "OK", { detail: `runtime-preload;act-map;${item.rule}` });
+        }
+        audit.record("gate", "ACT_MAP_MODULES", acts.rejected.length ? "DEGRADED" : "OK", {
+          detail: [
+            ...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`),
+            ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)
+          ].join(";"),
+          ...(acts.rejected.length ? { rejected: acts.rejected.map((item) => `${item.resource} — ${item.reason}`) } : {})
+        });
+        if (acts.modules.length) pathSections.push(actModulesPrompt(loaded));
+        if (acts.rejected.length) {
+          pathSections.push(
+            [
+              "# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)",
+              ...acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`),
+              "Ustal właściwy moduł z mapy dziedziny albo powiedz wprost, że go brak; zgłoś rozbieżność mapy."
+            ].join("\n")
+          );
+        }
+        step("PREPARE", `moduły aktów z mapy (mechanicznie): ${acts.modules.map((item) => path.basename(item.resource, ".md")).join(", ") || "brak"}`);
+      }
+    }
     if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
       const domains = rankDomains(this.registry, this.flashRoutes(), caseText);
       if (domains.length) {

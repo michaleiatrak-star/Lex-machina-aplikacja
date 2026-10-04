@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
+import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt } from "./knowledge-map.js";
@@ -482,6 +483,21 @@ export class LexExecutionEngine {
                 emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
             emit("gate", "PROCESS_CHECKPOINT_RESOURCES", "OK", `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`);
             executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+        }
+        // MAPA-AKTOW resolved mechanically from the question and the case documents.
+        if (!args.model.startsWith("local/")) {
+            const acts = resolveActModulesWithChecks(this.registry, [effectiveQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+            if (acts.modules.length || acts.rejected.length) {
+                const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
+                for (const item of loaded.loaded)
+                    emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule}`);
+                emit("gate", "ACT_MAP_MODULES", "OK", [...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`), ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)].join(";"));
+                if (acts.modules.length)
+                    executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+                if (acts.rejected.length) {
+                    executiveContractText += `\n\n# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
+                }
+            }
         }
         // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
         if (!args.model.startsWith("local/")) {

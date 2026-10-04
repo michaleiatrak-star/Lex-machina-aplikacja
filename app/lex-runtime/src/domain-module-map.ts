@@ -125,7 +125,7 @@ export function parseActMap(markdown: string, skill: string): ActEntry[] {
 }
 
 // A module named without its domain ("mod-KPA-..." in DR-04's map lives in DR-05).
-function locate(registry: LexSkillRegistry, skill: string, resource: string): string | null {
+export function locate(registry: LexSkillRegistry, skill: string, resource: string): string | null {
   if (registry.resolveResource(skill, resource)) return resource;
   const name = path.basename(resource);
   for (const other of registry.skills.values()) {
