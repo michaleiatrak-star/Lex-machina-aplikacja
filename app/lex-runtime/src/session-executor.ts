@@ -162,7 +162,8 @@ import { detectLegalReferences, type LegalReferenceKind } from "./finalization-g
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
-import { classifyTask, parseRoutingTable, type TaskRoute } from "./task-routing.js";
+import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
+import { decideTask, parseActivationMatrix, parseRoutingTable, type MatrixRule, type TaskDecision, type TaskRoute } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import {
   applyAutomaticVerificationMarkers,
@@ -1213,6 +1214,16 @@ export class SafeSessionExecutor implements SessionExecutor {
     return routes;
   }
 
+  private activationMatrixCache: { root: string; rules: MatrixRule[] } | null = null;
+
+  // shared/ACTIVATION-MATRIX.md, re-read after a skill update.
+  private activationMatrix(): MatrixRule[] {
+    if (this.activationMatrixCache?.root === this.registry.root) return this.activationMatrixCache.rules;
+    const rules = parseActivationMatrix(this.readCorpus("shared/ACTIVATION-MATRIX.md") ?? "");
+    this.activationMatrixCache = { root: this.registry.root, rules };
+    return rules;
+  }
+
   private mandatoryModel(): MandatoryPathModel | null {
     if (this.mandatoryModelCache?.root === this.registry.root) return this.mandatoryModelCache.model;
     try {
@@ -1764,6 +1775,28 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
     ]);
     const pathSections: string[] = [];
+    // The kind of every document the user sent (court decision, pleading, contract,
+    // evidence...), recognised locally from its protected text; the router chooses
+    // the skill also by what the user delivers (ACTIVATION-MATRIX).
+    const recognisedDocuments: RecognisedDocument[] =
+      mandatoryModel && legalTurn
+        ? attachments
+            .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+            .map((attachment) => ({
+              documentId: attachment.documentId,
+              ...classifyDocument({
+                text: attachment.chunks.map((chunk) => chunk.text).join("\n"),
+                images: attachment.images?.length ?? 0
+              })
+            }))
+        : [];
+    if (recognisedDocuments.length) {
+      audit.record("gate", "DOCUMENT_KINDS", "OK", {
+        documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
+      });
+      pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+      step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
+    }
     // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
     if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {
       const qualifier = this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE);
@@ -1791,7 +1824,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // AUTO: the task type from the router's table [1]–[11] names the executive skill
     // the router requires; the app loads it in full with its contract (mechanically,
     // as in the mechanical mode) instead of leaving the choice to the model.
-    let taskRoute: { route: TaskRoute; matched: string[] } | null = null;
+    let taskRoute: TaskDecision | null = null;
     if (
       mandatoryModel &&
       legalTurn &&
@@ -1803,18 +1836,27 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.contractWorkflowContext &&
       !request.orderedCaseWorkflowContext
     ) {
-      taskRoute = classifyTask(this.taskRoutes(), pathFacts.query);
-      const record = taskRoute ? this.registry.get(taskRoute.route.primary) : undefined;
+      // ACTIVATION-MATRIX first (phrases and delivered materials), then the
+      // router table [1]–[11] on the question and the documents' kinds.
+      taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, recognisedDocuments);
+      const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
         const skill = record.name;
         const text = fs.readFileSync(record.skillFile, "utf8");
         corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
-        audit.record("gate", "TASK_ROUTING", "OK", { route: taskRoute.route.id, skill, matched: taskRoute.matched });
+        audit.record("gate", "TASK_ROUTING", "OK", {
+          source: taskRoute.source,
+          skill,
+          ...(taskRoute.then ? { then: taskRoute.then } : {}),
+          reason: taskRoute.reason
+        });
         pathSections.push(
           [
-            `# SKILL WYKONAWCZY WG ROUTERA [${taskRoute.route.id}] ${taskRoute.route.title}: ${skill} (wczytany przez aplikację w całości; nie czytaj go ponownie)`,
-            `Rozpoznanie aplikacji z tabeli KROKU 2 routera (frazy: ${taskRoute.matched.join(", ")}). To jest PRIMARY tej sprawy; SECONDARY: ${taskRoute.route.secondary.join(", ") || "brak"}. Gdy treść sprawy wskazuje inny wiersz routingu, powiedz to wprost i wczytaj właściwy skill.`,
-            ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2"
+            `# SKILL WYKONAWCZY WG ROUTERA: ${skill} (wczytany przez aplikację w całości; nie czytaj go ponownie)`,
+            `Rozpoznanie aplikacji — ${taskRoute.reason}. To jest PRIMARY tej sprawy${taskRoute.route?.secondary.length ? `; SECONDARY: ${taskRoute.route.secondary.join(", ")}` : ""}.` +
+              (taskRoute.then ? ` Dalszy etap pipeline'u według macierzy: ${taskRoute.then} (po wyniku tego skilla).` : "") +
+              " Gdy treść sprawy wskazuje inny wiersz routingu, powiedz to wprost i wczytaj właściwy skill.",
+            ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2" || taskRoute.then === "pisma-procesowe-v3"
               ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
               : []),
             text
@@ -1832,7 +1874,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           });
           pathSections.push(contractPrompt(loaded));
         }
-        step("SKILLS", `skill wykonawczy wg routera [${taskRoute.route.id}]: ${skill}`);
+        step("SKILLS", `skill wykonawczy (${taskRoute.source === "MATRIX" ? "macierz aktywacji" : "routing"}): ${skill}`);
       }
     }
     const identityPrompt = [
@@ -3304,7 +3346,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           mode,
           report: evaluatedPath,
           // AUTO with a recognised task type: PRIMARY is the router's executive skill.
-          primarySkill: taskRoute ? taskRoute.route.primary : execution.primarySkill,
+          primarySkill: taskRoute ? taskRoute.primary : execution.primarySkill,
           loadedSkills: [...(execution.loadedSkills ?? []), ...(taskRoute ? [execution.primarySkill] : [])],
           events: audit.events.map((event) => ({ type: event.type, target: event.target, status: event.status })),
           routerVersion: String(this.registry.get(ROUTER_SKILL)?.frontmatter.version ?? "") || null,

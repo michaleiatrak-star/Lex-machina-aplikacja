@@ -88,3 +88,85 @@ export function classifyTask(routes, rawQuestion) {
     }
     return best ? { route: best.route, matched: best.matched } : null;
 }
+export function parseActivationMatrix(markdown) {
+    const section = /## MACIERZ AKTYWACJI[\s\S]*?(?=\n## )/u.exec(markdown)?.[0] ?? "";
+    const rules = [];
+    for (const line of section.split("\n")) {
+        const cells = line.split("|").map((cell) => cell.trim());
+        if (cells.length < 4 || !cells[2].includes("`"))
+            continue;
+        const signal = cells[1];
+        const skills = [...cells[2].matchAll(/`([a-z0-9-]+)`/gu)].map((match) => match[1]);
+        if (!skills[0] || !/-v\d|min90/.test(skills[0]))
+            continue;
+        const phrases = [...signal.matchAll(/"([^"]+)"/gu)].flatMap((match) => match[1].split(/\s*\/\s*/u).map((phrase) => phrase.trim().toLocaleLowerCase("pl")).filter((phrase) => phrase.length >= 3));
+        // "napisz pozew / apelację / zażalenie" in quotes is one verb with alternatives.
+        const expanded = phrases.flatMap((phrase, index) => {
+            const head = phrases[0].split(/\s+/u)[0];
+            return index > 0 && !phrase.includes(" ") && phrases[0].includes(" ") ? [`${head} ${phrase}`] : [phrase];
+        });
+        const deliveryText = /dostarcz\p{L}*\s+([^|]+)/iu.exec(signal)?.[1] ?? (/\+\s*dostarczone\s+(\p{L}+)/iu.exec(signal)?.[1] ?? "");
+        const delivers = deliveryText
+            .replace(/\(.*?\)/gu, "")
+            .split(/\s*\/\s*|\s+bez\s+/u)
+            .map((item) => item.trim().toLocaleLowerCase("pl"))
+            .filter((item) => item.length >= 3 && item !== "pisma");
+        const pleadingTask = /pismo\s+procesowe\s*\+/iu.test(signal);
+        rules.push({
+            signal,
+            phrases: expanded,
+            delivers: pleadingTask ? ["akta"] : delivers,
+            withoutPleading: /bez\s+pisma/iu.test(signal),
+            primary: skills[0],
+            then: skills[1] && /→/u.test(cells[2]) ? skills[1] : null
+        });
+    }
+    return rules;
+}
+// What a delivered document counts as in the matrix's words.
+function deliveryWords(material) {
+    switch (material.category) {
+        case "ORZECZENIE":
+            return ["akta", "wyrok", material.label];
+        case "PISMO_PROCESOWE":
+            return ["akta", "pismo przeciwnika", material.label];
+        default:
+            return material.evidence ? ["dowody", material.label] : [material.label];
+    }
+}
+/**
+ * Entry point for the task: the activation matrix first (phrases of the question
+ * and the materials delivered), then the router table on the question and the
+ * kinds of the delivered documents.
+ */
+export function decideTask(routes, matrix, rawQuestion, materials = []) {
+    const question = provisionsForDetection(rawQuestion);
+    const delivered = new Set(materials.flatMap(deliveryWords));
+    const pleadingDelivered = materials.some((material) => material.category === "ORZECZENIE" || material.category === "PISMO_PROCESOWE");
+    const routerPick = classifyTask(routes, rawQuestion);
+    const pleadingTask = routerPick?.route.primary === "pisma-procesowe-v3";
+    let best = null;
+    for (const rule of matrix) {
+        const phrases = rule.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
+        const deliveredHits = rule.delivers.filter((word) => delivered.has(word));
+        if (rule.withoutPleading && pleadingDelivered)
+            continue;
+        // "pismo procesowe + dostarczone akta": a pleading task with case files.
+        if (/pismo\s+procesowe\s*\+/iu.test(rule.signal) && !(pleadingTask && deliveredHits.length))
+            continue;
+        if (!phrases.length && !deliveredHits.length)
+            continue;
+        const score = phrases.reduce((sum, phrase) => sum + phrase.length, 0) + deliveredHits.length * 25 + (rule.then ? 30 : 0);
+        if (!best || score > best.score) {
+            best = { rule, score, why: [...phrases.map((phrase) => `fraza „${phrase}”`), ...deliveredHits.map((word) => `dostarczono: ${word}`)] };
+        }
+    }
+    if (best) {
+        return { source: "MATRIX", primary: best.rule.primary, then: best.rule.then, reason: `macierz aktywacji: ${best.rule.signal} (${best.why.join(", ")})` };
+    }
+    // No matrix row: the router table on the question and the kinds of the documents.
+    const byDocuments = routerPick ?? classifyTask(routes, `${rawQuestion}\n${materials.map((material) => material.label).join(" / ")}`);
+    return byDocuments
+        ? { source: "ROUTER", primary: byDocuments.route.primary, then: null, reason: `routing [${byDocuments.route.id}] ${byDocuments.route.title} (${byDocuments.matched.join(", ")})`, route: byDocuments.route }
+        : null;
+}
