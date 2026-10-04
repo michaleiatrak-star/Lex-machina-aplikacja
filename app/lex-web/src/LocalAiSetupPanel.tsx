@@ -677,7 +677,7 @@ export function LocalAiSetupPanel({
     }
     if (
       !window.confirm(
-        `Usunąć lokalny plik modelu „${selected.displayName}”? Ponowne użycie będzie wymagało ponownego pobrania modelu.`
+        `Usunąć model „${selected.displayName}” z dysku (plik modelu i jego kopię w pamięci podręcznej instalatora)? Ponowne użycie będzie wymagało ponownego pobrania.`
       )
     ) {
       return;

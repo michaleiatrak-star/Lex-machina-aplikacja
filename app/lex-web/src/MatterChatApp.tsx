@@ -79,6 +79,7 @@ import {
   listCaseSchedule,
   listCases,
   loginProviderAccount,
+  logoutProviderAccount,
   startProviderAccountProvision,
   getProviderAccountProvision,
   provisionLocalModel,
@@ -2295,6 +2296,22 @@ export default function MatterChatApp({
         ProviderAccountSessionStatus
       >
     );
+  }
+
+  async function disconnectProviderAccount(): Promise<void> {
+    if (!isAccountPrimarySource(provider) || user.appRole !== "ADMIN" || providerAccountBusy) return;
+    setProviderAccountBusy(true);
+    try {
+      await logoutProviderAccount(runtimeProvider);
+      setProviderAccountMessage("Wylogowano konto w kliencie dostawcy.");
+    } catch {
+      setProviderAccountMessage(
+        "Nie udało się wylogować: sesja nadal jest aktywna (np. token ze środowiska albo klient bez polecenia wylogowania). Wyloguj w oficjalnym kliencie dostawcy."
+      );
+    } finally {
+      await refreshProviderAccountStatus().catch(() => undefined);
+      setProviderAccountBusy(false);
+    }
   }
 
   function switchAccountToApi(): void {
@@ -6565,6 +6582,16 @@ export default function MatterChatApp({
                       >
                         Sprawdź ponownie
                       </button>
+                      {accountSession?.authenticated ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={providerAccountBusy}
+                          onClick={() => void disconnectProviderAccount()}
+                        >
+                          Wyloguj
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"
@@ -6581,8 +6608,7 @@ export default function MatterChatApp({
                   )}
                   {accountSession?.authenticated ? (
                     <small>
-                      Aby zmienić konto, wyloguj lub przełącz konto w oficjalnym
-                      kliencie dostawcy, a następnie kliknij „Sprawdź ponownie”.
+                      Aby zmienić konto, kliknij „Wyloguj”, a potem „Połącz konto”.
                     </small>
                   ) : null}
                   <AccountConnectProgress

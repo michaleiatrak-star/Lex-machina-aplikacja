@@ -2588,6 +2588,15 @@ export function loginProviderAccount(
   );
 }
 
+export function logoutProviderAccount(
+  provider: ProviderId
+): Promise<ProviderAccountSessionStatus> {
+  return json<ProviderAccountSessionStatus>(
+    `/api/provider-accounts/${provider}/logout`,
+    { method: "POST" }
+  );
+}
+
 export function getGuideState():
   Promise<{
     state:

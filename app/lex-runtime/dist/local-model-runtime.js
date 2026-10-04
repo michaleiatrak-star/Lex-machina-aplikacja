@@ -104,6 +104,15 @@ function localAppDataRoot() {
         return path.resolve(local, "LexMachina", "local-ai");
     return path.resolve(os.homedir(), ".lex-machina", "local-ai");
 }
+// install-local-llm.ps1 keeps a verified copy of every downloaded model here
+// (-CacheRoot is not passed by the runtime): removing a model removes it too.
+function localModelDownloadCache() {
+    const configured = process.env.LEX_LOCAL_LLM_CACHE_ROOT?.trim();
+    if (configured)
+        return path.resolve(configured);
+    const local = process.env.LOCALAPPDATA?.trim();
+    return local ? path.resolve(local, "LexMachina", "bootstrap-cache", "local-llm") : null;
+}
 function packagedRuntimeRoot() {
     const configured = process.env.LEX_RUNTIME_ROOT?.trim();
     if (configured)
@@ -1087,7 +1096,23 @@ export class LocalModelRuntime {
         }
         await this.stop();
         const target = path.join(this.rootDir, "models", model.filename);
-        fs.rmSync(target, { force: true });
+        // The model file, its unfinished downloads and the installer's verified
+        // download cache: "Usuń model" frees the disk, not only the active copy.
+        const cache = localModelDownloadCache();
+        const files = [
+            target,
+            `${target}.part`,
+            `${target}.tmp`,
+            ...(cache ? [path.join(cache, model.filename), path.join(cache, `${model.filename}.part`)] : [])
+        ];
+        for (const file of files) {
+            // A llama-server that has not exited yet still holds the file on Windows.
+            fs.rmSync(file, { force: true, maxRetries: 10, retryDelay: 300 });
+        }
+        const left = files.filter((file) => fs.existsSync(file));
+        if (left.length) {
+            throw new Error(`LOCAL_MODEL_REMOVE_FAILED:${left.map((file) => path.basename(file)).join(",")}`);
+        }
         const config = this.readConfig();
         const configRemoved = Boolean(config &&
             normalizeModelId(config.model.id) === canonical);

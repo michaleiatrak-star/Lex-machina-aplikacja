@@ -1462,7 +1462,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "PUT" | "DELETE")
         }
         _ if path.starts_with("/api/provider-accounts/")
-            && path.ends_with("/login") =>
+            && (path.ends_with("/login") || path.ends_with("/logout")) =>
         {
             method == "POST"
         }
@@ -2042,6 +2042,8 @@ mod tests {
         assert!(route_allowed("POST", "/api/update/download"));
         assert!(route_allowed("GET", "/api/local-models"));
         assert!(route_allowed("GET", "/api/provider-accounts"));
+        assert!(route_allowed("POST", "/api/provider-accounts/openai/logout"));
+        assert!(!route_allowed("GET", "/api/provider-accounts/openai/logout"));
         assert!(route_allowed("GET", "/api/admin/case-access"));
         assert!(!route_allowed("POST", "/api/admin/case-access"));
         assert!(route_allowed("GET", "/api/core-law/status"));
