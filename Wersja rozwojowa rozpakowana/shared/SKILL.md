@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.99.5"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.6"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -50,8 +50,8 @@ limitations:
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.99.5 (2026-10-04c, AUDYT-2026-10-04c): Osiągalność z zewnętrznych skilli: powiązane MOD-GENERATOR-AKTU, AUDIT-TRAIL-SPEC i bramka eksportu (MOD-AUDIT-BUNDLE), przyklad-adapter (MCP-INTEGRACJA).
-  Poprzednia: 3.99.4 (2026-10-04b, AUDYT-2026-10-04b): F-225 — usunięte 7 reliktów (3.19/2.6) wskrzeszonych nakładką; powiązane ORKA-BAS-001-125.json i MOD-AUDIT-BUNDLE.md; 197 → 190 plików.
+  Wersja bieżąca: 3.99.6 (2026-10-04m, AUDYT-2026-10-04m): Znaczniki `<!-- lex:wykonuje-aplikacja: … -->` (komentarz HTML, niewidoczny poza aplikacją Lex Machina): HIERARCHIA-ZRODEL — metryczka wersji ujęta w sekcję „METRYCZKA PLIKU” (HISTORIA); MOD-STEP-TRACKER „HISTORIA ZMIAN” i MOD-WYJATEK-GATE „HISTORIA NAZWY” (HISTORIA); DISCLAIMER „MECHANIZM AWARYJNY” (PROFIL — aplikacja zawsze wczytuje plik); UNIVERSAL-RUNTIME-ADAPTER §1A RESOLVER-SKILLI (RESOLVER). Treść reguł bez zmian.
+  Poprzednia: 3.99.5 (2026-10-04c, AUDYT-2026-10-04c): Osiągalność z zewnętrznych skilli: powiązane MOD-GENERATOR-AKTU, AUDIT-TRAIL-SPEC i bramka eksportu (MOD-AUDIT-BUNDLE), przyklad-adapter (MCP-INTEGRACJA).
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

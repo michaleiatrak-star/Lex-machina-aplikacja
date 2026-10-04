@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.60"
+version: "3.61"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,8 +120,8 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.60 (2026-10-04c, AUDYT-2026-10-04c): F-226 — usunięte archiwum legacy-material-router (8 plików); 4 tematy bez odpowiednika w DR → F-228 (FAZA 3E).
-  Poprzednia: 3.59 (2026-10-04b, AUDYT-2026-10-04b): F-225 — HARD-GATES-ORZECZNICTWO i pliki routingu przeciwnika podpięte (Reguły 15/17); rejestr mostów; usunięte 4 stuby.
+  Wersja bieżąca: 3.61 (2026-10-04m, AUDYT-2026-10-04m): KROK0A-anonimizer.md oznaczony `<!-- lex:wykonuje-aplikacja: ANONIMIZACJA -->`, „PATH-SELFTEST — RESOLVER” oznaczony RESOLVER (aplikacja rozwiązuje adresy korpusu sama) — w aplikacji Lex Machina pseudonimizacja działa zawsze lokalnie przed wysłaniem do modelu. Treść bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.
+  Poprzednia: 3.60 (2026-10-04c, AUDYT-2026-10-04c): F-226 — usunięte archiwum legacy-material-router (8 plików); 4 tematy bez odpowiednika w DR → F-228 (FAZA 3E).
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -158,6 +158,7 @@ Zastosuj `shared/UNIVERSAL-RUNTIME-ADAPTER.md`. Nazwy `view`, `web_search`,
 operacje hosta. Odczyty `shared/...`, `references/...` i `<skill>/...` dotyczą
 odpowiednich zainstalowanych skilli; nie kopiuj zależności do routera.
 
+<!-- lex:wykonuje-aplikacja: RESOLVER -->
 ### PATH-SELFTEST — RESOLVER (od 3.57)
 
 Skille mogą być zainstalowane jako pluginy z marketplace (claude.ai/Cowork:

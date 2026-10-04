@@ -1,6 +1,6 @@
 ---
 name: pisma-proste-v2
-version: "2.25"
+version: "2.26"
 type: executive-pisma
 status: production
 description: "Proste pisma prawne i urzędowe: wezwania, wnioski, odpowiedzi i krótsze dokumenty; kompletność danych, aktualna weryfikacja prawa i walidacja przed wygenerowaniem pliku."
@@ -443,6 +443,7 @@ Procedura, klasyfikacja błędów, format raportu i nakazy bezwzględne są w FA
 
 *Skill pisma-proste-v2 · Architektura modułowa · v2.6*
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
 ## CHANGELOG
 
 - **2026-07-25 (v2.6):** Zarejestrowano `shared/ZAZALENIE-ADRESAT-GATE.md`

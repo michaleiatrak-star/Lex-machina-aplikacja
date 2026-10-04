@@ -207,6 +207,7 @@ Jednak gdy DR-skill generuje samodzielny output (np. widget), powinien go dodać
 
 ---
 
+<!-- lex:wykonuje-aplikacja: PROFIL -->
 ## MECHANIZM AWARYJNY (gdy brak dostępu do shared/DISCLAIMER.md)
 
 Router i skille używają wbudowanego wariantu inline:

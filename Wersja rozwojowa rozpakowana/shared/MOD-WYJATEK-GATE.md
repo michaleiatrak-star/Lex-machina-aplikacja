@@ -286,6 +286,7 @@ klasa błędu wykrywana testem T18.
 
 ---
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
 ## 10. HISTORIA NAZWY
 
 Wersja 1.0 nosiła nazwę `MOD-UNIT-SWEEP.md` i miała jedno zamiatanie

@@ -14,6 +14,7 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   PROFIL: "profil ścieżki obowiązkowej i wczytanie jej zasobów",
   "REJESTR-KROKOW": "rejestr kroków ścieżki obowiązkowej z faktycznych odczytów",
   "MAPA-AKTOW": "moduły aktów wskazywane mechanicznie z MAPA-AKTOW",
+  RESOLVER: "rozwiązywanie adresów skilli i shared/ do jednej kopii korpusu aplikacji (wynik w śladzie KROK 3A)",
   "WERYFIKACJA-ELI": "odczyt przepisów w ELI i rejestr weryfikacji powołań",
   G8: "znaczniki statusu powołań i bramka końcowa HARD GATE (G8)",
   DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",

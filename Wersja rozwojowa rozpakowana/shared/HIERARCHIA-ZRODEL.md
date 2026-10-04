@@ -1,5 +1,8 @@
 # HIERARCHIA-ZRODEL.md — Kanoniczna Kategoryzacja Źródeł (RZĄD 1/2/3)
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
+## METRYCZKA PLIKU (wersje, status, konsumenci)
+
 > **Plik:** `shared/HIERARCHIA-ZRODEL.md`
 > **Wersja:** 1.11 (2026-09-23c) — E-3 uruchamia BRAK-AKTU (akt niepobieralny z RZĘDU 1: awaria serwera, timeout, blokada) — wtedy obowiązkowo; przy awarii ELI próba odczytu z ISAP.
 > **Wersja poprzednia:** 1.10 (2026-09-23) — ⭐ KANON KOLEJNOŚCI E-1…E-5 dla aktów polskich: ELI pierwszy, ISAP wyłącznie adres dla człowieka, LEX/Legalis → ArsLege dopiero po porażce ELI w obu kanałach; reguła interpretacyjna „ISAP” w pozostałych plikach; RZĄD 1 przeuporządkowany.

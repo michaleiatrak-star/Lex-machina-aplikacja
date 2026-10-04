@@ -238,6 +238,7 @@ ST-CP-INTEGRACJA:
 
 ---
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
 ## HISTORIA ZMIAN
 
 ```

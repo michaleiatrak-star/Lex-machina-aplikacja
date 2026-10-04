@@ -69891,6 +69891,24 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-04m — TRYB STRUKTURA: znaczniki sekcji wykonywanych przez aplikację (6.172)
+
+### 1. ŹRÓDŁO
+Decyzja użytkownika: przenoszenie procedur ze SKILL.md do aplikacji (etap 1 planu mechanizacji). Pomiar aplikacji: zwykła tura wysyła modelowi 200–300 tys. znaków instrukcji.
+
+### 2. KONWENCJA
+`<!-- lex:wykonuje-aplikacja: KOMPONENT -->` w linii bezpośrednio nad nagłówkiem sekcji. Aplikacja zastępuje sekcję jednolinijkowym odesłaniem tylko dla komponentów, które wykonuje (ANONIMIZACJA, ROUTING, PROFIL, RESOLVER, REJESTR-KROKOW, MAPA-AKTOW, WERYFIKACJA-ELI, G8, DISCLAIMER, CHECKPOINTY-PISM) albo HISTORIA (metadane). Poza aplikacją (claude.ai, Claude Code) znacznik jest niewidocznym komentarzem HTML — skill działa bez zmian.
+
+### 3. OZNACZONE SEKCJE (treść bez zmian)
+- `prawny-router-v3/references/KROK0A-anonimizer.md` — cały plik — ANONIMIZACJA (pseudonimizacja lokalna działa zawsze).
+- `shared/HIERARCHIA-ZRODEL.md` — metryczka wersji ujęta w sekcję „METRYCZKA PLIKU” — HISTORIA.
+- `shared/MOD-STEP-TRACKER.md` „HISTORIA ZMIAN”, `shared/MOD-WYJATEK-GATE.md` „HISTORIA NAZWY”, `chronologia-sprawy-v1/SKILL.md` „Historia wersji”, `pisma-proste-v2/SKILL.md` „CHANGELOG” — HISTORIA.
+- `shared/DISCLAIMER.md` „MECHANIZM AWARYJNY” — PROFIL (aplikacja zawsze wczytuje plik).
+- `shared/UNIVERSAL-RUNTIME-ADAPTER.md` §1A RESOLVER-SKILLI i `prawny-router-v3/SKILL.md` „PATH-SELFTEST — RESOLVER” — RESOLVER (wyszukiwanie kopii skilli na hostach; w aplikacji jedna kopia korpusu, wynik w śladzie KROK 3A).
+
+### 4. NIEOZNACZONE ŚWIADOMIE
+HIERARCHIA-ZRODEL „REALIA DOSTĘPNOŚCI RZĘDU 1” (zamknięta hierarchia czterech statusów wiąże model), „PROCEDURA” H-1…H-4 (dołączanie znaczników), ZRODLA-AKTOW-FALLBACK E-1…E-5 (kontrola temporalna wg daty czynu), router KROK 2 (gdy aplikacja nie wybierze skilla, routuje model), DISCLAIMER „TREŚĆ” (model lokalny i dokument strukturalny nie dostają zastrzeżenia od aplikacji).
+
 ## AUDYT-2026-10-04l — TRYB STRUKTURA: wiersz ROUTING-MAP umowy PL–UA o zabezpieczeniu społecznym we właściwej sekcji (6.171)
 
 ### 1. ŹRÓDŁO

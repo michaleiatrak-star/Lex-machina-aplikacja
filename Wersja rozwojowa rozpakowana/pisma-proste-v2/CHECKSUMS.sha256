@@ -1,9 +1,9 @@
-a27807ddafdea0c928f013111d520a8df14d6b19555d517596a579fe7c570c44  ./.claude-plugin/plugin.json
+5b9c14d27885db8ffd9daaeac1de9d80f70c6be12cb7cb87dd23ac89a3e526e3  ./.claude-plugin/plugin.json
 49eca7b24319ac4a396f2e3ff07b4f2971ca7f70f749c47b18a8ffdfc0546969  ./PORTABILITY-MANIFEST.md
-8faa1a5922ef193b351b91253ccb0011b709ca651d1becdbfac6909eb4c9931c  ./SKILL.md
+24f9d006847e4de42f11c4c17640694245d43797c217f2baf6ef2671ce802bdb  ./SKILL.md
 7838c9ee5368ea708512d2c10455cd0b85db0707af3c0f1ef0c44d63480b4d85  ./agents/openai.yaml
 49315dda7125ec5fc77ef5f2b96126d8b2121c6e72944b4702972e90f321d3ee  ./assets/icon.svg
-2bceb1d044f0c44d703986c6bb2d0c5c363f6781b42ffa48c322a682de4dfa1d  ./references/CHANGELOG.md
+668be221e87c6fcc64c1dd0db6a86a84fd91e2c30781af85228551e43b08de04  ./references/CHANGELOG.md
 a9e075075bbc7a4cf60e633ae397d1b23f88e6ade6feecc6adfed3b4f720647f  ./references/M1-zasady.md
 61daeb1ef49dcb7ec76e94e19a4a8a21927b1125e2e5bd2434f7125ff19093e9  ./references/M2-intake.md
 5d649e13b28b6ce715c3de796f3ce0d46a6467254a20e721fa9213f2e9ab954e  ./references/M3-weryfikacja.md

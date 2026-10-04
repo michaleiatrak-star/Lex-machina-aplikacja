@@ -1,6 +1,6 @@
 ---
 name: chronologia-sprawy-v1
-version: "1.13"
+version: "1.14"
 type: executive-chronologia
 status: production
 compatibility: "live_web_lookup, file_read, optional_interactive_ui"
@@ -30,6 +30,7 @@ Ta sekcja zmienia wyłącznie sposób wykonania operacji technicznych. Nie zmien
 **Zasada nadrzędna adaptera:** jeśli istniejąca instrukcja jest zrozumiała i wykonalna przez bieżący host, wykonaj ją bez konwersji. Adapter działa tylko na rzeczywistej granicy runtime.
 # Chronologia Sprawy v1.3 — Framework Wielowarstwowy
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
 ## Historia wersji
 
 ```
