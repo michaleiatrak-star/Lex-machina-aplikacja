@@ -1,3 +1,4 @@
+import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
@@ -3695,7 +3696,13 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? { widgets: widgetTools.widgets() }
         : {}),
       context: {
-        ...contextSelection.report
+        ...contextSelection.report,
+        ...(() => {
+          const budget = decodePromptBudget(
+            String([...execution.events].reverse().find((event) => event.target === "PROMPT_BUDGET")?.detail ?? "")
+          );
+          return budget ? { instructionChars: budget.chars, instructionSections: budget.sections } : {};
+        })()
       },
       audit: {
         result: completeness.result,

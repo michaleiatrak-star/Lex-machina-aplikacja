@@ -48,6 +48,12 @@ describe("MAPA-AKTOW resolved mechanically", () => {
     expect(names("Komornik prowadzi egzekucję z wynagrodzenia za pracę, mam też likwidację firmy.").some((name) => /PrUpad|VAT/.test(name))).toBe(false);
   });
 
+  it("a common legal word names no module ('odszkodowanie' is in 115 DR modules; 'zachowanie' is no 'zachowek')", () => {
+    expect(names("Sąsiad uszkodził mi samochód, należy mi się odszkodowanie?")).toEqual([]);
+    expect(names("Pracodawca ocenia moje zachowanie w pracy.").some((name) => /zachowek/.test(name))).toBe(false);
+    expect(names("Czy należy mi się zachowek po matce?")).toEqual(["NAZWA:mod-KC-spadki-zachowek-dzial-rozrzadzenia.md"]);
+  });
+
   it("electromobility goes to the transport module (map row fixed in DR-09 3.43)", () => {
     const result = pick("ustawa o elektromobilności i paliwach alternatywnych");
     expect(result.modules.map((item) => path.basename(item.resource))).toEqual(["mod-ustawa-transport-drogowy-kolejowy-lotniczy-morski.md"]);

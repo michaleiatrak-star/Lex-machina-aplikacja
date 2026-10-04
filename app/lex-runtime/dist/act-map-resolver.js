@@ -105,7 +105,19 @@ function phrases(label) {
             return `${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z]*`;
         });
         const pattern = new RegExp(`(?<![a-z])${stems.join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u");
-        (words.length === 1 ? single : result).push(pattern);
+        if (words.length === 1) {
+            // One word: its stem with a short ending only ("zachowek", "zachowku", not "zachowanie").
+            const folded = fold(words[0]);
+            const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const stems = [folded.slice(0, Math.max(5, folded.length - 1))];
+            // Mobile e: "zachowek" -> "zachowku", "kupiec" -> "kupca".
+            if (/e[a-z]$/.test(folded))
+                stems.push(folded.slice(0, -2) + folded.slice(-1));
+            single.push(new RegExp(`(?<![a-z])(?:${stems.map(escape).join("|")})[a-z]{0,3}(?![a-z])`, "u"));
+        }
+        else {
+            result.push(pattern);
+        }
     }
     return { multi: result, single };
 }
@@ -125,6 +137,7 @@ function headOf(label) {
     return words.length ? new RegExp(`(?<![a-z])${words.map(stemPattern).join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u") : null;
 }
 const cache = new Map();
+const RARE_IN_MODULES = 10;
 function actRows(registry) {
     const skills = [...registry.skills.values()].filter((skill) => /^dr-\d{2}-/.test(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
     const bodies = skills.map((skill) => {
@@ -191,10 +204,21 @@ function actRows(registry) {
             });
         }
     });
-    // A one-word part is unique when no other row's label holds that word.
+    // A one-word part stands alone when no other row's label holds it and few DR
+    // modules use it at all: "zachowek" yes, "odszkodowania" (115 of 455 modules) no.
     const labels = rows.map((row) => fold(row.label));
+    const moduleTexts = skills.flatMap((skill) => {
+        const dir = path.join(skill.directory, "modules");
+        try {
+            return fs.readdirSync(dir).filter((name) => name.endsWith(".md")).map((name) => fold(fs.readFileSync(path.join(dir, name), "utf8")));
+        }
+        catch {
+            return [];
+        }
+    });
     for (const [position, row] of rows.entries()) {
-        row.unique = row.singles.filter((pattern) => labels.every((label, other) => other === position || !pattern.test(label)));
+        row.unique = row.singles.filter((pattern) => labels.every((label, other) => other === position || !pattern.test(label)) &&
+            moduleTexts.filter((text) => pattern.test(text)).length <= RARE_IN_MODULES);
     }
     cache.set(key, rows);
     return rows;

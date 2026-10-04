@@ -833,6 +833,10 @@ function executionMessage(
         : execution.context
           ? ` · dokumenty ~${execution.context.estimatedDocumentTokens.toLocaleString("pl-PL")} tok.`
           : "";
+    // Instruction text of the turn (measure for moving skill procedure into the app).
+    const instructionMeta = execution.context?.instructionChars
+      ? ` · instrukcje ~${Math.round(execution.context.instructionChars / (execution.context.charsPerTokenEstimate || 3.5)).toLocaleString("pl-PL")} tok.`
+      : "";
     const citationMeta =
       execution.documentCitationFreshness
         ? ` · cytaty odświeżone: ${execution.documentCitationFreshness.checked}`
@@ -888,6 +892,7 @@ function executionMessage(
         skillMeta +
         domainMeta +
         contextMeta +
+        instructionMeta +
         citationMeta +
         workflowMeta +
         modelRoutingMeta +

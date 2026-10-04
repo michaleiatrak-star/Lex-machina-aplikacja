@@ -13,6 +13,9 @@ export type ContextBudgetReport = {
     | "CALIBRATED_LOCAL_TOKENIZER";
   charsPerTokenEstimate: number;
   estimatedDocumentTokens: number;
+  // Instruction text sent to the model in this turn (system prompt), by section.
+  instructionChars?: number;
+  instructionSections?: Array<{ label: string; chars: number }>;
   selectedChunks: number;
   compressedChunks: number;
   backlinkedChunks: number;

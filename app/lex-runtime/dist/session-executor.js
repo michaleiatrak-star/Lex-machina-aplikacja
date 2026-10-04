@@ -1,3 +1,4 @@
+import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
@@ -2262,7 +2263,11 @@ export class SafeSessionExecutor {
                 ? { widgets: widgetTools.widgets() }
                 : {}),
             context: {
-                ...contextSelection.report
+                ...contextSelection.report,
+                ...(() => {
+                    const budget = decodePromptBudget(String([...execution.events].reverse().find((event) => event.target === "PROMPT_BUDGET")?.detail ?? ""));
+                    return budget ? { instructionChars: budget.chars, instructionSections: budget.sections } : {};
+                })()
             },
             audit: {
                 result: completeness.result,

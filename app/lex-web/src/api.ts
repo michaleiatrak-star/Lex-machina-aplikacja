@@ -1043,6 +1043,8 @@ export type SessionExecutionResponse = {
     reservedSystemTokens?: number;
     documentBudgetTokens?: number;
     estimatedDocumentTokens: number;
+    instructionChars?: number;
+    instructionSections?: Array<{ label: string; chars: number }>;
     selectedChunks: number;
     omittedChunks: number;
     selectedDocuments: number;
