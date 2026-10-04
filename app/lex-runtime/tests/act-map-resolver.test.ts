@@ -17,13 +17,35 @@ describe("MAPA-AKTOW resolved mechanically", () => {
   });
 
   it("the module's own heading wins over a too broad map row (art. 278 KK is no forgery)", () => {
-    expect(names("Oskarżony o kradzież z art. 278 k.k.")).toEqual(["PRZEPIS:mod-KK-current-state-COV.md"]);
+    expect(names("Oskarżony o kradzież z art. 278 k.k.")).toEqual(["PRZEPIS:mod-KK-art278-295-przestepstwa-przeciwko-mieniu.md"]);
+    expect(names("Czy to oszustwo z art. 286 KK?")[0]).toBe("PRZEPIS:mod-KK-art278-295-przestepstwa-przeciwko-mieniu.md");
+  });
+
+  it("every row holding the article, the narrowest first (art. 291 KK)", () => {
+    expect(names("paserstwo z art. 291 KK")).toEqual([
+      "PRZEPIS:mod-KK-art291-pranie-pieniedzy.md",
+      "PRZEPIS:mod-KK-art278-295-przestepstwa-przeciwko-mieniu.md"
+    ]);
+  });
+
+  it("NAZWA: a long act name in any order within one sentence; 'zabezpieczenie' alone names no module", () => {
+    expect(names("Pytanie o umowę o zabezpieczeniu społecznym między Polską a Ukrainą, emerytura.")).toEqual([
+      "NAZWA:mod-umowa-PL-UA-zabezpieczenie-spoleczne.md"
+    ]);
+    expect(names("Wniosek o zabezpieczenie roszczenia.")).toEqual([]);
   });
 
   it("DZU and NAZWA", () => {
     expect(names("Dz.U. 2025 poz. 1490 — licencja")).toEqual(["DZU:mod-ustawa-transport-drogowy-kolejowy-lotniczy-morski.md"]);
     expect(names("Szkody łowieckie w uprawach")).toEqual(["NAZWA:mod-szkody-lowieckie-szacowanie-odszkodowanie.md"]);
     expect(names("Spadek po ojcu — zachowek")).toEqual(["NAZWA:mod-KC-spadki-zachowek-dzial-rozrzadzenia.md"]);
+  });
+
+  it("a word several map rows share points to none without the row's head (PPWR, KPA, PrUp, VAT)", () => {
+    expect(
+      names("Oskarżony wprowadził pokrzywdzonego w błąd i doprowadził go do niekorzystnego rozporządzenia mieniem. Prokurator wnosi o karę z warunkowym zawieszeniem wykonania.")
+    ).toEqual([]);
+    expect(names("Komornik prowadzi egzekucję z wynagrodzenia za pracę, mam też likwidację firmy.").some((name) => /PrUpad|VAT/.test(name))).toBe(false);
   });
 
   it("electromobility goes to the transport module (map row fixed in DR-09 3.43)", () => {
