@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkProvisionsAtEventDates, eventDates } from "../src/event-date-check.js";
-import { endsWithDisclaimer, parseDisclaimer, withDisclaimer } from "../src/legal-disclaimer.js";
+import { endsWithDisclaimer, parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "../src/legal-disclaimer.js";
 import { evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, missingGateBlocks, routingTrace, type TurnFacts } from "../src/mandatory-path.js";
 import type { NormalizedToolCall } from "../src/providers/types.js";
 import type { VerificationRecord } from "../src/verification-ledger.js";
@@ -88,6 +88,25 @@ describe("KROK 7: disclaimer as the last element", () => {
     expect(withDisclaimer(added.text, texts, { mode: "LAIK", pleading: false }).appended).toBe(false);
     const pleading = withDisclaimer("Projekt pozwu.", texts, { mode: "PRAWNIK", pleading: true }).text;
     expect(pleading.indexOf("Zastrzeżenie")).toBeLessThan(pleading.indexOf("Przed podpisaniem"));
+  });
+
+  it("cuts the model's own disclaimer off before the gates; the canonical one goes back after them", () => {
+    const answer = [
+      "Art. 233 KK ✅ [VER: x, 2026-10-04] — fałszywe zeznania.",
+      "REM-GATE\n\nREM-0: brak.",
+      "⚖️ Zastrzeżenie: Niniejsza analiza ma charakter informacyjny. Nie stanowi porady prawnej ani opinii prawnej w rozumieniu art. 4 ust. 1 Prawa o adwokaturze (t.j. Dz.U. z 2024 r. poz. 1564, ze zm.)."
+    ].join("\n\n");
+    const split = splitTrailingDisclaimer(answer);
+    expect(split.disclaimer).toMatch(/^⚖️ Zastrzeżenie/u);
+    expect(split.body).not.toMatch(/Dz\.U\./u);
+    expect(split.body.endsWith("REM-0: brak.")).toBe(true);
+    const restored = withDisclaimer(split.body, texts, { mode: "PRAWNIK", pleading: false });
+    expect(restored.text.endsWith(texts.prawnik)).toBe(true);
+    // With a rule above it and the pleading variant below.
+    const ruled = splitTrailingDisclaimer(`Analiza.\n\n${texts.prawnik}\n\n${texts.pismo}`);
+    expect(ruled.body).toBe("Analiza.");
+    // An analysis that only quotes the closing words keeps them.
+    expect(splitTrailingDisclaimer("Opinia nie stanowi porady prawnej, gdy brak stosunku pełnomocnictwa.").disclaimer).toBeNull();
   });
 });
 

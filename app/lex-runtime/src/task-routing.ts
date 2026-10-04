@@ -1,4 +1,4 @@
-import { asksAbout, draftingSchema, matchSchema, repliesToDemand, type SchemaEntry } from "./skill-schema-catalog.js";
+import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand, type SchemaEntry } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
@@ -227,7 +227,43 @@ const IMPLIED_ROWS: Array<{ pattern: RegExp; primary: string; row: string }> = [
   { pattern: /(?<![\p{L}])raport\p{L}*(?![\p{L}])/iu, primary: "raport-sytuacyjny-v2", row: "\"stan sprawy\" / \"aktualny status\" / raport ogólny" }
 ];
 
+// Case law asked for ("orzecznictwo do art. 233 KK", "jak sądy interpretują",
+// "linia orzecznicza", "podaj wyroki SN", "sprawdź sygnaturę").
+const CASE_LAW =
+  /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecznicz\p{L}*|precedens\p{L}*|sygnatur\p{L}*|(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*)\s+(?:SN|NSA|WSA|TK|TSUE|ETPC\p{L}*|SA|sąd\p{L}*)|(?:podaj|znajdź|wskaż|przytocz|wyszukaj)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|uchwał\p{L}*)|jak\s+(?:to\s+)?(?:sądy|SN|NSA)\s+(?:interpretuj\p{L}*|rozumi\p{L}*|stosuj\p{L}*|orzekaj\p{L}*|wykładaj\p{L}*|ocenia\p{L}*))(?![\p{L}])/iu;
+// An analysis of the provision itself, besides the case law.
+const PROVISION_ANALYSIS =
+  /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porównaj|wykaż|przesłank\p{L}*|znamion\p{L}*|wykładni\p{L}*|omów|wyjaśnij|przeanalizuj|analiz\p{L}*|co\s+mówi)(?![\p{L}])/iu;
+
+/**
+ * ACTIVATION-MATRIX: "CEL: znaleźć / zweryfikować orzeczenie (sygnatura,
+ * precedens, linia) → orzeczenia-sadowe-v2 jako PRIMARY"; with an analysis of
+ * the provision as well, analizator-przepisow-v2 is the entry point and the case
+ * law its next step ("kombinacja PRIMARY+SECONDARY zawsze dopuszczalna").
+ */
 export function decideTask(
+  routes: TaskRoute[],
+  matrix: MatrixRule[],
+  rawQuestion: string,
+  materials: DeliveredMaterial[] = [],
+  redaction: RedactionTest | null = null,
+  simpleLetters: { skill: string; entries: SchemaEntry[] } | null = null
+): TaskDecision | null {
+  const decision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+  const caseLaw = "orzeczenia-sadowe-v2";
+  const known = routes.some((route) => route.primary === caseLaw) || matrix.some((rule) => rule.primary === caseLaw);
+  const question = provisionsForDetection(rawQuestion);
+  if (!known || !CASE_LAW.test(question) || explicitHandoff(rawQuestion, () => true)) return decision;
+  if (!decision) {
+    return { source: "MATRIX", primary: caseLaw, then: null, reason: "macierz aktywacji: cel — znaleźć / zweryfikować orzeczenie (sygnatura, precedens, linia)" };
+  }
+  if (decision.primary !== "analizator-przepisow-v2" || decision.then) return decision;
+  return PROVISION_ANALYSIS.test(question)
+    ? { ...decision, then: caseLaw, reason: `${decision.reason}; orzecznictwo do przepisu → ${caseLaw}` }
+    : { ...decision, primary: caseLaw, reason: `macierz aktywacji: cel — orzecznictwo do przepisu (${decision.reason})` };
+}
+
+function decideTaskByMatrix(
   routes: TaskRoute[],
   matrix: MatrixRule[],
   rawQuestion: string,
@@ -388,14 +424,43 @@ export function parseCombinations(markdown: string): SkillCombination[] {
 
 export const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 
-/** The next skill after this one: the matrix's own "→", else the first combination it enters. */
+// The parts of a combination ("Przepis + pismo") that name another skill's subject
+// must be in the case; the others describe the entry skill's own material.
+const COMBINATION_PARTS: Array<{ part: RegExp; present: (question: string, materials: DeliveredMaterial[]) => boolean }> = [
+  {
+    part: /^pism/iu,
+    present: (question, materials) =>
+      asksToDraft(question) || /(?<![\p{L}])pism\p{L}*/iu.test(question) || materials.some((material) => material.category === "PISMO_PROCESOWE")
+  },
+  { part: /^orzecznictw/iu, present: (question) => CASE_LAW.test(question) },
+  { part: /^wezwani/iu, present: (question, materials) => /(?<![\p{L}])wezwani\p{L}*/iu.test(question) || materials.some((material) => material.kind === "WEZWANIE") },
+  { part: /^ripost/iu, present: (question) => /(?<![\p{L}])(?:ripost\p{L}*|odpowied\p{L}*\s+na)(?![\p{L}])/iu.test(question) }
+];
+
+export function combinationApplies(matter: string, question: string, materials: DeliveredMaterial[]): boolean {
+  return matter
+    .split("+")
+    .map((part) => part.trim())
+    .every((part) => COMBINATION_PARTS.find((item) => item.part.test(part))?.present(question, materials) ?? true);
+}
+
+/**
+ * The next skill after this one: the matrix's own "→", else the first combination
+ * it enters whose parts are in the case (no "Przepis + pismo" without a letter).
+ */
 export function pipelineNext(
   skill: string,
   then: string | null,
-  combinations: SkillCombination[]
+  combinations: SkillCombination[],
+  context?: { question: string; materials: DeliveredMaterial[] }
 ): { skill: string; reason: string } | null {
   if (then) return { skill: then, reason: "macierz aktywacji (wejście → następny etap)" };
-  const combination = combinations.find((row) => row.entry === skill && row.next.length);
+  const combination = combinations.find(
+    (row) =>
+      row.entry === skill &&
+      row.next.length &&
+      (!context || combinationApplies(row.matter, provisionsForDetection(context.question), context.materials))
+  );
   return combination ? { skill: combination.next[0]!, reason: `kombinacja skilli: ${combination.matter}` } : null;
 }
 

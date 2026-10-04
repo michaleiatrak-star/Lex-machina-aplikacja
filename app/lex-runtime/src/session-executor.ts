@@ -161,7 +161,7 @@ import {
 } from "./model-task-ownership.js";
 import { detectLegalReferences, type LegalReferenceKind } from "./finalization-gate.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
-import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
+import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
@@ -1932,6 +1932,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // the router requires; the app loads it in full with its contract (mechanically,
     // as in the mechanical mode) instead of leaving the choice to the model.
     let taskRoute: TaskDecision | null = null;
+    let routingMaterials: Array<{ category: string; evidence: boolean; label: string; kind?: string }> = [];
     if (
       mandatoryModel &&
       legalTurn &&
@@ -1953,6 +1954,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
           : [])
       ];
+      routingMaterials = materials;
       taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest(), {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
@@ -2690,6 +2692,14 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // The model's own ⚠️ at a statute does not stop the application from
     // verifying it: status comes from the registry only.
+    // KROK 7: the model's closing disclaimer is the fixed text of shared/DISCLAIMER.md.
+    // It is cut off before the gates and put back after them (the canonical text, or
+    // the model's own when the application adds none).
+    const modelDisclaimer =
+      legalTurn && !request.documentAstOutput && !request.model.startsWith("local/")
+        ? splitTrailingDisclaimer(modelOutput)
+        : { body: modelOutput, disclaimer: null };
+    if (modelDisclaimer.disclaimer) modelOutput = modelDisclaimer.body;
     const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
@@ -3483,8 +3493,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
-      : { text: processedDocumentCitations.text, appended: false };
-    if (disclaimed.appended) audit.record("gate", "DISCLAIMER_LAST", "OK", { by: "APLIKACJA", mode });
+      : modelDisclaimer.disclaimer
+        ? { text: `${processedDocumentCitations.text.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
+        : { text: processedDocumentCitations.text, appended: false };
+    const disclaimerBy = modelDisclaimer.disclaimer ? "MODEL" : disclaimed.appended ? "APLIKACJA" : "MODEL";
+    if (disclaimed.appended) audit.record("gate", "DISCLAIMER_LAST", "OK", { by: disclaimerBy, mode, canonical: true });
 
     // The register of the mandatory path, from what really happened in the turn.
     const evaluatedPath =
@@ -3495,7 +3508,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             profile: effectiveProfile,
             contextResources,
             answer: processedDocumentCitations.text,
-            ...(disclaimerTexts ? { disclaimerBy: disclaimed.appended ? "APLIKACJA" : "MODEL" } : {}),
+            ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),
             events: audit.events.map((event) => ({
               type: event.type,
@@ -3619,10 +3632,11 @@ export class SafeSessionExecutor implements SessionExecutor {
     );
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
+    const nextContext = { question: pathFacts.query, materials: routingMaterials };
     const next = taskRoute
-      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations())
+      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
       : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations())
+        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
         : null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
