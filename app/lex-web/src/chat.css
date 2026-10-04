@@ -2988,3 +2988,11 @@ mark.restored {
   font-size: 0.85em;
   margin: 4px 0 8px;
 }
+
+.chat-pipeline-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}

@@ -163,7 +163,17 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
-import { decideTask, parseActivationMatrix, parseRoutingTable, type MatrixRule, type TaskDecision, type TaskRoute } from "./task-routing.js";
+import {
+  decideTask,
+  parseActivationMatrix,
+  parseCombinations,
+  parseRoutingTable,
+  pipelineNext,
+  type MatrixRule,
+  type SkillCombination,
+  type TaskDecision,
+  type TaskRoute
+} from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
 import {
@@ -754,6 +764,8 @@ export type SessionExecutionResponse = {
   usage?: ModelUsage;
   // Mandatory path of the turn (router, skills, verification, hard gate) from the audit.
   mandatoryPath?: MandatoryPathReport;
+  // ACTIVATION-MATRIX: the next skill of the pipeline after this one (entry -> next).
+  pipelineNext?: { skill: string; reason: string };
   modeDecision?: QueryModeDecision;
   provider: ProviderId;
   model: string;
@@ -1213,6 +1225,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     const routes = parseRoutingTable(this.readCorpus(`${ROUTER_SKILL}/SKILL.md`) ?? "");
     this.taskRoutesCache = { root: this.registry.root, routes };
     return routes;
+  }
+
+  private combinationsCache: { root: string; rows: SkillCombination[] } | null = null;
+
+  private skillCombinations(): SkillCombination[] {
+    if (this.combinationsCache?.root === this.registry.root) return this.combinationsCache.rows;
+    const rows = parseCombinations(this.readCorpus("shared/ACTIVATION-MATRIX.md") ?? "");
+    this.combinationsCache = { root: this.registry.root, rows };
+    return rows;
   }
 
   private activationMatrixCache: { root: string; rules: MatrixRule[] } | null = null;
@@ -3467,9 +3488,17 @@ export class SafeSessionExecutor implements SessionExecutor {
       presentedText,
       chatPrivacyVault
     );
+    // Next step of the pipeline: after the AUTO entry skill, or after the final
+    // result of the mechanical workflow.
+    const next = taskRoute
+      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations())
+      : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
+        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations())
+        : null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
+      ...(next && safeToPresent ? { pipelineNext: next } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,

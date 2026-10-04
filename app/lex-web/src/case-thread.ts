@@ -27,6 +27,7 @@ export type CaseChatMessage = {
   content: string;
   evidence?: EvidenceItem[];
   mandatoryPath?: MandatoryPathView;
+  pipelineNext?: { skill: string; reason: string };
   auxiliarySources?:
     AuxiliarySourceItem[];
   meta?: string;

@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { classifyTask, decideTask, parseActivationMatrix, parseRoutingTable } from "../src/task-routing.js";
+import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRoutingTable, pipelineNext } from "../src/task-routing.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const routes = parseRoutingTable(fs.readFileSync(path.join(CORPUS, "prawny-router-v3/SKILL.md"), "utf8"));
@@ -133,4 +133,21 @@ describe("AUTO with an attached judgment", () => {
     expect(prompt).toContain("doc_wyrok: wyrok");
     expect(prompt).toContain("# SKILL WYKONAWCZY WG ROUTERA: analiza-sadowa-v6");
   }, 60_000);
+});
+
+describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
+  const markdown = fs.readFileSync(path.join(CORPUS, "shared/ACTIVATION-MATRIX.md"), "utf8");
+  const combinations = parseCombinations(markdown);
+  const matrix = parseActivationMatrix(markdown);
+
+  it("reads entry points and their next skills", () => {
+    expect(combinations.find((row) => row.entry === "analiza-sadowa-v6")?.next[0]).toBe("pisma-procesowe-v3");
+    expect(combinations.find((row) => row.entry === "raport-klienta-v1")?.next).toEqual([]);
+  });
+
+  it("names the next step and honours the continue button", () => {
+    expect(pipelineNext("analizator-dowodow-v3", null, combinations)?.skill).toBe("analiza-sadowa-v6");
+    expect(pipelineNext("analiza-sadowa-v6", "pisma-procesowe-v3", combinations)?.skill).toBe("pisma-procesowe-v3");
+    expect(decideTask(routes, matrix, `${PIPELINE_HANDOFF} pisma-procesowe-v3. Kontynuuj na podstawie powyższego wyniku.`)?.primary).toBe("pisma-procesowe-v3");
+  });
 });

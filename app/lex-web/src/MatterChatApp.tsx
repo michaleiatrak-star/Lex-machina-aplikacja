@@ -17,6 +17,9 @@ import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
 import { CaseLawPreview, attributedSentence, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
+
+// Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
+const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
 import { HomeDashboard } from "./HomeDashboard.js";
@@ -858,6 +861,7 @@ function executionMessage(
         execution.answer,
       evidence: execution.evidence,
       ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
+      ...(execution.pipelineNext ? { pipelineNext: execution.pipelineNext } : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -4732,6 +4736,31 @@ export default function MatterChatApp({
                     </details>
                   ) : null}
                   {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
+                  {message.pipelineNext ? (
+                    <div className="chat-pipeline-next" role="note">
+                      <span>
+                        Następny etap: <strong>{message.pipelineNext.skill}</strong> ({message.pipelineNext.reason}).
+                      </span>
+                      {workMode === "AUTO" ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={executing}
+                          onClick={() => {
+                            void executeMessage(
+                              `${PIPELINE_HANDOFF} ${message.pipelineNext!.skill}. Kontynuuj na podstawie powyższego wyniku.`
+                            );
+                          }}
+                        >
+                          Kontynuuj
+                        </button>
+                      ) : (
+                        <span className="field-help">
+                          Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
                       <summary>

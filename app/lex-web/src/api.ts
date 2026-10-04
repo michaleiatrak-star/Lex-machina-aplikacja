@@ -981,6 +981,8 @@ export type QueryModeDecisionView = {
 export type SessionExecutionResponse = {
   sessionId: string;
   mandatoryPath?: MandatoryPathView;
+  // Next skill of the pipeline (ACTIVATION-MATRIX).
+  pipelineNext?: { skill: string; reason: string };
   modeDecision?: QueryModeDecisionView;
   // Values restored locally into the answer, for highlighting and correction.
   restorations?: RestorationMark[];

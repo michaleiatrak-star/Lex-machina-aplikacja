@@ -36,7 +36,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
-import { decideTask, parseActivationMatrix, parseRoutingTable } from "./task-routing.js";
+import { decideTask, parseActivationMatrix, parseCombinations, parseRoutingTable, pipelineNext } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
@@ -531,6 +531,14 @@ export class SafeSessionExecutor {
         const routes = parseRoutingTable(this.readCorpus(`${ROUTER_SKILL}/SKILL.md`) ?? "");
         this.taskRoutesCache = { root: this.registry.root, routes };
         return routes;
+    }
+    combinationsCache = null;
+    skillCombinations() {
+        if (this.combinationsCache?.root === this.registry.root)
+            return this.combinationsCache.rows;
+        const rows = parseCombinations(this.readCorpus("shared/ACTIVATION-MATRIX.md") ?? "");
+        this.combinationsCache = { root: this.registry.root, rows };
+        return rows;
     }
     activationMatrixCache = null;
     // shared/ACTIVATION-MATRIX.md, re-read after a skill update.
@@ -2057,9 +2065,17 @@ export class SafeSessionExecutor {
         step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
         // Every restored value is reported so the UI can mark it for review.
         const restoredAnswer = restoreWithReport(presentedText, chatPrivacyVault);
+        // Next step of the pipeline: after the AUTO entry skill, or after the final
+        // result of the mechanical workflow.
+        const next = taskRoute
+            ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations())
+            : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
+                ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations())
+                : null;
         const response = {
             sessionId: audit.sessionId,
             status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
+            ...(next && safeToPresent ? { pipelineNext: next } : {}),
             ...(mandatoryPath ? { mandatoryPath } : {}),
             ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
             provider: request.provider,

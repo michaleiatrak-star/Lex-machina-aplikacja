@@ -179,6 +179,10 @@ export function decideTask(
   rawQuestion: string,
   materials: DeliveredMaterial[] = []
 ): TaskDecision | null {
+  // The user pressed "continue" on a pipeline step: that skill, explicitly.
+  const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
+  const handoff = explicitHandoff(rawQuestion, (skill) => known.has(skill));
+  if (handoff) return { source: "MATRIX", primary: handoff, then: null, reason: "następny etap pipeline'u wskazany przez użytkownika" };
   const question = provisionsForDetection(rawQuestion);
   const delivered = new Set(materials.flatMap(deliveryWords));
   const pleadingDelivered = materials.some((material) => material.category === "ORZECZENIE" || material.category === "PISMO_PROCESOWE");
@@ -205,4 +209,42 @@ export function decideTask(
   return byDocuments
     ? { source: "ROUTER", primary: byDocuments.route.primary, then: null, reason: `routing [${byDocuments.route.id}] ${byDocuments.route.title} (${byDocuments.matched.join(", ")})`, route: byDocuments.route }
     : null;
+}
+
+// ACTIVATION-MATRIX "KOMBINACJE SKILLI (entry point → pipeline)".
+export type SkillCombination = { matter: string; entry: string; next: string[] };
+
+export function parseCombinations(markdown: string): SkillCombination[] {
+  const section = /## KOMBINACJE SKILLI[\s\S]*?(?=\n## |$)/u.exec(markdown)?.[0] ?? "";
+  const rows: SkillCombination[] = [];
+  for (const line of section.split("\n")) {
+    const cells = line.split("|").map((cell) => cell.trim());
+    if (cells.length < 4 || !cells[2] || !/[a-z]-v\d|min90/.test(cells[2])) continue;
+    const entry = /([a-z0-9-]+-v\d+(?:-min90)?)/u.exec(cells[2])?.[1];
+    // "→ a → b": the following skills; "← x (źródło)" is a data source, not a next step.
+    const next = cells[3]!.trim().startsWith("→")
+      ? [...cells[3]!.matchAll(/([a-z0-9-]+-v\d+(?:-min90)?)/gu)].map((match) => match[1]!)
+      : [];
+    if (entry) rows.push({ matter: cells[1]!, entry, next });
+  }
+  return rows;
+}
+
+export const PIPELINE_HANDOFF = "Następny etap pipeline'u:";
+
+/** The next skill after this one: the matrix's own "→", else the first combination it enters. */
+export function pipelineNext(
+  skill: string,
+  then: string | null,
+  combinations: SkillCombination[]
+): { skill: string; reason: string } | null {
+  if (then) return { skill: then, reason: "macierz aktywacji (wejście → następny etap)" };
+  const combination = combinations.find((row) => row.entry === skill && row.next.length);
+  return combination ? { skill: combination.next[0]!, reason: `kombinacja skilli: ${combination.matter}` } : null;
+}
+
+/** "Następny etap pipeline'u: <skill>" sent by the app's own continue button. */
+export function explicitHandoff(question: string, known: (skill: string) => boolean): string | null {
+  const skill = new RegExp(`${PIPELINE_HANDOFF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*([a-z0-9-]+)`, "u").exec(question)?.[1];
+  return skill && known(skill) ? skill : null;
 }
