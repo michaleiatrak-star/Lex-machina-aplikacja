@@ -162,6 +162,8 @@ import { detectLegalReferences, type LegalReferenceKind } from "./finalization-g
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
+import { classifyTask, parseRoutingTable, type TaskRoute } from "./task-routing.js";
+import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -1201,6 +1203,16 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
   }
 
+  private taskRoutesCache: { root: string; routes: TaskRoute[] } | null = null;
+
+  // The router's KROK 2 table, re-read after a skill update.
+  private taskRoutes(): TaskRoute[] {
+    if (this.taskRoutesCache?.root === this.registry.root) return this.taskRoutesCache.routes;
+    const routes = parseRoutingTable(this.readCorpus(`${ROUTER_SKILL}/SKILL.md`) ?? "");
+    this.taskRoutesCache = { root: this.registry.root, routes };
+    return routes;
+  }
+
   private mandatoryModel(): MandatoryPathModel | null {
     if (this.mandatoryModelCache?.root === this.registry.root) return this.mandatoryModelCache.model;
     try {
@@ -1775,6 +1787,53 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
       step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
       pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
+    }
+    // AUTO: the task type from the router's table [1]–[11] names the executive skill
+    // the router requires; the app loads it in full with its contract (mechanically,
+    // as in the mechanical mode) instead of leaving the choice to the model.
+    let taskRoute: { route: TaskRoute; matched: string[] } | null = null;
+    if (
+      mandatoryModel &&
+      legalTurn &&
+      request.modelSelectsSkills &&
+      !request.guideContext &&
+      !request.processWorkflowContext &&
+      !request.courtWorkflowContext &&
+      !request.chronologyWorkflowContext &&
+      !request.contractWorkflowContext &&
+      !request.orderedCaseWorkflowContext
+    ) {
+      taskRoute = classifyTask(this.taskRoutes(), pathFacts.query);
+      const record = taskRoute ? this.registry.get(taskRoute.route.primary) : undefined;
+      if (taskRoute && record) {
+        const skill = record.name;
+        const text = fs.readFileSync(record.skillFile, "utf8");
+        corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
+        audit.record("gate", "TASK_ROUTING", "OK", { route: taskRoute.route.id, skill, matched: taskRoute.matched });
+        pathSections.push(
+          [
+            `# SKILL WYKONAWCZY WG ROUTERA [${taskRoute.route.id}] ${taskRoute.route.title}: ${skill} (wczytany przez aplikację w całości; nie czytaj go ponownie)`,
+            `Rozpoznanie aplikacji z tabeli KROKU 2 routera (frazy: ${taskRoute.matched.join(", ")}). To jest PRIMARY tej sprawy; SECONDARY: ${taskRoute.route.secondary.join(", ") || "brak"}. Gdy treść sprawy wskazuje inny wiersz routingu, powiedz to wprost i wczytaj właściwy skill.`,
+            ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2"
+              ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
+              : []),
+            text
+          ].join("\n\n")
+        );
+        const contract = executiveContract(this.registry, skill);
+        if (contract) {
+          const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
+          for (const item of loaded.loaded) {
+            contextResources.add(item.resource);
+            audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;executive-contract" });
+          }
+          audit.record("gate", "EXECUTIVE_CONTRACT", "OK", {
+            detail: `skill=${skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
+          });
+          pathSections.push(contractPrompt(loaded));
+        }
+        step("SKILLS", `skill wykonawczy wg routera [${taskRoute.route.id}]: ${skill}`);
+      }
     }
     const identityPrompt = [
       "# MODEL TEJ SESJI (podaje aplikacja)",
@@ -3244,8 +3303,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       ? routingTrace({
           mode,
           report: evaluatedPath,
-          primarySkill: execution.primarySkill,
-          loadedSkills: execution.loadedSkills ?? [],
+          // AUTO with a recognised task type: PRIMARY is the router's executive skill.
+          primarySkill: taskRoute ? taskRoute.route.primary : execution.primarySkill,
+          loadedSkills: [...(execution.loadedSkills ?? []), ...(taskRoute ? [execution.primarySkill] : [])],
           events: audit.events.map((event) => ({ type: event.type, target: event.target, status: event.status })),
           routerVersion: String(this.registry.get(ROUTER_SKILL)?.frontmatter.version ?? "") || null,
           sharedRoot: `${path.basename(this.registry.root)}/shared`,
