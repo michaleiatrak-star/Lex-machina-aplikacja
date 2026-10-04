@@ -426,6 +426,39 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
           : "brak odczytu skilla"
     });
   }
+  // Executive skill contract (mechanical mode, or the task type in AUTO): the gates
+  // from its SKILL.md, the resources the app loaded and those the model had to read.
+  for (const event of facts.events.filter((item) => item.type === "gate" && item.target === "EXECUTIVE_CONTRACT")) {
+    const detail = String(event.detail?.detail ?? "");
+    const field = (name: string) => new RegExp(`(?:^|;)${name}=([^;]*)`).exec(detail)?.[1] ?? "";
+    const skill = field("skill");
+    const list = (name: string) => field(name).split(",").filter(Boolean);
+    const toRead = list("toRead");
+    const unread = toRead.filter(
+      (resource) =>
+        !facts.events.some(
+          (item) =>
+            item.type === "resource_read" &&
+            item.status === "OK" &&
+            canonicalPath(item.target) === canonicalPath(resource) &&
+            !/runtime-preload/.test(String(item.detail?.detail ?? ""))
+        )
+    );
+    steps.push({
+      layer: "SKILL",
+      id: `KONTRAKT:${skill}`,
+      label: `Kontrakt skilla wykonawczego ${skill}: ${field("gates")} bramek z SKILL.md`,
+      requirement: "CORE",
+      status: unread.length ? "MISSING" : "MET",
+      by: unread.length || toRead.length ? "MODEL" : "APLIKACJA",
+      evidence: [
+        list("loaded").length ? `wczytane przez aplikację: ${list("loaded").length}` : "",
+        toRead.length ? `do wczytania przez model: ${toRead.length}${unread.length ? ` (brak: ${unread.join(", ")})` : " (wczytane)"}` : ""
+      ]
+        .filter(Boolean)
+        .join("; ") || "bramki z SKILL.md przekazane modelowi"
+    });
+  }
   for (const event of facts.events.filter((item) => item.target === "G39H_WORKFLOW_RESOURCE_READS")) {
     const missing = (event.detail?.missing as string[] | undefined) ?? [];
     const required = (event.detail?.required as string[] | undefined) ?? [];

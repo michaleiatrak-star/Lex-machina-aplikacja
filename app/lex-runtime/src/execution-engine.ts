@@ -1,7 +1,8 @@
 import fs from "node:fs";
+import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
-import { LegalSession } from "./legal-session.js";
+import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
 import {
   criminalQualifierExcerpt,
   qualifierPrinciples,
@@ -1038,6 +1039,33 @@ export class LexExecutionEngine {
       );
     }
 
+    // Mechanical mode: the executive skill's contract from its own SKILL.md (its
+    // mandatory gates and their resources) plus every required workflow resource
+    // goes to the model's context. Before, the "mechanical-policy" resources were
+    // only checked for existence and logged as read without reaching the model.
+    let executiveContractText = "";
+    if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+      const contract = executiveContract(this.registry, workflowPlan.executionSkill);
+      if (contract) {
+        const inContext = new Set<string>([
+          ...CORE_LEGAL_RESOURCES,
+          ...workflowPlan.semanticContextResources
+        ]);
+        const loaded = loadContract(this.registry, contract, {
+          extra: workflowPlan.requiredFreshResources,
+          inContext
+        });
+        for (const item of loaded.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;executive-contract");
+        emit(
+          "gate",
+          "EXECUTIVE_CONTRACT",
+          "OK",
+          `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
+        );
+        executiveContractText = contractPrompt(loaded);
+      }
+    }
+
     if (
       args.guideContext &&
       workflowPlan.id !==
@@ -1381,6 +1409,7 @@ export class LexExecutionEngine {
               ].join("\n\n")
             ]
           : []),
+        ...(executiveContractText ? [executiveContractText] : []),
         ...(runtimePrelude.appendix
           ? [runtimePrelude.appendix]
           : []),
@@ -1588,6 +1617,7 @@ export class LexExecutionEngine {
             ].join("\n\n")
           ]
         : []),
+      ...(executiveContractText ? [executiveContractText] : []),
       ...(args.guideContext
         ? [
             [
