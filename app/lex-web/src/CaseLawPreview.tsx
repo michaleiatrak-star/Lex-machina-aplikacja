@@ -2,18 +2,6 @@ import { useEffect, useState } from "react";
 import { ApiError, previewCaseLaw, type CaseLawPreview as Preview } from "./api.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
 
-// Hosts of judgments, decisions and interpretations: the full text is previewed.
-const CASE_HOSTS = /(^|\.)(sn\.pl|orzeczenia\.nsa\.gov\.pl|saos\.org\.pl|orzeczenia\.uzp\.gov\.pl|eureka\.mf\.gov\.pl|uodo\.gov\.pl|curia\.europa\.eu)$/i;
-
-export function isCaseLawSource(url: string | undefined): boolean {
-  if (!url) return false;
-  try {
-    return CASE_HOSTS.test(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
-
 /** The answer's line citing the signature: what the decision is said to hold. */
 export function attributedSentence(answer: string | undefined, signature: string | undefined): string | undefined {
   if (!answer || !signature) return undefined;

@@ -48,7 +48,7 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 46 | `d239272` | Ścieżka obowiązkowa routera, tryb LAIK/PRAWNIK na wejściu, status przepisów z rejestru przy ponownym pytaniu (k.k. = KK), wzory bez pseudonimizacji; tylko Windows |
 | hotfix 47 | `3fd177c` | G8: akt dla przepisu bez skrótu (porównanie art. 233/234/238), artykuł i paragraf z jednym znacznikiem, bez dubla w źródłach; tylko Windows |
 | **0.1.11** | tag `v0.1.11` | Nowe wydanie zbiorcze (hotfix 1–47), wersja aplikacji 0.1.11; tylko Windows |
-| **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO: pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; tylko Windows |
+| **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (R1/R2A): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; źródła pomocnicze tylko link; tylko Windows |
 
 ---
 
