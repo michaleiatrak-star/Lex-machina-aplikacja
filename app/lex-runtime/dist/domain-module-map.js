@@ -134,9 +134,24 @@ function actIndex(registry, skill) {
     const key = `${file}:${body.length}`;
     if (cache.has(key))
         return cache.get(key);
-    const index = parseActMap(body, skill)
+    const mapped = parseActMap(body, skill)
         .map((entry) => ({ ...entry, resources: entry.resources.map((resource) => locate(registry, skill, resource)).filter((resource) => resource !== null) }))
-        .filter((entry) => entry.resources.length > 0)
+        .filter((entry) => entry.resources.length > 0);
+    // Modules of the domain the act map does not list: indexed by their own headings
+    // and "Zakres:", marked as such (they cannot be suggested otherwise).
+    const listed = new Set(mapped.flatMap((entry) => entry.resources));
+    let files = [];
+    try {
+        files = fs.readdirSync(path.join(record.directory, "modules")).filter((file) => /^mod-.*\.md$/.test(file));
+    }
+    catch {
+        files = [];
+    }
+    const unlisted = files
+        .map((file) => `${skill}/modules/${file}`)
+        .filter((resource) => !listed.has(resource))
+        .map((resource) => ({ scope: `poza MAPA-AKTOW: ${path.basename(resource, ".md").replace(/^mod-/, "")}`, resources: [resource] }));
+    const index = [...mapped, ...unlisted]
         .map((entry) => {
         // What the module is about: the act or scope, and the module's own name.
         const names = entry.resources.map((resource) => path.basename(resource, ".md").replace(/^mod-/, "").replace(/-/g, " "));

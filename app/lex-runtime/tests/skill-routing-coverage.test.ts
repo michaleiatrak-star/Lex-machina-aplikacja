@@ -38,7 +38,9 @@ describe("pisma-proste-v2: every category of its schema catalogue", () => {
     ["Wniosek o interpretację indywidualną ZUS", "SPJ"],
     ["Skarga do UODO na administratora", "SPK"],
     ["Skarga na czynności komornika", "SPL"],
-    ["Oświadczenie o sankcji kredytu darmowego", "SPM"]
+    ["Oświadczenie o sankcji kredytu darmowego", "SPM"],
+    ["Wniosek o interpretację indywidualną Głównego Inspektora Pracy", "SPL-GIP"],
+    ["Wniosek o interpretację indywidualną do Dyrektora KIS", "SPM-KIS"]
   ])("%s -> %s", (question, code) => {
     expect(matchSchema(catalog, question)?.code).toBe(code);
     const decision = decideTask(routes, matrix, question, [], redaction, simple);

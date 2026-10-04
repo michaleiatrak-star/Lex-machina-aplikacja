@@ -41,12 +41,13 @@ export function parseSchemaCatalog(markdown: string, skill: string): SchemaEntry
   for (const line of section.split("\n")) {
     const cells = line.split("|").map((cell) => cell.trim());
     if (cells.length < 5) continue;
-    const code = /\*\*\s*(SP[A-Z](?:-[A-Z])?)\b/u.exec(cells[1]!)?.[1];
+    const code = /\*\*\s*(SP[A-Z](?:-[A-Z]+)?)\b/u.exec(cells[1]!)?.[1];
     if (!code) continue;
     const own = [...cells[2]!.matchAll(/(?:references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b/g)].map((match) => `${skill}/${match[0]}`);
     // "UWAGA: wczytaj najpierw <dr-.../modules/...md>": read before the schema.
     const first = [...cells[3]!.matchAll(/[a-z0-9-]+-v?\d*[a-z0-9-]*\/(?:modules|references)\/[A-Za-z0-9._\-/]+?\.md\b/g)].map((match) => match[0]);
-    const kind = cells[3]!.split(/\s+—\s+\*\*UWAGA|\*\*UWAGA/u)[0]!.replace(/\([^)]*\)/g, " ").replace(/\*\*/g, " ");
+    // The kind of letter, without the remarks after " — " (UWAGA, "kod ... zajęty").
+    const kind = cells[3]!.replace(/\([^)]*\)/g, " ").split(/\s+—\s+|\*\*UWAGA/u)[0]!.replace(/\*\*/g, " ");
     const alternatives = kind
       .split(/,|\s\/\s/u)
       .map((part) => keyWords(part))
