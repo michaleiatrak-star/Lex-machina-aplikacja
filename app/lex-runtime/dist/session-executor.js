@@ -34,6 +34,7 @@ import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } fr
 import { detectLegalReferences } from "./finalization-gate.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
+import { criminalMatter } from "./matter-signals.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -41,6 +42,7 @@ import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseud
 import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { parseSkillSelectionEnvelope } from "./skill-selection.js";
+const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
 function duplicateSkills(names) {
     const byBase = new Map();
@@ -839,7 +841,10 @@ export class SafeSessionExecutor {
         const pathFacts = {
             query: request.auxiliaryText ?? latestUserTurn(request.query),
             legal: legalTurn,
-            criminal: request.primarySkill.startsWith("dr-03-"),
+            // AUTO: primarySkill is a placeholder until the model reads a domain skill,
+            // so the criminal matter comes from the question itself.
+            criminal: (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
+                criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)),
             documents: attachments.length > 0,
             documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
             documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
@@ -857,9 +862,19 @@ export class SafeSessionExecutor {
             "shared/PRAWO-HARDGATE.md",
             `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
             `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
-            ...(pathFacts.criminal ? ["dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md"] : [])
+            // Route-based path: the engine puts the qualifier in the prompt itself.
+            ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
         ]);
         const pathSections = [];
+        // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
+        if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {
+            const qualifier = this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE);
+            if (qualifier) {
+                contextResources.add(CRIMINAL_QUALIFIER_RESOURCE);
+                audit.record("resource_read", CRIMINAL_QUALIFIER_RESOURCE, "OK", { detail: "runtime-preload;mandatory-path;criminal-question" });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${CRIMINAL_QUALIFIER_RESOURCE}\n\n${qualifier}`);
+            }
+        }
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
@@ -1176,10 +1191,9 @@ export class SafeSessionExecutor {
                 selection.domainSkills;
             execution.executionSkills =
                 selection.executionSkills;
-            if (selection.primarySkill) {
-                execution.primarySkill =
-                    selection.primarySkill;
-            }
+            // Never the placeholder: the DR the model read, else the router.
+            execution.primarySkill =
+                selection.primarySkill ?? ROUTER_SKILL;
             // The model routed itself: the route is the DR it actually read
             // (router-v3 only when it found no legal domain), not the placeholder.
             audit.record("route", selection.primarySkill ?? "prawny-router-v3", "OK", {
@@ -1284,6 +1298,28 @@ export class SafeSessionExecutor {
         // Mandatory path, profile PEŁNY: the router's gate blocks (CN, REM, WYJ) must be
         // visible in the answer. One correcting round with the gate modules; what is
         // still missing after it degrades the answer (⛔ TRYB ZDEGRADOWANY).
+        // The profile after the answer: a criminal domain the model read makes it PEŁNY.
+        // Gate modules not yet in the context are loaded for the correcting round.
+        const criminalAfter = pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith("dr-03-"));
+        const effectiveProfile = pathProfile({
+            mode: request.modeDecision?.mode ?? request.mode,
+            simple: request.matterComplexity?.level === "SIMPLE",
+            criminal: criminalAfter,
+            documentGeneration: pathFacts.documentGeneration
+        });
+        if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
+            for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
+                if (contextResources.has(resource))
+                    continue;
+                const content = this.readCorpus(resource);
+                if (!content)
+                    continue;
+                contextResources.add(resource);
+                audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path;escalated", profile: effectiveProfile });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+            }
+            pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
+        }
         let modelOutput = execution.output;
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
         const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
@@ -1300,7 +1336,7 @@ export class SafeSessionExecutor {
             !request.contractWorkflowContext &&
             !request.orderedCaseWorkflowContext &&
             legalAnswer(modelOutput)
-            ? missingGateBlocks(mandatoryModel, profile, modelOutput)
+            ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
             : [];
         if (missingGates.length) {
             step("MODEL", `ścieżka obowiązkowa: uzupełnienie bramek ${missingGates.map((item) => item.block).join(", ")}`);
@@ -1322,7 +1358,7 @@ export class SafeSessionExecutor {
                     reasoning: "none"
                 });
                 const text = corrected.fullText.trim();
-                const remaining = text ? missingGateBlocks(mandatoryModel, profile, text) : missingGates;
+                const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
                 const accepted = Boolean(text) && remaining.length < missingGates.length;
                 if (accepted)
                     modelOutput = text;
@@ -1800,7 +1836,8 @@ export class SafeSessionExecutor {
         const evaluatedPath = mandatoryModel && legalTurn
             ? evaluateMandatoryPath(mandatoryModel, {
                 ...pathFacts,
-                profile,
+                criminal: criminalAfter,
+                profile: effectiveProfile,
                 contextResources,
                 answer: processedDocumentCitations.text,
                 ...(disclaimerTexts ? { disclaimerBy: disclaimed.appended ? "APLIKACJA" : "MODEL" } : {}),
