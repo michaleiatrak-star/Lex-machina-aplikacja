@@ -1,3 +1,4 @@
+import { evaluateCheckpointOutput } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 const LEGAL_GUIDE_RESOURCES = [
     "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
@@ -430,25 +431,29 @@ export function evaluateDeterministicWorkflowOutput(plan, text, context) {
         "PROCESS_PLEADING_V1") {
         const finalCheckpoint = context?.processCheckpoint ===
             "CP-PEER";
+        // The active checkpoint's report contract (process-checkpoint-contract).
+        const contract = context?.processCheckpoint
+            ? evaluateCheckpointOutput(context.processCheckpoint, text)
+            : null;
         if (!finalCheckpoint) {
             const prematureFinalStatus = /STATUS\s+PISMA\s*[:=]\s*(?:✅\s*)?(?:FINAL\s*[—-]\s*)?GOTOWE(?:\s+DO\s+ZŁOŻENIA)?/u
                 .test(normalized);
+            const missing = [
+                ...(prematureFinalStatus ? ["CP-PEER_REQUIRED_FOR_FINAL_STATUS"] : []),
+                ...(contract?.missing ?? [])
+            ];
             return {
                 workflow: plan.id,
                 mode: "PROCESS_CHECKPOINT",
-                required: [],
+                required: context?.processCheckpoint ? [`RAPORT_${context.processCheckpoint}`] : [],
                 observed: prematureFinalStatus
                     ? [
                         "PREMATURE_FINAL_STATUS"
                     ]
                     : [],
-                missing: prematureFinalStatus
-                    ? [
-                        "CP-PEER_REQUIRED_FOR_FINAL_STATUS"
-                    ]
-                    : [],
+                missing,
                 orderValid: !prematureFinalStatus,
-                result: prematureFinalStatus
+                result: missing.length
                     ? "BLOCKED"
                     : "PASS"
             };
@@ -466,6 +471,7 @@ export function evaluateDeterministicWorkflowOutput(plan, text, context) {
             positions.every((position, index) => index === 0 ||
                 position >
                     positions[index - 1]);
+        const finalMissing = [...missing, ...(contract?.missing ?? [])];
         return {
             workflow: plan.id,
             mode: "PROCESS_FINAL",
@@ -473,11 +479,9 @@ export function evaluateDeterministicWorkflowOutput(plan, text, context) {
             observed: [
                 ...observed
             ],
-            missing: [
-                ...missing
-            ],
+            missing: finalMissing,
             orderValid,
-            result: missing.length === 0 &&
+            result: finalMissing.length === 0 &&
                 orderValid
                 ? "PASS"
                 : "BLOCKED"

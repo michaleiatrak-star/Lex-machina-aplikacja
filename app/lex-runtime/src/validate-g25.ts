@@ -84,7 +84,9 @@ const supported = bundle.find(
   (item) => item.status === "SUPPORTED"
 );
 
-const leaked = [hiddenA, hiddenB].filter(
+// The verified support quote is a passage of a public judgment: public as
+// `passage` (marked in the full-text preview). Evidence notes stay backend-only.
+const leaked = [hiddenA, "internal relation note"].filter(
   (value) => serialized.includes(value)
 );
 
@@ -96,6 +98,7 @@ const pass =
   quote?.evidenceHash === "11111111111111111111" &&
   supported?.caseScope === "PROPOSITION_SUPPORT" &&
   supported?.supportQuoteHash === "11111111111111111111" &&
+  supported?.passage === hiddenB &&
   leaked.length === 0;
 
 process.stdout.write(

@@ -1,17 +1,28 @@
-import { FinalizationGate, markUnverifiedReferences } from "./finalization-gate.js";
+import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
-import { evaluateStatusConsistency, reconcileStatusMarkers } from "./status-consistency-gate.js";
+import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
 import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
-import { LexExecutionEngine, latestUserTurn } from "./execution-engine.js";
+import { LexExecutionEngine, latestUserTurn, isTrivialChatCommand } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
 import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
 import { LegalCorpusToolRuntime } from "./legal-corpus-tool-runtime.js";
+import { WidgetToolRuntime } from "./widget-runtime.js";
+import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
+import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
+import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
+import fs from "node:fs";
+import path from "node:path";
+import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, mandatoryPathInstructions, missingGateBlocks, pathProfile, preloadForTurn, routingTrace } from "./mandatory-path.js";
+import { queryModePrompt } from "./query-mode.js";
+import { meterUsage } from "./providers/usage-meter.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
@@ -21,13 +32,32 @@ import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { detectLegalReferences } from "./finalization-gate.js";
-import { applyAutomaticVerificationMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
+import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
+import { parseDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
+import { criminalMatter } from "./matter-signals.js";
+import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
+import { ANALYSIS_INTENT, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
+import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
+import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
+import { domainHintPrompt, parseFlashRouting, rankDomains } from "./domain-module-map.js";
+import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
 import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseudonymizer.js";
 import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { parseSkillSelectionEnvelope } from "./skill-selection.js";
+const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
+// Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
+function duplicateSkills(names) {
+    const byBase = new Map();
+    for (const name of names) {
+        const base = name.replace(/-v\d+$/u, "");
+        byBase.set(base, [...(byBase.get(base) ?? []), name]);
+    }
+    return [...byBase.values()].filter((group) => group.length > 1).map((group) => group.sort().join(" i "));
+}
 export function publicAuxiliarySourceFromToolResult(result) {
     let payload;
     try {
@@ -210,8 +240,37 @@ export function reconcileAuxiliarySourcesWithVerification(sources, records) {
         };
     });
 }
+// "art. 233 § 1 KK" next to "art. 233 KK" from the same place of the same
+// source is one entry: the article is listed, its unit is not repeated.
+function withoutRepeatedUnits(records) {
+    const key = (claim) => compactActAbbreviations(claim).toLocaleLowerCase("pl").replace(/\s+/g, " ").trim();
+    const parts = (claim) => /^art\.?\s*(\d+[a-ząćęłńóśźż]*)(.*?)\s+(kc|kpc|kk|kpk|kpa|kp|kro|ksh|kw|kpw|pzp)$/u.exec(key(claim));
+    const latest = new Map();
+    for (const record of records) {
+        const id = `${record.kind}\u0000${key(record.claim)}\u0000${record.asOf ?? ""}`;
+        latest.delete(id);
+        latest.set(id, record);
+    }
+    const unique = [...latest.values()];
+    return unique.filter((record) => {
+        if (record.kind !== "statute" || record.status !== "VERIFIED")
+            return true;
+        const unit = parts(record.claim);
+        if (!unit || !unit[2].trim())
+            return true;
+        return !unique.some((other) => {
+            const article = other.kind === "statute" && other.status === "VERIFIED" ? parts(other.claim) : null;
+            return (article !== null &&
+                !article[2].trim() &&
+                article[1] === unit[1] &&
+                article[3] === unit[3] &&
+                (other.asOf ?? "") === (record.asOf ?? "") &&
+                verificationSourceLink(other) === verificationSourceLink(record));
+        });
+    });
+}
 export function publicEvidenceBundle(records) {
-    return records.map((record) => ({
+    return withoutRepeatedUnits(records).map((record) => ({
         claim: record.claim,
         kind: record.kind,
         status: record.status,
@@ -232,22 +291,40 @@ export function publicEvidenceBundle(records) {
         ...(record.evidenceHash ? { evidenceHash: record.evidenceHash } : {}),
         ...(record.supportQuoteHash
             ? { supportQuoteHash: record.supportQuoteHash }
-            : {})
+            : {}),
+        ...(record.kind === "case" && record.caseScope === "EXACT_QUOTE"
+            ? { passage: record.claim }
+            : record.kind === "case" && record.supportQuote
+                ? { passage: record.supportQuote }
+                : {})
     }));
 }
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");
-export function namespaceDocumentAttachmentTokens(attachments) {
-    const prefixes = new Map();
-    const prefixFor = (documentId) => {
-        const existing = prefixes.get(documentId);
-        if (existing) {
+/**
+ * Prefixes D01, D02... of own-key documents, in the order they reach the
+ * model (context first, then case files read by tools). Shared-key documents
+ * get none: their tokens are the chat's. Restoring an alias reads the
+ * document id at position n-1 of documentIds().
+ */
+export class DocumentAliasRegistry {
+    prefixes = new Map();
+    prefixFor(documentId) {
+        const existing = this.prefixes.get(documentId);
+        if (existing)
             return existing;
-        }
-        const prefix = "D" +
-            String(prefixes.size + 1).padStart(2, "0");
-        prefixes.set(documentId, prefix);
+        const prefix = "D" + String(this.prefixes.size + 1).padStart(2, "0");
+        this.prefixes.set(documentId, prefix);
         return prefix;
-    };
+    }
+    documentIds() {
+        return [...this.prefixes.keys()];
+    }
+}
+export function namespaceChunkTokens(text, prefix) {
+    return text.replace(/\[PII:([A-Z_]+):(\d{4})\]/g, (_token, kind, sequence) => `[LMPII:${prefix}:${kind}:${sequence}]`);
+}
+export function namespaceDocumentAttachmentTokens(attachments, registry = new DocumentAliasRegistry()) {
+    const prefixFor = (documentId) => registry.prefixFor(documentId);
     return attachments.map((attachment) => {
         if (attachment.sharedKey) {
             return { ...attachment, chunks: attachment.chunks.map((chunk) => ({ ...chunk })) };
@@ -266,7 +343,7 @@ export function namespaceDocumentAttachmentTokens(attachments) {
                 : {}),
             chunks: attachment.chunks.map((chunk) => ({
                 ...chunk,
-                text: chunk.text.replace(/\[PII:([A-Z_]+):(\d{4})\]/g, (_token, kind, sequence) => `[LMPII:${prefix}:${kind}:${sequence}]`)
+                text: namespaceChunkTokens(chunk.text, prefix)
             }))
         };
     });
@@ -397,6 +474,15 @@ export function createDraftCallbacks(vault, onDraft) {
         }
     };
 }
+export const THREAD_SUMMARY_PROMPT = [
+    "Jesteś asystentem Lex Machina. Tworzysz streszczenie wcześniejszej części rozmowy w sprawie, które zastąpi te wiadomości w kontekście kolejnych odpowiedzi.",
+    "Układ (nagłówki dokładnie takie): ## Fakty, ## Stanowiska stron, ## Ustalenia prawne, ## Dokumenty i dowody, ## Otwarte kwestie.",
+    "- Tylko to, co jest w rozmowie; nic nie dopisuj, nie oceniaj na nowo i nie rozstrzygaj.",
+    "- Ustalenia prawne: przepis z oznaczeniem aktu tak, jak w rozmowie. Nie przepisuj znaczników weryfikacji i nie podawaj brzmienia przepisów; status nada aplikacja z rejestru weryfikacji.",
+    "- Symbole [PII:...] przepisuj dokładnie; nie zgaduj, kto się pod nimi kryje.",
+    "- Jeśli jest dotychczasowe streszczenie, zaktualizuj je o nowe wiadomości i zachowaj jego poprawki (mogła je wprowadzić osoba prowadząca sprawę).",
+    "- Najwyżej ok. 6000 znaków; zwięźle, w punktach."
+].join("\n");
 export class SafeSessionExecutor {
     registry;
     providers;
@@ -406,9 +492,12 @@ export class SafeSessionExecutor {
     legalFederationTools;
     coreLawIndex;
     personMorphology;
+    actFreshness;
     engine;
     autoRouter;
-    constructor(registry, providers, finalizer = new AuditedFinalizer(), verificationToolFactory, chatNamedEntityRecognizer, legalFederationTools, coreLawIndex, personMorphology) {
+    constructor(registry, providers, finalizer = new AuditedFinalizer(), verificationToolFactory, chatNamedEntityRecognizer, legalFederationTools, coreLawIndex, personMorphology, 
+    // Current consolidated text of an act in Sejm ELI (evidence memory reuse).
+    actFreshness) {
         this.registry = registry;
         this.providers = providers;
         this.finalizer = finalizer;
@@ -417,9 +506,120 @@ export class SafeSessionExecutor {
         this.legalFederationTools = legalFederationTools;
         this.coreLawIndex = coreLawIndex;
         this.personMorphology = personMorphology;
+        this.actFreshness = actFreshness;
         this.engine = new LexExecutionEngine(registry, providers);
         this.autoRouter =
             new ModelAutoRouter(registry, providers);
+    }
+    mandatoryModelCache = null;
+    // Corpus files of the mandatory path, by canonical path (router-relative or skill-qualified).
+    readCorpus(resource) {
+        const relative = resource.startsWith(`${ROUTER_SKILL}/`) ? resource.slice(ROUTER_SKILL.length + 1) : resource;
+        const resolved = this.registry.resolveResource(ROUTER_SKILL, relative);
+        if (!resolved)
+            return null;
+        try {
+            return fs.readFileSync(resolved, "utf8");
+        }
+        catch {
+            return null;
+        }
+    }
+    taskRoutesCache = null;
+    // The router's KROK 2 table, re-read after a skill update.
+    taskRoutes() {
+        if (this.taskRoutesCache?.root === this.registry.root)
+            return this.taskRoutesCache.routes;
+        const routes = parseRoutingTable(this.readCorpus(`${ROUTER_SKILL}/SKILL.md`) ?? "");
+        this.taskRoutesCache = { root: this.registry.root, routes };
+        return routes;
+    }
+    flashRoutesCache = null;
+    // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
+    flashRoutes() {
+        if (this.flashRoutesCache?.root === this.registry.root)
+            return this.flashRoutesCache.rows;
+        const rows = parseFlashRouting(this.readCorpus("prawo-polskie-v2/SKILL.md") ?? "");
+        this.flashRoutesCache = { root: this.registry.root, rows };
+        return rows;
+    }
+    combinationsCache = null;
+    skillCombinations() {
+        if (this.combinationsCache?.root === this.registry.root)
+            return this.combinationsCache.rows;
+        const rows = parseCombinations(this.readCorpus("shared/ACTIVATION-MATRIX.md") ?? "");
+        this.combinationsCache = { root: this.registry.root, rows };
+        return rows;
+    }
+    redactionCache = null;
+    // pisma-procesowe-v3 KROK 0 Test A (editing a finished pleading), from the corpus.
+    redactionTest() {
+        if (this.redactionCache?.root === this.registry.root)
+            return this.redactionCache.test;
+        const record = this.registry.get("pisma-procesowe-v3");
+        let test = null;
+        try {
+            test = record ? parseRedactionTest(fs.readFileSync(record.skillFile, "utf8")) : null;
+        }
+        catch {
+            test = null;
+        }
+        this.redactionCache = { root: this.registry.root, test };
+        return test;
+    }
+    activationMatrixCache = null;
+    // shared/ACTIVATION-MATRIX.md, re-read after a skill update.
+    activationMatrix() {
+        if (this.activationMatrixCache?.root === this.registry.root)
+            return this.activationMatrixCache.rules;
+        const rules = parseActivationMatrix(this.readCorpus("shared/ACTIVATION-MATRIX.md") ?? "");
+        this.activationMatrixCache = { root: this.registry.root, rules };
+        return rules;
+    }
+    mandatoryModel() {
+        if (this.mandatoryModelCache?.root === this.registry.root)
+            return this.mandatoryModelCache.model;
+        try {
+            const model = loadMandatoryPathModel((resource) => this.readCorpus(resource));
+            this.mandatoryModelCache = { root: this.registry.root, model };
+            return model;
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * Summary of older thread messages: the text goes to the model
+     * pseudonymized like a chat message, without tools; provisions in the
+     * summary get their status from the verification registry only (reused
+     * evidence after the ELI check, otherwise NIEWERYFIKOWANE).
+     */
+    async summarizeThread(request) {
+        const vault = new PseudonymizationVault(request.privacySeed);
+        const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
+        const transcript = [
+            ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
+            "[WIADOMOŚCI DO STRESZCZENIA]",
+            ...request.messages.map((message) => `${message.role === "user" ? "Użytkownik" : "Asystent"}: ${message.content}`)
+        ].join("\n\n");
+        const protectedText = (await pseudonymizer.pseudonymize(transcript)).text;
+        const ledger = new VerificationLedger();
+        if (request.threadEvidence?.provisions.length && this.actFreshness) {
+            for (const record of (await revalidateThreadEvidence(request.threadEvidence, this.actFreshness)).reused)
+                ledger.add(record);
+        }
+        const key = placeholderKeyPrompt(placeholderGrammar(protectedText, vault));
+        const response = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: [...(key ? [key] : []), THREAD_SUMMARY_PROMPT].join("\n\n"),
+            messages: [{ role: "user", content: protectedText }],
+            accountContinuity: "none",
+            reasoning: "none"
+        });
+        let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
+        const gate = new FinalizationGate().evaluate(text, ledger);
+        text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate), gate), ledger).text;
+        return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
     }
     // A local primary model keeps the text on this machine, so the chat does
     // not also wait for local-model PII detection before answering.
@@ -464,6 +664,12 @@ export class SafeSessionExecutor {
         };
     }
     async execute(request) {
+        // Tokens of every model call in this turn (benchmark and cost display).
+        const { result, usage } = await meterUsage(() => this.executeTurn(request));
+        result.usage = usage;
+        return result;
+    }
+    async executeTurn(request) {
         const step = request.onStep ?? (() => undefined);
         step("PREPARE", "anonimizacja wiadomości");
         if (request.documentAttachments?.length) {
@@ -480,8 +686,12 @@ export class SafeSessionExecutor {
         let protectedQuery;
         let protectedAuxiliaryText;
         try {
+            // Example data the assistant wrote earlier (a model letter) stays as written.
+            const exampleData = /(?:^|\n\n)Asystent: /.test(request.query)
+                ? exampleDataKeepDirectives(request.query, (await new LocalPolishPseudonymizer(new PseudonymizationVault(request.privacySeed), this.chatRecognizerFor(request.model), this.personMorphology).pseudonymize(request.query)).findings, request.auxiliaryText ?? "", request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null)
+                : [];
             const protectedPrimary = await chatPseudonymizer
-                .pseudonymize(request.query);
+                .pseudonymize(request.query, exampleData);
             protectedQuery =
                 protectedPrimary.text;
             if (request.auxiliaryText !==
@@ -500,6 +710,7 @@ export class SafeSessionExecutor {
             audit.record("gate", "G39I_CHAT_PRIVACY", "OK", {
                 pseudonymized: protectedPrimary
                     .findings.length,
+                exampleDataKept: exampleData.length,
                 kinds: Object.keys(protectedPrimary
                     .counts).sort(),
                 vaultTokens: chatPrivacyVault
@@ -519,6 +730,25 @@ export class SafeSessionExecutor {
         }
         const requestedHistoricalAsOf = detectHistoricalAsOf(protectedQuery);
         const ledger = new VerificationLedger();
+        // Evidence memory: provisions verified in earlier messages are reused only
+        // when ELI still has the same consolidated text and no amendment after it.
+        let evidencePrompt = null;
+        const memory = request.threadEvidence;
+        if (memory &&
+            !request.model.startsWith("local/") &&
+            (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)) {
+            const reuse = this.actFreshness
+                ? await revalidateThreadEvidence(memory, this.actFreshness)
+                : { reused: [], recheck: memory.provisions.map((record) => ({ claim: record.claim, reason: "ELI_CHECK_UNAVAILABLE" })) };
+            for (const record of reuse.reused)
+                ledger.add(record);
+            evidencePrompt = threadEvidencePrompt(memory, reuse);
+            step("VERIFY", `pamięć sprawy: ${reuse.reused.length} przepisów aktualnych w ELI, ${reuse.recheck.length} do ponownej weryfikacji`);
+            audit.record("gate", "THREAD_EVIDENCE_REUSE", "OK", {
+                reused: reuse.reused.map((record) => record.claim),
+                recheck: reuse.recheck
+            });
+        }
         // Modele lokalne (Bielik, Mistral) weryfikują najpierw na lokalnej kopii ELI (RAG).
         const verificationTools = this.verificationToolFactory?.(ledger, {
             localModel: request.model.startsWith("local/")
@@ -527,6 +757,10 @@ export class SafeSessionExecutor {
             modelSelectsSkills: request.modelSelectsSkills === true
         });
         const reportTools = new ReportBlueprintToolRuntime();
+        // Modele lokalne: bez widgetów (minimalny zestaw narzędzi i promptu).
+        const widgetTools = request.model.startsWith("local/")
+            ? undefined
+            : new WidgetToolRuntime(this.registry);
         // Modele lokalne (Bielik, Mistral): bez federacji MCP. Jej instrukcje i schematy to
         // ~12 tys. znaków promptu przy oknie 32k, a lokalny model dostaje przepisy z RAG
         // rdzeniowego i verify_legal_reference na lokalnej kopii ELI.
@@ -581,8 +815,10 @@ export class SafeSessionExecutor {
                 }
                 : {})
         });
-        const attachments = namespaceDocumentAttachmentTokens(contextSelection.attachments);
-        const citationSources = contextSelection.citationSources;
+        const aliasRegistry = new DocumentAliasRegistry();
+        const attachments = namespaceDocumentAttachmentTokens(contextSelection.attachments, aliasRegistry);
+        // Chunks read by the case file tools are added after the model turn.
+        const citationSources = [...contextSelection.citationSources];
         // Page images of the attachments in context (masked evidence), for
         // models that see images; others work from the text.
         const evidence = selectEvidenceImages(request.documentAttachments ?? [], attachments);
@@ -616,6 +852,23 @@ export class SafeSessionExecutor {
         const coreLawTools = this.coreLawIndex
             ? new CoreLawToolRuntime(this.coreLawIndex)
             : undefined;
+        // The context holds what fits the window; the tools reach the rest of the
+        // matter's files. Not for local models (window and tool reliability).
+        const caseFileTools = request.caseFiles && !request.model.startsWith("local/")
+            ? new CaseFileToolRuntime(request.caseFiles, {
+                inContext: new Map(attachments
+                    .filter((attachment) => attachment.caseId === request.caseFiles.caseId)
+                    .map((attachment) => [attachment.documentId, new Set(attachment.chunks.map((chunk) => chunk.index))])),
+                prefixFor: (documentId) => aliasRegistry.prefixFor(documentId),
+                namespace: namespaceChunkTokens,
+                markPages,
+                ...(request.modelContextTokens
+                    ? {
+                        maxTurnChars: Math.min(120_000, Math.floor(request.modelContextTokens * (request.tokenCharsPerToken ?? 3) * 0.3))
+                    }
+                    : {})
+            })
+            : undefined;
         // Local 11-12B models call tools unreliably: they get the most relevant
         // core law articles in the prompt (retrieval, not training).
         const coreLawRag = this.coreLawIndex && request.model.startsWith("local/")
@@ -630,18 +883,271 @@ export class SafeSessionExecutor {
             ...(coreLawTools
                 ? coreLawTools.schemas()
                 : []),
+            ...(caseFileTools ? caseFileTools.schemas() : []),
             ...reportTools.schemas(),
+            ...(widgetTools ? widgetTools.schemas() : []),
             ...(federationTools
                 ? federationTools.schemas()
                 : []),
             ...(verificationTools ? verificationTools.schemas() : [])
         ];
+        // Mandatory path (hosted models): the profile, the corpus files the router's
+        // mandatory gates require, loaded up front, and the mode decided at the entry.
+        const mandatoryModel = request.model.startsWith("local/") ? null : this.mandatoryModel();
+        const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(latestUserTurn(request.query));
+        const pathFacts = {
+            query: request.auxiliaryText ?? latestUserTurn(request.query),
+            legal: legalTurn,
+            // AUTO: primarySkill is a placeholder until the model reads a domain skill,
+            // so the criminal matter comes from the question itself.
+            criminal: (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
+                criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)),
+            documents: attachments.length > 0,
+            documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
+            documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
+            foreignJurisdiction: false
+        };
+        const profile = pathProfile({
+            mode: request.modeDecision?.mode ?? request.mode,
+            simple: request.matterComplexity?.level === "SIMPLE",
+            criminal: pathFacts.criminal,
+            documentGeneration: pathFacts.documentGeneration
+        });
+        // Already in the model's context: the router skill and the core legal resources.
+        const contextResources = new Set([
+            `${ROUTER_SKILL}/SKILL.md`,
+            "shared/PRAWO-HARDGATE.md",
+            `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
+            `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
+            // Route-based path: the engine puts the qualifier in the prompt itself.
+            ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
+        ]);
+        const pathSections = [];
+        // The kind of every document the user sent (court decision, pleading, contract,
+        // evidence...), recognised locally from its protected text; the router chooses
+        // the skill also by what the user delivers (ACTIVATION-MATRIX).
+        const recognisedDocuments = mandatoryModel && legalTurn
+            ? attachments
+                .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                .map((attachment) => ({
+                documentId: attachment.documentId,
+                ...classifyDocument({
+                    text: attachment.chunks.map((chunk) => chunk.text).join("\n"),
+                    images: attachment.images?.length ?? 0
+                })
+            }))
+            : [];
+        if (recognisedDocuments.length) {
+            audit.record("gate", "DOCUMENT_KINDS", "OK", {
+                documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
+            });
+            pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+            step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
+        }
+        // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
+        if (mandatoryModel && legalTurn && pathFacts.criminal && request.modelSelectsSkills) {
+            const qualifier = this.readCorpus(CRIMINAL_QUALIFIER_RESOURCE);
+            if (qualifier) {
+                contextResources.add(CRIMINAL_QUALIFIER_RESOURCE);
+                audit.record("resource_read", CRIMINAL_QUALIFIER_RESOURCE, "OK", { detail: "runtime-preload;mandatory-path;criminal-question" });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${CRIMINAL_QUALIFIER_RESOURCE}\n\n${qualifier}`);
+            }
+        }
+        // AUTO: the domain (prawo-polskie-v2 flash routing) and its act modules
+        // (MAPA-AKTOW) the case points to; the model decides and reads them.
+        const caseText = [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n");
+        corpusTools.setCaseText(caseText);
+        // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
+        // named): those modules are loaded and required; the hint below covers the rest.
+        if (mandatoryModel && legalTurn) {
+            const documentText = attachments
+                .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+                .join("\n")
+                .slice(0, 30_000);
+            const acts = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"));
+            if (acts.modules.length || acts.rejected.length) {
+                const loaded = loadActModules(this.registry, acts.modules, contextResources);
+                for (const item of loaded.loaded) {
+                    contextResources.add(item.resource);
+                    audit.record("resource_read", item.resource, "OK", { detail: `runtime-preload;act-map;${item.rule}` });
+                }
+                audit.record("gate", "ACT_MAP_MODULES", acts.rejected.length ? "DEGRADED" : "OK", {
+                    detail: [
+                        ...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`),
+                        ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)
+                    ].join(";"),
+                    ...(acts.rejected.length ? { rejected: acts.rejected.map((item) => `${item.resource} — ${item.reason}`) } : {})
+                });
+                if (acts.modules.length)
+                    pathSections.push(actModulesPrompt(loaded));
+                if (acts.rejected.length) {
+                    pathSections.push([
+                        "# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)",
+                        ...acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`),
+                        "Ustal właściwy moduł z mapy dziedziny albo powiedz wprost, że go brak; zgłoś rozbieżność mapy."
+                    ].join("\n"));
+                }
+                step("PREPARE", `moduły aktów z mapy (mechanicznie): ${acts.modules.map((item) => path.basename(item.resource, ".md")).join(", ") || "brak"}`);
+            }
+        }
+        if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
+            const domains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            if (domains.length) {
+                audit.record("gate", "DOMAIN_HINT", "OK", {
+                    detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
+                });
+                pathSections.push(domainHintPrompt(domains));
+                step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
+            }
+        }
+        if (mandatoryModel && legalTurn) {
+            const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
+            for (const resource of preloaded) {
+                const content = this.readCorpus(resource);
+                if (!content) {
+                    audit.record("resource_read", resource, "BLOCKED", { detail: "runtime-preload;mandatory-path;missing" });
+                    continue;
+                }
+                contextResources.add(resource);
+                audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+            }
+            step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
+            pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
+        }
+        // AUTO: the task type from the router's table [1]–[11] names the executive skill
+        // the router requires; the app loads it in full with its contract (mechanically,
+        // as in the mechanical mode) instead of leaving the choice to the model.
+        let taskRoute = null;
+        if (mandatoryModel &&
+            legalTurn &&
+            request.modelSelectsSkills &&
+            !request.guideContext &&
+            !request.processWorkflowContext &&
+            !request.courtWorkflowContext &&
+            !request.chronologyWorkflowContext &&
+            !request.contractWorkflowContext &&
+            !request.orderedCaseWorkflowContext) {
+            // ACTIVATION-MATRIX first (phrases and delivered materials), then the
+            // router table [1]–[11] on the question and the documents' kinds.
+            // The matter's own files (case search on) count as delivered case files for a
+            // request to analyse the matter ("całościowa analiza sprawy").
+            const materials = [
+                ...recognisedDocuments,
+                ...(request.caseFiles && !recognisedDocuments.length && ANALYSIS_INTENT.test(pathFacts.query)
+                    ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
+                    : [])
+            ];
+            taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest(), {
+                skill: "pisma-proste-v2",
+                entries: schemaCatalog(this.registry, "pisma-proste-v2")
+            });
+            const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
+            if (taskRoute && record) {
+                const skill = record.name;
+                const text = fs.readFileSync(record.skillFile, "utf8");
+                corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
+                audit.record("gate", "TASK_ROUTING", "OK", {
+                    source: taskRoute.source,
+                    skill,
+                    ...(taskRoute.then ? { then: taskRoute.then } : {}),
+                    reason: taskRoute.reason
+                });
+                pathSections.push([
+                    `# SKILL WYKONAWCZY WG ROUTERA: ${skill} (wczytany przez aplikację w całości; nie czytaj go ponownie)`,
+                    `Rozpoznanie aplikacji — ${taskRoute.reason}. To jest PRIMARY tej sprawy${taskRoute.route?.secondary.length ? `; SECONDARY: ${taskRoute.route.secondary.join(", ")}` : ""}.` +
+                        (taskRoute.then ? ` Dalszy etap pipeline'u według macierzy: ${taskRoute.then} (po wyniku tego skilla).` : "") +
+                        " Gdy treść sprawy wskazuje inny wiersz routingu, powiedz to wprost i wczytaj właściwy skill.",
+                    ...(skill === "pisma-procesowe-v3" || skill === "pisma-proste-v2" || taskRoute.then === "pisma-procesowe-v3"
+                        ? ["Pełny pipeline pisma (etapy, HYBRID-VAL, .docx) prowadzi tryb mechaniczny: zaproponuj użytkownikowi wybór tego skilla w trybie mechanicznym."]
+                        : []),
+                    text
+                ].join("\n\n"));
+                const contract = executiveContract(this.registry, skill);
+                if (contract) {
+                    const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
+                    for (const item of loaded.loaded) {
+                        contextResources.add(item.resource);
+                        audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;executive-contract" });
+                    }
+                    audit.record("gate", "EXECUTIVE_CONTRACT", "OK", {
+                        detail: `skill=${skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
+                    });
+                    pathSections.push(contractPrompt(loaded));
+                }
+                // Shared files every executive skill names for this case: the runtime adapter
+                // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
+                // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
+                const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
+                const sharedForSkill = [
+                    "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
+                    ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])
+                ];
+                for (const resource of sharedForSkill) {
+                    if (contextResources.has(resource))
+                        continue;
+                    const content = this.readCorpus(resource);
+                    if (!content)
+                        continue;
+                    contextResources.add(resource);
+                    audit.record("resource_read", resource, "OK", { detail: "runtime-preload;executive-shared" });
+                    pathSections.push(`# ZASÓB SHARED WYMAGANY PRZEZ SKILL ${skill}: ${resource}\n\n${content}`);
+                }
+                // Modules the decision itself requires (Test A: MOD-REDAKCJA for a finished pleading).
+                for (const resource of taskRoute.modules ?? []) {
+                    if (contextResources.has(resource))
+                        continue;
+                    const content = this.readCorpus(resource);
+                    if (!content)
+                        continue;
+                    contextResources.add(resource);
+                    audit.record("resource_read", resource, "OK", { detail: "runtime-preload;task-decision" });
+                    pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
+                }
+                // Conditional modules of the skill's module map that this case triggers.
+                const modules = loadModules(this.registry, skill, skillModules(this.registry, skill, {
+                    // The kinds of the delivered material in the words module maps use.
+                    text: [
+                        pathFacts.query,
+                        ...recognisedDocuments.map((document) => document.label),
+                        recognisedDocuments.some((document) => document.evidence) ? "materiał zawiera dowody do oceny (dokumenty)" : "",
+                        recognisedDocuments.some((document) => document.category === "PISMO_PROCESOWE" || document.category === "ORZECZENIE")
+                            ? "materiał zawiera pisma procesowe, akta"
+                            : ""
+                    ].join("\n")
+                }), contextResources);
+                if (modules.loaded.length || modules.toRead.length) {
+                    for (const item of modules.loaded) {
+                        contextResources.add(item.resource);
+                        audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;skill-module-map" });
+                    }
+                    audit.record("gate", "SKILL_MODULES", "OK", {
+                        detail: `skill=${skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`
+                    });
+                    pathSections.push(modulesPrompt(skill, modules));
+                }
+                step("SKILLS", `skill wykonawczy (${taskRoute.source === "MATRIX" ? "macierz aktywacji" : taskRoute.source === "SKILL" ? "rozpoznanie w skillu" : "routing"}): ${skill}`);
+            }
+        }
+        const identityPrompt = [
+            "# MODEL TEJ SESJI (podaje aplikacja)",
+            `Dostawca: ${request.provider}; identyfikator modelu w aplikacji: ${request.model}.` +
+                (request.model.startsWith("account/") ? " Przy koncie konkretną wersję wybiera klient dostawcy; aplikacja jej nie zna." : ""),
+            "Pytany, jakim jesteś modelem, podaj te dane; nie zgaduj nazwy ani wersji z pamięci."
+        ].join("\n");
         const toolPrompt = [
+            identityPrompt,
+            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+            ...pathSections,
+            ...(evidencePrompt ? [evidencePrompt] : []),
             ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
             ...(coreLawTools
                 ? [coreLawTools.systemPromptAppendix()]
                 : []),
+            ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
             reportTools.systemPromptAppendix(),
+            ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
             ...(federationTools
                 ? [federationTools.systemPromptAppendix()]
                 : []),
@@ -835,11 +1341,15 @@ export class SafeSessionExecutor {
                 }
                 const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
                 const reportCalls = calls.filter((call) => reportTools.handles(call.name));
+                const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
+                const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
                 const federationCalls = calls.filter((call) => federationTools?.handles(call.name) ?? false);
                 const coreLawCalls = calls.filter((call) => coreLawTools?.handles(call.name) ?? false);
                 const verificationCalls = calls.filter((call) => !(coreLawTools?.handles(call.name) ?? false) &&
                     !corpusTools.handles(call.name) &&
                     !reportTools.handles(call.name) &&
+                    !(caseFileTools?.handles(call.name) ?? false) &&
+                    !(widgetTools?.handles(call.name) ?? false) &&
                     !(federationTools?.handles(call.name) ?? false));
                 const corpusResults = corpusCalls.length > 0
                     ? await corpusTools.runTools(corpusCalls)
@@ -850,6 +1360,12 @@ export class SafeSessionExecutor {
                     : [];
                 const reportResults = reportCalls.length > 0
                     ? await reportTools.runTools(reportCalls)
+                    : [];
+                const caseFileResults = caseFileTools && caseFileCalls.length > 0
+                    ? await caseFileTools.runTools(caseFileCalls)
+                    : [];
+                const widgetResults = widgetTools && widgetCalls.length > 0
+                    ? await widgetTools.runTools(widgetCalls)
                     : [];
                 const federationResults = federationTools &&
                     federationCalls.length > 0
@@ -884,7 +1400,9 @@ export class SafeSessionExecutor {
                 const byId = new Map([
                     ...corpusResults,
                     ...coreLawResults,
+                    ...caseFileResults,
                     ...reportResults,
+                    ...widgetResults,
                     ...federationResults,
                     ...verificationResults
                 ].map((result) => [
@@ -913,10 +1431,37 @@ export class SafeSessionExecutor {
                 selection.domainSkills;
             execution.executionSkills =
                 selection.executionSkills;
-            if (selection.primarySkill) {
-                execution.primarySkill =
-                    selection.primarySkill;
+            // Every skill the model read (or the app preloaded) is a skill_read in the
+            // audit; a SKILL.md read only in part is DEGRADED, not a read skill.
+            for (const read of corpusTools.skillReads()) {
+                if (audit.events.some((event) => event.type === "skill_read" && event.target === read.skill && event.status === "OK"))
+                    continue;
+                audit.record("skill_read", read.skill, read.complete ? "OK" : "DEGRADED", {
+                    how: read.how,
+                    ...(read.how === "tool" ? { readChars: read.read, totalChars: read.total } : {})
+                });
             }
+            // Never the placeholder: the DR the model read, else the router.
+            execution.primarySkill =
+                selection.primarySkill ?? ROUTER_SKILL;
+            // The model routed itself: the route is the DR it actually read
+            // (router-v3 only when it found no legal domain), not the placeholder.
+            audit.record("route", selection.primarySkill ?? "prawny-router-v3", "OK", {
+                role: "primary-domain",
+                selection: "model-auto-selection",
+                domainSkills: selection.domainSkills
+            });
+        }
+        for (const event of caseFileTools?.auditEvents() ?? []) {
+            audit.record(event.tool === "read_case_file" ? "resource_read" : "tool_decision", event.tool === "read_case_file" ? `local-document:${event.target}` : `case-files:${event.target}`, event.decision === "ALLOW" ? "OK" : "BLOCKED", { tool: event.tool, protectedOnly: true, ...(event.detail ?? {}) });
+        }
+        for (const read of caseFileTools?.readChunks() ?? []) {
+            citationSources.push({
+                caseId: request.caseFiles.caseId,
+                documentId: read.documentId,
+                sourceScope: "CASE_KNOWLEDGE",
+                chunks: read.chunks
+            });
         }
         for (const event of coreLawTools?.auditEvents() ?? []) {
             audit.record(event.tool === "read_core_law_article"
@@ -1000,7 +1545,89 @@ export class SafeSessionExecutor {
             observed: workflowReads.observed,
             missing: workflowReads.missing
         });
-        const automaticVerificationPlan = planAutomaticLegalVerification(execution.output, ledger, requestedHistoricalAsOf);
+        // Mandatory path, profile PEŁNY: the router's gate blocks (CN, REM, WYJ) must be
+        // visible in the answer. One correcting round with the gate modules; what is
+        // still missing after it degrades the answer (⛔ TRYB ZDEGRADOWANY).
+        // The profile after the answer: a criminal domain the model read makes it PEŁNY.
+        // Gate modules not yet in the context are loaded for the correcting round.
+        const criminalAfter = pathFacts.criminal || [...(execution.domainSkills ?? []), execution.primarySkill].some((skill) => skill.startsWith("dr-03-"));
+        const effectiveProfile = pathProfile({
+            mode: request.modeDecision?.mode ?? request.mode,
+            simple: request.matterComplexity?.level === "SIMPLE",
+            criminal: criminalAfter,
+            documentGeneration: pathFacts.documentGeneration
+        });
+        if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
+            for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
+                if (contextResources.has(resource))
+                    continue;
+                const content = this.readCorpus(resource);
+                if (!content)
+                    continue;
+                contextResources.add(resource);
+                audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path;escalated", profile: effectiveProfile });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${content}`);
+            }
+            pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
+        }
+        let modelOutput = execution.output;
+        // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
+        const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
+        const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0);
+        const missingGates = mandatoryModel &&
+            legalTurn &&
+            !request.model.startsWith("local/") &&
+            // Plain legal chat only: structured outputs and workflow checkpoints have their own contracts.
+            !request.documentAstOutput &&
+            !request.guideContext &&
+            !request.processWorkflowContext &&
+            !request.courtWorkflowContext &&
+            !request.chronologyWorkflowContext &&
+            !request.contractWorkflowContext &&
+            !request.orderedCaseWorkflowContext &&
+            legalAnswer(modelOutput)
+            ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
+            : [];
+        if (missingGates.length) {
+            step("MODEL", `ścieżka obowiązkowa: uzupełnienie bramek ${missingGates.map((item) => item.block).join(", ")}`);
+            try {
+                const corrected = await this.providers.stream(request.provider, {
+                    model: request.model,
+                    systemPrompt: [
+                        ...(placeholderKey ? [placeholderKey] : []),
+                        identityPrompt,
+                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                        ...pathSections
+                    ].join("\n\n"),
+                    messages: [
+                        { role: "user", content: protectedQuery },
+                        { role: "assistant", content: modelOutput },
+                        { role: "user", content: gateCorrectionPrompt(missingGates) }
+                    ],
+                    accountContinuity: "none",
+                    reasoning: "none"
+                });
+                const text = corrected.fullText.trim();
+                const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
+                const accepted = Boolean(text) && remaining.length < missingGates.length;
+                if (accepted)
+                    modelOutput = text;
+                audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
+                    missing: missingGates.map((item) => item.block),
+                    remaining: (accepted ? remaining : missingGates).map((item) => item.block)
+                });
+            }
+            catch (error) {
+                audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {
+                    missing: missingGates.map((item) => item.block),
+                    error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
+                });
+            }
+        }
+        // The model's own ⚠️ at a statute does not stop the application from
+        // verifying it: status comes from the registry only.
+        const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
+        const automaticVerificationPlan = planAutomaticLegalVerification(releasedDraft.text, ledger, requestedHistoricalAsOf);
         let automaticVerificationExecuted = 0;
         if (automaticVerificationPlan.calls.length > 0 &&
             verificationTools) {
@@ -1008,7 +1635,10 @@ export class SafeSessionExecutor {
             automaticVerificationExecuted =
                 results.length;
         }
-        const automaticVerification = applyAutomaticVerificationMarkers(execution.output, ledger, requestedHistoricalAsOf);
+        // Model-written ✅ markers are claims, not verification: only the ledger
+        // marker is shown, so a rewritten link or date cannot block the answer.
+        const ledgerBackedOutput = stripUnbackedVerificationMarkers(releasedDraft.text, ledger);
+        const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf);
         audit.record("gate", "G39I_AUTO_POST_DRAFT_VERIFICATION", automaticVerificationPlan.calls.length > 0 &&
             !verificationTools
             ? "BLOCKED"
@@ -1016,6 +1646,8 @@ export class SafeSessionExecutor {
             planned: automaticVerificationPlan.calls.length,
             executed: automaticVerificationExecuted,
             insertedMarkers: automaticVerification.inserted,
+            removedUnbackedMarkers: ledgerBackedOutput.removed,
+            releasedModelUnverifiedMarkers: releasedDraft.released,
             skipped: automaticVerificationPlan.skipped
         });
         if (verificationTools) {
@@ -1034,7 +1666,9 @@ export class SafeSessionExecutor {
         const markedAnswer = preFinalization.result === "BLOCKED"
             ? {
                 ...citedAnswer,
-                text: markUnverifiedReferences(citedAnswer.text, preFinalization)
+                // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
+                // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
+                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization), preFinalization)
             }
             : citedAnswer;
         // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
@@ -1419,6 +2053,91 @@ export class SafeSessionExecutor {
             guideOutputBlocked,
             reportBlueprintBlocked
         });
+        // KROK 4: provisions verified in their current wording, checked again on the
+        // event date from the question (separate ledger: answer markers stay as they are).
+        const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
+            ? eventDates(pathFacts.query, new Date().toISOString().slice(0, 10))
+            : [];
+        const eventDateCheck = dates.length
+            ? await checkProvisionsAtEventDates({
+                records: ledger.all(),
+                dates,
+                runTools: (calls) => this.verificationToolFactory(new VerificationLedger(), { localModel: false }).runTools(calls)
+            })
+            : undefined;
+        if (eventDateCheck?.items.length) {
+            audit.record("gate", "EVENT_DATE_CHECK", eventDateCheck.items.every((item) => item.result === "SAME") ? "OK" : "DEGRADED", {
+                dates: eventDateCheck.dates,
+                items: eventDateCheck.items.map((item) => `${item.claim}@${item.asOf}:${item.result}`)
+            });
+        }
+        // KROK 7: the disclaimer from shared/DISCLAIMER.md is the last element of a
+        // legal answer; the application adds it when the model did not end with it.
+        const mode = request.modeDecision?.mode ?? request.mode;
+        // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
+        const freeText = !request.documentAstOutput && !reportBlueprint;
+        const disclaimerTexts = legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+        const disclaimed = disclaimerTexts
+            ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
+            : { text: processedDocumentCitations.text, appended: false };
+        if (disclaimed.appended)
+            audit.record("gate", "DISCLAIMER_LAST", "OK", { by: "APLIKACJA", mode });
+        // The register of the mandatory path, from what really happened in the turn.
+        const evaluatedPath = mandatoryModel && legalTurn
+            ? evaluateMandatoryPath(mandatoryModel, {
+                ...pathFacts,
+                criminal: criminalAfter,
+                profile: effectiveProfile,
+                contextResources,
+                answer: processedDocumentCitations.text,
+                ...(disclaimerTexts ? { disclaimerBy: disclaimed.appended ? "APLIKACJA" : "MODEL" } : {}),
+                records: ledger.all(),
+                events: audit.events.map((event) => ({
+                    type: event.type,
+                    target: event.target,
+                    status: event.status,
+                    ...(event.detail ? { detail: event.detail } : {})
+                })),
+                loadedSkills: execution.loadedSkills ?? [],
+                primarySkill: execution.primarySkill,
+                finalization: finalization.result,
+                federationTools: Boolean(federationTools),
+                ...(eventDateCheck ? { eventDateCheck } : {})
+            })
+            : undefined;
+        // KROK 3A written by the application from the audit.
+        const trace = evaluatedPath
+            ? routingTrace({
+                mode,
+                report: evaluatedPath,
+                // AUTO with a recognised task type: PRIMARY is the router's executive skill.
+                primarySkill: taskRoute ? taskRoute.primary : execution.primarySkill,
+                loadedSkills: [...(execution.loadedSkills ?? []), ...(taskRoute ? [execution.primarySkill] : [])],
+                events: audit.events.map((event) => ({ type: event.type, target: event.target, status: event.status })),
+                routerVersion: String(this.registry.get(ROUTER_SKILL)?.frontmatter.version ?? "") || null,
+                sharedRoot: `${path.basename(this.registry.root)}/shared`,
+                duplicates: duplicateSkills([...this.registry.skills.keys()])
+            })
+            : null;
+        const mandatoryPath = evaluatedPath && trace ? { ...evaluatedPath, routingTrace: trace.text } : evaluatedPath;
+        // Router: a missing mandatory read or gate is declared, never silent.
+        const degradedReasons = mandatoryPath
+            ? [
+                ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
+                ...(mandatoryPath.degraded
+                    ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
+                    : [])
+            ]
+            : [];
+        const presentedText = degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
+            ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+            : disclaimed.text;
+        if (mandatoryPath) {
+            audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
+                profile: mandatoryPath.profile,
+                missing: mandatoryPath.missing
+            });
+        }
         const safeToPresent = !presentationBlocked;
         audit.record("gate", "G15_SAFE_SESSION_EXECUTION", presentationBlocked
             ? "BLOCKED"
@@ -1456,13 +2175,32 @@ export class SafeSessionExecutor {
             kind: "statute",
             line,
             status: finding.code
-        }))));
+        }))))
+            // Znaczniki orzeczeń bez dowodu (zmyślone albo cytat zmieniony po weryfikacji).
+            .concat([...finalization.caseQuoteFindings.filter((finding) => finding.status !== "VERIFIED"),
+            ...finalization.caseSupportFindings.filter((finding) => finding.status !== "SUPPORTED")]
+            .map((finding) => ({
+            claim: finding.record?.caseSignature ?? `znacznik orzeczenia ${finding.evidenceHash}`,
+            kind: "case",
+            line: finding.line,
+            status: finding.status
+        })));
         step("RESTORE", "symbole zastępcze → dane z lokalnego klucza");
         // Every restored value is reported so the UI can mark it for review.
-        const restoredAnswer = restoreWithReport(processedDocumentCitations.text, chatPrivacyVault);
+        const restoredAnswer = restoreWithReport(presentedText, chatPrivacyVault);
+        // Next step of the pipeline: after the AUTO entry skill, or after the final
+        // result of the mechanical workflow.
+        const next = taskRoute
+            ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations())
+            : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
+                ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations())
+                : null;
         const response = {
             sessionId: audit.sessionId,
             status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
+            ...(next && safeToPresent ? { pipelineNext: next } : {}),
+            ...(mandatoryPath ? { mandatoryPath } : {}),
+            ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
             provider: request.provider,
             model: request.model,
             modelRouting: {
@@ -1506,6 +2244,9 @@ export class SafeSessionExecutor {
                     auxiliarySources: publicAuxiliarySources
                 }
                 : {}),
+            ...(widgetTools && widgetTools.widgets().length > 0
+                ? { widgets: widgetTools.widgets() }
+                : {}),
             context: {
                 ...contextSelection.report
             },
@@ -1548,9 +2289,8 @@ export class SafeSessionExecutor {
                     ...event,
                     ...(event.detail ? { detail: { ...event.detail } } : {})
                 })),
-                documentAliasDocumentIds: [
-                    ...new Set(attachments.map((attachment) => attachment.documentId))
-                ]
+                // Own-key documents by prefix (D01 = [0]); shared-key ones have none.
+                documentAliasDocumentIds: aliasRegistry.documentIds()
             },
             enumerable: false,
             configurable: false,

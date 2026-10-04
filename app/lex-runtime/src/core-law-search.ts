@@ -78,13 +78,38 @@ export type SearchableArticle = {
 };
 
 // The index keeps references only; article text is read back from the act.
-export type SearchHit = Omit<SearchableArticle, "text"> & { score: number };
+// `unit`: the paragraph ("ust. 2", "§ 3") of a long article that matched best.
+export type SearchHit = Omit<SearchableArticle, "text"> & { score: number; unit?: string };
+
+// Long articles are indexed per paragraph: BM25 length normalisation otherwise
+// buries the one matching paragraph of a 20-paragraph article under short ones.
+const SPLIT_MIN_STEMS = 120;
+
+export type ArticleUnit = { unit: string | null; text: string };
+
+/** Paragraphs ("1. …" = ust., "§ 1. …") of an article; one unit when it has none. */
+export function articleUnits(text: string): ArticleUnit[] {
+  // "Art. 3. § 1. …" i "Art. 10. 1. …": pierwszy ustęp stoi w linii nagłówka.
+  const heading = /^\s*(?:Art\.\s*\d+[a-z]{0,4}\.|Artykuł\s+\d+[a-z]{0,4}\.?)[ \t]*/u.exec(text)?.[0] ?? "";
+  const body = text.slice(heading.length);
+  const marks = [...body.matchAll(/(?:^|\n)[ \t]*(§\s*\d+[a-z]{0,3}|\d+[a-z]{0,3})\.\s/gu)].map((match) => ({
+    label: match[1]!.startsWith("§") ? match[1]!.replace(/\s+/g, " ") : `ust. ${match[1]}`,
+    start: match.index! + (match[0].startsWith("\n") ? 1 : 0)
+  }));
+  if (marks.length < 2) return [{ unit: null, text }];
+  const head = (heading + body.slice(0, marks[0]!.start)).trim();
+  return marks.map((mark, index) => ({
+    unit: mark.label,
+    // The heading keeps a heading-only term findable from each paragraph.
+    text: `${head}\n${body.slice(mark.start, marks[index + 1]?.start ?? body.length).trim()}`
+  }));
+}
 
 const K1 = 1.2;
 const B = 0.75;
 
 export class CoreLawSearchIndex {
-  private readonly docs: Array<Omit<SearchableArticle, "text">> = [];
+  private readonly docs: Array<Omit<SearchableArticle, "text"> & { unit?: string }> = [];
   private readonly lengths: number[] = [];
   private readonly postings = new Map<string, Array<[number, number]>>();
   private averageLength = 1;
@@ -92,17 +117,26 @@ export class CoreLawSearchIndex {
   constructor(articles: Iterable<SearchableArticle>) {
     let total = 0;
     for (const article of articles) {
-      const id = this.docs.length;
-      this.docs.push({ eli: article.eli, title: article.title, article: article.article });
-      const stems = searchStems(article.text);
-      this.lengths.push(stems.length);
-      total += stems.length;
-      const counts = new Map<string, number>();
-      for (const stem of stems) counts.set(stem, (counts.get(stem) ?? 0) + 1);
-      for (const [stem, count] of counts) {
-        let list = this.postings.get(stem);
-        if (!list) this.postings.set(stem, (list = []));
-        list.push([id, count]);
+      const whole = searchStems(article.text);
+      const units = whole.length >= SPLIT_MIN_STEMS ? articleUnits(article.text) : [{ unit: null, text: article.text }];
+      for (const unit of units) {
+        const id = this.docs.length;
+        this.docs.push({
+          eli: article.eli,
+          title: article.title,
+          article: article.article,
+          ...(unit.unit ? { unit: unit.unit } : {})
+        });
+        const stems = units.length === 1 ? whole : searchStems(unit.text);
+        this.lengths.push(stems.length);
+        total += stems.length;
+        const counts = new Map<string, number>();
+        for (const stem of stems) counts.set(stem, (counts.get(stem) ?? 0) + 1);
+        for (const [stem, count] of counts) {
+          let list = this.postings.get(stem);
+          if (!list) this.postings.set(stem, (list = []));
+          list.push([id, count]);
+        }
       }
     }
     this.averageLength = this.docs.length ? total / this.docs.length : 1;
@@ -126,7 +160,15 @@ export class CoreLawSearchIndex {
         scores.set(id, (scores.get(id) ?? 0) + idf * norm);
       }
     }
-    return [...scores]
+    // One hit per article: its best paragraph.
+    const best = new Map<string, [number, number]>();
+    for (const [id, score] of scores) {
+      const doc = this.docs[id]!;
+      const key = `${doc.eli}\u0000${doc.article}`;
+      const current = best.get(key);
+      if (!current || score > current[1]) best.set(key, [id, score]);
+    }
+    return [...best.values()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, options.limit ?? 10)
       .map(([id, score]) => ({ ...this.docs[id]!, score: Math.round(score * 100) / 100 }));

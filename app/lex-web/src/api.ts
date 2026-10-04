@@ -1,4 +1,4 @@
-import type { RestorationMark } from "./workspace-client.js";
+import type { ChatWidget, RestorationMark } from "./workspace-client.js";
 
 export type ProviderId = "openai" | "anthropic" | "xai" | "google";
 
@@ -337,7 +337,37 @@ export type SharedTemplateManifest = {
   createdAt: string;
   createdByUserId: string;
   generationReady: false;
+  // Set by the firm: document kind and default for that kind.
+  role?: { kind: TemplateKindId; isDefault: boolean };
 };
+
+// Same list as the runtime's TEMPLATE_KINDS (template-roles.ts).
+export const TEMPLATE_KINDS = [
+  ["pozew", "Pozew"],
+  ["apelacja", "Apelacja"],
+  ["zazalenie", "Zażalenie"],
+  ["sprzeciw", "Sprzeciw / zarzuty"],
+  ["odpowiedz_na_pozew", "Odpowiedź na pozew"],
+  ["wniosek", "Wniosek / pismo procesowe"],
+  ["wezwanie", "Wezwanie"],
+  ["pismo", "Pismo / list"],
+  ["umowa", "Umowa"],
+  ["regulamin", "Regulamin"],
+  ["opinia", "Opinia prawna"],
+  ["pelnomocnictwo", "Pełnomocnictwo"],
+  ["inne", "Inny dokument"]
+] as const;
+export type TemplateKindId = (typeof TEMPLATE_KINDS)[number][0];
+
+export function setSharedTemplateRole(
+  templateId: string,
+  role: { kind: TemplateKindId; isDefault: boolean } | null
+): Promise<SharedTemplateListResponse> {
+  return json<SharedTemplateListResponse>(`/api/shared/templates/${encodeURIComponent(templateId)}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role })
+  });
+}
 
 export type SharedTemplateListResponse = {
   templates: SharedTemplateManifest[];
@@ -886,7 +916,7 @@ export type SkillUpdateApplyResponse = {
 
 export type BlockedReference = {
   claim: string;
-  kind: "statute" | "journal" | "case";
+  kind: "statute" | "journal" | "case" | "interpretation" | "amount";
   line: number;
   status: string;
 };
@@ -923,7 +953,7 @@ export type AuxiliarySourceItem = {
 
 export type EvidenceItem = {
   claim: string;
-  kind: "statute" | "journal" | "case" | "deadline" | "amount";
+  kind: "statute" | "journal" | "case" | "deadline" | "amount" | "interpretation";
   status: "VERIFIED" | "SUPPORTED" | "UNVERIFIED";
   sourceUrl?: string;
   // sourceUrl z kotwicą do artykułu/jednostki, gdy runtime ją ustalił.
@@ -947,10 +977,45 @@ export type EvidenceItem = {
   caseSignature?: string;
   evidenceHash?: string;
   supportQuoteHash?: string;
+  // Fragment orzeczenia sprawdzony w oficjalnym tekście (zaznaczany w podglądzie).
+  passage?: string;
+};
+
+export type MandatoryPathStep = {
+  layer: "ROUTER" | "SKILL" | "VERIFICATION" | "HARD_GATE";
+  id: string;
+  label: string;
+  requirement: "CORE" | "TRIGGERED" | "CONDITIONAL";
+  status: "MET" | "MISSING" | "NOT_TRIGGERED" | "NOT_EVALUATED";
+  by?: "APLIKACJA" | "MODEL";
+  evidence: string;
+};
+
+export type MandatoryPathView = {
+  source: string;
+  profile: "LEKKI" | "PELNY";
+  complete: boolean;
+  degraded: boolean;
+  steps: MandatoryPathStep[];
+  missing: string[];
+  // KROK 3A wypisany przez aplikację z audytu.
+  routingTrace?: string;
+};
+
+export type QueryModeDecisionView = {
+  mode: "LAIK" | "PRAWNIK";
+  decision: "PRAWNIK" | "LAIK" | "POPRZEDNI" | "ODPOWIEDZ_NA_PYTANIE" | "NIEROZSTRZYGNIETY";
+  signals: { laik: string[]; prawnik: string[]; direct: string[] };
 };
 
 export type SessionExecutionResponse = {
   sessionId: string;
+  mandatoryPath?: MandatoryPathView;
+  // Next skill of the pipeline (ACTIVATION-MATRIX).
+  pipelineNext?: { skill: string; reason: string };
+  // The firm's default template the application used (none picked).
+  firmTemplateApplied?: { templateId: string; filename: string; kind: string };
+  modeDecision?: QueryModeDecisionView;
   // Values restored locally into the answer, for highlighting and correction.
   restorations?: RestorationMark[];
   unresolvedTokens?: string[];
@@ -995,6 +1060,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
+  widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
     eventCount: number;
@@ -1717,6 +1783,45 @@ export function renameCase(
       })
     }
   );
+}
+
+export type CaseThreadSummary = {
+  text: string;
+  coveredMessages: number;
+  updatedAt: string;
+  editedByUser?: boolean;
+};
+
+export type CaseMemory = {
+  summary: CaseThreadSummary | null;
+  evidence: {
+    updatedAt: string;
+    provisions: Array<{
+      claim: string;
+      status: string;
+      sourceUrl: string | null;
+      consolidatedText: string | null;
+      fetchedAt: string;
+      freshnessCheckedAt: string | null;
+    }>;
+    sources: Array<{ claim: string; status: string; url: string; fetchedAt: string }>;
+    skills: string[];
+  } | null;
+};
+
+export function getCaseMemory(caseId: string): Promise<CaseMemory> {
+  return json<CaseMemory>(`/api/cases/${caseId}/memory`);
+}
+
+export function updateCaseSummary(caseId: string, text: string): Promise<{ summary: CaseThreadSummary }> {
+  return json(`/api/cases/${caseId}/memory/summary`, {
+    method: "PATCH",
+    body: JSON.stringify({ text })
+  });
+}
+
+export function clearCaseMemory(caseId: string): Promise<{ cleared: true }> {
+  return json(`/api/cases/${caseId}/memory`, { method: "DELETE" });
 }
 
 export function listCaseSchedule(
@@ -2659,6 +2764,74 @@ export function validateRoute(
   });
 }
 
+export type QualitySummary = {
+  turns: number;
+  score: number;
+  blockedRate: number;
+  verificationRate: number | null;
+  topicCoverage: number;
+  actCoverage: number | null;
+  continuity: number | null;
+  pathCoverage?: number | null;
+  unbackedClaimRate?: number;
+  meanTimeMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+};
+
+export type QualityBenchmarkJob = {
+  reportId: string;
+  provider: string;
+  model: string;
+  startedAt: string;
+  done: number;
+  total: number;
+  current: string | null;
+  cancelling: boolean;
+  error?: string;
+};
+
+export type QualityBenchmarkReportSummary = {
+  reportId: string;
+  createdAt: string;
+  finishedAt: string;
+  provider: string;
+  model: string;
+  historyChars: number;
+  cases: string[];
+  cancelled: boolean;
+  summary: QualitySummary;
+  comparison?: {
+    baselineReportId: string;
+    items: Array<{ metric: keyof QualitySummary; baseline: number | null; current: number | null; delta: number | null; regression: boolean }>;
+  };
+};
+
+export function getQualityBenchmark(): Promise<{
+  job: QualityBenchmarkJob | null;
+  failed: QualityBenchmarkJob | null;
+  reports: QualityBenchmarkReportSummary[];
+}> {
+  return json("/api/admin/quality-benchmark");
+}
+
+export function startQualityBenchmark(input: {
+  provider: ProviderId;
+  model: string;
+  cases?: string[];
+  historyChars?: number;
+}): Promise<{ job: QualityBenchmarkJob }> {
+  return json("/api/admin/quality-benchmark", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function cancelQualityBenchmark(): Promise<{ job: QualityBenchmarkJob | null }> {
+  return json("/api/admin/quality-benchmark/cancel", { method: "POST", body: "{}" });
+}
+
+export function getQualityBenchmarkReport(reportId: string): Promise<{ report: QualityBenchmarkReportSummary & { answers: unknown[] }; markdown: string }> {
+  return json(`/api/admin/quality-benchmark/reports/${reportId}`);
+}
+
 export function getModels(
   provider: ProviderId
 ): Promise<ModelsResponse> {
@@ -3369,6 +3542,52 @@ export type McpSourcePreview =
   | { kind: "pdf"; url: string; base64: string };
 
 // Page of an official source (search result) fetched by the runtime without scripts.
+// Widget: rejestracja ramki (zalogowany użytkownik) i adres ramki z własnym CSP runtime.
+export function registerChatWidget(widget: ChatWidget): Promise<{ widgetId: string }> {
+  return json("/api/widgets", { method: "POST", body: JSON.stringify({ widget }) });
+}
+
+export function chatWidgetFrameUrl(widgetId: string): string {
+  return `${apiBase()}/api/widgets/frame/${widgetId}`;
+}
+
+export type ProvisionPreview = {
+  kind: "html";
+  html: string;
+  anchor: string;
+  eli: string;
+  article: string;
+  unit: string | null;
+  unitFound: boolean;
+  copyFetchedAt: string;
+  sourceUrl: string;
+};
+
+export function previewProvision(claim: string, sourceUrl?: string): Promise<ProvisionPreview> {
+  return json<ProvisionPreview>("/api/core-law/provision-preview", {
+    method: "POST",
+    body: JSON.stringify({ claim, ...(sourceUrl ? { sourceUrl } : {}) })
+  });
+}
+
+export type CaseLawPreview = {
+  url: string;
+  html: string;
+  anchor: string;
+  match: "EXACT" | "PARTIAL" | "SIGNATURE" | "NONE";
+  chars: number;
+};
+
+// Pełny tekst orzeczenia/interpretacji z oficjalnego źródła, cytowany fragment zaznaczony.
+export function previewCaseLaw(input: {
+  sourceUrl: string;
+  passage?: string;
+  signature?: string;
+  attributed?: string;
+}): Promise<CaseLawPreview> {
+  return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
+}
+
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {
   return json<McpSourcePreview>("/api/mcp-search/source-preview", {
     method: "POST",
@@ -3435,6 +3654,19 @@ export function getAnomalies(filter: { severity?: AnomalySeverity; since?: strin
   return json(`/api/diagnostics/anomalies${query ? `?${query}` : ""}`);
 }
 
+// Faktura w PDF z logo wystawcy (z ustawień). logoOmitted: logo, którego nie dało się osadzić.
+export async function exportInvoicePdf(invoiceId: string): Promise<{ blob: Blob; filename: string; logoOmitted: boolean }> {
+  const response = await fetch(`${apiBase()}/api/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `HTTP_${response.status}`, response.status);
+  }
+  const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "Faktura.pdf";
+  return { blob: await response.blob(), filename, logoOmitted: Boolean(response.headers.get("x-lex-invoice-logo")) };
+}
+
 export async function exportAnomalies(): Promise<Blob> {
   const response = await fetch(`${apiBase()}/api/diagnostics/anomalies/export`, {
     headers: authorizationHeaders()
@@ -3476,6 +3708,42 @@ export type InvoiceLine = {
   quantity: string;
   unitNetPrice: string;
   vatRate: string;
+  discount?: string;
+};
+
+export type InvoiceAnnotations = {
+  cashMethod?: boolean;
+  selfBilling?: boolean;
+  reverseCharge?: boolean;
+  splitPayment?: boolean;
+  exemptionBasis?: string;
+};
+
+export type NumberingSettings = {
+  pattern: string;
+  reset: "monthly" | "yearly" | "never";
+  padding: number;
+};
+
+export type InvoiceRequirementStatus = "UNVERIFIED" | "VERIFIED" | "MISMATCH" | "NOT_FOUND";
+
+export type InvoiceRequirementsReport = {
+  eli: string;
+  article: string;
+  sourceUrl?: string;
+  statusDate?: string;
+  retrievedAt?: string;
+  requirements: Array<{
+    id: string;
+    point: string;
+    label: string;
+    fields: string[];
+    condition?: string;
+    status: InvoiceRequirementStatus;
+    excerpt?: string;
+  }>;
+  uncoveredPoints: Array<{ point: string; excerpt: string }>;
+  error?: string;
 };
 
 export type InvoiceLogo = {
@@ -3498,6 +3766,7 @@ export type InvoiceDraft = {
   paymentDueDate?: string;
   bankAccount?: string;
   notes?: string;
+  annotations?: InvoiceAnnotations;
 };
 
 export type InvoiceTotals = {
@@ -3518,11 +3787,28 @@ export type InvoiceView = InvoiceDraft & {
 
 export type InvoiceSort = "date-desc" | "date-asc" | "client-asc" | "client-desc";
 
+export type InvoicePaymentMethod = "przelew" | "gotówka" | "zapłacono";
+
+export type InvoiceDefaults = {
+  paymentMethod: InvoicePaymentMethod;
+  paymentTermDays: number;
+  vatRate: string;
+};
+
 export type InvoiceSettingsResponse = {
   ksef: KsefSettings;
   seller?: InvoiceParty;
   logo?: InvoiceLogo;
+  defaults?: InvoiceDefaults;
+  numbering?: NumberingSettings;
 };
+
+export function setInvoiceDefaults(defaults: InvoiceDefaults): Promise<{ defaults: InvoiceDefaults }> {
+  return json("/api/invoices/settings/defaults", {
+    method: "PUT",
+    body: JSON.stringify({ defaults })
+  });
+}
 
 export function getInvoiceSettings(): Promise<InvoiceSettingsResponse> {
   return json<InvoiceSettingsResponse>("/api/invoices/settings");
@@ -3596,16 +3882,76 @@ export function issueInvoice(invoiceId: string): Promise<{ invoice: InvoiceView 
   return json(`/api/invoices/${encodeURIComponent(invoiceId)}/issue`, { method: "POST" });
 }
 
+// Wzór faktury do wielokrotnego użytku (nabywca, pozycje, płatność).
+export type InvoiceTemplate = {
+  templateId: string;
+  name: string;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  currency: string;
+  paymentMethod?: string;
+  paymentTermDays?: number;
+  bankAccount?: string;
+  placeOfIssue?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InvoiceTemplateInput = Omit<InvoiceTemplate, "templateId" | "createdAt" | "updatedAt">;
+
+export function listInvoiceTemplates(): Promise<{ templates: InvoiceTemplate[] }> {
+  return json("/api/invoices/templates");
+}
+
+export function saveInvoiceTemplate(
+  template: InvoiceTemplateInput,
+  templateId?: string
+): Promise<{ template: InvoiceTemplate }> {
+  return json(templateId ? `/api/invoices/templates/${encodeURIComponent(templateId)}` : "/api/invoices/templates", {
+    method: templateId ? "PUT" : "POST",
+    body: JSON.stringify({ template })
+  });
+}
+
+export function deleteInvoiceTemplate(templateId: string): Promise<{ ok: true }> {
+  return json(`/api/invoices/templates/${encodeURIComponent(templateId)}`, { method: "DELETE" });
+}
+
 export function duplicateInvoice(invoiceId: string): Promise<{ invoice: InvoiceView }> {
   return json(`/api/invoices/${encodeURIComponent(invoiceId)}/duplicate`, { method: "POST" });
 }
 
-export function getInvoiceLegalBasis(): Promise<{
+// Bez tematu: art. 106e; "vat-rate": fragmenty ustawy o VAT z frazą stawki, z ELI.
+export function getInvoiceLegalBasis(topic?: "vat-rate"): Promise<{
   eli: string;
-  article: string;
+  article?: string;
+  search?: string;
   ok: boolean;
   result: unknown;
   retrievedAt: string;
+  report: InvoiceRequirementsReport;
+  secondarySources: string[];
 }> {
-  return json("/api/invoices/legal-basis");
+  return json(topic ? `/api/invoices/legal-basis?topic=${topic}` : "/api/invoices/legal-basis");
+}
+
+export function getInvoiceRequirements(): Promise<{
+  report: InvoiceRequirementsReport;
+  secondarySources: string[];
+}> {
+  return json("/api/invoices/requirements");
+}
+
+export function setInvoiceNumbering(
+  numbering: NumberingSettings | null
+): Promise<{ numbering: NumberingSettings | null }> {
+  return json("/api/invoices/settings/numbering", {
+    method: "PUT",
+    body: JSON.stringify({ numbering })
+  });
+}
+
+export function previewInvoiceNumber(issueDate: string): Promise<{ number: string | null }> {
+  return json(`/api/invoices/next-number?issueDate=${encodeURIComponent(issueDate)}`);
 }

@@ -13,6 +13,8 @@ export const PROCESS_AUTO_MAX_STEPS = 4;
 export type ProcessAutoNodeOutcome<T> = {
   result: T;
   commit: boolean;
+  // The answer found this conditional checkpoint not applicable (reason).
+  notApplicable?: string | null;
 };
 
 export type ProcessAutoStep<T> = {
@@ -156,7 +158,8 @@ export async function runBoundedProcessAutoSequence<T>(args: {
     const next =
       completeProcessExecution(
         state,
-        permit
+        permit,
+        node.notApplicable ?? null
       );
     const persisted =
       validateProcessPleadingState(

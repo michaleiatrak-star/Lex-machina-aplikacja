@@ -49,6 +49,26 @@ export type ResolvedSkillSelection = {
   domainSkills: string[];
 };
 
+const USER_TURN_MARKER =
+  "\n\nUżytkownik: ";
+
+// The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
+// history; only the newest user turn carries the current intent.
+export function latestUserTurn(
+  query: string
+): string {
+  const index =
+    query.lastIndexOf(
+      USER_TURN_MARKER
+    );
+  return index >= 0
+    ? query.slice(
+        index +
+          USER_TURN_MARKER.length
+      )
+    : query;
+}
+
 function normalize(value: string): string {
   return value
     .normalize("NFKD")
@@ -583,6 +603,14 @@ export function resolveAdditionalSkills(
 
   if (automatic) {
     const queryTokens = tokens(query);
+    // A stateful workflow is the current request's choice. Earlier turns,
+    // above all the assistant's own replies, must not start one: a reply
+    // about sources and dates would otherwise pin CHRONOLOGY_V1 on an
+    // unrelated statute question.
+    const currentTurn =
+      latestUserTurn(query);
+    const executionTokens =
+      tokens(currentTurn);
     const candidates = [...registry.skills.values()]
       .filter(
         (skill) =>
@@ -600,11 +628,11 @@ export function resolveAdditionalSkills(
 
     const rankedExecution = rankSkills(
       executionCandidates,
-      queryTokens
+      executionTokens
     );
     const explicitExecution =
       explicitExecutionSkillHints(
-        query,
+        currentTurn,
         executionCandidates
       );
 
@@ -644,7 +672,7 @@ export function resolveAdditionalSkills(
       // A genuinely vague legal question can still use the general guide, but
       // a command such as "napisz ok" has too little legal signal to do so.
       if (
-        queryTokens.size >= 2
+        executionTokens.size >= 2
       ) {
         const fallback =
           executionCandidates.find(

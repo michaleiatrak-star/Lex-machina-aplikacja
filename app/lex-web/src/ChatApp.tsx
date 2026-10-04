@@ -43,6 +43,7 @@ import {
   labelForSkill,
   type PublicSkillDescriptor
 } from "./chat-routing.js";
+import { MarkdownContent } from "./MarkdownContent.js";
 import { SourceLinkedText } from "./SourceLinkedText.js";
 import "./chat.css";
 
@@ -821,10 +822,19 @@ export default function ChatApp({
                         : "System"}
                   </div>
                   <div className="chat-message-content">
-                    <SourceLinkedText
-                      content={message.content}
-                      onOpenUrl={openExternalUrl}
-                    />
+                    {message.role === "assistant" ? (
+                      <MarkdownContent
+                        content={message.content}
+                        renderText={(text, key) => (
+                          <SourceLinkedText key={key} content={text} onOpenUrl={openExternalUrl} />
+                        )}
+                      />
+                    ) : (
+                      <SourceLinkedText
+                        content={message.content}
+                        onOpenUrl={openExternalUrl}
+                      />
+                    )}
                   </div>
                   {message.meta ? (
                     <small className="chat-message-meta">
@@ -1150,7 +1160,7 @@ export default function ChatApp({
             <article className="chat-card">
               <p className="eyebrow">Wiedza w sesji</p>
               <div className="chat-check-row">
-                <label>
+                <label title="Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam przeszukiwać i czytać całe akta sprawy (tekst spseudonimizowany).">
                   <input
                     type="checkbox"
                     checked={includeCaseKnowledge}

@@ -1,3 +1,4 @@
+import { suggestDomainModules } from "./domain-module-map.js";
 import fs from "node:fs";
 import path from "node:path";
 import type {
@@ -404,6 +405,34 @@ export class LegalCorpusToolRuntime {
   // Skills whose SKILL.md the model read, in order.
   private readonly readSkills:
     string[] = [];
+  // SKILL.md coverage: characters read of the whole file (a truncated first
+  // part is not a read skill; the gates and pipeline often sit at the end).
+  private readonly skillCoverage = new Map<string, { total: number; ranges: Array<[number, number]>; how: "tool" | "preloaded" | "native" }>();
+
+  private cover(skill: string, total: number, from: number, to: number, how: "tool" | "preloaded" | "native"): void {
+    const entry = this.skillCoverage.get(skill) ?? { total, ranges: [], how };
+    entry.total = total;
+    entry.ranges.push([from, to]);
+    if (how !== "tool") entry.how = how;
+    this.skillCoverage.set(skill, entry);
+  }
+
+  /** Per read skill: characters read, total, complete. */
+  skillReads(): Array<{ skill: string; read: number; total: number; complete: boolean; how: "tool" | "preloaded" | "native" }> {
+    return this.readSkills.map((skill) => {
+      const entry = this.skillCoverage.get(skill);
+      if (!entry || entry.how !== "tool") return { skill, read: entry?.total ?? 0, total: entry?.total ?? 0, complete: true, how: entry?.how ?? "preloaded" };
+      const ranges = [...entry.ranges].sort((a, b) => a[0] - b[0]);
+      let read = 0;
+      let end = 0;
+      for (const [from, to] of ranges) {
+        if (to <= end) continue;
+        read += to - Math.max(from, end);
+        end = to;
+      }
+      return { skill, read, total: entry.total, complete: read >= entry.total, how: "tool" };
+    });
+  }
   private qualifierDelivered = false;
 
   constructor(
@@ -415,6 +444,13 @@ export class LegalCorpusToolRuntime {
       modelSelectsSkills?: boolean;
     } = {}
   ) {}
+
+  private caseText = "";
+
+  /** The question and the document kinds: what the domain's act map is matched against. */
+  setCaseText(text: string): void {
+    this.caseText = text;
+  }
 
   modelSkillSelection(): ModelSkillSelection {
     const domainSkills =
@@ -442,6 +478,8 @@ export class LegalCorpusToolRuntime {
     if (skill && parts.length === 2 && parts[1] === "SKILL.md" && !this.readSkills.includes(skill)) {
       this.readSkills.push(skill);
     }
+    // The host's own Read returns the file (line-limited); its coverage is not visible here.
+    if (skill && parts.length === 2 && parts[1] === "SKILL.md") this.cover(skill, 0, 0, 0, "native");
     if (skill?.startsWith(CRIMINAL_DOMAIN_PREFIX) && relativePath.endsWith(`/${CRIMINAL_QUALIFIER_INDEX}`)) {
       this.qualifierDelivered = true;
     }
@@ -464,6 +502,7 @@ export class LegalCorpusToolRuntime {
     if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md") && !this.readSkills.includes(skill)) {
       this.readSkills.push(skill);
     }
+    if (skill && relativePath.split("/").length === 2 && relativePath.endsWith("/SKILL.md")) this.cover(skill, 0, 0, 0, "preloaded");
     this.events.push({ tool: READ_RESOURCE, target: relativePath, decision: "ALLOW", detail: { preloaded: true } });
   }
 
@@ -950,6 +989,13 @@ export class LegalCorpusToolRuntime {
           targetSkill
         );
       }
+      if (isSkillEntry) this.cover(targetSkill, text.length, offset, offset + content.length, "tool");
+      // prawo-polskie-v2: DR-skill -> act module. With the domain's SKILL.md, the
+      // modules of its MAPA-AKTOW that the case text points to (a suggestion).
+      const domainModules =
+        isSkillEntry && offset === 0 && /^dr-\d{2}-/.test(targetSkill) && this.caseText.trim()
+          ? suggestDomainModules(this.registry, targetSkill, this.caseText)
+          : [];
       // A criminal-law matter always goes through the qualifier: it is
       // delivered with the first DR-03 skill entry, not left to the model.
       let requiredModule:
@@ -1033,12 +1079,27 @@ export class LegalCorpusToolRuntime {
           text.length,
         nextOffset,
         content,
+        ...(isSkillEntry && nextOffset !== null
+          ? {
+              instruction:
+                `SKILL.md of ${targetSkill} continues (${text.length} characters). Read the rest with offset=${nextOffset} before applying the skill: a skill read only in part does not count as read, and its pipeline and gates are often at the end.`
+            }
+          : {}),
         ...(requiredRouter
           ? {
               requiredRouter: {
                 ...requiredRouter,
                 instruction:
                   "Mandatory prawny-router-v3 entry, delivered with the first legal resource. Apply its routing; read further router files only if the routing needs them."
+              }
+            }
+          : {}),
+        ...(domainModules.length
+          ? {
+              domainModules: {
+                suggested: domainModules.map((module) => ({ path: module.resource, why: module.why })),
+                instruction:
+                  "Act modules of this domain's MAPA-AKTOW that the case points to (application suggestion). Read the one that governs the case before applying the domain; if the case is governed by another module of the map, read that one and say why."
               }
             }
           : {}),

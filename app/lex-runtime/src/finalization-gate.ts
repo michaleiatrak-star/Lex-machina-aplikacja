@@ -1,3 +1,6 @@
+import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
+import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 import {
@@ -5,11 +8,19 @@ import {
   type VerificationRecord
 } from "./verification-ledger.js";
 
+// "amount": stawka, termin, kara albo sankcja liczbowo (PRAWO-HARDGATE, ZASADA ABSOLUTNA);
+// tylko w findings bramki, nie w references (to nie jest osobne powołanie źródła).
+export type LegalReferenceKind = "statute" | "journal" | "case" | "interpretation" | "amount";
+
 export type DetectedLegalReference = {
+  // A statute cited without its act ("Art. 233" under a heading about the
+  // Criminal Code) carries the act resolved from the line or the answer.
   claim: string;
-  kind: "statute" | "journal" | "case";
+  kind: LegalReferenceKind;
   line: number;
   lineText: string;
+  // The text as written, when it differs from the claim.
+  span?: string;
 };
 
 export type FinalizationFinding = {
@@ -61,20 +72,23 @@ export type FinalizationReport = {
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN =
   /✅\s*\[VER:[^\]\r\n]+\]/giu;
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]/iu;
+// 🟨 KOTWICA URZĘDOWA (kanon PRAWO-HARDGATE-BLOKADA) nie jest ✅: liczy się jak oznaczony ⚠️.
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
 const CASE_QUOTE_MARKER =
   /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER =
   /🔗\s*\[CASE-SUPPORT:([a-f0-9]{20})\]/giu;
 
-function expectedVerificationMarker(
+export function expectedVerificationMarker(
   record: VerificationRecord
 ): string | null {
   return verificationMarker(record);
 }
 
-const ARTICLE_PATTERN =
-  /\bart\.?\s+\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\s*§\s*\d+[a-zA-Z]*)?(?:\s+(?:KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP))?/giu;
+const ARTICLE_PATTERN = new RegExp(
+  `\\bart\\.?\\s+\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  "giu"
+);
 
 const DZU_PATTERN =
   /\bDz\.?\s*U\.?\s*(?:(?:z\s+)?\d{4}\s*r?\.?\s*)?poz\.?\s*\d+/giu;
@@ -102,11 +116,53 @@ function collectMatches(
   const references: DetectedLegalReference[] = [];
   pattern.lastIndex = 0;
   for (const match of lineText.matchAll(pattern)) {
-    const claim = match[0]?.trim();
+    // "art. 233 k.k." and "art. 233 KK" are one provision.
+    const written = match[0]?.trim() ?? "";
+    const claim = kind === "statute" ? compactActAbbreviations(written) : written;
     if (!claim) continue;
-    references.push({ claim, kind, line, lineText });
+    references.push({ claim, kind, line, lineText, ...(claim !== written ? { span: written } : {}) });
   }
   return references;
+}
+
+const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
+const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
+// Another act named in words: an act-less article on such a line is not resolved.
+const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
+
+const actsIn = (value: string): Set<string> =>
+  new Set([...compactActAbbreviations(value).matchAll(ACT_IN_TEXT)].map((match) => match[1]!));
+
+/**
+ * The act of an act-less statute: the only act on its line, else the act this
+ * article carries elsewhere in the answer, else the only act of the answer.
+ * Never across another act named in words ("art. 4 ustawy o …").
+ */
+function resolveActs(references: DetectedLegalReference[], text: string): DetectedLegalReference[] {
+  const actsByUnit = new Map<string, Set<string>>();
+  for (const reference of references) {
+    const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    if (!act) continue;
+    const unit = reference.claim.replace(ACT_SUFFIX, "").replace(/\s+/g, " ").toLocaleLowerCase("pl");
+    actsByUnit.set(unit, (actsByUnit.get(unit) ?? new Set()).add(act));
+  }
+  const answerActs = actsIn(text);
+  return references.map((reference) => {
+    if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim)) return reference;
+    if (OTHER_ACT.test(reference.lineText)) return reference;
+    const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
+    const lineActs = actsIn(reference.lineText);
+    const unitActs = actsByUnit.get(unit);
+    const act =
+      lineActs.size === 1
+        ? [...lineActs][0]
+        : lineActs.size === 0 && unitActs?.size === 1
+          ? [...unitActs][0]
+          : lineActs.size === 0 && answerActs.size === 1
+            ? [...answerActs][0]
+            : undefined;
+    return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;
+  });
 }
 
 export function detectLegalReferences(text: string): DetectedLegalReference[] {
@@ -118,11 +174,12 @@ export function detectLegalReferences(text: string): DetectedLegalReference[] {
     references.push(
       ...collectMatches(lineText, line, "statute", ARTICLE_PATTERN),
       ...collectMatches(lineText, line, "journal", DZU_PATTERN),
-      ...collectMatches(lineText, line, "case", CASE_PATTERN)
+      ...collectMatches(lineText, line, "case", CASE_PATTERN),
+      ...interpretationSignaturesInLine(lineText).map((claim) => ({ claim, kind: "interpretation" as const, line, lineText }))
     );
   });
 
-  return references;
+  return resolveActs(references, text);
 }
 
 function comparableClaim(value: string): string {
@@ -156,7 +213,27 @@ function coveringVerifiedRecord(
       return Boolean(marker) && lineMarkers.includes(marker!);
     });
   const claims = new Set(covering.map((record) => comparableClaim(record.claim)));
-  return claims.size === 1 ? covering.at(-1) : undefined;
+  // "art. 233 KK" and "art. 233 § 1 KK" with one marker on the line: one source.
+  const markers = new Set(covering.map((record) => expectedVerificationMarker(record)));
+  return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
+}
+
+// ⚠️ przypięty do wartości liczbowej albo do innej sygnatury interpretacji nie oznacza
+// powołania, które sprawdzamy (każde ma mieć własny znacznik).
+function withoutAttachedMarkers(reference: DetectedLegalReference): string {
+  const line = reference.lineText;
+  const signatures = interpretationSignaturesInLine(line).filter((signature) => signature !== reference.claim && line.includes(signature));
+  const spans = [
+    ...amountMarkerSpans(line),
+    ...markerSpansAfter(line, signatures.map((signature) => line.indexOf(signature) + signature.length))
+  ];
+  if (reference.kind === "interpretation" && line.includes(reference.claim)) {
+    // Sygnatura sprawdzana: liczy się wyłącznie ⚠️ tuż za nią.
+    return markerSpansAfter(line, [line.indexOf(reference.claim) + reference.claim.length]).length ? "⚠️ [NIEWERYFIKOWANE]" : "";
+  }
+  return spans
+    .sort((a, b) => b.start - a.start)
+    .reduce((text, span) => text.slice(0, span.start) + text.slice(span.end), line);
 }
 
 export class FinalizationGate {
@@ -230,7 +307,8 @@ export class FinalizationGate {
         coveringVerifiedRecord(ledger, reference, lineMarkers);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
-      if (!record && UNVERIFIED_MARKER.test(reference.lineText)) {
+      const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
+      if (!record && ownUnverified) {
         findings.push({
           reference,
           status: "UNVERIFIED_MARKED"
@@ -280,7 +358,7 @@ export class FinalizationGate {
         continue;
       }
 
-      if (UNVERIFIED_MARKER.test(reference.lineText)) {
+      if (ownUnverified) {
         findings.push({
           reference,
           status: "UNVERIFIED_MARKED",
@@ -296,6 +374,33 @@ export class FinalizationGate {
     }
 
     const lines = text.split(/\r?\n/u);
+
+    // Stawka, termin, kara: potwierdzona brzmieniem przepisu VERIFIED z tego wiersza.
+    lines.forEach((lineText, index) => {
+      const amounts = amountMatches(lineText);
+      if (amounts.length === 0) return;
+      const lineRecords = [
+        ...references.filter((reference) => reference.line === index + 1 && reference.kind === "statute").map((reference) => reference.claim),
+        ...statuteClaimsInLine(lineText)
+      ]
+        .map((claim) => ledger.latest(claim))
+        .filter((record): record is VerificationRecord => record?.status === "VERIFIED" && Boolean(record.evidence));
+      const marked = amountMarkerSpans(lineText);
+      for (const amount of amounts) {
+        const reference: DetectedLegalReference = { claim: amount.text, kind: "amount", line: index + 1, lineText };
+        const record = lineRecords.find((candidate) => evidenceHasAmount(candidate.evidence!, amount.key));
+        if (record) {
+          findings.push({ reference, status: "VERIFIED", record });
+        } else if (
+          marked.some((span) => span.start >= amount.end && span.start <= amount.end + 3) ||
+          (lineRecords.length === 0 && !VERIFIED_MARKER.test(lineText) && UNVERIFIED_MARKER.test(lineText))
+        ) {
+          findings.push({ reference, status: "UNVERIFIED_MARKED" });
+        } else {
+          findings.push({ reference, status: "UNVERIFIED_NOT_MARKED" });
+        }
+      }
+    });
 
     lines.forEach((lineText, index) => {
       CASE_QUOTE_MARKER.lastIndex = 0;
@@ -541,7 +646,7 @@ export function markUnverifiedReferences(
     if (finding.reference.kind === "case") continue;
     byLine.set(finding.reference.line, [
       ...(byLine.get(finding.reference.line) ?? []),
-      finding.reference.claim
+      finding.reference.span ?? finding.reference.claim
     ]);
   }
   if (byLine.size === 0) return text;
@@ -558,3 +663,35 @@ export function markUnverifiedReferences(
   }
   return lines.join("\n");
 }
+
+/**
+ * A provision verified in this turn but cited again without its marker (another
+ * paragraph, a comparison table) gets the marker of its VERIFIED record from the
+ * ledger. Only true ledger markers are added; a fabricated marker is not touched.
+ * In a table row the markers go into the last cell, keeping the row valid.
+ */
+export function addMissingVerificationMarkers(
+  text: string,
+  report: FinalizationReport
+): string {
+  const byLine = new Map<number, Set<string>>();
+  for (const finding of report.findings) {
+    if (finding.status !== "MISSING_VERIFICATION_MARKER" && finding.status !== "VERIFICATION_MARKER_MISMATCH") continue;
+    const marker = finding.record ? expectedVerificationMarker(finding.record) : null;
+    if (!marker) continue;
+    byLine.set(finding.reference.line, (byLine.get(finding.reference.line) ?? new Set()).add(marker));
+  }
+  if (byLine.size === 0) return text;
+  const lines = text.split(/\r?\n/u);
+  for (const [line, markers] of byLine) {
+    const current = lines[line - 1] ?? "";
+    const missing = [...markers].filter((marker) => !current.includes(marker));
+    if (missing.length === 0) continue;
+    const insert = missing.join(" ");
+    lines[line - 1] = /\|\s*$/u.test(current)
+      ? current.replace(/\s*\|\s*$/u, ` ${insert} |`)
+      : `${current.trimEnd()} ${insert}`;
+  }
+  return lines.join("\n");
+}
+

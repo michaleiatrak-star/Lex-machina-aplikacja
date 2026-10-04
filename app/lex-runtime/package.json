@@ -1,6 +1,6 @@
 {
   "name": "@lex-machina/runtime",
-  "version": "0.1.10",
+  "version": "0.1.14",
   "private": true,
   "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
@@ -28,6 +28,7 @@
     "validate:g19": "tsx src/validate-g19.ts",
     "validate:g19-live": "tsx src/validate-g19-live.ts",
     "test": "vitest run",
+    "benchmark:session": "tsx src/benchmark-session-quality.ts",
     "validate:g20": "tsx src/validate-g20.ts",
     "validate:g20-live": "tsx src/validate-g20-live.ts",
     "validate:g21": "tsx src/validate-g21.ts",
@@ -95,6 +96,8 @@
     "express": "5.2.1",
     "helmet": "8.1.0",
     "pdfjs-dist": "6.3.289",
+    "preact": "10.29.8",
+    "sucrase": "3.35.1",
     "yaml": "2.8.1"
   },
   "devDependencies": {

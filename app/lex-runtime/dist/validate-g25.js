@@ -62,7 +62,9 @@ const historical = bundle.find((item) => item.temporalMode === "HISTORICAL");
 const pdf = bundle.find((item) => item.sourceFormat === "PDF");
 const quote = bundle.find((item) => item.caseScope === "EXACT_QUOTE");
 const supported = bundle.find((item) => item.status === "SUPPORTED");
-const leaked = [hiddenA, hiddenB].filter((value) => serialized.includes(value));
+// The verified support quote is a passage of a public judgment: public as
+// `passage` (marked in the full-text preview). Evidence notes stay backend-only.
+const leaked = [hiddenA, "internal relation note"].filter((value) => serialized.includes(value));
 const pass = bundle.length === 4 &&
     historical?.asOf === "2020-06-01" &&
     pdf?.verificationMethod === "web_fetch_pdf" &&
@@ -70,6 +72,7 @@ const pass = bundle.length === 4 &&
     quote?.evidenceHash === "11111111111111111111" &&
     supported?.caseScope === "PROPOSITION_SUPPORT" &&
     supported?.supportQuoteHash === "11111111111111111111" &&
+    supported?.passage === hiddenB &&
     leaked.length === 0;
 process.stdout.write(JSON.stringify({
     gate: "G25_STRUCTURED_EVIDENCE_BUNDLE",

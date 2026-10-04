@@ -1,4 +1,4 @@
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import {
   MissingProviderCredentialError,
@@ -22,6 +22,14 @@ import {
 } from "./account-session.js";
 
 const MAX_OUTPUT_TOKENS = 16_384;
+// An answer cut at MAX_OUTPUT_TOKENS is continued at most this many times.
+const MAX_LENGTH_CONTINUATIONS = 3;
+export const LENGTH_CONTINUATION_PROMPT =
+  "Twoja poprzednia odpowiedź została ucięta na limicie długości. Kontynuuj dokładnie od miejsca przerwania: bez powtarzania, bez wstępu i bez podsumowania tego, co już napisałeś.";
+export const TOOL_LIMIT_FINAL_PROMPT =
+  "Limit wywołań narzędzi w tej odpowiedzi został wyczerpany. Odpowiedz teraz na pytanie na podstawie wyników narzędzi, które już masz, bez kolejnych wywołań. Czego nie zweryfikowałeś, oznacz jako niezweryfikowane.";
+export const LENGTH_TRUNCATED_NOTE =
+  "\n\n[ODPOWIEDŹ UCIĘTA: model osiągnął limit długości odpowiedzi także po kontynuacji. Poproś o dalszą część albo zawęź pytanie.]";
 const LOCAL_DEFAULT_OUTPUT_TOKENS =
   4_096;
 const LOCAL_CONTEXT_SAFETY_TOKENS =
@@ -1857,7 +1865,7 @@ function providerCapabilities(): ProviderCapabilities {
   };
 }
 
-async function streamModel(
+export async function streamModel(
   model: LanguageModel,
   params: ProviderStreamParams,
   label: string
@@ -1872,18 +1880,91 @@ async function streamModel(
     | "high"
     | "xhigh";
 
-  const withImages = params.messages.some((message) => message.images?.length);
+  let withImages = params.messages.some((message) => message.images?.length);
   let fullText = "";
+  let first: StreamOnceResult;
   try {
-    return await streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, (text) => {
+    first = await streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, (text) => {
       fullText += text;
     });
   } catch (error) {
     // A model without vision rejects the images: answer from the text alone.
     if (!withImages || fullText || (error as Error)?.name === "AbortError") throw error;
     process.stderr.write(`PROVIDER_IMAGES_REJECTED:${label}:${String((error as Error)?.message ?? error).slice(0, 300)}\n`);
-    return streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => {});
+    withImages = false;
+    first = await streamModelOnce(sdk, model, params, label, tools, reasoning, false, () => {});
   }
+  // The tool loop stopped at its step limit on a tool call: no answer yet.
+  first = await answerAfterToolLimit(first, (history) =>
+    // Tools stay defined (the history holds tool calls) but cannot be called.
+    streamModelOnce(sdk, model, params, label, tools, reasoning, withImages, () => {}, {
+      messages: [...history, { role: "user", content: TOOL_LIMIT_FINAL_PROMPT }],
+      toolChoice: "none"
+    })
+  );
+  return await continueAtLength(
+    first,
+    (messages) => streamModelOnce(sdk, model, { ...params, messages }, label, tools, reasoning, withImages, () => {}),
+    params.messages
+  );
+}
+
+type StreamOnceResult = ProviderStreamResult & {
+  finishReason?: string;
+  // Assistant and tool messages of all steps (tool results included).
+  responseMessages?: ModelMessage[];
+};
+
+/**
+ * When the steps ran out on a tool call, one more turn without tools asks
+ * for the answer from the tool results already gathered.
+ */
+export async function answerAfterToolLimit(
+  first: StreamOnceResult,
+  final: (history: ModelMessage[]) => Promise<StreamOnceResult>
+): Promise<StreamOnceResult> {
+  if (first.finishReason !== "tool-calls" || !first.responseMessages?.length) return first;
+  const answer = await final(first.responseMessages);
+  const usage = addUsage(first.usage, answer.usage);
+  return {
+    fullText: first.fullText.trim() ? `${first.fullText}\n\n${answer.fullText}` : answer.fullText,
+    ...(answer.finishReason ? { finishReason: answer.finishReason } : {}),
+    ...(usage ? { usage } : {})
+  };
+}
+
+function addUsage(
+  left: ProviderStreamResult["usage"],
+  right: ProviderStreamResult["usage"]
+): ProviderStreamResult["usage"] {
+  if (!left) return right;
+  if (!right) return left;
+  return { inputTokens: left.inputTokens + right.inputTokens, outputTokens: left.outputTokens + right.outputTokens };
+}
+
+/**
+ * An answer cut at the output limit ("length") is continued from where it
+ * stopped; one still cut after the last continuation says so in the text.
+ */
+export async function continueAtLength(
+  first: StreamOnceResult,
+  next: (messages: ProviderStreamParams["messages"]) => Promise<StreamOnceResult>,
+  messages: ProviderStreamParams["messages"]
+): Promise<ProviderStreamResult> {
+  let text = first.fullText;
+  let finishReason = first.finishReason;
+  let usage = first.usage;
+  for (let round = 0; finishReason === "length" && round < MAX_LENGTH_CONTINUATIONS; round += 1) {
+    const result = await next([
+      ...messages,
+      { role: "assistant", content: text },
+      { role: "user", content: LENGTH_CONTINUATION_PROMPT }
+    ]);
+    text += result.fullText;
+    finishReason = result.finishReason;
+    usage = addUsage(usage, result.usage);
+  }
+  return { fullText: finishReason === "length" ? text + LENGTH_TRUNCATED_NOTE : text, ...(usage ? { usage } : {}) };
 }
 
 function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean) {
@@ -1912,13 +1993,16 @@ async function streamModelOnce(
   tools: Awaited<ReturnType<typeof toAiSdkTools>>,
   reasoning: "provider-default" | "none" | "low" | "medium" | "high" | "xhigh",
   images: boolean,
-  onText: (text: string) => void
-): Promise<ProviderStreamResult> {
+  onText: (text: string) => void,
+  // Messages after the request's own (tool steps of an earlier call).
+  extra: { messages: ModelMessage[]; toolChoice?: "none" } = { messages: [] }
+): Promise<StreamOnceResult> {
   const result = sdk.streamText({
     model,
     system: params.systemPrompt,
-    messages: sdkMessages(params.messages, images),
+    messages: [...(sdkMessages(params.messages, images) as ModelMessage[]), ...extra.messages],
     ...(tools ? { tools } : {}),
+    ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     stopWhen: sdk.stepCountIs(params.maxIterations ?? 10),
     ...(params.abortSignal
@@ -1988,7 +2072,14 @@ async function streamModelOnce(
     params.callbacks?.onReasoningBlockEnd?.();
   }
 
-  return { fullText };
+  const finishReason = await result.finishReason;
+  const usage = await Promise.resolve(result.usage).catch(() => null);
+  return {
+    fullText,
+    finishReason,
+    ...(usage ? { usage: { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 } } : {}),
+    ...(finishReason === "tool-calls" ? { responseMessages: await result.responseMessages } : {})
+  };
 }
 
 export function shouldRetryLocalAtMinimumContext(

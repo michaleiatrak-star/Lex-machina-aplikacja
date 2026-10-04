@@ -1,4 +1,5 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { validTemplateRole } from "./template-roles.js";
 import { createHash, randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -201,12 +202,40 @@ export class LocalSharedTemplateStore {
                         false) {
                     continue;
                 }
-                result.push(manifest);
+                const role = await this.readRole(entry.name);
+                result.push(role ? { ...manifest, role } : manifest);
             }
             catch {
                 // Ignore incomplete or corrupt template entries.
             }
         }
         return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+    async readRole(templateId) {
+        try {
+            return validTemplateRole(JSON.parse(await readFile(path.join(this.templateDir(templateId), "role.json"), "utf8")));
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * The kind of document a template is for and whether it is the firm's default
+     * for that kind (one default per kind: setting it clears the previous one).
+     */
+    async setRole(templateId, role) {
+        const dir = this.templateDir(templateId);
+        await readFile(path.join(dir, "manifest.json"), "utf8");
+        if (role?.isDefault) {
+            for (const other of await this.listTemplates()) {
+                if (other.templateId !== templateId && other.role?.isDefault && other.role.kind === role.kind) {
+                    await writeFile(path.join(this.templateDir(other.templateId), "role.json"), JSON.stringify({ ...other.role, isDefault: false }));
+                }
+            }
+        }
+        if (role)
+            await writeFile(path.join(dir, "role.json"), JSON.stringify(role));
+        else
+            await rm(path.join(dir, "role.json"), { force: true });
     }
 }

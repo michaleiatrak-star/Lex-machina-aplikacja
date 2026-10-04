@@ -1,4 +1,6 @@
+import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
+  markProcessCheckpointNotApplicable,
   markProcessCheckpointReady,
   nextRequiredProcessCheckpoint,
   validateProcessPleadingState,
@@ -65,7 +67,9 @@ export function requireProcessExecutionPermit(
 
 export function completeProcessExecution(
   input: ProcessPleadingState,
-  permit: ProcessExecutionPermit
+  permit: ProcessExecutionPermit,
+  // A conditional checkpoint the answer found not applicable (with its reason).
+  notApplicable: string | null = null
 ): ProcessPleadingState {
   const state =
     validateProcessPleadingState(input);
@@ -97,8 +101,24 @@ export function completeProcessExecution(
       "PROCESS_PLEADING_CHECKPOINT_CONFLICT"
     );
   }
+  if (notApplicable && !MAIN_CHECKPOINTS.has(permit.checkpoint)) {
+    return markProcessCheckpointNotApplicable(state, permit.checkpoint, notApplicable);
+  }
   return markProcessCheckpointReady(
     state,
     permit.checkpoint
   );
+}
+
+// Checkpoints the state machine never allows as N/A (CP-W1, CP-PRE-W2, CP-ATAK, W3).
+const MAIN_CHECKPOINTS = new Set<ProcessPleadingCheckpoint>(["CP-1a", "CP-W1", "CP-PRE-W2", "CP-ATAK", "CP-PODMIOT", "CP-QUALITY", "CP-AUDYT", "CP-PEER"]);
+
+/** The case's checkpoint register for the model (closed, N/A with reason, open). */
+export function processCheckpointRegister(input: ProcessPleadingState): CheckpointRegisterEntry[] {
+  const state = validateProcessPleadingState(input);
+  return (Object.keys(state.checkpoints) as ProcessPleadingCheckpoint[]).map((checkpoint) => {
+    const status = state.checkpoints[checkpoint];
+    const reason = status === "NA" ? [...state.history].reverse().find((event) => event.type === "CHECKPOINT_NA" && event.checkpoint === checkpoint)?.reason : undefined;
+    return { checkpoint, status, ...(reason ? { reason } : {}) };
+  });
 }

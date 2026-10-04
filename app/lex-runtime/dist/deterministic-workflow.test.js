@@ -288,7 +288,7 @@ describe("deterministic legal workflow", () => {
     it("allows an intermediate process checkpoint without a final-document contract", () => {
         const registry = fixture();
         const plan = createDeterministicWorkflowPlan(registry, "pisma-procesowe-v3");
-        const report = evaluateDeterministicWorkflowOutput(plan, "RAPORT W1\nAnaliza faktów i dowodów. Pismo pozostaje projektem.", {
+        const report = evaluateDeterministicWorkflowOutput(plan, "RAPORT W1\nAnaliza faktów i dowodów. Pismo pozostaje projektem.\n✅ CHECKPOINT [CP-W1] RAPORT W1 KOŃCOWY — ZAKOŃCZONY", {
             processCheckpoint: "CP-W1"
         });
         expect(report.result)
@@ -297,6 +297,8 @@ describe("deterministic legal workflow", () => {
             .toBe("PROCESS_CHECKPOINT");
         expect(report.missing)
             .toEqual([]);
+        // Without the checkpoint report the checkpoint is not closed.
+        expect(evaluateDeterministicWorkflowOutput(plan, "Analiza faktów i dowodów.", { processCheckpoint: "CP-W1" }).missing).toEqual(["RAPORT_CP-W1"]);
     });
     it("blocks a premature process-final status before CP-PEER", () => {
         const registry = fixture();

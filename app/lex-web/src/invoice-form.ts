@@ -1,5 +1,8 @@
 import type {
+  InvoiceDefaults,
   InvoiceDraft,
+  InvoiceTemplate,
+  InvoiceTemplateInput,
   InvoiceLine,
   InvoiceParty,
   InvoiceTotals,
@@ -28,7 +31,12 @@ function money(cents: bigint): string {
 
 export function lineNet(line: InvoiceLine): string | null {
   if (!QUANTITY.test(line.quantity.trim()) || !PRICE.test(line.unitNetPrice.trim())) return null;
-  return money(roundDiv(scaled(line.quantity.trim(), 6) * scaled(line.unitNetPrice.trim(), 2), 1_000_000n));
+  const discount = line.discount?.trim() ?? "";
+  if (discount && !PRICE.test(discount)) return null;
+  const net =
+    roundDiv(scaled(line.quantity.trim(), 6) * scaled(line.unitNetPrice.trim(), 2), 1_000_000n) -
+    (discount ? scaled(discount, 2) : 0n);
+  return net < 0n ? null : money(net);
 }
 
 export function previewTotals(lines: InvoiceLine[]): InvoiceTotals | null {
@@ -58,27 +66,108 @@ export function formatMoney(value: string, currency: string): string {
   return `${grouped},${fraction ?? "00"} ${currency}`;
 }
 
-export function emptyLine(): InvoiceLine {
-  return { name: "", unit: "szt.", quantity: "1", unitNetPrice: "", vatRate: "" };
+export const PAYMENT_METHODS: Array<[InvoiceDefaults["paymentMethod"], string]> = [
+  ["przelew", "Przelew na rachunek"],
+  ["gotówka", "Gotówka"],
+  ["zapłacono", "Zapłacono (faktura opłacona)"]
+];
+
+export const PAYMENT_TERMS = [7, 14, 21, 30];
+
+export const VAT_RATES: Array<[string, string]> = [
+  ["23", "23%"],
+  ["8", "8%"],
+  ["5", "5%"],
+  ["0", "0%"],
+  ["zw", "zw (zwolnione)"],
+  ["np", "np (nie podlega)"],
+  ["oo", "oo (odwrotne obciążenie)"]
+];
+
+// Ustawienia fabryczne, gdy użytkownik nie zapisał własnych. Stawkę sprawdza się
+// w ELI przyciskiem w Ustawieniach (wyszukanie w ustawie o VAT), nie z pamięci.
+export const FACTORY_DEFAULTS: InvoiceDefaults = { paymentMethod: "przelew", paymentTermDays: 14, vatRate: "23" };
+
+export function addDays(date: string, days: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return result.toISOString().slice(0, 10);
+}
+
+// Liczba dni między wystawieniem a terminem, gdy to jeden z terminów do wyboru.
+export function termDaysOf(issueDate: string, dueDate: string | undefined): number | null {
+  if (!dueDate) return null;
+  return PAYMENT_TERMS.find((days) => addDays(issueDate, days) === dueDate) ?? null;
+}
+
+export function emptyLine(vatRate = ""): InvoiceLine {
+  return { name: "", unit: "szt.", quantity: "1", unitNetPrice: "", vatRate };
 }
 
 export function emptyParty(): InvoiceParty {
   return { name: "", nip: "", address: "" };
 }
 
-export function emptyDraft(seller: InvoiceParty | undefined, today: string): InvoiceDraft {
+export function emptyDraft(
+  seller: InvoiceParty | undefined,
+  today: string,
+  defaults: InvoiceDefaults = FACTORY_DEFAULTS
+): InvoiceDraft {
+  const transfer = defaults.paymentMethod === "przelew";
   return {
     number: "",
     issueDate: today,
     saleDate: today,
     seller: seller ? { ...seller } : emptyParty(),
     buyer: emptyParty(),
-    lines: [emptyLine()],
+    lines: [emptyLine(defaults.vatRate)],
     currency: "PLN",
-    paymentMethod: "przelew",
-    paymentDueDate: "",
+    paymentMethod: defaults.paymentMethod,
+    paymentDueDate: transfer ? addDays(today, defaults.paymentTermDays) : "",
     bankAccount: "",
     notes: ""
+  };
+}
+
+// Wzór z bieżącej faktury: bez numeru, dat i sprzedawcy; termin przelewu w dniach.
+export function templateFromDraft(draft: InvoiceDraft, name: string): InvoiceTemplateInput {
+  const days = draft.paymentMethod === "przelew" && draft.paymentDueDate
+    ? Math.round((Date.parse(draft.paymentDueDate) - Date.parse(draft.issueDate)) / 86_400_000)
+    : null;
+  return {
+    name: name.trim(),
+    buyer: { ...draft.buyer },
+    lines: draft.lines.map((line) => ({ ...line })),
+    currency: draft.currency,
+    ...(draft.paymentMethod ? { paymentMethod: draft.paymentMethod } : {}),
+    ...(days !== null && days >= 0 && days <= 365 ? { paymentTermDays: days } : {}),
+    ...(draft.bankAccount?.trim() ? { bankAccount: draft.bankAccount } : {}),
+    ...(draft.placeOfIssue?.trim() ? { placeOfIssue: draft.placeOfIssue } : {}),
+    ...(draft.notes?.trim() ? { notes: draft.notes } : {})
+  };
+}
+
+// Nowa faktura ze wzoru: dzisiejsze daty, sprzedawca z ustawień, pusty numer.
+export function draftFromTemplate(
+  template: InvoiceTemplate,
+  seller: InvoiceParty | undefined,
+  today: string,
+  defaults: InvoiceDefaults = FACTORY_DEFAULTS
+): InvoiceDraft {
+  const base = emptyDraft(seller, today, defaults);
+  const paymentMethod = template.paymentMethod ?? base.paymentMethod;
+  const days = template.paymentTermDays ?? defaults.paymentTermDays;
+  return {
+    ...base,
+    buyer: { ...template.buyer, nip: template.buyer.nip ?? "" },
+    lines: template.lines.map((line) => ({ ...line })),
+    currency: template.currency,
+    paymentMethod,
+    paymentDueDate: paymentMethod === "przelew" ? addDays(today, days) : "",
+    bankAccount: paymentMethod === "przelew" ? template.bankAccount ?? "" : "",
+    placeOfIssue: template.placeOfIssue ?? "",
+    notes: template.notes ?? ""
   };
 }
 
@@ -95,7 +184,8 @@ export function draftOf(invoice: InvoiceView): InvoiceDraft {
     paymentMethod: invoice.paymentMethod ?? "",
     paymentDueDate: invoice.paymentDueDate ?? "",
     bankAccount: invoice.bankAccount ?? "",
-    notes: invoice.notes ?? ""
+    notes: invoice.notes ?? "",
+    annotations: { ...invoice.annotations }
   };
 }
 
@@ -112,7 +202,12 @@ const FIELD_LABELS: Record<string, string> = {
   "buyer.address": "adres nabywcy",
   currency: "waluta",
   paymentDueDate: "termin płatności",
-  lines: "pozycje faktury"
+  templateName: "nazwa wzoru",
+  "defaults.paymentMethod": "domyślny sposób płatności",
+  "defaults.paymentTermDays": "domyślny termin płatności (dni)",
+  "defaults.vatRate": "domyślna stawka VAT",
+  lines: "pozycje faktury",
+  "annotations.exemptionBasis": "podstawa zwolnienia (pozycje ze stawką „zw”)"
 };
 
 function fieldLabel(field: string): string {
@@ -123,7 +218,8 @@ function fieldLabel(field: string): string {
       unit: "jednostka",
       quantity: "ilość",
       unitNetPrice: "cena netto",
-      vatRate: "stawka VAT"
+      vatRate: "stawka VAT",
+      discount: "opust"
     };
     return `pozycja ${Number(line[1]) + 1}: ${part[line[2]!] ?? line[2]}`;
   }
@@ -139,7 +235,18 @@ const ERRORS: Record<string, string> = {
   KSEF_TOKEN_REQUIRED: "Wklej token KSeF.",
   KSEF_TOKEN_INVALID: "Token KSeF nie może zawierać spacji ani przekraczać 2048 znaków.",
   KSEF_CONTEXT_NIP_INVALID: "NIP kontekstu musi mieć 10 cyfr.",
+  INVOICE_TEMPLATE_NAME_TAKEN: "Wzór o tej nazwie już istnieje.",
+  INVOICE_TEMPLATE_NOT_FOUND: "Nie znaleziono wzoru faktury.",
+  INVOICE_TEMPLATE_LIMIT: "Można zapisać najwyżej 100 wzorów.",
+  INVOICE_DEFAULTS_INVALID: "Nieprawidłowe ustawienia domyślne faktury.",
   KSEF_PRODUCTION_CONFIRMATION_REQUIRED: "Przełączenie na środowisko produkcyjne wymaga potwierdzenia.",
+  NUMBERING_NOT_CONFIGURED: "Autonumeracja nie jest ustawiona. Wpisz numer albo ustaw wzór w Ustawieniach → Faktury i KSeF.",
+  NUMBERING_PATTERN_INVALID: "Wzór numeracji jest pusty albo za długi (najwyżej 80 znaków).",
+  NUMBERING_PATTERN_NR_REQUIRED: "Wzór musi zawierać dokładnie jeden token {NR}.",
+  NUMBERING_PATTERN_UNKNOWN_TOKEN: "Dozwolone tokeny: {NR}, {DD}, {MM}, {RRRR}, {RR}.",
+  NUMBERING_PATTERN_YEAR_REQUIRED: "Przy resecie rocznym wzór musi zawierać rok ({RRRR} albo {RR}), inaczej numery się powtórzą.",
+  NUMBERING_PATTERN_MONTH_REQUIRED: "Przy resecie miesięcznym wzór musi zawierać miesiąc {MM} i rok ({RRRR} albo {RR}).",
+  NUMBERING_PADDING_INVALID: "Liczba cyfr licznika musi być od 1 do 8.",
   INVOICE_LEGAL_BASIS_UNAVAILABLE: "Konektor ISAP (ELI) jest niedostępny. Zainstaluj go w Ustawieniach → Konektory MCP."
 };
 

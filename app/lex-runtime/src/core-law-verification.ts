@@ -164,6 +164,10 @@ export function verifyFromCoreLaw(args: {
     const article = articleToken(args.claim);
     anchor = article ? record.articleAnchors?.[article] : undefined;
     evidence = article ? record.articles[article] : undefined;
+    // Zgubiony nagłówek przy wyciąganiu z PDF: ten artykuł może zawierać tekst następnego.
+    if (article && record.extractionCheck?.suspectArticles.includes(article)) {
+      return { decision: "DENY", reason: "CORE_LAW_EXTRACTION_SUSPECT" };
+    }
     if (!evidence) {
       failure = "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
     } else if (

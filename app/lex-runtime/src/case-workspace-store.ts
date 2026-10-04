@@ -1,3 +1,5 @@
+import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
+import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -67,6 +69,15 @@ export type WorkspaceThreadMessage = {
   restorations?: WorkspaceRestoration[];
   // A document generated in this message (chat card: download, preview, deanonymize).
   generatedDocument?: WorkspaceGeneratedDocument;
+  // Widgets shown with show_widget, re-rendered when the thread is reopened.
+  widgets?: WorkspaceWidget[];
+};
+
+export type WorkspaceWidget = {
+  title: string;
+  kind: "html" | "jsx";
+  code: string;
+  source?: string;
 };
 
 export type WorkspaceGeneratedDocument = {
@@ -95,6 +106,11 @@ export type WorkspaceRestoration = {
   agreement?: string;
 };
 
+export type CaseMemory = {
+  evidence?: ThreadEvidence;
+  summary?: ThreadSummary;
+};
+
 export type CaseWorkspaceIndex = {
   schemaVersion: 1;
   caseId: string;
@@ -104,6 +120,8 @@ export type CaseWorkspaceIndex = {
   thread: {
     messages: WorkspaceThreadMessage[];
   };
+  // Pamięć sprawy: dowody z poprzednich odpowiedzi i streszczenie starszej części wątku.
+  memory?: CaseMemory;
   workflows?: {
     processPleading?: ProcessPleadingState;
     courtAnalysis?: CourtAnalysisState;
@@ -255,6 +273,26 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     };
   });
 
+  const widgets = (input.widgets ?? []).slice(0, 3).map((widget) => {
+    if (
+      !widget ||
+      typeof widget.title !== "string" ||
+      widget.title.length > 200 ||
+      (widget.kind !== "html" && widget.kind !== "jsx") ||
+      typeof widget.code !== "string" ||
+      !widget.code.trim() ||
+      widget.code.length > 300_000 ||
+      (widget.source !== undefined && (typeof widget.source !== "string" || widget.source.length > 300))
+    ) {
+      throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
+    return {
+      title: widget.title,
+      kind: widget.kind,
+      code: widget.code,
+      ...(widget.source ? { source: widget.source } : {})
+    };
+  });
   const generated = input.generatedDocument;
   if (
     generated !== undefined &&
@@ -288,7 +326,8 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
         }
       : {}),
     ...(citations.length > 0 ? { documentCitations: citations } : {}),
-    ...(restorations.length > 0 ? { restorations } : {})
+    ...(restorations.length > 0 ? { restorations } : {}),
+    ...(widgets.length > 0 ? { widgets } : {})
   };
 }
 
@@ -736,7 +775,8 @@ export class EncryptedCaseWorkspaceStore {
         : {}),
       ...(item.restorations
         ? { restorations: item.restorations.map((restoration) => ({ ...restoration })) }
-        : {})
+        : {}),
+      ...(item.widgets ? { widgets: item.widgets.map((widget) => ({ ...widget })) } : {})
     }));
   }
 
@@ -975,6 +1015,48 @@ export class EncryptedCaseWorkspaceStore {
       args.keyVersion
     );
     return true;
+  }
+
+  async getCaseMemory(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+  }): Promise<CaseMemory & { threadMessages: WorkspaceThreadMessage[] }> {
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const evidence = validThreadEvidence(index.memory?.evidence);
+    const summary = validThreadSummary(index.memory?.summary);
+    return {
+      ...(evidence ? { evidence } : {}),
+      ...(summary ? { summary } : {}),
+      threadMessages: index.thread.messages.map((message) => ({ ...message }))
+    };
+  }
+
+  /** Replaces the given parts of the memory; null removes a part. */
+  async saveCaseMemory(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    evidence?: ThreadEvidence | null;
+    summary?: ThreadSummary | null;
+  }): Promise<CaseMemory> {
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const memory: CaseMemory = { ...(index.memory ?? {}) };
+    if (args.evidence !== undefined) {
+      const evidence = args.evidence === null ? null : validThreadEvidence(args.evidence);
+      if (args.evidence !== null && !evidence) throw new Error("CASE_MEMORY_EVIDENCE_INVALID");
+      if (evidence) memory.evidence = evidence;
+      else delete memory.evidence;
+    }
+    if (args.summary !== undefined) {
+      const summary = args.summary === null ? null : validThreadSummary(args.summary);
+      if (args.summary !== null && !summary) throw new Error("CASE_MEMORY_SUMMARY_INVALID");
+      if (summary) memory.summary = summary;
+      else delete memory.summary;
+    }
+    index.memory = memory;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return memory;
   }
 
   async getChronologyState(args: {

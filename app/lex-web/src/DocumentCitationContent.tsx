@@ -6,6 +6,7 @@ import {
 } from "react";
 import type { WorkspaceDocumentCitation } from "./workspace-client.js";
 import { SourceLinkedText } from "./SourceLinkedText.js";
+import { MarkdownContent } from "./MarkdownContent.js";
 
 function HighlightedContext({
   citation
@@ -37,11 +38,14 @@ function HighlightedContext({
 export function DocumentCitationContent({
   content,
   citations = [],
-  onOpenUrl
+  onOpenUrl,
+  markdown = true
 }: {
   content: string;
   citations?: WorkspaceDocumentCitation[];
   onOpenUrl?: (url: string) => Promise<void> | void;
+  // Model answers: tables, lists, bold; a user's own text stays as typed.
+  markdown?: boolean;
 }) {
   const [selected, setSelected] = useState<WorkspaceDocumentCitation | null>(null);
   const viewerRef = useRef<HTMLElement>(null);
@@ -49,7 +53,26 @@ export function DocumentCitationContent({
     () => new Map(citations.map((item) => [item.marker, item])),
     [citations]
   );
-  const parts = content.split(/(\[\[LEXDOCREF:docref_\d+\]\])/g);
+  // Citation markers and links inside paragraphs, lists and table cells.
+  const renderText = (text: string, key: string) =>
+    text.split(/(\[\[LEXDOCREF:docref_\d+\]\])/g).map((part, index) => {
+      const citation = byMarker.get(part);
+      if (!citation) {
+        return <SourceLinkedText key={`${key}-${index}`} content={part} onOpenUrl={onOpenUrl} />;
+      }
+      return (
+        <button
+          key={`${key}-${citation.citationId}-${index}`}
+          type="button"
+          className="document-citation-link"
+          title={`Przejdź do cytowanego fragmentu: ${citation.label}`}
+          aria-controls={`citation-${citation.citationId}`}
+          onClick={() => setSelected(citation)}
+        >
+          [{citation.label}]
+        </button>
+      );
+    });
 
   useEffect(() => {
     if (!selected) return;
@@ -63,31 +86,7 @@ export function DocumentCitationContent({
   return (
     <>
       <div className="chat-message-content">
-        {parts.map((part, index) => {
-          const citation = byMarker.get(part);
-          if (!citation) {
-            return (
-              <span key={index}>
-                <SourceLinkedText
-                  content={part}
-                  onOpenUrl={onOpenUrl}
-                />
-              </span>
-            );
-          }
-          return (
-            <button
-              key={`${citation.citationId}-${index}`}
-              type="button"
-              className="document-citation-link"
-              title={`Przejdź do cytowanego fragmentu: ${citation.label}`}
-              aria-controls={`citation-${citation.citationId}`}
-              onClick={() => setSelected(citation)}
-            >
-              [{citation.label}]
-            </button>
-          );
-        })}
+        {markdown ? <MarkdownContent content={content} renderText={renderText} /> : renderText(content, "plain")}
       </div>
 
       {selected ? (

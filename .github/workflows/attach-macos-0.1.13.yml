@@ -1,0 +1,50 @@
+name: Attach macOS installer to Lex Machina 0.1.13
+
+# publish-0.1.13 accepted the macOS package and listed it in SHA256SUMS.txt but
+# did not upload it. This attaches that exact accepted artifact (no rebuild),
+# after checking its hash against the release's SHA256SUMS.txt.
+
+on:
+  push:
+    branches:
+      - "claude/modest-knuth-re40mu"
+    paths:
+      - ".github/workflows/attach-macos-0.1.13.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  RELEASE_TAG: v0.1.13
+  SOURCE_RUN_ID: "37202019848"
+  MAC_ASSET_NAME: Lex-Machina-0.1.13-macOS-arm64-Online.pkg
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the accepted macOS artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: LexMachina-macOS-Online-Installer
+          path: macos
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify against the release checksums and attach
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pkg="macos/$MAC_ASSET_NAME"
+          [[ -f "$pkg" ]] || { echo "MACOS_PACKAGE_MISSING"; ls -R macos; exit 1; }
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir sums
+          expected="$(awk -v name="$MAC_ASSET_NAME" '$2==name || $2=="*"name {print $1}' sums/SHA256SUMS.txt)"
+          actual="$(sha256sum "$pkg" | awk '{print $1}')"
+          echo "expected=$expected actual=$actual"
+          [[ -n "$expected" && "$expected" == "$actual" ]] || { echo "MACOS_RELEASE_HASH_MISMATCH"; exit 1; }
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "$pkg"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'

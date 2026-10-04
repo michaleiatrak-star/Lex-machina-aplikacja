@@ -1,3 +1,4 @@
+import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import type {
   DeterministicWorkflowId
 } from "./deterministic-workflow.js";
@@ -158,7 +159,9 @@ export async function runGateIRuntimePrelude(args: {
 
   const verificationPlan =
     planAutomaticLegalVerification(
-      args.query,
+      provisionsForDetection(
+        args.query
+      ),
       args.ledger
     );
 

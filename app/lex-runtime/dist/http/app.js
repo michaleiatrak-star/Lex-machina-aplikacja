@@ -1,3 +1,4 @@
+import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import { PERSON_CASES } from "../privacy/person-morphology.js";
 import { LocalOfficeEditor, editableMediaType } from "../office-edit.js";
 import { deanonymizeModel } from "../deanonymize-file.js";
@@ -7,9 +8,16 @@ import { createHash } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
 import { saveToDownloads } from "../download-save.js";
+import fs from "node:fs";
+import { latestUserTurn } from "../execution-engine.js";
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
 import { ProviderGatewayError } from "../providers/gateway.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
+import { mergeThreadEvidence } from "../thread-evidence.js";
+import { realValueHashes } from "../privacy/example-data.js";
+import { defaultTemplateFor, draftingTarget, validTemplateRole } from "../template-roles.js";
+import { detectQueryMode, parseModeSignals } from "../query-mode.js";
+import { MAX_SUMMARY_CHARS, SUMMARY_CHUNK_CHARS, droppedMessageCount, queryWithSummary, summaryForDroppedHistory } from "../thread-summary.js";
 import { RoutingCatalog } from "./routing-catalog.js";
 import { decodeUploadFilename } from "../case-file-store.js";
 import { AuthError } from "../auth/service.js";
@@ -26,7 +34,7 @@ import { parseSkillSelectionEnvelope, resolveAdditionalSkills, SKILL_SELECTION_E
 import { isTrivialChatCommand } from "../execution-engine.js";
 import { assessMatterComplexity, describeMatterComplexity } from "../matter-complexity.js";
 import { createDeterministicWorkflowPlan } from "../deterministic-workflow.js";
-import { completeProcessExecution, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
+import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
 import { PROCESS_AUTO_MAX_STEPS, runBoundedProcessAutoSequence } from "../process-pleading-auto-runner.js";
 import { applyDeterministicProcessApplicability, evidenceInventoryFromUploads } from "../process-pleading-applicability.js";
 import { createCourtAnalysisState, nextCourtAnalysisCheckpoint } from "../court-analysis-state.js";
@@ -609,15 +617,17 @@ function parseSessionRequest(body) {
             : {})
     };
 }
+// Returns the values restored from the documents' vaults (real data).
 function restoreSessionDocumentAliases(result, documentService) {
+    const restored = [];
     if (!documentService
         ?.deanonymize) {
-        return;
+        return restored;
     }
     const documentIds = result[SESSION_EXECUTION_INTERNAL]?.documentAliasDocumentIds ??
         [];
     if (documentIds.length === 0) {
-        return;
+        return restored;
     }
     const restoreText = (text) => text.replace(/\[LMPII:D(\d{2}):([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g, (token, documentNumber, kind, sequence, requestedCase) => {
         const index = Number(documentNumber) - 1;
@@ -630,8 +640,11 @@ function restoreSessionDocumentAliases(result, documentService) {
             ? `[PII:${kind}:${sequence}|${requestedCase}]`
             : `[PII:${kind}:${sequence}]`;
         try {
-            return documentService
+            const value = documentService
                 .deanonymize(documentId, sourceToken);
+            if (value !== token)
+                restored.push(value);
+            return value;
         }
         catch {
             // Keep the opaque alias when the matching local vault is unavailable.
@@ -675,6 +688,7 @@ function restoreSessionDocumentAliases(result, documentService) {
         result.reportBlueprint =
             visit(result.reportBlueprint);
     }
+    return restored;
 }
 async function refreshDocumentCitations(args) {
     const citations = args.result.documentCitations ?? [];
@@ -721,6 +735,93 @@ async function refreshDocumentCitations(args) {
         }
     }
     return citations.length;
+}
+/**
+ * After an answer: the provisions it verified and the skills it read join the
+ * matter's evidence memory. A caller without write access, or a failed write,
+ * leaves the memory as it was; the answer is not affected.
+ */
+async function rememberThreadEvidence(args) {
+    const records = args.result[SESSION_EXECUTION_INTERNAL]?.verificationRecords ?? [];
+    const skills = args.result.loadedSkills ?? [];
+    if (records.length === 0 && skills.length === 0 && !args.result.mandatoryPath && !args.result.modeDecision && !args.realValues?.length)
+        return;
+    try {
+        const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+        await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "WRITE", (caseDataKey) => args.store.saveCaseMemory({
+            caseId: args.caseId,
+            caseDataKey,
+            keyVersion: caseView.keyVersion,
+            evidence: mergeThreadEvidence(args.previous, records, skills, new Date().toISOString(), {
+                ...(args.result.modeDecision && args.result.modeDecision.decision !== "NIEROZSTRZYGNIETY"
+                    ? { mode: args.result.modeDecision.mode }
+                    : {}),
+                ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {}),
+                realValueHashes: realValueHashes(args.realValues ?? [])
+            })
+        }));
+    }
+    catch (error) {
+        process.stderr.write(`CASE_MEMORY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`);
+    }
+}
+// KROK 1 signal table of the current corpus (re-read after a skill update).
+let modeSignalsCache = null;
+function modeSignals(registry) {
+    if (modeSignalsCache?.root === registry.root)
+        return modeSignalsCache.signals;
+    let signals = null;
+    try {
+        const file = registry.resolveResource("prawny-router-v3", "references/KROK1-detekcja.md");
+        signals = file ? parseModeSignals(fs.readFileSync(file, "utf8")) : null;
+    }
+    catch {
+        signals = null;
+    }
+    modeSignalsCache = { root: registry.root, signals };
+    return signals;
+}
+/** The matter's files for the case file tools, on the caller's case access. */
+function createCaseFileAccess(args) {
+    const withKey = async (work) => {
+        const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+        return await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "ANALYZE", (caseDataKey) => work(caseDataKey, caseView.keyVersion));
+    };
+    // Restored locally once per turn: its key turns the document's aliases in
+    // the answer back into names.
+    const restored = new Set();
+    const restore = async (documentId, caseDataKey, keyVersion) => {
+        if (restored.has(documentId))
+            return;
+        await args.documentService.restoreDocument({ caseId: args.caseId, documentId, caseDataKey, keyVersion });
+        restored.add(documentId);
+    };
+    return {
+        caseId: args.caseId,
+        listDocuments: () => withKey((caseDataKey, keyVersion) => args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion })),
+        search: (query, limit) => withKey(async (caseDataKey, keyVersion) => {
+            const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit });
+            // Snippets carry the documents' symbols too.
+            for (const documentId of new Set(hits.map((hit) => hit.documentId))) {
+                await restore(documentId, caseDataKey, keyVersion);
+            }
+            return hits;
+        }),
+        readChunks: async (documentId, chunkIndices) => {
+            await withKey((caseDataKey, keyVersion) => restore(documentId, caseDataKey, keyVersion));
+            const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices });
+            return {
+                totalPages: resolved.totalPages ?? 0,
+                chunks: resolved.chunks.map((chunk) => ({
+                    index: chunk.index,
+                    pageStart: chunk.pageStart,
+                    pageEnd: chunk.pageEnd,
+                    text: chunk.text
+                }))
+            };
+        },
+        sharedKey: (documentId) => args.sharedMembers?.has(documentId) ?? false
+    };
 }
 export function createLexHttpApp(options) {
     const app = express();
@@ -1476,6 +1577,31 @@ export function createLexHttpApp(options) {
             });
         }
     });
+    // The firm sets what a template is for and its default per document kind.
+    app.put("/api/shared/templates/:sharedTemplateId/role", express.json({ limit: "4kb" }), async (req, res) => {
+        if (!options.sharedTemplateStore) {
+            res.status(503).json({ error: "SHARED_TEMPLATE_STORE_UNAVAILABLE" });
+            return;
+        }
+        if (responseAuthContext(res).user.appRole !== "ADMIN") {
+            res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+            return;
+        }
+        const role = req.body?.role === null ? null : validTemplateRole(req.body?.role);
+        if (role === null && req.body?.role !== null) {
+            res.status(400).json({ error: "TEMPLATE_ROLE_INVALID" });
+            return;
+        }
+        try {
+            if (!options.sharedTemplateStore.setRole)
+                throw new Error("TEMPLATE_ROLES_UNAVAILABLE");
+            await options.sharedTemplateStore.setRole(String(req.params.sharedTemplateId ?? ""), role);
+            res.json({ templates: await options.sharedTemplateStore.listTemplates() });
+        }
+        catch {
+            res.status(404).json({ error: "SHARED_TEMPLATE_NOT_FOUND" });
+        }
+    });
     const sharedTemplateBody = express.raw({
         type: () => true,
         limit: "64mb"
@@ -1749,6 +1875,87 @@ export function createLexHttpApp(options) {
                     error: "CASE_RENAME_FAILED"
                 });
             }
+        }
+    });
+    // Pamięć sprawy: streszczenie starszej części wątku (do poprawy) i pamięć dowodowa (podgląd).
+    const withCaseMemory = async (res, caseId, action, work) => {
+        const actor = responseAuthContext(res);
+        const caseView = options.caseAccessService.openCase(actor, caseId);
+        return await options.caseAccessService.withCaseDataKey(actor, caseId, action, (caseDataKey) => work({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+    };
+    app.get("/api/cases/:caseId/memory", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore.getCaseMemory(key));
+            res.json({
+                summary: memory.summary ?? null,
+                evidence: memory.evidence
+                    ? {
+                        updatedAt: memory.evidence.updatedAt,
+                        provisions: memory.evidence.provisions.map((record) => ({
+                            claim: record.claim,
+                            status: record.status,
+                            sourceUrl: record.sourceAnchorUrl ?? record.sourceUrl ?? null,
+                            consolidatedText: record.currentEli ?? null,
+                            fetchedAt: record.fetchedAt,
+                            freshnessCheckedAt: record.freshnessCheckedAt ?? null
+                        })),
+                        sources: memory.evidence.sources,
+                        skills: memory.evidence.skills
+                    }
+                    : null
+            });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_READ_FAILED" });
+        }
+    });
+    app.patch("/api/cases/:caseId/memory/summary", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+        if (!text || text.length > MAX_SUMMARY_CHARS) {
+            res.status(400).json({ error: "CASE_SUMMARY_INVALID", maxChars: MAX_SUMMARY_CHARS });
+            return;
+        }
+        try {
+            const summary = await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", async (key) => {
+                const current = (await options.caseMemoryStore.getCaseMemory(key)).summary;
+                if (!current)
+                    return null;
+                const next = { ...current, text, updatedAt: new Date().toISOString(), editedByUser: true };
+                await options.caseMemoryStore.saveCaseMemory({ ...key, summary: next });
+                return next;
+            });
+            if (!summary) {
+                res.status(404).json({ error: "CASE_SUMMARY_NOT_FOUND" });
+                return;
+            }
+            res.json({ summary });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
+        }
+    });
+    app.delete("/api/cases/:caseId/memory", async (req, res) => {
+        if (!options.caseMemoryStore || !options.caseAccessService) {
+            res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+            return;
+        }
+        try {
+            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null }));
+            res.json({ cleared: true });
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error))
+                res.status(500).json({ error: "CASE_MEMORY_WRITE_FAILED" });
         }
     });
     app.get("/api/cases/:caseId/schedule", async (req, res) => {
@@ -3630,6 +3837,15 @@ export function createLexHttpApp(options) {
         const sessionRequest = parseSessionRequest(req.body);
         const attachments = parseDocumentAttachments(req.body?.attachments);
         const firmTemplates = parseFirmTemplates(req.body?.firmTemplates);
+        // No template picked: the firm's default for the requested document
+        // (its layout for the model, its styles for the file).
+        const generationTemplate = sessionRequest && firmTemplates && firmTemplates.length === 0
+            ? await firmDefaultTemplate(res, sessionRequest.query, ["pleading", "contract", "opinion", "letter", "report", "other"].includes(String(req.body?.documentType))
+                ? req.body.documentType
+                : undefined)
+            : null;
+        if (generationTemplate)
+            firmTemplates.push(generationTemplate.templateId);
         // Firm templates and firm files may shape the document; they are not
         // case sources, so they get no aliases.
         const firmCaseId = firmTemplates?.length ||
@@ -3647,7 +3863,7 @@ export function createLexHttpApp(options) {
             ? req.body
                 .templateId
                 .trim()
-            : undefined;
+            : generationTemplate?.templateId;
         const requestedStyleValid = [
             "lex-classic-clean-v1",
             "lex-light-legal-design-v1",
@@ -3864,6 +4080,7 @@ export function createLexHttpApp(options) {
                         : {})
                 }));
                 res.status(201).json({
+                    ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
                     sessionId: generated
                         .sessionId,
                     artifact: ready.artifact,
@@ -3906,6 +4123,7 @@ export function createLexHttpApp(options) {
                     : {})
             }));
             res.status(201).json({
+                ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
                 sessionId: generated
                     .sessionId,
                 artifact: tokenized
@@ -4017,7 +4235,9 @@ export function createLexHttpApp(options) {
             });
             res.setHeader("Content-Type", result.artifact.mediaType);
             res.setHeader("Content-Length", String(result.data.byteLength));
-            res.setHeader("Content-Disposition", `attachment; filename="${result.artifact.filename.replace(/"/g, "")}"`);
+            res.setHeader("Content-Disposition", 
+            // Non-Latin-1 names (Polish letters) would fail in setHeader.
+            `attachment; filename="${result.artifact.filename.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(result.artifact.filename)}`);
             res.status(200).send(result.data);
         }
         catch (error) {
@@ -4659,6 +4879,26 @@ export function createLexHttpApp(options) {
         }
         return picked;
     };
+    // The firm's default template for the document the message asks to draft (none
+    // picked by the user): used as a firm template and, for a file, as its style.
+    async function firmDefaultTemplate(res, query, documentType) {
+        if (!options.sharedTemplateStore || !options.caseAccessService)
+            return null;
+        const kind = draftingTarget(latestUserTurn(parseSkillSelectionEnvelope(query).query), documentType);
+        if (!kind)
+            return null;
+        try {
+            const firm = options.caseAccessService.getFirmKnowledgeWorkspace(responseAuthContext(res));
+            if (!firm)
+                return null;
+            options.caseAccessService.assertAccess(responseAuthContext(res), firm.caseId, "READ");
+            const template = defaultTemplateFor(await options.sharedTemplateStore.listTemplates(), kind);
+            return template ? { templateId: template.templateId, filename: template.filename, kind } : null;
+        }
+        catch {
+            return null;
+        }
+    }
     // Checked while the user picks files: do they fit the chosen model?
     app.post("/api/sessions/document-fit", async (req, res) => {
         const attachments = parseDocumentAttachments(req.body?.attachments);
@@ -4727,6 +4967,10 @@ export function createLexHttpApp(options) {
         const documentLimit = localModel
             ? LOCAL_MAX_DOCUMENT_ATTACHMENTS
             : MAX_DOCUMENT_ATTACHMENTS;
+        // "Napisz umowę najmu" without a picked template: the firm's default for umowa.
+        const appliedTemplate = firmTemplates.length === 0 && !localModel ? await firmDefaultTemplate(res, request.query) : null;
+        if (appliedTemplate)
+            firmTemplates.push(appliedTemplate.templateId);
         if (attachments.length + firmTemplates.length > documentLimit) {
             res.status(422).json({
                 error: "TOO_MANY_DOCUMENT_ATTACHMENTS",
@@ -4964,6 +5208,7 @@ export function createLexHttpApp(options) {
             // Documents of one case on its shared key: the message is pseudonymized
             // with the same key, so a person has one symbol in the message and in
             // every attached document.
+            let sharedMembers = null;
             const attachmentCases = [
                 ...new Set(sessionAttachments
                     .map((attachment) => attachment.caseId)
@@ -4982,6 +5227,7 @@ export function createLexHttpApp(options) {
                 }));
                 if (shared && shared.members.size > 0) {
                     request.privacySeed = shared.snapshot;
+                    sharedMembers = shared.members;
                     for (const attachment of sessionAttachments) {
                         if (attachment.caseId === sharedCaseId && shared.members.has(attachment.documentId)) {
                             attachment.sharedKey = true;
@@ -4993,6 +5239,93 @@ export function createLexHttpApp(options) {
                 0) {
                 request.documentAttachments =
                     sessionAttachments;
+            }
+            // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
+            let threadEvidence = null;
+            if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    const memory = await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                    threadEvidence = memory.evidence ?? null;
+                    if (threadEvidence)
+                        request.threadEvidence = threadEvidence;
+                    // Messages the client left out for the window: replaced with their summary.
+                    const dropped = droppedMessageCount(request.query);
+                    if (dropped && options.sessionExecutor.summarizeThread) {
+                        try {
+                            request.onStep?.("PREPARE", `streszczenie wcześniejszej części rozmowy (${dropped} wiadomości)`);
+                            const summarize = options.sessionExecutor.summarizeThread.bind(options.sessionExecutor);
+                            const result = await summaryForDroppedHistory({
+                                thread: memory.threadMessages,
+                                dropped,
+                                stored: memory.summary ?? null,
+                                chunkChars: SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
+                                now: new Date().toISOString(),
+                                summarize: (previousSummary, messages) => summarize({
+                                    provider: request.provider,
+                                    model: request.model,
+                                    ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+                                    ...(previousSummary ? { previousSummary } : {}),
+                                    messages,
+                                    ...(threadEvidence ? { threadEvidence } : {})
+                                })
+                            });
+                            if (result) {
+                                if (result.generated) {
+                                    await options.caseAccessService
+                                        .withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({
+                                        caseId: knowledge.caseId,
+                                        caseDataKey,
+                                        keyVersion: caseView.keyVersion,
+                                        summary: result.summary
+                                    }))
+                                        .catch((error) => process.stderr.write(`CASE_SUMMARY_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`));
+                                }
+                                request.query = queryWithSummary(request.query, result.summary);
+                            }
+                        }
+                        catch (error) {
+                            // The answer goes on with the client's note instead of the summary.
+                            if (error instanceof CaseAccessError)
+                                throw error;
+                            process.stderr.write(`CASE_SUMMARY_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+                        }
+                    }
+                }
+                catch (error) {
+                    if (error instanceof CaseAccessError)
+                        throw error;
+                    process.stderr.write(`CASE_MEMORY_NOT_READ:${error instanceof Error ? error.message : String(error)}\n`);
+                }
+            }
+            // LAIK / PRAWNIK from the content of the question, at the entry (KROK 1 signals);
+            // an ambiguous question keeps the matter's earlier mode.
+            if (!trivialChat) {
+                const signals = modeSignals(options.registry);
+                if (signals) {
+                    const decision = detectQueryMode(request.auxiliaryText ?? latestUserTurn(request.query), signals, threadEvidence?.mode ?? null);
+                    request.mode = decision.mode;
+                    request.modeDecision = decision;
+                    request.onStep?.("ROUTING", `tryb ${decision.mode} (${decision.decision.toLowerCase().replaceAll("_", " ")})`);
+                }
+            }
+            // The excerpts above are cut to the window; with case search on, the
+            // model reaches the rest of the matter's files through tools.
+            if (knowledge.includeCase &&
+                knowledge.caseId &&
+                !localModel &&
+                options.caseAccessService &&
+                options.caseKnowledgeSearch?.listDocuments &&
+                options.documentService?.restoreDocument) {
+                request.caseFiles = createCaseFileAccess({
+                    caseId: knowledge.caseId,
+                    actor: responseAuthContext(res),
+                    caseAccessService: options.caseAccessService,
+                    caseKnowledgeSearch: options.caseKnowledgeSearch,
+                    documentService: options.documentService,
+                    sharedMembers: attachmentCases.length === 1 && attachmentCases[0] === knowledge.caseId ? sharedMembers : null
+                });
             }
             const localContextWindow = options.modelCatalog
                 .localContextWindow?.(request.model);
@@ -5100,7 +5433,8 @@ export function createLexHttpApp(options) {
                 request.processWorkflowContext = {
                     stage: permit.stage,
                     checkpoint: permit.checkpoint,
-                    mode: permit.mode
+                    mode: permit.mode,
+                    register: processCheckpointRegister(state)
                 };
                 processContext = {
                     caseId: processCaseId,
@@ -5477,13 +5811,14 @@ export function createLexHttpApp(options) {
                             expectedRevision: current.revision
                         });
                     }),
-                    execute: async (permit) => {
+                    execute: async (permit, current) => {
                         const nodeRequest = {
                             ...request,
                             processWorkflowContext: {
                                 stage: permit.stage,
                                 checkpoint: permit.checkpoint,
-                                mode: permit.mode
+                                mode: permit.mode,
+                                register: processCheckpointRegister(current)
                             }
                         };
                         const nodeResult = await options
@@ -5500,7 +5835,8 @@ export function createLexHttpApp(options) {
                                 "PASS";
                         return {
                             result: nodeResult,
-                            commit
+                            commit,
+                            notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
                         };
                     },
                     persist: async (previous, next) => await options
@@ -6072,7 +6408,7 @@ export function createLexHttpApp(options) {
                                 throw new Error("PROCESS_PLEADING_STATE_CONFLICT");
                             }
                             const next = completeProcessExecution(current, processContext
-                                .permit);
+                                .permit, evaluateCheckpointOutput(processContext.permit.checkpoint, result.answer ?? "").notApplicable);
                             return await options
                                 .processWorkflowStore
                                 .saveProcessPleadingState({
@@ -6098,7 +6434,21 @@ export function createLexHttpApp(options) {
                     }
                 };
             }
-            restoreSessionDocumentAliases(result, options.documentService);
+            const restoredFromDocuments = restoreSessionDocumentAliases(result, options.documentService);
+            if (appliedTemplate)
+                result.firmTemplateApplied = appliedTemplate;
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
+                await rememberThreadEvidence({
+                    store: options.caseMemoryStore,
+                    caseAccessService: options.caseAccessService,
+                    actor: responseAuthContext(res),
+                    caseId: knowledge.caseId,
+                    previous: threadEvidence,
+                    result,
+                    // Real data restored into this answer: never "example data" later.
+                    realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
+                });
+            }
             res.json(result);
         }
         catch (error) {

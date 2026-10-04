@@ -2875,3 +2875,131 @@ mark.restored {
     gap: 2px;
   }
 }
+
+.chat-widget-card {
+  margin-top: 10px;
+  border: 1px solid #dfe5e0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.chat-widget-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid #dfe5e0;
+}
+
+.chat-widget-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.chat-widget-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+.case-memory-summary {
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid #dfe5e0;
+  border-radius: 6px;
+}
+
+.case-memory-list {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+/* Markdown odpowiedzi modelu: akapity, listy, tabele. */
+.chat-md-paragraph {
+  margin: 0 0 8px;
+}
+
+.chat-md-heading {
+  margin: 12px 0 6px;
+  font-size: 15px;
+}
+
+.chat-md-list {
+  margin: 0 0 8px;
+  padding-left: 22px;
+  white-space: normal;
+}
+
+.chat-md-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 6px 0 10px;
+}
+
+.chat-md-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.chat-md-table th,
+.chat-md-table td {
+  border: 1px solid #dfe5e0;
+  padding: 5px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.chat-md-table th {
+  background: #f3f6f3;
+  font-weight: 700;
+}
+
+.chat-md-table tbody tr:nth-child(even) td {
+  background: #fafbfa;
+}
+
+.chat-message-content code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #eef2ee;
+  font-size: 0.92em;
+}
+
+.chat-provision-preview-toggle {
+  margin-left: 8px;
+}
+
+.chat-mandatory-path li.chat-mandatory-missing b {
+  color: #a33;
+}
+
+.chat-mandatory-path .chat-routing-trace {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85em;
+  margin: 4px 0 8px;
+}
+
+.chat-pipeline-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.workspace-template-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

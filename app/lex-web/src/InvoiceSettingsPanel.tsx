@@ -3,15 +3,28 @@ import {
   ApiError,
   clearInvoiceLogo,
   clearKsefToken,
+  getInvoiceLegalBasis,
   getInvoiceSettings,
+  setInvoiceDefaults,
   setInvoiceLogo,
+  setInvoiceNumbering,
   setInvoiceSeller,
   setKsefEnvironment,
   setKsefToken,
+  type InvoiceDefaults,
   type InvoiceParty,
-  type InvoiceSettingsResponse
+  type InvoiceSettingsResponse,
+  type NumberingSettings
 } from "./api.js";
-import { emptyParty, invoiceErrorText } from "./invoice-form.js";
+import { CompanyNipField } from "./CompanyNipField.js";
+import {
+  FACTORY_DEFAULTS,
+  PAYMENT_METHODS,
+  PAYMENT_TERMS,
+  VAT_RATES,
+  emptyParty,
+  invoiceErrorText
+} from "./invoice-form.js";
 import "./invoices.css";
 
 const PRODUCTION_PHRASE = "PRODUKCJA";
@@ -38,6 +51,9 @@ export function InvoiceSettingsPanel() {
   const [token, setToken] = useState("");
   const [contextNip, setContextNip] = useState("");
   const [seller, setSeller] = useState<InvoiceParty>(emptyParty());
+  const [defaults, setDefaults] = useState<InvoiceDefaults>(FACTORY_DEFAULTS);
+  const [rateBasis, setRateBasis] = useState("");
+  const [numbering, setNumbering] = useState<NumberingSettings>({ pattern: "FV {NR}/{MM}/{RRRR}", reset: "monthly", padding: 1 });
   const [productionPhrase, setProductionPhrase] = useState("");
   const [askProduction, setAskProduction] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,6 +66,8 @@ export function InvoiceSettingsPanel() {
         setSettings(next);
         setContextNip(next.ksef.contextNip ?? "");
         if (next.seller) setSeller({ ...next.seller, nip: next.seller.nip ?? "" });
+        if (next.defaults) setDefaults(next.defaults);
+        if (next.numbering) setNumbering(next.numbering);
       })
       .catch((failure) => setError(failureText(failure)));
   }, []);
@@ -206,10 +224,7 @@ export function InvoiceSettingsPanel() {
             Nazwa
             <input value={seller.name} onChange={(event) => setSeller({ ...seller, name: event.target.value })} />
           </label>
-          <label>
-            NIP
-            <input inputMode="numeric" value={seller.nip ?? ""} onChange={(event) => setSeller({ ...seller, nip: event.target.value })} />
-          </label>
+          <CompanyNipField party={seller} onChange={setSeller} />
           <label className="invoice-wide">
             Adres
             <input value={seller.address} onChange={(event) => setSeller({ ...seller, address: event.target.value })} />
@@ -228,6 +243,147 @@ export function InvoiceSettingsPanel() {
         >
           Zapisz dane sprzedawcy
         </button>
+      </section>
+
+      <section>
+        <h3>Domyślne na nowej fakturze</h3>
+        <p className="field-help">
+          {settings?.defaults ? "Zapisane ustawienia." : "Ustawienia fabryczne (niezapisane)."} Na fakturze każdą wartość można zmienić.
+        </p>
+        <div className="invoice-grid">
+          <label>
+            Sposób płatności
+            <select
+              value={defaults.paymentMethod}
+              onChange={(event) => setDefaults({ ...defaults, paymentMethod: event.target.value as InvoiceDefaults["paymentMethod"] })}
+            >
+              {PAYMENT_METHODS.map(([method, label]) => <option key={method} value={method}>{label}</option>)}
+            </select>
+          </label>
+          <label>
+            Termin płatności przelewu
+            <select
+              value={defaults.paymentTermDays}
+              disabled={defaults.paymentMethod !== "przelew"}
+              onChange={(event) => setDefaults({ ...defaults, paymentTermDays: Number(event.target.value) })}
+            >
+              {[...new Set([...PAYMENT_TERMS, defaults.paymentTermDays])].sort((a, b) => a - b).map((days) => (
+                <option key={days} value={days}>{days} dni od wystawienia</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Stawka VAT
+            <select value={defaults.vatRate} onChange={(event) => setDefaults({ ...defaults, vatRate: event.target.value })}>
+              {VAT_RATES.map(([rate, label]) => <option key={rate} value={rate}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="chat-form-row">
+          <button
+            type="button"
+            className="chat-primary-action"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const next = await setInvoiceDefaults(defaults);
+                setSettings((current) => (current ? { ...current, defaults: next.defaults } : current));
+              }, "Ustawienia domyślne zapisane.")
+            }
+          >
+            Zapisz domyślne
+          </button>
+          <button
+            type="button"
+            className="chat-secondary-action"
+            disabled={busy}
+            title="Fragmenty aktualnego tekstu ustawy o VAT z wyszukiwania w Sejm ELI"
+            onClick={() =>
+              void run(async () => {
+                const basis = await getInvoiceLegalBasis("vat-rate");
+                const result = basis.result as { tekst?: string; text?: string; fragmenty?: unknown };
+                setRateBasis(
+                  `Ustawa o VAT, ELI ${basis.eli}, wyszukiwanie „${basis.search}” (pobrano ${new Date(basis.retrievedAt).toLocaleString("pl-PL")})\n\n` +
+                    (result.tekst ?? result.text ?? JSON.stringify(basis.result, null, 2))
+                );
+              }, "")
+            }
+          >
+            Sprawdź stawkę w ELI
+          </button>
+        </div>
+        {rateBasis ? <pre className="invoice-legal-basis">{rateBasis}</pre> : null}
+      </section>
+
+      <section>
+        <h3>Autonumeracja</h3>
+        <p className="field-help">
+          {settings?.numbering
+            ? `Włączona: ${settings.numbering.pattern}. Puste pole numeru na nowej fakturze dostaje kolejny numer.`
+            : "Wyłączona: numer wpisujesz ręcznie."}{" "}
+          Tokeny: {"{NR}"} licznik, {"{DD}"} dzień, {"{MM}"} miesiąc, {"{RRRR}"} albo {"{RR}"} rok (z daty wystawienia).
+        </p>
+        <div className="invoice-grid">
+          <label>
+            Wzór numeru
+            <input value={numbering.pattern} onChange={(event) => setNumbering({ ...numbering, pattern: event.target.value })} />
+          </label>
+          <label>
+            Licznik od nowa
+            <select
+              value={numbering.reset}
+              onChange={(event) => setNumbering({ ...numbering, reset: event.target.value as NumberingSettings["reset"] })}
+            >
+              <option value="monthly">co miesiąc</option>
+              <option value="yearly">co rok</option>
+              <option value="never">nigdy</option>
+            </select>
+          </label>
+          <label>
+            Cyfry licznika (min.)
+            <input
+              type="number"
+              min={1}
+              max={8}
+              value={numbering.padding}
+              onChange={(event) => setNumbering({ ...numbering, padding: Number(event.target.value) || 1 })}
+            />
+          </label>
+        </div>
+        <div className="chat-form-row">
+          <button
+            type="button"
+            className="chat-primary-action"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const next = await setInvoiceNumbering(numbering);
+                setSettings((current) => (current && next.numbering ? { ...current, numbering: next.numbering } : current));
+              }, "Autonumeracja zapisana.")
+            }
+          >
+            Zapisz wzór
+          </button>
+          {settings?.numbering ? (
+            <button
+              type="button"
+              className="chat-secondary-action"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await setInvoiceNumbering(null);
+                  setSettings((current) => {
+                    if (!current) return current;
+                    const { numbering: _removed, ...rest } = current;
+                    return rest;
+                  });
+                }, "Autonumeracja wyłączona.")
+              }
+            >
+              Wyłącz autonumerację
+            </button>
+          ) : null}
+        </div>
       </section>
 
       <section>

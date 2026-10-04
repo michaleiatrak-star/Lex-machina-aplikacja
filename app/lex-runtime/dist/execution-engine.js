@@ -1,10 +1,16 @@
 import fs from "node:fs";
+import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
+import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
+import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt } from "./knowledge-map.js";
-import { LegalSession } from "./legal-session.js";
+import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
 import { criminalQualifierExcerpt, qualifierPrinciples, QUICK_LEGAL_RULES, QUICK_LOCAL_MAX_OUTPUT_TOKENS, QUICK_LOCAL_MAX_TOOL_ROUNDS, QUICK_LOCAL_TOOLS, QuickLaneSources } from "./quick-legal-question.js";
 import { assessMatterComplexity } from "./matter-complexity.js";
-import { MANDATORY_SESSION_SKILLS, parseSkillSelectionEnvelope, resolveAdditionalSkills } from "./skill-selection.js";
+import { MANDATORY_SESSION_SKILLS, latestUserTurn, parseSkillSelectionEnvelope, resolveAdditionalSkills } from "./skill-selection.js";
+export { latestUserTurn };
 import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./deterministic-workflow.js";
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
@@ -17,16 +23,6 @@ export class LexExecutionError extends Error {
         this.events = events;
         this.name = "LexExecutionError";
     }
-}
-const USER_TURN_MARKER = "\n\nUżytkownik: ";
-// The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
-// history; only the newest user turn decides whether it is trivial chat.
-export function latestUserTurn(query) {
-    const index = query.lastIndexOf(USER_TURN_MARKER);
-    return index >= 0
-        ? query.slice(index +
-            USER_TURN_MARKER.length)
-        : query;
 }
 /**
  * Legal gate: an exact trivial chat command (greeting, test, thanks, "napisz
@@ -441,6 +437,83 @@ export class LexExecutionEngine {
                     content
                 ].join("\n\n"));
         }
+        // Mechanical mode: the executive skill's contract from its own SKILL.md (its
+        // mandatory gates and their resources) plus every required workflow resource
+        // goes to the model's context. Before, the "mechanical-policy" resources were
+        // only checked for existence and logged as read without reaching the model.
+        let executiveContractText = "";
+        if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+            const contract = executiveContract(this.registry, workflowPlan.executionSkill);
+            if (contract) {
+                const inContext = new Set([
+                    ...CORE_LEGAL_RESOURCES,
+                    ...workflowPlan.semanticContextResources
+                ]);
+                const loaded = loadContract(this.registry, contract, {
+                    // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
+                    extra: [
+                        ...workflowPlan.requiredFreshResources,
+                        ...(/^pisma-/.test(contract.skill) && args.documentContext ? ["shared/FAKTY_v2.md"] : [])
+                    ],
+                    inContext
+                });
+                for (const item of loaded.loaded)
+                    emit("resource_read", item.resource, "OK", "runtime-preload;executive-contract");
+                emit("gate", "EXECUTIVE_CONTRACT", "OK", `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`);
+                executiveContractText = contractPrompt(loaded);
+                // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
+                // conditional ones the question and the case documents trigger.
+                const modules = loadModules(this.registry, contract.skill, skillModules(this.registry, contract.skill, {
+                    text: [effectiveQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
+                    stage: args.processWorkflowContext?.stage ?? null
+                }), new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]));
+                if (modules.loaded.length || modules.toRead.length) {
+                    for (const item of modules.loaded)
+                        emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
+                    emit("gate", "SKILL_MODULES", "OK", `skill=${contract.skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`);
+                    executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+                }
+            }
+        }
+        // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
+        // (CP-REJESTR) and what its report must show, with the case's register.
+        if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
+            const checkpointFiles = loadCheckpointResources(this.registry, args.processWorkflowContext.checkpoint, new Set(CORE_LEGAL_RESOURCES));
+            for (const item of checkpointFiles.loaded)
+                emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
+            emit("gate", "PROCESS_CHECKPOINT_RESOURCES", "OK", `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`);
+            executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+        }
+        // MAPA-AKTOW resolved mechanically from the question and the case documents.
+        if (!args.model.startsWith("local/")) {
+            const acts = resolveActModulesWithChecks(this.registry, [effectiveQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+            if (acts.modules.length || acts.rejected.length) {
+                const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
+                for (const item of loaded.loaded)
+                    emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule}`);
+                emit("gate", "ACT_MAP_MODULES", "OK", [...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`), ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)].join(";"));
+                if (acts.modules.length)
+                    executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+                if (acts.rejected.length) {
+                    executiveContractText += `\n\n# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
+                }
+            }
+        }
+        // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
+        if (!args.model.startsWith("local/")) {
+            const domains = [...new Set([args.route.primarySkill, ...skillSelection.domainSkills])]
+                .filter((name) => /^dr-\d{2}-/.test(name))
+                .map((skill) => ({
+                skill,
+                matched: ["dziedzina wybrana dla tej sprawy"],
+                modules: suggestDomainModules(this.registry, skill, [effectiveQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+            }))
+                .filter((domain) => domain.modules.length > 0);
+            if (domains.length) {
+                emit("gate", "DOMAIN_HINT", "OK", domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";"));
+                executiveContractText += `${executiveContractText ? "\n\n" : ""}${domainHintPrompt(domains)}`;
+            }
+        }
         if (args.guideContext &&
             workflowPlan.id !==
                 "LEGAL_GUIDE_V1") {
@@ -579,6 +652,7 @@ export class LexExecutionEngine {
                         ].join("\n\n")
                     ]
                     : []),
+                ...(executiveContractText ? [executiveContractText] : []),
                 ...(runtimePrelude.appendix
                     ? [runtimePrelude.appendix]
                     : []),
@@ -714,6 +788,7 @@ export class LexExecutionEngine {
                     ].join("\n\n")
                 ]
                 : []),
+            ...(executiveContractText ? [executiveContractText] : []),
             ...(args.guideContext
                 ? [
                     [
@@ -881,6 +956,42 @@ export class LexExecutionEngine {
         if (!response.fullText.trim()) {
             throw new LexExecutionError("Provider returned an empty deterministic-workflow result.", "G39H_WORKFLOW_PROVIDER_COMPLETE", [...events]);
         }
+        // The checkpoint's report contract: one correcting round, then the output gate decides.
+        let output = response.fullText;
+        if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
+            const checkpoint = args.processWorkflowContext.checkpoint;
+            const first = evaluateCheckpointOutput(checkpoint, output);
+            if (first.result === "BLOCKED") {
+                let remaining = first.missing;
+                try {
+                    const corrected = await this.providers.stream(args.provider, {
+                        model: args.model,
+                        systemPrompt,
+                        messages: [
+                            ...(args.documentContext
+                                ? [{ role: "user", content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
+                                : []),
+                            { role: "user", content: effectiveQuery },
+                            { role: "assistant", content: output },
+                            { role: "user", content: checkpointCorrectionPrompt(checkpoint, first.missing) }
+                        ],
+                        reasoning: "none"
+                    });
+                    const text = corrected.fullText.trim();
+                    if (text) {
+                        const second = evaluateCheckpointOutput(checkpoint, text);
+                        if (second.missing.length < first.missing.length) {
+                            output = text;
+                            remaining = second.missing;
+                        }
+                    }
+                }
+                catch {
+                    remaining = first.missing;
+                }
+                emit("gate", "PROCESS_CHECKPOINT_CORRECTION", remaining.length ? "BLOCKED" : "OK", `checkpoint=${checkpoint};missing=${first.missing.join(",")};remaining=${remaining.join(",")}`);
+            }
+        }
         emit("gate", "G7_VERTICAL_SLICE", "OK");
         return {
             provider: args.provider,
@@ -889,7 +1000,7 @@ export class LexExecutionEngine {
             executionSkills: skillSelection.executionSkills,
             domainSkills: skillSelection.domainSkills,
             workflowPlan,
-            output: response.fullText,
+            output,
             events
         };
     }
@@ -958,6 +1069,7 @@ export class LexExecutionEngine {
             ["lista skilli", "list_legal_skills"],
             ["weryfikacja przepisu przez ELI / ISAP", "verify_legal_reference"],
             ["wyszukanie orzeczeń (SAOS, CBOSA, SN)", "search_case_law"],
+            ["weryfikacja sygnatury interpretacji podatkowej (EUREKA)", "verify_interpretation"],
             ["weryfikacja sygnatury, cytatu i tezy orzeczenia", "verify_case_reference, verify_case_quote, verify_case_proposition"],
             ["źródła prawne przez MCP (ISAP, EUR-Lex, KRS i inne)", "list_federated_legal_sources, search_federated_legal_sources, get_federated_legal_document, call_federated_legal_source"],
             ["web_search / wyszukiwanie w internecie", "web_search"]
@@ -1047,6 +1159,10 @@ export class LexExecutionEngine {
             promptParts.push(args.toolSystemPromptAppendix);
         }
         emit("gate", "MODEL_SKILL_SELECTION", "OK", `catalog=${catalog.length}`);
+        // The model routes itself, so this turn runs the general legal workflow;
+        // the route event follows from the audited corpus reads (session executor).
+        const workflowPlan = createDeterministicWorkflowPlan(this.registry, null);
+        emit("gate", "G39H_WORKFLOW_PREFLIGHT", "OK", `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`);
         emit("provider_start", args.provider, "OK", args.model);
         const response = await this.providers.stream(args.provider, {
             model: args.model,
@@ -1110,6 +1226,7 @@ export class LexExecutionEngine {
             }
         }
         emit("provider_end", args.provider, "OK", args.model);
+        emit("gate", "G39H_WORKFLOW_PROVIDER_COMPLETE", response.fullText.trim() ? "OK" : "BLOCKED", `workflow=${workflowPlan.id}`);
         if (!response.fullText.trim()) {
             throw new LexExecutionError("Provider returned an empty answer.", "MODEL_SKILL_SELECTION", [...events]);
         }
@@ -1121,7 +1238,7 @@ export class LexExecutionEngine {
             loadedSkills: [],
             executionSkills: [],
             domainSkills: [],
-            workflowPlan: createDeterministicWorkflowPlan(this.registry, null),
+            workflowPlan,
             output: response.fullText,
             events
         };

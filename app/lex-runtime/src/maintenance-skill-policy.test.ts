@@ -34,16 +34,16 @@ function discoveryResult(
   signatureBytes: Uint8Array
 ): UpdateDiscoveryResult {
   return {
-    currentVersion: "0.1.10",
+    currentVersion: "0.1.14",
     status: "AVAILABLE",
     checkedAt:
       "2026-09-18T09:00:00.000Z",
-    latestVersion: "0.1.11",
+    latestVersion: "0.1.15",
     skillsBundle: {
       name:
-        "LexMachina-Skills-0.1.11.zip",
+        "LexMachina-Skills-0.1.15.zip",
       url:
-        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.11/LexMachina-Skills-0.1.11.zip",
+        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.15/LexMachina-Skills-0.1.15.zip",
       sha256:
         "a".repeat(64),
       bytes: 123
@@ -52,7 +52,7 @@ function discoveryResult(
       name:
         "LexMachina-Skills-Index.json",
       url:
-        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.11/LexMachina-Skills-Index.json",
+        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.15/LexMachina-Skills-Index.json",
       sha256:
         sha256(indexBytes),
       bytes:
@@ -62,7 +62,7 @@ function discoveryResult(
       name:
         "LexMachina-Skills-Index.sig",
       url:
-        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.11/LexMachina-Skills-Index.sig",
+        "https://github.com/michaleiatrak-star/Lex-Machina/releases/download/v0.1.15/LexMachina-Skills-Index.sig",
       sha256:
         sha256(signatureBytes),
       bytes:
@@ -87,10 +87,10 @@ function verifiedIndex(args?: {
         "LEX_MACHINA_SKILLS_INDEX",
       version:
         args?.version ??
-        "0.1.11",
+        "0.1.15",
       bundle: {
         filename:
-          "LexMachina-Skills-0.1.11.zip",
+          "LexMachina-Skills-0.1.15.zip",
         sha256:
           "a".repeat(64),
         bytes: 123
@@ -98,7 +98,7 @@ function verifiedIndex(args?: {
       compatibility: {
         minAppVersion:
           args?.minAppVersion ??
-          "0.1.10",
+          "0.1.14",
         ...(args?.maxAppVersion
           ? {
               maxAppVersion:
@@ -307,7 +307,7 @@ describe(
         } = service(
           verifiedIndex({
             version:
-              "0.1.12"
+              "0.1.16"
           })
         );
 

@@ -565,12 +565,16 @@ describe(
           current.execute
             .mock.calls[0]?.[0]
             .processWorkflowContext
-        ).toEqual({
+        ).toMatchObject({
           stage: "W1",
           checkpoint:
             "CP-1a",
           mode:
-            "CHECKPOINT"
+            "CHECKPOINT",
+          // The case's checkpoint register goes with every checkpoint.
+          register: expect.arrayContaining([
+            expect.objectContaining({ checkpoint: "CP-1a", status: "OPEN" })
+          ])
         });
         expect(
           first.body
@@ -654,12 +658,16 @@ describe(
           current.execute
             .mock.calls[1]?.[0]
             .processWorkflowContext
-        ).toEqual({
+        ).toMatchObject({
           stage: "W1",
           checkpoint:
             "CP-FSL-D",
           mode:
-            "CHECKPOINT"
+            "CHECKPOINT",
+          // The case's checkpoint register goes with every checkpoint.
+          register: expect.arrayContaining([
+            expect.objectContaining({ checkpoint: "CP-FSL-D", status: "OPEN" })
+          ])
         });
         expect(
           second.body

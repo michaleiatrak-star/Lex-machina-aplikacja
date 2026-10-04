@@ -157,4 +157,41 @@ describe("EncryptedInvoiceStore", () => {
     );
     expect(await invoices.list(USER, key)).toHaveLength(8);
   });
+
+  it("auto-numbers by pattern when the number is left empty", async () => {
+    const invoices = await store();
+    const key = randomBytes(32);
+    await expect(invoices.create(USER, key, { ...input("", "A", "2026-10-01") })).rejects.toThrow("INVOICE_FIELD_REQUIRED:number");
+    expect(() => invoices.setNumbering(USER, key, { pattern: "FV {NR}", reset: "monthly" })).toThrow("NUMBERING_PATTERN_MONTH_REQUIRED");
+    await invoices.setNumbering(USER, key, { pattern: "FV {NR}/{MM}/{RRRR}", reset: "monthly", padding: 2 });
+    expect(await invoices.previewNumber(USER, key, "2026-10-01")).toBe("FV 01/10/2026");
+    const first = await invoices.create(USER, key, input("", "A", "2026-10-01"));
+    const second = await invoices.create(USER, key, input("", "B", "2026-10-20"));
+    const november = await invoices.create(USER, key, input("", "C", "2026-11-02"));
+    expect([first.number, second.number, november.number]).toEqual(["FV 01/10/2026", "FV 02/10/2026", "FV 01/11/2026"]);
+    const copy = await invoices.duplicate(USER, key, first.invoiceId);
+    expect(copy.number).toBe("FV 03/10/2026");
+  });
+
+  it("applies line discounts and requires an exemption basis to issue exempt sales", async () => {
+    const invoices = await store();
+    const key = randomBytes(32);
+    const draft = await invoices.create(USER, key, {
+      ...input("FV 1", "A", "2026-10-01"),
+      lines: [{ name: "Usługa", unit: "szt.", quantity: "2", unitNetPrice: "100", vatRate: "zw", discount: "20" }]
+    });
+    expect(invoiceTotals(draft.lines)).toMatchObject({ net: "180.00", vat: "0.00", gross: "180.00" });
+    await expect(invoices.issue(USER, key, draft.invoiceId)).rejects.toThrow("INVOICE_FIELD_REQUIRED:annotations.exemptionBasis");
+    await invoices.update(USER, key, draft.invoiceId, {
+      ...input("FV 1", "A", "2026-10-01"),
+      lines: draft.lines,
+      annotations: { exemptionBasis: "podstawa wpisana przez użytkownika", splitPayment: true, cashMethod: false }
+    });
+    const issued = await invoices.issue(USER, key, draft.invoiceId);
+    expect(issued.annotations).toEqual({ exemptionBasis: "podstawa wpisana przez użytkownika", splitPayment: true });
+    expect(() => invoices.create(USER, key, {
+      ...input("FV 2", "A", "2026-10-01"),
+      lines: [{ name: "x", unit: "szt.", quantity: "1", unitNetPrice: "10", vatRate: "23", discount: "11" }]
+    })).toThrow("INVOICE_FIELD_INVALID:lines.0.discount");
+  });
 });

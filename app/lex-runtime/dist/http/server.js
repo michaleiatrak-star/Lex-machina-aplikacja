@@ -11,12 +11,16 @@ import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
+import { registerQualityBenchmarkRoutes } from "./quality-benchmark-routes.js";
+import { QualityBenchmarkService } from "../quality-benchmark-service.js";
 import { LocalOfficeEditor } from "../office-edit.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
 import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
 import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import { registerInvoiceRoutes } from "./invoice-routes.js";
+import { registerWidgetRoutes } from "./widget-routes.js";
+import { WidgetFrameStore } from "../widget-runtime.js";
 import { EncryptedInvoiceStore } from "../invoice-store.js";
 import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
@@ -299,7 +303,9 @@ export async function startLocalServer(options) {
     }
     // Nieprawidłowości każdej sesji (ścieżki skilli, blokady, błędy) - bez treści spraw.
     const anomalyJournal = new AnomalyJournal(caseFileStore.rootDir);
-    const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology), anomalyJournal);
+    // Pamięć dowodowa wątku: przepis z poprzedniej wiadomości tylko przy tym samym t.j. w ELI.
+    const actFreshness = new TemporalSourceFreshnessChecker();
+    const sessionExecutor = withAnomalyJournal(new SafeSessionExecutor(registry, providerGateway, undefined, (ledger, context) => new LegalVerificationToolRuntime(ledger, legalSourceVerifier, undefined, new TemporalSourceFreshnessChecker(), undefined, undefined, coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)));
     const coreApp = createLexHttpApp({
@@ -318,6 +324,7 @@ export async function startLocalServer(options) {
         chronologyWorkflowStore: workspaceStore,
         contractWorkflowStore: workspaceStore,
         orderedCaseWorkflowStore: workspaceStore,
+        caseMemoryStore: workspaceStore,
         documentGenerationState,
         caseFileStore,
         secureCaseUploadStore,
@@ -371,11 +378,22 @@ export async function startLocalServer(options) {
         authService,
         index: coreLawIndex
     });
+    // Miernik jakości: runtime woła własne API (adres znany po starcie nasłuchu).
+    let selfBaseUrl = "";
+    registerQualityBenchmarkRoutes(app, {
+        authService,
+        benchmark: new QualityBenchmarkService({
+            rootDir: caseFileStore.rootDir,
+            baseUrl: () => selfBaseUrl,
+            ...(process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim() ? { desktopBootstrapToken: process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN.trim() } : {})
+        })
+    });
     registerMcpConnectorRoutes(app, {
         authService,
         connectors: mcpConnectors,
         search: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
+    registerWidgetRoutes(app, { authService, frames: new WidgetFrameStore() });
     registerInvoiceRoutes(app, {
         authService,
         invoices: new EncryptedInvoiceStore({
@@ -403,6 +421,7 @@ export async function startLocalServer(options) {
             const actualPort = typeof address === "object" && address
                 ? address.port
                 : port;
+            selfBaseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${actualPort}`;
             resolve({
                 host,
                 port: actualPort,

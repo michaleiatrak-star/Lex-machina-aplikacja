@@ -1,7 +1,7 @@
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { assertVerificationTierPolicy } from "./legal-source-policy.js";
 function normalizeClaim(value) {
-    return value
-        .normalize("NFKC")
+    return compactActAbbreviations(value.normalize("NFKC"))
         .toLocaleLowerCase("pl")
         .replace(/[.,;:()[\]{}]/g, " ")
         .replace(/\s+/g, " ")

@@ -2,6 +2,10 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:cr
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { NumberingError, nextAutoNumber, validateNumbering } from "./invoice-numbering.js";
+// Domyślne wartości nowej faktury (Ustawienia → Faktury i KSeF).
+export const INVOICE_PAYMENT_METHODS = ["przelew", "gotówka", "zapłacono"];
+const MAX_TEMPLATES = 100;
 export const INVOICE_SORTS = [
     "date-desc",
     "date-asc",
@@ -100,6 +104,7 @@ function line(value, index) {
     if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
         throw new InvoiceError(`INVOICE_FIELD_INVALID:${field("vatRate")}`, 400);
     }
+    const discount = pattern(typeof raw.discount === "string" ? raw.discount.replace(",", ".") : raw.discount, field("discount"), PRICE, false);
     const quantity = pattern(typeof raw.quantity === "string" ? raw.quantity.replace(",", ".") : raw.quantity, field("quantity"), DECIMAL, true);
     if (toScaled(quantity, 6) === 0n) {
         throw new InvoiceError(`INVOICE_FIELD_INVALID:${field("quantity")}`, 400);
@@ -109,10 +114,75 @@ function line(value, index) {
         unit: text(raw.unit, field("unit"), true),
         quantity,
         unitNetPrice: pattern(typeof raw.unitNetPrice === "string" ? raw.unitNetPrice.replace(",", ".") : raw.unitNetPrice, field("unitNetPrice"), PRICE, true),
-        vatRate
+        vatRate,
+        ...(discount && toScaled(discount, 2) > 0n ? { discount } : {})
     };
 }
-export function validateInvoiceInput(value) {
+export function validateInvoiceDefaults(value) {
+    if (!value || typeof value !== "object")
+        throw new InvoiceError("INVOICE_DEFAULTS_INVALID", 400);
+    const raw = value;
+    const paymentMethod = INVOICE_PAYMENT_METHODS.find((method) => method === raw.paymentMethod);
+    if (!paymentMethod)
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentMethod", 400);
+    const days = raw.paymentTermDays;
+    if (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365) {
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.paymentTermDays", 400);
+    }
+    const vatRate = typeof raw.vatRate === "string" ? raw.vatRate.trim().toLowerCase() : "";
+    if (!PERCENT_RATE.test(vatRate) && !CODE_RATE.test(vatRate)) {
+        throw new InvoiceError("INVOICE_FIELD_INVALID:defaults.vatRate", 400);
+    }
+    return { paymentMethod, paymentTermDays: days, vatRate };
+}
+export function validateInvoiceTemplate(value) {
+    if (!value || typeof value !== "object")
+        throw new InvoiceError("INVOICE_TEMPLATE_INVALID", 400);
+    const raw = value;
+    if (!Array.isArray(raw.lines) || raw.lines.length === 0) {
+        throw new InvoiceError("INVOICE_FIELD_REQUIRED:lines", 400);
+    }
+    if (raw.lines.length > MAX_LINES)
+        throw new InvoiceError("INVOICE_FIELD_TOO_LONG:lines", 400);
+    const days = raw.paymentTermDays;
+    if (days !== undefined && days !== null && (typeof days !== "number" || !Number.isInteger(days) || days < 0 || days > 365)) {
+        throw new InvoiceError("INVOICE_FIELD_INVALID:paymentTermDays", 400);
+    }
+    const optional = {
+        paymentMethod: text(raw.paymentMethod, "paymentMethod", false),
+        bankAccount: text(raw.bankAccount, "bankAccount", false),
+        placeOfIssue: text(raw.placeOfIssue, "placeOfIssue", false),
+        notes: text(raw.notes, "notes", false)
+    };
+    return {
+        name: text(raw.name, "templateName", true),
+        buyer: party(raw.buyer, "buyer"),
+        lines: raw.lines.map(line),
+        currency: pattern(raw.currency, "currency", /^[A-Z]{3}$/, false) ?? "PLN",
+        ...(typeof days === "number" ? { paymentTermDays: days } : {}),
+        ...Object.fromEntries(Object.entries(optional).filter(([, entry]) => entry !== undefined))
+    };
+}
+function annotations(value) {
+    if (value === undefined || value === null)
+        return undefined;
+    if (typeof value !== "object")
+        throw new InvoiceError("INVOICE_FIELD_INVALID:annotations", 400);
+    const raw = value;
+    const result = {};
+    for (const flag of ["cashMethod", "selfBilling", "reverseCharge", "splitPayment"]) {
+        if (raw[flag] !== undefined && typeof raw[flag] !== "boolean") {
+            throw new InvoiceError(`INVOICE_FIELD_INVALID:annotations.${flag}`, 400);
+        }
+        if (raw[flag] === true)
+            result[flag] = true;
+    }
+    const basis = text(raw.exemptionBasis, "annotations.exemptionBasis", false);
+    if (basis)
+        result.exemptionBasis = basis;
+    return Object.keys(result).length ? result : undefined;
+}
+export function validateInvoiceInput(value, options = {}) {
     if (!value || typeof value !== "object") {
         throw new InvoiceError("INVOICE_INVALID", 400);
     }
@@ -132,14 +202,21 @@ export function validateInvoiceInput(value) {
         paymentMethod: text(raw.paymentMethod, "paymentMethod", false),
         paymentDueDate: pattern(raw.paymentDueDate, "paymentDueDate", DATE, false),
         bankAccount: text(raw.bankAccount, "bankAccount", false),
-        notes: text(raw.notes, "notes", false)
+        notes: text(raw.notes, "notes", false),
+        annotations: annotations(raw.annotations)
     };
+    const lines = raw.lines.map(line);
+    lines.forEach((entry, index) => {
+        if (lineNetCents(entry) < 0n)
+            throw new InvoiceError(`INVOICE_FIELD_INVALID:lines.${index}.discount`, 400);
+    });
     return {
-        number: text(raw.number, "number", true),
+        // Pusty numer = autonumeracja (jeśli ustawiona) przy zapisie.
+        number: text(raw.number, "number", !options.allowAutoNumber) ?? "",
         issueDate: pattern(raw.issueDate, "issueDate", DATE, true),
         seller,
         buyer: party(raw.buyer, "buyer"),
-        lines: raw.lines.map(line),
+        lines,
         currency: (pattern(raw.currency, "currency", /^[A-Z]{3}$/, false) ?? "PLN"),
         ...Object.fromEntries(Object.entries(optional).filter(([, entry]) => entry !== undefined))
     };
@@ -158,8 +235,9 @@ function money(cents) {
     return `${sign}${absolute / 100n}.${String(absolute % 100n).padStart(2, "0")}`;
 }
 export function lineNetCents(entry) {
-    // ilość (×10^6) · cena (×10^2) → ×10^8, zaokrąglenie do groszy.
-    return roundDiv(toScaled(entry.quantity, 6) * toScaled(entry.unitNetPrice, 2), 1000000n);
+    // ilość (×10^6) · cena (×10^2) → ×10^8, zaokrąglenie do groszy, minus opust.
+    return roundDiv(toScaled(entry.quantity, 6) * toScaled(entry.unitNetPrice, 2), 1000000n) -
+        (entry.discount ? toScaled(entry.discount, 2) : 0n);
 }
 // Podatek liczony od sumy wartości netto w danej stawce.
 export function invoiceTotals(lines) {
@@ -395,8 +473,32 @@ export class EncryptedInvoiceStore {
         const state = await this.read(userId, userMasterKey);
         return {
             ...(state.seller ? { seller: state.seller } : {}),
-            ...(state.logo ? { logo: state.logo } : {})
+            ...(state.logo ? { logo: state.logo } : {}),
+            ...(state.defaults ? { defaults: state.defaults } : {}),
+            ...(state.numbering ? { numbering: state.numbering } : {})
         };
+    }
+    setDefaults(userId, userMasterKey, defaults) {
+        const cleaned = validateInvoiceDefaults(defaults);
+        return this.mutate(userId, userMasterKey, (state) => {
+            state.defaults = cleaned;
+            return cleaned;
+        });
+    }
+    setNumbering(userId, userMasterKey, input) {
+        const cleaned = input === null ? null : numberingOrThrow(input);
+        return this.mutate(userId, userMasterKey, (state) => {
+            if (cleaned)
+                state.numbering = cleaned;
+            else
+                delete state.numbering;
+            return cleaned;
+        });
+    }
+    // Podgląd numeru, który dostanie nowa faktura z tą datą (bez rezerwacji).
+    async previewNumber(userId, userMasterKey, issueDate) {
+        const state = await this.read(userId, userMasterKey);
+        return state.numbering ? autoNumber(state, issueDate) : null;
     }
     setSeller(userId, userMasterKey, seller) {
         const cleaned = party(seller, "seller");
@@ -427,8 +529,13 @@ export class EncryptedInvoiceStore {
         return found;
     }
     create(userId, userMasterKey, input) {
-        const cleaned = validateInvoiceInput(input);
+        const cleaned = validateInvoiceInput(input, { allowAutoNumber: true });
         return this.mutate(userId, userMasterKey, (state) => {
+            if (!cleaned.number) {
+                if (!state.numbering)
+                    throw new InvoiceError("INVOICE_FIELD_REQUIRED:number", 400);
+                cleaned.number = autoNumber(state, cleaned.issueDate);
+            }
             assertNumberFree(state.invoices, cleaned.number);
             const now = this.stamp();
             const record = {
@@ -460,6 +567,42 @@ export class EncryptedInvoiceStore {
             return record;
         });
     }
+    async templates(userId, userMasterKey) {
+        const state = await this.read(userId, userMasterKey);
+        return [...(state.templates ?? [])].sort((left, right) => compareText(left.name, right.name));
+    }
+    saveTemplate(userId, userMasterKey, input, templateId) {
+        const cleaned = validateInvoiceTemplate(input);
+        return this.mutate(userId, userMasterKey, (state) => {
+            const templates = (state.templates ??= []);
+            const same = (item) => item.name.toLocaleLowerCase("pl") === cleaned.name.toLocaleLowerCase("pl");
+            if (templates.some((item) => same(item) && item.templateId !== templateId)) {
+                throw new InvoiceError("INVOICE_TEMPLATE_NAME_TAKEN", 409);
+            }
+            const now = this.stamp();
+            if (templateId) {
+                const index = templates.findIndex((item) => item.templateId === templateId);
+                if (index < 0)
+                    throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+                const record = { ...cleaned, templateId, createdAt: templates[index].createdAt, updatedAt: now };
+                templates[index] = record;
+                return record;
+            }
+            if (templates.length >= MAX_TEMPLATES)
+                throw new InvoiceError("INVOICE_TEMPLATE_LIMIT", 400);
+            const record = { ...cleaned, templateId: `tpl_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now };
+            templates.push(record);
+            return record;
+        });
+    }
+    removeTemplate(userId, userMasterKey, templateId) {
+        return this.mutate(userId, userMasterKey, (state) => {
+            const index = (state.templates ?? []).findIndex((item) => item.templateId === templateId);
+            if (index < 0)
+                throw new InvoiceError("INVOICE_TEMPLATE_NOT_FOUND", 404);
+            state.templates.splice(index, 1);
+        });
+    }
     remove(userId, userMasterKey, invoiceId) {
         return this.mutate(userId, userMasterKey, (state) => {
             state.invoices.splice(draftIndex(state.invoices, invoiceId), 1);
@@ -469,7 +612,8 @@ export class EncryptedInvoiceStore {
     issue(userId, userMasterKey, invoiceId) {
         return this.mutate(userId, userMasterKey, (state) => {
             const index = draftIndex(state.invoices, invoiceId);
-            // Pola formularza są sprawdzane przy każdym zapisie szkicu.
+            // Pola formularza są sprawdzane przy każdym zapisie szkicu; tu warunki całej faktury.
+            assertIssuable(state.invoices[index]);
             const record = { ...state.invoices[index], status: "ISSUED", updatedAt: this.stamp() };
             state.invoices[index] = record;
             return record;
@@ -485,7 +629,7 @@ export class EncryptedInvoiceStore {
             const now = this.stamp();
             const today = now.slice(0, 10);
             const record = {
-                number: nextNumber(state.invoices, source.number),
+                number: state.numbering ? autoNumber(state, today) : nextNumber(state.invoices, source.number),
                 issueDate: today,
                 saleDate: today,
                 ...(source.placeOfIssue ? { placeOfIssue: source.placeOfIssue } : {}),
@@ -496,6 +640,7 @@ export class EncryptedInvoiceStore {
                 ...(source.paymentMethod ? { paymentMethod: source.paymentMethod } : {}),
                 ...(source.bankAccount ? { bankAccount: source.bankAccount } : {}),
                 ...(source.notes ? { notes: source.notes } : {}),
+                ...(source.annotations ? { annotations: { ...source.annotations } } : {}),
                 invoiceId: `inv_${randomBytes(16).toString("hex")}`,
                 status: "DRAFT",
                 basedOnInvoiceId: source.invoiceId,
@@ -515,6 +660,28 @@ function ksefView(ksef) {
         ...(ksef.tokenSetAt ? { tokenSetAt: ksef.tokenSetAt } : {}),
         ...(ksef.contextNip ? { contextNip: ksef.contextNip } : {})
     };
+}
+function numberingOrThrow(input) {
+    try {
+        return validateNumbering(input);
+    }
+    catch (error) {
+        if (error instanceof NumberingError)
+            throw new InvoiceError(error.code, 400);
+        throw error;
+    }
+}
+function autoNumber(state, issueDate) {
+    if (!state.numbering)
+        throw new InvoiceError("NUMBERING_NOT_CONFIGURED", 400);
+    return nextAutoNumber(state.invoices.map((entry) => entry.number), state.numbering, issueDate);
+}
+// Warunki dotyczące całej faktury, sprawdzane przy wystawieniu.
+export function assertIssuable(invoice) {
+    if (invoice.lines.some((entry) => entry.vatRate === "zw") &&
+        !invoice.annotations?.exemptionBasis) {
+        throw new InvoiceError("INVOICE_FIELD_REQUIRED:annotations.exemptionBasis", 400);
+    }
 }
 function sameNumber(left, right) {
     return left.trim().toLocaleLowerCase("pl") === right.trim().toLocaleLowerCase("pl");

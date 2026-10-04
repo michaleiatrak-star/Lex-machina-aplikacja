@@ -1,4 +1,4 @@
-import { searchStems } from "./core-law-search.js";
+import { articleUnits, searchStems } from "./core-law-search.js";
 import { coreLawEliCaution, normalizeForSearch } from "./core-law-index.js";
 import { CoreLawActLookupError, lookupCoreLawAct, parseLegalActReference } from "./core-law-act-lookup.js";
 import { anchoredUrl } from "./source-anchor.js";
@@ -89,6 +89,16 @@ const RAG_MIN_SCORE = 4;
  * Top core law articles for a question, as a prompt block. Placeholders are
  * ignored; nothing is returned for small talk or when nothing matches well.
  */
+// Długi artykuł: nagłówek i trafiony ustęp zamiast pierwszych 1100 znaków,
+// w których trafionego ustępu często nie ma.
+function excerpt(body, unit) {
+    const units = unit ? articleUnits(body) : [];
+    const match = units.find((item) => item.unit === unit);
+    if (!match)
+        return body.slice(0, RAG_ARTICLE_CHARS) + " […]";
+    const text = match.text.length > RAG_ARTICLE_CHARS ? match.text.slice(0, RAG_ARTICLE_CHARS) + " […]" : match.text;
+    return text.replace(/\n/, "\n[…]\n");
+}
 export function coreLawRetrievalPrompt(index, query) {
     const clean = query.replace(/\[(?:PII|LMPII):[^\]]+\]/g, " ");
     if (clean.replace(/\s+/g, " ").trim().length < 12)
@@ -101,8 +111,8 @@ export function coreLawRetrievalPrompt(index, query) {
         const body = index.currentRecord(hit.eli)?.articles[hit.article];
         if (!body)
             continue;
-        const text = body.length > RAG_ARTICLE_CHARS ? body.slice(0, RAG_ARTICLE_CHARS) + " […]" : body;
-        const block = `[${hit.eli}] ${hit.title} — art. ${hit.article}\n${text}`;
+        const text = body.length > RAG_ARTICLE_CHARS ? excerpt(body, hit.unit) : body;
+        const block = `[${hit.eli}] ${hit.title} — art. ${hit.article}${hit.unit ? `, trafienie: ${hit.unit}` : ""}\n${text}`;
         if (used + block.length > RAG_MAX_CHARS)
             break;
         blocks.push(block);
@@ -330,11 +340,13 @@ export class CoreLawToolRuntime {
                 .search(query, { ...(act ? { eli: act.eli } : {}), limit: MAX_SEARCH_HITS })
                 .map((hit) => {
                 const body = this.index.currentRecord(hit.eli)?.articles[hit.article] ?? "";
+                const unit = hit.unit ? articleUnits(body).find((item) => item.unit === hit.unit) : undefined;
                 return {
                     eli: hit.eli,
                     title: hit.title,
                     article: hit.article,
-                    snippet: articleSnippet(body, query)
+                    ...(hit.unit ? { unit: hit.unit } : {}),
+                    snippet: articleSnippet(unit?.text ?? body, query)
                 };
             });
             this.events.push({

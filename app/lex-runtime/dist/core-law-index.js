@@ -187,6 +187,44 @@ export function repairDzuPdfEncoding(text) {
         return text;
     return text.replace(/[àç´∏ƒÊê˝¥Æ£Œ¯]/gu, (char) => DZU_FONT_MAP[char] ?? char);
 }
+function articleBase(id) {
+    return Number.parseInt(id, 10);
+}
+/**
+ * Luki i zaburzenia numeracji artykułów po wyciągnięciu tekstu. W tekście jednolitym
+ * uchylone artykuły zostają jako "Art. N. (uchylony)", więc luka zwykle znaczy zgubiony
+ * nagłówek: tekst brakującego artykułu dopisał się do poprzedniego.
+ */
+export function checkArticleExtraction(text, order) {
+    const marks = [...text.matchAll(/(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu)]
+        .map((match) => (match[1] ?? match[2]));
+    const gaps = [];
+    const suspect = new Set();
+    let outOfOrder = 0;
+    for (let index = 1; index < order.length; index += 1) {
+        const previous = articleBase(order[index - 1]);
+        const current = articleBase(order[index]);
+        if (current > previous + 1) {
+            gaps.push(current === previous + 2 ? String(previous + 1) : `${previous + 1}–${current - 1}`);
+            suspect.add(order[index - 1]);
+        }
+        else if (current < previous) {
+            outOfOrder += 1;
+            suspect.add(order[index - 1]);
+        }
+    }
+    const seen = new Set();
+    let duplicates = 0;
+    marks.forEach((id, index) => {
+        if (seen.has(id)) {
+            duplicates += 1;
+            if (index > 0)
+                suspect.add(marks[index - 1]);
+        }
+        seen.add(id);
+    });
+    return { gaps, outOfOrder, duplicates, suspectArticles: [...suspect].filter((id) => order.includes(id)) };
+}
 /** Article number -> article text. The first occurrence of a number wins. */
 export function splitArticles(text) {
     // "Art. 5." w ustawach; "Artykuł 5" w umowach międzynarodowych.
@@ -612,6 +650,12 @@ export class CoreLawIndex {
             // traktowana jak niepobrana, więc odświeżanie pobiera ją ponownie.
             if (!record.extraction && record.articleOrder.length === 0)
                 return null;
+            // Kopie z PDF pobrane przed kontrolą jakości: wynik liczony przy odczycie.
+            if (record.textSource === "pdf" && !record.extractionCheck && record.text) {
+                const check = checkArticleExtraction(record.text, record.articleOrder);
+                if (check.suspectArticles.length || check.gaps.length)
+                    record.extractionCheck = check;
+            }
             if (this.cache.size > 24) {
                 this.cache.delete(this.cache.keys().next().value);
             }
@@ -1029,6 +1073,7 @@ export class CoreLawIndex {
             textSource = ocrPages.length ? "ocr" : "pdf";
         }
         const { order, articles } = splitArticles(body);
+        const extractionCheck = textSource === "pdf" ? checkArticleExtraction(body, order) : null;
         const articleAnchors = textSource === "html"
             ? htmlArticleAnchors(html, order)
             : textSource === "pdf"
@@ -1058,6 +1103,9 @@ export class CoreLawIndex {
             articleOrder: order,
             articles,
             ...(Object.keys(articleAnchors).length ? { articleAnchors } : {}),
+            ...(extractionCheck && (extractionCheck.suspectArticles.length || extractionCheck.gaps.length)
+                ? { extractionCheck }
+                : {}),
             text: body
         };
     }

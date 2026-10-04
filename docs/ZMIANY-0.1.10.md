@@ -40,8 +40,88 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 37 | `3dcbe0f` | Błędny numer wersji w nazwie skilla lub modułu, moduł z innego skilla |
 | hotfix 38 | `9639102` | Dziennik nieprawidłowości w Konserwacji; nieudany natywny Read nie jest odczytem |
 | hotfix 39 | `771e608` | Instalator online macOS (.pkg, Apple silicon, macOS 14+) obok instalatora Windows |
+| hotfix 41 | `cd1353f` | Faktury: dane kontrahenta po NIP (biała lista VAT, CEIDG), sposób płatności, termin, stawka VAT z listy, domyślne w ustawieniach |
+| hotfix 42 | `52a00a2` | Widgety skilli (show_widget) w izolowanej ramce, wzory faktur, parser wywołań ChatGPT/Codex |
+| hotfix 43 | `b9d3144` | Akta sprawy dla modelu (narzędzia), poprawka aliasów D01, kontynuacja uciętych odpowiedzi API, generator faktur, poprawki G8; tylko Windows |
+| hotfix 44 | `29d4c62` | Pamięć sprawy (przepisy po kontroli ELI, streszczenie starszej części wątku), miernik jakości sesji, tokeny tury; tylko Windows |
+| hotfix 45 | `2e54c13` | Tabele Markdown w czacie, podgląd przepisu z lokalnej kopii z zaznaczeniem, miernik jakości w aplikacji (konto); tylko Windows |
+| hotfix 46 | `d239272` | Ścieżka obowiązkowa routera, tryb LAIK/PRAWNIK na wejściu, status przepisów z rejestru przy ponownym pytaniu (k.k. = KK), wzory bez pseudonimizacji; tylko Windows |
+| hotfix 47 | `3fd177c` | G8: akt dla przepisu bez skrótu (porównanie art. 233/234/238), artykuł i paragraf z jednym znacznikiem, bez dubla w źródłach; tylko Windows |
+| **0.1.11** | tag `v0.1.11` | Nowe wydanie zbiorcze (hotfix 1–47), wersja aplikacji 0.1.11; tylko Windows |
+| **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (także źródła pomocnicze z tych serwisów): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; pozostałe źródła tylko link; eksport faktury do PDF z logo; tylko Windows |
+| **0.1.14** | gałąź `claude/modest-knuth-re40mu` | Pisma procesowe: moduły i kontrakt każdego checkpointu, N/A z powodem, rejestr kroków; pisma proste według katalogu schematów, redagowanie a analiza pisma, moduły DR z mapy aktów, moduły shared skilli i etapów; Windows i macOS |
+| **0.1.13** | gałąź `claude/modest-knuth-re40mu` | Rodzaj dokumentu i materiałów dowodowych, macierz aktywacji, kontrakty skilli wykonawczych, moduły warunkowe i etapowe, następny etap, wzory domyślne kancelarii, hard gate (interpretacje, stawki i terminy, data zdarzenia, ścieżka obowiązkowa jako bramka), prywatność danych przykładowych; Windows i macOS |
 
 ---
+
+## 0.1.14
+
+- `process-checkpoint-contract.ts`: pliki każdego checkpointu (CP-REJESTR), kontrakt raportu (PRE-W2, RAPORT D, izolacja W2, ST-FINAL), runda poprawkowa; N/A checkpointu warunkowego w stanie (`completeProcessExecution`), rejestr w `processWorkflowContext.register`.
+- `skill-schema-catalog.ts`: schematy pism prostych, `draftingSchema` (redagowanie a analiza); `domain-module-map.ts`: routing błyskawiczny i MAPA-AKTOW, krok MODUŁ-AKTU.
+- `skill-module-map.ts`: drzewa diagnostyczne z kodami, instrukcje „wczytaj”, moduły MOD-* etapów W1–W3; `executive-skill-contract.ts`: `dependencies.required`.
+- `task-routing.ts`: Test A, porozumienia, protokoły przesłuchań, analiza całościowa, raporty.
+
+## 0.1.13
+
+- `document-kind.ts`: rodzaj załącznika (orzeczenia, pisma, umowa, regulamin, wezwanie, dowody); `task-routing.ts`: `parseActivationMatrix`, `decideTask` (macierz przed [1]–[11]), `parseCombinations`, `pipelineNext`, jawne przejście `Następny etap pipeline'u:`.
+- `executive-skill-contract.ts`: kontrakt skilla z jego SKILL.md (tryb mechaniczny i AUTO); `skill-module-map.ts`: moduły warunkowe i etapowe (W1–W3).
+- `template-roles.ts`, `PUT /api/shared/templates/:id/role`: rodzaj wzoru i wzór domyślny; `draftingTarget` + `defaultTemplateFor` w czacie i generatorze (`firmTemplateApplied`).
+- Hard gate: `interpretation-verifier.ts` (EUREKA), `amount-references.ts`, `event-date-check.ts`, `legal-disclaimer.ts`, runda poprawkowa bramek i ślad KROKU 3A w `mandatory-path.ts`; `matter-signals.ts` (karne z pytania).
+- Prywatność: `realValueHashes` w pamięci sprawy (`privacy/example-data.ts`).
+
+## 0.1.12
+
+- `case-law-preview.ts`, `POST /api/case-law/preview`, `CaseLawPreview.tsx`: pełny tekst (SN przez API sn.pl, SAOS przez API, pozostałe przez `fetchSourcePreview`, PDF przez pdfjs), `<mark id="lex-case-quote">`; dopasowanie EXACT / PARTIAL / SIGNATURE / NONE.
+- `invoice-pdf.ts`, `pdf-writer.ts` (PDF 1.4 bez zależności: Helvetica + /Differences dla polskich liter, PNG z SMask, JPEG), `GET /api/invoices/:id/pdf`, „Eksport PDF” w `InvoicesPanel.tsx`.
+- `PublicEvidenceItem.passage`: cytat EXACT_QUOTE albo `supportQuote` (G25: cytat publiczny, notatki dalej ukryte).
+
+## hotfix 47
+
+- `finalization-gate.ts` `resolveActs`: przepis bez skrótu → akt z wiersza / tego artykułu w odpowiedzi / jedyny akt odpowiedzi; `span` = tekst oryginalny (wstawianie ⚠️). `coveringVerifiedRecord`: jeden znacznik = jeden rekord.
+- `status-consistency-gate.ts`: `k.k.` jako KK, klucz przepisu jak w G8.
+- `publicEvidenceBundle`: bez jednostek artykułu z tym samym linkiem źródła.
+
+## hotfix 46
+
+- `mandatory-path.ts`: model ścieżki (PROFIL-LEKKI R-1…R-5, ŁADOWANE ZAWSZE, bramki z krokami), `pathProfile`, `preloadForTurn`, `evaluateMandatoryPath` (ROUTER/SKILL/VERIFICATION/HARD_GATE, `DEKLARACJE-WYKONANIA`).
+- `query-mode.ts`: `detectQueryMode` z tabeli KROK 1 (`PRAWNIK`/`LAIK`/`POPRZEDNI`/`ODPOWIEDZ_NA_PYTANIE`/`NIEROZSTRZYGNIETY`).
+- `legal-act-abbreviations.ts`: `k.k.` → `KK` w detekcji, planie i rejestrze; `provisionsForDetection` ("233 kk" → "art. 233 KK") w prelude Gate I.
+- `releaseModelUnverifiedMarkers`: znacznik modelu przy przepisie nie blokuje weryfikacji. `adoptAct` dla każdego aktu zweryfikowanego w ELI.
+- `privacy/example-data.ts`: KEEP dla danych przykładowych asystenta (PERSON, ADDRESS, BIRTH_DATE, EMAIL, PHONE).
+
+## hotfix 45
+
+- `MarkdownContent.tsx`: tabele (tekst za ostatnią kreską do ostatniej komórki), nagłówki, listy, pogrubienia; bez HTML z odpowiedzi.
+- `core-law-preview.ts`, `POST /api/core-law/provision-preview`, `ProvisionPreview.tsx`: artykuł z kopii ELI, `<mark id="lex-provision">` na § / ust., ramka z kotwicą.
+- `quality-benchmark-service.ts`, `/api/admin/quality-benchmark[/cancel|/reports/:id]`, `QualityBenchmarkSection.tsx`: miernik przez własne API runtime (sesja administratora, `LEX_DESKTOP_BOOTSTRAP_TOKEN`); korpus w `session-quality-corpus.ts`.
+
+## hotfix 44
+
+- `thread-evidence.ts`: `memory.evidence` w zaszyfrowanym indeksie sprawy (rekord VERIFIED/CURRENT z `currentEli` i `actDescriptor`); ponowne użycie po `TemporalSourceFreshnessChecker` (ten sam t.j., bez nowelizacji), zdarzenie `THREAD_EVIDENCE_REUSE`.
+- `thread-summary.ts`, `summarizeThread`: notatka klienta o pominięciu → streszczenie (`memory.summary`), statusy z rejestru; `GET/DELETE /api/cases/:caseId/memory`, `PATCH /memory/summary`; karta `CaseMemoryCard`.
+- `session-quality-benchmark.ts`, `benchmark:session`, `session-quality-v1.json`, workflow `session-quality-benchmark.yml` (sekret klucza API).
+- `usage-meter.ts`: `usage` w odpowiedzi sesji (tokeny z AI SDK, `unmeteredCalls` dla kont).
+
+## hotfix 43
+
+- `case-file-tool-runtime.ts`: `list_case_files`, `search_case_files`, `read_case_file` przy `knowledge.includeCase` (bez modeli lokalnych); limit 120 tys. znaków/turę; odczyt odtwarza dokument lokalnie (aliasy), fragmenty w `citationSources`.
+- `DocumentAliasRegistry`: `documentAliasDocumentIds` tylko dla dokumentów z własnym kluczem (wcześniej przesunięcie przy dokumencie na kluczu współdzielonym).
+- `ai-sdk-adapter.ts`: `finishReason` "length" → do 3 kontynuacji, potem `[ODPOWIEDŹ UCIĘTA: …]`; "tool-calls" na limicie kroków → przejście z `toolChoice: "none"`.
+- Scalone: generator faktur (`a46b2a7`), poprawki G8/routingu/audytu AUTO (`blokada-odpowiedzi-kk`), zamienniki E-3/E-4, RAG po ustępach.
+- Bez instalatora macOS.
+
+## hotfix 42
+
+- `widget-runtime.ts`: narzędzie `show_widget` (plik z korpusu albo kod HTML/JSX modelu), JSX przez sucrase do Preact 10 (UMD w ramce); `POST /api/widgets` (sesja) → klucz 128-bit, `GET /api/widgets/frame/:id` z CSP bez sieci i `sandbox allow-scripts`; proxy desktopu bez tokenu sesji dla ramki, przekazuje CSP odpowiedzi HTML; `frame-src` z `lex-api`.
+- Most ramki: `window.sendPrompt` → wiadomość w czacie; `<a download>` (Blob/data URL) → Pobrane (`json`, `md`, `csv` dopuszczone); widgety w wątku sprawy.
+- Wzory faktur: `/api/invoices/templates` (GET, POST), `/templates/:id` (PUT, DELETE).
+- `account-session.ts`: kilka bloków `LEX_TOOL_CALLS_JSON:` w jednej odpowiedzi łączone, tekst po JSON pomijany.
+
+## hotfix 41
+
+- `company-lookup.ts`, `CompanyNipField.tsx`: NIP → `wl_sprawdz_nip`, potem `ceidg_szukaj_firmy` przez `/api/mcp-search/query`; suma kontrolna NIP lokalnie, odrzucenie odpowiedzi z innym NIP.
+- `invoice-store.ts`: `defaults` (sposób płatności, termin w dniach, stawka VAT), `PUT /api/invoices/settings/defaults` (allowlista desktopu); `GET /api/invoices/legal-basis?topic=vat-rate` szuka „23%” w ustawie o VAT przez ELI.
+- Formularz: listy sposobu płatności (przelew, gotówka, zapłacono), terminu (7/14/21/30 dni, inna data) i stawki VAT.
 
 ## hotfix 39
 

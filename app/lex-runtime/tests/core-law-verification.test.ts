@@ -153,6 +153,13 @@ describe("verifyFromCoreLaw", () => {
     new VerificationLedger().add(outcome.record);
   });
 
+  it("sends an article flagged by the PDF extraction check to ELI instead of VERIFIED", () => {
+    const flagged = kw();
+    flagged.record.textSource = "pdf";
+    flagged.record.extractionCheck = { gaps: ["52"], outOfOrder: 0, duplicates: 0, suspectArticles: ["51"] };
+    expect(verify(index(flagged))).toMatchObject({ decision: "DENY", reason: "CORE_LAW_EXTRACTION_SUSPECT" });
+  });
+
   it("recognises the act by its inflected title, not only by an abbreviation", () => {
     const idx = index(kw(), trzezwosc());
     for (const name of [
@@ -375,6 +382,73 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     expect(JSON.parse(outside!.content)).toMatchObject({ status: "DENIED", localCopy: "UNKNOWN_LEGAL_ACT" });
     expect(JSON.parse(outside!.content).error).toMatch(/^ELI_UNAVAILABLE:/);
     expect(adopted).toEqual([]);
+  });
+
+  it("BRAK-AKTU w RZĘDZIE 1: E-3 (2A) -> ✅ [VER], E-4 (dwa portale 2B, K-1…K-4) -> 🟨 KOTWICA, inaczej ⚠️, RZĄD 3 odmowa", async () => {
+    const ART_52 = "Art. 52. § 1. Kto uczestnicząc w zgromadzeniu nie wykonuje polecenia, podlega karze grzywny.";
+    const pages: Record<string, string> = {
+      "sip.lex.pl": `<p>Kodeks wykroczeń</p><p>${ART_52}</p>`,
+      "arslege.pl": `<p>Dz.U. 2025 poz. 734 t.j.</p><p>${ART_52}</p>`,
+      "lexlege.pl": `<p>tekst jednolity: Dz. U. z 2025 r. poz. 734</p><p>${ART_52}</p>`,
+      "www.infor.pl": `<p>${ART_52}</p>`,
+      "www.gofin.pl": `<p>${ART_52}</p>`
+    };
+    const ledger = new VerificationLedger();
+    const rt = runtime(ledger, eli({ down: true }), []);
+    const fetched: string[] = [];
+    rt.substituteFetcher = (async (url: URL | string) => {
+      const host = new URL(String(url)).hostname;
+      fetched.push(host);
+      return new Response(`<html><body>${pages[host] ?? ""}</body></html>`, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" }
+      });
+    }) as typeof fetch;
+    const kw = (urls?: string[]) => ({
+      claim: "art. 52 § 1 KW",
+      kind: "statute",
+      act: "KW",
+      ...(urls ? { substituteSourceUrls: urls } : {})
+    });
+    const [hint, e3, e4, noTj, r3, noK1] = await rt.runTools([
+      { id: "s0", name: "verify_legal_reference", input: kw() },
+      { id: "s1", name: "verify_legal_reference", input: kw(["https://sip.lex.pl/akty-prawne/dzu/kw/art-52"]) },
+      { id: "s2", name: "verify_legal_reference", input: kw(["https://arslege.pl/kw/art-52", "https://lexlege.pl/kw/art-52/"]) },
+      { id: "s3", name: "verify_legal_reference", input: kw(["https://www.infor.pl/kw/52", "https://www.gofin.pl/kw/52"]) },
+      { id: "s4", name: "verify_legal_reference", input: kw(["https://blog.example.com/kw-52"]) },
+      {
+        id: "s5",
+        name: "verify_legal_reference",
+        input: {
+          claim: "art. 52 ustawy o drogach publicznych",
+          kind: "statute",
+          act: "ustawy o drogach publicznych",
+          substituteSourceUrls: ["https://arslege.pl/kw/art-52", "https://lexlege.pl/kw/art-52/"]
+        }
+      }
+    ]);
+    expect(JSON.parse(hint!.content).substitute).toContain("E-3/E-4");
+    const ver = JSON.parse(e3!.content);
+    expect(ver).toMatchObject({ status: "VERIFIED", sourceStatus: "VER", sourceTier: "R2A", substituteFor: "R1" });
+    expect(ver.marker).toMatch(/^✅ \[VER: https:\/\/sip\.lex\.pl\/akty-prawne\/dzu\/kw\/art-52, \d{4}-\d{2}-\d{2}\]$/);
+    const anchor = JSON.parse(e4!.content);
+    expect(anchor).toMatchObject({ status: "UNVERIFIED", sourceStatus: "KOTWICA", sourceTier: "R2B" });
+    expect(anchor.marker).toMatch(/^🟨 \[KOTWICA-URZĘDOWA: eli\.gov\.pl indeks — Dz\.U\. 2025 poz\. 734 t\.j\., [\d-]+\] 📚 \[TREŚĆ: RZĄD 2B — arslege\.pl \+ lexlege\.pl, znacznik t\.j\. sprawdzony, [\d-]+\]$/);
+    expect(anchor.instruction).toContain("K-4");
+    const unverified = JSON.parse(noTj!.content);
+    expect(unverified).toMatchObject({ status: "UNVERIFIED", sourceStatus: "NIEWERYFIKOWANE", marker: "⚠️ [NIEWERYFIKOWANE]" });
+    expect(unverified.reasons.join(" ")).toContain("K-3");
+    expect(JSON.parse(r3!.content)).toMatchObject({ status: "DENIED", substituteError: "SUBSTITUTE_R3_AUXILIARY_ONLY" });
+    expect(fetched).not.toContain("blog.example.com");
+    expect(JSON.parse(noK1!.content).reasons.join(" ")).toContain("K-1");
+
+    const gate = new FinalizationGate();
+    const verifiedOnly = new VerificationLedger();
+    verifiedOnly.add(ledger.all().find((record) => record.status === "VERIFIED" && record.substituteFor === "R1")!);
+    expect(gate.evaluate(`Zastosowanie ma art. 52 § 1 KW. ${ver.marker}`, verifiedOnly).result).toBe("PASS");
+    const anchored = new VerificationLedger();
+    anchored.add({ claim: "art. 52 § 1 KW", kind: "statute", status: "UNVERIFIED", fetchedAt: "2026-10-03T00:00:00Z", sourceTier: "R2B", officialAnchor: true, substituteFor: "R1" });
+    expect(gate.evaluate(`Zastosowanie ma art. 52 § 1 KW. ${anchor.marker}`, anchored).result).toBe("DEGRADED");
   });
 
   it("model w chmurze: KK z ELI; kopia przy braku metadanych ELI, nie przy nowelizacjach po t.j.", async () => {
