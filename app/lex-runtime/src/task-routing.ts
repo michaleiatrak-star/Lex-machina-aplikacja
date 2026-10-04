@@ -1,3 +1,4 @@
+import { matchSchema, type SchemaEntry } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
@@ -231,7 +232,8 @@ export function decideTask(
   matrix: MatrixRule[],
   rawQuestion: string,
   materials: DeliveredMaterial[] = [],
-  redaction: RedactionTest | null = null
+  redaction: RedactionTest | null = null,
+  simpleLetters: { skill: string; entries: SchemaEntry[] } | null = null
 ): TaskDecision | null {
   // The user pressed "continue" on a pipeline step: that skill, explicitly.
   const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
@@ -254,6 +256,28 @@ export function decideTask(
         then: null,
         reason: `redakcja istniejącego pisma (${redaction.skill}, KROK 0 Test A: „${signal}”)`,
         modules: [redaction.module]
+      };
+    }
+  }
+  // A simple letter of the catalogue (pisma-proste-v2 SCHEMATY PISM: sprzeciw, zarzuty,
+  // klauzula, egzekucja, wezwanie, uzasadnienie, zabezpieczenie, SPH...): that skill with
+  // that one schema, unless the request is a full pleading ("napisz pozew / apelację").
+  if (simpleLetters) {
+    const schema = matchSchema(simpleLetters.entries, question);
+    const fullPleading = matrix.some(
+      (rule) => rule.primary === "pisma-procesowe-v3" && rule.phrases.some((phrase) => stemPhrase(phrase)?.test(question))
+    );
+    if (schema && !fullPleading) {
+      const decisionDelivered = materials.some((material) => material.category === "ORZECZENIE");
+      if (decisionDelivered && ANALYSIS_INTENT.test(question)) {
+        return { source: "SKILL", primary: "analiza-sadowa-v6", then: simpleLetters.skill, reason: `analiza dostarczonego orzeczenia, potem pismo proste (${schema.why})` };
+      }
+      return {
+        source: "SKILL",
+        primary: simpleLetters.skill,
+        then: null,
+        reason: `pismo proste z katalogu ${simpleLetters.skill} (${schema.why})`,
+        modules: schema.resources
       };
     }
   }

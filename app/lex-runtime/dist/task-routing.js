@@ -1,3 +1,4 @@
+import { matchSchema } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 const ROW = /^###\s+\[(\d{1,2})\]\s+(.+)$/u;
 export function parseRoutingTable(router) {
@@ -180,7 +181,7 @@ const IMPLIED_ROWS = [
     },
     { pattern: /(?<![\p{L}])raport\p{L}*(?![\p{L}])/iu, primary: "raport-sytuacyjny-v2", row: "\"stan sprawy\" / \"aktualny status\" / raport ogólny" }
 ];
-export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null) {
+export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
     // The user pressed "continue" on a pipeline step: that skill, explicitly.
     const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
     const handoff = explicitHandoff(rawQuestion, (skill) => known.has(skill));
@@ -201,6 +202,26 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
                 then: null,
                 reason: `redakcja istniejącego pisma (${redaction.skill}, KROK 0 Test A: „${signal}”)`,
                 modules: [redaction.module]
+            };
+        }
+    }
+    // A simple letter of the catalogue (pisma-proste-v2 SCHEMATY PISM: sprzeciw, zarzuty,
+    // klauzula, egzekucja, wezwanie, uzasadnienie, zabezpieczenie, SPH...): that skill with
+    // that one schema, unless the request is a full pleading ("napisz pozew / apelację").
+    if (simpleLetters) {
+        const schema = matchSchema(simpleLetters.entries, question);
+        const fullPleading = matrix.some((rule) => rule.primary === "pisma-procesowe-v3" && rule.phrases.some((phrase) => stemPhrase(phrase)?.test(question)));
+        if (schema && !fullPleading) {
+            const decisionDelivered = materials.some((material) => material.category === "ORZECZENIE");
+            if (decisionDelivered && ANALYSIS_INTENT.test(question)) {
+                return { source: "SKILL", primary: "analiza-sadowa-v6", then: simpleLetters.skill, reason: `analiza dostarczonego orzeczenia, potem pismo proste (${schema.why})` };
+            }
+            return {
+                source: "SKILL",
+                primary: simpleLetters.skill,
+                then: null,
+                reason: `pismo proste z katalogu ${simpleLetters.skill} (${schema.why})`,
+                modules: schema.resources
             };
         }
     }

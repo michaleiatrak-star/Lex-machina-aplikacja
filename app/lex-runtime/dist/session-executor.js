@@ -38,7 +38,8 @@ import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { ANALYSIS_INTENT, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
+import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
+import { domainHintPrompt, parseFlashRouting, rankDomains } from "./domain-module-map.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -532,6 +533,15 @@ export class SafeSessionExecutor {
         this.taskRoutesCache = { root: this.registry.root, routes };
         return routes;
     }
+    flashRoutesCache = null;
+    // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
+    flashRoutes() {
+        if (this.flashRoutesCache?.root === this.registry.root)
+            return this.flashRoutesCache.rows;
+        const rows = parseFlashRouting(this.readCorpus("prawo-polskie-v2/SKILL.md") ?? "");
+        this.flashRoutesCache = { root: this.registry.root, rows };
+        return rows;
+    }
     combinationsCache = null;
     skillCombinations() {
         if (this.combinationsCache?.root === this.registry.root)
@@ -942,6 +952,20 @@ export class SafeSessionExecutor {
                 pathSections.push(`# MANDATORY PATH RESOURCE: ${CRIMINAL_QUALIFIER_RESOURCE}\n\n${qualifier}`);
             }
         }
+        // AUTO: the domain (prawo-polskie-v2 flash routing) and its act modules
+        // (MAPA-AKTOW) the case points to; the model decides and reads them.
+        const caseText = [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n");
+        corpusTools.setCaseText(caseText);
+        if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
+            const domains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            if (domains.length) {
+                audit.record("gate", "DOMAIN_HINT", "OK", {
+                    detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
+                });
+                pathSections.push(domainHintPrompt(domains));
+                step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
+            }
+        }
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
@@ -980,7 +1004,10 @@ export class SafeSessionExecutor {
                     ? [{ category: "AKTA", evidence: false, label: "akta sprawy" }]
                     : [])
             ];
-            taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest());
+            taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest(), {
+                skill: "pisma-proste-v2",
+                entries: schemaCatalog(this.registry, "pisma-proste-v2")
+            });
             const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
             if (taskRoute && record) {
                 const skill = record.name;
@@ -1026,8 +1053,16 @@ export class SafeSessionExecutor {
                     pathSections.push(`# MODUŁ WYMAGANY PRZEZ ROZPOZNANIE ZADANIA: ${resource}\n\n${content}`);
                 }
                 // Conditional modules of the skill's module map that this case triggers.
-                const modules = loadModules(this.registry, skill, triggeredModules(moduleMap(this.registry, skill), {
-                    text: [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n")
+                const modules = loadModules(this.registry, skill, skillModules(this.registry, skill, {
+                    // The kinds of the delivered material in the words module maps use.
+                    text: [
+                        pathFacts.query,
+                        ...recognisedDocuments.map((document) => document.label),
+                        recognisedDocuments.some((document) => document.evidence) ? "materiał zawiera dowody do oceny (dokumenty)" : "",
+                        recognisedDocuments.some((document) => document.category === "PISMO_PROCESOWE" || document.category === "ORZECZENIE")
+                            ? "materiał zawiera pisma procesowe, akta"
+                            : ""
+                    ].join("\n")
                 }), contextResources);
                 if (modules.loaded.length || modules.toRead.length) {
                     for (const item of modules.loaded) {
@@ -1039,7 +1074,7 @@ export class SafeSessionExecutor {
                     });
                     pathSections.push(modulesPrompt(skill, modules));
                 }
-                step("SKILLS", `skill wykonawczy (${taskRoute.source === "MATRIX" ? "macierz aktywacji" : "routing"}): ${skill}`);
+                step("SKILLS", `skill wykonawczy (${taskRoute.source === "MATRIX" ? "macierz aktywacji" : taskRoute.source === "SKILL" ? "rozpoznanie w skillu" : "routing"}): ${skill}`);
             }
         }
         const identityPrompt = [

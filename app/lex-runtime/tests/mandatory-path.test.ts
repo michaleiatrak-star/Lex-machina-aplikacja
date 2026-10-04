@@ -96,6 +96,18 @@ describe("mandatory path model from the corpus", () => {
     };
   }
 
+  it("shows whether an act module of the read domain was read (not blocking)", () => {
+    const step = (events: TurnFacts["events"]) =>
+      evaluateMandatoryPath(model, facts("Odpowiedź.", { events })).steps.find((item) => item.id === "MODUŁ-AKTU:dr-03-prawo-karne-wykroczenia-egzekucja");
+    const base: TurnFacts["events"] = [
+      { type: "skill_read", target: "dr-03-prawo-karne-wykroczenia-egzekucja", status: "OK" },
+      { type: "gate", target: "DOMAIN_HINT", status: "OK", detail: { detail: "dr-03-prawo-karne-wykroczenia-egzekucja:dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kodeks-karny.md" } }
+    ];
+    expect(step(base)).toMatchObject({ status: "MISSING", requirement: "TRIGGERED" });
+    expect(step(base)?.evidence).toContain("mod-KK-kodeks-karny.md");
+    expect(step([...base, { type: "resource_read", target: "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kodeks-karny.md", status: "OK" }])).toMatchObject({ status: "MET" });
+  });
+
   it("marks gate blocks and their steps missing when the answer does not show them", () => {
     const report = evaluateMandatoryPath(model, facts("Art. 233 KK — fałszywe zeznanie. ✅ [VER: https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf#page=54, 2026-10-03]"));
     const byId = Object.fromEntries(report.steps.map((step) => [step.id, step]));

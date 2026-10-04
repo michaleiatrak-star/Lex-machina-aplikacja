@@ -1,3 +1,4 @@
+import { suggestDomainModules } from "./domain-module-map.js";
 import fs from "node:fs";
 import path from "node:path";
 import type {
@@ -443,6 +444,13 @@ export class LegalCorpusToolRuntime {
       modelSelectsSkills?: boolean;
     } = {}
   ) {}
+
+  private caseText = "";
+
+  /** The question and the document kinds: what the domain's act map is matched against. */
+  setCaseText(text: string): void {
+    this.caseText = text;
+  }
 
   modelSkillSelection(): ModelSkillSelection {
     const domainSkills =
@@ -982,6 +990,12 @@ export class LegalCorpusToolRuntime {
         );
       }
       if (isSkillEntry) this.cover(targetSkill, text.length, offset, offset + content.length, "tool");
+      // prawo-polskie-v2: DR-skill -> act module. With the domain's SKILL.md, the
+      // modules of its MAPA-AKTOW that the case text points to (a suggestion).
+      const domainModules =
+        isSkillEntry && offset === 0 && /^dr-\d{2}-/.test(targetSkill) && this.caseText.trim()
+          ? suggestDomainModules(this.registry, targetSkill, this.caseText)
+          : [];
       // A criminal-law matter always goes through the qualifier: it is
       // delivered with the first DR-03 skill entry, not left to the model.
       let requiredModule:
@@ -1077,6 +1091,15 @@ export class LegalCorpusToolRuntime {
                 ...requiredRouter,
                 instruction:
                   "Mandatory prawny-router-v3 entry, delivered with the first legal resource. Apply its routing; read further router files only if the routing needs them."
+              }
+            }
+          : {}),
+        ...(domainModules.length
+          ? {
+              domainModules: {
+                suggested: domainModules.map((module) => ({ path: module.resource, why: module.why })),
+                instruction:
+                  "Act modules of this domain's MAPA-AKTOW that the case points to (application suggestion). Read the one that governs the case before applying the domain; if the case is governed by another module of the map, read that one and say why."
               }
             }
           : {}),

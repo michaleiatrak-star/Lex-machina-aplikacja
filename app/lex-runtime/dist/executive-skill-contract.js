@@ -41,6 +41,14 @@ export function executiveContract(registry, skill) {
                 current.resources.add(match[0]);
     }
     close();
+    // Frontmatter "dependencies: required: [MOD-...]": shared modules the skill needs every time.
+    const dependencies = (record.frontmatter.dependencies ?? {});
+    const required = [dependencies.required, dependencies.requires]
+        .flatMap((list) => (Array.isArray(list) ? list : []))
+        .map((name) => /^(MOD-[A-Z0-9-]+)/u.exec(String(name).trim())?.[1])
+        .filter((name) => Boolean(name));
+    if (required.length)
+        gates.unshift({ title: "dependencies.required (frontmatter SKILL.md)", resources: required.map((name) => `shared/${name}.md`) });
     // Canonical corpus paths ("shared/X.md", "<skill>/references/X.md"), only those
     // that exist (a stale reference is not a contract).
     const canonical = (resource) => (resource.startsWith("shared/") ? resource : `${skill}/${resource}`);

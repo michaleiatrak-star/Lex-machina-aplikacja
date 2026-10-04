@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
+import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import path from "node:path";
 import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -456,7 +457,7 @@ export class LexExecutionEngine {
                 executiveContractText = contractPrompt(loaded);
                 // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
                 // conditional ones the question and the case documents trigger.
-                const modules = loadModules(this.registry, contract.skill, triggeredModules(moduleMap(this.registry, contract.skill), {
+                const modules = loadModules(this.registry, contract.skill, skillModules(this.registry, contract.skill, {
                     text: [effectiveQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
                     stage: args.processWorkflowContext?.stage ?? null
                 }), new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]));
@@ -466,6 +467,21 @@ export class LexExecutionEngine {
                     emit("gate", "SKILL_MODULES", "OK", `skill=${contract.skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`);
                     executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
                 }
+            }
+        }
+        // The chosen legal domains: their act modules (MAPA-AKTOW) the question points to.
+        if (!args.model.startsWith("local/")) {
+            const domains = [...new Set([args.route.primarySkill, ...skillSelection.domainSkills])]
+                .filter((name) => /^dr-\d{2}-/.test(name))
+                .map((skill) => ({
+                skill,
+                matched: ["dziedzina wybrana dla tej sprawy"],
+                modules: suggestDomainModules(this.registry, skill, [effectiveQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+            }))
+                .filter((domain) => domain.modules.length > 0);
+            if (domains.length) {
+                emit("gate", "DOMAIN_HINT", "OK", domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";"));
+                executiveContractText += `${executiveContractText ? "\n\n" : ""}${domainHintPrompt(domains)}`;
             }
         }
         if (args.guideContext &&

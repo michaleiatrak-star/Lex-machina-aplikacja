@@ -338,6 +338,31 @@ export function evaluateMandatoryPath(model, facts) {
                     : "brak odczytu skilla"
         });
     }
+    // prawo-polskie-v2: after a domain's SKILL.md, an act module of that domain
+    // (its MAPA-AKTOW). Shown, not blocking: the right module is the model's choice.
+    const hint = facts.events.find((event) => event.type === "gate" && event.target === "DOMAIN_HINT");
+    const hinted = (skill) => (new RegExp(`(?:^|;)${skill}:([^;]*)`).exec(String(hint?.detail?.detail ?? ""))?.[1] ?? "").split(",").filter(Boolean);
+    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => /^dr-\d{2}-/.test(name ?? ""))) {
+        if (!facts.events.some((event) => event.type === "skill_read" && event.target === skill && event.status === "OK"))
+            continue;
+        const modules = [
+            ...new Set(facts.events
+                .filter((event) => event.type === "resource_read" && event.status === "OK" && canonicalPath(event.target).startsWith(`${skill}/modules/`))
+                .map((event) => canonicalPath(event.target).slice(skill.length + 9)))
+        ];
+        const suggested = hinted(skill);
+        steps.push({
+            layer: "SKILL",
+            id: `MODUŁ-AKTU:${skill}`,
+            label: `Moduł aktu prawnego dziedziny ${skill} (MAPA-AKTOW)`,
+            requirement: "TRIGGERED",
+            status: modules.length ? "MET" : "MISSING",
+            by: "MODEL",
+            evidence: modules.length
+                ? `przeczytane: ${modules.join(", ")}`
+                : `brak odczytu modułu aktu${suggested.length ? `; wskazane przez aplikację: ${suggested.join(", ")}` : ""}`
+        });
+    }
     // Executive skill contract (mechanical mode, or the task type in AUTO): the gates
     // from its SKILL.md, the resources the app loaded and those the model had to read.
     for (const event of facts.events.filter((item) => item.type === "gate" && (item.target === "EXECUTIVE_CONTRACT" || item.target === "SKILL_MODULES"))) {
