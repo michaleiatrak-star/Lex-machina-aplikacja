@@ -26,12 +26,51 @@ function collectMatches(lineText, line, kind, pattern) {
     pattern.lastIndex = 0;
     for (const match of lineText.matchAll(pattern)) {
         // "art. 233 k.k." and "art. 233 KK" are one provision.
-        const claim = kind === "statute" ? compactActAbbreviations(match[0]?.trim() ?? "") : match[0]?.trim();
+        const written = match[0]?.trim() ?? "";
+        const claim = kind === "statute" ? compactActAbbreviations(written) : written;
         if (!claim)
             continue;
-        references.push({ claim, kind, line, lineText });
+        references.push({ claim, kind, line, lineText, ...(claim !== written ? { span: written } : {}) });
     }
     return references;
+}
+const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
+const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
+// Another act named in words: an act-less article on such a line is not resolved.
+const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
+const actsIn = (value) => new Set([...compactActAbbreviations(value).matchAll(ACT_IN_TEXT)].map((match) => match[1]));
+/**
+ * The act of an act-less statute: the only act on its line, else the act this
+ * article carries elsewhere in the answer, else the only act of the answer.
+ * Never across another act named in words ("art. 4 ustawy o …").
+ */
+function resolveActs(references, text) {
+    const actsByUnit = new Map();
+    for (const reference of references) {
+        const act = reference.kind === "statute" ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+        if (!act)
+            continue;
+        const unit = reference.claim.replace(ACT_SUFFIX, "").replace(/\s+/g, " ").toLocaleLowerCase("pl");
+        actsByUnit.set(unit, (actsByUnit.get(unit) ?? new Set()).add(act));
+    }
+    const answerActs = actsIn(text);
+    return references.map((reference) => {
+        if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim))
+            return reference;
+        if (OTHER_ACT.test(reference.lineText))
+            return reference;
+        const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
+        const lineActs = actsIn(reference.lineText);
+        const unitActs = actsByUnit.get(unit);
+        const act = lineActs.size === 1
+            ? [...lineActs][0]
+            : lineActs.size === 0 && unitActs?.size === 1
+                ? [...unitActs][0]
+                : lineActs.size === 0 && answerActs.size === 1
+                    ? [...answerActs][0]
+                    : undefined;
+        return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;
+    });
 }
 export function detectLegalReferences(text) {
     const references = [];
@@ -40,7 +79,7 @@ export function detectLegalReferences(text) {
         const line = index + 1;
         references.push(...collectMatches(lineText, line, "statute", ARTICLE_PATTERN), ...collectMatches(lineText, line, "journal", DZU_PATTERN), ...collectMatches(lineText, line, "case", CASE_PATTERN));
     });
-    return references;
+    return resolveActs(references, text);
 }
 function comparableClaim(value) {
     return value
@@ -66,7 +105,9 @@ function coveringVerifiedRecord(ledger, reference, lineMarkers) {
         return Boolean(marker) && lineMarkers.includes(marker);
     });
     const claims = new Set(covering.map((record) => comparableClaim(record.claim)));
-    return claims.size === 1 ? covering.at(-1) : undefined;
+    // "art. 233 KK" and "art. 233 § 1 KK" with one marker on the line: one source.
+    const markers = new Set(covering.map((record) => expectedVerificationMarker(record)));
+    return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
 }
 export class FinalizationGate {
     evaluate(text, ledger) {
@@ -316,7 +357,7 @@ export function markUnverifiedReferences(text, report) {
             continue;
         byLine.set(finding.reference.line, [
             ...(byLine.get(finding.reference.line) ?? []),
-            finding.reference.claim
+            finding.reference.span ?? finding.reference.claim
         ]);
     }
     if (byLine.size === 0)

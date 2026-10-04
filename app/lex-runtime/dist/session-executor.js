@@ -2,6 +2,7 @@ import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferenc
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
+import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
 import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
@@ -219,8 +220,37 @@ export function reconcileAuxiliarySourcesWithVerification(sources, records) {
         };
     });
 }
+// "art. 233 § 1 KK" next to "art. 233 KK" from the same place of the same
+// source is one entry: the article is listed, its unit is not repeated.
+function withoutRepeatedUnits(records) {
+    const key = (claim) => compactActAbbreviations(claim).toLocaleLowerCase("pl").replace(/\s+/g, " ").trim();
+    const parts = (claim) => /^art\.?\s*(\d+[a-ząćęłńóśźż]*)(.*?)\s+(kc|kpc|kk|kpk|kpa|kp|kro|ksh|kw|kpw|pzp)$/u.exec(key(claim));
+    const latest = new Map();
+    for (const record of records) {
+        const id = `${record.kind}\u0000${key(record.claim)}\u0000${record.asOf ?? ""}`;
+        latest.delete(id);
+        latest.set(id, record);
+    }
+    const unique = [...latest.values()];
+    return unique.filter((record) => {
+        if (record.kind !== "statute" || record.status !== "VERIFIED")
+            return true;
+        const unit = parts(record.claim);
+        if (!unit || !unit[2].trim())
+            return true;
+        return !unique.some((other) => {
+            const article = other.kind === "statute" && other.status === "VERIFIED" ? parts(other.claim) : null;
+            return (article !== null &&
+                !article[2].trim() &&
+                article[1] === unit[1] &&
+                article[3] === unit[3] &&
+                (other.asOf ?? "") === (record.asOf ?? "") &&
+                verificationSourceLink(other) === verificationSourceLink(record));
+        });
+    });
+}
 export function publicEvidenceBundle(records) {
-    return records.map((record) => ({
+    return withoutRepeatedUnits(records).map((record) => ({
         claim: record.claim,
         kind: record.kind,
         status: record.status,
