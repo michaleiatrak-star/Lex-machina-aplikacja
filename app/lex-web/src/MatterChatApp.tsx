@@ -15,7 +15,7 @@ import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
-import { CaseLawPreview, attributedSentence } from "./CaseLawPreview.js";
+import { CaseLawPreview, attributedSentence, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 import { CaseMemoryCard } from "./CaseMemoryCard.js";
 import { CollapsibleCaseSection } from "./CollapsibleCaseSection.js";
@@ -4704,7 +4704,7 @@ export default function MatterChatApp({
                                   <ProvisionPreview claim={item.claim} {...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {})} />
                                 ) : null}
                               </>
-                            ) : item.sourceUrl && item.kind === "case" && (!item.sourceTier || item.sourceTier === "R1" || item.sourceTier === "R2A") ? (
+                            ) : item.sourceUrl && (item.kind === "case" || isCaseLawSource(item.sourceUrl)) ? (
                               <>
                                 <button
                                   type="button"
@@ -4788,7 +4788,18 @@ export default function MatterChatApp({
                               >
                                 Otwórz źródło pomocnicze ↗
                               </a>
-
+                              {isCaseLawSource(item.sourceUrl) ? (
+                                <button
+                                  type="button"
+                                  className="chat-secondary-action chat-provision-preview-toggle"
+                                  onClick={() => {
+                                    const key = `${message.id}:aux:${index}`;
+                                    setProvisionPreview((current) => (current === key ? null : key));
+                                  }}
+                                >
+                                  {provisionPreview === `${message.id}:aux:${index}` ? "Zwiń pełny tekst" : "Pełny tekst z zaznaczeniem"}
+                                </button>
+                              ) : null}
                               {item.crossCheckUrl ? (
                                 <a
                                   className="source-inline-link"
@@ -4804,6 +4815,13 @@ export default function MatterChatApp({
                                 </a>
                               ) : null}
                             </div>
+                            {provisionPreview === `${message.id}:aux:${index}` ? (
+                              <CaseLawPreview
+                                sourceUrl={item.sourceUrl}
+                                {...(item.claim ? { signature: item.claim } : {})}
+                                {...(attributedSentence(message.content, item.claim) ? { attributed: attributedSentence(message.content, item.claim)! } : {})}
+                              />
+                            ) : null}
                           </li>
                         ))}
                       </ul>

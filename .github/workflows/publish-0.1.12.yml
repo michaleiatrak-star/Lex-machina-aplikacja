@@ -149,9 +149,9 @@ jobs:
           ## Lex Machina 0.1.12
 
           ### Orzeczenia, interpretacje i KIO: pełny tekst z zaznaczonym fragmentem
-          - w „Źródła i weryfikacja” przy orzeczeniu z oficjalnego źródła (R1/R2A) przycisk „Pełny tekst z zaznaczeniem”: cały wyrok, postanowienie, uchwała, orzeczenie KIO albo interpretacja pobrane z oficjalnego źródła (SN, CBOSA NSA/WSA, SAOS, KIO/UZP, EUREKA, UODO, TSUE; także PDF), przywołany fragment zaznaczony, okno otwiera się od razu w tym miejscu;
+          - w „Źródła i weryfikacja” oraz przy źródłach pomocniczych z serwisów orzeczeń i interpretacji przycisk „Pełny tekst z zaznaczeniem”: cały wyrok, postanowienie, uchwała, orzeczenie KIO albo interpretacja pobrane z oficjalnego źródła (SN, CBOSA NSA/WSA, SAOS, KIO/UZP, EUREKA, UODO, TSUE; także PDF), przywołany fragment zaznaczony, okno otwiera się od razu w tym miejscu;
           - nagłówek podglądu podaje zdanie odpowiedzi, które przypisuje coś temu rozstrzygnięciu, oraz wynik dopasowania: fragment dosłowny, tylko jego początek albo brak dosłownego fragmentu (parafraza lub błąd modelu, zaznaczona sygnatura) z ostrzeżeniem do ręcznej weryfikacji kontekstu;
-          - źródła pomocnicze (R2B/R3) mają jak dotąd tylko link do otwarcia w przeglądarce;
+          - pozostałe źródła mają jak dotąd tylko link do otwarcia w przeglądarce;
           - tekst pochodzi wyłącznie ze źródła (lista dozwolonych domen urzędowych), nigdy z modelu; status orzeczeń NSA/WSA pozostaje snapshotem.
 
           ### Z 0.1.11
