@@ -3618,6 +3618,19 @@ export function getAnomalies(filter: { severity?: AnomalySeverity; since?: strin
   return json(`/api/diagnostics/anomalies${query ? `?${query}` : ""}`);
 }
 
+// Faktura w PDF z logo wystawcy (z ustawień). logoOmitted: logo, którego nie dało się osadzić.
+export async function exportInvoicePdf(invoiceId: string): Promise<{ blob: Blob; filename: string; logoOmitted: boolean }> {
+  const response = await fetch(`${apiBase()}/api/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+    headers: authorizationHeaders()
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `HTTP_${response.status}`, response.status);
+  }
+  const filename = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? "Faktura.pdf";
+  return { blob: await response.blob(), filename, logoOmitted: Boolean(response.headers.get("x-lex-invoice-logo")) };
+}
+
 export async function exportAnomalies(): Promise<Blob> {
   const response = await fetch(`${apiBase()}/api/diagnostics/anomalies/export`, {
     headers: authorizationHeaders()

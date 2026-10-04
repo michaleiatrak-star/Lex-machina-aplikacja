@@ -154,6 +154,11 @@ jobs:
           - pozostałe źródła mają jak dotąd tylko link do otwarcia w przeglądarce;
           - tekst pochodzi wyłącznie ze źródła (lista dozwolonych domen urzędowych), nigdy z modelu; status orzeczeń NSA/WSA pozostaje snapshotem.
 
+          ### Faktury: eksport do PDF z logo
+          - w karcie Faktury przy fakturze przycisk „Eksport PDF” (obok zwykłego zapisu i wydruku): plik PDF A4 z logo wystawcy ustawionym w Ustawienia → Faktury i KSeF (PNG, także z przezroczystością, albo JPEG), zapisywany w Pobranych;
+          - treść jak na wydruku: dane sprzedawcy i nabywcy, pozycje (długie nazwy zawijane, tabela dzielona na strony z powtórzonym nagłówkiem), podsumowanie według stawek, kwota do zapłaty, płatność, oznaczenia (np. mechanizm podzielonej płatności, podstawa zwolnienia), uwagi, numeracja stron; szkic oznaczony „SZKIC”;
+          - logo, którego nie da się osadzić (np. PNG z przeplotem), jest pomijane z komunikatem, faktura powstaje bez niego.
+
           ### Z 0.1.11
           Wydanie zbiorcze: wszystkie zmiany z 0.1.10 hotfix 1–47. Instalator online dla Windows, zbudowany i przetestowany w przebiegu G33D (instalacja i uruchomienie zainstalowanej kopii) w tym samym przebiegu co publikacja. Instalacja na 0.1.10 jest aktualizacją (dane, sprawy i ustawienia zostają). W tym wydaniu nie ma instalatora macOS (ostatni: 0.1.10 hotfix 42).
 

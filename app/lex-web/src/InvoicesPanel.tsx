@@ -5,6 +5,7 @@ import {
   deleteInvoice,
   deleteInvoiceTemplate,
   duplicateInvoice,
+  exportInvoicePdf,
   getInvoiceSettings,
   issueInvoice,
   listInvoiceTemplates,
@@ -41,6 +42,7 @@ import {
 import { CompanyNipField } from "./CompanyNipField.js";
 import type { CompanyLookup } from "./company-lookup.js";
 import { InvoiceRequirementsCard } from "./InvoiceRequirementsCard.js";
+import { downloadBlob } from "./download-file.js";
 import "./invoices.css";
 
 const SORTS: Array<[InvoiceSort, string]> = [
@@ -247,13 +249,14 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
-  async function run(action: () => Promise<void>, success = ""): Promise<void> {
+  // success: a fixed text, or one the action leaves (e.g. where a file was saved).
+  async function run(action: () => Promise<void | string>, success = ""): Promise<void> {
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      await action();
-      setMessage(success);
+      const outcome = await action();
+      setMessage(typeof outcome === "string" ? outcome : success);
       await refresh();
     } catch (failure) {
       setError(failureText(failure));
@@ -687,8 +690,25 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               >
                 Nowa na podstawie tej
               </button>
+              <button
+                type="button"
+                className="chat-secondary-action"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const exported = await exportInvoicePdf(selected.invoiceId);
+                    const saved = await downloadBlob(exported.blob, exported.filename);
+                    const where = saved ? `Zapisano: ${saved}.` : `Pobrano ${exported.filename}.`;
+                    return exported.logoOmitted
+                      ? `${where} Logo pominięto: obraz w nieobsługiwanym formacie (np. PNG z przeplotem); zapisz logo ponownie jako zwykły PNG lub JPEG.`
+                      : where;
+                  })
+                }
+              >
+                Eksport PDF
+              </button>
               <button type="button" className="chat-secondary-action" onClick={() => window.print()}>
-                Drukuj / PDF
+                Drukuj
               </button>
               <button
                 type="button"

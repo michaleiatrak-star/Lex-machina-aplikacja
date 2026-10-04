@@ -1525,6 +1525,7 @@ fn is_invoice_route(method: &str, path: &str) -> bool {
             matches!(method, "GET" | "PUT" | "DELETE") && invoice_id(id)
         }
         ["api", "invoices", id, "issue" | "duplicate"] => method == "POST" && invoice_id(id),
+        ["api", "invoices", id, "pdf"] => method == "GET" && invoice_id(id),
         _ => false,
     }
 }

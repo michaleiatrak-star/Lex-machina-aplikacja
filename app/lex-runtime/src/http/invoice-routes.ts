@@ -4,6 +4,7 @@ import {
   type AuthService
 } from "../auth/service.js";
 import type { AuthenticatedContext } from "../auth/types.js";
+import { invoicePdf, invoicePdfFileName } from "../invoice-pdf.js";
 import {
   INVOICE_SORTS,
   InvoiceError,
@@ -240,4 +241,28 @@ export function registerInvoiceRoutes(
   app.post("/api/invoices/:invoiceId/duplicate", handle(async (context, key, req) => ({
     invoice: withTotals(await invoices.duplicate(context.user.userId, key, id(req)))
   })));
+
+  // Eksport faktury do PDF, z logo wystawcy z ustawień (gdy jest ustawione).
+  app.get("/api/invoices/:invoiceId/pdf", async (req, res) => {
+    try {
+      const context = authService.authenticateAuthorization(req.get("authorization"));
+      const { invoice, logo } = await authService.withSessionUserMasterKey(
+        context.session.sessionId,
+        async (userMasterKey) => ({
+          invoice: await invoices.get(context.user.userId, userMasterKey, id(req)),
+          logo: (await invoices.profile(context.user.userId, userMasterKey)).logo
+        })
+      );
+      const { pdf, logoOmitted } = invoicePdf(invoice, logo ? { logo } : {});
+      res
+        .status(200)
+        .type("application/pdf")
+        .set("Content-Disposition", `attachment; filename="${invoicePdfFileName(invoice)}"`)
+        .set("Cache-Control", "no-store")
+        .set(logoOmitted ? { "X-Lex-Invoice-Logo": `OMITTED:${logoOmitted}` } : {})
+        .send(pdf);
+    } catch (error) {
+      failed(res, error);
+    }
+  });
 }

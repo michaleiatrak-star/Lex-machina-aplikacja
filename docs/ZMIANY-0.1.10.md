@@ -48,13 +48,14 @@ Wydania: pre-release w `michaleiatrak-star/Lex-machina-aplikacja` (instalator on
 | hotfix 46 | `d239272` | Ścieżka obowiązkowa routera, tryb LAIK/PRAWNIK na wejściu, status przepisów z rejestru przy ponownym pytaniu (k.k. = KK), wzory bez pseudonimizacji; tylko Windows |
 | hotfix 47 | `3fd177c` | G8: akt dla przepisu bez skrótu (porównanie art. 233/234/238), artykuł i paragraf z jednym znacznikiem, bez dubla w źródłach; tylko Windows |
 | **0.1.11** | tag `v0.1.11` | Nowe wydanie zbiorcze (hotfix 1–47), wersja aplikacji 0.1.11; tylko Windows |
-| **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (także źródła pomocnicze z tych serwisów): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; pozostałe źródła tylko link; tylko Windows |
+| **0.1.12** | `f6c3c11` | Orzeczenia, interpretacje, KIO (także źródła pomocnicze z tych serwisów): pełny tekst z oficjalnego źródła z zaznaczonym fragmentem; pozostałe źródła tylko link; eksport faktury do PDF z logo; tylko Windows |
 
 ---
 
 ## 0.1.12
 
 - `case-law-preview.ts`, `POST /api/case-law/preview`, `CaseLawPreview.tsx`: pełny tekst (SN przez API sn.pl, SAOS przez API, pozostałe przez `fetchSourcePreview`, PDF przez pdfjs), `<mark id="lex-case-quote">`; dopasowanie EXACT / PARTIAL / SIGNATURE / NONE.
+- `invoice-pdf.ts`, `pdf-writer.ts` (PDF 1.4 bez zależności: Helvetica + /Differences dla polskich liter, PNG z SMask, JPEG), `GET /api/invoices/:id/pdf`, „Eksport PDF” w `InvoicesPanel.tsx`.
 - `PublicEvidenceItem.passage`: cytat EXACT_QUOTE albo `supportQuote` (G25: cytat publiczny, notatki dalej ukryte).
 
 ## hotfix 47
