@@ -428,7 +428,8 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
   }
   // Executive skill contract (mechanical mode, or the task type in AUTO): the gates
   // from its SKILL.md, the resources the app loaded and those the model had to read.
-  for (const event of facts.events.filter((item) => item.type === "gate" && item.target === "EXECUTIVE_CONTRACT")) {
+  for (const event of facts.events.filter((item) => item.type === "gate" && (item.target === "EXECUTIVE_CONTRACT" || item.target === "SKILL_MODULES"))) {
+    const modulesStep = event.target === "SKILL_MODULES";
     const detail = String(event.detail?.detail ?? "");
     const field = (name: string) => new RegExp(`(?:^|;)${name}=([^;]*)`).exec(detail)?.[1] ?? "";
     const skill = field("skill");
@@ -446,8 +447,10 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
     );
     steps.push({
       layer: "SKILL",
-      id: `KONTRAKT:${skill}`,
-      label: `Kontrakt skilla wykonawczego ${skill}: ${field("gates")} bramek z SKILL.md`,
+      id: `${modulesStep ? "MODUŁY" : "KONTRAKT"}:${skill}`,
+      label: modulesStep
+        ? `Moduły skilla ${skill} wyzwolone w tej sprawie (mapa modułów z SKILL.md)`
+        : `Kontrakt skilla wykonawczego ${skill}: ${field("gates")} bramek z SKILL.md`,
       requirement: "CORE",
       status: unread.length ? "MISSING" : "MET",
       by: unread.length || toRead.length ? "MODEL" : "APLIKACJA",

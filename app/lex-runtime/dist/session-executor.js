@@ -38,6 +38,7 @@ import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { decideTask, parseActivationMatrix, parseRoutingTable } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
+import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -980,6 +981,20 @@ export class SafeSessionExecutor {
                         detail: `skill=${skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
                     });
                     pathSections.push(contractPrompt(loaded));
+                }
+                // Conditional modules of the skill's module map that this case triggers.
+                const modules = loadModules(this.registry, skill, triggeredModules(moduleMap(this.registry, skill), {
+                    text: [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n")
+                }), contextResources);
+                if (modules.loaded.length || modules.toRead.length) {
+                    for (const item of modules.loaded) {
+                        contextResources.add(item.resource);
+                        audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;skill-module-map" });
+                    }
+                    audit.record("gate", "SKILL_MODULES", "OK", {
+                        detail: `skill=${skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`
+                    });
+                    pathSections.push(modulesPrompt(skill, modules));
                 }
                 step("SKILLS", `skill wykonawczy (${taskRoute.source === "MATRIX" ? "macierz aktywacji" : "routing"}): ${skill}`);
             }

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
+import { loadModules, moduleMap, modulesPrompt, triggeredModules } from "./skill-module-map.js";
 import path from "node:path";
 import { knowledgeMapPrompt } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -453,6 +454,18 @@ export class LexExecutionEngine {
                     emit("resource_read", item.resource, "OK", "runtime-preload;executive-contract");
                 emit("gate", "EXECUTIVE_CONTRACT", "OK", `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`);
                 executiveContractText = contractPrompt(loaded);
+                // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
+                // conditional ones the question and the case documents trigger.
+                const modules = loadModules(this.registry, contract.skill, triggeredModules(moduleMap(this.registry, contract.skill), {
+                    text: [effectiveQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
+                    stage: args.processWorkflowContext?.stage ?? null
+                }), new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]));
+                if (modules.loaded.length || modules.toRead.length) {
+                    for (const item of modules.loaded)
+                        emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
+                    emit("gate", "SKILL_MODULES", "OK", `skill=${contract.skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`);
+                    executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+                }
             }
         }
         if (args.guideContext &&
