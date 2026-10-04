@@ -361,6 +361,9 @@ export type PublicEvidenceItem = {
   caseSignature?: string;
   evidenceHash?: string;
   supportQuoteHash?: string;
+  // Judgment passage checked in the official text (exact quote or the quote
+  // supporting a proposition): marked in the full-text preview.
+  passage?: string;
 };
 
 export function publicAuxiliarySourceFromToolResult(
@@ -703,7 +706,12 @@ export function publicEvidenceBundle(
     ...(record.evidenceHash ? { evidenceHash: record.evidenceHash } : {}),
     ...(record.supportQuoteHash
       ? { supportQuoteHash: record.supportQuoteHash }
-      : {})
+      : {}),
+    ...(record.kind === "case" && record.caseScope === "EXACT_QUOTE"
+      ? { passage: record.claim }
+      : record.kind === "case" && record.supportQuote
+        ? { passage: record.supportQuote }
+        : {})
   }));
 }
 

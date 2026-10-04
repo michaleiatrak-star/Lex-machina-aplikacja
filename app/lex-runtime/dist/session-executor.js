@@ -271,7 +271,12 @@ export function publicEvidenceBundle(records) {
         ...(record.evidenceHash ? { evidenceHash: record.evidenceHash } : {}),
         ...(record.supportQuoteHash
             ? { supportQuoteHash: record.supportQuoteHash }
-            : {})
+            : {}),
+        ...(record.kind === "case" && record.caseScope === "EXACT_QUOTE"
+            ? { passage: record.claim }
+            : record.kind === "case" && record.supportQuote
+                ? { passage: record.supportQuote }
+                : {})
     }));
 }
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");

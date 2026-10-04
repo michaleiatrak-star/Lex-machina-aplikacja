@@ -653,3 +653,29 @@ export class SupremeCourtCaseVerifier {
         };
     }
 }
+/**
+ * The official full text (HTML) of an SN decision from its sn.pl page address
+ * (the one a verified record carries), fetched the way verification does.
+ * Null when the address is not an SN decision page.
+ */
+export async function supremeCourtFullTextHtml(sourceUrl, fetcher = globalThis.fetch.bind(globalThis)) {
+    let url;
+    try {
+        url = new URL(sourceUrl);
+    }
+    catch {
+        return null;
+    }
+    const id = url.searchParams.get("orzeczenie")?.trim();
+    if (url.protocol !== "https:" || !SN_HOSTS.has(url.hostname.toLowerCase()) || !id || !/^[\w-]{1,80}$/u.test(id)) {
+        return null;
+    }
+    const response = await fetchSn(fetcher, supremeCourtTextUrl(id));
+    if (!response.ok)
+        throw new Error(`SN_FULL_TEXT_HTTP_${response.status}`);
+    const raw = rawFullText(await response.json());
+    const html = raw ? decodeBase64Html(raw) : null;
+    if (!html)
+        throw new Error("SN_FULL_TEXT_UNAVAILABLE");
+    return html;
+}

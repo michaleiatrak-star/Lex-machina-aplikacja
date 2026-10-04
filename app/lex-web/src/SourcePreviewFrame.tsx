@@ -4,7 +4,7 @@ import { PdfPreview } from "./PdfPreview.js";
 import type { SourcePreviewTarget } from "./mcp-search-results.js";
 
 const ERRORS: Record<string, string> = {
-  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, UODO, ISAP/ELI, EUR-Lex, SN, KRS, NBP). Użyj „Otwórz w źródle”.",
+  SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Podgląd jest dostępny tylko dla oficjalnych źródeł (CBOSA, SAOS, EUREKA, KIO, UODO, ISAP/ELI, EUR-Lex, SN, KRS, NBP). Użyj „Otwórz w źródle”.",
   SOURCE_PREVIEW_NO_POLISH_TEXT: "Repozytorium UE (Cellar) nie ma polskiej wersji tego dokumentu. Użyj „Otwórz w źródle”.",
   SOURCE_PREVIEW_TOO_LARGE: "Strona źródła jest zbyt duża do podglądu. Użyj „Otwórz w źródle”."
 };

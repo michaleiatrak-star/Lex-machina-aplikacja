@@ -1245,7 +1245,8 @@ describe("SafeSessionExecutor", () => {
         caseSignature: "III CZP 25/11",
         evidenceHash: "22222222222222222222",
         supportQuoteHash: "11111111111111111111",
-        supportQuote: "backend-only exact support text",
+        // A verified passage of a public judgment: shown and marked in the full-text preview.
+        supportQuote: "dokładny fragment uzasadnienia sprawdzony w tekście SN",
         evidence: "backend-only relation note"
       }
     ]);
@@ -1262,7 +1263,8 @@ describe("SafeSessionExecutor", () => {
         caseScope: "PROPOSITION_SUPPORT",
         caseSignature: "III CZP 25/11",
         evidenceHash: "22222222222222222222",
-        supportQuoteHash: "11111111111111111111"
+        supportQuoteHash: "11111111111111111111",
+        passage: "dokładny fragment uzasadnienia sprawdzony w tekście SN"
       })
     ]);
 

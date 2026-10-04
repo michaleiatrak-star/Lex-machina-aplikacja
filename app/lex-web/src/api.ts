@@ -947,6 +947,8 @@ export type EvidenceItem = {
   caseSignature?: string;
   evidenceHash?: string;
   supportQuoteHash?: string;
+  // Fragment orzeczenia sprawdzony w oficjalnym tekście (zaznaczany w podglądzie).
+  passage?: string;
 };
 
 export type MandatoryPathStep = {
@@ -3530,6 +3532,24 @@ export function previewProvision(claim: string, sourceUrl?: string): Promise<Pro
     method: "POST",
     body: JSON.stringify({ claim, ...(sourceUrl ? { sourceUrl } : {}) })
   });
+}
+
+export type CaseLawPreview = {
+  url: string;
+  html: string;
+  anchor: string;
+  match: "EXACT" | "PARTIAL" | "SIGNATURE" | "NONE";
+  chars: number;
+};
+
+// Pełny tekst orzeczenia/interpretacji z oficjalnego źródła, cytowany fragment zaznaczony.
+export function previewCaseLaw(input: {
+  sourceUrl: string;
+  passage?: string;
+  signature?: string;
+  attributed?: string;
+}): Promise<CaseLawPreview> {
+  return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {
