@@ -39,6 +39,9 @@ describe("sections executed by the application", () => {
     expect(compactForModel(text, true).text).toContain("## ZOSTAJE\nTreść.");
     expect(compactForModel(text, false).text).toBe(text);
     expect(compactForModel("# Bez znaczników", true).compacted).toEqual([]);
+    expect(compactForModel("<!-- lex:wykonuje-aplikacja: HISTORIA -->\n## HISTORIA ZMIAN\n- 1.0 opis", true).text).toBe(
+      "## HISTORIA ZMIAN [pominięte: historia zmian pliku (metadane audytu)]\n"
+    );
   });
 });
 

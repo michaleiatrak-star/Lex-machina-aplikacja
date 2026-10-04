@@ -17,7 +17,9 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   "WERYFIKACJA-ELI": "odczyt przepisów w ELI i rejestr weryfikacji powołań",
   G8: "znaczniki statusu powołań i bramka końcowa HARD GATE (G8)",
   DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",
-  "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi"
+  "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi",
+  // Not a procedure: the file's change history, kept in the file for the audit.
+  HISTORIA: "historia zmian pliku (metadane audytu)"
 };
 
 const MARK = /^<!--\s*lex:wykonuje-aplikacja:\s*([A-Z0-9-]+)\s*-->\s*$/u;
@@ -50,9 +52,13 @@ export function compactForModel(
     }
     const removed = lines.slice(index, end).join("\n");
     out.push(
-      `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
-      `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
-      ""
+      ...(component === "HISTORIA"
+        ? [`${heading[1]} ${heading[2]} [pominięte: ${APP_COMPONENTS[component]}]`, ""]
+        : [
+            `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
+            `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
+            ""
+          ])
     );
     compacted.push({ heading: heading[2]!.slice(0, 90), component, chars: removed.length });
     index = end - 1;
