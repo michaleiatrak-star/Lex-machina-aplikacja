@@ -92,6 +92,22 @@ function fakeEli(
 }
 
 describe("core law index", () => {
+  it("reads 'Nr X, poz.' and 'a i b' lists, and re-reads the maps after a skill update", () => {
+    const root = corpus();
+    fs.writeFileSync(
+      path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"),
+      "| Timeshare | Dz.U. 2011 Nr 230, poz. 1370 | x | ✅ |\n| KK | nowelizacje Dz.U. 2026 poz. 760, 882 i 901 | x | ✅ |\n"
+    );
+    expect(extractCoreActs(root).map((act) => act.eli)).toEqual(expect.arrayContaining(["DU/2011/1370", "DU/2026/760", "DU/2026/882"]));
+    const index = new CoreLawIndex(tempDir("lex-core-reload-"));
+    index.load(root);
+    expect(index.reloadMapsIfChanged()).toEqual([]);
+    const map = path.join(root, "dr-03-karne", "MAPA-AKTOW.md");
+    fs.appendFileSync(map, "\n| Taryfikator | Dz.U. 2013 poz. 1624 t.j. | `mod-x` | ✅ |\n");
+    fs.utimesSync(map, new Date(), new Date(Date.now() + 5_000));
+    expect(index.reloadMapsIfChanged()).toEqual(["DU/2013/1624"]);
+  });
+
   it("collects every Dz.U. act from the domain maps and the routing map", () => {
     const acts = extractCoreActs(corpus());
     expect(acts.map((act) => act.eli)).toEqual([

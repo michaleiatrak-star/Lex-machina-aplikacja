@@ -206,8 +206,9 @@ const USE_CHECK_TIMEOUT_MS = 15_000;
 const ANCHOR_UPGRADES_PER_RUN = 5;
 const NOTE_CHARS = 400;
 
+// "Dz.U. 2011 Nr 230, poz. 1370", "Dz.U. 2026 poz. 421, 638 i 901", "Dz.U. z 2024 r. poz. 1".
 const REF_PATTERN =
-  /Dz\.\s?U\.\s?(?:z\s)?(\d{4})\s?(?:r\.\s)?(?:nr\s\d+\s)?poz\.\s?(\d+)((?:\s*,\s*(?:\d{4}\s?poz\.\s?)?\d+(?!\d|\.\d))*)(\s*t\.\s?j\.)?/g;
+  /Dz\.\s?U\.\s?(?:z\s)?(\d{4})\s?(?:r\.\s?,?\s?)?(?:[Nn]r\s?\d+\s?,?\s)?poz\.\s?(\d+)((?:\s*(?:,|\si)\s*(?:\d{4}\s?poz\.\s?)?\d+(?!\d|\.\d))*)(\s*t\.\s?j\.)?/g;
 
 function cleanNote(line: string): string {
   return line
@@ -276,7 +277,7 @@ export function extractCoreActs(corpusRoot: string): CoreActRef[] {
         const consolidated = Boolean(match[4]) && tail.trim() === "";
         add(`DU/${year}/${Number(match[2])}`, consolidated, domain, label, note);
         let currentYear = year;
-        for (const item of tail.split(",").map((part) => part.trim()).filter(Boolean)) {
+        for (const item of tail.split(/,|\si\s/).map((part) => part.trim()).filter(Boolean)) {
           const withYear = /^(\d{4})\s?poz\.\s?(\d+)$/.exec(item);
           if (withYear) {
             currentYear = withYear[1]!;
@@ -575,7 +576,43 @@ export class CoreLawIndex {
     private readonly ocr: OcrEngine | null = null
   ) {}
 
+  private corpusRoot: string | null = null;
+  private mapsSignature = "";
+
+  // Size and mtime of every act map: a skill update changes it.
+  private static mapsSignatureOf(corpusRoot: string): string {
+    return mapFiles(corpusRoot)
+      .map(({ file }) => {
+        try {
+          const stat = fs.statSync(file);
+          return `${file}:${stat.size}:${stat.mtimeMs}`;
+        } catch {
+          return `${file}:-`;
+        }
+      })
+      .join("|");
+  }
+
+  /**
+   * After a skill update the act maps change: the act list is read again, so new
+   * acts are downloaded on the next refresh (not only after a restart).
+   * Returns the ELIs added.
+   */
+  reloadMapsIfChanged(): string[] {
+    if (!this.corpusRoot) return [];
+    const signature = CoreLawIndex.mapsSignatureOf(this.corpusRoot);
+    if (signature === this.mapsSignature) return [];
+    const before = new Set(this.refs.map((ref) => ref.eli));
+    const adopted = this.refs.filter((ref) => (this.state.adopted ?? []).some((item) => item.eli === ref.eli));
+    this.refs = extractCoreActs(this.corpusRoot);
+    for (const ref of adopted) if (!this.ref(ref.eli)) this.refs.push(ref);
+    this.mapsSignature = signature;
+    return this.refs.map((ref) => ref.eli).filter((eli) => !before.has(eli));
+  }
+
   load(corpusRoot: string): void {
+    this.corpusRoot = corpusRoot;
+    this.mapsSignature = CoreLawIndex.mapsSignatureOf(corpusRoot);
     this.refs = extractCoreActs(corpusRoot);
     fs.mkdirSync(this.directory, { recursive: true });
     try {
@@ -1134,6 +1171,7 @@ export class CoreLawIndex {
   }
 
   private async refreshAll(options: RefreshOptions = {}): Promise<void> {
+    this.reloadMapsIfChanged();
     if (
       !options.force &&
       this.state.blockedUntil &&
