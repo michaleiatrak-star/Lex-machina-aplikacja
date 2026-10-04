@@ -28,6 +28,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { sygnal, owinSerwer, budzetWyczerpany } from "../wspolne/budzet.mjs";
 
 const KRS_BASE_URL = "https://api-krs.ms.gov.pl/api/krs";
 // „Otwórz w źródle”: oficjalna wyszukiwarka KRS (prs.ms.gov.pl to aplikacja JavaScript bez treści
@@ -37,7 +38,7 @@ export const KRS_WYSZUKIWARKA = "https://wyszukiwarka-krs.ms.gov.pl/";
 // ORLEN NIP 7740001454 i REGON 610188201 → 0000028860). Otwarte API KRS nie ma wyszukiwania po NIP/REGON.
 const WL_API = "https://wl-api.mf.gov.pl/api";
 
-const server = globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "krs-connector", version: "1.1.0" });
+const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "krs-connector", version: "1.1.0" }));
 
 // ⛔ POPRAWKA 2026-09-27q (AUDYT-2026-09-27q) — zmierzone na żywym API KRS:
 //  (1) tylko rejestr=P → fundacje i stowarzyszenia (rejestr S) dawały NOT_FOUND jak nieistniejący podmiot
@@ -123,7 +124,7 @@ async function pobierzZKrs(numerKrs) {
   for (const rejestr of ["P", "S"]) {
     for (let proba = 1; proba <= 3; proba++) {
       try {
-        const resp = await fetch(`${KRS_BASE_URL}/OdpisAktualny/${numerKrs}?rejestr=${rejestr}&format=json`, { signal: AbortSignal.timeout(20000) });
+        const resp = await fetch(`${KRS_BASE_URL}/OdpisAktualny/${numerKrs}?rejestr=${rejestr}&format=json`, { signal: sygnal(20000) });
         if (resp.status === 404) { ostatni = null; break; }
         if (!resp.ok) throw new Error(`API KRS zwróciło HTTP ${resp.status}`);
         return await resp.json();
@@ -152,7 +153,7 @@ export function nipPoprawny(nip) {
 /** Numer KRS z wykazu podatników VAT po NIP albo REGON (9 cyfr; 14-cyfrowy skracany do 9). */
 async function krsZWykazu(rodzaj, wartosc) {
   const dzis = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
-  const resp = await fetch(`${WL_API}/search/${rodzaj}/${wartosc}?date=${dzis}`, { signal: AbortSignal.timeout(20000) });
+  const resp = await fetch(`${WL_API}/search/${rodzaj}/${wartosc}?date=${dzis}`, { signal: sygnal(20000) });
   const dane = await resp.json().catch(() => null);
   if (!resp.ok && resp.status !== 400) throw new Error(`Wykaz podatników VAT HTTP ${resp.status}`);
   const s = dane?.result?.subject ?? null;

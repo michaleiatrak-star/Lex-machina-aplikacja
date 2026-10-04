@@ -8174,7 +8174,7 @@ wybrał wyłącznie F-12 do objęcia w tej rundzie).
 **Zakres:** Skill proceduralny `przesluchanie-swiadkow-v2-min90` +
 zależność `shared/MOD-SKAN-DOWODOW-KOMPLETNY.md`. Nie dotyczy mapy Dz.U.
 
-**Sprawa:** XI P 27/26, świadek Maria Koroleva.
+**Sprawa:** XI P 27/26, świadek [ŚWIADEK-K].
 
 ### 1. INCYDENT
 
@@ -9729,7 +9729,7 @@ procesowego dot. Sharmy/rekrutacji.
    W 633/25) — pytania właściwe w jednym mogą być nieadmisyjne w innym.
 3. Ocena przesłanki "czy oferowanie pracy było w zakresie obowiązków"
    pominęła własne pismo procesowe użytkownika oraz transkrypt zeznań
-   Marii Koroleva, oba już dostępne w tym samym archiwum, oba wprost
+   [ŚWIADEK-K], oba już dostępne w tym samym archiwum, oba wprost
    potwierdzające tę przesłankę.
 4. Brak systematycznego wydobywania z dostępnych transkryptów wcześniejszych
    przesłuchań tego samego świadka: przyznanych faktów, sprzeczności i
@@ -69463,3 +69463,214 @@ dziedziczony z katalogu nadrzędnego); lista narzędzi każdego `test_protokol_m
 Alternatywa rozważona i niepotrzebna: scalenie 13 raportów `references/raporty-pokrycia-2026-08-13/` w jeden plik (−12).
 
 `audyt-systemu-v4` 6.152 → **6.153** (209 → 179 plików). Otwarte bez zmian: F-217(b), F-212, F-213, F-210, F-197, F-203(b). Wolny numer: **F-218**.
+
+## AUDYT-2026-10-01 — serwery MCP: poprawność odpowiedzi, budżet czasu, cytator; porównanie z matematicsolutions (6.154)
+
+**Wejście:** paczka użytkownika `mcp-poprawki-audyt-systemu-v4.zip` (patch CBOSA Content-Length + EUREKA `searchInFullPhrase`, `dist` przebudowany). Polecenie: wdrożyć, zbadać analogiczne problemy w pozostałych serwerach i w `@matematicsolutions/*`, w testach brać pod uwagę POPRAWNOŚĆ odpowiedzi. Klucz CEIDG użyty wyłącznie jako zmienna środowiskowa (nigdzie niezapisany; token JWT zawiera PESEL w ładunku — zalecona rotacja).
+
+**Paczka użytkownika:** nakłada się czysto na `main` e795ae4; `dist` zgodny bajtowo ze źródłami (`zbuduj_pakiet.py --sprawdz`). Pomiar lokalny (undici, Node 22): gzip z poprawnym Content-Length — stary kod fałszywy błąd, nowy OK; ucięcie przy Content-Length lub chunked → wyjątek `UND_ERR_SOCKET` już w fetch; ⛔ ucięty gzip BEZ Content-Length (koniec = zamknięcie połączenia) → 4918/30013 B BEZ wyjątku — komentarz patcha był w tym punkcie nieprawdziwy; dodana kontrola `</html>`. EUREKA (żywe API): „akcyza alkohol” tryb słów 3722 trafień, tezy na temat 2/10; tryb frazy 454, 10/10; ⚠️ tryb frazy wrażliwy na szyk („alkohol akcyza” → 8) — zapisane w opisie narzędzia.
+
+**Ustalenia (zmierzone):**
+1. ⛔ Budżet czasu > 60 s klienta MCP: EUREKA zawiesza 25–50% połączeń (curl i Node), pętla 3 × 30 s = 90 s → `-32001 Request timed out`, własny ERROR serwera nie docierał. Ten sam wzorzec: EUR-Lex 120 s, SAOS 135 s, UODO 90 s, PDF ISAP 90 s, WL 60 s. Naprawa: `mcp-servers/wspolne/budzet.mjs` (AsyncLocalStorage; 50 s, `LEX_BUDZET_MS`), wpięty w 11 serwerów; test na zawieszonym serwerze: 50,0 s, komunikat o budżecie.
+2. ⛔ `saos_cytator`: dla III CRN 126/80 werdykt „w 6 z **0** przeskanowanych” mimo 18 pobranych pełnych tekstów (podsumowanie dostawało tablicę bez mapy pełnych tekstów; nieudane pobranie po cichu podstawiało fragment). `test_na_zywo` tego nie łapał (sprawdzał `zakres_skanu`, nie `result`). Po naprawie: „6 z 18”, liczniki nieudanych/pominiętych.
+3. ⛔ Fałszywie ujemny: III CKN 1283/00 krytykuje pogląd III CRN 126/80 („Nie można także uznać za zadowalające odwołanie się do wyroku Sądu Najwyższego z dnia 3 października 1980 r.”) ~2000 zn. od sygnatury, odsyłając DATĄ. Dodane: kotwice datowe (data wyłącznie z tekstu przed sygnaturą; pomijana, gdy za nią stoi inna sygnatura) i wzorzec „nie można uznać za zadowalające/trafne/przekonujące”. Wynik: 7/18, jedyny nowy sygnał = III CKN 1283/00; dwa sygnały wcześniejsze sprawdzone ręcznie na pełnym tekście (II CSK 18/14, II Ca 447/17) — prawdziwe. Przypadek III CKN 1283/00 → „samo odstąpiło” nadal PASS.
+4. SAOS `all=` bez cudzysłowu to AND po tokenach, nie OR („zachowek darowizna” 1968 < „zachowek” 3346); komentarz 27t skorygowany; cudzysłów w `saos_search` byłby szkodliwy („darowizna zachowek” → 4).
+5. Relikty: `main` zawierał 36 plików usuniętych w 6.146/6.153 (instalacja „na nakładkę” — trzecie wystąpienie); T41 FAIL 218. Usunięte ponownie → 182 (+2 nowe pliki tej rundy). README serwerów odsyłały do nieistniejących `test_protokol_mcp.mjs` → `../test_protokol.mjs`.
+
+**Test poprawności (nowy `test_poprawnosci.mjs`):** treść każdej odpowiedzi porównana z niezależnym odczytem: ISAP art. 118 KC == PDF DU/2026/795 przez `pdftotext` (ELI nie ma HTML dla t.j.) i t.j. najnowszy; KRS == surowy odpis; NBP (także sobota) == ostatnia tabela A; WL == surowe API; EUREKA precyzja 10/10 i treść dokumentu == źródło (20 próbek); SAOS fraza 10/10 na pełnych tekstach, sygnatura dokładna, cytator spójny; TSUE == SPARQL Cellar; UODO data i prawomocność == nagłówek dokumentu; CEIDG == lista surowego API. Wynik: 14/15 (CBOSA: 503 bramy — F-213). `test_na_zywo` 29/29 (bez CBOSA), testy offline 11/11, protokół OK, `instaluj_serwery_mcp.py --sprawdz` OK, `dist` zgodny bajtowo.
+
+**matematicsolutions (ta sama metodyka):** `mcp-eureka` 0.2.0 — ⛔ domyślnie tryb słów (tezy 2/10), ⛔ ucięta sygnatura zwraca dokument o innej pełnej sygnaturze bez post-checku, jedna próba 40 s; `mcp-saos` 1.2.0 — fraza poprawna (10/10), ⛔ `saos_cite_check` dla III CRN 126/80: „NADAL CYTOWANY, nie wykryto fraz przełamania” (fałszywie ujemny; co najmniej II CSK 18/14 odstępuje), cite-check bez wspólnego limitu: 40 s + ⌈maxScan/4⌉ × 40 s (domyślnie 120 s, maks. 240 s); `mcp-isap` 1.3.0 — ⛔ wartości `type` w schemacie podwójnie kodowane („RozporzÄ…dzenie”) → skopiowane ze schematu dają „Brak wyników” (34 akty istnieją); treści t.j. tylko-PDF nie zwraca (komunikuje to); `mcp-krs`, `mcp-eu-sparql` — zgodne ze źródłem; `mcp-nsa` — niezmierzony (503). Żaden pakiet nie ponawia żądań. Powiązane: F-212.
+
+**ZASADA 7:** pełny skill `audyt-systemu-v4` (jeden ZIP), PRE-DELIVERY-COMPLETENESS-CHECK z liczbami przed/po. `shared` bez zmian w tej rundzie (archiwum `shared/tools/mcp-servers/mcp-servers-examples.zip` — patrz niżej).
+
+**Propagacja do `shared` (sprawdzone):** `shared/tools/mcp-servers/mcp-servers-examples.zip` zawiera 7 starszych przykładów (bez EUREKA, CBOSA, UODO, WL i bez `saos_cytator`), pojedyncze żądania z limitem 15–20 s, bez pętli prób i bez kontroli Content-Length — żadna z klas błędów tej rundy w nim nie występuje. Produkcyjnym źródłem serwerów jest `audyt-systemu-v4/mcp-servers` (od 6.143). `shared` bez zmian; zgodność ZASADY 7 — jeden pełny skill.
+
+`audyt-systemu-v4` 6.153 → **6.154** (na wejściu z `main` 218 plików, w tym 36 reliktów; po wydaniu 182 = 180 plików wydania 6.153 [179 z sumami + `CHECKSUMS.sha256`] + `mcp-servers/wspolne/budzet.mjs` + `mcp-servers/test_poprawnosci.mjs`). Otwarte bez zmian: F-217(b), F-212 (uzupełniona o wyniki powyżej), F-213 (kryterium rozszerzone), F-210, F-197, F-203(b). Wolny numer: **F-218**.
+
+**T34 (paczki `WERSJA ROZWOJOWA/`) — ustalenie poza zakresem zmian:** na `main` T34 FAIL (94 rozbieżności). Przyczyny: (a) `audyt-systemu-v4.zip` to wydanie 6.152; (b) ⛔ `shared.zip` NIE zawiera `shared` — jego jedynym katalogiem głównym jest `audyt-systemu-v4/` (wydanie 6.153), stąd ostrzeżenie „shared/ bez paczki” i rozbieżności przypisane audytowi. Z paczką tego wydania w miejscu `audyt-systemu-v4.zip` i bez błędnego `shared.zip`: T34 PASS (0 rozbieżności, 31 skilli). Do decyzji użytkownika: odbudować `shared.zip` z drzewa `shared/` (ZASADA 7, osobna paczka).
+
+## AUDYT-2026-10-01b — przyczynowość: badanie, szacowanie, przewidywanie, wykazanie; graf przyczynowy (6.155)
+
+**Pytanie użytkownika:** czy system bada, szacuje, przewiduje i wykazuje związki przyczynowo-skutkowe oraz czy potrafi zbudować sieć zależności zdarzeń z ich wzajemnym wpływem. **Polecenie po raporcie:** wdrożyć.
+
+**Stan zastany (pomiar na `main` 1ef6319, 32 skille):**
+- BADANIE — istniało tekstowo: MP13 (7 typów łańcuchów, *post hoc*, wersja przeciwnika), MET-PT (dowód bezpośredni / pośredni / tylko korelacja), art. 361 KC (11 plików), art. 362 KC (11). Brak: test csqn (0 plików), przerwanie związku (0), przyczynowość alternatywna/kumulatywna (0), obiektywne przypisanie (0), „normalne następstwa” (1).
+- SZACOWANIE — skale 1–10 i „[%]” (analiza-sadowa-v6 §9, MP4) bez metody. ⛔ `shared/MOD-LANCUCH-DOWODOWY.md` „ZASADA KLUCZOWA”: lista 3 niezależnych dowodów po 0,9 miała dawać 0,27 (73% szans obalenia), wniosek „łańcuch silniejszy niż suma składowych” — rachunek odwrócony: równolegle 1 − 0,1³ = 0,999, szereg 0,9³ = 0,729 (słabszy niż każde ogniwo). Sprzeczne z MP13 („zerwanie jednego ogniwa obala cały łańcuch”). Moduł zasila pisma-procesowe-v3 W1.3.
+- PRZEWIDYWANIE — tylko wynik końcowy (wariant główny/alternatywny); brak „co jeśli”.
+- WYKAZANIE — tylko tekst; schemat zdarzenia chronologii bez ID i bez pól przyczyny/skutku; ID faktów M1 (F-nnn) i zdarzeń chronologii w osobnych przestrzeniach — łańcucha nie dało się powiązać z osią czasu.
+- ⛔ MET-PT: integracja zadeklarowana jednostronnie (pisma-procesowe-v3 W1.3, chronologia) — żaden z tych skilli ani analizator-dowodow-v3 nie wczytywał `MOD-METODY-BADAWCZE.md`; osiągalny tylko z raport-sytuacyjny-v2.
+- ⛔ Dane osób trzecich z prawdziwej sprawy w publicznym repozytorium: imię i nazwisko świadka (w `shared/CLAIM-VALIDATION.md` z zarzutem dotyczącym zeznań), numer telefonu i nazwa pracodawcy w `chronologia-sprawy-v1/assets/widget-timeline.html`, ten sam świadek w przesluchanie-swiadkow-v2-min90 (SKILL.md, CHANGELOG) i w tym dzienniku. Klasa F-217 (PESEL w fixture). T40 tego nie łapie (wykrywa sekrety i PESEL, nie nazwiska).
+
+**Wdrożone:**
+1. `shared/MOD-GRAF-PRZYCZYNOWY.md` 1.0.0 — model danych (węzły Z-nnn + `fakt_m1`; krawędzie WYWOLUJE/WARUNKUJE/WZMACNIA/OSLABIA/PRZERYWA; bramy I/LUB; jawne `sprawca` / `przyczynienie` / `obowiazek_dzialania`), trzy ustalenia na krawędź (MET-PT, csqn, przypisanie: art. 361 § 1, 362, 441 KC — brzmienia z ELI, t.j. Dz.U. 2026 poz. 795; art. 2 KK — t.j. Dz.U. 2025 poz. 383, cztery nowelizacje po t.j. sprawdzone: art. 2 bez zmian), jawny model liczbowy z granicami, ogniwa krytyczne, scenariusze, sprzężenia (cykle), formaty wyjścia. Orzecznictwo do testów doktrynalnych wyłącznie przez MCP (`saos_search`, `cbosa_szukaj` 🟨).
+2. `shared/tools/graf_przyczynowy.py` — silnik (MD/JSON/Mermaid; czyta też eksport widgetu), selftest 12/12. ⛔ Wykryte własnym testem przed wydaniem: flaga art. 441 KC powstawała z samej „strony” przodka (skarga pracownika-powoda = „drugi sprawca”) → flagi prawne tylko z jawnych oznaczeń + przypadek kontrolny.
+3. `chronologia-sprawy-v1` 1.13 — `id` i `przyczyny` w schemacie zdarzenia; TRYB C; `assets/widget-graf-przyczynowy.html` (SVG, oś X = daty, wiersze = wątki, kliknięcie = obalony/udowodniony, przeliczenie na żywo, MOD-WIDGET-IO JSON/MD). Uruchomiony w jsdom: 0 błędów JS; przykład: teza 0,72, po obaleniu Z-003 → 0,12 — identycznie jak silnik Python.
+4. `analizator-dowodow-v3` 5.16.18 — MP13 §13.2a i rachunek siły łańcucha; E1 wskazuje graf.
+5. `MOD-LANCUCH-DOWODOWY` 1.0.1 — rachunek poprawiony; `MOD-METODY-BADAWCZE` — MET-PT jako atrybut krawędzi grafu (realna ścieżka wywołania).
+6. T42 `scripts/check_graf_przyczynowy.py` (BLOKER) — selftest, parytet Python↔JS (4 grafy, ±1e-6), regresja formuły, podpięcia.
+7. Anonimizacja: [ŚWIADEK-K]/[ŚWIADEK-P], [PRACODAWCA], [TELEFON] w 7 plikach 4 skilli (shared, chronologia, przesłuchanie, ten dziennik). ⚠️ Historia gita nadal zawiera te dane — usunięcie wymaga przepisania historii (np. `git filter-repo`) i prośby do GitHub o wyczyszczenie pamięci podręcznej; decyzja użytkownika.
+
+**Czego graf NIE robi (jawnie):** nie zastępuje oceny materiału (pewność węzłów, dowód połączenia, csqn wprowadza analiza — MP13 §13.7); liczby zakładają niezależność ogniw i są skalą porządkową, nie statystyką orzeczniczą; nie liczy procentu „szans wygranej”. Predykcja analiza-sadowa-v6 §9 nadal nie ma metody — do decyzji, czy wiązać ją z grafem (osobna zmiana skilla).
+
+**Relikty:** aktualizacja 6.154 na `main` znowu nałożona na stary katalog — 36 plików wróciło (T41 FAIL 218). Usunięte ponownie → 183 (182 z 6.154 + T42).
+
+**ZASADA 7:** pięć osobnych pełnych paczek: `shared` 3.99, `chronologia-sprawy-v1` 1.13, `analizator-dowodow-v3` 5.16.18, `przesluchanie-swiadkow-v2-min90` 3.30, `audyt-systemu-v4` 6.155; PRE-DELIVERY-COMPLETENESS-CHECK osobno dla każdej. Wolny numer flagi: **F-218**.
+
+**Suita na wydaniu (poza zakresem tej zmiany):** T39 FAIL także na `main` 1ef6319 — `shared/tools/kontrakt_rachunek.py` i jego testu nie ma w ŻADNYM commicie repozytorium (wydanie 6.151/F-215 nie trafiło do gita), a `analizator-umow-v1` (SKILL.md, 2 workflowy, `mod-shared-ryzyko-kwant.md`) i T39 się do niego odwołują. Do decyzji użytkownika: wgrać plik z paczki 6.151, jeśli jest u niego, albo odbudować. T34 na `main`: paczki w `WERSJA ROZWOJOWA/` nieaktualne, `shared.zip` zawiera katalog `audyt-systemu-v4` (AUDYT-2026-10-01).
+
+**Uzupełnienie AUDYT-2026-10-01b — `kontrakt_rachunek.py` odtworzony (T39).** Na polecenie użytkownika przeszukano historię rozmów: plik powstał w sesji AUDYT-2026-09-29 („Porównanie z Lex Machina i integracja CEIDG”). Odtworzony 1:1 z zapisu: utworzenie + trzy późniejsze edycje (wykaz załączników w 2 liniach; podkomenda `cytaty`; usunięcie martwego kodu w `oblicz`) oraz test w ostatecznym brzmieniu (z korektą „3/5”). Jedyna niepewność rekonstrukcji: separator tysięcy w `CYFRY`/`_cyfra` — w zapisie widoczny jako dwa znaki odstępu; przyjęto U+00A0 i U+202F (spacje niełamiące), zwykłej spacji nie (inaczej sąsiednie liczby zlewałyby się w jedną). Weryfikacja: 13/13 testów, T39 5/5 na korpusie (05: i3 i i6 wykryte; 01: zero alarmów; 04: 5 par zgodnych). ⚠️ Wpisy z 2026-09-29 mówią o 14 testach; zapis sesji zawiera 13 metod testowych — liczba skorygowana w REGRESSION-TEST-PLAN. Tamta sesja wydała też shared 3.99 z wierszem CEIDG v3 w `DOSTEP-MASZYNOWY-API.md` — również nieobecnym na `main`; odtworzony. Numer 3.99 użyty raz: wydanie tej rundy zawiera oba zestawy zmian. T39: FAIL → PASS.
+
+
+## AUDYT-2026-10-02 — konektor KIO; scalenie paczki użytkownika; rewizja ekspercka modelu przyczynowo-skutkowego i wykluczeniowego (6.156)
+
+**Wejście:** `lex-mcp-kio.zip` (konektor `kio-example`, zmiany w serwerach CBOSA, CEIDG, KRS, NBP, WL, instalatorze, `lex-mcp.js`, manifeście, testach; poprawka `orzeczenia-sadowe-v2/tools/cbosa_parser.py`). Polecenie: poprawić konektor i zbadać, czy model przyczynowo-skutkowy i wykluczeniowy odpowiada wiedzy eksperckiej; jeśli nie — poprawić.
+
+**Scalenie.** Paczka powstała na drzewie sprzed 6.154: brak `wspolne/budzet.mjs`, cytator SAOS z błędem „6 z 0”, 36 reliktów (`package.json`, `package-lock.json`, `test_protokol_mcp.mjs` w katalogach serwerów). Wgranie jej wprost cofnęłoby 6.154–6.155. Wykonano scalenie trójstronne: baza = e795ae4 + patch użytkownika z 6.154; „nasze” = 6.155; „ich” = paczka. 13 plików scalonych, konflikty w CEIDG (limit 45 s użytkownika → przez `sygnal()`) i NBP (tabela C użytkownika + `sygnal()`); `krs-example` — nowy `AbortSignal.timeout` z paczki zamieniony na `sygnal()`. Relikty z paczki pominięte (T41).
+
+**Konektor KIO — pomiar na żywym portalu (piaskownica, 2026-10-02):** `POST /Home/GetResults` działa i `Sign` filtruje dokładnie (KIO 82/18 → 1; KIO 99999/18 → 0) — wniosek F-185 „Sign nie filtruje” dotyczył `GET /Home/Search`, który w ogóle nie niesie wyników. Wady znalezione i naprawione: (1) sprawy łączone mają sygnatury rozdzielone `|` (np. „KIO 2304/23|KIO 2306/23”) — podział po `,;` dawał fałszywe OUT_OF_SCOPE dla KIO 2306/23; (2) metryka wyroku sądu ma etykietę „Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia” — parser zwracał puste sygnatury, identyfikator „id 8893”; (3) KIO 4983/25 ma w metryce i w treści „7 grudnia 2026” (data z przyszłości) — narzędzie oddaje datę ze źródła z `ostrzezenie_daty`; (4) 2 × 40 s > 60 s klienta — budżet wspólny; (5) `przepisy_pzp`/`zagadnienia` rozdzielane także `;`. Dodane `kio_kontrola_sadowa`: wyszukiwanie frazą sygnatury KIO w SO/SA/SN i post-check po polu „Sygnatura KIO” metryki; KIO 44/12 → SO Rzeszów I Ca 117/12 „zmienia” (potwierdzone w treści wyroku). Podstawa: art. 579 ust. 1 i art. 580 ust. 1 Pzp (t.j. Dz.U. 2026 poz. 793, bez zmian po t.j.; brzmienie z ELI). Ograniczenie jawne: baza UZP nie jest kompletna — brak trafienia = OUT_OF_SCOPE, nie dowód prawomocności.
+
+**Rewizja ekspercka — model przyczynowo-skutkowy (MOD-GRAF-PRZYCZYNOWY 1.0.0 → 1.1.0).** Ocena wobec doktryny przyczynowości i metodologii dowodowej. Braki 1.0.0: (a) test csqn traktowany jako rozstrzygający — przy przyczynowości kumulatywnej/nadmiarowej (dwie przyczyny, każda wystarczająca) dawał „NIE” dla obu i silnik zerował obie krawędzie, czyli skutek „bez przyczyny”; dodano `csqn: NESS`; (b) zaniechanie liczone jak działanie — brak testu hipotetycznego (czy działanie zgodne z obowiązkiem zapobiegłoby skutkowi); (c) w prawie karnym tylko art. 2 KK — brak obiektywnego przypisania (stworzenie/zwiększenie ryzyka i jego realizacja w skutku) i reguły art. 5 § 2 KPK dla wątpliwości; (d) brak reguł ciężaru dowodu (art. 6 KC, art. 232 KPC) i domniemania faktycznego (art. 231 KPC) jako podstawy połączeń pośrednich; (e) brak modelu wykluczeniowego — połączenie z samej kolejności lub pośrednie przechodziło bez zbadania przyczyn alternatywnych; (f) brak kontroli niezależności dowodów w bramie LUB (ten sam dokument liczony jako dwa niezależne). Brzmienia: art. 5 KPK (t.j. Dz.U. 2026 poz. 490; 5 nowelizacji po t.j. sprawdzonych — art. 5 bez zmian), art. 6 KC (Dz.U. 2026 poz. 795), art. 231–232 KPC (Dz.U. 2026 poz. 468; 4 nowelizacje sprawdzone — bez zmian) — przez `isap_tekst`. Model liczbowy wsparcia bez zmian (parytet z widgetem utrzymany).
+
+**Rewizja ekspercka — model wykluczeniowy (MET-ACH).** Wzorzec: R. J. Heuer, „Psychology of Intelligence Analysis” (1999), rozdz. 8. Braki: tylko wersje stron jako hipotezy; ocena „POTWIERDZA/WYKLUCZA” myląca zgodność z rozstrzygnięciem; liczenie niespójności bez wagi dowodu; brak odrzucania dowodów niediagnostycznych; brak analizy wrażliwości (dowody krytyczne), kamieni milowych i nakładki procesowej. Przepisany wg 8 kroków; silnik `graf_przyczynowy.py --ach` (ważona niespójność, dowody niediagnostyczne i krytyczne, hipotezy wykluczone dowodem A/B, flagi art. 6 KC / art. 5 § 2 KPK). Powiązany z grafem (§5a): hipotezy o przyczynie = węzły alternatywne.
+
+**Testy:** selftest silnika 20/20 (8 nowych przypadków), T42 PASS (parytet Python↔JS bez zmian), KIO offline (fragmenty prawdziwych odpowiedzi) + na żywo 7/7, poprawność 15/15, `orzeczenia-sadowe-v2` pytest 25/25 + port JS 26/26.
+
+**Wydanie (ZASADA 7):** `audyt-systemu-v4` 6.156, `shared` 3.99.1, `orzeczenia-sadowe-v2` 2.21 (+ bez zmian od poprzedniej tury: `chronologia-sprawy-v1` 1.13, `analizator-dowodow-v3` 5.16.18, `przesluchanie-swiadkow-v2-min90` 3.30). Wolny numer flagi: **F-218**.
+
+---
+
+## AUDYT-2026-10-03 — naprawa przedawnienia z OC (dr-02), podtabela ORA (dr-12), wydanie wg ZASADY 7, relikty nakładki (6.157)
+
+**Tryb:** TARGETED (`dr-02`, `dr-12`) + FAZA 7A/7C, na polecenie „wykonaj aktualizacje zgodnie z regułą 7 audytu systemu”.
+
+### 1. STATUS OGÓLNY
+Trzy pełne paczki: `dr-02-prawo-cywilne-rodzinne-gospodarcze` 3.60, `dr-12-sadownictwo-prokuratura-zawody-prawnicze` 4.20, `audyt-systemu-v4` 6.157. Każda przez `scripts/dostarcz_skill.sh` (oryginał = kopia = ZIP) i rozpakowanie kontrolne (`diff -rq` pusty).
+
+### 2. NAPRAWY WYKONANE (CRIT)
+- **ZASADA 7 — naruszenie w poprzedniej turze tej sesji (CRIT).** Naprawy F-218/F-219 dostarczono jako luźne `.md` + patch, bez wyraźnego potwierdzenia dewelopera, że chce tylko patcha. Dodatkowo edycje wykonano w `SKILL_SOURCE` (katalog zainstalowanych pluginów), nie w `WORK_COPY`. Naprawione tym wydaniem: edycje przeniesione do kopii roboczej, luźne pliki usunięte z katalogu wyjściowego, dostarczone wyłącznie pełne ZIP-y.
+- **F-218 (otwarta i zamknięta 2026-10-03).** `dr-02/modules/mod-KC-ubezpieczenia.md`, STRATEGIA pkt 5: „3-letni termin przedawnienia (art. 819 KC), liczony od ostatniej decyzji lub zakończenia postępowania likwidacyjnego” — sprzeczne z tabelą TERMIN PRZEDAWNIENIA tego samego modułu (art. 819 § 3 → art. 442¹ dla OC) i z art. 819 § 4 (bieg od otrzymania na piśmie oświadczenia ubezpieczyciela). Nowe brzmienie rozdziela umowę własną (§ 1) i OC (§ 3 → 442¹ / 118). ✅ [VER: api.sejm.gov.pl ELI DU/2026/795, 2026-10-03]; zero nowelizacji KC po t.j. (`/eli/acts/DU/1964/93/references`, 2026-10-03). Wykrycie: audyt cudzego tekstu (router kat. [11]) — moduł był powołany w poście jako źródło analizy.
+- **F-219 (otwarta i zamknięta 2026-10-03).** `dr-12/modules/mod-ustawa-odpowiedzialnosc-dyscyplinarna-zawodow.md`, podtabela ORA: brak Łodzi (izba nr 11 z 24 na liście NRA — `adwokatura.pl/izby-adwokackie/`, RZĄD 1) i licznik „9 z 24” przy 8 wymienionych izbach. Łódź sprawdzona bezpośrednio (`lodz.adwokatura.pl`: strona główna, mapa WordPress — 106 stron + wpisy, „Samorząd”): ❌, jedyny materiał to komunikat rzecznika z 9.12.2016 o wszczęciu (RD 84/16). Kielce: przesłanka polecenia („nowa ORA”) **nieprawdziwa** — poz. 7 listy NRA, w podtabeli od tury IX; wykonana rewalidacja (`ora.kielce.pl`: menu, mapa, „Władze ORA”, „Uchwały”, pełna paginacja „Komunikaty” 13 str., „Aktualności” 15 str., „Informacje”, „Z życia Izby”, wzorce „SD nr/rok”, „wydalenie”, „orzeczenie”) — ❌ potwierdzone; wiersz wydzielony z 👁 OBSERWACJĄ. Stan podtabeli: 16/24 sprawdzonych bezpośrednio, 15/16 negatywnie, 1/16 (Poznań) wybiórczo.
+- **F-222 (otwarta i zamknięta 2026-10-03).** Kopia `audyt-systemu-v4` zainstalowana w claude.ai: 223 pliki → **T41 FAIL**, `dostarcz_skill.sh` odmówiłby spakowania. Przyczyna: 36 reliktów wskrzeszonych instalacją „na nakładkę” — 6 plików `references/` usuniętych w 6.146 (mapa_dzu_2026-06-14, PRZETERMINOWANE-TJ-2026-09-10, F-135-cross-check…, F-187-dostep-maszynowy…, PRZEGLAD-MAP-ELI-2026-09-01i, AUDYT-PRZERWANYCH-ETAPOW-2026-08-28) i 30 plików `mcp-servers/*/{package.json,package-lock.json,test_protokol_mcp.mjs}` usuniętych w 6.153. Każdy sprawdzony w CHANGELOG (wymóg T21), zero aktywnych odwołań poza samymi reliktami. Usunięte: 223 → 187. To trzecie udokumentowane wskrzeszenie po 6.146 i 6.149 — instalacja nadal wykonywana nakładką, nie zastąpieniem katalogu.
+
+### 3. OSTRZEŻENIA (WARN)
+- **F-220 (nowa, otwarta)** — `shared/DISCLAIMER.md`: szablony bez „ze zm.” przy Prawie o adwokaturze (t.j. 2024/1564; po t.j.: 2025/1172, 2026/370, 2026/846) i ustawie o radcach prawnych (t.j. 2024/499; po t.j. także 2026/731) — ELI `/references`, 2026-10-03. Poza zakresem tej tury (wymaga wydania `shared`).
+- **F-221 (nowa, otwarta)** — T21 na kopii zainstalowanej: `SKILL.md` niezgodny z sumą w 32/32 skillach, reszta plików zgodna. Korekta poprzedniej tury tej sesji: rozjazd przedstawiono tam jako „wcześniej istniejący w dr-02 i dr-12” — w rzeczywistości jest systemowy. W trzech paczkach tego wydania sumy `SKILL.md` przeliczone dla treści dostarczanej.
+- `shared`: 197 plików (T41 WARN, zapas 2) — bez działania w tej turze.
+
+### 4. WERYFIKACJA Dz.U.
+Dz.U.: brak nowych t.j. w zakresie tej sesji (KC t.j. 2026/795, u.u.o. t.j. 2026/783 — zero nowelizacji po t.j.) — mapa bez zmian (ostatnia: `mapa_dzu_2026-09-22.md`).
+
+### 4C. TREŚĆ MERYTORYCZNA MODUŁÓW
+F-218 jak w § 2. Pozostała treść `mod-KC-ubezpieczenia` (tabela przedawnienia, actio directa) odczytana w ELI w tej sesji bez rozbieżności.
+
+### 5. STRUKTURA SYSTEMU — SNAPSHOT
+`dr-02` 94 pliki (bez zmian liczby), `dr-12` 22 (bez zmian), `audyt-systemu-v4` 187 (−36 reliktów). Suita `run_regression_suite.py` na kopii roboczej (32 skille): wszystkie testy PASS poza **T22** (⛔, stan zastany — ten sam zestaw 9 skilli przed i po wydaniu; 121 → 115 rozjazdów wyłącznie przez usunięcie reliktów F-222; dr-02 i dr-12 bez rozjazdów) oraz T4/T5 (ręczne). T21 dla trzech skilli wydania: komplet i zgodność. T41 PASS (`shared` 197 — WARN). T22 przypisany do F-221 (hipoteza normalizacji frontmatteru przez hosta).
+
+### 6. WNIOSKI I ZALECENIA
+1. Instalować paczki przez **zastąpienie** katalogów skilli, nie nałożenie (ZASADA 7, limit i relikty).
+2. F-221 rozstrzygnąć przed kolejnym wydaniem zbiorczym — inaczej T21 na kopii zainstalowanej jest trwale czerwony i traci wartość sygnałową.
+3. Bramka kompletności list per-izba (dr-12): zestawiać z aktualną listą NRA/KRRP przy każdym wniosku „N z 24/19”.
+
+Wolny numer flagi: **F-223**.
+
+---
+
+## AUDYT-2026-10-03b — T22: przyczyna ustalona; frontmatter odtworzony z main; F-221 zamknięta (6.158)
+
+**Tryb:** TARGETED (`audyt-systemu-v4`, `dr-02`, `dr-12`) + FAZA 7A/7C, na polecenie „zajmij się T22”. **Źródło prawdy tej sesji:** klon `main` repozytorium `michaleiatrak-star/Lex-Machina` (HEAD `9330d39`, commit użytkownika z paczkami 6.157/3.60/4.20), nie kopia zainstalowana.
+
+### 1. STATUS OGÓLNY
+T22 na drzewie wydania: **0 rozjazdów (PASS)**. Na `main` przed sesją: 113. Paczki: `audyt-systemu-v4` 6.158, `dr-02` 3.61, `dr-12` 4.21.
+
+### 2. NAPRAWY WYKONANE (CRIT)
+- **F-223 (otwarta i zamknięta 2026-10-03b) — regresja wprowadzona przez wydanie 6.157 tej samej sesji.** Wydania 6.157/3.60/4.20 zbudowano z kopii zainstalowanej w claude.ai (`/mnt/skills/plugins/...`). Host przepisuje frontmatter `SKILL.md` serializatorem YAML: komentarze usunięte, wcięcia list zdjęte, skalary blokowe → ciągi z literalnym `\n`. Skutki na `main` po commicie `9330d39`: frontmatter audytu 290 → 109 linii (cała dokumentacja w komentarzach YAML utracona), dr-02 i dr-12 — utrata komentarza z 2026-09-27e i wcięcia `dependencies.requires`. T22 na `main`: przed `9330d39` **6** rozjazdów (wyłącznie relikty), po — **113** (107 z list bez wcięcia — parser T22 wymaga `^\s+-`, więc widział puste rejestry — plus te same 6 reliktów).
+  **Błędna diagnoza poprzedniego wpisu (AUDYT-2026-10-03 §3, §5) — korekta:** T22 FAIL na kopii zainstalowanej opisano tam jako „stan zastany”, a F-221 jako hipotezę. Stan „zastany” był artefaktem hosta, a wydanie 6.157 przeniosło ten artefakt do repozytorium. Test zgłosił problem poprawnie; zawiodła interpretacja.
+  **Naprawa:** `SKILL.md` trzech skilli odtworzony z `main` sprzed `9330d39` (`git show 9330d39~1:…`) + wyłącznie zamierzone zmiany (`version:`, stopka audytu, wpis tury XII dr-12). Korpus `SKILL.md` audytu porównany: poza stopką identyczny.
+- **F-221 ZAMKNIĘTA.** Porównanie bajtowe 32 skilli kopii zainstalowanej z `main` (`9330d39~1`): poza `SKILL.md` (32/32 różne) wszystkie pliki zgodne; dwa wyjątki (CHECKSUMS dr-02, dr-12) to moje edycje w kopii zainstalowanej z wcześniejszej tury. Przyczyna potwierdzona wprost na routerze (diff frontmatteru: wcięcia, komentarze). Wniosek: T21 i T22 dla `SKILL.md` są miarodajne wyłącznie na repozytorium.
+- **Relikty (F-222 c.d.).** 36 reliktów nadal jest w `main` mimo 6.157 — commit `9330d39` nałożył paczkę na drzewo, a nałożenie nie usuwa plików (225 plików audytu na `main`; T41 i T21 na `main` FAIL). W drzewie wydania usunięte (187). W repozytorium wymagają jawnego `git rm`.
+
+### 3. OSTRZEŻENIA (WARN)
+F-220 bez zmian (otwarta). Wolny numer: **F-224**.
+
+### 4. WERYFIKACJA Dz.U.
+Bez zmian — sesja wyłącznie strukturalna. Mapa: `mapa_dzu_2026-09-22.md`.
+
+### 5. STRUKTURA SYSTEMU — SNAPSHOT
+`audyt-systemu-v4` 187 plików, `dr-02` 94, `dr-12` 22. Zmiany narzędzi: T22 — kontrola D (lista bez wcięcia → jeden błąd z przyczyną, zamiast setek „BRAK WPISU”) i `--selftest`; `dostarcz_skill.sh` — bramka T22 przed pakowaniem; ZASADA 7 — `SKILL_SOURCE` = repozytorium.
+
+### 6. WNIOSKI I ZALECENIA
+1. Instalacja w repozytorium: zastąpić katalogi trzech skilli zawartością paczek **i** usunąć relikty (`git rm`), nie rozpakowywać na istniejące drzewo.
+2. Przed każdym wydaniem z sesji claude.ai: `SKILL.md` brać z `main` (raw), nie z `/mnt/skills/plugins`.
+3. Przy FAIL testu, którego przyczyny nie ustalono, nie wolno oznaczać go jako „stan zastany” bez porównania z repozytorium.
+
+---
+
+## AUDYT-2026-10-03c — F-220 zamknięta (DISCLAIMER 2.2); F-221 dopełniona — tryb kopii zainstalowanej w T21/T22 (6.159, shared 3.99.2)
+
+**Tryb:** TARGETED (`shared`, `audyt-systemu-v4`) + FAZA 7A/7C, polecenie „dalej F-220 i F-221”. Drzewo bazowe: `main` (`9330d39`) + wydanie 6.158/3.61/4.21 z AUDYT-2026-10-03b (jeszcze niewgrane do `main`).
+
+### 1. STATUS OGÓLNY
+Paczki: `shared` 3.99.2, `audyt-systemu-v4` 6.159 (zawiera 6.158). `dr-02` 3.61 i `dr-12` 4.21 z AUDYT-2026-10-03b — bez zmian, nadal aktualne.
+
+### 2. NAPRAWY WYKONANE
+- **F-220 ZAMKNIĘTA.** `shared/DISCLAIMER.md` 2.1 → 2.2: w trzech miejscach (ZASADA GŁÓWNA, LAIK, PRAWNIK) „Dz.U. z 2024 r. poz. 1564 (t.j.)” / „poz. 499 (t.j.)” → „t.j. Dz.U. z 2024 r. poz. 1564, ze zm.” / „… poz. 499, ze zm.” (format PRAWO-HARDGATE). Podstawa: ELI `/references` 2026-10-03c — Pr. adw. po t.j.: 2025/1172, 2026/370, 2026/846; u.r.p.: te same + 2026/731. Jednostki zawężone do art. 4 ust. 1 Pr. adw. i art. 6 ust. 1 u.r.p. (definicje pomocy prawnej); odczyt t.j. 2024/1564 i 2024/499 oraz treści nowelizacji: 2025/1172 dodaje wyłącznie art. 4 ust. 1c i art. 6 ust. 4 (poświadczenia elektroniczne), 2026/846 zmienia art. 6 ust. 4 Pr. adw. (tajemnica), 2026/370 i 2026/731 nie dotykają tych jednostek → ust. 1 obu artykułów w brzmieniu z t.j. ✅ [VER: api.sejm.gov.pl ELI DU/2024/1564, DU/2024/499, DU/2025/1172, DU/2026/846, DU/2026/370, DU/2026/731 text.pdf, 2026-10-03]. W pliku dopisana metryka z datą odczytu i procedura po nowym t.j. Zakres sprawdzony: 16 skilli DR odsyła do wariantu („art. 4 Prawa o adwokaturze / art. 6 u.r.p.”) bez pozycji Dz.U. — bez zmian. Odnotowane bez flagi: `prawo-polskie-v2/ROUTING-MAP.md` w. 705 („Dz.U. 2024 poz. 1564 t.j.”) bez „ze zm.”, choć w. 779 tego samego pliku ma „ze zm.” — tabela routingu, nie szablon wyjścia.
+- **F-221 — dopełnienie (zamknięcie w 6.158 było przedwczesne).** Kryterium zamknięcia w WARN-OTWARTE wymagało, by T21 pomijał `SKILL.md` w trybie kopii zainstalowanej albo weryfikował korpus bez frontmatteru; 6.158 zmieniło tylko T22. Pomiar: 32/32 `SKILL.md` kopii zainstalowanej ≠ `main` (`9330d39~1`) bajtowo, 32/32 frontmatterów równoważnych semantycznie (PyYAML `safe_load`), 32/32 korpusów identycznych. Wdrożone:
+  - T21 — tryb kopii (autodetekcja `plugin:skill` / `--kopia-zainstalowana`; `--repozytorium` wymusza ścisły). Bez `--repo-ref`: ℹ️ „SKILL.md NIEZWERYFIKOWANY” (nie liczy się). Z `--repo-ref`: korpus bajtowo + frontmatter semantycznie, rozbieżność ⛔. `--selftest` 3/3.
+  - T22 — w trybie kopii forma hosta → ℹ️ z adnotacją „wynik nie zastępuje T22 na repozytorium”.
+  - Test na żywych danych (`/mnt/skills/plugins`, ref = `main~1`): 32 × ✅ „różnica wyłącznie formy”; realne rozjazdy widoczne — 36 reliktów audytu oraz ⛔ „korpus ≠ repozytorium” dla `dr-12/SKILL.md`, edytowanego w kopii zainstalowanej w AUDYT-2026-10-03 (poprawne wykrycie). T22 na kopii zainstalowanej: 0 rozjazdów + ℹ️; na repozytorium (tryb ścisły): 0.
+
+### 3. OSTRZEŻENIA (WARN)
+Brak nowych. Wolny numer: **F-224**.
+
+### 4. WERYFIKACJA Dz.U.
+Mapa bez zmian (`mapa_dzu_2026-09-22.md`); akty disclaimera — jak w § 2.
+
+### 5. STRUKTURA SYSTEMU — SNAPSHOT
+`shared` 197 plików (bez zmian liczby; T41 WARN), `audyt-systemu-v4` 187.
+
+### 6. WNIOSKI I ZALECENIA
+1. Wgrać do `main` najpierw relikty (`git rm`, AUDYT-2026-10-03b § 6), potem paczki 6.159, 3.99.2, 3.61, 4.21 przez zastąpienie katalogów.
+2. Zamykając flagę, sprawdzać jej zapisane kryterium zamknięcia punkt po punkcie — F-221 zamknięto w 6.158 na podstawie ustalenia przyczyny, bez części wykonawczej kryterium.
+
+---
+
+## AUDYT-2026-10-04 — TRYB DZU + TREŚĆ: nowelizacja Dz.U. 2026 poz. 1161 (samorządy architektów/inżynierów + Prawo budowlane); rozp. WT budynków po 19.09.2026; relikty F-222 usunięte z repozytorium (6.160)
+
+**Tryb:** DZU (FAZA 3-PULL/3A/3D) + FAZA 3E (MOD-TRESC-MERYTORYCZNA, MOD-PROPAGACJA-NOWELIZACJI) + FAZA 7A/7B/7C, na polecenie: zbadać mapy aktów w modułach DR i `prawo-polskie-v2` pod kątem nowelizacji DU/2026/1161 (wpis z 2026-10-02 podany dwukrotnie — jedna nowelizacja), wprowadzić korekty, wydać skille wg ZASADY 7, wypchnąć wersję rozpakowaną i ZIP-y, zaktualizować sumy kontrolne. **Źródło prawdy:** klon `main` (`94b5e37`), nie kopia zainstalowana (F-223).
+
+### 1. STATUS OGÓLNY
+Wydania: `dr-09` 3.39, `prawo-polskie-v2` 6.33, `shared` 3.99.3, `audyt-systemu-v4` 6.160. Pozostałe skille — bez zmian (dr-12 sprawdzony: wyłącznie routing do DR-09, bez treści dotkniętej nowelizacją).
+
+### 2. NAPRAWY WYKONANE
+**2A. Ustalenia RZĄD 1** (ELI, odczyt 2026-10-04):
+- DU/2026/1161 — ustawa z 31.07.2026, ogł. 1.09.2026, `entryIntoForce` 2026-10-02; art. 5: 30 dni od ogłoszenia, art. 2 pkt 4 (rozdz. 10a PrBud) — od dnia następnego po ogłoszeniu (2.09.2026). `/references`: zmienia DU/2001/42 i DU/1994/414 (data 2026-10-02). ✅ [VER: api.sejm.gov.pl/eli/acts/DU/2026/1161 + text.pdf, 2026-10-04]. REPRODUKCJA: `curl api.sejm.gov.pl/eli/acts/DU/2026/1161/text.pdf | pdftotext`.
+- Ustawa o samorządach: jedyny akt zmieniający po t.j. 2025/1783 = 2026/1161 (`/references` DU/2001/42). Prawo budowlane po t.j. 2026/524: 605, 646, 1161 (+ odroczone przepisy 2025/1847 i 2025/1673) (`/references` DU/1994/414).
+- Treść zmian odczytana z `text.pdf` i porównana z t.j. 2025/1783 (art. 42, 43, 54) i 2026/524 (art. 7, 96 ust. 6, 99): art. 13a (zwolnienie od pracy bez wynagrodzenia), art. 19 ust. 2 (terminy 30 dni) i nowe ust. 2a–2b (czynność przewodniczącego po prawomocnym orzeczeniu SD), art. 42 (skreślenie przy utracie WSZYSTKICH uprawnień; składki — rok / >6 mies.), art. 43 (zawieszony członek; odesłanie do art. 12 ust. 1 pkt 1–5 PrBud zamiast wadliwego art. 14), art. 55 ust. 1; PrBud art. 12 ust. 7b, art. 96 ust. 6 (OKK wyznacza termin, OSD stwierdza utratę uprawnień w specjalności i zakresie), art. 99 ust. 1a, rozdz. 10a art. 102a–102c; art. 3–4 — sprawy w toku i wykonanie orzeczeń sprzed 2.10.2026 wg przepisów dotychczasowych.
+- **Warunki techniczne budynków:** DU/2002/690 — `status: uznany za uchylony`, `inForce: NOT_IN_FORCE`. Podstawa utraty mocy: art. 66 ustawy o zapewnianiu dostępności (DU/2019/1696; brzmienie 36 → 60 mies. — DU/2022/975 → 84 mies. — DU/2024/1081; tekst w t.j. DU/2024/1411) — przepisy wykonawcze z art. 7 ust. 2 i 3 PrBud zachowywały moc najdłużej 84 mies. od 20.09.2019, tj. do 19.09.2026; spójne z art. 102a („obowiązującymi do dnia 19 września 2026 r.”). ✅ [VER: ELI DU/2019/1696, DU/2022/975, DU/2024/1081, DU/2024/1411 text.pdf, 2026-10-04]. Nowe rozp. WT budynków: 🟨 brak w ELI (wyszukiwanie tytułów 2025/2026: „warunków technicznych”, „budynki i ich usytuowanie”, „budynk”, słowo kluczowe „budowlane prawo”) — zbieżnie Rząd 3: muratordom.pl (28.09.2026: „rozporządzenie nie zostało jeszcze podpisane… i opublikowane”), list otwarty PIIB/IARP (inzynierbudownictwa.pl, 14.09.2026). → **F-224**.
+
+**2B. CRIT-TREŚĆ naprawione (FAZA 3E):**
+- `dr-09/mod-ustawa-architekci-inzynierowie-budownictwa-zawod`: brak zmian 2026/1161 (art. 42/43 opisywane pośrednio w pkt 7 jako reżimy rozdzielne — od 2.10.2026 sprzężone) → sekcja NOWELIZACJA 2026/1161 + intake/warunki/QG; **błąd daty**: „obwieszczenie z 15.12.2025” → obwieszczenie 24.11.2025, ogł. 15.12.2025 (ELI `announcementDate`).
+- `dr-09/mod-PrBud-uzupelnienie-pokrycia-2026` 1.1: art. 12 ust. 7b, art. 96 ust. 6, art. 99 ust. 1a, nowy § 9a (art. 102a–102c).
+- `dr-09/mod-PrBud-prawo-budowlane`: wiersz WT „Weryfikuj aktualną wersję w isap” przy akcie, który przestał obowiązywać → stan faktyczny + reżim przejściowy; **błąd**: „poprzedni t.j. to Dz.U. 2026 poz. 524 (obwieszczenie 06.03.2025)” — 2026/524 jest t.j. aktualnym, poprzedni 2025/418 (ELI „Inf. o tekście jednolitym”).
+- **Propagacja (MOD-PROPAGACJA-NOWELIZACJI):** rozp. WT z 2002 r. cytowane jako obowiązujące także w `mod-PrBud-patodeweloperka-…` (cz. B), indeksie i częściach 1, 3, 5, 6 `ochrona-zabytkow/`, `mod-PrWodne-…` — alerty dodane. W cz. 5 zapis „nowelizacja WT wchodzi w życie WE WRZEŚNIU 2026” (stan 30.07.2026) — nie ziścił się; skorygowany, próg 25 m² dla lokali użytkowych oznaczony jako projekt.
+- `dr-09/MAPA-AKTOW`, `prawo-polskie-v2/ROUTING-MAP` (4 wiersze + źródło centralne; usunięta nieaktualna adnotacja „⚡ pozostaje art. 1 pkt 1 i 3 → wchodzi 20.09.2026”), `shared/ISAP-METRYKI-AKTOW` (2 wiersze; tabela zbiorcza `AKTUALNY-ISAP` → `PO-TJ-ZMIANY`).
+
+**2C. Strukturalne:** relikty F-222 (36 plików, opisane w AUDYT-2026-10-03b § 6 jako wymagające `git rm`) usunięte z repozytorium — każdy bez wpisu w CHECKSUMS, opisany w CHANGELOG 6.157 jako usunięty w 6.146/6.153, zero aktywnych odwołań (grep poza dziennikiem/changelogiem: tylko wzmianki historyczne w `mcp-servers/README.md` i `test_protokol.mjs`); 2 pliki `scripts/__pycache__/*.pyc` (śledzone w git, nieobecne w ZIP — `verify_development_archives.py` zgłaszał je jako `extra`). `audyt-systemu-v4`: 223 → 188 plików.
+
+### 3. OSTRZEŻENIA (WARN)
+- **F-224 (nowa, reaktywna)** — nowe rozp. WT budynków nieogłoszone; pełny opis z polami STATUS/ŹRÓDŁO/REPRODUKCJA w `WARN-OTWARTE.md`.
+- Odnotowane bez flagi: T11 w pierwszym przebiegu zgłosił `Dz.U. 2019 poz. 1696` w MAPA-AKTOW dr-09 bez wiersza w ROUTING-MAP/mapie — cytowania przestawione na t.j. `Dz.U. 2024 poz. 1411` (obecny w obu rejestrach; art. 66 w t.j. odczytany); T11 PASS.
+- Wolny numer: **F-225**.
+
+### 4. WERYFIKACJA Dz.U.
+Nowa generacja `mapa_dzu_2026-10-04.md` (z 09-22): +2026/1161 (NW), +2002/690 (UCH/PREV), adnotacje 2026/524 i 2025/1783. MONITORING: bez nowych pozycji (2026/1161 w mocy; nieogłoszone rozp. nie wchodzi do MONITORING — F-224).
+
+### 4C. TREŚĆ MERYTORYCZNA MODUŁÓW
+Jak w § 2B. Wszystkie twierdzenia o treści zmian — RZĄD 1 (ELI `text.pdf`); stan „brak nowego rozp. WT” — 🟨 wynik negatywny RZĘDU 1 + 2 źródła Rządu 3 zbieżne (ZASADA 14 pkt 3 — nie ✅).
+
+### 5. STRUKTURA SYSTEMU — SNAPSHOT
+`dr-09` 51 plików (bez zmiany liczby), `prawo-polskie-v2` 8, `shared` 197, `audyt-systemu-v4` 188. Sumy `CHECKSUMS.sha256` przeliczone w 4 skillach; ZIP-y `WERSJA ROZWOJOWA/` przebudowane `scripts/repack_development_archives.py` i zweryfikowane `verify_development_archives.py` (32 paczki, 0 błędów; przebudowane wyłącznie 4 ZIP-y skilli zmienionych — pozostałe 28 bez zmian bajtowych). `run_regression_suite.py` na drzewie wydania: ✅ PASS STRUKTURALNY (wszystkie testy PASS; T4/T5 ręczne); T21: 32 skille, 0 rozjazdów; `dostarcz_skill.sh` dla 4 skilli: T22 PASS, liczba plików oryginał = kopia = ZIP (51/8/197/188).
+
+### 6. WNIOSKI I ZALECENIA
+1. Po ogłoszeniu nowego rozp. WT — FAZA 3E na parametrach WT (F-224); do tego czasu każde powołanie WT wymaga ustalenia, czy inwestor złożył oświadczenie z art. 102a.
+2. Mapy w modułach podawały datę ogłoszenia jako datę obwieszczenia (2025/1783) — przy kolejnych t.j. odczytywać `announcementDate` z ELI, nie `promulgation`.
