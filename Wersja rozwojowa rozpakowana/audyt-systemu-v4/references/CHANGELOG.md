@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.183 (AUDYT-2026-10-05j): Etap KOLEJNA-TURA w przesluchanie-swiadkow 3.31 i analiza-sadowa 6.15.
+
 - 6.182 (AUDYT-2026-10-05i): Sekcje wykonywane przez aplikację w HIERARCHIA-ZRODEL, MOD-STEP-TRACKER i PROFIL-LEKKI (shared 3.99.9, router 3.63); TRYB ZDEGRADOWANY przy niewczytanym zasobie ścieżki.
 
 - 6.181 (AUDYT-2026-10-05h): Widgety zasilane danymi w analizator-dowodow 5.16.21, raport-sytuacyjny 2.12, raport-klienta 1.7, analiza-sadowa 6.14; menu audytu przez `show_widget(path)`.

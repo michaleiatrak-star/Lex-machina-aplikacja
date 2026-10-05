@@ -1,5 +1,7 @@
 # CHANGELOG — analiza-sadowa-v6
 
+- 6.15 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: Przejście III, Przejście IV, format raportu końcowego i sekwencja po raporcie (każde przejście to osobna wiadomość) dołączane od drugiej tury wątku. Treść bez zmian.
+
 - 6.14 (2026-10-05h, AUDYT-2026-10-05h): TRYB B: `assets/widget-analiza.html` (10 zakładek, wartości tekst/lista/tabela/podsekcje); W6: szablon raportu sytuacyjnego zamiast kodu. Warianty z kodem w sekcjach WIDGET-DANE.
 
 - 6.13 (2026-09-27e, AUDYT-2026-09-27e): claude.ai po dodaniu marketplace instalował wyłącznie 4 z 32 pluginów (shared, prawny-router-v3, analizator-dowodow-v3, przesluchanie-swiadkow-v2-min90); jedyna cecha wspólna tych 4, nieobecna w żadnym z 28 pozostałych, to klucz `dependencies` we frontmatterze SKILL.md. Dodano go (`requires: [shared]` — zgodnie ze stanem faktycznym) oraz jawny manifest pluginu (name, description = description z SKILL.md, author, repository, license) — host nie musi niczego wnioskować z SKILL.md. `version` w manifeście = `version:` z SKILL.md (pilnuje T38 w audyt-systemu-v4) — host rozpoznaje aktualizację po podbiciu wersji. Treść skilla bez zmian.

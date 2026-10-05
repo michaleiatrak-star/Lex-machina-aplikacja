@@ -1,6 +1,6 @@
 ---
 name: przesluchanie-swiadkow-v2-min90
-version: "3.30"
+version: "3.31"
 type: legal-skill
 domain: litigation-witness-examination
 status: production
@@ -63,7 +63,7 @@ pipeline:
     - W5-BINDER
     - W6-LIVE-DIRECT
 changelog: |
-  Wersja bieżąca: 3.30 (2026-10-01b, AUDYT-2026-10-01b): anonimizacja danych świadka z prawdziwej sprawy (przykład i dziennik); reguły bez zmian.
+  Wersja bieżąca: 3.31 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: SELF-CHECK-PRZED-W3 i etapy W3–W6 (po obowiązkowej pauzie CHECKPOINT-W2) dołączane od drugiej tury wątku. Treść bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -1166,6 +1166,7 @@ przy wyraźnym żądaniu natychmiastowych pytań, system:
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## SELF-CHECK-PRZED-W3 — OBOWIĄZKOWE PONOWNE WCZYTANIE (dodane w audycie 3.16)
 
 > ⛔ Ta sekcja uruchamia się NA STARCIE wiadomości zawierającej W3 (pytania),
@@ -1259,6 +1260,7 @@ wynagrodzenie i świadectwo pracy), nawet dotyczącym tych samych stron.
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## ETAP W3 — PYTANIA
 
 ### Cel etapu
@@ -1561,6 +1563,7 @@ Zmiana względem W2: [bez zmiany / podniesiony / obniżony + powód]
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## ETAP W4 — PRÓBA GENERALNA (przed rozprawą)
 
 > Aktywowany na żądanie lub automatycznie gdy użytkownik mówi
@@ -1583,6 +1586,7 @@ LISTA KONTROLNA W4:
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## ETAP W5 — BINDER SĄDOWY
 
 > Instrukcja do użycia NA SALI. Aktywowana na żądanie lub przy W4.
@@ -1604,6 +1608,7 @@ NAWIGACJA NA SALI:
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## ETAP W6 — SŁUCHANIE DIRECT I ADAPTACJA
 
 > Etap w trakcie rozprawy: przed Twoim cross świadek zeznaje na wprost.

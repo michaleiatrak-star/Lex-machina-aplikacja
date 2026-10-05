@@ -1,6 +1,6 @@
 ---
 name: analiza-sadowa-v6
-version: "6.14"
+version: "6.15"
 type: executive-analiza
 status: production
 compatibility: "live_web_lookup, file_read, cross_skill_file_read, optional_interactive_ui"
@@ -10,7 +10,7 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.14 (2026-10-05h, AUDYT-2026-10-05h): TRYB B: `assets/widget-analiza.html` (10 zakładek, wartości tekst/lista/tabela/podsekcje); W6: szablon raportu sytuacyjnego zamiast kodu. Warianty z kodem w sekcjach WIDGET-DANE.
+  Wersja bieżąca: 6.15 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: Przejście III, Przejście IV, format raportu końcowego i sekwencja po raporcie (każde przejście to osobna wiadomość) dołączane od drugiej tury wątku. Treść bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -306,6 +306,7 @@ TAK do obu → przejdź dalej. NIE → uzupełnij brakujące web_search przed pr
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ### PRZEJŚCIE III — ANALIZA ADVERSARIALNA + WERYFIKACJA PIERWSZA
 **Cel: Analiza z trzech perspektyw + pierwsze ponowne przeczytanie dokumentów źródłowych.**
 
@@ -428,6 +429,7 @@ Czy Weryfikacja Pierwsza ma status UKOŃCZONA? TAK → przejdź. NIE → zakońc
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ### PRZEJŚCIE IV — AUTOKOREKTA + WERYFIKACJA OSTATECZNA
 **Cel: Spójność I-III + drugie i ostatnie obowiązkowe przeczytanie weryfikacyjne.**
 
@@ -661,6 +663,7 @@ A+F łącznie: audyt dwustronny. B+D: często w sporach pracowniczych.
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## FORMAT RAPORTU KOŃCOWEGO
 
 ```
@@ -746,6 +749,7 @@ PRZEJŚCIE IV — AUTOKOREKTA
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## SEKWENCJA END-TO-END — PO RAPORCIE KOŃCOWYM
 
 > KOLEJNOŚĆ JEST BEZWZGLĘDNA. Każdy krok w osobnej wiadomości.

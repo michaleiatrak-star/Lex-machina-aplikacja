@@ -69891,6 +69891,16 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05j — TRYB STRUKTURA: etapy późniejszych tur w przesłuchaniu świadków i analizie sądowej (6.183)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji E5. Oba skille pracują wieloturowo z obowiązkową pauzą: przesłuchanie — CHECKPOINT-W2 przed W3; analiza sądowa — każde przejście i raport końcowy to osobna wiadomość. Sekcje etapów po pauzie trafiały do modelu już w pierwszej turze.
+
+### 2. ZMIANA
+- przesluchanie-swiadkow-v2-min90 3.31: `lex:wczytaj-gdy: KOLEJNA-TURA` przed SELF-CHECK-PRZED-W3 oraz ETAP W3, W4, W5, W6. Pierwsza tura: 84 908 → 64 758 znaków (−24%).
+- analiza-sadowa-v6 6.15: ten sam znacznik przed Przejściem III, Przejściem IV, FORMAT RAPORTU KOŃCOWEGO i SEKWENCJA END-TO-END. Pierwsza tura: 38 322 → 24 499 znaków (−36%).
+- Od drugiej tury wątku sekcje wracają w całości (mechanizm jak w pisma-procesowe-v3). Treść reguł bez zmian.
+
 ## AUDYT-2026-10-05i — TRYB STRUKTURA: rejestr kroków, profil i kanon źródeł wykonywane przez aplikację (6.182)
 
 ### 1. ŹRÓDŁO
