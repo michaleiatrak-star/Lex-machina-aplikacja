@@ -163,5 +163,29 @@ describe("corpus templates fed with data", () => {
     expect(code).not.toMatch(/innerHTML\s*=/u);
     for (const script of scripts(compileWidget({ title: "T", kind: "html", code }, "d".repeat(32)))) expect(() => new Function(script)).not.toThrow();
   });
+
+  it("provision analysis: the selection form needs no data, the results take data", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const tools = new WidgetToolRuntime(registry);
+    const [form, results] = await tools.runTools([
+      { id: "1", name: "show_widget", input: { title: "Wybór", path: "analizator-przepisow-v2/assets/widget-wybor-przepisu.html" } },
+      {
+        id: "2",
+        name: "show_widget",
+        input: {
+          title: "Wyniki",
+          path: "analizator-przepisow-v2/assets/widget-wyniki.html",
+          data: { przepis: { oznaczenie: "art. 415 KC" }, przeslanki: { logika: "AND", lista: [{ id: "P1", nazwa: "szkoda", status: "T", pewnosc: 90 }] } }
+        }
+      }
+    ]);
+    expect(JSON.parse(form!.content).status).toBe("SHOWN");
+    expect(JSON.parse(results!.content).status).toBe("SHOWN");
+    const [shownForm, shownResults] = tools.widgets();
+    expect(shownForm!.code).toContain("window.sendPrompt");
+    expect(shownResults!.code).toContain('"oznaczenie":"art. 415 KC"');
+    for (const widget of tools.widgets()) for (const script of scripts(compileWidget(widget, "e".repeat(32)))) expect(() => new Function(script)).not.toThrow();
+  });
 });
 

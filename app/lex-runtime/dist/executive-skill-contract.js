@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 const GATE_HEADING = /HARD GATE|OBOWIĄZ|⛔|BRAMK|-GATE\b|KROK 0\b|ZAWSZE|SEKWENCJ/iu;
 const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b/g;
 const cache = new Map();
-export function executiveContract(registry, skill) {
+// `asSent`: the text as the model receives it (sections the application executes
+// compacted), so a resource named only in such a section is not loaded.
+export function executiveContract(registry, skill, asSent) {
     const record = registry.get(skill);
     if (!record)
         return null;
@@ -13,7 +16,9 @@ export function executiveContract(registry, skill) {
     catch {
         return null;
     }
-    const key = `${record.skillFile}:${body.length}`;
+    if (asSent)
+        body = asSent(body);
+    const key = `${record.skillFile}:${createHash("sha1").update(body).digest("hex")}`;
     if (cache.has(key))
         return cache.get(key);
     const gates = [];

@@ -2020,7 +2020,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             forModel(`${skill}/SKILL.md`, text)
           ].join("\n\n")
         );
-        const contract = executiveContract(this.registry, skill);
+        const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages).text);
         if (contract) {
           const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
           for (const item of loaded.loaded) {

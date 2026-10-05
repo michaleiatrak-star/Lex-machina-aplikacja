@@ -163,6 +163,34 @@ describe("sections of a later stage of the thread", () => {
 });
 
 describe("widget component", () => {
+  it("a provision-analysis turn of an account model does not load MOD-WIDGET-IO", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "io",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Art. 286 KK." };
+      }
+    });
+    await new SafeSessionExecutor(registry, new ProviderGateway(providers)).execute({
+      query: "Czy to oszustwo z art. 286 KK? Proszę o analizę przepisu.",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "PRAWNIK"
+    });
+    const prompt = calls[0]!.systemPrompt ?? "";
+    expect(prompt).toContain("# SKILL WYKONAWCZY WG ROUTERA: analizator-przepisow-v2");
+    expect(prompt).toContain("assets/widget-wyniki.html");
+    expect(prompt).not.toContain("# MOD-WIDGET-IO");
+  }, 60_000);
+
   it("the case-law skill's code-pasting variant is a reference for models with show_widget data", () => {
     const skill = fs.readFileSync(path.join(CORPUS, "orzeczenia-sadowe-v2", "SKILL.md"), "utf8");
     const account = compactForModel(skill, true).text;
