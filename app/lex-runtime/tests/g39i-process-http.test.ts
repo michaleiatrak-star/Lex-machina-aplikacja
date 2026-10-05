@@ -333,7 +333,7 @@ function fixture() {
       sessionExecutor: {
         execute
       },
-      documentAstGenerator: { generate },
+      documentAstGenerator: { generate } as never,
       documentAuthoringService: {
         createReady: vi.fn(async () => ({
           artifact: { artifactId: "artifact_" + "b".repeat(32), filename: "pismo.docx" },
