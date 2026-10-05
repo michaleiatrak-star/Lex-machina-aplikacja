@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.175 (2026-10-05b, AUDYT-2026-10-05b): Znaczniki komponentu DISCLAIMER w `shared/DISCLAIMER.md` (shared 3.99.8); pierwszy komponent warunkowy — aplikacja pomija sekcje tylko w turze, w której sama dokłada zastrzeżenie.
+
 - 6.174 (2026-10-05, AUDYT-2026-10-05): Frontmatter SKILL.md bez komentarzy YAML (32 937 → 4 353 znaki, 304 → 115 linii); wartości pól bez zmian (porównanie `yaml.safe_load` przed/po). Komentarze (historia rejestracji plików, opisy flag) i łańcuch „poprzednio” ze stopki przeniesione dosłownie do `references/HISTORIA-ZMIAN-PLIKOW.md`. Pozostawiony jeden komentarz: cudzysłów przy `version`.
 
 - 6.173 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

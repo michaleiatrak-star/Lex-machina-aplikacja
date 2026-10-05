@@ -1,5 +1,7 @@
 # CHANGELOG — Biblioteka shared
 
+- 3.99.8 (2026-10-05, AUDYT-2026-10-05b): Znaczniki `<!-- lex:wykonuje-aplikacja: DISCLAIMER -->` w `DISCLAIMER.md` (ZASADA GŁÓWNA, KIEDY STOSOWAĆ, TREŚĆ, POZYCJA, INTEGRACJA ZE SKILLAMI, SELF-CHECK ROUTERA): aplikacja Lex Machina sama dokłada kanoniczny wariant po bramkach, więc przy odpowiedzi tekstowej modelu nielokalnego sekcje trafiają do modelu jako odesłanie; przy modelu lokalnym, dokumencie AST, trybie mechanicznym i raportach — w całości. Treść reguł bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.
+
 - 3.99.7 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 3.99.6 (2026-10-04m, AUDYT-2026-10-04m): Znaczniki `<!-- lex:wykonuje-aplikacja: … -->` (komentarz HTML, niewidoczny poza aplikacją Lex Machina): HIERARCHIA-ZRODEL — metryczka wersji ujęta w sekcję „METRYCZKA PLIKU” (HISTORIA); MOD-STEP-TRACKER „HISTORIA ZMIAN” i MOD-WYJATEK-GATE „HISTORIA NAZWY” (HISTORIA); DISCLAIMER „MECHANIZM AWARYJNY” (PROFIL — aplikacja zawsze wczytuje plik); UNIVERSAL-RUNTIME-ADAPTER §1A RESOLVER-SKILLI (RESOLVER). Treść reguł bez zmian. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04m.

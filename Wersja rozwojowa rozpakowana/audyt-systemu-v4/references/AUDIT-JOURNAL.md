@@ -69891,6 +69891,19 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05b — TRYB STRUKTURA: znaczniki DISCLAIMER w shared/DISCLAIMER.md (6.175)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji: pomiar aplikacji — stały rdzeń każdej tury prawnej ok. 143 tys. znaków; `shared/DISCLAIMER.md` 8,3 tys. znaków w każdej turze, choć aplikacja sama dokłada kanoniczny wariant (KROK 7: wycina zastrzeżenie modelu, dokłada LAIK/PRAWNIK/PISMO z pliku).
+
+### 2. ZMIANA (shared 3.99.8)
+- Znacznik `<!-- lex:wykonuje-aplikacja: DISCLAIMER -->` nad: ZASADA GŁÓWNA, KIEDY STOSOWAĆ, TREŚĆ DISCLAIMERA, POZYCJA DISCLAIMERA, INTEGRACJA ZE SKILLAMI, SELF-CHECK ROUTERA — SEKCJA DISCLAIMERA. Treść bez zmian.
+- Komponent warunkowy: aplikacja pomija te sekcje tylko przy odpowiedzi tekstowej modelu nielokalnego (bez dokumentu AST, trybu mechanicznego pisma i skilli `raport-*`) — wtedy, gdy sama dokłada zastrzeżenie. W pozostałych turach sekcje idą w całości.
+- Aplikacja czyta warianty z pliku na dysku, nie z tekstu przekazanego modelowi.
+
+### 3. NIEOZNACZONE ŚWIADOMIE
+`PROFIL-LEKKI.md` „KIEDY PROFIL LEKKI JEST ZAKAZANY”: aplikacja wymusza profil PEŁNY tylko dla sprawy karnej i generowania pisma; kategoria [11] (weryfikacja cudzego materiału) i błąd odczytu rdzenia nie są wykonywane mechanicznie — sekcja wiąże model.
+
 ## AUDYT-2026-10-05 — TRYB STRUKTURA: frontmatter SKILL.md audytu bez komentarzy YAML (6.174)
 
 ### 1. ŹRÓDŁO
