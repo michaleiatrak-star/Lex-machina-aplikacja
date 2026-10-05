@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.65"
+version: "3.66"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,7 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.65 (2026-10-05l, AUDYT-2026-10-05l): KROK 2: [3] odwołanie od wypowiedzenia / od decyzji / do sądu; [6] policz termin, termin na wniesienie; [1] „na umowie zlecenie / o pracę” to podstawa zatrudnienia → [10]; [6] maile/SMS/nagrania tylko przy pytaniu o dowód.
+  Wersja bieżąca: 3.66 (2026-10-05m, AUDYT-2026-10-05m): KROK 2: [3] odwołanie do KIO, skarga do WSA; [6] jako dowód / czy to dowód / moc dowodowa.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -319,7 +319,7 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 → SECONDARY: `analizator-dowodow-v3`, `orzeczenia-sadowe-v2` · FALLBACK: `przewodnik-prawny-v2`
 
 ### [3] PISMO ZŁOŻONE
-`pozew / apelacja / odpowiedź na pozew / zażalenie / skarga / odwołanie od wypowiedzenia / odwołanie od decyzji / odwołanie do sądu / pismo wielowątkowe`
+`pozew / apelacja / odpowiedź na pozew / zażalenie / skarga / odwołanie od wypowiedzenia / odwołanie od decyzji / odwołanie do sądu / odwołanie do KIO / skarga do WSA / pismo wielowątkowe`
 → PRIMARY: `view pisma-procesowe-v3/SKILL.md`
 → SECONDARY: `orzeczenia-sadowe-v2`, `analiza-sadowa-v6` · Wyjście: **obowiązkowo .docx**
 
@@ -334,7 +334,7 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 → SECONDARY: `analiza-sadowa-v6`
 
 ### [6] DOWODY / TERMINY / KOSZTY
-`maile / SMS / nagrania / faktury / terminy procesowe / policz termin / termin na wniesienie / koszty sądowe / opłaty komornicze`
+`maile / SMS / nagrania / faktury / terminy procesowe / policz termin / termin na wniesienie / jako dowód / czy to dowód / moc dowodowa / koszty sądowe / opłaty komornicze`
 → PRIMARY: `view analizator-dowodow-v3/SKILL.md`
 → SECONDARY: `analiza-sadowa-v6`
 → Maile / SMS / nagrania wskazują [6], gdy pytanie dotyczy dowodu (ocena, wykorzystanie); sama opowieść o sprawie („SMS-y i śledzenie”) → [10].

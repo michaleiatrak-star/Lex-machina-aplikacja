@@ -1,0 +1,2083 @@
+[
+ {
+  "q": "Czy mogę złożyć skargę konstytucyjną po prawomocnym wyroku NSA?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Termin na wniesienie skargi konstytucyjnej, od kiedy liczyć trzy miesiące?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Czy obywatel może zaskarżyć ustawę bezpośrednio do Trybunału Konstytucyjnego?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Prezydent odmówił podpisania ustawy, co dalej z ustawą?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Wygaśnięcie mandatu posła po skazaniu za przestępstwo umyślne",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Immunitet senatora a postępowanie karne w sprawie wypadku drogowego",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Jak zarejestrować nową partię polityczną w sądzie?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Finansowanie partii politycznej przez osobę prywatną, limity wpłat",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Kto zarządza referendum ogólnokrajowe i kiedy jest ono ważne?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Wprowadzenie stanu klęski żywiołowej po powodzi, jakie prawa można ograniczyć?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Stan wyjątkowy przy granicy a zakaz przebywania w strefie",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Czy rozporządzenie ministra może ograniczać wolności obywatelskie bez ustawy?",
+  "dr": "dr-01",
+  "znany_blad": true
+ },
+ {
+  "q": "Hierarchia źródeł prawa: umowa międzynarodowa a ustawa",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Rada Ministrów wydała uchwałę, czy jest źródłem prawa powszechnie obowiązującego?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Kto powołuje sędziów Sądu Najwyższego i jaka jest rola KRS?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Wybory do Sejmu, protest wyborczy, termin do Sądu Najwyższego",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Skarga na przewlekłość przed Sądem Najwyższym w sprawie dyscyplinarnej",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Specustawa a ustawa ogólna, która ma pierwszeństwo przy kolizji?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Przepisy przejściowe nowej ustawy, które prawo stosować do sprawy wszczętej wcześniej?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Pytanie prawne sądu do Trybunału Konstytucyjnego, zawieszenie postępowania",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Zasada niedziałania prawa wstecz, czy ustawa może pogorszyć sytuację podatnika wstecz?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Rzecznik Praw Obywatelskich, jak złożyć wniosek o interwencję?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Wotum nieufności wobec ministra, procedura w Sejmie",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Inicjatywa ustawodawcza obywateli, ile podpisów trzeba zebrać?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Prezes Rady Ministrów a kontrasygnata aktów prezydenta",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Czy uchwała Sejmu wiąże obywateli?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Ustrój sądów powszechnych, delegowanie sędziego do innego sądu",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Ojciec zapisał cały majątek bratu w testamencie, czy należy mi się zachowek?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Jak odrzucić spadek z długami i w jakim terminie?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Dziedziczenie ustawowe, gdy zmarły nie zostawił testamentu, kto dziedziczy?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Testament własnoręczny napisany na komputerze, czy jest ważny?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Dział spadku z rodzeństwem, kto ma prawo do domu?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Alimenty na dziecko, jak ustalić wysokość?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ojciec dziecka nie płaci alimentów, co mogę zrobić?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Podwyższenie alimentów, bo dziecko poszło do liceum",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Rozwód bez orzekania o winie, ile trwa sprawa?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Podział majątku wspólnego po rozwodzie, mieszkanie na kredyt",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ograniczenie władzy rodzicielskiej ojca, który nie interesuje się dzieckiem",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ustalenie kontaktów z dzieckiem po rozstaniu",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Intercyza przed ślubem, rozdzielność majątkowa",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Najemca nie płaci czynszu, jak wypowiedzieć umowę najmu mieszkania?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Eksmisja lokatora bez prawa do lokalu socjalnego",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Wynajmujący nie zwraca kaucji po wyprowadzce",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Najem okazjonalny, oświadczenie o poddaniu się egzekucji",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Reklamacja butów w sklepie, sprzedawca odmawia uznania rękojmi",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Zwrot towaru kupionego przez internet w ciągu 14 dni",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Deweloper nie oddał mieszkania w terminie, kary umowne",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Kredyt we frankach, unieważnienie umowy i rozliczenie z bankiem",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Sankcja kredytu darmowego przy kredycie gotówkowym",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Chwilówka z ogromnymi kosztami pozaodsetkowymi, czy muszę spłacać?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Upadłość konsumencka, czy stracę mieszkanie?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Zasiedzenie części działki sąsiada, płot stoi od 35 lat",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Służebność drogi koniecznej przez działkę sąsiada",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Wpis hipoteki do księgi wieczystej, wykreślenie po spłacie",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Sąsiad zalał mi mieszkanie, odszkodowanie z OC",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ubezpieczyciel zaniżył odszkodowanie za szkodę w samochodzie",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Zadośćuczynienie za naruszenie dóbr osobistych przez sąsiada",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Kontrahent nie zapłacił faktury, przedawnienie roszczenia",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Spółka z o.o., odpowiedzialność członka zarządu za długi spółki",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Przekształcenie spółki cywilnej w spółkę jawną",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Wspólnota mieszkaniowa podjęła uchwałę o remoncie dachu, jak zaskarżyć?",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Pies sąsiada pogryzł moje dziecko, odpowiedzialność właściciela",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ubezwłasnowolnienie babci chorej na demencję",
+  "dr": "dr-02",
+  "znany_blad": true
+ },
+ {
+  "q": "Fundacja rodzinna, sukcesja firmy",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Kolega pobił mnie na dyskotece, mam obdukcję, co dalej?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Ukradziono mi rower z klatki schodowej, zgłoszenie na policję",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Zostałem oszukany na portalu aukcyjnym, sprzedawca zniknął z pieniędzmi",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Zatrzymano mi prawo jazdy za jazdę po alkoholu, ile wynosi zakaz?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Dostałem mandat za parkowanie, czy mogę go nie przyjąć?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Przekroczenie prędkości o 55 km/h w terenie zabudowanym, utrata prawa jazdy",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Były partner mnie nęka telefonami i śledzi, uporczywe nękanie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Mąż znęca się psychicznie nade mną i dziećmi",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Ktoś grozi mi pobiciem w wiadomościach, groźby karalne",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Sąsiad obraża mnie publicznie, znieważenie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Ktoś pisze o mnie oszczerstwa w internecie, zniesławienie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Syn został zatrzymany przez policję, ma zarzut posiadania marihuany",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Prokurator umorzył śledztwo w mojej sprawie, co mogę zrobić?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Wezwanie na przesłuchanie w charakterze podejrzanego",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Tymczasowe aresztowanie na trzy miesiące, zażalenie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Dobrowolne poddanie się karze, czy warto?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Warunkowe zawieszenie wykonania kary, co jeśli złamię warunki?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Zatarcie skazania, kiedy znika wpis z Krajowego Rejestru Karnego?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Przedawnienie karalności kradzieży sprzed lat",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Włamanie do domku letniskowego, szkoda w mieniu",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Fałszywy podpis na umowie, fałszerstwo dokumentu",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Pracownik przywłaszczył pieniądze firmy, sprzeniewierzenie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Wypadek drogowy ze skutkiem śmiertelnym, odpowiedzialność kierowcy",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Nieletni syn pobił kolegę w szkole, sąd rodzinny",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Kara grzywny za wykroczenie, rozłożenie na raty",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Komornik zajął mi rachunek bankowy, ile może zabrać?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Egzekucja komornicza z wynagrodzenia za pracę, kwota wolna",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Pranie pieniędzy, przelew z nieznanego konta",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Czynny żal w sprawie karnej skarbowej",
+  "dr": "dr-03",
+  "znany_blad": true
+ },
+ {
+  "q": "Szef dał mi wypowiedzenie umowy o pracę bez uzasadnienia",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zwolnienie dyscyplinarne za rzekome spóźnienia, czy mogę się odwołać?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Pracodawca nie płaci za nadgodziny, jak to udowodnić?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Ile dni urlopu wypoczynkowego przysługuje po studiach?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Pracodawca nie chce udzielić urlopu na żądanie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Mobbing ze strony przełożonej, poniżanie przy zespole",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Dyskryminacja płacowa kobiet w firmie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zasiłek chorobowy na zwolnieniu lekarskim, ile wynosi?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "L4 w ciąży, czy pracodawca może mnie zwolnić?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Urlop macierzyński i rodzicielski dla ojca dziecka",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Świadczenie rehabilitacyjne po wyczerpaniu zasiłku chorobowego",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Wypadek przy pracy na budowie, odszkodowanie z ZUS",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Choroba zawodowa po latach pracy w hałasie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Odmowa przyznania renty z tytułu niezdolności do pracy przez ZUS",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Kiedy mogę przejść na emeryturę i jak ZUS liczy kapitał?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Emerytura pomostowa dla nauczyciela",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zakaz konkurencji po rozwiązaniu umowy o pracę, odszkodowanie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Praca zdalna, kto płaci za internet i prąd?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Umowa zlecenie a składki ZUS, czy student musi płacić?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zwolnienia grupowe w zakładzie, ile wynosi odprawa?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Świadectwo pracy z błędem, sprostowanie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Wynagrodzenie minimalne w 2026 roku",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Czas pracy w systemie równoważnym, dyżury",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zasiłek pogrzebowy po zmarłym ojcu",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Świadczenie wychowawcze 800 plus dla rodzica po rozwodzie",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Zasiłek dla bezrobotnych, rejestracja w urzędzie pracy",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Orzeczenie o niepełnosprawności a dofinansowanie z PFRON",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Pomoc społeczna, zasiłek celowy z MOPS",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Ubezpieczenie w KRUS dla rolnika prowadzącego działalność",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Kontrola PIP w firmie, mandat dla pracodawcy",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Urząd nie wydał decyzji od pół roku, skarga na bezczynność organu",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Odwołanie od decyzji administracyjnej, termin 14 dni od doręczenia",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Przewlekłe prowadzenie postępowania administracyjnego przez starostę",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Wznowienie postępowania administracyjnego po nowych dowodach",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Stwierdzenie nieważności decyzji wydanej z rażącym naruszeniem prawa",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Wniosek o udostępnienie informacji publicznej, urząd milczy",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Odmowa udostępnienia informacji publicznej, skarga do WSA",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Skarga do wojewódzkiego sądu administracyjnego na decyzję SKO",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Skarga kasacyjna do NSA, wymóg adwokata",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Prawo pomocy w postępowaniu przed WSA, zwolnienie od wpisu",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Karta pobytu czasowego dla cudzoziemca, odmowa wojewody",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Zezwolenie na pracę dla obywatela Ukrainy",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Decyzja o zobowiązaniu cudzoziemca do powrotu",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Egzekucja administracyjna, upomnienie i zajęcie konta przez urząd",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Ponaglenie w postępowaniu administracyjnym, do kogo złożyć?",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Doręczenie decyzji administracyjnej przez awizo, fikcja doręczenia",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Petycja do urzędu, w jakim terminie trzeba odpowiedzieć?",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Samorządowe kolegium odwoławcze uchyliło decyzję i przekazało do ponownego rozpatrzenia",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Wpis sądowy od skargi do WSA, ile wynosi?",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Strona postępowania administracyjnego, kto ma interes prawny?",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Pełnomocnik w postępowaniu administracyjnym, opłata skarbowa od pełnomocnictwa",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Zaświadczenie z urzędu, odmowa wydania",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Rzecznik Praw Dziecka, skarga na szkołę i ośrodek",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Dostępność budynku urzędu dla osoby niepełnosprawnej, skarga",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Skarga na działanie urzędnika do wojewody",
+  "dr": "dr-05",
+  "znany_blad": true
+ },
+ {
+  "q": "Ugoda administracyjna w postępowaniu przed organem",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Mediacja w postępowaniu administracyjnym",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Jak rozliczyć PIT za wynajem mieszkania, ryczałt czy skala?",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Ulga na dzieci w zeznaniu rocznym PIT",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Korekta deklaracji VAT po terminie",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Odliczenie VAT od faktury za paliwo do samochodu firmowego",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Zwolnienie podmiotowe z VAT, limit sprzedaży",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Biała lista podatników VAT, przelew na inne konto",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Faktura ustrukturyzowana w KSeF, od kiedy obowiązek?",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Kontrola podatkowa w firmie, prawa podatnika",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Urząd skarbowy wszczął postępowanie podatkowe, zaległość w PIT",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Rozłożenie zaległości podatkowej na raty",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Podatek od spadku po rodzicach, zwolnienie dla najbliższej rodziny",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Podatek od darowizny pieniędzy od dziadków",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Podatek od czynności cywilnoprawnych przy zakupie samochodu",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Podatek od nieruchomości za halę magazynową",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Interpretacja indywidualna przepisów prawa podatkowego, wniosek",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Estoński CIT dla spółki, warunki",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Koszty uzyskania przychodu przy działalności gospodarczej",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Ryczałt od przychodów ewidencjonowanych dla programisty",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Kasa fiskalna online, obowiązek dla usług",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Akcyza od samochodu sprowadzonego z zagranicy",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Cło przy imporcie towarów z Chin",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Limit płatności gotówką między firmami",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Przedawnienie zobowiązania podatkowego, 5 lat",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Opłata skarbowa od pozwolenia",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Przeciwdziałanie praniu pieniędzy, obowiązki biura rachunkowego AML",
+  "dr": "dr-06",
+  "znany_blad": true
+ },
+ {
+  "q": "Sprzedaż mieszkania przed upływem 5 lat, podatek dochodowy",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Ulga termomodernizacyjna w PIT",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Księga przychodów i rozchodów, korekta wpisu",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Odwołanie do KIO od odrzucenia naszej oferty w przetargu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Wybór najkorzystniejszej oferty, zamawiający pominął nasze doświadczenie",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Rażąco niska cena w postępowaniu o zamówienie publiczne",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Unieważnienie przetargu przez zamawiającego, czy można się odwołać?",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Wadium w przetargu, kiedy zamawiający je zatrzymuje?",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Zmiana umowy w sprawie zamówienia publicznego, waloryzacja cen",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Kary umowne w umowie z gminą po przetargu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Próg stosowania Prawa zamówień publicznych w 2026",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Tryb podstawowy z negocjacjami, jak przebiega?",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Opis przedmiotu zamówienia wskazuje konkretną markę, czy to dozwolone?",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Wykluczenie wykonawcy z postępowania, samooczyszczenie",
+  "dr": "dr-07",
+  "znany_blad": true
+ },
+ {
+  "q": "JEDZ w przetargu unijnym",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Dotacja unijna, korekta finansowa za naruszenie zasady konkurencyjności",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Zwrot dofinansowania z funduszy europejskich",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Partnerstwo publiczno-prywatne w budowie parkingu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Koncesja na roboty budowlane",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Kontrola zamówienia przez Prezesa UZP",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Naruszenie dyscypliny finansów publicznych przez wójta przy zamówieniu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Skarga na wyrok KIO do sądu zamówień publicznych",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Podwykonawca nie dostał zapłaty w zamówieniu publicznym",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Kontrola NIK w jednostce samorządu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Regionalna izba obrachunkowa a zamówienia gminy",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Zamówienie z wolnej ręki, kiedy dopuszczalne?",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Wymóg doświadczenia wykonawcy w przetargu, warunki udziału",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Konsorcjum w przetargu, solidarna odpowiedzialność",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Miejscowy plan zagospodarowania przestrzennego przeznaczył moją działkę pod drogę",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Gmina odmówiła wydania warunków zabudowy",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Plan ogólny gminy, co zmienia dla właścicieli działek?",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Odszkodowanie od gminy za spadek wartości nieruchomości po uchwaleniu planu",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Renta planistyczna przy sprzedaży działki",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Skarga na uchwałę rady gminy do sądu administracyjnego",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Wojewoda stwierdził nieważność uchwały rady miasta",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Opłata za wywóz odpadów komunalnych, uchwała gminy",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Strefa płatnego parkowania, kara za brak biletu",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Referendum w sprawie odwołania wójta",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Radny a zakaz prowadzenia działalności z mieniem gminy",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Statut sołectwa, wybór sołtysa",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Budżet obywatelski w mieście, zasady",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Burmistrz nie odpowiada na wniosek mieszkańców",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Uchwała krajobrazowa a reklamy na budynku",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Dzierżawa gruntu od gminy, przetarg na najem",
+  "dr": "dr-08",
+  "znany_blad": true
+ },
+ {
+  "q": "Opłata adiacencka po budowie drogi gminnej",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Taryfa za wodę i ścieki, zatwierdzenie przez Wody Polskie",
+  "dr": "dr-08",
+  "znany_blad": true
+ },
+ {
+  "q": "Rada powiatu, kompetencje starosty",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Samorząd województwa, marszałek a sejmik",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Akt prawa miejscowego, publikacja w dzienniku urzędowym województwa",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Rewitalizacja obszaru w gminie, specjalna strefa",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Zabytek w gminnej ewidencji zabytków, ograniczenia remontu",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Nadzór regionalnej izby obrachunkowej nad uchwałą budżetową gminy",
+  "dr": "dr-08",
+  "znany_blad": true
+ },
+ {
+  "q": "Pracownik samorządowy, nabór na stanowisko urzędnicze",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Sąsiad stawia altanę bez zgłoszenia, samowola budowlana",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Pozwolenie na budowę domu jednorodzinnego, dokumenty",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Zgłoszenie budowy budynku gospodarczego do 35 m2",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Nadzór budowlany nakazał rozbiórkę, czy można zalegalizować?",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Odbiór budynku i pozwolenie na użytkowanie",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Kierownik budowy, obowiązki i dziennik budowy",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Wycinka drzewa na prywatnej działce, zgłoszenie do gminy",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Kara za usunięcie drzewa bez zezwolenia",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Decyzja o środowiskowych uwarunkowaniach dla fermy drobiu",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Farma fotowoltaiczna na gruntach rolnych",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Przyłączenie mikroinstalacji fotowoltaicznej do sieci",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Taryfa za prąd zatwierdzona przez URE, reklamacja rachunku",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Odpady budowlane, kto odpowiada za wywóz?",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Gospodarka odpadami w firmie, BDO",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Szkody łowieckie w kukurydzy, odszkodowanie od koła łowieckiego",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Polowanie przy domach, odległość od zabudowań",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Wywłaszczenie działki pod budowę drogi ekspresowej",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Odszkodowanie za działkę zajętą pod drogę publiczną",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Pozwolenie wodnoprawne na studnię",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Prawo geologiczne, wydobycie kruszywa na własnej działce",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Świadectwo charakterystyki energetycznej przy najmie mieszkania",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Przewóz osób busem, licencja na transport drogowy",
+  "dr": "dr-09"
+ },
+ {
+  "q": "System kaucyjny, zwrot butelek w sklepie",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Obszar Natura 2000, ograniczenia budowy domu",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Ochrona zabytków, remont kamienicy w strefie konserwatorskiej",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Geodeta, rozgraniczenie nieruchomości",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Hałas z farmy wiatrowej, odległość od zabudowań",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Błąd lekarski podczas operacji, jak dochodzić odszkodowania od szpitala?",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Prawa pacjenta, dostęp do dokumentacji medycznej",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Szpital odmówił wydania kopii dokumentacji medycznej",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Rzecznik Praw Pacjenta, skarga na lekarza",
+  "dr": "dr-10"
+ },
+ {
+  "q": "NFZ nie chce zrefundować leczenia za granicą",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Kolejka do specjalisty w ramach NFZ, czas oczekiwania",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Przymusowe leczenie psychiatryczne bez zgody pacjenta",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Apteka odmówiła wydania leku na receptę",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Refundacja leków, lista refundacyjna",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Sprzedaż suplementów diety bez zgłoszenia do GIS",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Sanepid zamknął restaurację, kontrola sanitarna",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Etykietowanie żywności, alergeny w menu",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Szkoła odmówiła przyjęcia dziecka z orzeczeniem o potrzebie kształcenia specjalnego",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Uczeń zawieszony w prawach ucznia przez dyrektora",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Egzamin maturalny, unieważnienie pracy",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Uczelnia skreśliła studenta z listy studentów",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Rolnik, dopłaty bezpośrednie z ARiMR",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Hodowla psów, zezwolenie i obowiązki",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Weterynarz, szczepienie psa przeciw wściekliźnie",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Impreza masowa na stadionie, zakaz stadionowy",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Sport, kontrakt zawodnika z klubem",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Wyroby medyczne, rejestracja w Polsce",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Pielęgniarka, prawo wykonywania zawodu",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Zgoda pacjenta na zabieg, małoletni pacjent",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Telemedycyna i e-recepta",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Choroby rzadkie, dostęp do leku sierocego",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Zdrowie psychiczne, skierowanie do szpitala psychiatrycznego",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Firma udostępniła moje dane osobowe innej spółce bez zgody",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Wyciek danych z bazy sklepu internetowego, co mogę zrobić?",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Pracodawca monitoruje służbową pocztę e-mail pracowników",
+  "dr": "dr-11",
+  "znany_blad": true
+ },
+ {
+  "q": "Kamera sąsiada nagrywa moje podwórko, czy to legalne?",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Monitoring wizyjny w szkole, obowiązki dyrektora",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Prawo do usunięcia danych, sklep dalej wysyła mi oferty",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Żądanie kopii moich danych od banku",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Administrator nie odpowiedział na wniosek o sprostowanie danych",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Zgoda na przetwarzanie danych w formularzu kontaktowym",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Klauzula informacyjna RODO dla klientów firmy",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Rejestr czynności przetwarzania w gabinecie stomatologicznym",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Umowa powierzenia przetwarzania danych z biurem rachunkowym",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Inspektor ochrony danych w gminie, obowiązek powołania",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Naruszenie ochrony danych osobowych, zgłoszenie do Prezesa UODO w 72 godziny",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Kara od Prezesa UODO dla spółki",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Skarga do Prezesa UODO na przychodnię",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Pliki cookies i zgoda na marketing na stronie",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Telemarketing bez zgody, dzwonią do mnie z ofertami",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Newsletter wysłany bez zgody odbiorcy",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Publikacja zdjęć dzieci z przedszkola w internecie",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Wykorzystanie mojego wizerunku w reklamie bez zgody",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Ktoś skopiował mój artykuł i opublikował bez podania autora",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Licencja na oprogramowanie, prawa autorskie programisty",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Rejestracja znaku towarowego, sprzeciw innej firmy",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Patent na wynalazek, zgłoszenie do Urzędu Patentowego",
+  "dr": "dr-11"
+ },
+ {
+  "q": "AI Act, obowiązki dostawcy chatbota",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Cyberbezpieczeństwo, obowiązki operatora usługi kluczowej NIS2",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Atak hakerski na firmę, zgłoszenie incydentu do CSIRT",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Podpis elektroniczny kwalifikowany na umowie",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Kryptowaluty, rejestracja działalności MiCA",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Platforma internetowa usunęła moje konto, odwołanie DSA",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Ocena skutków dla ochrony danych przy biometrii",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Transfer danych osobowych poza Europejski Obszar Gospodarczy",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Ile wynosi opłata od pozwu o zapłatę 30 000 zł?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Zwolnienie od kosztów sądowych, jakie dokumenty dołączyć?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Pełnomocnik z urzędu w sprawie cywilnej, wniosek",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Koszty zastępstwa procesowego, stawki minimalne adwokata",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Skarga na radcę prawnego do rzecznika dyscyplinarnego",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Adwokat nie złożył apelacji w terminie, odpowiedzialność odszkodowawcza",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Biegły sądowy wydał opinię niekorzystną, wniosek o nowego biegłego",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Wynagrodzenie biegłego sądowego, zaliczka",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Mediacja sądowa w sprawie o zapłatę, koszty mediatora",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Sąd polubowny, zapis na sąd arbitrażowy w umowie",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Komornik sądowy, skarga na opłatę egzekucyjną",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Wybór komornika przez wierzyciela",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Notariusz pobrał zbyt wysoką taksę",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Prokuratura, zażalenie na przewlekłość działań prokuratora",
+  "dr": "dr-12",
+  "znany_blad": true
+ },
+ {
+  "q": "Kurator sądowy, obowiązki wobec skazanego",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Referendarz sądowy wydał nakaz zapłaty, skarga na orzeczenie referendarza",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Asesor sądowy, czy może orzekać?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Rzecznik patentowy, kto może reprezentować przed UPRP?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Doradca restrukturyzacyjny, licencja",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Odpowiedzialność dyscyplinarna sędziego",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Zwrot kosztów sądowych po wygranej sprawie",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Opłata sądowa od apelacji w sprawie o rozwód",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Taksa notarialna przy umowie darowizny",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Zawód radcy prawnego, aplikacja i egzamin",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Policjant zatrzymał mnie do kontroli drogowej, czy może przeszukać samochód?",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Legitymowanie przez policję bez powodu",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Użycie paralizatora przez policję, skarga",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Pozwolenie na broń sportową, procedura",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Komendant cofnął pozwolenie na broń",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Poświadczenie bezpieczeństwa, odmowa wydania przez ABW",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Informacje niejawne w firmie, kancelaria tajna",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Wezwanie na ćwiczenia wojskowe, czy mogę odmówić?",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Kwalifikacja wojskowa, obowiązek stawiennictwa",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Dobrowolna zasadnicza służba wojskowa",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Służby specjalne, kontrola operacyjna i podsłuch",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Retencja danych telekomunikacyjnych, dostęp służb do billingów",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Straż Graniczna, kontrola na lotnisku",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Państwowa Straż Pożarna, kontrola przeciwpożarowa w hotelu",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Żandarmeria Wojskowa, zatrzymanie żołnierza",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Zarządzanie kryzysowe, obrona cywilna i schrony",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Mobilizacja, świadczenia osobiste na rzecz obrony",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Służba w Policji, postępowanie dyscyplinarne funkcjonariusza",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Centralne Biuro Antykorupcyjne, kontrola oświadczeń majątkowych",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Ochotnicza Straż Pożarna, ekwiwalent dla strażaka",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Skarga do Europejskiego Trybunału Praw Człowieka, termin czterech miesięcy",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Naruszenie prawa do rzetelnego procesu, art. 6 Konwencji",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Karta praw podstawowych UE przed polskim sądem",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Pytanie prejudycjalne do TSUE w sprawie konsumenckiej",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Prawo właściwe dla umowy sprzedaży z kontrahentem z Włoch",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Jurysdykcja sądu przy rozwodzie małżonków różnych narodowości",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Uznanie zagranicznego wyroku rozwodowego w Polsce",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Egzekucja polskiego wyroku w Niemczech, europejski tytuł egzekucyjny",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Europejski nakaz zapłaty przeciwko firmie z Hiszpanii",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Status uchodźcy, ochrona międzynarodowa w Polsce",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Konwencja wiedeńska, immunitet dyplomaty",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Mały ruch graniczny z Ukrainą",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Swoboda przepływu pracowników w UE, praca w Holandii",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Dyrektywa UE niewdrożona w Polsce, odpowiedzialność państwa",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Traktat o funkcjonowaniu UE, pomoc publiczna",
+  "dr": "dr-14",
+  "znany_blad": true
+ },
+ {
+  "q": "Pakt Praw Obywatelskich i Politycznych ONZ, komitet praw człowieka",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Umowa międzynarodowa o unikaniu podwójnego opodatkowania a prawo UE",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Inwestycja zagraniczna, arbitraż inwestycyjny BIT",
+  "dr": "dr-14"
+ },
+ {
+  "q": "NATO, umowa o statusie sił zbrojnych",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Prawo prywatne międzynarodowe, spadek po obywatelu Francji",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Procedura zgłoszeń wewnętrznych dla sygnalistów w firmie 50 osób",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Ochrona sygnalisty przed zwolnieniem",
+  "dr": "dr-15"
+ },
+ {
+  "q": "System zarządzania bezpieczeństwem informacji ISO 27001",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Audyt zgodności ISO 37301 w spółce",
+  "dr": "dr-15"
+ },
+ {
+  "q": "System antykorupcyjny ISO 37001, polityka prezentów",
+  "dr": "dr-15"
+ },
+ {
+  "q": "ISO 42001, zarządzanie systemami sztucznej inteligencji w firmie",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Compliance officer, obowiązki w grupie kapitałowej",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Program compliance a odpowiedzialność podmiotu zbiorowego",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Zamówienia w dziedzinach obronności i bezpieczeństwa",
+  "dr": "dr-15"
+ },
+ {
+  "q": "DORA, zarządzanie ryzykiem ICT w banku",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Nadzór AML nad instytucją płatniczą",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Ustawa antykorupcyjna, zakaz zasiadania w zarządzie spółki przez urzędnika",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Kodeks etyki i polityka konfliktu interesów w spółce",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Audyt wewnętrzny w jednostce sektora finansów publicznych",
+  "dr": "dr-15",
+  "znany_blad": true
+ },
+ {
+  "q": "Polityka whistleblowingu w spółce giełdowej",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Ład korporacyjny, dobre praktyki spółek notowanych",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Zarządzanie ryzykiem nadużyć w firmie",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Szkolenia compliance dla pracowników",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Jak doręczyć pismo przez portal informacyjny sądów powszechnych?",
+  "dr": "dr-16"
+ },
+ {
+  "q": "E-doręczenia, skrzynka do doręczeń elektronicznych dla firmy",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Odtworzenie zaginionych akt sprawy spadkowej",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Kalkulator odsetek ustawowych za opóźnienie w transakcjach handlowych",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Kalkulator terminu na apelację",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Sprostowanie w prasie, redakcja odmówiła publikacji",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Autoryzacja wywiadu, prawo prasowe",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Wymogi formalne pisma procesowego, podpis i odpisy",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Strategia procesowa w sporze z kontrahentem",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Kontrola kompletności pozwu przed złożeniem",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Archiwizacja dokumentacji pracowniczej, ile lat?",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Odmowa wydania paszportu przez wojewodę",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Zameldowanie i wymeldowanie z mieszkania",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Nadanie obywatelstwa polskiego przez prezydenta",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Arbitraż sportowy, odwołanie od kary związku sportowego",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Prawo do sądu, konstytucyjne gwarancje procesowe",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Napisz pozew o alimenty na dwoje dzieci",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o zachowek przeciwko bratu",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Przygotuj pozew o rozwód bez orzekania o winie",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o eksmisję najemcy, który nie płaci czynszu",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew przeciwko bankowi o unieważnienie umowy kredytu frankowego",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o zapłatę kary umownej od dewelopera",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz odwołanie od wypowiedzenia umowy o pracę do sądu pracy",
+  "dr": "dr-04",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Przygotuj pozew o zapłatę wynagrodzenia za nadgodziny",
+  "dr": "dr-04",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz odwołanie od decyzji ZUS odmawiającej renty",
+  "dr": "dr-04",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o odszkodowanie za mobbing",
+  "dr": "dr-04",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz zażalenie na postanowienie o umorzeniu śledztwa w sprawie oszustwa",
+  "dr": "dr-03",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Przygotuj apelację od wyroku skazującego za jazdę po alkoholu",
+  "dr": "dr-03",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz zażalenie na tymczasowe aresztowanie",
+  "dr": "dr-03",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz skargę do WSA na bezczynność burmistrza w sprawie informacji publicznej",
+  "dr": "dr-05",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Przygotuj skargę do WSA na decyzję o odmowie karty pobytu",
+  "dr": "dr-05",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz skargę do WSA na decyzję w sprawie podatku VAT",
+  "dr": "dr-06",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz odwołanie od decyzji nakazującej rozbiórkę samowoli budowlanej",
+  "dr": "dr-09",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o zadośćuczynienie za wyciek danych osobowych",
+  "dr": "dr-11",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Przygotuj skargę do WSA na decyzję Prezesa UODO",
+  "dr": "dr-11",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz odwołanie do KIO od odrzucenia oferty w przetargu",
+  "dr": "dr-07",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz wezwanie do zapłaty za niezapłaconą fakturę dla kontrahenta",
+  "dr": "dr-02",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz sprzeciw od nakazu zapłaty wydanego na rzecz windykatora",
+  "dr": "dr-02",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz oświadczenie o sankcji kredytu darmowego do banku",
+  "dr": "dr-02",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz skargę do Prezesa UODO na sklep internetowy",
+  "dr": "dr-11",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz wniosek o interpretację indywidualną do ZUS w sprawie składek",
+  "dr": "dr-04",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz wniosek o interpretację indywidualną do Dyrektora KIS w sprawie VAT",
+  "dr": "dr-06",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Napisz skargę na czynności komornika, który zajął wynagrodzenie",
+  "dr": "dr-03",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Przeanalizuj umowę najmu mieszkania przed podpisaniem",
+  "dr": "dr-02",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Czy mogę podpisać umowę deweloperską z takimi karami umownymi?",
+  "dr": "dr-02",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Sprawdź umowę pożyczki z parabanku, czy koszty są legalne",
+  "dr": "dr-02",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Przeanalizuj umowę o pracę z zakazem konkurencji",
+  "dr": "dr-04",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Przeanalizuj umowę powierzenia przetwarzania danych z dostawcą chmury",
+  "dr": "dr-11",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Sprawdź umowę licencyjną na oprogramowanie, prawa autorskie",
+  "dr": "dr-11",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Przeanalizuj umowę o zamówienie publiczne na roboty budowlane",
+  "dr": "dr-07",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Jakie mam szanse w sprawie o zachowek po matce?",
+  "dr": "dr-02",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Oceń szanse wygrania sprawy z bankiem o kredyt frankowy",
+  "dr": "dr-02",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Jakie mam szanse w sprawie o przywrócenie do pracy po zwolnieniu dyscyplinarnym?",
+  "dr": "dr-04",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Oceń szanse obrony w sprawie o pobicie",
+  "dr": "dr-03",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Jakie mam szanse na odszkodowanie za wyciek danych osobowych?",
+  "dr": "dr-11",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Oceń szanse skargi do WSA na odmowę karty pobytu",
+  "dr": "dr-05",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Znajdź orzecznictwo SN w sprawie zachowku i darowizn",
+  "dr": "dr-02",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Linia orzecznicza w sprawach frankowych po wyrokach TSUE",
+  "dr": "dr-02",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Znajdź wyroki SN w sprawie mobbingu",
+  "dr": "dr-04",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Znajdź orzecznictwo NSA dotyczące kar nakładanych przez Prezesa UODO",
+  "dr": "dr-11",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Linia orzecznicza NSA w sprawie podatku od nieruchomości dla budowli",
+  "dr": "dr-06",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Znajdź orzecznictwo SN w sprawie stalkingu",
+  "dr": "dr-03",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Co oznacza art. 991 KC o zachowku i jakie są przesłanki?",
+  "dr": "dr-02",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Wykładnia art. 94 3 KP, przesłanki mobbingu",
+  "dr": "dr-04",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Jakie są przesłanki z art. 6 ust. 1 lit. f RODO, uzasadniony interes?",
+  "dr": "dr-11",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Przesłanki z art. 190a KK, uporczywe nękanie",
+  "dr": "dr-03",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Wykładnia art. 15 ustawy o CIT, koszty uzyskania przychodu",
+  "dr": "dr-06",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Przesłanki z art. 156 KPA, stwierdzenie nieważności decyzji",
+  "dr": "dr-05",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Mam nagrania rozmów z szefem, czy to dowód mobbingu?",
+  "dr": "dr-04",
+  "skill": "analizator-dowodow-v3"
+ },
+ {
+  "q": "Oceń SMS-y z groźbami jako dowód w sprawie o stalking",
+  "dr": "dr-03",
+  "skill": "analizator-dowodow-v3"
+ },
+ {
+  "q": "Oceń maile z kontrahentem jako dowód zawarcia umowy",
+  "dr": "dr-02",
+  "skill": "analizator-dowodow-v3"
+ },
+ {
+  "q": "Czy zrzuty ekranu z wyciekiem danych to dowód naruszenia RODO?",
+  "dr": "dr-11",
+  "skill": "analizator-dowodow-v3",
+  "znany_blad": true
+ },
+ {
+  "q": "Przygotuj pytania do świadka w sprawie o mobbing w pracy",
+  "dr": "dr-04",
+  "skill": "przesluchanie-swiadkow-v2-min90"
+ },
+ {
+  "q": "Pytania do świadka pobicia w sprawie karnej",
+  "dr": "dr-03",
+  "skill": "przesluchanie-swiadkow-v2-min90"
+ },
+ {
+  "q": "Pytania do biegłego w sprawie o błąd budowlany dewelopera",
+  "dr": "dr-02",
+  "skill": "przesluchanie-swiadkow-v2-min90"
+ },
+ {
+  "q": "Od czego zacząć, dostałem pozew o zapłatę od banku",
+  "dr": "dr-02",
+  "skill": "przewodnik-prawny-v2"
+ },
+ {
+  "q": "Co mam zrobić, pracodawca dał mi wypowiedzenie",
+  "dr": "dr-04",
+  "skill": "przewodnik-prawny-v2"
+ },
+ {
+  "q": "Firma ujawniła moje dane, czy mogę złożyć skargę do UODO?",
+  "dr": "dr-11",
+  "skill": "przewodnik-prawny-v2"
+ },
+ {
+  "q": "Co mam zrobić, dostałem wezwanie na policję jako podejrzany o kradzież",
+  "dr": "dr-03",
+  "skill": "przewodnik-prawny-v2"
+ },
+ {
+  "q": "Zrób chronologię zdarzeń w sprawie o mobbing",
+  "dr": "dr-04",
+  "skill": "chronologia-sprawy-v1"
+ },
+ {
+  "q": "Ułóż oś czasu sprawy spadkowej po ojcu",
+  "dr": "dr-02",
+  "skill": "chronologia-sprawy-v1"
+ },
+ {
+  "q": "Przygotuj raport dla klienta o stanie sprawy rozwodowej",
+  "dr": "dr-02",
+  "skill": "raport-klienta-v1"
+ },
+ {
+  "q": "Przygotuj raport sytuacyjny po wycieku danych osobowych w spółce",
+  "dr": "dr-11",
+  "skill": "raport-sytuacyjny-v2"
+ },
+ {
+  "q": "Dzień dobry, jak się masz?",
+  "dr": null
+ },
+ {
+  "q": "Dziękuję za pomoc, to wszystko",
+  "dr": null
+ },
+ {
+  "q": "Jaka jest dziś pogoda w Warszawie?",
+  "dr": null
+ },
+ {
+  "q": "Przetłumacz to zdanie na angielski",
+  "dr": null
+ },
+ {
+  "q": "Napisz wiersz o jesieni",
+  "dr": null
+ },
+ {
+  "q": "Ile to jest 15 procent z 2000?",
+  "dr": null
+ },
+ {
+  "q": "Polecisz dobrą książkę na weekend?",
+  "dr": null
+ },
+ {
+  "q": "Jak ugotować rosół?",
+  "dr": null
+ },
+ {
+  "q": "Streszczenie filmu Seksmisja",
+  "dr": null
+ },
+ {
+  "q": "Jak zmienić hasło w Windows?",
+  "dr": null
+ },
+ {
+  "q": "Pokaż mi listę moich spraw",
+  "dr": null
+ },
+ {
+  "q": "Otwórz ostatni wątek",
+  "dr": null
+ },
+ {
+  "q": "Zrób krótsze podsumowanie poprzedniej odpowiedzi",
+  "dr": null
+ },
+ {
+  "q": "Popraw literówki w tym tekście",
+  "dr": null
+ },
+ {
+  "q": "Wyjaśnij, czym jest fotosynteza",
+  "dr": null
+ },
+ {
+  "q": "Jakie są godziny otwarcia biblioteki?",
+  "dr": null
+ },
+ {
+  "q": "Kto wygrał mundial w 2022?",
+  "dr": null
+ },
+ {
+  "q": "Zaplanuj mi trening na siłownię",
+  "dr": null
+ },
+ {
+  "q": "Jak napisać CV po angielsku?",
+  "dr": null
+ },
+ {
+  "q": "Ile kosztuje bilet do kina?",
+  "dr": null
+ }
+]

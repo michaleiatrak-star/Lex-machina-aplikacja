@@ -1,5 +1,7 @@
 # CHANGELOG — Biblioteka shared
 
+- 3.99.11 (2026-10-05m, AUDYT-2026-10-05m): ACTIVATION-MATRIX: wiersz pisma-procesowe-v3 — „skarga do WSA”, „odwołanie do KIO” (pełne pismo, nie schemat pisma prostego).
+
 - 3.99.10 (2026-10-05k, AUDYT-2026-10-05k): ACTIVATION-MATRIX: „oceń szanse”, „szanse wygrania”, „przeanalizuj akta”, „analiza akt” → analiza-sadowa-v6.
 
 - 3.99.9 (2026-10-05i, AUDYT-2026-10-05i): HIERARCHIA-ZRODEL: KANON KOLEJNOŚCI E-1…E-5 i REALIA DOSTĘPNOŚCI RZĘDU 1 oznaczone WERYFIKACJA-ELI; MOD-STEP-TRACKER: FAZA 0 i FAZA 1 oznaczone REJESTR-KROKOW. Treść reguł bez zmian.

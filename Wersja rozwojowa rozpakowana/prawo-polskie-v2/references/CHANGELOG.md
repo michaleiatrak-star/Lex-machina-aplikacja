@@ -1,5 +1,7 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.43 (2026-10-05m, AUDYT-2026-10-05m): Routing błyskawiczny: słownictwo obszarów prawa dla DR-01–DR-16 po teście 500 pytań (m.in. DR-01 Sejm/weto/źródła prawa, DR-12 zawody i koszty, DR-14 jurysdykcja/prawo właściwe/za granicą, DR-15 DORA/audyt wewnętrzny, DR-16 prasa/meldunek); DR-01 „wybory” zawężone do wyborów powszechnych, DR-16 bez „orzecznictwo” (orzecznictwo to skill wykonawczy, nie dziedzina).
+
 - 6.42 (2026-10-05l, AUDYT-2026-10-05l): Routing błyskawiczny: słownictwo spraw klientów dla DR-01–DR-16 (m.in. RODO: monitoring wizyjny, IOD, rejestr czynności, powierzenie, wizerunek, spam, cookies, profilowanie; karne: pobicie, kradzież, jazda po alkoholu; praca: mobbing, L4, nadgodziny).
 
 - 6.41 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

@@ -1,0 +1,497 @@
+[
+ {
+  "q": "Czy Sejm może skrócić kadencję samorządów ustawą?",
+  "dr": "dr-01",
+  "znany_blad": true
+ },
+ {
+  "q": "Trybunał Konstytucyjny uznał przepis za niezgodny z Konstytucją, co z moim wyrokiem?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Kto może zgłosić kandydata na prezydenta?",
+  "dr": "dr-01",
+  "znany_blad": true
+ },
+ {
+  "q": "Konstytucyjne prawo do prywatności a nowa ustawa",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Czy Senat może odrzucić ustawę w całości?",
+  "dr": "dr-01"
+ },
+ {
+  "q": "Rozporządzenie wykonawcze wykracza poza delegację ustawową",
+  "dr": "dr-01",
+  "znany_blad": true
+ },
+ {
+  "q": "Teściowa chce odebrać darowanie mieszkanie, odwołanie darowizny",
+  "dr": "dr-02",
+  "znany_blad": true
+ },
+ {
+  "q": "Brat nie chce wyjść ze współwłasności domu po rodzicach",
+  "dr": "dr-02",
+  "znany_blad": true
+ },
+ {
+  "q": "Kupiłem używane auto z ukrytą wadą, sprzedawca prywatny",
+  "dr": "dr-02",
+  "znany_blad": true
+ },
+ {
+  "q": "Wierzyciel sprzedał mój dług firmie windykacyjnej, cesja",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Umowa przedwstępna sprzedaży mieszkania, zadatek przepadł",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Rodzice chcą przepisać gospodarstwo na mnie, umowa dożywocia",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ustalenie ojcostwa dziecka po rozstaniu",
+  "dr": "dr-02"
+ },
+ {
+  "q": "Ktoś podszył się pode mnie i wziął kredyt na moje dane",
+  "dr": "dr-03",
+  "znany_blad": true
+ },
+ {
+  "q": "Policja zatrzymała mnie z dopalaczami",
+  "dr": "dr-03",
+  "znany_blad": true
+ },
+ {
+  "q": "Pobicie przez ochroniarza w klubie",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Syn ukradł w sklepie towar za 300 zł, wykroczenie czy przestępstwo?",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Jazda bez uprawnień po utracie prawa jazdy",
+  "dr": "dr-03"
+ },
+ {
+  "q": "Skazany chce odbywać karę w systemie dozoru elektronicznego",
+  "dr": "dr-03",
+  "znany_blad": true
+ },
+ {
+  "q": "Nie dostałem wypłaty od dwóch miesięcy, pracodawca zwleka",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Czy pracodawca może obniżyć mi pensję bez mojej zgody?",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Okres wypowiedzenia przy umowie na czas określony",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Ojciec stracił pracę tuż przed emeryturą, ochrona przedemerytalna",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Pracownica w ciąży na umowie na okres próbny",
+  "dr": "dr-04"
+ },
+ {
+  "q": "ZUS żąda zwrotu zasiłku macierzyńskiego",
+  "dr": "dr-04"
+ },
+ {
+  "q": "Urząd nie odpowiada na moje pismo od trzech miesięcy",
+  "dr": "dr-05",
+  "znany_blad": true
+ },
+ {
+  "q": "Decyzja o odmowie przyznania dodatku mieszkaniowego, odwołanie",
+  "dr": "dr-05",
+  "znany_blad": true
+ },
+ {
+  "q": "Wojewoda wydał decyzję o wydaleniu cudzoziemca",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Jak zaskarżyć postanowienie organu administracji?",
+  "dr": "dr-05"
+ },
+ {
+  "q": "Egzekucja grzywny w celu przymuszenia przez urząd",
+  "dr": "dr-05",
+  "znany_blad": true
+ },
+ {
+  "q": "Rzecznik Praw Obywatelskich, skarga na działanie urzędu",
+  "dr": "dr-05",
+  "znany_blad": true
+ },
+ {
+  "q": "Fiskus zakwestionował koszty w mojej firmie",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Darowizna od rodziców na mieszkanie, zgłoszenie do urzędu skarbowego",
+  "dr": "dr-06",
+  "znany_blad": true
+ },
+ {
+  "q": "Sprzedaż działki odziedziczonej po babci, podatek",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Czy muszę płacić VAT od sprzedaży używanego auta firmowego?",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Zaległości w składkach i podatkach, ulga w spłacie",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Kontrola celno-skarbowa w magazynie",
+  "dr": "dr-06"
+ },
+ {
+  "q": "Zamawiający unieważnił przetarg po otwarciu ofert",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Gmina nie zapłaciła wykonawcy za roboty w zamówieniu publicznym",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Kryteria oceny ofert inne niż cena w przetargu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Zwrot dotacji z funduszy UE po kontroli projektu",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Ogłoszenie o zamówieniu, termin składania ofert za krótki",
+  "dr": "dr-07"
+ },
+ {
+  "q": "Rada miasta podjęła uchwałę o zakazie handlu w niedziele na targowisku",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Gmina nie odśnieża drogi gminnej, czyje to zadanie?",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Wniosek o zmianę studium i planu miejscowego dla mojej działki",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Opłata za psa w gminie, uchwała",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Wójt odmówił udostępnienia sali gminnej",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Sejmik województwa uchwalił program ochrony powietrza",
+  "dr": "dr-08"
+ },
+ {
+  "q": "Rozbudowa domu bez pozwolenia, legalizacja",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Sąsiad wylewa szambo na pole, ochrona środowiska",
+  "dr": "dr-09"
+ },
+ {
+  "q": "Pozwolenie na wycinkę lasu prywatnego",
+  "dr": "dr-09",
+  "znany_blad": true
+ },
+ {
+  "q": "Linia energetyczna przez moją działkę, służebność przesyłu i odszkodowanie",
+  "dr": "dr-09",
+  "znany_blad": true
+ },
+ {
+  "q": "Licencja taksówkarska, przewóz osób",
+  "dr": "dr-09",
+  "znany_blad": true
+ },
+ {
+  "q": "Instalacja pompy ciepła, dotacja i pozwolenie",
+  "dr": "dr-09",
+  "znany_blad": true
+ },
+ {
+  "q": "Lekarz odmówił wypisania recepty",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Szpital zgubił moją dokumentację medyczną",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Dziecko nie dostało się do przedszkola publicznego",
+  "dr": "dr-10",
+  "znany_blad": true
+ },
+ {
+  "q": "Producent żywności, wycofanie partii z rynku",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Lekarz weterynarii źle leczył mojego kota",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Student chce przenieść się na inną uczelnię",
+  "dr": "dr-10"
+ },
+ {
+  "q": "Firma kurierska wysłała moje dane do innej osoby",
+  "dr": "dr-11",
+  "znany_blad": true
+ },
+ {
+  "q": "Sąsiad opublikował nagranie ze mną w mediach społecznościowych",
+  "dr": "dr-11",
+  "znany_blad": true
+ },
+ {
+  "q": "Czy szkoła może przetwarzać dane biometryczne uczniów?",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Program komputerowy napisany przez pracownika, do kogo należą prawa?",
+  "dr": "dr-11",
+  "znany_blad": true
+ },
+ {
+  "q": "Chatbot AI w firmie, obowiązki informacyjne",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Bank odmówił usunięcia moich danych po zamknięciu konta",
+  "dr": "dr-11"
+ },
+ {
+  "q": "Ile kosztuje sprawa rozwodowa w sądzie, opłata od pozwu?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Adwokat z urzędu w sprawie karnej, jak uzyskać?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Notariusz odmówił sporządzenia aktu",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Biegły sądowy nie złożył opinii w terminie",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Mediator sądowy, ile kosztuje mediacja rodzinna?",
+  "dr": "dr-12"
+ },
+ {
+  "q": "Policja weszła do mieszkania bez nakazu",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Odmowa wydania pozwolenia na broń kolekcjonerską",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Kontrola osobista przez Straż Graniczną na lotnisku",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Rezerwista dostał kartę mobilizacyjną",
+  "dr": "dr-13",
+  "znany_blad": true
+ },
+ {
+  "q": "Dostęp do informacji niejawnych dla pracownika firmy zbrojeniowej",
+  "dr": "dr-13"
+ },
+ {
+  "q": "Wyrok ETPC przeciwko Polsce, wznowienie postępowania",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Rozwód z cudzoziemcem, który mieszka za granicą",
+  "dr": "dr-14",
+  "znany_blad": true
+ },
+ {
+  "q": "Dziedziczenie nieruchomości w Hiszpanii po polskim obywatelu",
+  "dr": "dr-14",
+  "znany_blad": true
+ },
+ {
+  "q": "Uprowadzenie dziecka za granicę przez rodzica, konwencja haska",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Prawo azylu, odmowa ochrony międzynarodowej",
+  "dr": "dr-14"
+ },
+ {
+  "q": "Wdrożenie kanału zgłoszeń anonimowych dla pracowników",
+  "dr": "dr-15",
+  "znany_blad": true
+ },
+ {
+  "q": "Polityka antykorupcyjna dla działu zakupów",
+  "dr": "dr-15",
+  "znany_blad": true
+ },
+ {
+  "q": "Certyfikacja systemu zarządzania zgodnością",
+  "dr": "dr-15"
+ },
+ {
+  "q": "Raportowanie incydentów ICT przez bank zgodnie z DORA",
+  "dr": "dr-15",
+  "znany_blad": true
+ },
+ {
+  "q": "Audyt zgodności z regulacjami w spółce energetycznej",
+  "dr": "dr-15",
+  "znany_blad": true
+ },
+ {
+  "q": "Kalkulator kosztów procesu w sprawie o zapłatę",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Jak złożyć pismo do sądu elektronicznie?",
+  "dr": "dr-16",
+  "znany_blad": true
+ },
+ {
+  "q": "Gazeta opublikowała nieprawdziwy artykuł o mnie, sprostowanie",
+  "dr": "dr-16",
+  "znany_blad": true
+ },
+ {
+  "q": "Wymeldowanie byłego męża z mieszkania",
+  "dr": "dr-16",
+  "znany_blad": true
+ },
+ {
+  "q": "Utrata obywatelstwa polskiego",
+  "dr": "dr-16"
+ },
+ {
+  "q": "Napisz pozew o podział majątku wspólnego",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz pozew o przywrócenie do pracy",
+  "dr": "dr-04",
+  "skill": "pisma-procesowe-v3",
+  "znany_blad": true
+ },
+ {
+  "q": "Napisz apelację od wyroku w sprawie o alimenty",
+  "dr": "dr-02",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz skargę do WSA na odmowę pozwolenia na budowę",
+  "dr": "dr-09",
+  "skill": "pisma-procesowe-v3"
+ },
+ {
+  "q": "Napisz wezwanie do zapłaty dla najemcy zalegającego z czynszem",
+  "dr": "dr-02",
+  "skill": "pisma-proste-v2"
+ },
+ {
+  "q": "Przeanalizuj umowę zlecenia, którą mam podpisać",
+  "dr": "dr-04",
+  "skill": "analizator-umow-v1"
+ },
+ {
+  "q": "Oceń szanse w sprawie o jazdę po alkoholu",
+  "dr": "dr-03",
+  "skill": "analiza-sadowa-v6"
+ },
+ {
+  "q": "Znajdź wyroki TSUE w sprawie RODO i cookies",
+  "dr": "dr-11",
+  "skill": "orzeczenia-sadowe-v2"
+ },
+ {
+  "q": "Przesłanki art. 30 KP, rozwiązanie umowy o pracę",
+  "dr": "dr-04",
+  "skill": "analizator-przepisow-v2"
+ },
+ {
+  "q": "Pytania do świadka w sprawie o zasiedzenie",
+  "dr": "dr-02",
+  "skill": "przesluchanie-swiadkow-v2-min90"
+ },
+ {
+  "q": "Napisz mi przepis na sernik",
+  "dr": null
+ },
+ {
+  "q": "Która jest godzina w Tokio?",
+  "dr": null
+ },
+ {
+  "q": "Opowiedz dowcip",
+  "dr": null
+ },
+ {
+  "q": "Jak działa silnik elektryczny?",
+  "dr": null
+ },
+ {
+  "q": "Zmień język odpowiedzi na angielski",
+  "dr": null
+ },
+ {
+  "q": "Policz średnią z liczb 4, 8, 15",
+  "dr": null
+ },
+ {
+  "q": "Jakie są najlepsze seriale tego roku?",
+  "dr": null
+ },
+ {
+  "q": "Ile kalorii ma banan?",
+  "dr": null
+ },
+ {
+  "q": "Pomóż mi zaplanować wakacje w Grecji",
+  "dr": null
+ },
+ {
+  "q": "Co to jest blockchain?",
+  "dr": null
+ },
+ {
+  "q": "Jak nauczyć się programować w Pythonie?",
+  "dr": null
+ },
+ {
+  "q": "Dzięki, na dziś wystarczy",
+  "dr": null
+ }
+]

@@ -1,6 +1,6 @@
 # Moduł [BC] — DSAR / Żądania podmiotów danych (art. 12, 15–22 RODO)
 
-**Hasła spraw:** dostęp do danych, kopia danych, usunięcie danych, nie usuwa danych, prawo do bycia zapomnianym, sprostowanie danych, sprzeciw wobec przetwarzania, przenoszenie danych, ograniczenie przetwarzania, wniosek do administratora, administrator nie odpowiada
+**Hasła spraw:** żądanie dostępu do danych, kopia danych osobowych, usunięcie danych osobowych, nie usuwa danych, prawo do bycia zapomnianym, sprostowanie danych osobowych, sprzeciw wobec przetwarzania, przenoszenie danych, ograniczenie przetwarzania, DSAR
 
 > **Dodano:** 2026-07-05 (AUDYT-2026-07-05a) — wypełnienie luki operacyjnej RODO.
 > **Wzorzec:** rodo-dsar-pl (bundle ochrona-danych, awesome-matematic-skills-pl).

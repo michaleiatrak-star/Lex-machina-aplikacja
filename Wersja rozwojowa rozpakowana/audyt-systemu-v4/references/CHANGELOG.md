@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.186 (AUDYT-2026-10-05m): Test doboru DR na 500 pytaniach (486/500) i 113 świeżych (80/113, zła dziedzina 14). prawo-polskie 6.43, router 3.66, shared 3.99.11, DR-11 3.23.
+
 - 6.185 (AUDYT-2026-10-05l): Audyt przekazywania spraw do DR, modułu aktu i skilla wykonawczego (144 pytania DR, 56 wykonawczych; RODO/DR-11 osobno). prawo-polskie 6.42, router 3.65, „Hasła spraw” w DR-01/02/03/05/06/07/08/11.
 
 - 6.184 (AUDYT-2026-10-05k): Audyt ścieżek przekazywania spraw: moduły skilli dziedzinowych wskazane ścieżką dr-NN w skillach wykonawczych; frazy routingu [2]. pisma-procesowe 5.36, shared 3.99.10, router 3.64.

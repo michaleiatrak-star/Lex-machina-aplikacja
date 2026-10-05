@@ -69891,6 +69891,30 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05m — TRYB STRUKTURA: dobór DR na 500 pytaniach i na zestawie świeżym (6.186)
+
+### 1. ŹRÓDŁO
+Zlecenie: test doboru DR na 500 przykładach — sprawy, w których aplikacja musi sama dobrać DR (413, każdy z DR-01–DR-16), zlecenia skilla wykonawczego wymagające też DR (67) i pytania bez DR (20). Po strojeniu: 113 nowych pytań napisanych po zmianach (zestaw świeży, miara uogólnienia).
+
+### 2. USTALENIA
+- Wynik przed zmianą: 383/500 (76,6%); pytania nieprawne z DR: 8/20.
+- BŁĄD (aplikacja): frazy routingu traciły słowa z listy pomijanych — „prawo właściwe” było puste, „sąd pracy” = każda „praca”.
+- BŁĄD (aplikacja): zapasowe dopasowanie po mapach aktów wskazywało dziedzinę z jednego słowa albo z dwóch wariantów jednego słowa („pozwolenie” → Prawo farmaceutyczne); liczby lat trafiały w numery aktów UE („mundial w 2022” → DR-10).
+- BŁĄD (aplikacja): ogólne słowa ważyły tyle co specyficzne („odszkodowanie” = „mobbing”); sprawa karna zawsze przed dziedziną własną („mandat posła po skazaniu” → DR-03).
+- BŁĄD (korpus, AUDYT-2026-10-05l): zbyt ogólne „Hasła spraw” w mod-RODO-DSAR („administrator nie odpowiada”) — fałszywe trafienia; poprawione.
+- BŁĄD (macierz): „skarga do WSA na decyzję Prezesa UODO” → schemat SPK pisma prostego; „odwołanie do KIO” bez skilla wykonawczego.
+- Luki słownictwa routingu błyskawicznego w DR-01, 05, 07, 08, 09, 10, 12, 13, 14, 15, 16.
+
+### 3. ZMIANA
+- Aplikacja: słowa fraz bez listy pomijanych; dwa różne słowa pytania w zapasowym dopasowaniu; bez lat; słowo z map aktów czterech i więcej dziedzin waży pół; sprawa karna na drugim miejscu, gdy inna dziedzina ma frazę dwuwyrazową; pytanie o ocenę („oceń szanse skargi do WSA”) nie trafia do pisma.
+- prawo-polskie-v2 6.43, prawny-router-v3 3.66, shared 3.99.11 (ACTIVATION-MATRIX), DR-11 3.23.
+- Test: tests/routing-500.test.ts (fixtures routing-domains-500.json i routing-domains-holdout.json); przypadki „znany_blad” jawnie oznaczone, każdy inny musi przejść.
+
+### 4. WYNIK
+- Zestaw 500: 486/500 (97,2%); pytania nieprawne 20/20 bez DR. Zestaw strojony — wynik dopasowania, nie uogólnienia.
+- Zestaw świeży 113 (bez strojenia słownictwa; jedna poprawka mechaniki znaleziona na nim): 80/113 trafnych (71%), 19 bez podpowiedzi DR (dziedzinę wybiera model), 14 ze złą dziedziną (12%), pytania nieprawne 12/12 bez DR.
+- Wniosek: routing słownikowy ma granicę ok. 70% na nowych sformułowaniach; podpowiedź DR pozostaje wskazówką, decyzję podejmuje model.
+
 ## AUDYT-2026-10-05l — TRYB STRUKTURA: przekazywanie spraw do dziedziny (DR), modułu aktu i skilla wykonawczego (6.185)
 
 ### 1. ŹRÓDŁO

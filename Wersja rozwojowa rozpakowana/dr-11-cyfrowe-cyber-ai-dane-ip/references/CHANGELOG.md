@@ -1,5 +1,7 @@
 # CHANGELOG — dr-11-cyfrowe-cyber-ai-dane-ip
 
+- 3.23 (2026-10-05m, AUDYT-2026-10-05m): mod-RODO-DSAR: „Hasła spraw” zawężone do terminów żądań osób (bez ogólnych słów, które dawały fałszywe trafienia). Treść prawna bez zmian.
+
 - 3.22 (2026-10-05l, AUDYT-2026-10-05l): Linie „Hasła spraw” w modułach RODO (DSAR, RCP/DPA, DPIA), UODO, usług elektronicznych, prawa autorskiego (IP, media/wizerunek) i DSA — sprawy RODO trafiają do właściwego modułu. Treść prawna bez zmian.
 
 - 3.21 (2026-10-04c, AUDYT-2026-10-04c): **F-227 (zamknięta).** SKILL.md nie wczytywał `MAPA-POKRYCIA.md`, choć `prawny-router-v3/references/pokrycie-dziedzinowe.md` nazywa lokalną mapę jedynym bieżącym źródłem statusu pokrycia — dodana sekcja „Mapa pokrycia treściowego” z `view`, wzorem DR-02…DR-06 i DR-16. Treść prawa bez zmian. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04c.

@@ -360,6 +360,8 @@ function decideTaskByMatrix(
     const phrases = rule.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
     const deliveredHits = rule.delivers.filter((word) => delivered.has(word));
     if (rule.withoutPleading && pleadingDelivered) continue;
+    // "Oceń szanse skargi do WSA": an assessment, not drafting ("napisz", "przygotuj").
+    if (/^pisma-/.test(rule.primary) && asksAbout(question)) continue;
     // ACTIVATION-MATRIX, nakładania: "pismo + dowody + »co zrobić dalej«" -> analiza-sadowa-v6, not the guide.
     if (pleadingDelivered && rule.primary === "przewodnik-prawny-v2" && NEXT_STEP.test(question)) continue;
     // "pismo procesowe + dostarczone akta": a pleading task with case files.
