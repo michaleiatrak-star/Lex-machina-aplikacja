@@ -88,3 +88,19 @@ describe("mechanical mode: the chosen executive skill's contract and the router'
     expect(result.mandatoryPath!.steps.find((step) => step.id === "KONTRAKT:analizator-przepisow-v2")).toMatchObject({ layer: "SKILL" });
   }, 60_000);
 });
+
+describe("contract resource headings", () => {
+  it("name each resource by its corpus path, without a doubled skill prefix", async () => {
+    const pathModule = await import("node:path");
+    const { LexSkillRegistry } = await import("../src/registry.js");
+    const { executiveContract, loadContract, contractPrompt } = await import("../src/executive-skill-contract.js");
+    const registry = new LexSkillRegistry(pathModule.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana"));
+    registry.scan();
+    const contract = executiveContract(registry, "analizator-przepisow-v2")!;
+    const prompt = contractPrompt(loadContract(registry, contract));
+    expect(prompt).toMatch(/## ZASÓB KONTRAKTU: (analizator-przepisow-v2\/references|shared)\//u);
+    expect(prompt).not.toContain("analizator-przepisow-v2/analizator-przepisow-v2/");
+    expect(prompt).not.toContain("analizator-przepisow-v2/shared/");
+  });
+});
+

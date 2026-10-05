@@ -125,7 +125,7 @@ export function contractPrompt(loaded: LoadedContract): string {
     loaded.toRead.length
       ? `Zasoby zbyt duże do wczytania z góry — wczytaj je sam narzędziem korpusu przed bramką, która ich wymaga (aplikacja to sprawdza): ${loaded.toRead.join(", ")}.`
       : "",
-    ...loaded.loaded.map((item) => `## ZASÓB KONTRAKTU: ${contract.skill}/${item.resource}\n\n${item.content}`)
+    ...loaded.loaded.map((item) => `## ZASÓB KONTRAKTU: ${item.resource}\n\n${item.content}`)
   ]
     .filter(Boolean)
     .join("\n\n");
