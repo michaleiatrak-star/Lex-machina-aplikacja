@@ -1991,6 +1991,10 @@ export function registerWorkspaceRoutes(
         ...(Array.isArray(raw.widgets)
           ? { widgets: raw.widgets as NonNullable<WorkspaceThreadMessage["widgets"]> }
           : {}),
+        ...(raw.evidence !== undefined ? { evidence: raw.evidence } : {}),
+        ...(raw.auxiliarySources !== undefined ? { auxiliarySources: raw.auxiliarySources } : {}),
+        ...(raw.mandatoryPath !== undefined ? { mandatoryPath: raw.mandatoryPath } : {}),
+        ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
         ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
           ? {
               generatedDocument:

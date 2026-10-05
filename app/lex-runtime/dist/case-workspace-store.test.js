@@ -97,6 +97,32 @@ describe("encrypted case workspace", () => {
             }
         })).rejects.toThrow("WORKSPACE_RESTORATION_INVALID");
     });
+    it("keeps the sources list of an answer after the thread is reopened", async () => {
+        const { caseId, key, store } = fixture();
+        const evidence = [{ claim: "art. 233 KK", kind: "statute", status: "VERIFIED", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf", fetchedAt: "2026-10-05T10:00:00.000Z" }];
+        await store.appendThreadMessage({
+            caseId, caseDataKey: key, keyVersion: 1,
+            message: {
+                messageId: "message_" + "f".repeat(32),
+                role: "assistant",
+                content: "Art. 233 KK – fałszywe zeznania.",
+                createdAt: new Date().toISOString(),
+                evidence,
+                auxiliarySources: [{ title: "Komentarz", url: "https://example.org" }],
+                mandatoryPath: { profile: "PELNY", steps: [] },
+                pipelineNext: { skill: "pisma-procesowe-v5", reason: "projekt pisma" }
+            }
+        });
+        const [message] = await store.loadThread({ caseId, caseDataKey: key, keyVersion: 1 });
+        expect(message.evidence).toEqual(evidence);
+        expect(message.auxiliarySources).toHaveLength(1);
+        expect(message.mandatoryPath).toEqual({ profile: "PELNY", steps: [] });
+        expect(message.pipelineNext?.skill).toBe("pisma-procesowe-v5");
+        await expect(store.appendThreadMessage({
+            caseId, caseDataKey: key, keyVersion: 1,
+            message: { messageId: "message_" + "e".repeat(32), role: "assistant", content: "x", createdAt: "t", evidence: "zle" }
+        })).rejects.toThrow("WORKSPACE_THREAD_MESSAGE_INVALID");
+    });
     it("keeps the generated document of a chat message for the download/preview card", async () => {
         const { caseId, key, store } = fixture();
         const base = {

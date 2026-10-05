@@ -4638,6 +4638,7 @@ export default function MatterChatApp({
                     content={message.content}
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
+                    {...(selectedCase?.caseId ? { caseId: selectedCase.caseId } : {})}
                     markdown={message.role === "assistant"}
                   />
                   {message.role === "assistant" &&
