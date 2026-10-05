@@ -69891,6 +69891,20 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05h — TRYB STRUKTURA: widgety zasilane danymi w pozostałych skillach (6.181)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7b (dokończenie). Model przepisywał cały kod widgetu, żeby wpisać dane: dashboard dowodów 99 KB, raport sytuacyjny, raport klienta i TRYB B analizy sądowej od zera.
+
+### 2. ZMIANA
+- analizator-dowodow-v3 5.16.21: `dashboard.html` — dane w jednym obiekcie `LEX_DATA` (literał po `lex:dane`), usunięte przykładowe dane sprawy (99 → 69 KB), schemat pól w komentarzu. Błąd: zakładki Osoby, Nazewnictwo, Kwestie sporne, Lapsusy nie były renderowane przy starcie — naprawione. Kreator przez `show_widget(path)`.
+- raport-sytuacyjny-v2 2.12: nowy `widget-raport-sytuacyjny.html` (7 zakładek, oba formaty ryzyk i sprzeczności).
+- raport-klienta-v1 1.7: nowy `widget-raport-klienta.html` (IND/BIZ × 4 tryby, druk do PDF); schemat uzupełniony o pola opisane w SKILL.md, których brakowało (`co_dalej`, `potwierdzenie`, `najblizsze_zdarzenie`).
+- analiza-sadowa-v6 6.14: TRYB B — `widget-analiza.html` (10 zakładek, renderowanie ogólne); W6 — szablon raportu sytuacyjnego.
+- audyt-systemu-v4: menu przez `show_widget(path=widgets/WIDGET-MENU.md)` zamiast przepisywania JSX.
+- Wszystkie szablony sprawdzone w Chromium (pusty i pełny zestaw danych, zakładki, escapowanie danych).
+- Aplikacja: wstawianie nagłówka ramki dopasowywało `<header>` jako `<head>` — poprawione (dopasowanie pełnej nazwy znacznika).
+
 ## AUDYT-2026-10-05g — TRYB STRUKTURA: widgety analizatora przepisów z szablonów, MOD-WIDGET-IO poza turą (6.180)
 
 ### 1. ŹRÓDŁO

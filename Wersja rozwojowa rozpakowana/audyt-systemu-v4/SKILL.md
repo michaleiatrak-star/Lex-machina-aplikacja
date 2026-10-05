@@ -4,7 +4,7 @@ description: "Audyt jakości, spójności i bezpieczeństwa systemu prawnych ski
 dependencies:
   requires:
     - shared
-version: "6.180"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
+version: "6.181"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
 type: governance-audit
 compatibility: "host-neutral; file read/write, fresh legal-source lookup and optional archive/UI operations mapped by the runtime adapter"
 entrypoint: SKILL.md
@@ -317,12 +317,9 @@ Celem jest ustalenie:
 
 Gdy użytkownik wywołuje audyt **bez precyzowania zakresu** (np. "przeprowadź audyt", "audytuj system"):
 
-1. Wczytaj widget:
-```
-view audyt-systemu-v4/widgets/WIDGET-MENU.md
-```
+1. Wyrenderuj menu wielokrotnego wyboru: `show_widget(path="audyt-systemu-v4/widgets/WIDGET-MENU.md")` — host czyta kod JSX z pliku; nie przepisuj go.
 
-2. Wyrenderuj menu wielokrotnego wyboru przez `show_widget` (kod JSX z WIDGET-MENU.md).
+2. Host bez `path`: `view audyt-systemu-v4/widgets/WIDGET-MENU.md` → `show_widget` z kodem JSX z pliku.
 
 3. Czekaj na wybór użytkownika. Po otrzymaniu — uruchom **tylko wskazane fazy/moduły**.
 
@@ -1312,4 +1309,4 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.180 | Ostatnia aktualizacja: 2026-10-05g (widgety analizatora przepisów z szablonów; analizator-przepisow-v2 2.11). Stopkę aktualizuj razem z polem `version`.*
+*Wersja: 6.181 | Ostatnia aktualizacja: 2026-10-05 (AUDYT-2026-10-05h). Stopkę aktualizuj razem z polem `version`.*

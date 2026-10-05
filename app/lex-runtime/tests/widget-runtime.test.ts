@@ -55,6 +55,13 @@ describe("widgets", () => {
     expect(html.indexOf("window.sendPrompt")).toBeLessThan(html.indexOf("<title>"));
   });
 
+  it("does not take <header> inside a fragment for the document head", () => {
+    const code = '<div id="r"></div><script>const h = () => `<header><h1>x</h1></header>`; document.getElementById("r").innerHTML = h();</script>';
+    const html = compileWidget({ title: "T", kind: "html", code }, "c".repeat(32));
+    expect(html).toContain("const h = () => `<header><h1>x</h1></header>`;");
+    expect(html.indexOf("<head>")).toBeLessThan(html.indexOf("<header>"));
+  });
+
   it("shows a corpus widget, rejects unknown paths and broken code", async () => {
     const tools = new WidgetToolRuntime(registry());
     const [shown, missing, escape, broken] = await tools.runTools([

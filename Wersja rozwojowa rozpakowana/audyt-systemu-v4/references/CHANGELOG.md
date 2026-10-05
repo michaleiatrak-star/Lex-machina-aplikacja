@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.181 (AUDYT-2026-10-05h): Widgety zasilane danymi w analizator-dowodow 5.16.21, raport-sytuacyjny 2.12, raport-klienta 1.7, analiza-sadowa 6.14; menu audytu przez `show_widget(path)`.
+
 - 6.180 (2026-10-05g, AUDYT-2026-10-05g): Widgety analizatora przepisów z szablonów (analizator-przepisow-v2 2.11).
 
 - 6.179 (2026-10-05f, AUDYT-2026-10-05f): Etap ZAMOWIENIA-PUBLICZNE znacznika lex:wczytaj-gdy (orzeczenia-sadowe-v2 2.23).

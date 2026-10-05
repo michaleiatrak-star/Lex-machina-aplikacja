@@ -3,6 +3,10 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { transform } from "sucrase";
+// Whole tag names only: `<head[^>]*>` also matched `<header>` (raport-klienta, 2026-10-05).
+const HEAD_TAG = /<head(?=[\s>])[^>]*>/i;
+const BODY_TAG = /<body(?=[\s>])[^>]*>/iu;
+const HTML_TAG = /<html(?=[\s>])[^>]*>/i;
 export class WidgetError extends Error {
     code;
     constructor(code) {
@@ -153,7 +157,7 @@ export function withWidgetData(spec, data, skill) {
         return code;
     // A template with its own MOD-WIDGET-IO functions keeps its bar (it exports the full state).
     const bar = /function\s+ioExportJSON\b/u.test(code) ? boot : boot + ioBar(skill);
-    return /<body[^>]*>/iu.test(code) ? code.replace(/<body[^>]*>/iu, (tag) => tag + bar) : bar + code;
+    return BODY_TAG.test(code) ? code.replace(BODY_TAG, (tag) => tag + bar) : bar + code;
 }
 const require = createRequire(import.meta.url);
 let preactBundle = null;
@@ -217,10 +221,10 @@ export function compileWidget(spec, widgetId) {
     const bridge = inlineScript(bridgeScript(widgetId));
     const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${bridge}`;
     if (spec.kind === "html") {
-        if (/<head[^>]*>/i.test(spec.code))
-            return spec.code.replace(/<head[^>]*>/i, (tag) => tag + head);
-        if (/<html[^>]*>/i.test(spec.code))
-            return spec.code.replace(/<html[^>]*>/i, (tag) => `${tag}<head>${head}</head>`);
+        if (HEAD_TAG.test(spec.code))
+            return spec.code.replace(HEAD_TAG, (tag) => tag + head);
+        if (HTML_TAG.test(spec.code))
+            return spec.code.replace(HTML_TAG, (tag) => `${tag}<head>${head}</head>`);
         return `<!doctype html><html lang="pl"><head>${head}</head><body>${spec.code}</body></html>`;
     }
     let compiled;
