@@ -1,5 +1,7 @@
 # CHANGELOG — orzeczenia-sadowe-v2
 
+- 2.23 (2026-10-05f, AUDYT-2026-10-05f): Znacznik `<!-- lex:wczytaj-gdy: ZAMOWIENIA-PUBLICZNE -->` nad „Faza 1-K — Orzecznictwo KIO / zamówienia publiczne (PZP)” (sekcja sama stanowi: „Stosuj gdy sprawa dotyczy zamówień publicznych”). Aplikacja Lex Machina dołącza ją, gdy rozpozna sprawę zamówień publicznych; w przeciwnym razie model dostaje nagłówek z informacją, że może przeczytać sekcję z pliku. Treść bez zmian.
+
 - 2.22 (2026-10-05e, AUDYT-2026-10-05e): Nowy szablon `assets/widget-orzeczenia.html` zasilany danymi (ten sam wygląd i zakładki co `references/widget.md`; treść renderowana jako tekst, link tylko http(s)). Sekcja „Widget interaktywny”: wariant `show_widget(path, data)` ze schematem DANE oraz dotychczasowy wariant z kodem i paskiem MOD-WIDGET-IO (oznaczony `lex:wykonuje-aplikacja: WIDGET-DANE` — w aplikacji Lex Machina pomijany, na innych hostach bez zmian).
 
 - 2.21 (2026-10-02, AUDYT-2026-10-02): `tools/cbosa_parser.py` — komórka wartości metryki CBOSA z zagnieżdżoną tabelą („Data orzeczenia”: data | „orzeczenie prawomocne”) była rozbijana na fałszywe pary; data obcinana do RRRR-MM-DD; test regresyjny (zmiana użytkownika, wdrożona z paczki `lex-mcp-kio.zip`; 25/25 testów, port JS w audyt-systemu-v4 zgodny — 26 przypadków).

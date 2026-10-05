@@ -69891,6 +69891,18 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05f — TRYB STRUKTURA: etap ZAMOWIENIA-PUBLICZNE, orzeczenia-sadowe-v2 2.23 (6.179)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 5 (skille wykonawcze etapami). Faza 1-K (5,1 tys. znaków) wchodziła do każdej tury orzecznictwa, choć sama ogranicza się do spraw zamówień publicznych.
+
+### 2. ZMIANA
+- Nowy etap `ZAMOWIENIA-PUBLICZNE` znacznika `lex:wczytaj-gdy`: aplikacja rozpoznaje sprawę z treści wątku (zamówienia publiczne, KIO, Krajowa Izba Odwoławcza, Pzp, przetarg, SWZ, rażąco niska cena, odrzucenie oferty, wykluczenie wykonawcy, zamawiający). Fałszywie dodatnie rozpoznanie tylko dołącza sekcję; przy braku rozpoznania model dostaje nagłówek z informacją, że może przeczytać sekcję z pliku.
+- orzeczenia-sadowe-v2 2.23: znacznik nad Fazą 1-K.
+
+### 3. NIEOZNACZONE ŚWIADOMIE
+`analizator-umow-v1` „GENEROWANIE DOKUMENTÓW”: tabela zawiera też narzędzie diagnostyczne zwykłej analizy (spójność odesłań) — sekcja nie jest wyłącznie etapem generowania.
+
 ## AUDYT-2026-10-05e — TRYB STRUKTURA: widget orzeczeń zasilany danymi, komponent WIDGET-DANE (6.178)
 
 ### 1. ŹRÓDŁO

@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.179 (2026-10-05f, AUDYT-2026-10-05f): Etap ZAMOWIENIA-PUBLICZNE znacznika lex:wczytaj-gdy (orzeczenia-sadowe-v2 2.23).
+
 - 6.178 (2026-10-05e, AUDYT-2026-10-05e): Widget orzeczeń zasilany danymi i komponent WIDGET-DANE (orzeczenia-sadowe-v2 2.22).
 
 - 6.177 (2026-10-05d, AUDYT-2026-10-05d): Konwencja `lex:dane` w szablonach widgetów (chronologia-sprawy-v1 1.16).
