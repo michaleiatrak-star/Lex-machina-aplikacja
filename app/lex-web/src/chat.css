@@ -810,6 +810,12 @@
   letter-spacing: 0.05em;
 }
 
+.chat-evidence-gate {
+  color: #6b6f6a;
+  font-size: 10px;
+  font-style: italic;
+}
+
 .chat-source-tier-r1 {
   border-color: #b8d1bc;
   background: #e8f4e9;

@@ -9,6 +9,7 @@ import {
   reconcileStatusMarkers,
   stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
+import { publicEvidenceBundle } from "./session-executor.js";
 import { VerificationLedger } from "./verification-ledger.js";
 
 const KK = "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf";
@@ -235,3 +236,46 @@ describe("G39I status consistency gate", () => {
   });
 });
 
+
+describe("ChatGPT answer 233/234/238 KK (2026-10-05)", () => {
+  function ledger(): VerificationLedger {
+    const result = new VerificationLedger();
+    for (const [claim, page] of [["art. 233 KK", 54], ["art. 234 KK", 55], ["art. 238 KK", 55], ["art. 232 KK", 54], ["art. 237 KK", 55]] as const) {
+      result.add({
+        claim,
+        kind: "statute",
+        status: "VERIFIED",
+        sourceUrl: KK,
+        sourceAnchorUrl: `${KK}#page=${page}`,
+        sourceTier: "R1",
+        fetchedAt: "2026-10-05T10:00:00.000Z",
+        verificationMethod: "web_fetch_pdf",
+        sourceFormat: "PDF",
+        temporalMode: "CURRENT",
+        temporalFreshnessStatus: "CURRENT"
+      });
+    }
+    return result;
+  }
+  const P55 = `✅ [VER: ${KK}#page=55, 2026-10-05]`;
+
+  it("appends one marker for two provisions from the same page", () => {
+    const line = "Wtedy trzeba ustalić, czy zachowanie obejmuje wyłącznie art. 238 KK, czy także znamiona art. 234 KK.";
+    expect(applyAutomaticVerificationMarkers(line, ledger()).text).toBe(`${line} ${P55}`);
+  });
+
+  it("marks provisions cited only in gate blocks as auxiliary sources", () => {
+    const answer = [
+      "Art. 233 KK – kłamstwo w zeznaniach.",
+      "Art. 238 KK – fałszywe zawiadomienie.",
+      "WYJ-GATE",
+      "",
+      "Art. 233 KK: S1 — sąsiednie art. 232 i 234; S2 — przepisy rozdziału.",
+      "Art. 238 KK: S1 — sąsiednie art. 237 i 239; S2 — brak."
+    ].join("\n");
+    const roles = publicEvidenceBundle(ledger().all(), answer).map((item) => `${item.claim}:${item.role ?? "-"}`);
+    expect(roles).toEqual([
+      "art. 233 KK:-", "art. 234 KK:-", "art. 238 KK:-", "art. 232 KK:gate", "art. 237 KK:gate"
+    ]);
+  });
+});

@@ -960,6 +960,8 @@ export type EvidenceItem = {
   sourceAnchorUrl?: string;
   sourceTier?: "R1" | "R2A" | "R2B" | "R3";
   fetchedAt: string;
+  // Przepis powołany tylko w bloku bramki (np. sąsiedni z WYJ-GATE S1).
+  role?: "gate";
   verificationMethod?:
     | "web_fetch"
     | "web_fetch_pdf"

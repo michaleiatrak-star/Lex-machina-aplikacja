@@ -4716,6 +4716,11 @@ export default function MatterChatApp({
                                   {item.sourceTier}
                                 </span>
                               ) : null}
+                              {item.role === "gate" ? (
+                                <span className="chat-evidence-gate" title="Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi">
+                                  pomocniczy — bramka
+                                </span>
+                              ) : null}
                             </span>
                             <strong>{item.claim}</strong>
                             {item.sourceUrl ? (

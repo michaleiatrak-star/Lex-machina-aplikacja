@@ -257,8 +257,9 @@ export function applyAutomaticVerificationMarkers(text, ledger, requestedAsOf) {
             records.length === 0) {
             return line;
         }
-        const missingMarkers = records
-            .map(marker)
+        // Dwa przepisy z tej samej strony aktu dają ten sam znacznik.
+        const missingMarkers = [...new Set(records
+                .map(marker))]
             .filter((value) => Boolean(value))
             .filter((value) => !line.includes(value));
         if (missingMarkers.length ===
