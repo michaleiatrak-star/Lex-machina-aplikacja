@@ -1,8 +1,8 @@
-7ce642a42fe1b95388def4093f71239290a3fa1399237f8b8a8e04022bee82ff  ./.claude-plugin/plugin.json
+2fbf35e194f2857e756aed2017494f26a2ef196824edf1fe77b3715ce7af07c1  ./.claude-plugin/plugin.json
 e63088dde2ef8acbcbf696c3ce9f2f35ecbdb5342950dddbd6be87a0223f2412  ./MAPA-AKTOW.md
 211351fa3498f08fe19b2e1baf5fab00bd1063cbc83030069f822bb6d00eb494  ./MAPA-POKRYCIA.md
 8e0e5d369ae15b2cf0cbffcf2f05fd3f5d72c5032b89c3665c892a71fa9017ae  ./PORTABILITY-MANIFEST.md
-48943192d51fa878f81ca014de067a4caeec04c818564f4bf88c9a2cb036895b  ./SKILL.md
+e2fd6972a4d24e5301b3287d7abbd1629352ed729eac18ff333df7d769a9151e  ./SKILL.md
 069bc49db133821e80d2750404468587e1e29b9982151c0e333c89f68c55a153  ./agents/openai.yaml
 d80a4c3e0fd2efa7af88433a53b25a92c78a644175c6669dd78fee50fb53acf6  ./assets/icon.svg
 bc1802487f84e7c9daaa7a1e5deefb78e89e483e8f99614a25448b16b6764f14  ./modules/kc-zobowiazania/czesc-01-przedawnienie-kara-umowna-wady-wzbogacenie-odsetki.md
@@ -38,9 +38,9 @@ ec838fe7cacb437eb0b11c20aa6fd142d9b363d6f96d92eb2bb20072b9834e26  ./modules/mod-
 506bd84ee72a919b68d03a89c0e6eae5e361a8c36a11a0bcecede4ce067a73fa  ./modules/mod-KPC-uzupelnienie-pokrycia-2026.md
 66ddbe8145b8fdc2c5349524e25ac47ed27b80cb7827a12640806d34127d6c5d  ./modules/mod-KRO-opieka-i-kuratela.md
 4a7c62e04009b1ab7d1ebd505d2860508d9761463bc0dcd5befdbe8e0b83993a  ./modules/mod-KRO-przysposobienie-adopcja-miedzynarodowa.md
-c734bb287eb30213f8153e55324c83acf6ac90547deac37da3bef4059e587ed3  ./modules/mod-KRO-rodzinne.md
+7a1a522649c12b602ffa3633c2733013333cbd77a8ef60842ad715fff21eb3cd  ./modules/mod-KRO-rodzinne.md
 8da0885b0c5555a46340eaff45746b7284c82774195a5bb7421afaefcf9a8e60  ./modules/mod-KRO-zawarcie-malzenstwa-bigamia-transgraniczne.md
-196b8af331747cf125c0414135d6449030b7bb1ca5f1e23fbe9e25478cf0ddab  ./modules/mod-KSH-organy-spolki-zoo.md
+5e93c28c0d1f38f341130e2d98e65952f8a9cbb54623fcfaa27924cb3a7f10d1  ./modules/mod-KSH-organy-spolki-zoo.md
 47254657aa6991420e38892fd941463dffb2c926ccaeae9a19194d1d6c0d180c  ./modules/mod-KSH-spolki-handlowe.md
 592252cd9f56ce15c3ab0acc1f512511327169515cc3ec98ddd558dd2023826c  ./modules/mod-KSH-spolki-osobowe-rada-nadzorcza.md
 f51278c6161f1b5d73d005b45130a958ce17de6bac218e1938c8076a275ea32f  ./modules/mod-KSH-uzupelnienie-pokrycia-2026.md
@@ -55,7 +55,7 @@ ee27edd081f5559a70dff10a0d0445ec2a083a9dd184b895a0788058ad190c52  ./modules/mod-
 07a785016ef56737aafaf6212cc546adb6efa1d2fd059f9cc257640e27d499b4  ./modules/mod-PrUpad-likwidacja-miedzynarodowe-szczegolne.md
 f97c230922018d3d1748bd1ab00881848934624111293554cecac6b971e2107b  ./modules/mod-PrUpad-postepowania-odrebne-426-491-38.md
 ebe67023b679a112f11498984da050d6766cbf130a63390c352162aa9fc7b8ac  ./modules/mod-PrUpad-uklad-likwidacja-zakonczenie.md
-24863bd5ad501c2511b86aebab4f1327872a5519fcfeb776f554326f0869a8d0  ./modules/mod-PrUpad-upadlosc-restrukturyzacja.md
+411e28fd2dc9ff21c8cd3dfba282de3e79d0f1453411d6579bdf698d116870aa  ./modules/mod-PrUpad-upadlosc-restrukturyzacja.md
 cbdea03190bad07adfbd0c74162001a7fd76c7de7bd6d6fe8ac9c9981ac060cd  ./modules/mod-Prawo-przedsiebiorcow-current-state-COV.md
 37dcb942d034175fa50696af8d59d7ac7ba468138b3d303ea7a53973518a8ad0  ./modules/mod-kaucja-najem-lokalu.md
 adf609f75203b6f76039f12b2e7006cb5c6e50359b4b930ab19813683b7e21af  ./modules/mod-liczba-pelnomocnikow-strona-samodzielna.md
@@ -83,12 +83,12 @@ bc9125f92d068cf5aae2c3d69a0413bd14303b5e5920ff4e6ec1547a1c809fb0  ./modules/mod-
 665769f649e6ee9dc1bfd708a04636559f59b5278cc19e487b771306d85def77  ./modules/mod-ustawa-monopole-panstwowe.md
 2ae5628778d991117c5e52b3b46ed9e1cf444d33ec86c9f03b1ba24c8b952d45  ./modules/mod-ustawa-ochrona-praw-lokatorow-najem-eksmisja.md
 335248b9ed97f61931a64f400a0d07e9c287b426e6427f98c3919b82f0f2d930  ./modules/mod-ustawa-pomoc-ratowanie-restrukturyzacja-przedsiebiorcow.md
-5b1fb37dbd6a83e03952136c73b1bf68f4ea973a822bbf9ba8e460a5a7d2502a  ./modules/mod-ustawa-prawa-konsumenta.md
+03017ae2cfcc25ba956b861051df696a7f6d61f472fabe9f075f5cb1e4e5596c  ./modules/mod-ustawa-prawa-konsumenta.md
 71a3a547c4dec8bdc7f63958e0d521b210aba0313ee074c075ca86ddd79cb01e  ./modules/mod-ustawa-spoldzielnie-mieszkaniowe.md
 260e5166a9caaf920bcdffccf35e2a7d37ed0e133205209e572b72e5d370038b  ./modules/mod-ustawa-spoldzielnie-wlasnosc-lokali.md
 5e887b9b1520d670a83d123bd75a7bc37834bf27d34ac37e2e83e2c60dab6818  ./modules/mod-ustawa-timeshare-zastaw-rejestrowy.md
 c6ea7ab2905c46963de42d3150e6f1e1de7197a05c2df189e10d263d56240ad6  ./modules/mod-ustawa-ubezpieczenia-obowiazkowe-UFG-PBUK.md
 0d27f04cfedf651c1c4feedb203e2c1e456b673688952c2472f1cacf3f29a6cf  ./modules/mod-ustawa-zastaw-rejestrowy.md
 3c41d52638a1d16adea5e28a28e74e51dde90d13565e98fe087b706ea93356a5  ./modules/mod-wekslowe-kontrola-przedsiebiorcy-koncesje.md
-44b4cc1fdb2b5b72622510d632b9546624d469d083715233f8f88277f73bed25  ./references/CHANGELOG.md
+3c8d67077b506a6510fa76d3bbfa62eefe8433fe760ae73877191e453d5b8bbc  ./references/CHANGELOG.md
 4d51963f97e602ce7096f71b128555e98a58e34f91ce0b97b0f8cc4f04c31824  ./references/HISTORIA-ZMIAN-PLIKOW.md

@@ -1,0 +1,84 @@
+{
+  "analizator-umow-v1": [
+    "Przeanalizuj umowę najmu lokalu użytkowego przed podpisaniem",
+    "Czy mogę podpisać tę umowę o dzieło? Są w niej kary umowne",
+    "Sprawdź klauzule abuzywne w regulaminie sklepu",
+    "Oceń ryzyka w umowie powierzenia przetwarzania danych osobowych",
+    "Przejrzyj ugodę z bankiem, czy jest dla mnie korzystna",
+    "Co oznaczają zapisy OWU mojej polisy?"
+  ],
+  "analiza-sadowa-v6": [
+    "Jakie mam szanse w sprawie o odszkodowanie za wypadek komunikacyjny?",
+    "Oceń wyrok sądu pierwszej instancji, czy warto apelować",
+    "Przeanalizuj akta sprawy i oceń moją pozycję procesową",
+    "Oceń szanse wygrania sprawy o zachowek",
+    "Przeanalizuj pismo przeciwnika procesowego"
+  ],
+  "pisma-procesowe-v3": [
+    "Napisz pozew o zapłatę 12 000 zł za niezapłacone faktury",
+    "Napisz apelację od wyroku sądu rejonowego w sprawie o odszkodowanie",
+    "Przygotuj odwołanie od wypowiedzenia do sądu pracy",
+    "Napisz zażalenie na postanowienie prokuratora o umorzeniu śledztwa",
+    "Skarga do WSA na decyzję o odmowie pozwolenia na budowę",
+    "Napisz odwołanie od decyzji ZUS do sądu",
+    "Przygotuj odpowiedź na pozew w sprawie o eksmisję",
+    "Napisz pozew o rozwód z orzeczeniem o winie"
+  ],
+  "pisma-proste-v2": [
+    "Napisz sprzeciw od nakazu zapłaty",
+    "Wezwanie do zapłaty za fakturę dla kontrahenta",
+    "Wniosek o przywrócenie terminu do wniesienia apelacji",
+    "Napisz skargę do Prezesa UODO na bank",
+    "Wniosek o uzasadnienie wyroku",
+    "Skarga na czynności komornika"
+  ],
+  "orzeczenia-sadowe-v2": [
+    "Znajdź orzecznictwo SN w sprawie zadośćuczynienia za śmierć osoby bliskiej",
+    "Linia orzecznicza NSA w sprawie ulgi na złe długi",
+    "Zweryfikuj sygnaturę III CZP 6/21",
+    "Znajdź wyrok TSUE w sprawie kredytów frankowych"
+  ],
+  "analizator-przepisow-v2": [
+    "Co oznacza art. 415 KC i jakie są przesłanki odpowiedzialności?",
+    "Wykładnia art. 52 § 1 KP, ciężkie naruszenie obowiązków",
+    "Sprawdź tę opinię prawną z innego AI, czy przepisy się zgadzają",
+    "Jakie są przesłanki z art. 6 ust. 1 lit. f RODO?"
+  ],
+  "analizator-dowodow-v3": [
+    "Mam maile i SMS-y od pracodawcy, czy to dowody?",
+    "Oceń moc dowodową nagrania rozmowy z szefem",
+    "Policz termin na wniesienie apelacji od wyroku doręczonego 3 marca"
+  ],
+  "przesluchanie-swiadkow-v2-min90": [
+    "Przygotuj pytania do świadka w sprawie o mobbing",
+    "Jak przesłuchać biegłego na rozprawie?",
+    "Rozbij zeznania świadka, szukam sprzeczności"
+  ],
+  "przewodnik-prawny-v2": [
+    "Od czego zacząć, dostałem jakieś pismo z sądu i nic nie rozumiem",
+    "Co mam zrobić, nie wiem jak się do tego zabrać",
+    "Dostałem wezwanie do zapłaty, czy muszę płacić?",
+    "Firma wyciekła moje dane osobowe, czy mogę złożyć skargę do UODO?"
+  ],
+  "chronologia-sprawy-v1": [
+    "Zrób chronologię zdarzeń w mojej sprawie",
+    "Ułóż oś czasu sprawy na podstawie dokumentów"
+  ],
+  "raport-klienta-v1": [
+    "Przygotuj raport dla klienta o stanie sprawy"
+  ],
+  "-": [
+    "Mobbing w pracy, szef mnie poniża, jakie mam prawa?",
+    "Pracodawca zainstalował monitoring wizyjny w szatni, czy to legalne?",
+    "Alimenty na dziecko, ojciec nie płaci od pół roku",
+    "Ile wynosi zasiłek chorobowy na L4 w ciąży?",
+    "Pracownik na umowie zlecenie miał wypadek, czy ZUS wypłaci odszkodowanie?",
+    "Stalking ze strony byłego partnera, SMS-y i śledzenie",
+    "Czy nasz system rekrutacyjny z AI podlega AI Act jako wysokiego ryzyka?",
+    "Kolega pobił mnie na imprezie, co grozi sprawcy?"
+  ],
+  "raport-sytuacyjny-v2": [
+    "Przygotuj raport sytuacyjny sprawy dla zarządu",
+    "Raport sytuacyjny: stan sprawy, ryzyka i terminy"
+  ]
+}

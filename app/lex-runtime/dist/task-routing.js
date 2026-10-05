@@ -78,15 +78,22 @@ function stemPhrase(phrase) {
  * [10] is the domain router, already in the context, and does not name an
  * executive skill). Null when no executive route matches.
  */
+const EVIDENCE_MEDIA = /^(?:maile|sms|nagrania)$/u;
+const EVIDENCE_INTENT = /(?<![\p{L}])(?:dow[oó]d\p{L}*|ocen\p{L}*|oceń|przeanalizuj|analiz\p{L}*|wykorzyst\p{L}*|użyć|sprawdź|zweryfikuj)(?![\p{L}])/iu;
+// "Pracuję na umowie zlecenie / o pracę": the person's employment, not a contract to analyse.
+const EMPLOYMENT_BASIS = /(?<![\p{L}])na\s+umowi\p{L}*\s+(?:o\s+prac\p{L}*|o\s+dzieło|zlecen\p{L}*|b2b|śmieciow\p{L}*)/giu;
 export function classifyTask(routes, rawQuestion) {
     // "233 kk" is "art. 233 KK" for the article row.
-    const question = provisionsForDetection(rawQuestion);
+    const question = provisionsForDetection(rawQuestion).replace(EMPLOYMENT_BASIS, " ");
     let best = null;
     for (const route of routes) {
         if (route.primary === "prawo-polskie-v2")
             continue;
         const matched = route.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
         if (!matched.length)
+            continue;
+        // "SMS-y i śledzenie" tells the story; "czy te SMS-y są dowodem" asks about evidence.
+        if (matched.every((phrase) => EVIDENCE_MEDIA.test(phrase)) && !EVIDENCE_INTENT.test(question))
             continue;
         const score = matched.reduce((sum, phrase) => sum + phrase.length, 0);
         if (!best || score > best.score)
@@ -159,7 +166,8 @@ export const ANALYSIS_INTENT = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|o
 // New substance (theses, provisions, case law) is not a Test A edit.
 const NEXT_STEP = /co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:zrobić|robić)|co\s+dalej|od\s+czego\s+zacząć/iu;
 const NEW_SUBSTANCE = /(?<![\p{L}])(?:dodaj|dopisz|nowy\s+zarzut|nowe\s+zarzuty|nowe\s+przepisy|orzeczni\p{L}*|argument\p{L}*)(?![\p{L}])/iu;
-const OWN_DOCUMENT = /(?<![\p{L}])(?:m[oó]j|moj[ae]|nasz[ae]?|własn\p{L}*|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
+// "mój sprzeciw", "moje pismo", "naszą odpowiedź na pozew" — not "moje dane osobowe".
+const OWN_DOCUMENT = /(?<![\p{L}])(?:(?:m[oó]j|moj\p{L}*|nasz\p{L}*|własn\p{L}*)(?:\s+\p{L}+){0,2}?\s+(?:pism\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*|pozew|pozw\p{L}*|wezwani\p{L}*|odwołani\p{L}*|zażaleni\p{L}*|apelacj\p{L}*|projekt\p{L}*|odpowied\p{L}*|zarzut\p{L}*|dokument\p{L}*|tekst\p{L}*|wersj\p{L}*|draft\p{L}*|oświadczeni\p{L}*|umow\p{L}*)|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
 /**
  * Entry point for the task: the activation matrix first (phrases of the question
  * and the materials delivered), then the router table on the question and the

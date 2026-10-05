@@ -1,6 +1,6 @@
 ---
 name: prawo-polskie-v2
-version: "6.41"
+version: "6.42"
 type: domain-router
 status: production
 compatibility: "live_web_lookup, cross_skill_file_read"
@@ -10,7 +10,7 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.41 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
+  Wersja bieżąca: 6.42 (2026-10-05l, AUDYT-2026-10-05l): Routing błyskawiczny: słownictwo spraw klientów dla DR-01–DR-16 (m.in. RODO: monitoring wizyjny, IOD, rejestr czynności, powierzenie, wizerunek, spam, cookies, profilowanie; karne: pobicie, kradzież, jazda po alkoholu; praca: mobbing, L4, nadgodziny).
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -100,22 +100,22 @@ view prawo-polskie-v2/ROUTING-MAP.md
 
 | Fraza / temat sprawy | DR-skill |
 |---|---|
-| Konstytucja, TK, ustrój, skarga konstytucyjna | `dr-01-Ustroj-Konstytucyjny-i-Zrodla-Prawa` |
-| Umowa, odszkodowanie, KC, spadek, spółka, upadłość, windykacja | `dr-02-Prawo-Cywilne-Rodzinne-Gospodarcze` |
-| Przestępstwo, KK, KPK, wykroczenie, mandat, stalking, przemoc, cyberprzestępstwo | `dr-03-Prawo-Karne-Wykroczenia-Egzekucja` |
-| Wypowiedzenie, KP, ZUS, emerytura, renta, KRUS, PFRON, pomoc społeczna | `dr-04-Prawo-Pracy-ZUS-Swiadczenia` |
-| KPA, decyzja urzędu, WSA, NSA, bezczynność, cudzoziemcy, egzekucja admin. | `dr-05-Prawo-Administracyjne-Sadowoadministracyjne` |
-| PIT, VAT, CIT, podatki, KAS, akcyza, cło, finanse publiczne | `dr-06-Podatki-Finanse-Publiczne-AML` |
-| Przetarg, KIO, PZP, zamówienie, fundusze UE, notariat | `dr-07-Zamowienia-Publiczne-Fundusze-UE` |
-| Gmina, powiat, JST, MPZP, uchwała, prawo lokalne, samorząd | `dr-08-Samorzad-Terytorialny-Prawo-Lokalne` |
-| Budowa, samowola, PINB, środowisko, odpady, energia, transport | `dr-09-Budownictwo-Srodowisko-Energia-Transport` |
-| Lekarz, apteka, farmacja, żywność, rolnictwo, szkoła, sport | `dr-10-Zdrowie-Farmacja-Zywnosc-Rolnictwo` |
-| RODO, dane osobowe, KSC, AI Act, cyberbezpieczeństwo, IP, prawo autorskie | `dr-11-Cyfrowe-Cyber-AI-Dane-IP` |
-| Sąd, prokuratura, adwokat, radca, notariusz, koszty sądowe | `dr-12-Sadownictwo-Prokuratura-Zawody-Prawnicze` |
-| Policja, ABW, służby specjalne, informacje niejawne, wojsko, obrona | `dr-13-Sluzby-Bezpieczenstwo-Informacje-Niejawne` |
-| Prawo UE, TSUE, EKPC, ETPC, prawo międzynarodowe | `dr-14-Prawo-UE-Miedzynarodowe-Prawa-Czlowieka` |
-| Compliance, ISO, AML instytucjonalny, zamówienia obronne, sygnaliści | `dr-15-Compliance-ISO-Governance-Audyt` |
-| Pismo procesowe, strategia, narzędzia, kalkulatory, orzecznictwo | `dr-16-Pisma-Strategia-Dowody-Orzecznictwo` |
+| Konstytucja, TK, Trybunał Konstytucyjny, ustrój, skarga konstytucyjna, wybory, referendum, Rzecznik Praw Obywatelskich, mandat posła, mandat senatora, stan wyjątkowy, stan wojenny, stan klęski żywiołowej, partia polityczna, Sąd Najwyższy, KRS | `dr-01-Ustroj-Konstytucyjny-i-Zrodla-Prawa` |
+| Umowa, odszkodowanie, zadośćuczynienie, KC, spadek, zachowek, testament, dziedziczenie, alimenty, rozwód, separacja, władza rodzicielska, kontakty z dzieckiem, najem, czynsz, eksmisja, lokator, rękojmia, reklamacja, konsument, kredyt, frankowy, deweloper, wspólnota mieszkaniowa, nieruchomość, służebność, zasiedzenie, dobra osobiste, spółka, upadłość, windykacja, windykator, dług, zapłata, fundacja rodzinna, księga wieczysta, chwilówka, parabank | `dr-02-Prawo-Cywilne-Rodzinne-Gospodarcze` |
+| Przestępstwo, KK, KPK, wykroczenie, mandat, stalking, przemoc, cyberprzestępstwo, pobicie, kradzież, oszustwo, nietrzeźwy, po alkoholu, prokurator, śledztwo, akt oskarżenia, pokrzywdzony, areszt, niebieska karta, groźby karalne, komornik, egzekucja komornicza, zniesławienie, znieważenie, punkty karne, prawo jazdy | `dr-03-Prawo-Karne-Wykroczenia-Egzekucja` |
+| Wypowiedzenie, KP, umowa o pracę, stosunek pracy, pracodawca, zwolnienie dyscyplinarne, mobbing, nadgodziny, urlop, sąd pracy, wypadek przy pracy, zakaz konkurencji, umowa zlecenie, ZUS, zasiłek, L4, zwolnienie lekarskie, macierzyński, emerytura, renta, KRUS, PFRON, pomoc społeczna | `dr-04-Prawo-Pracy-ZUS-Swiadczenia` |
+| KPA, decyzja urzędu, decyzja administracyjna, SKO, WSA, NSA, bezczynność, przewlekłość, informacja publiczna, cudzoziemcy, karta pobytu, egzekucja admin., stwierdzenie nieważności decyzji, petycja, skarga kasacyjna do NSA | `dr-05-Prawo-Administracyjne-Sadowoadministracyjne` |
+| PIT, VAT, CIT, podatki, podatek, urząd skarbowy, kontrola podatkowa, interpretacja podatkowa, ryczałt, KAS, akcyza, cło, finanse publiczne, podatek od nieruchomości | `dr-06-Podatki-Finanse-Publiczne-AML` |
+| Przetarg, KIO, PZP, zamówienie, fundusze UE, notariat, zamówienie publiczne, partnerstwo publiczno-prywatne, PPP, akt notarialny | `dr-07-Zamowienia-Publiczne-Fundusze-UE` |
+| Gmina, powiat, JST, MPZP, miejscowy plan, warunki zabudowy, uchwała, radny, wójt, burmistrz, prawo lokalne, samorząd, referendum lokalne, odwołanie burmistrza, odwołanie wójta, strefa płatnego parkowania, rada gminy | `dr-08-Samorzad-Terytorialny-Prawo-Lokalne` |
+| Budowa, pozwolenie na budowę, samowola, PINB, nadzór budowlany, środowisko, odpady, energia, fotowoltaika, transport, szkody łowieckie, łowiectwo, obwód łowiecki, wywłaszczenie, ZRID, wycinka drzew, farma wiatrowa, decyzja środowiskowa, charakterystyka energetyczna, system kaucyjny | `dr-09-Budownictwo-Srodowisko-Energia-Transport` |
+| Lekarz, szpital, pacjent, błąd medyczny, NFZ, apteka, farmacja, żywność, rolnictwo, rolnik, szkoła, uczeń, sport, impreza masowa, sanepid, szpital psychiatryczny | `dr-10-Zdrowie-Farmacja-Zywnosc-Rolnictwo` |
+| RODO, dane osobowe, ochrona danych, przetwarzanie danych, UODO, IOD, inspektor ochrony danych, wyciek danych, naruszenie ochrony danych, rejestr czynności przetwarzania, powierzenie przetwarzania, klauzula informacyjna, monitoring wizyjny, nagrywanie rozmów, wizerunek, cookies, spam, newsletter, profilowanie, KSC, NIS2, AI Act, cyberbezpieczeństwo, IP, prawo autorskie, znak towarowy, patent, wizerunek dziecka, publikacja wizerunku, ujawnienie danych, udostępnienie danych, lista dłużników z nazwiskami, podpis kwalifikowany, podpis zaufany, Digital Services Act, DSA, platforma internetowa, dostęp do danych, usunięcie danych | `dr-11-Cyfrowe-Cyber-AI-Dane-IP` |
+| Sąd, prokuratura, adwokat, radca, notariusz, koszty sądowe, opłata sądowa, biegły sądowy, mediacja, taksa notarialna, izba adwokacka, pełnomocnik z urzędu | `dr-12-Sadownictwo-Prokuratura-Zawody-Prawnicze` |
+| Policja, ABW, służby specjalne, informacje niejawne, wojsko, obrona, Straż Graniczna, pozwolenie na broń, poświadczenie bezpieczeństwa, retencja danych | `dr-13-Sluzby-Bezpieczenstwo-Informacje-Niejawne` |
+| Prawo UE, TSUE, EKPC, ETPC, prawo międzynarodowe, prawo prywatne międzynarodowe, prawo właściwe, europejski tytuł egzekucyjny, egzekucja za granicą, konwencja genewska, uchodźca, Karta praw podstawowych, pytanie prejudycjalne | `dr-14-Prawo-UE-Miedzynarodowe-Prawa-Czlowieka` |
+| Compliance, ISO, AML instytucjonalny, zamówienia obronne, sygnaliści, sygnalista, ISO 27001, ISO 37001, ISO 37301, ISO 42001, ustawa antykorupcyjna | `dr-15-Compliance-ISO-Governance-Audyt` |
+| Pismo procesowe, strategia, narzędzia, kalkulatory, orzecznictwo, e-doręczenia, portal informacyjny, odtworzenie akt, kalkulator, odsetki ustawowe, sprostowanie prasowe, prawo prasowe, wzór pisma, paszport | `dr-16-Pisma-Strategia-Dowody-Orzecznictwo` |
 
 ## Jak wywołać DR-skill
 

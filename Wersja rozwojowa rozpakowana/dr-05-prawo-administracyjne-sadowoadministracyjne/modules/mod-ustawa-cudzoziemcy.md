@@ -1,5 +1,7 @@
 # mod-ustawa-cudzoziemcy [PERSPEKTYWA ADMINISTRACYJNA — MODUŁ KANONICZNY]
 
+**Hasła spraw:** karta pobytu, zezwolenie na pobyt czasowy, pobyt stały, wiza, cudzoziemiec, legalizacja pobytu, zobowiązanie do powrotu, deportacja
+
 **Zakres modułu (DR-05):** Pełny moduł administracyjno-proceduralny: tytuły pobytowe (pełna taksonomia), zezwolenia na pracę (wszystkie typy A/B/C/D/S), wydalenie/zobowiązanie do powrotu, ochrona międzynarodowa (uchodźcy), ścieżka odwoławcza UW → SZUSC → WSA → NSA, detencja, matryca dokument → uprawnienie do pracy.
 **Skrócona wersja dla spraw cywilno-pracowniczych:** `dr-02` → `mod-ustawa-cudzoziemcy.md`
 **Świadome utrzymanie dwóch wersji:** TAK — DR-05 = moduł kanoniczny (pełna procedura, wydalenie, taksonomia), DR-02 = skrócony zakres cywilno-pracowniczy. Przy sprawach procesowo-administracyjnych zawsze ładuj DR-05.

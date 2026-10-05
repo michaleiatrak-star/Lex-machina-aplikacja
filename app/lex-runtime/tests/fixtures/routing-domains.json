@@ -1,0 +1,610 @@
+{
+  "dr-01-ustroj-konstytucyjny-i-zrodla-prawa": [
+    [
+      "Czy mogę złożyć skargę konstytucyjną na przepis, który zastosował sąd w moim wyroku?",
+      "Konstytucja-TK-skarga-konstytucyjna"
+    ],
+    [
+      "Wygaśnięcie mandatu posła po skazaniu prawomocnym wyrokiem",
+      "mandat-posla-senatora"
+    ],
+    [
+      "Wprowadzenie stanu wyjątkowego a ograniczenie wolności zgromadzeń",
+      "stany-nadzwyczajne"
+    ],
+    [
+      "Jak zarejestrować partię polityczną?",
+      "partie-polityczne"
+    ],
+    [
+      "Ustrój sądów powszechnych, kto powołuje prezesa sądu okręgowego?",
+      "USP-ustroj-sadow-powszechnych"
+    ],
+    [
+      "Trybunał Konstytucyjny: jak wygląda postępowanie w sprawie pytania prawnego sądu?",
+      "TK-organizacja-postepowanie"
+    ]
+  ],
+  "dr-02-prawo-cywilne-rodzinne-gospodarcze": [
+    [
+      "Jak obliczyć zachowek po ojcu, który zapisał wszystko bratu?",
+      "KC-spadki-zachowek"
+    ],
+    [
+      "Alimenty na dziecko, ojciec nie płaci od pół roku",
+      "KRO-rodzinne"
+    ],
+    [
+      "Rozwód z orzeczeniem o winie i władza rodzicielska nad dziećmi",
+      "KRO-rodzinne"
+    ],
+    [
+      "Najemca nie płaci czynszu od trzech miesięcy, jak przeprowadzić eksmisję?",
+      "ochrona-praw-lokatorow"
+    ],
+    [
+      "Wynajmujący nie oddaje kaucji po zakończeniu najmu mieszkania",
+      "kaucja-najem-lokalu"
+    ],
+    [
+      "Deweloper opóźnia odbiór mieszkania o rok, czy mogę odstąpić od umowy deweloperskiej?",
+      "ustawa-deweloperska"
+    ],
+    [
+      "Sklep odmawia przyjęcia reklamacji wadliwego laptopa w ramach rękojmi",
+      "prawa-konsumenta"
+    ],
+    [
+      "Kredyt we frankach szwajcarskich, czy mogę unieważnić umowę z bankiem?",
+      "kredyty-frankowe"
+    ],
+    [
+      "Chcę ogłosić upadłość konsumencką",
+      "PrUpad-upadlosc-restrukturyzacja"
+    ],
+    [
+      "Założenie spółki z o.o., zarząd i zgromadzenie wspólników",
+      "KSH-organy-spolki-zoo"
+    ],
+    [
+      "Zasiedzenie działki sąsiada po 30 latach posiadania",
+      "zasiedzenie"
+    ],
+    [
+      "Pożyczka w parabanku z ogromnymi kosztami pozaodsetkowymi, chwilówka",
+      "parabanki-chwilowki"
+    ],
+    [
+      "Wpis do księgi wieczystej przy zakupie mieszkania",
+      "KW-ksiega-wieczysta"
+    ],
+    [
+      "Fundacja rodzinna: jak ją założyć i kto jest beneficjentem?",
+      "fundacja-rodzinna"
+    ]
+  ],
+  "dr-03-prawo-karne-wykroczenia-egzekucja": [
+    [
+      "Kolega pobił mnie na imprezie, złamany nos, co grozi sprawcy?",
+      "KK-art148-162"
+    ],
+    [
+      "Ktoś ukradł mi telefon w autobusie, kradzież",
+      "KK-art278-295"
+    ],
+    [
+      "Zatrzymano mnie za jazdę po alkoholu, 0,6 promila",
+      null
+    ],
+    [
+      "Dostałem mandat za przekroczenie prędkości o 40 km/h, czy mogę odmówić przyjęcia?",
+      "grzywny-mandaty"
+    ],
+    [
+      "Stalking ze strony byłego partnera, uporczywe nękanie SMS-ami",
+      "KK-art190a-stalking"
+    ],
+    [
+      "Mąż stosuje przemoc domową i znęca się nad rodziną",
+      "przemoc-domowa"
+    ],
+    [
+      "Zniesławienie w internecie, ktoś pisze o mnie kłamstwa na forum",
+      "KK-art212-216"
+    ],
+    [
+      "Prokurator wystąpił o tymczasowe aresztowanie syna",
+      "tymczasowe-aresztowanie"
+    ],
+    [
+      "Przekroczenie punktów karnych, utrata prawa jazdy",
+      "PRD-prawo-jazdy-punkty-karne"
+    ],
+    [
+      "Przedawnienie karalności przestępstwa sprzed 10 lat",
+      "przedawnienie-karalnosci"
+    ],
+    [
+      "Komornik zajął mi całe wynagrodzenie, ile może zabrać?",
+      null
+    ]
+  ],
+  "dr-04-prawo-pracy-zus-swiadczenia": [
+    [
+      "Pracodawca wręczył mi wypowiedzenie umowy o pracę bez podania przyczyny",
+      "KP"
+    ],
+    [
+      "Mobbing w pracy, szef mnie poniża, jakie mam prawa?",
+      "mobbing"
+    ],
+    [
+      "Nie wypłacono mi nadgodzin od roku, czas pracy",
+      "KP-dzial-VI-czas-pracy"
+    ],
+    [
+      "Ile dni urlopu wypoczynkowego mi przysługuje po 10 latach pracy?",
+      "KP-dzial-VII-urlopy"
+    ],
+    [
+      "Ile wynosi zasiłek chorobowy na L4 w ciąży?",
+      "ustawa-zasilkowa"
+    ],
+    [
+      "Urlop rodzicielski i macierzyński dla ojca",
+      "KP-dzial-VIII-rodzicielstwo"
+    ],
+    [
+      "ZUS odmówił mi renty z tytułu niezdolności do pracy",
+      "SUS"
+    ],
+    [
+      "Pracownik miał wypadek przy pracy, jakie świadczenia z ZUS?",
+      "wypadek-przy-pracy"
+    ],
+    [
+      "Zwolnienia grupowe w firmie, odprawa",
+      "zwolnienia-grupowe"
+    ],
+    [
+      "Praca zdalna, czy pracodawca musi zwrócić koszty prądu?",
+      "KP-praca-zdalna"
+    ],
+    [
+      "Ile wynosi minimalne wynagrodzenie w 2026 roku?",
+      "minimalne-wynagrodzenie"
+    ],
+    [
+      "Zasiłek pogrzebowy po śmierci matki",
+      "zasilek-pogrzebowy"
+    ]
+  ],
+  "dr-05-prawo-administracyjne-sadowoadministracyjne": [
+    [
+      "Urząd od 5 miesięcy nie wydaje decyzji, skarga na bezczynność organu",
+      null
+    ],
+    [
+      "Decyzja wojewody o odmowie karty pobytu dla cudzoziemca",
+      "ustawa-cudzoziemcy"
+    ],
+    [
+      "Wniosek o dostęp do informacji publicznej, gmina odmawia",
+      "UDIP-dostep-informacji-publicznej"
+    ],
+    [
+      "Odwołanie od decyzji administracyjnej do SKO, termin 14 dni",
+      "KPA-decyzja-i-odwolanie"
+    ],
+    [
+      "Stwierdzenie nieważności decyzji administracyjnej sprzed lat",
+      "tryby-nadzwyczajne"
+    ],
+    [
+      "Egzekucja administracyjna należności, upomnienie i tytuł wykonawczy",
+      "UPEA-egzekucja-administracyjna"
+    ],
+    [
+      "Skarga kasacyjna do NSA od wyroku WSA, prawo pomocy",
+      "PPSA-terminy-kasacja-prawo-pomocy"
+    ],
+    [
+      "Jak złożyć petycję do urzędu w sprawie remontu drogi?",
+      "ustawa-petycje"
+    ],
+    [
+      "Skarga na przewlekłość postępowania sądowego, sprawa trwa 4 lata",
+      "przewleklosc"
+    ]
+  ],
+  "dr-06-podatki-finanse-publiczne-aml": [
+    [
+      "Urząd skarbowy wszczął kontrolę podatkową w mojej firmie",
+      "OP-kontrola-podatkowa"
+    ],
+    [
+      "Jak rozliczyć PIT za wynajem mieszkania ryczałtem?",
+      "ryczalt"
+    ],
+    [
+      "Czy muszę zapłacić podatek od spadku po babci?",
+      "spadkow-darowizn"
+    ],
+    [
+      "Odliczenie VAT od samochodu używanego w firmie i prywatnie",
+      "odliczenia-uzytek-mieszany"
+    ],
+    [
+      "Wystawienie faktury VAT w KSeF, fakturowanie",
+      "VAT-transakcje-fakturowanie"
+    ],
+    [
+      "Interpretacja indywidualna podatkowa, wniosek do Dyrektora KIS",
+      "interpretacje"
+    ],
+    [
+      "Podatek od nieruchomości dla firmy, stawki w gminie",
+      "podatek-nieruchomosci"
+    ],
+    [
+      "Limit płatności gotówką między przedsiębiorcami",
+      "limit-platnosci-gotowkowych"
+    ],
+    [
+      "Akcyza od samochodu sprowadzonego z Niemiec",
+      "akcyz"
+    ],
+    [
+      "CIT estoński dla spółki z o.o.",
+      "CIT"
+    ]
+  ],
+  "dr-07-zamowienia-publiczne-fundusze-ue": [
+    [
+      "Przetarg publiczny: odwołanie do KIO od wyboru oferty",
+      "KIO"
+    ],
+    [
+      "Rażąco niska cena w przetargu, wyjaśnienia wykonawcy",
+      "PZP"
+    ],
+    [
+      "Unieważnienie postępowania o udzielenie zamówienia publicznego",
+      "PZP-dzial-II"
+    ],
+    [
+      "Kary umowne w umowie o zamówienie publiczne, waloryzacja",
+      "PZP-wykonanie-umowy"
+    ],
+    [
+      "Dotacja z funduszy UE, korekta finansowa za naruszenie zasady konkurencyjności",
+      "fundusze-UE"
+    ],
+    [
+      "Partnerstwo publiczno-prywatne przy budowie basenu",
+      "PPP"
+    ],
+    [
+      "Akt notarialny, obowiązki notariusza przy umowie sprzedaży",
+      "PrNotariat"
+    ]
+  ],
+  "dr-08-samorzad-terytorialny-prawo-lokalne": [
+    [
+      "Gmina uchwaliła miejscowy plan zagospodarowania, który obniża wartość mojej działki",
+      "MPZP-WZ-planowanie-przestrzenne"
+    ],
+    [
+      "Warunki zabudowy dla działki, wójt odmawia",
+      "MPZP-WZ"
+    ],
+    [
+      "Strefa płatnego parkowania, opłata dodatkowa za brak biletu",
+      "strefy-platnego-parkowania"
+    ],
+    [
+      "Wojewoda stwierdził nieważność uchwały rady gminy",
+      "nadzor-wojewody"
+    ],
+    [
+      "Referendum w sprawie odwołania burmistrza",
+      "referendum-lokalne"
+    ],
+    [
+      "Skarga do WSA na uchwałę rady gminy, akt prawa miejscowego",
+      "skargi-na-prawo-miejscowe"
+    ],
+    [
+      "Opłata za wywóz śmieci w gminie, uchwała o stawkach",
+      null
+    ]
+  ],
+  "dr-09-budownictwo-srodowisko-energia-transport": [
+    [
+      "Sąsiad buduje garaż bez pozwolenia, zgłosić do PINB samowolę budowlaną?",
+      "PrBud"
+    ],
+    [
+      "Pozwolenie na budowę domu jednorodzinnego, jakie dokumenty?",
+      "PrBud"
+    ],
+    [
+      "Wycinka drzew na prywatnej działce bez zezwolenia, kara",
+      "srodowisko-wycinka"
+    ],
+    [
+      "Fotowoltaika, przyłączenie mikroinstalacji do sieci, URE",
+      "PrEnergetyczne-URE-OZE"
+    ],
+    [
+      "Szkody łowieckie w uprawach, dzierżawca obwodu nie chce płacić odszkodowania",
+      "szkody-lowieckie"
+    ],
+    [
+      "Wywłaszczenie nieruchomości pod drogę, odszkodowanie ZRID",
+      "GDDKiA-specustawa-drogowa-ZRID"
+    ],
+    [
+      "Decyzja środowiskowa dla farmy wiatrowej, ocena oddziaływania",
+      "OOS"
+    ],
+    [
+      "Świadectwo charakterystyki energetycznej przy sprzedaży mieszkania",
+      "charakterystyka-energetyczna"
+    ],
+    [
+      "System kaucyjny za butelki, obowiązki sklepu",
+      "system-kaucyjny"
+    ]
+  ],
+  "dr-10-zdrowie-farmacja-zywnosc-rolnictwo": [
+    [
+      "Błąd lekarski w szpitalu, prawa pacjenta i odszkodowanie",
+      "pacjent"
+    ],
+    [
+      "Apteka sprzedała lek na receptę bez recepty, jakie konsekwencje?",
+      "PrFarm"
+    ],
+    [
+      "NFZ odmówił refundacji leczenia, świadczenia zdrowotne",
+      "NFZ"
+    ],
+    [
+      "Przymusowe przyjęcie do szpitala psychiatrycznego bez zgody",
+      "zdrowie-psychiczne"
+    ],
+    [
+      "Szkoła zawiesiła ucznia, prawa ucznia i statut",
+      "prawa-ucznia"
+    ],
+    [
+      "Sanepid nałożył karę na restaurację, bezpieczeństwo żywności",
+      "bezpieczenstwo-zywnosci"
+    ],
+    [
+      "Impreza masowa na stadionie, obowiązki organizatora",
+      "imprezy-masowe"
+    ],
+    [
+      "Rzecznik Praw Pacjenta, skarga na naruszenie praw pacjenta",
+      "rzecznik-praw-pacjenta"
+    ]
+  ],
+  "dr-11-cyfrowe-cyber-ai-dane-ip": [
+    [
+      "Firma wyciekła moje dane osobowe, czy mogę złożyć skargę do UODO?",
+      "UODO"
+    ],
+    [
+      "Pracodawca zainstalował monitoring wizyjny w szatni, czy to legalne?",
+      "RODO"
+    ],
+    [
+      "Sklep internetowy nie chce usunąć moich danych mimo żądania, prawo do bycia zapomnianym",
+      "RODO-DSAR"
+    ],
+    [
+      "Administrator nie odpowiada na wniosek o dostęp do danych, kopia danych",
+      "RODO-DSAR"
+    ],
+    [
+      "Jak przygotować rejestr czynności przetwarzania w małej firmie?",
+      "RODO-RCP-DPA"
+    ],
+    [
+      "Umowa powierzenia przetwarzania danych z dostawcą chmury",
+      "RODO-RCP-DPA"
+    ],
+    [
+      "Czy muszę przeprowadzić ocenę skutków dla ochrony danych przy monitoringu?",
+      "RODO-DPIA"
+    ],
+    [
+      "Czy muszę powołać inspektora ochrony danych w przychodni?",
+      "RODO"
+    ],
+    [
+      "Naruszenie ochrony danych, mail z PESEL-ami wysłany do złej osoby, zgłoszenie w 72 godziny",
+      null
+    ],
+    [
+      "Pliki cookies na stronie internetowej, baner zgody",
+      null
+    ],
+    [
+      "Newsletter bez zgody, spam na maila firmowego",
+      "uslugi-elektroniczne"
+    ],
+    [
+      "Ktoś skopiował moje zdjęcia i używa ich na stronie, naruszenie praw autorskich",
+      "PrAut"
+    ],
+    [
+      "Rejestracja znaku towarowego w Urzędzie Patentowym",
+      "prawo-wlasnosci-przemyslowej"
+    ],
+    [
+      "Czy nasz system rekrutacyjny z AI podlega AI Act jako wysokiego ryzyka?",
+      "AI-Act"
+    ],
+    [
+      "Ransomware zaszyfrował serwery, obowiązki z ustawy o krajowym systemie cyberbezpieczeństwa",
+      "KSC-NIS2"
+    ],
+    [
+      "Platforma internetowa nie usuwa nielegalnych treści, Digital Services Act",
+      "DSA"
+    ],
+    [
+      "Podpis kwalifikowany i podpis zaufany, ważność umowy",
+      "podpis-elektroniczny"
+    ],
+    [
+      "Publikacja wizerunku dziecka na Facebooku przez szkołę bez zgody rodziców",
+      null
+    ],
+    [
+      "Profilowanie klientów przez algorytm scoringowy, zautomatyzowane decyzje RODO",
+      "RODO"
+    ],
+    [
+      "Wspólnota mieszkaniowa wywiesiła listę dłużników z nazwiskami na klatce",
+      null
+    ],
+    [
+      "Bank przetwarza moje dane po spłacie kredytu, BIK",
+      null
+    ]
+  ],
+  "dr-12-sadownictwo-prokuratura-zawody-prawnicze": [
+    [
+      "Ile wynosi opłata sądowa od pozwu o zapłatę 50 000 zł?",
+      "KSCU-koszty-sadowe"
+    ],
+    [
+      "Zwolnienie od kosztów sądowych i pełnomocnik z urzędu",
+      "KSCU"
+    ],
+    [
+      "Skarga na adwokata do rzecznika dyscyplinarnego izby adwokackiej",
+      "adwokatura"
+    ],
+    [
+      "Biegły sądowy wydał stronniczą opinię, zarzuty do opinii",
+      "KPC-biegli-sadowi"
+    ],
+    [
+      "Mediacja w sprawie gospodarczej przed sądem",
+      "mediac"
+    ],
+    [
+      "Wynagrodzenie notariusza, taksa notarialna",
+      "notariat"
+    ]
+  ],
+  "dr-13-sluzby-bezpieczenstwo-informacje-niejawne": [
+    [
+      "Policja zatrzymała mnie do kontroli, jakie uprawnienia ma policjant?",
+      "ustawa-policja"
+    ],
+    [
+      "Poświadczenie bezpieczeństwa do informacji niejawnych, odmowa",
+      "informacje-niejawne"
+    ],
+    [
+      "Pozwolenie na broń, cofnięcie przez komendanta policji",
+      "BronAmunU"
+    ],
+    [
+      "Wezwanie do wojska na ćwiczenia, obrona Ojczyzny",
+      "obrona-ojczyzny"
+    ],
+    [
+      "Retencja danych telekomunikacyjnych przez służby",
+      "retencja-danych"
+    ],
+    [
+      "Straż Graniczna zatrzymała cudzoziemca na granicy",
+      "straz-graniczna"
+    ]
+  ],
+  "dr-14-prawo-ue-miedzynarodowe-prawa-czlowieka": [
+    [
+      "Skarga do ETPC po wyczerpaniu drogi krajowej",
+      "EKPC-ETPC"
+    ],
+    [
+      "Karta praw podstawowych UE w sprawie przed sądem polskim",
+      "KPP-karta-praw-podstawowych"
+    ],
+    [
+      "Prawo właściwe dla umowy z kontrahentem z Niemiec, prawo prywatne międzynarodowe",
+      "PMPP"
+    ],
+    [
+      "Status uchodźcy według konwencji genewskiej",
+      "konwencja-genewska"
+    ],
+    [
+      "Egzekucja polskiego wyroku we Francji, europejski tytuł egzekucyjny",
+      "egzekucja-transgraniczna"
+    ],
+    [
+      "Pytanie prejudycjalne do TSUE, zasada pierwszeństwa prawa UE",
+      null
+    ]
+  ],
+  "dr-15-compliance-iso-governance-audyt": [
+    [
+      "Wdrożenie procedury zgłoszeń wewnętrznych dla sygnalistów w firmie",
+      "sygnalisci"
+    ],
+    [
+      "Certyfikacja ISO 27001 w spółce IT",
+      "ISO-27001"
+    ],
+    [
+      "System zarządzania antykorupcyjnego ISO 37001",
+      "ISO-37001"
+    ],
+    [
+      "Compliance management system ISO 37301 w grupie kapitałowej",
+      "ISO-37301"
+    ],
+    [
+      "ISO 42001 system zarządzania sztuczną inteligencją",
+      "ISO-42001"
+    ],
+    [
+      "Ograniczenia prowadzenia działalności przez osoby pełniące funkcje publiczne, ustawa antykorupcyjna",
+      "ustawa-antykorupcyjna"
+    ]
+  ],
+  "dr-16-pisma-strategia-dowody-orzecznictwo": [
+    [
+      "Jak doręczyć pismo przez portal informacyjny sądów, e-doręczenia",
+      "e-doreczenia-portal"
+    ],
+    [
+      "Odtworzenie zaginionych akt sprawy sądowej",
+      "odtworzenie-akt"
+    ],
+    [
+      "Kalkulator odsetek ustawowych za opóźnienie",
+      "kalkulatory"
+    ],
+    [
+      "Sprostowanie prasowe, gazeta opublikowała nieprawdę",
+      "prawo-prasowe"
+    ],
+    [
+      "Wzór pisma procesowego, wymogi formalne",
+      "wzory-pism"
+    ],
+    [
+      "Odmowa wydania paszportu, ewidencja ludności",
+      "obywatelstwo-paszporty"
+    ]
+  ]
+}

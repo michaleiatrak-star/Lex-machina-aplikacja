@@ -69891,6 +69891,25 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05l — TRYB STRUKTURA: przekazywanie spraw do dziedziny (DR), modułu aktu i skilla wykonawczego (6.185)
+
+### 1. ŹRÓDŁO
+Zlecenie: zbadać routing do właściwego modułu DR i skilla wykonawczego, osobno sprawy RODO (DR-11), dla każdego DR i każdego skilla wykonawczego. Audyt dynamiczny: 144 pytania w języku klienta (każdy z 16 DR, z oczekiwanym modułem) i 56 pytań dla 12 skilli wykonawczych; wynik przed zmianą: 40/142 DR i 6/54 skilli wykonawczych źle.
+
+### 2. USTALENIA
+- BŁĄD (routing błyskawiczny prawo-polskie-v2): brak słów, którymi klienci opisują sprawy (RODO: monitoring wizyjny, IOD, rejestr czynności, powierzenie, wizerunek, spam, cookies; karne: pobicie, kradzież, jazda po alkoholu; praca: mobbing, L4, nadgodziny; rodzinne: alimenty, rozwód, zachowek). Bez trafienia aplikacja zgadywała dziedzinę z map aktów („imprezie” → imprezy masowe, „firmie” → VAT).
+- BŁĄD (aplikacja): dopasowanie słów bez fleksji („danych osobowych” nie pasowało do „dane osobowe”; „powierzenia” pasowało do „powiat”); numery norm („ISO 27001”) wycinane; zapasowa druga dziedzina z jednego wspólnego słowa.
+- BŁĄD (aplikacja, Karne: +kwalifikator): sprawa karna opisana potocznie (pobicie, kradzież, jazda po alkoholu, mandat, stalking, śledztwo) nie była rozpoznawana jako karna — bez kwalifikatora i profilu PEŁNY.
+- BŁĄD (moduły DR): kolumna „Akt / zakres” map aktów nazywa akty, nie sprawy; moduł właściwy dla sprawy nie był wskazywany (np. „nie usuwa moich danych” → nie DSAR).
+- BŁĄD (router KROK 2): „odwołanie od wypowiedzenia / od decyzji ZUS” bez skilla wykonawczego; „policz termin na apelację” → pisma-procesowe; „na umowie zlecenie” → analizator-umow; „SMS-y” w opowieści o stalkingu → analizator-dowodow; „moje dane osobowe” traktowane jak „moje pismo” (sprawdzenie własnego pisma).
+
+### 3. ZMIANA
+- prawo-polskie-v2 6.42: routing błyskawiczny rozszerzony dla DR-01–DR-16.
+- prawny-router-v3 3.65: frazy [3] i [6]; reguły „na umowie …” → [10] i maile/SMS/nagrania tylko przy pytaniu o dowód.
+- Linia „**Hasła spraw:**” w nagłówkach modułów (aplikacja dobiera po niej moduł; resolver mechaniczny MAPA-AKTOW jej nie czyta, więc nie wymusza wczytania): DR-01 3.16, DR-02 3.63, DR-03 3.55, DR-05 3.32, DR-06 3.96, DR-07 3.14, DR-08 3.16, DR-11 3.22. Treść prawna bez zmian.
+- Aplikacja: rdzenie bez końcówek fleksyjnych, waga fraz wielowyrazowych, numery norm, sprawa karna → DR-03 na pierwszym miejscu, potoczne sygnały spraw karnych; stały test regresji (tests/routing-corpus.test.ts, 202 przypadki).
+- Wynik po zmianie: 144/144 DR, 56/56 skilli wykonawczych.
+
 ## AUDYT-2026-10-05k — TRYB STRUKTURA: ścieżki przekazywania spraw i wydawanie modułów (6.184)
 
 ### 1. ŹRÓDŁO

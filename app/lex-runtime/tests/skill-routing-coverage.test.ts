@@ -127,7 +127,7 @@ describe("DR domains: flash routing of prawo-polskie-v2 and act modules of MAPA-
     ["Ile wynosi zasiłek pogrzebowy z ZUS?", "dr-04-prawo-pracy-zus-swiadczenia", "mod-FUS-zasilek-pogrzebowy-renta-rodzinna-waloryzacja.md"],
     ["Czy przysługuje mi urlop rodzicielski?", "dr-04-prawo-pracy-zus-swiadczenia", "mod-KP-dzial-VIII-rodzicielstwo.md"],
     ["Spadek po ojcu — zachowek", "dr-02-prawo-cywilne-rodzinne-gospodarcze", "mod-KC-spadki-zachowek-dzial-rozrzadzenia.md"],
-    ["Administrator nie usuwa moich danych osobowych RODO", "dr-11-cyfrowe-cyber-ai-dane-ip", "mod-UODO-postepowanie-ochrona-danych.md"],
+    ["Administrator nie usuwa moich danych osobowych RODO", "dr-11-cyfrowe-cyber-ai-dane-ip", "mod-RODO-DSAR-zadania-osob.md"],
     ["Sąsiad wybudował garaż bez pozwolenia, samowola budowlana", "dr-09-budownictwo-srodowisko-energia-transport", "mod-PrBud-prawo-budowlane.md"]
   ])("%s", (question, domain, module) => {
     const ranked = rankDomains(registry, rows, question);

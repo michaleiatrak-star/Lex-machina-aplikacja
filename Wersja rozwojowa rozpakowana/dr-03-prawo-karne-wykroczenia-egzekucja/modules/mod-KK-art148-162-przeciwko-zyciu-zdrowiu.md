@@ -1,5 +1,7 @@
 # Przestępstwa przeciwko życiu i zdrowiu — ujęcie systemowe (art. 148-162 KK) v1.0.0 (dodany 2026-07-16)
 
+**Hasła spraw:** pobicie, pobił, bójka, uszczerbek na zdrowiu, złamanie, złamany nos, obrażenia ciała, uszkodzenie ciała, narażenie na niebezpieczeństwo, nieudzielenie pomocy, zabójstwo, nieumyślne spowodowanie śmierci
+
 > ⛔ Do 2026-07-16 przepisy tego rozdziału pojawiały się fragmentarycznie
 > (art. 148 i 156/157 incydentalnie w kwalifikatorze) bez systemowego
 > drzewa odróżniającego typy zabójstwa i relacji między nimi. Ten moduł

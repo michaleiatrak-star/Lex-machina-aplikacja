@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.64"
+version: "3.65"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,7 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.64 (2026-10-05k, AUDYT-2026-10-05k): KROK 2 [2]: frazy „oceń szanse”, „szanse wygrania”, analiza akt (spójnie z macierzą aktywacji).
+  Wersja bieżąca: 3.65 (2026-10-05l, AUDYT-2026-10-05l): KROK 2: [3] odwołanie od wypowiedzenia / od decyzji / do sądu; [6] policz termin, termin na wniesienie; [1] „na umowie zlecenie / o pracę” to podstawa zatrudnienia → [10]; [6] maile/SMS/nagrania tylko przy pytaniu o dowód.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -311,6 +311,7 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 `umowa / OWU / kontrakt / ugoda / regulamin / testament / "czy mogę podpisać" / "klauzule"`
 → PRIMARY: `view analizator-umow-v1/SKILL.md`
 → SECONDARY: `orzeczenia-sadowe-v2` · FALLBACK: `przewodnik-prawny-v2`
+→ „Na umowie zlecenie / o pracę / o dzieło” to podstawa zatrudnienia osoby, nie umowa do analizy → [10].
 
 ### [2] AKTA / WYROK / ANALIZA SZANS
 `wyrok / nakaz zapłaty / wezwanie / pismo przeciwnika / "jakie mam szanse" / "oceń szanse" / "szanse wygrania" / analiza akt / analiza pozycji`
@@ -318,7 +319,7 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 → SECONDARY: `analizator-dowodow-v3`, `orzeczenia-sadowe-v2` · FALLBACK: `przewodnik-prawny-v2`
 
 ### [3] PISMO ZŁOŻONE
-`pozew / apelacja / odpowiedź na pozew / zażalenie / skarga / pismo wielowątkowe`
+`pozew / apelacja / odpowiedź na pozew / zażalenie / skarga / odwołanie od wypowiedzenia / odwołanie od decyzji / odwołanie do sądu / pismo wielowątkowe`
 → PRIMARY: `view pisma-procesowe-v3/SKILL.md`
 → SECONDARY: `orzeczenia-sadowe-v2`, `analiza-sadowa-v6` · Wyjście: **obowiązkowo .docx**
 
@@ -333,9 +334,10 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 → SECONDARY: `analiza-sadowa-v6`
 
 ### [6] DOWODY / TERMINY / KOSZTY
-`maile / SMS / nagrania / faktury / terminy procesowe / koszty sądowe / opłaty komornicze`
+`maile / SMS / nagrania / faktury / terminy procesowe / policz termin / termin na wniesienie / koszty sądowe / opłaty komornicze`
 → PRIMARY: `view analizator-dowodow-v3/SKILL.md`
 → SECONDARY: `analiza-sadowa-v6`
+→ Maile / SMS / nagrania wskazują [6], gdy pytanie dotyczy dowodu (ocena, wykorzystanie); sama opowieść o sprawie („SMS-y i śledzenie”) → [10].
 
 ### [7] ZAGUBIONY / FALLBACK
 `"co mam zrobić" / "od czego zacząć" / wyjaśnienie wyniku / walidacja przepisu`

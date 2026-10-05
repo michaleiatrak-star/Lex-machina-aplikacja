@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
+import { criminalMatter } from "./matter-signals.js";
 // Lowercase without diacritics: module names are ASCII ("zasilek-pogrzebowy").
 export function fold(text) {
     return text
@@ -16,21 +17,33 @@ const STOP = new Set([
     "framework", "rodzina", "modulow", "lub", "dla", "the", "and", "nowe", "nowy", "zmiany", "przyp", "jw",
     "czy", "sie", "po", "za", "mi", "jak", "nie", "do", "od", "na", "ze", "co", "to", "gdy", "kiedy", "jest", "oraz"
 ]);
-// Words of four letters and more, and abbreviations written in capitals (KP, ZUS, VAT).
+// Words of four letters and more, and abbreviations written in capitals (KP, ZUS, VAT),
+// these marked "=" (they match whole).
 function words(text) {
     return [
         ...new Set((text.match(/[\p{L}0-9]{2,}/gu) ?? [])
             .filter((word) => word.length >= 4 || /^[\p{Lu}]{2,}$/u.test(word))
-            .map(fold)
-            .filter((word) => !STOP.has(word) && !/^\d+$/.test(word) && !/^(?:prze|przy|przez|przed)$/.test(word)))
+            .map((word) => (/^[\p{Lu}0-9]{2,}$/u.test(word) && word.length <= 5 ? `=${fold(word)}` : fold(word)))
+            .filter((word) => !STOP.has(word.replace(/^=/, "")) && !/^=?\d{1,2}$/.test(word) && !/^(?:prze|przy|przez|przed)$/.test(word)))
     ];
 }
-// A short word (an abbreviation: KP, ZUS, RODO) matches whole; a longer one by its stem.
+// Inflectional endings (folded, longest first): "danych" and "dane" share "dan".
+const ENDINGS = ["owie", "ach", "ami", "ych", "ich", "ego", "emu", "owi", "ow", "om", "em", "ie", "ek", "a", "e", "i", "y", "u", "o"];
+// An abbreviation (KP, ZUS, RODO) matches whole; a word by its stem without the
+// ending, a long one shorter still ("przetwarzanie" -> "przetwarz").
 function stemOf(word) {
-    return word.length <= 4 ? `=${word}` : word.slice(0, Math.max(4, word.length - 2));
+    if (word.startsWith("="))
+        return word;
+    const ending = ENDINGS.find((end) => word.endsWith(end) && word.length - end.length >= 3);
+    const base = ending ? word.slice(0, -ending.length) : word;
+    return base.length >= 8 ? base.slice(0, -2) : base;
 }
+// A short stem is an ending away from its word, not the start of another one
+// ("powi" of "powiat" is not "powierzenia").
 function hit(stem, tokens) {
-    return stem.startsWith("=") ? tokens.includes(stem.slice(1)) : tokens.some((token) => token.startsWith(stem));
+    if (stem.startsWith("="))
+        return tokens.includes(stem.slice(1));
+    return tokens.some((token) => token.startsWith(stem) && (stem.length > 4 || token.length <= stem.length + 4));
 }
 // What a module says it covers: its headings and its "Zakres:" paragraph.
 function moduleHead(file) {
@@ -48,7 +61,9 @@ function moduleHead(file) {
         .filter((line) => /^#{1,3}\s/.test(line) && !/HARD GATE|ALERT|ZAKAZ|CZYTAJ|CHANGELOG|STATUS/iu.test(line))
         .map((line) => line.replace(/^#+\s*/, "").replace(/\.md\b/g, ""));
     const scope = /\*\*Zakres:?\*\*:?\s*([\s\S]{0,400}?)(?:\n\s*\n|$)/u.exec(head)?.[1] ?? "";
-    return [...headings, scope.replace(/\(art[^)]*\)/g, " ")].join(" ");
+    // "**Hasła spraw:** ..." — the words a client uses for this module's matters.
+    const keywords = /\*\*Hasła spraw:?\*\*:?\s*([^\n]{0,600})/u.exec(head)?.[1] ?? "";
+    return [...headings, scope.replace(/\(art[^)]*\)/g, " "), keywords].join(" ");
 }
 function tokens(text) {
     return fold(provisionsForDetection(text)).match(/[a-z0-9]{2,}/g) ?? [];
@@ -69,15 +84,21 @@ export function parseFlashRouting(markdown) {
 export function flashDomains(rows, text) {
     const have = tokens(text);
     return rows
-        .map((row) => ({
-        skill: row.skill,
-        matched: row.phrases.filter((phrase) => {
+        .map((row) => {
+        const matched = row.phrases.filter((phrase) => {
             const stems = words(phrase).map(stemOf);
             return stems.length > 0 && stems.every((stem) => hit(stem, have));
-        })
-    }))
+        });
+        // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
+        // one word of it ("umowa"), which then does not count again.
+        const sets = matched.map((phrase) => words(phrase).map(stemOf));
+        const weight = sets
+            .filter((set, index) => !sets.some((other, at) => at !== index && other.length > set.length && set.every((stem) => other.includes(stem))))
+            .reduce((sum, set) => sum + set.length, 0);
+        return { skill: row.skill, matched, weight };
+    })
         .filter((row) => row.matched.length > 0)
-        .sort((a, b) => b.matched.length - a.matched.length);
+        .sort((a, b) => b.weight - a.weight);
 }
 export function parseActMap(markdown, skill) {
     const entries = [];
@@ -176,10 +197,10 @@ export function suggestDomainModules(registry, skill, text, limit = 3) {
         const score = matched.reduce((sum, stem) => sum + 1 / (df.get(stem) ?? 1), 0);
         return { item, matched, score };
     })
-        // One specific word (in at most two rows) or two common ones.
         // A specific word (in at most two rows): a long one alone, a short stem only with another word.
-        .filter((row) => row.score >= 0.5 &&
-        row.matched.some((stem) => (df.get(stem) ?? 1) <= 2 && (stem.length >= 5 || row.matched.length >= 2)))
+        // Or two words of the same row ("kontrola" + "podatkowa"), each common alone.
+        .filter((row) => (row.score >= 0.5 && row.matched.some((stem) => (df.get(stem) ?? 1) <= 2 && (stem.length >= 5 || row.matched.length >= 2))) ||
+        (row.score >= 0.25 && row.matched.filter((stem) => stem.length >= 5).length >= 2))
         .sort((a, b) => b.score - a.score);
     const result = [];
     for (const row of scored) {
@@ -196,11 +217,22 @@ export function suggestDomainModules(registry, skill, text, limit = 3) {
  * whose act maps it points to most (one specific act or scope).
  */
 export function rankDomains(registry, rows, text, limit = 2) {
+    const ranked = rankByPhrases(registry, rows, text, limit);
+    // A criminal matter (the application already requires the qualifier): DR-03 first.
+    const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
+    if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal)
+        return ranked;
+    const own = ranked.find((row) => row.skill === criminal);
+    const first = own ?? { skill: criminal, matched: [], modules: suggestDomainModules(registry, criminal, text) };
+    return [{ ...first, matched: ["sprawa karna (kwalifikator)", ...first.matched] }, ...ranked.filter((row) => row.skill !== criminal)].slice(0, limit);
+}
+function rankByPhrases(registry, rows, text, limit) {
     const flash = flashDomains(rows, text)
         .filter((row) => registry.get(row.skill))
         .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
-        .sort((a, b) => b.matched.length - a.matched.length || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
-        .slice(0, limit);
+        .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
+        .slice(0, limit)
+        .map(({ weight: _weight, ...row }) => row);
     if (flash.length)
         return flash;
     return [...registry.skills.values()]
@@ -208,6 +240,9 @@ export function rankDomains(registry, rows, text, limit = 2) {
         .map((skill) => ({ skill: skill.name, modules: suggestDomainModules(registry, skill.name, text) }))
         .filter((row) => (row.modules[0]?.score ?? 0) >= 1)
         .sort((a, b) => b.modules[0].score - a.modules[0].score)
+        // Without a flash-routing phrase a second domain is named only when its act map
+        // fits nearly as well (one shared word is not a second matter).
+        .filter((row, index, rows) => index === 0 || row.modules[0].score >= 0.75 * rows[0].modules[0].score)
         .slice(0, limit)
         .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0].why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules }));
 }

@@ -1,5 +1,7 @@
 # Moduł [BA] — Postępowanie przed UODO i ochrona danych osobowych
 
+**Hasła spraw:** skarga do UODO, Prezes UODO, kara administracyjna UODO, wyciek danych, naruszenie ochrony danych osobowych, zgłoszenie naruszenia w 72 godziny
+
 **Standard jakości:** stosuj `shared/MODULE-STANDARD-POLISH-LAW.md` oraz `shared/POLISH-LAW-COMPLETENESS-MATRIX.md`.
 ---
 WSPÓLNE ZASADY DLA MODUŁU:

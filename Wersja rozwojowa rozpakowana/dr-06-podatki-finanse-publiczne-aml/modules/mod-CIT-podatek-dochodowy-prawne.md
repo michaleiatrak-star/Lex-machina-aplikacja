@@ -1,5 +1,7 @@
 # mod-CIT-podatek-dochodowy-prawne
 
+**Hasła spraw:** CIT estoński, ryczałt od dochodów spółek, podatek dochodowy spółki, spółka z o.o. podatek, koszty uzyskania przychodu spółki
+
 **Status:** moduł klasy kancelaryjnej — poziom DR-03
 **Źródło weryfikacji:** CIT — Dz.U. **2026 poz. 554** t.j. (Obwieszczenie Marszałka Sejmu z 27 marca 2026 r., stan prawny na dzień 18 marca 2026 r.)
 **Data weryfikacji online:** 2026-06-07

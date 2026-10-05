@@ -1,5 +1,7 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.42 (2026-10-05l, AUDYT-2026-10-05l): Routing błyskawiczny: słownictwo spraw klientów dla DR-01–DR-16 (m.in. RODO: monitoring wizyjny, IOD, rejestr czynności, powierzenie, wizerunek, spam, cookies, profilowanie; karne: pobicie, kradzież, jazda po alkoholu; praca: mobbing, L4, nadgodziny).
+
 - 6.41 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 6.40 (2026-10-04l, AUDYT-2026-10-04l): ROUTING-MAP — wiersz umowy PL–UA o zabezpieczeniu społecznym przeniesiony z sekcji DR-14 do DR-04 (moduł leży w DR-04; T2 check_rejestracja_modulow); w wierszu MRG PL–UA nieaktualne „brak modułu w systemie” zastąpione odesłaniem do modułu DR-04. Bez zmian numerów Dz.U. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04l.

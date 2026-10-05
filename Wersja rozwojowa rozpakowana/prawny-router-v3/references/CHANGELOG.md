@@ -1,5 +1,7 @@
 # CHANGELOG — prawny-router-v3
 
+- 3.65 (2026-10-05l, AUDYT-2026-10-05l): KROK 2: [3] odwołanie od wypowiedzenia / od decyzji / do sądu; [6] policz termin, termin na wniesienie; [1] „na umowie zlecenie / o pracę” to podstawa zatrudnienia → [10]; [6] maile/SMS/nagrania tylko przy pytaniu o dowód.
+
 - 3.64 (2026-10-05k, AUDYT-2026-10-05k): KROK 2 [2]: frazy „oceń szanse”, „szanse wygrania”, analiza akt (spójnie z macierzą aktywacji).
 
 - 3.63 (2026-10-05i, AUDYT-2026-10-05i): PROFIL-LEKKI: „PO CO ISTNIEJE” jako HISTORIA, „DEKLARACJA PROFILU” i „KIEDY PROFIL LEKKI JEST ZAKAZANY” jako PROFIL — aplikacja wybiera profil, pisze KROK 3A i przy niewczytanym zasobie ogłasza TRYB ZDEGRADOWANY. Treść reguł bez zmian.

@@ -15,6 +15,24 @@ describe("AUTO: the matter is identified from the question, not from a placehold
     expect(criminalMatter("Sąsiad uszkodził mi samochód, należy mi się odszkodowanie?")).toBe(false);
   });
 
+  it("recognises a criminal matter told in everyday words (Karne: +kwalifikator)", () => {
+    for (const text of [
+      "Kolega pobił mnie na imprezie, złamany nos",
+      "Ktoś ukradł mi telefon w autobusie",
+      "Zatrzymano mnie za jazdę po alkoholu, 0,6 promila",
+      "Oszustwo internetowe na OLX, zapłaciłem a towaru brak",
+      "Mąż stosuje przemoc domową, chcę założyć niebieską kartę",
+      "Stalking ze strony byłego partnera",
+      "Zażalenie na postanowienie o umorzeniu śledztwa",
+      "Dostałem mandat za przekroczenie prędkości"
+    ]) {
+      expect(criminalMatter(text), text).toBe(true);
+    }
+    for (const text of ["Pobieram zasiłek chorobowy", "Dochodzenie roszczeń od ubezpieczyciela", "Wygaśnięcie mandatu radnego", "Mandat posła a immunitet"]) {
+      expect(criminalMatter(text), text).toBe(false);
+    }
+  });
+
   it("a lay criminal question in AUTO gets PEŁNY, the qualifier up front and no placeholder skill", async () => {
     const registry = new LexSkillRegistry(CORPUS);
     registry.scan();

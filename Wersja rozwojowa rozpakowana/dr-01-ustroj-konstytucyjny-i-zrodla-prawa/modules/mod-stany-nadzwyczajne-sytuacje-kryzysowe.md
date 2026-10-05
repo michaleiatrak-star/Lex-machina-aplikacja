@@ -1,5 +1,7 @@
 # MOD-STANY-KRYZYSOWE — Stany Nadzwyczajne i Sytuacje Kryzysowe (klęski żywiołowe, katastrofy, epidemie)
 
+**Hasła spraw:** stan wyjątkowy, stan wojenny, stan klęski żywiołowej, ograniczenie wolności i praw w stanie nadzwyczajnym, wolność zgromadzeń, sytuacja kryzysowa, epidemia
+
 **Wersja:** 1.0 | **Dodano:** 2026-07-17
 **Rola w systemie:** czwarty moduł w rodzinie DR-01 poświęconej prawu
 międzyczasowemu/kolizyjnemu, obok `mod-ZTP-przepisy-przejsciowe-doktryna.md`

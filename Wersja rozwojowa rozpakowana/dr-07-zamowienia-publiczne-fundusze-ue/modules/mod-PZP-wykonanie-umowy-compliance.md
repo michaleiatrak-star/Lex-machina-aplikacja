@@ -1,5 +1,7 @@
 # mod-PZP-wykonanie-umowy-compliance
 
+**Hasła spraw:** kary umowne w zamówieniu publicznym, waloryzacja wynagrodzenia, zmiana umowy o zamówienie, nienależyte wykonanie umowy, podwykonawca
+
 **Status:** moduł uzupełniający do `mod-PZP-zamowienia-publiczne-KIO.md`
 **Wydzielony:** 2026-06-14 (audyt — moduł nadrzędny >400 linii, podział tematyczny)
 **Źródło weryfikacji:** PZP — Dz.U. 2026 poz. 793 t.j. (obwieszczenie 27.05.2026; zastępuje t.j. 2024.1320) ✅ VER: 2026-08-15
