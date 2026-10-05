@@ -172,4 +172,15 @@ describe("G39I status consistency gate", () => {
         expect(result.finalization).toBe("DEGRADED");
         expect(result.text).toContain(`Art. 233 § 1 KK ${VER_233} i art. 233 § 6 KK ⚠️ [NIEWERYFIKOWANE]`);
     });
+    it("splits a group with both markers after a verified and an unverified provision (Gemini, 2026-10-05)", () => {
+        const answer = [
+            `Art. 233 KK i art. 232a KK ${VER_233} ⚠️ [NIEWERYFIKOWANE]`,
+            `Fałszywe zeznania: art. 233 KK ${VER_233}`
+        ].join("\n");
+        const ledger = ledgerWithKk();
+        expect(evaluateStatusConsistency(answer, ledger).result).toBe("BLOCKED");
+        const repaired = reconcileStatusMarkers(answer, ledger);
+        expect(repaired.text.split("\n")[0]).toBe(`Art. 233 KK ${VER_233} i art. 232a KK ⚠️ [NIEWERYFIKOWANE]`);
+        expect(evaluateStatusConsistency(repaired.text, ledger).result).toBe("PASS");
+    });
 });
