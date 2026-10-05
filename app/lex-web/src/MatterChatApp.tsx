@@ -6576,38 +6576,49 @@ export default function MatterChatApp({
                     udostępnia katalog modeli providera, a w aplikacji desktopowej klucz
                     może być zapisany w systemowym magazynie poświadczeń.
                   </p>
-                  <small>
+                  <p
+                    className={`chat-provider-account-status ${
+                      !accountSession
+                        ? "checking"
+                        : !accountSession.installed
+                          ? "missing"
+                          : accountSession.authenticated
+                            ? "connected"
+                            : "pending"
+                    }`}
+                    role="status"
+                  >
+                    <span aria-hidden="true" className="chat-provider-account-dot" />
                     {accountSession
                       ? accountSession.installed
                         ? accountSession.authenticated
-                          ? "Status: połączone · " + accountSession.command
-                          : "Status: klient zainstalowany, brak aktywnej sesji · " + accountSession.command
-                        : "Status: brak klienta · " + accountSession.command + ". " + accountSession.installHint
+                          ? `Połączone · ${accountSession.command}`
+                          : `Klient zainstalowany, brak aktywnej sesji · ${accountSession.command}`
+                        : `Brak klienta · ${accountSession.command}`
                       : "Sprawdzanie klienta i sesji…"}
-                  </small>
+                  </p>
+                  {accountSession && !accountSession.installed && accountSession.installHint ? (
+                    <small className="chat-account-note">{accountSession.installHint}</small>
+                  ) : null}
                   {user.appRole === "ADMIN" ? (
-                    <div className="chat-form-row compact chat-account-actions">
+                    <div className="chat-form-row compact chat-provider-account-actions">
                       {/* The runtime provisions the pinned client (Codex, Claude Code,
-                          Gemini CLI, Grok Build) on "Połącz konto". */}
-                      <button
-                        type="button"
-                        className="chat-primary-action"
-                        disabled={
-                          providerAccountBusy ||
-                          accountSession?.authenticated === true
-                        }
-                        onClick={() =>
-                          void connectProviderAccount()
-                        }
-                      >
-                        {providerAccountBusy
-                          ? accountConnectPhase?.kind === "provision"
-                      ? "Pobieranie klienta…"
-                      : "Logowanie…"
-                          : accountSession?.authenticated
-                            ? "Połączone"
+                          Gemini CLI, Grok Build) on "Połącz konto". Once connected the
+                          status above says so; no disabled "Połączone" button. */}
+                      {!accountSession?.authenticated || providerAccountBusy ? (
+                        <button
+                          type="button"
+                          className="chat-primary-action"
+                          disabled={providerAccountBusy}
+                          onClick={() => void connectProviderAccount()}
+                        >
+                          {providerAccountBusy
+                            ? accountConnectPhase?.kind === "provision"
+                              ? "Pobieranie klienta…"
+                              : "Logowanie…"
                             : "Połącz konto"}
-                      </button>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"

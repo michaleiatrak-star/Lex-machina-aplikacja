@@ -1313,8 +1313,15 @@
 }
 
 .chat-primary-action:disabled {
-  border-color: #9ba69d;
-  background: #9ba69d;
+  border-color: #c9d0c7;
+  background: #e4e8e1;
+  color: #5d6b61;
+  cursor: not-allowed;
+}
+
+.chat-secondary-action:disabled {
+  color: #7d897f;
+  cursor: not-allowed;
 }
 
 .chat-secondary-action {
@@ -1483,13 +1490,66 @@
   margin-top: 12px;
 }
 
-/* Account actions: wrap as whole buttons instead of breaking their labels. */
-.chat-account-actions {
+/* Settings, provider account: its own class. `.chat-account-actions` is the dark
+   sidebar card (light text on a translucent background) and must not reach the
+   light settings panel. Buttons wrap whole instead of breaking their labels. */
+.chat-provider-account-actions {
   flex-wrap: wrap;
 }
 
-.chat-account-actions > button {
+.chat-provider-account-actions > button {
   white-space: nowrap;
+}
+
+.chat-provider-account-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 6px 12px;
+  border: 1px solid #c9d0c7;
+  border-radius: 12px;
+  background: #f1f3ef;
+  color: #34453a;
+  font-weight: 700;
+}
+
+.chat-provider-account-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8a968d;
+  flex: none;
+}
+
+.chat-provider-account-status.connected {
+  border-color: #9cc39a;
+  background: #e7f2e4;
+  color: #1f4d2a;
+}
+
+.chat-provider-account-status.connected .chat-provider-account-dot {
+  background: #2f7d3c;
+}
+
+.chat-provider-account-status.pending {
+  border-color: #e2c98f;
+  background: #fbf3e2;
+  color: #6b4b12;
+}
+
+.chat-provider-account-status.pending .chat-provider-account-dot {
+  background: #b7862a;
+}
+
+.chat-provider-account-status.missing {
+  border-color: #e0aaa3;
+  background: #f8e8e6;
+  color: #7a2a21;
+}
+
+.chat-provider-account-status.missing .chat-provider-account-dot {
+  background: #b5463a;
 }
 
 .chat-account-note {
