@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { WorkspaceDocumentCitation } from "./workspace-client.js";
 import { getAnonymizedVersion, type AnonymizedVersion } from "./api.js";
-import { SourceLinkedText } from "./SourceLinkedText.js";
+import { SourceLinkedText, type SourceClaim } from "./SourceLinkedText.js";
 import { MarkdownContent } from "./MarkdownContent.js";
 
 function HighlightedContext({
@@ -119,12 +119,15 @@ export function DocumentCitationContent({
   citations = [],
   onOpenUrl,
   markdown = true,
-  caseId
+  caseId,
+  sources
 }: {
   content: string;
   citations?: WorkspaceDocumentCitation[];
   // Sprawa, z której akt można wczytać cały cytowany dokument.
   caseId?: string;
+  // Zweryfikowane przepisy: opis linku VER zamiast adresu.
+  sources?: SourceClaim[];
   onOpenUrl?: (url: string) => Promise<void> | void;
   // Model answers: tables, lists, bold; a user's own text stays as typed.
   markdown?: boolean;
@@ -137,11 +140,19 @@ export function DocumentCitationContent({
     [citations]
   );
   // Citation markers and links inside paragraphs, lists and table cells.
-  const renderText = (text: string, key: string) =>
-    text.split(/(\[\[LEXDOCREF:docref_\d+\]\])/g).map((part, index) => {
+  const renderText = (text: string, key: string, before = "") =>
+    text.split(/(\[\[LEXDOCREF:docref_\d+\]\])/g).map((part, index, parts) => {
       const citation = byMarker.get(part);
       if (!citation) {
-        return <SourceLinkedText key={`${key}-${index}`} content={part} onOpenUrl={onOpenUrl} />;
+        return (
+          <SourceLinkedText
+            key={`${key}-${index}`}
+            content={part}
+            onOpenUrl={onOpenUrl}
+            {...(sources ? { sources } : {})}
+            before={before + parts.slice(0, index).join("")}
+          />
+        );
       }
       return (
         <button

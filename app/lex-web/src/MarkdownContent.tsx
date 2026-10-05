@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
  * inline code and rules. No HTML from the answer is interpreted; plain text
  * pieces go to renderText (links, citation markers).
  */
-export type RenderText = (text: string, key: string) => ReactNode;
+// before: tekst wiersza lub komórki przed tym fragmentem (np. pogrubiony przepis przed znacznikiem VER).
+export type RenderText = (text: string, key: string, before?: string) => ReactNode;
 
 export type MarkdownBlock =
   | { type: "paragraph"; lines: string[] }
@@ -109,22 +110,22 @@ export function parseMarkdown(content: string): MarkdownBlock[] {
 }
 
 // **bold**, __bold__, *italic*, `code`; everything else goes to renderText.
-function inline(text: string, renderText: RenderText, key: string): ReactNode[] {
+function inline(text: string, renderText: RenderText, key: string, prefix = ""): ReactNode[] {
   const pattern = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+`|(?<![\w*])\*[^*\s][^*\n]*?\*(?![\w*]))/g;
   const nodes: ReactNode[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
   let part = 0;
   while ((match = pattern.exec(text)) !== null) {
-    if (match.index > cursor) nodes.push(renderText(text.slice(cursor, match.index), `${key}-t${part++}`));
+    if (match.index > cursor) nodes.push(renderText(text.slice(cursor, match.index), `${key}-t${part++}`, prefix + text.slice(0, cursor)));
     const token = match[0];
     const id = `${key}-m${part++}`;
     if (token.startsWith("`")) nodes.push(<code key={id}>{token.slice(1, -1)}</code>);
-    else if (token.startsWith("**") || token.startsWith("__")) nodes.push(<strong key={id}>{inline(token.slice(2, -2), renderText, id)}</strong>);
-    else nodes.push(<em key={id}>{inline(token.slice(1, -1), renderText, id)}</em>);
+    else if (token.startsWith("**") || token.startsWith("__")) nodes.push(<strong key={id}>{inline(token.slice(2, -2), renderText, id, prefix + text.slice(0, match.index))}</strong>);
+    else nodes.push(<em key={id}>{inline(token.slice(1, -1), renderText, id, prefix + text.slice(0, match.index))}</em>);
     cursor = match.index + token.length;
   }
-  if (cursor < text.length) nodes.push(renderText(text.slice(cursor), `${key}-t${part}`));
+  if (cursor < text.length) nodes.push(renderText(text.slice(cursor), `${key}-t${part}`, prefix + text.slice(0, cursor)));
   return nodes;
 }
 

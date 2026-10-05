@@ -38,6 +38,7 @@ import {
 } from "react";
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
+import type { SourceClaim } from "./SourceLinkedText.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
@@ -929,6 +930,14 @@ function executionMessage(
       ` · finalization ${execution.finalization}` +
       ` · UNVERIFIED ${execution.verification.unverified}`
   };
+}
+
+// Adres ze znacznika VER → weryfikowany przepis (z kotwicą strony, jak w znaczniku).
+function verifiedSources(evidence: EvidenceItem[]): SourceClaim[] {
+  return evidence.flatMap((item) => {
+    const urls = [item.sourceAnchorUrl, item.sourceUrl].filter((url): url is string => Boolean(url));
+    return [...new Set(urls)].map((url) => ({ claim: item.claim, url }));
+  });
 }
 
 // Login failures in words; an unknown code is shown with its identifier for support.
@@ -4639,6 +4648,7 @@ export default function MatterChatApp({
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
                     {...(selectedCase?.caseId ? { caseId: selectedCase.caseId } : {})}
+                    {...(message.evidence?.length ? { sources: verifiedSources(message.evidence) } : {})}
                     markdown={message.role === "assistant"}
                   />
                   {message.role === "assistant" &&
