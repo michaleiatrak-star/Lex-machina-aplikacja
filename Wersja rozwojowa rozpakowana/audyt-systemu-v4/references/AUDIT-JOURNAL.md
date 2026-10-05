@@ -69891,6 +69891,20 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05d — TRYB STRUKTURA: szablony widgetów zasilane danymi (lex:dane), chronologia-sprawy-v1 1.16 (6.177)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7 (widgety). Szablony nakazywały modelowi przepisać cały plik (9–17 tys. znaków) z podmienioną stałą danych, a przy widgetach bez szablonu — napisać kod i pasek IO od zera; to tokeny wyjściowe, najdroższe i najwolniejsze.
+
+### 2. KONWENCJA
+Komentarz `lex:dane` bezpośrednio przed literałem obiektu/tablicy danych w szablonie widgetu. Aplikacja Lex Machina: `show_widget(path, data)` — wstawia dane w miejsce literału, dokłada pasek eksportu JSON/MD/CSV i importu JSON, chyba że szablon ma własne funkcje MOD-WIDGET-IO. Wzmianka o znaczniku w prozie nie jest slotem (wymagany literał tuż po nim). Na innych hostach szablon działa jak dotąd.
+
+### 3. ZMIANA (chronologia-sprawy-v1 1.16)
+`widget-timeline.html` (SAMPLE_DATA) i `widget-graf-przyczynowy.html` (GRAF, poza blokiem ENGINE — T42 bez zmian): znacznik i nota w nagłówku.
+
+### 4. NASTĘPNE
+Widget orzeczeń (`orzeczenia-sadowe-v2/references/widget.md`, wywoływany dwukrotnie, ok. 20 tys. znaków za każdym razem) wymaga przebudowy na szablon zasilany danymi; MOD-WIDGET-IO oznaczony dopiero, gdy wszystkie widgety analityczne będą zasilane danymi.
+
 ## AUDYT-2026-10-05c — TRYB STRUKTURA: znacznik etapu lex:wczytaj-gdy, pisma-procesowe-v3 W2/W3 od drugiej tury (6.176)
 
 ### 1. ŹRÓDŁO
