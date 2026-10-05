@@ -12,7 +12,8 @@ import {
   WidgetFrameStore,
   WidgetToolRuntime,
   compileWidget,
-  widgetFromFile
+  widgetFromFile,
+  withWidgetData
 } from "../src/widget-runtime.js";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-widgets-"));
@@ -91,5 +92,55 @@ describe("widgets", () => {
     expect(WIDGET_FRAME_CSP).toContain("default-src 'none'");
     expect(frame.text).toContain("<p>Widget</p>");
     await request(app).get(`/api/widgets/frame/${"0".repeat(32)}`).expect(404);
+  });
+});
+
+const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
+
+function scripts(html: string): string[] {
+  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]!);
+}
+
+describe("corpus templates fed with data", () => {
+  const template = [
+    "<body><div id=x></div><script>",
+    'const SAMPLE_DATA = /* lex:dane */ { a: "}{ \\" ]", b: [1, 2], c: { d: `x}` } /* } */ };',
+    "document.getElementById('x').textContent = SAMPLE_DATA.a;",
+    "</script></body>"
+  ].join("\n");
+
+  it("replaces the marked literal with the model's data and adds the export/import bar", () => {
+    const code = withWidgetData({ kind: "html", code: template }, { a: "</script><b>", rows: [{ k: 1 }] }, "chronologia-sprawy-v1");
+    expect(code).toContain("const SAMPLE_DATA = /* lex:dane */ (window.__lexData||window.__lexDefault);");
+    expect(code).not.toContain("b: [1, 2]");
+    expect(code).toContain('window.__lexDefault={"a":"\\u003c/script>\\u003cb>","rows":[{"k":1}]}');
+    expect(code.indexOf('id="lex-io"')).toBeGreaterThan(code.indexOf("<body>"));
+    for (const script of scripts(compileWidget({ title: "T", kind: "html", code }, "c".repeat(32)))) expect(() => new Function(script)).not.toThrow();
+  });
+
+  it("refuses a template without a data slot and oversized data", () => {
+    expect(() => withWidgetData({ kind: "html", code: "<div></div>" }, {}, "x")).toThrow("WIDGET_TEMPLATE_HAS_NO_DATA_SLOT");
+    const mentioned = withWidgetData({ kind: "html", code: `<!-- slot: /* lex:dane */ -->\n${template}` }, { a: 1 }, "x");
+    expect(mentioned).toContain("<!-- slot: /* lex:dane */ -->");
+    expect(mentioned).toContain("const SAMPLE_DATA = /* lex:dane */ (window.__lexData");
+    expect(() => withWidgetData({ kind: "html", code: template }, { a: "x".repeat(200_001) }, "x")).toThrow("WIDGET_DATA_TOO_LARGE");
+  });
+
+  it("shows the chronology timeline from data only; the causal graph keeps its own bar", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const tools = new WidgetToolRuntime(registry);
+    const data = { watki: [{ id: "W1", nazwa: "Najem" }], zdarzenia: [], finanse: [], sprzecznosci: [] };
+    const [timeline, graph] = await tools.runTools([
+      { id: "1", name: "show_widget", input: { title: "Oś czasu", path: "chronologia-sprawy-v1/assets/widget-timeline.html", data } },
+      { id: "2", name: "show_widget", input: { title: "Graf", path: "chronologia-sprawy-v1/assets/widget-graf-przyczynowy.html", data: { teza: "T", wezly: [], krawedzie: [] } } }
+    ]);
+    expect(JSON.parse(timeline!.content).status).toBe("SHOWN");
+    expect(JSON.parse(graph!.content).status).toBe("SHOWN");
+    const [shownTimeline, shownGraph] = tools.widgets();
+    expect(shownTimeline!.code).toContain('"nazwa":"Najem"');
+    expect(shownTimeline!.code).toContain('id="lex-io"');
+    expect(shownGraph!.code).not.toContain('id="lex-io"');
+    expect(shownGraph!.code).toContain("let GRAF = /* lex:dane */ (window.__lexData||window.__lexDefault);");
   });
 });
