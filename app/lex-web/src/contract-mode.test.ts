@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestedContractMode } from "./contract-mode.js";
+import { automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
 describe("contract mode suggested from the request", () => {
   it.each([
@@ -14,5 +14,15 @@ describe("contract mode suggested from the request", () => {
     ["Dodaj klauzulę poufności do umowy", "SUPPLEMENT"]
   ])("%s -> %s", (text, mode) => {
     expect(suggestedContractMode(text)).toBe(mode);
+  });
+
+  it("sets the analysis mode without asking only for an unambiguous analysis request", () => {
+    expect(
+      automaticContractMode("Wykonaj analize prawną dokumentu, wskaż wadliwe zapisy i te, które niosą ryzyko dla autora. Czy chroni skutecznie pracodawcę?")
+    ).toBe("ANALYSIS");
+    expect(automaticContractMode("Przeanalizuj umowę najmu przed podpisaniem")).toBe("ANALYSIS");
+    expect(automaticContractMode("Zredaguj paragraf 5 tej umowy")).toBeNull();
+    expect(automaticContractMode("Napisz umowę o dzieło dla grafika")).toBeNull();
+    expect(automaticContractMode("Co z tą umową?")).toBeNull();
   });
 });

@@ -117,7 +117,7 @@ import {
   type ContractAnalysisMode
 } from "./api.js";
 import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
-import { CONTRACT_MODES, suggestedContractMode } from "./contract-mode.js";
+import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
 
 import {
@@ -3369,6 +3369,23 @@ export default function MatterChatApp({
         error instanceof ApiError
           ? error.reason
           : undefined;
+      // A plain analysis request sets the analysis mode itself and goes again.
+      const automaticMode = code === "CONTRACT_STATE_REQUIRED" ? automaticContractMode(trimmed) : null;
+      let contractModeSet = false;
+      if (automaticMode) {
+        try {
+          await initializeContractAnalysisWorkflow(executionCaseId, automaticMode);
+          contractModeSet = true;
+        } catch (initError) {
+          contractModeSet = initError instanceof ApiError && initError.code === "CONTRACT_STATE_EXISTS";
+        }
+      }
+      if (contractModeSet) {
+        setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+        setContractRetry({ text: trimmed, messageId: userMessage.id });
+        setGeneratedDocumentMessage("Ustawiono tryb „Analiza umowy” dla tej sprawy; wiadomość wysłana ponownie.");
+        return;
+      }
       if (code === "CONTRACT_STATE_REQUIRED") {
         setContractModeRequest({
           caseId: executionCaseId,
