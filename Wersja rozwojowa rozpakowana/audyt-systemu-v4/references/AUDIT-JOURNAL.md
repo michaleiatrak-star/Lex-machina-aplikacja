@@ -69891,6 +69891,28 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05o — TRYB STRUKTURA: widgety, wątki 1–5 wiadomości, etapy spraw w czacie (F-232–F-236, 6.188)
+
+### 1. ŹRÓDŁO
+Zlecenie użytkownika: sprawdzić wyświetlanie wszystkich widgetów i wywołania mechaniczne (bez pomijania istotnych elementów), 1000 testów na symulacji rozmów do 5 wiadomości użytkownika w wątku; zgłoszenia: CONTRACT_STATE_REQUIRED przy wysłaniu pliku (ChatGPT, Gemini, tryb mechaniczny), brak edycji tekstu w ręcznym OCR, kotwice przepisów w tekście czatu, to samo sprawdzenie dla analizy dowodów, pism procesowych i analizy sądowej (załączniki, wzory i reguły kancelarii).
+
+### 2. USTALENIA
+- F-232 (BŁĄD): widgety `analizator-dowodow-v3/assets/dashboard.html` i `chronologia-sprawy-v1/assets/widget-graf-przyczynowy.html` wstawiały dane do HTML bez escapowania (wykonanie skryptu z danych sprawy); dashboard, graf i oś czasu padały na brakujących polach (null), zakładka roszczeń w dashboardzie startowała pusta; oś czasu nie pokazywała `dedukacja`, `strona_dok`, autora sprzeczności; raport klienta nie pokazywał `delta.bez_zmian`.
+- F-233 (BŁĄD): kwalifikator karnomaterialny i wskazówka dziedziny (DR) liczone tylko z ostatniej wiadomości użytkownika — w dalszej turze („a jaki termin?”) sprawa karna traciła PROFIL PEŁNY i `mod-KK-kwalifikator-karnomaterialny`, a sprawa bez nazwy dziedziny w nowej wiadomości traciła wskazówkę DR (symulacja: 320 tur na 590).
+- F-234 (BŁĄD): workflow umowy i pisma procesowego wymagały stanu sprawy, którego UI nie zakładało (CONTRACT_STATE_REQUIRED, PROCESS_PLEADING_STATE_REQUIRED); plik .docx pozwu/apelacji generowany wprost blokowała bramka G39H (PROCESS_STATE_CONTEXT_MISSING) także po przejściu pipeline'u.
+- F-235 (BŁĄD): zakończona analiza dowodów zwracała 500 (ORDERED_WORKFLOW_ALREADY_COMPLETE bez mapowania); zakończone analiza sądowa, umowa i pismo FINAL nie miały w UI drogi do nowego etapu.
+- F-236 (LUKA): domyślny wzór kancelarii dołączany tylko przy czasowniku redakcji w bieżącej wiadomości (etap pipeline'u „kontynuuj” bez wzoru); know-how kancelarii przy pisaniu pisma tylko po ręcznym zaznaczeniu.
+
+### 3. ZMIANA
+- Widgety: escapowanie danych, wartości domyślne pól, obsługa zdarzeń bez `onclick` z danych, brakujące pola widoczne. Wersje: analizator-dowodow-v3, chronologia-sprawy-v1, raport-klienta-v1.
+- Runtime: sprawa karna i dziedzina z całego wątku użytkownika dla tury dalszej (`threadUserText`); `sendPrompt` widgetu tylko po geście użytkownika.
+- Pismo procesowe: plik renderowany wyłącznie z pipeline'u sprawy (wiązanie render-only, inaczej 409 PROCESS_PLEADING_PIPELINE_REQUIRED i przejście do pipeline'u w czacie); UI wstrzymuje wiadomość, uruchamia pipeline (z potwierdzaniem etapów albo automatycznie) i wysyła ją ponownie; to samo dla trybu umowy; „Rozpocznij nowy etap” dla zakończonych workflow; ORDERED_WORKFLOW_* jako 409 z nazwą workflow.
+- Pisma: wzór domyślny także na etapach pipeline'u (przedmiot z wątku); know-how kancelarii dołączane przy redakcji dokumentu, gdy przestrzeń kancelarii istnieje. Załączniki sprawy bez zmian — trafiają do kontekstu każdego trybu.
+- Czat: przepis zweryfikowany (VER) w tekście jest linkiem do strony artykułu w źródle; znaczniki VER za nagłówkiem tabeli nie tworzą pustej kolumny. Ręczny OCR: „Edytuj tekst” strony (ponowne wykrycie danych osobowych).
+
+### 4. WERYFIKACJA
+Symulacja 1000 wątków (2999 tur, 1–5 wiadomości) przez SafeSessionExecutor: R-1…R-5, kwalifikator i PROFIL PEŁNY w sprawie karnej, wskazówka DR, skill wykonawczy wg routera, show_widget, sekcje KOLEJNA-TURA — 0 uchybień. Widgety w Chromium: 50 wariantów danych, 0 błędów JS, 0 wykonań XSS. Runtime 2040/2040 (Node 24), lex-web 172/172.
+
 ## AUDYT-2026-10-05n — TRYB STRUKTURA: paczki skilli bez plików pluginu (F-230, 6.187)
 
 ### 1. ŹRÓDŁO

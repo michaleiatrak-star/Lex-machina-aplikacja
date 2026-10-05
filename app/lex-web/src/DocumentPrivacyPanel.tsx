@@ -6,6 +6,7 @@ import {
 } from "react";
 import {
   ApiError,
+  editDocumentPage,
   finalizeDocument,
   reviewDocument,
   uploadCaseFile,
@@ -223,6 +224,13 @@ export function DocumentPrivacyPanel({
     useState<FinalizedBatchItem[]>([]);
   const [archiveUpload, setArchiveUpload] =
     useState<StoredUploadResponse | null>(null);
+  // Hand correction of the current page's text (a poor scan).
+  const [pageEdit, setPageEdit] =
+    useState<{ page: number; text: string } | null>(null);
+  const [pageEditSaving, setPageEditSaving] =
+    useState(false);
+  const [pageEditNotice, setPageEditNotice] =
+    useState("");
 
   useEffect(() => {
     if (!incomingFile) return;
@@ -238,6 +246,11 @@ export function DocumentPrivacyPanel({
     setDirectives([]);
     activeFileRef.current = null;
   }, [caseId]);
+
+  useEffect(() => {
+    setPageEdit(null);
+    setPageEditNotice("");
+  }, [review?.documentId]);
 
   const currentPage = useMemo(
     () =>
@@ -390,6 +403,60 @@ export function DocumentPrivacyPanel({
     setLabel("");
     setError("");
     setArchiveUpload(null);
+  }
+
+  async function savePageEdit(): Promise<void> {
+    if (!review || !pageEdit) return;
+    const edited = pageEdit;
+    setPageEditSaving(true);
+    setError("");
+    try {
+      const result = await editDocumentPage(
+        caseId,
+        review.documentId,
+        edited.page,
+        edited.text
+      );
+      const next: DocumentReviewResponse = {
+        ...review,
+        pages: review.pages.map((item) =>
+          item.page === edited.page ? result.page : item
+        ),
+        suggestions: [
+          ...review.suggestions.filter((item) => item.page !== edited.page),
+          ...result.suggestions
+        ]
+      };
+      const dropped = directives.filter((item) => item.page === edited.page).length;
+      const kept = directives.filter((item) => item.page !== edited.page);
+      setReview(next);
+      setDirectives(kept);
+      setBatchDrafts((current) =>
+        current.map((draft) =>
+          draft.review.documentId === next.documentId
+            ? {
+                ...draft,
+                review: next,
+                directives: draft.directives.filter((item) => item.page !== edited.page)
+              }
+            : draft
+        )
+      );
+      setSelection(null);
+      setPageEdit(null);
+      setPageEditNotice(
+        `Zapisano poprawiony tekst strony ${edited.page}. Dane osobowe na tej stronie wykryto ponownie` +
+          (dropped ? `; ${dropped} wcześniejszych oznaczeń tej strony usunięto - oznacz je ponownie.` : ".")
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? `Nie udało się zapisać poprawionego tekstu: ${caught.message}`
+          : "Nie udało się zapisać poprawionego tekstu."
+      );
+    } finally {
+      setPageEditSaving(false);
+    }
   }
 
   function captureSelection(): void {
@@ -790,6 +857,8 @@ export function DocumentPrivacyPanel({
                       Number(event.target.value)
                     );
                     setSelection(null);
+                    setPageEdit(null);
+                    setPageEditNotice("");
                   }}
                 >
                   {review.pages.map(
@@ -814,19 +883,76 @@ export function DocumentPrivacyPanel({
               </span>
             </div>
 
-            <textarea
-              ref={textRef}
-              className="privacy-text"
-              readOnly
-              value={currentPage.text}
-              onSelect={captureSelection}
-              aria-label="Tekst dokumentu do ręcznego oznaczania"
-            />
-
-            <p className="field-help">
-              Zaznacz fragment tekstu powyżej,
-              następnie wybierz akcję.
-            </p>
+            {pageEdit && pageEdit.page === currentPage.page ? (
+              <>
+                <textarea
+                  className="privacy-text privacy-text-editing"
+                  value={pageEdit.text}
+                  onChange={(event) =>
+                    setPageEdit({ page: pageEdit.page, text: event.target.value })
+                  }
+                  aria-label="Edycja tekstu strony"
+                  autoFocus
+                />
+                <div className="privacy-edit-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={pageEditSaving}
+                    onClick={() => void savePageEdit()}
+                  >
+                    {pageEditSaving ? "Zapisywanie…" : "Zapisz poprawki"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pageEditSaving}
+                    onClick={() => setPageEdit(null)}
+                  >
+                    Anuluj
+                  </button>
+                </div>
+                <p className="field-help">
+                  Popraw błędnie odczytane znaki. Po zapisaniu dane osobowe na tej
+                  stronie zostaną wykryte ponownie, a wcześniejsze oznaczenia tej
+                  strony usunięte.
+                </p>
+              </>
+            ) : (
+              <>
+                <textarea
+                  ref={textRef}
+                  className="privacy-text"
+                  readOnly
+                  value={currentPage.text}
+                  onSelect={captureSelection}
+                  aria-label="Tekst dokumentu do ręcznego oznaczania"
+                />
+                <div className="privacy-edit-actions">
+                  <button
+                    type="button"
+                    disabled={loading || batchFinalizing}
+                    onClick={() => {
+                      setPageEdit({ page: currentPage.page, text: currentPage.text });
+                      setPageEditNotice("");
+                      setSelection(null);
+                    }}
+                  >
+                    Edytuj tekst
+                  </button>
+                  {currentPage.editedByUser ? (
+                    <span className="privacy-edited-badge">Tekst poprawiony ręcznie</span>
+                  ) : null}
+                </div>
+                {pageEditNotice ? (
+                  <p className="field-help" role="status">{pageEditNotice}</p>
+                ) : null}
+                <p className="field-help">
+                  Zaznacz fragment tekstu powyżej,
+                  następnie wybierz akcję. Jeśli skan
+                  odczytano błędnie, użyj „Edytuj tekst”.
+                </p>
+              </>
+            )}
           </div>
 
           <aside className="privacy-controls">

@@ -43,6 +43,7 @@ import {
 import {
   EncryptedCaseWorkspaceStore
 } from "../src/case-workspace-store.js";
+import { ORDERED_CASE_WORKFLOW_SEQUENCES } from "../src/ordered-case-workflow-state.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionExecutionResponse,
@@ -711,6 +712,53 @@ describe(
         });
 
         current.auth.close();
+      }
+    );
+    it(
+      "answers a finished evidence workflow with 409 naming the workflow (offered reset), not 500",
+      async () => {
+        const current = fixture(true);
+        const { authorization, caseId } = await bootstrap(current, "complete");
+        const original = EncryptedCaseWorkspaceStore.prototype.getOrderedCaseWorkflowState;
+        const spy = vi
+          .spyOn(EncryptedCaseWorkspaceStore.prototype, "getOrderedCaseWorkflowState")
+          .mockImplementation(async function (this: EncryptedCaseWorkspaceStore, args) {
+            const state = await original.call(this, args);
+            return state
+              ? {
+                  ...state,
+                  status: "COMPLETE" as const,
+                  closedCheckpoints: [...ORDERED_CASE_WORKFLOW_SEQUENCES[state.workflowId]],
+                  history: ORDERED_CASE_WORKFLOW_SEQUENCES[state.workflowId].map((checkpoint, index) => ({
+                    sequence: index + 1,
+                    at: state.createdAt,
+                    checkpoint,
+                    outcome: "DONE" as const,
+                    auditRefs: ["artifact://artifact_" + "0".repeat(32)]
+                  }))
+                }
+              : state;
+          });
+        try {
+          // First turn creates the state; the second finds it finished.
+          await run(current, authorization, caseId, "Przeanalizuj fakturę jako dowód w tej sprawie.").catch(() => undefined);
+          const response = await request(current.app)
+            .post("/api/sessions/execute")
+            .set("Authorization", authorization)
+            .send({
+              query: "Przeanalizuj fakturę jako dowód w tej sprawie.",
+              provider: "openai",
+              model: "gpt-test",
+              primarySkill: DR,
+              mode: "PRAWNIK",
+              knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+            });
+          expect(response.status).toBe(409);
+          expect(response.body).toEqual({ error: "ORDERED_WORKFLOW_ALREADY_COMPLETE", reason: "EVIDENCE_ANALYSIS_V1" });
+        } finally {
+          spy.mockRestore();
+          current.auth.close();
+        }
       }
     );
   }

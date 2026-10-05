@@ -14,6 +14,7 @@ import {
 } from "./legal-document-ast.js";
 import type { GenerationAliasManifest } from "./generation-aliases.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
+import type { ProcessPleadingStage } from "./process-pleading-state.js";
 import type {
   DocumentGenerationValidationContext
 } from "./document-generation-validation.js";
@@ -30,6 +31,10 @@ export type LegalDocumentAstGenerationRequest = {
   aliases: GenerationAliasManifest;
   // The case's shared key, so the instruction uses the documents' symbols.
   privacySeed?: PseudonymizationVaultSnapshot;
+  // The file of a pleading the case's process pipeline already wrote.
+  processRenderOnly?: { stage: ProcessPleadingStage };
+  // The stored text the file renders (pipeline draft): carried over as written.
+  sourceText?: { label: string; text: string };
 };
 
 function extractJson(value: string): unknown {
@@ -241,6 +246,14 @@ function generationInstruction(
   return [
     request.query,
     "",
+    ...(request.sourceText
+      ? [
+          `# TEKST PISMA DO ODWZOROWANIA — ${request.sourceText.label}`,
+          "Przenieś ten tekst do bloków dokumentu 1:1: bez zmian merytorycznych, bez skracania i bez dopisków; tylko podział na nagłówki, akapity, listy i podpis. Tekst spoza tego bloku nie wchodzi do dokumentu.",
+          request.sourceText.text,
+          ""
+        ]
+      : []),
     "# OUTPUT CONTRACT — LEGAL DOCUMENT AST",
     "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
     "schemaVersion must equal \"1\".",
@@ -366,6 +379,7 @@ export class LegalDocumentAstGenerator {
       // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
       accountContinuity: "none",
       ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+      ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
       ...(request.attachments?.length
         ? { documentAttachments: request.attachments }
         : {})

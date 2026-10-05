@@ -185,6 +185,14 @@ function generationInstruction(request) {
     return [
         request.query,
         "",
+        ...(request.sourceText
+            ? [
+                `# TEKST PISMA DO ODWZOROWANIA — ${request.sourceText.label}`,
+                "Przenieś ten tekst do bloków dokumentu 1:1: bez zmian merytorycznych, bez skracania i bez dopisków; tylko podział na nagłówki, akapity, listy i podpis. Tekst spoza tego bloku nie wchodzi do dokumentu.",
+                request.sourceText.text,
+                ""
+            ]
+            : []),
         "# OUTPUT CONTRACT — LEGAL DOCUMENT AST",
         "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
         "schemaVersion must equal \"1\".",
@@ -292,6 +300,7 @@ export class LegalDocumentAstGenerator {
             // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
             accountContinuity: "none",
             ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+            ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
             ...(request.attachments?.length
                 ? { documentAttachments: request.attachments }
                 : {})

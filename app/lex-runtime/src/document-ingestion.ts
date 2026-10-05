@@ -69,6 +69,8 @@ export type IngestedPage = {
   image?: OcrPageImage;
   // Words fixed by the local model after OCR (original kept here).
   corrections?: OcrCorrection[];
+  // Text corrected by the user by hand (a poor scan); OCR lines no longer match it.
+  editedByUser?: boolean;
 };
 
 export type OcrCorrection = {

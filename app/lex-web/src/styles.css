@@ -720,6 +720,27 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(100, 125, 104, 0.12);
 }
 
+.privacy-text-editing {
+  border-color: #b8860b;
+  background: #fffdf5;
+}
+
+.privacy-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.privacy-edited-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fdf3d8;
+  color: #6b4e00;
+  font-size: 12px;
+}
+
 .privacy-controls {
   display: grid;
   align-content: start;

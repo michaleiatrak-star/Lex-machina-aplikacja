@@ -212,3 +212,18 @@ export function sheetFormatFor(mediaType: string, filename: string): "xlsx" | "c
   if (mediaType.startsWith("text/csv") || /\.csv$/i.test(filename)) return "csv";
   return "xlsx";
 }
+
+// Plain text of edited blocks (a pleading draft for its pipeline): headings and
+// paragraphs as lines, list items with their markers, table rows with " | ".
+export function blocksToText(blocks: EditableBlock[]): string {
+  const runs = (items: { text: string }[]) => items.map((item) => item.text).join("");
+  return blocks
+    .map((block) => {
+      if (block.type === "heading" || block.type === "paragraph") return runs(block.runs);
+      if (block.type === "list") return block.items.map((item, index) => `${block.ordered ? `${index + 1}.` : "-"} ${runs(item)}`).join("\n");
+      return block.rows.map((row) => row.join(" | ")).join("\n");
+    })
+    .join("\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}

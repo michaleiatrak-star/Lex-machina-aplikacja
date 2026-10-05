@@ -1,3 +1,4 @@
+import { draftPrompt } from "./process-pleading-draft.js";
 import { compactForModel } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import fs from "node:fs";
@@ -485,6 +486,15 @@ export class LexExecutionEngine {
                 emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
             emit("gate", "PROCESS_CHECKPOINT_RESOURCES", "OK", `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`);
             executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+            const pleading = draftPrompt({
+                checkpoint: args.processWorkflowContext.checkpoint,
+                draft: args.processWorkflowContext.draft ? { ...args.processWorkflowContext.draft, createdAt: "" } : null,
+                remarks: args.processWorkflowContext.remarks ?? null
+            });
+            if (pleading) {
+                executiveContractText += `\n\n${pleading}`;
+                emit("gate", "PROCESS_PLEADING_DRAFT", "OK", `draft=${args.processWorkflowContext.draft?.version ?? "none"};source=${args.processWorkflowContext.draft?.source ?? "none"};remarks=${args.processWorkflowContext.remarks ? "yes" : "no"}`);
+            }
         }
         // MAPA-AKTOW resolved mechanically from the question and the case documents.
         if (!args.model.startsWith("local/")) {
@@ -537,7 +547,13 @@ export class LexExecutionEngine {
             emit("gate", "G39H_PROCESS_STATE_BINDING", "BLOCKED", "PROCESS_STATE_ON_NON_PROCESS_WORKFLOW");
             throw new LexExecutionError("Process pleading state was bound to a non-process workflow.", "G39H_PROCESS_STATE_BINDING", [...events]);
         }
-        if (workflowPlan.id ===
+        if (workflowPlan.id === "PROCESS_PLEADING_V1" &&
+            !args.processWorkflowContext &&
+            args.processRenderOnly &&
+            args.documentAstOutput) {
+            emit("gate", "G39H_PROCESS_STATE_BINDING", "OK", `render-only;stage=${args.processRenderOnly.stage}`);
+        }
+        else if (workflowPlan.id ===
             "PROCESS_PLEADING_V1" &&
             !args.processWorkflowContext) {
             emit("gate", "G39H_PROCESS_STATE_BINDING", "BLOCKED", "PROCESS_STATE_CONTEXT_MISSING");

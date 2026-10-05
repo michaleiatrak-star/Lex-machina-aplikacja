@@ -129,6 +129,7 @@ export class LocalDocumentAuthoringService {
                             workflowRequirement: "PROCESS_PLEADING_FINAL"
                         }
                         : {}),
+                    ...(args.processDocumentStatus ? { processDocumentStatus: args.processDocumentStatus } : {}),
                     createdAt: new Date()
                         .toISOString()
                 },

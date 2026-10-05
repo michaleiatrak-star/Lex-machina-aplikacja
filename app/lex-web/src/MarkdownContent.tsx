@@ -13,13 +13,15 @@ export type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "table"; header: string[]; align: Array<"left" | "center" | "right" | null>; rows: string[][] }
-  | { type: "rule" };
+  | { type: "rule"; label?: string };
 
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const BULLET = /^\s*[-*•]\s+(.*)$/;
 const NUMBERED = /^\s*\d{1,3}[.)]\s+(.*)$/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const RULE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
+// The pipeline's pleading block (process-pleading-draft.ts): shown as a labelled divider.
+const PLEADING_MARK = /^\s*=== (PISMO|KONIEC PISMA) ===\s*$/;
 
 const tableLine = (line: string): boolean => line.trim().startsWith("|") || /\S\s*\|\s*\S/.test(line);
 
@@ -36,6 +38,29 @@ export function tableCells(line: string, columns?: number): string[] {
   }
   while (columns && cells.length < columns) cells.push("");
   return cells;
+}
+
+// A header cell holding only verification markers (VER / NIEWERYFIKOWANE).
+const MARKERS_ONLY = /^(?:\s*(?:\u2705|\u26a0\ufe0f?|\u274c)?\s*\[(?:VER:[^\]]*|NIEWERYFIKOWANE[^\]]*)\]\s*)+$/u;
+
+// A model sometimes puts the verification markers of the header after its
+// last pipe; that made a column of its own, empty in every row. The markers
+// join the header cell before them and the empty column goes.
+export function withoutMarkerColumns(
+  table: Extract<MarkdownBlock, { type: "table" }>
+): Extract<MarkdownBlock, { type: "table" }> {
+  let { header, align, rows } = table;
+  for (let column = header.length - 1; column > 0; column -= 1) {
+    if (!MARKERS_ONLY.test(header[column]!) || rows.some((row) => row[column]?.trim())) continue;
+    header = [
+      ...header.slice(0, column - 1),
+      `${header[column - 1]} ${header[column]!.trim()}`.trim(),
+      ...header.slice(column + 1)
+    ];
+    align = [...align.slice(0, column), ...align.slice(column + 1)];
+    rows = rows.map((row) => [...row.slice(0, column), ...row.slice(column + 1)]);
+  }
+  return { type: "table", header, align, rows };
 }
 
 export function parseMarkdown(content: string): MarkdownBlock[] {
@@ -63,13 +88,19 @@ export function parseMarkdown(content: string): MarkdownBlock[] {
         index += 1;
       }
       index -= 1;
-      blocks.push({ type: "table", header, align, rows });
+      blocks.push(withoutMarkerColumns({ type: "table", header, align, rows }));
       continue;
     }
     const heading = HEADING.exec(line);
     if (heading) {
       flush();
       blocks.push({ type: "heading", level: heading[1]!.length, text: heading[2]! });
+      continue;
+    }
+    const mark = PLEADING_MARK.exec(line);
+    if (mark) {
+      flush();
+      blocks.push({ type: "rule", label: mark[1] === "PISMO" ? "Projekt pisma" : "Koniec pisma" });
       continue;
     }
     if (RULE.test(line)) {
@@ -147,7 +178,13 @@ export function MarkdownContent({ content, renderText }: { content: string; rend
             return <Tag key={key} className="chat-md-heading">{inline(block.text, renderText, key)}</Tag>;
           }
           case "rule":
-            return <hr key={key} />;
+            return block.label ? (
+              <div key={key} className="chat-md-mark" role="separator">
+                {block.label}
+              </div>
+            ) : (
+              <hr key={key} />
+            );
           case "list": {
             const List = block.ordered ? "ol" : "ul";
             return (

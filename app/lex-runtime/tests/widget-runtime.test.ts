@@ -125,6 +125,18 @@ describe("corpus templates fed with data", () => {
     for (const script of scripts(compileWidget({ title: "T", kind: "html", code }, "c".repeat(32)))) expect(() => new Function(script)).not.toThrow();
   });
 
+  it("no data (null): the template's empty literal stays the default, an import still wins", () => {
+    const code = withWidgetData({ kind: "html", code: template }, null, "chronologia-sprawy-v1");
+    expect(code).toContain('const SAMPLE_DATA = /* lex:dane */ (window.__lexData||{ a: "}{ \\" ]", b: [1, 2], c: { d: `x}` } /* } */ });');
+    expect(code).not.toContain("window.__lexDefault=");
+    expect(code).toContain('id="lex-io"');
+  });
+
+  it("a widget prompt needs the user's own click (no prompt from an injected handler)", () => {
+    const html = compileWidget({ title: "T", kind: "html", code: "<div></div>" }, "d".repeat(32));
+    expect(html).toContain("navigator.userActivation&&!navigator.userActivation.isActive");
+  });
+
   it("refuses a template without a data slot and oversized data", () => {
     expect(() => withWidgetData({ kind: "html", code: "<div></div>" }, {}, "x")).toThrow("WIDGET_TEMPLATE_HAS_NO_DATA_SLOT");
     const mentioned = withWidgetData({ kind: "html", code: `<!-- slot: /* lex:dane */ -->\n${template}` }, { a: 1 }, "x");

@@ -48,7 +48,9 @@ export type ProcessPleadingStateEvent = {
     | "CHECKPOINT_CONFIRMED"
     | "CHECKPOINT_NA"
     | "STAGE_ADVANCED"
-    | "FINALIZED";
+    | "FINALIZED"
+    | "CHECKPOINT_REVISION_REQUESTED"
+    | "DRAFT_REOPENED";
   checkpoint?: ProcessPleadingCheckpoint;
   fromStage?: ProcessPleadingStage;
   toStage?: ProcessPleadingStage;
@@ -438,7 +440,7 @@ export function validateProcessPleadingState(
       event.sequence <= previousSequence ||
       !validIso(event.at) ||
       (
-        event.type === "CHECKPOINT_NA"
+        event.type === "CHECKPOINT_NA" || event.type === "DRAFT_REOPENED"
           ? (
               typeof event.reason !== "string" ||
               event.reason.length < 3 ||
@@ -680,4 +682,68 @@ export function markProcessCheckpointNotApplicable(
   return validateProcessPleadingState(
     state
   );
+}
+
+/**
+ * CHECKPOINT mode: the user sends the step waiting for confirmation back for
+ * correction (with remarks kept beside the draft) instead of confirming it.
+ */
+export function requestProcessCheckpointRevision(
+  input: ProcessPleadingState,
+  checkpoint: ProcessPleadingCheckpoint,
+  at = new Date().toISOString()
+): ProcessPleadingState {
+  const state = validateProcessPleadingState(input);
+  if (
+    state.mode !== "CHECKPOINT" ||
+    state.pendingCheckpoint !== checkpoint ||
+    state.checkpoints[checkpoint] !== "PENDING_CONFIRMATION"
+  ) {
+    throw new Error("PROCESS_PLEADING_REVISION_INVALID");
+  }
+  state.checkpoints[checkpoint] = "OPEN";
+  state.pendingCheckpoint = null;
+  pushEvent(state, { type: "CHECKPOINT_REVISION_REQUESTED", checkpoint }, at);
+  return validateProcessPleadingState(state);
+}
+
+// pisma-procesowe-v3 §7.2: a change of facts or legal basis after the draft reopens
+// the attack on the draft and the W3 checks; the document goes back to DRAFT.
+export const DRAFT_REOPEN_CHECKPOINTS: readonly ProcessPleadingCheckpoint[] = [
+  "CP-ATAK",
+  "CP-QUALITY",
+  "CP-AUDYT",
+  "CP-PEER"
+];
+
+export function reopenProcessPleadingDraft(
+  input: ProcessPleadingState,
+  reason: string,
+  at = new Date().toISOString()
+): ProcessPleadingState {
+  const state = validateProcessPleadingState(input);
+  if (!["W2", "W3", "FINAL"].includes(state.stage)) {
+    throw new Error("PROCESS_PLEADING_REOPEN_INVALID");
+  }
+  const fromStage = state.stage;
+  for (const checkpoint of DRAFT_REOPEN_CHECKPOINTS) {
+    state.checkpoints[checkpoint] = "OPEN";
+  }
+  if (state.pendingCheckpoint) {
+    state.checkpoints[state.pendingCheckpoint] = "OPEN";
+    state.pendingCheckpoint = null;
+  }
+  state.stage = "W2";
+  state.documentStatus = "DRAFT";
+  pushEvent(
+    state,
+    {
+      type: "DRAFT_REOPENED",
+      fromStage,
+      toStage: "W2",
+      reason: reason.normalize("NFKC").replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 500).padEnd(3, ".")
+    },
+    at
+  );
+  return validateProcessPleadingState(state);
 }

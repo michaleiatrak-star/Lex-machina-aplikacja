@@ -581,6 +581,8 @@ export type DocumentReviewResponse = {
     engine?: string;
     // Words the local model fixed after OCR.
     corrections?: Array<{ line: number; from: string; to: string }>;
+    // The user corrected this page's text by hand.
+    editedByUser?: boolean;
   }>;
   suggestions: Array<{
     page: number;
@@ -2911,6 +2913,49 @@ export function provisionLocalModel(
   );
 }
 
+export type ContractAnalysisMode = "ANALYSIS" | "REDACTION" | "DRAFT" | "SUPPLEMENT";
+
+// Contract analysis needs its mode chosen once per case before the first execution
+// (G39I); the runtime answers CONTRACT_STATE_REQUIRED until it is.
+export function initializeContractAnalysisWorkflow(
+  caseId: string,
+  mode: ContractAnalysisMode
+): Promise<{ caseId: string; state: unknown }> {
+  return json(`/api/cases/${caseId}/workflow/contract-analysis/initialize`, {
+    method: "POST",
+    body: JSON.stringify({ mode })
+  });
+}
+
+export type ResettableWorkflow =
+  | { kind: "process-pleading" }
+  | { kind: "court-analysis" }
+  | { kind: "contract-analysis" }
+  | { kind: "ordered"; workflowId: string };
+
+// A finished workflow of the case starts again: the current revision is read and the
+// reset confirmed with it (the runtime refuses a reset of a changed state).
+export async function resetCaseWorkflow(caseId: string, workflow: ResettableWorkflow): Promise<void> {
+  const path =
+    workflow.kind === "ordered"
+      ? `ordered/${encodeURIComponent(workflow.workflowId)}`
+      : workflow.kind;
+  const confirmation =
+    workflow.kind === "process-pleading"
+      ? "RESET_PROCESS_PLEADING"
+      : workflow.kind === "court-analysis"
+        ? "RESET_COURT_ANALYSIS"
+        : workflow.kind === "contract-analysis"
+          ? "RESET_CONTRACT_ANALYSIS"
+          : "RESET_ORDERED_WORKFLOW";
+  const current = await json<{ state: { revision: number } | null }>(`/api/cases/${caseId}/workflow/${path}`);
+  if (!current.state) return;
+  await json(`/api/cases/${caseId}/workflow/${path}/reset`, {
+    method: "POST",
+    body: JSON.stringify({ expectedRevision: current.state.revision, confirmation })
+  });
+}
+
 export function getProcessPleadingWorkflow(
   caseId: string
 ): Promise<ProcessPleadingWorkflowResponse> {
@@ -2963,6 +3008,51 @@ export function confirmProcessPleadingCheckpoint(
       })
     }
   );
+}
+
+export type ProcessPleadingDraftVersion = {
+  version: number;
+  text: string;
+  source: "PIPELINE" | "USER";
+  stage: ProcessPleadingWorkflowState["stage"];
+  checkpoint?: ProcessPleadingCheckpoint;
+  change?: "MINOR" | "SUBSTANTIVE";
+  createdAt: string;
+};
+
+export type ProcessPleadingDraftView = {
+  revision: number;
+  latest: ProcessPleadingDraftVersion | null;
+  versions: Array<Omit<ProcessPleadingDraftVersion, "text"> & { chars: number }>;
+  remarks?: { checkpoint: ProcessPleadingCheckpoint; text: string; at: string };
+} | null;
+
+// The pleading text the pipeline keeps between its stages (newest version and history).
+export function getProcessPleadingDraft(caseId: string): Promise<{ caseId: string; draft: ProcessPleadingDraftView }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/draft`);
+}
+
+// The user's own version: MINOR keeps the closed checks, SUBSTANTIVE reopens CP-ATAK and W3.
+export function saveProcessPleadingDraft(
+  caseId: string,
+  input: { text: string; change: "MINOR" | "SUBSTANTIVE"; expectedRevision: number }
+): Promise<{ caseId: string; draft: ProcessPleadingDraftView; state: ProcessPleadingWorkflowState }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/draft`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+// CHECKPOINT mode: the step waiting for confirmation goes back with remarks.
+export function reviseProcessPleadingCheckpoint(
+  caseId: string,
+  checkpoint: ProcessPleadingCheckpoint,
+  remarks: string
+): Promise<{ caseId: string; state: ProcessPleadingWorkflowState }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/revise`, {
+    method: "POST",
+    body: JSON.stringify({ checkpoint, remarks })
+  });
 }
 
 export function executeSession(input: {
@@ -3241,6 +3331,22 @@ export function finalizeDocument(
       })
     }
   );
+}
+
+/** The user's own correction of one page's text (a poor scan); personal data on it is detected again. */
+export function editDocumentPage(
+  caseId: string,
+  documentId: string,
+  page: number,
+  text: string
+): Promise<{
+  page: DocumentReviewResponse["pages"][number];
+  suggestions: DocumentReviewResponse["suggestions"];
+}> {
+  return json(`/api/documents/${documentId}/pages/${page}/text`, {
+    method: "POST",
+    body: JSON.stringify({ caseId, text })
+  });
 }
 
 export type ProcessingProgress = {

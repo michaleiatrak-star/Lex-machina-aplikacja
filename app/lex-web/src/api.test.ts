@@ -4,6 +4,7 @@ import {
   createCase,
   createDeanonymizationIntent,
   downloadSensitiveArtifact,
+  editDocumentPage,
   executeSession,
   finalizeDeanonymization,
   generateLegalDocument,
@@ -202,6 +203,29 @@ describe("local API client", () => {
         );
       }
     }
+  });
+
+  it("sends the user's correction of one page's text", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        page: { page: 2, text: "Poprawiony", source: "OCR", editedByUser: true },
+        suggestions: []
+      }), { status: 200 })
+    );
+    const result = await editDocumentPage(
+      "case_0123456789abcdef0123456789abcdef",
+      "doc_0123456789abcdef01234567",
+      2,
+      "Poprawiony"
+    );
+    expect(result.page.editedByUser).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:4317/api/documents/doc_0123456789abcdef01234567/pages/2/text",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ caseId: "case_0123456789abcdef0123456789abcdef", text: "Poprawiony" })
+      })
+    );
   });
 
   it("uses the localhost runtime by default", async () => {

@@ -15,6 +15,13 @@ describe("rozpoznanie prośby o plik pisma", () => {
     expect(directDocumentRequest("zapisz jako odt")?.format).toBe("odt");
   });
 
+  it("szkic z panelu pipeline'u to plik pisma procesowego", () => {
+    expect(directDocumentRequest("Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy.")).toEqual({
+      format: "docx",
+      documentType: "pleading"
+    });
+  });
+
   it("zwykłe pytanie nie uruchamia generowania pliku", () => {
     expect(directDocumentRequest("Jaki jest termin przedawnienia?")).toBeNull();
     expect(directDocumentRequest("co jest w tym pliku?")).toBeNull();
@@ -40,9 +47,9 @@ describe("szkic i gotowy dokument po cyklu pisma", () => {
     } as never)).toEqual({ documentType: "letter", stage: "DRAFT" });
   });
 
-  it("pismo procesowe: szkic na etapach, gotowy dokument przy statusie FINAL", () => {
+  it("pismo procesowe: bez pliku na etapach (szkic tylko na żądanie), gotowy dokument przy statusie FINAL", () => {
     const view = (documentStatus: "DRAFT" | "FINAL") => ({ ...base, processWorkflow: { stage: "W2", documentStatus } });
-    expect(letterDocumentPlan(view("DRAFT") as never)).toEqual({ documentType: "pleading", stage: "DRAFT" });
+    expect(letterDocumentPlan(view("DRAFT") as never)).toBeNull();
     expect(letterDocumentPlan(view("FINAL") as never)).toEqual({ documentType: "pleading", stage: "FINAL" });
   });
 

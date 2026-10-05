@@ -1,3 +1,4 @@
+import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import {
@@ -130,6 +131,8 @@ export type CaseWorkspaceIndex = {
   memory?: CaseMemory;
   workflows?: {
     processPleading?: ProcessPleadingState;
+    // The pleading text between the pipeline's stages (process-pleading-draft.ts).
+    processPleadingDraft?: ProcessPleadingDraft;
     courtAnalysis?: CourtAnalysisState;
     chronology?: ChronologyState;
     contractAnalysis?: ContractAnalysisState;
@@ -494,6 +497,12 @@ export class EncryptedCaseWorkspaceStore {
             index.workflows.processPleading
           );
         if (workflow.caseId !== caseId) {
+          throw new Error("WORKSPACE_INDEX_INVALID");
+        }
+      }
+      if (index.workflows.processPleadingDraft) {
+        const draft = validateProcessPleadingDraft(index.workflows.processPleadingDraft);
+        if (draft.caseId !== caseId) {
           throw new Error("WORKSPACE_INDEX_INVALID");
         }
       }
@@ -950,12 +959,44 @@ export class EncryptedCaseWorkspaceStore {
       );
     }
     delete workflows.processPleading;
+    // A new pipeline starts without the previous pleading's text.
+    delete workflows.processPleadingDraft;
     await this.write(
       index,
       args.caseDataKey,
       args.keyVersion
     );
     return true;
+  }
+
+  async getProcessPleadingDraft(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+  }): Promise<ProcessPleadingDraft | null> {
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    const draft = index.workflows?.processPleadingDraft;
+    return draft ? validateProcessPleadingDraft(draft) : null;
+  }
+
+  async saveProcessPleadingDraft(args: {
+    caseId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    draft: ProcessPleadingDraft;
+    // Revision of the draft the change was made on (0: none yet).
+    expectedRevision: number;
+  }): Promise<ProcessPleadingDraft> {
+    const draft = validateProcessPleadingDraft(args.draft);
+    if (draft.caseId !== args.caseId) throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
+    const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+    if ((index.workflows?.processPleadingDraft?.revision ?? 0) !== args.expectedRevision) {
+      throw new Error("PROCESS_PLEADING_DRAFT_CONFLICT");
+    }
+    index.workflows ??= {};
+    index.workflows.processPleadingDraft = draft;
+    await this.write(index, args.caseDataKey, args.keyVersion);
+    return validateProcessPleadingDraft(draft);
   }
 
   async getCourtAnalysisState(args: {

@@ -109,8 +109,17 @@ import {
   type DeanonymizationPreview,
   type StoredUploadResponse,
   type LegalDocumentFormat,
-  type LocalModelsResponse
+  type LocalModelsResponse,
+  initializeContractAnalysisWorkflow,
+  initializeProcessPleadingWorkflow,
+  acceptProcessPleadingWorkflowStart,
+  resetCaseWorkflow,
+  type ContractAnalysisMode
 } from "./api.js";
+import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
+import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
+
+
 import {
   DOCUMENT_FILE_ACCEPT,
   MAX_DOCUMENT_DROP_QUEUE,
@@ -492,9 +501,9 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-// Letter workflows end with a file: a draft after each completed cycle and the
-// finished document at the end (simple letter: every gate passed; process
-// pleading: FINAL document status). Other workflows produce no file on their own.
+// Letter workflows end with a file: a simple letter a draft after each completed
+// cycle and the finished document at the end; a process pleading only its FINAL
+// document. Other workflows produce no file on their own.
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
@@ -503,10 +512,11 @@ export function letterDocumentPlan(
 ): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
-    return {
-      documentType: "pleading",
-      stage: result.processWorkflow?.documentStatus === "FINAL" ? "FINAL" : "DRAFT"
-    };
+    // pisma-procesowe-v3: the file comes after W3 (FINAL); a draft file only on the
+    // user's request (panel: "Pobierz szkic"), marked as not for filing.
+    return result.processWorkflow?.documentStatus === "FINAL"
+      ? { documentType: "pleading", stage: "FINAL" }
+      : null;
   }
   if (result.workflow?.id === "SIMPLE_LETTER_V1") {
     return {
@@ -1140,6 +1150,18 @@ export default function MatterChatApp({
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executionError, setExecutionError] = useState("");
+  // CONTRACT_STATE_REQUIRED: the message waits for the contract mode; resent after it is chosen.
+  const [contractModeRequest, setContractModeRequest] = useState<{
+    caseId: string; text: string; messageId: string; suggested: ContractAnalysisMode;
+  } | null>(null);
+  const [contractModeBusy, setContractModeBusy] = useState(false);
+  const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  // A case workflow stopped the message (pleading pipeline not started, workflow finished):
+  // the message waits for the user's choice and is resent through contractRetry.
+  const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
+    caseId: string; text: string; messageId: string; recovery: WorkflowRecovery;
+  } | null>(null);
+  const [workflowRecoveryBusy, setWorkflowRecoveryBusy] = useState(false);
   const [executionDiagnostic, setExecutionDiagnostic] =
     useState<ExecutionDiagnostic | null>(null);
   const [executionSteps, setExecutionSteps] = useState<ExecutionStepsSnapshot | null>(null);
@@ -2798,6 +2820,78 @@ export default function MatterChatApp({
     void startSelectedLocalModel();
   });
 
+  async function chooseContractMode(mode: ContractAnalysisMode): Promise<void> {
+    const pending = contractModeRequest;
+    if (!pending || contractModeBusy) return;
+    setContractModeBusy(true);
+    try {
+      try {
+        await initializeContractAnalysisWorkflow(pending.caseId, mode);
+      } catch (error) {
+        // Initialized meanwhile (another window): the message can go.
+        if (!(error instanceof ApiError && error.code === "CONTRACT_STATE_EXISTS")) throw error;
+      }
+      setContractModeRequest(null);
+      setExecutionError("");
+      setExecutionDiagnostic(null);
+      // The failed message leaves the thread and is sent again (no duplicate).
+      setMessages((current) => current.filter((message) => message.id !== pending.messageId));
+      setContractRetry({ text: pending.text, messageId: pending.messageId });
+    } catch (error) {
+      setExecutionError(
+        "Nie udało się ustawić trybu analizy umowy: " +
+          (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setContractModeBusy(false);
+    }
+  }
+
+  async function recoverWorkflow(mode?: "CHECKPOINT" | "AUTO"): Promise<void> {
+    const pending = workflowRecoveryRequest;
+    if (!pending || workflowRecoveryBusy) return;
+    setWorkflowRecoveryBusy(true);
+    try {
+      const { recovery } = pending;
+      if (recovery.kind === "process-start") {
+        if (!recovery.acceptOnly) {
+          try {
+            await initializeProcessPleadingWorkflow(pending.caseId, mode ?? "CHECKPOINT");
+          } catch (error) {
+            if (!(error instanceof ApiError && error.code === "PROCESS_PLEADING_STATE_EXISTS")) throw error;
+          }
+        }
+        await acceptProcessPleadingWorkflowStart(pending.caseId);
+        setProcessWorkflowRefresh((value) => value + 1);
+      } else {
+        await resetCaseWorkflow(pending.caseId, recovery.workflow);
+        if (recovery.workflow.kind === "process-pleading") setProcessWorkflowRefresh((value) => value + 1);
+      }
+      setWorkflowRecoveryRequest(null);
+      setExecutionError("");
+      setExecutionDiagnostic(null);
+      setMessages((current) => current.filter((message) => message.id !== pending.messageId));
+      setContractRetry({ text: pending.text, messageId: pending.messageId });
+    } catch (error) {
+      setExecutionError(
+        "Nie udało się przygotować etapu sprawy: " +
+          (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setWorkflowRecoveryBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!contractRetry || executing) return;
+    if (messages.some((message) => message.id === contractRetry.messageId)) return;
+    const { text } = contractRetry;
+    setContractRetry(null);
+    void executeMessage(text);
+    // executeMessage reads the current thread state; the effect waits for the removal above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractRetry, messages, executing]);
+
   async function executeMessage(plain: string): Promise<void> {
     const trimmed =
       plain.trim();
@@ -2872,6 +2966,9 @@ export default function MatterChatApp({
     setExecutionError("");
     setExecutionDiagnostic(null);
     setGeneratedDocumentMessage("");
+    // A new message supersedes a pending choice for an earlier one.
+    setContractModeRequest(null);
+    setWorkflowRecoveryRequest(null);
 
     try {
       let readyAccount =
@@ -2936,6 +3033,8 @@ export default function MatterChatApp({
         setExecutionStage(
           "Tworzenie dokumentu i weryfikacja źródeł"
         );
+        // A pleading not yet written by the case's pipeline goes to that pipeline
+        // (the chat below) instead of a file without HYBRID-VAL.
         const generated =
           await generateLegalDocument(
             executionCaseId,
@@ -2995,62 +3094,72 @@ export default function MatterChatApp({
                 "." +
                 documentRequest.format
             }
-          );
+          ).catch((error: unknown) => {
+            if (
+              documentRequest.documentType === "pleading" &&
+              error instanceof ApiError &&
+              error.code === "PROCESS_PLEADING_PIPELINE_REQUIRED"
+            ) {
+              return null;
+            }
+            throw error;
+          });
+        if (generated) {
+          const downloadedFinal =
+            generated
+              .readyForDownload ===
+              true;
 
-        const downloadedFinal =
-          generated
-            .readyForDownload ===
-            true;
+          // The document is shown in the chat as a card (download, preview, open in
+          // Word, machine deanonymization) instead of being saved without asking.
+          const generatedDocument = {
+            artifactId: generated.artifact.artifactId,
+            filename: generated.artifact.filename,
+            format: generated.format,
+            tokenized: !downloadedFinal
+          };
 
-        // The document is shown in the chat as a card (download, preview, open in
-        // Word, machine deanonymization) instead of being saved without asking.
-        const generatedDocument = {
-          artifactId: generated.artifact.artifactId,
-          filename: generated.artifact.filename,
-          format: generated.format,
-          tokenized: !downloadedFinal
-        };
-
-        if (
-          activeCaseIdRef.current ===
-            executionCaseId
-        ) {
-          setPendingFinalDocument(null);
-          setFinalDocumentPassword("");
-          setMessages(
-            (
-              current
-            ) => [
-              ...current,
-              {
-                id:
-                  messageId(),
-                role:
-                  "assistant",
-                content:
-                  downloadedFinal
-                    ? "Gotowy dokument " +
-                      documentRequest.format.toUpperCase() +
-                      " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
-                    : "Dokument " +
-                      documentRequest.format.toUpperCase() +
-                      " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
-                meta:
-                  "dokument: " +
-                  generated
-                    .artifact
-                    .filename,
-                generatedDocument
-              }
-            ]
-          );
-          setGeneratedDocumentMessage("");
-          setWorkspaceRefresh(
-            (value) =>
-              value + 1
-          );
+          if (
+            activeCaseIdRef.current ===
+              executionCaseId
+          ) {
+            setPendingFinalDocument(null);
+            setFinalDocumentPassword("");
+            setMessages(
+              (
+                current
+              ) => [
+                ...current,
+                {
+                  id:
+                    messageId(),
+                  role:
+                    "assistant",
+                  content:
+                    downloadedFinal
+                      ? "Gotowy dokument " +
+                        documentRequest.format.toUpperCase() +
+                        " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
+                      : "Dokument " +
+                        documentRequest.format.toUpperCase() +
+                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
+                  meta:
+                    "dokument: " +
+                    generated
+                      .artifact
+                      .filename,
+                  generatedDocument
+                }
+              ]
+            );
+            setGeneratedDocumentMessage("");
+            setWorkspaceRefresh(
+              (value) =>
+                value + 1
+            );
+          }
+          return;
         }
-        return;
       }
 
       setExecutionStage(
@@ -3260,6 +3369,40 @@ export default function MatterChatApp({
         error instanceof ApiError
           ? error.reason
           : undefined;
+      // A plain analysis request sets the analysis mode itself and goes again.
+      const automaticMode = code === "CONTRACT_STATE_REQUIRED" ? automaticContractMode(trimmed) : null;
+      let contractModeSet = false;
+      if (automaticMode) {
+        try {
+          await initializeContractAnalysisWorkflow(executionCaseId, automaticMode);
+          contractModeSet = true;
+        } catch (initError) {
+          contractModeSet = initError instanceof ApiError && initError.code === "CONTRACT_STATE_EXISTS";
+        }
+      }
+      if (contractModeSet) {
+        setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+        setContractRetry({ text: trimmed, messageId: userMessage.id });
+        setGeneratedDocumentMessage("Ustawiono tryb „Analiza umowy” dla tej sprawy; wiadomość wysłana ponownie.");
+        return;
+      }
+      if (code === "CONTRACT_STATE_REQUIRED") {
+        setContractModeRequest({
+          caseId: executionCaseId,
+          text: trimmed,
+          messageId: userMessage.id,
+          suggested: suggestedContractMode(trimmed)
+        });
+      }
+      const recovery = workflowRecovery(code, reason);
+      if (recovery) {
+        setWorkflowRecoveryRequest({
+          caseId: executionCaseId,
+          text: trimmed,
+          messageId: userMessage.id,
+          recovery
+        });
+      }
       if (
         code.startsWith(
           "PROCESS_PLEADING_"
@@ -3315,24 +3458,36 @@ export default function MatterChatApp({
               }.`
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
               ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
+              : code === "CONTRACT_STATE_REQUIRED"
+                ? "Analiza umowy wymaga jednorazowego wyboru trybu dla tej sprawy. Wybierz go poniżej — wiadomość zostanie wysłana ponownie."
+              : code === "CONTRACT_CASE_REQUIRED"
+                ? "Analiza umowy musi być powiązana z jedną aktywną sprawą (dołącz plik ze sprawy)."
+              : code === "CONTRACT_ALREADY_COMPLETE"
+                ? "Analiza umowy w tej sprawie została już zakończona. Możesz rozpocząć nowy etap poniżej — wiadomość zostanie wysłana ponownie."
               : code === "PROCESS_PLEADING_STATE_REQUIRED"
-                ? "To zadanie wymaga deterministycznego pipeline pisma procesowego. Uruchom go w panelu procesu i zaakceptuj start."
+                ? "Pismo procesowe prowadzi pipeline sprawy (etapy, HYBRID-VAL przed plikiem .docx). Uruchom go poniżej — wiadomość zostanie wysłana ponownie."
                 : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
-                  ? "Pipeline pisma procesowego czeka na Twoją akceptację startu."
+                  ? "Pipeline pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie."
                   : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"
                     ? "Pipeline czeka na potwierdzenie bieżącego checkpointu."
                     : code === "PROCESS_PLEADING_CASE_REQUIRED"
                       ? "Pismo procesowe musi być powiązane z aktywną sprawą."
                       : code === "PROCESS_PLEADING_ALREADY_FINAL"
-                        ? "Pipeline tej sprawy ma już status FINAL."
+                        ? "Pismo procesowe tej sprawy ma już status FINAL. Możesz rozpocząć nowe pismo poniżej — wiadomość zostanie wysłana ponownie."
                         : code.startsWith("PROCESS_PLEADING_")
                           ? `Pipeline pisma procesowego zablokował wykonanie: ${code}`
                           : code === "COURT_ANALYSIS_CASE_REQUIRED"
                             ? "Analiza sądowa musi być powiązana z aktywną sprawą."
                             : code === "COURT_ANALYSIS_ALREADY_COMPLETE"
-                              ? "Deterministyczna analiza sądowa tej sprawy została już zakończona."
+                              ? "Analiza sądowa tej sprawy została już zakończona. Możesz rozpocząć nową poniżej — wiadomość zostanie wysłana ponownie."
                               : code.startsWith("COURT_ANALYSIS_")
                                 ? `Pipeline analizy sądowej zablokował wykonanie: ${code}`
+                              : code === "ORDERED_WORKFLOW_ALREADY_COMPLETE"
+                                ? "Ten etap pracy ze sprawą (analiza dowodów lub przesłuchanie) jest już zakończony. Możesz rozpocząć nowy poniżej — wiadomość zostanie wysłana ponownie."
+                              : code === "ORDERED_WORKFLOW_CASE_REQUIRED"
+                                ? "Analiza dowodów musi być powiązana z jedną aktywną sprawą (dołącz pliki ze sprawy)."
+                              : code.startsWith("ORDERED_WORKFLOW_")
+                                ? `Pipeline sprawy zablokował wykonanie: ${code}`
                                 : code.startsWith(
                                     "Nie udało się uruchomić lokalnego modelu"
                                   ) ||
@@ -4526,6 +4681,11 @@ export default function MatterChatApp({
                   "Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem."
                 );
               }}
+              onDownloadDraft={() => {
+                void executeMessage(
+                  "Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy."
+                );
+              }}
             />
             {conversationIsNew ? (
               <section
@@ -5446,6 +5606,96 @@ export default function MatterChatApp({
                 <p className="chat-inline-success">
                   {generatedDocumentMessage}
                 </p>
+              ) : null}
+              {contractModeRequest && contractModeRequest.caseId === caseId ? (
+                <div className="chat-contract-mode" role="group" aria-label="Tryb analizy umowy">
+                  <strong>Wybierz tryb pracy z umową</strong>
+                  <div className="chat-contract-mode-options">
+                    {CONTRACT_MODES.map((option) => (
+                      <button
+                        key={option.mode}
+                        type="button"
+                        className={option.mode === contractModeRequest.suggested ? "chat-primary-action" : "chat-secondary-action"}
+                        disabled={contractModeBusy}
+                        onClick={() => void chooseContractMode(option.mode)}
+                        title={option.hint}
+                      >
+                        {option.label}
+                        {option.mode === contractModeRequest.suggested ? " (sugerowany)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                  <small>Tryb ustawia się raz dla sprawy; wiadomość zostanie wysłana ponownie po wyborze.</small>
+                </div>
+              ) : null}
+              {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (
+                <div className="chat-contract-mode" role="group" aria-label="Etap sprawy">
+                  {workflowRecoveryRequest.recovery.kind === "process-start" ? (
+                    <>
+                      <strong>Uruchomić pipeline pisma procesowego?</strong>
+                      <div className="chat-contract-mode-options">
+                        {workflowRecoveryRequest.recovery.acceptOnly ? (
+                          <button
+                            type="button"
+                            className="chat-primary-action"
+                            disabled={workflowRecoveryBusy}
+                            onClick={() => void recoverWorkflow()}
+                          >
+                            Akceptuję start
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="chat-primary-action"
+                              disabled={workflowRecoveryBusy}
+                              onClick={() => void recoverWorkflow("CHECKPOINT")}
+                              title="po każdym etapie potwierdzasz wynik"
+                            >
+                              Z potwierdzaniem etapów
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-secondary-action"
+                              disabled={workflowRecoveryBusy}
+                              onClick={() => void recoverWorkflow("AUTO")}
+                              title="etapy przechodzą bez pytania; HYBRID-VAL przed plikiem nadal obowiązuje"
+                            >
+                              Automatycznie
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <small>
+                        Pismo powstaje etapami; załączone dokumenty sprawy, wzory i materiały kancelarii są
+                        dostępne w każdym etapie. Wiadomość zostanie wysłana ponownie.
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{workflowRecoveryRequest.recovery.title}</strong>
+                      <div className="chat-contract-mode-options">
+                        <button
+                          type="button"
+                          className="chat-primary-action"
+                          disabled={workflowRecoveryBusy}
+                          onClick={() => void recoverWorkflow()}
+                        >
+                          Rozpocznij nowy etap
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={workflowRecoveryBusy}
+                          onClick={() => setWorkflowRecoveryRequest(null)}
+                        >
+                          Anuluj
+                        </button>
+                      </div>
+                      <small>Dotychczasowy przebieg zostaje w historii czatu; wiadomość zostanie wysłana ponownie.</small>
+                    </>
+                  )}
+                </div>
               ) : null}
               {executionError ? (
                 <div className="chat-error-diagnostic">
@@ -6576,38 +6826,49 @@ export default function MatterChatApp({
                     udostępnia katalog modeli providera, a w aplikacji desktopowej klucz
                     może być zapisany w systemowym magazynie poświadczeń.
                   </p>
-                  <small>
+                  <p
+                    className={`chat-provider-account-status ${
+                      !accountSession
+                        ? "checking"
+                        : !accountSession.installed
+                          ? "missing"
+                          : accountSession.authenticated
+                            ? "connected"
+                            : "pending"
+                    }`}
+                    role="status"
+                  >
+                    <span aria-hidden="true" className="chat-provider-account-dot" />
                     {accountSession
                       ? accountSession.installed
                         ? accountSession.authenticated
-                          ? "Status: połączone · " + accountSession.command
-                          : "Status: klient zainstalowany, brak aktywnej sesji · " + accountSession.command
-                        : "Status: brak klienta · " + accountSession.command + ". " + accountSession.installHint
+                          ? `Połączone · ${accountSession.command}`
+                          : `Klient zainstalowany, brak aktywnej sesji · ${accountSession.command}`
+                        : `Brak klienta · ${accountSession.command}`
                       : "Sprawdzanie klienta i sesji…"}
-                  </small>
+                  </p>
+                  {accountSession && !accountSession.installed && accountSession.installHint ? (
+                    <small className="chat-account-note">{accountSession.installHint}</small>
+                  ) : null}
                   {user.appRole === "ADMIN" ? (
-                    <div className="chat-form-row compact chat-account-actions">
+                    <div className="chat-form-row compact chat-provider-account-actions">
                       {/* The runtime provisions the pinned client (Codex, Claude Code,
-                          Gemini CLI, Grok Build) on "Połącz konto". */}
-                      <button
-                        type="button"
-                        className="chat-primary-action"
-                        disabled={
-                          providerAccountBusy ||
-                          accountSession?.authenticated === true
-                        }
-                        onClick={() =>
-                          void connectProviderAccount()
-                        }
-                      >
-                        {providerAccountBusy
-                          ? accountConnectPhase?.kind === "provision"
-                      ? "Pobieranie klienta…"
-                      : "Logowanie…"
-                          : accountSession?.authenticated
-                            ? "Połączone"
+                          Gemini CLI, Grok Build) on "Połącz konto". Once connected the
+                          status above says so; no disabled "Połączone" button. */}
+                      {!accountSession?.authenticated || providerAccountBusy ? (
+                        <button
+                          type="button"
+                          className="chat-primary-action"
+                          disabled={providerAccountBusy}
+                          onClick={() => void connectProviderAccount()}
+                        >
+                          {providerAccountBusy
+                            ? accountConnectPhase?.kind === "provision"
+                              ? "Pobieranie klienta…"
+                              : "Logowanie…"
                             : "Połącz konto"}
-                      </button>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"
