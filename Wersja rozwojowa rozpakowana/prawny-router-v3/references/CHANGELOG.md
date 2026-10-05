@@ -1,5 +1,7 @@
 # CHANGELOG — prawny-router-v3
 
+- 3.63 (2026-10-05i, AUDYT-2026-10-05i): PROFIL-LEKKI: „PO CO ISTNIEJE” jako HISTORIA, „DEKLARACJA PROFILU” i „KIEDY PROFIL LEKKI JEST ZAKAZANY” jako PROFIL — aplikacja wybiera profil, pisze KROK 3A i przy niewczytanym zasobie ogłasza TRYB ZDEGRADOWANY. Treść reguł bez zmian.
+
 - 3.62 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 3.61 (2026-10-04m, AUDYT-2026-10-04m): KROK0A-anonimizer.md oznaczony `<!-- lex:wykonuje-aplikacja: ANONIMIZACJA -->`, „PATH-SELFTEST — RESOLVER” oznaczony RESOLVER (aplikacja rozwiązuje adresy korpusu sama) — w aplikacji Lex Machina pseudonimizacja działa zawsze lokalnie przed wysłaniem do modelu. Treść bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04m.

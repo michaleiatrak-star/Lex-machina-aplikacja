@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.99.8"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.9"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -50,7 +50,7 @@ limitations:
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.99.8 (2026-10-05, AUDYT-2026-10-05b): Znaczniki `<!-- lex:wykonuje-aplikacja: DISCLAIMER -->` w `DISCLAIMER.md` (ZASADA GŁÓWNA, KIEDY STOSOWAĆ, TREŚĆ, POZYCJA, INTEGRACJA ZE SKILLAMI, SELF-CHECK ROUTERA): aplikacja Lex Machina sama dokłada kanoniczny wariant po bramkach, więc przy odpowiedzi tekstowej modelu nielokalnego sekcje trafiają do modelu jako odesłanie; przy modelu lokalnym, dokumencie AST, trybie mechanicznym i raportach — w całości. Treść reguł bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.
+  Wersja bieżąca: 3.99.9 (2026-10-05i, AUDYT-2026-10-05i): HIERARCHIA-ZRODEL: KANON KOLEJNOŚCI E-1…E-5 i REALIA DOSTĘPNOŚCI RZĘDU 1 oznaczone WERYFIKACJA-ELI; MOD-STEP-TRACKER: FAZA 0 i FAZA 1 oznaczone REJESTR-KROKOW. Treść reguł bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

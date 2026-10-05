@@ -69891,6 +69891,18 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05i — TRYB STRUKTURA: rejestr kroków, profil i kanon źródeł wykonywane przez aplikację (6.182)
+
+### 1. ŹRÓDŁO
+Etapy mechanizacji E2/E3. Pomiar promptu dla pytania „różnice 233, 234 i 238 KK” (profil PEŁNY): 259 923 znaków; HIERARCHIA-ZRODEL 32,7 tys., MOD-STEP-TRACKER 11,2 tys., PROFIL-LEKKI 9,6 tys. Rejestr kroków, profil ścieżki, ślad KROK 3A i odczyt ELI z kolejnością E-1…E-5 wykonuje aplikacja.
+
+### 2. ZMIANA
+- shared 3.99.9: HIERARCHIA-ZRODEL — KANON KOLEJNOŚCI i REALIA DOSTĘPNOŚCI RZĘDU 1 (WERYFIKACJA-ELI; nagłówek REALIA scalony w jedną linię); MOD-STEP-TRACKER — FAZA 0 i FAZA 1 (REJESTR-KROKOW). FAZA 2–3 (raport pominięć, raport przed .docx) zostają u modelu.
+- prawny-router-v3 3.63: PROFIL-LEKKI — „PO CO ISTNIEJE” (HISTORIA), „DEKLARACJA PROFILU”, „KIEDY PROFIL LEKKI JEST ZAKAZANY” (PROFIL).
+- Aplikacja: czwarty zakaz profilu LEKKIEGO (błąd odczytu zasobu rdzenia) — zasób niewczytany jest nazwany modelowi przed odpowiedzią i w odpowiedzi (⛔ TRYB ZDEGRADOWANY — nie wczytano: …).
+- Wynik pomiaru: 245 841 znaków (−14 082, −5,4%).
+- Nie oznaczono: wyzwalaczy CN/WYJ/REM (sekcje zawierają reguły kolejności bramek i zawężenia ≥6 jednostek), ZNACZNIK OBOWIĄZKOWY (📚 dla RZĘDU 2B/3 stawia model).
+
 ## AUDYT-2026-10-05h — TRYB STRUKTURA: widgety zasilane danymi w pozostałych skillach (6.181)
 
 ### 1. ŹRÓDŁO

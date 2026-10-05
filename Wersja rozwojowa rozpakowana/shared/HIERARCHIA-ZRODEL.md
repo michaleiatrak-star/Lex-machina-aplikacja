@@ -13,6 +13,7 @@
 
 ---
 
+<!-- lex:wykonuje-aplikacja: WERYFIKACJA-ELI -->
 ## ⭐ KANON KOLEJNOŚCI — AKTY POLSKIE (od v1.10, 2026-09-23) — NADRZĘDNY
 
 To jest **jedyne** miejsce, które ustala kolejność źródeł dla brzmienia i stanu
@@ -108,8 +109,8 @@ Kolejność użycia — KANON E-1…E-5 wyżej. Lista mocy źródeł:
     ⚠️ Publikatory wojewódzkie NIE są objęte API ELI Sejmu (zmierzone
     2026-09-01: `api.sejm.gov.pl/eli/acts` zwraca wyłącznie `DU` i `MP`).
 
-### ⛔ REALIA DOSTĘPNOŚCI RZĘDU 1 (v1.4 2026-08-23, skorygowane v1.5 2026-09-01c,
-### uzupełnione v1.7 2026-09-04 o wymogi kształtu żądania — F-157)
+<!-- lex:wykonuje-aplikacja: WERYFIKACJA-ELI -->
+### ⛔ REALIA DOSTĘPNOŚCI RZĘDU 1 (v1.4 2026-08-23, skorygowane v1.5 2026-09-01c, uzupełnione v1.7 2026-09-04 o wymogi kształtu żądania — F-157)
 
 Przynależność do RZĘDU 1 mówi o **mocy** źródła, nie o jego **osiągalności**.
 Osiągalność zależy od KANAŁU, którym host sięga po sieć — i to jest korekta
