@@ -22,17 +22,64 @@ export const APP_COMPONENTS = {
     HISTORIA: "historia zmian pliku (metadane audytu)"
 };
 const MARK = /^<!--\s*lex:wykonuje-aplikacja:\s*([A-Z0-9-]+)\s*-->\s*$/u;
-export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0") {
-    if (!enabled || !text.includes("lex:wykonuje-aplikacja"))
+// Frontmatter keys the application reads from the registry itself (skill graph,
+// mandatory modules, version history, I/O description). Any other key stays:
+// `escalation`, `limitations` and skill-specific keys carry rules for the model.
+export const APP_METADATA_KEYS = new Set([
+    "dependencies",
+    "required_modules",
+    "changelog",
+    "inputs",
+    "outputs",
+    "entrypoint",
+    "compatibility",
+    "type",
+    "status",
+    "confidence",
+    "modules",
+    "widgets",
+    "references",
+    "scripts"
+]);
+function compactFrontmatter(text) {
+    const match = /^---\n([\s\S]*?)\n---\n/u.exec(text);
+    if (!match)
+        return { text, keys: [], chars: 0 };
+    const kept = [];
+    const keys = [];
+    let dropping = false;
+    for (const line of match[1].split("\n")) {
+        const key = /^([A-Za-z_][\w-]*):/u.exec(line)?.[1];
+        if (key) {
+            dropping = APP_METADATA_KEYS.has(key);
+            if (dropping)
+                keys.push(key);
+        }
+        if (!dropping)
+            kept.push(line);
+    }
+    if (!keys.length)
+        return { text, keys, chars: 0 };
+    const head = `---\n${kept.join("\n")}\n# pominięte metadane (czyta aplikacja): ${keys.join(", ")}\n---\n`;
+    return { text: head + text.slice(match[0].length), keys, chars: match[0].length - head.length };
+}
+// `inactive`: components the application does not run in this turn (e.g. DISCLAIMER
+// for a local model or structured output); their sections reach the model whole.
+export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0", inactive = new Set()) {
+    if (!enabled)
         return { text, compacted: [] };
+    const front = compactFrontmatter(text);
+    const compacted = front.keys.length ? [{ heading: `frontmatter: ${front.keys.join(", ")}`, component: "METADANE", chars: front.chars }] : [];
+    text = front.text;
+    if (!text.includes("lex:wykonuje-aplikacja"))
+        return { text, compacted };
     const lines = text.split("\n");
     const out = [];
-    const compacted = [];
     for (let index = 0; index < lines.length; index += 1) {
         const mark = MARK.exec(lines[index]);
         const heading = /^(#{1,6})\s+(.*)$/u.exec(lines[index + 1] ?? "");
         const component = mark?.[1];
-        if (!mark || !heading || !component || !APP_COMPONENTS[component]) {
+        if (!mark || !heading || !component || !APP_COMPONENTS[component] || inactive.has(component)) {
             out.push(lines[index]);
             continue;
         }

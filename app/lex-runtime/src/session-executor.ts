@@ -1922,8 +1922,16 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // Sections the skill's author marked as executed by the application go to the
     // model as a one-line reference (skill-sections.ts); the audit names them.
+    // KROK 7 is the application's only where it appends the canonical text after the
+    // gates (free-text answer of a non-local model, not a report or a pipeline document).
+    const appendsDisclaimer =
+      !request.model.startsWith("local/") &&
+      !request.documentAstOutput &&
+      !request.processWorkflowContext &&
+      !/^raport-/u.test(request.primarySkill);
+    const inactiveComponents = new Set(appendsDisclaimer ? [] : ["DISCLAIMER"]);
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content);
+      const result = compactForModel(content, undefined, inactiveComponents);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,
