@@ -1477,6 +1477,20 @@
   margin-top: 12px;
 }
 
+/* Account actions: wrap as whole buttons instead of breaking their labels. */
+.chat-account-actions {
+  flex-wrap: wrap;
+}
+
+.chat-account-actions > button {
+  white-space: nowrap;
+}
+
+.chat-account-note {
+  display: block;
+  margin-top: 8px;
+}
+
 .matter-schedule-form {
   display: grid;
   gap: 10px;
