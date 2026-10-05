@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.178 (2026-10-05e, AUDYT-2026-10-05e): Widget orzeczeń zasilany danymi i komponent WIDGET-DANE (orzeczenia-sadowe-v2 2.22).
+
 - 6.177 (2026-10-05d, AUDYT-2026-10-05d): Konwencja `lex:dane` w szablonach widgetów (chronologia-sprawy-v1 1.16).
 
 - 6.176 (2026-10-05c, AUDYT-2026-10-05c): Konwencja znacznika etapu `<!-- lex:wczytaj-gdy: ETAP -->` (pierwszy etap: KOLEJNA-TURA); pierwsze użycie w pisma-procesowe-v3 5.35 (W2, PRE-W2, W3).

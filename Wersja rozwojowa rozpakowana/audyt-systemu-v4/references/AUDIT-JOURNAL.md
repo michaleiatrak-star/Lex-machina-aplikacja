@@ -69891,6 +69891,17 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05e — TRYB STRUKTURA: widget orzeczeń zasilany danymi, komponent WIDGET-DANE (6.178)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7. `orzeczenia-sadowe-v2` kazał wkleić kod z `references/widget.md` (ok. 20 tys. znaków z polami `<!-- DANE -->`) dwukrotnie na wyszukiwanie, z ręcznie wbudowanym paskiem MOD-WIDGET-IO — ok. 12 tys. tokenów wyjściowych na sprawę.
+
+### 2. ZMIANA (orzeczenia-sadowe-v2 2.22)
+- `assets/widget-orzeczenia.html`: ten sam CSS, zakładki i przełącznik LAIK/PRAWNIK; treść z obiektu DANE (literał po komentarzu `lex:dane`), renderowana przez `textContent`; URL tylko http(s), inaczej alert BRAK URL; Kat. 6A pierwsza; zasada prawna z domyślnym opisem. Sprawdzone w Chromium w ramce `sandbox=allow-scripts` (bez błędów konsoli).
+- SKILL.md „Widget interaktywny”: podsekcja ze schematem DANE i podsekcja „Kod widgetu i pasek IO (host bez pola data)” ze znacznikiem `lex:wykonuje-aplikacja: WIDGET-DANE`.
+- Komponent WIDGET-DANE (aplikacja): aktywny dla modeli z narzędziem show_widget (wszystkie poza lokalnymi).
+- `references/widget.md` bez zmian (inne hosty).
+
 ## AUDYT-2026-10-05d — TRYB STRUKTURA: szablony widgetów zasilane danymi (lex:dane), chronologia-sprawy-v1 1.16 (6.177)
 
 ### 1. ŹRÓDŁO
