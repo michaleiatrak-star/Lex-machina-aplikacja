@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { caseLawStore } from "./case-law-store.js";
+import { documentText } from "./official-text.js";
 import type {
   VerificationRecord
 } from "./verification-ledger.js";
@@ -18,7 +20,18 @@ export type SupremeCourtCaseVerificationRequest = {
   claim: string;
   signature: string;
   toolCallId: string;
+  // The decision's card (sn.pl ?orzeczenie=ID) or its ID: picks that record when
+  // one signature has several (judgment, decision, reasons).
+  cardUrl?: string;
 };
+
+/** ID of an SN decision card ("…?orzeczenie=ZuUy…" or the bare ID). */
+export function supremeCourtCardId(value: string | undefined): string | null {
+  const text = value?.trim() ?? "";
+  const fromUrl = /[?&]orzeczenie=([\w-]{6,80})/u.exec(text)?.[1];
+  if (fromUrl) return fromUrl;
+  return /^[A-Za-z0-9_-]{12,40}$/u.test(text) && /[A-Za-z]/.test(text) && /\d|[A-Z].*[a-z]|[a-z].*[A-Z]/.test(text) ? text : null;
+}
 
 export type SupremeCourtQuoteVerificationRequest = {
   caseClaim: string;
@@ -844,7 +857,15 @@ export class SupremeCourtCaseVerifier {
       };
     }
 
-    if (exact.length > 1) {
+    const cardId =
+      supremeCourtCardId(request.cardUrl) ??
+      supremeCourtCardId(/orzeczenie=/u.test(request.claim) ? request.claim : undefined);
+    const chosen =
+      cardId
+        ? exact.find((record) => String(record.id ?? "").trim() === cardId)
+        : undefined;
+
+    if (exact.length > 1 && !chosen) {
       return {
         status: "AMBIGUOUS",
         normalizedSignature,
@@ -855,7 +876,7 @@ export class SupremeCourtCaseVerifier {
     }
 
     const searchRecord =
-      exact[0]!;
+      chosen ?? exact[0]!;
 
     const id =
       String(
@@ -971,6 +992,18 @@ export class SupremeCourtCaseVerifier {
 
     const fetchedAt =
       this.now();
+
+    // The decision is downloaded once: its text is kept in the application under
+    // its card, for quotes and the marked preview (the text address is temporary).
+    caseLawStore()?.put({
+      cardUrl: sourceUrl,
+      court: "SN",
+      signature: normalizedSignature,
+      ...(date ? { date } : {}),
+      ...(form ? { form } : {}),
+      text: documentText(html),
+      fetchedAt
+    });
 
     const verificationRecord:
       VerificationRecord = {

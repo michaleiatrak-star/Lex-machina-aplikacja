@@ -164,6 +164,10 @@ const CASE_TOOL_SCHEMA = {
                 courtFamily: {
                     type: "string",
                     enum: ["SN"]
+                },
+                card_url: {
+                    type: "string",
+                    description: "Optional: the decision's card on sn.pl (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) when the user gave it or one signature has several decisions."
                 }
             }
         }
@@ -640,7 +644,8 @@ export class LegalVerificationToolRuntime {
                 const result = await this.caseVerifier.verify({
                     claim,
                     signature,
-                    toolCallId
+                    toolCallId,
+                    ...(typeof input.card_url === "string" && input.card_url.trim() ? { cardUrl: input.card_url.trim() } : {})
                 });
                 if (result.status !== "FOUND" ||
                     !isVerifiedRecord(result.record) ||

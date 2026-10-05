@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, previewCaseLaw, type CaseLawPreview as Preview } from "./api.js";
+import { ApiError, copyCaseLaw, previewCaseLaw, type CaseLawCopy, type CaseLawPreview as Preview } from "./api.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
 
 // Hosts of judgments, decisions and interpretations: the full text is previewed.
@@ -24,6 +24,22 @@ export function attributedSentence(answer: string | undefined, signature: string
     .find((line) => line.replace(/\s+/g, " ").toLocaleUpperCase("pl").includes(wanted));
 }
 
+/**
+ * The decision as a text document for the case's files (local RAG): the card
+ * is the source, the text is the copy downloaded into the application.
+ */
+export function caseLawDocument(copy: CaseLawCopy): File {
+  const title = [copy.court, copy.form, copy.signature, copy.date].filter(Boolean).join(" ");
+  const header = [
+    `Orzeczenie: ${title || copy.cardUrl}`,
+    `Karta orzeczenia (źródło): ${copy.cardUrl}`,
+    `Tekst pobrany: ${copy.fetchedAt.slice(0, 16).replace("T", " ")} UTC · SHA-256: ${copy.sha256}`,
+    ""
+  ].join("\n");
+  const name = `Orzeczenie ${(copy.signature ?? copy.court).replace(/[\\/:*?"<>|]+/g, "-").trim()}${copy.date ? ` z ${copy.date}` : ""}.txt`;
+  return new File([`${header}\n${copy.text}\n`], name, { type: "text/plain" });
+}
+
 const ERRORS: Record<string, string> = {
   SOURCE_PREVIEW_HOST_NOT_ALLOWED: "Pełny tekst jest dostępny tylko z oficjalnych źródeł orzeczeń i interpretacji.",
   CASE_PREVIEW_TEXT_EMPTY: "Źródło nie zwróciło tekstu rozstrzygnięcia."
@@ -34,8 +50,18 @@ const ERRORS: Record<string, string> = {
  * the passage the answer relies on marked: the model may have read it wrongly,
  * so the context is checked by hand.
  */
-export function CaseLawPreview(props: { sourceUrl: string; passage?: string; signature?: string; attributed?: string }) {
-  const { sourceUrl, passage, signature, attributed } = props;
+export function CaseLawPreview(props: {
+  sourceUrl: string;
+  passage?: string;
+  signature?: string;
+  attributed?: string;
+  // Saves the decision in the case's files; resolves to the stored file name.
+  onSaveToCase?: (file: File) => Promise<void>;
+}) {
+  const { sourceUrl, passage, signature, attributed, onSaveToCase } = props;
+  const [saving, setSaving] = useState<{ kind: "idle" } | { kind: "saving" } | { kind: "done"; name: string } | { kind: "error"; message: string }>({
+    kind: "idle"
+  });
   const [state, setState] = useState<{ kind: "loading" } | { kind: "ready"; preview: Preview } | { kind: "error"; message: string }>({
     kind: "loading"
   });
@@ -70,9 +96,32 @@ export function CaseLawPreview(props: { sourceUrl: string; passage?: string; sig
     );
   }
   const { preview } = state;
+  const save = async () => {
+    if (!onSaveToCase) return;
+    setSaving({ kind: "saving" });
+    try {
+      const file = caseLawDocument(await copyCaseLaw({ sourceUrl, ...(signature ? { signature } : {}) }));
+      await onSaveToCase(file);
+      setSaving({ kind: "done", name: file.name });
+    } catch (failure) {
+      const code = failure instanceof ApiError ? failure.code : failure instanceof Error ? failure.message : String(failure);
+      setSaving({ kind: "error", message: ERRORS[code] ?? `Nie udało się zapisać w aktach (${code}).` });
+    }
+  };
   return (
-    <SourcePreviewFrame
-      target={{ kind: "record", key: `case:${preview.url}:${passage ?? signature ?? ""}`, html: preview.html, ...(preview.match === "NONE" ? {} : { anchor: preview.anchor }) }}
-    />
+    <>
+      {onSaveToCase ? (
+        <p className="field-help">
+          <button type="button" className="chat-secondary-action" disabled={saving.kind === "saving" || saving.kind === "done"} onClick={() => void save()}>
+            {saving.kind === "saving" ? "Zapisywanie w aktach…" : saving.kind === "done" ? "Zapisano w aktach sprawy" : "Zapisz w aktach sprawy"}
+          </button>{" "}
+          {saving.kind === "done" ? `${saving.name} (z linkiem do karty orzeczenia)` : null}
+          {saving.kind === "error" ? <span className="chat-inline-error">{saving.message}</span> : null}
+        </p>
+      ) : null}
+      <SourcePreviewFrame
+        target={{ kind: "record", key: `case:${preview.url}:${passage ?? signature ?? ""}`, html: preview.html, ...(preview.match === "NONE" ? {} : { anchor: preview.anchor }) }}
+      />
+    </>
   );
 }

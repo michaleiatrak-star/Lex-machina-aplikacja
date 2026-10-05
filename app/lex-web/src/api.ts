@@ -3696,6 +3696,8 @@ export type CaseLawPreview = {
   anchor: string;
   match: "EXACT" | "PARTIAL" | "SIGNATURE" | "NONE";
   chars: number;
+  source?: "LOCAL" | "NETWORK";
+  storedAt?: string;
 };
 
 // Pełny tekst orzeczenia/interpretacji z oficjalnego źródła, cytowany fragment zaznaczony.
@@ -3706,6 +3708,22 @@ export function previewCaseLaw(input: {
   attributed?: string;
 }): Promise<CaseLawPreview> {
   return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type CaseLawCopy = {
+  cardUrl: string;
+  court: string;
+  signature?: string;
+  date?: string;
+  form?: string;
+  text: string;
+  sha256: string;
+  fetchedAt: string;
+};
+
+// Kopia orzeczenia zapisana w aplikacji (do akt sprawy); źródłem jest karta orzeczenia.
+export function copyCaseLaw(input: { sourceUrl: string; signature?: string }): Promise<CaseLawCopy> {
+  return json<CaseLawCopy>("/api/case-law/copy", { method: "POST", body: JSON.stringify(input) });
 }
 
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {

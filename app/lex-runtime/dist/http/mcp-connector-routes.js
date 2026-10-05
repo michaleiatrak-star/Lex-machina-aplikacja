@@ -208,6 +208,25 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
         }
     });
+    // Kopia orzeczenia zapisana w aplikacji (do akt sprawy); źródłem jest karta orzeczenia.
+    app.post("/api/case-law/copy", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const sourceUrl = typeof req.body?.sourceUrl === "string" && req.body.sourceUrl.length <= 2000 ? req.body.sourceUrl.trim() : "";
+        const signature = typeof req.body?.signature === "string" && req.body.signature.length <= 200 ? req.body.signature.trim() : "";
+        if (!sourceUrl) {
+            res.status(400).json({ error: "CASE_PREVIEW_INVALID" });
+            return;
+        }
+        try {
+            res.json(await caseLawPreview.copy({ sourceUrl, ...(signature ? { signature } : {}) }));
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT)_[A-Z0-9_]+$/.test(message) ? message : "CASE_PREVIEW_FAILED";
+            res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
+        }
+    });
     // Podgląd strony źródła w aplikacji: tylko oficjalne domeny, bez skryptów.
     app.post("/api/mcp-search/source-preview", async (req, res) => {
         if (!requireUser(req, res, authService))

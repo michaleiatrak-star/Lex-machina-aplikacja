@@ -1,4 +1,5 @@
 import { LocalPageImageMasker } from "../document-evidence.js";
+import { configureCaseLawStore } from "../case-law-store.js";
 import { LocalOcrCorrector } from "../ocr-correction.js";
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
@@ -192,6 +193,8 @@ export async function startLocalServer(options) {
         throw new Error(`Lex corpus validation failed before HTTP startup: ${issues.length} issue(s).`);
     }
     const caseFileStore = new LocalCaseFileStore();
+    // Decisions downloaded once (verification, preview): quotes are marked on this copy.
+    configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
     const authStore = new LocalAuthStore({
         rootDir: caseFileStore.rootDir
     });

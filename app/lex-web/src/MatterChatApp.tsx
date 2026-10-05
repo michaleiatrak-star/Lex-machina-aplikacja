@@ -2198,6 +2198,15 @@ export default function MatterChatApp({
     }
   }
 
+  // A decision from its official card saved in the case's files (local RAG).
+  async function saveCaseLawToCase(file: File): Promise<void> {
+    const targetCase = caseId;
+    const stored = await uploadCaseFile(targetCase, file);
+    const review = await processStoredCaseFile(targetCase, stored.uploadId);
+    await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    setWorkspaceRefresh((value) => value + 1);
+  }
+
   async function saveStagedDocuments(ids?: string[]): Promise<void> {
     const targetCase = caseId;
     const items = documentStaging.items.filter(
@@ -4942,6 +4951,7 @@ export default function MatterChatApp({
                                     {...(item.passage ? { passage: item.passage } : {})}
                                     {...(item.caseSignature ? { signature: item.caseSignature } : {})}
                                     {...(attributedSentence(message.content, item.caseSignature) ? { attributed: attributedSentence(message.content, item.caseSignature)! } : {})}
+                                    onSaveToCase={saveCaseLawToCase}
                                   />
                                 ) : null}
                               </>
@@ -5065,6 +5075,7 @@ export default function MatterChatApp({
                                 sourceUrl={item.sourceUrl}
                                 {...(item.claim ? { signature: item.claim } : {})}
                                 {...(attributedSentence(message.content, item.claim) ? { attributed: attributedSentence(message.content, item.claim)! } : {})}
+                                onSaveToCase={saveCaseLawToCase}
                               />
                             ) : null}
                           </li>
