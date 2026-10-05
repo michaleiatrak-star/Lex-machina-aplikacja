@@ -62,7 +62,11 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
       : {}),
-    ...(message.widgets?.length ? { widgets: message.widgets } : {})
+    ...(message.widgets?.length ? { widgets: message.widgets } : {}),
+    ...(message.evidence?.length ? { evidence: message.evidence } : {}),
+    ...(message.auxiliarySources?.length ? { auxiliarySources: message.auxiliarySources } : {}),
+    ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
+    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {})
   };
 }
 
@@ -82,7 +86,11 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
     ...(message.generatedDocument
       ? { generatedDocument: message.generatedDocument }
       : {}),
-    ...(message.widgets?.length ? { widgets: message.widgets } : {})
+    ...(message.widgets?.length ? { widgets: message.widgets } : {}),
+    ...(message.evidence?.length ? { evidence: message.evidence } : {}),
+    ...(message.auxiliarySources?.length ? { auxiliarySources: message.auxiliarySources } : {}),
+    ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
+    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {})
   };
 }
 

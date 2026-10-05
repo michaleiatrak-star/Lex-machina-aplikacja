@@ -810,6 +810,12 @@
   letter-spacing: 0.05em;
 }
 
+.chat-evidence-gate {
+  color: #6b6f6a;
+  font-size: 10px;
+  font-style: italic;
+}
+
 .chat-source-tier-r1 {
   border-color: #b8d1bc;
   background: #e8f4e9;
@@ -1475,6 +1481,20 @@
 
 .chat-form-row.compact {
   margin-top: 12px;
+}
+
+/* Account actions: wrap as whole buttons instead of breaking their labels. */
+.chat-account-actions {
+  flex-wrap: wrap;
+}
+
+.chat-account-actions > button {
+  white-space: nowrap;
+}
+
+.chat-account-note {
+  display: block;
+  margin-top: 8px;
 }
 
 .matter-schedule-form {
@@ -2956,6 +2976,20 @@ mark.restored {
   padding: 5px 8px;
   vertical-align: top;
   text-align: left;
+  /* Kontener wiadomości łamie „anywhere”: w tabeli dzieliło to słowa („Prze|pis”). */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+  min-width: 5.5em;
+}
+
+.chat-md-table td a {
+  overflow-wrap: anywhere;
+}
+
+.source-ver a,
+.source-ver-date {
+  white-space: nowrap;
 }
 
 .chat-md-table th {

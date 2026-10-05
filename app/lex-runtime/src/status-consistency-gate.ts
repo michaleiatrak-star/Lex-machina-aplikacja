@@ -430,6 +430,25 @@ export function reconcileStatusMarkers(
         repaired += unverified.length;
         continue;
       }
+      // Grupa mieszana z oboma znacznikami naraz („art. 233 kk i art. 232a KK ✅ … ⚠️ …”):
+      // znaczniki po grupie nie mówią, który dotyczy którego przepisu. Każdy przepis
+      // dostaje własny znacznik — ✅ z rejestru albo ⚠️ — a wspólne znaczniki znikają.
+      if (status === "CONFLICT") {
+        for (const marker of group.markers) {
+          const start = line.text[marker.start - 1] === " " ? marker.start - 1 : marker.start;
+          edits.push({ start, end: marker.end, insert: "" });
+        }
+        group.references.forEach((reference, index) => {
+          const record = records[index];
+          edits.push({
+            start: reference.end,
+            end: reference.end,
+            insert: ` ${record ? verificationMarker(record)! : "⚠️ [NIEWERYFIKOWANE]"}`
+          });
+        });
+        repaired += group.markers.length;
+        continue;
+      }
       // Grupa mieszana: ✅ bezpośrednio po zweryfikowanym przepisie, ⚠️ zostaje przy reszcie.
       // Ten sam ✅ w innym miejscu wiersza (np. dopisany na końcu) nie należy do tej grupy.
       const groupMarkers = new Set(

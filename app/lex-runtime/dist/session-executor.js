@@ -275,8 +275,35 @@ function withoutRepeatedUnits(records) {
         });
     });
 }
-export function publicEvidenceBundle(records) {
-    return withoutRepeatedUnits(records).map((record) => ({
+// Wiersze bloków CN/WYJ/REM-GATE: nagłówek, CN-n, REM-n, „Oś n:”, „Art. X: S1 —”.
+const GATE_LINE = /^\s*(?:(?:CN|WYJ|REM)-GATE\b|CN-\d|REM-\d|Oś \d+:|[^:\n]{0,80}:\s*S1\s*[—–-])/u;
+function articleKey(claim) {
+    const article = /art\.\s*(\d+[a-z]*)/iu.exec(claim);
+    const act = claim.trim().split(/\s+/u).at(-1);
+    return article && act ? `${article[1].toLocaleLowerCase("pl")} ${act.toLocaleLowerCase("pl")}` : null;
+}
+// Przepisy zweryfikowane przez model tylko na potrzeby bramek (sąsiednie
+// artykuły z WYJ-GATE S1/S2), których odpowiedź nie powołuje poza blokami bramek.
+export function gateOnlyStatutes(answer) {
+    const lines = answer.split(/\r?\n/u);
+    const inGate = new Set();
+    const outside = new Set();
+    for (const reference of detectLegalReferences(answer)) {
+        if (reference.kind !== "statute")
+            continue;
+        const key = articleKey(reference.claim);
+        if (!key)
+            continue;
+        (GATE_LINE.test(lines[reference.line - 1] ?? "") ? inGate : outside).add(key);
+    }
+    return new Set([...inGate].filter((key) => !outside.has(key)));
+}
+export function publicEvidenceBundle(records, answer) {
+    const gateOnly = answer ? gateOnlyStatutes(answer) : new Set();
+    const items = withoutRepeatedUnits(records).map((record) => ({
+        ...(record.kind === "statute" && gateOnly.has(articleKey(record.claim) ?? "")
+            ? { role: "gate" }
+            : {}),
         claim: record.claim,
         kind: record.kind,
         status: record.status,
@@ -304,6 +331,7 @@ export function publicEvidenceBundle(records) {
                 ? { passage: record.supportQuote }
                 : {})
     }));
+    return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
 }
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");
 /**
@@ -2292,7 +2320,7 @@ export class SafeSessionExecutor {
                 supported: verificationRecords.filter((record) => record.status === "SUPPORTED").length,
                 unverified: verificationRecords.filter((record) => record.status === "UNVERIFIED").length
             },
-            evidence: publicEvidenceBundle(verificationRecords),
+            evidence: publicEvidenceBundle(verificationRecords, restoredAnswer.text),
             ...(publicAuxiliarySources.length > 0
                 ? {
                     auxiliarySources: publicAuxiliarySources

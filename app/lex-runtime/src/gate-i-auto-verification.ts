@@ -489,9 +489,10 @@ export function applyAutomaticVerificationMarkers(
             return line;
           }
 
+          // Dwa przepisy z tej samej strony aktu dają ten sam znacznik.
           const missingMarkers =
-            records
-              .map(marker)
+            [...new Set(records
+              .map(marker))]
               .filter(
                 (
                   value

@@ -1076,3 +1076,37 @@
   color: #5d6a61;
   font-size: 11px;
 }
+
+.document-citation-full {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid #d9ded8;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.document-citation-full-chunk pre {
+  white-space: pre-wrap;
+  margin: 2px 0 10px;
+  font: inherit;
+}
+
+.document-citation-full-chunk small {
+  color: #6b6f6a;
+}
+
+.document-citation-full-chunk.is-cited {
+  border-left: 3px solid #c9b46a;
+  padding-left: 8px;
+}
+
+.document-citation-full mark.is-selected {
+  outline: 2px solid #b08a1e;
+}
+
+.document-citation-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}

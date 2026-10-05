@@ -38,6 +38,7 @@ import {
 } from "react";
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
+import type { SourceClaim } from "./SourceLinkedText.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
@@ -929,6 +930,32 @@ function executionMessage(
       ` · finalization ${execution.finalization}` +
       ` · UNVERIFIED ${execution.verification.unverified}`
   };
+}
+
+// Adres ze znacznika VER → weryfikowany przepis (z kotwicą strony, jak w znaczniku).
+function verifiedSources(evidence: EvidenceItem[]): SourceClaim[] {
+  return evidence.flatMap((item) => {
+    const urls = [item.sourceAnchorUrl, item.sourceUrl].filter((url): url is string => Boolean(url));
+    return [...new Set(urls)].map((url) => ({ claim: item.claim, url }));
+  });
+}
+
+// Login failures in words; an unknown code is shown with its identifier for support.
+function accountLoginFailureText(code: string): string {
+  switch (code) {
+    case "ACCOUNT_SESSION_SUBSCRIPTION_LOGIN_REQUIRED":
+      return "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API.";
+    case "ACCOUNT_SESSION_CLI_NOT_INSTALLED":
+      return "Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API.";
+    case "ACCOUNT_SESSION_LOGIN_FAILED":
+      return "Klient dostawcy nie potwierdził logowania (okno zamknięte przed końcem albo upłynął czas). Kliknij „Połącz konto” i dokończ logowanie w oknie klienta.";
+    case "ACCOUNT_SESSION_CLI_INCOMPATIBLE":
+      return "Zainstalowana wersja klienta dostawcy nie jest obsługiwana. Usuń ją albo przełącz źródło na API.";
+    case "ACCOUNT_SESSION_AUTH_EXPIRED":
+      return "Sesja klienta dostawcy wygasła. Zaloguj się ponownie.";
+    default:
+      return `Logowanie nie powiodło się (kod: ${code}).`;
+  }
 }
 
 export default function MatterChatApp({
@@ -2285,22 +2312,22 @@ export default function MatterChatApp({
     );
   }
 
-  async function refreshProviderAccountStatus(): Promise<void> {
+  async function refreshProviderAccountStatus(): Promise<Record<ProviderId, ProviderAccountSessionStatus>> {
     const result =
       await getProviderAccountStatus();
-    setProviderAccounts(
-      Object.fromEntries(
-        result.providers.map(
-          (item) => [
-            item.provider,
-            item
-          ]
-        )
-      ) as Record<
-        ProviderId,
-        ProviderAccountSessionStatus
-      >
-    );
+    const accounts = Object.fromEntries(
+      result.providers.map(
+        (item) => [
+          item.provider,
+          item
+        ]
+      )
+    ) as Record<
+      ProviderId,
+      ProviderAccountSessionStatus
+    >;
+    setProviderAccounts(accounts);
+    return accounts;
   }
 
   async function disconnectProviderAccount(): Promise<void> {
@@ -2409,7 +2436,7 @@ export default function MatterChatApp({
       );
       setProviderAccountMessage(
         status.authenticated
-          ? "Konto połączone. Lex Machina automatycznie wznowi zapamiętaną lub ostatnią sesję hosta; jeśli jej nie ma, utworzy nową."
+          ? "Konto połączone. Każda wiadomość idzie w nowej sesji klienta; historię sprawy dołącza Lex Machina."
           : "Logowanie zakończone, ale klient nie potwierdził aktywnej sesji."
       );
       return status.authenticated;
@@ -2420,18 +2447,15 @@ export default function MatterChatApp({
           : error instanceof Error
             ? error.message
             : String(error);
-      setProviderAccountMessage(
-        code ===
-          "ACCOUNT_SESSION_SUBSCRIPTION_LOGIN_REQUIRED"
-          ? "Claude Code nie potwierdził aktywnego logowania do subskrypcji Claude. Program używa wyłącznie sesji Claude.ai/Pro/Max i nie przełącza tego kanału na rozliczane API."
-          : code ===
-              "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
-            ? "Nie udało się przygotować oficjalnego klienta tego dostawcy. Spróbuj ponownie albo przełącz źródło na API."
-            : code
-      );
       setAccountConnectPhase(null);
-      await refreshProviderAccountStatus()
-        .catch(() => {});
+      // The login may still complete in the client's own window after the call failed:
+      // a session that is active now is not reported as a failure.
+      const refreshed = await refreshProviderAccountStatus().catch(() => null);
+      setProviderAccountMessage(
+        refreshed?.[runtimeProvider]?.authenticated
+          ? "Konto połączone (logowanie dokończone w oknie klienta dostawcy)."
+          : accountLoginFailureText(code)
+      );
       return false;
     } finally {
       setProviderAccountBusy(false);
@@ -4623,6 +4647,8 @@ export default function MatterChatApp({
                     content={message.content}
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
+                    {...(selectedCase?.caseId ? { caseId: selectedCase.caseId } : {})}
+                    {...(message.evidence?.length ? { sources: verifiedSources(message.evidence) } : {})}
                     markdown={message.role === "assistant"}
                   />
                   {message.role === "assistant" &&
@@ -4699,6 +4725,11 @@ export default function MatterChatApp({
                               {item.sourceTier ? (
                                 <span className={`chat-source-tier chat-source-tier-${item.sourceTier.toLocaleLowerCase("en")}`}>
                                   {item.sourceTier}
+                                </span>
+                              ) : null}
+                              {item.role === "gate" ? (
+                                <span className="chat-evidence-gate" title="Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi">
+                                  pomocniczy — bramka
                                 </span>
                               ) : null}
                             </span>
@@ -6555,7 +6586,7 @@ export default function MatterChatApp({
                       : "Sprawdzanie klienta i sesji…"}
                   </small>
                   {user.appRole === "ADMIN" ? (
-                    <div className="chat-form-row compact">
+                    <div className="chat-form-row compact chat-account-actions">
                       {/* The runtime provisions the pinned client (Codex, Claude Code,
                           Gemini CLI, Grok Build) on "Połącz konto". */}
                       <button
@@ -6581,9 +6612,10 @@ export default function MatterChatApp({
                         type="button"
                         className="chat-secondary-action"
                         disabled={providerAccountBusy}
-                        onClick={() =>
-                          void refreshProviderAccountStatus()
-                        }
+                        onClick={() => {
+                          setProviderAccountMessage("");
+                          void refreshProviderAccountStatus();
+                        }}
                       >
                         Sprawdź ponownie
                       </button>
@@ -6612,7 +6644,7 @@ export default function MatterChatApp({
                     </p>
                   )}
                   {accountSession?.authenticated ? (
-                    <small>
+                    <small className="chat-account-note">
                       Aby zmienić konto, kliknij „Wyloguj”, a potem „Połącz konto”.
                     </small>
                   ) : null}
@@ -6621,7 +6653,7 @@ export default function MatterChatApp({
                     clientLabel={providerDefinition?.accountClientLabel ?? "klient"}
                   />
                   {providerAccountMessage ? (
-                    <small>{providerAccountMessage}</small>
+                    <small className="chat-account-note">{providerAccountMessage}</small>
                   ) : null}
                 </>
               ) : user.appRole === "ADMIN" ? (

@@ -1282,6 +1282,10 @@ export function registerWorkspaceRoutes(app, dependencies) {
                 ...(Array.isArray(raw.widgets)
                     ? { widgets: raw.widgets }
                     : {}),
+                ...(raw.evidence !== undefined ? { evidence: raw.evidence } : {}),
+                ...(raw.auxiliarySources !== undefined ? { auxiliarySources: raw.auxiliarySources } : {}),
+                ...(raw.mandatoryPath !== undefined ? { mandatoryPath: raw.mandatoryPath } : {}),
+                ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
                 ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
                     ? {
                         generatedDocument: raw.generatedDocument

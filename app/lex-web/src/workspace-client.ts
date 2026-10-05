@@ -1,7 +1,10 @@
 import {
   apiBase,
   authorizationHeaders,
-  isDesktopShell
+  isDesktopShell,
+  type AuxiliarySourceItem,
+  type EvidenceItem,
+  type MandatoryPathView
 } from "./api.js";
 
 export type WorkspaceFolder = {
@@ -56,6 +59,10 @@ export type WorkspaceThreadMessage = {
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
   widgets?: ChatWidget[];
+  evidence?: EvidenceItem[];
+  auxiliarySources?: AuxiliarySourceItem[];
+  mandatoryPath?: MandatoryPathView;
+  pipelineNext?: { skill: string; reason: string };
 };
 
 // Widget shown with show_widget (skill corpus file or model code), rendered in an isolated frame.

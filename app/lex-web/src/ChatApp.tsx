@@ -851,6 +851,7 @@ export default function ChatApp({
                           <li key={`${item.claim}-${index}`}>
                             <span>
                               {item.status} · {item.kind}
+                              {item.role === "gate" ? " · pomocniczy — bramka" : ""}
                             </span>
                             <strong>{item.claim}</strong>
                             {item.sourceUrl ? (

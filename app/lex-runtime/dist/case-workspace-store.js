@@ -147,9 +147,23 @@ function safeMessage(input) {
             (generated.stage !== undefined && !["DRAFT", "FINAL"].includes(generated.stage)))) {
         throw new Error("WORKSPACE_GENERATED_DOCUMENT_INVALID");
     }
-    const { restorations: _dropped, generatedDocument: _generated, ...rest } = input;
+    const evidence = plainRecords(input.evidence, 300, 600_000);
+    const auxiliarySources = plainRecords(input.auxiliarySources, 100, 300_000);
+    const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
+    const next = input.pipelineNext;
+    if (next !== undefined &&
+        (typeof next !== "object" || next === null ||
+            typeof next.skill !== "string" || next.skill.length > 200 ||
+            typeof next.reason !== "string" || next.reason.length > 2_000)) {
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
+    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, ...rest } = input;
     return {
         ...rest,
+        ...(evidence?.length ? { evidence } : {}),
+        ...(auxiliarySources?.length ? { auxiliarySources } : {}),
+        ...(mandatoryPath ? { mandatoryPath } : {}),
+        ...(next ? { pipelineNext: { skill: next.skill, reason: next.reason } } : {}),
         ...(generated
             ? {
                 generatedDocument: {
@@ -165,6 +179,20 @@ function safeMessage(input) {
         ...(restorations.length > 0 ? { restorations } : {}),
         ...(widgets.length > 0 ? { widgets } : {})
     };
+}
+// Tablica zwykłych obiektów JSON z limitem liczby i rozmiaru (dane widoku, nie logika).
+function plainRecords(value, maxItems, maxBytes) {
+    if (value === undefined)
+        return undefined;
+    if (!Array.isArray(value) ||
+        value.length > maxItems ||
+        value.some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
+    const json = JSON.stringify(value);
+    if (json.length > maxBytes)
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    return JSON.parse(json);
 }
 export class EncryptedCaseWorkspaceStore {
     rootDir;
@@ -483,7 +511,11 @@ export class EncryptedCaseWorkspaceStore {
             ...(item.restorations
                 ? { restorations: item.restorations.map((restoration) => ({ ...restoration })) }
                 : {}),
-            ...(item.widgets ? { widgets: item.widgets.map((widget) => ({ ...widget })) } : {})
+            ...(item.widgets ? { widgets: item.widgets.map((widget) => ({ ...widget })) } : {}),
+            ...(item.evidence ? { evidence: structuredClone(item.evidence) } : {}),
+            ...(item.auxiliarySources ? { auxiliarySources: structuredClone(item.auxiliarySources) } : {}),
+            ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
+            ...(item.pipelineNext ? { pipelineNext: { ...item.pipelineNext } } : {})
         }));
     }
     async appendThreadMessage(args) {
