@@ -38,7 +38,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
-import { ANALYSIS_INTENT, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
+import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, parseFlashRouting, rankDomains } from "./domain-module-map.js";
@@ -913,11 +913,14 @@ export class SafeSessionExecutor {
             documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
             foreignJurisdiction: false
         };
+        // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
+        const verification = legalTurn && classifyTask(this.taskRoutes(), pathFacts.query)?.route.id === "11";
         const profile = pathProfile({
             mode: request.modeDecision?.mode ?? request.mode,
             simple: request.matterComplexity?.level === "SIMPLE",
             criminal: pathFacts.criminal,
-            documentGeneration: pathFacts.documentGeneration
+            documentGeneration: pathFacts.documentGeneration,
+            verification
         });
         // Already in the model's context: the router skill and the core legal resources.
         const contextResources = new Set([
@@ -1593,7 +1596,8 @@ export class SafeSessionExecutor {
             mode: request.modeDecision?.mode ?? request.mode,
             simple: request.matterComplexity?.level === "SIMPLE",
             criminal: criminalAfter,
-            documentGeneration: pathFacts.documentGeneration
+            documentGeneration: pathFacts.documentGeneration,
+            verification
         });
         if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
             for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {

@@ -56,6 +56,7 @@ describe("mandatory path model from the corpus", () => {
     expect(pathProfile({ mode: "PRAWNIK", simple: true, criminal: false, documentGeneration: false })).toBe("LEKKI");
     expect(pathProfile({ mode: "LAIK", simple: false, criminal: false, documentGeneration: false })).toBe("LEKKI");
     expect(pathProfile({ mode: "LAIK", simple: true, criminal: true, documentGeneration: false })).toBe("PELNY");
+    expect(pathProfile({ mode: "LAIK", simple: true, criminal: false, documentGeneration: false, verification: true })).toBe("PELNY");
     const base = { query: "art. 415 KC", legal: true, criminal: false, documents: false, documentsTruncated: false, documentGeneration: false, foreignJurisdiction: false };
     const full = preloadForTurn(model, { ...base, profile: "PELNY" });
     expect(full).toEqual(expect.arrayContaining(["shared/MOD-CN-GATE.md", "shared/MOD-REM-GATE.md", "shared/MOD-WYJATEK-GATE.md", "prawny-router-v3/references/SELF-CHECK.md"]));
@@ -204,3 +205,35 @@ describe("mandatory path in a session", () => {
     expect(result.mandatoryPath!.steps.find((step) => step.id === "DISCLAIMER-OSTATNI")).toMatchObject({ by: "APLIKACJA" });
   }, 60_000);
 });
+
+describe("router category [11]", () => {
+  it("verifying someone else's material is never the light profile", async () => {
+    const { ProviderGateway, ProviderRegistry } = await import("../src/providers/gateway.js");
+    const { LexSkillRegistry } = await import("../src/registry.js");
+    const { SafeSessionExecutor } = await import("../src/session-executor.js");
+    const pathModule = await import("node:path");
+    const registry = new LexSkillRegistry(pathModule.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana"));
+    registry.scan();
+    const prompts: string[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "k11",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        prompts.push(received.systemPrompt ?? "");
+        return { fullText: "Analiza." };
+      }
+    });
+    await new SafeSessionExecutor(registry, new ProviderGateway(providers)).execute({
+      query: "Sprawdź tę opinię, czy te przepisy się zgadzają?",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      modelSelectsSkills: true,
+      mode: "LAIK"
+    });
+    expect(prompts[0]).toContain("ŚCIEŻKA OBOWIĄZKOWA — PROFIL PEŁNY");
+  }, 60_000);
+});
+

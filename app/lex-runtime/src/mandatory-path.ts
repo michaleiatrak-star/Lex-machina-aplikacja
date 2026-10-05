@@ -140,11 +140,18 @@ export function parseMandatoryPathModel(profile: string): MandatoryPathModel {
 
 /**
  * PEŁNY for a typical professional matter, and always where PROFIL-LEKKI
- * forbids the light profile (criminal matter, document generation); LEKKI
+ * forbids the light profile (criminal matter, document generation, category [11]); LEKKI
  * for simple questions and lay users.
  */
-export function pathProfile(args: { mode: "LAIK" | "PRAWNIK"; simple: boolean; criminal: boolean; documentGeneration: boolean }): PathProfile {
-  if (args.criminal || args.documentGeneration) return "PELNY";
+export function pathProfile(args: {
+  mode: "LAIK" | "PRAWNIK";
+  simple: boolean;
+  criminal: boolean;
+  documentGeneration: boolean;
+  // Router category [11]: verifying someone else's legal material (full K0–K6 protocol).
+  verification?: boolean;
+}): PathProfile {
+  if (args.criminal || args.documentGeneration || args.verification) return "PELNY";
   return args.mode === "PRAWNIK" && !args.simple ? "PELNY" : "LEKKI";
 }
 

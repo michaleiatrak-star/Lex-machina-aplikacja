@@ -168,6 +168,7 @@ import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
   ANALYSIS_INTENT,
+  classifyTask,
   decideTask,
   parseActivationMatrix,
   parseCombinations,
@@ -1824,11 +1825,14 @@ export class SafeSessionExecutor implements SessionExecutor {
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
       foreignJurisdiction: false
     };
+    // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
+    const verification = legalTurn && classifyTask(this.taskRoutes(), pathFacts.query)?.route.id === "11";
     const profile: PathProfile = pathProfile({
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: pathFacts.criminal,
-      documentGeneration: pathFacts.documentGeneration
+      documentGeneration: pathFacts.documentGeneration,
+      verification
     });
     // Already in the model's context: the router skill and the core legal resources.
     const contextResources = new Set<string>([
@@ -2659,7 +2663,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: criminalAfter,
-      documentGeneration: pathFacts.documentGeneration
+      documentGeneration: pathFacts.documentGeneration,
+      verification
     });
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {

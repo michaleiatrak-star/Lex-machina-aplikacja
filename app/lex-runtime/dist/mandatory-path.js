@@ -89,11 +89,11 @@ export function parseMandatoryPathModel(profile) {
 }
 /**
  * PEŁNY for a typical professional matter, and always where PROFIL-LEKKI
- * forbids the light profile (criminal matter, document generation); LEKKI
+ * forbids the light profile (criminal matter, document generation, category [11]); LEKKI
  * for simple questions and lay users.
  */
 export function pathProfile(args) {
-    if (args.criminal || args.documentGeneration)
+    if (args.criminal || args.documentGeneration || args.verification)
         return "PELNY";
     return args.mode === "PRAWNIK" && !args.simple ? "PELNY" : "LEKKI";
 }
