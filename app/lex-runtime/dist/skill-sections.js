@@ -18,6 +18,7 @@ export const APP_COMPONENTS = {
     G8: "znaczniki statusu powołań i bramka końcowa HARD GATE (G8)",
     DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",
     "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi",
+    "WIDGET-DANE": "widget z szablonu korpusu zasilany danymi (show_widget z path i data) oraz pasek eksportu/importu",
     // Not a procedure: the file's change history, kept in the file for the audit.
     HISTORIA: "historia zmian pliku (metadane audytu)"
 };

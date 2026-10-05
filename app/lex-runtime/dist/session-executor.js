@@ -1015,7 +1015,11 @@ export class SafeSessionExecutor {
             !request.documentAstOutput &&
             !request.processWorkflowContext &&
             !/^raport-/u.test(request.primarySkill);
-        const inactiveComponents = new Set(appendsDisclaimer ? [] : ["DISCLAIMER"]);
+        const inactiveComponents = new Set([
+            ...(appendsDisclaimer ? [] : ["DISCLAIMER"]),
+            // show_widget (with template data) exists for every model except a local one.
+            ...(request.model.startsWith("local/") ? ["WIDGET-DANE"] : [])
+        ]);
         // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
         const reachedStages = new Set(laterTurn(request.query) ? ["KOLEJNA-TURA"] : []);
         const forModel = (resource, content) => {

@@ -149,6 +149,17 @@ describe("sections of a later stage of the thread", () => {
   }, 120_000);
 });
 
+describe("widget component", () => {
+  it("the case-law skill's code-pasting variant is a reference for models with show_widget data", () => {
+    const skill = fs.readFileSync(path.join(CORPUS, "orzeczenia-sadowe-v2", "SKILL.md"), "utf8");
+    const account = compactForModel(skill, true).text;
+    expect(account).toContain("### Kod widgetu i pasek IO (host bez pola `data`) [wykonuje aplikacja: WIDGET-DANE]");
+    expect(account).toContain("assets/widget-orzeczenia.html");
+    expect(account).not.toContain("view shared/MOD-WIDGET-IO.md");
+    expect(compactForModel(skill, true, new Set(["WIDGET-DANE"])).text).toContain("view shared/MOD-WIDGET-IO.md");
+  });
+});
+
 describe("frontmatter metadata the application reads itself", () => {
   const skill = [
     "---",

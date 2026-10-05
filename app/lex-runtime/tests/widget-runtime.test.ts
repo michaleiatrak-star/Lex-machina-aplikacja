@@ -143,4 +143,25 @@ describe("corpus templates fed with data", () => {
     expect(shownGraph!.code).not.toContain('id="lex-io"');
     expect(shownGraph!.code).toContain("let GRAF = /* lex:dane */ (window.__lexData||window.__lexDefault);");
   });
+
+  it("renders the case-law widget from data: text only, http(s) links, the app's export bar", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const tools = new WidgetToolRuntime(registry);
+    const data = {
+      tytul: "<b>x</b>",
+      etap: "wynik",
+      orzeczenia: [{ sygnatura: "III CZP 1/20", kategoria: "6A", url: "javascript:alert(1)", alerty: [] }]
+    };
+    const [result] = await tools.runTools([
+      { id: "1", name: "show_widget", input: { title: "Orzeczenia", path: "orzeczenia-sadowe-v2/assets/widget-orzeczenia.html", data } }
+    ]);
+    expect(JSON.parse(result!.content).status).toBe("SHOWN");
+    const code = tools.widgets()[0]!.code;
+    expect(code).toContain('id="lex-io"');
+    expect(code).toContain('"tytul":"\\u003cb>x\\u003c/b>"');
+    expect(code).not.toMatch(/innerHTML\s*=/u);
+    for (const script of scripts(compileWidget({ title: "T", kind: "html", code }, "d".repeat(32)))) expect(() => new Function(script)).not.toThrow();
+  });
 });
+
