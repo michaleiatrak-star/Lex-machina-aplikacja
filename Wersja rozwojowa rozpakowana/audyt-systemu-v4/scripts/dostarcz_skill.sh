@@ -6,7 +6,10 @@
 #  - ZIP zawiera CAŁE drzewo skilla,
 #  - liczba plików przed kopiowaniem, po kopiowaniu i w ZIP musi być identyczna,
 #  - twardy limit: maksymalnie 200 plików w jednym skillu,
-#  - T22 (rejestr frontmatteru = dysk) musi przejść — F-223, od 6.158.
+#  - T22 (rejestr frontmatteru = dysk) musi przejść — F-223, od 6.158,
+#  - pliki kanału pluginów w korzeniu skilla (.claude-plugin/, .mcp.json) NIE wchodzą
+#    do paczki: claude.ai odrzuca skill z manifestem pluginu (od 6.187); zostają
+#    w repozytorium dla marketplace.
 #
 # Użycie:
 #   bash dostarcz_skill.sh audyt-systemu-v4
@@ -43,7 +46,7 @@ for SKILL in "$@"; do
     continue
   fi
 
-  PRZED=$(find "$SRC" -type f -not -path "*/__pycache__/*" | wc -l | tr -d ' ')
+  PRZED=$(find "$SRC" -type f -not -path "*/__pycache__/*" -not -path "$SRC/.*" | wc -l | tr -d ' ')
 
   echo "== $SKILL =="
   echo "   KROK 1 (oryginał): $PRZED plików"
@@ -60,6 +63,7 @@ for SKILL in "$@"; do
   rm -rf "$DEST"
   cp -r "$SRC" "$DEST"
   find "$DEST" -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+  find "$DEST" -mindepth 1 -maxdepth 1 -name '.*' -exec rm -rf {} +
 
   # F-223 (6.158): wydanie z frontmatterem przepisanym przez hosta = ODMOWA.
   # T22 na samej kopii roboczej tego skilla (katalog tymczasowy z jednym skillem).
