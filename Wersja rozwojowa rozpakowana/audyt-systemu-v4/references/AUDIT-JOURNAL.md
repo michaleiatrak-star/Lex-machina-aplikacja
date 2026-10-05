@@ -69891,6 +69891,17 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05c — TRYB STRUKTURA: znacznik etapu lex:wczytaj-gdy, pisma-procesowe-v3 W2/W3 od drugiej tury (6.176)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji: wczytywanie skilla wykonawczego etapami. Pomiar aplikacji: pierwsza tura pisma procesowego wysyła 43 tys. znaków `pisma-procesowe-v3/SKILL.md`, w tym W2, PRE-W2 i W3 (ok. 13 tys.), których skill w pierwszej odpowiedzi zakazuje (MODEL TRZECH WIADOMOŚCI: „STOP po W1 — czekaj na odpowiedź użytkownika”).
+
+### 2. KONWENCJA
+`<!-- lex:wczytaj-gdy: ETAP -->` w linii bezpośrednio nad nagłówkiem sekcji. Aplikacja wysyła sekcję dopiero po osiągnięciu etapu; wcześniej model dostaje nagłówek z adnotacją. Etap nieznany aplikacji = sekcja w całości. Etapy: `KOLEJNA-TURA` — wątek zawiera odpowiedź asystenta albo jej streszczenie. Poza aplikacją znacznik jest niewidocznym komentarzem HTML.
+
+### 3. ZMIANA (pisma-procesowe-v3 5.35)
+Znaczniki nad: PRE-W2-VERIFICATION-GATE, WIADOMOŚĆ 2 — PROJEKT PISMA, WIADOMOŚĆ 3 — WERYFIKACJA ZE ŹRÓDEŁ + WALIDACJA. Treść bez zmian. `references/AUTOMAT-STANOW.md` bez znaczników: protokół checkpointów obowiązuje przez całą rozmowę.
+
 ## AUDYT-2026-10-05b — TRYB STRUKTURA: znaczniki DISCLAIMER w shared/DISCLAIMER.md (6.175)
 
 ### 1. ŹRÓDŁO

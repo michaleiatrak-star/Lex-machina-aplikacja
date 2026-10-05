@@ -1,6 +1,6 @@
 ---
 name: pisma-procesowe-v3
-version: "5.34"
+version: "5.35"
 type: executive-pisma
 status: production
 description: "Zaawansowane pisma procesowe: pozwy, odpowiedzi, apelacje, zażalenia i inne pisma wymagające strategii, faktów, dowodów, weryfikacji prawa i finalnej walidacji dokumentu."
@@ -619,6 +619,7 @@ Jeśli warunek aktywacji NIE jest spełniony — pomiń ten krok, przejdź do W1
 > `view pisma-procesowe-v3/references/W1-SZCZEGOLY.md`
 
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## ⛔⛔⛔ PRE-W2-VERIFICATION-GATE — BRAMKA OBOWIĄZKOWA PRZED W2 ⛔⛔⛔
 
 > **Wywołaj:** `view shared/PRE-W2-VERIFICATION-GATE.md`
@@ -650,6 +651,7 @@ Jeśli warunek aktywacji NIE jest spełniony — pomiń ten krok, przejdź do W1
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## WIADOMOŚĆ 2 — PROJEKT PISMA
 
 > ⛔ HARD GATE W2:
@@ -776,6 +778,7 @@ view shared/STRATEGIA-PROCESOWA.md                (⛔ OBOWIĄZKOWE — zawsze p
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## WIADOMOŚĆ 3 — WERYFIKACJA ZE ŹRÓDEŁ + WALIDACJA
 
 > ⛔ HARD GATE W3:
