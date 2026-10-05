@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { describe, expect, it } from "vitest";
-import { compactForModel, laterTurn } from "../src/skill-sections.js";
+import { compactForModel, laterTurn, reachedStages } from "../src/skill-sections.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 
@@ -109,6 +109,19 @@ describe("sections of a later stage of the thread", () => {
     expect(laterTurn("Napisz apelację.")).toBe(false);
     expect(laterTurn("Użytkownik: Napisz apelację.\n\nAsystent: Rama W1.\n\nUżytkownik: Zatwierdzam.")).toBe(true);
     expect(laterTurn("[Streszczenie wcześniejszej części rozmowy (4 wiadomości)]\n\nUżytkownik: dalej")).toBe(true);
+  });
+
+  it("public procurement stage: KIO section only for a procurement matter", () => {
+    expect(reachedStages("Jakie jest orzecznictwo KIO w sprawie rażąco niskiej ceny?").has("ZAMOWIENIA-PUBLICZNE")).toBe(true);
+    expect(reachedStages("Odwołanie od odrzucenia oferty w przetargu").has("ZAMOWIENIA-PUBLICZNE")).toBe(true);
+    expect(reachedStages("Orzecznictwo SN o zadośćuczynieniu").has("ZAMOWIENIA-PUBLICZNE")).toBe(false);
+    const skill = fs.readFileSync(path.join(CORPUS, "orzeczenia-sadowe-v2", "SKILL.md"), "utf8");
+    const civil = compactForModel(skill, true, new Set(), reachedStages("Orzecznictwo SN o zadośćuczynieniu")).text;
+    expect(civil).toContain("## Faza 1-K — Orzecznictwo KIO / zamówienia publiczne (PZP) [sprawa nie dotyczy zamówień publicznych");
+    expect(civil).not.toContain("orzeczenia.uzp.gov.pl/Home/Search");
+    expect(civil).toContain("## Faza 1-L");
+    const kio = compactForModel(skill, true, new Set(), reachedStages("Orzecznictwo KIO o wykluczeniu wykonawcy")).text;
+    expect(kio).toContain("orzeczenia.uzp.gov.pl/Home/Search");
   });
 
   async function pleadingPrompt(query: string): Promise<string> {

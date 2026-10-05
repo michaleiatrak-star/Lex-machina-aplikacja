@@ -72,8 +72,18 @@ function compactFrontmatter(text: string): { text: string; keys: string[]; chars
 // above the heading. The application sends them once the stage is reached;
 // before that the model gets the heading with a note. Unknown stages: whole.
 export const STAGES: Readonly<Record<string, string>> = {
-  "KOLEJNA-TURA": "od drugiej tury wątku, gdy jest już odpowiedź asystenta"
+  "KOLEJNA-TURA": "etap późniejszy: aplikacja dołączy tę sekcję od drugiej tury wątku, gdy jest już odpowiedź asystenta",
+  "ZAMOWIENIA-PUBLICZNE":
+    "sprawa nie dotyczy zamówień publicznych według aplikacji; jeśli jednak dotyczy (KIO, Pzp), przeczytaj tę sekcję z pliku skilla"
 };
+
+const PUBLIC_PROCUREMENT =
+  /zam[óo]wie\p{L}*\s+publiczn|\bKIO\b|Krajow\p{L}*\s+Izb\p{L}*\s+Odwo|\bPzp\b|\bp\.?z\.?p\b|przetarg|\bSWZ\b|ra[żz][ąa]co\s+nisk|odrzuc\p{L}*\s+ofert|wyklucz\p{L}*\s+wykonawc|zamawiaj[ąa]c/iu;
+
+/** Stages of a skill reached by this turn, from the thread and its matter. */
+export function reachedStages(query: string): Set<string> {
+  return new Set([...(laterTurn(query) ? ["KOLEJNA-TURA"] : []), ...(PUBLIC_PROCUREMENT.test(query) ? ["ZAMOWIENIA-PUBLICZNE"] : [])]);
+}
 
 const STAGE_MARK = /^<!--\s*lex:wczytaj-gdy:\s*([A-Z0-9-]+)\s*-->\s*$/u;
 
@@ -120,7 +130,7 @@ export function compactForModel(
     while (end > index + 2 && (MARK.test(lines[end - 1]!) || STAGE_MARK.test(lines[end - 1]!))) end -= 1;
     const removed = lines.slice(index, end).join("\n");
     if (deferred) {
-      out.push(`${heading[1]} ${heading[2]} [etap późniejszy: aplikacja dołączy tę sekcję ${STAGES[stage!]}]`, "");
+      out.push(`${heading[1]} ${heading[2]} [${STAGES[stage!]}]`, "");
       compacted.push({ heading: heading[2]!.slice(0, 90), component: `ETAP:${stage}`, chars: removed.length });
     } else {
       out.push(
