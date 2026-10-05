@@ -69891,6 +69891,17 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05g — TRYB STRUKTURA: widgety analizatora przepisów z szablonów, MOD-WIDGET-IO poza turą (6.180)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7b. Tura analizy przepisu wczytywała `shared/MOD-WIDGET-IO.md` (ok. 10 tys. znaków) przez kontrakt skilla (wzmianka w bloku sekwencji, krok 13), a model pisał od zera dwa widgety (wybór przepisu, wyniki z 7 zakładkami).
+
+### 2. ZMIANA (analizator-przepisow-v2 2.11)
+- `assets/widget-wybor-przepisu.html` — formularz Kroku 0.3 bez danych sprawy (polecenie przez sendPrompt, bez sendPrompt — tekst do skopiowania).
+- `assets/widget-wyniki.html` — Moduł 8 zasilany danymi (literał po komentarzu `lex:dane`): 7 zakładek, tryb krokowy, filtry tierów, alert linii niejednolitej, świeża nowelizacja ≤6 mies., linki tylko http(s). Oba sprawdzone w Chromium w ramce `sandbox=allow-scripts`.
+- SKILL.md: Krok 0.3 i nowe podsekcje „Moduł 8 — wykonanie widgetu” (szablon ze schematem DANE; wariant z kodem i MOD-WIDGET-IO oznaczony WIDGET-DANE). Krok 13 sekwencji odsyła do podsekcji.
+- Aplikacja liczy kontrakt skilla wykonawczego z tekstu po kompakcji — zasób wymieniony tylko w sekcji wykonywanej przez aplikację nie jest wczytywany.
+
 ## AUDYT-2026-10-05f — TRYB STRUKTURA: etap ZAMOWIENIA-PUBLICZNE, orzeczenia-sadowe-v2 2.23 (6.179)
 
 ### 1. ŹRÓDŁO
