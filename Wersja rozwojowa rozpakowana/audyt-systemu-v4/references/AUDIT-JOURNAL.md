@@ -69891,6 +69891,20 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05 — TRYB STRUKTURA: frontmatter SKILL.md audytu bez komentarzy YAML (6.174)
+
+### 1. ŹRÓDŁO
+Pytanie użytkownika o poprawność SKILL.md audytu, w tym YAML.
+
+### 2. USTALENIA
+- YAML poprawny: parsuje się, `name` = katalog, `description` 167 znaków, wszystkie ścieżki `modules`/`widgets`/`references`/`scripts` istnieją; T22, T26 PASS.
+- Błąd: frontmatter miał 32 937 znaków w 304 liniach, z czego ok. 27 750 to komentarze (historia rejestracji plików, opisy flag F-xxx). To historia w pliku roboczym — wbrew decyzji z AUDYT-2026-10-04n; w pozostałych skillach frontmatter ma do 6,7 tys. znaków, komentarze do 0,8 tys.
+
+### 3. ZMIANA
+- Komentarze usunięte; wartości pól bez zmian (`yaml.safe_load` przed = po). Zostaje jeden komentarz: obowiązkowy cudzysłów przy `version`.
+- Treść komentarzy i łańcuch „poprzednio” ze stopki przeniesione dosłownie do `references/HISTORIA-ZMIAN-PLIKOW.md`.
+- Skrypty nie zależą od komentarzy (`check_frontmatter_rejestracja.py` i `test_pokrycie_orkiestratora.py` je pomijają).
+
 ## AUDYT-2026-10-04n — TRYB STRUKTURA: historia zmian poza plikami roboczymi skilli (6.173)
 
 ### 1. ŹRÓDŁO
