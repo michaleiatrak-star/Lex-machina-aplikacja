@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
   downloadGeneratedArtifact,
+  getProcessPleadingDraft,
   isDesktopShell,
+  saveProcessPleadingDraft,
   listCaseArtifacts,
   uploadCaseFile,
   type CaseArtifact
@@ -10,6 +12,7 @@ import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
 import { ArtifactRenameForm } from "./ArtifactRenameForm.js";
 import { DocumentEditor } from "./DocumentEditor.js";
 import { downloadBlob } from "./download-file.js";
+import { blocksToText } from "./office-editing.js";
 import {
   getEditableItem,
   openWorkspaceItemInSystem,
@@ -51,6 +54,23 @@ export function ChatDocumentCard(props: {
     await uploadCaseFile(caseId, new File([blob], filename, { type: blob.type }));
     setEdited({ blob, filename });
     setStatus(`Wersja edytowana „${filename}” zapisana w aktach sprawy.`);
+  }
+
+  // A pleading file from the process pipeline: the edited text can become the
+  // pipeline's draft (not a case file, so it is not counted as evidence).
+  const pleading = /^LexMachina-pismo-procesowe/u.test(document.filename);
+  async function useAsPleadingDraft(blocks: EditableBlock[], change: "MINOR" | "SUBSTANTIVE"): Promise<string> {
+    if (document.tokenized) {
+      throw new Error(
+        "plik zawiera symbole danych osobowych — popraw tekst w panelu pipeline'u („Edytuj projekt”)"
+      );
+    }
+    const text = blocksToText(blocks).replace(/^PROJEKT – NIE SKŁADAĆ[^\n]*\n+/u, "");
+    const current = await getProcessPleadingDraft(caseId);
+    await saveProcessPleadingDraft(caseId, { text, change, expectedRevision: current.draft?.revision ?? 0 });
+    return change === "SUBSTANTIVE"
+      ? "Zapisano jako projekt pisma. Zmiana merytoryczna: pipeline wraca do W2 (atak na projekt i kontrole W3)."
+      : "Zapisano jako projekt pisma (drobna poprawka; zamknięte kontrole zostają).";
   }
 
   async function run(action: () => Promise<void>): Promise<void> {
@@ -203,6 +223,22 @@ export function ChatDocumentCard(props: {
             blocks={preview}
             readOnly={!props.canWrite}
             onSave={saveEdited}
+            {...(pleading
+              ? {
+                  extraActions: [
+                    {
+                      label: "Użyj jako projekt pisma (drobna poprawka)",
+                      title: "literówki, styl, układ — zamknięte kontrole zostają",
+                      run: (blocks: EditableBlock[]) => useAsPleadingDraft(blocks, "MINOR")
+                    },
+                    {
+                      label: "Użyj jako projekt pisma (zmiana merytoryczna)",
+                      title: "fakty, żądania, podstawa prawna — pipeline wraca do W2",
+                      run: (blocks: EditableBlock[]) => useAsPleadingDraft(blocks, "SUBSTANTIVE")
+                    }
+                  ]
+                }
+              : {})}
           />
         </div>
       ) : null}

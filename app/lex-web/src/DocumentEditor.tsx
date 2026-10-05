@@ -86,6 +86,9 @@ export function DocumentEditor(props: {
   blocks: EditableBlock[];
   readOnly: boolean;
   onSave: (filename: string, format: "docx" | "odt", blocks: EditableBlock[]) => Promise<void>;
+  // Other uses of the edited text (e.g. a pleading's draft in its pipeline); each
+  // resolves to the status shown to the user.
+  extraActions?: Array<{ label: string; title?: string; run: (blocks: EditableBlock[]) => Promise<string> }>;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -206,6 +209,34 @@ export function DocumentEditor(props: {
             <button type="button" disabled={(!dirty && format === props.format) || saving || !saveAs.trim()} onClick={() => void save()}>
               {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
             </button>
+            {editing
+              ? (props.extraActions ?? []).map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    title={action.title}
+                    disabled={saving}
+                    onClick={() => {
+                      const target = root.current;
+                      if (!target) return;
+                      setSaving(true);
+                      setStatus("");
+                      void action
+                        .run(blocksFromDom(target as unknown as NodeLike))
+                        .then((message) => {
+                          setDirty(false);
+                          setStatus(message);
+                        })
+                        .catch((failure: unknown) =>
+                          setStatus(`Nie udało się: ${failure instanceof Error ? failure.message : String(failure)}`)
+                        )
+                        .finally(() => setSaving(false));
+                    }}
+                  >
+                    {action.label}
+                  </button>
+                ))
+              : null}
           </div>
         )}
       </div>

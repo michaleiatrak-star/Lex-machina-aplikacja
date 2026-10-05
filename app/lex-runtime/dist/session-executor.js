@@ -718,6 +718,7 @@ export class SafeSessionExecutor {
         const chatPrivacyVault = new PseudonymizationVault(request.privacySeed);
         const chatPseudonymizer = new LocalPolishPseudonymizer(chatPrivacyVault, this.chatRecognizerFor(request.model), this.personMorphology);
         let protectedQuery;
+        let protectedProcessContext = request.processWorkflowContext;
         let protectedAuxiliaryText;
         try {
             // Example data the assistant wrote earlier (a model letter) stays as written.
@@ -740,6 +741,18 @@ export class SafeSessionExecutor {
                 undefined) {
                 protectedAuxiliaryText =
                     protectedQuery;
+            }
+            // The stored pleading draft and remarks reach the model like the chat text:
+            // pseudonymized with the same vault (restored in the answer).
+            if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+                const context = request.processWorkflowContext;
+                protectedProcessContext = {
+                    ...context,
+                    ...(context.draft
+                        ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
+                        : {}),
+                    ...(context.remarks ? { remarks: (await chatPseudonymizer.pseudonymize(context.remarks)).text } : {})
+                };
             }
             audit.record("gate", "G39I_CHAT_PRIVACY", "OK", {
                 pseudonymized: protectedPrimary
@@ -1364,9 +1377,9 @@ export class SafeSessionExecutor {
             ...(request.processRenderOnly && request.documentAstOutput
                 ? { processRenderOnly: request.processRenderOnly }
                 : {}),
-            ...(request.processWorkflowContext
+            ...(protectedProcessContext
                 ? {
-                    processWorkflowContext: request.processWorkflowContext
+                    processWorkflowContext: protectedProcessContext
                 }
                 : {}),
             ...(request.courtWorkflowContext

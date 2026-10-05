@@ -1,10 +1,11 @@
+import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks } from "../process-pleading-draft.js";
 import { FORMAT_MEDIA_TYPE, editableMediaType } from "../office-edit.js";
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { documentIdFromSha256, purgeSecureCaseDocument } from "../case-document-purge.js";
-import { PROCESS_PLEADING_CHECKPOINTS, acceptProcessPleadingStart, confirmProcessCheckpoint, createProcessPleadingState, markProcessCheckpointNotApplicable } from "../process-pleading-state.js";
+import { PROCESS_PLEADING_CHECKPOINTS, acceptProcessPleadingStart, confirmProcessCheckpoint, reopenProcessPleadingDraft, requestProcessCheckpointRevision, createProcessPleadingState, markProcessCheckpointNotApplicable } from "../process-pleading-state.js";
 import { createCourtAnalysisState } from "../court-analysis-state.js";
 import { createChronologyState } from "../chronology-state.js";
 import { createContractAnalysisState } from "../contract-analysis-state.js";
@@ -17,6 +18,17 @@ const FOLDER_ID = /^folder_[a-f0-9]{32}$/;
 const OPEN_TOKEN = /^open_[a-f0-9]{32}(?:\.[a-z0-9]{1,10})?$/;
 const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
 const OPEN_MAX_BYTES = 512 * 1024 * 1024;
+function draftView(draft) {
+    if (!draft)
+        return null;
+    const latest = draft.versions.at(-1) ?? null;
+    return {
+        revision: draft.revision,
+        latest,
+        versions: draft.versions.map(({ text, ...item }) => ({ ...item, chars: text.length })),
+        ...(draft.remarks ? { remarks: draft.remarks } : {})
+    };
+}
 function caseIdFrom(req) {
     return String(req.params.caseId ?? "").trim();
 }
@@ -43,6 +55,7 @@ function sendError(res, error) {
         code === "WORKSPACE_FOLDER_NOT_EMPTY" ||
         code === "PROCESS_PLEADING_STATE_EXISTS" ||
         code === "PROCESS_PLEADING_STATE_CONFLICT" ||
+        code === "PROCESS_PLEADING_DRAFT_CONFLICT" ||
         code === "COURT_ANALYSIS_STATE_EXISTS" ||
         code === "COURT_ANALYSIS_STATE_CONFLICT" ||
         code === "ORDERED_WORKFLOW_STATE_CONFLICT" ||
@@ -374,6 +387,106 @@ export function registerWorkspaceRoutes(app, dependencies) {
                     caseId,
                     caseDataKey,
                     keyVersion: caseView.keyVersion,
+                    state: next,
+                    expectedRevision: current.revision
+                });
+            });
+            res.json({ caseId, state });
+        }
+        catch (error) {
+            sendError(res, error);
+        }
+    });
+    // The pleading text between the stages: newest version, history, pending remarks.
+    app.get("/api/cases/:caseId/workflow/process-pleading/draft", async (req, res) => {
+        try {
+            const actor = actorFor(req);
+            const caseId = caseIdFrom(req);
+            dependencies.caseAccessService.assertAccess(actor, caseId, "READ");
+            const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+            const draft = await dependencies.caseAccessService.withCaseDataKey(actor, caseId, "READ", (caseDataKey) => dependencies.workspace.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+            res.json({ caseId, draft: draftView(draft) });
+        }
+        catch (error) {
+            sendError(res, error);
+        }
+    });
+    // The user's own version of the pleading: a minor correction keeps the closed checks,
+    // a substantive one (facts, legal basis) reopens CP-ATAK and the W3 checks (§7.2).
+    app.post("/api/cases/:caseId/workflow/process-pleading/draft", async (req, res) => {
+        try {
+            const actor = actorFor(req);
+            const caseId = caseIdFrom(req);
+            const text = typeof req.body?.text === "string" ? req.body.text : "";
+            const change = req.body?.change === "SUBSTANTIVE" ? "SUBSTANTIVE" : req.body?.change === "MINOR" ? "MINOR" : null;
+            const expectedRevision = Number(req.body?.expectedRevision);
+            if (!text.trim() || !change || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+                throw new Error("PROCESS_PLEADING_DRAFT_REQUEST_INVALID");
+            }
+            dependencies.caseAccessService.assertAccess(actor, caseId, "WRITE");
+            const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+            const result = await dependencies.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+                const keyVersion = caseView.keyVersion;
+                const state = await dependencies.workspace.getProcessPleadingState({ caseId, caseDataKey, keyVersion });
+                if (!state)
+                    throw new Error("PROCESS_PLEADING_STATE_NOT_FOUND");
+                if (!["W2", "W3", "FINAL"].includes(state.stage))
+                    throw new Error("PROCESS_PLEADING_DRAFT_STAGE_INVALID");
+                const current = await dependencies.workspace.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion });
+                const draft = await dependencies.workspace.saveProcessPleadingDraft({
+                    caseId,
+                    caseDataKey,
+                    keyVersion,
+                    draft: appendDraftVersion(current ?? emptyProcessPleadingDraft(caseId), { text, source: "USER", stage: state.stage, change }),
+                    expectedRevision
+                });
+                const nextState = change === "SUBSTANTIVE"
+                    ? await dependencies.workspace.saveProcessPleadingState({
+                        caseId,
+                        caseDataKey,
+                        keyVersion,
+                        state: reopenProcessPleadingDraft(state, "zmiana merytoryczna projektu pisma przez użytkownika"),
+                        expectedRevision: state.revision
+                    })
+                    : state;
+                return { draft, state: nextState };
+            });
+            res.json({ caseId, draft: draftView(result.draft), state: result.state });
+        }
+        catch (error) {
+            sendError(res, error);
+        }
+    });
+    // CHECKPOINT mode: the step waiting for confirmation goes back with the user's remarks.
+    app.post("/api/cases/:caseId/workflow/process-pleading/revise", async (req, res) => {
+        try {
+            const actor = actorFor(req);
+            const caseId = caseIdFrom(req);
+            const checkpoint = typeof req.body?.checkpoint === "string" ? req.body.checkpoint.trim() : "";
+            const remarks = typeof req.body?.remarks === "string" ? req.body.remarks : "";
+            if (!PROCESS_PLEADING_CHECKPOINTS.includes(checkpoint) || !remarks.trim()) {
+                throw new Error("PROCESS_PLEADING_REVISION_REQUEST_INVALID");
+            }
+            dependencies.caseAccessService.assertAccess(actor, caseId, "WRITE");
+            const caseView = dependencies.caseAccessService.openCase(actor, caseId);
+            const state = await dependencies.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+                const keyVersion = caseView.keyVersion;
+                const current = await dependencies.workspace.getProcessPleadingState({ caseId, caseDataKey, keyVersion });
+                if (!current)
+                    throw new Error("PROCESS_PLEADING_STATE_NOT_FOUND");
+                const next = requestProcessCheckpointRevision(current, checkpoint);
+                const draft = await dependencies.workspace.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion });
+                await dependencies.workspace.saveProcessPleadingDraft({
+                    caseId,
+                    caseDataKey,
+                    keyVersion,
+                    draft: withDraftRemarks(draft ?? emptyProcessPleadingDraft(caseId), checkpoint, remarks),
+                    expectedRevision: draft?.revision ?? 0
+                });
+                return await dependencies.workspace.saveProcessPleadingState({
+                    caseId,
+                    caseDataKey,
+                    keyVersion,
                     state: next,
                     expectedRevision: current.revision
                 });

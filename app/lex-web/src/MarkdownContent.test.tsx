@@ -49,4 +49,11 @@ describe("answer markdown", () => {
     expect(table.header).toEqual(["Kryterium", "Art. 233 KK", `Art. 238 KK ${ver}`]);
     expect(table.rows).toEqual([["Istota", "Fałsz", "Zawiadomienie"]]);
   });
+  it("shows the pipeline's pleading block markers as labelled dividers", () => {
+    const blocks = parseMarkdown("Raport W2\n\n=== PISMO ===\nSąd Rejonowy\n=== KONIEC PISMA ===\nRejestr");
+    expect(blocks.filter((block) => block.type === "rule")).toEqual([
+      { type: "rule", label: "Projekt pisma" },
+      { type: "rule", label: "Koniec pisma" }
+    ]);
+  });
 });

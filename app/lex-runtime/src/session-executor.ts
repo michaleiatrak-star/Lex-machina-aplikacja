@@ -312,6 +312,10 @@ export type SessionExecutionRequest = {
     mode: ProcessPleadingMode;
     // The case's checkpoint register (closed / N/A with reason / open), from the workflow state.
     register?: CheckpointRegisterEntry[];
+    // The newest pleading text kept between stages and the user's remarks to a step
+    // sent back for correction (process-pleading-draft.ts).
+    draft?: { version: number; source: "PIPELINE" | "USER"; stage: ProcessPleadingStage; text: string };
+    remarks?: string;
   };
   courtWorkflowContext?: {
     stage: Exclude<
@@ -1488,6 +1492,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     let protectedQuery:
       string;
+    let protectedProcessContext = request.processWorkflowContext;
     let protectedAuxiliaryText:
       string | undefined;
     try {
@@ -1537,6 +1542,18 @@ export class SafeSessionExecutor implements SessionExecutor {
           protectedQuery;
       }
 
+      // The stored pleading draft and remarks reach the model like the chat text:
+      // pseudonymized with the same vault (restored in the answer).
+      if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+        const context = request.processWorkflowContext;
+        protectedProcessContext = {
+          ...context,
+          ...(context.draft
+            ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
+            : {}),
+          ...(context.remarks ? { remarks: (await chatPseudonymizer.pseudonymize(context.remarks)).text } : {})
+        };
+      }
       audit.record(
         "gate",
         "G39I_CHAT_PRIVACY",
@@ -2301,10 +2318,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(request.processRenderOnly && request.documentAstOutput
         ? { processRenderOnly: request.processRenderOnly }
         : {}),
-      ...(request.processWorkflowContext
+      ...(protectedProcessContext
         ? {
             processWorkflowContext:
-              request.processWorkflowContext
+              protectedProcessContext
           }
         : {}),
       ...(request.courtWorkflowContext

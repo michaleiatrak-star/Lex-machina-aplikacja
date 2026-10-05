@@ -33,6 +33,8 @@ export type LegalDocumentAstGenerationRequest = {
   privacySeed?: PseudonymizationVaultSnapshot;
   // The file of a pleading the case's process pipeline already wrote.
   processRenderOnly?: { stage: ProcessPleadingStage };
+  // The stored text the file renders (pipeline draft): carried over as written.
+  sourceText?: { label: string; text: string };
 };
 
 function extractJson(value: string): unknown {
@@ -244,6 +246,14 @@ function generationInstruction(
   return [
     request.query,
     "",
+    ...(request.sourceText
+      ? [
+          `# TEKST PISMA DO ODWZOROWANIA — ${request.sourceText.label}`,
+          "Przenieś ten tekst do bloków dokumentu 1:1: bez zmian merytorycznych, bez skracania i bez dopisków; tylko podział na nagłówki, akapity, listy i podpis. Tekst spoza tego bloku nie wchodzi do dokumentu.",
+          request.sourceText.text,
+          ""
+        ]
+      : []),
     "# OUTPUT CONTRACT — LEGAL DOCUMENT AST",
     "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
     "schemaVersion must equal \"1\".",

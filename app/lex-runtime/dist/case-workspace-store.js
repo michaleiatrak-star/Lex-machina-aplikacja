@@ -1,3 +1,4 @@
+import { validateProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary } from "./thread-summary.js";
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
@@ -274,6 +275,12 @@ export class EncryptedCaseWorkspaceStore {
             if (index.workflows.processPleading) {
                 const workflow = validateProcessPleadingState(index.workflows.processPleading);
                 if (workflow.caseId !== caseId) {
+                    throw new Error("WORKSPACE_INDEX_INVALID");
+                }
+            }
+            if (index.workflows.processPleadingDraft) {
+                const draft = validateProcessPleadingDraft(index.workflows.processPleadingDraft);
+                if (draft.caseId !== caseId) {
                     throw new Error("WORKSPACE_INDEX_INVALID");
                 }
             }
@@ -573,8 +580,28 @@ export class EncryptedCaseWorkspaceStore {
             throw new Error("PROCESS_PLEADING_STATE_CONFLICT");
         }
         delete workflows.processPleading;
+        // A new pipeline starts without the previous pleading's text.
+        delete workflows.processPleadingDraft;
         await this.write(index, args.caseDataKey, args.keyVersion);
         return true;
+    }
+    async getProcessPleadingDraft(args) {
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        const draft = index.workflows?.processPleadingDraft;
+        return draft ? validateProcessPleadingDraft(draft) : null;
+    }
+    async saveProcessPleadingDraft(args) {
+        const draft = validateProcessPleadingDraft(args.draft);
+        if (draft.caseId !== args.caseId)
+            throw new Error("PROCESS_PLEADING_DRAFT_INVALID");
+        const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
+        if ((index.workflows?.processPleadingDraft?.revision ?? 0) !== args.expectedRevision) {
+            throw new Error("PROCESS_PLEADING_DRAFT_CONFLICT");
+        }
+        index.workflows ??= {};
+        index.workflows.processPleadingDraft = draft;
+        await this.write(index, args.caseDataKey, args.keyVersion);
+        return validateProcessPleadingDraft(draft);
     }
     async getCourtAnalysisState(args) {
         const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);

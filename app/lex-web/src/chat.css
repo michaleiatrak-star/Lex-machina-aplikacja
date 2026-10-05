@@ -3119,3 +3119,23 @@ mark.restored {
 .chat-contract-mode-options > button {
   white-space: nowrap;
 }
+
+/* Pipeline pleading block boundaries in an answer. */
+.chat-md-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: #7a5a12;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chat-md-mark::before,
+.chat-md-mark::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid rgba(184, 119, 0, 0.35);
+}

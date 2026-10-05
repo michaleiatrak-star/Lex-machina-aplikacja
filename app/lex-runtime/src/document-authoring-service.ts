@@ -196,6 +196,8 @@ export class LocalDocumentAuthoringService {
       Buffer;
     keyVersion:
       number;
+    // Pipeline status of a pleading (draft files stay tokenized for good).
+    processDocumentStatus?: "DRAFT" | "FINAL";
     validationContext:
       DocumentGenerationValidationContext;
     filename?: string;
@@ -351,6 +353,7 @@ export class LocalDocumentAuthoringService {
                     "PROCESS_PLEADING_FINAL" as const
                 }
               : {}),
+            ...(args.processDocumentStatus ? { processDocumentStatus: args.processDocumentStatus } : {}),
             createdAt:
               new Date()
                 .toISOString()

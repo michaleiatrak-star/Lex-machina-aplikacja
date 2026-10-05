@@ -11,6 +11,7 @@ import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { latestUserTurn } from "../execution-engine.js";
 import { threadUserText } from "../skill-selection.js";
+import { appendDraftVersion, emptyProcessPleadingDraft, extractPleadingText, latestDraftVersion, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
 // A message that only moves a document pipeline on (its subject is earlier in the thread).
 const PIPELINE_CONTINUATION = /(?<![\p{L}])(?:kontynuuj\p{L}*|dalej|następn\p{L}*\s+etap|kolejn\p{L}*\s+etap|zatwierdzam|akceptuj\p{L}*|potwierdzam|popraw\p{L}*|uzupełnij\p{L}*|pipeline\p{L}*|checkpoint\p{L}*)(?![\p{L}])/iu;
 import { MissingProviderCredentialError, providerConfigurationStatus } from "../providers/credentials.js";
@@ -302,6 +303,46 @@ function sendContractWorkflowError(res, error) {
     });
     return true;
 }
+const PLEADING_FIDELITY_MIN = 0.8;
+// Share of the stored pleading's words (4+ letters, outside personal-data symbols)
+// that the generated document carries.
+export function pleadingFidelity(source, ast) {
+    const words = (text) => (text
+        .replace(/\[[^\]\n]{0,80}\]/g, " ")
+        .toLocaleLowerCase("pl")
+        .match(/\p{L}{4,}/gu) ?? []);
+    const collected = [];
+    const visit = (value) => {
+        if (typeof value === "string")
+            return;
+        if (Array.isArray(value))
+            value.forEach(visit);
+        else if (value && typeof value === "object") {
+            for (const [key, item] of Object.entries(value)) {
+                if (key === "text" && typeof item === "string")
+                    collected.push(item);
+                else
+                    visit(item);
+            }
+        }
+    };
+    visit(ast);
+    const expected = words(source);
+    if (!expected.length)
+        return 1;
+    const present = new Map();
+    for (const word of words(collected.join(" ")))
+        present.set(word, (present.get(word) ?? 0) + 1);
+    let found = 0;
+    for (const word of expected) {
+        const count = present.get(word) ?? 0;
+        if (count > 0) {
+            found += 1;
+            present.set(word, count - 1);
+        }
+    }
+    return found / expected.length;
+}
 function sendOrderedWorkflowError(res, error) {
     if (!(error instanceof Error) || !error.message.startsWith("ORDERED_WORKFLOW_")) {
         return false;
@@ -519,6 +560,9 @@ async function assertDocumentWorkflowFinalizationAllowed(options, args) {
         caseDataKey: args.caseDataKey,
         keyVersion: args.keyVersion
     });
+    if (generation.processDocumentStatus === "DRAFT") {
+        throw new Error("PROCESS_PLEADING_DRAFT_ARTIFACT");
+    }
     if (!processState ||
         processState.stage !== "FINAL" ||
         processState.documentStatus !==
@@ -4119,24 +4163,42 @@ export function createLexHttpApp(options) {
             // (checkpoints, HYBRID-VAL before the file); the file only renders the text
             // that pipeline produced. Without a started pipeline there is no such text.
             let processRenderOnly;
+            let processDocumentStatus;
+            let pleadingSource;
             if (previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
-                const processState = options.processWorkflowStore
-                    ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => await options.processWorkflowStore.getProcessPleadingState({
-                        caseId,
-                        caseDataKey,
-                        keyVersion: caseView.keyVersion
+                const store = options.processWorkflowStore;
+                const stored = store
+                    ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => ({
+                        state: await store.getProcessPleadingState({ caseId, caseDataKey, keyVersion: caseView.keyVersion }),
+                        draft: store.getProcessPleadingDraft
+                            ? await store.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion: caseView.keyVersion })
+                            : null
                     }))
                     : null;
+                const processState = stored?.state ?? null;
                 if (!processState || processState.stage === "CG_ACCEPTANCE") {
                     res.status(409).json({ error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
                     return;
                 }
                 processRenderOnly = { stage: processState.stage };
+                processDocumentStatus = processState.documentStatus;
+                // The file renders the stored pleading (newest version), not the chat.
+                const latest = latestDraftVersion(stored?.draft);
+                if (latest)
+                    pleadingSource = { version: latest.version, text: latest.text };
             }
             const generated = await options
                 .documentAstGenerator
                 .generate({
                 ...(processRenderOnly ? { processRenderOnly } : {}),
+                ...(pleadingSource
+                    ? {
+                        sourceText: {
+                            label: `zapisany projekt pisma, wersja ${pleadingSource.version}${processDocumentStatus === "FINAL" ? " (FINAL)" : ""}`,
+                            text: pleadingSource.text
+                        }
+                    }
+                    : {}),
                 ...(sharedGeneration && sharedGeneration.members.size > 0
                     ? { privacySeed: sharedGeneration.snapshot }
                     : {}),
@@ -4155,6 +4217,29 @@ export function createLexHttpApp(options) {
                 attachments: resolvedAttachments,
                 aliases
             });
+            if (pleadingSource) {
+                // The file must carry the stored text, not a retelling of it.
+                const fidelity = pleadingFidelity(pleadingSource.text, generated.ast);
+                if (fidelity < PLEADING_FIDELITY_MIN) {
+                    res.status(422).json({
+                        error: "DOCUMENT_PLEADING_FIDELITY_FAILED",
+                        reason: `zgodność z zapisanym projektem ${Math.round(fidelity * 100)}% (wymagane ${Math.round(PLEADING_FIDELITY_MIN * 100)}%)`
+                    });
+                    return;
+                }
+            }
+            if (processDocumentStatus === "DRAFT") {
+                // pisma-procesowe-v3 CP-GATE: a draft file is marked as not for filing.
+                generated.ast.blocks.unshift({
+                    type: "paragraph",
+                    content: [
+                        {
+                            type: "text",
+                            text: `PROJEKT – NIE SKŁADAĆ${pleadingSource ? ` (wersja robocza ${pleadingSource.version})` : ""}`
+                        }
+                    ]
+                });
+            }
             if (sourceDocumentIds.length ===
                 0) {
                 const ready = await options
@@ -4204,6 +4289,7 @@ export function createLexHttpApp(options) {
                 .withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => await options
                 .documentAuthoringService
                 .createTokenized({
+                ...(processDocumentStatus ? { processDocumentStatus } : {}),
                 caseId,
                 createdByUserId: context.user
                     .userId,
@@ -4982,6 +5068,48 @@ export function createLexHttpApp(options) {
         }
         return picked;
     };
+    // The pleading text kept between the pipeline's stages: what the next step works on.
+    async function pleadingDraftContext(actor, caseId, keyVersion, checkpoint) {
+        const store = options.processWorkflowStore;
+        if (!store?.getProcessPleadingDraft || !options.caseAccessService)
+            return {};
+        const draft = await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", (caseDataKey) => store.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion }));
+        const latest = latestDraftVersion(draft);
+        return {
+            ...(latest ? { draft: { version: latest.version, source: latest.source, stage: latest.stage, text: latest.text } } : {}),
+            ...(draft?.remarks && draft.remarks.checkpoint === checkpoint ? { remarks: draft.remarks.text } : {})
+        };
+    }
+    // After a passing step: the pleading block of the answer becomes the next version and
+    // the remarks to this step are used up. A failure here never fails the answered turn.
+    async function recordPleadingStep(actor, caseId, keyVersion, checkpoint, stage, answer) {
+        const store = options.processWorkflowStore;
+        if (!store?.getProcessPleadingDraft || !store.saveProcessPleadingDraft || !options.caseAccessService)
+            return;
+        const text = writesPleading(checkpoint) ? extractPleadingText(answer) : null;
+        try {
+            await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+                const current = await store.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion });
+                let next = current ?? emptyProcessPleadingDraft(caseId);
+                if (text)
+                    next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
+                if (next.remarks?.checkpoint === checkpoint)
+                    next = withoutDraftRemarks(next);
+                if (next.revision === (current?.revision ?? 0))
+                    return;
+                await store.saveProcessPleadingDraft({
+                    caseId,
+                    caseDataKey,
+                    keyVersion,
+                    draft: next,
+                    expectedRevision: current?.revision ?? 0
+                });
+            });
+        }
+        catch {
+            // The step stays committed; the draft keeps its previous version.
+        }
+    }
     function hasFirmWorkspace(res) {
         try {
             return Boolean(options.caseAccessService?.getFirmKnowledgeWorkspace(responseAuthContext(res)));
@@ -5562,7 +5690,8 @@ export function createLexHttpApp(options) {
                     stage: permit.stage,
                     checkpoint: permit.checkpoint,
                     mode: permit.mode,
-                    register: processCheckpointRegister(state)
+                    register: processCheckpointRegister(state),
+                    ...(await pleadingDraftContext(actor, processCaseId, caseView.keyVersion, permit.checkpoint))
                 };
                 processContext = {
                     caseId: processCaseId,
@@ -5956,7 +6085,8 @@ export function createLexHttpApp(options) {
                                 stage: permit.stage,
                                 checkpoint: permit.checkpoint,
                                 mode: permit.mode,
-                                register: processCheckpointRegister(current)
+                                register: processCheckpointRegister(current),
+                                ...(await pleadingDraftContext(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint))
                             }
                         };
                         const nodeResult = await options
@@ -5971,6 +6101,9 @@ export function createLexHttpApp(options) {
                             nodeResult.workflow
                                 .result ===
                                 "PASS";
+                        if (commit) {
+                            await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint, permit.stage, nodeResult.answer ?? "");
+                        }
                         return {
                             result: nodeResult,
                             commit,
@@ -6559,6 +6692,11 @@ export function createLexHttpApp(options) {
                                 expectedRevision: current.revision
                             });
                         });
+                }
+                if (result.status === "DRAFT_PRESENTABLE" &&
+                    result.workflow?.id === "PROCESS_PLEADING_V1" &&
+                    result.workflow.result === "PASS") {
+                    await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, processContext.permit.checkpoint, processContext.permit.stage, result.answer ?? "");
                 }
                 result.processWorkflow = {
                     caseId: processContext.caseId,

@@ -3010,6 +3010,51 @@ export function confirmProcessPleadingCheckpoint(
   );
 }
 
+export type ProcessPleadingDraftVersion = {
+  version: number;
+  text: string;
+  source: "PIPELINE" | "USER";
+  stage: ProcessPleadingWorkflowState["stage"];
+  checkpoint?: ProcessPleadingCheckpoint;
+  change?: "MINOR" | "SUBSTANTIVE";
+  createdAt: string;
+};
+
+export type ProcessPleadingDraftView = {
+  revision: number;
+  latest: ProcessPleadingDraftVersion | null;
+  versions: Array<Omit<ProcessPleadingDraftVersion, "text"> & { chars: number }>;
+  remarks?: { checkpoint: ProcessPleadingCheckpoint; text: string; at: string };
+} | null;
+
+// The pleading text the pipeline keeps between its stages (newest version and history).
+export function getProcessPleadingDraft(caseId: string): Promise<{ caseId: string; draft: ProcessPleadingDraftView }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/draft`);
+}
+
+// The user's own version: MINOR keeps the closed checks, SUBSTANTIVE reopens CP-ATAK and W3.
+export function saveProcessPleadingDraft(
+  caseId: string,
+  input: { text: string; change: "MINOR" | "SUBSTANTIVE"; expectedRevision: number }
+): Promise<{ caseId: string; draft: ProcessPleadingDraftView; state: ProcessPleadingWorkflowState }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/draft`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+// CHECKPOINT mode: the step waiting for confirmation goes back with remarks.
+export function reviseProcessPleadingCheckpoint(
+  caseId: string,
+  checkpoint: ProcessPleadingCheckpoint,
+  remarks: string
+): Promise<{ caseId: string; state: ProcessPleadingWorkflowState }> {
+  return json(`/api/cases/${caseId}/workflow/process-pleading/revise`, {
+    method: "POST",
+    body: JSON.stringify({ checkpoint, remarks })
+  });
+}
+
 export function executeSession(input: {
   query: string;
   provider: ProviderId;

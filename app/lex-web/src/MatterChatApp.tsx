@@ -501,9 +501,9 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-// Letter workflows end with a file: a draft after each completed cycle and the
-// finished document at the end (simple letter: every gate passed; process
-// pleading: FINAL document status). Other workflows produce no file on their own.
+// Letter workflows end with a file: a simple letter a draft after each completed
+// cycle and the finished document at the end; a process pleading only its FINAL
+// document. Other workflows produce no file on their own.
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
@@ -512,10 +512,11 @@ export function letterDocumentPlan(
 ): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
-    return {
-      documentType: "pleading",
-      stage: result.processWorkflow?.documentStatus === "FINAL" ? "FINAL" : "DRAFT"
-    };
+    // pisma-procesowe-v3: the file comes after W3 (FINAL); a draft file only on the
+    // user's request (panel: "Pobierz szkic"), marked as not for filing.
+    return result.processWorkflow?.documentStatus === "FINAL"
+      ? { documentType: "pleading", stage: "FINAL" }
+      : null;
   }
   if (result.workflow?.id === "SIMPLE_LETTER_V1") {
     return {
@@ -4661,6 +4662,11 @@ export default function MatterChatApp({
               onContinue={() => {
                 void executeMessage(
                   "Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem."
+                );
+              }}
+              onDownloadDraft={() => {
+                void executeMessage(
+                  "Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy."
                 );
               }}
             />

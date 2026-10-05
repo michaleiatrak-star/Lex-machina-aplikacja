@@ -13,13 +13,15 @@ export type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "table"; header: string[]; align: Array<"left" | "center" | "right" | null>; rows: string[][] }
-  | { type: "rule" };
+  | { type: "rule"; label?: string };
 
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const BULLET = /^\s*[-*•]\s+(.*)$/;
 const NUMBERED = /^\s*\d{1,3}[.)]\s+(.*)$/;
 const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
 const RULE = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
+// The pipeline's pleading block (process-pleading-draft.ts): shown as a labelled divider.
+const PLEADING_MARK = /^\s*=== (PISMO|KONIEC PISMA) ===\s*$/;
 
 const tableLine = (line: string): boolean => line.trim().startsWith("|") || /\S\s*\|\s*\S/.test(line);
 
@@ -93,6 +95,12 @@ export function parseMarkdown(content: string): MarkdownBlock[] {
     if (heading) {
       flush();
       blocks.push({ type: "heading", level: heading[1]!.length, text: heading[2]! });
+      continue;
+    }
+    const mark = PLEADING_MARK.exec(line);
+    if (mark) {
+      flush();
+      blocks.push({ type: "rule", label: mark[1] === "PISMO" ? "Projekt pisma" : "Koniec pisma" });
       continue;
     }
     if (RULE.test(line)) {
@@ -170,7 +178,13 @@ export function MarkdownContent({ content, renderText }: { content: string; rend
             return <Tag key={key} className="chat-md-heading">{inline(block.text, renderText, key)}</Tag>;
           }
           case "rule":
-            return <hr key={key} />;
+            return block.label ? (
+              <div key={key} className="chat-md-mark" role="separator">
+                {block.label}
+              </div>
+            ) : (
+              <hr key={key} />
+            );
           case "list": {
             const List = block.ordered ? "ol" : "ul";
             return (

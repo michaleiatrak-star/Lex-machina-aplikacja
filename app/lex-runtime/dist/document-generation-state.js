@@ -88,6 +88,9 @@ export class DocumentGenerationStateStore {
                 undefined &&
                 value.workflowRequirement !==
                     "PROCESS_PLEADING_FINAL") ||
+            (value.processDocumentStatus !== undefined &&
+                value.processDocumentStatus !== "DRAFT" &&
+                value.processDocumentStatus !== "FINAL") ||
             typeof value.createdAt !==
                 "string") {
             throw new Error("GENERATION_STATE_INVALID");

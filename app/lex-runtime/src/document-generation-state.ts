@@ -36,6 +36,9 @@ export type StoredDocumentGenerationState = {
   deanonymizationKeyBinding?: string;
   workflowRequirement?:
     | "PROCESS_PLEADING_FINAL";
+  // Pipeline status of the pleading when the file was made: a draft file is never
+  // de-anonymized, even after the pipeline reaches FINAL.
+  processDocumentStatus?: "DRAFT" | "FINAL";
   createdAt: string;
   finalizedAt?: string;
   finalArtifactId?: string;
@@ -252,6 +255,11 @@ implements DeanonymizationTargetResolver {
           undefined &&
         value.workflowRequirement !==
           "PROCESS_PLEADING_FINAL"
+      ) ||
+      (
+        value.processDocumentStatus !== undefined &&
+        value.processDocumentStatus !== "DRAFT" &&
+        value.processDocumentStatus !== "FINAL"
       ) ||
       typeof value.createdAt !==
         "string"
