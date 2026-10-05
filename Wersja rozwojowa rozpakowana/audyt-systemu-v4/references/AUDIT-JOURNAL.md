@@ -69891,6 +69891,92 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05g — TRYB STRUKTURA: widgety analizatora przepisów z szablonów, MOD-WIDGET-IO poza turą (6.180)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7b. Tura analizy przepisu wczytywała `shared/MOD-WIDGET-IO.md` (ok. 10 tys. znaków) przez kontrakt skilla (wzmianka w bloku sekwencji, krok 13), a model pisał od zera dwa widgety (wybór przepisu, wyniki z 7 zakładkami).
+
+### 2. ZMIANA (analizator-przepisow-v2 2.11)
+- `assets/widget-wybor-przepisu.html` — formularz Kroku 0.3 bez danych sprawy (polecenie przez sendPrompt, bez sendPrompt — tekst do skopiowania).
+- `assets/widget-wyniki.html` — Moduł 8 zasilany danymi (literał po komentarzu `lex:dane`): 7 zakładek, tryb krokowy, filtry tierów, alert linii niejednolitej, świeża nowelizacja ≤6 mies., linki tylko http(s). Oba sprawdzone w Chromium w ramce `sandbox=allow-scripts`.
+- SKILL.md: Krok 0.3 i nowe podsekcje „Moduł 8 — wykonanie widgetu” (szablon ze schematem DANE; wariant z kodem i MOD-WIDGET-IO oznaczony WIDGET-DANE). Krok 13 sekwencji odsyła do podsekcji.
+- Aplikacja liczy kontrakt skilla wykonawczego z tekstu po kompakcji — zasób wymieniony tylko w sekcji wykonywanej przez aplikację nie jest wczytywany.
+
+## AUDYT-2026-10-05f — TRYB STRUKTURA: etap ZAMOWIENIA-PUBLICZNE, orzeczenia-sadowe-v2 2.23 (6.179)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 5 (skille wykonawcze etapami). Faza 1-K (5,1 tys. znaków) wchodziła do każdej tury orzecznictwa, choć sama ogranicza się do spraw zamówień publicznych.
+
+### 2. ZMIANA
+- Nowy etap `ZAMOWIENIA-PUBLICZNE` znacznika `lex:wczytaj-gdy`: aplikacja rozpoznaje sprawę z treści wątku (zamówienia publiczne, KIO, Krajowa Izba Odwoławcza, Pzp, przetarg, SWZ, rażąco niska cena, odrzucenie oferty, wykluczenie wykonawcy, zamawiający). Fałszywie dodatnie rozpoznanie tylko dołącza sekcję; przy braku rozpoznania model dostaje nagłówek z informacją, że może przeczytać sekcję z pliku.
+- orzeczenia-sadowe-v2 2.23: znacznik nad Fazą 1-K.
+
+### 3. NIEOZNACZONE ŚWIADOMIE
+`analizator-umow-v1` „GENEROWANIE DOKUMENTÓW”: tabela zawiera też narzędzie diagnostyczne zwykłej analizy (spójność odesłań) — sekcja nie jest wyłącznie etapem generowania.
+
+## AUDYT-2026-10-05e — TRYB STRUKTURA: widget orzeczeń zasilany danymi, komponent WIDGET-DANE (6.178)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7. `orzeczenia-sadowe-v2` kazał wkleić kod z `references/widget.md` (ok. 20 tys. znaków z polami `<!-- DANE -->`) dwukrotnie na wyszukiwanie, z ręcznie wbudowanym paskiem MOD-WIDGET-IO — ok. 12 tys. tokenów wyjściowych na sprawę.
+
+### 2. ZMIANA (orzeczenia-sadowe-v2 2.22)
+- `assets/widget-orzeczenia.html`: ten sam CSS, zakładki i przełącznik LAIK/PRAWNIK; treść z obiektu DANE (literał po komentarzu `lex:dane`), renderowana przez `textContent`; URL tylko http(s), inaczej alert BRAK URL; Kat. 6A pierwsza; zasada prawna z domyślnym opisem. Sprawdzone w Chromium w ramce `sandbox=allow-scripts` (bez błędów konsoli).
+- SKILL.md „Widget interaktywny”: podsekcja ze schematem DANE i podsekcja „Kod widgetu i pasek IO (host bez pola data)” ze znacznikiem `lex:wykonuje-aplikacja: WIDGET-DANE`.
+- Komponent WIDGET-DANE (aplikacja): aktywny dla modeli z narzędziem show_widget (wszystkie poza lokalnymi).
+- `references/widget.md` bez zmian (inne hosty).
+
+## AUDYT-2026-10-05d — TRYB STRUKTURA: szablony widgetów zasilane danymi (lex:dane), chronologia-sprawy-v1 1.16 (6.177)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7 (widgety). Szablony nakazywały modelowi przepisać cały plik (9–17 tys. znaków) z podmienioną stałą danych, a przy widgetach bez szablonu — napisać kod i pasek IO od zera; to tokeny wyjściowe, najdroższe i najwolniejsze.
+
+### 2. KONWENCJA
+Komentarz `lex:dane` bezpośrednio przed literałem obiektu/tablicy danych w szablonie widgetu. Aplikacja Lex Machina: `show_widget(path, data)` — wstawia dane w miejsce literału, dokłada pasek eksportu JSON/MD/CSV i importu JSON, chyba że szablon ma własne funkcje MOD-WIDGET-IO. Wzmianka o znaczniku w prozie nie jest slotem (wymagany literał tuż po nim). Na innych hostach szablon działa jak dotąd.
+
+### 3. ZMIANA (chronologia-sprawy-v1 1.16)
+`widget-timeline.html` (SAMPLE_DATA) i `widget-graf-przyczynowy.html` (GRAF, poza blokiem ENGINE — T42 bez zmian): znacznik i nota w nagłówku.
+
+### 4. NASTĘPNE
+Widget orzeczeń (`orzeczenia-sadowe-v2/references/widget.md`, wywoływany dwukrotnie, ok. 20 tys. znaków za każdym razem) wymaga przebudowy na szablon zasilany danymi; MOD-WIDGET-IO oznaczony dopiero, gdy wszystkie widgety analityczne będą zasilane danymi.
+
+## AUDYT-2026-10-05c — TRYB STRUKTURA: znacznik etapu lex:wczytaj-gdy, pisma-procesowe-v3 W2/W3 od drugiej tury (6.176)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji: wczytywanie skilla wykonawczego etapami. Pomiar aplikacji: pierwsza tura pisma procesowego wysyła 43 tys. znaków `pisma-procesowe-v3/SKILL.md`, w tym W2, PRE-W2 i W3 (ok. 13 tys.), których skill w pierwszej odpowiedzi zakazuje (MODEL TRZECH WIADOMOŚCI: „STOP po W1 — czekaj na odpowiedź użytkownika”).
+
+### 2. KONWENCJA
+`<!-- lex:wczytaj-gdy: ETAP -->` w linii bezpośrednio nad nagłówkiem sekcji. Aplikacja wysyła sekcję dopiero po osiągnięciu etapu; wcześniej model dostaje nagłówek z adnotacją. Etap nieznany aplikacji = sekcja w całości. Etapy: `KOLEJNA-TURA` — wątek zawiera odpowiedź asystenta albo jej streszczenie. Poza aplikacją znacznik jest niewidocznym komentarzem HTML.
+
+### 3. ZMIANA (pisma-procesowe-v3 5.35)
+Znaczniki nad: PRE-W2-VERIFICATION-GATE, WIADOMOŚĆ 2 — PROJEKT PISMA, WIADOMOŚĆ 3 — WERYFIKACJA ZE ŹRÓDEŁ + WALIDACJA. Treść bez zmian. `references/AUTOMAT-STANOW.md` bez znaczników: protokół checkpointów obowiązuje przez całą rozmowę.
+
+## AUDYT-2026-10-05b — TRYB STRUKTURA: znaczniki DISCLAIMER w shared/DISCLAIMER.md (6.175)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji: pomiar aplikacji — stały rdzeń każdej tury prawnej ok. 143 tys. znaków; `shared/DISCLAIMER.md` 8,3 tys. znaków w każdej turze, choć aplikacja sama dokłada kanoniczny wariant (KROK 7: wycina zastrzeżenie modelu, dokłada LAIK/PRAWNIK/PISMO z pliku).
+
+### 2. ZMIANA (shared 3.99.8)
+- Znacznik `<!-- lex:wykonuje-aplikacja: DISCLAIMER -->` nad: ZASADA GŁÓWNA, KIEDY STOSOWAĆ, TREŚĆ DISCLAIMERA, POZYCJA DISCLAIMERA, INTEGRACJA ZE SKILLAMI, SELF-CHECK ROUTERA — SEKCJA DISCLAIMERA. Treść bez zmian.
+- Komponent warunkowy: aplikacja pomija te sekcje tylko przy odpowiedzi tekstowej modelu nielokalnego (bez dokumentu AST, trybu mechanicznego pisma i skilli `raport-*`) — wtedy, gdy sama dokłada zastrzeżenie. W pozostałych turach sekcje idą w całości.
+- Aplikacja czyta warianty z pliku na dysku, nie z tekstu przekazanego modelowi.
+
+### 3. NIEOZNACZONE ŚWIADOMIE
+`PROFIL-LEKKI.md` „KIEDY PROFIL LEKKI JEST ZAKAZANY”: aplikacja wymusza profil PEŁNY tylko dla sprawy karnej i generowania pisma; kategoria [11] (weryfikacja cudzego materiału) i błąd odczytu rdzenia nie są wykonywane mechanicznie — sekcja wiąże model.
+
+## AUDYT-2026-10-05 — TRYB STRUKTURA: frontmatter SKILL.md audytu bez komentarzy YAML (6.174)
+
+### 1. ŹRÓDŁO
+Pytanie użytkownika o poprawność SKILL.md audytu, w tym YAML.
+
+### 2. USTALENIA
+- YAML poprawny: parsuje się, `name` = katalog, `description` 167 znaków, wszystkie ścieżki `modules`/`widgets`/`references`/`scripts` istnieją; T22, T26 PASS.
+- Błąd: frontmatter miał 32 937 znaków w 304 liniach, z czego ok. 27 750 to komentarze (historia rejestracji plików, opisy flag F-xxx). To historia w pliku roboczym — wbrew decyzji z AUDYT-2026-10-04n; w pozostałych skillach frontmatter ma do 6,7 tys. znaków, komentarze do 0,8 tys.
+
+### 3. ZMIANA
+- Komentarze usunięte; wartości pól bez zmian (`yaml.safe_load` przed = po). Zostaje jeden komentarz: obowiązkowy cudzysłów przy `version`.
+- Treść komentarzy i łańcuch „poprzednio” ze stopki przeniesione dosłownie do `references/HISTORIA-ZMIAN-PLIKOW.md`.
+- Skrypty nie zależą od komentarzy (`check_frontmatter_rejestracja.py` i `test_pokrycie_orkiestratora.py` je pomijają).
+
 ## AUDYT-2026-10-04n — TRYB STRUKTURA: historia zmian poza plikami roboczymi skilli (6.173)
 
 ### 1. ŹRÓDŁO

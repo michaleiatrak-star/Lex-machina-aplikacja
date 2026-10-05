@@ -57,6 +57,11 @@ jobs:
 
   runtime:
     uses: ./.github/workflows/lex-runtime.yml
+    # Release 0.1.16 only: sn.pl search (snproxy) answers HTTP 502 since 2026-10-04
+    # ~23:00 UTC (SN_SEARCH_HTTP_502, PR #21); case-law code unchanged since G22 last
+    # passed (4fa326f). PR checks keep G22 blocking. Remove after sn.pl recovers.
+    with:
+      sn_live_advisory: true
     secrets: inherit
 
   structural_audit:

@@ -1,5 +1,19 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.180 (2026-10-05g, AUDYT-2026-10-05g): Widgety analizatora przepisów z szablonów (analizator-przepisow-v2 2.11).
+
+- 6.179 (2026-10-05f, AUDYT-2026-10-05f): Etap ZAMOWIENIA-PUBLICZNE znacznika lex:wczytaj-gdy (orzeczenia-sadowe-v2 2.23).
+
+- 6.178 (2026-10-05e, AUDYT-2026-10-05e): Widget orzeczeń zasilany danymi i komponent WIDGET-DANE (orzeczenia-sadowe-v2 2.22).
+
+- 6.177 (2026-10-05d, AUDYT-2026-10-05d): Konwencja `lex:dane` w szablonach widgetów (chronologia-sprawy-v1 1.16).
+
+- 6.176 (2026-10-05c, AUDYT-2026-10-05c): Konwencja znacznika etapu `<!-- lex:wczytaj-gdy: ETAP -->` (pierwszy etap: KOLEJNA-TURA); pierwsze użycie w pisma-procesowe-v3 5.35 (W2, PRE-W2, W3).
+
+- 6.175 (2026-10-05b, AUDYT-2026-10-05b): Znaczniki komponentu DISCLAIMER w `shared/DISCLAIMER.md` (shared 3.99.8); pierwszy komponent warunkowy — aplikacja pomija sekcje tylko w turze, w której sama dokłada zastrzeżenie.
+
+- 6.174 (2026-10-05, AUDYT-2026-10-05): Frontmatter SKILL.md bez komentarzy YAML (32 937 → 4 353 znaki, 304 → 115 linii); wartości pól bez zmian (porównanie `yaml.safe_load` przed/po). Komentarze (historia rejestracji plików, opisy flag) i łańcuch „poprzednio” ze stopki przeniesione dosłownie do `references/HISTORIA-ZMIAN-PLIKOW.md`. Pozostawiony jeden komentarz: cudzysłów przy `version`.
+
 - 6.173 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 6.172 (2026-10-04m, AUDYT-2026-10-04m): Konwencja `<!-- lex:wykonuje-aplikacja: KOMPONENT -->` — sekcje, które aplikacja Lex Machina wykonuje sama lub które są metadanymi, trafiają do modelu jako jednolinijkowe odesłanie. Pierwsze znaczniki: shared 3.99.6, prawny-router-v3 3.61, chronologia-sprawy-v1 1.14, pisma-proste-v2 2.26.

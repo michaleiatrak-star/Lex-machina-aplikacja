@@ -1,4 +1,4 @@
-import { compactForModel } from "./skill-sections.js";
+import { compactForModel, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
@@ -168,6 +168,7 @@ import { criminalMatter } from "./matter-signals.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
   ANALYSIS_INTENT,
+  classifyTask,
   decideTask,
   parseActivationMatrix,
   parseCombinations,
@@ -346,6 +347,11 @@ export type SessionExecutionRequest = {
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
+// Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
+export function resumeHostThread(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.LEX_ACCOUNT_RESUME === "1";
+}
+
 function duplicateSkills(names: string[]): string[] {
   const byBase = new Map<string, string[]>();
   for (const name of names) {
@@ -1819,11 +1825,14 @@ export class SafeSessionExecutor implements SessionExecutor {
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
       foreignJurisdiction: false
     };
+    // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
+    const verification = legalTurn && classifyTask(this.taskRoutes(), pathFacts.query)?.route.id === "11";
     const profile: PathProfile = pathProfile({
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: pathFacts.criminal,
-      documentGeneration: pathFacts.documentGeneration
+      documentGeneration: pathFacts.documentGeneration,
+      verification
     });
     // Already in the model's context: the router skill and the core legal resources.
     const contextResources = new Set<string>([
@@ -1917,8 +1926,22 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // Sections the skill's author marked as executed by the application go to the
     // model as a one-line reference (skill-sections.ts); the audit names them.
+    // KROK 7 is the application's only where it appends the canonical text after the
+    // gates (free-text answer of a non-local model, not a report or a pipeline document).
+    const appendsDisclaimer =
+      !request.model.startsWith("local/") &&
+      !request.documentAstOutput &&
+      !request.processWorkflowContext &&
+      !/^raport-/u.test(request.primarySkill);
+    const inactiveComponents = new Set([
+      ...(appendsDisclaimer ? [] : ["DISCLAIMER"]),
+      // show_widget (with template data) exists for every model except a local one.
+      ...(request.model.startsWith("local/") ? ["WIDGET-DANE"] : [])
+    ]);
+    // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
+    const stages = reachedStages(request.query);
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content);
+      const result = compactForModel(content, undefined, inactiveComponents, stages);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,
@@ -1997,7 +2020,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             forModel(`${skill}/SKILL.md`, text)
           ].join("\n\n")
         );
-        const contract = executiveContract(this.registry, skill);
+        const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages).text);
         if (contract) {
           const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
           for (const item of loaded.loaded) {
@@ -2193,14 +2216,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       provider: request.provider,
       model: request.model,
-      ...(request.accountSessionKey
+      // The app sends the instructions and the thread (summary + recent turns) on
+      // every call, so a resumed host thread only repeated them: each turn and each
+      // tool round appended the whole prompt again, and with no matter key the CLI
+      // took over the user's latest unrelated session. LEX_ACCOUNT_RESUME=1 restores it.
+      ...(request.accountSessionKey && resumeHostThread()
         ? {
             continuityKey:
               request.accountSessionKey
           }
         : {}),
-      ...(request.accountContinuity
-        ? { accountContinuity: request.accountContinuity }
+      ...(request.accountContinuity || !resumeHostThread()
+        ? { accountContinuity: request.accountContinuity ?? "none" }
         : {}),
       route: {
         jurisdiction: "PL",
@@ -2636,7 +2663,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: criminalAfter,
-      documentGeneration: pathFacts.documentGeneration
+      documentGeneration: pathFacts.documentGeneration,
+      verification
     });
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {
