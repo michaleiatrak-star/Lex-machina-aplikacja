@@ -1,4 +1,4 @@
-import { compactForModel } from "./skill-sections.js";
+import { compactForModel, laterTurn } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
@@ -1930,8 +1930,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.processWorkflowContext &&
       !/^raport-/u.test(request.primarySkill);
     const inactiveComponents = new Set(appendsDisclaimer ? [] : ["DISCLAIMER"]);
+    // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
+    const reachedStages = new Set(laterTurn(request.query) ? ["KOLEJNA-TURA"] : []);
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content, undefined, inactiveComponents);
+      const result = compactForModel(content, undefined, inactiveComponents, reachedStages);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,

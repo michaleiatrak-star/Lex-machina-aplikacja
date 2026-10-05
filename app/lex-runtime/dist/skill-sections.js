@@ -63,23 +63,38 @@ function compactFrontmatter(text) {
     const head = `---\n${kept.join("\n")}\n# pominięte metadane (czyta aplikacja): ${keys.join(", ")}\n---\n`;
     return { text: head + text.slice(match[0].length), keys, chars: match[0].length - head.length };
 }
+// Sections a skill needs only from a later stage of the thread, marked
+//   <!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
+// above the heading. The application sends them once the stage is reached;
+// before that the model gets the heading with a note. Unknown stages: whole.
+export const STAGES = {
+    "KOLEJNA-TURA": "od drugiej tury wątku, gdy jest już odpowiedź asystenta"
+};
+const STAGE_MARK = /^<!--\s*lex:wczytaj-gdy:\s*([A-Z0-9-]+)\s*-->\s*$/u;
+/** A thread with an earlier answer of the assistant (or its summary). */
+export function laterTurn(query) {
+    return /(?:^|\n\n)Asystent: /u.test(query) || query.includes("[Streszczenie wcześniejszej części rozmowy");
+}
 // `inactive`: components the application does not run in this turn (e.g. DISCLAIMER
 // for a local model or structured output); their sections reach the model whole.
-export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0", inactive = new Set()) {
+// `reached`: stages reached in this turn; undefined = every stage (whole files).
+export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0", inactive = new Set(), reached) {
     if (!enabled)
         return { text, compacted: [] };
     const front = compactFrontmatter(text);
     const compacted = front.keys.length ? [{ heading: `frontmatter: ${front.keys.join(", ")}`, component: "METADANE", chars: front.chars }] : [];
     text = front.text;
-    if (!text.includes("lex:wykonuje-aplikacja"))
+    if (!text.includes("lex:wykonuje-aplikacja") && !(reached && text.includes("lex:wczytaj-gdy")))
         return { text, compacted };
     const lines = text.split("\n");
     const out = [];
     for (let index = 0; index < lines.length; index += 1) {
-        const mark = MARK.exec(lines[index]);
         const heading = /^(#{1,6})\s+(.*)$/u.exec(lines[index + 1] ?? "");
-        const component = mark?.[1];
-        if (!mark || !heading || !component || !APP_COMPONENTS[component] || inactive.has(component)) {
+        const component = MARK.exec(lines[index])?.[1];
+        const stage = reached ? STAGE_MARK.exec(lines[index])?.[1] : undefined;
+        const executed = component && APP_COMPONENTS[component] && !inactive.has(component);
+        const deferred = stage && STAGES[stage] && !reached.has(stage);
+        if (!heading || (!executed && !deferred)) {
             out.push(lines[index]);
             continue;
         }
@@ -93,15 +108,24 @@ export function compactForModel(text, enabled = process.env.LEX_COMPACT_INSTRUCT
             if (next && next[1].length <= level)
                 break;
         }
+        // A mark right above the next heading belongs to that section, not to this one.
+        while (end > index + 2 && (MARK.test(lines[end - 1]) || STAGE_MARK.test(lines[end - 1])))
+            end -= 1;
         const removed = lines.slice(index, end).join("\n");
-        out.push(...(component === "HISTORIA"
-            ? [`${heading[1]} ${heading[2]} [pominięte: ${APP_COMPONENTS[component]}]`, ""]
-            : [
-                `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
-                `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
-                ""
-            ]));
-        compacted.push({ heading: heading[2].slice(0, 90), component, chars: removed.length });
+        if (deferred) {
+            out.push(`${heading[1]} ${heading[2]} [etap późniejszy: aplikacja dołączy tę sekcję ${STAGES[stage]}]`, "");
+            compacted.push({ heading: heading[2].slice(0, 90), component: `ETAP:${stage}`, chars: removed.length });
+        }
+        else {
+            out.push(...(component === "HISTORIA"
+                ? [`${heading[1]} ${heading[2]} [pominięte: ${APP_COMPONENTS[component]}]`, ""]
+                : [
+                    `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
+                    `Tę procedurę (${APP_COMPONENTS[component]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,
+                    ""
+                ]));
+            compacted.push({ heading: heading[2].slice(0, 90), component: component, chars: removed.length });
+        }
         index = end - 1;
     }
     return { text: out.join("\n"), compacted };
