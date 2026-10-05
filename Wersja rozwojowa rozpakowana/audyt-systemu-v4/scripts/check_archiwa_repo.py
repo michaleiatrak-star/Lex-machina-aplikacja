@@ -36,6 +36,10 @@ def pliki(katalog: Path) -> dict:
         dirs[:] = [d for d in dirs if d not in POMIN]
         for f in files:
             p = Path(root) / f
+            # Pliki kanału pluginów w korzeniu skilla (.claude-plugin/, .mcp.json) nie
+            # wchodzą do paczki: claude.ai odrzuca skill z manifestem pluginu (6.187).
+            if p.relative_to(katalog).parts[0].startswith("."):
+                continue
             out[p.relative_to(katalog).as_posix()] = p.read_bytes()
     return out
 
@@ -59,6 +63,9 @@ def sprawdz(drzewo: Path, archiwa: Path):
             skill = korzenie.pop(); nazwy.add(skill)
             zawart = {n[len(skill) + 1:]: zf.read(n) for n in imiona
                       if not any(p in POMIN for p in PurePosixPath(n).parts)}
+            for n in imiona:
+                if len(PurePosixPath(n).parts) > 1 and PurePosixPath(n).parts[1].startswith("."):
+                    bledy.append(f"A: {z.name}: plik pluginu w paczce skilla: {n} (claude.ai odrzuca)")
         cel = drzewo / skill
         if not cel.is_dir():
             bledy.append(f"B: {z.name}: brak katalogu {skill}/ w drzewie"); continue

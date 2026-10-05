@@ -69891,6 +69891,27 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05n — TRYB STRUKTURA: paczki skilli bez plików pluginu (F-230, 6.187)
+
+### 1. ŹRÓDŁO
+Zgłoszenie użytkownika: wgranie `audyt-systemu-v4` do claude.ai odrzucone — „Umiejętność nie może zawierać manifestu wtyczki (audyt-systemu-v4/.claude-plugin/plugin.json). Usuń go lub prześlij tę zawartość jako wtyczkę.” Polecenie: naprawić i wydać wszystkie 32 skille zgodnie z ZASADĄ 7.
+
+### 2. USTALENIA
+- F-230 (BŁĄD, od AUDYT-2026-09-27e): manifest pluginu dodany dla instalacji z marketplace (`.claude-plugin/plugin.json` w 32/32 skillach, `.mcp.json` w audyt-systemu-v4) trafiał też do paczek ZIP skilli. Te same paczki służą do wgrywania skilli w claude.ai, który odrzuca skill z manifestem pluginu. Dotyczy wszystkich 32 paczek, nie tylko audytu.
+- Dwa kanały mają sprzeczne wymagania: marketplace (katalog repozytorium) potrzebuje manifestu (T38), wgrywany skill nie może go mieć.
+- `CHECKSUMS.sha256` wymieniał pliki pluginu, choć T21 pomija pliki ukryte — paczka bez manifestu miałaby martwy wpis.
+- F-231 (BŁĄD WŁASNY, AUDYT-2026-10-05l/m): sumy `shared` i `audyt-systemu-v4` przeliczone po uruchomieniu suite'u objęły lokalne artefakty `__pycache__/*.pyc` (1 + 4), których nie ma w repozytorium (`.gitignore`); te same pliki trafiły do paczek ZIP. Na `main` workflow „Repack core development ZIPs” padł po scaleniu PR #24 (martwe wpisy sum). Lokalny suite tego nie wykrył, bo artefakty istniały na dysku.
+
+### 3. ZMIANA
+- Paczka skilla = wszystkie pliki skilla bez plików kanału pluginów w korzeniu (`.claude-plugin/`, `.mcp.json`); w repozytorium zostają dla marketplace.
+- `scripts/repack_development_archives.py`, `scripts/verify_development_archives.py`, workflow `repack-core-development-zips.yml`, T34 (`check_archiwa_repo.py`), `dostarcz_skill.sh`: wykluczenie i liczenie plików bez nich; T34 i weryfikator zgłaszają plik pluginu w paczce.
+- `CHECKSUMS.sha256` 32/32: usunięte wpisy `./.claude-plugin/plugin.json` (32) i `./.mcp.json` (1); pozostałe sumy bez zmian. Wersje 31 skilli bez podbicia (treść bez zmian; zmiana wyłącznie w manifeście sum).
+- ZASADA 7: akapit o plikach kanału pluginów.
+- F-231: wpisy `__pycache__` usunięte z sum `shared` i `audyt-systemu-v4`; `repack_development_archives.py` pomija `__pycache__`, weryfikator paczek zgłasza artefakt w ZIP-ie. Sumy przeliczać wyłącznie na drzewie bez artefaktów.
+
+### 4. WYDANIE (ZASADA 7)
+32 osobne paczki z `dostarcz_skill.sh`: dla każdej liczba plików oryginał (bez plików pluginu) = kopia = ZIP, rozpakowanie do świeżej kopii i `diff -r` z drzewem = pusty, brak `.claude-plugin` i `.mcp.json` w żadnej paczce.
+
 ## AUDYT-2026-10-05m — TRYB STRUKTURA: dobór DR na 500 pytaniach i na zestawie świeżym (6.186)
 
 ### 1. ŹRÓDŁO

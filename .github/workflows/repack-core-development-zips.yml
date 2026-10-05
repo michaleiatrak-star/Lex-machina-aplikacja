@@ -64,7 +64,12 @@ jobs:
               return result
 
           def verify_skill(skill_dir: Path) -> list[Path]:
-              files = sorted(p for p in skill_dir.rglob("*") if p.is_file())
+              # Plugin-channel files at the skill root (.claude-plugin/, .mcp.json) stay
+              # in the repository; claude.ai rejects a skill ZIP with a plugin manifest.
+              files = sorted(
+                  p for p in skill_dir.rglob("*")
+                  if p.is_file() and not p.relative_to(skill_dir).parts[0].startswith(".")
+              )
               payload = [
                   p for p in files
                   if p.relative_to(skill_dir).as_posix() != "CHECKSUMS.sha256"

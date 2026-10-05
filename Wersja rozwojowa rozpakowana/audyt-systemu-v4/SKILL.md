@@ -4,7 +4,7 @@ description: "Audyt jakości, spójności i bezpieczeństwa systemu prawnych ski
 dependencies:
   requires:
     - shared
-version: "6.186"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
+version: "6.187"   # zawsze w cudzysłowie (6.10 bez niego = float 6.1)
 type: governance-audit
 compatibility: "host-neutral; file read/write, fresh legal-source lookup and optional archive/UI operations mapped by the runtime adapter"
 entrypoint: SKILL.md
@@ -983,6 +983,15 @@ z WARN-OTWARTE.md, dodaj pełny wpis do AUDIT-JOURNAL.md.
    > zakaz pakietu zbiorczego i zakaz dostarczania pojedynczego `SKILL.md`.
    > Sposób udostępnienia (`present_files`, instalacja skilla lub równoważna
    > funkcja hosta) nie zmienia wymogu kompletności.
+   >
+   > ⛔ **Pliki kanału pluginów NIE wchodzą do paczki skilla (F-230, od 6.187).**
+   > `.claude-plugin/` i `.mcp.json` w korzeniu skilla służą wyłącznie instalacji
+   > z marketplace (repozytorium, T38); claude.ai odrzuca wgrywany skill z
+   > manifestem pluginu („Umiejętność nie może zawierać manifestu wtyczki”).
+   > Kompletny skill do wgrania = wszystkie pliki skilla bez tych dwóch pozycji;
+   > `CHECKSUMS.sha256` ich nie wymienia (T21 i tak pomija pliki ukryte).
+   > `dostarcz_skill.sh`, `repack_development_archives.py` i T34 liczą pliki
+   > przed/po bez nich; T34 i weryfikator paczek zgłaszają plik pluginu w ZIP-ie.
 8. ⛔ **ZASADA WERYFIKACJI NUMERU NIEZALEŻNIE OD NAZWY (dodana 2026-07-02s,
    na wyraźny nakaz użytkownika) — "jeśli nazwy różnią się choć trochę,
    sprawdzaj w ISAP" (od 6.125 czytaj: w RZĘDZIE 1 — najpierw ELI).**
@@ -1309,4 +1318,4 @@ audyt-systemu-v4/                               ← 89 plików (stan 2026-09-09b
 
 ---
 
-*Wersja: 6.186 | Ostatnia aktualizacja: 2026-10-05 (AUDYT-2026-10-05m). Stopkę aktualizuj razem z polem `version`.*
+*Wersja: 6.187 | Ostatnia aktualizacja: 2026-10-05 (AUDYT-2026-10-05n). Stopkę aktualizuj razem z polem `version`.*
