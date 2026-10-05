@@ -1,5 +1,7 @@
 # Moduł — KPA: tryby nadzwyczajne, bezczynność, kary, skarga do WSA, strategia — INDEKS
 
+**Hasła spraw:** stwierdzenie nieważności decyzji, wznowienie postępowania administracyjnego, decyzja ostateczna sprzed lat
+
 > ⚡ **ZMIANA STRUKTURALNA 2026-08-20 (F-78, priorytet 7):** ten plik był
 > 1303 linie (sam produkt wcześniejszego podziału z 2026-08-12, patrz
 > historia niżej — mimo to ponownie urósł powyżej progu). Treść 18 sekcji

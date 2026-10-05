@@ -24,7 +24,7 @@ Router sprawdza tę macierz gdy fraza wyzwalająca pasuje do ≥2 skillów.
 
 | Fraza / sygnał | PRIMARY skill | NIE używaj jako PRIMARY |
 |---|---|---|
-| "jakie mam szanse" / "czy mam szansę" | `analiza-sadowa-v6` | analizator-dowodow, analizator-przepisow |
+| "jakie mam szanse" / "czy mam szansę" / "oceń szanse" / "szanse wygrania" / "przeanalizuj akta" / "analiza akt" | `analiza-sadowa-v6` | analizator-dowodow, analizator-przepisow |
 | "co mam zrobić" / "od czego zacząć" | `przewodnik-prawny-v2` | analiza-sadowa-v6 |
 | dostarcza akta / wyrok / pismo przeciwnika | `analiza-sadowa-v6` | analizator-dowodow-v3 |
 | dostarcza dowody bez pisma (maile, SMS, nagrania) | `analizator-dowodow-v3` | analiza-sadowa-v6 |
@@ -32,7 +32,7 @@ Router sprawdza tę macierz gdy fraza wyzwalająca pasuje do ≥2 skillów.
 | "art. X" / "§ Y" / "co mówi przepis" / wykładnia normy | `analizator-przepisow-v2` | analiza-sadowa-v6 |
 | "czy przepis mnie dotyczy" / przesłanki ustawowe | `analizator-przepisow-v2` | analiza-sadowa-v6 |
 | pismo procesowe + dostarczone akta | `analiza-sadowa-v6` (W1) → `pisma-procesowe-v3` (W2) | analizator-dowodow |
-| "napisz pozew / apelację / zażalenie" | `pisma-procesowe-v3` | pisma-proste-v2 |
+| "napisz pozew / apelację / zażalenie" / "skarga do WSA" / "odwołanie do KIO" | `pisma-procesowe-v3` | pisma-proste-v2 |
 | 1 wątek + katalog pisma prostego | `pisma-proste-v2` | pisma-procesowe-v3 |
 | "znajdź wyrok" / "precedens" / sygnatura do weryfikacji | `orzeczenia-sadowe-v2` | analiza-sadowa-v6 |
 | orzecznictwo jako wsparcie do pisma (W3) | `orzeczenia-sadowe-v2` jako SECONDARY | — |

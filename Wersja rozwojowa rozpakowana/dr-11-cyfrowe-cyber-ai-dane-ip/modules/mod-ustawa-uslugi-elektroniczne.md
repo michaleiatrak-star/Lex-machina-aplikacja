@@ -1,5 +1,7 @@
 # Modul - Swiadczenie uslug droga elektroniczna
 
+**Hasła spraw:** spam, newsletter, informacja handlowa bez zgody, marketing elektroniczny, regulamin sklepu internetowego, usługa drogą elektroniczną
+
 ## Akt prawny
 **Ustawa z 18.07.2002 r. o swiadczeniu uslug droga elektroniczna**
 - Tekst jednolity: **Dz.U. 2024 poz. 1513** (ze zm.) — ✅ [VER] RZĄD 1 2026-09-16; poprzedni t.j. 2020 poz. 344 wygasły

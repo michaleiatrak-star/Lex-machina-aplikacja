@@ -1,5 +1,7 @@
 # mod-KSH-organy-spolki-zoo
 
+**Hasła spraw:** spółka z o.o., założenie spółki, zarząd spółki, członek zarządu, zgromadzenie wspólników, uchwała wspólników, rada nadzorcza, udziały, kapitał zakładowy
+
 **Wersja:** 1.0.0 | **Dodano:** 2026-08-14 (NAPRAWA — F-68: raport
 zewnętrzny wykazał, że KSH [~600 art., 5 tytułów] jest w systemie
 reprezentowany na poziomie ~14 unikalnych przepisów skoncentrowanych

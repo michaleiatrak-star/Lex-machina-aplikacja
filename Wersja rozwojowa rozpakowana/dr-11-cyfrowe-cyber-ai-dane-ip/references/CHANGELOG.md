@@ -1,5 +1,9 @@
 # CHANGELOG — dr-11-cyfrowe-cyber-ai-dane-ip
 
+- 3.23 (2026-10-05m, AUDYT-2026-10-05m): mod-RODO-DSAR: „Hasła spraw” zawężone do terminów żądań osób (bez ogólnych słów, które dawały fałszywe trafienia). Treść prawna bez zmian.
+
+- 3.22 (2026-10-05l, AUDYT-2026-10-05l): Linie „Hasła spraw” w modułach RODO (DSAR, RCP/DPA, DPIA), UODO, usług elektronicznych, prawa autorskiego (IP, media/wizerunek) i DSA — sprawy RODO trafiają do właściwego modułu. Treść prawna bez zmian.
+
 - 3.21 (2026-10-04c, AUDYT-2026-10-04c): **F-227 (zamknięta).** SKILL.md nie wczytywał `MAPA-POKRYCIA.md`, choć `prawny-router-v3/references/pokrycie-dziedzinowe.md` nazywa lokalną mapę jedynym bieżącym źródłem statusu pokrycia — dodana sekcja „Mapa pokrycia treściowego” z `view`, wzorem DR-02…DR-06 i DR-16. Treść prawa bez zmian. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04c.
 
 - 3.20 (2026-09-27e, AUDYT-2026-09-27e): claude.ai po dodaniu marketplace instalował wyłącznie 4 z 32 pluginów (shared, prawny-router-v3, analizator-dowodow-v3, przesluchanie-swiadkow-v2-min90); jedyna cecha wspólna tych 4, nieobecna w żadnym z 28 pozostałych, to klucz `dependencies` we frontmatterze SKILL.md. Dodano go (`requires: [shared]` — zgodnie ze stanem faktycznym) oraz jawny manifest pluginu (name, description = description z SKILL.md, author, repository, license) — host nie musi niczego wnioskować z SKILL.md. `version` w manifeście = `version:` z SKILL.md (pilnuje T38 w audyt-systemu-v4) — host rozpoznaje aktualizację po podbiciu wersji. Treść skilla bez zmian.

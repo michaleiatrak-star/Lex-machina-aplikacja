@@ -1,5 +1,7 @@
 # Modul - DSA - Digital Services Act (Akt o Uslugach Cyfrowych)
 
+**Hasła spraw:** platforma internetowa, usuwanie nielegalnych treści, zgłoszenie treści, moderacja treści, hosting, portal społecznościowy, marketplace, blokada konta
+
 ## Akt prawny
 **Rozporządzenie (UE) 2022/2065 z 19.10.2022 r. o jednolitym rynku uslug cyfrowych (DSA)**
 - Dz.Urz. UE L 277/1 z 27.10.2022

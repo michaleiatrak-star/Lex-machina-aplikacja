@@ -1,5 +1,7 @@
 # mod-PrUpad-upadlosc-restrukturyzacja
 
+**Hasła spraw:** upadłość konsumencka, ogłoszenie upadłości, niewypłacalność, plan spłaty wierzycieli, oddłużenie, syndyk, restrukturyzacja firmy
+
 **Status:** moduł klasy kancelaryjnej — poziom DR-03
 
 **Źródło weryfikacji:** PrUp — Dz.U. 2026 poz. 913 t.j. (✅ VER 2026-08-15v, obwieszczenie 12.06.2026, koryguje poprzedni 2025/614) | PrRestr — Dz.U. 2026 poz. 533 t.j. (✅ VER 2026-06-15, koryguje poprzedni 2024/1428)

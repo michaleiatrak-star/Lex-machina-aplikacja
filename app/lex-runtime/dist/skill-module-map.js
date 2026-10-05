@@ -2,10 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { draftingSchema, parseSchemaCatalog } from "./skill-schema-catalog.js";
 const MAP_HEADING = /MODUŁ|MODUL|WCZYT|REFERENCES|LAZY|MAPA/iu;
-const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|[a-z0-9-]+-v\d+(?:-min90)?\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b/g;
+// A path of another skill: an executive skill (…-v3, …-min90) or a domain skill (dr-02-…).
+const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b/g;
 const STAGE = /\b(W[1-6])(?:\.\d+[a-z]?)?\b/u;
 const STOP = new Set(["umowa", "umowy", "każdy", "każda", "wczytaj", "moduł", "ścieżka", "sprawa", "sprawy", "gdy", "przed", "pismo", "pisma", "zawsze", "obowiązkowe"]);
 const cache = new Map();
+// "references/X.md" belongs to the skill; "shared/…", "…-v3/…" and "dr-02-…/…" are kept whole.
+function corpusPath(skill, raw) {
+    return raw.startsWith("shared/") || raw.startsWith(`${skill}/`) || /^(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\//u.test(raw) ? raw : `${skill}/${raw}`;
+}
 export function moduleMap(registry, skill) {
     const record = registry.get(skill);
     if (!record)
@@ -42,7 +47,7 @@ export function moduleMap(registry, skill) {
             continue;
         for (const match of line.matchAll(RESOURCE)) {
             const raw = match[0];
-            const resource = raw.startsWith("shared/") || raw.startsWith(`${skill}/`) || /-v\d+(?:-min90)?\//.test(raw) ? raw : `${skill}/${raw}`;
+            const resource = corpusPath(skill, raw);
             if (!registry.resolveResource(skill, resource))
                 continue;
             // Condition: the table's first cell, or the text around the path (and the
@@ -140,7 +145,7 @@ function loadInstructions(registry, skill, lines, known) {
             continue;
         for (const match of line.matchAll(RESOURCE)) {
             const raw = match[0];
-            const resource = raw.startsWith("shared/") || /-v\d+(?:-min90)?\//.test(raw) ? raw : `${skill}/${raw}`;
+            const resource = corpusPath(skill, raw);
             if (!registry.resolveResource(skill, resource))
                 continue;
             // An arrow line belongs to the paragraph above it ("ZLE_WIADOMOSCI — gdy: ...").

@@ -1,6 +1,6 @@
 ---
 name: analiza-sadowa-v6
-version: "6.13"
+version: "6.15"
 type: executive-analiza
 status: production
 compatibility: "live_web_lookup, file_read, cross_skill_file_read, optional_interactive_ui"
@@ -10,7 +10,7 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.13 (2026-09-27e, AUDYT-2026-09-27e): jawny manifest `.claude-plugin/plugin.json` oraz `dependencies.requires: [shared]` we frontmatterze — import z marketplace w claude.ai. Treść skilla bez zmian.
+  Wersja bieżąca: 6.15 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: Przejście III, Przejście IV, format raportu końcowego i sekwencja po raporcie (każde przejście to osobna wiadomość) dołączane od drugiej tury wątku. Treść bez zmian.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -306,6 +306,7 @@ TAK do obu → przejdź dalej. NIE → uzupełnij brakujące web_search przed pr
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ### PRZEJŚCIE III — ANALIZA ADVERSARIALNA + WERYFIKACJA PIERWSZA
 **Cel: Analiza z trzech perspektyw + pierwsze ponowne przeczytanie dokumentów źródłowych.**
 
@@ -428,6 +429,7 @@ Czy Weryfikacja Pierwsza ma status UKOŃCZONA? TAK → przejdź. NIE → zakońc
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ### PRZEJŚCIE IV — AUTOKOREKTA + WERYFIKACJA OSTATECZNA
 **Cel: Spójność I-III + drugie i ostatnie obowiązkowe przeczytanie weryfikacyjne.**
 
@@ -571,22 +573,19 @@ KROK 4 — Raport końcowy §1-§11 (tylko po GATE: ZATWIERDZONE TAK)
 
 ### TRYB B — Widget interaktywny (TYLKO na jawne żądanie)
 
-> Renderuj przez show_widget z HTML vanilla JS. NIE przez .jsx / present_files.
+`show_widget(path="analiza-sadowa-v6/assets/widget-analiza.html", data=DANE)` — bez kodu; host wstawia dane i pasek eksportu/importu.
+DANE: `{syg, sad, rodzaj, klient, rola, przeciwnik, etap, wartosc, przepis, znamiona: [{znamie, status: SPEŁNIONE|NIESPEŁNIONE|WĄTPLIWE|BRAK DANYCH, uzasadnienie}], notatki, zakladki: {intake, przejscie1, przejscie2, przejscie3, przejscie4, dowody, filtry, orzecznictwo, koszty, raport}}`. Wartość zakładki: tekst, lista tekstów, lista obiektów (tabela) albo obiekt `{podtytuł: wartość}`. Dane wyłącznie z rozmowy; po widgecie opis 2–3 zdania + „zacznij od zakładki Przejście I”.
+
+<!-- lex:wykonuje-aplikacja: WIDGET-DANE -->
+#### Host bez pola `data`
 
 ```
-1. Dane sprawy ze rozmowy (schemat: syg, sad, rodzaj, klient, rola,
-   przeciwnik, etap, wartosc, przepis, znamiona, notatki)
-2. visualize:read_me modules=["interactive","mockup"]
-3. ⛔ MOD-WIDGET-IO (OBOWIĄZKOWE przed show_widget):
-   view shared/MOD-WIDGET-IO.md
-   → wbuduj pasek IO (§3 HTML + §4 CSS + §5 JS) w nagłówek widgetu
-   → zaimplementuj ioGetState/ioSetState/ioGetMarkdown dla danych analiza-sadowa
-   → ustaw IO_SKILL_ID='analiza-sadowa-v6', IO_CASE_ID=syg
-   → matryca: Export JSON ✅ MD ✅ PDF ✅ | Import JSON ✅
-4. show_widget — kompletny HTML, dane jako literały JS
-   Zakładki: Intake | Przejście I | Przejście II | Przejście III+W1 |
-             Przejście IV+WO | Dowody | Filtry | Orzecznictwo | Koszty | Raport
-5. Opis 2-3 zdania + "zacznij od zakładki Przejście I"
+1. visualize:read_me modules=["interactive","mockup"]
+2. ⛔ MOD-WIDGET-IO: view shared/MOD-WIDGET-IO.md → pasek IO (§3 HTML + §4 CSS + §5 JS)
+   ioGetState/ioSetState/ioGetMarkdown, IO_SKILL_ID='analiza-sadowa-v6', IO_CASE_ID=syg
+   matryca: Export JSON ✅ MD ✅ PDF ✅ | Import JSON ✅
+3. view analiza-sadowa-v6/assets/widget-analiza.html → wpisz DANE w literał po /* lex:dane */
+   → show_widget(widget_code=<treść>). NIE przez .jsx / present_files.
 ```
 
 ### TRYB C — Analiza hybrydowa
@@ -664,6 +663,7 @@ A+F łącznie: audyt dwustronny. B+D: często w sporach pracowniczych.
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## FORMAT RAPORTU KOŃCOWEGO
 
 ```
@@ -749,6 +749,7 @@ PRZEJŚCIE IV — AUTOKOREKTA
 
 ---
 
+<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->
 ## SEKWENCJA END-TO-END — PO RAPORCIE KOŃCOWYM
 
 > KOLEJNOŚĆ JEST BEZWZGLĘDNA. Każdy krok w osobnej wiadomości.
@@ -766,13 +767,9 @@ SEKWENCJA:
      → dane wyłącznie z rozmowy / dokumentów; pola nieznane → null
      → tryb: "A" (po pełnej analizie)
 
-  3. visualize:read_me modules=["interactive","mockup"]
-     (tylko jeśli nie załadowano w tej sesji)
-
-  4. show_widget — kompletny HTML vanilla JS z danymi jako literały JS
-     Zakładki: Sprawa | Chronologia | Źródła | Ryzyka |
-               Luki i sprzeczności | Rekomendacje
-     Przyciski sendPrompt dla rekomendacji procesowych
+  3. show_widget(path="raport-sytuacyjny-v2/assets/widget-raport-sytuacyjny.html",
+                 data=BLUEPRINT) — bez kodu; host wstawia dane i pasek IO.
+     Host bez pola `data`: raport-sytuacyjny-v2/SKILL.md § WIDGET — WYKONANIE BEZ POLA `data`.
 
   Poprzedź widgetem komunikat:
   "Poniżej aktualny raport sytuacyjny sprawy —

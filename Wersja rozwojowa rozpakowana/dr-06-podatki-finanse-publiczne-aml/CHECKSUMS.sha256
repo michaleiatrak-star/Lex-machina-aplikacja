@@ -1,11 +1,11 @@
-d0b04e9ad4f7812621aba609f5f19c5c0d0a2488f7b9571ab89e9203cb7225c8  ./.claude-plugin/plugin.json
+826c5fd7a1a4a2af9b29cabe91c3849f89c21cee92b273f25828cd8c24a4e7e3  ./.claude-plugin/plugin.json
 14fe0d0f25951992273e1f6c06e869f436ce401ba016628ac84dc4c8076d8077  ./MAPA-AKTOW.md
 09b5b612b258f9798b1777158d3f8cd814a77081741ac9f99e80a9786b10ae4f  ./MAPA-POKRYCIA.md
 7c457e1307ad99afea550a549ede21895435a27f83e9063245575b7342edcca4  ./PORTABILITY-MANIFEST.md
-aab1a5d40013397c941a51a962c5f1b11be589b41e59cc6a4860599019ee9cab  ./SKILL.md
+bf19f26ec0ad618c0f9535163ff356ebccec6ec12585f9fb8f50a52475fb9c69  ./SKILL.md
 0723118e130945c731bd069a055c853011fcada42c7815680bd87b474239c8c5  ./agents/openai.yaml
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
-d86e6b47c3f0fefa4d75083af3f402d4d401f4b7e30a7e111c9e2dab1b63e71a  ./modules/mod-CIT-podatek-dochodowy-prawne.md
+b957886f0c5a16a23f9690b0466af0ad5708097c1a1fddf05d14a4fcf1379099  ./modules/mod-CIT-podatek-dochodowy-prawne.md
 76792f739a6a93b22fe253d39fc6a69f22dd21f5422161d63d7fb290f07c0a53  ./modules/mod-JPK-ksiegi-elektroniczne-e-sprawozdania.md
 f13c52a1ce1580ad256e1a52d22d4ad9aab31855fe32fe42feec0e132ff0d491  ./modules/mod-KAS-kontrola-celno-skarbowa.md
 2cd6165d6754bb874fbdb2869e1b5cc130c572f22f014300bf2c74da9d8b0401  ./modules/mod-OP-czynnosci-sprawdzajace-dzial-V.md
@@ -75,5 +75,5 @@ f7b1b6e938fd2f581807c44123ed9c86b5809cbba8691e96016fad4b365380f5  ./modules/vat-
 3e68b7cef36e384a60b951bc96ef2e0f2d8945e113af875b7c0b1c7d3ad8ce7c  ./modules/vat-podatek-od-towarow-i-uslug/part-06-grupa-zlozona.md
 5666286b9a042068711d23dd0689936598ec28bfb3fecee053c072dc80dce86e  ./references/BAZA-AKTOW-OKOLOAKCYZOWYCH.md
 0801b9cd2103d0c6fcca60224c66677bb34249a72227404551573de3eb55d0a8  ./references/BAZA-AKTOW-OKOLOPODATKOWYCH.md
-4f196c7971dec7b2532c450b06220b5e32c3e7c0fc7f85676a63d38572b01605  ./references/CHANGELOG.md
+36a111982f5cb08be27b99bdd4e0bcc1f2f7c803af91f267b93f8c2d98fbf7a3  ./references/CHANGELOG.md
 0f04d7c347f094d44d41df4e026937cf23482a7e4ce7e3393ee611dad0c8e05a  ./references/HISTORIA-ZMIAN-PLIKOW.md

@@ -8,6 +8,8 @@
 > potrzebujesz historii konkretnej naprawy (SKILL.md trzyma tylko krótkie
 > podsumowanie bieżącej wersji jako kontekst).
 
+- 3.31 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: SELF-CHECK-PRZED-W3 i etapy W3–W6 (po obowiązkowej pauzie CHECKPOINT-W2) dołączane od drugiej tury wątku. Treść bez zmian.
+
 - 3.30 (2026-10-01b, AUDYT-2026-10-01b): Anonimizacja: imię i nazwisko świadka z prawdziwej sprawy (przykład w SKILL.md i wpisy 3.7–3.19 tego dziennika) zastąpione znacznikami [ŚWIADEK-K]/[ŚWIADEK-P]; treść reguł bez zmian.
 - 3.29 (2026-09-27e, AUDYT-2026-09-27e): claude.ai po dodaniu marketplace instalował wyłącznie 4 z 32 pluginów (shared, prawny-router-v3, analizator-dowodow-v3, przesluchanie-swiadkow-v2-min90); jedyna cecha wspólna tych 4, nieobecna w żadnym z 28 pozostałych, to klucz `dependencies` we frontmatterze SKILL.md. Ten skill już go miał; oraz jawny manifest pluginu (name, description = description z SKILL.md, author, repository, license) — host nie musi niczego wnioskować z SKILL.md. `version` w manifeście = `version:` z SKILL.md (pilnuje T38 w audyt-systemu-v4) — host rozpoznaje aktualizację po podbiciu wersji. Treść skilla bez zmian.
 - 3.28 (2026-09-27d, AUDYT-2026-09-27d, F-207): **odtworzone** wywołanie `shared/MOD-WEJSCIE-DOKUMENTU.md` (bramka WD-1…WD-3, F-200) — jedyna zmiana tego skilla z wydania 3.27, które nie dotarło do repozytorium. Treść reguł nie jest kopiowana; obecność wywołania pilnuje T35.

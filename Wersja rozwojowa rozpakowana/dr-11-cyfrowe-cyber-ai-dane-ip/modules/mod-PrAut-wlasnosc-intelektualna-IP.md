@@ -1,5 +1,7 @@
 # mod-PrAut-wlasnosc-intelektualna-IP
 
+**Hasła spraw:** naruszenie praw autorskich, skopiowanie zdjęć, plagiat, licencja, utwór, autorskie prawa majątkowe, kopiowanie treści
+
 **Stan operacyjny:** 2026-08-28  
 **Źródło kanoniczne:** ELI — ustawa z 4.02.1994 r. o prawie autorskim i prawach pokrewnych, tekst jednolity Dz.U. 2025 poz. 24.
 

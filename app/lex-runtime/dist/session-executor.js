@@ -1064,19 +1064,30 @@ export class SafeSessionExecutor {
             }
             return result.text;
         };
+        // PROFIL-LEKKI: a mandatory resource the application could not read is named to the
+        // model before it answers and in the answer (⛔ TRYB ZDEGRADOWANY), never silently replaced by memory.
+        const unreadableResources = [];
         if (mandatoryModel && legalTurn) {
             const preloaded = preloadForTurn(mandatoryModel, { ...pathFacts, profile }).filter((resource) => !contextResources.has(resource));
             for (const resource of preloaded) {
                 const content = this.readCorpus(resource);
                 if (!content) {
                     audit.record("resource_read", resource, "BLOCKED", { detail: "runtime-preload;mandatory-path;missing" });
+                    unreadableResources.push(resource);
                     continue;
                 }
                 contextResources.add(resource);
                 audit.record("resource_read", resource, "OK", { detail: "runtime-preload;mandatory-path", profile });
                 pathSections.push(`# MANDATORY PATH RESOURCE: ${resource}\n\n${forModel(resource, content)}`);
             }
-            step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length} plików`);
+            if (unreadableResources.length) {
+                pathSections.push([
+                    "# ⛔ TRYB ZDEGRADOWANY — ZASOBY NIEWCZYTANE (ustalone przez aplikację)",
+                    `Aplikacja nie wczytała: ${unreadableResources.join(", ")}.`,
+                    "Nie odtwarzaj ich reguł z pamięci. Wskaż w odpowiedzi, której kontroli z tych zasobów nie wykonano."
+                ].join("\n"));
+            }
+            step("SKILLS", `ścieżka obowiązkowa: profil ${profile === "PELNY" ? "PEŁNY" : "LEKKI"}, wczytano ${preloaded.length - unreadableResources.length} plików`);
             pathSections.unshift(mandatoryPathInstructions(mandatoryModel, profile, [...contextResources]));
         }
         // AUTO: the task type from the router's table [1]–[11] names the executive skill
@@ -2205,6 +2216,7 @@ export class SafeSessionExecutor {
         const degradedReasons = mandatoryPath
             ? [
                 ...(trace && !trace.primaryRead ? ["router niewczytany (PRIMARY)"] : []),
+                ...(unreadableResources.length ? [`nie wczytano: ${unreadableResources.join(", ")}`] : []),
                 ...(mandatoryPath.degraded
                     ? [`brak obowiązkowego kroku: ${mandatoryPath.steps.filter((item) => item.requirement === "CORE" && item.layer === "ROUTER" && item.status === "MISSING").map((item) => item.id).join(", ")}`]
                     : [])

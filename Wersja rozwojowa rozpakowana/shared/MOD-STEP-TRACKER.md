@@ -39,6 +39,7 @@ nie przeszło wymaganych bramek jakości.
 
 ---
 
+<!-- lex:wykonuje-aplikacja: REJESTR-KROKOW -->
 ## FAZA 0 — INICJALIZACJA REJESTRU KROKÓW
 
 ```
@@ -105,6 +106,7 @@ Oznacz jako "— N/A" z uzasadnieniem. N/A musi być uzasadnione.
 
 ---
 
+<!-- lex:wykonuje-aplikacja: REJESTR-KROKOW -->
 ## FAZA 1 — ŚLEDZENIE W TRAKCIE WYKONANIA
 
 ```

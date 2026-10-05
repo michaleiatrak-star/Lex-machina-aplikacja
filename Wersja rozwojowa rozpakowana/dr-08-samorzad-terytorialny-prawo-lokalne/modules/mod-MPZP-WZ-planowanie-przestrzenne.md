@@ -1,5 +1,7 @@
 # mod-MPZP-WZ-planowanie-przestrzenne
 
+**Hasła spraw:** warunki zabudowy, decyzja WZ, miejscowy plan zagospodarowania przestrzennego, MPZP, plan ogólny gminy, przeznaczenie działki, odszkodowanie planistyczne, renta planistyczna
+
 **Status:** moduł klasy kancelaryjnej — poziom DR-03
 **Źródło weryfikacji:** Ustawa o planowaniu i zagospodarowaniu przestrzennym — Dz.U. 2026 poz. 538 t.j. ze zm. | Weryfikuj aktualne zmiany w ELI (RZĄD 1)
 **Data weryfikacji online:** 2026-06-05

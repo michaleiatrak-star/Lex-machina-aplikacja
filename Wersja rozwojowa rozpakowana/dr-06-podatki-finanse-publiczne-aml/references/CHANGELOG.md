@@ -1,5 +1,7 @@
 # CHANGELOG — dr-06-podatki-finanse-publiczne-aml
 
+- 3.96 (2026-10-05l, AUDYT-2026-10-05l): mod-CIT-podatek-dochodowy-prawne: linia „Hasła spraw”. Treść prawna bez zmian.
+
 - 3.95 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 3.94 (2026-10-04b, AUDYT-2026-10-04b): **Sieroty (F-225).** `references/BAZA-AKTOW-OKOLOPODATKOWYCH.md` i `BAZA-AKTOW-OKOLOAKCYZOWYCH.md` odsyłały wyłącznie do siebie nawzajem — podpięte pod „Lokalna mapa aktów prawnych” w SKILL.md. Odwołania do `shared/AKTY-PRAWNE-MASTER.md` (usunięty w shared 3.19) przeredagowane. Pełny opis: `audyt-systemu-v4/references/AUDIT-JOURNAL.md`, AUDYT-2026-10-04b.

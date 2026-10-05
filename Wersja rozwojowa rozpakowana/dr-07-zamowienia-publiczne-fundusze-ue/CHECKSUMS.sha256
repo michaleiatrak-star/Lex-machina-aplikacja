@@ -1,8 +1,8 @@
-3836d7e894122bdbc5c9e53b4ad25ec1708f64e3d2634e365d680f1d49b698b1  ./.claude-plugin/plugin.json
+3ecad167fbe74d1f7619000434d6838bcdd24be8388b49395a2e072c7913124b  ./.claude-plugin/plugin.json
 8c788700b97f39b1ef181d1e47906d45560455f6d2aa2aa361aa68d6c61384df  ./MAPA-AKTOW.md
 07b354fe610f54e76c37859ede687a027bf45e3551994233b45b67939a2a5211  ./MAPA-POKRYCIA.md
 1f31019a1365f4cda2e6f4849e64b29cd2e793be0f09a763518d451db6a7a2b5  ./PORTABILITY-MANIFEST.md
-0eb8a89ebb614450b3b48597bbc55c8d987418880dd40987d5262679e3ab8b2c  ./SKILL.md
+e6a4ab46e5200248e9d9bbb4e7e1e088f3629548db214df98830cc1ce4424994  ./SKILL.md
 d233400387309c7a87d8e09858b5dc021fd6eac8faf77bf09dc6e4c1432c35ca  ./agents/openai.yaml
 0cdb7990dea3ad89ead04743eeac2dc58c119fb0b8b4a01499a21237f155bc1a  ./assets/icon.svg
 7ff7d2203e296892bd5edae7d3cfd0762ee05e08781fbb584aa50b96fc064c12  ./modules/mod-PZP-dzial-I-podstawy-wylaczenia-szacowanie.md
@@ -14,7 +14,7 @@ d9680070366659a7e75c487d33bca261461ce9e88fb92bce7246da19119e3c90  ./modules/mod-
 ce0abbb020a1165f6a284e7bc2d6650d2ba772b4026a5df9a566ee774184ca88  ./modules/mod-PZP-opis-przedmiotu-zakaz-znakow-towarowych.md
 dd59cfce3e84d3fc884f1040881a70404afd350878a6efff2a1d00de07c03172  ./modules/mod-PZP-otwarcie-badanie-ofert-przebieg-KIO.md
 28969ecc8653cfefcdac107b2d13db403ed66bf44f973d227644e5cfe99a0dae  ./modules/mod-PZP-uzupelnienie-pokrycia-2026.md
-06843a3172d2c05a051773a7b7a3232f1cb3b18c486bf4a79093bcada19f817f  ./modules/mod-PZP-wykonanie-umowy-compliance.md
+9e453defdce29309dc7d038d04da9e56c2ca6420b3a3ffb5f0bd966f52bab690  ./modules/mod-PZP-wykonanie-umowy-compliance.md
 3cb8f2b4a123ad719b90fc8e835218b15e852d22c9a5beca9ba12bb2bb8b2d28  ./modules/mod-PZP-zamowienia-publiczne-KIO.md
 6740c0f72d9efffa4f360887b9fbe60c45731f8edd396085619ed8a88d5df0f4  ./modules/mod-PrNotariat-notariat-rejestry.md
 148fea56829f2356c4219f427183ca515e21b17e16e4eb80b99afe530fe9cb11  ./modules/mod-ustawa-NIK.md
@@ -25,5 +25,5 @@ dd59cfce3e84d3fc884f1040881a70404afd350878a6efff2a1d00de07c03172  ./modules/mod-
 0b76c8243b3baefb3113a8b6714b49a3dff749f4cbc168c060246311f2cf9166  ./modules/mod-ustawa-arbitraz-mediacja.md
 f64d12edb41eac8f92d439e56b9cc3da219ccd7d901b69700bb8b4bb4e1e45cb  ./modules/mod-ustawa-dyscyplina-finansow-publicznych.md
 f962b47b85c856c9a954b431a4a5969845155f4a3747ef8fc4aad1508aef73ba  ./modules/mod-ustawa-fundusze-UE-pomoc-publiczna.md
-37e1c729ea3ed345992662e535211db503d750a86bec625cf797e26f1e99fec6  ./references/CHANGELOG.md
+e95645890c397cfcf68c6a9164514964a9152a9812d9bf2d47f77ac63dc3c4e9  ./references/CHANGELOG.md
 4925736ce9856044215d5b0986eda1a9e0d15a01926bb7fabcbdbadab36a6b59  ./references/HISTORIA-ZMIAN-PLIKOW.md

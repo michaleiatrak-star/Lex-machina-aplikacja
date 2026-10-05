@@ -1,12 +1,12 @@
-e87107b640ea62b3ee82d2014fce607b31054e19f33020d9cf02c51c9f2b3745  ./.claude-plugin/plugin.json
+0daaaf1a3ec4da6263ccd481a88d73864372a756bbdf074ce03dc286b5e61cbc  ./.claude-plugin/plugin.json
 34ddd4d84ac02692d86bcb6c31bae1f92f26b009cb899d8a97dcec8981b8d7cd  ./MAPA-AKTOW.md
 2763701bd121dd6e70f1098ed71416e7d78852962b0289d7ec1db280fe520eae  ./MAPA-POKRYCIA.md
 5bb12ce059b79b514a3d11ba63efd201748c8e3a064a8f97bf576eace6a83782  ./PORTABILITY-MANIFEST.md
-81f8af47a8e8e00fb5e6e5e84e18da4081d64c79889e6547fc335b2323d46996  ./SKILL.md
+a3c5c670100017068d0008240ddf34ae0ae2ca10524d8443bdfe9abeb7b9bf2d  ./SKILL.md
 5681f9c71bd5ec9f182f0618b4a75d9711a50f1d57cb6788f5a98b5b4603e99b  ./agents/openai.yaml
 d80a4c3e0fd2efa7af88433a53b25a92c78a644175c6669dd78fee50fb53acf6  ./assets/icon.svg
 a4da06fd5ff6fe8ee90f423e87688d02caa64e4a5165b02567b656c93bf67f83  ./modules/mod-JST-ustroj-samorzad-gminny-powiatowy-wojewodztwa.md
-1798b1d6533d520385950933b40094a3b22b60fd806f884330809774b5dbcc9c  ./modules/mod-MPZP-WZ-planowanie-przestrzenne.md
+cd6a6747d79f319f28f8894f2c2fa29a659bf6e158aab0c196a61fccce08b942  ./modules/mod-MPZP-WZ-planowanie-przestrzenne.md
 05109d3394836951a3224cfefe13284c23f97d6f3845beb7491f02c6b7b8f2bf  ./modules/mod-UDP-strefy-platnego-parkowania.md
 0f52aad13ea50d5a25a9de23ab77696e8e338400a302d0457a6d01c0aec5f86e  ./modules/mod-akty-porzadkowe-bezpieczenstwo-lokalne.md
 28888b2c9198e859b32b78d6e19b06458f22006d4853a9c7378ca501e91e9ed2  ./modules/mod-dzienniki-urzedowe-BIP-publikacja.md
@@ -25,4 +25,4 @@ a18e15e1ac8c6e62cbee58217dd5beec1701bbf682f92d950047bfa083872f78  ./modules/mod-
 aff6d1ee5b6b2d6b86c49d14a877c40fd919a014f2fb2b31d15d31e6940e42ff  ./modules/mod-ustawa-zabytki-rewitalizacja.md
 536b89773939cd2e9134f119913ca7482142587ed0cb7b80fa23754f49f88717  ./modules/mod-ustawa-zarzadzanie-kryzysowe.md
 a63b556d8c55c3c190dce944b8a4780f76c019ae0fc70fc2f396c853d37990ee  ./modules/mod-wojewoda-administracja-rzadowa-current-state-COV.md
-40cda65d7443c787ba1dd3b536e31f86c87ef09e1baa70bc70c09a85cdb76578  ./references/CHANGELOG.md
+78a6a3d3e612e7135eff5ad6354aae238fb3bd0f0b61ac6402f35781a9d22417  ./references/CHANGELOG.md

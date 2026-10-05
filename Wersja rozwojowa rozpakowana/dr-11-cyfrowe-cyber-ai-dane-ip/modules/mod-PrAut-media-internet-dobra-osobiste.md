@@ -1,5 +1,7 @@
 # mod-CZ-ip-media-internet-dobra-osobiste.md — IP, media, Internet, dobra osobiste i platformy
 
+**Hasła spraw:** wizerunek, publikacja wizerunku, wizerunek dziecka, zdjęcia w internecie, media społecznościowe, Facebook, dobra osobiste w internecie, hejt
+
 Status: moduł prawa polskiego klasy wzorcowej. Stan metodyczny: 2026-05-28. Źródła prawa muszą być każdorazowo weryfikowane w ELI (RZĄD 1) / Dzienniku Ustaw; LEX/Legalis dopuszczalne pomocniczo przy braku praktycznego dostępu do aktu albo dla komentarza.
 
 ## 1. Akty i źródła do weryfikacji

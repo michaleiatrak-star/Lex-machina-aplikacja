@@ -30,6 +30,7 @@ proceduralnie, a nie jest.
 
 ---
 
+<!-- lex:wykonuje-aplikacja: HISTORIA -->
 ## PO CO ISTNIEJE (F-173, przesłanka skorygowana w F-179)
 
 ### ⛔ Korekta przesłanki — wersja 1.0 tego pliku była zbudowana na błędzie
@@ -146,6 +147,7 @@ bramki — i odczyt następuje najpóźniej w chwili, gdy bramka ma zadziałać.
 
 ---
 
+<!-- lex:wykonuje-aplikacja: PROFIL -->
 ## DEKLARACJA PROFILU — blok KROKU 3A
 
 Blok śladu routingu (`KROK 3A`) rozszerza się o jedną linię:
@@ -168,6 +170,7 @@ Zasady:
 
 ---
 
+<!-- lex:wykonuje-aplikacja: PROFIL -->
 ## KIEDY PROFIL LEKKI JEST ZAKAZANY
 
 ```

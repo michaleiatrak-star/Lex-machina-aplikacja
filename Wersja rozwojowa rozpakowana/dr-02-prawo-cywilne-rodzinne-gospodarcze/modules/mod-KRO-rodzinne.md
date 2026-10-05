@@ -1,5 +1,7 @@
 # mod-KRO-rodzinne — indeks bieżący
 
+**Hasła spraw:** alimenty, obowiązek alimentacyjny, rozwód, separacja, wina rozkładu pożycia, władza rodzicielska, kontakty z dzieckiem, piecza nad dzieckiem, ustalenie ojcostwa, majątek wspólny małżonków, podział majątku, intercyza
+
 **Stan operacyjny:** 2026-08-28  
 **Źródło kanoniczne:** ELI — Kodeks rodzinny i opiekuńczy, Dz.U. 2026 poz. 236 t.j., status obowiązujący.  
 **Powiązana procedura:** aktualny KPC — pobieraj oddzielnie dla konkretnego trybu.

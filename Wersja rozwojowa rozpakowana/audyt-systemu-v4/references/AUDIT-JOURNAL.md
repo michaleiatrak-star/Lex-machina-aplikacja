@@ -69891,6 +69891,100 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05m — TRYB STRUKTURA: dobór DR na 500 pytaniach i na zestawie świeżym (6.186)
+
+### 1. ŹRÓDŁO
+Zlecenie: test doboru DR na 500 przykładach — sprawy, w których aplikacja musi sama dobrać DR (413, każdy z DR-01–DR-16), zlecenia skilla wykonawczego wymagające też DR (67) i pytania bez DR (20). Po strojeniu: 113 nowych pytań napisanych po zmianach (zestaw świeży, miara uogólnienia).
+
+### 2. USTALENIA
+- Wynik przed zmianą: 383/500 (76,6%); pytania nieprawne z DR: 8/20.
+- BŁĄD (aplikacja): frazy routingu traciły słowa z listy pomijanych — „prawo właściwe” było puste, „sąd pracy” = każda „praca”.
+- BŁĄD (aplikacja): zapasowe dopasowanie po mapach aktów wskazywało dziedzinę z jednego słowa albo z dwóch wariantów jednego słowa („pozwolenie” → Prawo farmaceutyczne); liczby lat trafiały w numery aktów UE („mundial w 2022” → DR-10).
+- BŁĄD (aplikacja): ogólne słowa ważyły tyle co specyficzne („odszkodowanie” = „mobbing”); sprawa karna zawsze przed dziedziną własną („mandat posła po skazaniu” → DR-03).
+- BŁĄD (korpus, AUDYT-2026-10-05l): zbyt ogólne „Hasła spraw” w mod-RODO-DSAR („administrator nie odpowiada”) — fałszywe trafienia; poprawione.
+- BŁĄD (macierz): „skarga do WSA na decyzję Prezesa UODO” → schemat SPK pisma prostego; „odwołanie do KIO” bez skilla wykonawczego.
+- Luki słownictwa routingu błyskawicznego w DR-01, 05, 07, 08, 09, 10, 12, 13, 14, 15, 16.
+
+### 3. ZMIANA
+- Aplikacja: słowa fraz bez listy pomijanych; dwa różne słowa pytania w zapasowym dopasowaniu; bez lat; słowo z map aktów czterech i więcej dziedzin waży pół; sprawa karna na drugim miejscu, gdy inna dziedzina ma frazę dwuwyrazową; pytanie o ocenę („oceń szanse skargi do WSA”) nie trafia do pisma.
+- prawo-polskie-v2 6.43, prawny-router-v3 3.66, shared 3.99.11 (ACTIVATION-MATRIX), DR-11 3.23.
+- Test: tests/routing-500.test.ts (fixtures routing-domains-500.json i routing-domains-holdout.json); przypadki „znany_blad” jawnie oznaczone, każdy inny musi przejść.
+
+### 4. WYNIK
+- Zestaw 500: 486/500 (97,2%); pytania nieprawne 20/20 bez DR. Zestaw strojony — wynik dopasowania, nie uogólnienia.
+- Zestaw świeży 113 (bez strojenia słownictwa; jedna poprawka mechaniki znaleziona na nim): 80/113 trafnych (71%), 19 bez podpowiedzi DR (dziedzinę wybiera model), 14 ze złą dziedziną (12%), pytania nieprawne 12/12 bez DR.
+- Wniosek: routing słownikowy ma granicę ok. 70% na nowych sformułowaniach; podpowiedź DR pozostaje wskazówką, decyzję podejmuje model.
+
+## AUDYT-2026-10-05l — TRYB STRUKTURA: przekazywanie spraw do dziedziny (DR), modułu aktu i skilla wykonawczego (6.185)
+
+### 1. ŹRÓDŁO
+Zlecenie: zbadać routing do właściwego modułu DR i skilla wykonawczego, osobno sprawy RODO (DR-11), dla każdego DR i każdego skilla wykonawczego. Audyt dynamiczny: 144 pytania w języku klienta (każdy z 16 DR, z oczekiwanym modułem) i 56 pytań dla 12 skilli wykonawczych; wynik przed zmianą: 40/142 DR i 6/54 skilli wykonawczych źle.
+
+### 2. USTALENIA
+- BŁĄD (routing błyskawiczny prawo-polskie-v2): brak słów, którymi klienci opisują sprawy (RODO: monitoring wizyjny, IOD, rejestr czynności, powierzenie, wizerunek, spam, cookies; karne: pobicie, kradzież, jazda po alkoholu; praca: mobbing, L4, nadgodziny; rodzinne: alimenty, rozwód, zachowek). Bez trafienia aplikacja zgadywała dziedzinę z map aktów („imprezie” → imprezy masowe, „firmie” → VAT).
+- BŁĄD (aplikacja): dopasowanie słów bez fleksji („danych osobowych” nie pasowało do „dane osobowe”; „powierzenia” pasowało do „powiat”); numery norm („ISO 27001”) wycinane; zapasowa druga dziedzina z jednego wspólnego słowa.
+- BŁĄD (aplikacja, Karne: +kwalifikator): sprawa karna opisana potocznie (pobicie, kradzież, jazda po alkoholu, mandat, stalking, śledztwo) nie była rozpoznawana jako karna — bez kwalifikatora i profilu PEŁNY.
+- BŁĄD (moduły DR): kolumna „Akt / zakres” map aktów nazywa akty, nie sprawy; moduł właściwy dla sprawy nie był wskazywany (np. „nie usuwa moich danych” → nie DSAR).
+- BŁĄD (router KROK 2): „odwołanie od wypowiedzenia / od decyzji ZUS” bez skilla wykonawczego; „policz termin na apelację” → pisma-procesowe; „na umowie zlecenie” → analizator-umow; „SMS-y” w opowieści o stalkingu → analizator-dowodow; „moje dane osobowe” traktowane jak „moje pismo” (sprawdzenie własnego pisma).
+
+### 3. ZMIANA
+- prawo-polskie-v2 6.42: routing błyskawiczny rozszerzony dla DR-01–DR-16.
+- prawny-router-v3 3.65: frazy [3] i [6]; reguły „na umowie …” → [10] i maile/SMS/nagrania tylko przy pytaniu o dowód.
+- Linia „**Hasła spraw:**” w nagłówkach modułów (aplikacja dobiera po niej moduł; resolver mechaniczny MAPA-AKTOW jej nie czyta, więc nie wymusza wczytania): DR-01 3.16, DR-02 3.63, DR-03 3.55, DR-05 3.32, DR-06 3.96, DR-07 3.14, DR-08 3.16, DR-11 3.22. Treść prawna bez zmian.
+- Aplikacja: rdzenie bez końcówek fleksyjnych, waga fraz wielowyrazowych, numery norm, sprawa karna → DR-03 na pierwszym miejscu, potoczne sygnały spraw karnych; stały test regresji (tests/routing-corpus.test.ts, 202 przypadki).
+- Wynik po zmianie: 144/144 DR, 56/56 skilli wykonawczych.
+
+## AUDYT-2026-10-05k — TRYB STRUKTURA: ścieżki przekazywania spraw i wydawanie modułów (6.184)
+
+### 1. ŹRÓDŁO
+Zlecenie: zbadać ścieżki przekazywania spraw i czy skille i moduły są prawidłowo wydawane. Audyt statyczny (routing [1]–[11], macierz aktywacji, kombinacje, kontrakty i mapy modułów 12 skilli wykonawczych) i dynamiczny (15 przebiegów aplikacji, w tym przekazania „Następny etap pipeline'u”).
+
+### 2. USTALENIA
+- Routing, macierz i kombinacje: wszystkie wskazane skille istnieją; przekazania wczytują właściwy skill wykonawczy z modułami; brak nieudanych odczytów.
+- BŁĄD (aplikacja): mapa modułów rozpoznawała ścieżki innych skilli tylko z wersją w nazwie (…-v3/), więc moduł skilla dziedzinowego (dr-02-…/modules/mod-ustawa-kredyt-konsumencki-SKD.md), który pisma-proste (schemat SPM) i pisma-procesowe (pozew SKD) każą wczytać NAJPIERW, nie był wydawany.
+- BŁĄD (routing): „oceń szanse”, „szanse wygrania”, „przeanalizuj akta” nie prowadziły do analiza-sadowa-v6 (odpowiedź bez skilla wykonawczego).
+
+### 3. ZMIANA
+- Aplikacja: mapa modułów rozpoznaje ścieżki dr-NN-…/modules|references/; test regresji.
+- pisma-procesowe-v3 5.36: warunek „gdy sankcja kredytu darmowego” przy odwołaniu do modułu SKD (bez niego moduł wczytywałby się przy każdym pozwie o zapłatę).
+- shared 3.99.10 (ACTIVATION-MATRIX) i router 3.64 (KROK 2 [2]): nowe frazy kategorii [2].
+
+## AUDYT-2026-10-05j — TRYB STRUKTURA: etapy późniejszych tur w przesłuchaniu świadków i analizie sądowej (6.183)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji E5. Oba skille pracują wieloturowo z obowiązkową pauzą: przesłuchanie — CHECKPOINT-W2 przed W3; analiza sądowa — każde przejście i raport końcowy to osobna wiadomość. Sekcje etapów po pauzie trafiały do modelu już w pierwszej turze.
+
+### 2. ZMIANA
+- przesluchanie-swiadkow-v2-min90 3.31: `lex:wczytaj-gdy: KOLEJNA-TURA` przed SELF-CHECK-PRZED-W3 oraz ETAP W3, W4, W5, W6. Pierwsza tura: 84 908 → 64 758 znaków (−24%).
+- analiza-sadowa-v6 6.15: ten sam znacznik przed Przejściem III, Przejściem IV, FORMAT RAPORTU KOŃCOWEGO i SEKWENCJA END-TO-END. Pierwsza tura: 38 322 → 24 499 znaków (−36%).
+- Od drugiej tury wątku sekcje wracają w całości (mechanizm jak w pisma-procesowe-v3). Treść reguł bez zmian.
+
+## AUDYT-2026-10-05i — TRYB STRUKTURA: rejestr kroków, profil i kanon źródeł wykonywane przez aplikację (6.182)
+
+### 1. ŹRÓDŁO
+Etapy mechanizacji E2/E3. Pomiar promptu dla pytania „różnice 233, 234 i 238 KK” (profil PEŁNY): 259 923 znaków; HIERARCHIA-ZRODEL 32,7 tys., MOD-STEP-TRACKER 11,2 tys., PROFIL-LEKKI 9,6 tys. Rejestr kroków, profil ścieżki, ślad KROK 3A i odczyt ELI z kolejnością E-1…E-5 wykonuje aplikacja.
+
+### 2. ZMIANA
+- shared 3.99.9: HIERARCHIA-ZRODEL — KANON KOLEJNOŚCI i REALIA DOSTĘPNOŚCI RZĘDU 1 (WERYFIKACJA-ELI; nagłówek REALIA scalony w jedną linię); MOD-STEP-TRACKER — FAZA 0 i FAZA 1 (REJESTR-KROKOW). FAZA 2–3 (raport pominięć, raport przed .docx) zostają u modelu.
+- prawny-router-v3 3.63: PROFIL-LEKKI — „PO CO ISTNIEJE” (HISTORIA), „DEKLARACJA PROFILU”, „KIEDY PROFIL LEKKI JEST ZAKAZANY” (PROFIL).
+- Aplikacja: czwarty zakaz profilu LEKKIEGO (błąd odczytu zasobu rdzenia) — zasób niewczytany jest nazwany modelowi przed odpowiedzią i w odpowiedzi (⛔ TRYB ZDEGRADOWANY — nie wczytano: …).
+- Wynik pomiaru: 245 841 znaków (−14 082, −5,4%).
+- Nie oznaczono: wyzwalaczy CN/WYJ/REM (sekcje zawierają reguły kolejności bramek i zawężenia ≥6 jednostek), ZNACZNIK OBOWIĄZKOWY (📚 dla RZĘDU 2B/3 stawia model).
+
+## AUDYT-2026-10-05h — TRYB STRUKTURA: widgety zasilane danymi w pozostałych skillach (6.181)
+
+### 1. ŹRÓDŁO
+Etap mechanizacji 7b (dokończenie). Model przepisywał cały kod widgetu, żeby wpisać dane: dashboard dowodów 99 KB, raport sytuacyjny, raport klienta i TRYB B analizy sądowej od zera.
+
+### 2. ZMIANA
+- analizator-dowodow-v3 5.16.21: `dashboard.html` — dane w jednym obiekcie `LEX_DATA` (literał po `lex:dane`), usunięte przykładowe dane sprawy (99 → 69 KB), schemat pól w komentarzu. Błąd: zakładki Osoby, Nazewnictwo, Kwestie sporne, Lapsusy nie były renderowane przy starcie — naprawione. Kreator przez `show_widget(path)`.
+- raport-sytuacyjny-v2 2.12: nowy `widget-raport-sytuacyjny.html` (7 zakładek, oba formaty ryzyk i sprzeczności).
+- raport-klienta-v1 1.7: nowy `widget-raport-klienta.html` (IND/BIZ × 4 tryby, druk do PDF); schemat uzupełniony o pola opisane w SKILL.md, których brakowało (`co_dalej`, `potwierdzenie`, `najblizsze_zdarzenie`).
+- analiza-sadowa-v6 6.14: TRYB B — `widget-analiza.html` (10 zakładek, renderowanie ogólne); W6 — szablon raportu sytuacyjnego.
+- audyt-systemu-v4: menu przez `show_widget(path=widgets/WIDGET-MENU.md)` zamiast przepisywania JSX.
+- Wszystkie szablony sprawdzone w Chromium (pusty i pełny zestaw danych, zakładki, escapowanie danych).
+- Aplikacja: wstawianie nagłówka ramki dopasowywało `<header>` jako `<head>` — poprawione (dopasowanie pełnej nazwy znacznika).
+
 ## AUDYT-2026-10-05g — TRYB STRUKTURA: widgety analizatora przepisów z szablonów, MOD-WIDGET-IO poza turą (6.180)
 
 ### 1. ŹRÓDŁO

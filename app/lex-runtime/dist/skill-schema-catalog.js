@@ -87,7 +87,7 @@ export function matchSchema(entries, text) {
     return best ? { ...best.entry, why: `schemat ${best.entry.code}: ${best.entry.label} (${best.words.join(", ")})` } : null;
 }
 const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz|zrób|wyślij|złóż|wnieś|projekt\p{L}*|wzór|wzoru|szablon\p{L}*)(?![\p{L}])/iu;
-const REVIEW = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|jest|są|należy|powinien\p{L}*|trzeba)|co\s+(?:mam\s+)?(?:zrobić|robić))(?![\p{L}])/iu;
+const REVIEW = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|mogę|można|jest|są|należy|powinien\p{L}*|trzeba)|jakie\s+mam\s+prawa|co\s+(?:mam\s+)?(?:zrobić|robić))(?![\p{L}])/iu;
 const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu;
 /**
  * The schema to draft with, only when the user asks to draft that letter: a
