@@ -526,7 +526,7 @@
                     status_proc, umocowanie, dane, uwagi}
    nazewnictwo[] — {id:'NZ-1', status:'err'|'warn', title, cytat, problem, skutek, rek}
    dis_items[]   — {id:'DIS-01', title, priorytet:'KRYTYCZNA'|'ISTOTNA'|'POBOCZNA',
-                    bezsporne, pow, poz, przepisy, rek}
+                    bezsporne, pow, poz, przepisy:[{art}] (albo lista tekstów), rek}
    lapsusy[]     — {id:'LA-1', type:'la-rodzaj'|…, autor, doc, zamierzenie, skutek_rzecz,
                     skutek_odwr, severity:'KRYTYCZNE'|'ISTOTNE'|'MARGINALNE', cytat, rek,
                     status:'potwierdzony'|'wymaga_weryfikacji'}
@@ -540,17 +540,39 @@
 /* Dane sprawy: aplikacja podstawia je za literałem poniżej (WIDGET-DANE);
    poza aplikacją model wpisuje je w ten obiekt. Puste = brak danych. */
 const LEX_DATA = /* lex:dane */ {"caseId":"","mode":"A","evidence":[],"alerts_data":{"crit":[],"warn":[],"info":[]},"coverage_data":[],"gaps":[],"terminy":[],"recs":[],"contradictions":[],"lapsusy":[],"roszczenia":[],"persons":[],"nazewnictwo":[],"dis_items":[]};
-const evidence=(LEX_DATA.evidence||[]);
-const alerts_data=(LEX_DATA.alerts_data||{crit:[],warn:[],info:[]});
-const coverage_data=(LEX_DATA.coverage_data||[]);
-const gaps=(LEX_DATA.gaps||[]);
-const terminy=(LEX_DATA.terminy||[]);
-const recs=(LEX_DATA.recs||[]);
-const contradictions=(LEX_DATA.contradictions||[]);
+/* Widok czyta kopię danych z tekstami bezpiecznymi dla HTML (dane pochodzą z dokumentów
+   sprawy i mogą zawierać znaczniki); eksport JSON/MD/CSV czyta dane oryginalne (LEX_RAW). */
+const LEX_RAW = (LEX_DATA && typeof LEX_DATA === 'object') ? LEX_DATA : {};
+function lexNorm(d){
+  (d.dis_items||[]).forEach(x=>{ if(!x) return;
+    const p = Array.isArray(x.przepisy) ? x.przepisy : (x.przepisy ? [x.przepisy] : []);
+    x.przepisy = p.map(v => typeof v === 'string' ? {art:v} : v); });
+  return d;
+}
+function lexEsc(v){
+  if(typeof v==='string') return v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  if(Array.isArray(v)) return v.map(lexEsc);
+  if(v&&typeof v==='object'){ const o={}; for(const k in v) o[k]=lexEsc(v[k]); return o; }
+  return v;
+}
+function lexArrays(d){
+  return { evidence:d.evidence||[], alerts_data:d.alerts_data||{crit:[],warn:[],info:[]}, coverage_data:d.coverage_data||[],
+    gaps:d.gaps||[], terminy:d.terminy||[], recs:d.recs||[], contradictions:d.contradictions||[], lapsusy:d.lapsusy||[],
+    roszczenia:d.roszczenia||[], persons:d.persons||[], nazewnictwo:d.nazewnictwo||[], dis_items:d.dis_items||[] };
+}
+lexNorm(LEX_RAW);
+const LEX_VIEW = lexEsc(JSON.parse(JSON.stringify(LEX_RAW)));
+const evidence=(LEX_VIEW.evidence||[]);
+const alerts_data=(LEX_VIEW.alerts_data||{crit:[],warn:[],info:[]});
+const coverage_data=(LEX_VIEW.coverage_data||[]);
+const gaps=(LEX_VIEW.gaps||[]);
+const terminy=(LEX_VIEW.terminy||[]);
+const recs=(LEX_VIEW.recs||[]);
+const contradictions=(LEX_VIEW.contradictions||[]);
 
 /* ═══ HELPERS ═══ */
 
-const lapsusy=(LEX_DATA.lapsusy||[]);
+const lapsusy=(LEX_VIEW.lapsusy||[]);
 
 
 /* ═══ ROSZCZENIA ═══ */
@@ -568,7 +590,7 @@ const lapsusy=(LEX_DATA.lapsusy||[]);
 
   Kwota: liczba lub null (dla niepieniężnych)
 */
-const roszczenia=(LEX_DATA.roszczenia||[]);
+const roszczenia=(LEX_VIEW.roszczenia||[]);
 
 let roszMode='pozew';
 
@@ -661,13 +683,13 @@ function filterRosz(type,btn){
 
 
 /* ═══ STRONY I ŚWIADKOWIE ═══ */
-const persons=(LEX_DATA.persons||[]);
+const persons=(LEX_VIEW.persons||[]);
 
 /* ═══ NAZEWNICTWO PROCESOWE ═══ */
-const nazewnictwo=(LEX_DATA.nazewnictwo||[]);
+const nazewnictwo=(LEX_VIEW.nazewnictwo||[]);
 
 /* ═══ KWESTIE SPORNE DIS ═══ */
-const dis_items=(LEX_DATA.dis_items||[]);
+const dis_items=(LEX_VIEW.dis_items||[]);
 
 
 /* ── RENDER: Strony ── */
@@ -921,8 +943,8 @@ function renderRaport(){
 
 /* ═══ INIT ═══ */
 /* ── EKSPORT ── */
-const CASE_ID = LEX_DATA.caseId || 'sprawa';
-{ const badge=document.getElementById('mode-badge'); if(badge&&LEX_DATA.mode) badge.textContent='MODE '+LEX_DATA.mode; }
+const CASE_ID = String(LEX_RAW.caseId || 'sprawa');
+{ const badge=document.getElementById('mode-badge'); if(badge&&LEX_RAW.mode) badge.textContent='MODE '+LEX_RAW.mode+(LEX_RAW.caseId?' · '+LEX_RAW.caseId:''); }
 const EXPORT_DATE = new Date().toISOString().slice(0,10);
 
 function showToast(msg){
@@ -940,15 +962,17 @@ function dlBlob(content,filename,mime){
 }
 
 function exportJSON(){
+  const {evidence,alerts_data,coverage_data,gaps,terminy,recs,contradictions,lapsusy,roszczenia,persons,nazewnictwo,dis_items}=lexArrays(LEX_RAW);
   const data={
     meta:{sygnatura:CASE_ID,data_eksportu:EXPORT_DATE,wersja:'5.5.0'},
-    evidence,alerts_data,coverage_data,gaps,terminy,recs,contradictions,lapsusy,roszczenia,persons,nazewnictwo,dis_items,mode:LEX_DATA.mode||'A'
+    evidence,alerts_data,coverage_data,gaps,terminy,recs,contradictions,lapsusy,roszczenia,persons,nazewnictwo,dis_items,mode:LEX_RAW.mode||'A'
   };
   dlBlob(JSON.stringify(data,null,2),`analiza_${CASE_ID.replace(/\//g,'-')}_${EXPORT_DATE}.json`,'application/json');
   showToast('✓ Eksport JSON gotowy');
 }
 
 function exportCSV(){
+  const {evidence,alerts_data,coverage_data,gaps,terminy,recs,contradictions,lapsusy,roszczenia,persons,nazewnictwo,dis_items}=lexArrays(LEX_RAW);
   const header='ID;Nazwa;Typ;Poziom;Score;Alerty;Opis';
   const rows=evidence.map(e=>[
     e.id,
@@ -963,6 +987,7 @@ function exportCSV(){
 }
 
 function exportMD(){
+  const {evidence,alerts_data,coverage_data,gaps,terminy,recs,contradictions,lapsusy,roszczenia,persons,nazewnictwo,dis_items}=lexArrays(LEX_RAW);
   const lines=[];
   lines.push('# Analiza dowodów — '+CASE_ID+' — '+EXPORT_DATE);
   lines.push('');
@@ -1194,6 +1219,12 @@ function init(){
   renderNazw();
   renderDIS();
   renderLA('all');
+  // Roszczenia też od startu (wcześniej dopiero po kliknięciu trybu); tryb widoku z danych:
+  // odniesienia drugiej strony widać tylko w trybie „Odpowiedź na pozew”.
+  const roszStart = roszczenia.some(r=>r&&(r.tryb==='odpowiedz'||(r.odniesienia||[]).length)) ? 'odpowiedz'
+    : roszczenia.some(r=>r&&r.tryb==='przedsad') ? 'przedsad' : null;
+  if(roszStart) setRoszMode(roszStart, document.getElementById('ms-btn-'+roszStart));
+  else renderRoszczenia('all');
 }
 
 function switchTab(id){

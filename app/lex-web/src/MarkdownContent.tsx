@@ -38,6 +38,29 @@ export function tableCells(line: string, columns?: number): string[] {
   return cells;
 }
 
+// A header cell holding only verification markers (VER / NIEWERYFIKOWANE).
+const MARKERS_ONLY = /^(?:\s*(?:\u2705|\u26a0\ufe0f?|\u274c)?\s*\[(?:VER:[^\]]*|NIEWERYFIKOWANE[^\]]*)\]\s*)+$/u;
+
+// A model sometimes puts the verification markers of the header after its
+// last pipe; that made a column of its own, empty in every row. The markers
+// join the header cell before them and the empty column goes.
+export function withoutMarkerColumns(
+  table: Extract<MarkdownBlock, { type: "table" }>
+): Extract<MarkdownBlock, { type: "table" }> {
+  let { header, align, rows } = table;
+  for (let column = header.length - 1; column > 0; column -= 1) {
+    if (!MARKERS_ONLY.test(header[column]!) || rows.some((row) => row[column]?.trim())) continue;
+    header = [
+      ...header.slice(0, column - 1),
+      `${header[column - 1]} ${header[column]!.trim()}`.trim(),
+      ...header.slice(column + 1)
+    ];
+    align = [...align.slice(0, column), ...align.slice(column + 1)];
+    rows = rows.map((row) => [...row.slice(0, column), ...row.slice(column + 1)]);
+  }
+  return { type: "table", header, align, rows };
+}
+
 export function parseMarkdown(content: string): MarkdownBlock[] {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
   const blocks: MarkdownBlock[] = [];
@@ -63,7 +86,7 @@ export function parseMarkdown(content: string): MarkdownBlock[] {
         index += 1;
       }
       index -= 1;
-      blocks.push({ type: "table", header, align, rows });
+      blocks.push(withoutMarkerColumns({ type: "table", header, align, rows }));
       continue;
     }
     const heading = HEADING.exec(line);

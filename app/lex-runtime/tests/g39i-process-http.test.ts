@@ -238,6 +238,13 @@ function fixture() {
       })
     );
 
+  const generate = vi.fn(async (_request: { processRenderOnly?: { stage: string } }) => ({
+    ast: { schemaVersion: "1", documentType: "pleading", locale: "pl-PL", styleProfile: "lex-classic-clean-v1", blocks: [] },
+    aliasesUsed: [],
+    sessionId: "session-generate",
+    validationContext: {}
+  }));
+
   const artifactId =
     "artifact_" +
     "a".repeat(32);
@@ -325,7 +332,16 @@ function fixture() {
       reauthorizationManager,
       sessionExecutor: {
         execute
-      }
+      },
+      documentAstGenerator: { generate },
+      documentAuthoringService: {
+        createReady: vi.fn(async () => ({
+          artifact: { artifactId: "artifact_" + "b".repeat(32), filename: "pismo.docx" },
+          format: "docx",
+          sha256: "b".repeat(64)
+        }))
+      } as never,
+      documentService: { forget: vi.fn(() => false) } as never
     });
 
   const app =
@@ -390,6 +406,7 @@ function fixture() {
     app,
     auth,
     execute,
+    generate,
     artifactId,
     readState,
     createIntent
@@ -1069,5 +1086,56 @@ describe(
         current.auth.close();
       }
     );
+    it("renders a pleading file only from the case's started pipeline", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner", displayName: "Owner", password: "G39I render strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const createdCase = await request(current.app)
+        .post("/api/cases")
+        .set("Authorization", authorization)
+        .send({ displayName: "Render" })
+        .expect(201);
+      const caseId = String(createdCase.body.caseId);
+      const body = {
+        query: "Napisz pozew o zapłatę w pliku docx.",
+        provider: "openai",
+        model: "gpt-test",
+        primarySkill: DR,
+        mode: "PRAWNIK",
+        format: "docx",
+        documentType: "pleading",
+        styleProfile: "lex-classic-clean-v1",
+        attachments: []
+      };
+
+      await request(current.app)
+        .post(`/api/cases/${caseId}/artifacts/generate`)
+        .set("Authorization", authorization)
+        .send(body)
+        .expect(409, { error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
+      expect(current.generate).not.toHaveBeenCalled();
+
+      await request(current.app)
+        .post(`/api/cases/${caseId}/workflow/process-pleading/initialize`)
+        .set("Authorization", authorization)
+        .send({ mode: "CHECKPOINT" })
+        .expect(201);
+      await request(current.app)
+        .post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`)
+        .set("Authorization", authorization)
+        .send({})
+        .expect(200);
+
+      const rendered = await request(current.app)
+        .post(`/api/cases/${caseId}/artifacts/generate`)
+        .set("Authorization", authorization)
+        .send(body);
+      expect(rendered.status).toBe(201);
+      expect(current.generate.mock.calls[0]?.[0]?.processRenderOnly).toEqual({ stage: expect.any(String) });
+      current.auth.close();
+    });
   }
 );

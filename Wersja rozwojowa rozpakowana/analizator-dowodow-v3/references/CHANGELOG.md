@@ -1,5 +1,7 @@
 # CHANGELOG — analizator-dowodow-v3
 
+- 5.16.22 (2026-10-05o, AUDYT-2026-10-05o): dashboard: escapowanie danych, wartości domyślne pól, zakładka roszczeń od startu (F-232)
+
 - 5.16.21 (2026-10-05h, AUDYT-2026-10-05h): Dashboard (KROK 4) zasilany danymi: jeden obiekt LEX_DATA po komentarzu `lex:dane`, bez przykładowych danych sprawy w szablonie; zakładki Osoby, Nazewnictwo, Kwestie sporne i Lapsusy renderowane przy starcie (wcześniej puste). Kreator przez `show_widget(path)`. BLOK I i wariant z kodem oznaczone WIDGET-DANE.
 
 - 5.16.20 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

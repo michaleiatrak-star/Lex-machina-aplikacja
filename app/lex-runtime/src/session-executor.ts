@@ -1,4 +1,4 @@
-import { compactForModel, reachedStages } from "./skill-sections.js";
+import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
@@ -216,7 +216,8 @@ import {
   privacyRecognizerFor
 } from "./privacy/local-llm-ner.js";
 import {
-  parseSkillSelectionEnvelope
+  parseSkillSelectionEnvelope,
+  threadUserText
 } from "./skill-selection.js";
 
 export type SessionDocumentAttachment = {
@@ -303,6 +304,8 @@ export type SessionExecutionRequest = {
   >;
   // Sesja generatora pisma (LegalDocumentAstGenerator): wynik to JSON AST.
   documentAstOutput?: boolean;
+  // The .docx of a pleading the case's pipeline already wrote (route checked the state).
+  processRenderOnly?: { stage: ProcessPleadingStage };
   processWorkflowContext?: {
     stage: ProcessPleadingStage;
     checkpoint: ProcessPleadingCheckpoint;
@@ -1851,7 +1854,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       // so the criminal matter comes from the question itself.
       criminal:
         (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
-        criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)),
+        criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)) ||
+        // A follow-up of a criminal matter ("a jaki termin?") stays one.
+        (!request.auxiliaryText && criminalMatter(threadUserText(request.query))),
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
@@ -1947,7 +1952,12 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     }
     if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
-      const domains = rankDomains(this.registry, this.flashRoutes(), caseText);
+      // A follow-up naming no domain of its own keeps the domain of the thread.
+      const ownDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+      const domains =
+        ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
+          ? ownDomains
+          : rankDomains(this.registry, this.flashRoutes(), [threadUserText(request.query), caseText].join("\n"));
       if (domains.length) {
         audit.record("gate", "DOMAIN_HINT", "OK", {
           detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
@@ -2287,6 +2297,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       ...(request.documentAstOutput
         ? { documentAstOutput: true }
+        : {}),
+      ...(request.processRenderOnly && request.documentAstOutput
+        ? { processRenderOnly: request.processRenderOnly }
         : {}),
       ...(request.processWorkflowContext
         ? {

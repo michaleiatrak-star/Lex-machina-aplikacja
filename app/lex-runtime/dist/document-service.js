@@ -55,6 +55,8 @@ export function replaceOutsideTokens(text, surfaces, token) {
 }
 const PROTECTED_PART = /(\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/;
 const PAGE_HEADER = /^\[STRONA [^\]\n]+\]\n?/gm;
+// One page corrected by hand; a scanned page is a few thousand characters.
+const MAX_EDITED_PAGE_CHARS = 200_000;
 /**
  * Lines the anonymized text up with the source to show the original words
  * (in their original case) where each token stands. A token takes the
@@ -308,6 +310,57 @@ export class LocalPrivateDocumentService {
                     : {})
             })),
             suggestions
+        };
+    }
+    /**
+     * The user's own correction of a page's text (a poor scan the OCR got wrong). The page
+     * text of the document is replaced (also in the case's encrypted store) and personal
+     * data on that page detected again; the review's earlier offsets for it no longer hold.
+     */
+    async editPage(documentId, pageNumber, text, security) {
+        const record = this.documents.get(documentId);
+        if (!record)
+            throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+        const index = record.source.pages.findIndex((item) => item.page === pageNumber);
+        if (index < 0)
+            throw new Error("INVALID_DOCUMENT_PAGE");
+        const clean = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n");
+        if (clean.length > MAX_EDITED_PAGE_CHARS)
+            throw new Error("DOCUMENT_PAGE_TEXT_TOO_LONG");
+        const { lines: _lines, corrections: _corrections, ...previous } = record.source.pages[index];
+        const page = { ...previous, text: clean, editedByUser: true };
+        const pages = record.source.pages.map((item, at) => (at === index ? page : item));
+        const source = {
+            ...record.source,
+            pages,
+            sourceChars: pages.reduce((sum, item) => sum + item.text.length, 0),
+            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+        };
+        if (this.secureDocumentStore && record.caseId) {
+            if (!security?.caseDataKey || !Number.isInteger(security.keyVersion) || (security.keyVersion ?? 0) < 1) {
+                throw new Error("DOCUMENT_STORAGE_CONTEXT_REQUIRED");
+            }
+            await this.secureDocumentStore.saveSource({
+                caseId: record.caseId,
+                documentId,
+                mediaType: record.mediaType,
+                source,
+                caseDataKey: security.caseDataKey,
+                keyVersion: security.keyVersion
+            });
+        }
+        record.source = source;
+        const preview = await new LocalPolishPseudonymizer(new PseudonymizationVault(), withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), this.personMorphology).pseudonymize(clean);
+        return {
+            page: {
+                page: page.page,
+                text: page.text,
+                source: page.source,
+                ...(page.confidence !== undefined ? { confidence: page.confidence } : {}),
+                ...(page.engine ? { engine: page.engine } : {}),
+                editedByUser: true
+            },
+            suggestions: preview.findings.map((finding) => ({ page: page.page, start: finding.start, end: finding.end, kind: finding.kind }))
         };
     }
     /** OCR pages through the local model's correction (original words kept). */

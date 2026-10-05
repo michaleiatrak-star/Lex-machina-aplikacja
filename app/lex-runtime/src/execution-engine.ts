@@ -321,6 +321,9 @@ export class LexExecutionEngine {
     draftCallbacks?: StreamCallbacks;
     // Generowanie pisma: wynik to JSON AST (deterministic-workflow.ts, documentAstOutput).
     documentAstOutput?: boolean;
+    // The .docx of a pleading the case's pipeline already wrote (state checked by the
+    // route): the file is rendered from that text, no checkpoint runs.
+    processRenderOnly?: { stage: ProcessPleadingStage };
     provider: ProviderId;
     model: string;
     continuityKey?: string;
@@ -1211,6 +1214,13 @@ export class LexExecutionEngine {
       );
     }
     if (
+      workflowPlan.id === "PROCESS_PLEADING_V1" &&
+      !args.processWorkflowContext &&
+      args.processRenderOnly &&
+      args.documentAstOutput
+    ) {
+      emit("gate", "G39H_PROCESS_STATE_BINDING", "OK", `render-only;stage=${args.processRenderOnly.stage}`);
+    } else if (
       workflowPlan.id ===
         "PROCESS_PLEADING_V1" &&
       !args.processWorkflowContext

@@ -537,7 +537,13 @@ export class LexExecutionEngine {
             emit("gate", "G39H_PROCESS_STATE_BINDING", "BLOCKED", "PROCESS_STATE_ON_NON_PROCESS_WORKFLOW");
             throw new LexExecutionError("Process pleading state was bound to a non-process workflow.", "G39H_PROCESS_STATE_BINDING", [...events]);
         }
-        if (workflowPlan.id ===
+        if (workflowPlan.id === "PROCESS_PLEADING_V1" &&
+            !args.processWorkflowContext &&
+            args.processRenderOnly &&
+            args.documentAstOutput) {
+            emit("gate", "G39H_PROCESS_STATE_BINDING", "OK", `render-only;stage=${args.processRenderOnly.stage}`);
+        }
+        else if (workflowPlan.id ===
             "PROCESS_PLEADING_V1" &&
             !args.processWorkflowContext) {
             emit("gate", "G39H_PROCESS_STATE_BINDING", "BLOCKED", "PROCESS_STATE_CONTEXT_MISSING");

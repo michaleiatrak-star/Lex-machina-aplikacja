@@ -14,6 +14,7 @@ import {
 } from "./legal-document-ast.js";
 import type { GenerationAliasManifest } from "./generation-aliases.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
+import type { ProcessPleadingStage } from "./process-pleading-state.js";
 import type {
   DocumentGenerationValidationContext
 } from "./document-generation-validation.js";
@@ -30,6 +31,8 @@ export type LegalDocumentAstGenerationRequest = {
   aliases: GenerationAliasManifest;
   // The case's shared key, so the instruction uses the documents' symbols.
   privacySeed?: PseudonymizationVaultSnapshot;
+  // The file of a pleading the case's process pipeline already wrote.
+  processRenderOnly?: { stage: ProcessPleadingStage };
 };
 
 function extractJson(value: string): unknown {
@@ -366,6 +369,7 @@ export class LegalDocumentAstGenerator {
       // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
       accountContinuity: "none",
       ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+      ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
       ...(request.attachments?.length
         ? { documentAttachments: request.attachments }
         : {})

@@ -69,6 +69,18 @@ export function latestUserTurn(
     : query;
 }
 
+// Everything the user wrote in the thread (and its summary), without the
+// assistant's answers: the matter a follow-up ("a jaki termin?") belongs to.
+export function threadUserText(
+  query: string
+): string {
+  return query
+    .split(/\n\n(?=Użytkownik: |Asystent: )/u)
+    .filter((part) => !part.startsWith("Asystent: "))
+    .map((part) => part.replace(/^Użytkownik: /u, ""))
+    .join("\n");
+}
+
 function normalize(value: string): string {
   return value
     .normalize("NFKD")

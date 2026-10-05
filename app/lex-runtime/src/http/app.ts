@@ -26,6 +26,11 @@ import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
 import { latestUserTurn } from "../execution-engine.js";
+import { threadUserText } from "../skill-selection.js";
+
+// A message that only moves a document pipeline on (its subject is earlier in the thread).
+const PIPELINE_CONTINUATION =
+  /(?<![\p{L}])(?:kontynuuj\p{L}*|dalej|następn\p{L}*\s+etap|kolejn\p{L}*\s+etap|zatwierdzam|akceptuj\p{L}*|potwierdzam|popraw\p{L}*|uzupełnij\p{L}*|pipeline\p{L}*|checkpoint\p{L}*)(?![\p{L}])/iu;
 import {
   DynamicModelCatalog,
   type ModelDescriptor
@@ -169,6 +174,7 @@ import {
   createDeterministicWorkflowPlan
 } from "../deterministic-workflow.js";
 import type {
+  ProcessPleadingStage,
   ProcessPleadingState
 } from "../process-pleading-state.js";
 import {
@@ -867,6 +873,21 @@ function sendContractWorkflowError(
     error:
       error.message
         .split(":", 1)[0]
+  });
+  return true;
+}
+
+function sendOrderedWorkflowError(
+  res: Response,
+  error: unknown
+): boolean {
+  if (!(error instanceof Error) || !error.message.startsWith("ORDERED_WORKFLOW_")) {
+    return false;
+  }
+  const [code, workflowId] = error.message.split(":", 2);
+  res.status(error.message.startsWith("ORDERED_WORKFLOW_STATE_SERVICE") ? 503 : 409).json({
+    error: code,
+    ...(workflowId ? { reason: workflowId } : {})
   });
   return true;
 }
@@ -6387,6 +6408,63 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   );
 
   app.post(
+    "/api/documents/:documentId/pages/:page/text",
+    async (req, res) => {
+      const documentService = options.documentService;
+      if (!documentService?.editPage) {
+        res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+        return;
+      }
+      const documentId = String(req.params.documentId ?? "").trim();
+      const page = Number(req.params.page);
+      const requestedCaseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+      const text = req.body?.text;
+      if (
+        !/^doc_[a-f0-9]{24}$/.test(documentId) ||
+        !Number.isInteger(page) ||
+        page < 1 ||
+        typeof text !== "string" ||
+        (requestedCaseId && !/^case_[a-f0-9]{32}$/.test(requestedCaseId))
+      ) {
+        res.status(400).json({ error: "INVALID_DOCUMENT_PAGE_EDIT" });
+        return;
+      }
+      try {
+        let result;
+        if (options.caseAccessService) {
+          const caseId = requestedCaseId || documentCaseIds.get(documentId);
+          if (!caseId) throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+          const context = responseAuthContext(res);
+          const caseView = options.caseAccessService.openCase(context, caseId);
+          result = await options.caseAccessService.withCaseDataKey(
+            context,
+            caseId,
+            "WRITE",
+            async (caseDataKey) =>
+              await documentService.editPage!(documentId, page, text, {
+                caseId,
+                caseDataKey,
+                keyVersion: caseView.keyVersion
+              })
+          );
+        } else {
+          result = await documentService.editPage(documentId, page, text);
+        }
+        res.json(result);
+      } catch (error) {
+        if (!sendCaseAccessError(res, error)) {
+          const code = error instanceof Error ? error.message : "";
+          res.status(422).json({
+            error: /^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_TEXT_TOO_LONG)$/.test(code)
+              ? code
+              : "DOCUMENT_PAGE_EDIT_FAILED"
+          });
+        }
+      }
+    }
+  );
+
+  app.post(
     "/api/documents/:documentId/finalize",
     async (req, res) => {
       if (!options.documentService) {
@@ -6965,10 +7043,36 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               .styleProfile;
         }
 
+        // A pleading (pisma-procesowe-v3) is written by the case's process pipeline
+        // (checkpoints, HYBRID-VAL before the file); the file only renders the text
+        // that pipeline produced. Without a started pipeline there is no such text.
+        let processRenderOnly: { stage: ProcessPleadingStage } | undefined;
+        if (previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
+          const processState = options.processWorkflowStore
+            ? await options.caseAccessService.withCaseDataKey(
+                context,
+                caseId,
+                "ANALYZE",
+                async (caseDataKey) =>
+                  await options.processWorkflowStore!.getProcessPleadingState({
+                    caseId,
+                    caseDataKey,
+                    keyVersion: caseView.keyVersion
+                  })
+              )
+            : null;
+          if (!processState || processState.stage === "CG_ACCEPTANCE") {
+            res.status(409).json({ error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
+            return;
+          }
+          processRenderOnly = { stage: processState.stage };
+        }
+
         const generated =
           await options
             .documentAstGenerator
             .generate({
+              ...(processRenderOnly ? { processRenderOnly } : {}),
               ...(sharedGeneration && sharedGeneration.members.size > 0
                 ? { privacySeed: sharedGeneration.snapshot }
                 : {}),
@@ -8389,6 +8493,25 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     return picked;
   };
 
+  function hasFirmWorkspace(res: Response): boolean {
+    try {
+      return Boolean(options.caseAccessService?.getFirmKnowledgeWorkspace(responseAuthContext(res)));
+    } catch {
+      return false;
+    }
+  }
+
+  // The document the thread is drafting: named in this message, or - for a stage of a
+  // pipeline ("kontynuuj", "zatwierdzam", "popraw") - in an earlier message of the thread.
+  function draftingKind(query: string, documentType?: GenerationDocumentType) {
+    const text = parseSkillSelectionEnvelope(query).query;
+    const latest = latestUserTurn(text);
+    return (
+      draftingTarget(latest, documentType) ??
+      (latest.length < 300 && PIPELINE_CONTINUATION.test(latest) ? draftingTarget(threadUserText(text)) : null)
+    );
+  }
+
   // The firm's default template for the document the message asks to draft (none
   // picked by the user): used as a firm template and, for a file, as its style.
   async function firmDefaultTemplate(
@@ -8397,7 +8520,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     documentType?: GenerationDocumentType
   ): Promise<{ templateId: string; filename: string; kind: string } | null> {
     if (!options.sharedTemplateStore || !options.caseAccessService) return null;
-    const kind = draftingTarget(latestUserTurn(parseSkillSelectionEnvelope(query).query), documentType);
+    const kind = draftingKind(query, documentType);
     if (!kind) return null;
     try {
       const firm = options.caseAccessService.getFirmKnowledgeWorkspace(responseAuthContext(res));
@@ -8494,6 +8617,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     const appliedTemplate =
       firmTemplates.length === 0 && !localModel ? await firmDefaultTemplate(res, request.query) : null;
     if (appliedTemplate) firmTemplates.push(appliedTemplate.templateId);
+    // Drafting a document: the firm's rules and know-how are part of the material
+    // (a hosted model; the user's selection of firm files still applies).
+    if (
+      !localModel &&
+      !knowledge.includeFirm &&
+      options.caseKnowledgeSearch &&
+      draftingKind(request.query) &&
+      hasFirmWorkspace(res)
+    ) {
+      knowledge.includeFirm = true;
+    }
     if (attachments.length + firmTemplates.length > documentLimit) {
       res.status(422).json({
         error: "TOO_MANY_DOCUMENT_ATTACHMENTS",
@@ -9838,10 +9972,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               }
             );
 
-        const permit =
-          requireOrderedCaseExecutionPermit(
-            state
-          );
+        let permit: ReturnType<typeof requireOrderedCaseExecutionPermit>;
+        try {
+          permit = requireOrderedCaseExecutionPermit(state);
+        } catch (error) {
+          // The client needs the workflow to offer its reset.
+          if (error instanceof Error && error.message.startsWith("ORDERED_WORKFLOW_")) {
+            throw new Error(`${error.message.split(":", 1)[0]}:${workflowId}`);
+          }
+          throw error;
+        }
         request
           .orderedCaseWorkflowContext = {
             workflowId,
@@ -11068,6 +11208,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error
         )
       ) {
+        return;
+      }
+
+      if (sendOrderedWorkflowError(res, error)) {
         return;
       }
 

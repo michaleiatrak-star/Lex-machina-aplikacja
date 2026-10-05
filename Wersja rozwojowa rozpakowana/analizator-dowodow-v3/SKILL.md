@@ -1,6 +1,6 @@
 ---
 name: analizator-dowodow-v3
-version: "5.16.21"
+version: "5.16.22"
 type: executive-analiza
 status: production
 description: "Ocena dowodów, dokumentów, zeznań i akt: siła dowodowa, hierarchia A-D, pokrycie przesłanek, sprzeczności, terminy procesowe i analiza śledcza."
@@ -39,7 +39,7 @@ pipeline:
     - AD-KROK3-WYKONANIE
     - AD-KROK4-DASHBOARD
 changelog: |
-  Wersja bieżąca: 5.16.21 (2026-10-05h, AUDYT-2026-10-05h): Dashboard (KROK 4) zasilany danymi: jeden obiekt LEX_DATA po komentarzu `lex:dane`, bez przykładowych danych sprawy w szablonie; zakładki Osoby, Nazewnictwo, Kwestie sporne i Lapsusy renderowane przy starcie (wcześniej puste). Kreator przez `show_widget(path)`. BLOK I i wariant z kodem oznaczone WIDGET-DANE.
+  Wersja bieżąca: 5.16.22 (2026-10-05o, AUDYT-2026-10-05o): dashboard: escapowanie danych, wartości domyślne pól, zakładka roszczeń od startu (F-232)
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

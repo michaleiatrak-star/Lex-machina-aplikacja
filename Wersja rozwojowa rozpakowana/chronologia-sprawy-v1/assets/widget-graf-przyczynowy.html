@@ -67,6 +67,10 @@ let GRAF = /* lex:dane */ {
   ],
   scenariusze: []
 };
+// Brakujące pola (dane z modelu mogą być niepełne) — puste wartości, nie błąd skryptu.
+GRAF = { tytul: "", wezly: [], krawedzie: [], scenariusze: [], ...(GRAF && typeof GRAF === "object" ? GRAF : {}) };
+if (!Array.isArray(GRAF.wezly)) GRAF.wezly = [];
+if (!Array.isArray(GRAF.krawedzie)) GRAF.krawedzie = [];
 let STAN = {}; // id → "obalony" | "udowodniony"
 
 // ENGINE-START — 1:1 z shared/tools/graf_przyczynowy.py (nie zmieniaj osobno)
@@ -175,10 +179,12 @@ function analiza() {
   return { akt, s, baza, kryt, flagi };
 }
 
+// Tekst z danych do HTML/SVG: dane pochodzą z akt sprawy i mogą zawierać znaczniki.
+const E = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 function render() {
   const a = analiza(), svg = document.getElementById("gp-svg");
   document.getElementById("gp-tytul").textContent = GRAF.tytul || "Graf przyczynowy";
-  if (a.bledy) { document.getElementById("gp-teza").innerHTML = "⛔ " + a.bledy.join("<br>⛔ "); svg.innerHTML = ""; return; }
+  if (a.bledy) { document.getElementById("gp-teza").innerHTML = "⛔ " + a.bledy.map(E).join("<br>⛔ "); svg.innerHTML = ""; return; }
   // układ: oś X = kolejność dat, oś Y = wątek
   const wezly = [...GRAF.wezly].sort((x, y) => (x.data || "").localeCompare(y.data || ""));
   const watki = [...new Set(wezly.map((x) => x.watek || "—"))];
@@ -192,24 +198,25 @@ function render() {
     const neg = k.typ === "OSLABIA" || k.typ === "PRZERYWA", kol = neg ? "#cf222e" : "var(--color-text-secondary, #57606a)";
     const szerL = k.typ === "WARUNKUJE" ? 3.5 : 1.8, przer = k.dowod === "KORELACJA" ? "6 4" : k.typ === "WZMACNIA" ? "2 3" : "";
     const x1 = p1.x + W, y1 = p1.y + H / 2, x2 = p2.x, y2 = p2.y + H / 2, mx = (x1 + x2) / 2;
-    h += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${kol}" stroke-width="${szerL}" stroke-dasharray="${przer}" style="color:${kol}" marker-end="url(#gp-g)"><title>${k.od}→${k.do}: ${k.typ}, ${k.dowod || "?"}, csqn ${k.csqn || "?"}, adekw. ${k.adekwatnosc || "?"}, p=${pKrawedzi(k)}</title></path>`;
+    h += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${kol}" stroke-width="${szerL}" stroke-dasharray="${przer}" style="color:${kol}" marker-end="url(#gp-g)"><title>${E(k.od)}→${E(k.do)}: ${E(k.typ)}, ${E(k.dowod || "?")}, csqn ${E(k.csqn || "?")}, adekw. ${E(k.adekwatnosc || "?")}, p=${pKrawedzi(k)}${(k.zrodla || []).length ? ", źródła: " + E((k.zrodla || []).join(", ")) : ""}</title></path>`;
   }
   for (const x of wezly) {
     const p = poz[x.id], s = a.s[x.id], st = STAN[x.id], teza = x.id === GRAF.teza;
     const ramka = st === "obalony" ? "#cf222e" : st === "udowodniony" ? "#1a7f37" : teza ? "#8250df" : "var(--color-border-secondary, #8c959f)";
-    h += `<g class="wezel" onclick="przelacz('${x.id}')"><title>${x.id}: ${x.opis} — wsparcie ${s.toFixed(2)} (bez scenariusza ${a.baza[x.id].toFixed(2)})</title>
+    h += `<g class="wezel" data-id="${E(x.id)}"><title>${E(x.id)}: ${E(x.opis)} — wsparcie ${s.toFixed(2)} (bez scenariusza ${a.baza[x.id].toFixed(2)})</title>
       <rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" fill="var(--color-background-secondary, #f6f8fa)" stroke="${ramka}" stroke-width="${teza ? 3 : 1.5}"/>
       <rect x="${p.x}" y="${p.y + H - 6}" width="${(W * s).toFixed(1)}" height="6" fill="#1a7f37" opacity="0.75"/>
-      <text x="${p.x + 6}" y="${p.y + 15}" fill="currentColor"><tspan font-weight="600">${x.id}</tspan> ${x.data || ""} ${st ? "· " + st.toUpperCase() : ""}</text>
-      <text x="${p.x + 6}" y="${p.y + 31}" fill="currentColor">${(x.opis || "").slice(0, 26)}${(x.opis || "").length > 26 ? "…" : ""} · ${s.toFixed(2)}</text></g>`;
+      <text x="${p.x + 6}" y="${p.y + 15}" fill="currentColor"><tspan font-weight="600">${E(x.id)}</tspan> ${E(x.data || "")} ${st ? "· " + st.toUpperCase() : ""}</text>
+      <text x="${p.x + 6}" y="${p.y + 31}" fill="currentColor">${E(String(x.opis || "").slice(0, 26))}${String(x.opis || "").length > 26 ? "…" : ""} · ${s.toFixed(2)}</text></g>`;
   }
   svg.innerHTML = h;
   const t = GRAF.teza;
-  document.getElementById("gp-teza").innerHTML = t ? `<b>Teza ${t}</b>: wsparcie <b>${a.s[t].toFixed(2)}</b>` +
+  document.getElementById("gp-teza").innerHTML = t ? `<b>Teza ${E(t)}</b>: wsparcie <b>${a.s[t].toFixed(2)}</b>` +
     (Object.keys(STAN).length ? ` (bez scenariusza ${a.baza[t].toFixed(2)})` : "") : "";
-  document.getElementById("gp-krytyczne").innerHTML = a.kryt.length ? a.kryt.map(([id, n]) => `<li>${id}: obalenie → teza ${n.toFixed(2)}</li>`).join("") : "<li>brak ogniwa zmieniającego tezę o ≥ 0,05</li>";
-  document.getElementById("gp-flagi").innerHTML = a.flagi.length ? a.flagi.map((f) => `<li>⚠️ ${f}</li>`).join("") : "<li>brak</li>";
+  document.getElementById("gp-krytyczne").innerHTML = a.kryt.length ? a.kryt.map(([id, n]) => `<li>${E(id)}: obalenie → teza ${n.toFixed(2)}</li>`).join("") : "<li>brak ogniwa zmieniającego tezę o ≥ 0,05</li>";
+  document.getElementById("gp-flagi").innerHTML = a.flagi.length ? a.flagi.map((f) => `<li>⚠️ ${E(f)}</li>`).join("") : "<li>brak</li>";
 }
+document.getElementById("gp-svg").addEventListener("click", (e) => { const g = e.target.closest && e.target.closest("g.wezel"); if (g) przelacz(g.getAttribute("data-id")); });
 function przelacz(id) { STAN[id] = !STAN[id] ? "obalony" : STAN[id] === "obalony" ? "udowodniony" : undefined; if (!STAN[id]) delete STAN[id]; render(); }
 
 // ── MOD-WIDGET-IO v1.0 ──

@@ -165,8 +165,11 @@ export function withWidgetData(spec: { kind: WidgetKind; code: string }, data: u
   const start = mark.index + mark[0].length;
   const end = literalEnd(spec.code, start);
   if (end < 0) throw new WidgetError("WIDGET_TEMPLATE_DATA_SLOT_INVALID");
-  const boot = `<script>window.__lexDefault=${scriptJson(data)};try{if(window.name.indexOf("lexdata:")===0)window.__lexData=JSON.parse(window.name.slice(8));}catch(e){}</script>`;
-  const code = `${spec.code.slice(0, start)}(window.__lexData||window.__lexDefault)${spec.code.slice(end)}`;
+  // No data (null): the template's own empty literal is the default, an imported file still wins.
+  const empty = data === null || data === undefined;
+  const restore = `try{if(window.name.indexOf("lexdata:")===0)window.__lexData=JSON.parse(window.name.slice(8));}catch(e){}`;
+  const boot = empty ? `<script>${restore}</script>` : `<script>window.__lexDefault=${scriptJson(data)};${restore}</script>`;
+  const code = `${spec.code.slice(0, start)}(window.__lexData||${empty ? spec.code.slice(start, end) : "window.__lexDefault"})${spec.code.slice(end)}`;
   if (spec.kind !== "html") return code;
   // A template with its own MOD-WIDGET-IO functions keeps its bar (it exports the full state).
   const bar = /function\s+ioExportJSON\b/u.test(code) ? boot : boot + ioBar(skill);
@@ -194,7 +197,9 @@ function bridgeScript(widgetId: string): string {
   return `(function(){
 var ID=${JSON.stringify(widgetId)};
 function post(m){m.lexWidget=ID;parent.postMessage(m,"*");}
-window.sendPrompt=function(t){post({type:"prompt",text:String(t).slice(0,20000)});};
+// A prompt only from the user's own click: text from case files rendered into a widget must
+// not send a message on the user's behalf (an injected onerror handler has no user activation).
+window.sendPrompt=function(t){if(navigator.userActivation&&!navigator.userActivation.isActive)return;post({type:"prompt",text:String(t).slice(0,20000)});};
 var blobs={};var create=URL.createObjectURL;
 URL.createObjectURL=function(b){var u=create.call(URL,b);blobs[u]=b;return u;};
 function save(a){

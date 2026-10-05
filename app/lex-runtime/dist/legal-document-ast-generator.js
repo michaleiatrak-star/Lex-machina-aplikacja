@@ -292,6 +292,7 @@ export class LegalDocumentAstGenerator {
             // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
             accountContinuity: "none",
             ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+            ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
             ...(request.attachments?.length
                 ? { documentAttachments: request.attachments }
                 : {})

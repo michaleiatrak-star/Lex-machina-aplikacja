@@ -39,4 +39,14 @@ describe("answer markdown", () => {
     expect(tableCells("| a |", 3)).toEqual(["a", "", ""]);
     expect(parseMarkdown("Wybierz A | B, zależnie od sprawy.")[0]!.type).toBe("paragraph");
   });
+  it("does not make a column of the verification markers put after the header's last pipe", () => {
+    const ver = "\u2705 [VER: https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf#page=97, 2026-10-05]";
+    const [table] = parseMarkdown(
+      [`| Kryterium | Art. 233 KK | Art. 238 KK | ${ver}`, "|---|---|---|", "| Istota | Fałsz | Zawiadomienie |"].join("\n")
+    );
+    expect(table).toMatchObject({ type: "table" });
+    if (table?.type !== "table") return;
+    expect(table.header).toEqual(["Kryterium", "Art. 233 KK", `Art. 238 KK ${ver}`]);
+    expect(table.rows).toEqual([["Istota", "Fałsz", "Zawiadomienie"]]);
+  });
 });

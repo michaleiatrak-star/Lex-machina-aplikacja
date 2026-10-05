@@ -1,4 +1,4 @@
-import { compactForModel, reachedStages } from "./skill-sections.js";
+import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
@@ -49,7 +49,7 @@ import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWor
 import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseudonymizer.js";
 import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
-import { parseSkillSelectionEnvelope } from "./skill-selection.js";
+import { parseSkillSelectionEnvelope, threadUserText } from "./skill-selection.js";
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
 // Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
@@ -935,7 +935,9 @@ export class SafeSessionExecutor {
             // AUTO: primarySkill is a placeholder until the model reads a domain skill,
             // so the criminal matter comes from the question itself.
             criminal: (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
-                criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)),
+                criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)) ||
+                // A follow-up of a criminal matter ("a jaki termin?") stays one.
+                (!request.auxiliaryText && criminalMatter(threadUserText(request.query))),
             documents: attachments.length > 0,
             documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
             documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
@@ -1029,7 +1031,11 @@ export class SafeSessionExecutor {
             }
         }
         if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
-            const domains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            // A follow-up naming no domain of its own keeps the domain of the thread.
+            const ownDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
+            const domains = ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
+                ? ownDomains
+                : rankDomains(this.registry, this.flashRoutes(), [threadUserText(request.query), caseText].join("\n"));
             if (domains.length) {
                 audit.record("gate", "DOMAIN_HINT", "OK", {
                     detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
@@ -1354,6 +1360,9 @@ export class SafeSessionExecutor {
                 : {}),
             ...(request.documentAstOutput
                 ? { documentAstOutput: true }
+                : {}),
+            ...(request.processRenderOnly && request.documentAstOutput
+                ? { processRenderOnly: request.processRenderOnly }
                 : {}),
             ...(request.processWorkflowContext
                 ? {

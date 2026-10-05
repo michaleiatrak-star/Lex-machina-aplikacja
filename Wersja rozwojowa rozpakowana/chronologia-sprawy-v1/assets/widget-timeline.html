@@ -28,7 +28,7 @@
   // ============================================================
   // PRZYKŁADOWE DANE — ZASTĄP rzeczywistymi danymi sprawy przy realnym użyciu
   // ============================================================
-  const SAMPLE_DATA = /* lex:dane */ {
+  const SAMPLE_DATA_RAW = /* lex:dane */ {
     watki: [
       { id: "W1", nazwa: "Zatrudnienie i jego zakończenie" },
       { id: "W2", nazwa: "Zarzuty karne i ich rozpowszechnianie" },
@@ -71,13 +71,16 @@
       }
     ]
   };
+  const SAMPLE_DATA = SAMPLE_DATA_RAW && typeof SAMPLE_DATA_RAW === "object" ? SAMPLE_DATA_RAW : {};
+  // Brakujące pola (dane z modelu mogą być niepełne) — puste listy, nie błąd skryptu.
+  for (const pole of ["watki", "zdarzenia", "finanse", "sprzecznosci"]) if (!Array.isArray(SAMPLE_DATA[pole])) SAMPLE_DATA[pole] = [];
 
   function el(tag, attrs, children) {
     const e = document.createElement(tag);
     Object.entries(attrs || {}).forEach(([k, v]) => {
       if (k === "style") Object.assign(e.style, v); else e.setAttribute(k, v);
     });
-    (children || []).forEach(c => e.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+    (children || []).forEach(c => { if (c != null) e.appendChild(c instanceof Node ? c : document.createTextNode(String(c))); });
     return e;
   }
 
@@ -89,19 +92,21 @@
   function renderOsCzasu(watekId) {
     const container = el("div", {});
     const zdarzeniaWatku = SAMPLE_DATA.zdarzenia
-      .filter(z => watekId === "__ALL__" || z.watki.includes(watekId))
-      .sort((a, b) => a.data.localeCompare(b.data));
+      .filter(z => watekId === "__ALL__" || (z.watki || []).includes(watekId))
+      .sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")));
 
     zdarzeniaWatku.forEach(z => {
+      const pr = z.proweniencja || {};
       const card = el("div", { style: {
         border: "1px solid var(--color-border, #ddd)", borderRadius: "8px",
         padding: "10px 14px", marginBottom: "8px",
         borderLeft: z.kolizja_id ? "4px solid var(--color-danger, #c0392b)" : "4px solid var(--color-accent, #2c5282)"
       }}, [
-        el("div", { style: { fontWeight: "600" } }, [`${z.data} ${pewnoscBadge(z.pewnosc)} ${z.wezel_wspolny ? "🔗 [WSPÓLNY]" : ""}`]),
+        el("div", { style: { fontWeight: "600" } }, [`${z.data || "data nieustalona"} ${pewnoscBadge(z.pewnosc)} ${z.wezel_wspolny ? "🔗 [WSPÓLNY]" : ""}`]),
         el("div", {}, [z.opis]),
+        z.dedukacja ? el("div", { style: { fontSize: "12px", fontStyle: "italic" } }, [`Dedukcja: ${z.dedukacja}`]) : null,
         el("div", { style: { fontSize: "12px", opacity: "0.7" } }, [
-          `${z.proweniencja.dok_id} — ${z.proweniencja.strona_dok} (${z.proweniencja.autor_twierdzenia})`
+          `${pr.dok_id || "—"} — ${pr.strona_dok || "—"} (${pr.autor_twierdzenia || "—"})`
         ]),
         z.kolizja_id ? el("div", { style: { fontSize: "12px", color: "var(--color-danger, #c0392b)" } }, [`⚠ ${z.kolizja_id}`]) : null
       ].filter(Boolean));
@@ -130,7 +135,7 @@
         el("td", { style: { padding: "4px" } }, [f.termin || "— (brak w dokumencie)"]),
         el("td", { style: { padding: "4px", color: statusColor, fontWeight: "600" } }, [f.status]),
         el("td", { style: { padding: "4px", fontSize: "11px", opacity: "0.7" } }, [
-          [f.proweniencja.dok_id, ...(f.powiazane_dok_id || [])].join(", ")
+          [(f.proweniencja || {}).dok_id, (f.proweniencja || {}).strona_dok, ...(f.powiazane_dok_id || [])].filter(Boolean).join(", ")
         ])
       ]);
       table.appendChild(row);
@@ -143,12 +148,14 @@
     const container = el("div", {});
     container.appendChild(el("h3", {}, ["Indeks sprzeczności"]));
     SAMPLE_DATA.sprzecznosci.forEach(s => {
+      s = { ...s, wersja_a: s.wersja_a || {}, wersja_b: s.wersja_b || {} };
       container.appendChild(el("div", { style: {
         border: "1px solid var(--color-danger,#c0392b)", borderRadius: "8px", padding: "10px 14px", marginBottom: "8px"
       }}, [
         el("div", { style: { fontWeight: "700" } }, [`${s.id} [${s.typ}] — kategoria ${s.kategoria}`]),
-        el("div", {}, [`Wersja A (${s.wersja_a.dok_id}): ${s.wersja_a.tresc}`]),
-        el("div", {}, [`Wersja B (${s.wersja_b.dok_id}): ${s.wersja_b.tresc}`]),
+        s.zdarzenie ? el("div", {}, [`Zdarzenie: ${s.zdarzenie}`]) : null,
+        el("div", {}, [`Wersja A (${[s.wersja_a.dok_id, s.wersja_a.strona_dok].filter(Boolean).join(", ")}${s.wersja_a.autor ? "; " + s.wersja_a.autor : ""}): ${s.wersja_a.tresc || ""}`]),
+        el("div", {}, [`Wersja B (${[s.wersja_b.dok_id, s.wersja_b.strona_dok].filter(Boolean).join(", ")}${s.wersja_b.autor ? "; " + s.wersja_b.autor : ""}): ${s.wersja_b.tresc || ""}`]),
         s.common_ground ? el("div", { style: { fontStyle: "italic" } }, [`Wspólne: ${s.common_ground}`]) : null,
         el("div", {}, [`Wpływ: ${s.wplyw}`]),
         el("div", {}, [`Rekomendacja: ${s.rekomendacja}`])

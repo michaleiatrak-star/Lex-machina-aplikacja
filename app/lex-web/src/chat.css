@@ -3097,3 +3097,25 @@ mark.restored {
   align-items: center;
   gap: 8px;
 }
+
+/* Contract analysis: one-time mode choice before the first execution in a case. */
+.chat-contract-mode {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #b9c8b8;
+  border-radius: 12px;
+  background: #f3f7f1;
+  color: #1f3326;
+}
+
+.chat-contract-mode-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-contract-mode-options > button {
+  white-space: nowrap;
+}

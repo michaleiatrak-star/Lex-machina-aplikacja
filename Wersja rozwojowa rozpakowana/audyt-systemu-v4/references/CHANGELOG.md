@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.188 (2026-10-05o, AUDYT-2026-10-05o): AUDYT-2026-10-05o: widgety, wątki 1-5 wiadomości, etapy spraw w czacie (F-232-F-236)
+
 - 6.187 (AUDYT-2026-10-05n): F-230 — paczki skilli bez plików pluginu (`.claude-plugin/`, `.mcp.json`); claude.ai odrzucał wgrywany skill z manifestem. ZASADA 7, T34, dostarcz_skill.sh, skrypty paczek i workflow; CHECKSUMS 32/32 bez wpisów pluginu. F-231 (błąd własny 6.185/6.186): artefakty `__pycache__` w sumach i paczkach shared/audytu usunięte; pakowanie je pomija.
 
 - 6.186 (AUDYT-2026-10-05m): Test doboru DR na 500 pytaniach (486/500) i 113 świeżych (80/113, zła dziedzina 14). prawo-polskie 6.43, router 3.66, shared 3.99.11, DR-11 3.23.

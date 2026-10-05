@@ -33,6 +33,37 @@ export function verifiedClaimLabel(url: string, before: string, sources: SourceC
   return best?.claim ?? claims.join(", ");
 }
 
+// Act abbreviation compared without dots and case: „k.k.” = „KK”.
+function actKey(value: string): string {
+  return value.replace(/\./gu, "").toLocaleUpperCase("pl");
+}
+
+const PROVISION =
+  /(?<![\p{L}\d])(art\.\s*(\d+[a-z]*)(?:\s*§\s*\d+[a-z]*)?(?:\s*(?:ust\.|pkt)\s*\d+[a-z]*)*\s+((?:\p{Lu}[\p{L}]{0,5}\.?){1,4}))(?![\p{L}\d])/giu;
+
+// Verified provisions named in the text become links to the verified source,
+// at the page of the cited article (the anchor of the VER record).
+export function provisionLinks(
+  text: string,
+  sources: SourceClaim[]
+): Array<{ start: number; end: number; url: string; claim: string }> {
+  if (!sources.length) return [];
+  const verified = sources.flatMap((item) => {
+    const found = /art\.\s*(\d+[a-z]*)[^\n]*?\s((?:\p{Lu}[\p{L}]{0,5}\.?){1,4})\s*$/iu.exec(item.claim.trim());
+    return found ? [{ ...item, article: found[1]!.toLocaleLowerCase("pl"), act: actKey(found[2]!) }] : [];
+  });
+  const links: Array<{ start: number; end: number; url: string; claim: string }> = [];
+  for (const match of text.matchAll(PROVISION)) {
+    const article = match[2]!.toLocaleLowerCase("pl");
+    const act = actKey(match[3]!);
+    const candidates = verified.filter((item) => item.article === article && item.act === act);
+    const best = candidates.find((item) => item.url.includes("#")) ?? candidates[0];
+    const url = best ? safeHttpsUrl(best.url) : null;
+    if (best && url) links.push({ start: match.index!, end: match.index! + match[1]!.length, url, claim: best.claim });
+  }
+  return links;
+}
+
 function safeHttpsUrl(value: string): string | null {
   try {
     const url = new URL(value);
@@ -87,10 +118,39 @@ export function SourceLinkedText({
   const nodes: ReactNode[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
+  const plain = (start: number, end: number) => {
+    const text = normalized.slice(start, end);
+    let at = 0;
+    for (const link of provisionLinks(text, sources)) {
+      if (link.start > at) nodes.push(text.slice(at, link.start));
+      nodes.push(
+        <a
+          key={`provision-${start + link.start}`}
+          className="source-inline-link provision-link"
+          href={link.url}
+          title={`${link.claim} · ${shortSourceLabel(link.url)} · ${link.url}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={
+            onOpenUrl
+              ? (event) => {
+                  event.preventDefault();
+                  void onOpenUrl(link.url);
+                }
+              : undefined
+          }
+        >
+          {text.slice(link.start, link.end)}
+        </a>
+      );
+      at = link.end;
+    }
+    if (at < text.length) nodes.push(text.slice(at));
+  };
 
   while ((match = pattern.exec(normalized)) !== null) {
     if (match.index > cursor) {
-      nodes.push(normalized.slice(cursor, match.index));
+      plain(cursor, match.index);
     }
 
     const verUrl = match[1] ? safeHttpsUrl(match[1]) : null;
@@ -165,7 +225,7 @@ export function SourceLinkedText({
   }
 
   if (cursor < normalized.length) {
-    nodes.push(normalized.slice(cursor));
+    plain(cursor, normalized.length);
   }
 
   return <>{nodes}</>;

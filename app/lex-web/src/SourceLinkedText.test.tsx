@@ -62,4 +62,33 @@ describe("SourceLinkedText", () => {
     expect(html).not.toContain("<a");
     expect(html).toContain("http://example.com/source");
   });
+  it("links a verified provision named in the text to the page of the cited article", () => {
+    const pdf = "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf";
+    const sources = [
+      { claim: "art. 233 KK", url: pdf },
+      { claim: "art. 233 KK", url: `${pdf}#page=97` },
+      { claim: "art. 238 KK", url: `${pdf}#page=99` }
+    ];
+    const html = renderToStaticMarkup(
+      <SourceLinkedText
+        content={"Art. 233 § 1 KK dotyczy zeznań, art. 238 k.k. zawiadomienia, a art. 234 KK nie był sprawdzony."}
+        sources={sources}
+      />
+    );
+    expect(html).toContain(`href="${pdf}#page=97"`);
+    expect(html).toContain(">Art. 233 § 1 KK</a>");
+    expect(html).toContain(`href="${pdf}#page=99"`);
+    expect(html).toContain(">art. 238 k.k.</a>");
+    expect(html).not.toContain(">art. 234 KK</a>");
+  });
+
+  it("does not link a provision of another act with the same number", () => {
+    const html = renderToStaticMarkup(
+      <SourceLinkedText
+        content={"Art. 233 KPC dotyczy oceny dowodów."}
+        sources={[{ claim: "art. 233 KK", url: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.pdf#page=97" }]}
+      />
+    );
+    expect(html).not.toContain("<a");
+  });
 });

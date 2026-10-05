@@ -1,6 +1,6 @@
 ---
 name: chronologia-sprawy-v1
-version: "1.16"
+version: "1.17"
 type: executive-chronologia
 status: production
 compatibility: "live_web_lookup, file_read, optional_interactive_ui"

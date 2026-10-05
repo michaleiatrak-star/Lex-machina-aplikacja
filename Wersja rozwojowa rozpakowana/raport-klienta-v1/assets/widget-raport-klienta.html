@@ -58,7 +58,8 @@ const RK = /* lex:dane */ {"profile":"IND","tryb":"standard","kancelaria":null,"
   // Delta: obiekt {ma_poprzedni_raport, data_poprzedniego, co_sie_zmienilo[], bez_zmian} albo lista zmian.
   const delta = Array.isArray(D.delta) ? { ma_poprzedni_raport: true, co_sie_zmienilo: D.delta } : (D.delta || {});
   const deltaHtml = delta.ma_poprzedni_raport && has(delta.co_sie_zmienilo)
-    ? section(`Co się zmieniło od ostatniego raportu${delta.data_poprzedniego ? ` (${delta.data_poprzedniego})` : ""}`, list(delta.co_sie_zmienilo), "delta")
+    ? section(`Co się zmieniło od ostatniego raportu${delta.data_poprzedniego ? ` (${delta.data_poprzedniego})` : ""}`, list(delta.co_sie_zmienilo) +
+      (has(delta.bez_zmian) ? `<p><strong>Bez zmian:</strong></p>${Array.isArray(delta.bez_zmian) ? list(delta.bez_zmian) : `<p>${esc(delta.bez_zmian)}</p>`}` : ""), "delta")
     : "";
 
   const ocena = () => {
