@@ -69891,6 +69891,21 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05k — TRYB STRUKTURA: ścieżki przekazywania spraw i wydawanie modułów (6.184)
+
+### 1. ŹRÓDŁO
+Zlecenie: zbadać ścieżki przekazywania spraw i czy skille i moduły są prawidłowo wydawane. Audyt statyczny (routing [1]–[11], macierz aktywacji, kombinacje, kontrakty i mapy modułów 12 skilli wykonawczych) i dynamiczny (15 przebiegów aplikacji, w tym przekazania „Następny etap pipeline'u”).
+
+### 2. USTALENIA
+- Routing, macierz i kombinacje: wszystkie wskazane skille istnieją; przekazania wczytują właściwy skill wykonawczy z modułami; brak nieudanych odczytów.
+- BŁĄD (aplikacja): mapa modułów rozpoznawała ścieżki innych skilli tylko z wersją w nazwie (…-v3/), więc moduł skilla dziedzinowego (dr-02-…/modules/mod-ustawa-kredyt-konsumencki-SKD.md), który pisma-proste (schemat SPM) i pisma-procesowe (pozew SKD) każą wczytać NAJPIERW, nie był wydawany.
+- BŁĄD (routing): „oceń szanse”, „szanse wygrania”, „przeanalizuj akta” nie prowadziły do analiza-sadowa-v6 (odpowiedź bez skilla wykonawczego).
+
+### 3. ZMIANA
+- Aplikacja: mapa modułów rozpoznaje ścieżki dr-NN-…/modules|references/; test regresji.
+- pisma-procesowe-v3 5.36: warunek „gdy sankcja kredytu darmowego” przy odwołaniu do modułu SKD (bez niego moduł wczytywałby się przy każdym pozwie o zapłatę).
+- shared 3.99.10 (ACTIVATION-MATRIX) i router 3.64 (KROK 2 [2]): nowe frazy kategorii [2].
+
 ## AUDYT-2026-10-05j — TRYB STRUKTURA: etapy późniejszych tur w przesłuchaniu świadków i analizie sądowej (6.183)
 
 ### 1. ŹRÓDŁO

@@ -1,5 +1,7 @@
 # CHANGELOG — pisma-procesowe-v3
 
+- 5.36 (2026-10-05k, AUDYT-2026-10-05k): Pozew SKD: warunek przy module dr-02 mod-ustawa-kredyt-konsumencki-SKD zapisany wprost („gdy sankcja kredytu darmowego”), żeby aplikacja wydawała moduł tylko w tej sprawie.
+
 - 5.35 (2026-10-05c, AUDYT-2026-10-05c): Znaczniki `<!-- lex:wczytaj-gdy: KOLEJNA-TURA -->` nad PRE-W2-VERIFICATION-GATE, WIADOMOŚĆ 2 i WIADOMOŚĆ 3: zgodnie z MODELEM TRZECH WIADOMOŚCI (STOP po W1, czekaj na użytkownika) sekcje te nie mają zastosowania w pierwszej odpowiedzi wątku; aplikacja Lex Machina dołącza je od drugiej tury. Treść bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.
 
 - 5.34 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.63"
+version: "3.64"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,7 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.63 (2026-10-05i, AUDYT-2026-10-05i): PROFIL-LEKKI: „PO CO ISTNIEJE” jako HISTORIA, „DEKLARACJA PROFILU” i „KIEDY PROFIL LEKKI JEST ZAKAZANY” jako PROFIL — aplikacja wybiera profil, pisze KROK 3A i przy niewczytanym zasobie ogłasza TRYB ZDEGRADOWANY. Treść reguł bez zmian.
+  Wersja bieżąca: 3.64 (2026-10-05k, AUDYT-2026-10-05k): KROK 2 [2]: frazy „oceń szanse”, „szanse wygrania”, analiza akt (spójnie z macierzą aktywacji).
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
@@ -313,7 +313,7 @@ KROK 7  → DISCLAIMER → view shared/DISCLAIMER.md
 → SECONDARY: `orzeczenia-sadowe-v2` · FALLBACK: `przewodnik-prawny-v2`
 
 ### [2] AKTA / WYROK / ANALIZA SZANS
-`wyrok / nakaz zapłaty / wezwanie / pismo przeciwnika / "jakie mam szanse" / analiza pozycji`
+`wyrok / nakaz zapłaty / wezwanie / pismo przeciwnika / "jakie mam szanse" / "oceń szanse" / "szanse wygrania" / analiza akt / analiza pozycji`
 → PRIMARY: `view analiza-sadowa-v6/SKILL.md`
 → SECONDARY: `analizator-dowodow-v3`, `orzeczenia-sadowe-v2` · FALLBACK: `przewodnik-prawny-v2`
 

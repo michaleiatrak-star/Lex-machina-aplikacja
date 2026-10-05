@@ -1,6 +1,6 @@
 ---
 name: pisma-procesowe-v3
-version: "5.35"
+version: "5.36"
 type: executive-pisma
 status: production
 description: "Zaawansowane pisma procesowe: pozwy, odpowiedzi, apelacje, zażalenia i inne pisma wymagające strategii, faktów, dowodów, weryfikacji prawa i finalnej walidacji dokumentu."
@@ -861,7 +861,7 @@ oświadczenia SKD + ryzyko zarzutu prekluzji z art. 45 ust. 5 u.k.k. ze
 strony banku) → kwalifikuje się do tego skilla, NIE do pisma-proste-v2
 (które obsługuje wyłącznie samo oświadczenie, schemat SPM). Podstawa
 materialnoprawna, katalog naruszeń i spór o termin: wczytaj PRZED W1.2
-`view dr-02-prawo-cywilne-rodzinne-gospodarcze/modules/mod-ustawa-kredyt-konsumencki-SKD.md`.
+`view dr-02-prawo-cywilne-rodzinne-gospodarcze/modules/mod-ustawa-kredyt-konsumencki-SKD.md` — gdy sankcja kredytu darmowego (SKD, art. 45 u.k.k.).
 Jeśli sprawa ma ≥2 roszczenia (np. SKD + zwrot ubezpieczenia) → aktywuj
 też `theory-of-case-engine.md`.
 

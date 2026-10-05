@@ -1,5 +1,7 @@
 # CHANGELOG — Biblioteka shared
 
+- 3.99.10 (2026-10-05k, AUDYT-2026-10-05k): ACTIVATION-MATRIX: „oceń szanse”, „szanse wygrania”, „przeanalizuj akta”, „analiza akt” → analiza-sadowa-v6.
+
 - 3.99.9 (2026-10-05i, AUDYT-2026-10-05i): HIERARCHIA-ZRODEL: KANON KOLEJNOŚCI E-1…E-5 i REALIA DOSTĘPNOŚCI RZĘDU 1 oznaczone WERYFIKACJA-ELI; MOD-STEP-TRACKER: FAZA 0 i FAZA 1 oznaczone REJESTR-KROKOW. Treść reguł bez zmian.
 
 - 3.99.8 (2026-10-05, AUDYT-2026-10-05b): Znaczniki `<!-- lex:wykonuje-aplikacja: DISCLAIMER -->` w `DISCLAIMER.md` (ZASADA GŁÓWNA, KIEDY STOSOWAĆ, TREŚĆ, POZYCJA, INTEGRACJA ZE SKILLAMI, SELF-CHECK ROUTERA): aplikacja Lex Machina sama dokłada kanoniczny wariant po bramkach, więc przy odpowiedzi tekstowej modelu nielokalnego sekcje trafiają do modelu jako odesłanie; przy modelu lokalnym, dokumencie AST, trybie mechanicznym i raportach — w całości. Treść reguł bez zmian; poza aplikacją znacznik jest niewidocznym komentarzem.

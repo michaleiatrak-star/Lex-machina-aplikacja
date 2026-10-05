@@ -1,5 +1,7 @@
 # CHANGELOG — prawny-router-v3
 
+- 3.64 (2026-10-05k, AUDYT-2026-10-05k): KROK 2 [2]: frazy „oceń szanse”, „szanse wygrania”, analiza akt (spójnie z macierzą aktywacji).
+
 - 3.63 (2026-10-05i, AUDYT-2026-10-05i): PROFIL-LEKKI: „PO CO ISTNIEJE” jako HISTORIA, „DEKLARACJA PROFILU” i „KIEDY PROFIL LEKKI JEST ZAKAZANY” jako PROFIL — aplikacja wybiera profil, pisze KROK 3A i przy niewczytanym zasobie ogłasza TRYB ZDEGRADOWANY. Treść reguł bez zmian.
 
 - 3.62 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

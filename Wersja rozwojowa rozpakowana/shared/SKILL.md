@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.99.9"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.10"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -50,7 +50,7 @@ limitations:
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.99.9 (2026-10-05i, AUDYT-2026-10-05i): HIERARCHIA-ZRODEL: KANON KOLEJNOŚCI E-1…E-5 i REALIA DOSTĘPNOŚCI RZĘDU 1 oznaczone WERYFIKACJA-ELI; MOD-STEP-TRACKER: FAZA 0 i FAZA 1 oznaczone REJESTR-KROKOW. Treść reguł bez zmian.
+  Wersja bieżąca: 3.99.10 (2026-10-05k, AUDYT-2026-10-05k): ACTIVATION-MATRIX: „oceń szanse”, „szanse wygrania”, „przeanalizuj akta”, „analiza akt” → analiza-sadowa-v6.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

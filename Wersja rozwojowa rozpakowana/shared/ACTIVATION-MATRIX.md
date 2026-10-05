@@ -24,7 +24,7 @@ Router sprawdza tę macierz gdy fraza wyzwalająca pasuje do ≥2 skillów.
 
 | Fraza / sygnał | PRIMARY skill | NIE używaj jako PRIMARY |
 |---|---|---|
-| "jakie mam szanse" / "czy mam szansę" | `analiza-sadowa-v6` | analizator-dowodow, analizator-przepisow |
+| "jakie mam szanse" / "czy mam szansę" / "oceń szanse" / "szanse wygrania" / "przeanalizuj akta" / "analiza akt" | `analiza-sadowa-v6` | analizator-dowodow, analizator-przepisow |
 | "co mam zrobić" / "od czego zacząć" | `przewodnik-prawny-v2` | analiza-sadowa-v6 |
 | dostarcza akta / wyrok / pismo przeciwnika | `analiza-sadowa-v6` | analizator-dowodow-v3 |
 | dostarcza dowody bez pisma (maile, SMS, nagrania) | `analizator-dowodow-v3` | analiza-sadowa-v6 |

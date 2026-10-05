@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.184 (AUDYT-2026-10-05k): Audyt ścieżek przekazywania spraw: moduły skilli dziedzinowych wskazane ścieżką dr-NN w skillach wykonawczych; frazy routingu [2]. pisma-procesowe 5.36, shared 3.99.10, router 3.64.
+
 - 6.183 (AUDYT-2026-10-05j): Etap KOLEJNA-TURA w przesluchanie-swiadkow 3.31 i analiza-sadowa 6.15.
 
 - 6.182 (AUDYT-2026-10-05i): Sekcje wykonywane przez aplikację w HIERARCHIA-ZRODEL, MOD-STEP-TRACKER i PROFIL-LEKKI (shared 3.99.9, router 3.63); TRYB ZDEGRADOWANY przy niewczytanym zasobie ścieżki.
