@@ -69891,6 +69891,22 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-05p — TRYB STRUKTURA: dwie dziedziny DR w jednej sprawie (6.189)
+
+### 1. ŹRÓDŁO
+Zlecenie: sprawdzić wywoływanie dwóch DR, gdy sprawa tego wymaga, i właściwych skilli z routera. Próba 10 spraw dwudziedzinowych (praca+karne, wypadek drogowy, spadek+podatek, RODO w pracy, VAT+KKS, rozwód z alimentami i in.) na logice doboru z AUDYT-2026-10-05m.
+
+### 2. USTALENIA
+- „Pracodawca … podrobił mój podpis”: DR-03 bez trafienia (fraza „podrobienie podpisu” ma rdzeń „podrobien”, który nie łapie „podrobił”); sprawa karna nierozpoznana, bez kwalifikatora.
+- „Pijany kierowca … co grozi mu karnie”: sprawa karna nierozpoznana (detektor bez „karnie”, „pijany kierowca”, „pobity”, „ukradł”) — bez kwalifikatora (preferencja: Karne: +kwalifikator).
+- Moduł aktu: rozwód/alimenty → moduły KPC/adopcji zamiast mod-KRO-rodzinne; wypadek → brak modułu OC i przestępstw drogowych (wiersze map bez słów zakresu).
+
+### 3. ZMIANA
+- prawo-polskie-v2 6.44: frazy DR-03 i DR-04 (wyżej).
+- dr-02 3.64, dr-03 3.56: słowa zakresu w wierszach MAPA-AKTOW (bez numerów aktów).
+- Aplikacja: detektor sprawy karnej — „karnie”, kradzież/ukradł, pobicie/pobity, oszustwo, podrobienie, sfałszowanie, fałszerstwo, pijany/nietrzeźwy kierowca, groźba karalna (przymiotnik „karny” celowo pominięty: „adwokat z urzędu w sprawie karnej” zostaje w DR-12).
+- Testy: tests/domain-routing-multi.test.ts; routing-500 i zestaw świeży bez regresji (857/857).
+
 ## AUDYT-2026-10-05o — TRYB STRUKTURA: widgety, wątki 1–5 wiadomości, etapy spraw w czacie (F-232–F-236, 6.188)
 
 ### 1. ŹRÓDŁO

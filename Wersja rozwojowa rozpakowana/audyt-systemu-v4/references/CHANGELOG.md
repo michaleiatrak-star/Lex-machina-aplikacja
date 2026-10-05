@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.189 (AUDYT-2026-10-05p): Dwie dziedziny DR w jednej sprawie: frazy DR-03/DR-04, zakres wierszy map aktów DR-02/DR-03, rozpoznanie sprawy karnej bez słowa „przestępstwo”.
+
 - 6.188 (2026-10-05o, AUDYT-2026-10-05o): AUDYT-2026-10-05o: widgety, wątki 1-5 wiadomości, etapy spraw w czacie (F-232-F-236)
 
 - 6.187 (AUDYT-2026-10-05n): F-230 — paczki skilli bez plików pluginu (`.claude-plugin/`, `.mcp.json`); claude.ai odrzucał wgrywany skill z manifestem. ZASADA 7, T34, dostarcz_skill.sh, skrypty paczek i workflow; CHECKSUMS 32/32 bez wpisów pluginu. F-231 (błąd własny 6.185/6.186): artefakty `__pycache__` w sumach i paczkach shared/audytu usunięte; pakowanie je pomija.

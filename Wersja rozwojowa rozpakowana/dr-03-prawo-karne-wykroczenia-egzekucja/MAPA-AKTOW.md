@@ -113,7 +113,7 @@ Brzmienie każdego powoływanego artykułu KPK czytać u źródła; tekst jednol
 | Akt / zakres | Bieżąca podstawa | Moduł / routing | Status runtime |
 |---|---|---|---|
 | Prawo o ruchu drogowym / kierujący pojazdami / punkty karne | PRD: Dz.U. 2024 poz. 1251 t.j. ze zm.; u.k.p.: Dz.U. 2025 poz. 1226 t.j. ze zm. | `mod-PRD-prawo-jazdy-punkty-karne` | ✅ aktywny; fresh gate |
-| Nowe przestępstwa drogowe / BRD | właściwe obowiązujące nowelizacje KK/KW/PRD | `mod-PRD-nowe-przestepstwa-drogowe-BRD` | ✅ aktywny; temporal gate |
+| Nowe przestępstwa drogowe / BRD — nietrzeźwy lub pijany kierowca, wypadek drogowy, potrącenie, zakaz prowadzenia | właściwe obowiązujące nowelizacje KK/KW/PRD | `mod-PRD-nowe-przestepstwa-drogowe-BRD` | ✅ aktywny; temporal gate |
 | Modyfikacje / przeróbki pojazdów | PRD jw. + akty homologacyjne / tachografowe | `mod-przerobki-modyfikacje-pojazdow` | ✅ aktywny; fresh gate |
 
 ## Reguły runtime

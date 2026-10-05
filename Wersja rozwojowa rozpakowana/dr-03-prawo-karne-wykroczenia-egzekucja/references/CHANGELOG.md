@@ -1,5 +1,7 @@
 # CHANGELOG — dr-03-prawo-karne-wykroczenia-egzekucja
 
+- 3.56 (2026-10-05p, AUDYT-2026-10-05p): MAPA-AKTOW: zakres nowych przestępstw drogowych (nietrzeźwy kierowca, wypadek drogowy, potrącenie, zakaz prowadzenia).
+
 - 3.55 (2026-10-05l, AUDYT-2026-10-05l): mod-KK-art148-162: linia „Hasła spraw” (pobicie, uszczerbek na zdrowiu…). Treść prawna bez zmian.
 
 - 3.54 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
