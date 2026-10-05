@@ -346,6 +346,11 @@ export type SessionExecutionRequest = {
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
+// Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
+export function resumeHostThread(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.LEX_ACCOUNT_RESUME === "1";
+}
+
 function duplicateSkills(names: string[]): string[] {
   const byBase = new Map<string, string[]>();
   for (const name of names) {
@@ -2193,14 +2198,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       provider: request.provider,
       model: request.model,
-      ...(request.accountSessionKey
+      // The app sends the instructions and the thread (summary + recent turns) on
+      // every call, so a resumed host thread only repeated them: each turn and each
+      // tool round appended the whole prompt again, and with no matter key the CLI
+      // took over the user's latest unrelated session. LEX_ACCOUNT_RESUME=1 restores it.
+      ...(request.accountSessionKey && resumeHostThread()
         ? {
             continuityKey:
               request.accountSessionKey
           }
         : {}),
-      ...(request.accountContinuity
-        ? { accountContinuity: request.accountContinuity }
+      ...(request.accountContinuity || !resumeHostThread()
+        ? { accountContinuity: request.accountContinuity ?? "none" }
         : {}),
       route: {
         jurisdiction: "PL",
