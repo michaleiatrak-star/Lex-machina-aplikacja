@@ -380,6 +380,11 @@ GET https://sn.pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=…
 
 task=searchOrzeczenia&sygnatura=III CZP 25/11&strona=1&rozmiar_strony=25
      → data[0].data[] : sygnatura_sprawy, data_wydania, forma_orzeczenia, id
+     pola formularza (kod widżetu sn.pl, 2026-10-06): q + tresc (ta sama treść), sygnatura,
+     forma_orzeczenia (tekst opcji, np. „uchwała siedmiu sędziów SN”), data_wydania_od, data_wydania_do
+     (RRRR-MM-DD; „w dniu” = od = do), izba (nazwa, np. „Izba Cywilna”), sklad_sedziowski, sedzia_w_skladzie,
+     przewodniczacy, sprawozdawca, wspolsprawozdawca, autor_uzasadnienia, strona, rozmiar_strony (10/25/50/100).
+     API nie zwraca liczby wszystkich trafień — „następna strona” póki strona jest pełna. MCP `sn_szukaj`.
 task=detailsOrzeczenie&id=…
      → jednostka_obslugujaca_sprawe, izby_sn, rodzaj_skladu_orzekajacego,
        sklad_orzekajacy[], przewodniczacy, sprawozdawca, autor_uzasadnienia

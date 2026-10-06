@@ -69891,6 +69891,19 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06d — konektor sn: wszystkie pola wyszukiwarki SN; sp_szukaj w Portalu Orzeczeń, SAOS zastępczo (6.193)
+
+### 1. ŹRÓDŁO
+Użytkownik: wyszukiwanie SN tylko po sygnaturze (fraza kończyła się błędem źródła — trafiała do sn_sprawdz_sygnature); `sp_szukaj` zwracał „Unexpected token '<'” (SAOS oddał stronę HTML). Zasada użytkownika: SAOS zastępczy, korzystamy ze źródeł urzędowych. Kod widżetu sn.pl dostarczony przez użytkownika.
+
+### 2. ZMIANA
+- `sn_szukaj`: pola formularza sn.pl (q+tresc, sygnatura, forma_orzeczenia, data_wydania_od/do, „w dniu”, izba, skład, sędziowie), kontrola trafień wobec sygnatury, formy i dat; karty orzeczeń. W aplikacji `search_case_law source=SN` z tymi polami; federacja: sygnatura → `sn_sprawdz_sygnature`, reszta → `sn_szukaj`.
+- `sp_szukaj`: najpierw Portal Orzeczeń (fraza w polu 1 kontekstu Tapestry, kontrola odczytem treści), SAOS wyłącznie zastępczo; HTML zamiast JSON opisany wprost.
+- DOSTEP-MASZYNOWY-API (shared 3.99.14): parametry snproxy.
+
+### 3. WERYFIKACJA
+Testy offline sn/sp i testy aplikacji: OK. Pozycja frazy w kontekście Tapestry niezmierzona na żywo (piaskownica i runnery bez dostępu) — kontrolowana odczytem treści trafień; przy niezgodności SAOS zastępczo z adnotacją.
+
 ## AUDYT-2026-10-06c — TRYB STRUKTURA: konektory MCP sp (sądy powszechne) i tk (Trybunał Konstytucyjny) (6.192)
 
 ### 1. ŹRÓDŁO

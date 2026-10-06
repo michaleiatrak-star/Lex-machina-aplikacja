@@ -721,3 +721,46 @@ export async function supremeCourtSignatureFromCard(card, fetcher = globalThis.f
     const signature = signaturesIn(head).find((item) => item.court === "SN")?.signature;
     return signature ? { signature, cardUrl } : null;
 }
+export function supremeCourtQueryUrl(filters) {
+    const params = {};
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === undefined || value === null || value === "")
+            continue;
+        if (key === "tresc") {
+            params.q = String(value);
+            params.tresc = String(value);
+        }
+        else {
+            params[key] = key === "sygnatura" ? stripDotsAndSpace(String(value)) : String(value);
+        }
+    }
+    params.strona ??= "1";
+    params.rozmiar_strony ??= String(MAX_SEARCH_RECORDS);
+    return proxyUrl("searchOrzeczenia", params);
+}
+/** The sn.pl search with every form field; hits carry the decision's card. */
+export async function supremeCourtSearch(filters, fetcher = globalThis.fetch.bind(globalThis)) {
+    const response = await fetchSn(fetcher, supremeCourtQueryUrl(filters));
+    if (!response.ok)
+        throw new Error(`SN_SEARCH_HTTP_${response.status}`);
+    const payload = await response.json();
+    const upstream = snUpstreamError(payload);
+    if (upstream)
+        throw new Error("SN_SEARCH_UPSTREAM_ERROR");
+    const records = searchRecords(payload);
+    if (records === null)
+        throw new Error("SN_SEARCH_SCHEMA_DRIFT");
+    return records.flatMap((record) => {
+        const id = String(record.id ?? "").trim();
+        const signature = typeof record.sygnatura_sprawy === "string" ? record.sygnatura_sprawy.replace(/\s+/g, " ").trim() : "";
+        if (!id || !signature)
+            return [];
+        return [{
+                id,
+                signature,
+                ...(typeof record.data_wydania === "string" ? { date: record.data_wydania.slice(0, 10) } : {}),
+                ...(typeof record.forma_orzeczenia === "string" ? { form: record.forma_orzeczenia } : {}),
+                cardUrl: humanUrl(id)
+            }];
+    });
+}

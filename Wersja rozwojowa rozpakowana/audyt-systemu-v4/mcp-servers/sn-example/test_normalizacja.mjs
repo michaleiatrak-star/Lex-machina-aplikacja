@@ -32,3 +32,15 @@ assert.strictEqual(surowyTekst({ data: [{ data: { raw: b64 } }] }), b64);
 assert.strictEqual(surowyTekst({ data: [{ raw: b64 }] }), b64);
 assert.strictEqual(tekst(html), "Sygn. akt III CZP 25/11\nUCHWAŁA");
 console.log("OK: koperty snproxy (rekordy, błąd po stronie sn.pl, base64 tekstu)");
+
+// Parametry wyszukiwarki jak w widżecie sn.pl (q i tresc, „w dniu” = od = do) i kontrola trafień.
+import { parametrySzukania, pasujeDoFiltra } from "./sn-mcp-server.js";
+assert.deepStrictEqual(parametrySzukania({ tresc: "sankcja kredytu darmowego", forma: "wyrok SN", dataWDniu: "2026-07-08", izba: "Izba Cywilna" }), {
+  q: "sankcja kredytu darmowego", tresc: "sankcja kredytu darmowego", forma_orzeczenia: "wyrok SN",
+  data_wydania_od: "2026-07-08", data_wydania_do: "2026-07-08", izba: "Izba Cywilna", strona: "1", rozmiar_strony: "25",
+});
+assert.deepStrictEqual(parametrySzukania({ sygnatura: "II  CSKP 89 / 26", naStrone: 10 }), { sygnatura: "II CSKP 89/26", strona: "1", rozmiar_strony: "10" });
+assert.ok(pasujeDoFiltra({ sygnatura_sprawy: "II CSKP 89/26", data_wydania: "2026-07-08", forma_orzeczenia: "wyrok SN" }, { dataOd: "2026-07-01", dataDo: "2026-07-31", forma: "wyrok SN" }));
+assert.ok(!pasujeDoFiltra({ sygnatura_sprawy: "II CSKP 89/26", data_wydania: "2026-08-08" }, { dataDo: "2026-07-31" }));
+assert.ok(!pasujeDoFiltra({ sygnatura_sprawy: "I CSKP 89/26" }, { sygnatura: "II CSKP 89/26" }));
+console.log("OK: parametry wyszukiwarki SN (treść, forma, daty, izba) i kontrola trafień");

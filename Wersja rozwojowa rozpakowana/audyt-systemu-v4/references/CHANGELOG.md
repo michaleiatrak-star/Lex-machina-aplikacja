@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.193 (2026-10-06): sn_szukaj (pola wyszukiwarki SN), sp_szukaj w Portalu Orzeczeń, SAOS zastępczo
+
 - 6.192 (2026-10-06): konektory MCP sp (sądy powszechne, link do orzeczenia) i tk (TK, wyszukiwanie proste)
 
 - 6.191 (2026-10-06): konektor sn: nagłówki widżetu i ponowienie po 403 ochrony sn.pl

@@ -87,6 +87,10 @@
       "description": "SN: czy orzeczenie o tej sygnaturze jest w bazie sn.pl; zwraca kartę orzeczenia"
     },
     {
+      "name": "sn_szukaj",
+      "description": "SN: wyszukiwarka sn.pl — treść, sygnatura, forma, data, izba, skład, sędziowie; karty orzeczeń"
+    },
+    {
       "name": "sn_pobierz",
       "description": "SN: pełny tekst orzeczenia po karcie (…?orzeczenie=ID)"
     },
@@ -100,7 +104,7 @@
     },
     {
       "name": "sp_szukaj",
-      "description": "Sądy powszechne: wyszukiwanie po frazie (SAOS) z linkiem do Portalu Orzeczeń"
+      "description": "Sądy powszechne: wyszukiwanie po frazie w Portalu Orzeczeń (SAOS tylko zastępczo)"
     },
     {
       "name": "tk_sprawdz_sygnature",

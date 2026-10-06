@@ -228,6 +228,86 @@ server.registerTool("sn_sprawdz_sygnature", {
   } catch (e) { return odp(blad(e)); }
 });
 
+export const FORMY = [
+  "wyrok SN", "wyrok SN SD", "wyrok siedmiu sędziów SN", "wyrok siedmiu sędziów SN SD", "postanowienie SN", "postanowienie SN SD",
+  "postanowienie siedmiu sędziów SN", "postanowienie całej Izby SN", "uchwała SN", "uchwała SN SD", "uchwała siedmiu sędziów SN",
+  "uchwała siedmiu sędziów SN zasada prawna", "uchwała siedmiu sędziów SN SD", "uchwała całej izby SN", "uchwała całej Izby SN zasada prawna",
+  "uchwała połączonych izb SN", "uchwała połączonych Izb SN zasada prawna", "uchwała pełnego składu SN", "uchwała pełnego składu SN zasada prawna",
+  "orzeczenie", "zarządzenie", "wyciąg z protokołu", "opinia",
+];
+export const IZBY = [
+  "Izba Cywilna", "Izba Karna", "Izba Odpowiedzialności Zawodowej", "Izba Pracy i Ubezpieczeń Społecznych",
+  "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych", "Izba Wojskowa", "Izba Administracyjna, Pracy i Ubezpieczeń Społecznych",
+  "Izba Kontroli Nadzwyczajnej i Spraw Publicznych", "Izba Dyscyplinarna",
+];
+export const SKLADY = ["Skład", "Skład 1-osobowy", "Skład 3-osobowy", "Skład 5-osobowy", "Skład 7-osobowy", "Skład całej Izby SN", "Skład połączonych Izb SN", "Skład całego SN"];
+
+/**
+ * Parametry snproxy jak w widżecie wyszukiwarki sn.pl (kod strony, 2026-10-06): treść idzie jako q i tresc,
+ * „w dniu” = od i do tego samego dnia. Czysta funkcja.
+ */
+export function parametrySzukania(a) {
+  const od = a.dataWDniu || a.dataOd || "";
+  const doo = a.dataWDniu || a.dataDo || "";
+  const p = {
+    q: a.tresc, tresc: a.tresc, sygnatura: a.sygnatura ? normalizujSygnature(a.sygnatura) : "", forma_orzeczenia: a.forma,
+    data_wydania_od: od, data_wydania_do: doo, izba: a.izba, sklad_sedziowski: a.sklad, sedzia_w_skladzie: a.sedzia,
+    przewodniczacy: a.przewodniczacy, sprawozdawca: a.sprawozdawca, wspolsprawozdawca: a.wspolsprawozdawca,
+    autor_uzasadnienia: a.autorUzasadnienia, strona: String(a.strona ?? 1), rozmiar_strony: String(a.naStrone ?? 25),
+  };
+  return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== ""));
+}
+
+/** Kontrola trafień wobec pytanych pól, które rekord zawiera (sygnatura, forma, daty). Czysta funkcja. */
+export function pasujeDoFiltra(r, a) {
+  const syg = normalizujSygnature(r.sygnatura_sprawy).toUpperCase();
+  const data = typeof r.data_wydania === "string" ? r.data_wydania.slice(0, 10) : "";
+  const od = a.dataWDniu || a.dataOd, doo = a.dataWDniu || a.dataDo;
+  return (!a.sygnatura || syg === normalizujSygnature(a.sygnatura).toUpperCase())
+    && (!a.forma || !r.forma_orzeczenia || String(r.forma_orzeczenia).trim().toLowerCase() === a.forma.trim().toLowerCase())
+    && (!od || !data || data >= od) && (!doo || !data || data <= doo);
+}
+
+const DATA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
+server.registerTool("sn_szukaj", {
+  title: "Szukaj orzeczeń Sądu Najwyższego (wszystkie pola wyszukiwarki sn.pl)",
+  description: "Wyszukiwarka bazy orzeczeń SN: treść orzeczenia i uzasadnienia, sygnatura, forma, data (w dniu / od / do), izba, " +
+    "skład, sędziowie. Zwraca karty orzeczeń (url_karty) do powołania; trafienia sprawdzane wobec sygnatury, formy i dat.",
+  inputSchema: {
+    tresc: z.string().min(2).max(300).optional().describe("W treści orzeczenia i uzasadnienia"),
+    sygnatura: z.string().min(4).max(40).optional(),
+    forma: z.enum(FORMY).optional(),
+    dataWDniu: DATA.describe("data wydania RRRR-MM-DD"), dataOd: DATA, dataDo: DATA,
+    izba: z.enum(IZBY).optional(),
+    sklad: z.enum(SKLADY).optional(),
+    sedzia: z.string().max(80).optional(), przewodniczacy: z.string().max(80).optional(), sprawozdawca: z.string().max(80).optional(),
+    wspolsprawozdawca: z.string().max(80).optional(), autorUzasadnienia: z.string().max(80).optional(),
+    strona: z.number().int().min(1).max(500).optional(),
+    naStrone: z.union([z.literal(10), z.literal(25), z.literal(50), z.literal(100)]).optional(),
+  },
+}, async (a) => {
+  const p = parametrySzukania(a);
+  if (!Object.keys(p).some((k) => !["strona", "rozmiar_strony"].includes(k))) {
+    return odp({ status: "ERROR", ...baza, detail: "Podaj co najmniej jedno pole wyszukiwania." });
+  }
+  if (a.sygnatura) {
+    const sad = sadSygnatury(a.sygnatura);
+    if (sad && sad !== "SN") return odp({ status: "OUT_OF_SCOPE", ...baza, sad, powod: "SYGNATURA_INNEGO_SADU", uwaga: `Szukaj w: ${GDZIE[sad]}.` });
+  }
+  try {
+    const dane = await pobierzJson(proxy("searchOrzeczenia", p));
+    const upstream = bladSn(dane);
+    if (upstream) return odp({ status: "ERROR", ...baza, detail: `sn.pl zgłosił błąd: ${upstream}`, retrieved_at: new Date().toISOString() });
+    const lista = rekordy(dane);
+    if (lista === null) return odp({ status: "ERROR", ...baza, detail: "Nieznany kształt odpowiedzi snproxy (zmiana portalu?).", retrieved_at: new Date().toISOString() });
+    const trafione = lista.filter((r) => pasujeDoFiltra(r, a));
+    return odp({ status: trafione.length ? "AMBIGUOUS" : "OUT_OF_SCOPE", ...baza, query_type: "wyszukiwanie", strona: a.strona ?? 1,
+      kandydaci: trafione.map(pozycja), ...(lista.length > trafione.length ? { odrzucone_niepasujace: lista.length - trafione.length } : {}),
+      ...(lista.length === Number(p.rozmiar_strony) ? { nastepna_strona: (a.strona ?? 1) + 1 } : {}),
+      uwaga: "Kandydaci z wyszukiwarki SN — przed powołaniem sprawdź treść (sn_pobierz). " + NOTA, retrieved_at: new Date().toISOString() });
+  } catch (e) { return odp(blad(e)); }
+});
+
 server.registerTool("sn_pobierz", {
   title: "Pobierz orzeczenie Sądu Najwyższego (po karcie)",
   description: "Pełny tekst orzeczenia SN po karcie (link …?orzeczenie=ID albo samo ID); porcjami po 20 000 znaków (offset). " +

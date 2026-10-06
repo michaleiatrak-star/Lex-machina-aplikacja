@@ -1,4 +1,4 @@
-import { misroutedSignature } from "./court-of-signature.js";
+import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
 import {
   Client
 } from "@modelcontextprotocol/sdk/client/index.js";
@@ -72,7 +72,11 @@ const NATIVE_SEARCH: Record<
   eurlex: (input) => ({ tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } }),
   saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
   cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
-  sn: (input) => ({ tool: "sn_sprawdz_sygnature", args: { sygnatura: input.query } }),
+  // A signature goes to the signature check; anything else to the sn.pl search form (text of the decision).
+  sn: (input) =>
+    input.query && courtOfSignature(input.query) === "SN"
+      ? { tool: "sn_sprawdz_sygnature", args: { sygnatura: input.query } }
+      : { tool: "sn_szukaj", args: { tresc: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } },
   sp: (input) => ({ tool: "sp_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, limit: input.limit } }),
   tk: (input) => ({ tool: "tk_sprawdz_sygnature", args: { sygnatura: input.query } }),
   kio: (input) => ({ tool: "kio_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } }),

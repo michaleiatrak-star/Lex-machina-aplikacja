@@ -1,5 +1,7 @@
 # CHANGELOG — Biblioteka shared
 
+- 3.99.14 (2026-10-06): DOSTEP-MASZYNOWY-API: pełne pola wyszukiwarki SN (snproxy searchOrzeczenia) z kodu widżetu sn.pl
+
 - 3.99.13 (2026-10-06): HIERARCHIA-ZRODEL: SR/SO/SA — link do samego orzeczenia (/content/$N/{id}), konektor sp; TK — konektor tk (wyszukiwanie proste)
 
 - 3.99.12 (2026-10-06): HIERARCHIA-ZRODEL: wyjątek SN — karta sprawy; SAOS RZĄD 3; kolejność baz wg repertorium sygnatury; DOSTEP/SYGNATURY/KONEKTORY/ORZECZENIA-OUTPUT-SCHEMA ujednolicone

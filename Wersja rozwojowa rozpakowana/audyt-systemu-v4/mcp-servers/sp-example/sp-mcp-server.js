@@ -35,8 +35,10 @@ export function normalizujSygnature(s) {
   return String(s ?? "").normalize("NFKC").replace(/\./g, "").replace(/\s+/g, " ").replace(/\s*\/\s*/g, "/").trim();
 }
 
-/** Sygnatura w kontekście Tapestry: spacja → $0020, „/” → $002f. */
-export const kodujTapestry = (s) => normalizujSygnature(s).replace(/ /g, "$0020").replace(/\//g, "$002f");
+/** Wartość w kontekście Tapestry: litery i cyfry bez zmian, pozostałe znaki → $XXXX (np. spacja $0020, „/” $002f, „ą” $0105). */
+export const kodujTapestry = (s) => [...normalizujSygnature(s)]
+  .map((z) => (/[A-Za-z0-9]/.test(z) ? z : "$" + z.codePointAt(0).toString(16).padStart(4, "0")))
+  .join("");
 
 /** Host portalu: agregat albo portal sądu („poznan.so” → orzeczenia.poznan.so.gov.pl). */
 export function hostPortalu(sad) {
@@ -56,6 +58,15 @@ export function dozwolonyHost(url) {
 }
 
 export const urlSzukania = (host, syg, strona = 1) => `${host}/search/advanced/$N/${kodujTapestry(syg)}${"/$N".repeat(15)}/${strona}`;
+/** Fraza w pierwszym polu formularza zaawansowanego (pozycja 1 kontekstu, sygnatura pusta). */
+export const urlSzukaniaFrazy = (host, fraza, strona = 1) => `${host}/search/advanced/${kodujTapestry(fraza)}/$N${"/$N".repeat(15)}/${strona}`;
+
+/** Czy tekst orzeczenia zawiera frazę (wszystkie słowa ≥ 4 znaki, bez odmiany: pierwsze 5 liter). Czysta funkcja. */
+export function zawieraFraze(tekstDok, fraza) {
+  const t = String(tekstDok).toLocaleLowerCase("pl");
+  const slowa = String(fraza).toLocaleLowerCase("pl").split(/[^\p{L}\d]+/u).filter((w) => w.length >= 4);
+  return slowa.length > 0 && slowa.every((w) => t.includes(w.slice(0, 5)));
+}
 export const urlOrzeczenia = (host, docId) => `${host}/content/$N/${docId}`;
 export const urlMetryki = (host, docId) => `${host}/details/$N/${docId}`;
 
@@ -101,7 +112,12 @@ async function pobierz(url, typ = "text") {
     try {
       const r = await fetch(url, { signal: sygnal(30000), headers: { "User-Agent": UA, Accept: typ === "json" ? "application/json" : "text/html" } });
       if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
-      return typ === "json" ? await r.json() : await r.text();
+      if (typ !== "json") return await r.text();
+      // SAOS w czasie przerwy technicznej (albo przy blokadzie) oddaje stronę HTML z kodem 200.
+      if (!(r.headers.get("content-type") ?? "").includes("json")) {
+        throw Object.assign(new Error(`${new URL(url).hostname}: strona HTML zamiast danych JSON (przerwa techniczna albo blokada)`), { status: 503 });
+      }
+      return await r.json();
     } catch (e) {
       ostatni = e;
       if (e?.status && e.status < 500) break;
@@ -207,37 +223,79 @@ server.registerTool("sp_pobierz", {
   } catch (e) { return odp(blad(e)); }
 });
 
+/** SAOS (zastępczo, RZĄD 3): kandydaci po frazie z linkiem urzędowym, gdy SAOS go zna. */
+async function saosPoFrazie({ fraza, dataOd, dataDo, limit }) {
+  const qs = new URLSearchParams({ all: fraza, courtType: "COMMON", pageSize: String(Math.max(10, limit)), sortingField: "JUDGMENT_DATE", sortingDirection: "DESC" });
+  if (dataOd) qs.set("judgmentDateFrom", dataOd);
+  if (dataDo) qs.set("judgmentDateTo", dataDo);
+  const dane = await pobierz(`${SAOS}/search/judgments?${qs}`, "json");
+  const wynik = [];
+  for (const it of (dane.items ?? []).slice(0, limit)) {
+    const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
+    const zrodlo = pelny?.data?.source?.judgmentUrl;
+    wynik.push({
+      sygnatury: (it.courtCases ?? []).map((c) => normalizujSygnature(c.caseNumber)), data: it.judgmentDate ?? null,
+      sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
+      url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
+    });
+  }
+  return wynik;
+}
+
 server.registerTool("sp_szukaj", {
   title: "Szukaj orzeczeń sądów powszechnych po frazie",
-  description: "Wyszukiwanie po treści (proste): SAOS znajduje orzeczenia sądów powszechnych, narzędzie oddaje stały link do " +
-    "orzeczenia w Portalu Orzeczeń (url_orzeczenia), gdy SAOS go zna. Wynik to kandydaci — przed powołaniem sprawdź sygnaturę " +
-    "(sp_sprawdz_sygnature) i przeczytaj treść (sp_pobierz).",
+  description: "Wyszukiwanie po treści w Portalu Orzeczeń (urzędowym; agregat albo portal sądu `sad`), stałe linki do orzeczeń. " +
+    "Trafienia sprawdzane odczytem treści; gdy portal nie odpowie albo nie przyjmie frazy — SAOS zastępczo (RZĄD 3) z linkiem do portalu. " +
+    "Wynik to kandydaci — przed powołaniem przeczytaj treść (sp_pobierz).",
   inputSchema: {
     fraza: z.string().min(3).max(300),
+    sad: z.string().max(60).optional().describe("portal sądu: miasto.so | miasto.sr | miasto.sa"),
     dataOd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     dataDo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     limit: z.number().int().min(1).max(10).optional(),
   },
-}, async ({ fraza, dataOd, dataDo, limit = 5 }) => {
+}, async ({ fraza, sad, dataOd, dataDo, limit = 5 }) => {
+  let host;
+  try { host = hostPortalu(sad); } catch (e) { return odp(blad(e)); }
+  let portalUwaga = null;
+  // 1. Portal Orzeczeń (źródło urzędowe).
   try {
-    const qs = new URLSearchParams({ all: fraza, courtType: "COMMON", pageSize: String(limit), sortingField: "JUDGMENT_DATE", sortingDirection: "DESC" });
-    if (dataOd) qs.set("judgmentDateFrom", dataOd);
-    if (dataDo) qs.set("judgmentDateTo", dataDo);
-    const dane = await pobierz(`${SAOS}/search/judgments?${qs}`, "json");
-    const kandydaci = [];
-    for (const it of (dane.items ?? []).slice(0, limit)) {
-      const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
-      const zrodlo = pelny?.data?.source?.judgmentUrl;
-      kandydaci.push({
-        sygnatury: (it.courtCases ?? []).map((c) => normalizujSygnature(c.caseNumber)), data: it.judgmentDate ?? null,
-        sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
-        url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
-      });
+    const w = parsujWyniki(await pobierz(urlSzukaniaFrazy(host, fraza)));
+    const ids = w.docIds.filter((id) => {
+      const d = rozbierzDocId(id).data;
+      return (!dataOd || !d || d >= dataOd) && (!dataDo || !d || d <= dataDo);
+    }).slice(0, limit);
+    // Kontrola, że portal przyjął frazę: treść przynajmniej jednego z pierwszych trafień ją zawiera.
+    const sprawdzone = [];
+    for (const id of ids.slice(0, 3)) {
+      const t = await pobierz(urlOrzeczenia(host, id)).then(tekst).catch(() => "");
+      sprawdzone.push(zawieraFraze(t, fraza));
     }
-    return odp({ status: kandydaci.length ? "AMBIGUOUS" : "OUT_OF_SCOPE", ...baza, source: "saos → Portal Orzeczeń", fraza, kandydaci,
-      uwaga: "Kandydaci z SAOS (RZĄD 3, agregator akademicki) — źródłem jest url_orzeczenia z portalu urzędowego. " + NOTA,
+    if (ids.length && sprawdzone.some(Boolean)) {
+      return odp({ status: "AMBIGUOUS", ...baza, query_type: "wyszukiwanie", fraza, portal: new URL(host).hostname, liczba_trafien: w.liczba,
+        kandydaci: ids.map((id) => pozycja(host, id)),
+        uwaga: "Kandydaci z Portalu Orzeczeń (źródło urzędowe) — przed powołaniem przeczytaj treść (sp_pobierz). " + NOTA,
+        retrieved_at: new Date().toISOString() });
+    }
+    portalUwaga = ids.length ? "portal zwrócił orzeczenia bez tej frazy w treści (fraza nieprzyjęta przez portal)" : "brak trafień w portalu";
+    if (!ids.length && w.liczba === 0) {
+      return odp({ status: "OUT_OF_SCOPE", ...baza, query_type: "wyszukiwanie", fraza, portal: new URL(host).hostname, liczba_trafien: 0,
+        uwaga: `Brak trafień w portalu ${new URL(host).hostname}. ${NOTA}`, retrieved_at: new Date().toISOString() });
+    }
+  } catch (e) {
+    portalUwaga = `portal nie odpowiedział (${e?.message ?? e})`;
+  }
+  // 2. SAOS — wyłącznie zastępczo.
+  try {
+    const kandydaci = await saosPoFrazie({ fraza, dataOd, dataDo, limit });
+    return odp({ status: kandydaci.length ? "AMBIGUOUS" : "OUT_OF_SCOPE", ...baza, source: "saos (zastępczo)", query_type: "wyszukiwanie", fraza,
+      portal_uwaga: portalUwaga, kandydaci,
+      uwaga: `Portal Orzeczeń: ${portalUwaga}. Wynik zastępczy z SAOS (RZĄD 3, agregator akademicki) — powołuj url_orzeczenia z portalu, gdy jest. ` + NOTA,
       retrieved_at: new Date().toISOString() });
-  } catch (e) { return odp(blad(e)); }
+  } catch (e2) {
+    return odp({ status: "ERROR", ...baza, query_type: "wyszukiwanie", fraza, portal_uwaga: portalUwaga, saos_blad: String(e2?.message ?? e2),
+      detail: `Portal Orzeczeń: ${portalUwaga}; SAOS: ${e2?.message ?? e2}`, retrieved_at: new Date().toISOString() });
+  }
 });
 
 if (!globalThis.__LEX_MCP_WSPOLNY && process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

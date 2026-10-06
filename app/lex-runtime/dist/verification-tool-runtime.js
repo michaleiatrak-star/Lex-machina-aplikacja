@@ -121,38 +121,47 @@ const CASE_LIBRARY_TOOL_SCHEMA = {
         }
     }
 };
+const SN_FORMS = [
+    "wyrok SN", "wyrok SN SD", "wyrok siedmiu sędziów SN", "wyrok siedmiu sędziów SN SD", "postanowienie SN", "postanowienie SN SD",
+    "postanowienie siedmiu sędziów SN", "postanowienie całej Izby SN", "uchwała SN", "uchwała SN SD", "uchwała siedmiu sędziów SN",
+    "uchwała siedmiu sędziów SN zasada prawna", "uchwała siedmiu sędziów SN SD", "uchwała całej izby SN", "uchwała całej Izby SN zasada prawna",
+    "uchwała połączonych izb SN", "uchwała połączonych Izb SN zasada prawna", "uchwała pełnego składu SN", "uchwała pełnego składu SN zasada prawna",
+    "orzeczenie", "zarządzenie", "wyciąg z protokołu", "opinia"
+];
+const SN_CHAMBERS = [
+    "Izba Cywilna", "Izba Karna", "Izba Odpowiedzialności Zawodowej", "Izba Pracy i Ubezpieczeń Społecznych",
+    "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych", "Izba Wojskowa", "Izba Administracyjna, Pracy i Ubezpieczeń Społecznych",
+    "Izba Kontroli Nadzwyczajnej i Spraw Publicznych", "Izba Dyscyplinarna"
+];
 const CASE_SEARCH_TOOL_SCHEMA = {
     type: "function",
     function: {
         name: CASE_SEARCH_TOOL_NAME,
-        description: "Search Polish case-law candidates in SAOS or CBOSA. " +
-            "This is discovery only: returned candidates are NOT verified for citation. " +
-            "Use source=CBOSA for NSA/WSA; SN signatures go to verify_case_reference. SAOS is an academic aggregator (lowest rank): broad full-text discovery, and the fallback when the court's official source fails. " +
-            "After selecting a candidate, run the applicable verification workflow before citing it.",
+        description: "Search Polish case-law candidates. source=SN: the official sn.pl search form (text of the decision and its reasons, signature, form, date range, chamber, panel, judges); hits carry the decision's card. " +
+            "source=CBOSA for NSA/WSA. SAOS is an academic aggregator (lowest rank): broad full-text discovery, and the fallback when the court's official source fails. " +
+            "This is discovery only: returned candidates are NOT verified for citation. After selecting a candidate, run the applicable verification workflow before citing it.",
         parameters: {
             type: "object",
             additionalProperties: false,
-            required: [
-                "query",
-                "source"
-            ],
+            required: ["source"],
             properties: {
                 query: {
                     type: "string",
-                    description: "Full-text legal phrase or issue to search for. Do not use this field to fabricate a case signature."
+                    description: "Full-text legal phrase (SN: searched in the decision and its reasons). May be empty for SN when other fields are given. Do not fabricate a case signature."
                 },
-                source: {
-                    type: "string",
-                    enum: [
-                        "SAOS",
-                        "CBOSA"
-                    ]
-                },
-                limit: {
-                    type: "integer",
-                    minimum: 1,
-                    maximum: 10
-                }
+                source: { type: "string", enum: ["SN", "SAOS", "CBOSA"] },
+                limit: { type: "integer", minimum: 1, maximum: 10 },
+                signature: { type: "string", description: "SN only: case signature, e.g. II CSKP 89/26." },
+                form: { type: "string", enum: SN_FORMS, description: "SN only: form of the decision." },
+                dateOn: { type: "string", description: "SN only: issued on YYYY-MM-DD." },
+                dateFrom: { type: "string", description: "SN only: issued from YYYY-MM-DD." },
+                dateTo: { type: "string", description: "SN only: issued until YYYY-MM-DD." },
+                chamber: { type: "string", enum: SN_CHAMBERS, description: "SN only: chamber (Izba SN)." },
+                panel: { type: "string", description: "SN only: panel, e.g. Skład 7-osobowy." },
+                judge: { type: "string", description: "SN only: judge on the panel (surname)." },
+                presiding: { type: "string", description: "SN only: presiding judge." },
+                rapporteur: { type: "string", description: "SN only: judge rapporteur." },
+                reasonsAuthor: { type: "string", description: "SN only: author of the reasons." }
             }
         }
     }
@@ -453,6 +462,25 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- verify_case_proposition returns SUPPORTED, never VERIFIED. SUPPORTED means the proposition is transparently linked to official evidence; semantic entailment is not independently decided by the runtime.",
     "- For SUPPORTED propositions, keep the exact proposition and supportQuote unchanged and put them with the case citation, case marker, CASE-QUOTE marker and CASE-SUPPORT marker on the SAME LINE."
 ].join("\n");
+// search_case_law source=SN: tool fields → the sn.pl search form fields.
+function snSearchFilters(input) {
+    const text = (value, max = 200) => (typeof value === "string" && value.trim() && value.length <= max ? value.trim() : "");
+    const date = (value) => (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : "");
+    const on = date(input.dateOn);
+    const fields = {
+        sygnatura: text(input.signature, 40),
+        forma_orzeczenia: SN_FORMS.includes(text(input.form)) ? text(input.form) : "",
+        data_wydania_od: on || date(input.dateFrom),
+        data_wydania_do: on || date(input.dateTo),
+        izba: SN_CHAMBERS.includes(text(input.chamber)) ? text(input.chamber) : "",
+        sklad_sedziowski: text(input.panel, 60),
+        sedzia_w_skladzie: text(input.judge, 80),
+        przewodniczacy: text(input.presiding, 80),
+        sprawozdawca: text(input.rapporteur, 80),
+        autor_uzasadnienia: text(input.reasonsAuthor, 80)
+    };
+    return Object.fromEntries(Object.entries(fields).filter(([, value]) => value));
+}
 function searchCaseLawLibrary(input) {
     const repository = caseLawRepository();
     if (!repository?.libraryEnabled()) {
@@ -522,18 +550,21 @@ export class LegalVerificationToolRuntime {
                 const limit = typeof input.limit === "number"
                     ? input.limit
                     : undefined;
-                if (!query ||
+                const sn = source === "SN" && input.sn && typeof input.sn === "object" ? input.sn : {};
+                if ((!query && !(source === "SN" && Object.keys(sn).length)) ||
                     (source !== "SAOS" &&
-                        source !== "CBOSA")) {
+                        source !== "CBOSA" &&
+                        source !== "SN")) {
                     throw new Error("INVALID_CASE_SEARCH_INPUT");
                 }
                 // A signature of another court: where to look instead of a misleading "no hits".
-                const misrouted = misroutedSignature(source, query);
+                const misrouted = misroutedSignature(source, [query, sn.sygnatura ?? ""].join(" "));
                 if (misrouted) {
                     return JSON.stringify({ source, query, candidates: [], ...misrouted, verificationStatus: "DISCOVERY_ONLY" });
                 }
                 const result = await this.caseLawSearch.search({
                     query,
+                    ...(Object.keys(sn).length ? { sn } : {}),
                     source: source,
                     ...(limit !== undefined
                         ? { limit }
@@ -1180,9 +1211,11 @@ export class LegalVerificationToolRuntime {
                 const limit = typeof call.input.limit === "number"
                     ? call.input.limit
                     : undefined;
-                if (!query ||
+                const snFilters = source === "SN" ? snSearchFilters(call.input) : {};
+                if ((!query && !(source === "SN" && Object.keys(snFilters).length)) ||
                     (source !== "SAOS" &&
-                        source !== "CBOSA")) {
+                        source !== "CBOSA" &&
+                        source !== "SN")) {
                     this.resolverAudit.push({
                         sequence: this.resolverAudit.length + 1,
                         tool: CASE_SEARCH_TOOL_NAME,
@@ -1208,6 +1241,7 @@ export class LegalVerificationToolRuntime {
                         ...(limit !== undefined
                             ? { limit }
                             : {}),
+                        ...(Object.keys(snFilters).length ? { sn: snFilters } : {}),
                         url: caseLawSearchEntryUrl(typedSource)
                     }
                 });

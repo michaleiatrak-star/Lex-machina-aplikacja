@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.99.13"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.14"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -50,7 +50,7 @@ limitations:
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.99.13 (2026-10-06): HIERARCHIA-ZRODEL: SR/SO/SA — link do samego orzeczenia (/content/$N/{id}), konektor sp; TK — konektor tk (wyszukiwanie proste)
+  Wersja bieżąca: 3.99.14 (2026-10-06): DOSTEP-MASZYNOWY-API: pełne pola wyszukiwarki SN (snproxy searchOrzeczenia) z kodu widżetu sn.pl
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

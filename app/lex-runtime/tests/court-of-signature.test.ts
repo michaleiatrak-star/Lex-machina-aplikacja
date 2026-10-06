@@ -71,3 +71,35 @@ describe("case tools follow the court of the signature", () => {
     expect(resolved).toEqual({ signature: "II CSKP 89/26", cardUrl: "https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ZuUySp8Bw1HnVDW6c5lg" });
   });
 });
+
+describe("sn.pl search form", () => {
+  it("search_case_law source=SN sends every form field like the widget and keeps only matching hits", async () => {
+    const { CaseLawSearchService } = await import("../src/case-law-search.js");
+    const seen: string[] = [];
+    const fetcher = async (input: string | URL) => {
+      seen.push(String(input));
+      return new Response(JSON.stringify({ data: [{ data: [
+        { id: "AbCdEf123456ghIJ", sygnatura_sprawy: "II CSKP 89/26", data_wydania: "2026-07-08", forma_orzeczenia: "wyrok SN" },
+        { id: "XyZxYz987654abCD", sygnatura_sprawy: "II CSKP 12/26", data_wydania: "2026-09-01", forma_orzeczenia: "wyrok SN" }
+      ] }] }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const result = await new CaseLawSearchService(fetcher).search({
+      source: "SN",
+      query: "sankcja kredytu darmowego",
+      sn: { forma_orzeczenia: "wyrok SN", data_wydania_od: "2026-07-01", data_wydania_do: "2026-07-31", izba: "Izba Cywilna" }
+    });
+    const url = new URL(seen[0]!);
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      task: "searchOrzeczenia", q: "sankcja kredytu darmowego", tresc: "sankcja kredytu darmowego",
+      forma_orzeczenia: "wyrok SN", data_wydania_od: "2026-07-01", data_wydania_do: "2026-07-31", izba: "Izba Cywilna"
+    });
+    expect(result.status).toBe("FOUND");
+    expect(result.candidates).toEqual([expect.objectContaining({ caseNumbers: ["II CSKP 89/26"], sourceUrl: "https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=AbCdEf123456ghIJ" })]);
+  });
+
+  it("the tool accepts SN fields without a phrase", async () => {
+    const runtime = new LegalVerificationToolRuntime(new VerificationLedger());
+    const [result] = await runtime.runTools([{ id: "s2", name: "search_case_law", input: { source: "SN", signature: "I SA/Wa 123/20" } }]);
+    expect(JSON.parse(result!.content)).toMatchObject({ reason: "SIGNATURE_OF_OTHER_COURT", court: "NSA/WSA" });
+  });
+});

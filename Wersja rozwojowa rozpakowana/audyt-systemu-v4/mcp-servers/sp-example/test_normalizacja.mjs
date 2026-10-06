@@ -27,3 +27,12 @@ assert.deepStrictEqual(parsujWyniki(html), { liczba: 2, docIds: [id, "1550100000
 assert.deepStrictEqual(parsujWyniki("<p>Nie znaleziono żadnego wyniku pasującego do zapytania</p>"), { liczba: 0, docIds: [] });
 assert.strictEqual(tekst("<html><head><title>x</title></head><body><p>Sygn. akt I C 100/15</p><p>WYROK</p></body></html>"), "Sygn. akt I C 100/15\nWYROK");
 console.log("OK: strona wyników (liczba, id bez powtórzeń, brak trafień)");
+
+// Fraza w kontekście Tapestry (polskie znaki jako $XXXX) i kontrola, że treść zawiera frazę.
+import { urlSzukaniaFrazy, zawieraFraze } from "./sp-mcp-server.js";
+assert.strictEqual(kodujTapestry("kredyt ą"), "kredyt$0020$0105");
+assert.strictEqual(urlSzukaniaFrazy("https://orzeczenia.ms.gov.pl", "sankcja kredytu"),
+  "https://orzeczenia.ms.gov.pl/search/advanced/sankcja$0020kredytu/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/1");
+assert.ok(zawieraFraze("Sąd uznał, że sankcja kredytu darmowego przysługuje", "sankcji kredytu darmowego"));
+assert.ok(!zawieraFraze("Sprawa o zapłatę z umowy najmu", "sankcja kredytu darmowego"));
+console.log("OK: fraza w Portalu Orzeczeń (kodowanie Tapestry, kontrola treści)");
