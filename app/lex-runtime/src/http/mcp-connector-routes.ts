@@ -1,5 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { CaseLawPreviewService } from "../case-law-preview.js";
+import { caseLawRepository } from "../case-law-store.js";
+import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
+import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
 import {
   AuthError,
   type AuthService
@@ -262,6 +265,7 @@ export function registerMcpConnectorRoutes(
       const passage = text(req.body?.passage, 8000);
       const signature = text(req.body?.signature, 200);
       const attributed = text(req.body?.attributed, 4000);
+      const previewCase = text(req.body?.caseId, 100);
       if (!sourceUrl || (req.body?.passage !== undefined && !passage && req.body.passage !== "")) {
         res.status(400).json({ error: "CASE_PREVIEW_INVALID" });
         return;
@@ -272,7 +276,8 @@ export function registerMcpConnectorRoutes(
             sourceUrl,
             ...(passage ? { passage } : {}),
             ...(signature ? { signature } : {}),
-            ...(attributed ? { attributed } : {})
+            ...(attributed ? { attributed } : {}),
+            ...(previewCase ? { caseId: previewCase } : {})
           })
         );
       } catch (error) {
@@ -295,7 +300,8 @@ export function registerMcpConnectorRoutes(
         return;
       }
       try {
-        res.json(await caseLawPreview.copy({ sourceUrl, ...(signature ? { signature } : {}) }));
+        const caseId = typeof req.body?.caseId === "string" && req.body.caseId.length <= 100 ? req.body.caseId.trim() : "";
+        res.json(await caseLawPreview.copy({ sourceUrl, ...(signature ? { signature } : {}), ...(caseId ? { caseId } : {}) }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT)_[A-Z0-9_]+$/.test(message) ? message : "CASE_PREVIEW_FAILED";
@@ -303,6 +309,72 @@ export function registerMcpConnectorRoutes(
       }
     }
   );
+
+  // Orzeczenie wskazane przez użytkownika (karta, sygnatura SN, link blob: z sygnaturą):
+  // pobierane z oficjalnej bazy i zapisywane w sprawie; źródłem jest karta.
+  const caseVerifier = new SupremeCourtCaseVerifier(previewFetch as never);
+  app.post(
+    "/api/case-law/resolve",
+    async (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const field = (value: unknown, max: number) => (typeof value === "string" && value.length <= max ? value.trim() : "");
+      const link = field(req.body?.cardUrl, 2000);
+      let signature = field(req.body?.signature, 200);
+      const caseId = field(req.body?.caseId, 100);
+      try {
+        const problem = link ? caseLinkProblem(link) : null;
+        if (problem?.signature && !signature) signature = problem.signature;
+        let cardUrl = link && !problem ? link : "";
+        const cardId = cardUrl ? supremeCourtCardId(cardUrl) : null;
+        if (cardId) cardUrl = `https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=${encodeURIComponent(cardId)}`;
+        if (!cardUrl && signature) {
+          if (courtOfSignature(signature) !== "SN") {
+            res.status(400).json({ error: "CASE_LAW_SIGNATURE_NOT_SN" });
+            return;
+          }
+          const verified = await caseVerifier.verify({ claim: `sygn. ${signature}`, signature, toolCallId: `resolve-${Date.now()}` });
+          if (verified.status !== "FOUND" || !verified.record?.sourceUrl) {
+            res.status(404).json({ error: `CASE_LAW_${verified.status}`, reason: verified.reason });
+            return;
+          }
+          cardUrl = verified.record.sourceUrl;
+          signature = verified.judgment?.signature ?? signature;
+        }
+        if (!cardUrl) {
+          res.status(400).json({ error: problem?.kind === "BLOB" ? "CASE_LAW_BLOB_NEEDS_SIGNATURE" : "CASE_LAW_REFERENCE_MISSING" });
+          return;
+        }
+        res.json(await caseLawPreview.copy({ sourceUrl: cardUrl, ...(signature ? { signature } : {}), ...(caseId ? { caseId } : {}) }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT|SN)_[A-Z0-9_]+$/.test(message) ? message : "CASE_LAW_RESOLVE_FAILED";
+        res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
+      }
+    }
+  );
+
+  // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.
+  app.get("/api/case-law/library", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    const repository = caseLawRepository();
+    const query = typeof req.query.q === "string" ? req.query.q.slice(0, 200) : "";
+    res.json({ enabled: repository?.libraryEnabled() ?? false, available: Boolean(repository), entries: repository?.catalog(query, 100) ?? [] });
+  });
+  app.put("/api/case-law/library", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    const repository = caseLawRepository();
+    if (!repository || typeof req.body?.enabled !== "boolean") {
+      res.status(400).json({ error: "CASE_LAW_LIBRARY_INVALID" });
+      return;
+    }
+    repository.setLibraryEnabled(req.body.enabled);
+    res.json({ enabled: repository.libraryEnabled() });
+  });
+  app.post("/api/case-law/library/remove", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    const cardUrl = typeof req.body?.cardUrl === "string" ? req.body.cardUrl : "";
+    res.json({ removed: Boolean(cardUrl) && (caseLawRepository()?.remove(cardUrl) ?? false) });
+  });
 
   // Podgląd strony źródła w aplikacji: tylko oficjalne domeny, bez skryptów.
   app.post(

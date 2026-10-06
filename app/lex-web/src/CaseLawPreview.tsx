@@ -24,6 +24,44 @@ export function attributedSentence(answer: string | undefined, signature: string
     .find((line) => line.replace(/\s+/g, " ").toLocaleUpperCase("pl").includes(wanted));
 }
 
+// Repertories of Sąd Najwyższy (as in the runtime's court-of-signature).
+const SN_REPERTORIES =
+  "CSKP|CSK|NKK|KK|UK|NSNC|NSNU|NKN|CNPP|CNP|SDI|ZK|CZP|KZP|UZP|PZP|NSNZP|SNO|DSI|DSP|CZ|KO|KSP|NSW";
+const SN_SIGNATURE = new RegExp(`(?<![\\p{L}\\d])(?:[IVXL]{1,5}\\s+)?(?:${SN_REPERTORIES})\\s+\\d{1,6}\\/\\d{2,4}(?![\\p{L}\\d])`, "u");
+
+export type CaseLawReference =
+  | { kind: "CARD"; cardUrl: string }
+  | { kind: "SIGNATURE"; signature: string; link: string }
+  | { kind: "BLOB_WITHOUT_SIGNATURE"; link: string };
+
+/**
+ * Decisions the user points to in a message: a card (sn.pl ?orzeczenie=ID,
+ * CBOSA /doc/…, UZP, SAOS), or a blob:/old PDF address of sn.pl. A blob:
+ * address lives only in the browser tab that made it, so the decision is
+ * taken from sn.pl by the signature in the same message.
+ */
+export function caseLawReferences(text: string): CaseLawReference[] {
+  const found: CaseLawReference[] = [];
+  const signature = SN_SIGNATURE.exec(text.normalize("NFKC"))?.[0]?.replace(/\s+/g, " ");
+  for (const match of text.matchAll(/(?:blob:)?https?:\/\/[^\s<>"')\]]+/giu)) {
+    const link = match[0].replace(/[.,;:]+$/, "");
+    if (/^blob:/i.test(link) || /\/sites\/orzecznictwo\//i.test(link)) {
+      found.push(signature ? { kind: "SIGNATURE", signature, link } : { kind: "BLOB_WITHOUT_SIGNATURE", link });
+      continue;
+    }
+    // Cards of single decisions only (not search pages or news).
+    if (
+      /sn\.pl\/.*[?&]orzeczenie=[\w-]{6,80}/iu.test(link) ||
+      /orzeczenia\.nsa\.gov\.pl\/doc\/[0-9A-F]{6,}/iu.test(link) ||
+      /saos\.org\.pl\/judgments\/\d+/iu.test(link) ||
+      /orzeczenia\.uzp\.gov\.pl\/Home\/Details\/\d+/iu.test(link)
+    ) {
+      found.push({ kind: "CARD", cardUrl: link });
+    }
+  }
+  return found.filter((item, index) => found.findIndex((other) => JSON.stringify(other) === JSON.stringify(item)) === index).slice(0, 3);
+}
+
 /**
  * The decision as a text document for the case's files (local RAG): the card
  * is the source, the text is the copy downloaded into the application.
@@ -56,9 +94,11 @@ export function CaseLawPreview(props: {
   signature?: string;
   attributed?: string;
   // Saves the decision in the case's files; resolves to the stored file name.
-  onSaveToCase?: (file: File) => Promise<void>;
+  onSaveToCase?: (file: File) => Promise<unknown>;
+  // The case whose copy of the decision is used for marking the quote.
+  caseId?: string;
 }) {
-  const { sourceUrl, passage, signature, attributed, onSaveToCase } = props;
+  const { sourceUrl, passage, signature, attributed, onSaveToCase, caseId } = props;
   const [saving, setSaving] = useState<{ kind: "idle" } | { kind: "saving" } | { kind: "done"; name: string } | { kind: "error"; message: string }>({
     kind: "idle"
   });
@@ -73,7 +113,8 @@ export function CaseLawPreview(props: {
       sourceUrl,
       ...(passage ? { passage } : {}),
       ...(signature ? { signature } : {}),
-      ...(attributed ? { attributed } : {})
+      ...(attributed ? { attributed } : {}),
+      ...(caseId ? { caseId } : {})
     })
       .then((preview) => active && setState({ kind: "ready", preview }))
       .catch((failure: unknown) => {
@@ -84,7 +125,7 @@ export function CaseLawPreview(props: {
     return () => {
       active = false;
     };
-  }, [sourceUrl, passage, signature, attributed]);
+  }, [sourceUrl, passage, signature, attributed, caseId]);
 
   if (state.kind === "loading") return <p className="field-help">Wczytywanie pełnego tekstu ze źródła…</p>;
   if (state.kind === "error") {
@@ -100,7 +141,7 @@ export function CaseLawPreview(props: {
     if (!onSaveToCase) return;
     setSaving({ kind: "saving" });
     try {
-      const file = caseLawDocument(await copyCaseLaw({ sourceUrl, ...(signature ? { signature } : {}) }));
+      const file = caseLawDocument(await copyCaseLaw({ sourceUrl, ...(signature ? { signature } : {}), ...(caseId ? { caseId } : {}) }));
       await onSaveToCase(file);
       setSaving({ kind: "done", name: file.name });
     } catch (failure) {

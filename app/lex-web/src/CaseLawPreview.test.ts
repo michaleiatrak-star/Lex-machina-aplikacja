@@ -36,3 +36,21 @@ describe("decision saved in the case's files", () => {
     expect(text.endsWith("Pełny tekst uchwały.\n")).toBe(true);
   });
 });
+
+describe("decisions the user points to", () => {
+  it("takes cards; a blob: or old PDF of sn.pl goes by the signature in the message", async () => {
+    const { caseLawReferences } = await import("./CaseLawPreview.js");
+    expect(caseLawReferences("zobacz https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ZuUySp8Bw1HnVDW6c5lg.")).toEqual([
+      { kind: "CARD", cardUrl: "https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ZuUySp8Bw1HnVDW6c5lg" }
+    ]);
+    expect(caseLawReferences("II CSKP 89/26 blob:https://www.sn.pl/aeff2f6a-34cd-4771-8941-6b7ea9295466 to jest link orzeczenia")).toEqual([
+      { kind: "SIGNATURE", signature: "II CSKP 89/26", link: "blob:https://www.sn.pl/aeff2f6a-34cd-4771-8941-6b7ea9295466" }
+    ]);
+    expect(caseLawReferences("blob:https://www.sn.pl/aeff2f6a-34cd-4771-8941-6b7ea9295466")).toEqual([
+      { kind: "BLOB_WITHOUT_SIGNATURE", link: "blob:https://www.sn.pl/aeff2f6a-34cd-4771-8941-6b7ea9295466" }
+    ]);
+    expect(caseLawReferences("https://orzeczenia.nsa.gov.pl/doc/1A2B3C4D5E")).toEqual([{ kind: "CARD", cardUrl: "https://orzeczenia.nsa.gov.pl/doc/1A2B3C4D5E" }]);
+    expect(caseLawReferences("https://www.sn.pl/pl/wyszukiwarka-orzeczen oraz https://www.sn.pl/aktualnosci")).toEqual([]);
+    expect(caseLawReferences("wyrok II Cz 12/20 blob:https://x.pl/1")[0]?.kind).toBe("BLOB_WITHOUT_SIGNATURE");
+  });
+});

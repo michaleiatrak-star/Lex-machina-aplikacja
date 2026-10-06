@@ -15,7 +15,7 @@ import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
-import { CaseLawPreview, attributedSentence, isCaseLawSource } from "./CaseLawPreview.js";
+import { CaseLawPreview, attributedSentence, caseLawDocument, caseLawReferences, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 
 // Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
@@ -76,6 +76,7 @@ import {
   listCaseArtifacts,
   listCaseFiles,
   processStoredCaseFile,
+  resolveCaseLaw,
   type ProcessingProgress,
   uploadCaseFile,
   listCaseSchedule,
@@ -2218,12 +2219,55 @@ export default function MatterChatApp({
   }
 
   // A decision from its official card saved in the case's files (local RAG).
-  async function saveCaseLawToCase(file: File): Promise<void> {
+  async function saveCaseLawToCase(file: File): Promise<DocumentAttachmentSelection> {
     const targetCase = caseId;
+    // The same decision already in the case files is reused, not stored twice.
+    const existing = caseFiles.find((item) => item.filename === file.name && item.processing?.documentId);
+    if (existing?.processing) {
+      return { caseId: targetCase, documentId: existing.processing.documentId, chunkIndices: existing.processing.chunkIndices };
+    }
     const stored = await uploadCaseFile(targetCase, file);
     const review = await processStoredCaseFile(targetCase, stored.uploadId);
-    await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
     setWorkspaceRefresh((value) => value + 1);
+    return { caseId: targetCase, documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) };
+  }
+
+  // Decisions the user points to (card, or a blob:/old PDF link of sn.pl with
+  // the signature): taken from the official database, stored in the case
+  // files and attached to this message. A blob: address cannot be read by
+  // anyone outside the browser tab that made it.
+  async function attachUserCaseLaw(text: string): Promise<DocumentAttachmentSelection[]> {
+    const references = caseLawReferences(text);
+    if (!references.length || !caseId) return [];
+    const attached: DocumentAttachmentSelection[] = [];
+    const notes: string[] = [];
+    for (const reference of references) {
+      if (reference.kind === "BLOB_WITHOUT_SIGNATURE") {
+        notes.push(
+          "Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. " +
+            "Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; " +
+            "możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu."
+        );
+        continue;
+      }
+      setPickerNotice(`Pobieram orzeczenie ${reference.kind === "SIGNATURE" ? reference.signature : "z karty"} i dodaję do akt sprawy…`);
+      try {
+        const copy = await resolveCaseLaw({
+          ...(reference.kind === "CARD" ? { cardUrl: reference.cardUrl } : { signature: reference.signature, cardUrl: reference.link }),
+          caseId
+        });
+        const attachment = await saveCaseLawToCase(caseLawDocument(copy));
+        attached.push(attachment);
+        notes.push(`Dodano do akt: ${[copy.court, copy.signature].filter(Boolean).join(" ")} (karta: ${copy.cardUrl}).`);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : String(error);
+        notes.push(`Nie udało się pobrać orzeczenia (${code}). Model sprawdzi je narzędziem weryfikacji.`);
+      }
+    }
+    if (attached.length) pickFiles(attached.map((item) => ({ kind: "document" as const, documentId: item.documentId, chunkIndices: item.chunkIndices })), true, caseId);
+    setPickerNotice(notes.join(" "));
+    return attached;
   }
 
   async function saveStagedDocuments(ids?: string[]): Promise<void> {
@@ -2932,6 +2976,8 @@ export default function MatterChatApp({
       !model
     ) return;
     saveLastUsedModel(user.userId, { provider, model });
+    const userCaseLaw = await attachUserCaseLaw(trimmed);
+    const sendAttachments = userCaseLaw.reduce((list, item) => upsertAttachment(list, item), documentAttachments);
 
     if (
       conversationIsNew &&
@@ -3096,7 +3142,7 @@ export default function MatterChatApp({
               styleProfile:
                 "lex-classic-clean-v1",
               attachments:
-                documentAttachments,
+                sendAttachments,
               ...(firmTemplateIds.length > 0
                 ? { firmTemplates: firmTemplateIds }
                 : {}),
@@ -3225,9 +3271,9 @@ export default function MatterChatApp({
           trimmed,
         primarySkill: route,
         mode: "PRAWNIK",
-        ...(documentAttachments.length > 0
+        ...(sendAttachments.length > 0
           ? {
-              attachments: documentAttachments,
+              attachments: sendAttachments,
               evidenceImages: imagesWithText ? "all" as const : "photos" as const
             }
           : {}),
@@ -3325,7 +3371,7 @@ export default function MatterChatApp({
                 format: "docx",
                 documentType: letterWorkflow,
                 styleProfile: "lex-classic-clean-v1",
-                attachments: documentAttachments,
+                attachments: sendAttachments,
                 ...(firmTemplateIds.length > 0
                   ? { firmTemplates: firmTemplateIds }
                   : {}),
@@ -4975,6 +5021,7 @@ export default function MatterChatApp({
                                     {...(item.caseSignature ? { signature: item.caseSignature } : {})}
                                     {...(attributedSentence(message.content, item.caseSignature) ? { attributed: attributedSentence(message.content, item.caseSignature)! } : {})}
                                     onSaveToCase={saveCaseLawToCase}
+                                    caseId={caseId}
                                   />
                                 ) : null}
                               </>
@@ -5099,6 +5146,7 @@ export default function MatterChatApp({
                                 {...(item.claim ? { signature: item.claim } : {})}
                                 {...(attributedSentence(message.content, item.claim) ? { attributed: attributedSentence(message.content, item.claim)! } : {})}
                                 onSaveToCase={saveCaseLawToCase}
+                                caseId={caseId}
                               />
                             ) : null}
                           </li>

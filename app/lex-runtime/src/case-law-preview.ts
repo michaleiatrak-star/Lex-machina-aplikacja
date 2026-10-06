@@ -2,7 +2,7 @@ import { supremeCourtFullTextHtml, type CaseLawFetch } from "./case-law-verifier
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
 import { allowedPreviewUrl, fetchSourcePreview, type PreviewFetch } from "./source-preview.js";
 import { createHash } from "node:crypto";
-import { caseLawStore, courtOfCard, type StoredCaseLaw } from "./case-law-store.js";
+import { caseLawRepository, courtOfCard, type StoredCaseLaw } from "./case-law-store.js";
 import { decodeEntities, documentText } from "./official-text.js";
 
 export { documentText };
@@ -140,33 +140,44 @@ export class CaseLawPreviewService {
     private readonly now: () => number = Date.now
   ) {}
 
-  /** The stored copy of a decision (downloaded now if missing), to be saved in a case's documents. */
-  async copy(input: { sourceUrl: string; signature?: string }): Promise<StoredCaseLaw> {
+  /**
+   * The stored copy of a decision (downloaded now if missing): kept in the
+   * case (when given) and, with the library enabled, catalogued there.
+   */
+  async copy(input: { sourceUrl: string; signature?: string; caseId?: string }): Promise<StoredCaseLaw> {
     const url = allowedPreviewUrl(input.sourceUrl).toString();
-    const stored = caseLawStore()?.get(url);
-    if (stored) return (input.signature && !stored.signature ? caseLawStore()?.put({ ...stored, signature: input.signature }) : null) ?? stored;
-    const text = (await this.text(url)).trim();
+    const repository = caseLawRepository();
+    const stored = repository?.get(url, input.caseId);
+    const text = stored?.text ?? (await this.text(url)).trim();
     if (text.length < 40) throw new Error("CASE_PREVIEW_TEXT_EMPTY");
-    const fetchedAt = new Date(this.now()).toISOString();
+    const fetchedAt = stored?.fetchedAt ?? new Date(this.now()).toISOString();
+    const entry = {
+      ...(stored ?? {}),
+      cardUrl: url,
+      text,
+      fetchedAt,
+      ...(input.signature && !stored?.signature ? { signature: input.signature } : {})
+    };
     return (
-      caseLawStore()?.put({ cardUrl: url, text, fetchedAt, ...(input.signature ? { signature: input.signature } : {}) }) ?? {
-        cardUrl: url,
+      repository?.put(entry, input.caseId) ?? {
         court: courtOfCard(url),
-        ...(input.signature ? { signature: input.signature } : {}),
-        text,
-        sha256: createHash("sha256").update(text).digest("hex"),
-        fetchedAt
+        ...entry,
+        sha256: createHash("sha256").update(text).digest("hex")
       }
     );
   }
 
-  async preview(input: { sourceUrl: string; passage?: string; signature?: string; attributed?: string }): Promise<CaseLawPreview> {
+  async preview(input: { sourceUrl: string; passage?: string; signature?: string; attributed?: string; caseId?: string }): Promise<CaseLawPreview> {
     const url = allowedPreviewUrl(input.sourceUrl).toString();
-    // The local copy first: the quote is marked on what was downloaded once.
-    const stored = caseLawStore()?.get(url);
+    // The local copy first (the case's, then the library's): the quote is
+    // marked on what was downloaded once.
+    const repository = caseLawRepository();
+    const stored = repository?.get(url, input.caseId) ?? null;
     const text = stored?.text ?? (await this.text(url));
     if (text.length < 40) throw new Error("CASE_PREVIEW_TEXT_EMPTY");
-    const saved = stored ?? caseLawStore()?.put({ cardUrl: url, text, ...(input.signature ? { signature: input.signature } : {}) }) ?? null;
+    const saved =
+      repository?.put({ ...(stored ?? {}), cardUrl: url, text, ...(input.signature && !stored?.signature ? { signature: input.signature } : {}) }, input.caseId) ??
+      stored;
     const rendered = renderCaseLawPreview({
       url,
       text,

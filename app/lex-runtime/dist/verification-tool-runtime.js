@@ -1,3 +1,4 @@
+import { caseLawRepository } from "./case-law-store.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import { SupremeCourtCaseVerifier, propositionEvidenceHash, supremeCourtSearchUrl } from "./case-law-verifier.js";
 import { CASE_LAW_SEARCH_HOSTS, CaseLawSearchService, caseLawSearchEntryUrl } from "./case-law-search.js";
@@ -54,6 +55,7 @@ const INTERPRETATION_TOOL_SCHEMA = {
     }
 };
 const CASE_SEARCH_TOOL_NAME = "search_case_law";
+const CASE_LIBRARY_TOOL_NAME = "search_case_law_library";
 const CASE_TOOL_NAME = "verify_case_reference";
 const CASE_QUOTE_TOOL_NAME = "verify_case_quote";
 const CASE_PROPOSITION_TOOL_NAME = "verify_case_proposition";
@@ -102,6 +104,23 @@ const TOOL_SCHEMA = {
     }
 };
 const SUBSTITUTE_HINT = "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
+const CASE_LIBRARY_TOOL_SCHEMA = {
+    type: "function",
+    function: {
+        name: CASE_LIBRARY_TOOL_NAME,
+        description: "Search the user's local case-law library (decisions downloaded earlier from official sources, catalogued by court, signature and date; enabled in Settings). " +
+            "Returns entries with the decision's card (source link) and a passage. Before citing as verified, run verify_case_reference (SN) or the court's own check.",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            required: ["query"],
+            properties: {
+                query: { type: "string", description: "Signature (e.g. II CSKP 89/26), court or a phrase from the text." },
+                limit: { type: "integer", minimum: 1, maximum: 10 }
+            }
+        }
+    }
+};
 const CASE_SEARCH_TOOL_SCHEMA = {
     type: "function",
     function: {
@@ -426,6 +445,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- The first supported courtFamily is SN. Pass claim + signature + courtFamily; pass card_url only when the user gave a card link or ID. Never invent an sn.pl URL.",
     "- SN source = the decision's card (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) returned by verify_case_reference: cite it, never a PDF/text address. A blob: link is a temporary copy in one browser tab; the old /sites/orzecznictwo/Orzeczenia… PDF directory no longer serves decisions. Neither proves anything; no hit there is not evidence that a decision is unpublished.",
     "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl via SAOS; TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
+    "- With the case-law library enabled, search_case_law_library finds decisions downloaded earlier (by signature, court or phrase); cite their card.",
     "- SAOS is an academic aggregator (lowest rank): use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
     "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
     "- For a verbatim quotation attributed to SN, call verify_case_quote. Copy the exact quote plus both returned markers onto the SAME LINE as the exact case citation.",
@@ -433,6 +453,23 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- verify_case_proposition returns SUPPORTED, never VERIFIED. SUPPORTED means the proposition is transparently linked to official evidence; semantic entailment is not independently decided by the runtime.",
     "- For SUPPORTED propositions, keep the exact proposition and supportQuote unchanged and put them with the case citation, case marker, CASE-QUOTE marker and CASE-SUPPORT marker on the SAME LINE."
 ].join("\n");
+function searchCaseLawLibrary(input) {
+    const repository = caseLawRepository();
+    if (!repository?.libraryEnabled()) {
+        return JSON.stringify({ status: "DISABLED", instruction: "The case-law library is off (Settings). Use search_case_law or verify_case_reference." });
+    }
+    const query = typeof input.query === "string" ? input.query.trim().slice(0, 200) : "";
+    const limit = typeof input.limit === "number" ? Math.min(10, Math.max(1, Math.trunc(input.limit))) : 5;
+    if (query.length < 2)
+        return JSON.stringify({ status: "INVALID_QUERY" });
+    const entries = repository.catalog(query, limit).map(({ sha256: _sha, ...entry }) => entry);
+    return JSON.stringify({
+        status: entries.length ? "FOUND" : "NOT_FOUND",
+        query,
+        entries,
+        instruction: "Local copies of official decisions; the card (cardUrl) is the source to cite. Verify before citing as VERIFIED."
+    });
+}
 export class LegalVerificationToolRuntime {
     ledger;
     verifier;
@@ -662,7 +699,7 @@ export class LegalVerificationToolRuntime {
                             status: "OUT_OF_SCOPE",
                             reason: linkProblem.kind === "BLOB" ? "TEMPORARY_BLOB_LINK" : "SN_LEGACY_PDF_LINK",
                             instruction: linkProblem.kind === "BLOB"
-                                ? "A blob: link is a temporary copy in the user's browser tab and cannot be opened by anyone else. Ask for the signature or the card link (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID); never cite a blob: link."
+                                ? "A blob: link is a copy in the user's browser tab that no one else can open. Pass the signature from the conversation (the decision is then taken from sn.pl), or ask the user for the signature, the card link (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) or the saved PDF; never cite a blob: link."
                                 : "The old sn.pl PDF directory is not a source. Ask for the signature or the card link; never cite this address."
                         });
                     }
@@ -823,6 +860,7 @@ export class LegalVerificationToolRuntime {
             TOOL_SCHEMA,
             INTERPRETATION_TOOL_SCHEMA,
             CASE_SEARCH_TOOL_SCHEMA,
+            CASE_LIBRARY_TOOL_SCHEMA,
             CASE_TOOL_SCHEMA,
             CASE_QUOTE_TOOL_SCHEMA,
             CASE_PROPOSITION_TOOL_SCHEMA
@@ -1123,6 +1161,10 @@ export class LegalVerificationToolRuntime {
     async runTools(calls) {
         const results = [];
         for (const call of calls) {
+            if (call.name === CASE_LIBRARY_TOOL_NAME) {
+                results.push({ tool_use_id: call.id, content: searchCaseLawLibrary(call.input) });
+                continue;
+            }
             if (call.name === INTERPRETATION_TOOL_NAME) {
                 results.push({ tool_use_id: call.id, content: await this.verifyInterpretationCall(call) });
                 continue;

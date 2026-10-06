@@ -1,3 +1,4 @@
+import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import { PERSON_CASES } from "../privacy/person-morphology.js";
 import { LocalOfficeEditor, editableMediaType } from "../office-edit.js";
@@ -2186,10 +2187,13 @@ export function createLexHttpApp(options) {
             ? req.body.password
             : "";
         try {
-            res.json(await options
+            const deleted = await options
                 .caseAccessService
                 .deleteCase(responseAuthContext(res), String(req.params.caseId ??
-                ""), password));
+                ""), password);
+            // The case's copies of decisions go with it (the library keeps its own).
+            caseLawRepository()?.removeCase(String(req.params.caseId ?? ""));
+            res.json(deleted);
         }
         catch (error) {
             if (!sendAuthError(res, error) &&

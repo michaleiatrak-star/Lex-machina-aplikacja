@@ -3710,6 +3710,7 @@ export function previewCaseLaw(input: {
   passage?: string;
   signature?: string;
   attributed?: string;
+  caseId?: string;
 }): Promise<CaseLawPreview> {
   return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
 }
@@ -3726,8 +3727,27 @@ export type CaseLawCopy = {
 };
 
 // Kopia orzeczenia zapisana w aplikacji (do akt sprawy); źródłem jest karta orzeczenia.
-export function copyCaseLaw(input: { sourceUrl: string; signature?: string }): Promise<CaseLawCopy> {
+export function copyCaseLaw(input: { sourceUrl: string; signature?: string; caseId?: string }): Promise<CaseLawCopy> {
   return json<CaseLawCopy>("/api/case-law/copy", { method: "POST", body: JSON.stringify(input) });
+}
+
+// Orzeczenie wskazane przez użytkownika (karta, sygnatura SN, blob: z sygnaturą) pobrane z bazy urzędowej.
+export function resolveCaseLaw(input: { cardUrl?: string; signature?: string; caseId?: string }): Promise<CaseLawCopy> {
+  return json<CaseLawCopy>("/api/case-law/resolve", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type CaseLawCatalogEntry = Omit<CaseLawCopy, "text"> & { chars: number; snippet?: string };
+
+export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; available: boolean; entries: CaseLawCatalogEntry[] }> {
+  return json(`/api/case-law/library${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+}
+
+export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean }> {
+  return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {
+  return json("/api/case-law/library/remove", { method: "POST", body: JSON.stringify({ cardUrl }) });
 }
 
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {

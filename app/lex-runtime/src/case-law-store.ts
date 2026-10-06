@@ -66,6 +66,15 @@ export class CaseLawStore {
     }
   }
 
+  delete(cardUrl: string): boolean {
+    try {
+      fs.rmSync(this.file(cardUrl));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Saves a copy once; a later save keeps the first copy and fills in missing metadata. */
   put(input: Omit<StoredCaseLaw, "sha256" | "fetchedAt" | "court"> & { court?: string; fetchedAt?: string }): StoredCaseLaw | null {
     const text = input.text.trim();
@@ -102,13 +111,119 @@ export class CaseLawStore {
   }
 }
 
-let configured: CaseLawStore | null = null;
+export type CaseLawCatalogEntry = Omit<StoredCaseLaw, "text"> & { chars: number; snippet?: string };
 
-/** The application's store (set by the HTTP server); null in tests and tools without a data directory. */
-export function configureCaseLawStore(dir: string | null): void {
-  configured = dir ? new CaseLawStore(dir) : null;
+const CASE_ID = /^[A-Za-z0-9_-]{1,100}$/;
+
+function readJson<T>(file: string): T | null {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as T;
+  } catch {
+    return null;
+  }
 }
 
-export function caseLawStore(): CaseLawStore | null {
+function writeJson(file: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(value), "utf8");
+  fs.renameSync(temporary, file);
+}
+
+/**
+ * Where downloaded decisions live. Each case keeps its own copies (used to
+ * mark quotes in that case). The case-law library (Settings, off by
+ * default) additionally catalogues every downloaded decision by court,
+ * signature and date, searchable by the user and the model.
+ */
+export class CaseLawRepository {
+  readonly library: CaseLawStore;
+
+  constructor(readonly root: string) {
+    this.library = new CaseLawStore(path.join(root, "library"));
+  }
+
+  libraryEnabled(): boolean {
+    return readJson<{ library?: boolean }>(path.join(this.root, "settings.json"))?.library === true;
+  }
+
+  setLibraryEnabled(enabled: boolean): void {
+    writeJson(path.join(this.root, "settings.json"), { library: enabled });
+  }
+
+  forCase(caseId: string): CaseLawStore | null {
+    return CASE_ID.test(caseId) ? new CaseLawStore(path.join(this.root, "cases", caseId)) : null;
+  }
+
+  /** The case's copy first, then the library (when enabled). */
+  get(cardUrl: string, caseId?: string): StoredCaseLaw | null {
+    return (caseId ? this.forCase(caseId)?.get(cardUrl) : null) ?? (this.libraryEnabled() ? this.library.get(cardUrl) : null) ?? null;
+  }
+
+  /** Saves into the case (when given) and into the library (when enabled). */
+  put(input: Parameters<CaseLawStore["put"]>[0], caseId?: string): StoredCaseLaw | null {
+    const inCase = caseId ? this.forCase(caseId)?.put(input) ?? null : null;
+    const inLibrary = this.libraryEnabled() ? this.library.put(input) : null;
+    if (inLibrary) this.indexEntry(inLibrary);
+    return inCase ?? inLibrary;
+  }
+
+  private indexFile(): string {
+    return path.join(this.root, "library", "index.json");
+  }
+
+  private index(): CaseLawCatalogEntry[] {
+    return readJson<CaseLawCatalogEntry[]>(this.indexFile()) ?? [];
+  }
+
+  private indexEntry(entry: StoredCaseLaw): void {
+    const { text, ...meta } = entry;
+    const rest = this.index().filter((item) => item.cardUrl !== entry.cardUrl);
+    writeJson(this.indexFile(), [...rest, { ...meta, chars: text.length }]);
+  }
+
+  /** The library catalogue: newest first; a query matches the signature, court or text. */
+  catalog(query = "", limit = 50): CaseLawCatalogEntry[] {
+    const all = this.index().sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
+    const wanted = query.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase("pl");
+    if (!wanted) return all.slice(0, limit);
+    const found: CaseLawCatalogEntry[] = [];
+    for (const item of all) {
+      if (found.length >= limit) break;
+      const meta = [item.court, item.signature, item.form, item.date].filter(Boolean).join(" ").toLocaleLowerCase("pl");
+      if (meta.includes(wanted)) {
+        found.push(item);
+        continue;
+      }
+      const text = this.library.get(item.cardUrl)?.text;
+      const at = text ? text.normalize("NFKC").replace(/\s+/g, " ").toLocaleLowerCase("pl").indexOf(wanted) : -1;
+      if (text && at >= 0) {
+        const flat = text.normalize("NFKC").replace(/\s+/g, " ");
+        found.push({ ...item, snippet: flat.slice(Math.max(0, at - 200), at + wanted.length + 300) });
+      }
+    }
+    return found;
+  }
+
+  remove(cardUrl: string): boolean {
+    const rest = this.index().filter((item) => item.cardUrl !== cardUrl);
+    const removed = this.library.delete(cardUrl);
+    writeJson(this.indexFile(), rest);
+    return removed;
+  }
+
+  removeCase(caseId: string): void {
+    if (CASE_ID.test(caseId)) fs.rmSync(path.join(this.root, "cases", caseId), { recursive: true, force: true });
+  }
+}
+
+let configured: CaseLawRepository | null = null;
+
+/** The application's repository (set by the HTTP server); null in tests and tools without a data directory. */
+export function configureCaseLawStore(dir: string | null): void {
+  configured = dir ? new CaseLawRepository(dir) : null;
+}
+
+export function caseLawRepository(): CaseLawRepository | null {
   return configured;
 }

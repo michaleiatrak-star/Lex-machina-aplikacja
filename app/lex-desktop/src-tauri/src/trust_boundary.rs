@@ -1451,7 +1451,10 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/core-law/acts/remove"
         | "/api/core-law/provision-preview"
         | "/api/case-law/preview"
-        | "/api/case-law/copy" => method == "POST",
+        | "/api/case-law/copy"
+        | "/api/case-law/resolve"
+        | "/api/case-law/library/remove" => method == "POST",
+        "/api/case-law/library" => matches!(method, "GET" | "PUT"),
         "/api/core-law/settings" => method == "PUT",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
@@ -2023,6 +2026,11 @@ mod tests {
     #[test]
     fn allowlist_rejects_unknown_routes_and_methods() {
         assert!(route_allowed("POST", "/api/auth/activity"));
+        assert!(route_allowed("POST", "/api/case-law/resolve"));
+        assert!(route_allowed("GET", "/api/case-law/library"));
+        assert!(route_allowed("PUT", "/api/case-law/library"));
+        assert!(route_allowed("POST", "/api/case-law/library/remove"));
+        assert!(!route_allowed("DELETE", "/api/case-law/library"));
         assert!(!route_allowed("GET", "/api/auth/activity"));
         assert!(route_allowed("POST", "/api/privacy/name-forms"));
         assert!(route_allowed("POST", "/api/deanonymization/preview"));

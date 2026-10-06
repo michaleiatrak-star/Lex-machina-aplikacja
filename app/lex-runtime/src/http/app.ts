@@ -1,3 +1,4 @@
+import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
 import {
@@ -3951,7 +3952,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           ? req.body.password
           : "";
       try {
-        res.json(
+        const deleted =
           await options
             .caseAccessService
             .deleteCase(
@@ -3963,8 +3964,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 ""
               ),
               password
-            )
-        );
+            );
+        // The case's copies of decisions go with it (the library keeps its own).
+        caseLawRepository()?.removeCase(String(req.params.caseId ?? ""));
+        res.json(deleted);
       } catch (error) {
         if (
           !sendAuthError(

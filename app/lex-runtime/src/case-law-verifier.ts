@@ -1,6 +1,6 @@
 import { SN_REPERTORIES, signaturesIn } from "./court-of-signature.js";
 import { createHash } from "node:crypto";
-import { caseLawStore } from "./case-law-store.js";
+import { caseLawRepository } from "./case-law-store.js";
 import { documentText } from "./official-text.js";
 import type {
   VerificationRecord
@@ -975,7 +975,7 @@ export class SupremeCourtCaseVerifier {
 
     // The decision is downloaded once: its text is kept in the application under
     // its card, for quotes and the marked preview (the text address is temporary).
-    caseLawStore()?.put({
+    caseLawRepository()?.put({
       cardUrl: sourceUrl,
       court: "SN",
       signature: normalizedSignature,

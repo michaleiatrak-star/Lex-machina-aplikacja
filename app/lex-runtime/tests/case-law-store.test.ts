@@ -2,7 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CaseLawStore, caseLawStore, configureCaseLawStore, courtOfCard } from "../src/case-law-store.js";
+import { CaseLawStore, caseLawRepository, configureCaseLawStore, courtOfCard } from "../src/case-law-store.js";
+import { VerificationLedger } from "../src/verification-ledger.js";
+import { LegalVerificationToolRuntime } from "../src/verification-tool-runtime.js";
 import { CaseLawPreviewService } from "../src/case-law-preview.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../src/case-law-verifier.js";
 
@@ -42,19 +44,43 @@ describe("local copies of decisions keyed by their card", () => {
     expect(store.get("https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=inne")).toBeNull();
   });
 
-  it("previews from the network once, then from the stored copy; the card stays the source", async () => {
+  it("previews from the network once, then from the case's copy; the card stays the source", async () => {
     configureCaseLawStore(dir);
     const url = "https://orzeczenia.uzp.gov.pl/Home/Details/12345";
     const fetch = vi.fn(async () => new Response(`<html><body><p>Sygn. akt: KIO 512/25</p><p>${TEXT}</p></body></html>`, { status: 200, headers: { "content-type": "text/html" } }));
-    const first = await new CaseLawPreviewService(fetch as never).preview({ sourceUrl: url, passage: "wierzyciel może dochodzić roszczenia" });
+    const first = await new CaseLawPreviewService(fetch as never).preview({ sourceUrl: url, passage: "wierzyciel może dochodzić roszczenia", caseId: "sprawa-1" });
     expect(first).toMatchObject({ source: "NETWORK", match: "EXACT" });
-    const second = await new CaseLawPreviewService(fetch as never).preview({ sourceUrl: url, passage: "wierzyciel może dochodzić roszczenia" });
+    const second = await new CaseLawPreviewService(fetch as never).preview({ sourceUrl: url, passage: "wierzyciel może dochodzić roszczenia", caseId: "sprawa-1" });
     expect(second).toMatchObject({ source: "LOCAL", match: "EXACT", storedAt: first.storedAt });
     expect(second.html).toContain(`Karta orzeczenia (źródło): <a href="${url}">`);
     expect(fetch).toHaveBeenCalledTimes(1);
-    const copy = await new CaseLawPreviewService(fetch as never).copy({ sourceUrl: url, signature: "KIO 512/25" });
+    const copy = await new CaseLawPreviewService(fetch as never).copy({ sourceUrl: url, signature: "KIO 512/25", caseId: "sprawa-1" });
     expect(copy).toMatchObject({ cardUrl: url, court: "KIO", signature: "KIO 512/25" });
     expect(fetch).toHaveBeenCalledTimes(1);
+    // Library off: the copy is only in that case; another case downloads its own.
+    expect(caseLawRepository()?.catalog()).toEqual([]);
+    await new CaseLawPreviewService(fetch as never).preview({ sourceUrl: url, caseId: "sprawa-2" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("with the library on catalogues decisions by court, signature and date, searchable by the model", async () => {
+    configureCaseLawStore(dir);
+    const repository = caseLawRepository()!;
+    expect(repository.libraryEnabled()).toBe(false);
+    repository.setLibraryEnabled(true);
+    repository.put({ cardUrl: CARD, text: TEXT, signature: "III CZP 25/11", date: "2011-10-18", form: "uchwała" });
+    repository.put({ cardUrl: "https://orzeczenia.nsa.gov.pl/doc/ABCDEF1234", text: "Naczelny Sąd Administracyjny oddalił skargę kasacyjną organu w sprawie podatku.", signature: "II FSK 1/20" });
+    expect(repository.catalog().map((entry) => entry.signature).sort()).toEqual(["II FSK 1/20", "III CZP 25/11"]);
+    expect(repository.catalog("czp 25/11")[0]).toMatchObject({ court: "SN", signature: "III CZP 25/11", form: "uchwała" });
+    expect(repository.catalog("skargę kasacyjną")[0]?.snippet).toContain("skargę kasacyjną");
+    const runtime = new LegalVerificationToolRuntime(new VerificationLedger());
+    const [result] = await runtime.runTools([{ id: "l1", name: "search_case_law_library", input: { query: "III CZP 25/11" } }]);
+    expect(JSON.parse(result!.content)).toMatchObject({ status: "FOUND", entries: [{ cardUrl: CARD, signature: "III CZP 25/11" }] });
+    expect(repository.remove(CARD)).toBe(true);
+    expect(repository.catalog("III CZP 25/11")).toEqual([]);
+    repository.setLibraryEnabled(false);
+    const [off] = await runtime.runTools([{ id: "l2", name: "search_case_law_library", input: { query: "II FSK" } }]);
+    expect(JSON.parse(off!.content).status).toBe("DISABLED");
   });
 });
 
@@ -67,6 +93,7 @@ describe("SN: the card picks the record and the verified text is stored", () => 
 
   it("chooses the record of the given card among exact duplicates and saves its text under the card", async () => {
     configureCaseLawStore(dir);
+    caseLawRepository()!.setLibraryEnabled(true);
     const fetcher = vi.fn(async (input: string | URL) => {
       const url = String(input);
       if (url.includes("task=searchOrzeczenia")) {
@@ -90,7 +117,7 @@ describe("SN: the card picks the record and the verified text is stored", () => 
     });
     expect(result.status).toBe("FOUND");
     expect(result.record?.sourceUrl).toBe(CARD);
-    expect(caseLawStore()?.get(CARD)).toMatchObject({ court: "SN", signature: "III CZP 25/11", date: "2011-10-18", form: "uchwała" });
-    expect(caseLawStore()?.get(CARD)?.text).toContain("wierzyciel może dochodzić roszczenia");
+    expect(caseLawRepository()?.library.get(CARD)).toMatchObject({ court: "SN", signature: "III CZP 25/11", date: "2011-10-18", form: "uchwała" });
+    expect(caseLawRepository()?.library.get(CARD)?.text).toContain("wierzyciel może dochodzić roszczenia");
   });
 });
