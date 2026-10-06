@@ -4,7 +4,7 @@ import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
 
 // Hosts of judgments, decisions and interpretations: the full text is previewed.
 const CASE_HOSTS =
-  /(^|\.)(sn\.pl|orzeczenia\.nsa\.gov\.pl|saos\.org\.pl|orzeczenia\.uzp\.gov\.pl|eureka\.mf\.gov\.pl|uodo\.gov\.pl|curia\.europa\.eu|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z0-9-]+\.(sr|so|sa)\.gov\.pl|ipo\.trybunal\.gov\.pl|otkzu\.trybunal\.gov\.pl)$/i;
+  /(^|\.)(sn\.pl|orzeczenia\.nsa\.gov\.pl|saos\.org\.pl|orzeczenia\.uzp\.gov\.pl|eureka\.mf\.gov\.pl|uodo\.gov\.pl|curia\.europa\.eu|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z0-9-]+\.(sr|so|sa)\.gov\.pl|ipo\.trybunal\.gov\.pl|otkzu\.trybunal\.gov\.pl|etpcz\.ms\.gov\.pl)$/i;
 
 export function isCaseLawSource(url: string | undefined): boolean {
   if (!url) return false;
@@ -57,7 +57,11 @@ export function caseLawReferences(text: string): CaseLawReference[] {
       /saos\.org\.pl\/judgments\/\d+/iu.test(link) ||
       /orzeczenia\.uzp\.gov\.pl\/Home\/Details\/\d+/iu.test(link) ||
       /orzeczenia\.(ms|[a-z0-9-]+\.(sr|so|sa))\.gov\.pl\/(content|details)\/\$N\/[\w.-]{10,}/iu.test(link) ||
-      /(ipo|otkzu)\.trybunal\.gov\.pl\/\S*(dokument|sprawa|Sprawa)=?/u.test(link)
+      /(ipo|otkzu)\.trybunal\.gov\.pl\/\S*(dokument|sprawa|Sprawa)=?/u.test(link) ||
+      // OTK ZU: position of the official collection (/2023/A/43) or its PDF (downloadOTK?mpo=).
+      /otkzu\.trybunal\.gov\.pl\/(\d{4}\/[AB]\/\d+|downloadOTK\?mpo=\d+)/u.test(link) ||
+      // ECHR (Ministry of Justice database): text or details of a decision.
+      /etpcz\.ms\.gov\.pl\/(etpccontent|detailsetpc)\/\$N\/[\w.-]{10,}/iu.test(link)
     ) {
       found.push({ kind: "CARD", cardUrl: link });
     }

@@ -56,5 +56,11 @@ describe("decisions the user points to", () => {
     expect(caseLawReferences(`wyrok ${sp}`)).toEqual([{ kind: "CARD", cardUrl: sp }]);
     expect(isCaseLawSource("https://orzeczenia.ms.gov.pl/details/$N/1")).toBe(true);
     expect(isCaseLawSource("https://ipo.trybunal.gov.pl/ipo/Sprawa?dokument=1")).toBe(true);
+    // OTK ZU positions and ECHR decisions (Ministry of Justice database) get a preview too.
+    const otk = "https://otkzu.trybunal.gov.pl/2023/A/43";
+    const echr = "https://etpcz.ms.gov.pl/etpccontent/$N/990000000000001_I_ETPC_043447_2019_Wy_2021-07-22_001";
+    expect(caseLawReferences(`OTK ZU ${otk} oraz ETPCz ${echr}.`)).toEqual([{ kind: "CARD", cardUrl: otk }, { kind: "CARD", cardUrl: echr }]);
+    expect(caseLawReferences("https://otkzu.trybunal.gov.pl/Wyszukiwanie oraz https://etpcz.ms.gov.pl/")).toEqual([]);
+    expect(isCaseLawSource(echr)).toBe(true);
   });
 });
