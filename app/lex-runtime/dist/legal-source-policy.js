@@ -290,6 +290,24 @@ const FEDERATED_POLICIES = {
         crossCheckRequired: true,
         note: "Official SN database; cite the decision's card (sn.pl ?orzeczenie=ID). VERIFIED only through verify_case_reference."
     },
+    sp: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official common-court portal; cite the stable link to the decision. Results found through SAOS keep R3 unless the portal link is read."
+    },
+    tk: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Constitutional Tribunal (IPO/OTK ZU); identity requires the signature in the document read by tk_pobierz."
+    },
     kio: {
         sourceTier: "R2A",
         provenance: "EXTERNAL_MCP",

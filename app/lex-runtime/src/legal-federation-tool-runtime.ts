@@ -73,6 +73,8 @@ const NATIVE_SEARCH: Record<
   saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
   cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
   sn: (input) => ({ tool: "sn_sprawdz_sygnature", args: { sygnatura: input.query } }),
+  sp: (input) => ({ tool: "sp_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, limit: input.limit } }),
+  tk: (input) => ({ tool: "tk_sprawdz_sygnature", args: { sygnatura: input.query } }),
   kio: (input) => ({ tool: "kio_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } }),
   krs: (input) => ({ tool: "krs_lookup", args: { numerKrs: input.query } }),
   wl: (input) => ({ tool: "wl_sprawdz_nip", args: { nip: input.query, data: input.dateTo } }),
@@ -92,6 +94,8 @@ const NATIVE_GET: Record<
   saos: (id) => ({ tool: "saos_search", args: { sygnatura: id } }),
   cbosa: (id) => ({ tool: "cbosa_pobierz", args: { doc_id: id } }),
   sn: (id) => ({ tool: "sn_pobierz", args: { karta: id } }),
+  sp: (id) => ({ tool: "sp_pobierz", args: { url_lub_id: id } }),
+  tk: (id) => ({ tool: "tk_pobierz", args: { url: id } }),
   kio: (id) => ({ tool: "kio_pobierz", args: { id } }),
   krs: (id) => ({ tool: "krs_lookup", args: { numerKrs: id } }),
   wl: (id) => ({ tool: "wl_sprawdz_nip", args: { nip: id } }),
@@ -140,6 +144,18 @@ const LOCAL_COVERAGE: Record<
     authority: "Sąd Najwyższy (sn.pl snproxy)",
     role: "official retrieval; the decision's card is the source",
     fallback: "Native verify_case_reference (sn.pl card); SAOS only when sn.pl fails."
+  },
+  sp: {
+    family: "common-court-case-law",
+    authority: "Portal Orzeczeń Sądów Powszechnych (orzeczenia.ms.gov.pl + portale sądów)",
+    role: "official retrieval; the link is the decision itself (/content/$N/{id})",
+    fallback: "SAOS (R3) only when the portal fails; signature not unique nationally -> court portal resolves AMBIGUOUS."
+  },
+  tk: {
+    family: "constitutional-court-case-law",
+    authority: "Trybunał Konstytucyjny (IPO / OTK ZU)",
+    role: "simple lookup: SAOS up to 2015 + IPO document read with signature check",
+    fallback: "No machine search by signature in IPO (JSF); web search site:ipo.trybunal.gov.pl then tk_pobierz."
   },
   kio: {
     family: "public-procurement-case-law",
@@ -259,7 +275,7 @@ const SEARCH_SCHEMA:
       name: SEARCH_TOOL,
       description:
         "Search one Lex Machina MCP source. " +
-        "Sources: ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. " +
+        "Sources: ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), common courts (sp, link = decision), TK (tk), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. " +
         "Registry sources (krs, wl, ceidg, sudop) take the identifier (KRS number, NIP) as query; nbp takes the currency code. " +
         "Search results are discovery material; fetch the document before relying on its contents.",
       parameters: {
@@ -968,7 +984,7 @@ export class LegalFederationToolRuntime {
     string {
     return [
       "# FEDERATED LEGAL RESEARCH",
-      "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
+      "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), common courts (sp, link = decision), TK (tk), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
       "NSA/WSA results from cbosa are a snapshot 🟨 and are never promoted to VERIFIED; no exact match is OUT_OF_SCOPE, not absence of the ruling.",
       "Use list_federated_legal_sources when you need source capabilities or a native schema. Search first, then fetch the actual document before relying on its contents.",
       "This federation is DISCOVERY/RESEARCH ONLY. It never creates a Lex Machina VERIFIED ledger entry and never bypasses Gate I.",

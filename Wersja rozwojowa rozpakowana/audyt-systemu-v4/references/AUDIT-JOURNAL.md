@@ -69891,6 +69891,23 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06c — TRYB STRUKTURA: konektory MCP sp (sądy powszechne) i tk (Trybunał Konstytucyjny) (6.192)
+
+### 1. ŹRÓDŁO
+Zlecenie: konektory dla sądów powszechnych i TK; przy stałych linkach źródłem jest samo orzeczenie, bez możliwości budowy konektora — wyszukiwanie proste.
+
+### 2. USTALENIA (pomiary z DOSTEP-MASZYNOWY-API, piaskownica bez dostępu do portali)
+- Portal Orzeczeń SP: GET po sygnaturze bez sesji (kontekst Tapestry), stałe linki `/content/$N/{id}` i `/details/$N/{id}`; sygnatura nieunikalna krajowo — portal sądu rozstrzyga; pod łańcuchem UA Chrome 502 → UA neutralny.
+- IPO TK: JSF/PrimeFaces z ViewState, tylko POST; `Sprawa?sygnatura=` nie jest kluczem. Formularz `Szukaj?cid=1` da się jednak wysłać bez przeglądarki (sesja + ViewState → POST) — korekta oceny F-184 po uwadze użytkownika; nazwy pól odczytywane z HTML.
+
+### 3. ZMIANA
+- `sp-example`: `sp_sprawdz_sygnature` (agregat albo portal sądu `sad=miasto.so`; FOUND/AMBIGUOUS po kodzie sądu z id dokumentu; link do orzeczenia), `sp_pobierz` (treść po stałym linku/id), `sp_szukaj` (fraza: SAOS → link urzędowy `source.judgmentUrl`); awaria portalu → SAOS zastępczo (RZĄD 3).
+- `tk-example`: `tk_sprawdz_sygnature` (najpierw formularz IPO; zapasowo SAOS do 2015 z linkiem urzędowym; poza oknem OUT_OF_SCOPE z zapytaniem `site:ipo.trybunal.gov.pl`), `tk_pobierz` (dokument IPO/OTK ZU z kontrolą sygnatury, MISMATCH gdy brak).
+- Rejestracja: lex-mcp.js, instalator, manifest MCPB, test_poprawnosci (przypadek SP na żywo), dist/lex-mcp.mjs; HIERARCHIA-ZRODEL (shared 3.99.13).
+
+### 4. WERYFIKACJA
+Testy offline `sp-example/test_normalizacja.mjs`, `tk-example/test_normalizacja.mjs` (w tym formularz JSF IPO): OK. Portale niedostępne z piaskownicy — przypadki SP i TK na żywo w `test_poprawnosci.mjs` (10b, 10c).
+
 ## AUDYT-2026-10-06b — konektor sn: żądania jak widżet wyszukiwarki, ponowienie po 403 (6.191)
 
 ### 1. ŹRÓDŁO

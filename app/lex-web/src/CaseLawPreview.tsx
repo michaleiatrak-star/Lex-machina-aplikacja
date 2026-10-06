@@ -3,7 +3,8 @@ import { ApiError, copyCaseLaw, previewCaseLaw, type CaseLawCopy, type CaseLawPr
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
 
 // Hosts of judgments, decisions and interpretations: the full text is previewed.
-const CASE_HOSTS = /(^|\.)(sn\.pl|orzeczenia\.nsa\.gov\.pl|saos\.org\.pl|orzeczenia\.uzp\.gov\.pl|eureka\.mf\.gov\.pl|uodo\.gov\.pl|curia\.europa\.eu)$/i;
+const CASE_HOSTS =
+  /(^|\.)(sn\.pl|orzeczenia\.nsa\.gov\.pl|saos\.org\.pl|orzeczenia\.uzp\.gov\.pl|eureka\.mf\.gov\.pl|uodo\.gov\.pl|curia\.europa\.eu|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z0-9-]+\.(sr|so|sa)\.gov\.pl|ipo\.trybunal\.gov\.pl|otkzu\.trybunal\.gov\.pl)$/i;
 
 export function isCaseLawSource(url: string | undefined): boolean {
   if (!url) return false;
@@ -54,7 +55,9 @@ export function caseLawReferences(text: string): CaseLawReference[] {
       /sn\.pl\/.*[?&]orzeczenie=[\w-]{6,80}/iu.test(link) ||
       /orzeczenia\.nsa\.gov\.pl\/doc\/[0-9A-F]{6,}/iu.test(link) ||
       /saos\.org\.pl\/judgments\/\d+/iu.test(link) ||
-      /orzeczenia\.uzp\.gov\.pl\/Home\/Details\/\d+/iu.test(link)
+      /orzeczenia\.uzp\.gov\.pl\/Home\/Details\/\d+/iu.test(link) ||
+      /orzeczenia\.(ms|[a-z0-9-]+\.(sr|so|sa))\.gov\.pl\/(content|details)\/\$N\/[\w.-]{10,}/iu.test(link) ||
+      /(ipo|otkzu)\.trybunal\.gov\.pl\/\S*(dokument|sprawa|Sprawa)=?/u.test(link)
     ) {
       found.push({ kind: "CARD", cardUrl: link });
     }

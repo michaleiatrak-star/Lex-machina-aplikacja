@@ -20,7 +20,7 @@ const SERW = { isap: ["isap-eli-example", "isap-eli-mcp-server.js"], krs: ["krs-
   nbp: ["nbp-example", "nbp-mcp-server.js"], wl: ["wl-example", "wl-mcp-server.js"], eureka: ["eureka-example", "eureka-mcp-server.js"],
   saos: ["saos-example", "saos-mcp-server.js"], eurlex: ["eurlex-example", "eurlex-mcp-server.js"], uodo: ["uodo-example", "uodo-mcp-server.js"],
   ceidg: ["ceidg-example", "ceidg-mcp-server.js"], cbosa: ["cbosa-example", "cbosa-mcp-server.js"], kio: ["kio-example", "kio-mcp-server.js"],
-  sn: ["sn-example", "sn-mcp-server.js"] };
+  sn: ["sn-example", "sn-mcp-server.js"], sp: ["sp-example", "sp-mcp-server.js"], tk: ["tk-example", "tk-mcp-server.js"] };
 
 async function narzedzie(s, nazwa, args) {
   const [kat, plik] = SERW[s];
@@ -294,6 +294,30 @@ await przypadek("SN: III CZP 25/11 — karta z narzędzia prowadzi do tekstu z t
   }
   const inny = await narzedzie("sn", "sn_sprawdz_sygnature", { sygnatura: "III OSK 1959/22" });
   ok(inny.status === "OUT_OF_SCOPE" && inny.sad === "NSA/WSA", "sygnatura NSA nie została odesłana do CBOSA");
+});
+
+// ── 10b. Sądy powszechne: portal sądu rozstrzyga sygnaturę nieunikalną krajowo; link prowadzi do orzeczenia z tą sygnaturą.
+await przypadek("SP: I C 100/15 w SO Poznań — stały link do orzeczenia zawiera sygnaturę", async (ok) => {
+  const w = await narzedzie("sp", "sp_sprawdz_sygnature", { sygnatura: "I C 100/15", sad: "poznan.so" });
+  ok(w.status === "FOUND", `status ${w.status} ${w.detail ?? ""}`);
+  if (w.status === "FOUND") {
+    const p = await narzedzie("sp", "sp_pobierz", { url_lub_id: w.result.url_orzeczenia });
+    ok(p.status === "FOUND" && /i c 100\/15/.test(norm(p.result.tresc)), "treść spod linku nie zawiera sygnatury");
+  }
+  const agregat = await narzedzie("sp", "sp_sprawdz_sygnature", { sygnatura: "I C 100/15" });
+  ok(agregat.status === "AMBIGUOUS", `agregat: ${agregat.status} (oczekiwane AMBIGUOUS — sygnatura w wielu sądach)`);
+});
+
+// ── 10c. TK: formularz wyszukiwarki IPO (JSF) daje link, a dokument spod linku zawiera sygnaturę.
+await przypadek("TK: K 33/07 — wyszukiwarka IPO, dokument zawiera sygnaturę", async (ok) => {
+  const w = await narzedzie("tk", "tk_sprawdz_sygnature", { sygnatura: "K 33/07" });
+  ok(["FOUND", "AMBIGUOUS"].includes(w.status), `status ${w.status} ${w.ipo_blad ?? w.detail ?? ""}`);
+  ok(w.metoda === "IPO — formularz wyszukiwarki", `metoda: ${w.metoda ?? w.source} (formularz IPO nie zadziałał: ${w.ipo_blad ?? "brak trafień"})`);
+  const url = w.result?.url_orzeczenia ?? w.kandydaci?.[0]?.url_orzeczenia;
+  if (url) {
+    const p = await narzedzie("tk", "tk_pobierz", { url, sygnatura: "K 33/07" });
+    ok(p.status === "FOUND", `tk_pobierz: ${p.status}`);
+  }
 });
 
 // ── 11. KIO (wyszukiwarka UZP): sygnatura, data i rozstrzygnięcie == dokument źródłowy (treść HTML i metryka).

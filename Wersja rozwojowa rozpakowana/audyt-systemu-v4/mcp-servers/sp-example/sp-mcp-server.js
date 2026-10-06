@@ -1,0 +1,246 @@
+#!/usr/bin/env node
+/**
+ * sp-mcp-server.js — orzeczenia sądów powszechnych (SR/SO/SA) z Portalu Orzeczeń
+ * Sądów Powszechnych (orzeczenia.ms.gov.pl i portale poszczególnych sądów). 2026-10-06.
+ *
+ * Mechanika (pomiar 2026-09-13, shared/DOSTEP-MASZYNOWY-API.md, V-SYG-0.6):
+ *  • GET po sygnaturze bez sesji, kontekst Tapestry (spacja → $0020, „/” → $002f), 17 pozycji,
+ *    sygnatura na pozycji 2: /search/advanced/$N/{SYG}/$N×15/{strona};
+ *    trafienia: <span class="big_number">N</span> + odnośniki /details/$N/{docId};
+ *    brak: „Nie znaleziono żadnego wyniku pasującego do zapytania”.
+ *  • Sygnatura nie jest unikalna krajowo (I C 100/15 → 9 sądów) — portal konkretnego sądu
+ *    (orzeczenia.{sad}.sr|so|sa.gov.pl) rozstrzyga AMBIGUOUS.
+ *  • ⛔ UA: 200 pod neutralnym UA, 502 pod łańcuchem Chrome — wysyłamy neutralny.
+ *  • Linki są STAŁE: link do samego orzeczenia /content/$N/{docId}, metryka /details/$N/{docId}.
+ *  • Wyszukiwanie po frazie: portal nie ma udokumentowanego GET po frazie — SAOS (RZĄD 3, agregator
+ *    akademicki) służy tylko do znalezienia orzeczenia; źródłem jest link do portalu urzędowego z SAOS
+ *    (source.judgmentUrl). SAOS zastępuje portal tylko przy jego awarii.
+ * Orzeczenie to materiał orzeczniczy (RZĄD 2A z portalu), nie źródło brzmienia przepisu (ELI).
+ */
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
+
+const AGREGAT = "https://orzeczenia.ms.gov.pl";
+const UA = "LexMachina-sp/1.0 (+https://github.com/michaleiatrak-star/Lex-machina-aplikacja)";
+const SAOS = "https://www.saos.org.pl/api";
+const PORCJA = 20000;
+const RODZAJ = { Uz: "uzasadnienie", Wy: "wyrok", Po: "postanowienie", Uc: "uchwała", Za: "zarządzenie", Np: "nakaz zapłaty" };
+
+/** „I  C 100 / 15” → „I C 100/15”. */
+export function normalizujSygnature(s) {
+  return String(s ?? "").normalize("NFKC").replace(/\./g, "").replace(/\s+/g, " ").replace(/\s*\/\s*/g, "/").trim();
+}
+
+/** Sygnatura w kontekście Tapestry: spacja → $0020, „/” → $002f. */
+export const kodujTapestry = (s) => normalizujSygnature(s).replace(/ /g, "$0020").replace(/\//g, "$002f");
+
+/** Host portalu: agregat albo portal sądu („poznan.so” → orzeczenia.poznan.so.gov.pl). */
+export function hostPortalu(sad) {
+  if (!sad) return AGREGAT;
+  const s = String(sad).trim().toLowerCase().replace(/^orzeczenia\./, "").replace(/\.gov\.pl\/?$/, "");
+  if (!/^[a-z0-9-]{2,40}\.(sr|so|sa)$/.test(s)) throw new Error(`Nieprawidłowy portal sądu: ${sad} (np. poznan.so, warszawa.sa)`);
+  return `https://orzeczenia.${s}.gov.pl`;
+}
+
+export function dozwolonyHost(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (u.hostname === "orzeczenia.ms.gov.pl" || /^orzeczenia\.[a-z0-9-]{2,40}\.(sr|so|sa)\.gov\.pl$/.test(u.hostname));
+  } catch {
+    return false;
+  }
+}
+
+export const urlSzukania = (host, syg, strona = 1) => `${host}/search/advanced/$N/${kodujTapestry(syg)}${"/$N".repeat(15)}/${strona}`;
+export const urlOrzeczenia = (host, docId) => `${host}/content/$N/${docId}`;
+export const urlMetryki = (host, docId) => `${host}/details/$N/${docId}`;
+
+/**
+ * Identyfikator dokumentu portalu, np. 155000000001006_I_C_000100_2015_Uz_2015-06-18_001
+ * → sygnatura I C 100/15, rodzaj, data. Nierozpoznany kształt → tylko id.
+ */
+export function rozbierzDocId(docId) {
+  const m = /^(\d{6,})_([IVXL]{1,6})_([A-Za-z]{1,6})_0*(\d{1,6})_(\d{4})_([A-Za-z]{1,4})_(\d{4}-\d{2}-\d{2})_(\d{1,4})$/.exec(String(docId));
+  if (!m) return { docId };
+  const [, kodSadu, wydzial, rep, nr, rok, typ, data] = m;
+  return { docId, kodSadu, sygnatura: `${wydzial} ${rep} ${nr}/${rok.slice(2)}`, rodzaj: RODZAJ[typ] ?? typ, data };
+}
+
+/** Ta sama sygnatura niezależnie od zapisu roku (15 / 2015). */
+export function tasamaSygnatura(a, b) {
+  const k = (s) => normalizujSygnature(s).replace(/\/(\d{2})(\d{2})$/, (_, c, r) => (c === "19" || c === "20" ? `/${r}` : `/${c}${r}`)).toUpperCase();
+  return k(a) === k(b);
+}
+
+/** Strona wyników → liczba trafień i identyfikatory dokumentów. Czysta funkcja. */
+export function parsujWyniki(html) {
+  const t = String(html ?? "");
+  if (/Nie znaleziono żadnego wyniku|Nie znaleziono zadnego wyniku/i.test(t)) return { liczba: 0, docIds: [] };
+  const liczbaTxt = /class="big_number"[^>]*>\s*([\d\s ]+)</.exec(t)?.[1];
+  const docIds = [...new Set([...t.matchAll(/\/details\/\$N\/([A-Za-z0-9_.-]{10,120})/g)].map((m) => m[1]))];
+  return { liczba: liczbaTxt ? Number(liczbaTxt.replace(/[\s ]/g, "")) : null, docIds };
+}
+
+const ENCJE = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+const dekoduj = (t) => String(t ?? "")
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&([a-z]+);/gi, (m, n) => ENCJE[n.toLowerCase()] ?? m);
+export const tekst = (html) => dekoduj(String(html ?? "")
+  .replace(/<(script|style|head|nav|footer)[\s\S]*?<\/\1>/gi, "")
+  .replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h\d)>/gi, "\n").replace(/<[^>]+>/g, " "))
+  .split("\n").map((l) => l.replace(/[ \t ]+/g, " ").trim()).filter(Boolean).join("\n");
+
+async function pobierz(url, typ = "text") {
+  let ostatni;
+  for (let proba = 1; proba <= 2; proba += 1) {
+    try {
+      const r = await fetch(url, { signal: sygnal(30000), headers: { "User-Agent": UA, Accept: typ === "json" ? "application/json" : "text/html" } });
+      if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+      return typ === "json" ? await r.json() : await r.text();
+    } catch (e) {
+      ostatni = e;
+      if (e?.status && e.status < 500) break;
+    }
+  }
+  throw ostatni;
+}
+
+/** SAOS (zastępczo): rekord po sygnaturze z urzędowym linkiem źródłowym. */
+async function saosPoSygnaturze(syg) {
+  const dane = await pobierz(`${SAOS}/search/judgments?caseNumber=${encodeURIComponent(normalizujSygnature(syg))}&courtType=COMMON&pageSize=10`, "json");
+  const trafione = (dane.items ?? []).filter((it) => (it.courtCases ?? []).some((c) => tasamaSygnatura(c.caseNumber, syg)));
+  const wynik = [];
+  for (const it of trafione.slice(0, 5)) {
+    const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
+    const zrodlo = pelny?.data?.source?.judgmentUrl;
+    wynik.push({
+      sygnatura: normalizujSygnature(syg), data: it.judgmentDate ?? null, sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
+      url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
+    });
+  }
+  return wynik;
+}
+
+const baza = { source: "orzeczenia.ms.gov.pl", query_type: "orzeczenie" };
+const NOTA = "Źródłem jest link do samego orzeczenia w Portalu Orzeczeń (url_orzeczenia, stały). Sygnatura SR/SO nie jest " +
+  "unikalna krajowo — przy AMBIGUOUS podaj portal sądu (sad, np. poznan.so). Brak trafienia ≠ brak orzeczenia " +
+  "(portal publikuje wybrane orzeczenia). Przepisy weryfikuj w ELI.";
+const odp = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
+const blad = (e) => ({ status: "ERROR", ...baza, detail: String(e?.message ?? e), retrieved_at: new Date().toISOString() });
+const pozycja = (host, docId) => ({ ...rozbierzDocId(docId), url_orzeczenia: urlOrzeczenia(host, docId), url_metryki: urlMetryki(host, docId), portal: new URL(host).hostname });
+
+const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "sp-connector", version: "1.0.0" }));
+
+server.registerTool("sp_sprawdz_sygnature", {
+  title: "Sprawdź sygnaturę orzeczenia sądu powszechnego",
+  description: "Czy w Portalu Orzeczeń Sądów Powszechnych jest orzeczenie o tej sygnaturze (SR/SO/SA). Zwraca stały link do " +
+    "samego orzeczenia (url_orzeczenia). `sad` (np. poznan.so, warszawa.sa) zawęża do portalu jednego sądu i rozstrzyga " +
+    "sygnatury powtarzające się w różnych sądach. Przy awarii portalu: SAOS z linkiem urzędowym.",
+  inputSchema: {
+    sygnatura: z.string().min(4).max(40).describe("np. I C 100/15, V ACa 12/24"),
+    sad: z.string().max(60).optional().describe("portal sądu: miasto.so | miasto.sr | miasto.sa"),
+  },
+}, async ({ sygnatura, sad }) => {
+  const oczekiwana = normalizujSygnature(sygnatura);
+  let host;
+  try { host = hostPortalu(sad); } catch (e) { return odp(blad(e)); }
+  try {
+    const strona = await pobierz(urlSzukania(host, oczekiwana));
+    const w = parsujWyniki(strona);
+    const docs = w.docIds.filter((id) => { const r = rozbierzDocId(id); return !r.sygnatura || tasamaSygnatura(r.sygnatura, oczekiwana); });
+    if (!docs.length) {
+      return odp({ status: "OUT_OF_SCOPE", ...baza, oczekiwana, portal: new URL(host).hostname, liczba_trafien: w.liczba ?? 0,
+        uwaga: `Brak orzeczenia ${oczekiwana} w portalu ${new URL(host).hostname}. ${NOTA}`, retrieved_at: new Date().toISOString() });
+    }
+    // Uzasadnienie i wyrok jednej sprawy w jednym sądzie to jedna sprawa; różne sądy = AMBIGUOUS.
+    const sady = new Set(docs.map((id) => rozbierzDocId(id).kodSadu ?? id));
+    return odp({ status: sady.size === 1 ? "FOUND" : "AMBIGUOUS", ...baza, oczekiwana, liczba_trafien: w.liczba,
+      ...(sady.size === 1 ? { result: pozycja(host, docs[0]), dokumenty: docs.map((id) => pozycja(host, id)) } : { kandydaci: docs.map((id) => pozycja(host, id)) }),
+      uwaga: NOTA, retrieved_at: new Date().toISOString(), confidence: "deterministic" });
+  } catch (e) {
+    // Portal urzędowy nie odpowiada → SAOS zastępczo (RZĄD 3), z linkiem do portalu, gdy SAOS go zna.
+    try {
+      const zastepczo = await saosPoSygnaturze(oczekiwana);
+      return odp({ status: zastepczo.length ? (zastepczo.length === 1 ? "FOUND" : "AMBIGUOUS") : "OUT_OF_SCOPE", ...baza, source: "saos (zastępczo)",
+        oczekiwana, portal_blad: String(e?.message ?? e), ...(zastepczo.length === 1 ? { result: zastepczo[0] } : { kandydaci: zastepczo }),
+        uwaga: `Portal Orzeczeń nie odpowiedział (${e?.message ?? e}); wynik z SAOS (RZĄD 3, agregator akademicki). Powołuj url_orzeczenia, gdy jest.`,
+        retrieved_at: new Date().toISOString() });
+    } catch (e2) {
+      return odp({ ...blad(e), saos_blad: String(e2?.message ?? e2) });
+    }
+  }
+});
+
+server.registerTool("sp_pobierz", {
+  title: "Pobierz orzeczenie sądu powszechnego",
+  description: "Treść orzeczenia z Portalu Orzeczeń po stałym linku (…/content/$N/{id} albo …/details/$N/{id}) lub id dokumentu; " +
+    "porcjami po 20 000 znaków (offset).",
+  inputSchema: {
+    url_lub_id: z.string().min(10).max(400).describe("link z portalu albo id dokumentu (np. 155000000001006_I_C_000100_2015_Uz_2015-06-18_001)"),
+    sad: z.string().max(60).optional().describe("portal sądu, gdy podajesz samo id"),
+    offset: z.number().int().min(0).optional(),
+  },
+}, async ({ url_lub_id, sad, offset = 0 }) => {
+  try {
+    let host, docId;
+    if (/^https?:\/\//i.test(url_lub_id)) {
+      if (!dozwolonyHost(url_lub_id)) return odp({ status: "ERROR", ...baza, detail: "To nie jest adres Portalu Orzeczeń Sądów Powszechnych." });
+      const u = new URL(url_lub_id);
+      host = u.origin;
+      docId = /\/(?:content|details)\/\$N\/([A-Za-z0-9_.-]{10,120})/.exec(decodeURIComponent(u.pathname))?.[1];
+    } else {
+      host = hostPortalu(sad);
+      docId = url_lub_id.trim();
+    }
+    if (!docId) return odp({ status: "ERROR", ...baza, detail: "Nie rozpoznano id dokumentu w adresie." });
+    const calosc = tekst(await pobierz(urlOrzeczenia(host, docId)));
+    if (calosc.length < 40) return odp({ status: "NOT_FOUND", ...baza, url_orzeczenia: urlOrzeczenia(host, docId), uwaga: "Portal nie zwrócił treści orzeczenia." });
+    const czesc = calosc.slice(offset, offset + PORCJA);
+    return odp({ status: "FOUND", ...baza, confidence: "deterministic",
+      result: { ...pozycja(host, docId), tresc: czesc, tresc_offset: offset, tresc_dlugosc: calosc.length, tresc_kompletna: offset + czesc.length >= calosc.length },
+      uwaga: NOTA, retrieved_at: new Date().toISOString() });
+  } catch (e) { return odp(blad(e)); }
+});
+
+server.registerTool("sp_szukaj", {
+  title: "Szukaj orzeczeń sądów powszechnych po frazie",
+  description: "Wyszukiwanie po treści (proste): SAOS znajduje orzeczenia sądów powszechnych, narzędzie oddaje stały link do " +
+    "orzeczenia w Portalu Orzeczeń (url_orzeczenia), gdy SAOS go zna. Wynik to kandydaci — przed powołaniem sprawdź sygnaturę " +
+    "(sp_sprawdz_sygnature) i przeczytaj treść (sp_pobierz).",
+  inputSchema: {
+    fraza: z.string().min(3).max(300),
+    dataOd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dataDo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    limit: z.number().int().min(1).max(10).optional(),
+  },
+}, async ({ fraza, dataOd, dataDo, limit = 5 }) => {
+  try {
+    const qs = new URLSearchParams({ all: fraza, courtType: "COMMON", pageSize: String(limit), sortingField: "JUDGMENT_DATE", sortingDirection: "DESC" });
+    if (dataOd) qs.set("judgmentDateFrom", dataOd);
+    if (dataDo) qs.set("judgmentDateTo", dataDo);
+    const dane = await pobierz(`${SAOS}/search/judgments?${qs}`, "json");
+    const kandydaci = [];
+    for (const it of (dane.items ?? []).slice(0, limit)) {
+      const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
+      const zrodlo = pelny?.data?.source?.judgmentUrl;
+      kandydaci.push({
+        sygnatury: (it.courtCases ?? []).map((c) => normalizujSygnature(c.caseNumber)), data: it.judgmentDate ?? null,
+        sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
+        url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
+      });
+    }
+    return odp({ status: kandydaci.length ? "AMBIGUOUS" : "OUT_OF_SCOPE", ...baza, source: "saos → Portal Orzeczeń", fraza, kandydaci,
+      uwaga: "Kandydaci z SAOS (RZĄD 3, agregator akademicki) — źródłem jest url_orzeczenia z portalu urzędowego. " + NOTA,
+      retrieved_at: new Date().toISOString() });
+  } catch (e) { return odp(blad(e)); }
+});
+
+if (!globalThis.__LEX_MCP_WSPOLNY && process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
+  await server.connect(new StdioServerTransport());
+  console.error("sp-mcp-server: nasłuchuję na stdio (MCP)");
+}

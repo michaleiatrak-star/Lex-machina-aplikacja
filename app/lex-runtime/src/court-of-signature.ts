@@ -61,11 +61,11 @@ const WHERE: Record<SignatureCourt, { label: string; use: string; card: string }
   },
   POWSZECHNY: {
     label: "sąd powszechny",
-    use: "search_case_law source=SAOS (Portal Orzeczeń Sądów Powszechnych przez SAOS)",
+    use: "sp_sprawdz_sygnature (Portal Orzeczeń; link do samego orzeczenia; sad=miasto.so rozstrzyga powtórzenia), SAOS tylko zastępczo",
     card: "https://orzeczenia.ms.gov.pl"
   },
   KIO: { label: "Krajowa Izba Odwoławcza", use: "kio_sprawdz_sygnature (UZP)", card: "https://orzeczenia.uzp.gov.pl" },
-  TK: { label: "Trybunał Konstytucyjny", use: "search_case_law source=SAOS albo baza ipo.trybunal.gov.pl", card: "https://ipo.trybunal.gov.pl" }
+  TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature, a dokument z IPO sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" }
 };
 
 // Courts each search source publishes.
@@ -73,7 +73,9 @@ const COVERS: Record<string, readonly SignatureCourt[]> = {
   cbosa: ["NSA_WSA"],
   kio: ["KIO"],
   saos: ["SN", "POWSZECHNY", "TK", "KIO"],
-  sn: ["SN"]
+  sn: ["SN"],
+  sp: ["POWSZECHNY"],
+  tk: ["TK"]
 };
 
 /**

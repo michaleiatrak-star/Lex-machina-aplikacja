@@ -52,5 +52,9 @@ describe("decisions the user points to", () => {
     expect(caseLawReferences("https://orzeczenia.nsa.gov.pl/doc/1A2B3C4D5E")).toEqual([{ kind: "CARD", cardUrl: "https://orzeczenia.nsa.gov.pl/doc/1A2B3C4D5E" }]);
     expect(caseLawReferences("https://www.sn.pl/pl/wyszukiwarka-orzeczen oraz https://www.sn.pl/aktualnosci")).toEqual([]);
     expect(caseLawReferences("wyrok II Cz 12/20 blob:https://x.pl/1")[0]?.kind).toBe("BLOB_WITHOUT_SIGNATURE");
+    const sp = "https://orzeczenia.poznan.so.gov.pl/content/$N/155000000001006_I_C_000100_2015_Uz_2015-06-18_001";
+    expect(caseLawReferences(`wyrok ${sp}`)).toEqual([{ kind: "CARD", cardUrl: sp }]);
+    expect(isCaseLawSource("https://orzeczenia.ms.gov.pl/details/$N/1")).toBe(true);
+    expect(isCaseLawSource("https://ipo.trybunal.gov.pl/ipo/Sprawa?dokument=1")).toBe(true);
   });
 });

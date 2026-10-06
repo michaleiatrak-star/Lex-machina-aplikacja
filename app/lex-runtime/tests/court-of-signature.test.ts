@@ -27,6 +27,11 @@ describe("the court of a signature", () => {
     expect(misroutedSignature("saos", "II OSK 1234/22")?.useInstead).toContain("CBOSA");
     expect(misroutedSignature("saos", "V ACa 12/2024")).toBeNull();
     expect(misroutedSignature("kio", "{\"sygnatura\":\"II CSKP 89/26\"}")?.court).toBe("Sąd Najwyższy");
+    expect(misroutedSignature("sp", "I C 100/15")).toBeNull();
+    expect(misroutedSignature("sp", "II CSKP 89/26")?.useInstead).toContain("verify_case_reference");
+    expect(misroutedSignature("cbosa", "I C 100/15")?.useInstead).toContain("sp_sprawdz_sygnature");
+    expect(misroutedSignature("tk", "K 33/07")).toBeNull();
+    expect(misroutedSignature("cbosa", "SK 3/20")?.useInstead).toContain("tk_sprawdz_sygnature");
   });
 
   it("recognizes links that are not sources and keeps the signature of an old SN PDF", () => {

@@ -19,8 +19,14 @@ export const SOURCE_PREVIEW_HOSTS = new Set([
     // Official open-data APIs rendered as a readable page (KRS odpis, NBP rates).
     "api-krs.ms.gov.pl",
     "orzeczenia.uzp.gov.pl",
-    "api.nbp.pl"
+    "api.nbp.pl",
+    // Common courts (aggregate portal) and the Constitutional Tribunal.
+    "orzeczenia.ms.gov.pl",
+    "ipo.trybunal.gov.pl",
+    "otkzu.trybunal.gov.pl"
 ]);
+// Portals of single common courts: orzeczenia.{city}.sr|so|sa.gov.pl.
+export const COURT_PORTAL_HOST = /^orzeczenia\.[a-z0-9-]{2,40}\.(sr|so|sa)\.gov\.pl$/;
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 4;
 const TIMEOUT_MS = 20_000;
@@ -36,7 +42,7 @@ export function allowedPreviewUrl(value) {
         url.username ||
         url.password ||
         (url.port && url.port !== "443") ||
-        !SOURCE_PREVIEW_HOSTS.has(url.hostname.toLowerCase())) {
+        !(SOURCE_PREVIEW_HOSTS.has(url.hostname.toLowerCase()) || COURT_PORTAL_HOST.test(url.hostname.toLowerCase()))) {
         throw new Error("SOURCE_PREVIEW_HOST_NOT_ALLOWED");
     }
     return url;

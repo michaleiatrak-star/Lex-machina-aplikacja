@@ -91,6 +91,26 @@
       "description": "SN: pełny tekst orzeczenia po karcie (…?orzeczenie=ID)"
     },
     {
+      "name": "sp_sprawdz_sygnature",
+      "description": "Sądy powszechne: orzeczenie po sygnaturze w Portalu Orzeczeń; stały link do orzeczenia"
+    },
+    {
+      "name": "sp_pobierz",
+      "description": "Sądy powszechne: treść orzeczenia po stałym linku"
+    },
+    {
+      "name": "sp_szukaj",
+      "description": "Sądy powszechne: wyszukiwanie po frazie (SAOS) z linkiem do Portalu Orzeczeń"
+    },
+    {
+      "name": "tk_sprawdz_sygnature",
+      "description": "TK: orzeczenie po sygnaturze (SAOS do 2015 + zapytanie do IPO)"
+    },
+    {
+      "name": "tk_pobierz",
+      "description": "TK: treść dokumentu z IPO/OTK ZU z kontrolą sygnatury"
+    },
+    {
       "name": "kio_szukaj",
       "description": "KIO: wyszukiwanie orzeczeń Krajowej Izby Odwoławczej (wyszukiwarka UZP) po frazie, sygnaturze i dacie"
     },

@@ -30,6 +30,8 @@ export function courtOfCard(cardUrl: string): string {
   }
   if (/(^|\.)sn\.pl$/.test(host)) return "SN";
   if (host === "orzeczenia.nsa.gov.pl") return "NSA/WSA";
+  if (host === "orzeczenia.ms.gov.pl" || /^orzeczenia\.[a-z0-9-]+\.(sr|so|sa)\.gov\.pl$/.test(host)) return "SP";
+  if (/(^|\.)trybunal\.gov\.pl$/.test(host)) return "TK";
   if (/(^|\.)saos\.org\.pl$/.test(host)) return "SAOS";
   if (host === "orzeczenia.uzp.gov.pl") return "KIO";
   if (host === "eureka.mf.gov.pl") return "EUREKA";
