@@ -103,9 +103,23 @@ function mergeCookies(current, incoming) {
     }
     return [...byName.values()];
 }
+// sn.pl answers the search widget's own requests; a bare request may meet the
+// site's bot protection (HTTP 403 page). Requests look like the widget's (same
+// referer, XHR, JSON accept) and, after a 403, the search page is opened once
+// for its session cookies before one more try.
 async function fetchSn(fetcher, input) {
+    const first = await fetchSnOnce(fetcher, input, []);
+    if (first.response.status !== 403 || input === SN_HUMAN)
+        return first.response;
+    const warm = await fetchSnOnce(fetcher, SN_HUMAN, first.cookies).catch(() => null);
+    if (!warm)
+        return first.response;
+    return (await fetchSnOnce(fetcher, input, warm.cookies)).response;
+}
+async function fetchSnOnce(fetcher, input, initialCookies) {
     let url = input;
-    let cookies = [];
+    let cookies = initialCookies;
+    const page = input === SN_HUMAN;
     for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
         const response = await fetcher(url, {
             method: "GET",
@@ -113,7 +127,14 @@ async function fetchSn(fetcher, input) {
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             headers: {
                 "User-Agent": SN_BROWSER_UA,
-                Accept: "*/*",
+                "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+                ...(page
+                    ? { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+                    : {
+                        Accept: "application/json, text/javascript, */*; q=0.01",
+                        Referer: SN_HUMAN,
+                        "X-Requested-With": "XMLHttpRequest"
+                    }),
                 ...(cookies.length
                     ? {
                         Cookie: cookies.join("; ")
@@ -136,7 +157,7 @@ async function fetchSn(fetcher, input) {
             url = next.toString();
             continue;
         }
-        return response;
+        return { response, cookies };
     }
     throw new Error("SN_REDIRECT_LIMIT_EXCEEDED");
 }

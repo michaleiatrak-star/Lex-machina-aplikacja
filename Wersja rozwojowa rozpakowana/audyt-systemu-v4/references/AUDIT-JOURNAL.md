@@ -69891,6 +69891,14 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06b — konektor sn: żądania jak widżet wyszukiwarki, ponowienie po 403 (6.191)
+
+### 1. ŹRÓDŁO
+Sonda CI G22 (2026-10-06 08:21 i 08:32): sn.pl odpowiada `HTTP 403 text/html` na `snproxy searchOrzeczenia` z GitHub Actions; 07:47 ten sam kod przechodził.
+
+### 2. ZMIANA
+`sn-mcp-server.js` (i weryfikator w aplikacji): nagłówki jak widżet (Referer wyszukiwarki, `X-Requested-With`, Accept JSON, Accept-Language); po 403 jednorazowe otwarcie wyszukiwarki po ciasteczka sesji i ponowienie. Błąd 403 opisany jako ochrona przed botami sn.pl. dist/lex-mcp.mjs przebudowany.
+
 ## AUDYT-2026-10-06 — TRYB STRUKTURA: orzeczenia SN — karta sprawy, właściwa baza wg sygnatury, SAOS RZĄD 3, konektor MCP sn (6.190)
 
 ### 1. ŹRÓDŁO

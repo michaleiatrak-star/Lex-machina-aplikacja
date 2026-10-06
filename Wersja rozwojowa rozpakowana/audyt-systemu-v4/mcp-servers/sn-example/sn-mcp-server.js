@@ -143,13 +143,33 @@ function proxy(task, params) {
   return u.toString();
 }
 
+// Żądania jak widżet wyszukiwarki (referer, XHR, JSON). Ochrona przed botami sn.pl odpowiada 403
+// stroną HTML — wtedy raz otwieramy wyszukiwarkę po ciasteczka sesji i ponawiamy (pomiar CI 2026-10-06).
 async function pobierzJson(url) {
+  const pierwsza = await zadanieSn(url, []);
+  if (pierwsza.r.status !== 403) return odczytaj(pierwsza.r);
+  const strona = await zadanieSn(KARTA, pierwsza.ciastka, true).catch(() => null);
+  return odczytaj((await zadanieSn(url, strona ? strona.ciastka : pierwsza.ciastka)).r);
+}
+
+async function odczytaj(r) {
+  if (!r.ok) throw new Error(`sn.pl HTTP ${r.status}${r.status === 403 ? " (ochrona przed botami sn.pl)" : ""}`);
+  return await r.json();
+}
+
+async function zadanieSn(url, poczatkowe, strona = false) {
   let adres = url;
-  let ciastka = [];
+  let ciastka = poczatkowe;
   for (let i = 0; i <= 3; i += 1) {
     const r = await fetch(adres, {
       redirect: "manual", signal: sygnal(40000),
-      headers: { "User-Agent": UA, Accept: "*/*", ...(ciastka.length ? { Cookie: ciastka.join("; ") } : {}) },
+      headers: {
+        "User-Agent": UA, "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+        ...(strona
+          ? { Accept: "text/html,application/xhtml+xml,*/*;q=0.8" }
+          : { Accept: "application/json, text/javascript, */*; q=0.01", Referer: KARTA, "X-Requested-With": "XMLHttpRequest" }),
+        ...(ciastka.length ? { Cookie: ciastka.join("; ") } : {}),
+      },
     });
     const nowe = (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]);
     ciastka = [...ciastka.filter((c) => !nowe.some((n) => n.split("=")[0] === c.split("=")[0])), ...nowe];
@@ -159,8 +179,7 @@ async function pobierzJson(url) {
       adres = dalej.toString();
       continue;
     }
-    if (!r.ok) throw new Error(`sn.pl HTTP ${r.status}`);
-    return await r.json();
+    return { r, ciastka };
   }
   throw new Error("Za dużo przekierowań sn.pl");
 }

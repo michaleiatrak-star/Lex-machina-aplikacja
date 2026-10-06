@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.191 (2026-10-06): konektor sn: nagłówki widżetu i ponowienie po 403 ochrony sn.pl
+
 - 6.190 (2026-10-06): konektor MCP sn (karta orzeczenia), SAOS RZĄD 3, nieczynne linki SN usunięte
 
 - 6.189 (AUDYT-2026-10-05p): Dwie dziedziny DR w jednej sprawie: frazy DR-03/DR-04, zakres wierszy map aktów DR-02/DR-03, rozpoznanie sprawy karnej bez słowa „przestępstwo”.

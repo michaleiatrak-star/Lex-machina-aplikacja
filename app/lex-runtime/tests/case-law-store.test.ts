@@ -121,3 +121,28 @@ describe("SN: the card picks the record and the verified text is stored", () => 
     expect(caseLawRepository()?.library.get(CARD)?.text).toContain("wierzyciel może dochodzić roszczenia");
   });
 });
+
+describe("sn.pl bot protection", () => {
+  it("after a 403 opens the search page for session cookies and asks once more, like the widget", async () => {
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    let blocked = true;
+    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      seen.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
+      if (url.endsWith("/pl/wyszukiwarka-orzeczen")) {
+        blocked = false;
+        return new Response("<html></html>", { status: 200, headers: { "content-type": "text/html", "set-cookie": "sess=abc; path=/" } });
+      }
+      if (blocked) return new Response("<html>403</html>", { status: 403, headers: { "content-type": "text/html" } });
+      if (url.includes("task=searchOrzeczenia")) {
+        return json({ data: [{ data: [{ id: "ZuUySp8Bw1HnVDW6c5lg", sygnatura_sprawy: "III CZP 25/11" }] }] });
+      }
+      return snText(`<html><body><p>${TEXT}</p></body></html>`);
+    });
+    const result = await new SupremeCourtCaseVerifier(fetcher).verify({ claim: "sygn. III CZP 25/11", signature: "III CZP 25/11", toolCallId: "waf-1" });
+    expect(result.status).toBe("FOUND");
+    expect(seen.map((item) => new URL(item.url).searchParams.get("task") ?? "page")).toEqual(["searchOrzeczenia", "page", "searchOrzeczenia", "OrzeczeniePlikHtml"]);
+    expect(seen[0]!.headers).toMatchObject({ Referer: "https://sn.pl/pl/wyszukiwarka-orzeczen", "X-Requested-With": "XMLHttpRequest" });
+    expect(seen[2]!.headers.Cookie).toBe("sess=abc");
+  });
+});
