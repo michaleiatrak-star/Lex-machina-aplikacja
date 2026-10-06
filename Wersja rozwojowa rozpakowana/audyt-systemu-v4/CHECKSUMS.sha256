@@ -13,7 +13,7 @@ c2c61b340f90522e08100a71e4ac5d74a46c8a5bf708730e0802ff7fcaf25393  ./mcp-servers/
 55dbd937ab8ed74d02b95ac874a4a79cf6f7551485302f7fad85617634585a1a  ./mcp-servers/ceidg-example/fixtures/firmy_nip_aktywny.json
 74b6c9bda725bbfbc3926510d234bb5cbfde501267ec28bd7d804c4a00823dab  ./mcp-servers/ceidg-example/test_normalizacja.mjs
 ad8df07cc7234d88ebdfd7eefa0a2ea8acf405c492683d783078c2fbe7cd1ad2  ./mcp-servers/dist/NOTICE-THIRD-PARTY.txt
-e2518c935fdc34aa551e70db490b1668b4e9b885c3196eecf7349635360f9028  ./mcp-servers/dist/lex-mcp.mjs
+1ae214cd745dd9ebcc3d8d77fd000a808af8e48f33e1439bc1af6100ca57b36a  ./mcp-servers/dist/lex-mcp.mjs
 14729981c13e9f5585ad139c58b12b477defcc2ffe56b01c75b8869acc89733a  ./mcp-servers/eureka-example/eureka-mcp-server.js
 1aa02a2b1c340653a9e5dbdcfcba96c0023d2a9f30f50f19fe98dede3f0b2590  ./mcp-servers/eureka-example/fixtures/dok_445895.json
 6a82c22d36d35a4b721780eb8c7c3eff1c64819a1d4f8ebee22841e188bb76bb  ./mcp-servers/eureka-example/fixtures/dok_709097.json
@@ -72,7 +72,7 @@ fd473fd3ad4943b0842cf6c5817939be10b3125a29e38c1e887cbdeaaff10e7c  ./mcp-servers/
 be9ca7328e256cc3b7c8b39b605e2f40a5b2ba27c317b93cf03e40f777ed4a8d  ./mcp-servers/test_poprawnosci.mjs
 700f866368b2365c0ba627c281d52cb0d09352ce716f6f0845d190b52cccdacb  ./mcp-servers/test_protokol.mjs
 98dae445e2e2bc4e2b309f3e7bc63c7adc998f274215c02ea982f08f78f5d518  ./mcp-servers/tk-example/test_normalizacja.mjs
-226ff047df00a393b51c878a07b614c6ff611de99db8fbeaecef38844272de8f  ./mcp-servers/tk-example/tk-mcp-server.js
+6eb6916c463e463e6950af32776ac83d306b63333e04f00bb47d037d5f1a595b  ./mcp-servers/tk-example/tk-mcp-server.js
 c226922d0f6da812b4d3f257893708f908622057386c576b4635ed887d76c40b  ./mcp-servers/uodo-example/fixtures/uodo.json
 ce24aabec71ee995707965b9f8a990c1e2eb63c1caeccf2a887f86e1ccbf5546  ./mcp-servers/uodo-example/test_normalizacja.mjs
 ffb41a29f7192a9f4939da48f6eec469aafe0eaa70d7d96a33bd48f0da86b73e  ./mcp-servers/uodo-example/uodo-mcp-server.js

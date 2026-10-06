@@ -192,7 +192,7 @@ server.registerTool("tk_sprawdz_sygnature", {
       uwaga: "Rekord z SAOS (RZĄD 3) — powołuj url_orzeczenia z IPO; gdy go brak, znajdź dokument w IPO i sprawdź tk_pobierz. " + NOTA,
       retrieved_at: new Date().toISOString() });
   } catch (e) {
-    return odp({ ...blad(e), zapytanie_wyszukiwarki: zapytanie(oczekiwana) });
+    return odp({ ...blad(e), zapytanie_wyszukiwarki: zapytanie(oczekiwana), ...(ipoBlad ? { ipo_blad: ipoBlad } : {}) });
   }
 });
 
