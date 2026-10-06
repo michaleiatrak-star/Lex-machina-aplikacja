@@ -69891,6 +69891,18 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06k — T11: Dz.U. 2026 poz. 982 dopisana do snapshotu indeksu Dz.U. (6.200)
+
+### 1. ŹRÓDŁO
+T11 (check_sync_aktow) po aktualizacji map DR/prawo-polskie: Dz.U. 2026 poz. 982 obecna w MAPA-AKTOW (dr-08, dr-09) i ROUTING-MAP, brak w `references/mapa_dzu_2026-10-04.md`.
+
+### 2. ZMIANA
+Dopisano wiersz 2026 poz. 982 (ustawa z 29.05.2026 o zmianie ustawy o drogach publicznych oraz niektórych innych ustaw; ogł. 22.07.2026, w życie 21.09.2026; zmienia drogi publiczne 1985/60, PRD 1997/602, transport drogowy 2001/1371, u.k.p. 2011/151) — z ELI, akt pierwotny, brzmienie art. u źródła.
+
+### 3. WERYFIKACJA
+T11: brak rozbieżności w trzech rejestrach (MAPA-AKTOW ↔ ROUTING-MAP ↔ mapa Dz.U.). ELI DU/2026/982.
+
+
 ## AUDYT-2026-10-06j — sn: weryfikacja captcha przez użytkownika w aplikacji; sp: fraza przez formularz portalu, SAOS z sygnaturą; tk: repertorium spoza listy; cbosa: ponowienie po zerwaniu (6.199)
 
 ### 1. ŹRÓDŁO

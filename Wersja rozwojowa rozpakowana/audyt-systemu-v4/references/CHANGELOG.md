@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.200 (2026-10-06k): T11 — Dz.U. 2026 poz. 982 (nowelizacja drogi publiczne/PRD/transport/u.k.p.) dopisana do snapshotu indeksu Dz.U.; trzy rejestry znów zsynchronizowane
+
 - 6.199 (2026-10-06j): sn — weryfikacja captcha przez użytkownika w aplikacji (SN_SESSION_FILE/SN_COOKIE); sp — fraza przez formularz portalu, SAOS z sygnaturą i rodzajem po polsku; tk — repertorium spoza listy pytane w IPO/OTK ZU; cbosa — ponowienie po zerwanym połączeniu
 
 - 6.198 (2026-10-06): etpcz: pole numeru skargi (complaintNumber) z pomiaru na żywo w G40B
