@@ -1067,6 +1067,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
+  sourceVerification?: { source: "sn"; url: string };
   widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
@@ -3544,6 +3545,9 @@ export type McpConnectorStatusResponse = {
     keyConfigured: boolean;
     keyUrl: string;
   };
+  sn?: {
+    sessionSavedAt: string | null;
+  };
   desktop: {
     configPath: string;
     available: boolean;
@@ -3613,6 +3617,21 @@ export function setCeidgApiKey(
       body: JSON.stringify({ key })
     }
   );
+}
+
+// Sesja sn.pl po weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl aplikacji.
+export function saveSnSession(
+  cookie: string,
+  userAgent: string
+): Promise<{ savedAt: string; cookies: number }> {
+  return json("/api/mcp-search/sn-session", {
+    method: "PUT",
+    body: JSON.stringify({ cookie, userAgent })
+  });
+}
+
+export function clearSnSession(): Promise<{ cleared: boolean }> {
+  return json("/api/mcp-search/sn-session", { method: "DELETE" });
 }
 
 export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse }> {

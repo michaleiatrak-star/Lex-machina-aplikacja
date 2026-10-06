@@ -1560,6 +1560,8 @@ fn is_mcp_route(method: &str, path: &str) -> bool {
         ["api", "mcp-search", "query"] => method == "POST",
         // Podgląd strony źródła (runtime pobiera tylko z oficjalnych domen).
         ["api", "mcp-search", "source-preview"] => method == "POST",
+        // Sesja sn.pl z weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl.
+        ["api", "mcp-search", "sn-session"] => matches!(method, "PUT" | "DELETE"),
         _ => false,
     }
 }
@@ -2147,6 +2149,9 @@ mod tests {
         assert!(!route_allowed("POST", "/api/admin/mcp-connectors/nbp/delete"));
         assert!(!route_allowed("POST", "/api/admin/mcp-connectors/../install"));
         assert!(!route_allowed("GET", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("PUT", "/api/mcp-search/sn-session"));
+        assert!(route_allowed("DELETE", "/api/mcp-search/sn-session"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sn-session"));
         assert!(!route_allowed("POST", "/api/mcp-search/sources"));
         assert!(!route_allowed("GET", "/api/mcp-search/query"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));

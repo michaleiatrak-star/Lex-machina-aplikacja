@@ -41,6 +41,19 @@ async function main(): Promise<void> {
     const agregat = await call("sp", "sp_sprawdz_sygnature", { sygnatura: "I C 100/15" });
     cases.push({ name: "SP: agregat — sygnatura w wielu sądach = AMBIGUOUS", pass: agregat.status === "AMBIGUOUS", detail: { status: agregat.status, liczba: agregat.liczba_trafien } });
 
+    // Fraza: formularz Portalu Orzeczeń (nie SAOS); przy porażce formularze strony głównej.
+    const fraza = await call("sp", "sp_szukaj", { fraza: "zadośćuczynienie" });
+    const frazaPass = fraza.status === "AMBIGUOUS" && /^formularz/.test(String(fraza.metoda ?? "")) && Boolean(fraza.kandydaci?.[0]?.url_orzeczenia);
+    cases.push({
+      name: "SP: fraza przez formularz Portalu Orzeczeń, kandydaci z linkiem",
+      pass: frazaPass,
+      detail: { status: fraza.status, metoda: fraza.metoda, source: fraza.source, pierwszy: fraza.kandydaci?.[0], error: fraza.detail ?? fraza.portal_blad,
+        ...(frazaPass ? {} : { forms: await homeForms("https://orzeczenia.ms.gov.pl/", "LexMachina-sp/1.0") }) }
+    });
+
+    const cbosa = await call("cbosa", "cbosa_sprawdz_sygnature", { sygnatura: "II OSK 2286/20" });
+    cases.push({ name: "CBOSA: II OSK 2286/20 — odpowiedź źródła (nie błąd sieci)", pass: cbosa.status !== "ERROR", detail: { status: cbosa.status, error: cbosa.detail } });
+
     const tk = await call("tk", "tk_sprawdz_sygnature", { sygnatura: "K 33/07" });
     const tkLink = String(tk.result?.url_orzeczenia ?? tk.kandydaci?.[0]?.url_orzeczenia ?? "");
     const tkText = tkLink ? await call("tk", "tk_pobierz", { url: tkLink, sygnatura: "K 33/07" }) : {};
@@ -58,7 +71,7 @@ async function main(): Promise<void> {
       name: "ETPCz: skarga 43447/19 w bazie MS, treść spod stałego linku",
       pass: etpczPass,
       // Przy porażce: formularze strony głównej (akcja, metoda, pola) — do dopasowania konektora.
-      detail: { status: etpcz.status, link: etpczLink, textStatus: etpczText.status, error: etpcz.detail, ...(etpczPass ? {} : { forms: await etpczForms() }) }
+      detail: { status: etpcz.status, link: etpczLink, textStatus: etpczText.status, error: etpcz.detail, ...(etpczPass ? {} : { forms: await homeForms("https://etpcz.ms.gov.pl/", "LexMachina-etpcz/1.0") }) }
     });
 
     const sn = await call("sn", "sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" });
@@ -71,9 +84,9 @@ async function main(): Promise<void> {
   if (cases.some((item) => !item.pass)) process.exitCode = 1;
 }
 
-async function etpczForms(): Promise<unknown> {
+async function homeForms(url: string, userAgent: string): Promise<unknown> {
   try {
-    const response = await fetch("https://etpcz.ms.gov.pl/", { headers: { "User-Agent": "LexMachina-etpcz/1.0", Accept: "text/html" }, signal: AbortSignal.timeout(30_000) });
+    const response = await fetch(url, { headers: { "User-Agent": userAgent, Accept: "text/html" }, signal: AbortSignal.timeout(30_000) });
     const html = await response.text();
     return {
       http: response.status,

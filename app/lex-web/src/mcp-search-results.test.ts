@@ -189,6 +189,31 @@ describe("court decisions: stable link, preview and full text", () => {
     expect(second!.meta).toEqual(["data: 2019-06-10", "uzasadnienie"]);
   });
 
+  it("SP fallback from SAOS: signature, Polish kind and a SAOS link with preview", () => {
+    const page = readSearchResult("sp_szukaj", { fraza: "zadośćuczynienie" }, {
+      status: "AMBIGUOUS",
+      kandydaci: [
+        { sygnatura: "XII C 12/25", data: "2026-09-07", sad: "Sąd Okręgowy w Poznaniu", rodzaj: "uzasadnienie", url_orzeczenia: null, url_saos: "https://www.saos.org.pl/judgments/7" }
+      ]
+    }, ["sp_sprawdz_sygnature", "sp_pobierz", "sp_szukaj"]);
+    expect(page.items[0]).toMatchObject({
+      url: "https://www.saos.org.pl/judgments/7",
+      preview: { kind: "url", url: "https://www.saos.org.pl/judgments/7" },
+      meta: ["Sąd Okręgowy w Poznaniu", "data: 2026-09-07", "uzasadnienie"]
+    });
+  });
+
+  it("SN blocked by sn.pl: verification frame data, none for other errors", () => {
+    const blocked = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "DO 1/18" }, {
+      status: "ERROR",
+      powod: "SN_WERYFIKACJA_WYMAGANA",
+      weryfikacja: { wymagana: true, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen", sesja_zapisana: false, instrukcja: "Zweryfikuj w sn.pl" }
+    }, ["sn_sprawdz_sygnature"]);
+    expect(blocked.verification).toEqual({ url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen", savedSession: false, instruction: "Zweryfikuj w sn.pl" });
+    const other = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "DO 1/18" }, { status: "ERROR", detail: "sn.pl HTTP 500" }, ["sn_sprawdz_sygnature"]);
+    expect(other.verification).toBeNull();
+  });
+
   it("SN: the card is the link; TK: the decision link with the signature check", () => {
     const sn = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" }, {
       status: "FOUND",

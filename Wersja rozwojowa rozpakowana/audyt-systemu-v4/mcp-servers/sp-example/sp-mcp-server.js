@@ -23,6 +23,7 @@ import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
+import { formularze, daneFormularza } from "../wspolne/formularz.mjs";
 
 const AGREGAT = "https://orzeczenia.ms.gov.pl";
 const UA = "LexMachina-sp/1.0 (+https://github.com/michaleiatrak-star/Lex-machina-aplikacja)";
@@ -144,7 +145,7 @@ async function saosPoSygnaturze(syg) {
     const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
     const zrodlo = pelny?.data?.source?.judgmentUrl;
     wynik.push({
-      sygnatura: normalizujSygnature(syg), data: it.judgmentDate ?? null, sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
+      sygnatura: normalizujSygnature(syg), data: it.judgmentDate ?? null, sad: it.division?.court?.name ?? null, rodzaj: RODZAJ_SAOS[it.judgmentType] ?? it.judgmentType ?? null,
       url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
     });
   }
@@ -233,6 +234,41 @@ server.registerTool("sp_pobierz", {
   } catch (e) { return odp(blad(e)); }
 });
 
+/** Formularz wyszukiwarki portalu z polem frazy (ten sam silnik co etpcz.ms.gov.pl: pole `phrase`). Czysta funkcja. */
+export function formularzFrazy(html, baza) {
+  for (const forma of formularze(html, baza)) {
+    const pole = forma.tekstowe.find((p) => /^phrase$/i.test(p.nazwa)) ??
+      forma.tekstowe.find((p) => /phrase|fraz|tre[sś][cć]|s[lł]owa|szukaj|search|query|keyword/i.test(p.opis));
+    if (pole) return { ...forma, poleFrazy: pole.nazwa };
+  }
+  return null;
+}
+
+/**
+ * Fraza w Portalu Orzeczeń: formularz wyszukiwarki odczytany ze strony (strona główna albo
+ * wyszukiwarka zaawansowana), wysłany z frazą; bez formularza — adres kontekstu Tapestry.
+ */
+async function wynikiFrazyPortalu(host, fraza) {
+  for (const start of [`${host}/`, `${host}/search/advanced`]) {
+    const r = await fetch(start, { signal: sygnal(30000), headers: { "User-Agent": UA, Accept: "text/html" } }).catch(() => null);
+    if (!r?.ok) continue;
+    const forma = formularzFrazy(await r.text(), r.url || start);
+    if (!forma) continue;
+    const ciastka = (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+    const dane = daneFormularza(forma, { [forma.poleFrazy]: fraza });
+    const naglowki = { "User-Agent": UA, Accept: "text/html", Referer: start, ...(ciastka ? { Cookie: ciastka } : {}) };
+    const wynik = forma.metoda === "post"
+      ? await fetch(forma.akcja, { method: "POST", body: dane.toString(), lexPowtarzalne: true, signal: sygnal(30000), headers: { ...naglowki, "Content-Type": "application/x-www-form-urlencoded" } })
+      : await fetch(`${forma.akcja.split("?")[0]}?${dane}`, { signal: sygnal(30000), headers: naglowki });
+    if (!wynik.ok) throw new Error(`HTTP ${wynik.status}`);
+    return { ...parsujWyniki(await wynik.text()), metoda: `formularz ${new URL(forma.akcja).pathname} (${forma.poleFrazy})` };
+  }
+  return { ...parsujWyniki(await pobierz(urlSzukaniaFrazy(host, fraza))), metoda: "adres kontekstu Tapestry" };
+}
+
+// Rodzaje orzeczeń SAOS (judgmentType) po polsku.
+const RODZAJ_SAOS = { SENTENCE: "wyrok", DECISION: "postanowienie", RESOLUTION: "uchwała", REASONS: "uzasadnienie", REGULATION: "zarządzenie" };
+
 /** SAOS (zastępczo, RZĄD 3): kandydaci po frazie z linkiem urzędowym, gdy SAOS go zna. */
 async function saosPoFrazie({ fraza, dataOd, dataDo, limit }) {
   const qs = new URLSearchParams({ all: fraza, courtType: "COMMON", pageSize: String(Math.max(10, limit)), sortingField: "JUDGMENT_DATE", sortingDirection: "DESC" });
@@ -242,14 +278,19 @@ async function saosPoFrazie({ fraza, dataOd, dataDo, limit }) {
   const wynik = [];
   for (const it of (dane.items ?? []).slice(0, limit)) {
     const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
-    const zrodlo = pelny?.data?.source?.judgmentUrl;
-    wynik.push({
-      sygnatury: (it.courtCases ?? []).map((c) => normalizujSygnature(c.caseNumber)), data: it.judgmentDate ?? null,
-      sad: it.division?.court?.name ?? null, rodzaj: it.judgmentType ?? null,
-      url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
-    });
+    wynik.push(pozycjaSaos(it, pelny?.data?.source?.judgmentUrl));
   }
   return wynik;
+}
+
+/** Pozycja SAOS (zastępczo): sygnatura, polski rodzaj, sąd, link portalu (tylko urzędowy host) i link SAOS. */
+export function pozycjaSaos(it, zrodlo) {
+  const sygnatury = (it.courtCases ?? []).map((c) => normalizujSygnature(c.caseNumber)).filter(Boolean);
+  return {
+    sygnatura: sygnatury[0] ?? null, ...(sygnatury.length > 1 ? { sygnatury } : {}), data: it.judgmentDate ?? null,
+    sad: it.division?.court?.name ?? null, rodzaj: RODZAJ_SAOS[it.judgmentType] ?? it.judgmentType ?? null,
+    url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}`,
+  };
 }
 
 server.registerTool("sp_szukaj", {
@@ -269,7 +310,7 @@ server.registerTool("sp_szukaj", {
   let portalUwaga = null;
   // 1. Portal Orzeczeń (źródło urzędowe).
   try {
-    const w = parsujWyniki(await pobierz(urlSzukaniaFrazy(host, fraza)));
+    const w = await wynikiFrazyPortalu(host, fraza);
     const ids = w.docIds.slice(0, 10);
     // Kontrola, że portal przyjął frazę: treść przynajmniej jednego z pierwszych trafień ją zawiera.
     const sprawdzone = [];
@@ -278,7 +319,7 @@ server.registerTool("sp_szukaj", {
       sprawdzone.push(zawieraFraze(t, fraza));
     }
     if (ids.length && sprawdzone.some(Boolean)) {
-      return odp({ status: "AMBIGUOUS", ...baza, query_type: "wyszukiwanie", fraza, portal: new URL(host).hostname, liczba_trafien: w.liczba,
+      return odp({ status: "AMBIGUOUS", ...baza, query_type: "wyszukiwanie", fraza, portal: new URL(host).hostname, metoda: w.metoda, liczba_trafien: w.liczba,
         kandydaci: ids.map((id) => pozycja(host, id, w.sady)),
         uwaga: "Kandydaci z Portalu Orzeczeń (źródło urzędowe) — przed powołaniem przeczytaj treść (sp_pobierz). " + NOTA,
         retrieved_at: new Date().toISOString() });

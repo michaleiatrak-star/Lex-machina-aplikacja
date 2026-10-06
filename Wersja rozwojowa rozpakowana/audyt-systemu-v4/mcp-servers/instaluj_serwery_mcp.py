@@ -255,6 +255,9 @@ def zbuduj_mcpb(wyjscie, wybrane=None, klucz=None):
     if "ceidg" not in wybrane:
         man["user_config"].pop("ceidg_klucz", None)
         man["server"]["mcp_config"]["env"].pop("CEIDG_API_KEY", None)
+    if "sn" not in wybrane:
+        man["user_config"].pop("sn_cookie", None)
+        man["server"]["mcp_config"]["env"].pop("SN_COOKIE", None)
     if klucz:
         man["server"]["mcp_config"]["env"]["CEIDG_API_KEY"] = klucz
         man["user_config"].pop("ceidg_klucz", None)

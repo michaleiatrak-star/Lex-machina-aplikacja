@@ -36,6 +36,11 @@ export function toSygnaturaTk(s) {
   return Boolean(m && REP_TK.has(m[1]));
 }
 
+/** Postać sygnatury bez numeru wydziału („LITERY nr/rok”), także przy repertorium spoza REP_TK. */
+export function postacSygnaturyTk(s) {
+  return /^[A-Za-z]{1,3} \d{1,4}\/\d{2,4}$/.test(normalizujSygnature(s));
+}
+
 export function dozwolonyHost(url) {
   try {
     const u = new URL(url);
@@ -236,7 +241,9 @@ server.registerTool("tk_sprawdz_sygnature", {
   inputSchema: { sygnatura: z.string().min(3).max(30).describe("np. K 33/07, SK 3/20") },
 }, async ({ sygnatura }) => {
   const oczekiwana = normalizujSygnature(sygnatura);
-  if (!toSygnaturaTk(oczekiwana)) {
+  // Repertorium spoza listy, ale w postaci „LITERY nr/rok” (bez wydziału) — mimo to pytamy źródła urzędowe TK.
+  const pozaLista = !toSygnaturaTk(oczekiwana);
+  if (pozaLista && !postacSygnaturyTk(oczekiwana)) {
     return odp({ status: "OUT_OF_SCOPE", ...baza, oczekiwana, powod: "SYGNATURA_INNEGO_SADU",
       uwaga: `${oczekiwana} nie ma postaci sygnatury TK (repertorium K, P, SK, U, Kp, Kpt, Pp, Ts, Tw, S bez numeru wydziału).` });
   }
@@ -276,6 +283,7 @@ server.registerTool("tk_sprawdz_sygnature", {
   } catch (e) { bledy.ipo_wyszukiwarka = String(e?.message ?? e); }
   const wszystkieBledy = Object.values(bledy).every((b) => /HTTP|fetch|abort|timeout|rozpoznano|ECONN|ENOTFOUND/i.test(b));
   return odp({ status: wszystkieBledy ? "ERROR" : "OUT_OF_SCOPE", ...baza, oczekiwana, zrodla: bledy,
+    ...(pozaLista ? { powod: "REPERTORIUM_SPOZA_LISTY_TK", repertoria_tk: [...REP_TK] } : {}),
     url_sprawy: urlSprawyIpo(oczekiwana), url_wyszukiwarki_otkzu: `${OTKZU}/Wyszukiwanie`, zapytanie_wyszukiwarki: zapytanie(oczekiwana),
     uwaga: `${wszystkieBledy ? "Źródła urzędowe TK nie odpowiedziały" : `Brak trafienia ${oczekiwana} w IPO i OTK ZU`} — otwórz url_sprawy albo wyszukiwarkę OTK ZU; znaleziony dokument sprawdź tk_pobierz. ${NOTA}`,
     retrieved_at: new Date().toISOString() });

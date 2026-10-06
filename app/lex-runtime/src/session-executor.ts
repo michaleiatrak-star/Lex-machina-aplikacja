@@ -857,6 +857,8 @@ export type SessionExecutionResponse = {
   evidence: PublicEvidenceItem[];
   auxiliarySources?:
     PublicAuxiliarySourceItem[];
+  // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik).
+  sourceVerification?: { source: "sn"; url: string };
   // Widgety pokazane narzędziem show_widget (czat renderuje je w izolowanej ramce).
   widgets?: WidgetSpec[];
   audit: {
@@ -1663,6 +1665,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const auxiliarySources:
       PublicAuxiliarySourceItem[] =
       [];
+    let snVerificationRequired = false;
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -2460,6 +2463,9 @@ export class SafeSessionExecutor implements SessionExecutor {
                 )
             : [];
 
+        if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
+          snVerificationRequired = true;
+        }
         for (
           const result
           of federationResults
@@ -3820,6 +3826,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             auxiliarySources:
               publicAuxiliarySources
           }
+        : {}),
+      ...(snVerificationRequired
+        ? { sourceVerification: { source: "sn" as const, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
         : {}),
       ...(widgetTools && widgetTools.widgets().length > 0
         ? { widgets: widgetTools.widgets() }

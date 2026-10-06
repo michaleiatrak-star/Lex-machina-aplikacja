@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.199 (2026-10-06j): sn — weryfikacja captcha przez użytkownika w aplikacji (SN_SESSION_FILE/SN_COOKIE); sp — fraza przez formularz portalu, SAOS z sygnaturą i rodzajem po polsku; tk — repertorium spoza listy pytane w IPO/OTK ZU; cbosa — ponowienie po zerwanym połączeniu
+
 - 6.198 (2026-10-06): etpcz: pole numeru skargi (complaintNumber) z pomiaru na żywo w G40B
 
 - 6.197 (2026-10-06): konektor etpcz (ETPCz, baza MS); SP: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie

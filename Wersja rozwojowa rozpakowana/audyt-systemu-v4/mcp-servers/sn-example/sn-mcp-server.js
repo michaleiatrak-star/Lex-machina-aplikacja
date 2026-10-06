@@ -18,7 +18,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
 
@@ -148,6 +148,34 @@ function proxy(task, params) {
 // wyszukiwarkę po ciasteczka sesji i ponawiamy (pomiar CI 2026-10-06; zgłoszenie użytkownika 2026-10-06).
 export class BlokadaSn extends Error {}
 
+// Sesja z weryfikacji wykonanej przez użytkownika (captcha w oknie sn.pl w aplikacji albo ręcznie skopiowane
+// ciasteczka): SN_SESSION_FILE (JSON {cookie, userAgent, saved_at}, czytany przy każdym zapytaniu) i SN_COOKIE.
+// Wartości ciasteczek nigdy nie trafiają do odpowiedzi ani logów.
+const CIASTKO = /^[A-Za-z0-9_.\-]{1,128}=[^;\r\n]{0,4096}$/;
+const ciastkaZ = (t) => String(t ?? "").split(";").map((x) => x.trim()).filter((x) => CIASTKO.test(x));
+export function sesjaUzytkownika(env = process.env, czytaj = (f) => readFileSync(f, "utf8")) {
+  let plik = null;
+  if (env.SN_SESSION_FILE) {
+    try { plik = JSON.parse(czytaj(env.SN_SESSION_FILE)); } catch { plik = null; }
+  }
+  const ua = typeof plik?.userAgent === "string" && /^Mozilla\/5\.0 [\x20-\x7e]{10,400}$/.test(plik.userAgent) ? plik.userAgent : null;
+  const ciastka = [...ciastkaZ(env.SN_COOKIE), ...ciastkaZ(plik?.cookie)];
+  const nazwy = new Set();
+  const unikalne = ciastka.reverse().filter((c) => !nazwy.has(c.split("=")[0]) && nazwy.add(c.split("=")[0])).reverse();
+  return { ciastka: unikalne, ua, zapisana: typeof plik?.saved_at === "string" ? plik.saved_at : null };
+}
+
+/** Opis weryfikacji dla aplikacji i modelu, gdy sn.pl zablokował zapytanie automatyczne. */
+export function weryfikacjaSn(sesja = sesjaUzytkownika()) {
+  const zapisana = sesja.ciastka.length > 0;
+  return {
+    wymagana: true, url: KARTA, sesja_zapisana: zapisana, ...(sesja.zapisana ? { sesja_z: sesja.zapisana } : {}),
+    instrukcja: zapisana
+      ? "sn.pl odrzucił zapisaną sesję (wygasła albo ochrona wymaga nowej weryfikacji). Zweryfikuj ponownie w oknie sn.pl (przycisk w aplikacji) i ponów zapytanie."
+      : "sn.pl wymaga weryfikacji człowieka (captcha). W aplikacji: „Zweryfikuj w sn.pl”, rozwiąż captcha w oknie sn.pl, kliknij „Gotowe” i ponów zapytanie. Poza aplikacją: ustaw SN_COOKIE z sesji przeglądarki.",
+  };
+}
+
 /** Treść odpowiedzi snproxy: JSON albo opis, dlaczego to nie dane (strona HTML, ochrona przed botami). */
 export function rozpoznajOdpowiedz(status, typ, tekst) {
   const t = String(tekst ?? "");
@@ -163,31 +191,33 @@ export function rozpoznajOdpowiedz(status, typ, tekst) {
 }
 
 async function pobierzJson(url) {
-  const pierwsza = await zadanieSn(url, []);
+  const sesja = sesjaUzytkownika();
+  const pierwsza = await zadanieSn(url, sesja.ciastka, false, sesja.ua);
   const odczyt = rozpoznajOdpowiedz(pierwsza.r.status, pierwsza.r.headers.get("content-type"), await pierwsza.r.text());
   if (!(odczyt.blad instanceof BlokadaSn)) {
     if (odczyt.blad) throw odczyt.blad;
     return odczyt.dane;
   }
-  const strona = await zadanieSn(KARTA, pierwsza.ciastka, true).catch(() => null);
+  const strona = await zadanieSn(KARTA, pierwsza.ciastka, true, sesja.ua).catch(() => null);
   if (strona) await strona.r.arrayBuffer().catch(() => null);
-  const druga = (await zadanieSn(url, strona ? strona.ciastka : pierwsza.ciastka)).r;
+  const druga = (await zadanieSn(url, strona ? strona.ciastka : pierwsza.ciastka, false, sesja.ua)).r;
   const wynik = rozpoznajOdpowiedz(druga.status, druga.headers.get("content-type"), await druga.text());
   if (wynik.blad) throw wynik.blad;
   return wynik.dane;
 }
 
-async function zadanieSn(url, poczatkowe, strona = false) {
+async function zadanieSn(url, poczatkowe, strona = false, ua = null) {
   let adres = url;
   let ciastka = poczatkowe;
   for (let i = 0; i <= 3; i += 1) {
     const r = await fetch(adres, {
       redirect: "manual", signal: sygnal(40000),
       headers: {
-        "User-Agent": UA, "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+        "User-Agent": ua ?? UA, "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8", "Cache-Control": "no-cache", Pragma: "no-cache",
         ...(strona
-          ? { Accept: "text/html,application/xhtml+xml,*/*;q=0.8" }
-          : { Accept: "application/json, text/javascript, */*; q=0.01", Referer: KARTA, "X-Requested-With": "XMLHttpRequest" }),
+          ? { Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Site": "none" }
+          : { Accept: "application/json, text/javascript, */*; q=0.01", Referer: KARTA, Origin: "https://www.sn.pl", "X-Requested-With": "XMLHttpRequest",
+              "Sec-Fetch-Dest": "empty", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Site": "same-origin" }),
         ...(ciastka.length ? { Cookie: ciastka.join("; ") } : {}),
       },
     });
@@ -208,7 +238,8 @@ const baza = { source: "sn.pl", query_type: "orzeczenie" };
 const NOTA = "Źródło = KARTA orzeczenia (link „url_karty”), nigdy blob: ani PDF. Orzeczenie SN to materiał orzeczniczy (R2A), " +
   "przepis weryfikuj w ELI. Brak trafienia nie dowodzi braku orzeczenia (np. jeszcze nieopublikowane).";
 const odp = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
-const blad = (e) => ({ status: "ERROR", ...baza, detail: String(e?.message ?? e), retrieved_at: new Date().toISOString() });
+const blad = (e) => ({ status: "ERROR", ...baza, detail: String(e?.message ?? e),
+  ...(e instanceof BlokadaSn ? { powod: "SN_WERYFIKACJA_WYMAGANA", weryfikacja: weryfikacjaSn() } : {}), retrieved_at: new Date().toISOString() });
 const pozycja = (r) => ({
   sygnatura: normalizujSygnature(r.sygnatura_sprawy),
   data_wydania: typeof r.data_wydania === "string" ? r.data_wydania.slice(0, 10) : null,
@@ -249,10 +280,10 @@ server.registerTool("sn_sprawdz_sygnature", {
     if (!(e instanceof BlokadaSn)) return odp(blad(e));
     // sn.pl nie wpuszcza (ochrona przed botami): SAOS zastępczo (RZĄD 3, SN do 2016 r.), z jawnym oznaczeniem.
     const zastepczo = await saosSn(oczekiwana).catch((s) => ({ blad: String(s?.message ?? s) }));
-    const wspolne = { ...baza, oczekiwana, sn_blad: e.message, wyszukiwarka_sn: KARTA, retrieved_at: new Date().toISOString() };
+    const wspolne = { ...baza, oczekiwana, sn_blad: e.message, wyszukiwarka_sn: KARTA, powod: "SN_WERYFIKACJA_WYMAGANA", weryfikacja: weryfikacjaSn(), retrieved_at: new Date().toISOString() };
     if (zastepczo.blad || !zastepczo.trafione?.length) {
       return odp({ status: "ERROR", ...wspolne, detail: e.message, ...(zastepczo.blad ? { saos_blad: zastepczo.blad } : { saos: "brak trafienia (SAOS ma SN do 2016 r.)" }),
-        uwaga: `sn.pl zablokował zapytanie automatyczne. Sprawdź ${oczekiwana} ręcznie w wyszukiwarce SN (wyszukiwarka_sn) i powołaj kartę orzeczenia. Brak trafienia ≠ brak orzeczenia.` });
+        uwaga: `sn.pl zablokował zapytanie automatyczne. Zweryfikuj się w sn.pl (weryfikacja.instrukcja) i ponów zapytanie albo sprawdź ${oczekiwana} ręcznie w wyszukiwarce SN (wyszukiwarka_sn) i powołaj kartę orzeczenia. Brak trafienia ≠ brak orzeczenia.` });
     }
     return odp({ status: zastepczo.trafione.length === 1 ? "FOUND" : "AMBIGUOUS", ...wspolne, source: "saos (zastępczo za sn.pl)", rzad: "R3",
       ...(zastepczo.trafione.length === 1 ? { result: zastepczo.trafione[0] } : { kandydaci: zastepczo.trafione }),

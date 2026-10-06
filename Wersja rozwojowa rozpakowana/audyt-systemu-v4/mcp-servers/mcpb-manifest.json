@@ -25,6 +25,7 @@
       ],
       "env": {
         "CEIDG_API_KEY": "${user_config.ceidg_klucz}",
+        "SN_COOKIE": "${user_config.sn_cookie}",
         "NODE_EXTRA_CA_CERTS": "${user_config.certyfikat_ca}"
       }
     }
@@ -184,6 +185,14 @@
       "type": "string",
       "title": "Klucz API CEIDG (opcjonalny)",
       "description": "Token (JWT) z Hurtowni danych CEIDG: https://dane.biznes.gov.pl/pl/portal/034872 — wniosek o dostęp, logowanie Profilem Zaufanym. Bez tokenu narzędzie CEIDG jest wyłączone. Token zawiera Twoje dane osobowe (PESEL) — nie publikuj go.",
+      "sensitive": true,
+      "required": false,
+      "default": ""
+    },
+    "sn_cookie": {
+      "type": "string",
+      "title": "Sesja sn.pl (opcjonalna)",
+      "description": "Gdy sn.pl blokuje zapytania (captcha): otwórz https://www.sn.pl/pl/wyszukiwarka-orzeczen w przeglądarce, przejdź weryfikację i wklej nagłówek Cookie tej strony (narzędzia deweloperskie → Sieć). W aplikacji Lex Machina weryfikacja jest wbudowana (przycisk „Zweryfikuj w sn.pl”).",
       "sensitive": true,
       "required": false,
       "default": ""

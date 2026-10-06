@@ -75,7 +75,8 @@ function sendConnectorError(
     : "LEX_MCP_FAILED";
   const status =
     code === "CEIDG_KEY_NOT_JWT" ||
-    code === "CEIDG_KEY_REQUIRED"
+    code === "CEIDG_KEY_REQUIRED" ||
+    code === "SN_SESSION_EMPTY"
       ? 400
       : code === "CEIDG_KEY_REJECTED"
         ? 422
@@ -185,6 +186,35 @@ export function registerMcpConnectorRoutes(
       try {
         connectors.clearCeidgKey();
         res.json({ status: connectors.status() });
+      } catch (error) {
+        sendConnectorError(res, error);
+      }
+    }
+  );
+
+  // Sesja sn.pl po weryfikacji (captcha) wykonanej przez zalogowanego użytkownika w oknie sn.pl aplikacji.
+  // Ciasteczek nie zwracamy ani nie logujemy.
+  app.put(
+    "/api/mcp-search/sn-session",
+    (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+      const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+      try {
+        res.json(connectors.setSnSession(cookie, userAgent));
+      } catch (error) {
+        sendConnectorError(res, error);
+      }
+    }
+  );
+
+  app.delete(
+    "/api/mcp-search/sn-session",
+    (req, res) => {
+      if (!requireUser(req, res, authService)) return;
+      try {
+        connectors.clearSnSession();
+        res.json({ cleared: true });
       } catch (error) {
         sendConnectorError(res, error);
       }

@@ -27,7 +27,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { sygnal, owinSerwer, budzetWyczerpany } from "../wspolne/budzet.mjs";
+import { sygnal, owinSerwer, budzetWyczerpany, pozostalyBudzet, opisBleduSieci } from "../wspolne/budzet.mjs";
 
 const BASE = "https://orzeczenia.nsa.gov.pl";
 const HOST = "orzeczenia.nsa.gov.pl";
@@ -226,13 +226,28 @@ export function naSchemat(v) {
 }
 
 // ── HTTP: sesja z cookies, przekierowania ręcznie (host przypięty), kontrola transferu ───────
+// Zerwane połączenie (orzeczenia.nsa.gov.pl zrywa je seriami przy przeciążeniu, zgłoszenie 2026-10-06):
+// ponowienie całego żądania po 1,5 s i 3 s, o ile zostało budżetu; także zerwanie w trakcie odczytu treści.
+const ZERWANE = /Połączenie zerwane|Niekompletny|UND_ERR_SOCKET|ECONNRESET|terminated/i;
+const czekaj = (ms) => new Promise((ok) => setTimeout(ok, ms));
+export async function zPonowieniem(proba, { przerwa = 1500, prob = 3, budzet = pozostalyBudzet } = {}) {
+  for (let i = 1; ; i++) {
+    try { return await proba(); }
+    catch (e) {
+      if (i >= prob || !ZERWANE.test(String(e?.message ?? e)) || budzet() < przerwa * i + 5000) throw e;
+      await czekaj(przerwa * i);
+    }
+  }
+}
+
 class Sesja {
   constructor() { this.cookies = new Map(); }
-  async zadanie(url, init = {}) {
+  zadanie(url, init = {}) { return zPonowieniem(() => this.jednoZadanie(url, init)); }
+  async jednoZadanie(url, init = {}) {
     for (let skok = 0; skok < 6; skok++) {
       const u = new URL(url);
       if (u.protocol !== "https:" || u.hostname !== HOST) throw new Error(`Odmowa: host spoza CBOSA (${u.host})`);
-      const headers = { "User-Agent": "lex-machina-cbosa/1.0", "Accept-Language": "pl-PL,pl;q=0.9", ...(init.headers ?? {}) };
+      const headers = { "User-Agent": "lex-machina-cbosa/1.0", Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "pl-PL,pl;q=0.9", ...(init.headers ?? {}) };
       if (this.cookies.size) headers.Cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
       const r = await fetch(url, { ...init, headers, redirect: "manual", signal: sygnal(40000), lexPowtarzalne: true }); // wyszukiwarka i odczyt niczego nie zmieniają
       for (const c of r.headers.getSetCookie?.() ?? []) { const [kv] = c.split(";"); const i = kv.indexOf("="); if (i > 0) this.cookies.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim()); }
@@ -240,7 +255,9 @@ class Sesja {
         url = new URL(r.headers.get("location"), url).href; init = { method: "GET" }; continue;
       }
       if (!r.ok) throw new Error(`CBOSA HTTP ${r.status}`);
-      const buf = Buffer.from(await r.arrayBuffer());
+      let buf;
+      try { buf = Buffer.from(await r.arrayBuffer()); }
+      catch (e) { throw new Error(opisBleduSieci(e, HOST), { cause: e }); }
       // Content-Length to rozmiar PRZESŁANY: przy gzip/br fetch zwraca treść po dekompresji
       // (większą), więc długość porównujemy tylko bez kompresji (wcześniej: fałszywy błąd 18128/5690 B).
       // ⚠️ Korekta 2026-10-01 (pomiar lokalny, undici/Node 22): ucięcie przy Content-Length lub w trybie

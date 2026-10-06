@@ -60,6 +60,22 @@
   assert.ok(!(rozpoznajOdpowiedz(500, "application/json", "{}").blad instanceof BlokadaSn));
   assert.match(rozpoznajOdpowiedz(200, "application/json", "{zly").blad.message, /nie jest poprawnym JSON/);
   console.log("OK: strona HTML/ochrona przed botami rozpoznana zamiast błędu parsowania JSON");
+  {
+    const { sesjaUzytkownika, weryfikacjaSn } = await import("./sn-example/sn-mcp-server.js");
+    const brak = sesjaUzytkownika({}, () => { throw new Error("nie czytaj"); });
+    assert.deepStrictEqual(brak, { ciastka: [], ua: null, zapisana: null });
+    const plik = JSON.stringify({ cookie: "incap_ses_1=b; zle ciastko; visid_incap_1=c", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/140.0", saved_at: "2026-10-06T10:00:00Z" });
+    const s = sesjaUzytkownika({ SN_COOKIE: "incap_ses_1=a; x=1", SN_SESSION_FILE: "f" }, () => plik);
+    assert.deepStrictEqual(s.ciastka, ["x=1", "incap_ses_1=b", "visid_incap_1=c"]);
+    assert.strictEqual(s.ua, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/140.0");
+    assert.strictEqual(sesjaUzytkownika({ SN_SESSION_FILE: "f" }, () => "{zly json").ciastka.length, 0);
+    const w = weryfikacjaSn(s);
+    assert.strictEqual(w.wymagana, true);
+    assert.strictEqual(w.sesja_zapisana, true);
+    assert.ok(!JSON.stringify(w).includes("incap_ses_1=b"), "wartości ciasteczek nie trafiają do odpowiedzi");
+    assert.strictEqual(weryfikacjaSn(brak).sesja_zapisana, false);
+    console.log("OK: sesja z weryfikacji użytkownika (plik + SN_COOKIE, bez ujawniania wartości) i opis weryfikacji");
+  }
 }
 
 // ═══ sp ═══
@@ -115,6 +131,21 @@
   assert.strictEqual(wynik.sady["152505100001006_II_K_001350_2018_Uz_2019-06-10_002"], "Sąd Rejonowy w Rybniku");
   assert.strictEqual(wynik.sady["159999999999999_I_C_000001_2020_Uz_2020-01-01_001"], undefined);
   console.log("OK: nazwa sądu przy pozycji listy wyników (gdy portal ją podaje)");
+  {
+    const { formularzFrazy, pozycjaSaos } = await import("./sp-example/sp-mcp-server.js");
+    const html = `<form action="/search.searchform" method="post"><input type="hidden" name="t:formdata" value="F"/>
+      <input type="text" name="signature" title="Sygnatura"/><input type="text" name="phrase" title="Fraza"/><input type="submit" name="s" value="Szukaj"/></form>`;
+    const f = formularzFrazy(html, "https://orzeczenia.ms.gov.pl/");
+    assert.strictEqual(f.poleFrazy, "phrase");
+    assert.strictEqual(f.akcja, "https://orzeczenia.ms.gov.pl/search.searchform");
+    assert.strictEqual(formularzFrazy("<form><input name='signature'/></form>", "https://orzeczenia.ms.gov.pl/"), null);
+    const p = pozycjaSaos({ id: 7, judgmentDate: "2026-09-07", judgmentType: "REASONS", division: { court: { name: "Sąd Okręgowy w Poznaniu" } },
+      courtCases: [{ caseNumber: "XII C 12/25" }] }, "https://example.com/x");
+    assert.deepStrictEqual(p, { sygnatura: "XII C 12/25", data: "2026-09-07", sad: "Sąd Okręgowy w Poznaniu", rodzaj: "uzasadnienie",
+      url_orzeczenia: null, url_saos: "https://www.saos.org.pl/judgments/7" });
+    assert.strictEqual(pozycjaSaos({ id: 8, judgmentType: "SENTENCE", courtCases: [] }, "https://orzeczenia.ms.gov.pl/content/$N/1").url_orzeczenia, "https://orzeczenia.ms.gov.pl/content/$N/1");
+    console.log("OK: formularz frazy portalu i pozycja SAOS (sygnatura, rodzaj po polsku, link SAOS)");
+  }
 }
 
 // ═══ tk ═══
@@ -169,6 +200,12 @@
   <tr><td><a href="/2021/A/1">OTK ZU A/2021, poz. 1</a></td><td>Wyrok (SK 21/19)</td></tr></table>`;
   assert.deepStrictEqual(wynikiOtkzu(lista, "P 21/19"), ["https://otkzu.trybunal.gov.pl/2020/A/43"]);
   console.log("OK: karta sprawy IPO po sygnaturze, dokumenty sprawy, formularz i wyniki OTK ZU");
+  {
+    const { postacSygnaturyTk, toSygnaturaTk: tk } = await import("./tk-example/tk-mcp-server.js");
+    assert.ok(postacSygnaturyTk("OK 291/09") && !tk("OK 291/09"), "repertorium spoza listy: pytamy źródła TK");
+    assert.ok(!postacSygnaturyTk("II OSK 1/20") && !postacSygnaturyTk("I C 100/15 x"));
+    console.log("OK: sygnatura w postaci TK spoza listy repertoriów idzie do źródeł urzędowych");
+  }
 }
 
 // ═══ etpcz ═══

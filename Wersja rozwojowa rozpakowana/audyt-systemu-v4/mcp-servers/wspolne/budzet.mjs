@@ -36,6 +36,9 @@ export function sygnal(limitMs) {
   return AbortSignal.timeout(Math.min(limitMs, zostalo));
 }
 
+/** Pozostały budżet bieżącego wywołania w ms (Infinity poza wywołaniem narzędzia). */
+export const pozostalyBudzet = () => (als.getStore()?.koniec ?? Infinity) - Date.now();
+
 /** Czy budżet bieżącego wywołania został wyczerpany (dla narzędzi zbierających wiele odpowiedzi). */
 export const budzetWyczerpany = () => Boolean(als.getStore()?.wyczerpany);
 

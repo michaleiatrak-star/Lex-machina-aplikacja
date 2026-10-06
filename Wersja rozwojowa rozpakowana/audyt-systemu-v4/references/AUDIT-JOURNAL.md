@@ -69891,6 +69891,21 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06j — sn: weryfikacja captcha przez użytkownika w aplikacji; sp: fraza przez formularz portalu, SAOS z sygnaturą; tk: repertorium spoza listy; cbosa: ponowienie po zerwaniu (6.199)
+
+### 1. ŹRÓDŁO
+Zgłoszenia użytkownika 2026-10-06 (porównanie z wersjami 1.3.3/1.3.4 zmienionymi przez inne modele): sp_szukaj — brak podglądu, SAOS „Wynik 1…5” z rodzajem po angielsku; tk „OK 291/09” odrzucane bez zapytania; sn DO 1/18 — strona weryfikacji Imperva (captcha); cbosa — `UND_ERR_SOCKET` z orzeczenia.nsa.gov.pl.
+
+### 2. ZMIANA
+- sn: sesja z weryfikacji wykonanej przez użytkownika — `SN_SESSION_FILE` (zapis aplikacji po rozwiązaniu captcha w oknie sn.pl) i `SN_COOKIE` (ręcznie, także pole `sn_cookie` w .mcpb); nagłówki XHR jak przeglądarka. Przy blokadzie `powod: SN_WERYFIKACJA_WYMAGANA` + `weryfikacja` (bez wartości ciasteczek). Captcha Imperva to widżet (hCaptcha/reCAPTCHA), nie kod do przepisania — rozwiązuje ją człowiek; konektor jej nie obchodzi. SAOS zastępczo bez zmian (RZĄD 3).
+- sp: fraza przez formularz portalu (`wspolne/formularz.mjs`, wspólny z etpcz); pozycja SAOS z sygnaturą, rodzajem po polsku i `url_saos`.
+- tk: sygnatura w postaci TK spoza listy repertoriów idzie do IPO/OTK ZU; brak trafienia → `REPERTORIUM_SPOZA_LISTY_TK`.
+- cbosa: ponowienie całego żądania po zerwanym połączeniu (1,5 s, 3 s, w budżecie), także przy zerwaniu w trakcie odczytu treści.
+
+### 3. WERYFIKACJA
+`test_sady.mjs` (sesja i opis weryfikacji, formularz frazy, pozycja SAOS, sygnatura TK), `cbosa-example/test_normalizacja.mjs` (ponowienie), `test_protokol.mjs`, `wspolne/test_siec.mjs`. Na żywo: sn.pl z GitHub/kontenera blokowane (Imperva) — weryfikacja okna w aplikacji wymaga Windows/macOS.
+
+
 ## AUDYT-2026-10-06i — etpcz: pole numeru skargi z pomiaru na żywo (G40B) (6.198)
 
 ### 1. ŹRÓDŁO

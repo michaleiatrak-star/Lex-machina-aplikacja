@@ -42,6 +42,8 @@ export type SearchPage = {
   document: SearchDocument | null;
   // Zlecenie przyjęte w kolejce źródła (SUDOP): narzędzie i argumenty odbioru wyniku.
   pending: { tool: string; args: Record<string, unknown>; message: string | null } | null;
+  // sn.pl zablokował zapytanie automatyczne: weryfikację (captcha) wykonuje użytkownik w oknie sn.pl.
+  verification: { url: string; savedSession: boolean; instruction: string | null } | null;
 };
 
 type Row = Record<string, unknown>;
@@ -57,9 +59,9 @@ function num(value: unknown): number | null {
 }
 
 // Link do źródła pozycji: stały link do orzeczenia (Portal Orzeczeń, IPO/OTK ZU), karta SN,
-// a dla pozostałych źródeł strona źródła.
+// a dla pozostałych źródeł strona źródła; SAOS tylko gdy brak linku oficjalnego (wynik zastępczy).
 function sourceUrlOf(row: Row): string | null {
-  return text(row.url_orzeczenia) ?? text(row.url_karty) ?? text(row.url_zrodlowy) ?? text(row.url) ?? text(row.url_sprawy);
+  return text(row.url_orzeczenia) ?? text(row.url_karty) ?? text(row.url_zrodlowy) ?? text(row.url) ?? text(row.url_sprawy) ?? text(row.url_saos);
 }
 
 const DATE_LABELS: Array<[string, string]> = [
@@ -117,7 +119,7 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
 const SHOWN = new Set([
   "tytul_lub_nazwa", "sygnatura", "identyfikator", "tytul", "doc_id", "id_eureka", "id_kio", "urn", "sad",
   "fragment", "teza", "sentencja", "url_zrodlowy", "url_podgladu", "url", "rola",
-  "url_orzeczenia", "url_karty", "url_metryki", "url_sprawy", "docId", "rodzaj", "forma",
+  "url_orzeczenia", "url_karty", "url_metryki", "url_sprawy", "url_saos", "docId", "rodzaj", "forma",
   ...DATE_LABELS.map(([key]) => key),
   "prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"
 ]);
@@ -274,7 +276,12 @@ export function readSearchResult(
       ? { tool: pendingTool, args: { kolejka_id: queueId }, message: text(root.komunikat_serwera) }
       : null;
   const notice = text(root.uwaga) ?? text(root.powod) ?? text(root.detail) ?? text(root.error);
+  const check = root.weryfikacja && typeof root.weryfikacja === "object" ? root.weryfikacja as Row : null;
+  const verification = check?.wymagana === true && text(check.url)
+    ? { url: text(check.url)!, savedSession: check.sesja_zapisana === true, instruction: text(check.instrukcja) }
+    : null;
   return {
+    verification,
     status: pending ? "PENDING" : text(root.status),
     pending,
     total: num(root.liczba_trafien),

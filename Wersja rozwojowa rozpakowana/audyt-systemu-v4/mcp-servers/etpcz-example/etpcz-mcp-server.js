@@ -19,6 +19,7 @@ import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
+import { formularze } from "../wspolne/formularz.mjs";
 
 const HOST = "https://etpcz.ms.gov.pl";
 // Silnik portalu odrzuca łańcuch przeglądarki (502 w Portalu Orzeczeń) — neutralny UA.
@@ -72,44 +73,18 @@ export const tekst = (html) => dekoduj(String(html ?? "")
   .replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr|h\d)>/gi, "\n").replace(/<[^>]+>/g, " "))
   .split("\n").map((l) => l.replace(/[ \t ]+/g, " ").trim()).filter(Boolean).join("\n");
 
-const ATRYBUT = (tag, nazwa) => new RegExp(`\\b${nazwa}\\s*=\\s*["']([^"']*)["']`, "i").exec(tag)?.[1];
-
 /**
  * Formularz wyszukiwarki ze strony: akcja, metoda, pola ukryte, pole numeru skargi i pole frazy
  * (rozpoznane po nazwie/id/etykiecie), przycisk. Czysta funkcja; null, gdy brak pola tekstowego.
  */
 export function formularzWyszukiwarki(html, baza = HOST + "/") {
-  const formy = [];
-  for (const [, atrForm, wnetrze] of String(html ?? "").matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)) {
-    const pola = {};
-    const tekstowe = [];
-    let przycisk = null;
-    for (const [tag] of wnetrze.matchAll(/<(?:input|button)\b[^>]*>/gi)) {
-      const nazwa = ATRYBUT(tag, "name");
-      if (!nazwa) continue;
-      const typ = (ATRYBUT(tag, "type") ?? (/^<button/i.test(tag) ? "submit" : "text")).toLowerCase();
-      const opis = `${nazwa} ${ATRYBUT(tag, "id") ?? ""} ${ATRYBUT(tag, "placeholder") ?? ""} ${ATRYBUT(tag, "title") ?? ""}`;
-      if (typ === "hidden") pola[nazwa] = dekoduj(ATRYBUT(tag, "value") ?? "");
-      else if (typ === "text" || typ === "search") tekstowe.push({ nazwa, opis });
-      else if (typ === "submit" && !przycisk) przycisk = { nazwa, wartosc: dekoduj(ATRYBUT(tag, "value") ?? "") };
-    }
-    // Listy wyboru (rodzaj, rok, państwo): wartość zaznaczona albo pierwsza (zwykle „wszystkie”).
-    for (const [, atr, opcje] of wnetrze.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
-      const nazwa = ATRYBUT(atr, "name");
-      if (!nazwa) continue;
-      const lista = [...opcje.matchAll(/<option\b([^>]*)>/gi)].map(([, a]) => a);
-      const wybrana = lista.find((a) => /\bselected\b/i.test(a)) ?? lista[0];
-      pola[nazwa] = dekoduj((wybrana && ATRYBUT(wybrana, "value")) ?? "");
-    }
-    if (!tekstowe.length) continue;
+  const formy = formularze(html, baza).map((f) => {
     // Pomiar G40B 2026-10-06: complaintNumber = numer skargi, complainant = skarżący, phrase = fraza.
-    const numer = tekstowe.find((p) => /complaint.?number|application.?number|numer|number|skarg|sygn|\bnr\b/i.test(p.opis) && !/^complainant$/i.test(p.nazwa))?.nazwa ?? null;
-    const fraza = tekstowe.find((p) => p.nazwa !== numer && /fraz|tre[sś]|text|s[lł]ow|query|phrase|keyword|szukaj|search|q\b/i.test(p.opis))?.nazwa
-      ?? tekstowe.find((p) => p.nazwa !== numer)?.nazwa ?? null;
-    const akcja = new URL(dekoduj(ATRYBUT(atrForm, "action") ?? "") || baza, baza).toString();
-    formy.push({ akcja, metoda: (ATRYBUT(atrForm, "method") ?? "get").toLowerCase(), pola, poleNumeru: numer, poleFrazy: fraza, przycisk,
-      pola_tekstowe: tekstowe.map((p) => p.nazwa) });
-  }
+    const numer = f.tekstowe.find((p) => /complaint.?number|application.?number|numer|number|skarg|sygn|\bnr\b/i.test(p.opis) && !/^complainant$/i.test(p.nazwa))?.nazwa ?? null;
+    const fraza = f.tekstowe.find((p) => p.nazwa !== numer && /fraz|tre[sś]|text|s[lł]ow|query|phrase|keyword|szukaj|search|q\b/i.test(p.opis))?.nazwa
+      ?? f.tekstowe.find((p) => p.nazwa !== numer)?.nazwa ?? null;
+    return { akcja: f.akcja, metoda: f.metoda, pola: f.pola, poleNumeru: numer, poleFrazy: fraza, przycisk: f.przycisk, pola_tekstowe: f.tekstowe.map((p) => p.nazwa) };
+  });
   // Pierwszeństwo: formularz z polem numeru skargi, potem pierwszy z polem tekstowym.
   return formy.find((f) => f.poleNumeru) ?? formy[0] ?? null;
 }

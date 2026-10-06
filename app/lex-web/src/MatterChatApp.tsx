@@ -203,6 +203,7 @@ import {
 import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
+import { SnVerification } from "./SnVerification.js";
 
 type TabId =
   | "home"
@@ -889,6 +890,7 @@ function executionMessage(
         : {}),
       documentCitations: execution.documentCitations,
       ...(execution.widgets?.length ? { widgets: execution.widgets } : {}),
+      ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
       ...(execution.restorations?.length
         ? {
             restorations:
@@ -5056,6 +5058,16 @@ export default function MatterChatApp({
                         </span>
                       )}
                     </div>
+                  ) : null}
+                  {message.sourceVerification ? (
+                    <SnVerification
+                      verification={{ url: message.sourceVerification.url }}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeMessage(question);
+                      }}
+                    />
                   ) : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">

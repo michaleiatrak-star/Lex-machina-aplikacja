@@ -7,7 +7,6 @@ import {
 import {
   ApiError,
   getMcpSearchSources,
-  isDesktopShell,
   getMcpSearchTools,
   queryMcpSearch,
   type McpPackageInfo,
@@ -18,6 +17,7 @@ import {
 } from "./api.js";
 import { fieldLabel, toolLabel } from "./mcp-search-labels.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
+import { SnVerification, openExternalUrl } from "./SnVerification.js";
 import {
   appendDocument,
   nextPageArgs,
@@ -74,26 +74,6 @@ function failureText(error: unknown): string {
   return ERRORS[code] ?? code;
 }
 
-async function openExternalUrl(url: string): Promise<void> {
-  if (isDesktopShell()) {
-    const internals = (
-      window as Window & {
-        __TAURI_INTERNALS__?: {
-          invoke?: (
-            command: string,
-            args?: Record<string, unknown>
-          ) => Promise<unknown>;
-        };
-      }
-    ).__TAURI_INTERNALS__;
-    if (internals?.invoke) {
-      await internals.invoke("open_external_url", { url });
-      return;
-    }
-  }
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 // Wynik wyszukiwania złożony z kolejnych stron; surowe odpowiedzi tylko w danych technicznych.
 type ResultView = {
   source: string;
@@ -108,6 +88,7 @@ type ResultView = {
   next: Record<string, unknown> | null;
   raw: unknown[];
   pending: SearchPage["pending"];
+  verification: SearchPage["verification"];
 };
 
 type DetailState = {
@@ -333,7 +314,8 @@ export function McpSearchPanel() {
       documentArgs: args,
       next: nextPageArgs(args, page, page.items.length, parameters),
       raw,
-      pending: page.pending
+      pending: page.pending,
+      verification: page.verification
     };
   }
 
@@ -620,6 +602,9 @@ export function McpSearchPanel() {
             </p>
           ) : null}
           {view.notice ? <div className="alert">{view.notice}</div> : null}
+          {view.verification ? (
+            <SnVerification verification={view.verification} onVerified={() => void submit()} />
+          ) : null}
           {view.pending ? (
             <div className="chat-form-row compact">
               <p className="field-help">
