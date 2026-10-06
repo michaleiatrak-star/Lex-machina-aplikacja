@@ -4165,7 +4165,10 @@ export function createLexHttpApp(options) {
             let processRenderOnly;
             let processDocumentStatus;
             let pleadingSource;
-            if (previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
+            // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
+            // names no pleading keyword; its document type does.
+            if (documentType === "pleading" ||
+                previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
                 const store = options.processWorkflowStore;
                 const stored = store
                     ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => ({
@@ -5085,18 +5088,19 @@ export function createLexHttpApp(options) {
     async function recordPleadingStep(actor, caseId, keyVersion, checkpoint, stage, answer) {
         const store = options.processWorkflowStore;
         if (!store?.getProcessPleadingDraft || !store.saveProcessPleadingDraft || !options.caseAccessService)
-            return;
+            return null;
         const text = writesPleading(checkpoint) ? extractPleadingText(answer) : null;
         try {
-            await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+            return await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
                 const current = await store.getProcessPleadingDraft({ caseId, caseDataKey, keyVersion });
                 let next = current ?? emptyProcessPleadingDraft(caseId);
+                const before = latestDraftVersion(next)?.version ?? 0;
                 if (text)
                     next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
                 if (next.remarks?.checkpoint === checkpoint)
                     next = withoutDraftRemarks(next);
                 if (next.revision === (current?.revision ?? 0))
-                    return;
+                    return null;
                 await store.saveProcessPleadingDraft({
                     caseId,
                     caseDataKey,
@@ -5104,10 +5108,13 @@ export function createLexHttpApp(options) {
                     draft: next,
                     expectedRevision: current?.revision ?? 0
                 });
+                const version = latestDraftVersion(next)?.version ?? 0;
+                return version > before ? { version, checkpoint } : null;
             });
         }
         catch {
             // The step stays committed; the draft keeps its previous version.
+            return null;
         }
     }
     function hasFirmWorkspace(res) {
@@ -5601,6 +5608,7 @@ export function createLexHttpApp(options) {
             }
             const previewPlan = previewSessionWorkflow(options.registry, request);
             let processContext = null;
+            let pleadingDraftWritten = null;
             if (previewPlan.id ===
                 "PROCESS_PLEADING_V1") {
                 if (!options.caseAccessService ||
@@ -6102,7 +6110,7 @@ export function createLexHttpApp(options) {
                                 .result ===
                                 "PASS";
                         if (commit) {
-                            await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint, permit.stage, nodeResult.answer ?? "");
+                            pleadingDraftWritten = (await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint, permit.stage, nodeResult.answer ?? "")) ?? pleadingDraftWritten;
                         }
                         return {
                             result: nodeResult,
@@ -6188,6 +6196,7 @@ export function createLexHttpApp(options) {
                 };
                 response.processWorkflow = {
                     caseId: processContext.caseId,
+                    ...(pleadingDraftWritten ? { draftWritten: pleadingDraftWritten } : {}),
                     mode: auto.state.mode,
                     revision: auto.state.revision,
                     stage: auto.state.stage,
@@ -6696,10 +6705,12 @@ export function createLexHttpApp(options) {
                 if (result.status === "DRAFT_PRESENTABLE" &&
                     result.workflow?.id === "PROCESS_PLEADING_V1" &&
                     result.workflow.result === "PASS") {
-                    await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, processContext.permit.checkpoint, processContext.permit.stage, result.answer ?? "");
+                    pleadingDraftWritten =
+                        (await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, processContext.permit.checkpoint, processContext.permit.stage, result.answer ?? "")) ?? pleadingDraftWritten;
                 }
                 result.processWorkflow = {
                     caseId: processContext.caseId,
+                    ...(pleadingDraftWritten ? { draftWritten: pleadingDraftWritten } : {}),
                     mode: state.mode,
                     revision: state.revision,
                     stage: state.stage,

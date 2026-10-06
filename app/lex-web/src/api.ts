@@ -1017,6 +1017,8 @@ export type SessionExecutionResponse = {
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
   pipelineNext?: { skill: string; reason: string };
+  // AUTO: the executive skill the router's table chose and the application loaded.
+  taskSkill?: string;
   // The firm's default template the application used (none picked).
   firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecisionView;
@@ -1158,6 +1160,8 @@ export type ProcessPleadingWorkflowView = {
     ProcessPleadingCheckpoint,
     ProcessPleadingCheckpointStatus
   >;
+  // A new version of the pleading text written by this turn.
+  draftWritten?: { version: number; checkpoint: ProcessPleadingCheckpoint };
 };
 
 export type ProcessPleadingWorkflowState =

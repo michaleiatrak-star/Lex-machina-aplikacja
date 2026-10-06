@@ -821,6 +821,8 @@ export type SessionExecutionResponse = {
   mandatoryPath?: MandatoryPathReport;
   // ACTIVATION-MATRIX: the next skill of the pipeline after this one (entry -> next).
   pipelineNext?: { skill: string; reason: string };
+  // AUTO: the executive skill the router's table chose and the application loaded.
+  taskSkill?: string;
   // The firm's default template the application used (none picked by the user).
   firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecision;
@@ -951,6 +953,8 @@ export type SessionExecutionResponse = {
       ProcessPleadingCheckpoint,
       ProcessPleadingCheckpointStatus
     >;
+    // A new version of the pleading text written by this turn (the UI makes its file).
+    draftWritten?: { version: number; checkpoint: ProcessPleadingCheckpoint };
   };
   [SESSION_EXECUTION_INTERNAL]?: SessionExecutionInternalState;
 };
@@ -3761,6 +3765,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
+      ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,

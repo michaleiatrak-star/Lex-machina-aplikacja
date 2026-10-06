@@ -2315,6 +2315,7 @@ export class SafeSessionExecutor {
             sessionId: audit.sessionId,
             status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
             ...(next && safeToPresent ? { pipelineNext: next } : {}),
+            ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
             ...(mandatoryPath ? { mandatoryPath } : {}),
             ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
             provider: request.provider,

@@ -501,24 +501,26 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-// Letter workflows end with a file: a simple letter a draft after each completed
-// cycle and the finished document at the end; a process pleading only its FINAL
-// document. Other workflows produce no file on their own.
+// Letter skills end with a file on their own, without being asked:
+// - a simple letter (mechanical workflow or chosen by the router in AUTO): a draft
+//   after each cycle, the finished document when every gate passed;
+// - a process pleading: a draft (marked PROJEKT – NIE SKŁADAĆ) when W2 wrote the
+//   draft, and the finished document at FINAL.
+// Other workflows produce no file on their own.
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill"
   >
 ): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
-    // pisma-procesowe-v3: the file comes after W3 (FINAL); a draft file only on the
-    // user's request (panel: "Pobierz szkic"), marked as not for filing.
-    return result.processWorkflow?.documentStatus === "FINAL"
-      ? { documentType: "pleading", stage: "FINAL" }
+    if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
+    return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
+      ? { documentType: "pleading", stage: "DRAFT" }
       : null;
   }
-  if (result.workflow?.id === "SIMPLE_LETTER_V1") {
+  if (result.workflow?.id === "SIMPLE_LETTER_V1" || result.taskSkill === "pisma-proste-v2") {
     return {
       documentType: "letter",
       stage:
@@ -530,6 +532,13 @@ export function letterDocumentPlan(
     };
   }
   return null;
+}
+
+/** AUTO chose the process pleading skill, but its pipeline (and its file) has not started. */
+export function pleadingPipelineNeeded(
+  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow">
+): boolean {
+  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow;
 }
 
 // Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
@@ -3278,6 +3287,16 @@ export default function MatterChatApp({
       // Letter workflows end with a file, like a document artifact: after each
       // completed cycle a draft .docx, and the finished document at the end
       // (simple letter: all gates passed; process pleading: FINAL status).
+      // AUTO answered a court pleading without its pipeline: the pipeline (which makes
+      // the file itself) is offered at once, continuing this request.
+      if (pleadingPipelineNeeded(result) && canWriteCase(selectedCase)) {
+        setWorkflowRecoveryRequest({
+          caseId: executionCaseId,
+          text: "Rozpocznij pipeline pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą.",
+          messageId: `pipeline-${userMessage.id}`,
+          recovery: { kind: "process-start", acceptOnly: false }
+        });
+      }
       const letterPlan = letterDocumentPlan(result);
       if (
         letterPlan &&
@@ -5689,8 +5708,9 @@ export default function MatterChatApp({
                         )}
                       </div>
                       <small>
-                        Pismo powstaje etapami; załączone dokumenty sprawy, wzory i materiały kancelarii są
-                        dostępne w każdym etapie. Wiadomość zostanie wysłana ponownie.
+                        Pismo powstaje etapami (W1 rama, W2 projekt, W3 weryfikacja); plik .docx powstaje sam:
+                        szkic po W2, gotowe pismo po W3. Załączone dokumenty sprawy, wzory i materiały
+                        kancelarii są dostępne w każdym etapie.
                       </small>
                     </>
                   ) : (

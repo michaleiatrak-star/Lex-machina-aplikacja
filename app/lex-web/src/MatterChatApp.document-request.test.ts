@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { directDocumentRequest, letterDocumentPlan } from "./MatterChatApp.js";
+import { directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded } from "./MatterChatApp.js";
 
 describe("rozpoznanie prośby o plik pisma", () => {
   it("doc, docx, Word i „plik” z czasownikiem to generowanie .docx", () => {
@@ -82,10 +82,28 @@ describe("szkic i gotowy dokument po cyklu pisma", () => {
     } as never)).toEqual({ documentType: "letter", stage: "DRAFT" });
   });
 
-  it("pismo procesowe: bez pliku na etapach (szkic tylko na żądanie), gotowy dokument przy statusie FINAL", () => {
-    const view = (documentStatus: "DRAFT" | "FINAL") => ({ ...base, processWorkflow: { stage: "W2", documentStatus } });
+  it("pismo procesowe: szkic sam po projekcie W2, gotowy dokument przy FINAL, bez pliku po innych krokach", () => {
+    const view = (documentStatus: "DRAFT" | "FINAL", checkpoint?: string) => ({
+      ...base,
+      processWorkflow: { stage: "W3", documentStatus, ...(checkpoint ? { draftWritten: { version: 1, checkpoint } } : {}) }
+    });
     expect(letterDocumentPlan(view("DRAFT") as never)).toBeNull();
+    expect(letterDocumentPlan(view("DRAFT", "CP-QUALITY") as never)).toBeNull();
+    expect(letterDocumentPlan(view("DRAFT", "CP-ATAK") as never)).toEqual({ documentType: "pleading", stage: "DRAFT" });
     expect(letterDocumentPlan(view("FINAL") as never)).toEqual({ documentType: "pleading", stage: "FINAL" });
+  });
+
+  it("pismo proste wybrane przez router w AUTO tworzy plik samo", () => {
+    expect(letterDocumentPlan({ ...base, taskSkill: "pisma-proste-v2" } as never)).toEqual({ documentType: "letter", stage: "FINAL" });
+    expect(letterDocumentPlan({ ...base, taskSkill: "analizator-umow-v1" } as never)).toBeNull();
+  });
+
+  it("pismo procesowe w AUTO bez pipeline'u: aplikacja proponuje pipeline, który sam zrobi plik", () => {
+    expect(pleadingPipelineNeeded({ status: "DRAFT_PRESENTABLE", taskSkill: "pisma-procesowe-v3" } as never)).toBe(true);
+    expect(
+      pleadingPipelineNeeded({ status: "DRAFT_PRESENTABLE", taskSkill: "pisma-procesowe-v3", processWorkflow: { stage: "W1" } } as never)
+    ).toBe(false);
+    expect(pleadingPipelineNeeded({ status: "DRAFT_PRESENTABLE", taskSkill: "pisma-proste-v2" } as never)).toBe(false);
   });
 
   it("zwykła odpowiedź albo zablokowana sesja nie tworzy pliku", () => {

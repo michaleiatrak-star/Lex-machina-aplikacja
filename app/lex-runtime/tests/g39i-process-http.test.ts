@@ -1193,11 +1193,15 @@ describe(
         knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
       };
       let stage = "";
+      const written: Array<{ checkpoint: string } | undefined> = [];
       for (let round = 0; round < 8 && stage !== "FINAL"; round += 1) {
         const response = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(body).expect(200);
         stage = response.body.processWorkflow.stage;
+        written.push(response.body.processWorkflow.draftWritten);
       }
       expect(stage).toBe("FINAL");
+      // The turn that wrote a new version says so (the UI makes the file from it).
+      expect(written.filter(Boolean).length).toBeGreaterThan(0);
 
       // Every W3 step worked on the text of the step before, not on the chat.
       const contexts = current.execute.mock.calls.map((call) => call[0].processWorkflowContext);
@@ -1269,7 +1273,8 @@ describe(
 
       // The file renders the stored version: passed to the generator, checked, marked as a draft.
       const docBody = {
-        query: "Przygotuj plik docx: pismo procesowe z zapisanego projektu sprawy.",
+        // The automatic file after a step names no pleading keyword; its type does.
+        query: "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta.",
         provider: "openai",
         model: "gpt-test",
         primarySkill: DR,
