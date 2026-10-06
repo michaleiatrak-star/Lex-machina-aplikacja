@@ -144,17 +144,37 @@ function proxy(task, params) {
 }
 
 // Żądania jak widżet wyszukiwarki (referer, XHR, JSON). Ochrona przed botami sn.pl odpowiada 403
-// stroną HTML — wtedy raz otwieramy wyszukiwarkę po ciasteczka sesji i ponawiamy (pomiar CI 2026-10-06).
-async function pobierzJson(url) {
-  const pierwsza = await zadanieSn(url, []);
-  if (pierwsza.r.status !== 403) return odczytaj(pierwsza.r);
-  const strona = await zadanieSn(KARTA, pierwsza.ciastka, true).catch(() => null);
-  return odczytaj((await zadanieSn(url, strona ? strona.ciastka : pierwsza.ciastka)).r);
+// albo 200 ze stroną HTML (weryfikacja przeglądarki, „<html style=…”) — wtedy raz otwieramy
+// wyszukiwarkę po ciasteczka sesji i ponawiamy (pomiar CI 2026-10-06; zgłoszenie użytkownika 2026-10-06).
+export class BlokadaSn extends Error {}
+
+/** Treść odpowiedzi snproxy: JSON albo opis, dlaczego to nie dane (strona HTML, ochrona przed botami). */
+export function rozpoznajOdpowiedz(status, typ, tekst) {
+  const t = String(tekst ?? "");
+  const html = /^\s*</.test(t) || (/text\/html/i.test(typ ?? "") && !/^\s*[[{]/.test(t));
+  if (status === 403 || html) {
+    const bot = status === 403 || /incapsula|imperva|incident_id|_Incapsula_Resource|captcha|challenge/i.test(t);
+    return { blad: new BlokadaSn(bot
+      ? "sn.pl: ochrona przed botami — strona weryfikacji przeglądarki zamiast danych (HTTP " + status + ")"
+      : "sn.pl: strona HTML zamiast danych JSON (HTTP " + status + "; przerwa techniczna albo zmiana portalu)") };
+  }
+  if (status < 200 || status >= 300) return { blad: new Error(`sn.pl HTTP ${status}`) };
+  try { return { dane: JSON.parse(t) }; } catch { return { blad: new Error("sn.pl: odpowiedź nie jest poprawnym JSON (zmiana portalu?)") }; }
 }
 
-async function odczytaj(r) {
-  if (!r.ok) throw new Error(`sn.pl HTTP ${r.status}${r.status === 403 ? " (ochrona przed botami sn.pl)" : ""}`);
-  return await r.json();
+async function pobierzJson(url) {
+  const pierwsza = await zadanieSn(url, []);
+  const odczyt = rozpoznajOdpowiedz(pierwsza.r.status, pierwsza.r.headers.get("content-type"), await pierwsza.r.text());
+  if (!(odczyt.blad instanceof BlokadaSn)) {
+    if (odczyt.blad) throw odczyt.blad;
+    return odczyt.dane;
+  }
+  const strona = await zadanieSn(KARTA, pierwsza.ciastka, true).catch(() => null);
+  if (strona) await strona.r.arrayBuffer().catch(() => null);
+  const druga = (await zadanieSn(url, strona ? strona.ciastka : pierwsza.ciastka)).r;
+  const wynik = rozpoznajOdpowiedz(druga.status, druga.headers.get("content-type"), await druga.text());
+  if (wynik.blad) throw wynik.blad;
+  return wynik.dane;
 }
 
 async function zadanieSn(url, poczatkowe, strona = false) {
@@ -225,8 +245,33 @@ server.registerTool("sn_sprawdz_sygnature", {
     return odp({ status: trafione.length === 1 ? "FOUND" : "AMBIGUOUS", ...baza, oczekiwana,
       ...(trafione.length === 1 ? { result: pozycja(trafione[0]) } : { kandydaci: trafione.map(pozycja) }),
       uwaga: NOTA, retrieved_at: new Date().toISOString(), confidence: "deterministic" });
-  } catch (e) { return odp(blad(e)); }
+  } catch (e) {
+    if (!(e instanceof BlokadaSn)) return odp(blad(e));
+    // sn.pl nie wpuszcza (ochrona przed botami): SAOS zastępczo (RZĄD 3, SN do 2016 r.), z jawnym oznaczeniem.
+    const zastepczo = await saosSn(oczekiwana).catch((s) => ({ blad: String(s?.message ?? s) }));
+    const wspolne = { ...baza, oczekiwana, sn_blad: e.message, wyszukiwarka_sn: KARTA, retrieved_at: new Date().toISOString() };
+    if (zastepczo.blad || !zastepczo.trafione?.length) {
+      return odp({ status: "ERROR", ...wspolne, detail: e.message, ...(zastepczo.blad ? { saos_blad: zastepczo.blad } : { saos: "brak trafienia (SAOS ma SN do 2016 r.)" }),
+        uwaga: `sn.pl zablokował zapytanie automatyczne. Sprawdź ${oczekiwana} ręcznie w wyszukiwarce SN (wyszukiwarka_sn) i powołaj kartę orzeczenia. Brak trafienia ≠ brak orzeczenia.` });
+    }
+    return odp({ status: zastepczo.trafione.length === 1 ? "FOUND" : "AMBIGUOUS", ...wspolne, source: "saos (zastępczo za sn.pl)", rzad: "R3",
+      ...(zastepczo.trafione.length === 1 ? { result: zastepczo.trafione[0] } : { kandydaci: zastepczo.trafione }),
+      uwaga: `sn.pl zablokował zapytanie automatyczne; rekord z SAOS (RZĄD 3, agregator akademicki). Przed powołaniem znajdź kartę orzeczenia w wyszukiwarce SN (wyszukiwarka_sn) i powołuj kartę, nie SAOS.` });
+  }
 });
+
+/** SAOS (RZĄD 3) dla SN po sygnaturze — tylko gdy sn.pl nie wpuszcza. */
+async function saosSn(syg) {
+  const r = await fetch(`https://www.saos.org.pl/api/search/judgments?caseNumber=${encodeURIComponent(syg)}&courtType=SUPREME&pageSize=10`,
+    { signal: sygnal(30000), headers: { Accept: "application/json", "User-Agent": "LexMachina-sn/1.0" } });
+  const t = await r.text();
+  if (!r.ok || /^\s*</.test(t)) throw new Error(`SAOS HTTP ${r.status}${/^\s*</.test(t) ? " (strona HTML)" : ""}`);
+  const dane = JSON.parse(t);
+  const trafione = (dane.items ?? [])
+    .filter((it) => (it.courtCases ?? []).some((c) => normalizujSygnature(c.caseNumber).toUpperCase() === syg.toUpperCase()))
+    .map((it) => ({ sygnatura: syg, data_wydania: it.judgmentDate ?? null, forma: it.judgmentType ?? null, url_saos: `https://www.saos.org.pl/judgments/${it.id}` }));
+  return { trafione };
+}
 
 export const FORMY = [
   "wyrok SN", "wyrok SN SD", "wyrok siedmiu sędziów SN", "wyrok siedmiu sędziów SN SD", "postanowienie SN", "postanowienie SN SD",

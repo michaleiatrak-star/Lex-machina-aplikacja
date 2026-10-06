@@ -145,4 +145,34 @@ describe("sn.pl bot protection", () => {
     expect(seen[0]!.headers).toMatchObject({ Referer: "https://sn.pl/pl/wyszukiwarka-orzeczen", "X-Requested-With": "XMLHttpRequest" });
     expect(seen[2]!.headers.Cookie).toBe("sess=abc");
   });
+
+  it("treats a 200 browser-check HTML page like a 403: cookies, one more try", async () => {
+    const tasks: string[] = [];
+    let blocked = true;
+    const fetcher = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      tasks.push(new URL(url).searchParams.get("task") ?? "page");
+      if (url.endsWith("/pl/wyszukiwarka-orzeczen")) {
+        blocked = false;
+        return new Response("<html></html>", { status: 200, headers: { "content-type": "text/html", "set-cookie": "incap_ses=abc; path=/" } });
+      }
+      if (blocked) return new Response('<html style="height:100%"><iframe src="/_Incapsula_Resource"></iframe></html>', { status: 200, headers: { "content-type": "text/html" } });
+      if (url.includes("task=searchOrzeczenia")) {
+        return json({ data: [{ data: [{ id: "ZuUySp8Bw1HnVDW6c5lg", sygnatura_sprawy: "III CZP 25/11" }] }] });
+      }
+      return snText(`<html><body><p>${TEXT}</p></body></html>`);
+    });
+    const result = await new SupremeCourtCaseVerifier(fetcher).verify({ claim: "sygn. III CZP 25/11", signature: "III CZP 25/11", toolCallId: "waf-2" });
+    expect(result.status).toBe("FOUND");
+    expect(tasks).toEqual(["searchOrzeczenia", "page", "searchOrzeczenia", "OrzeczeniePlikHtml"]);
+  });
+
+  it("still blocked after the retry: bot protection (403), not a JSON parse error", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response('<html style="height:100%"></html>', { status: 200, headers: { "content-type": "text/html" } })
+    );
+    const result = await new SupremeCourtCaseVerifier(fetcher).verify({ claim: "sygn. III CZP 25/11", signature: "III CZP 25/11", toolCallId: "waf-3" });
+    expect(result.status).toBe("OUT_OF_SCOPE");
+    expect(result.reason).toBe("SN_SEARCH_HTTP_403");
+  });
 });

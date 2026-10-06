@@ -252,18 +252,32 @@ function mergeCookies(
 }
 
 // sn.pl answers the search widget's own requests; a bare request may meet the
-// site's bot protection (HTTP 403 page). Requests look like the widget's (same
-// referer, XHR, JSON accept) and, after a 403, the search page is opened once
-// for its session cookies before one more try.
+// site's bot protection: an HTTP 403 page, or HTTP 200 with a browser-check HTML
+// page instead of JSON. Requests look like the widget's (same referer, XHR, JSON
+// accept) and, when blocked, the search page is opened once for its session
+// cookies before one more try. Still blocked: a 403 (bot protection), never an
+// HTML page handed to a JSON parser.
 async function fetchSn(
   fetcher: CaseLawFetch,
   input: string
 ): Promise<Response> {
   const first = await fetchSnOnce(fetcher, input, []);
-  if (first.response.status !== 403 || input === SN_HUMAN) return first.response;
+  if (input === SN_HUMAN || !(await snBlocked(first.response))) return first.response;
   const warm = await fetchSnOnce(fetcher, SN_HUMAN, first.cookies).catch(() => null);
-  if (!warm) return first.response;
-  return (await fetchSnOnce(fetcher, input, warm.cookies)).response;
+  const second = (await fetchSnOnce(fetcher, input, warm ? warm.cookies : first.cookies)).response;
+  return (await snBlocked(second))
+    ? new Response(null, { status: 403, statusText: "SN_BOT_PROTECTION" })
+    : second;
+}
+
+/** A 403, or an HTML page where the widget's endpoints answer JSON (or PDF). */
+async function snBlocked(response: Response): Promise<boolean> {
+  if (response.status === 403) return true;
+  if (!response.ok) return false;
+  const type = response.headers.get("content-type") ?? "";
+  if (/json|pdf|octet-stream/i.test(type)) return false;
+  const head = (await response.clone().text().catch(() => "")).slice(0, 200);
+  return /^\s*</.test(head);
 }
 
 async function fetchSnOnce(

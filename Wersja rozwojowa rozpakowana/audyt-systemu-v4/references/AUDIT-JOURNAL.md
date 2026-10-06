@@ -69891,6 +69891,19 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06g — sn: strona weryfikacji przeglądarki (HTTP 200 HTML) zamiast „Unexpected token '<'”; SAOS zastępczo (6.196)
+
+### 1. ŹRÓDŁO
+Użytkownik: `sn_sprawdz_sygnature` → ERROR „Unexpected token '<', "<html styl"... is not valid JSON”. sn.pl odpowiedział stroną HTML (ochrona przed botami) z kodem 200; ponowienie z ciasteczkami działało tylko po 403.
+
+### 2. ZMIANA
+- Konektor `sn`: odpowiedź snproxy rozpoznawana (`rozpoznajOdpowiedz`): strona HTML/403 = blokada → wyszukiwarka po ciasteczka i ponowienie; nadal HTML → jawny komunikat (ochrona przed botami / przerwa techniczna). `sn_sprawdz_sygnature` przy blokadzie: SAOS zastępczo (RZĄD 3, SN do 2016) z oznaczeniem i linkiem do wyszukiwarki SN; brak trafienia → ERROR z instrukcją ręcznej weryfikacji karty.
+- Aplikacja (`case-law-verifier`): to samo w `fetchSn` (strona HTML 200 = blokada; po ponowieniu nadal → 403, nie błąd parsowania).
+
+### 3. WERYFIKACJA
+Testy offline sn (6 przypadków odpowiedzi) i przebieg narzędzia na atrapie: ponowienie → FOUND z sn.pl; blokada → SAOS zastępczo; blokada bez trafienia → ERROR z opisem; HTTP 500 bez ponowienia. Testy aplikacji: strona HTML 200 → ponowienie → FOUND; trwała blokada → SN_SEARCH_HTTP_403. Czy ciasteczka sesji wystarczą wobec weryfikacji JS sn.pl u użytkownika — niezmierzone (sn.pl niedostępny z piaskownicy i runnerów).
+
+
 ## AUDYT-2026-10-06f — błędy sieci konektorów MCP: przyczyna zamiast „fetch failed”, ponowienia, certyfikaty systemu (6.195)
 
 ### 1. ŹRÓDŁO

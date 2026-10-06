@@ -44,3 +44,14 @@ assert.ok(pasujeDoFiltra({ sygnatura_sprawy: "II CSKP 89/26", data_wydania: "202
 assert.ok(!pasujeDoFiltra({ sygnatura_sprawy: "II CSKP 89/26", data_wydania: "2026-08-08" }, { dataDo: "2026-07-31" }));
 assert.ok(!pasujeDoFiltra({ sygnatura_sprawy: "I CSKP 89/26" }, { sygnatura: "II CSKP 89/26" }));
 console.log("OK: parametry wyszukiwarki SN (treść, forma, daty, izba) i kontrola trafień");
+
+// Odpowiedź snproxy: JSON albo strona HTML (ochrona przed botami) — nigdy „Unexpected token '<'”.
+import { rozpoznajOdpowiedz, BlokadaSn } from "./sn-mcp-server.js";
+assert.deepStrictEqual(rozpoznajOdpowiedz(200, "application/json", '{"data":[]}'), { dane: { data: [] } });
+const strona = rozpoznajOdpowiedz(200, "text/html", '<html style="height:100%"><head><META NAME="ROBOTS"></head><body><iframe src="/_Incapsula_Resource?x"></iframe></body></html>');
+assert.ok(strona.blad instanceof BlokadaSn && /ochrona przed botami/.test(strona.blad.message), strona.blad?.message);
+assert.ok(rozpoznajOdpowiedz(200, "application/json", "<html><body>Przerwa techniczna</body></html>").blad instanceof BlokadaSn);
+assert.ok(rozpoznajOdpowiedz(403, "text/html", "<html></html>").blad instanceof BlokadaSn);
+assert.ok(!(rozpoznajOdpowiedz(500, "application/json", "{}").blad instanceof BlokadaSn));
+assert.match(rozpoznajOdpowiedz(200, "application/json", "{zly").blad.message, /nie jest poprawnym JSON/);
+console.log("OK: strona HTML/ochrona przed botami rozpoznana zamiast błędu parsowania JSON");
