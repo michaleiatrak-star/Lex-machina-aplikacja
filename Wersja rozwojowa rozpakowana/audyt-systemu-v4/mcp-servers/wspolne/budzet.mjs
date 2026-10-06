@@ -8,6 +8,16 @@
 //    min(własny limit, pozostały budżet). Po wyczerpaniu budżetu kolejne próby kończą się od razu
 //    jawnym błędem, więc narzędzie zwraca ERROR przed timeoutem klienta.
 import { AsyncLocalStorage } from "node:async_hooks";
+import tls from "node:tls";
+
+// Certyfikaty z magazynu systemu obok wbudowanych (2026-10-06): na Windows antywirus albo zapora
+// firmowa przechwytujące HTTPS instalują swój urząd w magazynie systemu — przeglądarka działa,
+// a Node (tylko lista wbudowana) kończył „fetch failed”. Równoważne `node --use-system-ca`.
+try {
+  if (typeof tls.getCACertificates === "function" && typeof tls.setDefaultCACertificates === "function") {
+    tls.setDefaultCACertificates([...new Set([...tls.getCACertificates("default"), ...tls.getCACertificates("system")])]);
+  }
+} catch { /* starszy Node albo brak magazynu: zostaje lista wbudowana */ }
 
 const als = new AsyncLocalStorage();
 export const BUDZET_MS = Math.max(5000, Number(process.env.LEX_BUDZET_MS) || 50000);
@@ -37,4 +47,63 @@ export function owinSerwer(server) {
     oryg(nazwa, meta, (...a) => als.run({ koniec: Date.now() + BUDZET_MS, wyczerpany: false }, () => handler(...a)));
   server.__lexBudzet = true;
   return server;
+}
+
+// ── Błędy sieci (2026-10-06): „fetch failed” bez przyczyny → kod i host; ponowienie przejściowych ──
+// ⛔ PO CO: undici zgłasza każdy błąd sieci jako „fetch failed”, a przyczynę (DNS, TLS, zerwane
+//    połączenie) chowa w e.cause — użytkownik widział tylko „fetch failed” (CBOSA). Teraz komunikat
+//    niesie kod i host. Błąd przed wysłaniem żądania ponawiamy zawsze (do 2 razy); zerwanie po
+//    wysłaniu — tylko dla GET/HEAD albo żądania oznaczonego `lexPowtarzalne: true` (np. POST
+//    wyszukiwarki, który niczego nie zmienia). Każda próba mieści się w budżecie wywołania.
+const PRZED_WYSLANIEM = new Set(["EAI_AGAIN", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT"]);
+const PRZEJSCIOWE = new Set([...PRZED_WYSLANIEM, "ECONNRESET", "ETIMEDOUT", "EPIPE", "UND_ERR_SOCKET"]);
+const TLS = /CERT|SELF_SIGNED|UNABLE_TO|ERR_TLS|ERR_SSL|SSL/i;
+
+/** Kod błędu sieci z łańcucha przyczyn (np. ECONNRESET, ENOTFOUND, UNABLE_TO_VERIFY_LEAF_SIGNATURE). */
+export function kodSieci(e) {
+  for (let c = e, i = 0; c && i < 5; c = c.cause, i++) {
+    if (typeof c.code === "string" && c.code !== "ERR_INVALID_STATE") return c.code;
+  }
+  return null;
+}
+
+/** Komunikat błędu sieci zrozumiały dla użytkownika: host, kod i co to znaczy. */
+export function opisBleduSieci(e, host) {
+  const kod = kodSieci(e);
+  const gdzie = host ? ` (${host})` : "";
+  if (e?.name === "TimeoutError") return `Źródło${gdzie} nie odpowiedziało w limicie czasu.`;
+  if (!kod) return `Błąd sieci${gdzie}: ${e?.cause?.message ?? e?.message ?? e}`;
+  if (TLS.test(kod)) return `Błąd TLS${gdzie}: ${kod} — certyfikat serwera nie przeszedł weryfikacji (niepełny łańcuch po stronie serwera albo zapora/antywirus przechwytujący HTTPS).`;
+  if (kod === "ENOTFOUND" || kod === "EAI_AGAIN") return `Błąd DNS${gdzie}: ${kod} — nie rozwiązano nazwy hosta (brak sieci albo DNS).`;
+  if (kod === "ECONNREFUSED") return `Połączenie odrzucone${gdzie}: ${kod} — serwer nie przyjmuje połączeń (awaria albo zapora).`;
+  if (kod === "ECONNRESET" || kod === "UND_ERR_SOCKET" || kod === "EPIPE") return `Połączenie zerwane przez serwer${gdzie}: ${kod} — przeciążenie lub przerwa techniczna źródła.`;
+  if (kod === "ETIMEDOUT" || kod === "UND_ERR_CONNECT_TIMEOUT") return `Przekroczony czas połączenia${gdzie}: ${kod}.`;
+  return `Błąd sieci${gdzie}: ${kod}`;
+}
+
+const czekaj = (ms) => new Promise((ok) => setTimeout(ok, ms));
+if (typeof globalThis.fetch === "function" && !globalThis.fetch.__lexSiec) {
+  const oryg = globalThis.fetch;
+  const fetchLex = async (input, init) => {
+    const metoda = String(init?.method ?? input?.method ?? "GET").toUpperCase();
+    let host = "";
+    try { host = new URL(String(input?.url ?? input)).hostname; } catch { /* adres sprawdza fetch */ }
+    for (let proba = 0; ; proba++) {
+      try {
+        return await oryg(input, init);
+      } catch (e) {
+        if (e?.name === "AbortError" || init?.signal?.aborted) throw e;
+        const kod = kodSieci(e);
+        const powtarzalne = metoda === "GET" || metoda === "HEAD" || init?.lexPowtarzalne === true;
+        const zostalo = (als.getStore()?.koniec ?? Infinity) - Date.now();
+        if (proba < 2 && kod && zostalo > 3000 && (PRZED_WYSLANIEM.has(kod) || (PRZEJSCIOWE.has(kod) && powtarzalne))) {
+          await czekaj(400 * (proba + 1));
+          continue;
+        }
+        throw new Error(opisBleduSieci(e, host), { cause: e });
+      }
+    }
+  };
+  fetchLex.__lexSiec = true;
+  globalThis.fetch = fetchLex;
 }

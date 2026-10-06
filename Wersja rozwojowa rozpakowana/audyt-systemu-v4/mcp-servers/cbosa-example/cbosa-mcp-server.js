@@ -234,7 +234,7 @@ class Sesja {
       if (u.protocol !== "https:" || u.hostname !== HOST) throw new Error(`Odmowa: host spoza CBOSA (${u.host})`);
       const headers = { "User-Agent": "lex-machina-cbosa/1.0", "Accept-Language": "pl-PL,pl;q=0.9", ...(init.headers ?? {}) };
       if (this.cookies.size) headers.Cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
-      const r = await fetch(url, { ...init, headers, redirect: "manual", signal: sygnal(40000) });
+      const r = await fetch(url, { ...init, headers, redirect: "manual", signal: sygnal(40000), lexPowtarzalne: true }); // wyszukiwarka i odczyt niczego nie zmieniają
       for (const c of r.headers.getSetCookie?.() ?? []) { const [kv] = c.split(";"); const i = kv.indexOf("="); if (i > 0) this.cookies.set(kv.slice(0, i).trim(), kv.slice(i + 1).trim()); }
       if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
         url = new URL(r.headers.get("location"), url).href; init = { method: "GET" }; continue;

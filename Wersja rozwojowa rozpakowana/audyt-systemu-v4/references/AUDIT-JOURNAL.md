@@ -69891,6 +69891,20 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06f — błędy sieci konektorów MCP: przyczyna zamiast „fetch failed”, ponowienia, certyfikaty systemu (6.195)
+
+### 1. ŹRÓDŁO
+Użytkownik: `cbosa_szukaj` → ERROR „fetch failed” (bez przyczyny).
+
+### 2. ZMIANA
+- `wspolne/budzet.mjs` (wszystkie serwery): komunikat z kodem i hostem (DNS, TLS, odrzucone, zerwane, limit czasu); ponowienie do 2 razy — błąd przed wysłaniem zawsze, zerwanie po wysłaniu tylko GET/HEAD albo żądanie `lexPowtarzalne` (POST wyszukiwarki CBOSA); w budżecie wywołania.
+- Certyfikaty z magazynu systemu obok wbudowanych (`tls.setDefaultCACertificates`, jak `--use-system-ca`): antywirus/zapora przechwytujące HTTPS na Windows nie kończą się „fetch failed”.
+- Test `wspolne/test_siec.mjs` (lokalny serwer zrywający połączenia).
+
+### 3. WERYFIKACJA
+Test sieci OK (GET po 2 zerwaniach, POST bez ponowienia, POST oznaczony ponowiony, ECONNREFUSED, opisy TLS/DNS); `fetch` respektuje dołożony urząd (pomiar: DEPTH_ZERO_SELF_SIGNED_CERT → ok). Przyczyna u użytkownika nieznana do odczytu nowego komunikatu (piaskownica: CBOSA za blokadą 403).
+
+
 ## AUDYT-2026-10-06e — konektor tk wyłącznie ze źródeł urzędowych (IPO, OTK ZU), bez SAOS (6.194)
 
 ### 1. ŹRÓDŁO
