@@ -12,7 +12,11 @@ const SERWERY = {
   sudop: () => import("./sudop-example/sudop-mcp-server.js"),
   ceidg: () => import("./ceidg-example/ceidg-mcp-server.js"),
   cbosa: () => import("./cbosa-example/cbosa-mcp-server.js"),
+  sn: () => import("./sn-example/sn-mcp-server.js"),
+  sp: () => import("./sp-example/sp-mcp-server.js"),
+  tk: () => import("./tk-example/tk-mcp-server.js"),
   kio: () => import("./kio-example/kio-mcp-server.js"),
+  etpcz: () => import("./etpcz-example/etpcz-mcp-server.js"),
   uodo: () => import("./uodo-example/uodo-mcp-server.js"),
   wl: () => import("./wl-example/wl-mcp-server.js"),
 };

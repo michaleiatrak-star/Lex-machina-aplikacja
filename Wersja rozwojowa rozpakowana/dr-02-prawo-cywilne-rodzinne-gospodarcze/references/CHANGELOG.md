@@ -1,5 +1,7 @@
 # CHANGELOG — dr-02-prawo-cywilne-rodzinne-gospodarcze
 
+- 3.64 (2026-10-05p, AUDYT-2026-10-05p): MAPA-AKTOW: zakres KRO (rozwód, separacja, alimenty, władza rodzicielska, kontakty) i ubezpieczeń obowiązkowych (OC sprawcy, wypadek drogowy) — aplikacja wskazuje właściwy moduł aktu.
+
 - 3.63 (2026-10-05l, AUDYT-2026-10-05l): Linie „Hasła spraw” w mod-KRO-rodzinne, mod-ustawa-prawa-konsumenta, mod-PrUpad-upadlosc-restrukturyzacja, mod-KSH-organy-spolki-zoo (dobór modułu przez aplikację). Treść prawna bez zmian.
 
 - 3.62 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.

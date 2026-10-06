@@ -554,11 +554,10 @@ view shared/SYGNATURY.md
 → Dopiero po wyniku FOUND: cytuj z linkiem źródłowym
 ```
 
-⛔ **Rozbieżność rzędu źródła — rozstrzygnięcie (F-185).** `orzeczenia-sadowe-v2`
-klasyfikuje `saos.org.pl` jako „Tier 3 — wyłącznie pomocniczo",
-`shared/HIERARCHIA-ZRODEL.md` jako RZĄD 2A. **To nie jest sprzeczność, ale było
-czytane jak sprzeczność**, więc zapisuje się wprost: SAOS ma RZĄD 2A jako
-źródło TREŚCI (agregator pełnych tekstów), a Tier 3 jako źródło WERYFIKACJI
-przy powołaniu w piśmie (nie zastępuje portalu sądu). W V-SYG-0 SAOS pełni
+⛔ **Ranga SAOS — ujednolicona (2026-10-06, zastępuje F-185).** `saos.org.pl` to
+agregator akademicki: **RZĄD 3** w `shared/HIERARCHIA-ZRODEL.md` i Tier 3 w
+`orzeczenia-sadowe-v2` — jedna ranga, bez dwóch skal. Najpierw baza urzędowa sądu
+właściwego dla repertorium; SAOS zastępczo tylko przy jej awarii albo braku
+trwałego linku (SN ma kartę orzeczenia). W V-SYG-0 SAOS pełni
 funkcję **kontroli krzyżowej**, nie funkcję bazy rozstrzygającej — rozstrzyga
 baza z kolumny „Baza właściwa" tabeli ROUTING BAZ.

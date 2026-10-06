@@ -47,6 +47,8 @@ def zbuduj(wyjscie: Path):
         out = Path(tmp) / "lex-mcp.mjs"
         subprocess.run([npx, "-y", ESBUILD, "lex-mcp.js", "--bundle", "--platform=node", "--format=esm",
                         "--target=node18", "--minify", "--log-level=warning",
+                        # playwright: opcjonalny (sn_captcha_auto, SN 1.4.0) — ładowany w runtime, nie wbudowywany
+                        "--external:playwright",
                         f"--metafile={meta}", f"--outfile={out}"], cwd=stage, check=True)
         wyjscie.mkdir(parents=True, exist_ok=True)
         (wyjscie / "lex-mcp.mjs").write_bytes(NAGLOWEK.encode() + out.read_bytes())

@@ -7,7 +7,6 @@ import {
 import {
   ApiError,
   getMcpSearchSources,
-  isDesktopShell,
   getMcpSearchTools,
   queryMcpSearch,
   type McpPackageInfo,
@@ -16,8 +15,9 @@ import {
   type McpSearchTool,
   type McpToolInputProperty
 } from "./api.js";
-import { fieldLabel, toolLabel } from "./mcp-search-labels.js";
+import { fieldLabel, orderFields, orderTools, sourceHasPhraseSearch, toolLabel } from "./mcp-search-labels.js";
 import { SourcePreviewFrame } from "./SourcePreviewFrame.js";
+import { SnVerification, openExternalUrl } from "./SnVerification.js";
 import {
   appendDocument,
   nextPageArgs,
@@ -74,26 +74,6 @@ function failureText(error: unknown): string {
   return ERRORS[code] ?? code;
 }
 
-async function openExternalUrl(url: string): Promise<void> {
-  if (isDesktopShell()) {
-    const internals = (
-      window as Window & {
-        __TAURI_INTERNALS__?: {
-          invoke?: (
-            command: string,
-            args?: Record<string, unknown>
-          ) => Promise<unknown>;
-        };
-      }
-    ).__TAURI_INTERNALS__;
-    if (internals?.invoke) {
-      await internals.invoke("open_external_url", { url });
-      return;
-    }
-  }
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 // Wynik wyszukiwania złożony z kolejnych stron; surowe odpowiedzi tylko w danych technicznych.
 type ResultView = {
   source: string;
@@ -108,6 +88,7 @@ type ResultView = {
   next: Record<string, unknown> | null;
   raw: unknown[];
   pending: SearchPage["pending"];
+  verification: SearchPage["verification"];
 };
 
 type DetailState = {
@@ -241,12 +222,8 @@ export function McpSearchPanel() {
     void getMcpSearchTools(sourceId)
       .then((next) => {
         if (cancelled) return;
-        // Wyszukiwanie po słowie kluczowym lub fragmencie tekstu na początku listy.
-        const sorted = [...next.tools].sort(
-          (a, b) =>
-            Number(Boolean(toolLabel(b.name).fullText)) -
-            Number(Boolean(toolLabel(a.name).fullText))
-        );
+        // Wyszukiwanie po frazie na początku listy, obsługa dostępu do źródła na końcu.
+        const sorted = orderTools(next.tools);
         setTools(sorted);
         setToolName(sorted[0]?.name ?? "");
       })
@@ -270,8 +247,8 @@ export function McpSearchPanel() {
     () => tools.find((item) => item.name === toolName),
     [tools, toolName]
   );
-  const properties = Object.entries(tool?.inputSchema.properties ?? {});
   const required = new Set(tool?.inputSchema.required ?? []);
+  const properties = orderFields(Object.entries(tool?.inputSchema.properties ?? {}), required);
   const missing = properties.some(([name, property]) =>
     required.has(name) &&
     property.type !== "boolean" &&
@@ -333,7 +310,8 @@ export function McpSearchPanel() {
       documentArgs: args,
       next: nextPageArgs(args, page, page.items.length, parameters),
       raw,
-      pending: page.pending
+      pending: page.pending,
+      verification: page.verification
     };
   }
 
@@ -480,16 +458,19 @@ export function McpSearchPanel() {
                 <option value="">— wybierz źródło —</option>
                 {groupsOf(sources).map(([group, items]) => (
                   <optgroup key={group} label={group}>
-                    {items.map((source) => (
-                      <option key={source.id} value={source.id} disabled={!source.ready}>
-                        {source.label}
-                        {!source.ready
-                          ? " — niegotowe (Ustawienia → Konektory MCP)"
-                          : source.lastCheck && !source.lastCheck.ok
-                            ? " — ostatnie sprawdzenie nieudane"
-                            : ""}
-                      </option>
-                    ))}
+                    {[...items]
+                      .sort((a, b) => Number(sourceHasPhraseSearch(b.id)) - Number(sourceHasPhraseSearch(a.id)))
+                      .map((source) => (
+                        <option key={source.id} value={source.id} disabled={!source.ready}>
+                          {source.label}
+                          {sourceHasPhraseSearch(source.id) ? " · szukanie po frazie" : ""}
+                          {!source.ready
+                            ? " — niegotowe (Ustawienia → Konektory MCP)"
+                            : source.lastCheck && !source.lastCheck.ok
+                              ? " — ostatnie sprawdzenie nieudane"
+                              : ""}
+                        </option>
+                      ))}
                   </optgroup>
                 ))}
               </select>
@@ -620,6 +601,9 @@ export function McpSearchPanel() {
             </p>
           ) : null}
           {view.notice ? <div className="alert">{view.notice}</div> : null}
+          {view.verification ? (
+            <SnVerification verification={view.verification} onVerified={() => void submit()} />
+          ) : null}
           {view.pending ? (
             <div className="chat-form-row compact">
               <p className="field-help">

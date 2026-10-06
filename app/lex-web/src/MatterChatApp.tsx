@@ -15,7 +15,7 @@ import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
-import { CaseLawPreview, attributedSentence, isCaseLawSource } from "./CaseLawPreview.js";
+import { CaseLawPreview, attributedSentence, caseLawDocument, caseLawReferences, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 
 // Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
@@ -76,6 +76,8 @@ import {
   listCaseArtifacts,
   listCaseFiles,
   processStoredCaseFile,
+  resolveCaseLaw,
+  type ProcessingProgress,
   uploadCaseFile,
   listCaseSchedule,
   listCases,
@@ -200,6 +202,8 @@ import {
 } from "./restoration-review.js";
 import "./chat.css";
 import "./workspace.css";
+import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
+import { SnVerification } from "./SnVerification.js";
 
 type TabId =
   | "home"
@@ -501,24 +505,26 @@ type DirectDocumentRequest = {
     | "other";
 };
 
-// Letter workflows end with a file: a simple letter a draft after each completed
-// cycle and the finished document at the end; a process pleading only its FINAL
-// document. Other workflows produce no file on their own.
+// Letter skills end with a file on their own, without being asked:
+// - a simple letter (mechanical workflow or chosen by the router in AUTO): a draft
+//   after each cycle, the finished document when every gate passed;
+// - a process pleading: a draft (marked PROJEKT – NIE SKŁADAĆ) when W2 wrote the
+//   draft, and the finished document at FINAL.
+// Other workflows produce no file on their own.
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill"
   >
 ): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
-    // pisma-procesowe-v3: the file comes after W3 (FINAL); a draft file only on the
-    // user's request (panel: "Pobierz szkic"), marked as not for filing.
-    return result.processWorkflow?.documentStatus === "FINAL"
-      ? { documentType: "pleading", stage: "FINAL" }
+    if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
+    return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
+      ? { documentType: "pleading", stage: "DRAFT" }
       : null;
   }
-  if (result.workflow?.id === "SIMPLE_LETTER_V1") {
+  if (result.workflow?.id === "SIMPLE_LETTER_V1" || result.taskSkill === "pisma-proste-v2") {
     return {
       documentType: "letter",
       stage:
@@ -532,6 +538,36 @@ export function letterDocumentPlan(
   return null;
 }
 
+/** AUTO chose the process pleading skill, but its pipeline (and its file) has not started. */
+export function pleadingPipelineNeeded(
+  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow">
+): boolean {
+  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow;
+}
+
+// Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
+// "umowę" or "dokumentu" never matched a \b-delimited pattern.
+function polishWords(alternatives: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\d])(?:${alternatives})(?![\\p{L}\\d])`, "u");
+}
+
+// A contract is written in the contract workflow (its mode, analizator-umow), so a
+// contract becomes a file directly only when a file is named as the result.
+const DOCUMENT_NOUN = polishWords(
+  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*"
+);
+const GENERATION_VERB = polishWords(
+  "wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj|zapisz|wyeksportuj|eksportuj|zrób|przerób|zamień|przekształć"
+);
+// A file named as the result: "do pobrania", "w postaci dokumentu", "jako plik".
+const FILE_RESULT =
+  /(?<![\p{L}])(?:do\s+(?:pobrania|ściągnięcia|zapisania|wydruku)|(?:w\s+(?:postaci|formie|formacie)|jako)\s+(?:pliku|plik|dokumentu|dokument)(?![\p{L}]))/u;
+// Reading a document is not writing one: analysis or verification of a file
+// goes to the chat unless a file is named as the result.
+const READING_INTENT = polishWords(
+  "przeanalizuj|analiz\\p{L}*|zweryfikuj|weryfik\\p{L}*|sprawdź|sprawdz|oceń|ocen\\p{L}*|porównaj|wskaż|zinterpretuj|wyjaśnij|streść|podsumuj|przejrzyj|co\\s+(?:jest|zawiera|wynika)"
+);
+
 export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
@@ -541,39 +577,38 @@ export function directDocumentRequest(
       .toLocaleLowerCase("pl");
 
   const explicitFormat =
-    /\bodt\b/u.test(normalized)
+    polishWords("odt").test(normalized)
       ? "odt" as const
       // "plik doc", "w Wordzie", "worda": the same .docx request.
-      : /\bdocx?\b|\bword(?:a|zie|owy|owym)?\b/u.test(normalized)
+      : polishWords("docx?|word(?:a|zie|owy|owym|ze)?").test(normalized)
         ? "docx" as const
         : null;
 
-  const documentNoun =
-    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór|plik)\b/u
-      .test(normalized);
-  const generationVerb =
-    /\b(?:wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj)\b/u
-      .test(normalized);
+  const fileResult = FILE_RESULT.test(normalized);
+  const drafting =
+    DOCUMENT_NOUN.test(normalized) &&
+    GENERATION_VERB.test(normalized) &&
+    !READING_INTENT.test(normalized);
 
-  if (
-    !explicitFormat &&
-    !(documentNoun && generationVerb)
-  ) {
+  if (!explicitFormat && !fileResult && !drafting) {
+    return null;
+  }
+  // "Sprawdź, co jest w pliku" names a file but asks to read it.
+  if (!explicitFormat && !drafting && !GENERATION_VERB.test(normalized) && READING_INTENT.test(normalized)) {
     return null;
   }
 
   const documentType =
-    /\b(?:pozew|apelacj|sprzeciw|zażalen|pismo procesowe)\b/u
+    polishWords("pozew|pozw\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|pism\\p{L}*\\s+procesow\\p{L}*|odpowied\\p{L}*\\s+na\\s+pozew|skarg\\p{L}*\\s+kasacyjn\\p{L}*")
       .test(normalized)
       ? "pleading" as const
-      : /\bumow/u.test(normalized)
+      : polishWords("umow\\p{L}*|umów").test(normalized)
         ? "contract" as const
-        : /\bopini/u.test(normalized)
+        : polishWords("opini\\p{L}*").test(normalized)
           ? "opinion" as const
-          : /\braport/u.test(normalized)
+          : polishWords("raport\\p{L}*").test(normalized)
             ? "report" as const
-            : /\b(?:wezwanie|reklamacj|oświadczen|pełnomocnictw|list)\b/u
-                .test(normalized)
+            : polishWords("wezwani\\p{L}*|reklamacj\\p{L}*|oświadczeni\\p{L}*|pełnomocnictw\\p{L}*|list\\p{L}*").test(normalized)
               ? "letter" as const
               : "other" as const;
 
@@ -886,6 +921,7 @@ function executionMessage(
         : {}),
       documentCitations: execution.documentCitations,
       ...(execution.widgets?.length ? { widgets: execution.widgets } : {}),
+      ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
       ...(execution.restorations?.length
         ? {
             restorations:
@@ -1037,6 +1073,21 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // Stage and page of documents processed from the chat (staged file id or upload id).
+  const [documentProgress, setDocumentProgress] = useState<Record<string, ProcessingProgress>>({});
+  // Runs one document request with its progress shown under `key`.
+  async function withDocumentProgress<T>(key: string, targetCase: string, run: (progressId: string) => Promise<T>): Promise<T> {
+    const tracker = trackProgress(targetCase, (progress) => setDocumentProgress((current) => ({ ...current, [key]: progress })));
+    try {
+      return await run(tracker.progressId);
+    } finally {
+      tracker.stop();
+      setDocumentProgress((current) => {
+        const { [key]: _done, ...rest } = current;
+        return rest;
+      });
+    }
+  }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
     useState(false);
   const [caseFilePickerError, setCaseFilePickerError] =
@@ -2160,18 +2211,20 @@ export default function MatterChatApp({
     );
     try {
       const stored = await uploadCaseFile(targetCase, file);
-      const review = await processStoredCaseFile(
-        targetCase,
-        stored.uploadId,
-        undefined,
-        undefined,
-        processingModeOptions(mode)
-      );
-      const result = await finalizeCaseDocument(
-        targetCase,
-        review.documentId,
-        keepAllDirectives(review)
-      );
+      const result = await withDocumentProgress(id, targetCase, async (progressId) => {
+        const review = await processStoredCaseFile(
+          targetCase,
+          stored.uploadId,
+          undefined,
+          progressId,
+          processingModeOptions(mode)
+        );
+        return finalizeCaseDocument(
+          targetCase,
+          review.documentId,
+          keepAllDirectives(review)
+        );
+      });
       pickFiles(
         [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
         true,
@@ -2196,6 +2249,58 @@ export default function MatterChatApp({
         })
       );
     }
+  }
+
+  // A decision from its official card saved in the case's files (local RAG).
+  async function saveCaseLawToCase(file: File): Promise<DocumentAttachmentSelection> {
+    const targetCase = caseId;
+    // The same decision already in the case files is reused, not stored twice.
+    const existing = caseFiles.find((item) => item.filename === file.name && item.processing?.documentId);
+    if (existing?.processing) {
+      return { caseId: targetCase, documentId: existing.processing.documentId, chunkIndices: existing.processing.chunkIndices };
+    }
+    const stored = await uploadCaseFile(targetCase, file);
+    const review = await processStoredCaseFile(targetCase, stored.uploadId);
+    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    setWorkspaceRefresh((value) => value + 1);
+    return { caseId: targetCase, documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) };
+  }
+
+  // Decisions the user points to (card, or a blob:/old PDF link of sn.pl with
+  // the signature): taken from the official database, stored in the case
+  // files and attached to this message. A blob: address cannot be read by
+  // anyone outside the browser tab that made it.
+  async function attachUserCaseLaw(text: string): Promise<DocumentAttachmentSelection[]> {
+    const references = caseLawReferences(text);
+    if (!references.length || !caseId) return [];
+    const attached: DocumentAttachmentSelection[] = [];
+    const notes: string[] = [];
+    for (const reference of references) {
+      if (reference.kind === "BLOB_WITHOUT_SIGNATURE") {
+        notes.push(
+          "Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. " +
+            "Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; " +
+            "możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu."
+        );
+        continue;
+      }
+      setPickerNotice(`Pobieram orzeczenie ${reference.kind === "SIGNATURE" ? reference.signature : "z karty"} i dodaję do akt sprawy…`);
+      try {
+        const copy = await resolveCaseLaw({
+          ...(reference.kind === "CARD" ? { cardUrl: reference.cardUrl } : { signature: reference.signature, cardUrl: reference.link }),
+          caseId
+        });
+        const attachment = await saveCaseLawToCase(caseLawDocument(copy));
+        attached.push(attachment);
+        notes.push(`Dodano do akt: ${[copy.court, copy.signature].filter(Boolean).join(" ")} (karta: ${copy.cardUrl}).`);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : String(error);
+        notes.push(`Nie udało się pobrać orzeczenia (${code}). Model sprawdzi je narzędziem weryfikacji.`);
+      }
+    }
+    if (attached.length) pickFiles(attached.map((item) => ({ kind: "document" as const, documentId: item.documentId, chunkIndices: item.chunkIndices })), true, caseId);
+    setPickerNotice(notes.join(" "));
+    return attached;
   }
 
   async function saveStagedDocuments(ids?: string[]): Promise<void> {
@@ -2904,6 +3009,8 @@ export default function MatterChatApp({
       !model
     ) return;
     saveLastUsedModel(user.userId, { provider, model });
+    const userCaseLaw = await attachUserCaseLaw(trimmed);
+    const sendAttachments = userCaseLaw.reduce((list, item) => upsertAttachment(list, item), documentAttachments);
 
     if (
       conversationIsNew &&
@@ -3068,7 +3175,7 @@ export default function MatterChatApp({
               styleProfile:
                 "lex-classic-clean-v1",
               attachments:
-                documentAttachments,
+                sendAttachments,
               ...(firmTemplateIds.length > 0
                 ? { firmTemplates: firmTemplateIds }
                 : {}),
@@ -3197,9 +3304,9 @@ export default function MatterChatApp({
           trimmed,
         primarySkill: route,
         mode: "PRAWNIK",
-        ...(documentAttachments.length > 0
+        ...(sendAttachments.length > 0
           ? {
-              attachments: documentAttachments,
+              attachments: sendAttachments,
               evidenceImages: imagesWithText ? "all" as const : "photos" as const
             }
           : {}),
@@ -3256,6 +3363,16 @@ export default function MatterChatApp({
       // Letter workflows end with a file, like a document artifact: after each
       // completed cycle a draft .docx, and the finished document at the end
       // (simple letter: all gates passed; process pleading: FINAL status).
+      // AUTO answered a court pleading without its pipeline: the pipeline (which makes
+      // the file itself) is offered at once, continuing this request.
+      if (pleadingPipelineNeeded(result) && canWriteCase(selectedCase)) {
+        setWorkflowRecoveryRequest({
+          caseId: executionCaseId,
+          text: "Rozpocznij pipeline pisma procesowego dla tej sprawy zgodnie z moją wcześniejszą prośbą.",
+          messageId: `pipeline-${userMessage.id}`,
+          recovery: { kind: "process-start", acceptOnly: false }
+        });
+      }
       const letterPlan = letterDocumentPlan(result);
       if (
         letterPlan &&
@@ -3297,7 +3414,7 @@ export default function MatterChatApp({
                 format: "docx",
                 documentType: letterWorkflow,
                 styleProfile: "lex-classic-clean-v1",
-                attachments: documentAttachments,
+                attachments: sendAttachments,
                 ...(firmTemplateIds.length > 0
                   ? { firmTemplates: firmTemplateIds }
                   : {}),
@@ -4524,7 +4641,11 @@ export default function MatterChatApp({
                     <strong>{item.file.name}</strong>
                     <small>
                       {describeDocumentFile(item.file)}
-                      {item.status === "SAVING" ? " · zapisuję i przetwarzam…" : ""}
+                      {item.status === "SAVING"
+                        ? documentProgress[item.id]
+                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
+                          : " · zapisuję i przetwarzam…"
+                        : ""}
                       {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
                     </small>
                     <span className="chat-file-actions">
@@ -4942,6 +5063,8 @@ export default function MatterChatApp({
                                     {...(item.passage ? { passage: item.passage } : {})}
                                     {...(item.caseSignature ? { signature: item.caseSignature } : {})}
                                     {...(attributedSentence(message.content, item.caseSignature) ? { attributed: attributedSentence(message.content, item.caseSignature)! } : {})}
+                                    onSaveToCase={saveCaseLawToCase}
+                                    caseId={caseId}
                                   />
                                 ) : null}
                               </>
@@ -4976,6 +5099,16 @@ export default function MatterChatApp({
                         </span>
                       )}
                     </div>
+                  ) : null}
+                  {message.sourceVerification ? (
+                    <SnVerification
+                      verification={{ url: message.sourceVerification.url }}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeMessage(question);
+                      }}
+                    />
                   ) : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
@@ -5065,6 +5198,8 @@ export default function MatterChatApp({
                                 sourceUrl={item.sourceUrl}
                                 {...(item.claim ? { signature: item.claim } : {})}
                                 {...(attributedSentence(message.content, item.claim) ? { attributed: attributedSentence(message.content, item.claim)! } : {})}
+                                onSaveToCase={saveCaseLawToCase}
+                                caseId={caseId}
                               />
                             ) : null}
                           </li>
@@ -5424,7 +5559,9 @@ export default function MatterChatApp({
                                   onClick={() => {
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
                                       .then((result) => {
                                         pickFiles(
@@ -5440,7 +5577,11 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : "Anonimizuj i zaznacz"}
+                                  {pickerAnonymizing === item.uploadId
+                                    ? documentProgress[item.uploadId]
+                                      ? progressLabel(documentProgress[item.uploadId]!)
+                                      : "Przetwarzam…"
+                                    : "Anonimizuj i zaznacz"}
                                 </button>
                                 <button
                                   type="button"
@@ -5457,7 +5598,9 @@ export default function MatterChatApp({
                                     }
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) =>
                                         finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
                                       )
@@ -5667,8 +5810,9 @@ export default function MatterChatApp({
                         )}
                       </div>
                       <small>
-                        Pismo powstaje etapami; załączone dokumenty sprawy, wzory i materiały kancelarii są
-                        dostępne w każdym etapie. Wiadomość zostanie wysłana ponownie.
+                        Pismo powstaje etapami (W1 rama, W2 projekt, W3 weryfikacja); plik .docx powstaje sam:
+                        szkic po W2, gotowe pismo po W3. Załączone dokumenty sprawy, wzory i materiały
+                        kancelarii są dostępne w każdym etapie.
                       </small>
                     </>
                   ) : (

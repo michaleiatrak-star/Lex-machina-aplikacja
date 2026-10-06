@@ -18,10 +18,10 @@ const R2A_HOSTS = new Set([
     "www.orzeczenia.ms.gov.pl",
     "orzeczenia.nsa.gov.pl",
     "nsa.gov.pl",
-    "saos.org.pl",
-    "www.saos.org.pl",
     "trybunal.gov.pl",
     "ipo.trybunal.gov.pl",
+    "otkzu.trybunal.gov.pl",
+    "etpcz.ms.gov.pl",
     "orzeczenia.uodo.gov.pl",
     "orzeczenia.uzp.gov.pl",
     "bip.uke.gov.pl",
@@ -99,6 +99,10 @@ export function classifyKnownLegalSourceUrl(value) {
     }
     if (R2B_HOSTS.has(host)) {
         return "R2B";
+    }
+    // SAOS: academic aggregator of court decisions, lowest rank.
+    if (host === "saos.org.pl" || host === "www.saos.org.pl") {
+        return "R3";
     }
     return null;
 }
@@ -196,13 +200,15 @@ const FEDERATED_POLICIES = {
         note: "R1 source material via MCP is discovery/retrieval only. Current wording must be reverified through the native legal-act path."
     },
     saos: {
-        sourceTier: "R2A",
+        // Academic aggregator, not an official court source: lowest rank. Used when
+        // the court's official source fails or gives no permanent link.
+        sourceTier: "R3",
         provenance: "EXTERNAL_MCP",
         transport: "FEDERATED_MCP",
         verificationAuthority: "LEX_NATIVE_ONLY",
         verificationEligible: false,
         crossCheckRequired: true,
-        note: "SAOS is discovery/cross-check material. It does not replace the court-family authoritative verifier."
+        note: "SAOS is an academic aggregator (R3): check the court's official source first (sn.pl card, CBOSA, orzeczenia.ms.gov.pl, UZP, TK); SAOS only when that source fails or gives no permanent link."
     },
     cbosa: {
         sourceTier: "R2A",
@@ -276,6 +282,42 @@ const FEDERATED_POLICIES = {
         verificationEligible: false,
         crossCheckRequired: true,
         note: "Official NBP exchange-rate data; the applicable rate rule must come from the statute."
+    },
+    sn: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official SN database; cite the decision's card (sn.pl ?orzeczenie=ID). VERIFIED only through verify_case_reference."
+    },
+    sp: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Official common-court portal; cite the stable link to the decision. Results found through SAOS keep R3 unless the portal link is read."
+    },
+    tk: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "Constitutional Tribunal (IPO/OTK ZU); identity requires the signature in the document read by tk_pobierz."
+    },
+    etpcz: {
+        sourceTier: "R2A",
+        provenance: "EXTERNAL_MCP",
+        transport: "FEDERATED_MCP",
+        verificationAuthority: "LEX_NATIVE_ONLY",
+        verificationEligible: false,
+        crossCheckRequired: true,
+        note: "ECHR decisions (Ministry of Justice database, Polish translations); cite the stable link to the text; selected decisions only, HUDOC is the full collection."
     },
     kio: {
         sourceTier: "R2A",

@@ -83,6 +83,30 @@ describe("LegalVerificationToolRuntime", () => {
     });
   });
 
+  it("asks the source once for the same call in one turn (also in another key order)", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response("<html><title>Kodeks cywilny</title><body><h2>Art. 5.</h2><p>Treść.</p></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" }
+      })
+    );
+    const runtime = new LegalVerificationToolRuntime(
+      new VerificationLedger(),
+      new OfficialLegalSourceVerifier(fetcher, () => "2026-09-15T19:00:00.000Z")
+    );
+    const results = await runtime.runTools([
+      { id: "a", name: "verify_legal_reference", input: { claim: "art. 5 KC", kind: "statute", act: "k.c." } },
+      { id: "b", name: "verify_legal_reference", input: { act: "k.c.", kind: "statute", claim: "art. 5 KC" } }
+    ]);
+    const [again] = await runtime.runTools([
+      { id: "c", name: "verify_legal_reference", input: { claim: "art. 5 KC", kind: "statute", act: "k.c." } }
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(results.map((item) => item.tool_use_id)).toEqual(["a", "b"]);
+    expect(results[1]!.content).toBe(results[0]!.content);
+    expect(JSON.parse(again!.content)).toMatchObject({ status: "VERIFIED" });
+  });
+
   it("denies unknown acts before any network fetch", async () => {
     const fetcher = vi.fn(async () =>
       new Response("network-call-should-not-happen")

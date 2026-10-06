@@ -1,4 +1,5 @@
 import { LocalPageImageMasker } from "../document-evidence.js";
+import { configureCaseLawStore } from "../case-law-store.js";
 import { LocalOcrCorrector } from "../ocr-correction.js";
 import { timingSafeEqual } from "node:crypto";
 import express, {
@@ -358,6 +359,8 @@ export async function startLocalServer(options?: {
 
   const caseFileStore =
     new LocalCaseFileStore();
+  // Decisions downloaded once (verification, preview): quotes are marked on this copy.
+  configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
   const authStore =
     new LocalAuthStore({
       rootDir:

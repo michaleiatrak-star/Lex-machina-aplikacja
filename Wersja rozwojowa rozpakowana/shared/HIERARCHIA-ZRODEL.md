@@ -176,20 +176,35 @@ ryzyku dezaktualizacji, redakcja profesjonalna).
 **2A — oficjalne, wykonawcze/orzecznicze (znacznik ✅ [VER: ...]):**
 - **Orzecznictwo z oficjalnych baz sądowych — RZĄD 2A dla treści
   rozstrzygnięcia**: `sn.pl`, `orzeczenia.ms.gov.pl`,
-  `orzeczenia.nsa.gov.pl` (CBOSA), `trybunal.gov.pl` /
-  `ipo.trybunal.gov.pl`; `saos.org.pl` wyłącznie pomocniczo / jako kontrola
-  krzyżowa. Orzeczenie NIE jest źródłem brzmienia przepisu, więc nie awansuje
-  do RZĘDU 1; RZĄD 2A oznacza tu autentyczne źródło rozstrzygnięcia.
+  `orzeczenia.nsa.gov.pl` (CBOSA), `orzeczenia.uzp.gov.pl` (KIO),
+  `trybunal.gov.pl` / `ipo.trybunal.gov.pl`. Orzeczenie NIE jest źródłem
+  brzmienia przepisu, więc nie awansuje do RZĘDU 1; RZĄD 2A oznacza tu
+  autentyczne źródło rozstrzygnięcia.
+- ⛔ **WYJĄTEK SN — link = KARTA SPRAWY (od 2026-10-06).** Źródłem orzeczenia SN
+  podawanym użytkownikowi jest karta `https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID`
+  (zwraca ją `verify_case_reference` / `sn_sprawdz_sygnature`), nigdy adres tekstu:
+  `blob:https://www.sn.pl/…` żyje tylko w jednej karcie przeglądarki, a stary katalog
+  `/sites/orzecznictwo/Orzeczenia3/*.pdf` nie serwuje orzeczeń (brak pliku tam ≠ brak
+  publikacji). Cytat i zaznaczenie — na kopii pobranej do aplikacji.
+- ⛔ **SAOS (`saos.org.pl`) = RZĄD 3** — agregator akademicki (ICM UW), nie urzędowa
+  baza sądu. Kolejność: najpierw baza urzędowa właściwego sądu (wg repertorium
+  sygnatury: SN → sn.pl, NSA/WSA → CBOSA, KIO → UZP, sądy powszechne →
+  orzeczenia.ms.gov.pl, TK → ipo.trybunal.gov.pl); SAOS tylko gdy serwer urzędowy
+  nie działa albo portal nie daje trwałego linku do orzeczenia (SN ma kartę —
+  dla SN SAOS wyłącznie przy awarii sn.pl). Sygnatury nie szuka się w bazie innego
+  sądu (II CSKP → nigdy CBOSA).
   
   **Routing wykonawczy jest obowiązkowy i nie wolno zastępować go dowolnym
   web_search:** 
   
   | Rodzina | Źródło rozstrzygające | Kanał / mechanizm |
   |---|---|---|
-  | SN | `sn.pl` | `shared/DOSTEP-MASZYNOWY-API.md` + `shared/SYGNATURY.md`; `snproxy` JSON po świeżym pomiarze runtime |
-  | SR/SO/SA | `orzeczenia.ms.gov.pl` + portal konkretnego sądu | deterministyczny GET po sygnaturze; portal lokalny rozstrzyga AMBIGUOUS |
+  | SN | `sn.pl` | `snproxy` JSON (`searchOrzeczenia` → id → `OrzeczeniePlikHtml`); **link = karta `…/wyszukiwarka-orzeczen?orzeczenie=ID`**; MCP `sn_*`, w aplikacji `verify_case_reference` |
+  | SR/SO/SA | `orzeczenia.ms.gov.pl` + portal konkretnego sądu | wyszukiwanie wyłącznie po sygnaturze albo frazie (bez filtrów dat); deterministyczny GET po sygnaturze; portal lokalny rozstrzyga AMBIGUOUS; **link = samo orzeczenie `/content/$N/{id}` (stały)**; MCP `sp_*` |
+  | TK | `ipo.trybunal.gov.pl` / `otkzu.trybunal.gov.pl` | tylko źródła urzędowe, **bez SAOS**: karta sprawy IPO GET `view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+33%2F07` → wyszukiwarka OTK ZU (`/Wyszukiwanie`, pozycja `/{rok}/{A\|B}/{poz}`) → formularz JSF `Szukaj?cid=1` (bywa niesprawny); brak trafienia = OUT_OF_SCOPE z linkami urzędowymi; MCP `tk_*`, odczyt dokumentu z kontrolą sygnatury; link = dokument orzeczenia |
+  | ETPCz | `etpcz.ms.gov.pl` (baza MS, polskie tłumaczenia; wybrane orzeczenia) / `hudoc.echr.coe.int` (pełny zbiór) | formularz wyszukiwarki odczytany ze strony; numer skargi kontrolowany po id dokumentu (`…_ETPC_{nr 6 cyfr}_{20RR}_…`); **link = treść `/etpccontent/$N/{id}` (stały)**; brak trafienia ≠ brak orzeczenia (HUDOC); MCP `etpcz_*` |
   | **NSA/WSA** | **`orzeczenia.nsa.gov.pl` / CBOSA** | **fresh-probe → direct HTML: `POST /cbo/search` → sesyjna paginacja `/cbo/find?p=N` → `/doc/{ID}` → exact-match**; implementacja: `shared/CBOSA-ADAPTER.md` + `tools/cbosa_parser.py`. Gdy direct CBOSA niedostępna → `shared/SYGNATURY.md` V-SYG-0.5 |
-  | SAOS | `saos.org.pl` | discovery / kontrola krzyżowa wg okna pokrycia; nie zastępuje źródła rozstrzygającego |
+  | SAOS | `saos.org.pl` | **RZĄD 3** (agregator akademicki): discovery / kontrola krzyżowa; zastępczo tylko przy awarii bazy urzędowej albo braku trwałego linku w portalu |
   
   ⛔ **Adapter/konektor nie ma własnego RZĘDU.** RZĄD dziedziczy treść ze
   źródła docelowego. MCP/HTML/parser to wyłącznie kanał transportowy.

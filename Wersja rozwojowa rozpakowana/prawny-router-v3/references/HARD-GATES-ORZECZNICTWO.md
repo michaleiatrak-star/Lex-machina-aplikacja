@@ -29,8 +29,9 @@ Wykluczyć fikcyjne sygnatury i niezweryfikowane tezy.
 ## Standard potwierdzenia istnienia (od routera 3.54)
 
 Orzeczenie **istnieje** dopiero wtedy, gdy sygnatura, sąd i data pochodzą
-z **jednego i tego samego rekordu** w źródle RZĘDU 1/2A (portal sądu, SAOS, baza
-SN, CBOSA) lub z odczytanego pełnego tekstu. Nie wystarcza:
+z **jednego i tego samego rekordu** w źródle RZĘDU 1/2A (portal sądu, karta SN
+na sn.pl, CBOSA, UZP) lub z odczytanego pełnego tekstu; SAOS (RZĄD 3) tylko zastępczo
+przy awarii bazy urzędowej. Nie wystarcza:
 
 - zbieżność samej daty albo samej sygnatury w wynikach wyszukiwarki,
 - skojarzenie sygnatury z jednego wyniku z datą z innego wyniku,

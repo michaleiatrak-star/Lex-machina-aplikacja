@@ -1,3 +1,4 @@
+import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
 import {
@@ -3951,7 +3952,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           ? req.body.password
           : "";
       try {
-        res.json(
+        const deleted =
           await options
             .caseAccessService
             .deleteCase(
@@ -3963,8 +3964,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 ""
               ),
               password
-            )
-        );
+            );
+        // The case's copies of decisions go with it (the library keeps its own).
+        caseLawRepository()?.removeCase(String(req.params.caseId ?? ""));
+        res.json(deleted);
       } catch (error) {
         if (
           !sendAuthError(
@@ -6407,7 +6410,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                           caseView.keyVersion,
                         ...documentProcessingOptions(
                           req.get("x-lex-processing")
-                        )
+                        ),
+                        // Stage and page while the chat's document is processed.
+                        ...(progressIdFrom(req.get("x-lex-progress"))
+                          ? { onProgress: processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")))! }
+                          : {})
                       }
                     )
               );
@@ -7099,7 +7106,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         let processRenderOnly: { stage: ProcessPleadingStage } | undefined;
         let processDocumentStatus: "DRAFT" | "FINAL" | undefined;
         let pleadingSource: { version: number; text: string } | undefined;
-        if (previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
+        // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
+        // names no pleading keyword; its document type does.
+        if (
+          documentType === "pleading" ||
+          previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1"
+        ) {
           const store = options.processWorkflowStore;
           const stored = store
             ? await options.caseAccessService.withCaseDataKey(
@@ -8612,17 +8624,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     checkpoint: ProcessPleadingCheckpoint,
     stage: ProcessPleadingStage,
     answer: string
-  ): Promise<void> {
+  ): Promise<{ version: number; checkpoint: ProcessPleadingCheckpoint } | null> {
     const store = options.processWorkflowStore;
-    if (!store?.getProcessPleadingDraft || !store.saveProcessPleadingDraft || !options.caseAccessService) return;
+    if (!store?.getProcessPleadingDraft || !store.saveProcessPleadingDraft || !options.caseAccessService) return null;
     const text = writesPleading(checkpoint) ? extractPleadingText(answer) : null;
     try {
-      await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+      return await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
         const current = await store.getProcessPleadingDraft!({ caseId, caseDataKey, keyVersion });
         let next = current ?? emptyProcessPleadingDraft(caseId);
+        const before = latestDraftVersion(next)?.version ?? 0;
         if (text) next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
         if (next.remarks?.checkpoint === checkpoint) next = withoutDraftRemarks(next);
-        if (next.revision === (current?.revision ?? 0)) return;
+        if (next.revision === (current?.revision ?? 0)) return null;
         await store.saveProcessPleadingDraft!({
           caseId,
           caseDataKey,
@@ -8630,9 +8643,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           draft: next,
           expectedRevision: current?.revision ?? 0
         });
+        const version = latestDraftVersion(next)?.version ?? 0;
+        return version > before ? { version, checkpoint } : null;
       });
     } catch {
       // The step stays committed; the draft keeps its previous version.
+      return null;
     }
   }
 
@@ -9384,6 +9400,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             state: ProcessPleadingState;
           }
         | null = null;
+      let pleadingDraftWritten: { version: number; checkpoint: ProcessPleadingCheckpoint } | null = null;
 
       if (
         previewPlan.id ===
@@ -10347,14 +10364,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     .result ===
                     "PASS";
                 if (commit) {
-                  await recordPleadingStep(
+                  pleadingDraftWritten = (await recordPleadingStep(
                     actor,
                     processContext!.caseId,
                     caseView.keyVersion,
                     permit.checkpoint,
                     permit.stage,
                     nodeResult.answer ?? ""
-                  );
+                  )) ?? pleadingDraftWritten;
                 }
                 return {
                   result:
@@ -10495,6 +10512,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         response.processWorkflow = {
           caseId:
             processContext.caseId,
+          ...(pleadingDraftWritten ? { draftWritten: pleadingDraftWritten } : {}),
           mode:
             auto.state.mode,
           revision:
@@ -11283,19 +11301,21 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id === "PROCESS_PLEADING_V1" &&
           result.workflow.result === "PASS"
         ) {
-          await recordPleadingStep(
-            actor,
-            processContext.caseId,
-            caseView.keyVersion,
-            processContext.permit.checkpoint,
-            processContext.permit.stage,
-            result.answer ?? ""
-          );
+          pleadingDraftWritten =
+            (await recordPleadingStep(
+              actor,
+              processContext.caseId,
+              caseView.keyVersion,
+              processContext.permit.checkpoint,
+              processContext.permit.stage,
+              result.answer ?? ""
+            )) ?? pleadingDraftWritten;
         }
 
         result.processWorkflow = {
           caseId:
             processContext.caseId,
+          ...(pleadingDraftWritten ? { draftWritten: pleadingDraftWritten } : {}),
           mode: state.mode,
           revision: state.revision,
           stage: state.stage,

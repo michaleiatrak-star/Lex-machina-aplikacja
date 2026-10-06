@@ -19,7 +19,9 @@ const TU = path.dirname(fileURLToPath(import.meta.url));
 const SERW = { isap: ["isap-eli-example", "isap-eli-mcp-server.js"], krs: ["krs-example", "krs-mcp-server.js"],
   nbp: ["nbp-example", "nbp-mcp-server.js"], wl: ["wl-example", "wl-mcp-server.js"], eureka: ["eureka-example", "eureka-mcp-server.js"],
   saos: ["saos-example", "saos-mcp-server.js"], eurlex: ["eurlex-example", "eurlex-mcp-server.js"], uodo: ["uodo-example", "uodo-mcp-server.js"],
-  ceidg: ["ceidg-example", "ceidg-mcp-server.js"], cbosa: ["cbosa-example", "cbosa-mcp-server.js"], kio: ["kio-example", "kio-mcp-server.js"] };
+  ceidg: ["ceidg-example", "ceidg-mcp-server.js"], cbosa: ["cbosa-example", "cbosa-mcp-server.js"], kio: ["kio-example", "kio-mcp-server.js"],
+  sn: ["sn-example", "sn-mcp-server.js"], sp: ["sp-example", "sp-mcp-server.js"], tk: ["tk-example", "tk-mcp-server.js"],
+  etpcz: ["etpcz-example", "etpcz-mcp-server.js"] };  // 6.202: etpcz dopisany — przypadek 10d wywracał się przed wywołaniem
 
 async function narzedzie(s, nazwa, args) {
   const [kat, plik] = SERW[s];
@@ -279,6 +281,66 @@ await przypadek("CBOSA: III OSK 1959/22 — sygnatura obecna w dokumencie źród
   if (w.status === "FOUND") {
     const t = norm(await pobierz(w.result.url_zrodlowy, {}, "text"));
     ok(t.includes("iii osk 1959/22"), "sygnatura nie występuje w dokumencie źródłowym");
+  }
+});
+
+// ── 10a. SN (sn.pl snproxy): karta orzeczenia z narzędzia daje tekst z tą samą sygnaturą; sygnatura SN nie idzie do CBOSA.
+await przypadek("SN: III CZP 25/11 — karta z narzędzia prowadzi do tekstu z tą sygnaturą", async (ok) => {
+  const w = await narzedzie("sn", "sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" });
+  // 6.202: blokada sn.pl (Incapsula) to stan środowiska — jawny FAIL z przyczyną; wynik zastępczy SAOS nie jest kartą SN.
+  if (w.powod === "SN_WERYFIKACJA_WYMAGANA") {
+    ok(w.source !== "sn.pl" && (w.rzad === "R3" || w.status === "ERROR"), "wynik zastępczy nie jest oznaczony jako RZĄD 3");
+    ok(false, `sn.pl zablokował zapytanie (${w.sn_blad ?? w.detail ?? "Incapsula"}) — uruchom z sesją (sn_captcha_auto / SN_COOKIE)`);
+  } else {
+    ok(w.status === "FOUND" && w.source === "sn.pl", `status ${w.status} ${w.source ?? ""} ${w.detail ?? ""}`);
+    if (w.status === "FOUND" && w.result?.url_karty) {
+      ok(/\?orzeczenie=/.test(w.result.url_karty), "brak karty orzeczenia");
+      const p = await narzedzie("sn", "sn_pobierz", { karta: w.result.url_karty });
+      ok(p.status === "FOUND" && norm(p.result.tresc).includes("iii czp 25/11"), "tekst z karty nie zawiera sygnatury");
+    }
+  }
+  const inny = await narzedzie("sn", "sn_sprawdz_sygnature", { sygnatura: "III OSK 1959/22" });
+  ok(inny.status === "OUT_OF_SCOPE" && inny.sad === "NSA/WSA", "sygnatura NSA nie została odesłana do CBOSA");
+});
+
+// ── 10b. Sądy powszechne: portal sądu rozstrzyga sygnaturę nieunikalną krajowo; link prowadzi do orzeczenia z tą sygnaturą.
+await przypadek("SP: I C 100/15 w SO Poznań — stały link do orzeczenia zawiera sygnaturę", async (ok) => {
+  const w = await narzedzie("sp", "sp_sprawdz_sygnature", { sygnatura: "I C 100/15", sad: "poznan.so" });
+  ok(w.status === "FOUND", `status ${w.status} ${w.detail ?? ""}`);
+  // 6.202: przy niedostępnym portalu wynik zastępczy SAOS musi być zawężony do wskazanego sądu.
+  if (w.portal_blad) {
+    ok(/Okręgowy w Poznaniu/.test(w.result?.sad ?? ""), `wynik zastępczy spoza wskazanego sądu: ${w.result?.sad ?? w.status}`);
+    ok(false, `Portal Orzeczeń niedostępny (${w.portal_blad}) — źródło urzędowe niezweryfikowane; uruchom u siebie`);
+  } else if (w.status === "FOUND") {
+    const p = await narzedzie("sp", "sp_pobierz", { url_lub_id: w.result.url_orzeczenia });
+    ok(p.status === "FOUND" && /i c 100\/15/.test(norm(p.result.tresc)), "treść spod linku nie zawiera sygnatury");
+  }
+  const agregat = await narzedzie("sp", "sp_sprawdz_sygnature", { sygnatura: "I C 100/15" });
+  ok(agregat.status === "AMBIGUOUS", `agregat: ${agregat.status} (oczekiwane AMBIGUOUS — sygnatura w wielu sądach)`);
+});
+
+// ── 10c. TK: źródła urzędowe (karta sprawy IPO / OTK ZU / formularz IPO) dają link, a dokument spod linku zawiera sygnaturę.
+await przypadek("TK: K 33/07 — IPO / OTK ZU, bez SAOS, dokument zawiera sygnaturę", async (ok) => {
+  const w = await narzedzie("tk", "tk_sprawdz_sygnature", { sygnatura: "K 33/07" });
+  ok(["FOUND", "AMBIGUOUS"].includes(w.status), `status ${w.status} ${JSON.stringify(w.zrodla ?? w.detail ?? "")}`);
+  // 6.202: kontrola „bez SAOS” na źródle i linkach — nie na tekście uwagi („SAOS nie jest źródłem TK”).
+  ok(/^(IPO|OTK ZU)/.test(w.metoda ?? "") && !/saos/i.test(JSON.stringify({ s: w.source, r: w.result, k: w.kandydaci })), `metoda: ${w.metoda ?? w.source}`);
+  const url = w.result?.url_orzeczenia ?? w.kandydaci?.[0]?.url_orzeczenia;
+  if (url) {
+    const p = await narzedzie("tk", "tk_pobierz", { url, sygnatura: "K 33/07" });
+    ok(p.status === "FOUND", `tk_pobierz: ${p.status}`);
+  }
+});
+
+// ── 10d. ETPCz (baza MS): numer skargi → stały link do treści, treść dotyczy tej skargi.
+await przypadek("ETPCz: skarga 43447/19 — link do treści i odczyt z kontrolą numeru skargi", async (ok) => {
+  const w = await narzedzie("etpcz", "etpcz_szukaj", { numer_skargi: "43447/19" });
+  ok(w.status === "FOUND", `status ${w.status} ${w.detail ?? ""}`);
+  const url = w.result?.url_orzeczenia ?? "";
+  ok(/\/etpccontent\/\$N\/.*_ETPC_043447_2019_/.test(url), `link: ${url}`);
+  if (url) {
+    const p = await narzedzie("etpcz", "etpcz_pobierz", { url_lub_id: url, numer_skargi: "43447/19" });
+    ok(p.status === "FOUND" && (p.result?.tresc ?? "").length > 200, `etpcz_pobierz: ${p.status}`);
   }
 });
 

@@ -152,3 +152,131 @@ describe("wynik MCP jako strona wyników", () => {
     expect(nextPageArgs({ fraza: "x" }, page, 1, ["fraza", "strona"])).toEqual({ fraza: "x", strona: 2 });
   });
 });
+
+describe("court decisions: stable link, preview and full text", () => {
+  it("shows the Portal Orzeczeń link, preview, date, kind and court of each candidate", () => {
+    const page = readSearchResult("sp_sprawdz_sygnature", { sygnatura: "II K 1350/18" }, {
+      status: "AMBIGUOUS",
+      liczba_trafien: 2,
+      kandydaci: [
+        {
+          docId: "151025200001006_II_K_001350_2018_Uz_2019-11-05_002",
+          kodSadu: "151025200001006",
+          sygnatura: "II K 1350/18",
+          rodzaj: "uzasadnienie",
+          data: "2019-11-05",
+          sad: "Sąd Rejonowy w Bytomiu",
+          url_orzeczenia: "https://orzeczenia.ms.gov.pl/content/$N/151025200001006_II_K_001350_2018_Uz_2019-11-05_002",
+          url_metryki: "https://orzeczenia.ms.gov.pl/details/$N/151025200001006_II_K_001350_2018_Uz_2019-11-05_002",
+          portal: "orzeczenia.ms.gov.pl"
+        },
+        {
+          docId: "152505100001006_II_K_001350_2018_Uz_2019-06-10_002",
+          sygnatura: "II K 1350/18",
+          rodzaj: "uzasadnienie",
+          data: "2019-06-10",
+          url_orzeczenia: "https://orzeczenia.ms.gov.pl/content/$N/152505100001006_II_K_001350_2018_Uz_2019-06-10_002"
+        }
+      ]
+    }, ["sp_sprawdz_sygnature", "sp_pobierz", "sp_szukaj"]);
+    expect(page.items).toHaveLength(2);
+    const [first, second] = page.items;
+    expect(first!.url).toBe("https://orzeczenia.ms.gov.pl/content/$N/151025200001006_II_K_001350_2018_Uz_2019-11-05_002");
+    expect(first!.preview).toEqual({ kind: "url", url: first!.url });
+    expect(first!.meta).toEqual(["Sąd Rejonowy w Bytomiu", "data: 2019-11-05", "uzasadnienie"]);
+    expect(first!.detail).toEqual({ tool: "sp_pobierz", args: { url_lub_id: first!.url } });
+    expect(first!.key).not.toBe(second!.key);
+    expect(second!.meta).toEqual(["data: 2019-06-10", "uzasadnienie"]);
+  });
+
+  it("SP fallback from SAOS: signature, Polish kind and a SAOS link with preview", () => {
+    const page = readSearchResult("sp_szukaj", { fraza: "zadośćuczynienie" }, {
+      status: "AMBIGUOUS",
+      kandydaci: [
+        { sygnatura: "XII C 12/25", data: "2026-09-07", sad: "Sąd Okręgowy w Poznaniu", rodzaj: "uzasadnienie", url_orzeczenia: null, url_saos: "https://www.saos.org.pl/judgments/7" }
+      ]
+    }, ["sp_sprawdz_sygnature", "sp_pobierz", "sp_szukaj"]);
+    expect(page.items[0]).toMatchObject({
+      url: "https://www.saos.org.pl/judgments/7",
+      preview: { kind: "url", url: "https://www.saos.org.pl/judgments/7" },
+      meta: ["Sąd Okręgowy w Poznaniu", "data: 2026-09-07", "uzasadnienie"]
+    });
+  });
+
+  it("SN blocked by sn.pl: verification frame data, none for other errors", () => {
+    const blocked = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "DO 1/18" }, {
+      status: "ERROR",
+      powod: "SN_WERYFIKACJA_WYMAGANA",
+      weryfikacja: { wymagana: true, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen", sesja_zapisana: false, instrukcja: "Zweryfikuj w sn.pl" }
+    }, ["sn_sprawdz_sygnature"]);
+    expect(blocked.verification).toEqual({ url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen", savedSession: false, instruction: "Zweryfikuj w sn.pl" });
+    const other = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "DO 1/18" }, { status: "ERROR", detail: "sn.pl HTTP 500" }, ["sn_sprawdz_sygnature"]);
+    expect(other.verification).toBeNull();
+  });
+
+  it("SN: the card is the link; TK: the decision link with the signature check", () => {
+    const sn = readSearchResult("sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" }, {
+      status: "FOUND",
+      result: { sygnatura: "III CZP 25/11", data_wydania: "2011-06-22", forma: "uchwała SN", id_karty: "123", url_karty: "https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=123" }
+    }, ["sn_sprawdz_sygnature", "sn_pobierz"]);
+    expect(sn.items[0]).toMatchObject({
+      url: "https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=123",
+      meta: ["wydanie: 2011-06-22", "uchwała SN"],
+      detail: { tool: "sn_pobierz", args: { karta: "https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=123" } }
+    });
+    const tk = readSearchResult("tk_sprawdz_sygnature", { sygnatura: "K 33/07" }, {
+      status: "FOUND",
+      result: { sygnatura: "K 33/07", url_orzeczenia: "https://otkzu.trybunal.gov.pl/2008/A/88" }
+    }, ["tk_sprawdz_sygnature", "tk_pobierz"]);
+    expect(tk.items[0]).toMatchObject({
+      url: "https://otkzu.trybunal.gov.pl/2008/A/88",
+      detail: { tool: "tk_pobierz", args: { url: "https://otkzu.trybunal.gov.pl/2008/A/88", sygnatura: "K 33/07" } }
+    });
+  });
+  it("wyniki po frazie z prawdziwych odpowiedzi źródeł (2026-10-06) czytelne dla użytkownika", () => {
+    const etpcz = readSearchResult("etpcz_szukaj", { fraza: "prawo do sądu" }, {
+      status: "AMBIGUOUS",
+      liczba_trafien: 741,
+      kandydaci: [{
+        docId: "990000000000001_I_ETPC_012285_2009_De_2012-03-20_001",
+        numer_skargi: "12285/09",
+        rodzaj: "decyzja",
+        data: "2012-03-20",
+        url_orzeczenia: "https://etpcz.ms.gov.pl/etpccontent/$N/990000000000001_I_ETPC_012285_2009_De_2012-03-20_001"
+      }]
+    }, ["etpcz_szukaj", "etpcz_pobierz"]);
+    expect(etpcz.total).toBe(741);
+    expect(etpcz.items[0]?.title).toBe("Skarga nr 12285/09");
+
+    const sn = readSearchResult("sn_szukaj", { tresc: "zadośćuczynienie" }, {
+      status: "ERROR",
+      detail: "sn.pl: ochrona przed botami — strona weryfikacji przeglądarki zamiast danych (HTTP 403)",
+      powod: "SN_WERYFIKACJA_WYMAGANA",
+      weryfikacja: { wymagana: true, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen", sesja_zapisana: false, instrukcja: "Zweryfikuj w sn.pl" }
+    }, ["sn_szukaj"]);
+    expect(sn.notice).toContain("ochrona przed botami");
+    expect(sn.verification?.url).toContain("sn.pl");
+
+    const kio = readSearchResult("kio_szukaj", { fraza: "rażąco niska cena" }, {
+      status: "AMBIGUOUS",
+      kandydaci: [{
+        identyfikator: "KIO 4983/25",
+        tytul_lub_nazwa: "wyrok KIO 4983/25",
+        data_wyroku: "2026-12-07",
+        ostrzezenie_daty: "\u26a0\ufe0f Data w źródle UZP prawdopodobnie błędna: data 2026-12-07 jest PÓŹNIEJSZA niż dziś (2026-10-06)."
+      }]
+    }, ["kio_szukaj"]);
+    expect(kio.items[0]?.meta.some((item) => item.startsWith("uwaga: Data w źródle UZP"))).toBe(true);
+
+    const uodo = readSearchResult("uodo_szukaj", { fraza: "monitoring" }, {
+      kandydaci: [{ identyfikator: "DKN.5131.4.2024", tytul_lub_nazwa: "kara", prawomocnosc: "nieprawomocna", status_obowiazywania: "nieznany" }]
+    }, ["uodo_szukaj"]);
+    expect(uodo.items[0]?.meta).toContain("nieprawomocna");
+    expect(uodo.items[0]?.meta).not.toContain("nieznany");
+
+    const eureka = readSearchResult("eureka_szukaj", { fraza: "akcyza" }, {
+      kandydaci: [{ identyfikator: "0111-KDIB3-3.4013.256.2026.2.AM", tytul_lub_nazwa: "Zwolnienie", status_obowiazywania: "obowiazuje" }]
+    }, ["eureka_szukaj"]);
+    expect(eureka.items[0]?.meta).toContain("obowiązuje");
+  });
+});

@@ -1,3 +1,5 @@
+import { caseLawRepository } from "./case-law-store.js";
+import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import { SupremeCourtCaseVerifier, propositionEvidenceHash, supremeCourtSearchUrl } from "./case-law-verifier.js";
 import { CASE_LAW_SEARCH_HOSTS, CaseLawSearchService, caseLawSearchEntryUrl } from "./case-law-search.js";
 import { DeterministicLegalActResolver, LegalActResolutionError } from "./legal-act-resolver.js";
@@ -53,6 +55,7 @@ const INTERPRETATION_TOOL_SCHEMA = {
     }
 };
 const CASE_SEARCH_TOOL_NAME = "search_case_law";
+const CASE_LIBRARY_TOOL_NAME = "search_case_law_library";
 const CASE_TOOL_NAME = "verify_case_reference";
 const CASE_QUOTE_TOOL_NAME = "verify_case_quote";
 const CASE_PROPOSITION_TOOL_NAME = "verify_case_proposition";
@@ -101,38 +104,64 @@ const TOOL_SCHEMA = {
     }
 };
 const SUBSTITUTE_HINT = "BRAK-AKTU w RZĘDZIE 1: Sejm ELI is unavailable and the local ELI copy cannot confirm this provision. Per E-3/E-4 (shared/HIERARCHIA-ZRODEL.md) call verify_legal_reference again with substituteSourceUrls: first a RZĄD 2A source (LEX/Legalis or an official database) -> ✅ [VER]; if none, two independent RZĄD 2B portals -> at most 🟨 [KOTWICA-URZĘDOWA] + 📚 [TREŚĆ: …] (K-1…K-4). Otherwise ⚠️ [NIEWERYFIKOWANE]. RZĄD 3 never confirms a provision.";
+const CASE_LIBRARY_TOOL_SCHEMA = {
+    type: "function",
+    function: {
+        name: CASE_LIBRARY_TOOL_NAME,
+        description: "Search the user's local case-law library (decisions downloaded earlier from official sources, catalogued by court, signature and date; enabled in Settings). " +
+            "Returns entries with the decision's card (source link) and a passage. Before citing as verified, run verify_case_reference (SN) or the court's own check.",
+        parameters: {
+            type: "object",
+            additionalProperties: false,
+            required: ["query"],
+            properties: {
+                query: { type: "string", description: "Signature (e.g. II CSKP 89/26), court or a phrase from the text." },
+                limit: { type: "integer", minimum: 1, maximum: 10 }
+            }
+        }
+    }
+};
+const SN_FORMS = [
+    "wyrok SN", "wyrok SN SD", "wyrok siedmiu sędziów SN", "wyrok siedmiu sędziów SN SD", "postanowienie SN", "postanowienie SN SD",
+    "postanowienie siedmiu sędziów SN", "postanowienie całej Izby SN", "uchwała SN", "uchwała SN SD", "uchwała siedmiu sędziów SN",
+    "uchwała siedmiu sędziów SN zasada prawna", "uchwała siedmiu sędziów SN SD", "uchwała całej izby SN", "uchwała całej Izby SN zasada prawna",
+    "uchwała połączonych izb SN", "uchwała połączonych Izb SN zasada prawna", "uchwała pełnego składu SN", "uchwała pełnego składu SN zasada prawna",
+    "orzeczenie", "zarządzenie", "wyciąg z protokołu", "opinia"
+];
+const SN_CHAMBERS = [
+    "Izba Cywilna", "Izba Karna", "Izba Odpowiedzialności Zawodowej", "Izba Pracy i Ubezpieczeń Społecznych",
+    "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych", "Izba Wojskowa", "Izba Administracyjna, Pracy i Ubezpieczeń Społecznych",
+    "Izba Kontroli Nadzwyczajnej i Spraw Publicznych", "Izba Dyscyplinarna"
+];
 const CASE_SEARCH_TOOL_SCHEMA = {
     type: "function",
     function: {
         name: CASE_SEARCH_TOOL_NAME,
-        description: "Search Polish case-law candidates in SAOS or CBOSA. " +
-            "This is discovery only: returned candidates are NOT verified for citation. " +
-            "Use source=SAOS for broad full-text discovery and source=CBOSA for NSA/WSA discovery. " +
-            "After selecting a candidate, run the applicable verification workflow before citing it.",
+        description: "Search Polish case-law candidates. source=SN: the official sn.pl search form (text of the decision and its reasons, signature, form, date range, chamber, panel, judges); hits carry the decision's card. " +
+            "source=CBOSA for NSA/WSA. SAOS is an academic aggregator (lowest rank): broad full-text discovery, and the fallback when the court's official source fails. " +
+            "This is discovery only: returned candidates are NOT verified for citation. After selecting a candidate, run the applicable verification workflow before citing it.",
         parameters: {
             type: "object",
             additionalProperties: false,
-            required: [
-                "query",
-                "source"
-            ],
+            required: ["source"],
             properties: {
                 query: {
                     type: "string",
-                    description: "Full-text legal phrase or issue to search for. Do not use this field to fabricate a case signature."
+                    description: "Full-text legal phrase (SN: searched in the decision and its reasons). May be empty for SN when other fields are given. Do not fabricate a case signature."
                 },
-                source: {
-                    type: "string",
-                    enum: [
-                        "SAOS",
-                        "CBOSA"
-                    ]
-                },
-                limit: {
-                    type: "integer",
-                    minimum: 1,
-                    maximum: 10
-                }
+                source: { type: "string", enum: ["SN", "SAOS", "CBOSA"] },
+                limit: { type: "integer", minimum: 1, maximum: 10 },
+                signature: { type: "string", description: "SN only: case signature, e.g. II CSKP 89/26." },
+                form: { type: "string", enum: SN_FORMS, description: "SN only: form of the decision." },
+                dateOn: { type: "string", description: "SN only: issued on YYYY-MM-DD." },
+                dateFrom: { type: "string", description: "SN only: issued from YYYY-MM-DD." },
+                dateTo: { type: "string", description: "SN only: issued until YYYY-MM-DD." },
+                chamber: { type: "string", enum: SN_CHAMBERS, description: "SN only: chamber (Izba SN)." },
+                panel: { type: "string", description: "SN only: panel, e.g. Skład 7-osobowy." },
+                judge: { type: "string", description: "SN only: judge on the panel (surname)." },
+                presiding: { type: "string", description: "SN only: presiding judge." },
+                rapporteur: { type: "string", description: "SN only: judge rapporteur." },
+                reasonsAuthor: { type: "string", description: "SN only: author of the reasons." }
             }
         }
     }
@@ -142,14 +171,13 @@ const CASE_TOOL_SCHEMA = {
     function: {
         name: CASE_TOOL_NAME,
         description: "Verify a Sąd Najwyższy case signature against the official sn.pl database. " +
-            "Provide the exact output claim, raw signature and courtFamily=SN. " +
-            "Never supply a source URL. VERIFIED confirms official existence and full-text identity, not an arbitrary paraphrased thesis.",
+            "Provide the exact output claim, raw signature and courtFamily=SN; with only a card link from the user, pass card_url and leave signature empty. " +
+            "Never invent a source URL. The cited source is the returned card (sn.pl ?orzeczenie=ID), never a PDF or blob: address. VERIFIED confirms official existence and full-text identity, not an arbitrary paraphrased thesis.",
         parameters: {
             type: "object",
             additionalProperties: false,
             required: [
                 "claim",
-                "signature",
                 "courtFamily"
             ],
             properties: {
@@ -159,11 +187,15 @@ const CASE_TOOL_SCHEMA = {
                 },
                 signature: {
                     type: "string",
-                    description: "Raw Sąd Najwyższy signature, e.g. III CZP 25/11."
+                    description: "Raw Sąd Najwyższy signature, e.g. III CZP 25/11 (may be empty when card_url is given)."
                 },
                 courtFamily: {
                     type: "string",
                     enum: ["SN"]
+                },
+                card_url: {
+                    type: "string",
+                    description: "Optional: the decision's card on sn.pl (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID or the bare ID) when the user gave it or one signature has several decisions."
                 }
             }
         }
@@ -419,13 +451,53 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
     "- Before citing a tax interpretation (KIS/MF signature, e.g. 0114-KDIP1-2.4012.345.2024.1.RD), call verify_interpretation and copy the returned marker onto the SAME LINE as the signature. Say whether it is an interpretation of an authority (not binding on a court, 📋) or a court ruling (⚖️); an interpretation EUREKA does not list as current is never presented as the authority's current position. Without VERIFIED: ⚠️ [NIEWERYFIKOWANE] or omit the signature.",
     "- Before emitting a case signature (sygn.), call verify_case_reference.",
-    "- The first supported courtFamily is SN. Pass only claim + signature + courtFamily; never invent or supply the sn.pl URL.",
+    "- The first supported courtFamily is SN. Pass claim + signature + courtFamily; pass card_url only when the user gave a card link or ID. Never invent an sn.pl URL.",
+    "- SN source = the decision's card (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) returned by verify_case_reference: cite it, never a PDF/text address. A blob: link is a temporary copy in one browser tab; the old /sites/orzecznictwo/Orzeczenia… PDF directory no longer serves decisions. Neither proves anything; no hit there is not evidence that a decision is unpublished.",
+    "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl via SAOS; TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
+    "- With the case-law library enabled, search_case_law_library finds decisions downloaded earlier (by signature, court or phrase); cite their card.",
+    "- SAOS is an academic aggregator (lowest rank): use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
     "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
     "- For a verbatim quotation attributed to SN, call verify_case_quote. Copy the exact quote plus both returned markers onto the SAME LINE as the exact case citation.",
     "- For a paraphrased proposition attributed to SN, call verify_case_proposition with the exact proposition plus an exact supporting quotation.",
     "- verify_case_proposition returns SUPPORTED, never VERIFIED. SUPPORTED means the proposition is transparently linked to official evidence; semantic entailment is not independently decided by the runtime.",
     "- For SUPPORTED propositions, keep the exact proposition and supportQuote unchanged and put them with the case citation, case marker, CASE-QUOTE marker and CASE-SUPPORT marker on the SAME LINE."
 ].join("\n");
+// search_case_law source=SN: tool fields → the sn.pl search form fields.
+function snSearchFilters(input) {
+    const text = (value, max = 200) => (typeof value === "string" && value.trim() && value.length <= max ? value.trim() : "");
+    const date = (value) => (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) ? value.trim() : "");
+    const on = date(input.dateOn);
+    const fields = {
+        sygnatura: text(input.signature, 40),
+        forma_orzeczenia: SN_FORMS.includes(text(input.form)) ? text(input.form) : "",
+        data_wydania_od: on || date(input.dateFrom),
+        data_wydania_do: on || date(input.dateTo),
+        izba: SN_CHAMBERS.includes(text(input.chamber)) ? text(input.chamber) : "",
+        sklad_sedziowski: text(input.panel, 60),
+        sedzia_w_skladzie: text(input.judge, 80),
+        przewodniczacy: text(input.presiding, 80),
+        sprawozdawca: text(input.rapporteur, 80),
+        autor_uzasadnienia: text(input.reasonsAuthor, 80)
+    };
+    return Object.fromEntries(Object.entries(fields).filter(([, value]) => value));
+}
+function searchCaseLawLibrary(input) {
+    const repository = caseLawRepository();
+    if (!repository?.libraryEnabled()) {
+        return JSON.stringify({ status: "DISABLED", instruction: "The case-law library is off (Settings). Use search_case_law or verify_case_reference." });
+    }
+    const query = typeof input.query === "string" ? input.query.trim().slice(0, 200) : "";
+    const limit = typeof input.limit === "number" ? Math.min(10, Math.max(1, Math.trunc(input.limit))) : 5;
+    if (query.length < 2)
+        return JSON.stringify({ status: "INVALID_QUERY" });
+    const entries = repository.catalog(query, limit).map(({ sha256: _sha, ...entry }) => entry);
+    return JSON.stringify({
+        status: entries.length ? "FOUND" : "NOT_FOUND",
+        query,
+        entries,
+        instruction: "Local copies of official decisions; the card (cardUrl) is the source to cite. Verify before citing as VERIFIED."
+    });
+}
 export class LegalVerificationToolRuntime {
     ledger;
     verifier;
@@ -478,13 +550,21 @@ export class LegalVerificationToolRuntime {
                 const limit = typeof input.limit === "number"
                     ? input.limit
                     : undefined;
-                if (!query ||
+                const sn = source === "SN" && input.sn && typeof input.sn === "object" ? input.sn : {};
+                if ((!query && !(source === "SN" && Object.keys(sn).length)) ||
                     (source !== "SAOS" &&
-                        source !== "CBOSA")) {
+                        source !== "CBOSA" &&
+                        source !== "SN")) {
                     throw new Error("INVALID_CASE_SEARCH_INPUT");
+                }
+                // A signature of another court: where to look instead of a misleading "no hits".
+                const misrouted = misroutedSignature(source, [query, sn.sygnatura ?? ""].join(" "));
+                if (misrouted) {
+                    return JSON.stringify({ source, query, candidates: [], ...misrouted, verificationStatus: "DISCOVERY_ONLY" });
                 }
                 const result = await this.caseLawSearch.search({
                     query,
+                    ...(Object.keys(sn).length ? { sn } : {}),
                     source: source,
                     ...(limit !== undefined
                         ? { limit }
@@ -628,19 +708,61 @@ export class LegalVerificationToolRuntime {
                 const claim = typeof input.claim === "string"
                     ? input.claim.trim()
                     : "";
-                const signature = typeof input.signature === "string"
+                let signature = typeof input.signature === "string"
                     ? input.signature.trim()
                     : "";
                 const toolCallId = typeof input.toolCallId === "string"
                     ? input.toolCallId
                     : "";
-                if (!claim || !signature || !toolCallId) {
+                let cardUrl = typeof input.card_url === "string" && input.card_url.trim() ? input.card_url.trim() : undefined;
+                if (!claim || (!signature && !cardUrl) || !toolCallId) {
                     throw new Error("INVALID_CASE_VERIFICATION_INPUT");
+                }
+                // Links that are not sources: a blob: address lives in one browser tab;
+                // the old sn.pl PDF directory no longer serves decisions (its name keeps the signature).
+                const linkProblem = cardUrl ? caseLinkProblem(cardUrl) : null;
+                if (linkProblem) {
+                    cardUrl = undefined;
+                    if (!signature && linkProblem.signature)
+                        signature = linkProblem.signature;
+                    if (!signature) {
+                        return JSON.stringify({
+                            status: "OUT_OF_SCOPE",
+                            reason: linkProblem.kind === "BLOB" ? "TEMPORARY_BLOB_LINK" : "SN_LEGACY_PDF_LINK",
+                            instruction: linkProblem.kind === "BLOB"
+                                ? "A blob: link is a copy in the user's browser tab that no one else can open. Pass the signature from the conversation (the decision is then taken from sn.pl), or ask the user for the signature, the card link (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) or the saved PDF; never cite a blob: link."
+                                : "The old sn.pl PDF directory is not a source. Ask for the signature or the card link; never cite this address."
+                        });
+                    }
+                }
+                // A card without a signature: the signature is read from the card's official text.
+                if (!signature && cardUrl) {
+                    const fromCard = await this.caseVerifier.signatureFromCard(cardUrl).catch(() => null);
+                    if (!fromCard) {
+                        return JSON.stringify({
+                            status: "OUT_OF_SCOPE",
+                            reason: "SN_CARD_UNREADABLE",
+                            instruction: "The card did not return a readable SN decision. Ask for the signature; do not cite the card as verified."
+                        });
+                    }
+                    signature = fromCard.signature;
+                    cardUrl = fromCard.cardUrl;
+                }
+                const otherCourt = signatureRedirect(signature);
+                if (otherCourt && otherCourt.court !== "Sąd Najwyższy") {
+                    return JSON.stringify({
+                        status: "OUT_OF_SCOPE",
+                        reason: "SIGNATURE_OF_OTHER_COURT",
+                        signature,
+                        ...otherCourt,
+                        instruction: `${signature} is not an SN signature. Use ${otherCourt.useInstead}.`
+                    });
                 }
                 const result = await this.caseVerifier.verify({
                     claim,
                     signature,
-                    toolCallId
+                    toolCallId,
+                    ...(cardUrl ? { cardUrl } : {})
                 });
                 if (result.status !== "FOUND" ||
                     !isVerifiedRecord(result.record) ||
@@ -769,6 +891,7 @@ export class LegalVerificationToolRuntime {
             TOOL_SCHEMA,
             INTERPRETATION_TOOL_SCHEMA,
             CASE_SEARCH_TOOL_SCHEMA,
+            CASE_LIBRARY_TOOL_SCHEMA,
             CASE_TOOL_SCHEMA,
             CASE_QUOTE_TOOL_SCHEMA,
             CASE_PROPOSITION_TOOL_SCHEMA
@@ -1066,9 +1189,29 @@ export class LegalVerificationToolRuntime {
             sequence: index + 1
         }));
     }
+    // One turn: the same call with the same input asks the source once.
+    answered = new Map();
     async runTools(calls) {
+        const key = (call) => `${call.name}:${stableJson(call.input)}`;
+        const fresh = calls.filter((call, index) => !this.answered.has(key(call)) && calls.findIndex((other) => key(other) === key(call)) === index);
+        const ran = new Map((await this.runFresh(fresh)).map((result) => [result.tool_use_id, result.content]));
+        const now = new Map();
+        for (const call of fresh) {
+            const content = ran.get(call.id) ?? "";
+            now.set(key(call), content);
+            // A failure (source down, timeout, refusal) is not remembered: a retry asks again.
+            if (!/"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content))
+                this.answered.set(key(call), content);
+        }
+        return calls.map((call) => ({ tool_use_id: call.id, content: now.get(key(call)) ?? this.answered.get(key(call)) ?? "" }));
+    }
+    async runFresh(calls) {
         const results = [];
         for (const call of calls) {
+            if (call.name === CASE_LIBRARY_TOOL_NAME) {
+                results.push({ tool_use_id: call.id, content: searchCaseLawLibrary(call.input) });
+                continue;
+            }
             if (call.name === INTERPRETATION_TOOL_NAME) {
                 results.push({ tool_use_id: call.id, content: await this.verifyInterpretationCall(call) });
                 continue;
@@ -1084,9 +1227,11 @@ export class LegalVerificationToolRuntime {
                 const limit = typeof call.input.limit === "number"
                     ? call.input.limit
                     : undefined;
-                if (!query ||
+                const snFilters = source === "SN" ? snSearchFilters(call.input) : {};
+                if ((!query && !(source === "SN" && Object.keys(snFilters).length)) ||
                     (source !== "SAOS" &&
-                        source !== "CBOSA")) {
+                        source !== "CBOSA" &&
+                        source !== "SN")) {
                     this.resolverAudit.push({
                         sequence: this.resolverAudit.length + 1,
                         tool: CASE_SEARCH_TOOL_NAME,
@@ -1112,6 +1257,7 @@ export class LegalVerificationToolRuntime {
                         ...(limit !== undefined
                             ? { limit }
                             : {}),
+                        ...(Object.keys(snFilters).length ? { sn: snFilters } : {}),
                         url: caseLawSearchEntryUrl(typedSource)
                     }
                 });
@@ -1251,6 +1397,7 @@ export class LegalVerificationToolRuntime {
                     input: {
                         claim: call.input.claim,
                         signature,
+                        ...(typeof call.input.card_url === "string" ? { card_url: call.input.card_url } : {}),
                         toolCallId: call.id,
                         url: supremeCourtSearchUrl(signature)
                     }
@@ -1452,4 +1599,13 @@ export class LegalVerificationToolRuntime {
         }
         return results;
     }
+}
+/** JSON with sorted keys: the same input written in another key order is the same call. */
+function stableJson(value) {
+    if (Array.isArray(value))
+        return `[${value.map(stableJson).join(",")}]`;
+    if (value && typeof value === "object") {
+        return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson(value[name])}`).join(",")}}`;
+    }
+    return JSON.stringify(value) ?? "null";
 }

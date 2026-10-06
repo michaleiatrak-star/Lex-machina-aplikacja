@@ -8,6 +8,8 @@
 > potrzebujesz historii konkretnej naprawy (SKILL.md trzyma tylko krótkie
 > podsumowanie bieżącej wersji jako kontekst).
 
+- 3.32 (2026-10-06): PRAWO-HARDGATE-WITNESS: sn.pl wyszukiwarka-orzeczen, link = karta
+
 - 3.31 (2026-10-05j, AUDYT-2026-10-05j): Etap KOLEJNA-TURA: SELF-CHECK-PRZED-W3 i etapy W3–W6 (po obowiązkowej pauzie CHECKPOINT-W2) dołączane od drugiej tury wątku. Treść bez zmian.
 
 - 3.30 (2026-10-01b, AUDYT-2026-10-01b): Anonimizacja: imię i nazwisko świadka z prawdziwej sprawy (przykład w SKILL.md i wpisy 3.7–3.19 tego dziennika) zastąpione znacznikami [ŚWIADEK-K]/[ŚWIADEK-P]; treść reguł bez zmian.

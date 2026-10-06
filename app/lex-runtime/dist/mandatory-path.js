@@ -255,9 +255,18 @@ export function evaluateMandatoryPath(model, facts) {
         by: "APLIKACJA",
         evidence: privacy?.status === "OK" ? `lokalnie przez aplikację (symboli: ${String(privacy.detail?.pseudonymized ?? 0)})` : "brak zdarzenia G39I_CHAT_PRIVACY"
     });
+    // One row per file: a resource the PEŁNY profile requires (CORE) is reported
+    // there, not again as a trigger; a resource named by several triggers, once.
+    const fullRows = facts.profile === "PELNY" && legal
+        ? new Set(model.full.filter((entry) => !entry.whenDocuments || facts.documents).map((entry) => entry.resource))
+        : new Set();
+    const reported = new Set(model.core.map((item) => item.resource));
     // ROUTER: the closed table of triggers.
     for (const row of model.triggered) {
         for (const resource of row.resources) {
+            if (fullRows.has(resource) || reported.has(resource))
+                continue;
+            reported.add(resource);
             const name = basename(resource);
             const pre = legal ? preTrigger(name, facts) : false;
             const post = legal ? postTrigger(name, facts) : false;
@@ -315,7 +324,8 @@ export function evaluateMandatoryPath(model, facts) {
         }
     }
     // SKILL: the skills called in the turn and their runtime-required reads.
-    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => name && name !== "AUTO")) {
+    // A skill whose SKILL.md is already a core row (the router, R-1) is not repeated.
+    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => name && name !== "AUTO" && !reported.has(`${name}/SKILL.md`))) {
         const events = facts.events.filter((event) => event.type === "skill_read" && event.target === skill);
         const read = events.find((event) => event.status === "OK");
         const partial = events.find((event) => event.status === "DEGRADED");

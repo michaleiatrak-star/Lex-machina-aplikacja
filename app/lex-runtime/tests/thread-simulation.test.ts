@@ -117,6 +117,7 @@ describe("thread simulation (1-5 user messages)", () => {
         if (/"TASK_ROUTING"[^}]*"OK"/.test(audit) || audit.includes("TASK_ROUTING")) {
           const skill = /"skill":"([^"]+)"/.exec(audit.slice(audit.indexOf("TASK_ROUTING")))?.[1];
           if (skill && !prompt.includes(`# SKILL WYKONAWCZY WG ROUTERA: ${skill}`)) fail(`executive skill ${skill} not loaded`);
+          if (skill && result.taskSkill !== skill) fail(`taskSkill ${result.taskSkill} != ${skill}`);
         }
         // A fake answer writes no CN/WYJ/REM blocks, so the gates rightly mark it; an unread
         // mandatory resource or router is the application's own omission.

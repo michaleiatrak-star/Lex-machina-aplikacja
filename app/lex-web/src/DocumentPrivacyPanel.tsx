@@ -16,8 +16,10 @@ import {
   type PagePrivacyDirective,
   type PiiKind,
   type PrivacyAction,
+  type ProcessingProgress,
   type StoredUploadResponse
 } from "./api.js";
+import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 
 const PII_KINDS: Array<{
   value: PiiKind;
@@ -215,6 +217,9 @@ export function DocumentPrivacyPanel({
     useState<PagePrivacyDirective[]>([]);
   const [loading, setLoading] =
     useState(false);
+  // Stage and page of the document being read (OCR, detection, local AI).
+  const [progress, setProgress] =
+    useState<ProcessingProgress | null>(null);
   const [batchFinalizing, setBatchFinalizing] =
     useState(false);
   const [error, setError] = useState("");
@@ -341,12 +346,17 @@ export function DocumentPrivacyPanel({
         return;
       }
 
+      const tracker = trackProgress(caseId, setProgress);
       const result =
         await reviewDocument(
           file,
           caseId,
-          processingOptionsFor?.(file)
-        );
+          processingOptionsFor?.(file),
+          tracker.progressId
+        ).finally(() => {
+          tracker.stop();
+          setProgress(null);
+        });
       setReview(result);
       onCaseFilesChange?.();
       setPage(
@@ -727,7 +737,9 @@ export function DocumentPrivacyPanel({
 
         <label className="file-button">
           {loading
-            ? "Przetwarzanie…"
+            ? progress
+              ? progressLabel(progress)
+              : "Przetwarzanie…"
             : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
           <input
             type="file"
@@ -741,6 +753,12 @@ export function DocumentPrivacyPanel({
             }}
           />
         </label>
+        {loading && progress ? (
+          <div className="workspace-progress" role="status" aria-live="polite">
+            <progress max={100} value={progressPercent(progress)} />
+            <small>{progressLabel(progress)}</small>
+          </div>
+        ) : null}
       </div>
 
       {error && (

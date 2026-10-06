@@ -1,5 +1,7 @@
 # CHANGELOG — dr-09-budownictwo-srodowisko-energia-transport
 
+- 3.45 (2026-10-06): nowelizacje po t.j. (ELI 2026-10-06): PRD/u.k.p./drogi publiczne/transport drogowy — Dz.U. 2025 poz. 1676, 1734, 1843; Dz.U. 2026 poz. 180, 982; nowa ustawa o zdrowiu zwierząt Dz.U. 2025 poz. 1795
+
 - 3.44 (2026-10-04n, AUDYT-2026-10-04n): Historia zmian SKILL.md i modułów przeniesiona z plików roboczych do `references/HISTORIA-ZMIAN-PLIKOW.md` (plik historyczny, niewczytywany przez model). Treść robocza bez zmian.
 
 - 3.43 (2026-10-04g, AUDYT-2026-10-04g): MAPA-AKTOW — wiersz „Ustawa o elektromobilności i paliwach alternatywnych” (Dz.U. 2026 poz. 1243 t.j.) wskazywał `mod-ustawa-charakterystyka-energetyczna`, który ustawy nie omawia (0 wystąpień); teraz `mod-ustawa-transport-drogowy-kolejowy-lotniczy-morski` § 7 ELEKTROMOBILNOŚĆ (t.j. 2026/1243 ✅ [VER] RZĄD 1 2026-10-04 w module). Moduł charakterystyki energetycznej dostał własny wiersz (Dz.U. 2024 poz. 101 t.j., ✅ [VER] RZĄD 1 2026-09-16d — metryka z modułu; T45). Bez zmian treści prawa.

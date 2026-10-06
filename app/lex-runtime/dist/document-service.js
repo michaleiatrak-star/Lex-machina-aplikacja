@@ -227,7 +227,7 @@ export class LocalPrivateDocumentService {
         if (!this.imageIngestor) {
             throw new Error("IMAGE_OCR_UNAVAILABLE");
         }
-        onProgress?.({ stage: "OCR", done: 0, total: 1 });
+        onProgress?.({ stage: "OCR", done: 0, total: 1, page: 1 });
         const image = await this.imageIngestor.ingest(data, mediaType);
         onProgress?.({ stage: "OCR", done: 1, total: 1 });
         return image;
@@ -275,7 +275,7 @@ export class LocalPrivateDocumentService {
         const suggestionVault = new PseudonymizationVault();
         const suggestions = [];
         for (const [index, page] of source.pages.entries()) {
-            onProgress?.({ stage: "DETECTING", done: index, total: source.pages.length });
+            onProgress?.({ stage: "DETECTING", done: index, total: source.pages.length, page: page.page });
             const preview = await new LocalPolishPseudonymizer(suggestionVault, withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR", security?.localAi
                 ? {
                     onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
@@ -415,7 +415,7 @@ export class LocalPrivateDocumentService {
         const onProgress = security?.onProgress;
         const pseudonymizePages = async () => {
             for (const [pageIndex, page] of record.source.pages.entries()) {
-                onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length });
+                onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
                 const pageDirectives = directives
                     .filter((directive) => directive.page === page.page)
                     .map(({ page: _page, ...directive }) => directive);

@@ -1,3 +1,4 @@
+import { supremeCourtSearch, type SupremeCourtSearchFilters } from "./case-law-verifier.js";
 export type CaseLawSearchFetch = (
   input: string | URL,
   init?: RequestInit
@@ -5,12 +6,15 @@ export type CaseLawSearchFetch = (
 
 export type CaseLawSearchSource =
   | "SAOS"
-  | "CBOSA";
+  | "CBOSA"
+  | "SN";
 
 export type CaseLawSearchRequest = {
   source: CaseLawSearchSource;
   query: string;
   limit?: number;
+  // SN only: the other fields of the sn.pl search form.
+  sn?: Omit<SupremeCourtSearchFilters, "tresc" | "strona" | "rozmiar_strony">;
 };
 
 export type CaseLawSearchCandidate = {
@@ -39,7 +43,8 @@ export type CaseLawSearchResult = {
 export const CASE_LAW_SEARCH_HOSTS = [
   "saos.org.pl",
   "www.saos.org.pl",
-  "orzeczenia.nsa.gov.pl"
+  "orzeczenia.nsa.gov.pl",
+  "sn.pl"
 ] as const;
 
 const SAOS_ENDPOINT =
@@ -564,7 +569,9 @@ export function caseLawSearchEntryUrl(
 ): string {
   return source === "SAOS"
     ? SAOS_ENDPOINT
-    : CBOSA_SEARCH;
+    : source === "SN"
+      ? "https://sn.pl/index.php"
+      : CBOSA_SEARCH;
 }
 
 export class CaseLawSearchService {
@@ -586,6 +593,10 @@ export class CaseLawSearchService {
         .trim();
     const limit =
       clampLimit(request.limit);
+
+    if (request.source === "SN") {
+      return await this.searchSn(query, limit, request.sn ?? {});
+    }
 
     if (
       query.length < 2 ||
@@ -611,6 +622,60 @@ export class CaseLawSearchService {
           query,
           limit
         );
+  }
+
+  // sn.pl search form: text of the decision and its reasons plus the other
+  // fields. Hits are checked against the asked signature, form and dates.
+  private async searchSn(
+    query: string,
+    limit: number,
+    filters: NonNullable<CaseLawSearchRequest["sn"]>
+  ): Promise<CaseLawSearchResult> {
+    const hasFilter = Object.values(filters).some((value) => typeof value === "string" && value.trim());
+    if ((query.length < 2 && !hasFilter) || query.length > 500) {
+      return { source: "SN", status: "OUT_OF_SCOPE", query, candidates: [], reason: "INVALID_SEARCH_QUERY" };
+    }
+    let hits;
+    try {
+      hits = await supremeCourtSearch(
+        { ...(query.length >= 2 ? { tresc: query } : {}), ...filters, strona: 1, rozmiar_strony: Math.max(10, limit) },
+        this.fetcher
+      );
+    } catch (error) {
+      return {
+        source: "SN",
+        status: "OUT_OF_SCOPE",
+        query,
+        candidates: [],
+        reason: error instanceof Error && /^SN_/.test(error.message) ? error.message : "SN_SEARCH_TRANSPORT_FAILED"
+      };
+    }
+    const same = (a: string, b: string) => a.replace(/[.\s]+/g, " ").trim().toUpperCase() === b.replace(/[.\s]+/g, " ").trim().toUpperCase();
+    const matching = hits.filter(
+      (hit) =>
+        (!filters.sygnatura || same(hit.signature, filters.sygnatura)) &&
+        (!filters.forma_orzeczenia || !hit.form || same(hit.form, filters.forma_orzeczenia)) &&
+        (!filters.data_wydania_od || !hit.date || hit.date >= filters.data_wydania_od) &&
+        (!filters.data_wydania_do || !hit.date || hit.date <= filters.data_wydania_do)
+    );
+    const candidates: CaseLawSearchCandidate[] = matching.slice(0, limit).map((hit) => ({
+      source: "SN",
+      id: hit.id,
+      caseNumbers: [hit.signature],
+      ...(hit.date ? { judgmentDate: hit.date } : {}),
+      court: "Sąd Najwyższy",
+      ...(hit.form ? { courtType: hit.form } : {}),
+      sourceUrl: hit.cardUrl,
+      contentScope: "DISCOVERY"
+    }));
+    return {
+      source: "SN",
+      status: candidates.length ? "FOUND" : "NOT_FOUND",
+      query,
+      candidates,
+      total: matching.length,
+      ...(hits.length > matching.length ? { reason: `REJECTED_${hits.length - matching.length}_NOT_MATCHING_FILTERS` } : {})
+    };
   }
 
   private async searchSaos(

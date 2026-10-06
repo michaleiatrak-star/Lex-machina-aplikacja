@@ -1,4 +1,7 @@
+import { SN_REPERTORIES, signaturesIn } from "./court-of-signature.js";
 import { createHash } from "node:crypto";
+import { caseLawRepository } from "./case-law-store.js";
+import { documentText } from "./official-text.js";
 import type {
   VerificationRecord
 } from "./verification-ledger.js";
@@ -18,7 +21,18 @@ export type SupremeCourtCaseVerificationRequest = {
   claim: string;
   signature: string;
   toolCallId: string;
+  // The decision's card (sn.pl ?orzeczenie=ID) or its ID: picks that record when
+  // one signature has several (judgment, decision, reasons).
+  cardUrl?: string;
 };
+
+/** ID of an SN decision card ("…?orzeczenie=ZuUy…" or the bare ID). */
+export function supremeCourtCardId(value: string | undefined): string | null {
+  const text = value?.trim() ?? "";
+  const fromUrl = /[?&]orzeczenie=([\w-]{6,80})/u.exec(text)?.[1];
+  if (fromUrl) return fromUrl;
+  return /^[A-Za-z0-9_-]{12,40}$/u.test(text) && /[A-Za-z]/.test(text) && /\d|[A-Z].*[a-z]|[a-z].*[A-Z]/.test(text) ? text : null;
+}
 
 export type SupremeCourtQuoteVerificationRequest = {
   caseClaim: string;
@@ -79,32 +93,6 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_SEARCH_RECORDS = 25;
 const MAX_BASE64_CHARS = 8_000_000;
 
-const SN_REPERTORIES = new Set([
-  "CSK",
-  "CSKP",
-  "KK",
-  "NKK",
-  "UK",
-  "NSNC",
-  "NSNU",
-  "NKN",
-  "CNP",
-  "CNPP",
-  "SDI",
-  "ZK",
-  "CZP",
-  "KZP",
-  "UZP",
-  "PZP",
-  "NSNZP",
-  "SNO",
-  "DSI",
-  "DSP",
-  "CZ",
-  "KO",
-  "KSP",
-  "NSW"
-]);
 
 function stripDotsAndSpace(
   value: string
@@ -263,12 +251,43 @@ function mergeCookies(
   return [...byName.values()];
 }
 
+// sn.pl answers the search widget's own requests; a bare request may meet the
+// site's bot protection: an HTTP 403 page, or HTTP 200 with a browser-check HTML
+// page instead of JSON. Requests look like the widget's (same referer, XHR, JSON
+// accept) and, when blocked, the search page is opened once for its session
+// cookies before one more try. Still blocked: a 403 (bot protection), never an
+// HTML page handed to a JSON parser.
 async function fetchSn(
   fetcher: CaseLawFetch,
   input: string
 ): Promise<Response> {
+  const first = await fetchSnOnce(fetcher, input, []);
+  if (input === SN_HUMAN || !(await snBlocked(first.response))) return first.response;
+  const warm = await fetchSnOnce(fetcher, SN_HUMAN, first.cookies).catch(() => null);
+  const second = (await fetchSnOnce(fetcher, input, warm ? warm.cookies : first.cookies)).response;
+  return (await snBlocked(second))
+    ? new Response(null, { status: 403, statusText: "SN_BOT_PROTECTION" })
+    : second;
+}
+
+/** A 403, or an HTML page where the widget's endpoints answer JSON (or PDF). */
+async function snBlocked(response: Response): Promise<boolean> {
+  if (response.status === 403) return true;
+  if (!response.ok) return false;
+  const type = response.headers.get("content-type") ?? "";
+  if (/json|pdf|octet-stream/i.test(type)) return false;
+  const head = (await response.clone().text().catch(() => "")).slice(0, 200);
+  return /^\s*</.test(head);
+}
+
+async function fetchSnOnce(
+  fetcher: CaseLawFetch,
+  input: string,
+  initialCookies: string[]
+): Promise<{ response: Response; cookies: string[] }> {
   let url = input;
-  let cookies: string[] = [];
+  let cookies: string[] = initialCookies;
+  const page = input === SN_HUMAN;
 
   for (
     let redirect = 0;
@@ -286,7 +305,14 @@ async function fetchSn(
         headers: {
           "User-Agent":
             SN_BROWSER_UA,
-          Accept: "*/*",
+          "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
+          ...(page
+            ? { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+            : {
+                Accept: "application/json, text/javascript, */*; q=0.01",
+                Referer: SN_HUMAN,
+                "X-Requested-With": "XMLHttpRequest"
+              }),
           ...(cookies.length
             ? {
                 Cookie:
@@ -334,7 +360,7 @@ async function fetchSn(
       continue;
     }
 
-    return response;
+    return { response, cookies };
   }
 
   throw new Error(
@@ -703,6 +729,11 @@ export class SupremeCourtCaseVerifier {
         () => new Date().toISOString()
   ) {}
 
+  /** The signature of the decision on an sn.pl card, read from its official text. */
+  signatureFromCard(card: string): Promise<{ signature: string; cardUrl: string } | null> {
+    return supremeCourtSignatureFromCard(card, this.fetcher);
+  }
+
   async verify(
     request:
       SupremeCourtCaseVerificationRequest
@@ -844,7 +875,15 @@ export class SupremeCourtCaseVerifier {
       };
     }
 
-    if (exact.length > 1) {
+    const cardId =
+      supremeCourtCardId(request.cardUrl) ??
+      supremeCourtCardId(/orzeczenie=/u.test(request.claim) ? request.claim : undefined);
+    const chosen =
+      cardId
+        ? exact.find((record) => String(record.id ?? "").trim() === cardId)
+        : undefined;
+
+    if (exact.length > 1 && !chosen) {
       return {
         status: "AMBIGUOUS",
         normalizedSignature,
@@ -855,7 +894,7 @@ export class SupremeCourtCaseVerifier {
     }
 
     const searchRecord =
-      exact[0]!;
+      chosen ?? exact[0]!;
 
     const id =
       String(
@@ -971,6 +1010,18 @@ export class SupremeCourtCaseVerifier {
 
     const fetchedAt =
       this.now();
+
+    // The decision is downloaded once: its text is kept in the application under
+    // its card, for quotes and the marked preview (the text address is temporary).
+    caseLawRepository()?.put({
+      cardUrl: sourceUrl,
+      court: "SN",
+      signature: normalizedSignature,
+      ...(date ? { date } : {}),
+      ...(form ? { form } : {}),
+      text: documentText(html),
+      fetchedAt
+    });
 
     const verificationRecord:
       VerificationRecord = {
@@ -1170,4 +1221,85 @@ export async function supremeCourtFullTextHtml(
   const html = raw ? decodeBase64Html(raw) : null;
   if (!html) throw new Error("SN_FULL_TEXT_UNAVAILABLE");
   return html;
+}
+
+/**
+ * The signature of the decision on an sn.pl card (link or bare ID), read from
+ * its official text: a card given without a signature is verified as usual.
+ */
+export async function supremeCourtSignatureFromCard(
+  card: string,
+  fetcher: CaseLawFetch = globalThis.fetch.bind(globalThis)
+): Promise<{ signature: string; cardUrl: string } | null> {
+  const id = supremeCourtCardId(card);
+  if (!id) return null;
+  const cardUrl = humanUrl(id);
+  const html = await supremeCourtFullTextHtml(cardUrl, fetcher);
+  if (!html) return null;
+  const head = documentText(html).slice(0, 4000);
+  const signature = signaturesIn(head).find((item) => item.court === "SN")?.signature;
+  return signature ? { signature, cardUrl } : null;
+}
+
+/** Fields of the sn.pl search form (the widget sends them to snproxy as named here). */
+export type SupremeCourtSearchFilters = {
+  // „W treści orzeczenia i uzasadnienia” — the widget sends it as both q and tresc.
+  tresc?: string;
+  sygnatura?: string;
+  forma_orzeczenia?: string;
+  data_wydania_od?: string;
+  data_wydania_do?: string;
+  izba?: string;
+  sklad_sedziowski?: string;
+  sedzia_w_skladzie?: string;
+  przewodniczacy?: string;
+  sprawozdawca?: string;
+  wspolsprawozdawca?: string;
+  autor_uzasadnienia?: string;
+  strona?: number;
+  rozmiar_strony?: number;
+};
+
+export function supremeCourtQueryUrl(filters: SupremeCourtSearchFilters): string {
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (key === "tresc") {
+      params.q = String(value);
+      params.tresc = String(value);
+    } else {
+      params[key] = key === "sygnatura" ? stripDotsAndSpace(String(value)) : String(value);
+    }
+  }
+  params.strona ??= "1";
+  params.rozmiar_strony ??= String(MAX_SEARCH_RECORDS);
+  return proxyUrl("searchOrzeczenia", params);
+}
+
+export type SupremeCourtSearchHit = { id: string; signature: string; date?: string; form?: string; cardUrl: string };
+
+/** The sn.pl search with every form field; hits carry the decision's card. */
+export async function supremeCourtSearch(
+  filters: SupremeCourtSearchFilters,
+  fetcher: CaseLawFetch = globalThis.fetch.bind(globalThis)
+): Promise<SupremeCourtSearchHit[]> {
+  const response = await fetchSn(fetcher, supremeCourtQueryUrl(filters));
+  if (!response.ok) throw new Error(`SN_SEARCH_HTTP_${response.status}`);
+  const payload: unknown = await response.json();
+  const upstream = snUpstreamError(payload);
+  if (upstream) throw new Error("SN_SEARCH_UPSTREAM_ERROR");
+  const records = searchRecords(payload);
+  if (records === null) throw new Error("SN_SEARCH_SCHEMA_DRIFT");
+  return records.flatMap((record) => {
+    const id = String(record.id ?? "").trim();
+    const signature = typeof record.sygnatura_sprawy === "string" ? record.sygnatura_sprawy.replace(/\s+/g, " ").trim() : "";
+    if (!id || !signature) return [];
+    return [{
+      id,
+      signature,
+      ...(typeof record.data_wydania === "string" ? { date: record.data_wydania.slice(0, 10) } : {}),
+      ...(typeof record.forma_orzeczenia === "string" ? { form: record.forma_orzeczenia } : {}),
+      cardUrl: humanUrl(id)
+    }];
+  });
 }

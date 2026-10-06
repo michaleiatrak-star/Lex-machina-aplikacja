@@ -1450,7 +1450,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/core-law/acts/lookup"
         | "/api/core-law/acts/remove"
         | "/api/core-law/provision-preview"
-        | "/api/case-law/preview" => method == "POST",
+        | "/api/case-law/preview"
+        | "/api/case-law/copy"
+        | "/api/case-law/resolve"
+        | "/api/case-law/library/remove" => method == "POST",
+        "/api/case-law/library" => matches!(method, "GET" | "PUT"),
         "/api/core-law/settings" => method == "PUT",
         // Dziennik nieprawidłowości (Ustawienia -> Konserwacja, tylko administrator).
         "/api/diagnostics/anomalies" => matches!(method, "GET" | "DELETE"),
@@ -1556,6 +1560,8 @@ fn is_mcp_route(method: &str, path: &str) -> bool {
         ["api", "mcp-search", "query"] => method == "POST",
         // Podgląd strony źródła (runtime pobiera tylko z oficjalnych domen).
         ["api", "mcp-search", "source-preview"] => method == "POST",
+        // Sesja sn.pl z weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl.
+        ["api", "mcp-search", "sn-session"] => matches!(method, "PUT" | "DELETE"),
         _ => false,
     }
 }
@@ -2022,6 +2028,11 @@ mod tests {
     #[test]
     fn allowlist_rejects_unknown_routes_and_methods() {
         assert!(route_allowed("POST", "/api/auth/activity"));
+        assert!(route_allowed("POST", "/api/case-law/resolve"));
+        assert!(route_allowed("GET", "/api/case-law/library"));
+        assert!(route_allowed("PUT", "/api/case-law/library"));
+        assert!(route_allowed("POST", "/api/case-law/library/remove"));
+        assert!(!route_allowed("DELETE", "/api/case-law/library"));
         assert!(!route_allowed("GET", "/api/auth/activity"));
         assert!(route_allowed("POST", "/api/privacy/name-forms"));
         assert!(route_allowed("POST", "/api/deanonymization/preview"));
@@ -2138,6 +2149,9 @@ mod tests {
         assert!(!route_allowed("POST", "/api/admin/mcp-connectors/nbp/delete"));
         assert!(!route_allowed("POST", "/api/admin/mcp-connectors/../install"));
         assert!(!route_allowed("GET", "/api/admin/mcp-connectors/ceidg/key"));
+        assert!(route_allowed("PUT", "/api/mcp-search/sn-session"));
+        assert!(route_allowed("DELETE", "/api/mcp-search/sn-session"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sn-session"));
         assert!(!route_allowed("POST", "/api/mcp-search/sources"));
         assert!(!route_allowed("GET", "/api/mcp-search/query"));
         assert!(!route_allowed("GET", "/api/mcp-search/sources/saos/tools/extra"));

@@ -1,5 +1,7 @@
 # CHANGELOG — prawny-router-v3
 
+- 3.67 (2026-10-06): HARD-GATES-ORZECZNICTWO: karta SN; SAOS RZĄD 3 tylko zastępczo
+
 - 3.66 (2026-10-05m, AUDYT-2026-10-05m): KROK 2: [3] odwołanie do KIO, skarga do WSA; [6] jako dowód / czy to dowód / moc dowodowa.
 
 - 3.65 (2026-10-05l, AUDYT-2026-10-05l): KROK 2: [3] odwołanie od wypowiedzenia / od decyzji / do sądu; [6] policz termin, termin na wniesienie; [1] „na umowie zlecenie / o pracę” to podstawa zatrudnienia → [10]; [6] maile/SMS/nagrania tylko przy pytaniu o dowód.

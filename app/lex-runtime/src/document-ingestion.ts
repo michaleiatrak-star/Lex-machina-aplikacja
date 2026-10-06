@@ -271,14 +271,20 @@ export class CompleteDocumentIngestor {
     }
 
     if (ocrCandidates.length) {
-      onProgress?.({ stage: "OCR", done: 0, total: ocrCandidates.length });
+      onProgress?.({ stage: "OCR", done: 0, total: ocrCandidates.length, page: ocrCandidates[0]! });
     }
     const ocrResults = this.ocr && ocrCandidates.length
       ? await this.ocr.recognizePages(
           data,
           ocrCandidates,
           onProgress
-            ? (done) => onProgress({ stage: "OCR", done, total: ocrCandidates.length })
+            ? (done) =>
+                onProgress({
+                  stage: "OCR",
+                  done,
+                  total: ocrCandidates.length,
+                  ...(done < ocrCandidates.length ? { page: ocrCandidates[done]! } : {})
+                })
             : undefined
         )
       : [];

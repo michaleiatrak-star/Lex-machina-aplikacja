@@ -19,7 +19,7 @@
          "input": {"query": "wyrok SN I CSK 4821/23"}},
         {"type": "web_search_tool_result", "tool_use_id": "toolu_demo_2",
          "content": [{"type": "web_search_result",
-                     "url": "https://sn.pl/orzecznictwo/SitePages/wyrok.aspx?id=I-CSK-4821-23",
+                     "url": "https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=PRZYKLADOWE-ID",
                      "title": "Wyrok SN I CSK 4821/23"}]},
         {"type": "text", "text": "Na podstawie powyższego przygotowuję odpowiedź."}
       ]

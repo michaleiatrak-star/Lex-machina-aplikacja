@@ -142,6 +142,82 @@ fn open_external_url(url: String) -> Result<(), String> {
     }
 }
 
+// Weryfikacja sn.pl: użytkownik sam rozwiązuje captcha (Imperva) w oknie sn.pl; aplikacja
+// odczytuje tylko ciasteczka tej sesji i przekazuje je konektorowi SN. Strona zdalna nie ma IPC.
+const SN_VERIFICATION_LABEL: &str = "sn-verification";
+const SN_VERIFICATION_URL: &str = "https://www.sn.pl/pl/wyszukiwarka-orzeczen";
+
+fn is_sn_url(url: &tauri::Url) -> bool {
+    url.scheme() == "https"
+        && matches!(url.host_str(), Some("www.sn.pl") | Some("sn.pl"))
+}
+
+fn valid_cookie_part(name: &str, value: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+        && value.len() <= 4096
+        && !value
+            .bytes()
+            .any(|byte| matches!(byte, b';' | b'\r' | b'\n'))
+}
+
+fn cookie_header<'a>(pairs: impl Iterator<Item = (&'a str, &'a str)>) -> String {
+    pairs
+        .filter(|(name, value)| valid_cookie_part(name, value))
+        .map(|(name, value)| format!("{name}={value}"))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+#[tauri::command]
+async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(SN_VERIFICATION_LABEL) {
+        let _ = window.unminimize();
+        return window
+            .set_focus()
+            .map_err(|_| "SN_VERIFICATION_WINDOW_FAILED".to_string());
+    }
+    let url = SN_VERIFICATION_URL
+        .parse::<tauri::Url>()
+        .map_err(|_| "SN_VERIFICATION_URL_INVALID".to_string())?;
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        SN_VERIFICATION_LABEL,
+        tauri::WebviewUrl::External(url),
+    )
+    .title("Weryfikacja sn.pl - rozwiaz captcha, potem kliknij Gotowe w Lex Machina")
+    .inner_size(1000.0, 760.0)
+    .on_navigation(is_sn_url)
+    .build()
+    .map_err(|error| format!("SN_VERIFICATION_WINDOW_FAILED:{error}"))?;
+    Ok(())
+}
+
+// Async: na Windows odczyt ciasteczek WebView2 w komendzie synchronicznej blokuje się (wry#583).
+#[tauri::command]
+async fn sn_verification_finish(app: tauri::AppHandle) -> Result<String, String> {
+    let window = app
+        .get_webview_window(SN_VERIFICATION_LABEL)
+        .ok_or_else(|| "SN_VERIFICATION_WINDOW_MISSING".to_string())?;
+    let url = SN_VERIFICATION_URL
+        .parse::<tauri::Url>()
+        .map_err(|_| "SN_VERIFICATION_URL_INVALID".to_string())?;
+    let cookies = window
+        .cookies_for_url(url)
+        .map_err(|_| "SN_VERIFICATION_COOKIES_FAILED".to_string())?;
+    let header = cookie_header(
+        cookies.iter().map(|cookie| (cookie.name(), cookie.value())),
+    );
+    let _ = window.close();
+    if header.is_empty() {
+        return Err("SN_VERIFICATION_NO_COOKIES".to_string());
+    }
+    Ok(header)
+}
+
 #[tauri::command]
 fn open_workspace_file(token: String) -> Result<(), String> {
     let target = authorized_workspace_open_path(&token)?;
@@ -242,7 +318,9 @@ pub fn run() {
             tauri::generate_handler![
                 open_external_url,
                 open_workspace_file,
-                install_application_update
+                install_application_update,
+                sn_verification_open,
+                sn_verification_finish
             ]
         )
         .register_asynchronous_uri_scheme_protocol(
@@ -280,7 +358,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
+        cookie_header,
         is_allowed_external_url,
+        is_sn_url,
         valid_update_receipt_token,
         valid_workspace_open_token,
     };
@@ -291,6 +371,20 @@ mod tests {
         assert!(!is_allowed_external_url("http://example.com"));
         assert!(!is_allowed_external_url("file:///C:/secret.txt"));
         assert!(!is_allowed_external_url("https://example.com\r\nX-Test: 1"));
+    }
+
+    #[test]
+    fn sn_verification_stays_on_sn_pl_and_keeps_valid_cookies() {
+        assert!(is_sn_url(&"https://www.sn.pl/pl/wyszukiwarka-orzeczen".parse().unwrap()));
+        assert!(!is_sn_url(&"http://www.sn.pl/".parse().unwrap()));
+        assert!(!is_sn_url(&"https://sn.pl.example.com/".parse().unwrap()));
+        assert_eq!(
+            cookie_header(
+                [("incap_ses_1", "a"), ("bad name", "x"), ("visid_incap_1", "b;c"), ("nlbi_1", "d")]
+                    .into_iter()
+            ),
+            "incap_ses_1=a; nlbi_1=d"
+        );
     }
 
     #[test]

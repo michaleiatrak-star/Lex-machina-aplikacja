@@ -121,6 +121,39 @@ jobs:
           }
           Write-Host "Acceptance VC++ prerequisite exit code: $($install.ExitCode)"
 
+      - name: VC++ app-local deployment when the system runtime cannot be upgraded
+        shell: pwsh
+        run: |
+          # The bootstrap's own functions (read from the script, not copied) on the
+          # payload just built: the bundled runtime is complete, not older than
+          # required, and lands next to an executable, as on a machine whose older
+          # system runtime fails to upgrade (MSI 1603).
+          $errors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path "app/installer/windows-online-bootstrap.ps1"), [ref]$null, [ref]$errors)
+          if ($errors) { throw "BOOTSTRAP_PARSE_FAILED: $($errors -join '; ')" }
+          # The floor the bootstrap accepts for a working runtime.
+          $floor = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$script:VcRuntimeFloor' }, $true) | Select-Object -First 1
+          if (-not $floor) { throw "VC_RUNTIME_FLOOR_MISSING" }
+          . ([scriptblock]::Create($floor.Extent.Text))
+          $required = $script:VcRuntimeFloor
+          $wanted = @("Get-DllVersion", "Get-VcRuntimeAppLocal", "Copy-VcRuntimeAppLocal")
+          $functions = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $wanted }, $true)
+          if ($functions.Count -ne $wanted.Count) { throw "VC_APPLOCAL_FUNCTIONS_MISSING" }
+          . ([scriptblock]::Create((($functions | ForEach-Object { $_.Extent.Text }) -join "`n")))
+          $payload = Resolve-Path "app/lex-desktop/src-tauri/runtime"
+          $dllDir = Get-VcRuntimeAppLocal $payload $required
+          $target = Join-Path $env:RUNNER_TEMP "vc-applocal-target"
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-VcRuntimeAppLocal $dllDir @($target)
+          foreach ($name in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+            $path = Join-Path $target $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "VC_APPLOCAL_NOT_PLACED:$name" }
+            $version = Get-DllVersion $path
+            if ($version -lt $required) { throw "VC_APPLOCAL_TOO_OLD:${name}:$version" }
+            Write-Host "$name $version"
+          }
+          Write-Host "VC_APPLOCAL_PASS: $((Get-ChildItem $target -Filter *.dll).Count) DLLs >= $required"
+
       - name: Reproduce pre-existing same-version Python registration
         shell: pwsh
         run: |

@@ -1,7 +1,7 @@
 // test_normalizacja.mjs = test równoważności z parserem referencyjnym (ta sama zawartość, nazwa wymagana przez CI i instalator).
 // Równoważność portu JS z parserem referencyjnym Python (orzeczenia-sadowe-v2/tools/cbosa_parser.py).
 // Wzorzec: fixtures/rownowaznosc.json — wyniki PYTHONA na tym samym HTML (generowane, nie pisane ręcznie).
-import { parsujDokument, weryfikujSygnature } from "./cbosa-mcp-server.js";
+import { parsujDokument, weryfikujSygnature, zPonowieniem } from "./cbosa-mcp-server.js";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 const K = JSON.parse(readFileSync(new URL("./fixtures/rownowaznosc.json", import.meta.url)));
@@ -36,3 +36,14 @@ const ids = (a, b) => Array.from({ length: b - a }, (_, i) => `A${String(a + i).
   assert.strictEqual(d.finality, "orzeczenie prawomocne");
   assert.ok(d.court); n++; }
 console.log(`OK: ${n} przypadków zgodnych z parserem referencyjnym (Python) + paginacja`);
+
+{ let n = 0;
+  const w = await zPonowieniem(async () => { if (++n < 3) throw new Error("Połączenie zerwane przez serwer (orzeczenia.nsa.gov.pl): UND_ERR_SOCKET"); return "ok"; }, { przerwa: 5, budzet: () => 1e9 });
+  assert.deepStrictEqual([w, n], ["ok", 3]);
+  n = 0;
+  await assert.rejects(zPonowieniem(async () => { n++; throw new Error("CBOSA HTTP 404"); }, { przerwa: 5, budzet: () => 1e9 }));
+  assert.strictEqual(n, 1);
+  n = 0;
+  await assert.rejects(zPonowieniem(async () => { n++; throw new Error("UND_ERR_SOCKET"); }, { przerwa: 5, budzet: () => 100 }));
+  assert.strictEqual(n, 1);
+  console.log("OK: ponowienie po zerwanym połączeniu (w budżecie), bez ponawiania błędów HTTP"); }

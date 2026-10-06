@@ -329,6 +329,27 @@ describe("model skill selection mode", () => {
     expect(JSON.parse(again!.content).requiredModule).toBeUndefined();
   });
 
+  it("returns no second copy of a resource the application already put in context", async () => {
+    const runtime = new LegalCorpusToolRuntime(withCriminalDomain(), { modelSelectsSkills: true });
+    runtime.setInContext(new Set([
+      "prawny-router-v3/SKILL.md",
+      "dr-03-prawo-karne/modules/mod-KK-kwalifikator-karnomaterialny.md"
+    ]));
+    // The router is in context: the domain read neither waits for it nor carries it.
+    const [entry] = await runtime.runTools([read("dr-03-prawo-karne", "SKILL.md")]);
+    const body = JSON.parse(entry!.content);
+    expect(body.status).toBe("OK");
+    expect(body.requiredRouter).toBeUndefined();
+    // Nor the qualifier the application already gave.
+    expect(body.requiredModule).toBeUndefined();
+    const [qualifier] = await runtime.runTools([read("dr-03-prawo-karne", "modules/mod-KK-kwalifikator-karnomaterialny.md")]);
+    expect(JSON.parse(qualifier!.content)).toMatchObject({ status: "OK", inContext: true, content: "" });
+    const [router] = await runtime.runTools([read("prawny-router-v3", "SKILL.md")]);
+    expect(JSON.parse(router!.content)).toMatchObject({ status: "OK", inContext: true, content: "" });
+    expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "dr-03-prawo-karne"]);
+    expect(runtime.missingCriminalQualifier()).toBeNull();
+  });
+
   it("keeps the preloaded router path unchanged outside model selection", async () => {
     const runtime = new LegalCorpusToolRuntime(fixture());
     const [result] = await runtime.runTools([read(DR, "SKILL.md")]);

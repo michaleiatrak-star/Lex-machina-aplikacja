@@ -144,7 +144,7 @@ export function knowledgeMapPrompt(args: {
 
   const groups: Array<[string, string[]]> = [
     ["weryfikacja przepisów i orzeczeń", ["verify_legal_reference", "verify_interpretation", "verify_case_reference", "verify_case_quote", "verify_case_proposition"]],
-    ["orzecznictwo (SAOS, CBOSA, SN)", ["search_case_law"]],
+    ["orzecznictwo (SAOS, CBOSA, SN)", ["search_case_law", "search_case_law_library"]],
     ["źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne)", ["list_federated_legal_sources", "search_federated_legal_sources", "get_federated_legal_document", "call_federated_legal_source"]],
     ["wyszukiwanie w internecie", ["web_search"]]
   ];

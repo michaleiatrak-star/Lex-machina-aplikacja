@@ -1,5 +1,35 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.203 (2026-10-06n, AUDYT-2026-10-06n): AUDYT-2026-10-06n: etpcz — wyszukiwanie po frazie odczytuje wyniki (linki z frazą w ścieżce, F-237); test_sady + przypadek frazy; dist przebudowany; T41 bez plików kanału pluginów (F-238)
+
+- 6.202 (2026-10-06m): audyt konektorów MCP — sn 1.5.0: bez płatnych usług (2captcha usunięte; Playwright bez okna w budżecie wywołania, potem widoczne okno w tle dla użytkownika, PENDING + stan w sn_sesja_status); sukces = sonda snproxy zwraca JSON (1.4.0 uznawała ciasteczka incap_ses/visid_incap, które Incapsula ustawia już na stronie 403 — zapisywała niedziałającą sesję); wynik automatu w odpowiedzi (wcześniej doklejany do błędu i gubiony); bez zmian process.env; sesja w ~/.lex-machina (0600); limit próby ≤ budżet (było 90 s > 60 s klienta); tk: karta IPO w układzie 2026 (zakładki dok_N, downloadOrzeczenieDoc) — parser szukał `dokument=` i zwracał kartę zamiast orzeczenia; tk_pobierz czyta panel dokumentu (#dok_N lub plik .doc + sygnatura); sp: wskazany sąd zawęża też wynik zastępczy SAOS (pasujeDoSadu); manifest 1.3.3: +krs_szukaj (brakował), opis sn_captcha_auto; testy: test_protokol +sn/sp/tk/etpcz, test_poprawnosci +etpcz w mapie serwerów (przypadek wywracał się), SN/SP jawny FAIL przy blokadzie źródła zamiast wyjątku, TK bez fałszywego „SAOS” z tekstu uwagi, test_na_zywo SAOS-KIO bez wyjątku przy ERROR; SKILL.md FAZA 0E: 16 serwerów, wybór przyciskami na poziomie grup (dawny opis niewykonalny)
+
+- 6.201 (2026-10-06l): sn — konektor wymieniony na sn-konektor-lex 1.4.0 (pliki serwera bajtowo z paczki użytkownika): snproxy pod /pl/index.php, UA Chrome 140, domyślny plik sesji sn-session.json obok modułu (gdy brak SN_SESSION_FILE), ponowienie po automatycznym przejściu weryfikacji (SN_CAPTCHA_AUTO=1, Playwright ± 2captcha), nowe narzędzia sn_sesja_status / sn_sesja_ustaw / sn_captcha_auto; nowy moduł sn-example/sn-captcha-auto.mjs; zbuduj_pakiet.py: --external:playwright (dist bez Playwrighta; stare źródła + nowy skrypt = stary dist bajtowo); manifest MCPB 1.3.2 (+3 narzędzia); test_sady: kontrakt sesji 1.4.0 + funkcje czyste auto-captcha; test_protokol: sn-example (6 narzędzi); opis w mcp-servers/README.md (README-sn.md z paczki nie dodany — limit T41: 198/199)
+
+- 6.200 (2026-10-06k): T11 — Dz.U. 2026 poz. 982 (nowelizacja drogi publiczne/PRD/transport/u.k.p.) dopisana do snapshotu indeksu Dz.U.; trzy rejestry znów zsynchronizowane
+
+- 6.199 (2026-10-06j): sn — weryfikacja captcha przez użytkownika w aplikacji (SN_SESSION_FILE/SN_COOKIE); sp — fraza przez formularz portalu, SAOS z sygnaturą i rodzajem po polsku; tk — repertorium spoza listy pytane w IPO/OTK ZU; cbosa — ponowienie po zerwanym połączeniu
+
+- 6.198 (2026-10-06): etpcz: pole numeru skargi (complaintNumber) z pomiaru na żywo w G40B
+
+- 6.197 (2026-10-06): konektor etpcz (ETPCz, baza MS); SP: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie
+
+- 6.196 (2026-10-06): sn: strona weryfikacji przeglądarki rozpoznana, ponowienie z ciasteczkami, SAOS zastępczo przy blokadzie
+
+- 6.195 (2026-10-06): konektory MCP: przyczyna błędu sieci zamiast „fetch failed”, ponowienia przejściowych, certyfikaty systemu
+
+- 6.194 (2026-10-06): konektor tk wyłącznie ze źródeł urzędowych (karta sprawy IPO, OTK ZU), bez SAOS
+
+- 6.193 (2026-10-06): sn_szukaj (pola wyszukiwarki SN), sp_szukaj w Portalu Orzeczeń, SAOS zastępczo
+
+- 6.192 (2026-10-06): konektory MCP sp (sądy powszechne, link do orzeczenia) i tk (TK, wyszukiwanie proste)
+
+- 6.191 (2026-10-06): konektor sn: nagłówki widżetu i ponowienie po 403 ochrony sn.pl
+
+- 6.190 (2026-10-06): konektor MCP sn (karta orzeczenia), SAOS RZĄD 3, nieczynne linki SN usunięte
+
+- 6.189 (AUDYT-2026-10-05p): Dwie dziedziny DR w jednej sprawie: frazy DR-03/DR-04, zakres wierszy map aktów DR-02/DR-03, rozpoznanie sprawy karnej bez słowa „przestępstwo”.
+
 - 6.188 (2026-10-05o, AUDYT-2026-10-05o): AUDYT-2026-10-05o: widgety, wątki 1-5 wiadomości, etapy spraw w czacie (F-232-F-236)
 
 - 6.187 (AUDYT-2026-10-05n): F-230 — paczki skilli bez plików pluginu (`.claude-plugin/`, `.mcp.json`); claude.ai odrzucał wgrywany skill z manifestem. ZASADA 7, T34, dostarcz_skill.sh, skrypty paczek i workflow; CHECKSUMS 32/32 bez wpisów pluginu. F-231 (błąd własny 6.185/6.186): artefakty `__pycache__` w sumach i paczkach shared/audytu usunięte; pakowanie je pomija.
