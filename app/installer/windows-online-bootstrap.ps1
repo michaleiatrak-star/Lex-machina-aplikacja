@@ -106,8 +106,63 @@ function Test-RebootPending {
   )
 }
 
+# App-local Visual C++ runtime (a deployment Microsoft supports for the VC++
+# redistributable DLLs). When the system runtime is older than required and
+# cannot be upgraded (MSI 1603 after a cleaned Package Cache), the newer DLLs
+# from the same verified vc_redist are unpacked without installing anything
+# (bundle /layout, then an administrative MSI extract, no elevation) and later
+# copied next to the application executables. Windows loads DLLs from the
+# executable's folder first; the older system runtime is left untouched.
+$script:VcAppLocalDir = $null
+$script:VcAppLocalPattern = '^(vcruntime140(_1)?|msvcp140(_1|_2|_atomic_wait|_codecvt_ids)?|concrt140|vccorlib140|vcomp140)\.dll$'
+function Get-DllVersion([string]$path) {
+  $info = (Get-Item -LiteralPath $path).VersionInfo
+  return [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
+}
+function Expand-VcRuntimeAppLocal([string]$installer, [Version]$required, [string]$workDir) {
+  if (Test-Path -LiteralPath $workDir) { Remove-Item -LiteralPath $workDir -Recurse -Force }
+  $layout = Join-Path $workDir "layout"
+  $files = Join-Path $workDir "files"
+  $dllDir = Join-Path $workDir "dll"
+  New-Item -ItemType Directory -Force -Path $layout, $files, $dllDir | Out-Null
+  $bundle = Start-Process -FilePath $installer -ArgumentList @("/layout", "`"$layout`"", "/quiet", "/norestart") -PassThru -Wait
+  $msis = @(Get-ChildItem -LiteralPath $layout -Recurse -Filter "*.msi" -File -ErrorAction SilentlyContinue)
+  if (-not $msis.Count) { throw "VC_APPLOCAL_LAYOUT_EMPTY:$($bundle.ExitCode)" }
+  foreach ($msi in $msis) {
+    $extract = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/a", "`"$($msi.FullName)`"", "/qn", "TARGETDIR=`"$files`"") -PassThru -Wait
+    if ($extract.ExitCode -ne 0) { throw "VC_APPLOCAL_EXTRACT_FAILED:$($msi.Name):$($extract.ExitCode)" }
+  }
+  # Newest copy of each runtime DLL (x64 bundle: the System64 copies).
+  $chosen = @{}
+  foreach ($dll in Get-ChildItem -LiteralPath $files -Recurse -File -Filter "*.dll") {
+    if ($dll.Name -notmatch $script:VcAppLocalPattern) { continue }
+    $version = Get-DllVersion $dll.FullName
+    $key = $dll.Name.ToLowerInvariant()
+    if (-not $chosen.ContainsKey($key) -or $version -gt $chosen[$key].Version) {
+      $chosen[$key] = [pscustomobject]@{ Path = $dll.FullName; Version = $version }
+    }
+  }
+  foreach ($needed in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+    if (-not $chosen.ContainsKey($needed)) { throw "VC_APPLOCAL_DLL_MISSING:$needed" }
+    if ($chosen[$needed].Version -lt $required) { throw "VC_APPLOCAL_DLL_TOO_OLD:${needed}:$($chosen[$needed].Version)<$required" }
+  }
+  foreach ($item in $chosen.Values) { Copy-Item -LiteralPath $item.Path -Destination $dllDir -Force }
+  Remove-Item -LiteralPath $layout, $files -Recurse -Force -ErrorAction SilentlyContinue
+  return $dllDir
+}
+function Copy-VcRuntimeAppLocal([string]$dllDir, [string[]]$targets) {
+  foreach ($target in $targets) {
+    if (-not $target -or -not (Test-Path -LiteralPath $target -PathType Container)) { continue }
+    Get-ChildItem -LiteralPath $dllDir -File -Filter "*.dll" | ForEach-Object {
+      Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+    }
+    Write-Host "Visual C++ runtime (app-local) placed in $target"
+  }
+}
+
 # Runs vc_redist with a log; on failure accepts an already working runtime
-# (>= floor) and otherwise explains the cause instead of a bare exit code.
+# (>= floor), then deploys the required runtime app-local, and otherwise
+# explains the cause instead of a bare exit code.
 function Install-VcRuntime([string]$installer, [Version]$required, [string]$logDir, [string]$errorPrefix, [int]$timeoutMs = 600000) {
   New-Item -ItemType Directory -Force -Path $logDir | Out-Null
   $log = Join-Path $logDir ("vc_redist-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
@@ -137,6 +192,15 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
     Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); using installed $present (>= $($script:VcRuntimeFloor))"
     return $code
   }
+  # The system runtime stays older: the required version goes next to the application instead.
+  $appLocalError = $null
+  try {
+    $script:VcAppLocalDir = Expand-VcRuntimeAppLocal $installer $required (Join-Path $logDir "..\vc-applocal")
+    Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); installed $(if ($present) { $present } else { 'none' }) stays, the required runtime is deployed next to the application"
+    return $code
+  } catch {
+    $appLocalError = $_.Exception.Message
+  }
   $logText = ""
   Get-ChildItem -LiteralPath $logDir -Filter ([IO.Path]::GetFileNameWithoutExtension($log) + "*") -ErrorAction SilentlyContinue |
     ForEach-Object { $logText += (Get-Content -Raw -LiteralPath $_.FullName -ErrorAction SilentlyContinue) }
@@ -150,6 +214,7 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
   if (-not $hints.Count) {
     $hints += "napraw albo odinstaluj 'Microsoft Visual C++ 2015-2022 Redistributable (x64)' w Panelu sterowania, uruchom komputer ponownie i powtorz instalacje"
   }
+  if ($appLocalError) { $hints += "wdrozenie lokalne obok aplikacji tez sie nie udalo ($appLocalError)" }
   $installedText = if ($present) { "zainstalowana $present" } else { "brak runtime" }
   throw "${errorPrefix}_FAILED:$code - Visual C++ $required nie zainstalowal sie ($installedText). Co zrobic: $($hints -join '; '). Log: $log"
 }
@@ -569,6 +634,16 @@ if (-not $modelsReady) {
 }
 
 Write-Host "[6/6] Integrity lock and offline acceptance"
+# A system Visual C++ runtime that could not be upgraded: the required one goes
+# next to every executable of the runtime before the integrity lock is made.
+if ($script:VcAppLocalDir) {
+  $vcTargets = @($runtime, $nodeDir, $pythonDir) + @(
+    Get-ChildItem -LiteralPath $runtime -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -notmatch '\\(prerequisites|bootstrap)\\' } |
+      ForEach-Object { $_.DirectoryName }
+  ) | Sort-Object -Unique
+  Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
+}
 & (Join-Path $bootstrapRoot "generate-component-lock.ps1") `
   -PayloadRoot $runtime `
   -Output (Join-Path $runtime "component-lock.json") `
