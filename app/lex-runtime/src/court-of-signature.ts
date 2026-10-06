@@ -65,14 +65,14 @@ const WHERE: Record<SignatureCourt, { label: string; use: string; card: string }
     card: "https://orzeczenia.ms.gov.pl"
   },
   KIO: { label: "Krajowa Izba Odwoławcza", use: "kio_sprawdz_sygnature (UZP)", card: "https://orzeczenia.uzp.gov.pl" },
-  TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature, a dokument z IPO sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" }
+  TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature (karta sprawy IPO, OTK ZU; nie SAOS), a dokument sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" }
 };
 
 // Courts each search source publishes.
 const COVERS: Record<string, readonly SignatureCourt[]> = {
   cbosa: ["NSA_WSA"],
   kio: ["KIO"],
-  saos: ["SN", "POWSZECHNY", "TK", "KIO"],
+  saos: ["SN", "POWSZECHNY", "KIO"],
   sn: ["SN"],
   sp: ["POWSZECHNY"],
   tk: ["TK"]

@@ -1584,7 +1584,26 @@ export class LegalVerificationToolRuntime {
     }));
   }
 
+  // One turn: the same call with the same input asks the source once.
+  private readonly answered = new Map<string, string>();
+
   async runTools(
+    calls: NormalizedToolCall[]
+  ): Promise<NormalizedToolResult[]> {
+    const key = (call: NormalizedToolCall) => `${call.name}:${stableJson(call.input)}`;
+    const fresh = calls.filter((call, index) => !this.answered.has(key(call)) && calls.findIndex((other) => key(other) === key(call)) === index);
+    const ran = new Map((await this.runFresh(fresh)).map((result) => [result.tool_use_id, result.content] as const));
+    const now = new Map<string, string>();
+    for (const call of fresh) {
+      const content = ran.get(call.id) ?? "";
+      now.set(key(call), content);
+      // A failure (source down, timeout, refusal) is not remembered: a retry asks again.
+      if (!/"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content)) this.answered.set(key(call), content);
+    }
+    return calls.map((call) => ({ tool_use_id: call.id, content: now.get(key(call)) ?? this.answered.get(key(call)) ?? "" }));
+  }
+
+  private async runFresh(
     calls: NormalizedToolCall[]
   ): Promise<NormalizedToolResult[]> {
     const results: NormalizedToolResult[] = [];
@@ -2154,3 +2173,12 @@ export type LegalVerificationToolFactory = (
   ledger: VerificationLedger,
   context?: { localModel: boolean }
 ) => LegalVerificationToolRuntime;
+
+/** JSON with sorted keys: the same input written in another key order is the same call. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson((value as Record<string, unknown>)[name])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}

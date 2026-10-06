@@ -69891,6 +69891,20 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06e — konektor tk wyłącznie ze źródeł urzędowych (IPO, OTK ZU), bez SAOS (6.194)
+
+### 1. ŹRÓDŁO
+Użytkownik: `tk_sprawdz_sygnature` dla P 21/19 zwrócił OUT_OF_SCOPE ze ścieżki SAOS. Zasada: w SAOS szuka tylko SAOS; orzeczenia TK są w `otkzu.trybunal.gov.pl` i `ipo.trybunal.gov.pl` (wyszukiwarka IPO bywa niesprawna).
+
+### 2. ZMIANA
+- `tk_sprawdz_sygnature`: (1) karta sprawy IPO GET `view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+28%2F05` z kontrolą sygnatury i listą dokumentów (`dokument=`); (2) wyszukiwarka OTK ZU (`/Wyszukiwanie`, pole Sygnatura) → pozycje `/{rok}/{A|B}/{poz}`; (3) formularz JSF IPO. Ścieżka SAOS usunięta. Brak trafienia → OUT_OF_SCOPE z linkami urzędowymi; awaria wszystkich → ERROR.
+- Aplikacja: sygnatura TK w `saos_search` przekierowana do `tk_sprawdz_sygnature` (SAOS nie pokrywa TK).
+- HIERARCHIA-ZRODEL, DOSTEP-MASZYNOWY-API (shared 3.99.15), manifest, test 10c, G40B.
+
+### 3. WERYFIKACJA
+Testy offline tk (karta IPO, dokumenty, formularz i wyniki OTK ZU): OK; test wykrył błąd (zakładka „pokaz=dokumenty” liczona jako dokument) — poprawiony. Wzorce adresów IPO/OTK ZU z publicznych odnośników; niezmierzone na żywo (hosty TK zablokowane w piaskownicy).
+
+
 ## AUDYT-2026-10-06d — konektor sn: wszystkie pola wyszukiwarki SN; sp_szukaj w Portalu Orzeczeń, SAOS zastępczo (6.193)
 
 ### 1. ŹRÓDŁO

@@ -201,7 +201,7 @@ ryzyku dezaktualizacji, redakcja profesjonalna).
   |---|---|---|
   | SN | `sn.pl` | `snproxy` JSON (`searchOrzeczenia` → id → `OrzeczeniePlikHtml`); **link = karta `…/wyszukiwarka-orzeczen?orzeczenie=ID`**; MCP `sn_*`, w aplikacji `verify_case_reference` |
   | SR/SO/SA | `orzeczenia.ms.gov.pl` + portal konkretnego sądu | deterministyczny GET po sygnaturze; portal lokalny rozstrzyga AMBIGUOUS; **link = samo orzeczenie `/content/$N/{id}` (stały)**; MCP `sp_*` |
-  | TK | `ipo.trybunal.gov.pl` / `otkzu.trybunal.gov.pl` | formularz JSF `Szukaj?cid=1` wysyłany bez przeglądarki (sesja + ViewState → POST z sygnaturą); zapasowo SAOS do 2015; MCP `tk_*`, odczyt dokumentu z kontrolą sygnatury; link = dokument orzeczenia |
+  | TK | `ipo.trybunal.gov.pl` / `otkzu.trybunal.gov.pl` | tylko źródła urzędowe, **bez SAOS**: karta sprawy IPO GET `view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+33%2F07` → wyszukiwarka OTK ZU (`/Wyszukiwanie`, pozycja `/{rok}/{A\|B}/{poz}`) → formularz JSF `Szukaj?cid=1` (bywa niesprawny); brak trafienia = OUT_OF_SCOPE z linkami urzędowymi; MCP `tk_*`, odczyt dokumentu z kontrolą sygnatury; link = dokument orzeczenia |
   | **NSA/WSA** | **`orzeczenia.nsa.gov.pl` / CBOSA** | **fresh-probe → direct HTML: `POST /cbo/search` → sesyjna paginacja `/cbo/find?p=N` → `/doc/{ID}` → exact-match**; implementacja: `shared/CBOSA-ADAPTER.md` + `tools/cbosa_parser.py`. Gdy direct CBOSA niedostępna → `shared/SYGNATURY.md` V-SYG-0.5 |
   | SAOS | `saos.org.pl` | **RZĄD 3** (agregator akademicki): discovery / kontrola krzyżowa; zastępczo tylko przy awarii bazy urzędowej albo braku trwałego linku w portalu |
   

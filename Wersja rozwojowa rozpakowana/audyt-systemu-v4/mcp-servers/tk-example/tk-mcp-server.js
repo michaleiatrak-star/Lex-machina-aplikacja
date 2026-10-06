@@ -1,20 +1,16 @@
 #!/usr/bin/env node
 /**
- * tk-mcp-server.js — orzeczenia Trybunału Konstytucyjnego (2026-10-06). Konektor PROSTY.
+ * tk-mcp-server.js — orzeczenia Trybunału Konstytucyjnego (2026-10-06). Konektor PROSTY, wyłącznie źródła urzędowe.
  *
- * Zbadane (shared/DOSTEP-MASZYNOWY-API.md, F-184): ipo.trybunal.gov.pl i otkzu.trybunal.gov.pl są
- * osiągalne (200); wyszukiwarka IPO (`/ipo/Szukaj?cid=1`) to formularz JSF/PrimeFaces z ViewState —
- * `Sprawa?sygnatura=` nie jest kluczem, ale formularz da się wysłać bez przeglądarki: GET strony
- * (ciasteczko sesji + javax.faces.ViewState) → POST formularza z sygnaturą. Nazwy pól odczytujemy
- * z pobranego HTML (pole z „sygn” w id/nazwie, przycisk „Szukaj”), bo nie są stałe. Kolejność:
- *  • tk_sprawdz_sygnature — najpierw formularz IPO (źródło urzędowe); gdy formularz się zmieni albo
- *    IPO nie odpowie — SAOS (RZĄD 3; TK tylko do 2015 r.) po sygnaturze, z linkiem urzędowym,
- *    gdy SAOS go zna; poza oknem SAOS → OUT_OF_SCOPE z gotowym zapytaniem do wyszukiwarki
- *    (site:ipo.trybunal.gov.pl "K 33/07"), nie „nie istnieje”;
- *  • tk_pobierz — treść spod adresu IPO/OTK ZU (stały link do dokumentu orzeczenia) z kontrolą,
- *    że tekst zawiera pytaną sygnaturę.
- * Źródłem jest link do samego orzeczenia w IPO/OTK ZU. Orzeczenie TK to materiał orzeczniczy
- * (RZĄD 2A z IPO), nie źródło brzmienia przepisu (ELI).
+ * SAOS nie jest źródłem dla TK (SAOS przeszukuje się tylko narzędziami SAOS). Kolejność:
+ *  • tk_sprawdz_sygnature — (1) karta sprawy IPO pod stałym adresem
+ *    `ipo.trybunal.gov.pl/ipo/view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+33%2F07` (GET, bez sesji),
+ *    z kontrolą, że strona zawiera pytaną sygnaturę, i listą dokumentów sprawy; (2) wyszukiwarka OTK ZU
+ *    (`otkzu.trybunal.gov.pl/Wyszukiwanie`, pole Sygnatura) → pozycja zbioru `/{rok}/{A|B}/{poz}`;
+ *    (3) formularz JSF IPO (`/ipo/Szukaj?cid=1`, bywa niesprawny); brak trafienia → OUT_OF_SCOPE
+ *    z linkami urzędowymi (karta IPO, wyszukiwarka OTK ZU), nie „nie istnieje”;
+ *  • tk_pobierz — treść spod adresu IPO/OTK ZU z kontrolą, że tekst zawiera pytaną sygnaturę.
+ * Orzeczenie TK to materiał orzeczniczy (RZĄD 2A), nie źródło brzmienia przepisu (ELI).
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -23,7 +19,8 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
 
-const SAOS = "https://www.saos.org.pl/api";
+const IPO = "https://ipo.trybunal.gov.pl/ipo";
+const OTKZU = "https://otkzu.trybunal.gov.pl";
 const UA = "Mozilla/5.0 (compatible; LexMachina-tk/1.0)";
 const PORCJA = 20000;
 const HOSTY = new Set(["ipo.trybunal.gov.pl", "otkzu.trybunal.gov.pl", "trybunal.gov.pl", "www.trybunal.gov.pl"]);
@@ -130,16 +127,102 @@ async function ipoSzukaj(syg) {
   return wynikiIpo(await r2.text(), syg, forma.akcja);
 }
 
-async function pobierz(url, typ = "text") {
-  const r = await fetch(url, { signal: sygnal(30000), headers: { "User-Agent": UA, Accept: typ === "json" ? "application/json" : "text/html,*/*" } });
+/** Stały adres karty sprawy w IPO (zakładka dokumentów): spacja jako „+”, ukośnik jako %2F. */
+export function urlSprawyIpo(syg) {
+  return `${IPO}/view/sprawa.xhtml?pokaz=dokumenty&sygnatura=${encodeURIComponent(normalizujSygnature(syg)).replace(/%20/g, "+")}`;
+}
+
+/** Dokumenty z karty sprawy IPO (odnośniki z parametrem `dokument=`). Czysta funkcja. */
+export function dokumentyIpo(html, baza = `${IPO}/view/sprawa.xhtml`) {
+  const wynik = [];
+  for (const [, atr, tresc] of String(html ?? "").matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = ATRYBUT(atr, "href");
+    if (!href || !/[?&;]dokument=\d+/i.test(dekoduj(href))) continue;
+    const url = new URL(dekoduj(href), baza).toString();
+    if (dozwolonyHost(url) && !wynik.some((d) => d.url === url)) wynik.push({ tytul: tekst(tresc).replace(/\n/g, " ") || null, url });
+  }
+  return wynik;
+}
+
+/**
+ * Formularz wyszukiwarki z polem sygnatury (OTK ZU): akcja, metoda, pola ukryte, nazwa pola sygnatury
+ * i przycisku. Czysta funkcja; null, gdy formularza nie da się rozpoznać.
+ */
+export function formularzSygnatury(html, baza = `${OTKZU}/Wyszukiwanie`) {
+  for (const [, atrForm, wnetrze] of String(html ?? "").matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)) {
+    const pola = {};
+    let poleSygnatury = null;
+    let przycisk = null;
+    for (const [tag] of wnetrze.matchAll(/<(?:input|button)\b[^>]*>/gi)) {
+      const nazwa = ATRYBUT(tag, "name");
+      if (!nazwa) continue;
+      const typ = (ATRYBUT(tag, "type") ?? (/^<button/i.test(tag) ? "submit" : "text")).toLowerCase();
+      const id = ATRYBUT(tag, "id") ?? "";
+      if (typ === "hidden") pola[nazwa] = dekoduj(ATRYBUT(tag, "value") ?? "");
+      else if ((typ === "text" || typ === "search") && /sygn/i.test(`${nazwa} ${id}`) && !poleSygnatury) poleSygnatury = nazwa;
+      else if (typ === "submit" && !przycisk) przycisk = { nazwa, wartosc: dekoduj(ATRYBUT(tag, "value") ?? "") };
+    }
+    if (!poleSygnatury) continue;
+    const akcja = new URL(dekoduj(ATRYBUT(atrForm, "action") ?? "") || baza, baza).toString();
+    return { akcja, metoda: (ATRYBUT(atrForm, "method") ?? "get").toLowerCase(), pola, poleSygnatury, przycisk };
+  }
+  return null;
+}
+
+/** Pozycje OTK ZU (`/{rok}/{A|B}/{poz}`, `downloadOTK?mpo=`) przy pytanej sygnaturze. Czysta funkcja. */
+export function wynikiOtkzu(html, syg, baza = `${OTKZU}/Wyszukiwanie`) {
+  const linki = [];
+  for (const wiersz of String(html ?? "").split(/<\/tr>|<\/li>|<\/article>|<\/div>\s*<div/i)) {
+    if (!zawieraSygnature(tekst(wiersz), syg)) continue;
+    for (const [, href] of wiersz.matchAll(/href="([^"]+)"/g)) {
+      const url = new URL(dekoduj(href), baza).toString();
+      if (!dozwolonyHost(url) || !/\/\d{4}\/[AB]\/\d+(?:$|[?#])|downloadOTK\?mpo=\d+/.test(url)) continue;
+      if (!linki.includes(url)) linki.push(url);
+    }
+  }
+  return linki;
+}
+
+const naglowki = { "User-Agent": UA, Accept: "text/html,*/*" };
+
+/** Karta sprawy IPO po sygnaturze: null, gdy strona nie dotyczy tej sprawy. */
+async function ipoSprawa(syg) {
+  const url = urlSprawyIpo(syg);
+  const r = await fetch(url, { signal: sygnal(30000), headers: naglowki });
+  if (!r.ok) throw new Error(`IPO HTTP ${r.status}`);
+  const html = await r.text();
+  if (!zawieraSygnature(tekst(html), syg)) return null;
+  return { url_sprawy: url, dokumenty: dokumentyIpo(html, r.url || url) };
+}
+
+/** Wyszukiwarka OTK ZU: formularz z polem Sygnatura → pozycje zbioru przy tej sygnaturze. */
+async function otkzuSzukaj(syg) {
+  const start = `${OTKZU}/Wyszukiwanie`;
+  const r1 = await fetch(start, { signal: sygnal(30000), headers: naglowki });
+  if (!r1.ok) throw new Error(`OTK ZU HTTP ${r1.status}`);
+  const ciastka = (r1.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  const forma = formularzSygnatury(await r1.text(), r1.url || start);
+  if (!forma) throw new Error("OTK ZU: nie rozpoznano formularza wyszukiwarki (zmiana strony?)");
+  const dane = new URLSearchParams({ ...forma.pola, [forma.poleSygnatury]: normalizujSygnature(syg),
+    ...(forma.przycisk ? { [forma.przycisk.nazwa]: forma.przycisk.wartosc } : {}) });
+  const naglowkiSesji = { ...naglowki, Referer: start, ...(ciastka ? { Cookie: ciastka } : {}) };
+  const r2 = forma.metoda === "post"
+    ? await fetch(forma.akcja, { method: "POST", signal: sygnal(30000), body: dane.toString(), headers: { ...naglowkiSesji, "Content-Type": "application/x-www-form-urlencoded" } })
+    : await fetch(`${forma.akcja.split("?")[0]}?${dane}`, { signal: sygnal(30000), headers: naglowkiSesji });
+  if (!r2.ok) throw new Error(`OTK ZU HTTP ${r2.status}`);
+  return wynikiOtkzu(await r2.text(), syg, r2.url || forma.akcja);
+}
+
+async function pobierz(url) {
+  const r = await fetch(url, { signal: sygnal(30000), headers: naglowki });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return typ === "json" ? await r.json() : await r.text();
+  return await r.text();
 }
 
 const baza = { source: "ipo.trybunal.gov.pl", query_type: "orzeczenie" };
 const zapytanie = (syg) => `site:ipo.trybunal.gov.pl "${normalizujSygnature(syg)}"`;
-const NOTA = "Źródłem jest link do samego orzeczenia w IPO/OTK ZU. IPO nie ma wyszukiwania po sygnaturze dostępnego bez przeglądarki — " +
-  "SAOS (RZĄD 3) obejmuje TK tylko do 2015 r. Brak trafienia ≠ brak orzeczenia.";
+const NOTA = "Źródłem jest link do samego orzeczenia w IPO/OTK ZU (tylko źródła urzędowe TK; SAOS nie jest źródłem TK). " +
+  "Brak trafienia ≠ brak orzeczenia.";
 const odp = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
 const blad = (e) => ({ status: "ERROR", ...baza, detail: String(e?.message ?? e), retrieved_at: new Date().toISOString() });
 
@@ -147,9 +230,9 @@ const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: 
 
 server.registerTool("tk_sprawdz_sygnature", {
   title: "Sprawdź sygnaturę orzeczenia Trybunału Konstytucyjnego",
-  description: "Orzeczenie TK po sygnaturze (K, P, SK, U, Kp, Kpt…): wyszukiwarka IPO; zapasowo SAOS (do 2015 r.) z linkiem urzędowym; poza tym " +
-    "zwraca gotowe zapytanie do wyszukiwarki (site:ipo.trybunal.gov.pl) — znaleziony adres IPO sprawdź narzędziem tk_pobierz. " +
-    "Najpierw formularz wyszukiwarki IPO (Szukaj?cid=1), SAOS tylko gdy IPO nie da wyniku.",
+  description: "Orzeczenie TK po sygnaturze (K, P, SK, U, Kp, Kpt…) wyłącznie ze źródeł urzędowych: karta sprawy IPO " +
+    "(view/sprawa.xhtml?sygnatura=), wyszukiwarka OTK ZU (otkzu.trybunal.gov.pl), formularz IPO. Bez SAOS. Brak trafienia → " +
+    "OUT_OF_SCOPE z linkami urzędowymi; znaleziony dokument sprawdź narzędziem tk_pobierz.",
   inputSchema: { sygnatura: z.string().min(3).max(30).describe("np. K 33/07, SK 3/20") },
 }, async ({ sygnatura }) => {
   const oczekiwana = normalizujSygnature(sygnatura);
@@ -157,8 +240,30 @@ server.registerTool("tk_sprawdz_sygnature", {
     return odp({ status: "OUT_OF_SCOPE", ...baza, oczekiwana, powod: "SYGNATURA_INNEGO_SADU",
       uwaga: `${oczekiwana} nie ma postaci sygnatury TK (repertorium K, P, SK, U, Kp, Kpt, Pp, Ts, Tw, S bez numeru wydziału).` });
   }
-  // 1. Wyszukiwarka IPO (źródło urzędowe). Trafienie = link przy pytanej sygnaturze; tożsamość potwierdza tk_pobierz.
-  let ipoBlad = null;
+  const bledy = {};
+  // 1. Karta sprawy IPO pod stałym adresem (źródło urzędowe).
+  try {
+    const sprawa = await ipoSprawa(oczekiwana);
+    if (sprawa) {
+      return odp({ status: "FOUND", ...baza, metoda: "IPO — karta sprawy", oczekiwana,
+        result: { sygnatura: oczekiwana, url_orzeczenia: sprawa.dokumenty[0]?.url ?? sprawa.url_sprawy, url_sprawy: sprawa.url_sprawy, dokumenty: sprawa.dokumenty },
+        uwaga: "Karta sprawy IPO zawiera pytaną sygnaturę. Przed powołaniem przeczytaj dokument orzeczenia tk_pobierz (z sygnaturą). " + NOTA,
+        retrieved_at: new Date().toISOString() });
+    }
+    bledy.ipo = "karta sprawy IPO nie zawiera pytanej sygnatury";
+  } catch (e) { bledy.ipo = String(e?.message ?? e); }
+  // 2. OTK ZU — urzędowy zbiór orzeczeń (pozycja /{rok}/{A|B}/{poz}).
+  try {
+    const linki = await otkzuSzukaj(oczekiwana);
+    if (linki.length) {
+      return odp({ status: linki.length === 1 ? "FOUND" : "AMBIGUOUS", ...baza, source: "otkzu.trybunal.gov.pl", metoda: "OTK ZU — wyszukiwarka (Sygnatura)", oczekiwana,
+        ...(linki.length === 1 ? { result: { sygnatura: oczekiwana, url_orzeczenia: linki[0] } } : { kandydaci: linki.map((url) => ({ sygnatura: oczekiwana, url_orzeczenia: url })) }),
+        uwaga: "Pozycja OTK ZU przy pytanej sygnaturze — przed powołaniem przeczytaj ją tk_pobierz (z sygnaturą). " + NOTA,
+        retrieved_at: new Date().toISOString() });
+    }
+    bledy.otkzu = "brak trafienia w wyszukiwarce OTK ZU";
+  } catch (e) { bledy.otkzu = String(e?.message ?? e); }
+  // 3. Formularz JSF IPO (bywa niesprawny).
   try {
     const linki = await ipoSzukaj(oczekiwana);
     if (linki.length) {
@@ -167,33 +272,13 @@ server.registerTool("tk_sprawdz_sygnature", {
         uwaga: "Link z wyszukiwarki IPO — przed powołaniem przeczytaj dokument tk_pobierz (z sygnaturą). " + NOTA,
         retrieved_at: new Date().toISOString() });
     }
-  } catch (e) {
-    ipoBlad = String(e?.message ?? e);
-  }
-  // 2. SAOS (RZĄD 3, TK do 2015 r.) — gdy IPO nie dało wyniku.
-  try {
-    const dane = await pobierz(`${SAOS}/search/judgments?caseNumber=${encodeURIComponent(oczekiwana)}&courtType=CONSTITUTIONAL_TRIBUNAL&pageSize=10`, "json");
-    const trafione = (dane.items ?? []).filter((it) => (it.courtCases ?? []).some((c) => normalizujSygnature(c.caseNumber).toUpperCase() === oczekiwana.toUpperCase()));
-    if (!trafione.length) {
-      return odp({ status: "OUT_OF_SCOPE", ...baza, oczekiwana, zapytanie_wyszukiwarki: zapytanie(oczekiwana), ...(ipoBlad ? { ipo_blad: ipoBlad } : { ipo: "brak trafienia w wyszukiwarce IPO" }),
-        uwaga: `Brak ${oczekiwana} w SAOS (TK tylko do 2015 r.). Znajdź dokument orzeczenia w IPO (zapytanie_wyszukiwarki) i sprawdź go tk_pobierz. ${NOTA}`,
-        retrieved_at: new Date().toISOString() });
-    }
-    const kandydaci = [];
-    for (const it of trafione.slice(0, 5)) {
-      const pelny = await pobierz(`${SAOS}/judgments/${it.id}`, "json").catch(() => null);
-      const zrodlo = pelny?.data?.source?.judgmentUrl;
-      kandydaci.push({ sygnatura: oczekiwana, data: it.judgmentDate ?? null, rodzaj: it.judgmentType ?? null,
-        url_orzeczenia: zrodlo && dozwolonyHost(zrodlo) ? zrodlo : null, url_saos: `https://www.saos.org.pl/judgments/${it.id}` });
-    }
-    return odp({ status: kandydaci.length === 1 ? "FOUND" : "AMBIGUOUS", ...baza, source: "saos → IPO", oczekiwana,
-      ...(kandydaci.length === 1 ? { result: kandydaci[0] } : { kandydaci }),
-      ...(kandydaci.some((k) => !k.url_orzeczenia) ? { zapytanie_wyszukiwarki: zapytanie(oczekiwana) } : {}),
-      uwaga: "Rekord z SAOS (RZĄD 3) — powołuj url_orzeczenia z IPO; gdy go brak, znajdź dokument w IPO i sprawdź tk_pobierz. " + NOTA,
-      retrieved_at: new Date().toISOString() });
-  } catch (e) {
-    return odp({ ...blad(e), zapytanie_wyszukiwarki: zapytanie(oczekiwana), ...(ipoBlad ? { ipo_blad: ipoBlad } : {}) });
-  }
+    bledy.ipo_wyszukiwarka = "brak trafienia w formularzu IPO";
+  } catch (e) { bledy.ipo_wyszukiwarka = String(e?.message ?? e); }
+  const wszystkieBledy = Object.values(bledy).every((b) => /HTTP|fetch|abort|timeout|rozpoznano|ECONN|ENOTFOUND/i.test(b));
+  return odp({ status: wszystkieBledy ? "ERROR" : "OUT_OF_SCOPE", ...baza, oczekiwana, zrodla: bledy,
+    url_sprawy: urlSprawyIpo(oczekiwana), url_wyszukiwarki_otkzu: `${OTKZU}/Wyszukiwanie`, zapytanie_wyszukiwarki: zapytanie(oczekiwana),
+    uwaga: `${wszystkieBledy ? "Źródła urzędowe TK nie odpowiedziały" : `Brak trafienia ${oczekiwana} w IPO i OTK ZU`} — otwórz url_sprawy albo wyszukiwarkę OTK ZU; znaleziony dokument sprawdź tk_pobierz. ${NOTA}`,
+    retrieved_at: new Date().toISOString() });
 });
 
 server.registerTool("tk_pobierz", {

@@ -1897,6 +1897,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // Route-based path: the engine puts the qualifier in the prompt itself.
       ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
     ]);
+    corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
@@ -2074,6 +2075,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         const skill = record.name;
         const text = fs.readFileSync(record.skillFile, "utf8");
         corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
+        contextResources.add(`${path.basename(record.directory)}/SKILL.md`);
         audit.record("gate", "TASK_ROUTING", "OK", {
           source: taskRoute.source,
           skill,

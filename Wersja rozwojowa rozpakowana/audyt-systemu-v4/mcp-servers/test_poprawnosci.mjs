@@ -308,11 +308,11 @@ await przypadek("SP: I C 100/15 w SO Poznań — stały link do orzeczenia zawie
   ok(agregat.status === "AMBIGUOUS", `agregat: ${agregat.status} (oczekiwane AMBIGUOUS — sygnatura w wielu sądach)`);
 });
 
-// ── 10c. TK: formularz wyszukiwarki IPO (JSF) daje link, a dokument spod linku zawiera sygnaturę.
-await przypadek("TK: K 33/07 — wyszukiwarka IPO, dokument zawiera sygnaturę", async (ok) => {
+// ── 10c. TK: źródła urzędowe (karta sprawy IPO / OTK ZU / formularz IPO) dają link, a dokument spod linku zawiera sygnaturę.
+await przypadek("TK: K 33/07 — IPO / OTK ZU, bez SAOS, dokument zawiera sygnaturę", async (ok) => {
   const w = await narzedzie("tk", "tk_sprawdz_sygnature", { sygnatura: "K 33/07" });
-  ok(["FOUND", "AMBIGUOUS"].includes(w.status), `status ${w.status} ${w.ipo_blad ?? w.detail ?? ""}`);
-  ok(w.metoda === "IPO — formularz wyszukiwarki", `metoda: ${w.metoda ?? w.source} (formularz IPO nie zadziałał: ${w.ipo_blad ?? "brak trafień"})`);
+  ok(["FOUND", "AMBIGUOUS"].includes(w.status), `status ${w.status} ${JSON.stringify(w.zrodla ?? w.detail ?? "")}`);
+  ok(/^(IPO|OTK ZU)/.test(w.metoda ?? "") && !/saos/i.test(JSON.stringify(w)), `metoda: ${w.metoda ?? w.source}`);
   const url = w.result?.url_orzeczenia ?? w.kandydaci?.[0]?.url_orzeczenia;
   if (url) {
     const p = await narzedzie("tk", "tk_pobierz", { url, sygnatura: "K 33/07" });

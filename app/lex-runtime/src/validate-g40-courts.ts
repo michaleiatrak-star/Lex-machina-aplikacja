@@ -6,7 +6,7 @@ import { LegalFederationToolRuntime } from "./legal-federation-tool-runtime.js";
 import { LexMcpConnectorStore } from "./lex-mcp-connectors.js";
 
 // G40B — konektory orzeczeń na żywo przez lex-mcp.mjs: sądy powszechne (Portal Orzeczeń, link do
-// samego orzeczenia), TK (formularz wyszukiwarki IPO), SN (karta). Wynik każdego przypadku w JSON.
+// samego orzeczenia), TK (karta sprawy IPO / OTK ZU, bez SAOS), SN (karta). Wynik każdego przypadku w JSON.
 const skillsRoot =
   process.env.LEX_SKILLS_PATH?.trim() ||
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../Wersja rozwojowa rozpakowana");
@@ -45,9 +45,9 @@ async function main(): Promise<void> {
     const tkLink = String(tk.result?.url_orzeczenia ?? tk.kandydaci?.[0]?.url_orzeczenia ?? "");
     const tkText = tkLink ? await call("tk", "tk_pobierz", { url: tkLink, sygnatura: "K 33/07" }) : {};
     cases.push({
-      name: "TK: K 33/07 przez formularz IPO, dokument zawiera sygnaturę",
-      pass: tk.metoda === "IPO — formularz wyszukiwarki" && tkText.status === "FOUND",
-      detail: { status: tk.status, metoda: tk.metoda ?? tk.source, link: tkLink, ipoError: tk.ipo_blad, textStatus: tkText.status }
+      name: "TK: K 33/07 ze źródła urzędowego (IPO / OTK ZU), dokument zawiera sygnaturę",
+      pass: /^(IPO|OTK ZU)/.test(String(tk.metoda ?? "")) && tkText.status === "FOUND",
+      detail: { status: tk.status, metoda: tk.metoda ?? tk.source, link: tkLink, sources: tk.zrodla, textStatus: tkText.status }
     });
 
     const sn = await call("sn", "sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" });

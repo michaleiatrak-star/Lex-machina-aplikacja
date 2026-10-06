@@ -108,7 +108,7 @@
     },
     {
       "name": "tk_sprawdz_sygnature",
-      "description": "TK: orzeczenie po sygnaturze (SAOS do 2015 + zapytanie do IPO)"
+      "description": "TK: orzeczenie po sygnaturze wyłącznie ze źródeł urzędowych (karta sprawy IPO, OTK ZU, formularz IPO); bez SAOS"
     },
     {
       "name": "tk_pobierz",

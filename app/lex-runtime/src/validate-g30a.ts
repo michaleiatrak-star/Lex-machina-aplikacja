@@ -234,6 +234,7 @@ const checks = {
         ?.enum ?? []
     ) ===
       JSON.stringify([
+        "SN",
         "SAOS",
         "CBOSA"
       ]),

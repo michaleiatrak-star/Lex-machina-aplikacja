@@ -193,6 +193,13 @@ describe("mandatory path in a session", () => {
     expect(params?.systemPrompt).toContain("Tryb: PRAWNIK");
     expect(result.mandatoryPath).toMatchObject({ profile: "PELNY" });
     expect(result.mandatoryPath!.steps.find((step) => step.id === "PELNY:MOD-CN-GATE")).toMatchObject({ status: "MET", by: "APLIKACJA" });
+    // Jeden wiersz na plik: zasób PEŁNEGO profilu nie wraca jako wyzwalacz, router nie wraca jako skill.
+    const files = result.mandatoryPath!.steps
+      .filter((step) => step.layer === "ROUTER" && !step.id.endsWith("-BLOK") && step.id !== "KROK-0A-WYKONANIE")
+      .map((step) => step.label.split(" — ")[0]!.replace(/^R-\d /, ""));
+    expect(files.length).toBe(new Set(files).size);
+    expect(result.mandatoryPath!.steps.some((step) => step.id === "MOD-CN-GATE")).toBe(false);
+    expect(result.mandatoryPath!.steps.some((step) => step.id === "SKILL:prawny-router-v3")).toBe(false);
     expect(result.modeDecision?.mode).toBe("PRAWNIK");
     expect(verified).toEqual(expect.arrayContaining(["art. 233 KK", "art. 234 KK", "art. 238 KK"]));
     // PEŁNY without visible gate blocks: one correcting round, then ⛔ TRYB ZDEGRADOWANY.

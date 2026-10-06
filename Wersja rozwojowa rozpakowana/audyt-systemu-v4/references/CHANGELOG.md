@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.194 (2026-10-06): konektor tk wyłącznie ze źródeł urzędowych (karta sprawy IPO, OTK ZU), bez SAOS
+
 - 6.193 (2026-10-06): sn_szukaj (pola wyszukiwarki SN), sp_szukaj w Portalu Orzeczeń, SAOS zastępczo
 
 - 6.192 (2026-10-06): konektory MCP sp (sądy powszechne, link do orzeczenia) i tk (TK, wyszukiwanie proste)
