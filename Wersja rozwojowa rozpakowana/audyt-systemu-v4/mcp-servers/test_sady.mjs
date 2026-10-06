@@ -204,5 +204,22 @@
   <a href="/detailsetpc/$N/990000000000001_I_ETPC_000001_2019_De_2020-01-01_001">1/19</a>`;
   assert.deepStrictEqual(parsujWyniki(wyniki), { liczba: 2, docIds: [id, "990000000000001_I_ETPC_000001_2019_De_2020-01-01_001"] });
   assert.deepStrictEqual(parsujWyniki("<p>Nie znaleziono żadnego wyniku</p>"), { liczba: 0, docIds: [] });
-  console.log("OK: formularz wyszukiwarki (pole numeru skargi i frazy) i strona wyników");
+  // Prawdziwy formularz etpcz.ms.gov.pl (G40B 2026-10-06): complaintNumber, nie complainant (skarżący).
+  const prawdziwy = `<form onsubmit="javascript:return Tapestry.waitForPage(event);" action="/searchetpc.advancedsearchform" method="post" id="advancedSearchForm">
+<input value="$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/1" name="t:ac" type="hidden"><input value="22oQ:H4sI" name="t:formdata" type="hidden">
+<input autocomplete="off" id="complainant" name="complainant" type="text"><input autocomplete="off" id="complaintNumber" name="complaintNumber" type="text">
+<input id="conventionArticle" name="conventionArticle" type="text"><input id="conventionProtocolArticle" name="conventionProtocolArticle" type="text">
+<input autocomplete="off" id="phrase" name="phrase" type="text">
+<select class="courtSelect" id="type" name="type"><option value="">wszystkie</option><option value="Wy">wyrok</option></select>
+<select class="courtSelect" id="sentenceYear" name="sentenceYear"><option value="">---</option><option value="2021" selected="selected">2021</option></select>
+<select class="courtSelect" id="complaintCountry" name="complaintCountry"><option value="">---</option></select>
+<input value="Szukaj" class="searchSubmit" id="advancedSearchFormSubmit" name="advancedSearchFormSubmit" type="submit"></form>`;
+  const f = formularzWyszukiwarki(prawdziwy, "https://etpcz.ms.gov.pl/");
+  assert.strictEqual(f.akcja, "https://etpcz.ms.gov.pl/searchetpc.advancedsearchform");
+  assert.strictEqual(f.metoda, "post");
+  assert.strictEqual(f.poleNumeru, "complaintNumber");
+  assert.strictEqual(f.poleFrazy, "phrase");
+  assert.deepStrictEqual(f.pola, { "t:ac": "$N/$N/$N/$N/$N/$N/$N/$N/$N/$N/1", "t:formdata": "22oQ:H4sI", type: "", sentenceYear: "2021", complaintCountry: "" });
+  assert.deepStrictEqual(f.przycisk, { nazwa: "advancedSearchFormSubmit", wartosc: "Szukaj" });
+  console.log("OK: formularz wyszukiwarki (pole numeru skargi i frazy) i strona wyników; prawdziwy formularz etpcz.ms.gov.pl");
 }

@@ -69891,6 +69891,18 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06i — etpcz: pole numeru skargi z pomiaru na żywo (G40B) (6.198)
+
+### 1. ŹRÓDŁO
+G40B (CI, 93c6c01): `etpcz_szukaj` 43447/19 → OUT_OF_SCOPE. Diagnostyka formularza: `POST /searchetpc.advancedsearchform`, pola `complaintNumber` (numer skargi), `complainant` (skarżący), `phrase`, selecty `type`/`sentenceYear`/`complaintCountry`, ukryte `t:ac`, `t:formdata`.
+
+### 2. ZMIANA
+⛔ Błąd konektora: wzorzec pola numeru (`numer|skarg|…`) nie rozpoznawał `complaintNumber` — zapytanie szło do innego pola. Poprawione (`complaint.?number|number|…`, z wyłączeniem `complainant`); selecty wysyłane z wartością zaznaczoną albo pierwszą.
+
+### 3. WERYFIKACJA
+Test na prawdziwym formularzu z logu G40B (`test_sady.mjs`): pole numeru `complaintNumber`, fraza `phrase`, akcja i pola ukryte. Ponowny pomiar na żywo: G40B na kolejnym commicie.
+
+
 ## AUDYT-2026-10-06h — konektor etpcz (ETPCz, baza MS); sądy powszechne: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie (6.197)
 
 ### 1. ŹRÓDŁO

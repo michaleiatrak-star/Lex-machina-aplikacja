@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.198 (2026-10-06): etpcz: pole numeru skargi (complaintNumber) z pomiaru na żywo w G40B
+
 - 6.197 (2026-10-06): konektor etpcz (ETPCz, baza MS); SP: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie
 
 - 6.196 (2026-10-06): sn: strona weryfikacji przeglądarki rozpoznana, ponowienie z ciasteczkami, SAOS zastępczo przy blokadzie

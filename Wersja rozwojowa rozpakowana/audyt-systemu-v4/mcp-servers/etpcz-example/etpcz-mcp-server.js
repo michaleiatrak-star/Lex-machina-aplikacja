@@ -3,7 +3,8 @@
  * etpcz-mcp-server.js — orzecznictwo Europejskiego Trybunału Praw Człowieka w bazie Ministerstwa
  * Sprawiedliwości (etpcz.ms.gov.pl; tłumaczenia i streszczenia po polsku). 2026-10-06.
  *
- * Mechanika (silnik Portalu Orzeczeń, jak orzeczenia.ms.gov.pl):
+ * Mechanika (silnik Portalu Orzeczeń, jak orzeczenia.ms.gov.pl; formularz zmierzony w G40B 2026-10-06:
+ *  POST /searchetpc.advancedsearchform, pola complaintNumber, phrase, complainant, selecty type/sentenceYear/complaintCountry):
  *  • Linki STAŁE: treść /etpccontent/$N/{docId}, metryka /detailsetpc/$N/{docId};
  *    docId: 990000000000001_I_ETPC_{nr skargi, 6 cyfr}_{20RR}_{Wy|De|…}_{data}_{nr},
  *    np. skarga 43447/19 → …_ETPC_043447_2019_Wy_2021-07-22_001 (rok zawsze „20”+RR: 34503/97 → 2097).
@@ -92,8 +93,17 @@ export function formularzWyszukiwarki(html, baza = HOST + "/") {
       else if (typ === "text" || typ === "search") tekstowe.push({ nazwa, opis });
       else if (typ === "submit" && !przycisk) przycisk = { nazwa, wartosc: dekoduj(ATRYBUT(tag, "value") ?? "") };
     }
+    // Listy wyboru (rodzaj, rok, państwo): wartość zaznaczona albo pierwsza (zwykle „wszystkie”).
+    for (const [, atr, opcje] of wnetrze.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
+      const nazwa = ATRYBUT(atr, "name");
+      if (!nazwa) continue;
+      const lista = [...opcje.matchAll(/<option\b([^>]*)>/gi)].map(([, a]) => a);
+      const wybrana = lista.find((a) => /\bselected\b/i.test(a)) ?? lista[0];
+      pola[nazwa] = dekoduj((wybrana && ATRYBUT(wybrana, "value")) ?? "");
+    }
     if (!tekstowe.length) continue;
-    const numer = tekstowe.find((p) => /skarg|sygn|numer|\bnr\b|signature|application/i.test(p.opis))?.nazwa ?? null;
+    // Pomiar G40B 2026-10-06: complaintNumber = numer skargi, complainant = skarżący, phrase = fraza.
+    const numer = tekstowe.find((p) => /complaint.?number|application.?number|numer|number|skarg|sygn|\bnr\b/i.test(p.opis) && !/^complainant$/i.test(p.nazwa))?.nazwa ?? null;
     const fraza = tekstowe.find((p) => p.nazwa !== numer && /fraz|tre[sś]|text|s[lł]ow|query|phrase|keyword|szukaj|search|q\b/i.test(p.opis))?.nazwa
       ?? tekstowe.find((p) => p.nazwa !== numer)?.nazwa ?? null;
     const akcja = new URL(dekoduj(ATRYBUT(atrForm, "action") ?? "") || baza, baza).toString();
