@@ -343,9 +343,9 @@ describe("model skill selection mode", () => {
     // Nor the qualifier the application already gave.
     expect(body.requiredModule).toBeUndefined();
     const [qualifier] = await runtime.runTools([read("dr-03-prawo-karne", "modules/mod-KK-kwalifikator-karnomaterialny.md")]);
-    expect(JSON.parse(qualifier!.content)).toMatchObject({ status: "ALREADY_IN_CONTEXT" });
+    expect(JSON.parse(qualifier!.content)).toMatchObject({ status: "OK", inContext: true, content: "" });
     const [router] = await runtime.runTools([read("prawny-router-v3", "SKILL.md")]);
-    expect(JSON.parse(router!.content)).toMatchObject({ status: "ALREADY_IN_CONTEXT" });
+    expect(JSON.parse(router!.content)).toMatchObject({ status: "OK", inContext: true, content: "" });
     expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "dr-03-prawo-karne"]);
     expect(runtime.missingCriminalQualifier()).toBeNull();
   });

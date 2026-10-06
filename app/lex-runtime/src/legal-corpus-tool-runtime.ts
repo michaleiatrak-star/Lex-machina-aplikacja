@@ -886,8 +886,10 @@ export class LegalCorpusToolRuntime {
         if (targetSkill?.startsWith(CRIMINAL_DOMAIN_PREFIX) && resolvedPath.endsWith(`/${CRIMINAL_QUALIFIER_INDEX}`)) this.qualifierDelivered = true;
         this.events.push({ tool: call.name, target: resolvedPath, decision: "ALLOW", detail: { inContext: true, returnedChars: 0 } });
         return JSON.stringify({
-          status: "ALREADY_IN_CONTEXT",
+          status: "OK",
           path: resolvedPath,
+          inContext: true,
+          content: "",
           note: "Aplikacja wczytała ten plik do kontekstu w tej turze (sekcja z tą ścieżką w instrukcjach). Korzystaj z tamtej treści; nie czytaj go ponownie."
         });
       }
