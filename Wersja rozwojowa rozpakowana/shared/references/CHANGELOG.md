@@ -1,5 +1,7 @@
 # CHANGELOG — Biblioteka shared
 
+- 3.99.12 (2026-10-06): HIERARCHIA-ZRODEL: wyjątek SN — karta sprawy; SAOS RZĄD 3; kolejność baz wg repertorium sygnatury; DOSTEP/SYGNATURY/KONEKTORY/ORZECZENIA-OUTPUT-SCHEMA ujednolicone
+
 - 3.99.11 (2026-10-05m, AUDYT-2026-10-05m): ACTIVATION-MATRIX: wiersz pisma-procesowe-v3 — „skarga do WSA”, „odwołanie do KIO” (pełne pismo, nie schemat pisma prostego).
 
 - 3.99.10 (2026-10-05k, AUDYT-2026-10-05k): ACTIVATION-MATRIX: „oceń szanse”, „szanse wygrania”, „przeanalizuj akta”, „analiza akt” → analiza-sadowa-v6.

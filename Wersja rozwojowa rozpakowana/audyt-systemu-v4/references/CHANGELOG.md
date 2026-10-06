@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.190 (2026-10-06): konektor MCP sn (karta orzeczenia), SAOS RZĄD 3, nieczynne linki SN usunięte
+
 - 6.189 (AUDYT-2026-10-05p): Dwie dziedziny DR w jednej sprawie: frazy DR-03/DR-04, zakres wierszy map aktów DR-02/DR-03, rozpoznanie sprawy karnej bez słowa „przestępstwo”.
 
 - 6.188 (2026-10-05o, AUDYT-2026-10-05o): AUDYT-2026-10-05o: widgety, wątki 1-5 wiadomości, etapy spraw w czacie (F-232-F-236)

@@ -36,7 +36,7 @@
     },
     {
       "name": "saos_search",
-      "description": "SAOS: orzeczenia SP (bieżąco), SN do 2016, TK do 2015, KIO tylko do 2018 (nowsze: kio_*); kontrola sygnatury"
+      "description": "SAOS (agregator akademicki, ranga najniższa): orzeczenia SP, SN do 2016, TK do 2015, KIO do 2018; gdy źródło urzędowe nie działa"
     },
     {
       "name": "krs_lookup",
@@ -81,6 +81,14 @@
     {
       "name": "cbosa_pobierz",
       "description": "CBOSA: pełny dokument orzeczenia"
+    },
+    {
+      "name": "sn_sprawdz_sygnature",
+      "description": "SN: czy orzeczenie o tej sygnaturze jest w bazie sn.pl; zwraca kartę orzeczenia"
+    },
+    {
+      "name": "sn_pobierz",
+      "description": "SN: pełny tekst orzeczenia po karcie (…?orzeczenie=ID)"
     },
     {
       "name": "kio_szukaj",

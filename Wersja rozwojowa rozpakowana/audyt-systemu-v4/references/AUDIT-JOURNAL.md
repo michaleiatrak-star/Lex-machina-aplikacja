@@ -69891,6 +69891,24 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06 — TRYB STRUKTURA: orzeczenia SN — karta sprawy, właściwa baza wg sygnatury, SAOS RZĄD 3, konektor MCP sn (6.190)
+
+### 1. ŹRÓDŁO
+Zlecenie użytkownika z rozmową (wyszukanie II CSKP 89/26): model szukał sygnatury SN w CBOSA, sprawdzał stary katalog `/sites/orzecznictwo/Orzeczenia3/*.pdf` (nieczynny) i uznał brak publikacji; link `blob:https://www.sn.pl/…` od użytkownika odrzucił bez drogi dalej.
+
+### 2. USTALENIA
+- Korpus wskazywał nieczynne wejścia SN (`sn.pl/orzecznictwo/SitePages/…`) w 9 plikach; brak serwera MCP dla SN — działająca mechanika (snproxy → karta `?orzeczenie=ID`) była tylko w aplikacji.
+- SAOS figurował jako RZĄD 2A (z notą o „dwóch skalach”); użytkownik: SAOS to agregator akademicki, ranga najniższa.
+
+### 3. ZMIANA
+- HIERARCHIA-ZRODEL: wyjątek SN — źródłem jest karta sprawy; SAOS = RZĄD 3, zastępczo tylko przy awarii bazy urzędowej albo braku trwałego linku; baza wg repertorium sygnatury (II CSKP → nigdy CBOSA).
+- DOSTEP-MASZYNOWY-API, SYGNATURY (zastępuje notę F-185), KONEKTORY-REKOMENDOWANE, ORZECZENIA-OUTPUT-SCHEMA, orzeczenia-sadowe 2.24, HARD-GATES-ORZECZNICTWO (router 3.67), PORTALE-ORZECZNICZE-API: ujednolicone.
+- Nieczynne linki SN zastąpione wyszukiwarką `https://www.sn.pl/pl/wyszukiwarka-orzeczen` (analizator-przepisow 2.12, pisma-procesowe 5.37, przesluchanie 3.32, dr-10 3.51, sonda check_domeny_allowlist, przykłady narzędzi).
+- mcp-servers: nowy konektor `sn` (`sn_sprawdz_sygnature`, `sn_pobierz`) — karta jako źródło, sygnatura innego sądu → wskazanie właściwej bazy, blob:/stary PDF rozpoznane; testy offline `sn-example/test_normalizacja.mjs`, przypadek na żywo w `test_poprawnosci.mjs`; dist/lex-mcp.mjs przebudowany.
+
+### 4. WERYFIKACJA
+Testy offline konektora: OK. Sieć sn.pl z piaskownicy zablokowana — przypadek na żywo dopiero w CI.
+
 ## AUDYT-2026-10-05p — TRYB STRUKTURA: dwie dziedziny DR w jednej sprawie (6.189)
 
 ### 1. ŹRÓDŁO

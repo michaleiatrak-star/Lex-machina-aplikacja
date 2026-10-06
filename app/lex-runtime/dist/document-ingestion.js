@@ -110,11 +110,16 @@ export class CompleteDocumentIngestor {
             throw new DocumentIngestionError(`OCR is required for ${ocrCandidates.length} page(s), but no local OCR engine is configured.`, "OCR_REQUIRED");
         }
         if (ocrCandidates.length) {
-            onProgress?.({ stage: "OCR", done: 0, total: ocrCandidates.length });
+            onProgress?.({ stage: "OCR", done: 0, total: ocrCandidates.length, page: ocrCandidates[0] });
         }
         const ocrResults = this.ocr && ocrCandidates.length
             ? await this.ocr.recognizePages(data, ocrCandidates, onProgress
-                ? (done) => onProgress({ stage: "OCR", done, total: ocrCandidates.length })
+                ? (done) => onProgress({
+                    stage: "OCR",
+                    done,
+                    total: ocrCandidates.length,
+                    ...(done < ocrCandidates.length ? { page: ocrCandidates[done] } : {})
+                })
                 : undefined)
             : [];
         const ocrByPage = new Map(ocrResults.map((result) => [result.page, result]));

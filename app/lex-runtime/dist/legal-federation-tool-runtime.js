@@ -1,3 +1,4 @@
+import { misroutedSignature } from "./court-of-signature.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { assessLegalSourceCandidate, classifyKnownLegalSourceUrl, federatedSourcePolicy } from "./legal-source-policy.js";
@@ -19,6 +20,7 @@ const NATIVE_SEARCH = {
     eurlex: (input) => ({ tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } }),
     saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
     cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
+    sn: (input) => ({ tool: "sn_sprawdz_sygnature", args: { sygnatura: input.query } }),
     kio: (input) => ({ tool: "kio_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } }),
     krs: (input) => ({ tool: "krs_lookup", args: { numerKrs: input.query } }),
     wl: (input) => ({ tool: "wl_sprawdz_nip", args: { nip: input.query, data: input.dateTo } }),
@@ -33,6 +35,7 @@ const NATIVE_GET = {
     eurlex: (id) => ({ tool: "eurlex_lookup", args: { celex: id } }),
     saos: (id) => ({ tool: "saos_search", args: { sygnatura: id } }),
     cbosa: (id) => ({ tool: "cbosa_pobierz", args: { doc_id: id } }),
+    sn: (id) => ({ tool: "sn_pobierz", args: { karta: id } }),
     kio: (id) => ({ tool: "kio_pobierz", args: { id } }),
     krs: (id) => ({ tool: "krs_lookup", args: { numerKrs: id } }),
     wl: (id) => ({ tool: "wl_sprawdz_nip", args: { nip: id } }),
@@ -66,6 +69,12 @@ const LOCAL_COVERAGE = {
         authority: "CBOSA",
         role: "snapshot 🟨 without promotion",
         fallback: "Native Lex direct-CBOSA adapter; no exact match = OUT_OF_SCOPE, never NOT_FOUND."
+    },
+    sn: {
+        family: "supreme-court-case-law",
+        authority: "Sąd Najwyższy (sn.pl snproxy)",
+        role: "official retrieval; the decision's card is the source",
+        fallback: "Native verify_case_reference (sn.pl card); SAOS only when sn.pl fails."
     },
     kio: {
         family: "public-procurement-case-law",
@@ -155,7 +164,7 @@ const SEARCH_SCHEMA = {
     function: {
         name: SEARCH_TOOL,
         description: "Search one Lex Machina MCP source. " +
-            "Sources: ISAP/ELI, EUR-Lex/CJEU, SAOS, NSA/WSA (cbosa), KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. " +
+            "Sources: ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. " +
             "Registry sources (krs, wl, ceidg, sudop) take the identifier (KRS number, NIP) as query; nbp takes the currency code. " +
             "Search results are discovery material; fetch the document before relying on its contents.",
         parameters: {
@@ -620,7 +629,7 @@ export class LegalFederationToolRuntime {
     systemPromptAppendix() {
         return [
             "# FEDERATED LEGAL RESEARCH",
-            "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS, NSA/WSA (cbosa), KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
+            "Lex Machina has optional read-only MCP connectors (lex-mcp, audyt-systemu-v4/mcp-servers): ISAP/ELI, EUR-Lex/CJEU, SAOS (academic aggregator, lowest rank), NSA/WSA (cbosa), SN (sn, card = source), KIO, KRS, VAT white list (wl), CEIDG, NBP, EUREKA/KIS, SUDOP and UODO. Only sources installed in Settings → MCP connectors are available.",
             "NSA/WSA results from cbosa are a snapshot 🟨 and are never promoted to VERIFIED; no exact match is OUT_OF_SCOPE, not absence of the ruling.",
             "Use list_federated_legal_sources when you need source capabilities or a native schema. Search first, then fetch the actual document before relying on its contents.",
             "This federation is DISCOVERY/RESEARCH ONLY. It never creates a Lex Machina VERIFIED ledger entry and never bypasses Gate I.",
@@ -1042,6 +1051,15 @@ export class LegalFederationToolRuntime {
             throw new Error("FEDERATED_SOURCE_INVALID");
         }
         this.assertInstalled(source);
+        // A signature of another court (II CSKP 89/26 in CBOSA): where to look instead.
+        if (call.name === SEARCH_TOOL || call.name === CALL_TOOL) {
+            const text = call.name === SEARCH_TOOL
+                ? typeof call.input.query === "string" ? call.input.query : ""
+                : JSON.stringify(call.input.arguments ?? {});
+            const misrouted = misroutedSignature(source, text);
+            if (misrouted)
+                return JSON.stringify({ source, ...misrouted });
+        }
         if (call.name ===
             SEARCH_TOOL) {
             const request = NATIVE_SEARCH[source]({

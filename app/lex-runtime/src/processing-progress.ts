@@ -17,6 +17,8 @@ export type ProcessingProgress = {
   stage: ProcessingStage;
   done?: number;
   total?: number;
+  // The document page being processed now (OCR, detection, anonymization).
+  page?: number;
   // AI_CHECK: the words the local model is checking now (shown only in this case).
   item?: string;
 };

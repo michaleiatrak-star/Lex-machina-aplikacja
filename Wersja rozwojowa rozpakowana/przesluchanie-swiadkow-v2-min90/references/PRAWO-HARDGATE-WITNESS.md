@@ -153,7 +153,7 @@ KROK 4: Oznacz ✅ [VER: SN/saos.org.pl, data]
 ```
 
 Kluczowe bazy orzecznicze dla zeznań świadków:
-- https://www.sn.pl/orzecznictwo (SN)
+- https://www.sn.pl/pl/wyszukiwarka-orzeczen (SN; link = karta `?orzeczenie=ID`)
 - https://orzeczenia.ms.gov.pl (sądy powszechne SA/SO)
 - https://saos.org.pl (agregator)
 

@@ -1,6 +1,6 @@
 ---
 name: shared
-version: "3.99.11"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
+version: "3.99.12"   # ⛔ CUDZYSŁÓW OBOWIĄZKOWY: niecytowane `3.17` YAML parsuje
                   # jako float 3.17, a 3.17 < 3.9 — porządek wersji odwraca się
                   # dla każdego narzędzia porównującego liczbowo. Wykryte
                   # testem T12 (check_wersje_changelog.py), 2026-08-20z.
@@ -50,7 +50,7 @@ limitations:
 required_modules: []
   # nie ma zastosowania — shared jest wczytywany, nie wczytuje sam siebie
 changelog: |
-  Wersja bieżąca: 3.99.11 (2026-10-05m, AUDYT-2026-10-05m): ACTIVATION-MATRIX: wiersz pisma-procesowe-v3 — „skarga do WSA”, „odwołanie do KIO” (pełne pismo, nie schemat pisma prostego).
+  Wersja bieżąca: 3.99.12 (2026-10-06): HIERARCHIA-ZRODEL: wyjątek SN — karta sprawy; SAOS RZĄD 3; kolejność baz wg repertorium sygnatury; DOSTEP/SYGNATURY/KONEKTORY/ORZECZENIA-OUTPUT-SCHEMA ujednolicone
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

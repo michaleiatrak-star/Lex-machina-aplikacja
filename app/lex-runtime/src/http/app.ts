@@ -6407,7 +6407,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                           caseView.keyVersion,
                         ...documentProcessingOptions(
                           req.get("x-lex-processing")
-                        )
+                        ),
+                        // Stage and page while the chat's document is processed.
+                        ...(progressIdFrom(req.get("x-lex-progress"))
+                          ? { onProgress: processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")))! }
+                          : {})
                       }
                     )
               );

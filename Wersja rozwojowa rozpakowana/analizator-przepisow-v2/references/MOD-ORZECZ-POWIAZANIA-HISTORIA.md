@@ -19,7 +19,7 @@ KROK 7.1 — Identyfikacja kwestii spornych
   Jakie pojęcia/przesłanki są interpretowane różnie?
 
 KROK 7.2 — Wyszukiwanie (TYLKO oficjalne źródła w tej kolejności):
-  1. SN: https://www.sn.pl/orzecznictwo
+  1. SN: https://www.sn.pl/pl/wyszukiwarka-orzeczen (link = karta `?orzeczenie=ID`)
   2. NSA: https://orzeczenia.nsa.gov.pl
   3. TK: https://www.trybunal.gov.pl/orzeczenia
   4. TSUE: https://curia.europa.eu (dla norm UE)
@@ -74,7 +74,7 @@ KROK A — Sformułuj 3 różne zapytania per źródło:
 
 KROK B — Źródła w kolejności:
   1. https://saos.org.pl — agregator, najszerszy zasięg
-  2. https://www.sn.pl/orzecznictwo — SN (linia wiodąca cywilna/karna)
+  2. https://www.sn.pl/pl/wyszukiwarka-orzeczen — SN (linia wiodąca cywilna/karna)
   3. https://orzeczenia.ms.gov.pl — sądy powszechne SA/SO/SR
   4. https://orzeczenia.nsa.gov.pl — NSA/WSA (jeśli przepis administracyjny)
   5. https://www.trybunal.gov.pl/orzeczenia — TK (jeśli konstytucyjność)

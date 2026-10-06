@@ -19,7 +19,8 @@ const TU = path.dirname(fileURLToPath(import.meta.url));
 const SERW = { isap: ["isap-eli-example", "isap-eli-mcp-server.js"], krs: ["krs-example", "krs-mcp-server.js"],
   nbp: ["nbp-example", "nbp-mcp-server.js"], wl: ["wl-example", "wl-mcp-server.js"], eureka: ["eureka-example", "eureka-mcp-server.js"],
   saos: ["saos-example", "saos-mcp-server.js"], eurlex: ["eurlex-example", "eurlex-mcp-server.js"], uodo: ["uodo-example", "uodo-mcp-server.js"],
-  ceidg: ["ceidg-example", "ceidg-mcp-server.js"], cbosa: ["cbosa-example", "cbosa-mcp-server.js"], kio: ["kio-example", "kio-mcp-server.js"] };
+  ceidg: ["ceidg-example", "ceidg-mcp-server.js"], cbosa: ["cbosa-example", "cbosa-mcp-server.js"], kio: ["kio-example", "kio-mcp-server.js"],
+  sn: ["sn-example", "sn-mcp-server.js"] };
 
 async function narzedzie(s, nazwa, args) {
   const [kat, plik] = SERW[s];
@@ -280,6 +281,19 @@ await przypadek("CBOSA: III OSK 1959/22 — sygnatura obecna w dokumencie źród
     const t = norm(await pobierz(w.result.url_zrodlowy, {}, "text"));
     ok(t.includes("iii osk 1959/22"), "sygnatura nie występuje w dokumencie źródłowym");
   }
+});
+
+// ── 10a. SN (sn.pl snproxy): karta orzeczenia z narzędzia daje tekst z tą samą sygnaturą; sygnatura SN nie idzie do CBOSA.
+await przypadek("SN: III CZP 25/11 — karta z narzędzia prowadzi do tekstu z tą sygnaturą", async (ok) => {
+  const w = await narzedzie("sn", "sn_sprawdz_sygnature", { sygnatura: "III CZP 25/11" });
+  ok(w.status === "FOUND", `status ${w.status} ${w.detail ?? ""}`);
+  if (w.status === "FOUND") {
+    ok(/\?orzeczenie=/.test(w.result.url_karty), "brak karty orzeczenia");
+    const p = await narzedzie("sn", "sn_pobierz", { karta: w.result.url_karty });
+    ok(p.status === "FOUND" && norm(p.result.tresc).includes("iii czp 25/11"), "tekst z karty nie zawiera sygnatury");
+  }
+  const inny = await narzedzie("sn", "sn_sprawdz_sygnature", { sygnatura: "III OSK 1959/22" });
+  ok(inny.status === "OUT_OF_SCOPE" && inny.sad === "NSA/WSA", "sygnatura NSA nie została odesłana do CBOSA");
 });
 
 // ── 11. KIO (wyszukiwarka UZP): sygnatura, data i rozstrzygnięcie == dokument źródłowy (treść HTML i metryka).

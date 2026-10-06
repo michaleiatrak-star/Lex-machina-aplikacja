@@ -17,6 +17,7 @@ export const LEX_MCP_SERVER_IDS = [
   "eurlex",
   "saos",
   "cbosa",
+  "sn",
   "kio",
   "krs",
   "wl",
@@ -40,8 +41,9 @@ export type LexMcpServerInfo = {
 export const LEX_MCP_CATALOG: LexMcpServerInfo[] = [
   { id: "isap", group: "Akty prawne i orzecznictwo", label: "ISAP/ELI — tekst aktu i przepisu (Sejm ELI)" },
   { id: "eurlex", group: "Akty prawne i orzecznictwo", label: "EUR-Lex + TSUE — akty UE, status, wyroki" },
-  { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — orzeczenia sądów powszechnych i SN, cytator" },
+  { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — agregator orzeczeń (ranga najniższa; gdy źródło urzędowe nie działa), cytator" },
   { id: "cbosa", group: "Akty prawne i orzecznictwo", label: "CBOSA — orzeczenia NSA/WSA (snapshot 🟨)" },
+  { id: "sn", group: "Akty prawne i orzecznictwo", label: "SN — orzeczenia Sądu Najwyższego (sn.pl, źródłem karta orzeczenia)" },
   { id: "kio", group: "Akty prawne i orzecznictwo", label: "KIO — orzeczenia Krajowej Izby Odwoławczej (wyszukiwarka UZP)" },
   { id: "krs", group: "Rejestry podmiotów", label: "KRS — odpis, reprezentacja (bez klucza)" },
   { id: "wl", group: "Rejestry podmiotów", label: "Biała lista VAT — status i rachunki (bez klucza)" },

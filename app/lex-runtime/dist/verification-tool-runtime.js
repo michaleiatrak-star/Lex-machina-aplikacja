@@ -1,3 +1,4 @@
+import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import { SupremeCourtCaseVerifier, propositionEvidenceHash, supremeCourtSearchUrl } from "./case-law-verifier.js";
 import { CASE_LAW_SEARCH_HOSTS, CaseLawSearchService, caseLawSearchEntryUrl } from "./case-law-search.js";
 import { DeterministicLegalActResolver, LegalActResolutionError } from "./legal-act-resolver.js";
@@ -107,7 +108,7 @@ const CASE_SEARCH_TOOL_SCHEMA = {
         name: CASE_SEARCH_TOOL_NAME,
         description: "Search Polish case-law candidates in SAOS or CBOSA. " +
             "This is discovery only: returned candidates are NOT verified for citation. " +
-            "Use source=SAOS for broad full-text discovery and source=CBOSA for NSA/WSA discovery. " +
+            "Use source=CBOSA for NSA/WSA; SN signatures go to verify_case_reference. SAOS is an academic aggregator (lowest rank): broad full-text discovery, and the fallback when the court's official source fails. " +
             "After selecting a candidate, run the applicable verification workflow before citing it.",
         parameters: {
             type: "object",
@@ -142,14 +143,13 @@ const CASE_TOOL_SCHEMA = {
     function: {
         name: CASE_TOOL_NAME,
         description: "Verify a Sąd Najwyższy case signature against the official sn.pl database. " +
-            "Provide the exact output claim, raw signature and courtFamily=SN. " +
-            "Never supply a source URL. VERIFIED confirms official existence and full-text identity, not an arbitrary paraphrased thesis.",
+            "Provide the exact output claim, raw signature and courtFamily=SN; with only a card link from the user, pass card_url and leave signature empty. " +
+            "Never invent a source URL. The cited source is the returned card (sn.pl ?orzeczenie=ID), never a PDF or blob: address. VERIFIED confirms official existence and full-text identity, not an arbitrary paraphrased thesis.",
         parameters: {
             type: "object",
             additionalProperties: false,
             required: [
                 "claim",
-                "signature",
                 "courtFamily"
             ],
             properties: {
@@ -159,7 +159,7 @@ const CASE_TOOL_SCHEMA = {
                 },
                 signature: {
                     type: "string",
-                    description: "Raw Sąd Najwyższy signature, e.g. III CZP 25/11."
+                    description: "Raw Sąd Najwyższy signature, e.g. III CZP 25/11 (may be empty when card_url is given)."
                 },
                 courtFamily: {
                     type: "string",
@@ -167,7 +167,7 @@ const CASE_TOOL_SCHEMA = {
                 },
                 card_url: {
                     type: "string",
-                    description: "Optional: the decision's card on sn.pl (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) when the user gave it or one signature has several decisions."
+                    description: "Optional: the decision's card on sn.pl (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID or the bare ID) when the user gave it or one signature has several decisions."
                 }
             }
         }
@@ -423,7 +423,10 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
     "- Before citing a tax interpretation (KIS/MF signature, e.g. 0114-KDIP1-2.4012.345.2024.1.RD), call verify_interpretation and copy the returned marker onto the SAME LINE as the signature. Say whether it is an interpretation of an authority (not binding on a court, 📋) or a court ruling (⚖️); an interpretation EUREKA does not list as current is never presented as the authority's current position. Without VERIFIED: ⚠️ [NIEWERYFIKOWANE] or omit the signature.",
     "- Before emitting a case signature (sygn.), call verify_case_reference.",
-    "- The first supported courtFamily is SN. Pass only claim + signature + courtFamily; never invent or supply the sn.pl URL.",
+    "- The first supported courtFamily is SN. Pass claim + signature + courtFamily; pass card_url only when the user gave a card link or ID. Never invent an sn.pl URL.",
+    "- SN source = the decision's card (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) returned by verify_case_reference: cite it, never a PDF/text address. A blob: link is a temporary copy in one browser tab; the old /sites/orzecznictwo/Orzeczenia… PDF directory no longer serves decisions. Neither proves anything; no hit there is not evidence that a decision is unpublished.",
+    "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl via SAOS; TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
+    "- SAOS is an academic aggregator (lowest rank): use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
     "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
     "- For a verbatim quotation attributed to SN, call verify_case_quote. Copy the exact quote plus both returned markers onto the SAME LINE as the exact case citation.",
     "- For a paraphrased proposition attributed to SN, call verify_case_proposition with the exact proposition plus an exact supporting quotation.",
@@ -486,6 +489,11 @@ export class LegalVerificationToolRuntime {
                     (source !== "SAOS" &&
                         source !== "CBOSA")) {
                     throw new Error("INVALID_CASE_SEARCH_INPUT");
+                }
+                // A signature of another court: where to look instead of a misleading "no hits".
+                const misrouted = misroutedSignature(source, query);
+                if (misrouted) {
+                    return JSON.stringify({ source, query, candidates: [], ...misrouted, verificationStatus: "DISCOVERY_ONLY" });
                 }
                 const result = await this.caseLawSearch.search({
                     query,
@@ -632,20 +640,61 @@ export class LegalVerificationToolRuntime {
                 const claim = typeof input.claim === "string"
                     ? input.claim.trim()
                     : "";
-                const signature = typeof input.signature === "string"
+                let signature = typeof input.signature === "string"
                     ? input.signature.trim()
                     : "";
                 const toolCallId = typeof input.toolCallId === "string"
                     ? input.toolCallId
                     : "";
-                if (!claim || !signature || !toolCallId) {
+                let cardUrl = typeof input.card_url === "string" && input.card_url.trim() ? input.card_url.trim() : undefined;
+                if (!claim || (!signature && !cardUrl) || !toolCallId) {
                     throw new Error("INVALID_CASE_VERIFICATION_INPUT");
+                }
+                // Links that are not sources: a blob: address lives in one browser tab;
+                // the old sn.pl PDF directory no longer serves decisions (its name keeps the signature).
+                const linkProblem = cardUrl ? caseLinkProblem(cardUrl) : null;
+                if (linkProblem) {
+                    cardUrl = undefined;
+                    if (!signature && linkProblem.signature)
+                        signature = linkProblem.signature;
+                    if (!signature) {
+                        return JSON.stringify({
+                            status: "OUT_OF_SCOPE",
+                            reason: linkProblem.kind === "BLOB" ? "TEMPORARY_BLOB_LINK" : "SN_LEGACY_PDF_LINK",
+                            instruction: linkProblem.kind === "BLOB"
+                                ? "A blob: link is a temporary copy in the user's browser tab and cannot be opened by anyone else. Ask for the signature or the card link (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID); never cite a blob: link."
+                                : "The old sn.pl PDF directory is not a source. Ask for the signature or the card link; never cite this address."
+                        });
+                    }
+                }
+                // A card without a signature: the signature is read from the card's official text.
+                if (!signature && cardUrl) {
+                    const fromCard = await this.caseVerifier.signatureFromCard(cardUrl).catch(() => null);
+                    if (!fromCard) {
+                        return JSON.stringify({
+                            status: "OUT_OF_SCOPE",
+                            reason: "SN_CARD_UNREADABLE",
+                            instruction: "The card did not return a readable SN decision. Ask for the signature; do not cite the card as verified."
+                        });
+                    }
+                    signature = fromCard.signature;
+                    cardUrl = fromCard.cardUrl;
+                }
+                const otherCourt = signatureRedirect(signature);
+                if (otherCourt && otherCourt.court !== "Sąd Najwyższy") {
+                    return JSON.stringify({
+                        status: "OUT_OF_SCOPE",
+                        reason: "SIGNATURE_OF_OTHER_COURT",
+                        signature,
+                        ...otherCourt,
+                        instruction: `${signature} is not an SN signature. Use ${otherCourt.useInstead}.`
+                    });
                 }
                 const result = await this.caseVerifier.verify({
                     claim,
                     signature,
                     toolCallId,
-                    ...(typeof input.card_url === "string" && input.card_url.trim() ? { cardUrl: input.card_url.trim() } : {})
+                    ...(cardUrl ? { cardUrl } : {})
                 });
                 if (result.status !== "FOUND" ||
                     !isVerifiedRecord(result.record) ||
@@ -1256,6 +1305,7 @@ export class LegalVerificationToolRuntime {
                     input: {
                         claim: call.input.claim,
                         signature,
+                        ...(typeof call.input.card_url === "string" ? { card_url: call.input.card_url } : {}),
                         toolCallId: call.id,
                         url: supremeCourtSearchUrl(signature)
                     }

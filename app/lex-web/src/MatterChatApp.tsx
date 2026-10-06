@@ -76,6 +76,7 @@ import {
   listCaseArtifacts,
   listCaseFiles,
   processStoredCaseFile,
+  type ProcessingProgress,
   uploadCaseFile,
   listCaseSchedule,
   listCases,
@@ -200,6 +201,7 @@ import {
 } from "./restoration-review.js";
 import "./chat.css";
 import "./workspace.css";
+import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 
 type TabId =
   | "home"
@@ -1037,6 +1039,21 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // Stage and page of documents processed from the chat (staged file id or upload id).
+  const [documentProgress, setDocumentProgress] = useState<Record<string, ProcessingProgress>>({});
+  // Runs one document request with its progress shown under `key`.
+  async function withDocumentProgress<T>(key: string, targetCase: string, run: (progressId: string) => Promise<T>): Promise<T> {
+    const tracker = trackProgress(targetCase, (progress) => setDocumentProgress((current) => ({ ...current, [key]: progress })));
+    try {
+      return await run(tracker.progressId);
+    } finally {
+      tracker.stop();
+      setDocumentProgress((current) => {
+        const { [key]: _done, ...rest } = current;
+        return rest;
+      });
+    }
+  }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
     useState(false);
   const [caseFilePickerError, setCaseFilePickerError] =
@@ -2160,18 +2177,20 @@ export default function MatterChatApp({
     );
     try {
       const stored = await uploadCaseFile(targetCase, file);
-      const review = await processStoredCaseFile(
-        targetCase,
-        stored.uploadId,
-        undefined,
-        undefined,
-        processingModeOptions(mode)
-      );
-      const result = await finalizeCaseDocument(
-        targetCase,
-        review.documentId,
-        keepAllDirectives(review)
-      );
+      const result = await withDocumentProgress(id, targetCase, async (progressId) => {
+        const review = await processStoredCaseFile(
+          targetCase,
+          stored.uploadId,
+          undefined,
+          progressId,
+          processingModeOptions(mode)
+        );
+        return finalizeCaseDocument(
+          targetCase,
+          review.documentId,
+          keepAllDirectives(review)
+        );
+      });
       pickFiles(
         [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
         true,
@@ -4533,7 +4552,11 @@ export default function MatterChatApp({
                     <strong>{item.file.name}</strong>
                     <small>
                       {describeDocumentFile(item.file)}
-                      {item.status === "SAVING" ? " · zapisuję i przetwarzam…" : ""}
+                      {item.status === "SAVING"
+                        ? documentProgress[item.id]
+                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
+                          : " · zapisuję i przetwarzam…"
+                        : ""}
                       {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
                     </small>
                     <span className="chat-file-actions">
@@ -5435,7 +5458,9 @@ export default function MatterChatApp({
                                   onClick={() => {
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
                                       .then((result) => {
                                         pickFiles(
@@ -5451,7 +5476,11 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : "Anonimizuj i zaznacz"}
+                                  {pickerAnonymizing === item.uploadId
+                                    ? documentProgress[item.uploadId]
+                                      ? progressLabel(documentProgress[item.uploadId]!)
+                                      : "Przetwarzam…"
+                                    : "Anonimizuj i zaznacz"}
                                 </button>
                                 <button
                                   type="button"
@@ -5468,7 +5497,9 @@ export default function MatterChatApp({
                                     }
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) =>
                                         finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
                                       )

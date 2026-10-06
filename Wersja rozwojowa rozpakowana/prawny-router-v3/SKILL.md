@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.66"
+version: "3.67"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,7 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.66 (2026-10-05m, AUDYT-2026-10-05m): KROK 2: [3] odwołanie do KIO, skarga do WSA; [6] jako dowód / czy to dowód / moc dowodowa.
+  Wersja bieżąca: 3.67 (2026-10-06): HARD-GATES-ORZECZNICTWO: karta SN; SAOS RZĄD 3 tylko zastępczo
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

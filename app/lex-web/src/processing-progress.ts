@@ -1,4 +1,4 @@
-import type { ProcessingProgress } from "./api.js";
+import { getProcessingProgress, newProgressId, type ProcessingProgress } from "./api.js";
 
 type Stage = ProcessingProgress["stage"];
 
@@ -28,7 +28,7 @@ export function progressPercent(progress: Pick<ProcessingProgress, "stage" | "do
   return Math.round(from + (to - from) * fraction);
 }
 
-export function progressLabel(progress: Pick<ProcessingProgress, "stage" | "done" | "total" | "item">): string {
+export function progressLabel(progress: Pick<ProcessingProgress, "stage" | "done" | "total" | "item" | "page">): string {
   const label = LABELS[progress.stage];
   if (progress.stage === "AI_CHECK") {
     const count = progress.total ? ` (${Math.min(progress.done ?? 0, progress.total)} z ${progress.total} sprawdzonych)` : "";
@@ -36,7 +36,33 @@ export function progressLabel(progress: Pick<ProcessingProgress, "stage" | "done
   }
   if (!progress.total || progress.stage === "SAVING" || progress.stage === "READING") return `${label}…`;
   const current = Math.min(progress.total, (progress.done ?? 0) + (progress.stage === "OCR" ? 0 : 1));
-  return progress.stage === "OCR"
-    ? `${label}: ${progress.done ?? 0} z ${progress.total} stron`
+  if (progress.stage === "OCR") {
+    const done = Math.min(progress.total, progress.done ?? 0);
+    return progress.page && done < progress.total
+      ? `${label}: strona ${progress.page} (${done + 1} z ${progress.total} stron skanu)`
+      : `${label}: ${done} z ${progress.total} stron`;
+  }
+  return progress.page
+    ? `${label}: strona ${progress.page} (${current} z ${progress.total})`
     : `${label}: strona ${current} z ${progress.total}`;
+}
+
+/**
+ * Polls the runtime for the stage and page of one document request; the
+ * request carries the returned id as X-Lex-Progress. stop() ends polling.
+ */
+export function trackProgress(
+  caseId: string,
+  onUpdate: (progress: ProcessingProgress) => void,
+  intervalMs = 500
+): { progressId: string; stop: () => void } {
+  const progressId = newProgressId();
+  const timer = setInterval(() => {
+    void getProcessingProgress(caseId, progressId)
+      .then((progress) => {
+        if (progress) onUpdate(progress);
+      })
+      .catch(() => undefined);
+  }, intervalMs);
+  return { progressId, stop: () => clearInterval(timer) };
 }

@@ -150,7 +150,7 @@ Nie twórz fikcyjnych sygnatur. Szukaj w:
 
 web_search: "izba aptekarska odmowa prawa wykonywania zawodu skarga WSA orzecznictwo"
 web_search: "odpowiedzialność dyscyplinarna farmaceuty izba aptekarska orzecznictwo"
-web_fetch: https://www.orzeczenia.ms.gov.pl (sąd apelacyjny — odwołanie) / https://www.sn.pl/orzecznictwo/SitePages/Baza_orzeczen.aspx (kasacja)
+web_fetch: https://www.orzeczenia.ms.gov.pl (sąd apelacyjny — odwołanie) / https://www.sn.pl/pl/wyszukiwarka-orzeczen (kasacja)
 web_search: "ustawa o zawodzie farmaceuty 2020 tekst jednolity isap"
 ```
 

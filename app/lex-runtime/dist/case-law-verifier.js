@@ -1,3 +1,4 @@
+import { SN_REPERTORIES, signaturesIn } from "./court-of-signature.js";
 import { createHash } from "node:crypto";
 import { caseLawStore } from "./case-law-store.js";
 import { documentText } from "./official-text.js";
@@ -22,32 +23,6 @@ const MAX_REDIRECTS = 3;
 const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_SEARCH_RECORDS = 25;
 const MAX_BASE64_CHARS = 8_000_000;
-const SN_REPERTORIES = new Set([
-    "CSK",
-    "CSKP",
-    "KK",
-    "NKK",
-    "UK",
-    "NSNC",
-    "NSNU",
-    "NKN",
-    "CNP",
-    "CNPP",
-    "SDI",
-    "ZK",
-    "CZP",
-    "KZP",
-    "UZP",
-    "PZP",
-    "NSNZP",
-    "SNO",
-    "DSI",
-    "DSP",
-    "CZ",
-    "KO",
-    "KSP",
-    "NSW"
-]);
 function stripDotsAndSpace(value) {
     return value
         .replace(/\./g, "")
@@ -378,6 +353,10 @@ export class SupremeCourtCaseVerifier {
         this.fetcher = fetcher;
         this.now = now;
     }
+    /** The signature of the decision on an sn.pl card, read from its official text. */
+    signatureFromCard(card) {
+        return supremeCourtSignatureFromCard(card, this.fetcher);
+    }
     async verify(request) {
         const normalizedSignature = normalizeCaseSignature(request.signature);
         if (!request.claim.trim() ||
@@ -704,4 +683,20 @@ export async function supremeCourtFullTextHtml(sourceUrl, fetcher = globalThis.f
     if (!html)
         throw new Error("SN_FULL_TEXT_UNAVAILABLE");
     return html;
+}
+/**
+ * The signature of the decision on an sn.pl card (link or bare ID), read from
+ * its official text: a card given without a signature is verified as usual.
+ */
+export async function supremeCourtSignatureFromCard(card, fetcher = globalThis.fetch.bind(globalThis)) {
+    const id = supremeCourtCardId(card);
+    if (!id)
+        return null;
+    const cardUrl = humanUrl(id);
+    const html = await supremeCourtFullTextHtml(cardUrl, fetcher);
+    if (!html)
+        return null;
+    const head = documentText(html).slice(0, 4000);
+    const signature = signaturesIn(head).find((item) => item.court === "SN")?.signature;
+    return signature ? { signature, cardUrl } : null;
 }

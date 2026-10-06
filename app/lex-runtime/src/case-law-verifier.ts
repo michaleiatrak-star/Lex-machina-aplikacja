@@ -1,3 +1,4 @@
+import { SN_REPERTORIES, signaturesIn } from "./court-of-signature.js";
 import { createHash } from "node:crypto";
 import { caseLawStore } from "./case-law-store.js";
 import { documentText } from "./official-text.js";
@@ -92,32 +93,6 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_SEARCH_RECORDS = 25;
 const MAX_BASE64_CHARS = 8_000_000;
 
-const SN_REPERTORIES = new Set([
-  "CSK",
-  "CSKP",
-  "KK",
-  "NKK",
-  "UK",
-  "NSNC",
-  "NSNU",
-  "NKN",
-  "CNP",
-  "CNPP",
-  "SDI",
-  "ZK",
-  "CZP",
-  "KZP",
-  "UZP",
-  "PZP",
-  "NSNZP",
-  "SNO",
-  "DSI",
-  "DSP",
-  "CZ",
-  "KO",
-  "KSP",
-  "NSW"
-]);
 
 function stripDotsAndSpace(
   value: string
@@ -716,6 +691,11 @@ export class SupremeCourtCaseVerifier {
         () => new Date().toISOString()
   ) {}
 
+  /** The signature of the decision on an sn.pl card, read from its official text. */
+  signatureFromCard(card: string): Promise<{ signature: string; cardUrl: string } | null> {
+    return supremeCourtSignatureFromCard(card, this.fetcher);
+  }
+
   async verify(
     request:
       SupremeCourtCaseVerificationRequest
@@ -1203,4 +1183,22 @@ export async function supremeCourtFullTextHtml(
   const html = raw ? decodeBase64Html(raw) : null;
   if (!html) throw new Error("SN_FULL_TEXT_UNAVAILABLE");
   return html;
+}
+
+/**
+ * The signature of the decision on an sn.pl card (link or bare ID), read from
+ * its official text: a card given without a signature is verified as usual.
+ */
+export async function supremeCourtSignatureFromCard(
+  card: string,
+  fetcher: CaseLawFetch = globalThis.fetch.bind(globalThis)
+): Promise<{ signature: string; cardUrl: string } | null> {
+  const id = supremeCourtCardId(card);
+  if (!id) return null;
+  const cardUrl = humanUrl(id);
+  const html = await supremeCourtFullTextHtml(cardUrl, fetcher);
+  if (!html) return null;
+  const head = documentText(html).slice(0, 4000);
+  const signature = signaturesIn(head).find((item) => item.court === "SN")?.signature;
+  return signature ? { signature, cardUrl } : null;
 }

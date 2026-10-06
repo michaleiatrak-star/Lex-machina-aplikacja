@@ -318,8 +318,9 @@ dowodem niedostępności ani nieistnienia orzeczenia.
 ⚠️ Pokrycie potwierdzone ponownie: `III CZP 88/15` (SN, 2015) → 1 trafienie;
 `III OSK 1959/22` i `II SAB/Wa 678/21` (NSA/WSA, 2021–2023) → 0 trafień = **OUT_OF_SCOPE**,
 nie „nie istnieje".
-⛔ SAOS to RZĄD 2A — ustala, że orzeczenie istnieje i co zawiera; **nie
-zastępuje sprawdzenia sygnatury u źródła** przy powołaniu w piśmie.
+⛔ SAOS to RZĄD 3 (agregator akademicki, od 2026-10-06; wcześniej 2A) — pomaga ustalić,
+że orzeczenie istnieje i co zawiera; **nie zastępuje sprawdzenia sygnatury w bazie
+urzędowej sądu**; zastępczo tylko przy jej awarii albo braku trwałego linku.
 
 ⛔⛔ **SAOS jest korpusem CZĘŚCIOWO ZAMROŻONYM.** Żywy jest wyłącznie pion sądów
 powszechnych. Zmierzone 2026-09-13 (przedziałem dat, nie sortowaniem — baza

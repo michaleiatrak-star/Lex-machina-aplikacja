@@ -68,7 +68,7 @@ describe("LexMcpConnectorStore", () => {
     expect(status.ceidg).toEqual({ keyConfigured: false, keyUrl: CEIDG_KEY_URL });
     expect(CEIDG_KEY_URL).toBe("https://dane.biznes.gov.pl/pl/portal/034872");
     expect(status.servers.map((server) => server.id)).toEqual([
-      "isap", "eurlex", "saos", "cbosa", "kio", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
+      "isap", "eurlex", "saos", "cbosa", "sn", "kio", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
     ]);
     expect(status.servers.filter((server) => !server.installed).map((server) => server.id)).toEqual(["ceidg"]);
   });

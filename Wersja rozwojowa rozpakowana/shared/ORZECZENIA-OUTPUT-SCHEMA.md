@@ -74,7 +74,7 @@ ORZ-REKORD {
 ✅ II PK 44/21 — Sąd Najwyższy, Izba Pracy i Ubezpieczeń Społecznych, 12 stycznia 2022
    Teza: Pracodawca nie może rozwiązać umowy bez wypowiedzenia z powodu ciężkiego
          naruszenia obowiązków, jeżeli nie wykazał winy umyślnej lub rażącego niedbalstwa.
-   URL: https://www.sn.pl/orzecznictwo/...
+   URL: https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID   ← karta sprawy, nie PDF ani blob:
    ✅ [VER: sn.pl, 2026-06-04] | Kat. 1 | Aktualność: ✅ aktualna
    Alerty: brak
    Pokrycie: P1, P2

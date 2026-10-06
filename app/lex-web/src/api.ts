@@ -3233,7 +3233,8 @@ export async function reviewDocument(
   file: File,
   caseId: string,
   // localAi: the local model also checks personal data; ocrFix: it corrects OCR.
-  options?: { localAi?: boolean; ocrFix?: boolean }
+  options?: { localAi?: boolean; ocrFix?: boolean },
+  progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
     ...(options?.localAi ? ["local-ai"] : []),
@@ -3249,6 +3250,7 @@ export async function reviewDocument(
         ...authorizationHeaders(),
         "X-Lex-Case-Id": caseId,
         ...(processing ? { "X-Lex-Processing": processing } : {}),
+        ...(progressId ? { "X-Lex-Progress": progressId } : {}),
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },
@@ -3353,6 +3355,8 @@ export type ProcessingProgress = {
   stage: "READING" | "OCR" | "DETECTING" | "AI_CHECK" | "PSEUDONYMIZING" | "SAVING";
   done?: number;
   total?: number;
+  // The document page being processed now.
+  page?: number;
   // AI_CHECK: the words the local model is checking now.
   item?: string;
   updatedAt: string;

@@ -71,5 +71,5 @@ Pelny opis trybu, tabela zawodow i uzasadnienie: dr-12 ->
 ## Weryfikacja online
 ```
 web_search: "ustawa zawod lekarza Dz.U. 2026 poz. 37 isap t.j."
-web_fetch: https://www.sn.pl/orzecznictwo/SitePages/Baza_orzeczen.aspx (kasacja od orzeczen NSL)
+web_fetch: https://www.sn.pl/pl/wyszukiwarka-orzeczen (kasacja od orzeczen NSL)
 ```

@@ -1,6 +1,6 @@
 ---
 name: analizator-przepisow-v2
-version: "2.11"
+version: "2.12"
 type: executive-analiza
 status: production
 compatibility: "live_web_lookup, file_read, optional_interactive_ui"
@@ -298,7 +298,7 @@ Pojęcie techniczne → znaczenie branżowe: [źródło]
 ### Wykładnia orzecznicza pojęć nieostrych
 
 Przeszukaj w kolejności:
-1. https://www.sn.pl/orzecznictwo — Sąd Najwyższy
+1. https://www.sn.pl/pl/wyszukiwarka-orzeczen — Sąd Najwyższy (link = karta `?orzeczenie=ID`)
 2. https://orzeczenia.nsa.gov.pl — NSA / WSA
 3. https://orzeczenia.ms.gov.pl — sądy powszechne
 4. https://www.trybunal.gov.pl/orzeczenia — Trybunał Konstytucyjny
