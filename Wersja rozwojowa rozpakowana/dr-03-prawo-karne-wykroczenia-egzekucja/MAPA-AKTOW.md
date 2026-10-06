@@ -112,8 +112,8 @@ Brzmienie każdego powoływanego artykułu KPK czytać u źródła; tekst jednol
 
 | Akt / zakres | Bieżąca podstawa | Moduł / routing | Status runtime |
 |---|---|---|---|
-| Prawo o ruchu drogowym / kierujący pojazdami / punkty karne | PRD: Dz.U. 2024 poz. 1251 t.j. ze zm.; u.k.p.: Dz.U. 2025 poz. 1226 t.j. ze zm. | `mod-PRD-prawo-jazdy-punkty-karne` | ✅ aktywny; fresh gate |
-| Nowe przestępstwa drogowe / BRD | właściwe obowiązujące nowelizacje KK/KW/PRD | `mod-PRD-nowe-przestepstwa-drogowe-BRD` | ✅ aktywny; temporal gate |
+| Prawo o ruchu drogowym / kierujący pojazdami / punkty karne | PRD: Dz.U. 2024 poz. 1251 t.j.; ⛔ KROK 2C nowelizacje po t.j. (w mocy do 2026-10-06): Dz.U. 2025 poz. 1676 (03.03.2026, cz. 17.12.2025 i 03.06.2026), 1734 (10.06.2026), 1843 (24.06.2026), Dz.U. 2026 poz. 180 (18.05.2026), 982 (21.09.2026, cz. 23.07 i 06.08.2026); zapowiedziane: Dz.U. 2026 poz. 875 (01.01.2027). u.k.p.: Dz.U. 2025 poz. 1226 t.j.; po t.j.: Dz.U. 2025 poz. 1676, Dz.U. 2026 poz. 180, 982. Brzmienie każdego powoływanego art. czytać u źródła (ELI) ✅ [VER] 2026-10-06 (ELI `/references` DU/1997/602, DU/2011/151) | `mod-PRD-prawo-jazdy-punkty-karne` | ✅ aktywny; fresh gate |
+| Nowe przestępstwa drogowe / BRD — nietrzeźwy lub pijany kierowca, wypadek drogowy, potrącenie, zakaz prowadzenia | właściwe obowiązujące nowelizacje KK/KW/PRD | `mod-PRD-nowe-przestepstwa-drogowe-BRD` | ✅ aktywny; temporal gate |
 | Modyfikacje / przeróbki pojazdów | PRD jw. + akty homologacyjne / tachografowe | `mod-przerobki-modyfikacje-pojazdow` | ✅ aktywny; fresh gate |
 
 ## Reguły runtime

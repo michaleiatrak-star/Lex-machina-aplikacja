@@ -15,7 +15,7 @@ import { ChatDocumentCard } from "./ChatDocumentCard.js";
 import { ChatWidgetCard } from "./ChatWidgetCard.js";
 import { CaseContactsCard } from "./CaseContactsCard.js";
 import { ProvisionPreview } from "./ProvisionPreview.js";
-import { CaseLawPreview, attributedSentence, isCaseLawSource } from "./CaseLawPreview.js";
+import { CaseLawPreview, attributedSentence, caseLawDocument, caseLawReferences, isCaseLawSource } from "./CaseLawPreview.js";
 import { MandatoryPathDetails } from "./MandatoryPathDetails.js";
 
 // Same text as the runtime's PIPELINE_HANDOFF (task-routing.ts).
@@ -76,6 +76,8 @@ import {
   listCaseArtifacts,
   listCaseFiles,
   processStoredCaseFile,
+  resolveCaseLaw,
+  type ProcessingProgress,
   uploadCaseFile,
   listCaseSchedule,
   listCases,
@@ -200,6 +202,8 @@ import {
 } from "./restoration-review.js";
 import "./chat.css";
 import "./workspace.css";
+import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
+import { SnVerification } from "./SnVerification.js";
 
 type TabId =
   | "home"
@@ -917,6 +921,7 @@ function executionMessage(
         : {}),
       documentCitations: execution.documentCitations,
       ...(execution.widgets?.length ? { widgets: execution.widgets } : {}),
+      ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
       ...(execution.restorations?.length
         ? {
             restorations:
@@ -1068,6 +1073,21 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // Stage and page of documents processed from the chat (staged file id or upload id).
+  const [documentProgress, setDocumentProgress] = useState<Record<string, ProcessingProgress>>({});
+  // Runs one document request with its progress shown under `key`.
+  async function withDocumentProgress<T>(key: string, targetCase: string, run: (progressId: string) => Promise<T>): Promise<T> {
+    const tracker = trackProgress(targetCase, (progress) => setDocumentProgress((current) => ({ ...current, [key]: progress })));
+    try {
+      return await run(tracker.progressId);
+    } finally {
+      tracker.stop();
+      setDocumentProgress((current) => {
+        const { [key]: _done, ...rest } = current;
+        return rest;
+      });
+    }
+  }
   const [caseFilePickerOpen, setCaseFilePickerOpen] =
     useState(false);
   const [caseFilePickerError, setCaseFilePickerError] =
@@ -2191,18 +2211,20 @@ export default function MatterChatApp({
     );
     try {
       const stored = await uploadCaseFile(targetCase, file);
-      const review = await processStoredCaseFile(
-        targetCase,
-        stored.uploadId,
-        undefined,
-        undefined,
-        processingModeOptions(mode)
-      );
-      const result = await finalizeCaseDocument(
-        targetCase,
-        review.documentId,
-        keepAllDirectives(review)
-      );
+      const result = await withDocumentProgress(id, targetCase, async (progressId) => {
+        const review = await processStoredCaseFile(
+          targetCase,
+          stored.uploadId,
+          undefined,
+          progressId,
+          processingModeOptions(mode)
+        );
+        return finalizeCaseDocument(
+          targetCase,
+          review.documentId,
+          keepAllDirectives(review)
+        );
+      });
       pickFiles(
         [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
         true,
@@ -2227,6 +2249,58 @@ export default function MatterChatApp({
         })
       );
     }
+  }
+
+  // A decision from its official card saved in the case's files (local RAG).
+  async function saveCaseLawToCase(file: File): Promise<DocumentAttachmentSelection> {
+    const targetCase = caseId;
+    // The same decision already in the case files is reused, not stored twice.
+    const existing = caseFiles.find((item) => item.filename === file.name && item.processing?.documentId);
+    if (existing?.processing) {
+      return { caseId: targetCase, documentId: existing.processing.documentId, chunkIndices: existing.processing.chunkIndices };
+    }
+    const stored = await uploadCaseFile(targetCase, file);
+    const review = await processStoredCaseFile(targetCase, stored.uploadId);
+    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    setWorkspaceRefresh((value) => value + 1);
+    return { caseId: targetCase, documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) };
+  }
+
+  // Decisions the user points to (card, or a blob:/old PDF link of sn.pl with
+  // the signature): taken from the official database, stored in the case
+  // files and attached to this message. A blob: address cannot be read by
+  // anyone outside the browser tab that made it.
+  async function attachUserCaseLaw(text: string): Promise<DocumentAttachmentSelection[]> {
+    const references = caseLawReferences(text);
+    if (!references.length || !caseId) return [];
+    const attached: DocumentAttachmentSelection[] = [];
+    const notes: string[] = [];
+    for (const reference of references) {
+      if (reference.kind === "BLOB_WITHOUT_SIGNATURE") {
+        notes.push(
+          "Link blob: istnieje tylko w karcie przeglądarki, w której otwarto orzeczenie - aplikacja nie ma do niego dostępu. " +
+            "Podaj sygnaturę (np. II CSKP 89/26) albo adres karty z paska przeglądarki (…?orzeczenie=…), a orzeczenie zostanie pobrane z sn.pl i dodane do akt; " +
+            "możesz też zapisać PDF (Ctrl+S) i przeciągnąć go do czatu."
+        );
+        continue;
+      }
+      setPickerNotice(`Pobieram orzeczenie ${reference.kind === "SIGNATURE" ? reference.signature : "z karty"} i dodaję do akt sprawy…`);
+      try {
+        const copy = await resolveCaseLaw({
+          ...(reference.kind === "CARD" ? { cardUrl: reference.cardUrl } : { signature: reference.signature, cardUrl: reference.link }),
+          caseId
+        });
+        const attachment = await saveCaseLawToCase(caseLawDocument(copy));
+        attached.push(attachment);
+        notes.push(`Dodano do akt: ${[copy.court, copy.signature].filter(Boolean).join(" ")} (karta: ${copy.cardUrl}).`);
+      } catch (error) {
+        const code = error instanceof Error ? error.message : String(error);
+        notes.push(`Nie udało się pobrać orzeczenia (${code}). Model sprawdzi je narzędziem weryfikacji.`);
+      }
+    }
+    if (attached.length) pickFiles(attached.map((item) => ({ kind: "document" as const, documentId: item.documentId, chunkIndices: item.chunkIndices })), true, caseId);
+    setPickerNotice(notes.join(" "));
+    return attached;
   }
 
   async function saveStagedDocuments(ids?: string[]): Promise<void> {
@@ -2935,6 +3009,8 @@ export default function MatterChatApp({
       !model
     ) return;
     saveLastUsedModel(user.userId, { provider, model });
+    const userCaseLaw = await attachUserCaseLaw(trimmed);
+    const sendAttachments = userCaseLaw.reduce((list, item) => upsertAttachment(list, item), documentAttachments);
 
     if (
       conversationIsNew &&
@@ -3099,7 +3175,7 @@ export default function MatterChatApp({
               styleProfile:
                 "lex-classic-clean-v1",
               attachments:
-                documentAttachments,
+                sendAttachments,
               ...(firmTemplateIds.length > 0
                 ? { firmTemplates: firmTemplateIds }
                 : {}),
@@ -3228,9 +3304,9 @@ export default function MatterChatApp({
           trimmed,
         primarySkill: route,
         mode: "PRAWNIK",
-        ...(documentAttachments.length > 0
+        ...(sendAttachments.length > 0
           ? {
-              attachments: documentAttachments,
+              attachments: sendAttachments,
               evidenceImages: imagesWithText ? "all" as const : "photos" as const
             }
           : {}),
@@ -3338,7 +3414,7 @@ export default function MatterChatApp({
                 format: "docx",
                 documentType: letterWorkflow,
                 styleProfile: "lex-classic-clean-v1",
-                attachments: documentAttachments,
+                attachments: sendAttachments,
                 ...(firmTemplateIds.length > 0
                   ? { firmTemplates: firmTemplateIds }
                   : {}),
@@ -4565,7 +4641,11 @@ export default function MatterChatApp({
                     <strong>{item.file.name}</strong>
                     <small>
                       {describeDocumentFile(item.file)}
-                      {item.status === "SAVING" ? " · zapisuję i przetwarzam…" : ""}
+                      {item.status === "SAVING"
+                        ? documentProgress[item.id]
+                          ? ` · ${progressLabel(documentProgress[item.id]!)}`
+                          : " · zapisuję i przetwarzam…"
+                        : ""}
                       {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
                     </small>
                     <span className="chat-file-actions">
@@ -4983,6 +5063,8 @@ export default function MatterChatApp({
                                     {...(item.passage ? { passage: item.passage } : {})}
                                     {...(item.caseSignature ? { signature: item.caseSignature } : {})}
                                     {...(attributedSentence(message.content, item.caseSignature) ? { attributed: attributedSentence(message.content, item.caseSignature)! } : {})}
+                                    onSaveToCase={saveCaseLawToCase}
+                                    caseId={caseId}
                                   />
                                 ) : null}
                               </>
@@ -5017,6 +5099,16 @@ export default function MatterChatApp({
                         </span>
                       )}
                     </div>
+                  ) : null}
+                  {message.sourceVerification ? (
+                    <SnVerification
+                      verification={{ url: message.sourceVerification.url }}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeMessage(question);
+                      }}
+                    />
                   ) : null}
                   {message.auxiliarySources?.length ? (
                     <details className="chat-auxiliary-sources">
@@ -5106,6 +5198,8 @@ export default function MatterChatApp({
                                 sourceUrl={item.sourceUrl}
                                 {...(item.claim ? { signature: item.claim } : {})}
                                 {...(attributedSentence(message.content, item.claim) ? { attributed: attributedSentence(message.content, item.claim)! } : {})}
+                                onSaveToCase={saveCaseLawToCase}
+                                caseId={caseId}
                               />
                             ) : null}
                           </li>
@@ -5465,7 +5559,9 @@ export default function MatterChatApp({
                                   onClick={() => {
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
                                       .then((result) => {
                                         pickFiles(
@@ -5481,7 +5577,11 @@ export default function MatterChatApp({
                                       .finally(() => setPickerAnonymizing(null));
                                   }}
                                 >
-                                  {pickerAnonymizing === item.uploadId ? "Przetwarzam…" : "Anonimizuj i zaznacz"}
+                                  {pickerAnonymizing === item.uploadId
+                                    ? documentProgress[item.uploadId]
+                                      ? progressLabel(documentProgress[item.uploadId]!)
+                                      : "Przetwarzam…"
+                                    : "Anonimizuj i zaznacz"}
                                 </button>
                                 <button
                                   type="button"
@@ -5498,7 +5598,9 @@ export default function MatterChatApp({
                                     }
                                     setPickerAnonymizing(item.uploadId);
                                     setCaseFilePickerError("");
-                                    void processStoredCaseFile(caseId, item.uploadId)
+                                    void withDocumentProgress(item.uploadId, caseId, (progressId) =>
+                                      processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
+                                    )
                                       .then((review) =>
                                         finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
                                       )

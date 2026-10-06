@@ -706,3 +706,30 @@ export class LocalPolishPseudonymizer {
         return this.vault.deanonymize(text);
     }
 }
+/**
+ * Leak test of the outgoing text (as in a pre-send tightness check): a value the
+ * pseudonymizer replaced must not survive anywhere else in the protected text
+ * (a second occurrence the recognizer missed). Every remaining occurrence is
+ * replaced by the same token, so the answer still restores it. Values shorter
+ * than 3 characters are skipped (they also occur inside ordinary words).
+ */
+export function sealResidualValues(original, protectedText, findings) {
+    const byValue = new Map();
+    for (const finding of findings) {
+        const value = original.slice(finding.start, finding.end).trim();
+        if (value.length >= 3 && !byValue.has(value))
+            byValue.set(value, finding.token);
+    }
+    let text = protectedText;
+    let sealed = 0;
+    // Longest values first: "Jan Kowalski" before "Kowalski".
+    for (const [value, token] of [...byValue.entries()].sort((a, b) => b[0].length - a[0].length)) {
+        const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu");
+        text = text.replace(pattern, () => {
+            sealed += 1;
+            return token;
+        });
+    }
+    return { text, sealed };
+}

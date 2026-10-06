@@ -14,6 +14,8 @@ describe("processing progress", () => {
 
   it("names the stage and page", () => {
     expect(progressLabel({ stage: "OCR", done: 3, total: 12 })).toBe("OCR: 3 z 12 stron");
+    expect(progressLabel({ stage: "OCR", done: 3, total: 12, page: 17 })).toBe("OCR: strona 17 (4 z 12 stron skanu)");
+    expect(progressLabel({ stage: "PSEUDONYMIZING", done: 1, total: 4, page: 2 })).toBe("Anonimizacja: strona 2 (2 z 4)");
     expect(progressLabel({ stage: "DETECTING", done: 0, total: 4 })).toBe("Wykrywanie danych osobowych: strona 1 z 4");
     expect(progressLabel({ stage: "SAVING" })).toBe("Zapis zaszyfrowanego klucza…");
     expect(progressLabel({ stage: "AI_CHECK", done: 2, total: 5, item: "s. 1: Bank, Rada" })).toBe(

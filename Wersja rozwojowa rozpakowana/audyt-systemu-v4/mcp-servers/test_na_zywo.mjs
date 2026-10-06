@@ -43,7 +43,8 @@ const PRZYPADKI = [
     "saos_search", { sygnatura: "III CZP 999/11" }, (w) => w.status === "NOT_FOUND"],
   ["SAOS: KIO → sygnatury KIO", "saos-example", "saos-mcp-server.js", "saos_search",
     { fraza: "wadium", courtType: "NATIONAL_APPEAL_CHAMBER", pageSize: 2 },
-    (w) => (w.kandydaci ?? [w.result]).every((k) => /KIO/.test(k.identyfikator ?? ""))],
+    (w) => ["FOUND", "AMBIGUOUS"].includes(w.status) && (w.kandydaci ?? [w.result]).filter(Boolean).length > 0 &&
+      (w.kandydaci ?? [w.result]).filter(Boolean).every((k) => /KIO/.test(k.identyfikator ?? ""))],
   ["SAOS: NSA/WSA → OUT_OF_SCOPE, nie „brak orzecznictwa”", "saos-example", "saos-mcp-server.js",
     "saos_search", { fraza: "podatek", courtType: "ADMINISTRATIVE" }, (w) => w.status === "OUT_OF_SCOPE"],
   ["EUR-Lex: RODO → obowiązuje, tytuł PL", "eurlex-example", "eurlex-mcp-server.js", "eurlex_lookup",

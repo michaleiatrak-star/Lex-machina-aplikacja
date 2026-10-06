@@ -206,6 +206,7 @@ import type {
 import {
   LocalPolishPseudonymizer,
   PseudonymizationVault,
+  sealResidualValues,
   type NamedEntityRecognizer
 } from "./privacy/pseudonymizer.js";
 import {
@@ -858,6 +859,8 @@ export type SessionExecutionResponse = {
   evidence: PublicEvidenceItem[];
   auxiliarySources?:
     PublicAuxiliarySourceItem[];
+  // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik).
+  sourceVerification?: { source: "sn"; url: string };
   // Widgety pokazane narzędziem show_widget (czat renderuje je w izolowanej ramce).
   widgets?: WidgetSpec[];
   audit: {
@@ -1522,8 +1525,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             request.query,
             exampleData
           );
+      // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
+      const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
       protectedQuery =
-        protectedPrimary.text;
+        primarySeal.text;
+      let sealedValues = primarySeal.sealed;
 
       if (
         request.auxiliaryText !==
@@ -1531,13 +1537,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         request.auxiliaryText !==
           request.query
       ) {
+        const auxiliary =
+          await chatPseudonymizer
+            .pseudonymize(
+              request.auxiliaryText
+            );
+        const auxiliarySeal = sealResidualValues(request.auxiliaryText, auxiliary.text, auxiliary.findings);
         protectedAuxiliaryText =
-          (
-            await chatPseudonymizer
-              .pseudonymize(
-                request.auxiliaryText
-              )
-          ).text;
+          auxiliarySeal.text;
+        sealedValues += auxiliarySeal.sealed;
       } else if (
         request.auxiliaryText !==
           undefined
@@ -1575,7 +1583,10 @@ export class SafeSessionExecutor implements SessionExecutor {
             ).sort(),
           vaultTokens:
             chatPrivacyVault
-              .size
+              .size,
+          // Occurrences of already replaced values found again by the leak test.
+          residualSealed:
+            sealedValues
         }
       );
     } catch (error) {
@@ -1658,6 +1669,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const auxiliarySources:
       PublicAuxiliarySourceItem[] =
       [];
+    let snVerificationRequired = false;
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -1901,6 +1913,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       // Route-based path: the engine puts the qualifier in the prompt itself.
       ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
     ]);
+    corpusTools.setInContext(contextResources);
     const pathSections: string[] = [];
     // The kind of every document the user sent (court decision, pleading, contract,
     // evidence...), recognised locally from its protected text; the router chooses
@@ -2078,6 +2091,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         const skill = record.name;
         const text = fs.readFileSync(record.skillFile, "utf8");
         corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
+        contextResources.add(`${path.basename(record.directory)}/SKILL.md`);
         audit.record("gate", "TASK_ROUTING", "OK", {
           source: taskRoute.source,
           skill,
@@ -2453,6 +2467,9 @@ export class SafeSessionExecutor implements SessionExecutor {
                 )
             : [];
 
+        if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
+          snVerificationRequired = true;
+        }
         for (
           const result
           of federationResults
@@ -3814,6 +3831,9 @@ export class SafeSessionExecutor implements SessionExecutor {
             auxiliarySources:
               publicAuxiliarySources
           }
+        : {}),
+      ...(snVerificationRequired
+        ? { sourceVerification: { source: "sn" as const, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
         : {}),
       ...(widgetTools && widgetTools.widgets().length > 0
         ? { widgets: widgetTools.widgets() }

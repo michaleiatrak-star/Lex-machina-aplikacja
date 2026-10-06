@@ -46,7 +46,7 @@ import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from ".
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
-import { LocalPolishPseudonymizer, PseudonymizationVault } from "./privacy/pseudonymizer.js";
+import { LocalPolishPseudonymizer, PseudonymizationVault, sealResidualValues } from "./privacy/pseudonymizer.js";
 import { ModelAutoRouter } from "./model-auto-routing.js";
 import { privacyRecognizerFor } from "./privacy/local-llm-ner.js";
 import { parseSkillSelectionEnvelope, threadUserText } from "./skill-selection.js";
@@ -727,15 +727,21 @@ export class SafeSessionExecutor {
                 : [];
             const protectedPrimary = await chatPseudonymizer
                 .pseudonymize(request.query, exampleData);
+            // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
+            const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
             protectedQuery =
-                protectedPrimary.text;
+                primarySeal.text;
+            let sealedValues = primarySeal.sealed;
             if (request.auxiliaryText !==
                 undefined &&
                 request.auxiliaryText !==
                     request.query) {
+                const auxiliary = await chatPseudonymizer
+                    .pseudonymize(request.auxiliaryText);
+                const auxiliarySeal = sealResidualValues(request.auxiliaryText, auxiliary.text, auxiliary.findings);
                 protectedAuxiliaryText =
-                    (await chatPseudonymizer
-                        .pseudonymize(request.auxiliaryText)).text;
+                    auxiliarySeal.text;
+                sealedValues += auxiliarySeal.sealed;
             }
             else if (request.auxiliaryText !==
                 undefined) {
@@ -761,7 +767,9 @@ export class SafeSessionExecutor {
                 kinds: Object.keys(protectedPrimary
                     .counts).sort(),
                 vaultTokens: chatPrivacyVault
-                    .size
+                    .size,
+                // Occurrences of already replaced values found again by the leak test.
+                residualSealed: sealedValues
             });
         }
         catch (error) {
@@ -817,6 +825,7 @@ export class SafeSessionExecutor {
         // Instancja federacji jest wspólna dla wszystkich sesji; ta sesja audytuje tylko własne wywołania.
         const federationEvents = [];
         const auxiliarySources = [];
+        let snVerificationRequired = false;
         // References in the message are checked by the Gate I runtime prelude
         // (ELI); no model is asked to extract them.
         const modelTaskOwnership = evaluateModelTaskOwnershipGate(resolveReferencePreflightOwnership(detectLegalReferences(protectedAuxiliaryText ??
@@ -974,6 +983,7 @@ export class SafeSessionExecutor {
             // Route-based path: the engine puts the qualifier in the prompt itself.
             ...(pathFacts.criminal && !request.modelSelectsSkills ? [CRIMINAL_QUALIFIER_RESOURCE] : [])
         ]);
+        corpusTools.setInContext(contextResources);
         const pathSections = [];
         // The kind of every document the user sent (court decision, pleading, contract,
         // evidence...), recognised locally from its protected text; the router chooses
@@ -1143,6 +1153,7 @@ export class SafeSessionExecutor {
                 const skill = record.name;
                 const text = fs.readFileSync(record.skillFile, "utf8");
                 corpusTools.recordPreloaded(`${path.basename(record.directory)}/SKILL.md`);
+                contextResources.add(`${path.basename(record.directory)}/SKILL.md`);
                 audit.record("gate", "TASK_ROUTING", "OK", {
                     source: taskRoute.source,
                     skill,
@@ -1474,6 +1485,9 @@ export class SafeSessionExecutor {
                     ? await federationTools
                         .runTools(federationCalls, federationEvents)
                     : [];
+                if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
+                    snVerificationRequired = true;
+                }
                 for (const result of federationResults) {
                     const source = publicAuxiliarySourceFromToolResult(result);
                     if (!source) {
@@ -2360,6 +2374,9 @@ export class SafeSessionExecutor {
                 ? {
                     auxiliarySources: publicAuxiliarySources
                 }
+                : {}),
+            ...(snVerificationRequired
+                ? { sourceVerification: { source: "sn", url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
                 : {}),
             ...(widgetTools && widgetTools.widgets().length > 0
                 ? { widgets: widgetTools.widgets() }

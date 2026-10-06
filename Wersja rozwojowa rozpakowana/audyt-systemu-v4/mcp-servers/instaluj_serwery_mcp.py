@@ -59,9 +59,13 @@ GRUPY = [
     ("Akty prawne i orzecznictwo", [
         ("isap", "ISAP/ELI — tekst aktu i przepisu (Sejm ELI)"),
         ("eurlex", "EUR-Lex + TSUE — akty UE, status, wyroki"),
-        ("saos", "SAOS — orzeczenia sądów powszechnych i SN, cytator"),
+        ("saos", "SAOS — agregator orzeczeń SP, SN i KIO (ranga najniższa; zastępczo), cytator"),
         ("cbosa", "CBOSA — orzeczenia NSA/WSA (snapshot 🟨)"),
+        ("sn", "SN — orzeczenia Sądu Najwyższego (sn.pl, źródłem karta orzeczenia)"),
+        ("sp", "Sądy powszechne — Portal Orzeczeń (stały link do orzeczenia)"),
+        ("tk", "TK — orzeczenia Trybunału Konstytucyjnego (IPO, OTK ZU; bez SAOS)"),
         ("kio", "KIO — orzeczenia Krajowej Izby Odwoławczej (wyszukiwarka UZP)"),
+        ("etpcz", "ETPCz — orzeczenia Europejskiego Trybunału Praw Człowieka (baza MS, etpcz.ms.gov.pl)"),
     ]),
     ("Rejestry podmiotów", [
         ("krs", "KRS — odpis, reprezentacja (bez klucza)"),
@@ -245,12 +249,15 @@ def zbuduj_mcpb(wyjscie, wybrane=None, klucz=None):
     man = json.loads((TU / "mcpb-manifest.json").read_text(encoding="utf-8"))
     pelny = set(wybrane) == set(SERWERY)
     man["server"]["mcp_config"]["args"][1] = "wszystkie" if pelny else ",".join(wybrane)
-    pref = {"isap": "isap_", "eurlex": "eurlex_", "saos": "saos_", "cbosa": "cbosa_", "kio": "kio_", "krs": "krs_", "wl": "wl_",
+    pref = {"isap": "isap_", "eurlex": "eurlex_", "saos": "saos_", "cbosa": "cbosa_", "sn": "sn_", "sp": "sp_", "tk": "tk_", "kio": "kio_", "etpcz": "etpcz_", "krs": "krs_", "wl": "wl_",
             "ceidg": "ceidg_", "nbp": "nbp_", "eureka": "eureka_", "sudop": "sudop_", "uodo": "uodo_"}
     man["tools"] = [t for t in man["tools"] if any(t["name"].startswith(pref[n]) for n in wybrane)]
     if "ceidg" not in wybrane:
         man["user_config"].pop("ceidg_klucz", None)
         man["server"]["mcp_config"]["env"].pop("CEIDG_API_KEY", None)
+    if "sn" not in wybrane:
+        man["user_config"].pop("sn_cookie", None)
+        man["server"]["mcp_config"]["env"].pop("SN_COOKIE", None)
     if klucz:
         man["server"]["mcp_config"]["env"]["CEIDG_API_KEY"] = klucz
         man["user_config"].pop("ceidg_klucz", None)

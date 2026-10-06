@@ -493,7 +493,7 @@ Pozostałe parametry: `courtType` (`COMMON`/`SUPREME`/`ADMINISTRATIVE`/
 `CONSTITUTIONAL_TRIBUNAL`/`NATIONAL_APPEAL_CHAMBER`), `all` (pełny tekst),
 `sortingField=JUDGMENT_DATE`, `sortingDirection`.
 
-⛔ **Granica:** SAOS to RZĄD 2A (baza wtórna), nie publikator. Ustala, że
+⛔ **Granica:** SAOS to RZĄD 3 (agregator akademicki, od 2026-10-06), nie publikator. Ustala, że
 orzeczenie istnieje i co zawiera; nie zastępuje sprawdzenia sygnatury
 u źródła przy powoływaniu się w piśmie.
 

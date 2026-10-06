@@ -51,7 +51,7 @@ nie na posiadaniu własnego kodu integracyjnego jako takiego.
 | Projekt | Zakres | Narzędzia / uwagi | Źródło danych (RZĄD) |
 |---|---|---|---|
 | `matematicsolutions/mcp-isap` | Dz.U. + M.P., Sejm ELI | `search_acts`, `get_act`, `get_act_text`; każde cytowanie niesie identyfikator ELI | api.sejm.gov.pl (RZĄD 1) |
-| `matematicsolutions/mcp-saos` | sądy powszechne, SN, TK, KIO | `search`, `get_judgment`, `search_by_case` | SAOS (RZĄD 2A) |
+| `matematicsolutions/mcp-saos` | sądy powszechne, SN, TK, KIO | `search`, `get_judgment`, `search_by_case` | SAOS (RZĄD 3 — agregator akademicki) |
 | `matematicsolutions/mcp-nsa` | NSA + 16 WSA | `search`, `get_judgment`, `search_by_case` | CBOSA (RZĄD 2A) |
 | `matematicsolutions/mcp-krs` | rejestr przedsiębiorców | `get_entity`, `get_entity_full`, `get_board` — obsługa KROK 0D / PODMIOT-GATE | KRS MS (RZĄD 2A) |
 | `matematicsolutions/mcp-eu-sparql` | prawo UE + TSUE | `search_by_celex`, `search_by_date_range`, `search_cjeu` | EUR-Lex / CELLAR (RZĄD 1/2A) |

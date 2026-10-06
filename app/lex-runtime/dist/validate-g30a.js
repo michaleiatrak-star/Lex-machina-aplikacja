@@ -126,6 +126,7 @@ const checks = {
         ?.source
         ?.enum ?? []) ===
         JSON.stringify([
+            "SN",
             "SAOS",
             "CBOSA"
         ]),

@@ -34,7 +34,7 @@ Mapa runtime zawiera wyłącznie bieżące przypisanie **akt / zakres → moduł
 
 | Akt / zakres | Bieżąca podstawa | Moduł / routing | Status runtime |
 |---|---|---|---|
-| Kodeks rodzinny i opiekuńczy | Dz.U. 2026 poz. 236 t.j. ze zm. | `mod-KRO-rodzinne` | 🟢 B+/COV |
+| Kodeks rodzinny i opiekuńczy — rozwód, separacja, alimenty, władza rodzicielska, kontakty z dzieckiem | Dz.U. 2026 poz. 236 t.j. ze zm. | `mod-KRO-rodzinne` | 🟢 B+/COV |
 | KRO — zawarcie małżeństwa / bigamia / transgraniczne | jw. + właściwe prawo międzynarodowe | `mod-KRO-zawarcie-malzenstwa-bigamia-transgraniczne` | ✅ aktywny; fresh gate |
 | KRO — przysposobienie | jw. + Konwencja haska 1993 | `mod-KRO-przysposobienie-adopcja-miedzynarodowa` | ✅ aktywny |
 | KRO — opieka i kuratela | jw. | `mod-KRO-opieka-i-kuratela` | ✅ aktywny |
@@ -88,7 +88,7 @@ Mapa runtime zawiera wyłącznie bieżące przypisanie **akt / zakres → moduł
 | Fundacja rodzinna | Dz.U. 2023 poz. 326 ze zm. | `mod-ustawa-fundacja-rodzinna` | 🟢 B+/COV |
 | Prawo wekslowe + Prawo czekowe | Dz.U. 2022 poz. 282 t.j. + Dz.U. 2016 poz. 462 t.j. | `mod-prawo-wekslowe-czekowe` | 🟢 B+/COV |
 | Timeshare + zastaw rejestrowy | ustawa o timeshare: Dz.U. 2011 nr 230 poz. 1370 ze zm.; zastaw: Dz.U. 2018 poz. 2017 t.j. ze zm. | `mod-ustawa-timeshare-zastaw-rejestrowy` + `mod-ustawa-zastaw-rejestrowy` | ✅ aktywny / B+/COV |
-| Ubezpieczenia obowiązkowe / UFG / PBUK | Dz.U. 2026 poz. 783 t.j. ze zm. | `mod-ustawa-ubezpieczenia-obowiazkowe-UFG-PBUK` | 🟢 B+/COV |
+| Ubezpieczenia obowiązkowe / UFG / PBUK — OC sprawcy, odszkodowanie i zadośćuczynienie z OC, wypadek drogowy | Dz.U. 2026 poz. 783 t.j. ze zm. | `mod-ustawa-ubezpieczenia-obowiazkowe-UFG-PBUK` | 🟢 B+/COV |
 | Monopole państwowe | Konstytucja + właściwe ustawy sektorowe, w tym hazard/poczta | `mod-ustawa-monopole-panstwowe` | ✅ aktywny; temporal gate |
 | Transakcje handlowe / opóźnienia | Dz.U. 2023 poz. 1790 t.j. ze zm. | `mod-transakcje-handlowe-opoznienia` | 🟢 B+/COV |
 | Cudzoziemcy — routing gospodarczy/cywilny | Dz.U. 2025 poz. 1079 t.j. ze zm. | `mod-ustawa-cudzoziemcy` | 🔗 routing DR-05 |

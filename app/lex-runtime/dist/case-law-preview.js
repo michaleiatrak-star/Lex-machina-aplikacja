@@ -1,6 +1,10 @@
 import { supremeCourtFullTextHtml } from "./case-law-verifier.js";
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
 import { allowedPreviewUrl, fetchSourcePreview } from "./source-preview.js";
+import { createHash } from "node:crypto";
+import { caseLawRepository, courtOfCard } from "./case-law-store.js";
+import { documentText } from "./official-text.js";
+export { documentText };
 export const CASE_PREVIEW_ANCHOR = "lex-case-quote";
 const CACHE_MS = 30 * 60_000;
 const CACHE_ITEMS = 30;
@@ -8,31 +12,6 @@ const MAX_FRAGMENT = 4000;
 const SAOS_JUDGMENT = /^\/judgments\/(\d{1,12})\/?$/;
 function escapeHtml(value) {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-function decodeEntities(value) {
-    return value
-        .replace(/&nbsp;|&#160;/gi, " ")
-        .replace(/&quot;/gi, '"')
-        .replace(/&apos;|&#39;/gi, "'")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&#(\d{1,6});/g, (_match, code) => String.fromCodePoint(Number(code)))
-        .replace(/&#x([0-9a-f]{1,6});/gi, (_match, code) => String.fromCodePoint(parseInt(code, 16)))
-        .replace(/&amp;/gi, "&");
-}
-/** Readable text of a decision page: paragraphs kept, markup and scripts dropped. */
-export function documentText(html) {
-    return decodeEntities(html
-        .replace(/<(script|style|head|title|nav|header|footer|noscript)\b[\s\S]*?<\/\1\s*>/gi, " ")
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<\/(p|div|li|h[1-6]|tr|table|section|article|blockquote)\s*>/gi, "\n")
-        .replace(/<(p|div|li|h[1-6]|tr|blockquote)\b[^>]*>/gi, "\n")
-        .replace(/<\/t[dh]\s*>/gi, " \t ")
-        .replace(/<[^>]+>/g, " "))
-        .replace(/[ \t ]+/g, " ")
-        .replace(/ *\n */g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
 }
 // One comparable form for the source text and the cited passage: case, dots,
 // quotation marks, dashes and whitespace do not decide a match (as in the
@@ -113,7 +92,7 @@ body{font-family:Calibri,Arial,sans-serif;margin:16px;line-height:1.5;color:#1d1
 .lex-text{white-space:pre-wrap}
 mark{background:#ffe066;padding:1px 0;scroll-margin-top:40vh}
 @media (prefers-color-scheme:dark){body{background:#1e1f22;color:#e8e8ea}.lex-head{background:#2a2c30;border-color:#44474d}.lex-note{color:#f0c060}mark{background:#8a6d00;color:#fff}}
-</style></head><body><div class="lex-head"><p><b>Pełny tekst${input.signature ? ` · ${escapeHtml(input.signature)}` : ""}</b></p><p>Źródło: <a href="${escapeHtml(input.url)}">${escapeHtml(input.url)}</a> · pobrano ${escapeHtml(input.fetchedAt.slice(0, 16).replace("T", " "))} UTC</p>${input.attributed ? `<p>Odpowiedź przypisuje temu rozstrzygnięciu: <i>${escapeHtml(input.attributed.slice(0, 1500))}</i></p>` : ""}<p class="lex-note">${MATCH_NOTE[range.match]}</p></div><div class="lex-text">${body}</div></body></html>`;
+</style></head><body><div class="lex-head"><p><b>Pełny tekst${input.signature ? ` · ${escapeHtml(input.signature)}` : ""}</b></p><p>Karta orzeczenia (źródło): <a href="${escapeHtml(input.url)}">${escapeHtml(input.url)}</a> · tekst pobrany ${escapeHtml(input.fetchedAt.slice(0, 16).replace("T", " "))} UTC i zapisany w aplikacji; cytat zaznaczono na tej kopii</p>${input.attributed ? `<p>Odpowiedź przypisuje temu rozstrzygnięciu: <i>${escapeHtml(input.attributed.slice(0, 1500))}</i></p>` : ""}<p class="lex-note">${MATCH_NOTE[range.match]}</p></div><div class="lex-text">${body}</div></body></html>`;
     return { url: input.url, html, anchor: CASE_PREVIEW_ANCHOR, match: range.match, chars: input.text.length };
 }
 export class CaseLawPreviewService {
@@ -124,19 +103,51 @@ export class CaseLawPreviewService {
         this.fetcher = fetcher;
         this.now = now;
     }
-    async preview(input) {
+    /**
+     * The stored copy of a decision (downloaded now if missing): kept in the
+     * case (when given) and, with the library enabled, catalogued there.
+     */
+    async copy(input) {
         const url = allowedPreviewUrl(input.sourceUrl).toString();
-        const text = await this.text(url);
+        const repository = caseLawRepository();
+        const stored = repository?.get(url, input.caseId);
+        const text = stored?.text ?? (await this.text(url)).trim();
         if (text.length < 40)
             throw new Error("CASE_PREVIEW_TEXT_EMPTY");
-        return renderCaseLawPreview({
+        const fetchedAt = stored?.fetchedAt ?? new Date(this.now()).toISOString();
+        const entry = {
+            ...(stored ?? {}),
+            cardUrl: url,
+            text,
+            fetchedAt,
+            ...(input.signature && !stored?.signature ? { signature: input.signature } : {})
+        };
+        return (repository?.put(entry, input.caseId) ?? {
+            court: courtOfCard(url),
+            ...entry,
+            sha256: createHash("sha256").update(text).digest("hex")
+        });
+    }
+    async preview(input) {
+        const url = allowedPreviewUrl(input.sourceUrl).toString();
+        // The local copy first (the case's, then the library's): the quote is
+        // marked on what was downloaded once.
+        const repository = caseLawRepository();
+        const stored = repository?.get(url, input.caseId) ?? null;
+        const text = stored?.text ?? (await this.text(url));
+        if (text.length < 40)
+            throw new Error("CASE_PREVIEW_TEXT_EMPTY");
+        const saved = repository?.put({ ...(stored ?? {}), cardUrl: url, text, ...(input.signature && !stored?.signature ? { signature: input.signature } : {}) }, input.caseId) ??
+            stored;
+        const rendered = renderCaseLawPreview({
             url,
             text,
             ...(input.passage ? { passage: input.passage } : {}),
             ...(input.signature ? { signature: input.signature } : {}),
             ...(input.attributed ? { attributed: input.attributed } : {}),
-            fetchedAt: new Date(this.now()).toISOString()
+            fetchedAt: saved?.fetchedAt ?? new Date(this.now()).toISOString()
         });
+        return { ...rendered, source: stored ? "LOCAL" : "NETWORK", ...(saved ? { storedAt: saved.fetchedAt } : {}) };
     }
     async text(url) {
         const cached = this.cache.get(url);

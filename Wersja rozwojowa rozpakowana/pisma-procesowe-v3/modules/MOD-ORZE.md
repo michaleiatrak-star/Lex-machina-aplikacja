@@ -37,7 +37,7 @@ Wywołaj `orzeczenia-sadowe-v2` z frazami z ORZE-2. Skill przeszuka w kolejnośc
 
 | Priorytet | Portal | Zakres |
 |-----------|--------|--------|
-| 1 | https://www.sn.pl/orzecznictwo | SN, uchwały, zasady prawne |
+| 1 | https://www.sn.pl/pl/wyszukiwarka-orzeczen | SN, uchwały, zasady prawne (link = karta `?orzeczenie=ID`) |
 | 2 | https://orzeczenia.ms.gov.pl | SA, SO, SR |
 | 3 | https://www.saos.org.pl | sądy apelacyjne (agregator) |
 | 4 | https://orzeczenia.nsa.gov.pl | administracyjne |

@@ -1,6 +1,6 @@
 ---
 name: orzeczenia-sadowe-v2
-version: "2.23"
+version: "2.24"
 type: executive-analiza
 status: production
 compatibility: "live_web_lookup, file_read, cross_skill_file_read, optional_code_execution, optional_document_and_interactive_ui"
@@ -323,7 +323,7 @@ bezpośredniego URL z oficjalnego portalu sądowego:
 
 **Zasada 7 — Hierarchia portali (TSUE i ETPC jako pełnoprawne źródła):**
 ```
-Tier 1 (krajowe PL): sn.pl · orzeczenia.ms.gov.pl + sieć lokalna SA/SO/SR (Zasada 5A)
+Tier 1 (krajowe PL): sn.pl (link = karta …/wyszukiwarka-orzeczen?orzeczenie=ID) · orzeczenia.ms.gov.pl + sieć lokalna SA/SO/SR (Zasada 5A)
                       · orzeczenia.nsa.gov.pl = CBOSA (NSA + wszystkie 16 WSA)
                       · trybunal.gov.pl + otkzu.trybunal.gov.pl (Zasada 5B —
                         równoważne, ten sam organ, archiwum pełnych tekstów)
@@ -331,18 +331,16 @@ Tier 1 (krajowe PL): sn.pl · orzeczenia.ms.gov.pl + sieć lokalna SA/SO/SR (Zas
                         referencyjne, nie źródło prawa (art. 87 Konstytucji), ale
                         Tier 1 dla praktyki DR-07
 Tier 2 (UE/EU):      curia.europa.eu · hudoc.echr.coe.int
-Tier 3 (backup):     saos.org.pl (wyłącznie pomocniczo jako źródło WERYFIKACJI
-                      przy powołaniu w piśmie; jako źródło TREŚCI ma RZĄD 2A
-                      wg shared/HIERARCHIA-ZRODEL.md — to nie jest sprzeczność,
-                      patrz nota niżej)
+Tier 3 (backup):     saos.org.pl — agregator akademicki, RZĄD 3; tylko gdy baza
+                      urzędowa nie działa albo nie daje trwałego linku
 Tier 4 (zagraniczne): patrz sekcja „Jurysdykcje zagraniczne"
 ```
 
 ⛔ **Nota o dwóch skalach (dodane 2026-09-13, F-185).** „Tier" w tym skillu mierzy
 **dopuszczalność jako źródła potwierdzenia sygnatury w piśmie procesowym**;
 „RZĄD" w `shared/HIERARCHIA-ZRODEL.md` mierzy **moc źródła co do treści**.
-SAOS = Tier 3 + RZĄD 2A jednocześnie i poprawnie. Rozbieżność była czytana jako
-sprzeczność między plikami i przez to blokowała użycie sprawnego API.
+Od 2026-10-06 SAOS = Tier 3 i RZĄD 3 (agregator akademicki) — jedna ranga; najpierw
+baza urzędowa sądu właściwego dla repertorium, SAOS zastępczo przy jej awarii.
 
 ⛔⛔ **STAN KANAŁÓW TIER 1 — dostępność jest właściwością bieżącego runtime, nie stałą.**
 Pomiar z 2026-09-13 wykazał niedostępność CBOSA w tamtym środowisku, ale nie wolno
@@ -379,7 +377,7 @@ Wiążą wszystkie składy orzekające SN (odstąpienie wymaga uchwały całej I
 Sędziowie sądów powszechnych nie są nimi formalnie związani, lecz mają
 fundamentalne znaczenie praktyczne dla całego systemu.
 Gdy takie uchwały są dostępne → ZAWSZE powołuj jako pierwsze w piśmie.
-Weryfikacja: sn.pl/orzecznictwo/SitePages/Najnowsze_orzeczenia.aspx?Izba=Uchwaly
+Weryfikacja: https://www.sn.pl/pl/wyszukiwarka-orzeczen (snproxy; link = karta `?orzeczenie=ID`)
 
 **Zasada 9 — Dopasowanie tezy do oczekiwanego rozstrzygnięcia.**
 Wyszukiwanie ma na celu znalezienie orzeczeń, których teza i sentencja są
@@ -499,7 +497,7 @@ pomiń profil, wyszukiwanie prowadź bez preferowanego kierunku i pomiń Fazę 1
 ### Portale krajowe i UE (Tier 1–3)
 
 Kolejność priorytetu dla spraw polskich:
-1. sn.pl/orzecznictwo — SN, uchwały (w tym Kat. 6A)
+1. https://www.sn.pl/pl/wyszukiwarka-orzeczen — SN, uchwały (w tym Kat. 6A); link = karta `?orzeczenie=ID`
 2. orzeczenia.ms.gov.pl — SA, SO, SR
 3. orzeczenia.nsa.gov.pl — Administracyjne
 4. trybunal.gov.pl/orzeczenia — TK

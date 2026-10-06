@@ -310,6 +310,12 @@ export class LegalCorpusToolRuntime {
         this.options = options;
     }
     caseText = "";
+    // Resources the application already put in the model's context this turn.
+    inContext = new Set();
+    /** The live set of resources the application loaded into the prompt: a read of one returns no second copy. */
+    setInContext(resources) {
+        this.inContext = resources;
+    }
     /** The question and the document kinds: what the domain's act map is matched against. */
     setCaseText(text) {
         this.caseText = text;
@@ -596,6 +602,27 @@ export class LegalCorpusToolRuntime {
             const resolvedPath = path.relative(this.registry.root, resolved)
                 .replaceAll(path.sep, "/");
             const targetSkill = this.skillForPath(resolvedPath);
+            // Already in the model's context (loaded by the application this turn): no second copy.
+            const requestedOffset = Number.isInteger(call.input.offset) ? Number(call.input.offset) : 0;
+            if (requestedOffset === 0 && this.inContext.has(resolvedPath)) {
+                if (targetSkill !== null && resolvedPath.split("/").length === 2 && resolvedPath.endsWith("/SKILL.md")) {
+                    if (!this.readSkills.includes(targetSkill))
+                        this.readSkills.push(targetSkill);
+                    this.cover(targetSkill, 0, 0, 0, "preloaded");
+                }
+                if (targetSkill?.startsWith(CRIMINAL_DOMAIN_PREFIX) && resolvedPath.endsWith(`/${CRIMINAL_QUALIFIER_INDEX}`))
+                    this.qualifierDelivered = true;
+                this.events.push({ tool: call.name, target: resolvedPath, decision: "ALLOW", detail: { inContext: true, returnedChars: 0 } });
+                return JSON.stringify({
+                    status: "OK",
+                    path: resolvedPath,
+                    inContext: true,
+                    content: "",
+                    note: "Aplikacja wczytała ten plik do kontekstu w tej turze (sekcja z tą ścieżką w instrukcjach). Korzystaj z tamtej treści; nie czytaj go ponownie."
+                });
+            }
+            if (this.inContext.has(`${ROUTER_SKILL}/SKILL.md`) && !this.readSkills.includes(ROUTER_SKILL))
+                this.readSkills.push(ROUTER_SKILL);
             // Router v3 is always first. When the model asks for another legal
             // resource before it, the router entry is delivered with that read
             // (like the criminal qualifier) instead of refusing it and costing a
@@ -668,6 +695,9 @@ export class LegalCorpusToolRuntime {
             // A criminal-law matter always goes through the qualifier: it is
             // delivered with the first DR-03 skill entry, not left to the model.
             let requiredModule;
+            // The application already gave the qualifier: not delivered a second time.
+            if (isSkillEntry && this.inContext.has(`${targetSkill}/${CRIMINAL_QUALIFIER_INDEX}`))
+                this.qualifierDelivered = true;
             if (this.options.modelSelectsSkills &&
                 isSkillEntry &&
                 targetSkill.startsWith(CRIMINAL_DOMAIN_PREFIX) &&

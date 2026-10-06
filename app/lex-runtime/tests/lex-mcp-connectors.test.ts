@@ -66,9 +66,10 @@ describe("LexMcpConnectorStore", () => {
 
     expect(status.packageAvailable).toBe(true);
     expect(status.ceidg).toEqual({ keyConfigured: false, keyUrl: CEIDG_KEY_URL });
+    expect(status.sn).toEqual({ sessionSavedAt: null });
     expect(CEIDG_KEY_URL).toBe("https://dane.biznes.gov.pl/pl/portal/034872");
     expect(status.servers.map((server) => server.id)).toEqual([
-      "isap", "eurlex", "saos", "cbosa", "kio", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
+      "isap", "eurlex", "saos", "cbosa", "sn", "sp", "tk", "kio", "etpcz", "krs", "wl", "ceidg", "nbp", "eureka", "sudop", "uodo"
     ]);
     expect(status.servers.filter((server) => !server.installed).map((server) => server.id)).toEqual(["ceidg"]);
   });
@@ -128,6 +129,36 @@ describe("LexMcpConnectorStore", () => {
     const saved = await connectors.setCeidgKey(jwt({ sub: "x" }), unreachable);
     expect(saved.verification).toBe("UNREACHABLE");
     expect(connectors.status().ceidg.keyConfigured).toBe(true);
+  });
+
+  it("stores the sn.pl session from the user's verification privately and passes only its path", () => {
+    const connectors = store();
+    expect(() => connectors.setSnSession("bez ciasteczek", "")).toThrow("SN_SESSION_EMPTY");
+    const saved = connectors.setSnSession("incap_ses_1=abc; visid_incap_1=def; zly\r\n=x", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/140.0");
+    expect(saved.cookies).toBe(2);
+    const file = connectors.serverEnvironment().SN_SESSION_FILE!;
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toMatchObject({ cookie: "incap_ses_1=abc; visid_incap_1=def", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/140.0" });
+    if (process.platform !== "win32") expect(fs.statSync(file).mode & 0o077).toBe(0);
+    expect(connectors.status().sn.sessionSavedAt).toBe(saved.savedAt);
+    expect(JSON.stringify(connectors.status())).not.toContain("abc");
+    connectors.clearSnSession();
+    expect(connectors.status().sn.sessionSavedAt).toBeNull();
+  });
+
+  it("turns on Node's env proxy for connectors when a proxy is configured", () => {
+    const connectors = store();
+    const saved = { HTTPS_PROXY: process.env.HTTPS_PROXY, https_proxy: process.env.https_proxy, HTTP_PROXY: process.env.HTTP_PROXY, http_proxy: process.env.http_proxy, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY };
+    try {
+      for (const key of Object.keys(saved)) delete process.env[key];
+      expect(connectors.serverEnvironment().NODE_USE_ENV_PROXY).toBeUndefined();
+      process.env.HTTPS_PROXY = "http://proxy.firma:8080";
+      expect(connectors.serverEnvironment()).toMatchObject({ HTTPS_PROXY: "http://proxy.firma:8080", NODE_USE_ENV_PROXY: "1" });
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 
   it("inspects the JWT shape without echoing personal data", () => {

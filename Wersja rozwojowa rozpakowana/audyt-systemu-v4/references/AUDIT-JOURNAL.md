@@ -69891,6 +69891,195 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06n — etpcz: wyszukiwanie po frazie zwracało „brak trafienia” mimo trafień; karta Wyszukiwanie: fraza pierwsza (6.203)
+
+### 1. ŹRÓDŁO
+Zlecenie użytkownika: wstawić audyt-systemu-v4 6.202 (paczka użytkownika), sprawdzić działanie wszystkich konektorów w aplikacji i przyjazne przekazywanie danych w wyszukiwarkach; podstawową formą jest szukanie po frazie i ta opcja ma być pierwsza.
+
+### 2. USTALENIA
+- F-237 (BŁĄD): `etpcz_szukaj` po frazie — strona wyników etpcz.ms.gov.pl podaje linki `/detailsetpc/<zakodowana fraza>/<id>`, a `parsujWyniki` i `docIdZ` przyjmowały tylko segment `$N` (link po numerze skargi). Pomiar 2026-10-06: „prawo do sądu” — 741 trafień, 0 odczytanych, status OUT_OF_SCOPE.
+- Pomiar konektorów (test_protokol: 16/16 serwerów; test_poprawnosci: 17 PASS, 4 FAIL po stronie źródeł z sieci CI — WL i sn.pl: ochrona przed botami, CBOSA: ECONNRESET, SO Poznań: niepełny łańcuch TLS; test_sady: OK; G40 aplikacji: 15/15 źródeł, CEIDG bez klucza).
+- Aplikacja (lex-web, poza korpusem): 6 narzędzi bez polskiej nazwy (w tym `sn_szukaj`, więc wyszukiwanie SN po frazie nie było pierwsze), 13 pól SN bez etykiet, pole frazy za sygnaturą (SAOS, TSUE, ETPCz), tytuły „Wynik N” w ETPCz, kod `SN_WERYFIKACJA_WYMAGANA` jako komunikat, surowe wartości statusu („obowiazuje”, „nieznany”), ostrzeżenie konektora o dacie KIO niewyświetlane.
+
+### 3. ZMIANA
+- etpcz-example: rozpoznanie id dokumentu z dowolnym segmentem ścieżki (fraza albo `$N`); test_sady: przypadek strony wyników po frazie; dist/lex-mcp.mjs przebudowany (zbuduj_pakiet.py, esbuild przypięty).
+- F-238 (BŁĄD): T41 (`check_limit_plikow.py`) liczył pliki kanału pluginów (`.claude-plugin/`, `.mcp.json`), których paczka nie zawiera od 6.187 — wersja 6.202 (paczka 198 plików) dawała fałszywy FAIL „200 plików”. T41 liczy teraz to, co wchodzi do paczki; selftest z plikami pluginu.
+- Aplikacja: kolejność narzędzi fraza → sygnatura → odczyt → pobieranie → obsługa dostępu; pole frazy pierwsze (po wymaganym wskazaniu aktu w ISAP); źródła z wyszukiwaniem po frazie oznaczone i pierwsze w grupie; komplet polskich nazw narzędzi i pól (test na katalogu 16 konektorów).
+
+### 4. WERYFIKACJA
+etpcz na żywo po poprawce: „prawo do sądu” — 741 trafień, kandydaci z numerem skargi; numer 43447/19 — FOUND. Wyniki frazowe 10 źródeł przez parser karty Wyszukiwanie: tytuły, sąd, data, status po polsku.
+
+## AUDYT-2026-10-06k — T11: Dz.U. 2026 poz. 982 dopisana do snapshotu indeksu Dz.U. (6.200)
+
+### 1. ŹRÓDŁO
+T11 (check_sync_aktow) po aktualizacji map DR/prawo-polskie: Dz.U. 2026 poz. 982 obecna w MAPA-AKTOW (dr-08, dr-09) i ROUTING-MAP, brak w `references/mapa_dzu_2026-10-04.md`.
+
+### 2. ZMIANA
+Dopisano wiersz 2026 poz. 982 (ustawa z 29.05.2026 o zmianie ustawy o drogach publicznych oraz niektórych innych ustaw; ogł. 22.07.2026, w życie 21.09.2026; zmienia drogi publiczne 1985/60, PRD 1997/602, transport drogowy 2001/1371, u.k.p. 2011/151) — z ELI, akt pierwotny, brzmienie art. u źródła.
+
+### 3. WERYFIKACJA
+T11: brak rozbieżności w trzech rejestrach (MAPA-AKTOW ↔ ROUTING-MAP ↔ mapa Dz.U.). ELI DU/2026/982.
+
+
+## AUDYT-2026-10-06j — sn: weryfikacja captcha przez użytkownika w aplikacji; sp: fraza przez formularz portalu, SAOS z sygnaturą; tk: repertorium spoza listy; cbosa: ponowienie po zerwaniu (6.199)
+
+### 1. ŹRÓDŁO
+Zgłoszenia użytkownika 2026-10-06 (porównanie z wersjami 1.3.3/1.3.4 zmienionymi przez inne modele): sp_szukaj — brak podglądu, SAOS „Wynik 1…5” z rodzajem po angielsku; tk „OK 291/09” odrzucane bez zapytania; sn DO 1/18 — strona weryfikacji Imperva (captcha); cbosa — `UND_ERR_SOCKET` z orzeczenia.nsa.gov.pl.
+
+### 2. ZMIANA
+- sn: sesja z weryfikacji wykonanej przez użytkownika — `SN_SESSION_FILE` (zapis aplikacji po rozwiązaniu captcha w oknie sn.pl) i `SN_COOKIE` (ręcznie, także pole `sn_cookie` w .mcpb); nagłówki XHR jak przeglądarka. Przy blokadzie `powod: SN_WERYFIKACJA_WYMAGANA` + `weryfikacja` (bez wartości ciasteczek). Captcha Imperva to widżet (hCaptcha/reCAPTCHA), nie kod do przepisania — rozwiązuje ją człowiek; konektor jej nie obchodzi. SAOS zastępczo bez zmian (RZĄD 3).
+- sp: fraza przez formularz portalu (`wspolne/formularz.mjs`, wspólny z etpcz); pozycja SAOS z sygnaturą, rodzajem po polsku i `url_saos`.
+- tk: sygnatura w postaci TK spoza listy repertoriów idzie do IPO/OTK ZU; brak trafienia → `REPERTORIUM_SPOZA_LISTY_TK`.
+- cbosa: ponowienie całego żądania po zerwanym połączeniu (1,5 s, 3 s, w budżecie), także przy zerwaniu w trakcie odczytu treści.
+- Pomiar na żywo (full access, 2026-10-06): wbudowany fetch Node (>= 22.21) używa `HTTPS_PROXY` tylko z `NODE_USE_ENV_PROXY=1` — bez niej wszystkie konektory za proxy firmowym dostawały 403; aplikacja ustawia tę flagę w środowisku serwerów MCP.
+- Odpowiedź, która nie jest JSON (strona weryfikacji Imperva/Cloudflare, HTML przerwy technicznej): wspólny `fetch` opakowuje `json()` i zwraca przyczynę (host, kod HTTP, „ochrona przed botami”) zamiast „Unexpected token '<'”; Biała lista nie ponawia wtedy i podaje link do wyszukiwarki.
+- sp: parser listy wyników rozpoznaje `docId` po końcówce (`_RRRR-MM-DD_NNN`) niezależnie od kontekstu (fraza albo sygnatura), a nazwę sądu bierze z granic wiersza wyniku (pomiar na żywo: „zadośćuczynienie” = 52357 trafień, 10 kart z sądami).
+
+### 3. WERYFIKACJA
+`test_sady.mjs` (sesja i opis weryfikacji, formularz frazy, pozycja SAOS, sygnatura TK), `cbosa-example/test_normalizacja.mjs` (ponowienie), `test_protokol.mjs`, `wspolne/test_siec.mjs`. Na żywo (full access): sp_szukaj „zadośćuczynienie” → 52357 trafień, formularz portalu, karty z sądami; ETPCz 43447/19 FOUND. sn.pl, CBOSA, poznan.so, api.sejm.gov.pl z kontenera nadal blokowane albo zrywane (Imperva/polityka sieci) — pełny pomiar na maszynie użytkownika i w CI; okno weryfikacji sn.pl wymaga Windows/macOS.
+
+
+## AUDYT-2026-10-06i — etpcz: pole numeru skargi z pomiaru na żywo (G40B) (6.198)
+
+### 1. ŹRÓDŁO
+G40B (CI, 93c6c01): `etpcz_szukaj` 43447/19 → OUT_OF_SCOPE. Diagnostyka formularza: `POST /searchetpc.advancedsearchform`, pola `complaintNumber` (numer skargi), `complainant` (skarżący), `phrase`, selecty `type`/`sentenceYear`/`complaintCountry`, ukryte `t:ac`, `t:formdata`.
+
+### 2. ZMIANA
+⛔ Błąd konektora: wzorzec pola numeru (`numer|skarg|…`) nie rozpoznawał `complaintNumber` — zapytanie szło do innego pola. Poprawione (`complaint.?number|number|…`, z wyłączeniem `complainant`); selecty wysyłane z wartością zaznaczoną albo pierwszą.
+
+### 3. WERYFIKACJA
+Test na prawdziwym formularzu z logu G40B (`test_sady.mjs`): pole numeru `complaintNumber`, fraza `phrase`, akcja i pola ukryte. Ponowny pomiar na żywo: G40B na kolejnym commicie.
+
+
+## AUDYT-2026-10-06h — konektor etpcz (ETPCz, baza MS); sądy powszechne: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie (6.197)
+
+### 1. ŹRÓDŁO
+Użytkownik: w wynikach sądów powszechnych brak podglądu i linku do źródła (II K 1350/18 → dwie pozycje bez linku); Portal Orzeczeń szuka tylko po sygnaturze albo frazie; ETPCz: `etpcz.ms.gov.pl`.
+
+### 2. ZMIANA
+- Panel wyników (aplikacja): link i podgląd z `url_orzeczenia` (SP, TK) i `url_karty` (SN); data, rodzaj/forma i sąd w metadanych; „Pokaż treść” przez `sp_pobierz`, `sn_pobierz`, `tk_pobierz`, `etpcz_pobierz`; etykiety narzędzi SP/SN/TK/ETPCz.
+- `sp`: nazwa sądu z listy wyników portalu (gdy podana) przy każdej pozycji; `sp_szukaj` bez dat i limitu (portal ich nie obsługuje); federacja: sygnatura SR/SO/SA → `sp_sprawdz_sygnature`.
+- Nowy konektor `etpcz`: `etpcz_szukaj` (numer skargi z kontrolą po id dokumentu albo fraza; formularz wyszukiwarki odczytywany ze strony), `etpcz_pobierz` (treść `/etpccontent/$N/{id}`, kontrola numeru skargi). Rejestracja: paczka, manifest, instalator, aplikacja (federacja, polityka R2A, podgląd), G40B i test 10d.
+- Limit plików skilla (T41, < 200): testy offline sn/sp/tk/etpcz scalone w `mcp-servers/test_sady.mjs` (każda sekcja we własnym bloku, asercje bez zmian) — 198 plików.
+- HIERARCHIA-ZRODEL, DOSTEP-MASZYNOWY-API (shared 3.99.16).
+
+### 3. WERYFIKACJA
+Testy offline etpcz (numer skargi ↔ id, rok 20RR, formularz, wyniki) i przebieg na atrapie (formularz → POST → FOUND → treść → MISMATCH dla innej skargi); sp na atrapie (nazwa sądu w wyniku). Pomiar na żywo: G40B w CI (z diagnostyką formularza przy porażce) — piaskownica bez dostępu do etpcz.ms.gov.pl.
+
+
+## AUDYT-2026-10-06g — sn: strona weryfikacji przeglądarki (HTTP 200 HTML) zamiast „Unexpected token '<'”; SAOS zastępczo (6.196)
+
+### 1. ŹRÓDŁO
+Użytkownik: `sn_sprawdz_sygnature` → ERROR „Unexpected token '<', "<html styl"... is not valid JSON”. sn.pl odpowiedział stroną HTML (ochrona przed botami) z kodem 200; ponowienie z ciasteczkami działało tylko po 403.
+
+### 2. ZMIANA
+- Konektor `sn`: odpowiedź snproxy rozpoznawana (`rozpoznajOdpowiedz`): strona HTML/403 = blokada → wyszukiwarka po ciasteczka i ponowienie; nadal HTML → jawny komunikat (ochrona przed botami / przerwa techniczna). `sn_sprawdz_sygnature` przy blokadzie: SAOS zastępczo (RZĄD 3, SN do 2016) z oznaczeniem i linkiem do wyszukiwarki SN; brak trafienia → ERROR z instrukcją ręcznej weryfikacji karty.
+- Aplikacja (`case-law-verifier`): to samo w `fetchSn` (strona HTML 200 = blokada; po ponowieniu nadal → 403, nie błąd parsowania).
+
+### 3. WERYFIKACJA
+Testy offline sn (6 przypadków odpowiedzi) i przebieg narzędzia na atrapie: ponowienie → FOUND z sn.pl; blokada → SAOS zastępczo; blokada bez trafienia → ERROR z opisem; HTTP 500 bez ponowienia. Testy aplikacji: strona HTML 200 → ponowienie → FOUND; trwała blokada → SN_SEARCH_HTTP_403. Czy ciasteczka sesji wystarczą wobec weryfikacji JS sn.pl u użytkownika — niezmierzone (sn.pl niedostępny z piaskownicy i runnerów).
+
+
+## AUDYT-2026-10-06f — błędy sieci konektorów MCP: przyczyna zamiast „fetch failed”, ponowienia, certyfikaty systemu (6.195)
+
+### 1. ŹRÓDŁO
+Użytkownik: `cbosa_szukaj` → ERROR „fetch failed” (bez przyczyny).
+
+### 2. ZMIANA
+- `wspolne/budzet.mjs` (wszystkie serwery): komunikat z kodem i hostem (DNS, TLS, odrzucone, zerwane, limit czasu); ponowienie do 2 razy — błąd przed wysłaniem zawsze, zerwanie po wysłaniu tylko GET/HEAD albo żądanie `lexPowtarzalne` (POST wyszukiwarki CBOSA); w budżecie wywołania.
+- Certyfikaty z magazynu systemu obok wbudowanych (`tls.setDefaultCACertificates`, jak `--use-system-ca`): antywirus/zapora przechwytujące HTTPS na Windows nie kończą się „fetch failed”.
+- Test `wspolne/test_siec.mjs` (lokalny serwer zrywający połączenia).
+
+### 3. WERYFIKACJA
+Test sieci OK (GET po 2 zerwaniach, POST bez ponowienia, POST oznaczony ponowiony, ECONNREFUSED, opisy TLS/DNS); `fetch` respektuje dołożony urząd (pomiar: DEPTH_ZERO_SELF_SIGNED_CERT → ok). Przyczyna u użytkownika nieznana do odczytu nowego komunikatu (piaskownica: CBOSA za blokadą 403).
+
+
+## AUDYT-2026-10-06e — konektor tk wyłącznie ze źródeł urzędowych (IPO, OTK ZU), bez SAOS (6.194)
+
+### 1. ŹRÓDŁO
+Użytkownik: `tk_sprawdz_sygnature` dla P 21/19 zwrócił OUT_OF_SCOPE ze ścieżki SAOS. Zasada: w SAOS szuka tylko SAOS; orzeczenia TK są w `otkzu.trybunal.gov.pl` i `ipo.trybunal.gov.pl` (wyszukiwarka IPO bywa niesprawna).
+
+### 2. ZMIANA
+- `tk_sprawdz_sygnature`: (1) karta sprawy IPO GET `view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+28%2F05` z kontrolą sygnatury i listą dokumentów (`dokument=`); (2) wyszukiwarka OTK ZU (`/Wyszukiwanie`, pole Sygnatura) → pozycje `/{rok}/{A|B}/{poz}`; (3) formularz JSF IPO. Ścieżka SAOS usunięta. Brak trafienia → OUT_OF_SCOPE z linkami urzędowymi; awaria wszystkich → ERROR.
+- Aplikacja: sygnatura TK w `saos_search` przekierowana do `tk_sprawdz_sygnature` (SAOS nie pokrywa TK).
+- HIERARCHIA-ZRODEL, DOSTEP-MASZYNOWY-API (shared 3.99.15), manifest, test 10c, G40B.
+
+### 3. WERYFIKACJA
+Testy offline tk (karta IPO, dokumenty, formularz i wyniki OTK ZU): OK; test wykrył błąd (zakładka „pokaz=dokumenty” liczona jako dokument) — poprawiony. Wzorce adresów IPO/OTK ZU z publicznych odnośników; niezmierzone na żywo (hosty TK zablokowane w piaskownicy).
+
+
+## AUDYT-2026-10-06d — konektor sn: wszystkie pola wyszukiwarki SN; sp_szukaj w Portalu Orzeczeń, SAOS zastępczo (6.193)
+
+### 1. ŹRÓDŁO
+Użytkownik: wyszukiwanie SN tylko po sygnaturze (fraza kończyła się błędem źródła — trafiała do sn_sprawdz_sygnature); `sp_szukaj` zwracał „Unexpected token '<'” (SAOS oddał stronę HTML). Zasada użytkownika: SAOS zastępczy, korzystamy ze źródeł urzędowych. Kod widżetu sn.pl dostarczony przez użytkownika.
+
+### 2. ZMIANA
+- `sn_szukaj`: pola formularza sn.pl (q+tresc, sygnatura, forma_orzeczenia, data_wydania_od/do, „w dniu”, izba, skład, sędziowie), kontrola trafień wobec sygnatury, formy i dat; karty orzeczeń. W aplikacji `search_case_law source=SN` z tymi polami; federacja: sygnatura → `sn_sprawdz_sygnature`, reszta → `sn_szukaj`.
+- `sp_szukaj`: najpierw Portal Orzeczeń (fraza w polu 1 kontekstu Tapestry, kontrola odczytem treści), SAOS wyłącznie zastępczo; HTML zamiast JSON opisany wprost.
+- DOSTEP-MASZYNOWY-API (shared 3.99.14): parametry snproxy.
+
+### 3. WERYFIKACJA
+Testy offline sn/sp i testy aplikacji: OK. Pozycja frazy w kontekście Tapestry niezmierzona na żywo (piaskownica i runnery bez dostępu) — kontrolowana odczytem treści trafień; przy niezgodności SAOS zastępczo z adnotacją.
+
+## AUDYT-2026-10-06c — TRYB STRUKTURA: konektory MCP sp (sądy powszechne) i tk (Trybunał Konstytucyjny) (6.192)
+
+### 1. ŹRÓDŁO
+Zlecenie: konektory dla sądów powszechnych i TK; przy stałych linkach źródłem jest samo orzeczenie, bez możliwości budowy konektora — wyszukiwanie proste.
+
+### 2. USTALENIA (pomiary z DOSTEP-MASZYNOWY-API, piaskownica bez dostępu do portali)
+- Portal Orzeczeń SP: GET po sygnaturze bez sesji (kontekst Tapestry), stałe linki `/content/$N/{id}` i `/details/$N/{id}`; sygnatura nieunikalna krajowo — portal sądu rozstrzyga; pod łańcuchem UA Chrome 502 → UA neutralny.
+- IPO TK: JSF/PrimeFaces z ViewState, tylko POST; `Sprawa?sygnatura=` nie jest kluczem. Formularz `Szukaj?cid=1` da się jednak wysłać bez przeglądarki (sesja + ViewState → POST) — korekta oceny F-184 po uwadze użytkownika; nazwy pól odczytywane z HTML.
+
+### 3. ZMIANA
+- `sp-example`: `sp_sprawdz_sygnature` (agregat albo portal sądu `sad=miasto.so`; FOUND/AMBIGUOUS po kodzie sądu z id dokumentu; link do orzeczenia), `sp_pobierz` (treść po stałym linku/id), `sp_szukaj` (fraza: SAOS → link urzędowy `source.judgmentUrl`); awaria portalu → SAOS zastępczo (RZĄD 3).
+- `tk-example`: `tk_sprawdz_sygnature` (najpierw formularz IPO; zapasowo SAOS do 2015 z linkiem urzędowym; poza oknem OUT_OF_SCOPE z zapytaniem `site:ipo.trybunal.gov.pl`), `tk_pobierz` (dokument IPO/OTK ZU z kontrolą sygnatury, MISMATCH gdy brak).
+- Rejestracja: lex-mcp.js, instalator, manifest MCPB, test_poprawnosci (przypadek SP na żywo), dist/lex-mcp.mjs; HIERARCHIA-ZRODEL (shared 3.99.13).
+
+### 4. WERYFIKACJA
+Testy offline `sp-example/test_normalizacja.mjs`, `tk-example/test_normalizacja.mjs` (w tym formularz JSF IPO): OK. Portale niedostępne z piaskownicy — przypadki SP i TK na żywo w `test_poprawnosci.mjs` (10b, 10c).
+
+## AUDYT-2026-10-06b — konektor sn: żądania jak widżet wyszukiwarki, ponowienie po 403 (6.191)
+
+### 1. ŹRÓDŁO
+Sonda CI G22 (2026-10-06 08:21 i 08:32): sn.pl odpowiada `HTTP 403 text/html` na `snproxy searchOrzeczenia` z GitHub Actions; 07:47 ten sam kod przechodził.
+
+### 2. ZMIANA
+`sn-mcp-server.js` (i weryfikator w aplikacji): nagłówki jak widżet (Referer wyszukiwarki, `X-Requested-With`, Accept JSON, Accept-Language); po 403 jednorazowe otwarcie wyszukiwarki po ciasteczka sesji i ponowienie. Błąd 403 opisany jako ochrona przed botami sn.pl. dist/lex-mcp.mjs przebudowany.
+
+## AUDYT-2026-10-06 — TRYB STRUKTURA: orzeczenia SN — karta sprawy, właściwa baza wg sygnatury, SAOS RZĄD 3, konektor MCP sn (6.190)
+
+### 1. ŹRÓDŁO
+Zlecenie użytkownika z rozmową (wyszukanie II CSKP 89/26): model szukał sygnatury SN w CBOSA, sprawdzał stary katalog `/sites/orzecznictwo/Orzeczenia3/*.pdf` (nieczynny) i uznał brak publikacji; link `blob:https://www.sn.pl/…` od użytkownika odrzucił bez drogi dalej.
+
+### 2. USTALENIA
+- Korpus wskazywał nieczynne wejścia SN (`sn.pl/orzecznictwo/SitePages/…`) w 9 plikach; brak serwera MCP dla SN — działająca mechanika (snproxy → karta `?orzeczenie=ID`) była tylko w aplikacji.
+- SAOS figurował jako RZĄD 2A (z notą o „dwóch skalach”); użytkownik: SAOS to agregator akademicki, ranga najniższa.
+
+### 3. ZMIANA
+- HIERARCHIA-ZRODEL: wyjątek SN — źródłem jest karta sprawy; SAOS = RZĄD 3, zastępczo tylko przy awarii bazy urzędowej albo braku trwałego linku; baza wg repertorium sygnatury (II CSKP → nigdy CBOSA).
+- DOSTEP-MASZYNOWY-API, SYGNATURY (zastępuje notę F-185), KONEKTORY-REKOMENDOWANE, ORZECZENIA-OUTPUT-SCHEMA, orzeczenia-sadowe 2.24, HARD-GATES-ORZECZNICTWO (router 3.67), PORTALE-ORZECZNICZE-API: ujednolicone.
+- Nieczynne linki SN zastąpione wyszukiwarką `https://www.sn.pl/pl/wyszukiwarka-orzeczen` (analizator-przepisow 2.12, pisma-procesowe 5.37, przesluchanie 3.32, dr-10 3.51, sonda check_domeny_allowlist, przykłady narzędzi).
+- mcp-servers: nowy konektor `sn` (`sn_sprawdz_sygnature`, `sn_pobierz`) — karta jako źródło, sygnatura innego sądu → wskazanie właściwej bazy, blob:/stary PDF rozpoznane; testy offline `sn-example/test_normalizacja.mjs`, przypadek na żywo w `test_poprawnosci.mjs`; dist/lex-mcp.mjs przebudowany.
+
+### 4. WERYFIKACJA
+Testy offline konektora: OK. Sieć sn.pl z piaskownicy zablokowana — przypadek na żywo dopiero w CI.
+
+## AUDYT-2026-10-05p — TRYB STRUKTURA: dwie dziedziny DR w jednej sprawie (6.189)
+
+### 1. ŹRÓDŁO
+Zlecenie: sprawdzić wywoływanie dwóch DR, gdy sprawa tego wymaga, i właściwych skilli z routera. Próba 10 spraw dwudziedzinowych (praca+karne, wypadek drogowy, spadek+podatek, RODO w pracy, VAT+KKS, rozwód z alimentami i in.) na logice doboru z AUDYT-2026-10-05m.
+
+### 2. USTALENIA
+- „Pracodawca … podrobił mój podpis”: DR-03 bez trafienia (fraza „podrobienie podpisu” ma rdzeń „podrobien”, który nie łapie „podrobił”); sprawa karna nierozpoznana, bez kwalifikatora.
+- „Pijany kierowca … co grozi mu karnie”: sprawa karna nierozpoznana (detektor bez „karnie”, „pijany kierowca”, „pobity”, „ukradł”) — bez kwalifikatora (preferencja: Karne: +kwalifikator).
+- Moduł aktu: rozwód/alimenty → moduły KPC/adopcji zamiast mod-KRO-rodzinne; wypadek → brak modułu OC i przestępstw drogowych (wiersze map bez słów zakresu).
+
+### 3. ZMIANA
+- prawo-polskie-v2 6.44: frazy DR-03 i DR-04 (wyżej).
+- dr-02 3.64, dr-03 3.56: słowa zakresu w wierszach MAPA-AKTOW (bez numerów aktów).
+- Aplikacja: detektor sprawy karnej — „karnie”, kradzież/ukradł, pobicie/pobity, oszustwo, podrobienie, sfałszowanie, fałszerstwo, pijany/nietrzeźwy kierowca, groźba karalna (przymiotnik „karny” celowo pominięty: „adwokat z urzędu w sprawie karnej” zostaje w DR-12).
+- Testy: tests/domain-routing-multi.test.ts; routing-500 i zestaw świeży bez regresji (857/857).
+
 ## AUDYT-2026-10-05o — TRYB STRUKTURA: widgety, wątki 1–5 wiadomości, etapy spraw w czacie (F-232–F-236, 6.188)
 
 ### 1. ŹRÓDŁO

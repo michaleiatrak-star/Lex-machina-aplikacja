@@ -408,6 +408,27 @@ export default function AuthenticatedApp() {
     useState<
       AuthMeResponse["user"] | undefined
     >();
+  // The application of the last signed-in user, kept mounted across a lock.
+  const [retained, setRetained] =
+    useState<{
+      user: AuthMeResponse["user"];
+      key: string;
+    } | null>(null);
+  useEffect(() => {
+    if (!auth) {
+      return;
+    }
+    setRetained((current) =>
+      current &&
+      current.user.userId ===
+        auth.user.userId
+        ? { ...current, user: auth.user }
+        : {
+            user: auth.user,
+            key: `${auth.user.userId}:${auth.session.sessionId}`
+          }
+    );
+  }, [auth]);
   const [now, setNow] =
     useState(() => Date.now());
   const [
@@ -562,10 +583,14 @@ export default function AuthenticatedApp() {
       lastReported = current;
       void reportUserActivity();
     };
+    // Moving the mouse (reading a document) is activity too; reports stay at
+    // most one per minute.
     const events = [
       "keydown",
       "pointerdown",
+      "pointermove",
       "wheel",
+      "scroll",
       "touchstart"
     ] as const;
     for (const name of events) {
@@ -618,190 +643,215 @@ export default function AuthenticatedApp() {
     try {
       await logoutAuth();
     } finally {
+      setRetained(null);
       setLastUser(undefined);
       setAuth(null);
       setPhase("login");
     }
   }
 
-  if (phase === "checking") {
-    return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <p className="eyebrow">
-            Lex Machina
-          </p>
-          <h1>
-            Uruchamianie lokalnego runtime…
-          </h1>
-        </section>
-      </main>
-    );
-  }
+  // The lock, sign-in and recovery screens; null once signed in.
+  const renderPanel = (): ReactNode => {
+    if (phase === "checking") {
+      return (
+        <main className="auth-shell">
+          <section className="auth-card">
+            <p className="eyebrow">
+              Lex Machina
+            </p>
+            <h1>
+              Uruchamianie lokalnego runtime…
+            </h1>
+          </section>
+        </main>
+      );
+    }
 
-  if (phase === "recover") {
-    return (
-      <RecoveryAuthPanel
-        {...(lastUser
-          ? {
-              initialLoginName:
-                lastUser.loginName
-            }
-          : {})}
-        onCancel={() => {
-          clearAuthSession();
-          setPhase("login");
-        }}
-        onAuthenticated={(value) => {
-          setAuth(value);
-          setLastUser(
-            value.user
-          );
-          setNow(Date.now());
-          setPhase(
-            "authenticated"
-          );
-        }}
-      />
-    );
-  }
-
-  if (
-    phase !== "authenticated" ||
-    !auth
-  ) {
-    const panelPhase:
-      "bootstrap" | "login" | "locked" =
-        phase === "authenticated"
-          ? "login"
-          : phase;
-    return (
-      <AuthPanel
-        key={
-          panelPhase +
-          ":" +
-          (
-            lastUser?.userId ??
-            "none"
-          )
-        }
-        phase={panelPhase}
-        {...(lastUser
-          ? { lastUser }
-          : {})}
-        onChangeUser={() => {
-          clearAuthSession();
-          setLastUser(undefined);
-          setPhase("login");
-        }}
-        onRecover={() => {
-          clearAuthSession();
-          setPhase("recover");
-        }}
-        temporaryAdminCredentialsActive={
-          temporaryAdminCredentialsActive
-        }
-        onAuthenticated={(value) => {
-          setAuth(value);
-          setLastUser(value.user);
-          setNow(Date.now());
-          const passwordSetupPending =
-            value.user
-              .passwordSetupPending ===
-              true;
-          if (
-            value.user.loginName ===
-              "admin" &&
-            !passwordSetupPending
-          ) {
-            setTemporaryAdminCredentialsActive(
-              false
+    if (phase === "recover") {
+      return (
+        <RecoveryAuthPanel
+          {...(lastUser
+            ? {
+                initialLoginName:
+                  lastUser.loginName
+              }
+            : {})}
+          onCancel={() => {
+            clearAuthSession();
+            setPhase("login");
+          }}
+          onAuthenticated={(value) => {
+            setAuth(value);
+            setLastUser(
+              value.user
             );
-          }
-          setPhase(
-            "authenticated"
-          );
-        }}
-      />
-    );
-  }
+            setNow(Date.now());
+            setPhase(
+              "authenticated"
+            );
+          }}
+        />
+      );
+    }
 
+    if (
+      phase !== "authenticated" ||
+      !auth
+    ) {
+      const panelPhase:
+        "bootstrap" | "login" | "locked" =
+          phase === "authenticated"
+            ? "login"
+            : phase;
+      return (
+        <AuthPanel
+          key={
+            panelPhase +
+            ":" +
+            (
+              lastUser?.userId ??
+              "none"
+            )
+          }
+          phase={panelPhase}
+          {...(lastUser
+            ? { lastUser }
+            : {})}
+          onChangeUser={() => {
+            clearAuthSession();
+            setRetained(null);
+            setLastUser(undefined);
+            setPhase("login");
+          }}
+          onRecover={() => {
+            clearAuthSession();
+            setPhase("recover");
+          }}
+          temporaryAdminCredentialsActive={
+            temporaryAdminCredentialsActive
+          }
+          onAuthenticated={(value) => {
+            setAuth(value);
+            setLastUser(value.user);
+            setNow(Date.now());
+            const passwordSetupPending =
+              value.user
+                .passwordSetupPending ===
+                true;
+            if (
+              value.user.loginName ===
+                "admin" &&
+              !passwordSetupPending
+            ) {
+              setTemporaryAdminCredentialsActive(
+                false
+              );
+            }
+            setPhase(
+              "authenticated"
+            );
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  // A lock (manual, idle or a failed session check) keeps the application of the
+  // same user mounted, hidden and inert, behind the lock screen: unsent text in
+  // every field, open panels and scroll survive until that user signs in again.
+  // Another user, an explicit sign-out or "change user" starts a fresh application.
+  const authenticated =
+    phase === "authenticated" &&
+    Boolean(auth);
   const passwordSetupPending =
-    auth.user
+    auth?.user
       .passwordSetupPending === true;
 
   return (
-    <AuthenticatedShell
-      passwordSetupPending={
-        passwordSetupPending
-      }
-    >
-      {passwordSetupPending && (
+    <>
+      {renderPanel()}
+      {retained && (
         <div
-          className="password-setup-banner"
-          data-lex-banner="true"
-          role="alert"
+          className="retained-application"
+          hidden={!authenticated}
+          inert={!authenticated}
+          aria-hidden={!authenticated}
         >
-          <span>
-            Konto korzysta jeszcze z hasła początkowego. Możesz pracować, ale ustaw własne hasło mające co najmniej 10 znaków.
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setSettingsRequest({
-                section: "security",
-                nonce: Date.now()
-              })
-            }
-          >
-            Zmień hasło
-          </button>
-        </div>
-      )}
-
-      {idleRemaining <= 120_000 && (
-        <div
-          className="session-warning"
-          role="status"
-        >
-          Sesja zbliża się do blokady z powodu bezczynności. Backend pozostaje źródłem prawdy o czasie wygaśnięcia.
-        </div>
-      )}
-
-      <App
-        key={
-          auth.session.sessionId
-        }
-        user={auth.user}
-        settingsRequest={
-          settingsRequest
-        }
-        onLock={() => {
-          void lock();
-        }}
-        onLogout={() => {
-          void logout();
-        }}
-        onAuthUpdated={(value) => {
-          setAuth(value);
-          setLastUser(
-            value.user
-          );
-          setNow(Date.now());
-          if (
-            value.user.loginName ===
-              "admin" &&
-            value.user
-              .passwordSetupPending !==
-              true
-          ) {
-            setTemporaryAdminCredentialsActive(
-              false
-            );
+        <AuthenticatedShell
+          passwordSetupPending={
+            passwordSetupPending
           }
-        }}
-      />
-    </AuthenticatedShell>
+        >
+          {passwordSetupPending && (
+            <div
+              className="password-setup-banner"
+              data-lex-banner="true"
+              role="alert"
+            >
+              <span>
+                Konto korzysta jeszcze z hasła początkowego. Możesz pracować, ale ustaw własne hasło mające co najmniej 10 znaków.
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsRequest({
+                    section: "security",
+                    nonce: Date.now()
+                  })
+                }
+              >
+                Zmień hasło
+              </button>
+            </div>
+          )}
+
+          {authenticated && idleRemaining <= 120_000 && (
+            <div
+              className="session-warning"
+              role="status"
+            >
+              Sesja zbliża się do blokady z powodu bezczynności. Backend pozostaje źródłem prawdy o czasie wygaśnięcia.
+            </div>
+          )}
+
+          <App
+            key={
+              retained.key
+            }
+            user={retained.user}
+            settingsRequest={
+              settingsRequest
+            }
+            onLock={() => {
+              void lock();
+            }}
+            onLogout={() => {
+              void logout();
+            }}
+            onAuthUpdated={(value) => {
+              setAuth(value);
+              setLastUser(
+                value.user
+              );
+              setNow(Date.now());
+              if (
+                value.user.loginName ===
+                  "admin" &&
+                value.user
+                  .passwordSetupPending !==
+                  true
+              ) {
+                setTemporaryAdminCredentialsActive(
+                  false
+                );
+              }
+            }}
+          />
+        </AuthenticatedShell>
+        </div>
+      )}
+    </>
   );
 }
 

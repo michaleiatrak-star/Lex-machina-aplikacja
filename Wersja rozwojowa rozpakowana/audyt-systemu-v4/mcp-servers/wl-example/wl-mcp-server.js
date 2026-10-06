@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { sygnal, owinSerwer, budzetWyczerpany } from "../wspolne/budzet.mjs";
+import { sygnal, owinSerwer, budzetWyczerpany, BlokadaBotow } from "../wspolne/budzet.mjs";
 
 const B = "https://wl-api.mf.gov.pl/api";
 // Oficjalna wyszukiwarka wykazu (Ministerstwo Finansów); podatnik.info to serwis prywatny.
@@ -80,11 +80,15 @@ async function api(sciezka) {
       const d = await r.json();
       if (r.status === 400 || r.ok) return d; // 400 = błąd merytoryczny z kodem WL-xxx — nie ponawiamy
       throw new Error(`Biała lista HTTP ${r.status}`);
-    } catch (e) { ostatni = e; }
+    } catch (e) {
+      ostatni = e;
+      if (e instanceof BlokadaBotow) break; // strona weryfikacji przeglądarki: ponowienie nic nie da
+    }
   }
   throw ostatni;
 }
-const blad = (q, m) => ({ status: "ERROR", query_type: q, source: "biala-lista-vat", detail: m, retrieved_at: new Date().toISOString() });
+const blad = (q, m) => ({ status: "ERROR", query_type: q, source: "biala-lista-vat", detail: m,
+  ...(/ochrona przed botami/.test(m) ? { url_wyszukiwarki: WL_WYSZUKIWARKA } : {}), retrieved_at: new Date().toISOString() });
 const odp = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
 const DATA = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("dzień, na który sprawdzasz (domyślnie dziś, czas warszawski)");
 const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "wl-connector", version: "1.0.0" }));

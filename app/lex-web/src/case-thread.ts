@@ -35,6 +35,8 @@ export type CaseChatMessage = {
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
   widgets?: ChatWidget[];
+  // Ramka weryfikacji sn.pl (tylko bieżąca odpowiedź; nie jest zapisywana w wątku).
+  sourceVerification?: { source: "sn"; url: string };
 };
 
 function persistedMessageId(id: string): string {

@@ -17,7 +17,11 @@ export const LEX_MCP_SERVER_IDS = [
   "eurlex",
   "saos",
   "cbosa",
+  "sn",
+  "sp",
+  "tk",
   "kio",
+  "etpcz",
   "krs",
   "wl",
   "ceidg",
@@ -40,9 +44,13 @@ export type LexMcpServerInfo = {
 export const LEX_MCP_CATALOG: LexMcpServerInfo[] = [
   { id: "isap", group: "Akty prawne i orzecznictwo", label: "ISAP/ELI — tekst aktu i przepisu (Sejm ELI)" },
   { id: "eurlex", group: "Akty prawne i orzecznictwo", label: "EUR-Lex + TSUE — akty UE, status, wyroki" },
-  { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — orzeczenia sądów powszechnych i SN, cytator" },
+  { id: "saos", group: "Akty prawne i orzecznictwo", label: "SAOS — agregator orzeczeń (ranga najniższa; gdy źródło urzędowe nie działa), cytator" },
   { id: "cbosa", group: "Akty prawne i orzecznictwo", label: "CBOSA — orzeczenia NSA/WSA (snapshot 🟨)" },
+  { id: "sn", group: "Akty prawne i orzecznictwo", label: "SN — orzeczenia Sądu Najwyższego (sn.pl, źródłem karta orzeczenia)" },
+  { id: "sp", group: "Akty prawne i orzecznictwo", label: "Sądy powszechne — Portal Orzeczeń (stały link do orzeczenia)" },
+  { id: "tk", group: "Akty prawne i orzecznictwo", label: "TK — orzeczenia Trybunału Konstytucyjnego (IPO, OTK ZU; bez SAOS)" },
   { id: "kio", group: "Akty prawne i orzecznictwo", label: "KIO — orzeczenia Krajowej Izby Odwoławczej (wyszukiwarka UZP)" },
+  { id: "etpcz", group: "Akty prawne i orzecznictwo", label: "ETPCz — orzeczenia Europejskiego Trybunału Praw Człowieka (baza MS, etpcz.ms.gov.pl)" },
   { id: "krs", group: "Rejestry podmiotów", label: "KRS — odpis, reprezentacja (bez klucza)" },
   { id: "wl", group: "Rejestry podmiotów", label: "Biała lista VAT — status i rachunki (bez klucza)" },
   { id: "ceidg", group: "Rejestry podmiotów", label: "CEIDG — przedsiębiorcy-osoby fizyczne (WYMAGA KLUCZA)", requiresKey: "CEIDG_API_KEY" },
@@ -70,11 +78,14 @@ const PASSED_ENV = [
   "TMP",
   "HTTPS_PROXY",
   "HTTP_PROXY",
+  // Sesja sn.pl ustawiona ręcznie (poza oknem weryfikacji aplikacji); wartości nie logujemy.
+  "SN_COOKIE",
   "NO_PROXY",
   "https_proxy",
   "http_proxy",
   "no_proxy",
-  "NODE_EXTRA_CA_CERTS"
+  "NODE_EXTRA_CA_CERTS",
+  "NODE_USE_ENV_PROXY"
 ];
 
 export function isLexMcpServerId(
@@ -320,6 +331,9 @@ export type LexMcpConnectorStatus = {
     keyConfigured: boolean;
     keyUrl: string;
   };
+  sn: {
+    sessionSavedAt: string | null;
+  };
   desktop: {
     configPath: string;
     available: boolean;
@@ -408,6 +422,37 @@ export class LexMcpConnectorStore {
     return path.join(this.stateDir, "ceidg.token");
   }
 
+  // Sesja sn.pl z weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl aplikacji.
+  private get snSessionFile(): string {
+    return path.join(this.stateDir, "sn-session.json");
+  }
+
+  snSessionSavedAt(): string | null {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.snSessionFile, "utf8")) as { saved_at?: unknown };
+      return typeof parsed.saved_at === "string" ? parsed.saved_at : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Serwer sn czyta plik przy każdym zapytaniu, więc klient MCP nie musi startować od nowa.
+  setSnSession(rawCookie: string, rawUserAgent: string): { savedAt: string; cookies: number } {
+    const cookies = rawCookie
+      .split(";")
+      .map((part) => part.trim())
+      .filter((part) => /^[A-Za-z0-9_.-]{1,128}=[^;\r\n]{0,4096}$/.test(part));
+    if (!cookies.length) throw new Error("SN_SESSION_EMPTY");
+    const userAgent = /^Mozilla\/5\.0 [\x20-\x7e]{10,400}$/.test(rawUserAgent) ? rawUserAgent : null;
+    const savedAt = new Date().toISOString();
+    writePrivate(this.snSessionFile, JSON.stringify({ cookie: cookies.join("; "), userAgent, saved_at: savedAt }) + "\n");
+    return { savedAt, cookies: cookies.length };
+  }
+
+  clearSnSession(): void {
+    fs.rmSync(this.snSessionFile, { force: true });
+  }
+
   private readState(): StoredState {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.stateFile, "utf8")) as Partial<StoredState>;
@@ -462,6 +507,12 @@ export class LexMcpConnectorStore {
     }
     const key = this.ceidgKey();
     if (key) env.CEIDG_API_KEY = key;
+    env.SN_SESSION_FILE = this.snSessionFile;
+    // Wbudowany fetch Node (>= 22.21) korzysta z HTTPS_PROXY tylko z tą flagą — bez niej konektory
+    // za proxy firmowym łączyły się bezpośrednio i dostawały odmowę (pomiar 2026-10-06).
+    if (!env.NODE_USE_ENV_PROXY && (env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy)) {
+      env.NODE_USE_ENV_PROXY = "1";
+    }
     return env;
   }
 
@@ -523,6 +574,10 @@ export class LexMcpConnectorStore {
   private desktopEntry(id: LexMcpServerId): Record<string, unknown> {
     const env = this.serverEnvironment();
     if (id !== "ceidg") delete env.CEIDG_API_KEY;
+    if (id !== "sn") {
+      delete env.SN_SESSION_FILE;
+      delete env.SN_COOKIE;
+    }
     return {
       command: this.nodeCommand,
       args: [this.packagePath, id],
@@ -544,6 +599,9 @@ export class LexMcpConnectorStore {
       ceidg: {
         keyConfigured: Boolean(this.ceidgKey()),
         keyUrl: CEIDG_KEY_URL
+      },
+      sn: {
+        sessionSavedAt: this.snSessionSavedAt()
       },
       desktop: desktopLocation,
       servers: LEX_MCP_CATALOG.map((server) => ({

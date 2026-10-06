@@ -67,6 +67,136 @@ function Test-IsAdministrator {
   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+# Visual C++ 2015-2022 x64 runtime: the newest version seen in the registry
+# (both views) and in the System32 DLLs. A machine whose Package Cache was
+# cleaned keeps a working runtime but cannot be upgraded (MSI 1603), so the
+# DLLs count as well as the registry.
+$script:VcRuntimeFloor = [Version]"14.40.33810" # VS 17.10 runtime: oldest that runs current llama.cpp/ONNX builds
+function Get-VcRuntimeVersion {
+  $found = @()
+  foreach ($key in @(
+    "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+  )) {
+    try {
+      if ((Get-ItemPropertyValue -Path $key -Name Installed -ErrorAction Stop) -eq 1) {
+        $found += [Version]((Get-ItemPropertyValue -Path $key -Name Version -ErrorAction Stop).ToString().TrimStart("v"))
+      }
+    } catch {}
+  }
+  $dllVersions = @()
+  foreach ($dll in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+    $path = Join-Path $env:SystemRoot "System32\$dll"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $dllVersions = @(); break }
+    $info = (Get-Item -LiteralPath $path).VersionInfo
+    $dllVersions += [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
+  }
+  if ($dllVersions.Count -eq 3) {
+    $found += ($dllVersions | Sort-Object | Select-Object -First 1)
+  }
+  if (-not $found.Count) { return $null }
+  return ($found | Sort-Object -Descending | Select-Object -First 1)
+}
+
+function Test-RebootPending {
+  return (
+    (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") -or
+    (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired") -or
+    [bool](Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -ErrorAction SilentlyContinue)
+  )
+}
+
+# App-local Visual C++ runtime (a deployment Microsoft supports for the VC++
+# redistributable DLLs). When the system runtime is older than required and
+# cannot be upgraded (MSI 1603 after a cleaned Package Cache), the runtime
+# bundled in the installer (prerequisites\vc-applocal, taken at build time
+# from the Visual Studio redistributable folder) is copied next to the
+# application executables. Windows loads DLLs from the executable's folder
+# first; the older system runtime is left untouched.
+$script:VcAppLocalDir = $null
+function Get-DllVersion([string]$path) {
+  $info = (Get-Item -LiteralPath $path).VersionInfo
+  return [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
+}
+function Get-VcRuntimeAppLocal([string]$runtimeRoot, [Version]$required) {
+  $dir = Join-Path $runtimeRoot "prerequisites\vc-applocal"
+  foreach ($needed in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
+    $path = Join-Path $dir $needed
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "VC_APPLOCAL_NOT_BUNDLED:$needed" }
+    $version = Get-DllVersion $path
+    if ($version -lt $required) { throw "VC_APPLOCAL_TOO_OLD:${needed}:$version<$required" }
+  }
+  return $dir
+}
+function Copy-VcRuntimeAppLocal([string]$dllDir, [string[]]$targets) {
+  foreach ($target in $targets) {
+    if (-not $target -or -not (Test-Path -LiteralPath $target -PathType Container)) { continue }
+    Get-ChildItem -LiteralPath $dllDir -File -Filter "*.dll" | ForEach-Object {
+      Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+    }
+    Write-Host "Visual C++ runtime (app-local) placed in $target"
+  }
+}
+
+# Runs vc_redist with a log; on failure accepts an already working runtime
+# (>= floor), then deploys the required runtime app-local, and otherwise
+# explains the cause instead of a bare exit code.
+function Install-VcRuntime([string]$installer, [Version]$required, [string]$logDir, [string]$errorPrefix, [int]$timeoutMs = 600000) {
+  New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+  $log = Join-Path $logDir ("vc_redist-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+  $startArgs = @{
+    FilePath = $installer
+    ArgumentList = @("/install", "/quiet", "/norestart", "/log", "`"$log`"")
+    PassThru = $true
+  }
+  if (-not (Test-IsAdministrator)) {
+    $startArgs.Verb = "RunAs"
+  }
+  $process = Start-Process @startArgs
+  if (-not $process.WaitForExit($timeoutMs)) {
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    throw "${errorPrefix}_TIMEOUT"
+  }
+  $process.Refresh()
+  $code = $process.ExitCode
+  # 0 ok, 3010 ok after restart, 1638 a newer version is already installed.
+  if ($code -in @(0, 1638, 3010)) { return $code }
+  $present = Get-VcRuntimeVersion
+  if ($present -and $present -ge $required) {
+    Write-Host "Visual C++ runtime $present present despite vc_redist exit $code; continuing"
+    return $code
+  }
+  if ($present -and $present -ge $script:VcRuntimeFloor) {
+    Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); using installed $present (>= $($script:VcRuntimeFloor))"
+    return $code
+  }
+  # The system runtime stays older: the required version goes next to the application instead.
+  $appLocalError = $null
+  try {
+    $script:VcAppLocalDir = Get-VcRuntimeAppLocal $runtime $script:VcRuntimeFloor
+    Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); installed $(if ($present) { $present } else { 'none' }) stays, the required runtime is deployed next to the application"
+    return $code
+  } catch {
+    $appLocalError = $_.Exception.Message
+  }
+  $logText = ""
+  Get-ChildItem -LiteralPath $logDir -Filter ([IO.Path]::GetFileNameWithoutExtension($log) + "*") -ErrorAction SilentlyContinue |
+    ForEach-Object { $logText += (Get-Content -Raw -LiteralPath $_.FullName -ErrorAction SilentlyContinue) }
+  $hints = @()
+  if (Test-RebootPending) {
+    $hints += "system czeka na ponowne uruchomienie - uruchom komputer ponownie i powtorz instalacje"
+  }
+  if ($logText -match "(?i)1612|source (file )?(is )?not (available|found)|Package Cache") {
+    $hints += "brak pakietu poprzedniej wersji Visual C++ w C:\ProgramData\Package Cache (usuniete instalatory) - odinstaluj 'Microsoft Visual C++ 2015-2022 Redistributable (x64)' w Panelu sterowania (albo narzedziem Microsoft 'Program Install and Uninstall troubleshooter'), nastepnie powtorz instalacje"
+  }
+  if (-not $hints.Count) {
+    $hints += "napraw albo odinstaluj 'Microsoft Visual C++ 2015-2022 Redistributable (x64)' w Panelu sterowania, uruchom komputer ponownie i powtorz instalacje"
+  }
+  if ($appLocalError) { $hints += "wdrozenie lokalne obok aplikacji tez sie nie udalo ($appLocalError)" }
+  $installedText = if ($present) { "zainstalowana $present" } else { "brak runtime" }
+  throw "${errorPrefix}_FAILED:$code - Visual C++ $required nie zainstalowal sie ($installedText). Co zrobic: $($hints -join '; '). Log: $log"
+}
+
 function Get-VerifiedDownload(
   [string]$Url,
   [string]$ExpectedSha256,
@@ -166,18 +296,10 @@ if (-not (Test-CommandVersion $nodeExe @("--version") $nodeExpected)) {
 }
 
 Write-Host "[2/6] System prerequisites"
-$vcInstalled = $false
 $vc = $manifest.systemPrerequisites.visualCppRuntime
-try {
-  $installedFlag = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" -Name Installed -ErrorAction Stop
-  $installedVersionText = (Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" -Name Version -ErrorAction Stop).ToString().TrimStart("v")
-  $vcInstalled = (
-    $installedFlag -eq 1 -and
-    ([Version]$installedVersionText) -ge ([Version]$vc.version)
-  )
-} catch {
-  $vcInstalled = $false
-}
+$vcPresent = Get-VcRuntimeVersion
+$vcInstalled = [bool]($vcPresent -and $vcPresent -ge [Version]$vc.version)
+if ($vcPresent) { Write-Host "Visual C++ runtime found: $vcPresent (required $($vc.version))" }
 if (-not $vcInstalled) {
   $bundledVc = Join-Path $runtime "prerequisites\vc_redist.x64.exe"
   if (Test-Path -LiteralPath $bundledVc -PathType Leaf) {
@@ -191,19 +313,7 @@ if (-not $vcInstalled) {
     $vcInstaller = Join-Path $cache "vc_redist.x64-$($vc.version).exe"
     Get-VerifiedDownload $vc.url $vc.sha256 $vcInstaller "visual-cpp-runtime"
   }
-  $startArgs = @{
-    FilePath = $vcInstaller
-    ArgumentList = @("/install", "/quiet", "/norestart")
-    Wait = $true
-    PassThru = $true
-  }
-  if (-not (Test-IsAdministrator)) {
-    $startArgs.Verb = "RunAs"
-  }
-  $vcInstall = Start-Process @startArgs
-  if ($vcInstall.ExitCode -notin @(0, 1638, 3010)) {
-    throw "BOOTSTRAP_VC_RUNTIME_FAILED:$($vcInstall.ExitCode)"
-  }
+  $null = Install-VcRuntime $vcInstaller ([Version]$vc.version) (Join-Path $cache "logs") "BOOTSTRAP_VC_RUNTIME"
 }
 
 Write-Host "[3/6] Private Python"
@@ -502,6 +612,16 @@ if (-not $modelsReady) {
 }
 
 Write-Host "[6/6] Integrity lock and offline acceptance"
+# A system Visual C++ runtime that could not be upgraded: the required one goes
+# next to every executable of the runtime before the integrity lock is made.
+if ($script:VcAppLocalDir) {
+  $vcTargets = @($runtime, $nodeDir, $pythonDir) + @(
+    Get-ChildItem -LiteralPath $runtime -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -notmatch '\\(prerequisites|bootstrap)\\' } |
+      ForEach-Object { $_.DirectoryName }
+  ) | Sort-Object -Unique
+  Copy-VcRuntimeAppLocal $script:VcAppLocalDir $vcTargets
+}
 & (Join-Path $bootstrapRoot "generate-component-lock.ps1") `
   -PayloadRoot $runtime `
   -Output (Join-Path $runtime "component-lock.json") `

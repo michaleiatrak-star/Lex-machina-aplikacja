@@ -1985,6 +1985,11 @@ function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean
   );
 }
 
+/** A model served by the Anthropic API provider (not an account CLI or a local server). */
+export function isAnthropicModel(model: LanguageModel): boolean {
+  return typeof model === "object" && model !== null && String((model as { provider?: unknown }).provider ?? "").startsWith("anthropic");
+}
+
 async function streamModelOnce(
   sdk: typeof import("ai"),
   model: LanguageModel,
@@ -2000,6 +2005,14 @@ async function streamModelOnce(
   const result = sdk.streamText({
     model,
     system: params.systemPrompt,
+    // Anthropic API: automatic prompt caching (a top-level cache breakpoint that
+    // moves with the conversation), so each tool round of a turn reads the
+    // unchanged system prompt and history from the cache instead of re-processing
+    // ~30k tokens. The prompt itself is unchanged. OpenAI and Gemini cache a
+    // repeated prefix on their own.
+    ...(isAnthropicModel(model)
+      ? { providerOptions: { anthropic: { cacheControl: { type: "ephemeral" as const } } } }
+      : {}),
     messages: [...(sdkMessages(params.messages, images) as ModelMessage[]), ...extra.messages],
     ...(tools ? { tools } : {}),
     ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),

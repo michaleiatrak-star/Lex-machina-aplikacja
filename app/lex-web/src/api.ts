@@ -1069,6 +1069,7 @@ export type SessionExecutionResponse = {
   evidence: EvidenceItem[];
   auxiliarySources?:
     AuxiliarySourceItem[];
+  sourceVerification?: { source: "sn"; url: string };
   widgets?: ChatWidget[];
   audit: {
     result: "PASS" | "BLOCKED";
@@ -3237,7 +3238,8 @@ export async function reviewDocument(
   file: File,
   caseId: string,
   // localAi: the local model also checks personal data; ocrFix: it corrects OCR.
-  options?: { localAi?: boolean; ocrFix?: boolean }
+  options?: { localAi?: boolean; ocrFix?: boolean },
+  progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
     ...(options?.localAi ? ["local-ai"] : []),
@@ -3253,6 +3255,7 @@ export async function reviewDocument(
         ...authorizationHeaders(),
         "X-Lex-Case-Id": caseId,
         ...(processing ? { "X-Lex-Processing": processing } : {}),
+        ...(progressId ? { "X-Lex-Progress": progressId } : {}),
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },
@@ -3357,6 +3360,8 @@ export type ProcessingProgress = {
   stage: "READING" | "OCR" | "DETECTING" | "AI_CHECK" | "PSEUDONYMIZING" | "SAVING";
   done?: number;
   total?: number;
+  // The document page being processed now.
+  page?: number;
   // AI_CHECK: the words the local model is checking now.
   item?: string;
   updatedAt: string;
@@ -3544,6 +3549,9 @@ export type McpConnectorStatusResponse = {
     keyConfigured: boolean;
     keyUrl: string;
   };
+  sn?: {
+    sessionSavedAt: string | null;
+  };
   desktop: {
     configPath: string;
     available: boolean;
@@ -3613,6 +3621,21 @@ export function setCeidgApiKey(
       body: JSON.stringify({ key })
     }
   );
+}
+
+// Sesja sn.pl po weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl aplikacji.
+export function saveSnSession(
+  cookie: string,
+  userAgent: string
+): Promise<{ savedAt: string; cookies: number }> {
+  return json("/api/mcp-search/sn-session", {
+    method: "PUT",
+    body: JSON.stringify({ cookie, userAgent })
+  });
+}
+
+export function clearSnSession(): Promise<{ cleared: boolean }> {
+  return json("/api/mcp-search/sn-session", { method: "DELETE" });
 }
 
 export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse }> {
@@ -3700,6 +3723,8 @@ export type CaseLawPreview = {
   anchor: string;
   match: "EXACT" | "PARTIAL" | "SIGNATURE" | "NONE";
   chars: number;
+  source?: "LOCAL" | "NETWORK";
+  storedAt?: string;
 };
 
 // Pełny tekst orzeczenia/interpretacji z oficjalnego źródła, cytowany fragment zaznaczony.
@@ -3708,8 +3733,44 @@ export function previewCaseLaw(input: {
   passage?: string;
   signature?: string;
   attributed?: string;
+  caseId?: string;
 }): Promise<CaseLawPreview> {
   return json<CaseLawPreview>("/api/case-law/preview", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type CaseLawCopy = {
+  cardUrl: string;
+  court: string;
+  signature?: string;
+  date?: string;
+  form?: string;
+  text: string;
+  sha256: string;
+  fetchedAt: string;
+};
+
+// Kopia orzeczenia zapisana w aplikacji (do akt sprawy); źródłem jest karta orzeczenia.
+export function copyCaseLaw(input: { sourceUrl: string; signature?: string; caseId?: string }): Promise<CaseLawCopy> {
+  return json<CaseLawCopy>("/api/case-law/copy", { method: "POST", body: JSON.stringify(input) });
+}
+
+// Orzeczenie wskazane przez użytkownika (karta, sygnatura SN, blob: z sygnaturą) pobrane z bazy urzędowej.
+export function resolveCaseLaw(input: { cardUrl?: string; signature?: string; caseId?: string }): Promise<CaseLawCopy> {
+  return json<CaseLawCopy>("/api/case-law/resolve", { method: "POST", body: JSON.stringify(input) });
+}
+
+export type CaseLawCatalogEntry = Omit<CaseLawCopy, "text"> & { chars: number; snippet?: string };
+
+export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; available: boolean; entries: CaseLawCatalogEntry[] }> {
+  return json(`/api/case-law/library${query ? `?q=${encodeURIComponent(query)}` : ""}`);
+}
+
+export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean }> {
+  return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {
+  return json("/api/case-law/library/remove", { method: "POST", body: JSON.stringify({ cardUrl }) });
 }
 
 export function previewMcpSource(url: string): Promise<McpSourcePreview> {

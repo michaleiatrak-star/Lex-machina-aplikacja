@@ -69,6 +69,20 @@ describe("MCP search tab routes", () => {
     expect(JSON.stringify(response.body)).not.toContain("packagePath");
   });
 
+  it("stores the sn.pl verification session for a signed-in user without echoing it", async () => {
+    await request(app).put("/api/mcp-search/sn-session").send({ cookie: "incap_ses_1=tajne" }).expect(401);
+    await request(app).put("/api/mcp-search/sn-session").set("authorization", "Bearer user").send({ cookie: "" }).expect(400);
+    const saved = await request(app)
+      .put("/api/mcp-search/sn-session")
+      .set("authorization", "Bearer user")
+      .send({ cookie: "incap_ses_1=tajne", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/140.0" })
+      .expect(200);
+    expect(saved.body.cookies).toBe(1);
+    expect(JSON.stringify(saved.body)).not.toContain("tajne");
+    await request(app).delete("/api/mcp-search/sn-session").set("authorization", "Bearer user").expect(200);
+    expect(connectors.status().sn.sessionSavedAt).toBeNull();
+  });
+
   it("returns the native tool schemas of a source", async () => {
     const response = await request(app)
       .get("/api/mcp-search/sources/nbp/tools")

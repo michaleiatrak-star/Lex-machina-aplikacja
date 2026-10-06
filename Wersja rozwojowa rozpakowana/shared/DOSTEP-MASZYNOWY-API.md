@@ -318,8 +318,9 @@ dowodem niedostępności ani nieistnienia orzeczenia.
 ⚠️ Pokrycie potwierdzone ponownie: `III CZP 88/15` (SN, 2015) → 1 trafienie;
 `III OSK 1959/22` i `II SAB/Wa 678/21` (NSA/WSA, 2021–2023) → 0 trafień = **OUT_OF_SCOPE**,
 nie „nie istnieje".
-⛔ SAOS to RZĄD 2A — ustala, że orzeczenie istnieje i co zawiera; **nie
-zastępuje sprawdzenia sygnatury u źródła** przy powołaniu w piśmie.
+⛔ SAOS to RZĄD 3 (agregator akademicki, od 2026-10-06; wcześniej 2A) — pomaga ustalić,
+że orzeczenie istnieje i co zawiera; **nie zastępuje sprawdzenia sygnatury w bazie
+urzędowej sądu**; zastępczo tylko przy jej awarii albo braku trwałego linku.
 
 ⛔⛔ **SAOS jest korpusem CZĘŚCIOWO ZAMROŻONYM.** Żywy jest wyłącznie pion sądów
 powszechnych. Zmierzone 2026-09-13 (przedziałem dat, nie sortowaniem — baza
@@ -379,6 +380,11 @@ GET https://sn.pl/index.php?option=com_ajax&plugin=snproxy&format=json&task=…
 
 task=searchOrzeczenia&sygnatura=III CZP 25/11&strona=1&rozmiar_strony=25
      → data[0].data[] : sygnatura_sprawy, data_wydania, forma_orzeczenia, id
+     pola formularza (kod widżetu sn.pl, 2026-10-06): q + tresc (ta sama treść), sygnatura,
+     forma_orzeczenia (tekst opcji, np. „uchwała siedmiu sędziów SN”), data_wydania_od, data_wydania_do
+     (RRRR-MM-DD; „w dniu” = od = do), izba (nazwa, np. „Izba Cywilna”), sklad_sedziowski, sedzia_w_skladzie,
+     przewodniczacy, sprawozdawca, wspolsprawozdawca, autor_uzasadnienia, strona, rozmiar_strony (10/25/50/100).
+     API nie zwraca liczby wszystkich trafień — „następna strona” póki strona jest pełna. MCP `sn_szukaj`.
 task=detailsOrzeczenie&id=…
      → jednostka_obslugujaca_sprawe, izby_sn, rodzaj_skladu_orzekajacego,
        sklad_orzekajacy[], przewodniczacy, sprawozdawca, autor_uzasadnienia
@@ -567,7 +573,8 @@ z `shared/WERYFIKACJA-SLAD.md`.
 
 ⛔ Brak exact-hit w retrieval = `OUT_OF_SCOPE`, nigdy `NOT_FOUND`.
 Pełny kontrakt: `shared/SYGNATURY.md`, V-SYG-0.5.
-| `ipo.trybunal.gov.pl`, `otkzu.trybunal.gov.pl` | HTML | osiągalne (`/ipo/Szukaj` → 200). ⛔ Wyszukiwarka to JSF/PrimeFaces z `ViewState` — **POST-only**, `Sprawa?sygnatura=` nie jest kluczem. Brak kontroli po sygnaturze (F-184) |
+| `ipo.trybunal.gov.pl`, `otkzu.trybunal.gov.pl` | HTML | osiągalne (`/ipo/Szukaj` → 200). Wyszukiwarka to JSF/PrimeFaces z `ViewState` — **POST-only**, `Sprawa?sygnatura=` nie jest kluczem. Stały adres karty sprawy (GET, bez sesji): `ipo.trybunal.gov.pl/ipo/view/sprawa.xhtml?pokaz=dokumenty&sygnatura=K+28%2F05`; dokumenty `Sprawa?dokument=…&sprawa=…`. OTK ZU: `otkzu.trybunal.gov.pl/Wyszukiwanie` (pole Sygnatura), pozycje `/{rok}/{A\|B}/{poz}`, PDF `downloadOTK?mpo=`. Konektor `tk` (2026-10-06): karta IPO → OTK ZU → formularz JSF IPO; **SAOS nie jest źródłem TK**. Pomiar na żywo: `test_poprawnosci.mjs` (10c) |
+| `etpcz.ms.gov.pl` | HTML | Baza MS orzeczeń ETPCz (polskie tłumaczenia, wybrane orzeczenia; ten sam silnik co Portal Orzeczeń). Stałe linki: treść `/etpccontent/$N/{id}`, metryka `/detailsetpc/$N/{id}`; id `990000000000001_I_ETPC_{nr skargi 6 cyfr}_{20RR}_{Wy\|De}_{data}_{nr}` (rok zawsze „20”+RR: 34503/97 → `2097`). Konektor `etpcz` (2026-10-06): formularz wyszukiwarki odczytywany z HTML; pomiar na żywo: G40B |
 | `hudoc.echr.coe.int` | ⚠️ HTML | ⛔ **Sprostowanie (F-186a, zamknięta 2026-09-13c):** ścieżka `/app/query/results` zwraca **404** (zmierzone w dwóch wariantach zapytania) — zapis z wersji 1.0 był nieprawdziwy. ✅ Działa pobranie dokumentu po `itemid`: `GET /app/conversion/docx/html/body?library=ECHR&id=001-57619` → 200, pełny tekst HTML (zmierzone: 177 kB). Wyszukiwanie po frazie pozostaje nierozstrzygnięte maszynowo |
 | `orzeczenia.uzp.gov.pl` | HTML (fragment przez XHR) | ✅ **od 2026-10-02 (AUDYT-2026-10-02) — konektor `kio-example`.** `GET /Home/Search` nie zawiera wyników (stąd wcześniejszy wniosek F-185 „Sign nie filtruje” — dotyczył złego endpointu); wyniki: **`POST /Home/GetResults`** (`Phrase`, `Fle`, `SCnt`, `Sign`, `Dt` „DD-MM-YYYY - DD-MM-YYYY”, `Kind` KIO/SO/SA/SN, `Pg`, `CountStats`). `Sign` filtruje dokładnie (KIO 82/18 → 1, KIO 99999/18 → 0). Sprawy łączone: sygnatury rozdzielone `\|`. Metryka `/Home/Details/{id}`; wyrok sądu na skargę ma pole „Sygnatura KIO” (kontrola sądowa, art. 579–580 Pzp). ⚠️ Daty w źródle bywają błędne (KIO 4983/25: „7 grudnia 2026”, pomiar 2026-10-02) |
 
