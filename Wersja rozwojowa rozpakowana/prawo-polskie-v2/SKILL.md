@@ -1,6 +1,6 @@
 ---
 name: prawo-polskie-v2
-version: "6.44"
+version: "6.45"
 type: domain-router
 status: production
 compatibility: "live_web_lookup, cross_skill_file_read"
@@ -10,7 +10,7 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.44 (2026-10-05p, AUDYT-2026-10-05p): Routing błyskawiczny: DR-03 „podrobić podpis”, „sfałszować”, „pijany kierowca”, „KKS”, „karny skarbowy” (rdzeń „podrobienie” nie łapał „podrobił”); DR-04 „wynagrodzenie”.
+  Wersja bieżąca: 6.45 (2026-10-06): nowelizacje po t.j. (ELI 2026-10-06): PRD/u.k.p./drogi publiczne/transport drogowy — Dz.U. 2025 poz. 1676, 1734, 1843; Dz.U. 2026 poz. 180, 982; nowa ustawa o zdrowiu zwierząt Dz.U. 2025 poz. 1795
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 

@@ -1,5 +1,7 @@
 # CHANGELOG — dr-03-prawo-karne-wykroczenia-egzekucja
 
+- 3.57 (2026-10-06): nowelizacje po t.j. (ELI 2026-10-06): PRD/u.k.p./drogi publiczne/transport drogowy — Dz.U. 2025 poz. 1676, 1734, 1843; Dz.U. 2026 poz. 180, 982; nowa ustawa o zdrowiu zwierząt Dz.U. 2025 poz. 1795
+
 - 3.56 (2026-10-05p, AUDYT-2026-10-05p): MAPA-AKTOW: zakres nowych przestępstw drogowych (nietrzeźwy kierowca, wypadek drogowy, potrącenie, zakaz prowadzenia).
 
 - 3.55 (2026-10-05l, AUDYT-2026-10-05l): mod-KK-art148-162: linia „Hasła spraw” (pobicie, uszczerbek na zdrowiu…). Treść prawna bez zmian.

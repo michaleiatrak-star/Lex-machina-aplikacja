@@ -1,5 +1,7 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.45 (2026-10-06): nowelizacje po t.j. (ELI 2026-10-06): PRD/u.k.p./drogi publiczne/transport drogowy — Dz.U. 2025 poz. 1676, 1734, 1843; Dz.U. 2026 poz. 180, 982; nowa ustawa o zdrowiu zwierząt Dz.U. 2025 poz. 1795
+
 - 6.44 (2026-10-05p, AUDYT-2026-10-05p): Routing błyskawiczny: DR-03 „podrobić podpis”, „sfałszować”, „pijany kierowca”, „KKS”, „karny skarbowy” (rdzeń „podrobienie” nie łapał „podrobił”); DR-04 „wynagrodzenie”.
 
 - 6.43 (2026-10-05m, AUDYT-2026-10-05m): Routing błyskawiczny: słownictwo obszarów prawa dla DR-01–DR-16 po teście 500 pytań (m.in. DR-01 Sejm/weto/źródła prawa, DR-12 zawody i koszty, DR-14 jurysdykcja/prawo właściwe/za granicą, DR-15 DORA/audyt wewnętrzny, DR-16 prasa/meldunek); DR-01 „wybory” zawężone do wyborów powszechnych, DR-16 bez „orzecznictwo” (orzecznictwo to skill wykonawczy, nie dziedzina).
