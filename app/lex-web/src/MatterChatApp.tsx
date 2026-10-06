@@ -532,6 +532,29 @@ export function letterDocumentPlan(
   return null;
 }
 
+// Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
+// "umowę" or "dokumentu" never matched a \b-delimited pattern.
+function polishWords(alternatives: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\d])(?:${alternatives})(?![\\p{L}\\d])`, "u");
+}
+
+// A contract is written in the contract workflow (its mode, analizator-umow), so a
+// contract becomes a file directly only when a file is named as the result.
+const DOCUMENT_NOUN = polishWords(
+  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*"
+);
+const GENERATION_VERB = polishWords(
+  "wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj|zapisz|wyeksportuj|eksportuj|zrób|przerób|zamień|przekształć"
+);
+// A file named as the result: "do pobrania", "w postaci dokumentu", "jako plik".
+const FILE_RESULT =
+  /(?<![\p{L}])(?:do\s+(?:pobrania|ściągnięcia|zapisania|wydruku)|(?:w\s+(?:postaci|formie|formacie)|jako)\s+(?:pliku|plik|dokumentu|dokument)(?![\p{L}]))/u;
+// Reading a document is not writing one: analysis or verification of a file
+// goes to the chat unless a file is named as the result.
+const READING_INTENT = polishWords(
+  "przeanalizuj|analiz\\p{L}*|zweryfikuj|weryfik\\p{L}*|sprawdź|sprawdz|oceń|ocen\\p{L}*|porównaj|wskaż|zinterpretuj|wyjaśnij|streść|podsumuj|przejrzyj|co\\s+(?:jest|zawiera|wynika)"
+);
+
 export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
@@ -541,39 +564,38 @@ export function directDocumentRequest(
       .toLocaleLowerCase("pl");
 
   const explicitFormat =
-    /\bodt\b/u.test(normalized)
+    polishWords("odt").test(normalized)
       ? "odt" as const
       // "plik doc", "w Wordzie", "worda": the same .docx request.
-      : /\bdocx?\b|\bword(?:a|zie|owy|owym)?\b/u.test(normalized)
+      : polishWords("docx?|word(?:a|zie|owy|owym|ze)?").test(normalized)
         ? "docx" as const
         : null;
 
-  const documentNoun =
-    /\b(?:pismo|wezwanie|pozew|wniosek|apelacj[ęa]|sprzeciw|zażalenie|umow[ęa]|opini[ęa]|raport|oświadczenie|reklamacj[ęa]|odpowiedź na pozew|pełnomocnictwo|dokument|wzór|plik)\b/u
-      .test(normalized);
-  const generationVerb =
-    /\b(?:wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj)\b/u
-      .test(normalized);
+  const fileResult = FILE_RESULT.test(normalized);
+  const drafting =
+    DOCUMENT_NOUN.test(normalized) &&
+    GENERATION_VERB.test(normalized) &&
+    !READING_INTENT.test(normalized);
 
-  if (
-    !explicitFormat &&
-    !(documentNoun && generationVerb)
-  ) {
+  if (!explicitFormat && !fileResult && !drafting) {
+    return null;
+  }
+  // "Sprawdź, co jest w pliku" names a file but asks to read it.
+  if (!explicitFormat && !drafting && !GENERATION_VERB.test(normalized) && READING_INTENT.test(normalized)) {
     return null;
   }
 
   const documentType =
-    /\b(?:pozew|apelacj|sprzeciw|zażalen|pismo procesowe)\b/u
+    polishWords("pozew|pozw\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|pism\\p{L}*\\s+procesow\\p{L}*|odpowied\\p{L}*\\s+na\\s+pozew|skarg\\p{L}*\\s+kasacyjn\\p{L}*")
       .test(normalized)
       ? "pleading" as const
-      : /\bumow/u.test(normalized)
+      : polishWords("umow\\p{L}*|umów").test(normalized)
         ? "contract" as const
-        : /\bopini/u.test(normalized)
+        : polishWords("opini\\p{L}*").test(normalized)
           ? "opinion" as const
-          : /\braport/u.test(normalized)
+          : polishWords("raport\\p{L}*").test(normalized)
             ? "report" as const
-            : /\b(?:wezwanie|reklamacj|oświadczen|pełnomocnictw|list)\b/u
-                .test(normalized)
+            : polishWords("wezwani\\p{L}*|reklamacj\\p{L}*|oświadczeni\\p{L}*|pełnomocnictw\\p{L}*|list\\p{L}*").test(normalized)
               ? "letter" as const
               : "other" as const;
 

@@ -28,6 +28,41 @@ describe("rozpoznanie prośby o plik pisma", () => {
   });
 });
 
+describe("żądanie dokumentu a analiza i weryfikacja dokumentu", () => {
+  it.each([
+    ["wygeneruj to w postaci dokumentu do pobrania", "other"],
+    ["Daj mi to do pobrania", "other"],
+    ["Zapisz tę odpowiedź jako plik", "other"],
+    ["Przygotuj pismo do pracodawcy", "other"],
+    ["Napisz wezwanie do zapłaty", "letter"],
+    ["Przygotuj reklamację butów", "letter"],
+    ["Sporządź opinię prawną", "opinion"],
+    ["Napisz apelację od wyroku", "pleading"],
+    ["Przygotuj odpowiedź na pozew", "pleading"],
+    ["Wygeneruj umowę w Wordzie", "contract"],
+    ["Daj tę umowę do pobrania", "contract"],
+    ["Przeanalizuj ten dokument i wygeneruj raport w pliku docx", "report"]
+  ])("generuje plik: %s", (text, documentType) => {
+    expect(directDocumentRequest(text)).toEqual({ format: "docx", documentType });
+  });
+
+  it.each([
+    "Przeanalizuj dokument",
+    "Wykonaj analizę prawną dokumentu, wskaż wadliwe zapisy",
+    "Zweryfikuj ten dokument pod kątem błędów",
+    "Sprawdź plik, czy jest kompletny",
+    "Co jest w tym pliku?",
+    "Czy w pliku są błędy?",
+    "Przygotuj analizę tego dokumentu",
+    "Oceń pismo przeciwnika",
+    "Napisz umowę o dzieło dla grafika",
+    "Zredaguj paragraf 5 tej umowy",
+    "Jaki dokument muszę złożyć w urzędzie?"
+  ])("nie generuje pliku (analiza, weryfikacja, pytanie, tryb umowy): %s", (text) => {
+    expect(directDocumentRequest(text)).toBeNull();
+  });
+});
+
 describe("szkic i gotowy dokument po cyklu pisma", () => {
   const base = {
     status: "DRAFT_PRESENTABLE",
