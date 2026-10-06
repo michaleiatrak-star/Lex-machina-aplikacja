@@ -84,6 +84,32 @@ export function opisBleduSieci(e, host) {
   return `Błąd sieci${gdzie}: ${kod}`;
 }
 
+// ── Odpowiedź, która nie jest JSON (2026-10-06): zamiast „Unexpected token '<'” przyczyna ──
+// ⛔ PO CO: sn.pl, wl-api.mf.gov.pl i inne źródła za Imperva/Cloudflare odpowiadają 200 ze stroną
+//    weryfikacji przeglądarki („<html style=…”, _Incapsula_Resource) zamiast danych; konektory
+//    wywołujące r.json() zgłaszały wtedy błąd parsera. Teraz json() każdej odpowiedzi mówi, co przyszło.
+export class BlokadaBotow extends Error {}
+const OCHRONA = /incapsula|imperva|incident_id|_Incapsula_Resource|captcha|cf-chl|challenge-platform|cloudflare/i;
+/** Komunikat, gdy treść odpowiedzi nie jest JSON (host, kod HTTP i co przyszło zamiast danych). */
+export function opisNieJson(tekst, status, host) {
+  const t = String(tekst ?? "");
+  const gdzie = host || "źródło";
+  if (!t.trim()) return { blad: new Error(`${gdzie}: pusta odpowiedź zamiast danych JSON (HTTP ${status}).`) };
+  if (/^\s*</.test(t) && OCHRONA.test(t)) {
+    return { blad: new BlokadaBotow(`${gdzie}: ochrona przed botami — strona weryfikacji przeglądarki zamiast danych (HTTP ${status}). ` +
+      "Źródło odrzuca zapytania automatyczne z tej sieci; brak danych ≠ brak w źródle — sprawdź ręcznie w wyszukiwarce źródła albo spróbuj później.") };
+  }
+  if (/^\s*</.test(t)) return { blad: new Error(`${gdzie}: strona HTML zamiast danych JSON (HTTP ${status}; przerwa techniczna albo zmiana API).`) };
+  return { blad: new Error(`${gdzie}: odpowiedź nie jest poprawnym JSON (HTTP ${status}).`) };
+}
+function jsonZPrzyczyna(r, host) {
+  r.json = async () => {
+    const t = await r.text();
+    try { return JSON.parse(t); } catch { throw opisNieJson(t, r.status, host).blad; }
+  };
+  return r;
+}
+
 const czekaj = (ms) => new Promise((ok) => setTimeout(ok, ms));
 if (typeof globalThis.fetch === "function" && !globalThis.fetch.__lexSiec) {
   const oryg = globalThis.fetch;
@@ -93,7 +119,7 @@ if (typeof globalThis.fetch === "function" && !globalThis.fetch.__lexSiec) {
     try { host = new URL(String(input?.url ?? input)).hostname; } catch { /* adres sprawdza fetch */ }
     for (let proba = 0; ; proba++) {
       try {
-        return await oryg(input, init);
+        return jsonZPrzyczyna(await oryg(input, init), host);
       } catch (e) {
         if (e?.name === "AbortError" || init?.signal?.aborted) throw e;
         const kod = kodSieci(e);

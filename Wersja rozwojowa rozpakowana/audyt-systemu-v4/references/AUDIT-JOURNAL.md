@@ -69901,9 +69901,12 @@ Zgłoszenia użytkownika 2026-10-06 (porównanie z wersjami 1.3.3/1.3.4 zmienion
 - sp: fraza przez formularz portalu (`wspolne/formularz.mjs`, wspólny z etpcz); pozycja SAOS z sygnaturą, rodzajem po polsku i `url_saos`.
 - tk: sygnatura w postaci TK spoza listy repertoriów idzie do IPO/OTK ZU; brak trafienia → `REPERTORIUM_SPOZA_LISTY_TK`.
 - cbosa: ponowienie całego żądania po zerwanym połączeniu (1,5 s, 3 s, w budżecie), także przy zerwaniu w trakcie odczytu treści.
+- Pomiar na żywo (full access, 2026-10-06): wbudowany fetch Node (>= 22.21) używa `HTTPS_PROXY` tylko z `NODE_USE_ENV_PROXY=1` — bez niej wszystkie konektory za proxy firmowym dostawały 403; aplikacja ustawia tę flagę w środowisku serwerów MCP.
+- Odpowiedź, która nie jest JSON (strona weryfikacji Imperva/Cloudflare, HTML przerwy technicznej): wspólny `fetch` opakowuje `json()` i zwraca przyczynę (host, kod HTTP, „ochrona przed botami”) zamiast „Unexpected token '<'”; Biała lista nie ponawia wtedy i podaje link do wyszukiwarki.
+- sp: parser listy wyników rozpoznaje `docId` po końcówce (`_RRRR-MM-DD_NNN`) niezależnie od kontekstu (fraza albo sygnatura), a nazwę sądu bierze z granic wiersza wyniku (pomiar na żywo: „zadośćuczynienie” = 52357 trafień, 10 kart z sądami).
 
 ### 3. WERYFIKACJA
-`test_sady.mjs` (sesja i opis weryfikacji, formularz frazy, pozycja SAOS, sygnatura TK), `cbosa-example/test_normalizacja.mjs` (ponowienie), `test_protokol.mjs`, `wspolne/test_siec.mjs`. Na żywo: sn.pl z GitHub/kontenera blokowane (Imperva) — weryfikacja okna w aplikacji wymaga Windows/macOS.
+`test_sady.mjs` (sesja i opis weryfikacji, formularz frazy, pozycja SAOS, sygnatura TK), `cbosa-example/test_normalizacja.mjs` (ponowienie), `test_protokol.mjs`, `wspolne/test_siec.mjs`. Na żywo (full access): sp_szukaj „zadośćuczynienie” → 52357 trafień, formularz portalu, karty z sądami; ETPCz 43447/19 FOUND. sn.pl, CBOSA, poznan.so, api.sejm.gov.pl z kontenera nadal blokowane albo zrywane (Imperva/polityka sieci) — pełny pomiar na maszynie użytkownika i w CI; okno weryfikacji sn.pl wymaga Windows/macOS.
 
 
 ## AUDYT-2026-10-06i — etpcz: pole numeru skargi z pomiaru na żywo (G40B) (6.198)

@@ -93,14 +93,23 @@ export function parsujWyniki(html) {
   const t = String(html ?? "");
   if (/Nie znaleziono żadnego wyniku|Nie znaleziono zadnego wyniku/i.test(t)) return { liczba: 0, docIds: [], sady: {} };
   const liczbaTxt = /class="big_number"[^>]*>\s*([\d\s ]+)</.exec(t)?.[1];
-  const trafienia = [...t.matchAll(/\/details\/\$N\/([A-Za-z0-9_.-]{10,120})/g)];
+  // Link pozycji: /details/<kontekst>/<docId>. Przy wyszukiwaniu sygnaturą kontekst = $N, przy frazie
+  // to zakodowana fraza — docId rozpoznajemy po końcówce (_RRRR-MM-DD_NNN), niezależnie od kontekstu.
+  const trafienia = [...t.matchAll(/\/(?:details|content)\/[^/"\s]+\/([A-Za-z0-9_.-]{6,120}_\d{4}-\d{2}-\d{2}_\d{3})/g)];
   const docIds = [...new Set(trafienia.map((m) => m[1]))];
   // Nazwa sądu przy pozycji listy („II K 1350/18 - wyrok … Sąd Rejonowy w … z 2019-11-05”), gdy portal ją podaje.
   const sady = {};
+  // Nazwa sądu bywa PRZED linkiem (lista frazy) albo PO nim (lista sygnatury) — bierzemy ją z granic
+  // wiersza wyniku (</li>, </tr>, </p>…), żeby nie przypisać sądu z sąsiedniej pozycji. Kończy się
+  // przed „Data orzeczenia/publikacji”, „trafność”, myślnikiem albo datą.
+  const GRANICA = /<\/(?:li|tr|ul|ol|table|tbody)>/gi;
+  const granice = [0, ...[...t.matchAll(GRANICA)].map((g) => g.index + g[0].length), t.length];
+  const przed = (i) => granice.filter((g) => g <= i).pop() ?? 0;
+  const po = (i) => granice.find((g) => g > i) ?? t.length;
   for (const m of trafienia) {
     if (sady[m[1]]) continue;
-    const okno = tekst(t.slice(m.index, m.index + 900)).replace(/\n/g, " ");
-    const nazwa = /\bSąd (?:Rejonowy|Okręgowy|Apelacyjny)\b.{2,80}?(?=\s+z\s+\d{4}-\d{2}-\d{2}|\s+-\s|$)/u.exec(okno)?.[0];
+    const okno = tekst(t.slice(przed(m.index), po(m.index + m[0].length))).replace(/\n/g, " ");
+    const nazwa = /\bSąd (?:Rejonowy|Okręgowy|Apelacyjny|Najwyższy)\b.{2,80}?(?=\s+Data\s|\s+trafność|\s+z\s+\d{4}-\d{2}-\d{2}|\s+-\s|\s*$)/u.exec(okno)?.[0];
     if (nazwa) sady[m[1]] = nazwa.trim();
   }
   return { liczba: liczbaTxt ? Number(liczbaTxt.replace(/[\s ]/g, "")) : null, docIds, sady };

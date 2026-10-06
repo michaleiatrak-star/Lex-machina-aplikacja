@@ -106,6 +106,14 @@
   const html = `<div><span class="big_number">2</span> <a href="/details/$N/${id}">I C 100/15</a>
   <a href="/details/$N/${id}">x</a> <a href="/details/$N/155010000000503_I_C_000100_2015_Uz_2016-01-02_001">y</a></div>`;
   assert.deepStrictEqual(parsujWyniki(html), { liczba: 2, docIds: [id, "155010000000503_I_C_000100_2015_Uz_2016-01-02_001"], sady: {} });
+  // Wyszukiwanie frazą: kontekst w linku to zakodowana fraza (nie $N), nazwa sądu stoi przed linkiem (pomiar na żywo 2026-10-06).
+  const frazaHtml = `<div class="big_number">52 357</div><table class="result-list"><tbody>
+    <tr><td class="title"><div class="single_result"><div class="title"><h4><a href="/details/zado$015b$0107uczynienie/152510000004021_VIII_Pa_000045_2022_Uz_2022-07-25_001">VIII Pa 45/22</a></h4>
+    <p>wyrok</p><p>Sąd Okręgowy w Łodzi</p><p>Data orzeczenia: 2022-07-25</p><p>Data publikacji: 2022-10-07</p></div></div></td></tr></tbody></table>`;
+  const wf = parsujWyniki(frazaHtml);
+  assert.strictEqual(wf.liczba, 52357);
+  assert.deepStrictEqual(wf.docIds, ["152510000004021_VIII_Pa_000045_2022_Uz_2022-07-25_001"]);
+  assert.strictEqual(wf.sady["152510000004021_VIII_Pa_000045_2022_Uz_2022-07-25_001"], "Sąd Okręgowy w Łodzi");
   assert.deepStrictEqual(parsujWyniki("<p>Nie znaleziono żadnego wyniku pasującego do zapytania</p>"), { liczba: 0, docIds: [], sady: {} });
   assert.strictEqual(tekst("<html><head><title>x</title></head><body><p>Sygn. akt I C 100/15</p><p>WYROK</p></body></html>"), "Sygn. akt I C 100/15\nWYROK");
   console.log("OK: strona wyników (liczba, id bez powtórzeń, brak trafień)");
@@ -133,11 +141,15 @@
   console.log("OK: nazwa sądu przy pozycji listy wyników (gdy portal ją podaje)");
   {
     const { formularzFrazy, pozycjaSaos } = await import("./sp-example/sp-mcp-server.js");
+    const { formularze, daneFormularza } = await import("./wspolne/formularz.mjs");
     const html = `<form action="/search.searchform" method="post"><input type="hidden" name="t:formdata" value="F"/>
       <input type="text" name="signature" title="Sygnatura"/><input type="text" name="phrase" title="Fraza"/><input type="submit" name="s" value="Szukaj"/></form>`;
     const f = formularzFrazy(html, "https://orzeczenia.ms.gov.pl/");
     assert.strictEqual(f.poleFrazy, "phrase");
     assert.strictEqual(f.akcja, "https://orzeczenia.ms.gov.pl/search.searchform");
+    // Silnik Tapestry ma kilka ukrytych pól o tej samej nazwie (t:formdata) — muszą przetrwać wysłanie.
+    const wielo = formularze('<form action="/s" method="post"><input type="hidden" name="t:formdata" value="A"/><input type="hidden" name="t:formdata" value="B"/><input type="text" name="phrase"/><input type="submit" name="go" value="Szukaj"/></form>', "https://x/")[0];
+    assert.deepStrictEqual(daneFormularza(wielo, { phrase: "kot" }).getAll("t:formdata"), ["A", "B"]);
     assert.strictEqual(formularzFrazy("<form><input name='signature'/></form>", "https://orzeczenia.ms.gov.pl/"), null);
     const p = pozycjaSaos({ id: 7, judgmentDate: "2026-09-07", judgmentType: "REASONS", division: { court: { name: "Sąd Okręgowy w Poznaniu" } },
       courtCases: [{ caseNumber: "XII C 12/25" }] }, "https://example.com/x");
@@ -233,7 +245,7 @@
   <input type="text" name="phrase" id="phrase" placeholder="Szukaj w treści"/><input type="text" name="applicationNumber" id="nrSkargi"/>
   <input type="submit" name="submit" value="Szukaj"/></form><form action="/login"><input type="password" name="p"/></form>`;
   assert.deepStrictEqual(formularzWyszukiwarki(strona), {
-    akcja: "https://etpcz.ms.gov.pl/search.form", metoda: "post", pola: { "t:formdata": "abc&d" },
+    akcja: "https://etpcz.ms.gov.pl/search.form", metoda: "post", pola: { "t:formdata": "abc&d" }, pary: [["t:formdata", "abc&d"]],
     poleNumeru: "applicationNumber", poleFrazy: "phrase", przycisk: { nazwa: "submit", wartosc: "Szukaj" }, pola_tekstowe: ["phrase", "applicationNumber"],
   });
   assert.strictEqual(formularzWyszukiwarki("<form><input type='password' name='p'></form>"), null);

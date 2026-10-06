@@ -1,5 +1,5 @@
 // Błędy sieci: kod i host w komunikacie zamiast „fetch failed”; ponowienie tylko tam, gdzie bezpieczne.
-import { opisBleduSieci, kodSieci } from "./budzet.mjs";
+import { opisBleduSieci, kodSieci, BlokadaBotow } from "./budzet.mjs";
 import assert from "node:assert";
 import http from "node:http";
 
@@ -8,6 +8,9 @@ const zadania = [];
 const serwer = http.createServer((req, res) => {
   zadania.push(req.method);
   if (zerwij > 0) { zerwij--; req.socket.destroy(); return; }
+  if (req.url === "/imperva") { res.setHeader("content-type", "text/html"); res.end('<html style="height:100%"><script src="/_Incapsula_Resource?SWJIYLWA=1"></script></html>'); return; }
+  if (req.url === "/html") { res.setHeader("content-type", "text/html"); res.end("<html><body>Przerwa techniczna</body></html>"); return; }
+  if (req.url === "/json") { res.end('{"a":1}'); return; }
   res.end("ok");
 });
 await new Promise((ok) => serwer.listen(0, "127.0.0.1", ok));
@@ -27,6 +30,11 @@ assert.deepStrictEqual(zadania.splice(0), ["POST"]);
 zerwij = 1;
 assert.strictEqual(await (await fetch(url, { method: "POST", body: "x", lexPowtarzalne: true })).text(), "ok");
 assert.deepStrictEqual(zadania.splice(0), ["POST", "POST"]);
+// json(): strona weryfikacji / HTML / poprawny JSON.
+await assert.rejects((await fetch(url + "imperva")).json(), (e) => e instanceof BlokadaBotow && /^127\.0\.0\.1: ochrona przed botami/.test(e.message));
+await assert.rejects((await fetch(url + "html")).json(), (e) => /strona HTML zamiast danych JSON \(HTTP 200/.test(e.message));
+assert.deepStrictEqual(await (await fetch(url + "json")).json(), { a: 1 });
+zadania.splice(0);
 serwer.close();
 
 // Odmowa połączenia: kod w komunikacie.
@@ -41,4 +49,4 @@ const z = (code) => Object.assign(new TypeError("fetch failed"), { cause: Object
 assert.match(opisBleduSieci(z("UNABLE_TO_VERIFY_LEAF_SIGNATURE"), "orzeczenia.nsa.gov.pl"), /^Błąd TLS \(orzeczenia\.nsa\.gov\.pl\): UNABLE_TO_VERIFY_LEAF_SIGNATURE/);
 assert.match(opisBleduSieci(z("ENOTFOUND"), "a.pl"), /^Błąd DNS/);
 assert.match(opisBleduSieci(new TypeError("fetch failed"), "a.pl"), /^Błąd sieci \(a\.pl\): fetch failed/);
-console.log("OK: błędy sieci z kodem i hostem; ponowienie GET i POST oznaczonego, bez ponowienia zwykłego POST");
+console.log("OK: błędy sieci z kodem i hostem; ponowienie GET i POST oznaczonego, bez ponowienia zwykłego POST; json() z przyczyną (ochrona przed botami, HTML)");

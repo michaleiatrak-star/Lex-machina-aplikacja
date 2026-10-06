@@ -17,33 +17,43 @@ const ATRYBUT = (tag, nazwa) => new RegExp(`\\b${nazwa}\\s*=\\s*["']([^"']*)["']
 export function formularze(html, baza) {
   const formy = [];
   for (const [, atrForm, wnetrze] of String(html ?? "").matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)) {
-    const pola = {};
+    // pary: pola ukryte i wybory w kolejności dokumentu, z powtórzeniami — Tapestry ma kilka
+    // ukrytych `t:formdata` (orzeczenia.ms.gov.pl: 6); z jednym portal gubił frazę (pomiar 2026-10-06).
+    const pary = [];
     const tekstowe = [];
     let przycisk = null;
-    for (const [tag] of wnetrze.matchAll(/<(?:input|button)\b[^>]*>/gi)) {
+    for (const [tag, atrSelect, opcje] of wnetrze.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>|<(?:input|button)\b[^>]*>/gi)) {
+      if (atrSelect !== undefined) {
+        const nazwa = ATRYBUT(atrSelect, "name");
+        if (!nazwa) continue;
+        const lista = [...opcje.matchAll(/<option\b([^>]*)>/gi)].map(([, a]) => a);
+        const wybrana = lista.find((a) => /\bselected\b/i.test(a)) ?? lista[0];
+        pary.push([nazwa, dekoduj((wybrana && ATRYBUT(wybrana, "value")) ?? "")]);
+        continue;
+      }
       const nazwa = ATRYBUT(tag, "name");
       if (!nazwa) continue;
       const typ = (ATRYBUT(tag, "type") ?? (/^<button/i.test(tag) ? "submit" : "text")).toLowerCase();
       const opis = `${nazwa} ${ATRYBUT(tag, "id") ?? ""} ${ATRYBUT(tag, "placeholder") ?? ""} ${ATRYBUT(tag, "title") ?? ""}`;
-      if (typ === "hidden") pola[nazwa] = dekoduj(ATRYBUT(tag, "value") ?? "");
+      if (typ === "hidden") pary.push([nazwa, dekoduj(ATRYBUT(tag, "value") ?? "")]);
       else if (typ === "text" || typ === "search") tekstowe.push({ nazwa, opis });
       else if (typ === "submit" && !przycisk) przycisk = { nazwa, wartosc: dekoduj(ATRYBUT(tag, "value") ?? "") };
     }
-    for (const [, atr, opcje] of wnetrze.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
-      const nazwa = ATRYBUT(atr, "name");
-      if (!nazwa) continue;
-      const lista = [...opcje.matchAll(/<option\b([^>]*)>/gi)].map(([, a]) => a);
-      const wybrana = lista.find((a) => /\bselected\b/i.test(a)) ?? lista[0];
-      pola[nazwa] = dekoduj((wybrana && ATRYBUT(wybrana, "value")) ?? "");
-    }
+    const pola = Object.fromEntries(pary);
     if (!tekstowe.length) continue;
     const akcja = new URL(dekoduj(ATRYBUT(atrForm, "action") ?? "") || baza, baza).toString();
-    formy.push({ akcja, metoda: (ATRYBUT(atrForm, "method") ?? "get").toLowerCase(), pola, tekstowe, przycisk });
+    formy.push({ akcja, metoda: (ATRYBUT(atrForm, "method") ?? "get").toLowerCase(), pola, pary, tekstowe, przycisk });
   }
   return formy;
 }
 
-/** Dane do wysłania: pola ukryte i wybory, wartości pól tekstowych, przycisk. */
+/** Dane do wysłania: pola ukryte i wybory (z powtórzeniami, w kolejności strony), pola tekstowe, przycisk. */
 export function daneFormularza(forma, wartosci) {
-  return new URLSearchParams({ ...forma.pola, ...wartosci, ...(forma.przycisk ? { [forma.przycisk.nazwa]: forma.przycisk.wartosc } : {}) });
+  const dane = new URLSearchParams();
+  for (const [nazwa, wartosc] of forma.pary ?? Object.entries(forma.pola ?? {})) {
+    if (!(nazwa in wartosci)) dane.append(nazwa, wartosc);
+  }
+  for (const [nazwa, wartosc] of Object.entries(wartosci)) dane.append(nazwa, wartosc);
+  if (forma.przycisk) dane.append(forma.przycisk.nazwa, forma.przycisk.wartosc);
+  return dane;
 }

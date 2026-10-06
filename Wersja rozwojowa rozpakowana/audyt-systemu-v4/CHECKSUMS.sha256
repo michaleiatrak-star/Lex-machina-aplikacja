@@ -13,7 +13,7 @@ c2c61b340f90522e08100a71e4ac5d74a46c8a5bf708730e0802ff7fcaf25393  ./mcp-servers/
 55dbd937ab8ed74d02b95ac874a4a79cf6f7551485302f7fad85617634585a1a  ./mcp-servers/ceidg-example/fixtures/firmy_nip_aktywny.json
 74b6c9bda725bbfbc3926510d234bb5cbfde501267ec28bd7d804c4a00823dab  ./mcp-servers/ceidg-example/test_normalizacja.mjs
 ad8df07cc7234d88ebdfd7eefa0a2ea8acf405c492683d783078c2fbe7cd1ad2  ./mcp-servers/dist/NOTICE-THIRD-PARTY.txt
-52d3dcc61b05ff725bc7770bed3422436bec2cfcdd644c90b6f8bd5c9b9dfb44  ./mcp-servers/dist/lex-mcp.mjs
+ab82d143148f6ae263e9a87ac4430d89886923f6003ea422544ab1cb27657404  ./mcp-servers/dist/lex-mcp.mjs
 14729981c13e9f5585ad139c58b12b477defcc2ffe56b01c75b8869acc89733a  ./mcp-servers/eureka-example/eureka-mcp-server.js
 1aa02a2b1c340653a9e5dbdcfcba96c0023d2a9f30f50f19fe98dede3f0b2590  ./mcp-servers/eureka-example/fixtures/dok_445895.json
 6a82c22d36d35a4b721780eb8c7c3eff1c64819a1d4f8ebee22841e188bb76bb  ./mcp-servers/eureka-example/fixtures/dok_709097.json
@@ -62,7 +62,7 @@ a05c97584e366b660da784d061a2d661929b3acaaf51e50766bf4ff17711082a  ./mcp-servers/
 53e4e0437f4f31ca7ed672418a2f756e45cdcad278813e4dca15ec9f089d2084  ./mcp-servers/saos-example/saos-mcp-server.js
 871cd4f763e943ebd76c7e7e17fe3c4b4b0fb161e95551985127c8b1d2b3fe1e  ./mcp-servers/saos-example/test_normalizacja.mjs
 8224209d535760f1450f8948eb5d3dea3c9e9a06fa95060607d4fcc931c5c776  ./mcp-servers/sn-example/sn-mcp-server.js
-283838549067812a73211d33db16e276385d61adb6a606bb64dac0aa1b65bd58  ./mcp-servers/sp-example/sp-mcp-server.js
+4c985c396a34c6d1e22ff3c737c14e32bd78cef6a75b0853b2529310c03ded08  ./mcp-servers/sp-example/sp-mcp-server.js
 208c9a30af99c60ba8ea8e44d79f4368ca416edb49e25148a7c19dabd5a436eb  ./mcp-servers/sudop-example/README.md
 1cba6bad59aadec9058c9dc109ac5d850a2494136ac77a26648d0e13dc45ad78  ./mcp-servers/sudop-example/sudop-mcp-server.js
 8ca272c50708daca6f2e8a6038e2c58b52c39c1f4dee9d70087122e6fc7b17bb  ./mcp-servers/sudop-example/test_normalizacja.mjs
@@ -75,8 +75,8 @@ ce24aabec71ee995707965b9f8a990c1e2eb63c1caeccf2a887f86e1ccbf5546  ./mcp-servers/
 ffb41a29f7192a9f4939da48f6eec469aafe0eaa70d7d96a33bd48f0da86b73e  ./mcp-servers/uodo-example/uodo-mcp-server.js
 f516617dbeb8440625f4253f69a16d82523f778d35cfd8a4f3f867088f92fd3e  ./mcp-servers/wl-example/fixtures/wl.json
 d10c3da98ff734dafe05d24eecc9ea7ec156adcb77d8913cbbd4c55ffefc307d  ./mcp-servers/wl-example/test_normalizacja.mjs
-ff7dc0d37f6e0941845eea50a143d99b1d409b1681c21f14a3a501884e16f759  ./mcp-servers/wl-example/wl-mcp-server.js
-5983604a16680d5e8320d9bb86033283e741adff6acc3b13cbef36957a4d9035  ./mcp-servers/wspolne/budzet.mjs
+89bdbb0e55ece445ce7504781097039d18aef14f0b183476ee9935121ef7e050  ./mcp-servers/wl-example/wl-mcp-server.js
+54349c399233e8c6e82cb5e13e958f5004db23e6a2b902e9ef4c5b0115cb2639  ./mcp-servers/wspolne/budzet.mjs
 60a887566c80820cc2d9cda73abba2d654c70d073d9ea5443b2a082920393261  ./mcp-servers/zbuduj_pakiet.py
 4e1fb6c25693e16536b9397c060ecfb476328c75513dd15b7b77732009c02e52  ./modules/MOD-DESCRIPTION.md
 a50962d9b85cf54ba22c9863fbab798b5f21d85d80622e7ede16c561723b1679  ./modules/MOD-INTERLINIE.md
@@ -84,7 +84,7 @@ f06c3969a5625a2560967736e6ff8646e822d6af40573c4a77910816f281cf7d  ./modules/MOD-
 54e9ab5ec87acccb168b39671dbfe8f06308be3ecbc5662f369126c1c8e022ff  ./modules/MOD-TRESC-MERYTORYCZNA.md
 53f0880bdbf47510b8c7fb18a67130b1a3f2107bcb9d931a37e422aa82a92461  ./modules/MOD-WSTAWKI.md
 13279701eef22c911cdbcb35412d94c9a85112217351307db910732dbc21e8da  ./references/ALIASY-NAZW-AKTOW.md
-c7ee730e0896cf723cb8da4d62b25a7df3f0435728b8bed43184d716fca0e5d3  ./references/AUDIT-JOURNAL.md
+cfd6ab41727e2cc0b55c1a5b471d83131b9bfe6da15bd9a0dedc434af35193ea  ./references/AUDIT-JOURNAL.md
 5fa198ddfccd4e5b3f548055d1602e9f06abf7fabe4c6530150dbd9166a1dd8d  ./references/CHANGELOG.md
 aee9df0be072509755f8ce08a6863ffec3aee26277d7239005542a42da732f67  ./references/CHECKLIST-DEDUP.md
 4029e076fe66794f7ccbd36ee3da795faf8d856895ebaba8461d755f89c02f78  ./references/COWORK-HARMONOGRAM-NATYWNY.md
@@ -190,7 +190,7 @@ ad8c406e100e29c550843f1c0ed16eb0bb4f0b5bfdd0486efd6a97128347e7ec  ./scripts/test
 7819f3628026a9e1334f7f3ee934b4483be33c4c3caa1fc1f37d16f167dbe934  ./scripts/test_title_scope_match.py
 3f4ff8808d97b116562fcca4839a024f853fff97670d034ac69695c098dfaa79  ./scripts/weryfikator_sygnatur.py
 e1c3e575fc614e0d6c19920cf3a91e463b64f639cc86656deb67439b658ba972  ./widgets/WIDGET-MENU.md
-c617dbc850daa2a68f6350a565945854fd0554e4fae1b00ff3d81d1e6c565e3d  ./mcp-servers/wspolne/test_siec.mjs
-6f4ce56f2a252ac8e983d4d2157b580538e22acd3e633c34da619dd76a31f023  ./mcp-servers/etpcz-example/etpcz-mcp-server.js
-73ec28b06ac578f62d0de8304358b3e465f36b584f076eb8938b1c328196618e  ./mcp-servers/test_sady.mjs
-08bfd58da151dae1f41d89fb92ec77aaf1aa99e6c3ea89f16928d5527927bc23  ./mcp-servers/wspolne/formularz.mjs
+dd57ad59b047ce6e68151a423de62c7f51a995ef146374808a2db819e709ce5a  ./mcp-servers/wspolne/test_siec.mjs
+cbeeedc641d7b9ac2bbaab287ddb120be4d1832b12189d112b20955d95c5a2bb  ./mcp-servers/etpcz-example/etpcz-mcp-server.js
+f83e807fc4822c1378a8956b686bf0cbd63ddd414cabbdb43b62ebd4ef81c281  ./mcp-servers/test_sady.mjs
+9c6eaac5509528bd5c6a9a57d5ce753b590fa2ad9c21e8a300cec6701e678535  ./mcp-servers/wspolne/formularz.mjs

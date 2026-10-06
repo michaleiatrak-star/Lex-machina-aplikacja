@@ -19,7 +19,7 @@ import { z } from "zod";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { sygnal, owinSerwer } from "../wspolne/budzet.mjs";
-import { formularze } from "../wspolne/formularz.mjs";
+import { formularze, daneFormularza } from "../wspolne/formularz.mjs";
 
 const HOST = "https://etpcz.ms.gov.pl";
 // Silnik portalu odrzuca łańcuch przeglądarki (502 w Portalu Orzeczeń) — neutralny UA.
@@ -83,7 +83,7 @@ export function formularzWyszukiwarki(html, baza = HOST + "/") {
     const numer = f.tekstowe.find((p) => /complaint.?number|application.?number|numer|number|skarg|sygn|\bnr\b/i.test(p.opis) && !/^complainant$/i.test(p.nazwa))?.nazwa ?? null;
     const fraza = f.tekstowe.find((p) => p.nazwa !== numer && /fraz|tre[sś]|text|s[lł]ow|query|phrase|keyword|szukaj|search|q\b/i.test(p.opis))?.nazwa
       ?? f.tekstowe.find((p) => p.nazwa !== numer)?.nazwa ?? null;
-    return { akcja: f.akcja, metoda: f.metoda, pola: f.pola, poleNumeru: numer, poleFrazy: fraza, przycisk: f.przycisk, pola_tekstowe: f.tekstowe.map((p) => p.nazwa) };
+    return { akcja: f.akcja, metoda: f.metoda, pola: f.pola, pary: f.pary, poleNumeru: numer, poleFrazy: fraza, przycisk: f.przycisk, pola_tekstowe: f.tekstowe.map((p) => p.nazwa) };
   });
   // Pierwszeństwo: formularz z polem numeru skargi, potem pierwszy z polem tekstowym.
   return formy.find((f) => f.poleNumeru) ?? formy[0] ?? null;
@@ -112,7 +112,7 @@ async function szukaj({ numer, fraza }) {
   if (!forma) throw new Error("etpcz.ms.gov.pl: nie rozpoznano formularza wyszukiwarki (zmiana strony?)");
   const pole = numer ? (forma.poleNumeru ?? forma.poleFrazy) : forma.poleFrazy;
   if (!pole) throw new Error(`etpcz.ms.gov.pl: formularz bez pola ${numer ? "numeru skargi" : "frazy"} (pola: ${forma.pola_tekstowe.join(", ")})`);
-  const dane = new URLSearchParams({ ...forma.pola, [pole]: numer ?? fraza, ...(forma.przycisk ? { [forma.przycisk.nazwa]: forma.przycisk.wartosc } : {}) });
+  const dane = daneFormularza(forma, { [pole]: numer ?? fraza });
   const naglowki = { Referer: start.url, ...(start.ciastka.length ? { Cookie: start.ciastka.join("; ") } : {}) };
   const wynik = forma.metoda === "post"
     ? await pobierz(forma.akcja, { method: "POST", body: dane.toString(), lexPowtarzalne: true, headers: { ...naglowki, "Content-Type": "application/x-www-form-urlencoded" } })

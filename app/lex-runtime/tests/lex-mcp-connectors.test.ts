@@ -145,6 +145,22 @@ describe("LexMcpConnectorStore", () => {
     expect(connectors.status().sn.sessionSavedAt).toBeNull();
   });
 
+  it("turns on Node's env proxy for connectors when a proxy is configured", () => {
+    const connectors = store();
+    const saved = { HTTPS_PROXY: process.env.HTTPS_PROXY, https_proxy: process.env.https_proxy, HTTP_PROXY: process.env.HTTP_PROXY, http_proxy: process.env.http_proxy, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY };
+    try {
+      for (const key of Object.keys(saved)) delete process.env[key];
+      expect(connectors.serverEnvironment().NODE_USE_ENV_PROXY).toBeUndefined();
+      process.env.HTTPS_PROXY = "http://proxy.firma:8080";
+      expect(connectors.serverEnvironment()).toMatchObject({ HTTPS_PROXY: "http://proxy.firma:8080", NODE_USE_ENV_PROXY: "1" });
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("inspects the JWT shape without echoing personal data", () => {
     expect(inspectCeidgKey(jwt({ pesel: "1", sub: "2" }))).toEqual({
       valid: true,

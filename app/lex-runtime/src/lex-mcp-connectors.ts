@@ -84,7 +84,8 @@ const PASSED_ENV = [
   "https_proxy",
   "http_proxy",
   "no_proxy",
-  "NODE_EXTRA_CA_CERTS"
+  "NODE_EXTRA_CA_CERTS",
+  "NODE_USE_ENV_PROXY"
 ];
 
 export function isLexMcpServerId(
@@ -507,6 +508,11 @@ export class LexMcpConnectorStore {
     const key = this.ceidgKey();
     if (key) env.CEIDG_API_KEY = key;
     env.SN_SESSION_FILE = this.snSessionFile;
+    // Wbudowany fetch Node (>= 22.21) korzysta z HTTPS_PROXY tylko z tą flagą — bez niej konektory
+    // za proxy firmowym łączyły się bezpośrednio i dostawały odmowę (pomiar 2026-10-06).
+    if (!env.NODE_USE_ENV_PROXY && (env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy)) {
+      env.NODE_USE_ENV_PROXY = "1";
+    }
     return env;
   }
 
