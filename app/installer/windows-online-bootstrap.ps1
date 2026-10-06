@@ -108,47 +108,25 @@ function Test-RebootPending {
 
 # App-local Visual C++ runtime (a deployment Microsoft supports for the VC++
 # redistributable DLLs). When the system runtime is older than required and
-# cannot be upgraded (MSI 1603 after a cleaned Package Cache), the newer DLLs
-# from the same verified vc_redist are unpacked without installing anything
-# (bundle /layout, then an administrative MSI extract, no elevation) and later
-# copied next to the application executables. Windows loads DLLs from the
-# executable's folder first; the older system runtime is left untouched.
+# cannot be upgraded (MSI 1603 after a cleaned Package Cache), the runtime
+# bundled in the installer (prerequisites\vc-applocal, taken at build time
+# from the Visual Studio redistributable folder) is copied next to the
+# application executables. Windows loads DLLs from the executable's folder
+# first; the older system runtime is left untouched.
 $script:VcAppLocalDir = $null
-$script:VcAppLocalPattern = '^(vcruntime140(_1)?|msvcp140(_1|_2|_atomic_wait|_codecvt_ids)?|concrt140|vccorlib140|vcomp140)\.dll$'
 function Get-DllVersion([string]$path) {
   $info = (Get-Item -LiteralPath $path).VersionInfo
   return [Version]::new($info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart)
 }
-function Expand-VcRuntimeAppLocal([string]$installer, [Version]$required, [string]$workDir) {
-  if (Test-Path -LiteralPath $workDir) { Remove-Item -LiteralPath $workDir -Recurse -Force }
-  $layout = Join-Path $workDir "layout"
-  $files = Join-Path $workDir "files"
-  $dllDir = Join-Path $workDir "dll"
-  New-Item -ItemType Directory -Force -Path $layout, $files, $dllDir | Out-Null
-  $bundle = Start-Process -FilePath $installer -ArgumentList @("/layout", "`"$layout`"", "/quiet", "/norestart") -PassThru -Wait
-  $msis = @(Get-ChildItem -LiteralPath $layout -Recurse -Filter "*.msi" -File -ErrorAction SilentlyContinue)
-  if (-not $msis.Count) { throw "VC_APPLOCAL_LAYOUT_EMPTY:$($bundle.ExitCode)" }
-  foreach ($msi in $msis) {
-    $extract = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/a", "`"$($msi.FullName)`"", "/qn", "TARGETDIR=`"$files`"") -PassThru -Wait
-    if ($extract.ExitCode -ne 0) { throw "VC_APPLOCAL_EXTRACT_FAILED:$($msi.Name):$($extract.ExitCode)" }
-  }
-  # Newest copy of each runtime DLL (x64 bundle: the System64 copies).
-  $chosen = @{}
-  foreach ($dll in Get-ChildItem -LiteralPath $files -Recurse -File -Filter "*.dll") {
-    if ($dll.Name -notmatch $script:VcAppLocalPattern) { continue }
-    $version = Get-DllVersion $dll.FullName
-    $key = $dll.Name.ToLowerInvariant()
-    if (-not $chosen.ContainsKey($key) -or $version -gt $chosen[$key].Version) {
-      $chosen[$key] = [pscustomobject]@{ Path = $dll.FullName; Version = $version }
-    }
-  }
+function Get-VcRuntimeAppLocal([string]$runtimeRoot, [Version]$required) {
+  $dir = Join-Path $runtimeRoot "prerequisites\vc-applocal"
   foreach ($needed in @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")) {
-    if (-not $chosen.ContainsKey($needed)) { throw "VC_APPLOCAL_DLL_MISSING:$needed" }
-    if ($chosen[$needed].Version -lt $required) { throw "VC_APPLOCAL_DLL_TOO_OLD:${needed}:$($chosen[$needed].Version)<$required" }
+    $path = Join-Path $dir $needed
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "VC_APPLOCAL_NOT_BUNDLED:$needed" }
+    $version = Get-DllVersion $path
+    if ($version -lt $required) { throw "VC_APPLOCAL_TOO_OLD:${needed}:$version<$required" }
   }
-  foreach ($item in $chosen.Values) { Copy-Item -LiteralPath $item.Path -Destination $dllDir -Force }
-  Remove-Item -LiteralPath $layout, $files -Recurse -Force -ErrorAction SilentlyContinue
-  return $dllDir
+  return $dir
 }
 function Copy-VcRuntimeAppLocal([string]$dllDir, [string[]]$targets) {
   foreach ($target in $targets) {
@@ -195,7 +173,7 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
   # The system runtime stays older: the required version goes next to the application instead.
   $appLocalError = $null
   try {
-    $script:VcAppLocalDir = Expand-VcRuntimeAppLocal $installer $required (Join-Path $logDir "..\vc-applocal")
+    $script:VcAppLocalDir = Get-VcRuntimeAppLocal $runtime $script:VcRuntimeFloor
     Write-Warning "Visual C++ runtime update to $required failed (exit $code, log $log); installed $(if ($present) { $present } else { 'none' }) stays, the required runtime is deployed next to the application"
     return $code
   } catch {
