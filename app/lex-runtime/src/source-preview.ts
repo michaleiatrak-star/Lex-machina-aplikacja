@@ -24,7 +24,8 @@ export const SOURCE_PREVIEW_HOSTS = new Set([
   // Common courts (aggregate portal) and the Constitutional Tribunal.
   "orzeczenia.ms.gov.pl",
   "ipo.trybunal.gov.pl",
-  "otkzu.trybunal.gov.pl"
+  "otkzu.trybunal.gov.pl",
+  "etpcz.ms.gov.pl"
 ]);
 
 // Portals of single common courts: orzeczenia.{city}.sr|so|sa.gov.pl.

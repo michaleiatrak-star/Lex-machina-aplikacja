@@ -320,6 +320,18 @@ await przypadek("TK: K 33/07 — IPO / OTK ZU, bez SAOS, dokument zawiera sygnat
   }
 });
 
+// ── 10d. ETPCz (baza MS): numer skargi → stały link do treści, treść dotyczy tej skargi.
+await przypadek("ETPCz: skarga 43447/19 — link do treści i odczyt z kontrolą numeru skargi", async (ok) => {
+  const w = await narzedzie("etpcz", "etpcz_szukaj", { numer_skargi: "43447/19" });
+  ok(w.status === "FOUND", `status ${w.status} ${w.detail ?? ""}`);
+  const url = w.result?.url_orzeczenia ?? "";
+  ok(/\/etpccontent\/\$N\/.*_ETPC_043447_2019_/.test(url), `link: ${url}`);
+  if (url) {
+    const p = await narzedzie("etpcz", "etpcz_pobierz", { url_lub_id: url, numer_skargi: "43447/19" });
+    ok(p.status === "FOUND" && (p.result?.tresc ?? "").length > 200, `etpcz_pobierz: ${p.status}`);
+  }
+});
+
 // ── 11. KIO (wyszukiwarka UZP): sygnatura, data i rozstrzygnięcie == dokument źródłowy (treść HTML i metryka).
 await przypadek("KIO: KIO 82/18 — sygnatura i data z narzędzia występują w treści orzeczenia u źródła", async (ok) => {
   const w = await narzedzie("kio", "kio_sprawdz_sygnature", { sygnatura: "KIO 82/18" });

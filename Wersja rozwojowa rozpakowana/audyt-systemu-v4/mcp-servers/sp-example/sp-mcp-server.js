@@ -90,10 +90,19 @@ export function tasamaSygnatura(a, b) {
 /** Strona wyników → liczba trafień i identyfikatory dokumentów. Czysta funkcja. */
 export function parsujWyniki(html) {
   const t = String(html ?? "");
-  if (/Nie znaleziono żadnego wyniku|Nie znaleziono zadnego wyniku/i.test(t)) return { liczba: 0, docIds: [] };
+  if (/Nie znaleziono żadnego wyniku|Nie znaleziono zadnego wyniku/i.test(t)) return { liczba: 0, docIds: [], sady: {} };
   const liczbaTxt = /class="big_number"[^>]*>\s*([\d\s ]+)</.exec(t)?.[1];
-  const docIds = [...new Set([...t.matchAll(/\/details\/\$N\/([A-Za-z0-9_.-]{10,120})/g)].map((m) => m[1]))];
-  return { liczba: liczbaTxt ? Number(liczbaTxt.replace(/[\s ]/g, "")) : null, docIds };
+  const trafienia = [...t.matchAll(/\/details\/\$N\/([A-Za-z0-9_.-]{10,120})/g)];
+  const docIds = [...new Set(trafienia.map((m) => m[1]))];
+  // Nazwa sądu przy pozycji listy („II K 1350/18 - wyrok … Sąd Rejonowy w … z 2019-11-05”), gdy portal ją podaje.
+  const sady = {};
+  for (const m of trafienia) {
+    if (sady[m[1]]) continue;
+    const okno = tekst(t.slice(m.index, m.index + 900)).replace(/\n/g, " ");
+    const nazwa = /\bSąd (?:Rejonowy|Okręgowy|Apelacyjny)\b.{2,80}?(?=\s+z\s+\d{4}-\d{2}-\d{2}|\s+-\s|$)/u.exec(okno)?.[0];
+    if (nazwa) sady[m[1]] = nazwa.trim();
+  }
+  return { liczba: liczbaTxt ? Number(liczbaTxt.replace(/[\s ]/g, "")) : null, docIds, sady };
 }
 
 const ENCJE = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -148,7 +157,8 @@ const NOTA = "Źródłem jest link do samego orzeczenia w Portalu Orzeczeń (url
   "(portal publikuje wybrane orzeczenia). Przepisy weryfikuj w ELI.";
 const odp = (w) => ({ content: [{ type: "text", text: JSON.stringify(w, null, 2) }] });
 const blad = (e) => ({ status: "ERROR", ...baza, detail: String(e?.message ?? e), retrieved_at: new Date().toISOString() });
-const pozycja = (host, docId) => ({ ...rozbierzDocId(docId), url_orzeczenia: urlOrzeczenia(host, docId), url_metryki: urlMetryki(host, docId), portal: new URL(host).hostname });
+const pozycja = (host, docId, sady = {}) => ({ ...rozbierzDocId(docId), ...(sady[docId] ? { sad: sady[docId] } : {}),
+  url_orzeczenia: urlOrzeczenia(host, docId), url_metryki: urlMetryki(host, docId), portal: new URL(host).hostname });
 
 const server = owinSerwer(globalThis.__LEX_MCP_WSPOLNY ?? new McpServer({ name: "sp-connector", version: "1.0.0" }));
 
@@ -176,7 +186,7 @@ server.registerTool("sp_sprawdz_sygnature", {
     // Uzasadnienie i wyrok jednej sprawy w jednym sądzie to jedna sprawa; różne sądy = AMBIGUOUS.
     const sady = new Set(docs.map((id) => rozbierzDocId(id).kodSadu ?? id));
     return odp({ status: sady.size === 1 ? "FOUND" : "AMBIGUOUS", ...baza, oczekiwana, liczba_trafien: w.liczba,
-      ...(sady.size === 1 ? { result: pozycja(host, docs[0]), dokumenty: docs.map((id) => pozycja(host, id)) } : { kandydaci: docs.map((id) => pozycja(host, id)) }),
+      ...(sady.size === 1 ? { result: pozycja(host, docs[0], w.sady), dokumenty: docs.map((id) => pozycja(host, id, w.sady)) } : { kandydaci: docs.map((id) => pozycja(host, id, w.sady)) }),
       uwaga: NOTA, retrieved_at: new Date().toISOString(), confidence: "deterministic" });
   } catch (e) {
     // Portal urzędowy nie odpowiada → SAOS zastępczo (RZĄD 3), z linkiem do portalu, gdy SAOS go zna.
@@ -246,25 +256,21 @@ server.registerTool("sp_szukaj", {
   title: "Szukaj orzeczeń sądów powszechnych po frazie",
   description: "Wyszukiwanie po treści w Portalu Orzeczeń (urzędowym; agregat albo portal sądu `sad`), stałe linki do orzeczeń. " +
     "Trafienia sprawdzane odczytem treści; gdy portal nie odpowie albo nie przyjmie frazy — SAOS zastępczo (RZĄD 3) z linkiem do portalu. " +
+    "Portal szuka tylko po frazie albo sygnaturze (sygnatura: sp_sprawdz_sygnature) — bez filtrów dat. " +
     "Wynik to kandydaci — przed powołaniem przeczytaj treść (sp_pobierz).",
   inputSchema: {
     fraza: z.string().min(3).max(300),
     sad: z.string().max(60).optional().describe("portal sądu: miasto.so | miasto.sr | miasto.sa"),
-    dataOd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    dataDo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    limit: z.number().int().min(1).max(10).optional(),
   },
-}, async ({ fraza, sad, dataOd, dataDo, limit = 5 }) => {
+}, async ({ fraza, sad }) => {
+  // Portal szuka tylko po sygnaturze albo frazie (bez dat i limitu) — tyle przyjmuje narzędzie.
   let host;
   try { host = hostPortalu(sad); } catch (e) { return odp(blad(e)); }
   let portalUwaga = null;
   // 1. Portal Orzeczeń (źródło urzędowe).
   try {
     const w = parsujWyniki(await pobierz(urlSzukaniaFrazy(host, fraza)));
-    const ids = w.docIds.filter((id) => {
-      const d = rozbierzDocId(id).data;
-      return (!dataOd || !d || d >= dataOd) && (!dataDo || !d || d <= dataDo);
-    }).slice(0, limit);
+    const ids = w.docIds.slice(0, 10);
     // Kontrola, że portal przyjął frazę: treść przynajmniej jednego z pierwszych trafień ją zawiera.
     const sprawdzone = [];
     for (const id of ids.slice(0, 3)) {
@@ -273,7 +279,7 @@ server.registerTool("sp_szukaj", {
     }
     if (ids.length && sprawdzone.some(Boolean)) {
       return odp({ status: "AMBIGUOUS", ...baza, query_type: "wyszukiwanie", fraza, portal: new URL(host).hostname, liczba_trafien: w.liczba,
-        kandydaci: ids.map((id) => pozycja(host, id)),
+        kandydaci: ids.map((id) => pozycja(host, id, w.sady)),
         uwaga: "Kandydaci z Portalu Orzeczeń (źródło urzędowe) — przed powołaniem przeczytaj treść (sp_pobierz). " + NOTA,
         retrieved_at: new Date().toISOString() });
     }
@@ -287,7 +293,7 @@ server.registerTool("sp_szukaj", {
   }
   // 2. SAOS — wyłącznie zastępczo.
   try {
-    const kandydaci = await saosPoFrazie({ fraza, dataOd, dataDo, limit });
+    const kandydaci = await saosPoFrazie({ fraza, limit: 5 });
     return odp({ status: kandydaci.length ? "AMBIGUOUS" : "OUT_OF_SCOPE", ...baza, source: "saos (zastępczo)", query_type: "wyszukiwanie", fraza,
       portal_uwaga: portalUwaga, kandydaci,
       uwaga: `Portal Orzeczeń: ${portalUwaga}. Wynik zastępczy z SAOS (RZĄD 3, agregator akademicki) — powołuj url_orzeczenia z portalu, gdy jest. ` + NOTA,

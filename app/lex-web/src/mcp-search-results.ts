@@ -56,8 +56,16 @@ function num(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+// Link do źródła pozycji: stały link do orzeczenia (Portal Orzeczeń, IPO/OTK ZU), karta SN,
+// a dla pozostałych źródeł strona źródła.
+function sourceUrlOf(row: Row): string | null {
+  return text(row.url_orzeczenia) ?? text(row.url_karty) ?? text(row.url_zrodlowy) ?? text(row.url) ?? text(row.url_sprawy);
+}
+
 const DATE_LABELS: Array<[string, string]> = [
   ["data_wyroku", "wyrok"],
+  ["data_wydania", "wydanie"],
+  ["data", "data"],
   ["data_publikacji_lub_wyroku", "data"],
   ["data_publikacji_w_eureka", "publikacja"],
   ["data_uprawomocnienia", "uprawomocnienie"],
@@ -72,7 +80,7 @@ function metaOf(row: Row): string[] {
     const value = text(row[key]);
     if (value) meta.push(`${label}: ${value.slice(0, 10)}`);
   }
-  for (const key of ["prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"]) {
+  for (const key of ["rodzaj", "forma", "prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"]) {
     const value = text(row[key]);
     if (value) meta.push(value.replace(/_/g, " "));
   }
@@ -87,12 +95,21 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
     ["isap_tekst", "eli", row.eli],
     ["kio_pobierz", "id", row.id_kio],
     ["eureka_pobierz", "id", row.id_eureka],
-    ["uodo_pobierz", "urn_lub_sygnatura", row.urn ?? row.identyfikator]
+    ["uodo_pobierz", "urn_lub_sygnatura", row.urn ?? row.identyfikator],
+    ["sp_pobierz", "url_lub_id", row.url_orzeczenia ?? row.docId],
+    ["sn_pobierz", "karta", row.url_karty ?? row.id_karty],
+    ["etpcz_pobierz", "url_lub_id", row.url_orzeczenia ?? row.docId]
   ];
   for (const [detailTool, argument, value] of candidates) {
     if (!detailTool.startsWith(source + "_") || detailTool === tool || !available.has(detailTool)) continue;
     const id = text(value);
     if (id) return { tool: detailTool, args: { [argument]: id } };
+  }
+  // TK: dokument spod linku IPO/OTK ZU z kontrolą, że zawiera pytaną sygnaturę.
+  const tkUrl = text(row.url_orzeczenia);
+  if (source === "tk" && tool !== "tk_pobierz" && tkUrl && available.has("tk_pobierz")) {
+    const signature = text(row.sygnatura);
+    return { tool: "tk_pobierz", args: { url: tkUrl, ...(signature ? { sygnatura: signature } : {}) } };
   }
   return null;
 }
@@ -100,6 +117,7 @@ function detailOf(tool: string, row: Row, available: Set<string>): SearchItem["d
 const SHOWN = new Set([
   "tytul_lub_nazwa", "sygnatura", "identyfikator", "tytul", "doc_id", "id_eureka", "id_kio", "urn", "sad",
   "fragment", "teza", "sentencja", "url_zrodlowy", "url_podgladu", "url", "rola",
+  "url_orzeczenia", "url_karty", "url_metryki", "url_sprawy", "docId", "rodzaj", "forma",
   ...DATE_LABELS.map(([key]) => key),
   "prawomocnosc", "status_obowiazywania", "status_eureka", "status_aktualnosci"
 ]);
@@ -161,7 +179,7 @@ function previewOf(tool: string, row: Row, title: string, retrievedAt: string | 
   if (RECORD_SOURCES[source]) {
     return { kind: "record", key: `${tool}:${title}`, html: recordPreviewHtml(title, RECORD_SOURCES[source]!, row, retrievedAt) };
   }
-  const url = text(row.url_podgladu) ?? text(row.url_zrodlowy) ?? text(row.url);
+  const url = text(row.url_podgladu) ?? sourceUrlOf(row);
   return url ? { kind: "url", url } : null;
 }
 
@@ -175,11 +193,11 @@ function itemOf(tool: string, row: Row, index: number, available: Set<string>, w
     `Wynik ${index + 1}`;
   const identifier = text(row.identyfikator) ?? text(row.sygnatura);
   return {
-    key: text(row.doc_id) ?? text(row.id_eureka) ?? text(row.urn) ?? identifier ?? `${index}`,
+    key: text(row.doc_id) ?? text(row.docId) ?? text(row.id_karty) ?? text(row.id_eureka) ?? text(row.urn) ?? text(row.url_orzeczenia) ?? identifier ?? `${index}`,
     title,
     meta: [...(identifier && identifier !== title ? [identifier] : []), ...metaOf(row)],
     snippet: text(row.fragment) ?? text(row.teza) ?? text(row.sentencja)?.slice(0, 600) ?? null,
-    url: text(row.url_zrodlowy) ?? text(row.url),
+    url: sourceUrlOf(row),
     preview: previewOf(tool, row, title, retrievedAt),
     facts: withFacts ? factsOf(row, SHOWN) : [],
     detail: detailOf(tool, row, available)
@@ -217,7 +235,7 @@ function documentOf(tool: string, row: Row, args: Record<string, unknown>): Sear
   return {
     title: text(row.identyfikator) ?? text(row.sygnatura) ?? text(row.tytul_lub_nazwa) ?? tool,
     meta: metaOf(row),
-    url: text(row.url_zrodlowy),
+    url: sourceUrlOf(row),
     preview: previewOf(tool, row, text(row.identyfikator) ?? text(row.sygnatura) ?? tool, null),
     sections,
     continuation

@@ -294,7 +294,7 @@ jobs:
         run: npm run validate:g40-live
 
       # Portale sądów bywają wrażliwe na adres runnera; wynik każdego przypadku jest w logu (JSON).
-      - name: G40B — live court connectors (common courts, TK via IPO form, SN card)
+      - name: G40B — live court connectors (common courts, TK, ETPCz, SN card)
         continue-on-error: true
         run: npm run validate:g40-courts
 

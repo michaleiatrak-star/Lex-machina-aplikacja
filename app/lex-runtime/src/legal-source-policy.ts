@@ -111,6 +111,8 @@ const R2A_HOSTS =
     "nsa.gov.pl",
     "trybunal.gov.pl",
     "ipo.trybunal.gov.pl",
+    "otkzu.trybunal.gov.pl",
+    "etpcz.ms.gov.pl",
     "orzeczenia.uodo.gov.pl",
     "orzeczenia.uzp.gov.pl",
     "bip.uke.gov.pl",
@@ -572,6 +574,21 @@ const FEDERATED_POLICIES:
         true,
       note:
         "Constitutional Tribunal (IPO/OTK ZU); identity requires the signature in the document read by tk_pobierz."
+    },
+    etpcz: {
+      sourceTier: "R2A",
+      provenance:
+        "EXTERNAL_MCP",
+      transport:
+        "FEDERATED_MCP",
+      verificationAuthority:
+        "LEX_NATIVE_ONLY",
+      verificationEligible:
+        false,
+      crossCheckRequired:
+        true,
+      note:
+        "ECHR decisions (Ministry of Justice database, Polish translations); cite the stable link to the text; selected decisions only, HUDOC is the full collection."
     },
     kio: {
       sourceTier: "R2A",

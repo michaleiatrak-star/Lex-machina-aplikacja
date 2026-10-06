@@ -65,6 +65,7 @@ describe(
           "sp",
           "tk",
           "kio",
+          "etpcz",
           "krs",
           "wl",
           "ceidg",
@@ -133,7 +134,7 @@ describe(
         );
         expect(
           payload.sources
-        ).toHaveLength(15);
+        ).toHaveLength(16);
         expect(
           payload.sources.map(
             (source) =>

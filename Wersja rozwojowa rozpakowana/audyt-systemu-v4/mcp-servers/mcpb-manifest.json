@@ -115,6 +115,14 @@
       "description": "TK: treść dokumentu z IPO/OTK ZU z kontrolą sygnatury"
     },
     {
+      "name": "etpcz_szukaj",
+      "description": "ETPCz (baza MS etpcz.ms.gov.pl): orzeczenia po numerze skargi (dokładna kontrola) albo frazie; stałe linki do treści"
+    },
+    {
+      "name": "etpcz_pobierz",
+      "description": "ETPCz: treść orzeczenia spod stałego linku etpcz.ms.gov.pl z kontrolą numeru skargi"
+    },
+    {
       "name": "kio_szukaj",
       "description": "KIO: wyszukiwanie orzeczeń Krajowej Izby Odwoławczej (wyszukiwarka UZP) po frazie, sygnaturze i dacie"
     },

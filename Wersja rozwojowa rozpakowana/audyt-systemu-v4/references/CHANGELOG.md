@@ -1,5 +1,7 @@
 # CHANGELOG — audyt-systemu-v4
 
+- 6.197 (2026-10-06): konektor etpcz (ETPCz, baza MS); SP: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie
+
 - 6.196 (2026-10-06): sn: strona weryfikacji przeglądarki rozpoznana, ponowienie z ciasteczkami, SAOS zastępczo przy blokadzie
 
 - 6.195 (2026-10-06): konektory MCP: przyczyna błędu sieci zamiast „fetch failed”, ponowienia przejściowych, certyfikaty systemu

@@ -69891,6 +69891,22 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-06h — konektor etpcz (ETPCz, baza MS); sądy powszechne: link, podgląd i nazwa sądu w wynikach, wyszukiwanie tylko po sygnaturze albo frazie (6.197)
+
+### 1. ŹRÓDŁO
+Użytkownik: w wynikach sądów powszechnych brak podglądu i linku do źródła (II K 1350/18 → dwie pozycje bez linku); Portal Orzeczeń szuka tylko po sygnaturze albo frazie; ETPCz: `etpcz.ms.gov.pl`.
+
+### 2. ZMIANA
+- Panel wyników (aplikacja): link i podgląd z `url_orzeczenia` (SP, TK) i `url_karty` (SN); data, rodzaj/forma i sąd w metadanych; „Pokaż treść” przez `sp_pobierz`, `sn_pobierz`, `tk_pobierz`, `etpcz_pobierz`; etykiety narzędzi SP/SN/TK/ETPCz.
+- `sp`: nazwa sądu z listy wyników portalu (gdy podana) przy każdej pozycji; `sp_szukaj` bez dat i limitu (portal ich nie obsługuje); federacja: sygnatura SR/SO/SA → `sp_sprawdz_sygnature`.
+- Nowy konektor `etpcz`: `etpcz_szukaj` (numer skargi z kontrolą po id dokumentu albo fraza; formularz wyszukiwarki odczytywany ze strony), `etpcz_pobierz` (treść `/etpccontent/$N/{id}`, kontrola numeru skargi). Rejestracja: paczka, manifest, instalator, aplikacja (federacja, polityka R2A, podgląd), G40B i test 10d.
+- Limit plików skilla (T41, < 200): testy offline sn/sp/tk/etpcz scalone w `mcp-servers/test_sady.mjs` (każda sekcja we własnym bloku, asercje bez zmian) — 198 plików.
+- HIERARCHIA-ZRODEL, DOSTEP-MASZYNOWY-API (shared 3.99.16).
+
+### 3. WERYFIKACJA
+Testy offline etpcz (numer skargi ↔ id, rok 20RR, formularz, wyniki) i przebieg na atrapie (formularz → POST → FOUND → treść → MISMATCH dla innej skargi); sp na atrapie (nazwa sądu w wyniku). Pomiar na żywo: G40B w CI (z diagnostyką formularza przy porażce) — piaskownica bez dostępu do etpcz.ms.gov.pl.
+
+
 ## AUDYT-2026-10-06g — sn: strona weryfikacji przeglądarki (HTTP 200 HTML) zamiast „Unexpected token '<'”; SAOS zastępczo (6.196)
 
 ### 1. ŹRÓDŁO
