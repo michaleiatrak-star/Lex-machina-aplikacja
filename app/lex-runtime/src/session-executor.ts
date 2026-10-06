@@ -206,6 +206,7 @@ import type {
 import {
   LocalPolishPseudonymizer,
   PseudonymizationVault,
+  sealResidualValues,
   type NamedEntityRecognizer
 } from "./privacy/pseudonymizer.js";
 import {
@@ -1518,8 +1519,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             request.query,
             exampleData
           );
+      // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
+      const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
       protectedQuery =
-        protectedPrimary.text;
+        primarySeal.text;
+      let sealedValues = primarySeal.sealed;
 
       if (
         request.auxiliaryText !==
@@ -1527,13 +1531,15 @@ export class SafeSessionExecutor implements SessionExecutor {
         request.auxiliaryText !==
           request.query
       ) {
+        const auxiliary =
+          await chatPseudonymizer
+            .pseudonymize(
+              request.auxiliaryText
+            );
+        const auxiliarySeal = sealResidualValues(request.auxiliaryText, auxiliary.text, auxiliary.findings);
         protectedAuxiliaryText =
-          (
-            await chatPseudonymizer
-              .pseudonymize(
-                request.auxiliaryText
-              )
-          ).text;
+          auxiliarySeal.text;
+        sealedValues += auxiliarySeal.sealed;
       } else if (
         request.auxiliaryText !==
           undefined
@@ -1571,7 +1577,10 @@ export class SafeSessionExecutor implements SessionExecutor {
             ).sort(),
           vaultTokens:
             chatPrivacyVault
-              .size
+              .size,
+          // Occurrences of already replaced values found again by the leak test.
+          residualSealed:
+            sealedValues
         }
       );
     } catch (error) {
