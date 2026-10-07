@@ -739,6 +739,15 @@ export type ProviderAccountSessionStatus = {
   installHint: string;
   resumeMode: AccountSessionResumeMode;
   oauthTokenConfigured?: boolean;
+  // A client Lex Machina downloaded into its private directory (removable by
+  // uninstall); a system-wide CLI is never reported here nor removed.
+  managedClientInstalled?: boolean;
+};
+
+export type AccountClientUninstallResult = {
+  provider: ProviderId;
+  removed: boolean;
+  status: ProviderAccountSessionStatus;
 };
 
 type RunResult = {
@@ -1037,6 +1046,12 @@ function optionalAccountClientsRoot(): string {
         "optional-tools",
         "account-clients"
       );
+}
+
+function optionalAccountClientDir(
+  provider: "openai" | "anthropic" | "google" | "xai"
+): string {
+  return path.join(optionalAccountClientsRoot(), provider);
 }
 
 function optionalAccountClientExecutable(
@@ -3303,6 +3318,16 @@ export class AccountSessionManager {
   async status(
     provider: ProviderId
   ): Promise<ProviderAccountSessionStatus> {
+    const status = await this.clientStatus(provider);
+    return {
+      ...status,
+      managedClientInstalled: existsSync(optionalAccountClientDir(provider))
+    };
+  }
+
+  private async clientStatus(
+    provider: ProviderId
+  ): Promise<ProviderAccountSessionStatus> {
     const command = CLI_NAMES[provider];
     // Status opiera `installed` na kliencie PRZYPIĘTYM (nie systemowym) dla
     // wszystkich dostawców — connect pobiera wtedy klienta Lex dla Claude i
@@ -3477,6 +3502,38 @@ export class AccountSessionManager {
       throw new Error(`ACCOUNT_SESSION_LOGOUT_FAILED:${provider}`);
     }
     return after;
+  }
+
+  /**
+   * Removes the client Lex Machina downloaded for the provider (its private
+   * account-clients/<provider> directory). The provider login kept by the
+   * client in the user profile (~/.codex, ~/.claude, ~/.gemini, ~/.grok) and a
+   * system-wide CLI are left alone: "Wyloguj" handles the login.
+   */
+  async uninstall(
+    provider: ProviderId
+  ): Promise<AccountClientUninstallResult> {
+    const job = this.provisionJobs.get(provider);
+    if (
+      job &&
+      job.progress.stage !== "READY" &&
+      job.progress.stage !== "FAILED"
+    ) {
+      throw new Error(`ACCOUNT_CLIENT_UNINSTALL_BUSY:${provider}`);
+    }
+    const dir = optionalAccountClientDir(provider);
+    const removed = existsSync(dir);
+    try {
+      // Retries cover Windows locks left by a client process that is exiting.
+      await fsp.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      throw new Error(`ACCOUNT_CLIENT_UNINSTALL_FAILED:${provider}`);
+    }
+    this.provisionJobs.delete(provider);
+    if (provider === "anthropic") {
+      this.anthropicInteractiveLoginConfirmed = false;
+    }
+    return { provider, removed, status: await this.status(provider) };
   }
 
   async statusAll(): Promise<ProviderAccountSessionStatus[]> {
