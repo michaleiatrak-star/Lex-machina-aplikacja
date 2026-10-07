@@ -249,7 +249,34 @@ function mapFiles(corpusRoot: string): Array<{ domain: string; file: string }> {
   return files.sort((a, b) => a.domain.localeCompare(b.domain));
 }
 
-/** All Dz.U. acts named in the domain act maps and the routing map. */
+/**
+ * Source registries of a domain (dr-* /references/<zakres>/sources.json): the acts whose
+ * full texts the skill ships, e.g. the amendments after the last t.j. of PrUp/PrRestr.
+ */
+function sourceRegistries(corpusRoot: string): Array<{ domain: string; file: string }> {
+  const files: Array<{ domain: string; file: string }> = [];
+  for (const entry of fs.readdirSync(corpusRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("dr-")) continue;
+    const references = path.join(corpusRoot, entry.name, "references");
+    let scopes: fs.Dirent[];
+    try {
+      scopes = fs.readdirSync(references, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const scope of scopes) {
+      const file = path.join(references, scope.name, "sources.json");
+      if (scope.isDirectory() && fs.existsSync(file)) files.push({ domain: entry.name, file });
+    }
+  }
+  return files.sort((a, b) => a.file.localeCompare(b.file));
+}
+
+// Only amendments: "historyczny_nie_stosuj_jako_biezacy" texts (original acts, superseded
+// t.j.) are reference points for a past state, not wording to quote as current law.
+const REGISTRY_ROLES = new Set(["nowelizacja"]);
+
+/** All Dz.U. acts named in the domain act maps, the routing map and the source registries. */
 export function extractCoreActs(corpusRoot: string): CoreActRef[] {
   const acts = new Map<string, CoreActRef>();
   const add = (
@@ -295,6 +322,23 @@ export function extractCoreActs(corpusRoot: string): CoreActRef[] {
           }
         }
       }
+    }
+  }
+  for (const { domain, file } of sourceRegistries(corpusRoot)) {
+    let sources: unknown;
+    try {
+      sources = (JSON.parse(fs.readFileSync(file, "utf8")) as { sources?: unknown }).sources;
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(sources)) continue;
+    const scope = path.basename(path.dirname(file));
+    for (const source of sources as Array<{ eli?: unknown; role?: unknown; id?: unknown }>) {
+      if (typeof source.eli !== "string" || typeof source.role !== "string") continue;
+      const eli = /^DU\/(\d{4})\/(\d+)$/.exec(source.eli);
+      if (!eli || !REGISTRY_ROLES.has(source.role)) continue;
+      const id = typeof source.id === "string" ? ` (${source.id})` : "";
+      add(`DU/${eli[1]}/${Number(eli[2])}`, false, domain, null, cleanNote(`references/${scope}/sources.json: ${source.role}${id}`));
     }
   }
   return [...acts.values()].sort(
@@ -587,9 +631,9 @@ export class CoreLawIndex {
   private corpusRoot: string | null = null;
   private mapsSignature = "";
 
-  // Size and mtime of every act map: a skill update changes it.
+  // Size and mtime of every act map and source registry: a skill update changes it.
   private static mapsSignatureOf(corpusRoot: string): string {
-    return mapFiles(corpusRoot)
+    return [...mapFiles(corpusRoot), ...sourceRegistries(corpusRoot)]
       .map(({ file }) => {
         try {
           const stat = fs.statSync(file);
