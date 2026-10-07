@@ -59,7 +59,16 @@ const LAY_CRIMINAL_WORDS = new RegExp("(?<![\\p{L}])(?:" +
         "dopalacz\\p{L}*",
         "podszy\\p{L}*\\s+się",
         "kradzież\\p{L}*\\s+tożsamości",
-        "czynn\\p{L}*\\s+żal\\p{L}*\\s+w\\s+sprawie\\s+karn\\p{L}*"
+        "czynn\\p{L}*\\s+żal\\p{L}*\\s+w\\s+sprawie\\s+karn\\p{L}*",
+        "(?:bije|bił|biła|bili|biją|uderzył\\p{L}*|kopnął|kopnęła|dusił\\p{L}*)\\s+mnie",
+        "grozi(?:ł|ła|li)?\\s+mi(?![\\p{L}])",
+        "fałszow\\p{L}*",
+        "(?:dosta|otrzyma|usłysza|postawi)\\p{L}*\\s+(?:\\p{L}+\\s+)?zarzut(?!\\p{L}*\\s+od\\s+nakazu)\\p{L}*",
+        "intymn\\p{L}*\\s+(?:zdję\\p{L}*|nagra\\p{L}*|film\\p{L}*|wizerun\\p{L}*)",
+        "(?:wy)?łudzi\\p{L}*",
+        "na\\s+wnuczka",
+        "włama\\p{L}*",
+        "okradzi\\p{L}*|okradł\\p{L}*"
     ].join("|") +
     ")(?![\\p{L}])", "iu");
 // Messages are often typed without Polish letters ("pobil mnie sasiad"): the same

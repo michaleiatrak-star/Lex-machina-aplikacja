@@ -14,14 +14,22 @@ export function plainLetters(text) {
 // the plain one and than any other accented spelling of the same plain word.
 const DOMINANCE = 3;
 export function buildAccentMap(texts) {
+    // Single words, and pairs of words: "ocen" is a word of its own ("ocen" of "ocena"),
+    // "ocen szanse" is only "oceń szanse".
     const counts = new Map();
+    const count = (spelled) => {
+        const plain = plainLetters(spelled);
+        const spellings = counts.get(plain) ?? new Map();
+        spellings.set(spelled, (spellings.get(spelled) ?? 0) + 1);
+        counts.set(plain, spellings);
+    };
     for (const text of texts) {
-        for (const raw of text.toLocaleLowerCase("pl").match(/\p{L}{2,}/gu) ?? []) {
-            const plain = plainLetters(raw);
-            const spellings = counts.get(plain) ?? new Map();
-            spellings.set(raw, (spellings.get(raw) ?? 0) + 1);
-            counts.set(plain, spellings);
-        }
+        const words = text.toLocaleLowerCase("pl").match(/\p{L}{2,}/gu) ?? [];
+        words.forEach((word, index) => {
+            count(word);
+            if (index > 0)
+                count(`${words[index - 1]} ${word}`);
+        });
     }
     const map = new Map();
     for (const [plain, spellings] of counts) {
@@ -39,10 +47,27 @@ export function buildAccentMap(texts) {
 export function restoreAccents(text, map) {
     if (POLISH.test(text) || map.size === 0)
         return text;
-    return text.replace(/\p{L}{2,}/gu, (word) => {
-        const accented = map.get(word.toLocaleLowerCase("pl"));
-        if (!accented)
-            return word;
-        return word[0] === word[0].toLocaleUpperCase("pl") ? accented[0].toLocaleUpperCase("pl") + accented.slice(1) : accented;
+    const words = [...text.matchAll(/\p{L}{2,}/gu)];
+    const spelled = words.map((match) => map.get(match[0].toLocaleLowerCase("pl")) ?? null);
+    // A pair decides a word its single spelling leaves open.
+    for (let index = 1; index < words.length; index += 1) {
+        const pair = map.get(`${words[index - 1][0]} ${words[index][0]}`.toLocaleLowerCase("pl"));
+        if (!pair)
+            continue;
+        const [first, second] = pair.split(" ");
+        spelled[index - 1] ??= first;
+        spelled[index] ??= second;
+    }
+    let result = "";
+    let at = 0;
+    words.forEach((match, index) => {
+        const word = match[0];
+        const accented = spelled[index];
+        result += text.slice(at, match.index) + (accented ? keepCase(word, accented) : word);
+        at = match.index + word.length;
     });
+    return result + text.slice(at);
+}
+function keepCase(word, accented) {
+    return word[0] === word[0].toLocaleUpperCase("pl") ? accented[0].toLocaleUpperCase("pl") + accented.slice(1) : accented;
 }

@@ -23,7 +23,7 @@ const LEGAL_STEMS = [
   "umow", "kontrakt", "aneks", "regulamin", "ugod", "wypowiedz", "kara", "kary", "karn", "grzywn", "mandat", "odszkodowa",
   "zadoscuczyn", "roszczen", "dlug(?!o\\b|osc|ie\\b|ich\\b|im\\b|iego|iej|a\\b)", "dluz", "wierzyc", "zaplat", "faktur", "windyk", "egzekuc", "zajeci", "zajal",
   "spadk", "spadek", "testament", "zachow", "dziedzicz", "rozwod", "alimen", "opiek", "wladz", "separac", "malzen",
-  "najem", "najm", "wynajm", "czynsz", "kaucj", "lokator", "eksmis", "wlasciciel", "wlasnos", "nieruchomos", "dzialk",
+  "najem", "najm", "wynajm", "wynajem", "czynsz", "kaucj", "lokator", "eksmis", "wlasciciel", "wlasnos", "nieruchomos", "dzialk", "dzialc", "bez (?:mojej|jego|jej|naszej) wiedzy",
   "sasiad", "pracodaw", "pracowni", "zwolni", "urlop", "wynagrodz", "zus", "krus", "emerytur", "rent", "zasil", "swiadcze",
   "urzad", "urzedni", "decyzj", "organ", "gmin", "wojewod", "starost", "burmistrz", "wojt", "skarbow", "podat", "vat", "pit", "cit",
   "polic(?!z)", "prokurat", "przestep", "wykrocz", "oszu", "krad", "pobi", "grozi", "nek", "zglos", "zawiadom",
@@ -48,7 +48,7 @@ const LEGAL_LEXICON = new RegExp(`(?<![a-z0-9])(?:${LEGAL_STEMS.join("|")})`, "u
 
 // Questions about rights and duties, whatever the topic.
 const LEGAL_INTENT =
-  /(?<![a-z])(?:czy (?:moge|mozna|musze|trzeba|wolno|mam prawo|grozi|jestem zobowiazan|to legalne|to zgodne)|co mi grozi|co (?:moge|mam) zrobic|od czego zaczac|jakie mam (?:prawa|szanse|opcje)|kto (?:placi|odpowiada|ponosi)|ile (?:mam czasu|mam dni)|jak (?:sie odwolac|zaskarzyc|dochodzic|odzyskac (?:pieniadz|kaucj|dlug|nalezn|zaplat|wklad|depozyt|prawo|samoch|mieszk)|zglosic|wypowiedziec|rozwiazac umowe))/u;
+  /(?<![a-z])(?:czy (?:(?:cos|jakos|w ogole|tu|tutaj|teraz|wtedy|nadal|jeszcze) )*(?:moge|mozna|musze|trzeba|wolno|mam prawo|grozi|jestem zobowiazan|to legalne|to zgodne|da sie)|co (?:(?:mi|w tej sytuacji|teraz) )?grozi|cos (?:moge|mozna|da sie)|co (?:(?:moge|mam|mozna|powinienem|powinnam|nalezy) )(?:z tym )?(?:zrobic|robic)|od czego zaczac|jakie mam (?:prawa|szanse|opcje|mozliwosci)|kto (?:placi|odpowiada|ponosi|zaplaci)|ile (?:mam czasu|mam dni)|do kogo (?:sie )?(?:zwrocic|zglosic|isc)|gdzie (?:sie )?(?:zglosic|zwrocic|to zglosic|zlozyc)|jak (?:to )?(?:zalatwic|rozwiazac|sie bronic|sie odwolac|zaskarzyc|dochodzic|odzyskac (?:pieniadz|kaucj|dlug|nalezn|zaplat|wklad|depozyt|prawo|samoch|mieszk)|zglosic|wypowiedziec|rozwiazac umowe))/u;
 
 // One everyday word of a domain's routing row ("pies", "student", "zamówienie",
 // "fotowoltaika") names a topic, not yet a matter: alone it does not make the
@@ -81,7 +81,7 @@ function hasLegalSignal(text: string, flash: FlashRoute[]): boolean {
 // stays legal.
 const OPENING = /^(?:(?:hej|hejka|czesc|witam|witaj|dzien dobry|dobry wieczor|siema|halo)[\s,!.]*)?(?:(?:mam (?:takie )?pytanie|pytanie|prosba)\s*[:,-]?\s*)?/u;
 const GENERAL_REQUEST =
-  /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|masz|w co|plan|cwiczenia|przepis na)\b/u;
+  /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|podpowiesz|podpowiedz|doradz|doradzisz|podziel|pomnoz|dodaj|odejmij|naucz|pokaz|wymysl|masz|w co|plan|cwiczenia|przepis na)\b/u;
 
 /** True only for a general request with no legal signal, in a thread with none either. */
 export function isNonLegalMessage(query: string, flash: FlashRoute[]): boolean {
