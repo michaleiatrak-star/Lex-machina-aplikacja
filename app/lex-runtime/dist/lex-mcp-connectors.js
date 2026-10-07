@@ -25,6 +25,10 @@ export const LEX_MCP_SERVER_IDS = [
     "sudop",
     "uodo"
 ];
+// Ten sam UA, którego serwer SN używa do zapytań snproxy (sn-mcp-server.js). Sonda musi
+// wysłać go, gdy sesja nie zapamiętała UA, inaczej Incapsula może potraktować ją inaczej.
+const SN_PROBE_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 export const LEX_MCP_CATALOG = [
     { id: "isap", group: "Akty prawne i orzecznictwo", label: "ISAP/ELI — tekst aktu i przepisu (Sejm ELI)" },
     { id: "eurlex", group: "Akty prawne i orzecznictwo", label: "EUR-Lex + TSUE — akty UE, status, wyroki" },
@@ -325,6 +329,45 @@ export class LexMcpConnectorStore {
     }
     clearSnSession() {
         fs.rmSync(this.snSessionFile, { force: true });
+    }
+    // Lekka sonda snproxy z podanymi ciasteczkami — potwierdza, że weryfikacja sn.pl przeszła
+    // (brak captchy albo rozwiązana przez użytkownika) DOKŁADNIE tak, jak późniejsze zapytania
+    // serwera SN: ten sam PROXY, UA i task. JSON = gotowe; 403/HTML (strona wyzwania Incapsuli) =
+    // wciąż blokada. Pozwala aplikacji ponowić zapytanie samej, bez ręcznego „Gotowe".
+    async probeSnSession(rawCookie, rawUserAgent, fetchImpl = fetch) {
+        const cookie = rawCookie
+            .split(";")
+            .map((part) => part.trim())
+            .filter((part) => /^[A-Za-z0-9_.-]{1,128}=[^;\r\n]{0,4096}$/.test(part))
+            .join("; ");
+        if (!cookie)
+            return { ready: false, status: 0 };
+        const userAgent = /^Mozilla\/5\.0 [\x20-\x7e]{10,400}$/.test(rawUserAgent)
+            ? rawUserAgent
+            : SN_PROBE_USER_AGENT;
+        const url = "https://www.sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json" +
+            "&task=searchOrzeczenia&sygnatura=" +
+            encodeURIComponent("III CZP 25/11");
+        try {
+            const resp = await fetchImpl(url, {
+                headers: { cookie, "user-agent": userAgent, accept: "application/json" },
+                signal: AbortSignal.timeout(15000)
+            });
+            if (resp.status !== 200)
+                return { ready: false, status: resp.status };
+            const body = await resp.text();
+            // Incapsula serwuje stronę wyzwania jako HTML 200; JSON = snproxy odpowiedział.
+            try {
+                JSON.parse(body);
+                return { ready: true, status: 200 };
+            }
+            catch {
+                return { ready: false, status: 200 };
+            }
+        }
+        catch {
+            return { ready: false, status: 0 };
+        }
     }
     readState() {
         try {

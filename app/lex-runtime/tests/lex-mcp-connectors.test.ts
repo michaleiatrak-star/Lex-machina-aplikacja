@@ -145,6 +145,32 @@ describe("LexMcpConnectorStore", () => {
     expect(connectors.status().sn.sessionSavedAt).toBeNull();
   });
 
+  it("probes sn.pl snproxy: JSON = ready (session persisted), 403/HTML = not ready", async () => {
+    const connectors = store();
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+    const seen: { url: string; headers: Record<string, string> }[] = [];
+    const fetchWith = (status: number, body: string): typeof fetch =>
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        seen.push({ url: String(input), headers: (init?.headers ?? {}) as Record<string, string> });
+        return new Response(body, { status });
+      }) as typeof fetch;
+
+    expect(await connectors.probeSnSession("", ua)).toEqual({ ready: false, status: 0 });
+
+    const blocked = await connectors.probeSnSession("incap_ses_1=abc", ua, fetchWith(403, "<html>Incapsula</html>"));
+    expect(blocked.ready).toBe(false);
+    expect(connectors.status().sn.sessionSavedAt).toBeNull();
+
+    const htmlChallenge = await connectors.probeSnSession("incap_ses_1=abc", ua, fetchWith(200, "<html>challenge</html>"));
+    expect(htmlChallenge).toEqual({ ready: false, status: 200 });
+
+    const ready = await connectors.probeSnSession("incap_ses_1=abc; visid_incap_1=def", ua, fetchWith(200, "{\"data\":[]}"));
+    expect(ready).toEqual({ ready: true, status: 200 });
+    expect(seen.at(-1)!.url).toContain("plugin=snproxy");
+    expect(seen.at(-1)!.headers.cookie).toBe("incap_ses_1=abc; visid_incap_1=def");
+    expect(seen.at(-1)!.headers["user-agent"]).toBe(ua);
+  });
+
   it("turns on Node's env proxy for connectors when a proxy is configured", () => {
     const connectors = store();
     const saved = { HTTPS_PROXY: process.env.HTTPS_PROXY, https_proxy: process.env.https_proxy, HTTP_PROXY: process.env.HTTP_PROXY, http_proxy: process.env.http_proxy, NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY };

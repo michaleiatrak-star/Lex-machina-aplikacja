@@ -1562,6 +1562,8 @@ fn is_mcp_route(method: &str, path: &str) -> bool {
         ["api", "mcp-search", "source-preview"] => method == "POST",
         // Sesja sn.pl z weryfikacji (captcha) wykonanej przez użytkownika w oknie sn.pl.
         ["api", "mcp-search", "sn-session"] => matches!(method, "PUT" | "DELETE"),
+        // Auto-„Gotowe”: sonda snproxy z ciasteczek okna sn.pl (gdy przeszło — zapisuje sesję).
+        ["api", "mcp-search", "sn-session", "probe"] => method == "POST",
         _ => false,
     }
 }
@@ -2143,6 +2145,9 @@ mod tests {
         assert!(route_allowed("POST", "/api/mcp-search/query"));
         assert!(route_allowed("POST", "/api/mcp-search/source-preview"));
         assert!(!route_allowed("GET", "/api/mcp-search/source-preview"));
+        assert!(route_allowed("PUT", "/api/mcp-search/sn-session"));
+        assert!(route_allowed("POST", "/api/mcp-search/sn-session/probe"));
+        assert!(!route_allowed("GET", "/api/mcp-search/sn-session/probe"));
 
         assert!(!route_allowed("DELETE", "/api/admin/mcp-connectors"));
         assert!(!route_allowed("GET", "/api/admin/mcp-connectors/nbp/install"));
