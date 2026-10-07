@@ -59,18 +59,25 @@ Trzy filary odróżniają ją od zwykłego czatu z LLM:
 
 ## Architektura
 
-```
-lex-desktop (Tauri / Rust)   okno aplikacji; uruchamia runtime; granica zaufania
-      |                      (proxy z allowlistą tras i nagłówków X-Lex-*)
-      |  HTTP 127.0.0.1
-lex-runtime (Node 24, TS)    API, sesje, weryfikacja, sprawy, szyfrowanie,
-      |                      orkiestracja modeli, narzędzia prawne, konserwacja
-      |  stdio / named pipe
-workery Python               privacy (Morfeusz2/SGJP, Stanza NER), ocr (PaddleOCR),
-                             storage (odczyt/zapis Office)
-lex-mcp.mjs                  serwery MCP źródeł prawa
-llama.cpp                    modele lokalne (opcjonalnie)
-lex-web (React)              interfejs: Start, Sprawa, Czat, Kancelaria, Ustawienia
+```mermaid
+flowchart TB
+    subgraph PC["Komputer użytkownika"]
+        WEB["lex-web (React)<br/>Start, Sprawa, Czat, Kancelaria, Ustawienia"]
+        DESK["lex-desktop (Tauri, Rust)<br/>okno, uruchamia runtime, granica zaufania:<br/>allowlista tras, nagłówki X-Lex-*"]
+        RT["lex-runtime (Node 24, TypeScript)<br/>API, sesje, sprawy, szyfrowanie, anonimizacja,<br/>modele, narzędzia prawne, bramki, konserwacja"]
+        PY["workery Python<br/>privacy (Morfeusz2/SGJP, Stanza NER),<br/>ocr (PaddleOCR), storage (Office)"]
+        MCP["lex-mcp.mjs<br/>serwery MCP źródeł prawa"]
+        LLM["llama.cpp (llama-server)<br/>model lokalny, opcjonalnie"]
+        WEB -->|"widok w oknie"| DESK
+        DESK -->|"proxy HTTP 127.0.0.1"| RT
+        RT -->|"procesy potomne"| PY
+        RT -->|"stdio"| MCP
+        RT -->|"HTTP 127.0.0.1"| LLM
+    end
+    SRC[("Źródła urzędowe<br/>ISAP/ELI, SAOS, CBOSA, SN, TK, EUR-Lex, KRS…")]
+    CLOUD[("Dostawcy modeli w chmurze<br/>tylko tekst po anonimizacji")]
+    MCP -->|"HTTPS"| SRC
+    RT -->|"HTTPS"| CLOUD
 ```
 
 | Warstwa | Katalog | Technologia | Rola |
