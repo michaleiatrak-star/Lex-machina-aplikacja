@@ -145,6 +145,24 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             sendConnectorError(res, error);
         }
     });
+    // Auto-„Gotowe”: aplikacja sonduje snproxy z bieżącymi ciasteczkami okna sn.pl. Gdy przeszło
+    // (brak captchy albo rozwiązana), zapisujemy sesję i zwracamy ready:true — aplikacja ponawia
+    // zapytanie bez ręcznego kliknięcia. Ciasteczek nie zwracamy ani nie logujemy.
+    app.post("/api/mcp-search/sn-session/probe", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const cookie = typeof req.body?.cookie === "string" ? req.body.cookie : "";
+        const userAgent = typeof req.body?.userAgent === "string" ? req.body.userAgent : "";
+        try {
+            const { ready } = await connectors.probeSnSession(cookie, userAgent);
+            if (ready)
+                connectors.setSnSession(cookie, userAgent);
+            res.json({ ready });
+        }
+        catch (error) {
+            sendConnectorError(res, error);
+        }
+    });
     app.delete("/api/mcp-search/sn-session", (req, res) => {
         if (!requireUser(req, res, authService))
             return;

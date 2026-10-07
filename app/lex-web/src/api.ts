@@ -3638,6 +3638,18 @@ export function clearSnSession(): Promise<{ cleared: boolean }> {
   return json("/api/mcp-search/sn-session", { method: "DELETE" });
 }
 
+// Auto-„Gotowe”: sonda snproxy z ciasteczek okna sn.pl. ready:true = weryfikacja przeszła
+// (brak captchy albo rozwiązana) i runtime zapisał sesję — można ponowić zapytanie.
+export function probeSnSession(
+  cookie: string,
+  userAgent: string
+): Promise<{ ready: boolean }> {
+  return json("/api/mcp-search/sn-session/probe", {
+    method: "POST",
+    body: JSON.stringify({ cookie, userAgent })
+  });
+}
+
 export function clearCeidgApiKey(): Promise<{ status: McpConnectorStatusResponse }> {
   return json(
     "/api/admin/mcp-connectors/ceidg/key",

@@ -196,9 +196,9 @@ async fn sn_verification_open(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-// Async: na Windows odczyt ciasteczek WebView2 w komendzie synchronicznej blokuje się (wry#583).
-#[tauri::command]
-async fn sn_verification_finish(app: tauri::AppHandle) -> Result<String, String> {
+// Odczyt ciasteczek okna sn.pl jako nagłówek Cookie. Async: na Windows odczyt WebView2
+// w komendzie synchronicznej blokuje się (wry#583).
+fn sn_cookie_header(app: &tauri::AppHandle) -> Result<String, String> {
     let window = app
         .get_webview_window(SN_VERIFICATION_LABEL)
         .ok_or_else(|| "SN_VERIFICATION_WINDOW_MISSING".to_string())?;
@@ -208,14 +208,38 @@ async fn sn_verification_finish(app: tauri::AppHandle) -> Result<String, String>
     let cookies = window
         .cookies_for_url(url)
         .map_err(|_| "SN_VERIFICATION_COOKIES_FAILED".to_string())?;
-    let header = cookie_header(
+    Ok(cookie_header(
         cookies.iter().map(|cookie| (cookie.name(), cookie.value())),
-    );
-    let _ = window.close();
+    ))
+}
+
+// Auto-„Gotowe”: odczyt ciasteczek BEZ zamykania okna — aplikacja sonduje nimi snproxy
+// i dopiero po potwierdzeniu zamyka okno (sn_verification_close). Pusty wynik = brak sesji.
+#[tauri::command]
+async fn sn_verification_cookies(app: tauri::AppHandle) -> Result<String, String> {
+    sn_cookie_header(&app)
+}
+
+// Ręczne „Gotowe”: odczyt ciasteczek i zamknięcie okna (zapas, gdy auto-sonda nie zdążyła).
+#[tauri::command]
+async fn sn_verification_finish(app: tauri::AppHandle) -> Result<String, String> {
+    let header = sn_cookie_header(&app)?;
+    if let Some(window) = app.get_webview_window(SN_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
     if header.is_empty() {
         return Err("SN_VERIFICATION_NO_COOKIES".to_string());
     }
     Ok(header)
+}
+
+// Zamknięcie okna sn.pl po udanej auto-sondzie (sesja już zapisana po stronie runtime).
+#[tauri::command]
+async fn sn_verification_close(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(SN_VERIFICATION_LABEL) {
+        let _ = window.close();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -320,7 +344,9 @@ pub fn run() {
                 open_workspace_file,
                 install_application_update,
                 sn_verification_open,
-                sn_verification_finish
+                sn_verification_cookies,
+                sn_verification_finish,
+                sn_verification_close
             ]
         )
         .register_asynchronous_uri_scheme_protocol(

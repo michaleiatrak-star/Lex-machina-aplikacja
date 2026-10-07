@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ApiError, isDesktopShell, saveSnSession } from "./api.js";
+import { useEffect, useRef, useState } from "react";
+import { ApiError, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
 
 function desktopInvoke():
   | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
@@ -46,10 +46,54 @@ export function SnVerification({
   const invoke = desktopInvoke();
   const [stage, setStage] = useState<"idle" | "open" | "saving">("idle");
   const [message, setMessage] = useState("");
+  const doneRef = useRef(false);
+
+  // Auto-„Gotowe”: dopóki okno sn.pl jest otwarte, co kilka sekund sondujemy snproxy
+  // ciasteczkami okna. Gdy przeszło (brak captchy albo rozwiązana przez użytkownika),
+  // zamykamy okno i ponawiamy zapytanie bez ręcznego kliknięcia.
+  useEffect(() => {
+    if (!invoke || stage !== "open") return;
+    let cancelled = false;
+    let tries = 0;
+    async function tick(): Promise<void> {
+      if (cancelled || doneRef.current) return;
+      tries += 1;
+      try {
+        const cookie = String(await invoke!("sn_verification_cookies"));
+        if (cookie) {
+          const { ready } = await probeSnSession(cookie, navigator.userAgent);
+          if (ready && !cancelled && !doneRef.current) {
+            doneRef.current = true;
+            try {
+              await invoke!("sn_verification_close");
+            } catch {
+              // okno mogło już zostać zamknięte
+            }
+            setStage("idle");
+            onVerified();
+            return;
+          }
+        }
+      } catch {
+        // okno zamknięte albo ciasteczka jeszcze niegotowe — próbujemy dalej do limitu
+      }
+      if (tries >= 45) {
+        setMessage("Weryfikacja trwa — po rozwiązaniu zadania w oknie sn.pl kliknij „Gotowe”.");
+      }
+    }
+    const timer = window.setInterval(() => void tick(), 4000);
+    const first = window.setTimeout(() => void tick(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.clearTimeout(first);
+    };
+  }, [invoke, stage, onVerified]);
 
   async function open(): Promise<void> {
     if (!invoke) return;
     setMessage("");
+    doneRef.current = false;
     try {
       await invoke("sn_verification_open");
       setStage("open");
@@ -59,12 +103,13 @@ export function SnVerification({
   }
 
   async function finish(): Promise<void> {
-    if (!invoke) return;
+    if (!invoke || doneRef.current) return;
     setStage("saving");
     setMessage("");
     try {
       const cookie = String(await invoke("sn_verification_finish"));
       await saveSnSession(cookie, navigator.userAgent);
+      doneRef.current = true;
       setStage("idle");
       onVerified();
     } catch (failure) {
@@ -85,7 +130,7 @@ export function SnVerification({
       {invoke ? (
         <>
           <p className="field-help">
-            1. Otwórz okno sn.pl i rozwiąż captcha (aż zobaczysz wyszukiwarkę orzeczeń). 2. Kliknij „Gotowe” — aplikacja zapisze sesję tylko dla konektora SN i ponowi zapytanie.
+            1. Otwórz okno sn.pl. Jeśli nie ma captchy, aplikacja sama przeszuka wyniki. 2. Jeśli pojawi się zadanie — rozwiąż je w oknie (aż zobaczysz wyszukiwarkę orzeczeń); aplikacja wykryje to i ponowi zapytanie automatycznie. Możesz zminimalizować okno, ale nie zamykaj go, zanim zobaczysz wynik. „Gotowe” jest potrzebne tylko, gdyby wykrycie się nie powiodło.
           </p>
           <div className="chat-form-row compact">
             <button type="button" className="chat-secondary-action" disabled={stage === "saving"} onClick={() => void open()}>
