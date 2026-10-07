@@ -1357,11 +1357,11 @@
 }
 
 .chat-settings-auth {
-  order: 2;
+  order: 3;
 }
 
 .chat-settings-advanced {
-  order: 3;
+  order: 4;
 }
 
 .chat-settings-field-grid {
@@ -2083,6 +2083,7 @@
 
 .chat-settings-embedded-wide {
   grid-column: 1 / -1;
+  order: 2;
   min-width: 0;
 }
 
