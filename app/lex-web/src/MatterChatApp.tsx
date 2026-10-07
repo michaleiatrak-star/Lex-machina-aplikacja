@@ -317,14 +317,11 @@ export function provisionFailureText(error: string): string {
   return `Nie udało się przygotować klienta: ${error || "nieznany błąd"}.`;
 }
 
+// Kolejność w selektorze: modele główne (konto/API) u góry, lokalna AI na dole.
 const PRIMARY_MODEL_SOURCES: Array<{
   id: PrimaryModelSource;
   label: string;
 }> = [
-  {
-    id: "local",
-    label: "Lokalne"
-  },
   {
     id: "openai-account",
     label: "ChatGPT · konto"
@@ -357,6 +354,10 @@ const PRIMARY_MODEL_SOURCES: Array<{
   {
     id: "google",
     label: "Google Gemini · API"
+  },
+  {
+    id: "local",
+    label: "Lokalne"
   }
 ];
 

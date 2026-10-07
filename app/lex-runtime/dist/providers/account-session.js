@@ -679,6 +679,20 @@ function privateClaudeExecutable() {
                 : "claude")
             : null));
 }
+// Klient PRZYPIĘTY (pobierany przez Lex) dla danego dostawcy — bez klienta
+// systemowego. Status connect opiera na nim `installed`, więc Claude i ChatGPT
+// pobierają własnego klienta tak samo jak Grok i Gemini (ten sam katalog, ta sama
+// wersja), zamiast polegać na przypadkowej instalacji systemowej.
+export function pinnedAccountClientExecutable(provider) {
+    if (provider === "openai")
+        return privateCodexExecutable();
+    if (provider === "anthropic")
+        return privateClaudeExecutable();
+    if (provider === "google" || provider === "xai") {
+        return optionalAccountClientExecutable(provider);
+    }
+    return null;
+}
 export function codexExecArgs(workDir, outputPath, model = codexAccountModel(), tail = ["-"]) {
     return [
         "exec",
@@ -1259,11 +1273,7 @@ async function provisionPinnedAccountClientOnce(provider) {
     if (result.code !== 0) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${npmFailureDetail(result.stderr)}`);
     }
-    const installed = provider === "openai"
-        ? privateCodexExecutable()
-        : provider === "google" || provider === "xai"
-            ? optionalAccountClientExecutable(provider)
-            : privateClaudeExecutable();
+    const installed = pinnedAccountClientExecutable(provider);
     if (!installed) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`);
     }
@@ -2039,7 +2049,11 @@ export class AccountSessionManager {
     }
     async status(provider) {
         const command = CLI_NAMES[provider];
-        const executable = await resolveAccountExecutable(provider);
+        // Status opiera `installed` na kliencie PRZYPIĘTYM (nie systemowym) dla
+        // wszystkich dostawców — connect pobiera wtedy klienta Lex dla Claude i
+        // ChatGPT tak samo jak dla Grok i Gemini. Klient systemowy pozostaje jedynie
+        // awaryjnym rozwiązaniem w ścieżce wykonania (ensureAccountExecutable).
+        const executable = pinnedAccountClientExecutable(provider);
         if (!executable) {
             return {
                 provider,

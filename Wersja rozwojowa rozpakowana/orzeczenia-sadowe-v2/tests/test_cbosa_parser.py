@@ -143,6 +143,18 @@ def test_repeated_pagination_fails_closed():
     r=collect_search_doc_ids(first,lambda page:repeated)
     assert r.status == VerificationStatus.OUT_OF_SCOPE
 
+def test_extra_doc_links_beyond_counter_are_candidates_not_drift():
+    # Strona wyników niesie linki /doc/ spoza trafień (orzeczenia powiązane, nawigacja),
+    # więc unikalnych ID bywa więcej niż licznik N. To dodatkowi kandydaci, nie drift:
+    # exact-match + fail-closed odczyt dokumentu decydują. Wcześniej fałszywe OUT_OF_SCOPE.
+    s = search(1, [("AAAAAAAAAA", "hit"), ("BBBBBBBBBB", "powiazane")])
+    r = verify_search_results(
+        s, "II FSK 100/24",
+        lambda doc_id: doc() if doc_id == "AAAAAAAAAA" else doc("III FSK 100/24"),
+    )
+    assert r.status == VerificationStatus.FOUND
+    assert r.judgment is not None and r.judgment.case_number == "II FSK 100/24"
+
 def test_pagination_collects_unique_docs():
     first=search(11,[(f"A{i:09}","x") for i in range(10)])
     second=search(11,[("B000000000","last")])
