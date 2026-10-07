@@ -119,6 +119,38 @@ describe("core law index", () => {
     expect(acts.find((act) => act.eli === "DU/2013/1373")?.labels).toEqual([]);
   });
 
+  it("adds amendments from a domain source registry, never its historical texts, and reloads on change", () => {
+    const root = corpus();
+    const registry = path.join(root, "dr-03-karne", "references", "insolvency");
+    fs.mkdirSync(registry, { recursive: true });
+    const sources = path.join(registry, "sources.json");
+    fs.writeFileSync(
+      sources,
+      JSON.stringify({
+        sources: [
+          { id: "amendment-2026-340", eli: "DU/2026/340", role: "nowelizacja" },
+          { id: "amendment-2026-421", eli: "DU/2026/421", role: "nowelizacja" },
+          { id: "original-prup", eli: "DU/2003/535", role: "historyczny_nie_stosuj_jako_biezacy" },
+          { id: "bez-eli", role: "nowelizacja" }
+        ]
+      })
+    );
+    const acts = extractCoreActs(root);
+    const added = acts.find((act) => act.eli === "DU/2026/340");
+    expect(added).toMatchObject({ consolidated: false, labels: [], domains: ["dr-03-karne"] });
+    expect(added?.notes).toEqual(["references/insolvency/sources.json: nowelizacja (amendment-2026-340)"]);
+    expect(acts.filter((act) => act.eli === "DU/2026/421")).toHaveLength(1);
+    expect(acts.map((act) => act.eli)).not.toContain("DU/2003/535");
+
+    const index = new CoreLawIndex(tempDir("lex-core-registry-"));
+    index.load(root);
+    const data = JSON.parse(fs.readFileSync(sources, "utf8")) as { sources: unknown[] };
+    data.sources.push({ id: "amendment-2026-1206", eli: "DU/2026/1206", role: "nowelizacja" });
+    fs.writeFileSync(sources, JSON.stringify(data));
+    fs.utimesSync(sources, new Date(), new Date(Date.now() + 5_000));
+    expect(index.reloadMapsIfChanged()).toEqual(["DU/2026/1206"]);
+  });
+
   it("collects every Dz.U. act from the domain maps and the routing map", () => {
     const acts = extractCoreActs(corpus());
     expect(acts.map((act) => act.eli)).toEqual([
