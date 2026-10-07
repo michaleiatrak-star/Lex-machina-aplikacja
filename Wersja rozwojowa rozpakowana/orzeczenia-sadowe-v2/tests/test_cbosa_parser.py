@@ -175,6 +175,31 @@ def test_content_length_mismatch_fails_closed():
     assert r.status == VerificationStatus.OUT_OF_SCOPE
 
 
+def test_missing_sad_and_data_are_best_effort_not_out_of_scope():
+    # zgł. 2026-10-07: karta bez pól "Sąd"/"Data orzeczenia" (inny układ) dawała fałszywe
+    # OUT_OF_SCOPE mimo realnego orzeczenia. Sentencja + sygnatura + zamknięty HTML wystarczą.
+    html = doc()
+    html = html.replace(
+        '<tr><td class="lista-label">Sąd</td><td class="info-list-value">Naczelny Sąd Administracyjny</td></tr>', ""
+    ).replace(
+        '<tr><td class="lista-label">Data orzeczenia</td><td class="info-list-value">2026-01-10</td></tr>', ""
+    )
+    d = parse_cbosa_document(html, "AAAAAAAAAA")
+    assert d.case_number == "II FSK 100/24"
+    assert d.court is None
+    assert d.judgment_date is None
+    assert set(d.missing_metadata) == {"Sąd", "Data orzeczenia"}
+    assert "Oddala skargę kasacyjną" in (d.operative_part or "")
+    r = verify_search_results(search(1, [("AAAAAAAAAA", "one")]), "II FSK 100/24", lambda _: html)
+    assert r.status == VerificationStatus.FOUND
+
+
+def test_missing_sentencja_still_fails_closed():
+    html = doc().replace('<div class="lista-label">Sentencja</div>', '<div class="lista-label">Inne</div>')
+    with pytest.raises(ValueError, match="brak Sentencji"):
+        parse_cbosa_document(html, "AAAAAAAAAA")
+
+
 def test_value_cell_with_nested_table_keeps_judgment_date():
     # CBOSA: date and finality in a table nested in the value cell.
     html = doc().replace(

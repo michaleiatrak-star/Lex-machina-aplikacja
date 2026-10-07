@@ -2397,6 +2397,7 @@ export function codexStoredAuthIsChatGpt(
       JSON.parse(raw) as {
         auth_mode?: unknown;
         OPENAI_API_KEY?: unknown;
+        tokens?: unknown;
       };
     const mode =
       typeof payload.auth_mode ===
@@ -2405,19 +2406,45 @@ export function codexStoredAuthIsChatGpt(
             .trim()
             .toLowerCase()
         : "";
-    const storedApiKey =
-      typeof payload.OPENAI_API_KEY ===
-        "string" &&
-      payload.OPENAI_API_KEY
-        .trim().length > 0;
-    return (
-      !storedApiKey &&
-      (
-        mode === "chatgpt" ||
-        mode === "chatgpt_oauth" ||
-        mode === "chatgpt-oauth"
-      )
+    // Oficjalny klient Codex zapisuje w auth.json dla logowania ChatGPT obiekt
+    // `tokens` (OAuth: id_token/access_token/refresh_token) i NIE zapisuje pola
+    // `auth_mode` (to pojęcie wyliczane w kodzie, nie utrwalane). Rozpoznanie po
+    // samym `auth_mode === "chatgpt"` dawało więc fałszywe „niezalogowany" po
+    // udanym logowaniu przez przeglądarkę (zgł. użytkownika 2026-10-07). Token to
+    // dowód logowania konta; tryb klucza API (sam OPENAI_API_KEY, bez tokenów)
+    // subskrypcją nie jest.
+    const tokens =
+      payload.tokens &&
+      typeof payload.tokens === "object" &&
+      !Array.isArray(payload.tokens)
+        ? (payload.tokens as Record<string, unknown>)
+        : null;
+    const niepustyNapis = (v: unknown): boolean =>
+      typeof v === "string" && v.trim().length > 0;
+    const hasOAuthTokens = Boolean(
+      tokens &&
+        (
+          niepustyNapis(tokens.access_token) ||
+          niepustyNapis(tokens.id_token) ||
+          niepustyNapis(tokens.refresh_token)
+        )
     );
+    const explicitChatGpt =
+      mode === "chatgpt" ||
+      mode === "chatgpt_oauth" ||
+      mode === "chatgpt-oauth";
+    const explicitApiKey =
+      mode === "api" ||
+      mode === "apikey" ||
+      mode === "api_key" ||
+      mode === "api-key";
+    const storedApiKey =
+      niepustyNapis(payload.OPENAI_API_KEY);
+    // Tryb klucza API bez tokenów OAuth → nie jest logowaniem ChatGPT.
+    if ((explicitApiKey || storedApiKey) && !hasOAuthTokens) {
+      return false;
+    }
+    return hasOAuthTokens || explicitChatGpt;
   } catch {
     return false;
   }
@@ -2497,14 +2524,14 @@ async function assertSubscriptionAccount(
           abortSignal
         );
 
+  // auth.json z tokenami OAuth jest dowodem logowania ChatGPT niezależnie od kodu
+  // wyjścia `codex login status` (różne wersje klienta potrafią zwrócić ≠0 mimo
+  // ważnej sesji). Detektor jest ścisły (wymaga tokenów, odrzuca sam klucz API).
   const authenticated =
     openAiChatGptAuthenticated(
       result
     ) ||
-    (
-      result.code === 0 &&
-      await storedCodexChatGptAuthPresent()
-    );
+    await storedCodexChatGptAuthPresent();
 
   if (!authenticated) {
     throw new Error(
@@ -3436,10 +3463,7 @@ export class AccountSessionManager {
             openAiChatGptAuthenticated(
               result
             ) ||
-            (
-              result.code === 0 &&
-              await storedCodexChatGptAuthPresent()
-            )
+            await storedCodexChatGptAuthPresent()
           )
         : provider ===
             "anthropic"
