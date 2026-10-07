@@ -175,6 +175,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX
 } from "../skill-selection.js";
 import { isTrivialChatCommand } from "../execution-engine.js";
+import { isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
 import {
   assessMatterComplexity,
   describeMatterComplexity
@@ -1319,6 +1320,46 @@ export function applyTrivialChatGate(
       : [...registry.skills.keys()]
           .filter((name) => name.startsWith("dr-"))
           .sort()[0];
+  if (!domain) return false;
+  request.primarySkill = domain;
+  request.query =
+    SKILL_SELECTION_ENVELOPE_PREFIX +
+    " " +
+    JSON.stringify({ auto: false, manual: [], workflow: null }) +
+    "\n" +
+    envelope.query;
+  request.conversationalOnly = true;
+  delete request.modelSelectsSkills;
+  return true;
+}
+
+/**
+ * Legal gate for chat, beyond trivial commands: a general request with no legal signal
+ * ("jak upiec sernik", "napisz funkcję w Pythonie") in AUTO, without documents, case
+ * material, a chosen skill or a pinned workflow, is answered in the conversational
+ * lane like a trivial one (turn-gate.ts; doubt stays legal). Every provider: an API
+ * model no longer reads the router and the mandatory path for it, a local model no
+ * longer pays for a routing pass.
+ */
+export function applyNonLegalChatGate(
+  registry: LexSkillRegistry,
+  request: SessionExecutionRequest,
+  attachmentCount: number,
+  caseMaterial: boolean
+): boolean {
+  const envelope = parseSkillSelectionEnvelope(request.query);
+  if (
+    attachmentCount > 0 ||
+    caseMaterial ||
+    request.primarySkill !== "AUTO" ||
+    !envelope.automatic ||
+    envelope.manualSkills.length > 0 ||
+    envelope.workflowExecutionSkill !== null ||
+    !isNonLegalMessage(envelope.query, registryFlashRoutes(registry))
+  ) {
+    return false;
+  }
+  const domain = [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
   if (!domain) return false;
   request.primarySkill = domain;
   request.query =
@@ -8889,6 +8930,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         options.registry,
         request,
         attachments.length + firmTemplates.length
+      ) ||
+      applyNonLegalChatGate(
+        options.registry,
+        request,
+        attachments.length + firmTemplates.length,
+        Boolean(knowledge.caseId && knowledge.includeCase)
       );
     // Entry gate: how much of the legal system this message needs.
     const entryEnvelope =
@@ -8923,7 +8970,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     request.onStep?.(
       "ROUTING",
       trivialChat
-        ? "krótkie polecenie: bez skilli prawnych i workflow"
+        ? "krótkie polecenie lub pytanie bez kwestii prawnej: bez skilli prawnych i workflow"
         : request.primarySkill === "AUTO"
           ? "prawny-router-v3: wybór dziedziny"
           : `wybrany skill ${request.primarySkill}`

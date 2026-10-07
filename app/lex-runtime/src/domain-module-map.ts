@@ -75,7 +75,17 @@ function stemOf(word: string): string {
 // ("powi" of "powiat" is not "powierzenia").
 function hit(stem: string, tokens: string[]): boolean {
   if (stem.startsWith("=")) return tokens.includes(stem.slice(1));
-  return tokens.some((token) => token.startsWith(stem) && (stem.length > 4 || token.length <= stem.length + (stem.length <= 3 ? 3 : 6)));
+  return alternations(stem).some((form) =>
+    tokens.some((token) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)))
+  );
+}
+
+// Polish vowel alternation inside the stem, after folding: "urzędu"/"urząd" ("urzed"/"urzad"),
+// "męża"/"mąż" ("mez"/"maz"). The stem's last vowel e <-> a, for stems of four letters and more.
+function alternations(stem: string): string[] {
+  const match = /^(.{2,}?)([ae])([^aeiouy]+)$/u.exec(stem);
+  if (!match || stem.length < 4) return [stem];
+  return [stem, `${match[1]}${match[2] === "e" ? "a" : "e"}${match[3]}`];
 }
 
 // What a module says it covers: its headings and its "Zakres:" paragraph.
