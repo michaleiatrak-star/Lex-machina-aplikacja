@@ -765,10 +765,14 @@ export function newExecutionId(): string {
  * Polls the runtime for the live draft of a running execution. Returns a
  * stop function; the draft is cleared when polling stops.
  */
+export const DRAFT_POLL_MS = 250;
+
 export function startDraftPolling(
   executionId: string,
   onDraft: (text: string) => void,
-  intervalMs = 1000,
+  // The runtime's progress route is local and cheap; a second between polls showed the
+  // model's text up to a second after it arrived.
+  intervalMs = DRAFT_POLL_MS,
   fetchProgress: typeof getSessionProgress = getSessionProgress,
   onSteps?: (steps: ExecutionStepsSnapshot | null) => void
 ): () => void {
@@ -3313,7 +3317,7 @@ export default function MatterChatApp({
         startDraftPolling(
           executionId,
           setDraftText,
-          1000,
+          DRAFT_POLL_MS,
           getSessionProgress,
           setExecutionSteps
         );

@@ -733,17 +733,21 @@ export class SafeSessionExecutor {
         // A trivial command ("ok", "dzięki") is a fixed word of a closed list: it holds no
         // personal data, and only that latest message reaches the model. The thread history is
         // not run through PII detection (with a local model ready, one local inference per chunk).
+        // The web client sends the message also as auxiliaryText: that is the same text.
+        const latestMessage = latestUserTurn(parseSkillSelectionEnvelope(request.query).query).trim();
         const trivialTurn = request.conversationalOnly === true &&
-            isTrivialChatCommand(request.query) &&
+            isTrivialChatCommand(parseSkillSelectionEnvelope(request.query).query) &&
             !request.documentAttachments?.length &&
-            request.auxiliaryText === undefined &&
+            (request.auxiliaryText === undefined || request.auxiliaryText.trim() === latestMessage) &&
             !request.processWorkflowContext;
         try {
             if (trivialTurn) {
                 const header = request.query.startsWith(SKILL_SELECTION_ENVELOPE_PREFIX)
                     ? request.query.slice(0, request.query.indexOf("\n") + 1)
                     : "";
-                protectedQuery = header + latestUserTurn(request.query);
+                protectedQuery = header + latestMessage;
+                if (request.auxiliaryText !== undefined)
+                    protectedAuxiliaryText = latestMessage;
                 audit.record("gate", "G39I_CHAT_PRIVACY", "OK", {
                     pseudonymized: 0,
                     exampleDataKept: 0,

@@ -529,10 +529,14 @@ export async function startLocalServer(options?: {
     accountSessions
   );
   const providerGateway = new ProviderGateway(providerRegistry);
-  // Stanza NER plus the SGJP name dictionary and address patterns.
+  // Stanza NER plus the SGJP name dictionary and address patterns. The Stanza model
+  // is loaded once, in the background now, not for every checked message.
+  const stanzaRecognizer =
+    new LocalStanzaNamedEntityRecognizer();
+  stanzaRecognizer.warmUp();
   const stanzaNamedEntities =
     new CompositeRecognizer([
-      new LocalStanzaNamedEntityRecognizer(),
+      stanzaRecognizer,
       new LocalGazetteerRecognizer()
     ]);
   const privacyNamedEntities =
@@ -835,6 +839,7 @@ export async function startLocalServer(options?: {
           new Promise<void>((closeResolve, closeReject) => {
             server.close((error) => {
               void localModels.stop();
+              stanzaRecognizer.close();
               credentials.close();
               supportService.close();
               unsubscribeGuideRevocation();
