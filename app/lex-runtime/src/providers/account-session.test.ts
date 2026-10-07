@@ -449,6 +449,32 @@ describe("provider account-session transport", () => {
         })
       )
     ).toBe(false);
+    // Realny kształt auth.json oficjalnego klienta Codex po logowaniu ChatGPT:
+    // obiekt `tokens` z OAuth, BEZ pola `auth_mode` (zgł. użytkownika 2026-10-07 —
+    // wcześniej rozpoznawane jako niezalogowane mimo udanego loginu w przeglądarce).
+    expect(
+      codexStoredAuthIsChatGpt(
+        JSON.stringify({
+          OPENAI_API_KEY: null,
+          tokens: {
+            id_token: "redacted",
+            access_token: "redacted",
+            refresh_token: "redacted",
+            account_id: "acct_redacted"
+          },
+          last_refresh: "2026-10-07T17:00:00Z"
+        })
+      )
+    ).toBe(true);
+    // Sam klucz API (bez tokenów OAuth) subskrypcją ChatGPT nie jest.
+    expect(
+      codexStoredAuthIsChatGpt(
+        JSON.stringify({
+          OPENAI_API_KEY: "sk-redacted",
+          tokens: null
+        })
+      )
+    ).toBe(false);
     expect(
       codexStoredAuthIsChatGpt(
         "not-json"
