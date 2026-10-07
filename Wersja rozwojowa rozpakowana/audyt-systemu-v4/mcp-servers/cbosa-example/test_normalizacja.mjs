@@ -42,6 +42,23 @@ const ids = (a, b) => Array.from({ length: b - a }, (_, i) => `A${String(a + i).
   assert.match(d.judgment_date, /^\d{4}-\d{2}-\d{2}$/);
   assert.strictEqual(d.finality, "orzeczenie prawomocne");
   assert.ok(d.court); n++; }
+// Karta bez pól „Sąd”/„Data orzeczenia” (inny układ) — BEST-EFFORT, nie OUT_OF_SCOPE.
+// Wcześniej fałszywe „brak pól Sąd, Data orzeczenia” mimo realnego orzeczenia (zgł. 2026-10-07).
+{ const bezMeta = dok
+    .replace('<tr><td class="lista-label">Sąd</td><td class="info-list-value">Naczelny Sąd Administracyjny</td></tr>', "")
+    .replace('<tr><td class="lista-label">Data orzeczenia</td><td class="info-list-value">2026-01-10</td></tr>', "");
+  assert.notStrictEqual(bezMeta, dok);
+  const d = parsujDokument(bezMeta, "AAAAAAAAAA");
+  assert.strictEqual(d.court, null);
+  assert.strictEqual(d.judgment_date, null);
+  assert.deepStrictEqual(d.brak_metadanych, ["Sąd", "Data orzeczenia"]);
+  assert.match(d.operative_part, /Oddala skargę kasacyjną/);
+  const v = await weryfikujSygnature(strona(1, ids(0, 1)), "II FSK 100/24",
+    async () => { throw new Error("brak stron"); }, async () => bezMeta);
+  assert.strictEqual(v.status, "FOUND"); n++; }
+// Brak Sentencji NADAL fail-closed (kotwica poprawności).
+{ const bezSent = dok.replace('<div class="lista-label">Sentencja</div>', '<div class="lista-label">Inne</div>');
+  assert.throws(() => parsujDokument(bezSent, "AAAAAAAAAA"), /brak Sentencji/); n++; }
 console.log(`OK: ${n} przypadków zgodnych z parserem referencyjnym (Python) + paginacja`);
 
 { let n = 0;
