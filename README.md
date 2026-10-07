@@ -1,692 +1,249 @@
 <div align="center">
 
-# ⚖️ Lex Machina
+# Lex Machina
 
-**Modułowy system skilli prawniczych AI dla prawa polskiego — z twardymi bramkami antyhalucynacyjnymi**
+**Lokalna aplikacja desktopowa — asystent prawny AI dla prawa polskiego, działający na komputerze użytkownika, z obowiązkową weryfikacją każdego przepisu u źródła i prywatnością danych sprawy z założenia.**
 
 [![Licencja: użytek osobisty, kod zastrzeżony](https://img.shields.io/badge/Licencja-u%C5%BCytek%20osobisty%20%C2%B7%20kod%20zastrze%C5%BCony-red.svg)](LICENSE)
-[![Wersja stabilna](https://img.shields.io/badge/stabilna-8.09.2026-2A6F50.svg)](#-wersjonowanie)
-[![Wieloplatformowość](https://img.shields.io/badge/wieloplatformowo%C5%9B%C4%87-stabilna%20%2B%20rozwojowa-2A6F50.svg)](#-kompatybilno%C5%9B%C4%87-llm)
-[![Wersja rozwojowa](https://img.shields.io/badge/rozwojowa-aktywna-orange.svg)](#-wersjonowanie)
-[![Skille](https://img.shields.io/badge/skille-32-8A2BE2.svg)](#-katalog-skilli)
-[![Platforma](https://img.shields.io/badge/platforma-Claude%20%C2%B7%20ChatGPT%20%C2%B7%20Codex%20%C2%B7%20Grok-D97757.svg)](#-kompatybilno%C5%9B%C4%87-llm)
+[![Wersja aplikacji](https://img.shields.io/badge/aplikacja-0.1.20-2A6F50.svg)](#wersjonowanie)
+[![Platformy](https://img.shields.io/badge/platformy-Windows%20%C2%B7%20macOS-2A6F50.svg)](#instalacja)
+[![Stos](https://img.shields.io/badge/stos-Tauri%2FRust%20%C2%B7%20Node%2024%20%C2%B7%20React%20%C2%B7%20Python-D97757.svg)](#architektura)
+[![Modele](https://img.shields.io/badge/modele-Anthropic%20%C2%B7%20OpenAI%20%C2%B7%20xAI%20%C2%B7%20lokalne-8A2BE2.svg)](#modele-ai)
 [![Język](https://img.shields.io/badge/j%C4%99zyk-polski-white.svg?labelColor=DC143C)](#)
 
-*System pokrywa 16 dziedzin prawa polskiego i unijnego: od routingu sprawy, przez analizę
-dowodów i strategię procesową, po generowanie pism — z obowiązkową weryfikacją online
-każdego przepisu i każdej sygnatury.*
-
-[Szybki start](#-szybki-start) •
-[Architektura](#%EF%B8%8F-architektura) •
-[Kompatybilność LLM](#-kompatybilno%C5%9B%C4%87-llm) •
-[Katalog skilli](#-katalog-skilli) •
-[Mechanizmy weryfikacji](#%EF%B8%8F-mechanizmy-antyhalucynacyjne) •
-[Baza źródeł](#baza-źródeł-i-portali) •
-[Konektory MCP](#konektory-mcp) •
-[Instalacja](#-instalacja) •
-[Zadania cykliczne (Cowork)](#zadania-cykliczne-scheduled-tasks-w-cowork) •
-[Zastrzeżenia](#%EF%B8%8F-zastrzeżenia-prawne)
+[Czym jest](#czym-jest-lex-machina) •
+[Możliwości](#kluczowe-mo%C5%BCliwo%C5%9Bci) •
+[Architektura](#architektura) •
+[Prywatność](#prywatno%C5%9B%C4%87-i-anonimizacja) •
+[Modele](#modele-ai) •
+[Źródła prawa](#%C5%BAr%C3%B3d%C5%82a-prawa) •
+[Bramki](#bramki-antyhalucynacyjne) •
+[Bezpieczeństwo](#bezpiecze%C5%84stwo) •
+[Instalacja](#instalacja) •
+[Budowa](#budowa-ze-%C5%BAr%C3%B3de%C5%82)
 
 </div>
 
 ---
 
-## 🎯 Czym jest Lex Machina
+## Czym jest Lex Machina
 
-Lex Machina to zestaw **32 skilli** (host-neutralnych Agent Skills) tworzących kompletny warsztat pracy
-z polskim prawem:
+Lex Machina to **samodzielna aplikacja desktopowa** (Windows, macOS), która zamienia dowolny wspierany model językowy w warsztat pracy z prawem polskim — bez oddawania akt sprawy do chmury i bez cytowania przepisów „z pamięci" modelu.
 
-| | |
+Trzy filary odróżniają ją od zwykłego czatu z LLM:
+
+1. **Prywatność z założenia** — dane spraw przetwarzane są lokalnie; do modeli zewnętrznych trafiają wyłącznie symbole zastępcze (`[PII:PERSON:0001|GEN]`), a klucz do nich jest zaszyfrowany na dysku użytkownika.
+2. **Weryfikacja u źródła** — każdy artykuł, każda pozycja Dz.U. i każda sygnatura są potwierdzane w urzędowym repozytorium (Sejm ELI) lub przez narzędzia w tej samej turze; przepis bez pokrycia nie wchodzi do odpowiedzi finalnej.
+3. **Lokalny runtime jako źródło prawdy** — logika (sprawy, szyfrowanie, anonimizacja, orkiestracja modeli, bramki) działa w procesie na `127.0.0.1`, nie w przeglądarce ani w chmurze.
+
+> Niniejszy dokument opisuje **aplikację** — runtime, interfejs i mechanizmy. Metodyka prawna (router, dziedziny prawa, skille wykonawcze) jest **osobnym projektem**: żyje we własnym repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina), ma własną dokumentację i jest udostępniana na **licencji GPL-3.0**. Dla aplikacji skille są opcjonalnym dodatkiem, który wczytuje z katalogu `Wersja rozwojowa rozpakowana/`; aplikacja działa też z innym zestawem skilli lub bez korpusu. Aplikacja i korpus skilli mają różnych właścicieli licencyjnych — zob. [Kontakt i licencja](#kontakt-i-licencja).
+
+---
+
+## Kluczowe możliwości
+
+| Obszar | Co potrafi aplikacja |
 |---|---|
-| 🧭 **Orkiestracja** | router spraw z trybami **PRAWNIK / LAIK**, macierz aktywacji, checkpointy jakości |
-| 📚 **Wiedza dziedzinowa** | 16 modułów DR — każda dziedzina prawa PL/UE, jeden moduł = jeden akt prawny |
-| 🛠️ **Narzędzia wykonawcze** | pisma procesowe, analiza umów i dowodów, przesłuchania świadków, chronologia, raporty |
-| 🛡️ **Antyhalucynacja** | HARD GATE: zakaz cytowania prawa z pamięci, deterministyczne API, gradient weryfikacji cytatu |
-| 📋 **Governance** | dziennik audytów, mapa Dz.U., paczka audytowa AI Act art. 12, polityka deduplikacji |
-| 🔌 **Wieloplatformowość** | pełna host-neutralność: Claude, hosty zgodne z OpenAI (ChatGPT / Codex / API / Atlas) **oraz** Grok (pobiera skille wprost z repozytorium) — te same bramki, bez przepisywania metodologii. Zestaw przetestowany na **Claude i ChatGPT**; **od 8.09.2026 warstwa ta jest częścią wersji stabilnej**, nie tylko rozwojowej |
-
-> **Zasada naczelna:** *brak numeru artykułu jest lepszy niż błędny numer artykułu;
-> brak sygnatury jest lepszy niż sygnatura nieweryfikowana lub fałszywa.*
-
----
-
-## 🚀 Szybki start
-
-1. Pobierz repozytorium (`Code → Download ZIP` lub `git clone`)
-2. Wgraj skille do Claude AI w kolejności: `shared/` → routing → DR → wykonawcze ([pełna instrukcja](#-instalacja))
-3. Ustaw **User Preferences** w Claude AI:
-   ```
-   Prawo PL: router→v3 pierwszy, ISAP każdy przepis, HYBRID-VAL przed .docx. Karne: +kwalifikator.
-   ```
-4. Otwórz nową rozmowę i napisz: **„Mam sprawę prawną. Od czego zacząć?"**
+| **Zarządzanie sprawami** | Osobny, zaszyfrowany magazyn i klucz per sprawa; foldery, pliki, terminarz, kontakty, pamięć sprawy i streszczenie. |
+| **Wczytywanie dokumentów** | PDF, obrazy, DOCX, ODT, XLSX/XLSM, CSV/TSV, TXT/MD oraz ZIP (bezpieczne rozpakowanie z limitami); wbudowany edytor DOCX/ODT i arkuszy. |
+| **OCR lokalny** | Polski PP-OCRv6 (Paddle) dla stron bez warstwy tekstowej i grafik; rozliczenie wszystkich stron bez ucięcia; korekta OCR ograniczona słownikiem. |
+| **Anonimizacja** | Wielowarstwowe rozpoznawanie PII (słownik SGJP/Morfeusz2, Stanza NER, detektory identyfikatorów, opcjonalnie model lokalny) z odwracalnym, lokalnym kluczem. |
+| **Czat prawny** | Załączniki z miernikiem tokenów, obrazy jako dowód z maskowaniem PII, 6-etapowy potok z widocznym postępem, bramka złożoności. |
+| **Generowanie pism** | Pisma, opinie, umowy i raporty jako pliki `.docx`/`.odt` do pobrania; status DRAFT do akceptacji; automatyczna deanonimizacja wyników. |
+| **Modele AI** | API (Anthropic, OpenAI, xAI), konta CLI (Claude, Codex, Grok) oraz modele lokalne (llama.cpp, np. Bielik) — jeden spójny interfejs. |
+| **Źródła prawa** | Weryfikacja w Sejm ELI + 16 konektorów MCP (ISAP, EUR-Lex, SAOS, CBOSA, SN, KRS, WL, CEIDG, NBP, EUREKA, SUDOP, UODO, KIO, TK, sądy powszechne, ETPCz) i karta Wyszukiwanie. |
+| **Biblioteka kancelarii** | Wspólny, zaszyfrowany magazyn wzorów DOCX/ODT i dokumentów know-how z wyszukiwaniem semantycznym. |
+| **Konta i uprawnienia** | Lokalne konta (Argon2id), role per sprawa (OWNER/EDITOR/ANALYST/VIEWER), koperty kluczy per użytkownik, odzyskiwanie hasła, re-autoryzacja operacji wrażliwych. |
 
 ---
 
-## 🏗️ Architektura
-
-```mermaid
-flowchart TB
-    U([👤 Użytkownik]) --> R
-
-    subgraph ROUTING["🧭 Warstwa routingu"]
-        R[prawny-router-v3<br/>tryb PRAWNIK / LAIK] --> PP[prawo-polskie-v2<br/>ROUTING-MAP]
-    end
-
-    subgraph DR["📚 Dziedziny prawa — DR-01 … DR-16"]
-        D1[dr-01 ustrój] ~~~ D2[dr-02 cywilne] ~~~ D3[dr-03 karne] ~~~ DN[… dr-16 pisma/strategia]
-    end
-
-    subgraph EXEC["🛠️ Skille wykonawcze"]
-        E1[pisma-procesowe-v3] ~~~ E2[analiza-sadowa-v6] ~~~ E3[analizator-umow / dowodow] ~~~ E4[raporty / przesłuchania]
-    end
-
-    subgraph SHARED["🛡️ shared/ — biblioteka współdzielona"]
-        S1[PRAWO-HARDGATE v2.0<br/>ŹRÓDŁO-0: API ELI/SAOS/CELLAR] ~~~ S2[SYGNATURY v1.1<br/>FOUND / NOT_FOUND / AMBIGUOUS] ~~~ S3[WERYFIKACJA-SLAD v1.1<br/>gradient ISTNIENIE/TREŚĆ/FRAGMENT] ~~~ S4[MOD-AUDIT-BUNDLE<br/>AI Act art. 12]
-    end
-
-    AUD[📋 audyt-systemu-v4<br/>AUDIT-JOURNAL + mapa Dz.U.]
-
-    PP --> DR
-    DR --> EXEC
-    ROUTING -.obowiązkowe bramki.-> SHARED
-    DR -.-> SHARED
-    EXEC -.-> SHARED
-    AUD -. audytuje .-> ROUTING & DR & EXEC & SHARED
-```
-
-**Przepływ sprawy:** router klasyfikuje sprawę i tryb → ładuje właściwe moduły DR (lazy
-loading: jeden moduł = jeden akt prawny) → skill wykonawczy realizuje zadanie → każde
-powołanie przepisu/orzeczenia przechodzi przez bramki `shared/` → wynik z widocznym
-śladem weryfikacji.
-
----
-
-## 🔌 Kompatybilność LLM
-
-**Obie wersje — stabilna (8.09.2026) i rozwojowa — są w pełni wieloplatformowe.**
-Ten sam zestaw skilli działa na Claude, na hostach zgodnych z OpenAI (**ChatGPT,
-Codex, API, Atlas**) oraz na **Grok**, bez przepisywania metodologii, HARD GATE ani
-bramek jakości. Działanie na **Claude i ChatGPT zostało potwierdzone testami całego
-zestawu**. Wieloplatformowość nie jest już cechą wyłącznie kanału rozwojowego:
-warstwa portowalności została promowana do wersji stabilnej i w obu katalogach jest
-identyczna co do bajtu. Skille to zwykły Markdown
-czytany pod wspólnym adapterem, więc nazwy operacji odziedziczone z jednego runtime
-są traktowane jako semantyka, nie jako wymóg konkretnego API danego dostawcy.
-
-> **Grok — automatyczne pobranie z repozytorium.** Grokowi wystarczy **wskazać
-> repozytorium** (URL GitHub) i **którą wersję** ma wziąć — rozwojową
-> (`Wersja rozwojowa rozpakowana/`) albo stabilną
-> (`Wersja stabilna rozpakowana 8.09.2026/`) — obie niosą warstwę
-> host-neutralną. Grok pobiera i instaluje skille
-> samodzielnie, bez ręcznego wgrywania folderów. Reguły sterujące (odpowiednik
-> User Preferences) wskazujesz w jego instrukcjach/personalizacji tak samo jak na
-> pozostałych hostach — patrz [Instalacja](#-instalacja).
-
-**Warstwa portowalności** — obecna w **obu** kanałach (stabilnym i rozwojowym):
-
-| Element | Lokalizacja | Rola |
-|---|---|---|
-| Adapter runtime | [`shared/UNIVERSAL-RUNTIME-ADAPTER.md`](Wersja%20stabilna%20rozpakowana%208.09.2026/shared/UNIVERSAL-RUNTIME-ADAPTER.md) | Jeden kontrakt wykonawczy: mapuje operacje zależne od hosta (`view`, `web_search`, `web_fetch`, `create_file`, `show_widget`) na natywne funkcje hosta lub ich odpowiedniki. |
-| Manifest OpenAI | `<skill>/agents/openai.yaml` | Rejestracja skilla w ekosystemie OpenAI (`products: chatgpt, codex, api, atlas`) + `allow_implicit_invocation`. |
-| Manifest integralności | `<skill>/PORTABILITY-MANIFEST.md` | Lista plików + SHA-256 — dowód, że przeniesienie między hostami jest bezstratne. |
-| Pole `compatibility:` | frontmatter `SKILL.md` | Deklaruje wymagane operacje hosta (lub równoważne wg adaptera). |
-
-**Zasady adaptera:**
-
-- **Fail-closed** — jeżeli obowiązkowy zasób nie może zostać świeżo odczytany, skill
-  zatrzymuje się; nie zastępuje go pamięcią modelu.
-- **Bramki bez zmian** — `PRAWO-HARDGATE`, `TEMPORAL-LAW-CHECK`, `LEGAL-QUALITY-GATE`
-  działają identycznie na każdym hoście. Brak natywnego generatora DOCX/PDF nie znosi
-  walidacji — obniża jedynie format wyjścia do raportu strukturalnego.
-- **Prywatność** — statyczne widgety i skrypty **nie wysyłają danych bezpośrednio** do
-  żadnego dostawcy AI; wysyłka do zewnętrznego API tylko przez hosta i po jawnej decyzji
-  użytkownika. Domyślna anonimizacja jest lokalna i deterministyczna.
-- **Ścieżki** — zapis `shared/PLIK.md` oznacza kanoniczny zasób zainstalowanego skilla,
-  a nie konkretny katalog systemowy; historyczne ścieżki `/mnt/...` są normalizowane do
-  `skill/path`.
-
-> **Wieloplatformowość jest pełna — i potwierdzona w praktyce.** Skille to zwykły
-> Markdown w standardzie Agent Skills; nie zawierają kodu ani wywołań API związanych
-> z konkretnym dostawcą, więc działają na każdym hoście, który potrafi wczytać skill
-> i wykonać operacje opisane w adapterze. Cały zestaw został **przetestowany z
-> powodzeniem na Claude i na ChatGPT** — te same bramki, ta sama metodologia, ten sam
-> wynik merytoryczny, bez żadnej wersji „portowanej" ani osobnej gałęzi kodu. Grok
-> instaluje ten sam zestaw, pobierając go wprost z repozytorium (Krok 6).
->
-> Jedyna różnica między hostami jest rejestracyjna, nie funkcjonalna: 31 z 32
-> katalogów niesie `agents/openai.yaml`, dzięki czemu pojawia się samodzielnie
-> w katalogu skilli hosta OpenAI; `analizator-dowodow-v3` tego manifestu nie ma,
-> więc uruchamia się przez router zamiast z listy. Analogicznie brak pola
-> `compatibility:` w modułach `dr-01` … `dr-16` niczego nie blokuje — wymagane
-> operacje hosta rozstrzyga wtedy adapter runtime.
-
----
-
-## 📁 Struktura repozytorium
+## Architektura
 
 ```
-Lex-Machina/
-├── README.md                                ← ten plik
-├── LICENSE                                  ← licencja: bezpłatny użytek osobisty, kod zastrzeżony
-├── POLITYKA-PRYWATNOSCI.md                  ← polityka prywatności (część licencji)
-├── DOKUMENTACJA-WDROZENIOWA-2026-07-13.md   ← dokumentacja wdrożeniowa systemu
-├── claude_desktop_config.json               ← przykładowa konfiguracja konektorów MCP
-├── benchmark/                               ← wyniki testów na bankach kazusów (per data)
-├── WERSJA STABILNA 8.09.2026/               ← skille spakowane (.zip) — wersja stabilna
-├── WERSJA ROZWOJOWA/                        ← skille spakowane (.zip) — wersja rozwojowa
-├── Wersja stabilna rozpakowana 8.09.2026/   ← źródła skilli — wersja stabilna
-│                                              (host-neutralna: Claude / OpenAI / Grok)
-└── Wersja rozwojowa rozpakowana/            ← źródła skilli — tu trafiają bieżące zmiany
-    ├── shared/                              ← bramki (PRAWO-HARDGATE, SYGNATURY,
-    │   │                                      WERYFIKACJA-SLAD), UNIVERSAL-RUNTIME-ADAPTER,
-    │   │                                      moduły MOD-*, definicje
-    │   └── tools/                           ← skrypty audytowe + mcp-servers/ (przykłady
-    │                                          konektorów: ISAP/ELI, SAOS, EUR-Lex, KRS…)
-    │   (każdy skill: agents/openai.yaml + PORTABILITY-MANIFEST.md — warstwa host-neutralna)
-    ├── prawny-router-v3/                    ← orkiestrator
-    ├── prawo-polskie-v2/                    ← mapa routingu dziedzin
-    ├── przewodnik-prawny-v2/                ← punkt wejścia dla laika
-    ├── dr-01-… … dr-16-…/                   ← 16 dziedzin prawa
-    ├── analiza-sadowa-v6/                   ┐
-    ├── analizator-dowodow-v3/               │
-    ├── analizator-przepisow-v2/             │
-    ├── analizator-umow-v1/                  │
-    ├── chronologia-sprawy-v1/               │
-    ├── orzeczenia-sadowe-v2/                ├─ skille wykonawcze
-    ├── pisma-procesowe-v3/                  │
-    ├── pisma-proste-v2/                     │
-    ├── przesluchanie-swiadkow-v2-min90/     │
-    ├── raport-klienta-v1/                   │
-    ├── raport-sytuacyjny-v2/                ┘
-    ├── *_build/                             ← katalogi robocze buildów — NIE wgrywać
-    └── audyt-systemu-v4/                    ← governance: modules/, references/
-                                               (AUDIT-JOURNAL, mapy Dz.U.), scripts/, widgets/
+lex-desktop (Tauri / Rust)   okno aplikacji; uruchamia runtime; granica zaufania
+      |                      (proxy z allowlistą tras i nagłówków X-Lex-*)
+      |  HTTP 127.0.0.1
+lex-runtime (Node 24, TS)    API, sesje, weryfikacja, sprawy, szyfrowanie,
+      |                      orkiestracja modeli, narzędzia prawne, konserwacja
+      |  stdio / named pipe
+workery Python               privacy (Morfeusz2/SGJP, Stanza NER), ocr (PaddleOCR),
+                             storage (odczyt/zapis Office)
+lex-mcp.mjs                  serwery MCP źródeł prawa
+llama.cpp                    modele lokalne (opcjonalnie)
+lex-web (React)              interfejs: Start, Sprawa, Czat, Kancelaria, Ustawienia
 ```
 
-Katalog wersji stabilnej ma tę samą strukturę — łącznie z warstwą host-neutralną
-(`agents/openai.yaml`, `PORTABILITY-MANIFEST.md`, adapter runtime w `shared/`).
-Każdy skill to folder z `SKILL.md` w korzeniu — wgrywa się **cały folder** skilla,
-niezależnie od hosta.
+| Warstwa | Katalog | Technologia | Rola |
+|---|---|---|---|
+| Desktop | `app/lex-desktop` | Tauri, Rust | Okno, uruchomienie runtime, granica zaufania (CORS, nagłówki, allowlista tras) |
+| Runtime | `app/lex-runtime` | TypeScript, Node ≥ 24.7 | API HTTP na loopbacku, sprawy, szyfrowanie, anonimizacja, modele, narzędzia, bramki |
+| Interfejs | `app/lex-web` | React | Czat, zakładka Sprawa, Kancelaria, Ustawienia |
+| Workery | `app/privacy`, `app/ocr`, `app/storage` | Python | NER i słowniki, OCR, odczyt/zapis Office |
+| Konektory | `…/audyt-systemu-v4/mcp-servers` | Node (MCP) | Federacja źródeł prawa |
+| Instalator | `app/installer`, `.github/workflows/` | NSIS, PowerShell | Instalator online Windows i macOS |
+
+Runtime jest źródłem prawdy; `app/lex-runtime/dist` jest budowany i wersjonowany w repozytorium (instalator kopiuje `dist`). Komunikacja desktop → runtime przechodzi wyłącznie dozwolone trasy (`DESKTOP_ROUTE_NOT_ALLOWED` przy odstępstwie) — API liczy ok. 90 tras HTTP.
 
 ---
 
-## 📚 Katalog skilli
+## Prywatność i anonimizacja
 
-### 🧭 Routing i orkiestracja
+**Zasada nadrzędna:** dane sprawy nie opuszczają komputera w postaci jawnej, chyba że użytkownik świadomie wyśle tekst jawny. Model zewnętrzny widzi symbole, nie dane.
 
-| Skill | Rola |
-|---|---|
-| `prawny-router-v3` | Punkt wejścia każdej sprawy: klasyfikacja [1]–[10], tryb PRAWNIK/LAIK, anonimizacja (KROK 0A), macierz aktywacji, step-tracker |
-| `prawo-polskie-v2` | Mapa routingu: sprawa → właściwe skille DR |
-| `przewodnik-prawny-v2` | Punkt wejścia dla laika — prowadzenie za rękę |
+- **Rozpoznawanie PII (suma wyników, odporne na błąd pojedynczego detektora):**
+  1. słownik SGJP (Morfeusz2) — imiona, nazwiska we wszystkich formach, adresy;
+  2. Stanza NER (polski model, offline);
+  3. detektory identyfikatorów: PESEL, NIP, REGON, IBAN, KRS, dowód, paszport, telefon, e-mail, księga wieczysta, nr rejestracyjny, karta;
+  4. opcjonalnie lokalny model AI, który ocenia wątpliwe trafienia w kontekście całego zdania.
+- **Reguły instytucji i ról:** rzeczownik instytucji (`Bank Pekao S.A.`, `Rada Gminy`) nie jest osobą; rola strony (`Najemca Kowalski`) wskazuje, że następne słowo to osoba.
+- **Osoby, rodziny, firmy:** obsługa stron wieloosobowych (`państwo Wiśniewscy`), wspólnego nazwiska (`Piotrowi i Marii Nowakom`) i firm z nazwiskiem (`PHU Jan Kowalski`), z osobnymi symbolami i rodzajem/liczbą w kluczu dla modelu.
+- **Odmiana (HARD GATE):** model musi dopisać przypadek do symbolu (`|NOM|GEN|DAT|ACC|INS|LOC|VOC`); wartość odmienia lokalnie Lex. Brak przypadku lub niepewna forma → oznaczenie do przeglądu.
+- **Klucz wspólny sprawy:** jedna osoba = jeden symbol we wszystkich plikach sprawy i w czacie; odwracalny, szyfrowany lokalnie, z rotacją klucza.
+- **Przegląd użytkownika:** podgląd z zaznaczonymi słowami; można dodać tekst do anonimizacji, poprawić formy przypadków lub usunąć symbol przed wysyłką.
 
-### ⚖️ Dziedziny prawa (DR-01 … DR-16)
-
-| # | Skill | Zakres |
-|---|---|---|
-| 01 | `dr-01-ustroj-konstytucyjny-i-zrodla-prawa` | Konstytucja, źródła prawa, TK |
-| 02 | `dr-02-prawo-cywilne-rodzinne-gospodarcze` | KC, KRO, KSH, KPC |
-| 03 | `dr-03-prawo-karne-wykroczenia-egzekucja` | KK, KPK, KW, KKW |
-| 04 | `dr-04-prawo-pracy-zus-swiadczenia` | KP, ZUS, świadczenia |
-| 05 | `dr-05-prawo-administracyjne-sadowoadministracyjne` | KPA, PPSA |
-| 06 | `dr-06-podatki-finanse-publiczne-aml` | Ordynacja, VAT/PIT/CIT, AML |
-| 07 | `dr-07-zamowienia-publiczne-fundusze-ue` | PZP, KIO, fundusze UE |
-| 08 | `dr-08-samorzad-terytorialny-prawo-lokalne` | JST, prawo miejscowe |
-| 09 | `dr-09-budownictwo-srodowisko-energia-transport` | Prawo budowlane, OOŚ, energetyka |
-| 10 | `dr-10-zdrowie-farmacja-zywnosc-rolnictwo` | Prawo medyczne, farmaceutyczne |
-| 11 | `dr-11-cyfrowe-cyber-ai-dane-ip` | RODO (+ operacyjne: DPIA, DSAR, RCP/DPA, naruszenia 72h), AI Act, DSA/DMA, KSC/NIS2, IP |
-| 12 | `dr-12-sadownictwo-prokuratura-zawody-prawnicze` | Ustrój sądów, zawody prawnicze |
-| 13 | `dr-13-sluzby-bezpieczenstwo-informacje-niejawne` | Służby, informacje niejawne |
-| 14 | `dr-14-prawo-ue-miedzynarodowe-prawa-czlowieka` | Prawo UE, EKPC, KPP |
-| 15 | `dr-15-compliance-iso-governance-audyt` | Compliance, ISO, sygnaliści |
-| 16 | `dr-16-pisma-strategia-dowody-orzecznictwo` | Warsztat procesowy przekrojowy |
-
-### 🛠️ Skille wykonawcze
-
-| Skill | Zastosowanie |
-|---|---|
-| `pisma-procesowe-v3` | Pozwy, apelacje, odpowiedzi na pozew — z bramkami DRAFT/FINAL |
-| `pisma-proste-v2` | Sprzeciwy, wezwania do zapłaty, wnioski o klauzulę |
-| `analizator-umow-v1` | Analiza i redakcja umów (w tym RODO: powierzenie, regulaminy) |
-| `analizator-dowodow-v3` | Klasyfikacja, scoring i walidacja dowodów |
-| `analizator-przepisow-v2` | Analiza przepisów, vacatio legis, historia nowelizacji |
-| `orzeczenia-sadowe-v2` | Wyszukiwanie i weryfikacja orzecznictwa |
-| `analiza-sadowa-v6` | Pełna, wieloprzebiegowa analiza sprawy (ekstrakcja → struktura → predykcja) |
-| `chronologia-sprawy-v1` | Oś czasu zdarzeń prawnych |
-| `przesluchanie-swiadkow-v2` | Pytania do świadków, kontrprzesłuchanie (≥90 pytań) |
-| `raport-sytuacyjny-v2` | Interaktywny raport ryzyk (tryby IND/BIZ) |
-| `raport-klienta-v1` | Raport statusu sprawy dla klienta końcowego |
-
-### 📋 Governance
-
-| Skill | Rola |
-|---|---|
-| `audyt-systemu-v4` | Audyt jakości i aktualności: [dziennik audytów](Wersja%20rozwojowa%20rozpakowana/audyt-systemu-v4/references/AUDIT-JOURNAL.md), mapy Dz.U., deduplikacja |
-
-#### Przejrzystość stanu systemu — co czytać (a czego nie)
-
-Dziennik audytów to pełny ślad forensyczny (ponad 950 sesji, dowody reprodukcji —
-materiał dla audytora i pod AI Act art. 12), **nie** codzienna lektura. Aby poznać
-aktualny stan i granice systemu, użytkownik ma trzy zwięzłe punkty wejścia:
-
-| Artefakt | Plik | Co daje |
-|---|---|---|
-| 🚦 Tablica otwartych flag | [`references/WARN-OTWARTE.md`](Wersja%20rozwojowa%20rozpakowana/audyt-systemu-v4/references/WARN-OTWARTE.md) | „Co jeszcze do zrobienia" w jednym miejscu — tablica sterująca z podziałem flag (wykonalne sesją audytową / reaktywne / zależne od środowiska). Czytaj to zamiast całego dziennika. |
-| 📊 Raporty pokrycia | [`references/raporty-pokrycia-2026-08-13/`](Wersja%20rozwojowa%20rozpakowana/audyt-systemu-v4/references/raporty-pokrycia-2026-08-13/) | Pokrycie per kodeks (🟢 pełne · 🟡 częściowe · 🔴 śladowe) + priorytety uzupełnień — od razu widać, co system pokrywa dobrze, a co śladowo. |
-| 🗺️ Mapa Dz.U. | `references/mapa_dzu_*.md` (najnowsza: `2026-08-26`) | Data „zdjęcia" stanu prawnego — do czego numery Dz.U. są aktualne. |
-
-> **Znane granice pokrycia (na dzień ostatniego audytu):** m.in. KKW (moduł istnieje,
-> ale bez treści artykułów KKW), PPSA (brak dedykowanego modułu — rozproszone cytaty),
-> SUS rozdz. 2 (zasady podlegania ubezpieczeniom), Układ w Prawie restrukturyzacyjnym.
-> Pełna lista i priorytety: indeks raportów pokrycia. System **uczciwie odnotowuje**
-> luki, zamiast je maskować — zgodnie z zasadą naczelną.
+Audyt (`app/privacy/benchmarks`, 500 dokumentów): skuteczność 100%, 0 wycieków, 0 fałszywych trafień, deanonimizacja 100%.
 
 ---
 
-## 🛡️ Mechanizmy antyhalucynacyjne
+## Dokumenty: OCR i wczytywanie
 
-Fundament systemu — pliki w `shared/`, obowiązkowe dla wszystkich skilli:
-
-### ⛔ PRAWO-HARDGATE v2.0 — zakaz cytowania prawa z pamięci
-Żaden przepis, numer Dz.U., stawka, termin ani sygnatura nie może paść bez weryfikacji
-online **w tym samym kroku**. Hierarchia źródeł (od najsilniejszego):
-
-```
-POZIOM A  🔌 konektory MCP (verify_article, verify_signature — gdy skonfigurowane)
-POZIOM B  🌐 strukturalne API:  api.sejm.gov.pl/eli (akty + łańcuch t.j.)
-                                saos.org.pl/api (sygnatury) · EUR-Lex/CELEX (UE)
-POZIOM C  🔍 web_search / web_fetch — wyłącznie fallback
-```
-
-Zawsze najnowszy tekst jednolity (deterministycznie przez endpoint ELI `/references`),
-weryfikacja przedmiotu aktu (tytuł vs teza), specjalny reżim dla wyroków TK 2024–2026.
-
-### 🔏 SYGNATURY v1.1 — kontrakt wyniku weryfikacji
-Każda weryfikacja sygnatury kończy się jednym z czterech statusów — bez zgadywania:
-
-| Status | Reakcja |
-|---|---|
-| 🟢 `FOUND` | dokładnie jedno trafienie → cytuj z pełnymi danymi |
-| 🔴 `NOT_FOUND` | zero trafień w pokrytym zakresie → **nie cytuj** |
-| 🟡 `AMBIGUOUS` | ta sama sygnatura w ≥2 sądach → przedstaw kandydatów, nie wybieraj |
-| ⚪ `OUT_OF_SCOPE` | baza nie pokrywa sądu/okresu → eskaluj do bazy oficjalnej |
-
-### 🎚️ WERYFIKACJA-SLAD v1.1 — gradient weryfikacji cytatu
-Poziom weryfikacji musi odpowiadać sile twierdzenia — zamyka lukę
-*„prawdziwy cytat, fałszywa teza"*:
-
-```
-ISTNIENIE  → samo powołanie kotwicy (sygnatura, nr Dz.U.)
-TREŚĆ      → parafraza („SN przyjął, że…")
-FRAGMENT   → cytat dosłowny / pinpoint
-```
-+ guard STRON (sygnatura realna doczepiona do innej sprawy = 🔴 blokada)
-+ reguła kalibracji (twierdzisz FRAGMENT, osiągasz TREŚĆ → 🟠 złagodź tezę)
-+ widoczny ślad weryfikacji w każdej odpowiedzi (`✅ [VER: źródło, data]`).
-
-### 📦 MOD-AUDIT-BUNDLE — artefakt zgodności AI Act art. 12
-Paczka audytowa deliverable: manifest JSON, sumy SHA-256, metadane (model, tryb,
-źródła, zatwierdzający), jawne statusy `MISSING`. Dowód dla audytora i compliance —
-nigdy załącznik do pisma.
+- **Cztery tryby przetwarzania** (wybór przy każdym pliku, nic nie startuje samo): `OCR + anonimizacja`, `OCR + anonimizacja z AI`, `Tylko OCR`, `Tylko OCR z korektą AI`.
+- OCR uruchamia się tylko dla stron bez warstwy tekstowej lub z grafiką; tekst cyfrowy idzie od razu dalej. Pasek postępu z numerem strony: odczyt → OCR → wykrywanie → [lokalne AI] → anonimizacja → zapis klucza.
+- **Korekta OCR** działa na całych fragmentach, ale zmiany są drobne i ograniczone słownikiem (ogonki, sklejenie/rozcięcie słów, usunięcie symboli bez znaczenia); liczby, daty, kwoty, identyfikatory i `§` zostają nienaruszone, stylu autora się nie zmienia.
+- **ZIP:** rozpakowanie lokalne z ochroną przed traversal/symlink/bombą; członkowie nigdy nie trafiają do modelu automatycznie.
 
 ---
 
-## Baza źródeł i portali
+## Modele AI
 
-Lex Machina nie przeszukuje internetu "na ślepo" — każde wyszukiwanie trafia do
-skatalogowanej bazy źródeł o przypisanym rzędzie wiarygodności. Rejestry kanoniczne:
-[`shared/HIERARCHIA-ZRODEL.md`](Wersja%20rozwojowa%20rozpakowana/shared/HIERARCHIA-ZRODEL.md)
-(kategoryzacja wiarygodności Rząd 1 / 2A / 2B / 3) oraz
-[`shared/PORTALE-BRANZOWE-RZAD-2B.md`](Wersja%20rozwojowa%20rozpakowana/shared/PORTALE-BRANZOWE-RZAD-2B.md)
-(mapa portali per dziedzina DR, z empirycznymi testami `site:`, wersja 2.1).
-
-> **Integracja jako źródła wyszukiwania (router v3.17, 2026-07-21):** oba rejestry
-> istniały wcześniej, ale nie były ładowane przez żaden skill. Teraz
-> `HIERARCHIA-ZRODEL.md` i `PORTALE-BRANZOWE-RZAD-2B.md` są w `required_modules`
-> orkiestratora [`prawny-router-v3`](Wersja%20rozwojowa%20rozpakowana/prawny-router-v3/SKILL.md),
-> więc każda sprawa prowadzona przez router — a przez to każdy uruchamiany przez
-> niego skill DR — ma dostęp do kategoryzacji wiarygodności i mapy portali branżowych.
-
-### Rząd 1 — źródła urzędowe (wyłączne dla brzmienia przepisu)
-
-| Baza | Zakres |
+| Rodzaj | Jak działa |
 |---|---|
-| [isap.sejm.gov.pl](https://isap.sejm.gov.pl) + [api.sejm.gov.pl/eli](https://api.sejm.gov.pl/eli) | Dz.U. i M.P. od 1918 r. — teksty jednolite, łańcuch nowelizacji (deterministyczne API ELI) |
-| [sejm.gov.pl](https://www.sejm.gov.pl) | proces legislacyjny |
-| [eur-lex.europa.eu](https://eur-lex.europa.eu) | prawo UE (CELLAR/CELEX) |
-| [dzienniki.gov.pl](https://dzienniki.gov.pl) | dzienniki urzędowe (m.in. wojewódzkie — prawo miejscowe) |
-| [prawakonsumenta.uokik.gov.pl](https://prawakonsumenta.uokik.gov.pl) | UOKiK — prawa konsumenta, gotowe wzory pism (odstąpienie, reklamacja), polubowne spory (DR-02) |
-| [parp.gov.pl](https://www.parp.gov.pl) | PARP — dotacje i dofinansowania dla firm, aktualne nabory (DR-06) |
-| uodo.gov.pl, BIP właściwych organów | rozporządzenia branżowe, ochrona danych |
+| **API** (Anthropic, OpenAI, xAI) | Klucz w pamięci procesu lub keyringu systemu; dwie najnowsze wersje każdej rodziny. |
+| **Konto Claude (CLI)** | Jeden proces `claude -p` w trybie `--restricted` (tylko `Read/Glob/Grep`, bez powłoki, internetu i zapisu); narzędzia Lex przez serwer MCP. |
+| **Konto Codex / Grok** | Tekstowy protokół narzędzi Lex (runda na narzędzie). |
+| **Lokalny** (llama.cpp, np. Bielik) | Kompaktowy routing, RAG z rdzenia aktów w prompcie, limit 4 plików; używany też do korekty OCR i wspomagania anonimizacji. |
 
-### Rząd 2A — oficjalne orzecznictwo i interpretacje
-
-| Baza | Zakres |
-|---|---|
-| [sn.pl](https://sn.pl) | Sąd Najwyższy |
-| [orzeczenia.ms.gov.pl](https://orzeczenia.ms.gov.pl) | Portal Orzeczeń Sądów Powszechnych + portale poszczególnych SA/SO/SR |
-| [orzeczenia.nsa.gov.pl](https://orzeczenia.nsa.gov.pl) | CBOSA — NSA i 16 WSA |
-| [trybunal.gov.pl](https://trybunal.gov.pl) + otkzu.trybunal.gov.pl | Trybunał Konstytucyjny (OTK ZU) |
-| [orzeczenia.uzp.gov.pl](https://orzeczenia.uzp.gov.pl) | Krajowa Izba Odwoławcza |
-| [saos.org.pl](https://www.saos.org.pl) | SAOS — wyszukiwarka pomocnicza i API weryfikacji sygnatur |
-| [curia.europa.eu](https://curia.europa.eu), [echr.coe.int](https://www.echr.coe.int) | TSUE, ETPC |
-| interpretacje.podatki.gov.pl (Eureka), zus.pl, pip.gov.pl, uokik.gov.pl, uzp.gov.pl i in. | interpretacje urzędowe per dziedzina — rejestr: [`shared/INTERPRETACJE-URZEDOWE.md`](Wersja%20rozwojowa%20rozpakowana/shared/INTERPRETACJE-URZEDOWE.md) |
-
-### Rząd 2B — uznane portale prawnicze i branżowe (komentarz i kontekst)
-
-Nigdy nie służą jako brzmienie przepisu ani dowód istnienia orzeczenia — zawsze ze
-znacznikiem źródła pomocniczego.
-
-| Kategoria | Portale |
-|---|---|
-| Generalistyczne | prawo.pl, infor.pl (+ kadry / ksiegowosc / samorzad), gofin.pl (+ subdomeny), gazetaprawna.pl, rp.pl, lexlege.pl, arslege.pl, money.pl |
-| Gospodarcze i NGO (DR-02) | poradnikprzedsiebiorcy.pl, bankier.pl, ngo.pl (fundacje, stowarzyszenia — nowa nisza) |
-| Podatki i księgowość (DR-06) | gofin.pl, ksiegowosc.infor.pl, podatki.biz, epodatnik.pl (archiwum interpretacji KIS), bankier.pl (proces legislacyjny), egospodarka.pl |
-| Prawo pracy (DR-04) | kodekspracy.pl, kadry.infor.pl |
-| Zamówienia publiczne (DR-07) | portalzp.pl |
-| Samorząd (DR-08) | samorzad.infor.pl, prawodlasamorzadu.pl |
-| Budownictwo (DR-09) | muratorplus.pl, prawniknabudowie.com, prawnikpodpowienabudowie.pl |
-| Zdrowie, farmacja, rolnictwo (DR-10) | rynekzdrowia.pl (zdrowie/farmacja), farmer.pl, wiescirolnicze.pl (rolnictwo — ARiMR, KRUS) |
-| RODO i cyfrowe (DR-11) | poradyodo.pl |
-| Zawody prawnicze (DR-12) | palestra.pl, temidium.pl |
-| Osoby z niepełnosprawnościami | niepelnosprawni.pl, integracja.org (+ popon.pl, obpon.org — perspektywa pracodawcy) |
-| Bazy komercyjne (przy licencji) | LEX (sip.lex.pl), Legalis (sip.legalis.pl) — jako tekst przepisu Rząd 2A, jako komentarz Rząd 2B |
-
-> Portale oznaczone jako AI-wspomagane (np. egospodarka.pl — część artykułów
-> generowana przez AI) system traktuje z podwyższoną ostrożnością i krzyżuje z
-> innym źródłem przy kluczowych ustaleniach.
-
-Rejestr uczciwie odnotowuje dziedziny bez dominującego portalu branżowego (DR-03
-karne, DR-05 administracyjne, DR-15 compliance) — tam system korzysta z portali
-generalistycznych z zawężonym zapytaniem.
-
-### Rząd 3 — strony kancelarii, blogi, NGO
-
-Dopuszczone wyłącznie jako trop do dalszej weryfikacji — wysokie ryzyko
-dezaktualizacji, obowiązkowe skrzyżowanie z Rzędem 1/2A przed użyciem.
-
-Konektory MCP opisuje osobna sekcja: [Konektory MCP](#konektory-mcp).
+- **Bramka złożoności** (bez wywołania modelu): `TRIVIAL` / `SIMPLE` / `STANDARD` — steruje kosztem i wybiera szybką ścieżkę dla prostych pytań.
+- **Szybka odpowiedź (model lokalny):** prompt ~3× mniejszy (ok. 8–11 tys. znaków zamiast ~25 tys.), rdzeń aktów z ELI, maks. 3 rundy.
+- **Strażnik źródeł:** każdy artykuł, pozycja Dz.U., URL i powołane narzędzie muszą pochodzić z tekstów ELI lub wyników narzędzi danej tury; inaczej jedna runda korekty, potem blokada.
 
 ---
 
-## Konektory MCP
+## Źródła prawa
 
-Lex Machina ma własny pakiet serwerów MCP (Model Context Protocol) do polskich i unijnych źródeł publicznych: `audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs`. Aplikacja Lex Machina instaluje je i sprawdza w **Ustawienia → Konektory MCP**; w Claude Desktop działają jako wpisy `lex-<serwer>` w `claude_desktop_config.json`.
-
-> **CEIDG wymaga Twojego własnego klucza API.** Konektor CEIDG (przedsiębiorcy — osoby fizyczne) nie działa bez tokenu z Hurtowni danych CEIDG. Klucza nie dostarczamy i nie wolno go udostępniać: token jest wydawany na osobę i zawiera jej dane (m.in. PESEL). Bez klucza CEIDG jest raportowany jako **niedostępny**, nigdy jako „brak podmiotu”. Spółki są w KRS, nie w CEIDG.
->
-> **Jak wyrobić klucz:** wniosek o dostęp do API w [Hurtowni danych CEIDG i Biznes.gov.pl](https://dane.biznes.gov.pl/pl/portal/034872) (logowanie Profilem Zaufanym lub e-dowodem) → po akceptacji skopiuj token (JWT) → w aplikacji: Ustawienia → Konektory MCP → „Token CEIDG” → „Zatwierdź klucz” (aplikacja sprawdza kształt tokenu i próbuje API v3; zapis lokalny z uprawnieniami tylko dla Twojego konta) → „Zainstaluj” przy CEIDG. Poza aplikacją: zmienna środowiskowa `CEIDG_API_KEY`.
-
-| Serwer | Źródło | Klucz |
-|---|---|---|
-| `isap` | Sejm ELI — akty Dz.U./M.P., aktualny tekst jednolity, nowelizacje po nim | — |
-| `eurlex` | EUR-Lex / Cellar i wyroki TSUE | — |
-| `saos` | orzeczenia sądów powszechnych, SN, TK, KIO (treść, teza, uzasadnienie), cytator | — |
-| `cbosa` | orzeczenia NSA i WSA — snapshot bez awansu do VERIFIED, brak trafień = `OUT_OF_SCOPE` | — |
-| `krs` | odpis aktualny KRS, reprezentacja | — |
-| `wl` | biała lista VAT: status podatnika i kontrola rachunku z `requestId` | — |
-| `ceidg` | CEIDG API v3 | **wymagany, własny** |
-| `nbp` | kursy średnie NBP (tabela A) | — |
-| `eureka` | interpretacje i objaśnienia podatkowe z aktualnością | — |
-| `sudop` | pomoc publiczna i de minimis (UOKiK) | — |
-| `uodo` | decyzje Prezesa UODO z prawomocnością | — |
-
-### Czym to się różni od innych rozwiązań
-
-Stan na 29.09.2026, na podstawie publicznych materiałów dostawców:
-
-- **Otwarte serwery MCP do polskiego prawa istnieją** — m.in. [`prawo-pl-mcp`](https://github.com/matematicsolutions/prawo-pl-mcp) (MateMatic, Apache-2.0: SAOS, CBOSA, ISAP/ELI, KRS, EUREKA, KIO, UODO, EUR-Lex) oraz pojedyncze serwery społeczności, np. [`mcp-wl-vat`](https://github.com/pwasniowski/mcp-wl-vat) (biała lista VAT). Samo MCP nie jest więc wyróżnikiem.
-- **Komercyjne systemy AI dla prawników** (LEX Expert AI i Libra — Wolters Kluwer, Legalis AI i Beck-Noxtua — C.H.Beck) opierają się na własnych bazach treści w zamkniętym środowisku; w ich publicznych materiałach nie znaleźliśmy konektorów MCP do rejestrów publicznych.
-
-Wyróżnikiem Lex Machiny jest **sposób użycia** konektorów, nie sam protokół:
-
-1. **Jeden pakiet, 11 źródeł**, w tym CEIDG, biała lista VAT z kontrolą rachunku, NBP i SUDOP — których brak w `prawo-pl-mcp`.
-2. **Konektory są częścią bramek antyhalucynacyjnych**: wynik MCP służy do odnalezienia źródła i nigdy sam nie tworzy statusu VERIFIED; brzmienie przepisu potwierdza wyłącznie weryfikator ELI (Rząd 1), a niedostępne źródło to „niedostępne”, nie „brak prawa”.
-3. **Kontrola tożsamości wyniku**: sygnatura (SAOS, CBOSA, EUREKA, UODO) musi się zgadzać dokładnie — prefiks ani podobna sygnatura nie potwierdza orzeczenia; CBOSA jako snapshot bez awansu.
-4. **Ochrona danych sprawy** (w aplikacji Lex Machina): do zewnętrznych API nie trafiają fakty sprawy, tekst dokumentów ani tokeny danych osobowych — blokada w runtime, nie tylko instrukcja dla modelu. W Claude Desktop obowiązuje ta sama reguła skilli, ale bez blokady po stronie programu.
-5. **Instalacja z kontrolą**: handshake MCP przy instalacji, przycisk „Sprawdź”, suma kontrolna pakietu wobec skilla („najnowsza instalacja”), wyszukiwarka bez modelu w aplikacji (karta Wyszukiwanie).
+- **Weryfikacja przepisów:** modele w chmurze potwierdzają każdy akt (także KC/KPC/KK/KPK) w Sejm ELI z kontrolą aktualności (bieżący tekst jednolity, nowelizacje po nim). Lokalna kopia ELI (RAG) służy tylko przy awarii ELI — wtedy z jawną adnotacją.
+- **16 konektorów MCP** (federacja w czacie, karta Wyszukiwanie): ISAP/ELI, EUR-Lex, SAOS, CBOSA (NSA/WSA), Sąd Najwyższy, KRS, Biała lista VAT, CEIDG (wymaga własnego klucza API), NBP, EUREKA (interpretacje podatkowe), SUDOP, UODO, KIO, Trybunał Konstytucyjny, sądy powszechne (orzeczenia.ms.gov.pl), ETPCz.
+- **Karta Wyszukiwanie:** wynik wprost z API źródła, bez modelu — materiał do odnalezienia źródła, nie weryfikacja. NSA/WSA to snapshot; brak trafień = `OUT_OF_SCOPE`.
 
 ---
 
-## 💾 Instalacja
+## Bramki antyhalucynacyjne
 
-> **Wymagania:** konto na jednym z obsługiwanych hostów — [claude.ai](https://claude.ai),
-> host zgodny z OpenAI (ChatGPT / Codex / API / Atlas) albo Grok. Skille wymagają planu,
-> w którym host udostępnia wgrywanie skilli · przeglądarka — bez instalacji oprogramowania.
->
-> **Inne hosty:** host-neutralne są **obie wersje — stabilna (8.09.2026) i rozwojowa**
-> (wspólny [adapter runtime](#-kompatybilno%C5%9B%C4%87-llm)). Kroki 1–4 opisują ścieżkę
-> Claude AI; **Krok 5** — instalację w ChatGPT (hosty zgodne z OpenAI), a **Krok 6** —
-> w Grok, który pobiera skille wprost z repozytorium po wskazaniu wersji. Na każdym
-> hoście te same reguły trafiają do jego instrukcji/personalizacji, a bramki jakości
-> są identyczne.
+Aplikacja egzekwuje serię bramek walidacyjnych (G0–G40) przed każdym wynikiem finalnym lub eksportem:
 
-<details>
-<summary><b>Krok 1 — Pobierz repozytorium</b></summary>
+- **G8 — HARD GATE:** niepopart przepis lub orzeczenie nie może po cichu stać się odpowiedzią finalną.
+- **Finalizacja:** niezweryfikowany przepis/Dz.U. pokazywany wyłącznie z `⚠️ [NIEWERYFIKOWANE]` przy samym odwołaniu; zmyślona lub zmieniona sygnatura, cytat albo teza blokuje odpowiedź.
+- **G10 — Export Gate:** nieprawidłowe cytaty/weryfikacja blokują eksport; `.docx` tylko po walidacji HYBRID-VAL.
+- **G9 — Audit:** każda odpowiedź finalna ma kompletny, audytowalny ślad wykonania.
+- **Routing:** `prawny-router-v3` zawsze pierwszy; sprawa karna wymaga kwalifikatora karnomaterialnego (brak = runda korekty, dalej brak = blokada).
 
-GitHub → zielony przycisk **Code** → **Download ZIP**, albo:
+---
+
+## Bezpieczeństwo
+
+- Runtime nasłuchuje wyłącznie na `127.0.0.1`; desktop przepuszcza tylko nagłówki `X-Lex-*` z listy i tylko trasy z allowlisty.
+- Magazyny spraw i klucze anonimizacji szyfrowane kluczem sprawy; rotacja przy odebraniu dostępu.
+- Konta lokalne: Argon2id (koperta UMK z hasła), trwałe metadane logowania, backoff po błędach, wygasanie sesji; role ACL per sprawa i oddzielne uprawnienie `canReidentify`.
+- Koperty kluczy: niezależny 256-bitowy klucz per sprawa (CDK), koperty UMK/X25519 per użytkownik, ścieżka rotacji przy odbieraniu dostępu.
+- Model Claude nie ma powłoki, internetu, zapisu ani serwerów MCP konta; odczyt ograniczony do korpusu skilli.
+- Most narzędzi MCP: prywatny kanał (named pipe / socket 0600) z jednorazowym tokenem na turę.
+
+---
+
+## Instalacja
+
+**Wymagania:** Windows 10/11 (x64) lub macOS (Apple silicon). Instalator online pobiera prywatny Node i Python przy pierwszym uruchomieniu (sumy SHA-256 z `app/installer/windows-release-source.json`).
+
+1. Pobierz instalator online (artefakt workflow `Lex Windows Online Installer`: `LexMachina-Windows-Online-Installer`, lub `.dmg` z workflow macOS).
+2. Instalator jest niepodpisany — przy SmartScreen wybierz „Więcej informacji" → „Uruchom mimo to".
+3. Instalacja odbywa się w profilu użytkownika; nie wymaga uprawnień administratora.
+4. Pierwsze logowanie: `admin` i hasło początkowe — aplikacja wymusza zmianę (min. 10 znaków).
+
+Aktualizacje aplikacji są pre-release z instalatorem online i `SHA256SUMS.txt`. Skille można odświeżać w aplikacji (Ustawienia → Konserwacja → Skille, kanał Stabilna/Rozwojowa).
+
+---
+
+## Budowa ze źródeł
 
 ```bash
-git clone https://github.com/michaleiatrak-star/Lex-Machina.git
+# runtime
+cd app/lex-runtime && npm install && npm run typecheck && npx vitest run && npm run build
+# interfejs
+cd app/lex-web && npm install && npx tsc -b && npx vitest run && npm run build && npm run validate:g14
+# walidatory bramek (przykłady)
+cd app/lex-runtime && npm run validate:g8 && npm run validate:g33d && npm run validate:g36
+# trasy runtime a allowlista proxy desktopu
+python3 app/lex-desktop/scripts/check-route-allowlist.py
+# lista słów instytucji i ról (po zmianie)
+python app/privacy/generate_generic_words.py
 ```
 
-Skille do wgrania znajdziesz w katalogu wersji (rozpakowanej lub jako pojedyncze
-`.zip` w `WERSJA STABILNA …/`).
-</details>
+Instalator buduje workflow `lex-installer.yml` (Windows, ~25 min; wyzwalacze: pull request, `workflow_dispatch`). Nie wymaga sekretów (instalator niepodpisany). Pełna dokumentacja: [użytkowa](docs/APLIKACJA-DOKUMENTACJA.md) · [techniczna](docs/DOKUMENTACJA-TECHNICZNA.md).
 
-<details>
-<summary><b>Krok 2 — Wgraj skille do Claude AI (kolejność ma znaczenie)</b></summary>
+### Wybrane zmienne środowiskowe
 
-Claude AI → **Customize** → **Nowy skill** → **Wgraj skill z komputera** → wskaż **cały folder** skilla (nie pojedynczy plik `SKILL.md`).
-
-Kolejność wgrywania:
-
-| Etap | Skille | Status |
-|---|---|---|
-| 1️⃣ | `shared/` | obowiązkowy |
-| 2️⃣ | `prawo-polskie-v2/`, `prawny-router-v3/` | obowiązkowe |
-| 3️⃣ | `dr-01/` … `dr-16/` | wgraj wszystkie |
-| 4️⃣ | skille wykonawcze | wg potrzeb (zalecany: `przewodnik-prawny-v2/`) |
-| 5️⃣ | `audyt-systemu-v4/` | opcjonalny (administracja) |
-
-**Minimalna instalacja:** `shared/` + `prawo-polskie-v2/` + `prawny-router-v3/` +
-`przewodnik-prawny-v2/` + dowolny skill wykonawczy + DR-skille właściwe dla Twojej sprawy.
-</details>
-
-<details>
-<summary><b>Krok 3 — User Preferences (kluczowy!)</b></summary>
-
-Claude AI → ikona konta → **Settings** → **User Preferences** → wpisz dokładnie:
-
-```
-Prawo PL: router→v3 pierwszy, ISAP każdy przepis, HYBRID-VAL przed .docx. Karne: +kwalifikator.
-```
-
-| Fragment | Znaczenie |
+| Zmienna | Znaczenie |
 |---|---|
-| `router→v3 pierwszy` | router wczytywany jako pierwszy w każdej sprawie |
-| `ISAP każdy przepis` | weryfikacja każdego przepisu w isap.sejm.gov.pl |
-| `HYBRID-VAL przed .docx` | walidacja hybrydowa przed generowaniem Worda |
-| `Karne: +kwalifikator` | w sprawach karnych moduł kwalifikatora karnomaterialnego |
-
-**Allowlista domen (wymagana dla oficjalnych źródeł prawa):**
-
-Claude AI → **Settings** → **Capabilities** → **Additional allowed domains** → dodaj:
-
-```text
-api.sejm.gov.pl
-eli.gov.pl
-isap.sejm.gov.pl
-gov.pl
-```
-
-Bez tej allowlisty Claude może blokować bezpośredni dostęp do źródeł urzędowych
-używanych przez HARD GATE i weryfikację online.
-</details>
-
-<details>
-<summary><b>Krok 4 — Weryfikacja i rozwiązywanie problemów</b></summary>
-
-Test: nowa rozmowa → *„Mam sprawę prawną. Od czego zacząć?"* — system powinien
-uruchomić router, dopytać o charakter sprawy i zaproponować przewodnik.
-
-| Problem | Rozwiązanie |
-|---|---|
-| Claude nie używa routera | sprawdź User Preferences (dokładny tekst) i czy router jest na liście skilli |
-| Skill nie pojawia się po wgraniu | wskaż **folder**, nie plik `SKILL.md` |
-| Cytowanie bez weryfikacji | napisz: *„przypomnij sobie zasady HARDGATE"*; sprawdź czy `shared/` zawiera `PRAWO-HARDGATE.md` |
-| Błąd „description too long" | uruchom: *„przeprowadź audyt systemu"* — wskaże winny skill |
-</details>
-
-<details>
-<summary><b>Krok 5 — Instalacja w ChatGPT (host zgodny z OpenAI)</b></summary>
-
-Host-neutralna jest zarówno wersja stabilna (8.09.2026), jak i rozwojowa, więc
-w ChatGPT wgrywa się **te same foldery skilli** i w **tej samej kolejności** co
-w Claude (patrz Krok 2) — z dowolnego z dwóch katalogów wersji. Każdy skill niesie
-manifest `agents/openai.yaml` (`products: chatgpt, codex, api, atlas`) rozpoznawany
-przez ekosystem OpenAI oraz wspólny [adapter runtime](#-kompatybilno%C5%9B%C4%87-llm),
-który mapuje operacje systemu na natywne funkcje ChatGPT.
-
-**Odpowiednikiem „User Preferences" (Krok 3) jest w ChatGPT pole instrukcji
-niestandardowych w personalizacji** — te same reguły wpisujesz raz, dokładnie tak samo:
-
-ChatGPT → **Ustawienia** → **Personalizacja** → **Instrukcje niestandardowe**
-(*Custom instructions*) → pole *„Jak ChatGPT ma odpowiadać?"* (lub *„Co jeszcze ChatGPT
-powinien wiedzieć?"*) → wklej:
-
-```
-Prawo PL: router→v3 pierwszy, ISAP każdy przepis, HYBRID-VAL przed .docx. Karne: +kwalifikator.
-```
-
-| Fragment | Znaczenie |
-|---|---|
-| `router→v3 pierwszy` | router wczytywany jako pierwszy w każdej sprawie |
-| `ISAP każdy przepis` | weryfikacja każdego przepisu w isap.sejm.gov.pl |
-| `HYBRID-VAL przed .docx` | walidacja hybrydowa przed generowaniem dokumentu |
-| `Karne: +kwalifikator` | w sprawach karnych moduł kwalifikatora karnomaterialnego |
-
-> Instrukcje niestandardowe działają globalnie na koncie — dokładnie jak User
-> Preferences w Claude — więc reguły obowiązują w każdej nowej rozmowie bez
-> powtarzania. Bramki jakości (HARD GATE, weryfikacja online, ZASADA 7) są identyczne.
-> Gdy host nie ma natywnego generatora DOCX/PDF, system zwraca równoważny raport
-> strukturalny — walidacja końcowa nie jest pomijana (patrz adapter runtime).
-</details>
-
-<details>
-<summary><b>Krok 6 — Instalacja w Grok (automatyczne pobranie z repozytorium)</b></summary>
-
-Grok nie wymaga ręcznego wgrywania folderów — potrafi **sam pobrać skille z
-repozytorium**. Wystarczy:
-
-1. **Wskaż repozytorium** — podaj Grokowi adres:
-   `https://github.com/michaleiatrak-star/Lex-Machina`.
-2. **Wskaż wersję** — którą gałąź/katalog ma wziąć:
-
-   | Wersja | Katalog w repozytorium | Host-neutralna |
-   |---|---|---|
-   | 🟢 stabilna (zalecana) | `Wersja stabilna rozpakowana 8.09.2026/` | tak |
-   | 🟠 rozwojowa | `Wersja rozwojowa rozpakowana/` | tak |
-
-3. Grok pobiera i instaluje skille automatycznie (zaczynając od `shared/`, potem
-   router i skille DR — kolejność jak w Kroku 2).
-4. **Reguły sterujące** wpisz w instrukcjach/personalizacji Grok — ta sama kanoniczna
-   reguła co w Claude i ChatGPT:
-
-   ```
-   Prawo PL: router→v3 pierwszy, ISAP każdy przepis, HYBRID-VAL przed .docx. Karne: +kwalifikator.
-   ```
-
-> Bramki jakości (HARD GATE, weryfikacja online, ZASADA 7) obowiązują identycznie.
-> Do brzmienia przepisu i sygnatur Grok korzysta z weryfikacji online zgodnie z
-> adapterem runtime — nie cytuje prawa z pamięci.
-</details>
+| `LEX_HOST`, `LEX_PORT` | Adres runtime (tylko loopback). |
+| `LEX_CLAUDE_NATIVE_CORPUS=off` | Claude wraca do tekstowego protokołu narzędzi. |
+| `LEX_SKILLS_PATH`, `LEX_ACCOUNT_SKILL_DIRS` | Przypięty korpus / katalogi skilli z kont. |
+| `LEX_CORE_LAW_DIR`, `LEX_CORE_LAW_REFRESH=off` | Lokalna kopia ELI i jej odświeżanie w tle. |
+| `LEX_MCP_PACKAGE`, `LEX_MCP_STATE_DIR`, `CEIDG_API_KEY` | Pakiet serwerów MCP, stan konektorów, klucz CEIDG. |
+| `LEX_NER_PYTHON`, `LEX_OCR_PYTHON`, `LEX_GENERIC_WORDS` | Ścieżki workerów i list słów. |
 
 ---
 
-## Zadania cykliczne (scheduled tasks) w Cowork
+## Wersjonowanie
 
-Cowork (aplikacja desktop Claude, plany płatne) pozwala uruchamiać skille systemu
-automatycznie według harmonogramu — typowo cykliczny audyt `audyt-systemu-v4`
-(monitoring nowych Dz.U., zamykanie flag WARN).
+Wersja aplikacji: **0.1.20** (runtime, interfejs i desktop współdzielą numer).
 
-### Jak utworzyć zadanie
-
-Uruchom audyt systemu w trybie graficznym w Cowork i wybierz automatyzację systemu - weryfikacje dzienników ustaw, system poprowadzi cię automatycznie.
-
-### Prompt zadania dla Lex Machina — reguły
-
-Zadanie startuje w **świeżej sesji**: prompt musi być samowystarczalny i **musi
-precyzować zakres audytu**. Samo „przeprowadź audyt" uruchamia w `audyt-systemu-v4`
-interaktywne menu wyboru (FAZA 0B), na które w sesji automatycznej nikt nie odpowie.
-Wskazuj wprost tryb z sekcji „TRYBY WYWOŁANIA" w `audyt-systemu-v4/SKILL.md`:
-
-| Cel | Częstotliwość | Prompt zadania |
-|---|---|---|
-| Monitoring nowych Dz.U. / t.j. | Daily / Weekdays | `Uruchom audyt-systemu-v4 w TRYBIE DZU: sprawdź mapę Dz.U., zaktualizuj tabelę MONITORING i AUDIT-JOURNAL.` |
-| Pełny audyt systemu | Weekly | `Uruchom audyt-systemu-v4 w TRYBIE AUTO: pełny audyt, Fazy 0–7, bez menu interaktywnego.` |
-| Zamykanie otwartych flag | Weekly | `Uruchom audyt-systemu-v4 w TRYBIE WARN-CLOSE: zamknij otwarte warningi z references/WARN-OTWARTE.md.` |
-
-### O czym pamiętać
-
-- Zadanie lokalne wykonuje się tylko przy otwartej aplikacji i niewyłączonym komputerze;
-  pominięty termin → jeden przebieg nadrabiający po wybudzeniu. Zadania niezależne od
-  komputera twórz jako zdalne *routines* (chmura Anthropic).
-- Wynik każdego przebiegu pojawia się jako sesja w sekcji **Scheduled** — sprawdź, czy
-  audyt zakończył się obowiązkowym wpisem w `AUDIT-JOURNAL.md` (FAZA 7).
-- Wszystkie bramki systemu (HARDGATE, weryfikacja online, ZASADA 7) obowiązują również
-  w sesjach automatycznych — skille `shared/` i `audyt-systemu-v4/` muszą być wgrane
-  na koncie, na którym działa Cowork.
+Korpus skilli (osobny projekt GPL-3.0 w repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina)) jest tu dołączony jako dodatek i ma własne wersjonowanie w dwóch kanałach — `Wersja stabilna rozpakowana <data>/` (codzienna praca) i `Wersja rozwojowa rozpakowana/` (nowe mechanizmy). Aplikację można zaktualizować niezależnie od skilli i odwrotnie.
 
 ---
 
-## 🔄 Wersjonowanie
+## Znane ograniczenia
 
-| Kanał | Lokalizacja | Przeznaczenie |
-|---|---|---|
-| 🟢 **Stabilna** | `WERSJA STABILNA 8.09.2026/` + katalog rozpakowany | do codziennej pracy; **wieloplatformowa** — Claude + ChatGPT/Codex/API/Atlas + Grok |
-| 🟠 **Rozwojowa** | `WERSJA ROZWOJOWA/` + `Wersja rozwojowa rozpakowana/` | nowe mechanizmy przed promocją; ta sama warstwa host-neutralna |
-
-> **Zmiana wobec poprzednich wydań:** do 21.08.2026 warstwa host-neutralna była
-> wyłączną cechą kanału rozwojowego, a wersja stabilna niosła profil wyłącznie
-> Claude AI. Wraz z wydaniem **8.09.2026 warstwa została promowana do wersji
-> stabilnej** — oba katalogi mają dziś identyczną zawartość, więc wybór kanału nie
-> wpływa już na to, na jakim hoście system zadziała.
-
-Każda zmiana w systemie jest odnotowana w
-[**dzienniku audytów**](Wersja%20rozwojowa%20rozpakowana/audyt-systemu-v4/references/AUDIT-JOURNAL.md)
-(`audyt-systemu-v4/references/AUDIT-JOURNAL.md`) — format: jedna sekcja
-`## AUDYT-YYYY-MM-DD` na sesję, z tabelą zmienionych plików, naprawami
-i otwartymi flagami. Bieżący zakres „do zrobienia" (bez przekopywania całego
-dziennika) trzyma [`references/WARN-OTWARTE.md`](Wersja%20rozwojowa%20rozpakowana/audyt-systemu-v4/references/WARN-OTWARTE.md).
-Aktualność numerów Dz.U. pilnowana jest w centralnej
-mapie (`audyt-systemu-v4/references/mapa_dzu_*.md`).
+- Przyspieszenie trybu natywnego Claude i weryfikacja przez lokalne AI nie były mierzone na prawdziwym koncie/modelu (pokryte testami).
+- Strażnik źródeł porównuje numery artykułów, nie akty (finalizacja ELI nadal sprawdza akt).
+- Codex i Grok nie mają zamknięcia odczytu w jednym katalogu — pozostają przy protokole tekstowym.
+- Okna kontekstu modeli w hoście przyjęte ostrożnie (Claude 200 tys., OpenAI/Grok 128 tys. tokenów).
+- Jakości OCR/korekty na prawdziwych skanach i modelu lokalnym nie mierzono (testy na atrapie silnika).
+- Instalator offline wstrzymany do potwierdzenia instalatora online.
 
 ---
 
-## ⚠️ Zastrzeżenia prawne
+## Zastrzeżenia prawne
 
 > **Lex Machina dostarcza informację prawną, nie poradę prawną.**
 >
-> - System jest narzędziem wspomagającym — **nie zastępuje adwokata ani radcy prawnego**; w sprawach o istotnej wadze skonsultuj się z profesjonalnym pełnomocnikiem.
-> - Mimo wielowarstwowych bramek weryfikacyjnych każdy przepis i każdą sygnaturę **zweryfikuj samodzielnie** w źródłach oficjalnych (isap.sejm.gov.pl, sn.pl, orzeczenia.ms.gov.pl) przed użyciem w postępowaniu.
-> - Wygenerowane pisma mają status **DRAFT** do czasu ich świadomej akceptacji przez człowieka.
+> - Narzędzie wspomagające — **nie zastępuje adwokata ani radcy prawnego**; w sprawach o istotnej wadze skonsultuj się z pełnomocnikiem.
+> - Mimo wielowarstwowych bramek każdy przepis i każdą sygnaturę **zweryfikuj samodzielnie** w źródłach oficjalnych (isap.sejm.gov.pl, sn.pl, orzeczenia.ms.gov.pl) przed użyciem w postępowaniu.
+> - Wygenerowane pisma mają status **DRAFT** do świadomej akceptacji przez człowieka.
 > - Stan prawny zmienia się stale — mapy aktów są „zdjęciem" na datę ostatniego audytu.
 
 ---
 
-## 🤝 Kontakt i zgłaszanie błędów
+## Kontakt i licencja
 
-Błędy, sugestie i propozycje zmian → [**Issues**](https://github.com/michaleiatrak-star/Lex-Machina/issues)
+Błędy i sugestie → [Issues](https://github.com/michaleiatrak-star/Lex-machina-aplikacja/issues).
 
-## 📜 Licencja
+Dwie różne licencje — nie myl ich:
 
-**Kod zastrzeżony.** © 2026 michaleiatrak-star (autor Lex Machina). Wszelkie prawa zastrzeżone.
+- **Aplikacja** (`app/`, runtime, interfejs, desktop, instalatory) — **kod zastrzeżony**, © 2026 michaleiatrak-star. Wszelkie prawa zastrzeżone. Bezpłatna instalacja i używanie **wyłącznie do osobistego użytku** ([LICENSE](LICENSE)); bez pisemnej zgody autora zabronione jest kopiowanie kodu, modyfikowanie, tworzenie utworów zależnych, rozpowszechnianie i wykorzystanie zawodowe.
+- **Korpus skilli** (metodyka prawna, osobne repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina), tu dołączony jako dodatek) — **GPL-3.0**, z własną dokumentacją i warunkami tej licencji.
 
-Aplikację można bezpłatnie instalować i używać **wyłącznie do osobistego użytku** ([LICENSE](LICENSE)). Bez pisemnej zgody autora zabronione jest kopiowanie kodu źródłowego lub jego fragmentów, modyfikowanie, tworzenie utworów zależnych, rozpowszechnianie i wykorzystanie w działalności gospodarczej lub zawodowej. Komponenty osób trzecich pozostają na swoich licencjach.
-
-Przetwarzanie danych: [Polityka prywatności](POLITYKA-PRYWATNOSCI.md).
+Komponenty osób trzecich pozostają na swoich licencjach. Przetwarzanie danych: [Polityka prywatności](POLITYKA-PRYWATNOSCI.md).
 
 <div align="center">
-<sub>⚖️ Lex Machina — <i>prawo z maszyny, weryfikacja ze źródła.</i></sub>
+<sub>Lex Machina — prawo z maszyny, weryfikacja ze źródła.</sub>
 </div>
