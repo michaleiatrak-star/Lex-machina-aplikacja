@@ -171,6 +171,14 @@ Aplikacja egzekwuje serię bramek walidacyjnych (G0–G40) przed każdym wynikie
 
 Aktualizacje aplikacji są pre-release z instalatorem online i `SHA256SUMS.txt`. Skille można odświeżać w aplikacji (Ustawienia → Konserwacja → Skille, kanał Stabilna/Rozwojowa).
 
+**Skille w Claude Code (marketplace):** dodawaj marketplace przypięty do tagu wydania, nie do `main` — wtyczki ze ścieżek względnych pochodzą z tej samej rewizji:
+
+```
+/plugin marketplace add michaleiatrak-star/Lex-machina-aplikacja#v0.1.21
+```
+
+Konektory MCP skilli działają z pakietu w repozytorium (`audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs`, suma w `CHECKSUMS.sha256`), bez pobierania z npm. Przykładowy `claude_desktop_config.json` z serwerem zewnętrznym przypina wersję (`@matematicsolutions/mcp-isap@1.3.0`).
+
 ---
 
 ## Budowa ze źródeł

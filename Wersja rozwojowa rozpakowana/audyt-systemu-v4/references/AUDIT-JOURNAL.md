@@ -69891,6 +69891,16 @@ Bez nowych numerów; Dz.U. 2026 poz. 1243 — ✅ [VER] RZĄD 1 2026-10-04 (już
 Liczby plików bez zmian. Podbicia: DR-03 3.50 → **3.51**, DR-09 3.42 → **3.43**, prawo-polskie-v2 6.35 → **6.36**, audyt 6.165 → **6.166**.
 
 
+## AUDYT-2026-10-07e — weryfikator sygnatur: FOUND bez post-checku (zgł. #90); T22, T41 (6.208)
+
+**Zgłoszenie.** `weryfikator_sygnatur.py` zwracał FOUND, nie sprawdzając, czy znaleziona sprawa ma pytaną sygnaturę. Potwierdzone w kodzie: gałąź POWSZECHNE budowała trafienia jako `[{"sygnatura": pytana}] * liczba_wyników` — licznik portalu wystarczał do FOUND przy jednym wyniku, a post-check tożsamości działał tylko dla SN. Wyszukiwarka Portalu Orzeczeń jest rozmyta, a ta sama sygnatura występuje w wielu sądach.
+
+**Naprawa.** `ms_wyniki()` odczytuje z listy wyników sygnaturę, sąd i adres `/details/` (układ zmierzony na żywo 2026-10-07). Post-check `tozsame()` dla wszystkich baz. Brak zgodnej przy wynikach nieodczytanych (paginacja, zmiana układu) → OUT_OF_SCOPE z uzasadnieniem, nie NOT_FOUND.
+
+**Pomiar.** `--selftest` PASS (19/19). Na żywo: I ACa 100/19 → FOUND (Sąd Apelacyjny w Poznaniu); I ACa 100/18 → AMBIGUOUS (5); I ACa 999999/19 → NOT_FOUND. Gałąź SN: sn.pl HTTP 403 (blokada po stronie serwera od 2026-10-06, poza zakresem zmiany).
+
+**Przy okazji.** T22 — brak wpisu `scripts/test_konstytucja_tekst_czysty.py`; T41 — 201 plików po 6.207 (dwa osobne testy offline sn/tk wbrew konwencji `test_sady.mjs`), scalone. T47 wymaga `npm ci` w `mcp-servers/` (środowisko, nie wada).
+
 ## AUDYT-2026-10-06n — etpcz: wyszukiwanie po frazie zwracało „brak trafienia” mimo trafień; karta Wyszukiwanie: fraza pierwsza (6.203)
 
 ### 1. ŹRÓDŁO

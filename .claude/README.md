@@ -8,12 +8,12 @@ Claude Code is an interactive command-line interface that provides AI assistance
 
 ## Repository Contents
 
-- **`settings.json`** - Core configuration file containing:
+- **`settings.json`** (local only, not committed) - Core configuration file containing:
   - Permission settings for various tools and commands
   - Custom hooks for enhanced functionality
   - etc.
 
-- **`statusline.exe` / `statusline.go`** - Custom status line binary (see [Statusline](#statusline) below)
+- **`statusline.exe` / `statusline.go`** - Custom status line binary (`statusline.exe` is built locally with `build_statusline.*`, not committed) (see [Statusline](#statusline) below)
 
 - **`CLAUDE.md`** - Minimal agent instructions
 
