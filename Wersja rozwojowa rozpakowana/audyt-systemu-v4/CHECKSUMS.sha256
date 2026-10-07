@@ -1,6 +1,6 @@
 f1306e7d29cbbac14d14f7a3c096c646d340ab41c8bae37f1250c6c3916e5978  ./PORTABILITY-MANIFEST.md
 2cf33abe59a4fc8cfb7ca289790b86a818eaf6c885379d4ef2fa5c63d749ac3b  ./README.md
-6b1c25e6fd625602aaab7f4df33c14b834e8dc7a9f3df419148287a48d01b73a  ./SKILL.md
+b680271210af7a07078452d4fa40d070302ca2d47e007ed7f17518ad99c69ebf  ./SKILL.md
 6ab72bd687f07b8de1615a237b2c3813b4375c88775ae09e9c16136a424cb68b  ./agents/openai.yaml
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986  ./mcp-servers/LICENSE
@@ -13,7 +13,7 @@ c2c61b340f90522e08100a71e4ac5d74a46c8a5bf708730e0802ff7fcaf25393  ./mcp-servers/
 55dbd937ab8ed74d02b95ac874a4a79cf6f7551485302f7fad85617634585a1a  ./mcp-servers/ceidg-example/fixtures/firmy_nip_aktywny.json
 74b6c9bda725bbfbc3926510d234bb5cbfde501267ec28bd7d804c4a00823dab  ./mcp-servers/ceidg-example/test_normalizacja.mjs
 ad8df07cc7234d88ebdfd7eefa0a2ea8acf405c492683d783078c2fbe7cd1ad2  ./mcp-servers/dist/NOTICE-THIRD-PARTY.txt
-32d4c6ca675192dc2edb114f1f54ca93b622c6019b04b28c02bbb10e34350c64  ./mcp-servers/dist/lex-mcp.mjs
+37ddb2e612b0a0720826ad83dd6884f1892ccf46b36be54229bba7ec58f3d8aa  ./mcp-servers/dist/lex-mcp.mjs
 cdc5ee84a2eb1094bcf586e200394d306b70661202cee472eee1fe0fe9624edf  ./mcp-servers/etpcz-example/etpcz-mcp-server.js
 14729981c13e9f5585ad139c58b12b477defcc2ffe56b01c75b8869acc89733a  ./mcp-servers/eureka-example/eureka-mcp-server.js
 1aa02a2b1c340653a9e5dbdcfcba96c0023d2a9f30f50f19fe98dede3f0b2590  ./mcp-servers/eureka-example/fixtures/dok_445895.json
@@ -37,7 +37,7 @@ d64095fa343273bf885b3b7f2e964ea969b8a8d0b334fe21ea81c40c57ae6adf  ./mcp-servers/
 2c3f1c843ecb0aeb3e596d3d0d6ba050a6b25061a68d4686a85cc2673a8fe980  ./mcp-servers/isap-eli-example/fixtures/eli_DU_2026_795.json
 063f69d9a5abcfafdc59627aac8b06e54f9c0c719ffbdce81504921855dd2066  ./mcp-servers/isap-eli-example/fixtures/eli_szukaj_kc.json
 793e2f3f8e6e05a165069179f0e96481cbc72d3713acc276f3841ab9d1950bb0  ./mcp-servers/isap-eli-example/fixtures/tj_kc_2026_795_wycinek.txt
-a656e36b18adaf1028453306c782a7b787b867af3c21b8b1ce0f6ab84bf968b8  ./mcp-servers/isap-eli-example/isap-eli-mcp-server.js
+94629cf9d47cbb5b7db1c30571ca42c2119af2fa185f9cf7478328ab800a6b47  ./mcp-servers/isap-eli-example/isap-eli-mcp-server.js
 0b3499134dc5edeb422141aabf0bc188cf7e2a24f441360081b944ffe6cd718e  ./mcp-servers/isap-eli-example/test_normalizacja.mjs
 9debc648200f3819ee1f4853c903eadfe7db2e020a0355a2244517b9303e30f6  ./mcp-servers/kio-example/README.md
 9aeee7dfba7ddef5aabd7039fb7043fc27ff94149afcef632bb35b69eb18b42b  ./mcp-servers/kio-example/fixtures/uzp.json
@@ -90,7 +90,7 @@ f06c3969a5625a2560967736e6ff8646e822d6af40573c4a77910816f281cf7d  ./modules/MOD-
 53f0880bdbf47510b8c7fb18a67130b1a3f2107bcb9d931a37e422aa82a92461  ./modules/MOD-WSTAWKI.md
 13279701eef22c911cdbcb35412d94c9a85112217351307db910732dbc21e8da  ./references/ALIASY-NAZW-AKTOW.md
 2b830671a3dde03bbb72e16098d9bb9231ba0cf9a98ba2d10d3073f75f04d010  ./references/AUDIT-JOURNAL.md
-a4a88af78862ee73c7e36b4782a01eebf725316442eadc04d20807b06f7a9e9d  ./references/CHANGELOG.md
+3501b71865bb66d5fcfedac4758b91fa3b64cc062fe2337856d39f4477be393b  ./references/CHANGELOG.md
 aee9df0be072509755f8ce08a6863ffec3aee26277d7239005542a42da732f67  ./references/CHECKLIST-DEDUP.md
 4029e076fe66794f7ccbd36ee3da795faf8d856895ebaba8461d755f89c02f78  ./references/COWORK-HARMONOGRAM-NATYWNY.md
 acf1a3408d1662c382244cc8a0ae87861ffa6d4d63f1501470cd6ee218bd2f66  ./references/F-104-lista-robocza-mapa-dzu.md
@@ -180,7 +180,7 @@ a285598f363d6b5e997040a74f191ed5ac781ffec45d8dc7643d61ba43346edc  ./scripts/inst
 076e45f295d3a3b41c4ecf3d29b69c2c33bd575e7b6077563cbb1ef82f08ebce  ./scripts/mock_eli_server_test.py
 bc8dc97eef65c4387acfffae9f3b4ff6d41061017168a893079f7174ac89e125  ./scripts/napraw_tekst_dzu.py
 b4f10ebfbc9b8b0fa08f1954f13eec5af9abb4a3889bae88a122c9fa1fcadf87  ./scripts/ocena_transkryptow_f113.py
-74f15446c9415e3d6295b4e3f40ed67cfc382ec2a5701057e62156736e620880  ./scripts/run_regression_suite.py
+1202ac5522d80b9e87b2c7b0293c34e75de7c5a217d9d16c596729b024c04a49  ./scripts/run_regression_suite.py
 e305cf93cfaa97898c4457992eec69a355f474011b14b9e91bfecc8baecd1c8d  ./scripts/sync_dzu_eli.py
 f99267e67a76d1ee1888563696afccb04d6e8c530e84abf7f22d2258444ea0c3  ./scripts/test_cross_map_dzu.py
 f9d2127aae0202ea0bfbd7820946642588a37995f8e1095193683f451a07ca90  ./scripts/test_f108_consistency.py
@@ -195,3 +195,4 @@ ad8c406e100e29c550843f1c0ed16eb0bb4f0b5bfdd0486efd6a97128347e7ec  ./scripts/test
 7819f3628026a9e1334f7f3ee934b4483be33c4c3caa1fc1f37d16f167dbe934  ./scripts/test_title_scope_match.py
 3f4ff8808d97b116562fcca4839a024f853fff97670d034ac69695c098dfaa79  ./scripts/weryfikator_sygnatur.py
 e1c3e575fc614e0d6c19920cf3a91e463b64f639cc86656deb67439b658ba972  ./widgets/WIDGET-MENU.md
+a11daec78ae28f13741370ba832a4fc067b6d2645b999930ed2a37103005c116  ./scripts/test_konstytucja_tekst_czysty.py
