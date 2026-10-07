@@ -1,6 +1,6 @@
 f1306e7d29cbbac14d14f7a3c096c646d340ab41c8bae37f1250c6c3916e5978  ./PORTABILITY-MANIFEST.md
 2cf33abe59a4fc8cfb7ca289790b86a818eaf6c885379d4ef2fa5c63d749ac3b  ./README.md
-0cf35d94ce0d410a830ade1caa2051137065f161f2baf072e6c981611b68e51b  ./SKILL.md
+f8b02d1bc4eb9ab491e11b81512f9f35724f0486af0f793fd6173e948671090b  ./SKILL.md
 6ab72bd687f07b8de1615a237b2c3813b4375c88775ae09e9c16136a424cb68b  ./agents/openai.yaml
 e9301497fa98ef56aaca7ede0857b9a18dc06c34040f0679c609a6bf49b1d38b  ./assets/icon.svg
 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986  ./mcp-servers/LICENSE
@@ -13,7 +13,7 @@ c2c61b340f90522e08100a71e4ac5d74a46c8a5bf708730e0802ff7fcaf25393  ./mcp-servers/
 55dbd937ab8ed74d02b95ac874a4a79cf6f7551485302f7fad85617634585a1a  ./mcp-servers/ceidg-example/fixtures/firmy_nip_aktywny.json
 74b6c9bda725bbfbc3926510d234bb5cbfde501267ec28bd7d804c4a00823dab  ./mcp-servers/ceidg-example/test_normalizacja.mjs
 ad8df07cc7234d88ebdfd7eefa0a2ea8acf405c492683d783078c2fbe7cd1ad2  ./mcp-servers/dist/NOTICE-THIRD-PARTY.txt
-f2b7d4c2ecf1ddfb5465d93ceb982c8f50cf3bd737411785527823443515cd9d  ./mcp-servers/dist/lex-mcp.mjs
+7a4aecb2255417b4e9218f2df8e8bc6bc47c577af9086a6f2e533de2c8b3128b  ./mcp-servers/dist/lex-mcp.mjs
 cdc5ee84a2eb1094bcf586e200394d306b70661202cee472eee1fe0fe9624edf  ./mcp-servers/etpcz-example/etpcz-mcp-server.js
 14729981c13e9f5585ad139c58b12b477defcc2ffe56b01c75b8869acc89733a  ./mcp-servers/eureka-example/eureka-mcp-server.js
 1aa02a2b1c340653a9e5dbdcfcba96c0023d2a9f30f50f19fe98dede3f0b2590  ./mcp-servers/eureka-example/fixtures/dok_445895.json
@@ -24,12 +24,12 @@ cdc5ee84a2eb1094bcf586e200394d306b70661202cee472eee1fe0fe9624edf  ./mcp-servers/
 4a3c11cea8172e2c9ebfcedd4a080284572580869064ecd8d6dc38c624ee9902  ./mcp-servers/eureka-example/fixtures/syg_prefiks.json
 8495a254ce89f78e91032d5b5e829e93c7c49564fb0e093aa484d4c4a2df4986  ./mcp-servers/eureka-example/test_normalizacja.mjs
 367b8e13dddef0aede4db2dcee3b1f71eca7335d044a7dd8df321d89477b005e  ./mcp-servers/eurlex-example/README.md
-fecd325db891fc235844153940021b476ae6115f54cbfa4fc6c033b180a7afd0  ./mcp-servers/eurlex-example/eurlex-mcp-server.js
+e294e9e089c7573c02b1c92078af2bb48824e2828ce3c8e11f79813aecfd2a27  ./mcp-servers/eurlex-example/eurlex-mcp-server.js
 9b7aaad2e01bd3e747b1d11cbdca2d401d9ab078019148442f86d363c6fd71b3  ./mcp-servers/eurlex-example/fixtures/cellar_31995L0046.json
 ab43c39b83862629a3af0b6905807b21bb421dfbb809dde4d8855955eb5e228f  ./mcp-servers/eurlex-example/fixtures/cellar_32016R0679.json
 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945  ./mcp-servers/eurlex-example/fixtures/cellar_39999R9999.json
 d9a5d9004263de7cfc02782632595e62c81cf53e8dd38e9818f03e343fd49d52  ./mcp-servers/eurlex-example/fixtures/cellar_tsue.json
-dccd8c6fe1b6a89e2e297b40461333bcdfe2bd343c265f6ba1468719f3322650  ./mcp-servers/eurlex-example/test_normalizacja.mjs
+96a5b06ff1938b9d55466f3c76b248aa07091ad82a436f5e4d089188fb8c434e  ./mcp-servers/eurlex-example/test_normalizacja.mjs
 399af41a150d84e59ce8db9efe7dd25ece5f287c04bbf28d93e9c2adaf23f0b8  ./mcp-servers/instaluj_serwery_mcp.py
 8f362e55fe6e6db9fc2aed831d5d19eae4563da2d9f99213078a6f788e627a81  ./mcp-servers/isap-eli-example/README.md
 ce4caf3dba1c6e28f90d113d7fb21a738425e4095422887bfe7c24e47af28ba3  ./mcp-servers/isap-eli-example/fixtures/eli_DU_1964_93.json
@@ -90,7 +90,7 @@ f06c3969a5625a2560967736e6ff8646e822d6af40573c4a77910816f281cf7d  ./modules/MOD-
 53f0880bdbf47510b8c7fb18a67130b1a3f2107bcb9d931a37e422aa82a92461  ./modules/MOD-WSTAWKI.md
 13279701eef22c911cdbcb35412d94c9a85112217351307db910732dbc21e8da  ./references/ALIASY-NAZW-AKTOW.md
 2b830671a3dde03bbb72e16098d9bb9231ba0cf9a98ba2d10d3073f75f04d010  ./references/AUDIT-JOURNAL.md
-1e7d9d0845ab553af7d5a70222fcf2c01f7fad85eb89180d74075493f8b274ff  ./references/CHANGELOG.md
+0c4d22c0ce3a36968410a5d2a5e3b6b6a65e96dc8edca7362ae85c17e7af214f  ./references/CHANGELOG.md
 aee9df0be072509755f8ce08a6863ffec3aee26277d7239005542a42da732f67  ./references/CHECKLIST-DEDUP.md
 4029e076fe66794f7ccbd36ee3da795faf8d856895ebaba8461d755f89c02f78  ./references/COWORK-HARMONOGRAM-NATYWNY.md
 acf1a3408d1662c382244cc8a0ae87861ffa6d4d63f1501470cd6ee218bd2f66  ./references/F-104-lista-robocza-mapa-dzu.md
