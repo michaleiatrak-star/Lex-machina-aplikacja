@@ -8,3 +8,7 @@ target/
 
 # Publisher Google OAuth client, injected at installer build time
 app/lex-runtime/config/google-oauth-client.json
+
+# Personal Claude Code settings and local binaries (issue #87)
+.claude/settings.json
+.claude/statusline.exe

@@ -619,6 +619,9 @@ function optionalAccountClientsRoot() {
         ? path.join(localAppData, "LexMachina", "optional-tools", "account-clients")
         : path.join(os.homedir(), ".lex-machina", "optional-tools", "account-clients");
 }
+function optionalAccountClientDir(provider) {
+    return path.join(optionalAccountClientsRoot(), provider);
+}
 function optionalAccountClientExecutable(provider) {
     const spec = OPTIONAL_ACCOUNT_CLIENTS[provider];
     if (!spec) {
@@ -1486,14 +1489,36 @@ export function codexStoredAuthIsChatGpt(raw) {
                 .trim()
                 .toLowerCase()
             : "";
-        const storedApiKey = typeof payload.OPENAI_API_KEY ===
-            "string" &&
-            payload.OPENAI_API_KEY
-                .trim().length > 0;
-        return (!storedApiKey &&
-            (mode === "chatgpt" ||
-                mode === "chatgpt_oauth" ||
-                mode === "chatgpt-oauth"));
+        // Oficjalny klient Codex zapisuje w auth.json dla logowania ChatGPT obiekt
+        // `tokens` (OAuth: id_token/access_token/refresh_token) i NIE zapisuje pola
+        // `auth_mode` (to pojęcie wyliczane w kodzie, nie utrwalane). Rozpoznanie po
+        // samym `auth_mode === "chatgpt"` dawało więc fałszywe „niezalogowany" po
+        // udanym logowaniu przez przeglądarkę (zgł. użytkownika 2026-10-07). Token to
+        // dowód logowania konta; tryb klucza API (sam OPENAI_API_KEY, bez tokenów)
+        // subskrypcją nie jest.
+        const tokens = payload.tokens &&
+            typeof payload.tokens === "object" &&
+            !Array.isArray(payload.tokens)
+            ? payload.tokens
+            : null;
+        const niepustyNapis = (v) => typeof v === "string" && v.trim().length > 0;
+        const hasOAuthTokens = Boolean(tokens &&
+            (niepustyNapis(tokens.access_token) ||
+                niepustyNapis(tokens.id_token) ||
+                niepustyNapis(tokens.refresh_token)));
+        const explicitChatGpt = mode === "chatgpt" ||
+            mode === "chatgpt_oauth" ||
+            mode === "chatgpt-oauth";
+        const explicitApiKey = mode === "api" ||
+            mode === "apikey" ||
+            mode === "api_key" ||
+            mode === "api-key";
+        const storedApiKey = niepustyNapis(payload.OPENAI_API_KEY);
+        // Tryb klucza API bez tokenów OAuth → nie jest logowaniem ChatGPT.
+        if ((explicitApiKey || storedApiKey) && !hasOAuthTokens) {
+            return false;
+        }
+        return hasOAuthTokens || explicitChatGpt;
     }
     catch {
         return false;
@@ -1534,9 +1559,11 @@ async function assertSubscriptionAccount(provider, abortSignal) {
             "auth",
             "status"
         ], undefined, STATUS_TIMEOUT_MS, undefined, abortSignal);
+    // auth.json z tokenami OAuth jest dowodem logowania ChatGPT niezależnie od kodu
+    // wyjścia `codex login status` (różne wersje klienta potrafią zwrócić ≠0 mimo
+    // ważnej sesji). Detektor jest ścisły (wymaga tokenów, odrzuca sam klucz API).
     const authenticated = openAiChatGptAuthenticated(result) ||
-        (result.code === 0 &&
-            await storedCodexChatGptAuthPresent());
+        await storedCodexChatGptAuthPresent();
     if (!authenticated) {
         throw new Error(`ACCOUNT_SESSION_NOT_SUBSCRIPTION_AUTH:${provider}`);
     }
@@ -2048,6 +2075,13 @@ export class AccountSessionManager {
         return Boolean(currentAnthropicOAuthToken());
     }
     async status(provider) {
+        const status = await this.clientStatus(provider);
+        return {
+            ...status,
+            managedClientInstalled: existsSync(optionalAccountClientDir(provider))
+        };
+    }
+    async clientStatus(provider) {
         const command = CLI_NAMES[provider];
         // Status opiera `installed` na kliencie PRZYPIĘTYM (nie systemowym) dla
         // wszystkich dostawców — connect pobiera wtedy klienta Lex dla Claude i
@@ -2118,8 +2152,7 @@ export class AccountSessionManager {
         }
         const authenticated = provider === "openai"
             ? (openAiChatGptAuthenticated(result) ||
-                (result.code === 0 &&
-                    await storedCodexChatGptAuthPresent()))
+                await storedCodexChatGptAuthPresent())
             : provider ===
                 "anthropic"
                 ? (claudeAutomationCredentialMode(accountEnvironment("anthropic")) !==
@@ -2169,6 +2202,34 @@ export class AccountSessionManager {
             throw new Error(`ACCOUNT_SESSION_LOGOUT_FAILED:${provider}`);
         }
         return after;
+    }
+    /**
+     * Removes the client Lex Machina downloaded for the provider (its private
+     * account-clients/<provider> directory). The provider login kept by the
+     * client in the user profile (~/.codex, ~/.claude, ~/.gemini, ~/.grok) and a
+     * system-wide CLI are left alone: "Wyloguj" handles the login.
+     */
+    async uninstall(provider) {
+        const job = this.provisionJobs.get(provider);
+        if (job &&
+            job.progress.stage !== "READY" &&
+            job.progress.stage !== "FAILED") {
+            throw new Error(`ACCOUNT_CLIENT_UNINSTALL_BUSY:${provider}`);
+        }
+        const dir = optionalAccountClientDir(provider);
+        const removed = existsSync(dir);
+        try {
+            // Retries cover Windows locks left by a client process that is exiting.
+            await fsp.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        }
+        catch {
+            throw new Error(`ACCOUNT_CLIENT_UNINSTALL_FAILED:${provider}`);
+        }
+        this.provisionJobs.delete(provider);
+        if (provider === "anthropic") {
+            this.anthropicInteractiveLoginConfirmed = false;
+        }
+        return { provider, removed, status: await this.status(provider) };
     }
     async statusAll() {
         return Promise.all(["openai", "anthropic", "xai", "google"]

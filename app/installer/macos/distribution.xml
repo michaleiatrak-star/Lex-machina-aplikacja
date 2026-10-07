@@ -15,5 +15,5 @@
   <choice id="default" title="Lex Machina">
     <pkg-ref id="pl.lexmachina.desktop"/>
   </choice>
-  <pkg-ref id="pl.lexmachina.desktop" version="0.1.20" onConclusion="none">LexMachina-component.pkg</pkg-ref>
+  <pkg-ref id="pl.lexmachina.desktop" version="0.1.21" onConclusion="none">LexMachina-component.pkg</pkg-ref>
 </installer-gui-script>
