@@ -27,6 +27,13 @@ const ids = (a, b) => Array.from({ length: b - a }, (_, i) => `A${String(a + i).
   assert.strictEqual(v.status, "AMBIGUOUS"); assert.strictEqual(v.doc_ids.length, 12); n++; }
 { const v = await weryfikujSygnature(strona(11, ids(0, 10)), "II FSK 100/24", async () => strona(11, ids(0, 10)), async () => dok);
   assert.strictEqual(v.status, "OUT_OF_SCOPE"); assert.match(v.powod, /bez nowych ID/); n++; }
+// Nadmiar unikalnych /doc/ ponad licznik (linki powiązane/nawigacja) NIE jest driftem:
+// exact-match decyduje. Wcześniej fałszywe OUT_OF_SCOPE dla istniejącego wyroku (zgł. 2026-10-07).
+{ const dok2 = dok.replace(/II\s*FSK\s*100\/24/gi, "III FSK 100/24");
+  const v = await weryfikujSygnature(strona(1, ids(0, 2)), "II FSK 100/24",
+    async () => { throw new Error("brak stron"); },
+    async (id) => (id === "A000000000" ? dok : dok2));
+  assert.strictEqual(v.status, "FOUND"); assert.strictEqual(v.matches[0].case_number, "II FSK 100/24"); n++; }
 // Komórka wartości z zagnieżdżoną tabelą (data | prawomocność) — wcześniej „brak pól Data orzeczenia”.
 { const zagn = dok.replace(/<td class="info-list-value">(\d{4}-\d{2}-\d{2})<\/td>/,
     '<td class="info-list-value"><table class="info-list"><tr><td >$1</td><td class="war_header">orzeczenie prawomocne</td></tr></table></td>');

@@ -44,8 +44,10 @@ submit=Szukaj
 2. Nierozpoznany licznik = `OUT_OF_SCOPE`.
 3. Wyciągnij unikalne `/doc/{ID}`.
 4. Jeśli liczba ID < N, pobieraj `/cbo/find?p=N` z tymi samymi cookies.
-5. Brak nowych ID na kolejnej stronie, pętla paginacji, więcej ID niż licznik
-   albo limit bezpieczeństwa = `OUT_OF_SCOPE`.
+5. Brak nowych ID na kolejnej stronie, pętla paginacji albo limit bezpieczeństwa =
+   `OUT_OF_SCOPE`. Nadmiar ID ponad licznik N nie jest driftem (strona niesie też linki
+   spoza trafień: orzeczenia powiązane, nawigacja) — to dodatkowi kandydaci, filtrowani
+   przez exact-match + fail-closed odczyt dokumentu, nie powód do `OUT_OF_SCOPE`.
 6. Dopiero kompletny zbiór kandydatów wolno klasyfikować.
 
 ## Dokument i integralność transportu

@@ -198,7 +198,11 @@ export async function weryfikujSygnature(searchHtml, oczekiwana, pobierzStrone, 
     if (!nowe.length) return oos(`Paginacja bez nowych ID na stronie ${p} (total=${total}, odczytano=${ids.length}).`, ids);
     for (const i of nowe) { widz.add(i); ids.push(i); }
   }
-  if (ids.length > total) return oos("Liczba unikalnych /doc/{ID} przekracza licznik CBOSA.", ids);
+  // Nadmiar unikalnych /doc/{ID} ponad licznik „Znaleziono N” NIE jest driftem: strona wyników
+  // CBOSA niesie też linki spoza trafień (orzeczenia powiązane, nawigacja). To dodatkowi
+  // kandydaci, nie brak kompletności — i tak przechodzą przez exact-match + fail-closed
+  // parsujDokument, więc nie mogą dać fałszywego trafienia. Blokada `> total` dawała fałszywe
+  // OUT_OF_SCOPE dla istniejących wyroków (zgł. użytkownika 2026-10-07).
   const dok = [];
   try { for (const id of ids) dok.push(parsujDokument(await pobierzDokument(id), id)); }
   catch (e) { return oos(`Nie udało się odczytać wszystkich kandydatów CBOSA: ${e.message}`, ids); }

@@ -395,14 +395,12 @@ def collect_search_doc_ids(
                 added += 1
         return added
 
+    # Nadmiar unikalnych /doc/{ID} ponad licznik „Znaleziono N” NIE jest driftem: strona
+    # wyników CBOSA niesie też linki spoza trafień (orzeczenia powiązane, nawigacja). To
+    # dodatkowi kandydaci, nie brak kompletności — i tak przechodzą przez exact-match
+    # + fail-closed parse_cbosa_document, więc nie dają fałszywego trafienia. Dawna blokada
+    # `> total` zwracała fałszywe OUT_OF_SCOPE dla istniejących wyroków (zgł. 2026-10-07).
     add_page(first_html)
-    if len(ordered) > total:
-        return CbosaSearchCollection(
-            status=VerificationStatus.OUT_OF_SCOPE,
-            doc_ids=tuple(ordered),
-            total=total,
-            reason="Liczba unikalnych /doc/{ID} przekracza licznik CBOSA.",
-        )
 
     page = 2
     while len(ordered) < total:
@@ -421,13 +419,6 @@ def collect_search_doc_ids(
                 doc_ids=tuple(ordered),
                 total=total,
                 reason=f"Paginacja zatrzymała się/powtórzyła na stronie p={page}.",
-            )
-        if len(ordered) > total:
-            return CbosaSearchCollection(
-                status=VerificationStatus.OUT_OF_SCOPE,
-                doc_ids=tuple(ordered),
-                total=total,
-                reason="Paginacja zwróciła więcej unikalnych dokumentów niż licznik CBOSA.",
             )
         page += 1
 
