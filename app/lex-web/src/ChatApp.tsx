@@ -45,6 +45,7 @@ import {
 } from "./chat-routing.js";
 import { MarkdownContent } from "./MarkdownContent.js";
 import { SourceLinkedText } from "./SourceLinkedText.js";
+import { SnVerification } from "./SnVerification.js";
 import "./chat.css";
 
 type TabId = "chat" | "files" | "skills" | "case" | "settings";
@@ -54,6 +55,8 @@ type ChatMessage = {
   content: string;
   evidence?: EvidenceItem[];
   meta?: string;
+  // sn.pl zablokował zapytanie konektora: czat pokazuje ramkę weryfikacji (captcha rozwiązuje użytkownik w oknie sn.pl).
+  sourceVerification?: { source: "sn"; url: string };
 };
 
 const PROVIDERS: Array<{
@@ -145,7 +148,7 @@ async function openExternalUrl(url: string): Promise<void> {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function executionMessage(
+export function executionMessage(
   execution: SessionExecutionResponse,
   route: string
 ): ChatMessage {
@@ -158,6 +161,7 @@ function executionMessage(
       role: "assistant",
       content: execution.answer,
       evidence: execution.evidence,
+      ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
       meta:
         `routing: ${labelForSkill(execution.primarySkill || route)}` +
         ` · VERIFIED ${execution.verification.verified}` +
@@ -171,6 +175,7 @@ function executionMessage(
     content:
       "HARD GATE zatrzymał odpowiedź przed prezentacją, ponieważ wymagany ślad weryfikacji nie był kompletny.",
     evidence: execution.evidence,
+    ...(execution.sourceVerification ? { sourceVerification: execution.sourceVerification } : {}),
     meta:
       `routing: ${labelForSkill(execution.primarySkill || route)}` +
       ` · UNVERIFIED ${execution.verification.unverified}`
@@ -586,6 +591,13 @@ export default function ChatApp({
       }
     ]);
     setQuery("");
+    await executeQuery(plain);
+  }
+
+  // Wykonanie zapytania bez dokładania wiadomości użytkownika — używane też do ponowienia
+  // po weryfikacji sn.pl (captcha rozwiązana przez użytkownika w oknie sn.pl).
+  async function executeQuery(plain: string): Promise<void> {
+    if (!currentPrimaryRoute || executing) return;
     setExecuting(true);
     setExecutionError("");
 
@@ -840,6 +852,19 @@ export default function ChatApp({
                     <small className="chat-message-meta">
                       {message.meta}
                     </small>
+                  ) : null}
+                  {message.sourceVerification ? (
+                    <SnVerification
+                      verification={{ url: message.sourceVerification.url }}
+                      onVerified={() => {
+                        const index = messages.findIndex((item) => item.id === message.id);
+                        const question = messages
+                          .slice(0, index)
+                          .reverse()
+                          .find((item) => item.role === "user")?.content;
+                        if (question && !executing) void executeQuery(question);
+                      }}
+                    />
                   ) : null}
                   {message.evidence?.length ? (
                     <details className="chat-evidence">

@@ -42,8 +42,19 @@ describe("żądanie dokumentu a analiza i weryfikacja dokumentu", () => {
     ["Wygeneruj umowę w Wordzie", "contract"],
     ["Daj tę umowę do pobrania", "contract"],
     ["Przeanalizuj ten dokument i wygeneruj raport w pliku docx", "report"]
-  ])("generuje plik: %s", (text, documentType) => {
+  ] as const)("generuje plik: %s", (text, documentType) => {
     expect(directDocumentRequest(text)).toEqual({ format: "docx", documentType });
+  });
+
+  it.each([
+    // Frazy zgłoszone w weryfikacji 2026-10-06/07: typ + jawny format oraz typ + „jako plik".
+    ["Sporządź wezwanie do zapłaty w wordzie", "docx", "letter"],
+    ["zapisz opinię jako plik", "docx", "opinion"],
+    ["Sporządź opinię prawną w formacie odt", "odt", "opinion"],
+    ["Wyeksportuj pozew do pliku docx", "docx", "pleading"],
+    ["Przerób tę reklamację na dokument do pobrania", "docx", "letter"]
+  ] as const)("frazy odmienione i z sygnałem pliku: %s", (text, format, documentType) => {
+    expect(directDocumentRequest(text)).toEqual({ format, documentType });
   });
 
   it.each([
