@@ -505,7 +505,7 @@ export type LexHttpAppOptions = {
     | "setAnthropicOAuthToken"
     | "clearAnthropicOAuthToken"
   > &
-    Partial<Pick<AccountSessionManager, "startProvision" | "provisionProgress">>;
+    Partial<Pick<AccountSessionManager, "startProvision" | "provisionProgress" | "uninstall">>;
   updateDiscovery?: UpdateDiscovery;
   sessionExecutor?: SessionExecutor;
   guideSessionStore?: Pick<
@@ -5925,6 +5925,41 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           : sessions.provisionProgress(provider)
       );
     };
+  // Removes the client Lex downloaded (not the provider login, not a system CLI).
+  app.post(
+    "/api/provider-accounts/:provider/uninstall",
+    async (req, res) => {
+      const context = responseAuthContext(res);
+      if (context.user.appRole !== "ADMIN") {
+        res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+        return;
+      }
+      const sessions = options.accountSessions;
+      if (!sessions?.uninstall) {
+        res.status(503).json({ error: "PROVIDER_ACCOUNT_SESSION_UNAVAILABLE" });
+        return;
+      }
+      const provider = String(req.params.provider ?? "").trim();
+      if (!isProviderId(provider)) {
+        res.status(404).json({ error: "UNKNOWN_PROVIDER" });
+        return;
+      }
+      try {
+        res.json(await sessions.uninstall(provider));
+      } catch (error) {
+        const busy =
+          error instanceof Error &&
+          error.message.startsWith("ACCOUNT_CLIENT_UNINSTALL_BUSY:");
+        res.status(busy ? 409 : 422).json({
+          error: busy
+            ? "ACCOUNT_CLIENT_UNINSTALL_BUSY"
+            : "ACCOUNT_CLIENT_UNINSTALL_FAILED",
+          provider
+        });
+      }
+    }
+  );
+
   app.post("/api/provider-accounts/:provider/provision", provisionRoute("start"));
   app.get("/api/provider-accounts/:provider/provision", provisionRoute("progress"));
 

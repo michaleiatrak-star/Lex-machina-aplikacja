@@ -771,6 +771,7 @@ export type ProviderAccountSessionStatus = {
     | "LAST_OR_NEW"
     | "LEX_CONTEXT_ONLY";
   oauthTokenConfigured?: boolean;
+  managedClientInstalled?: boolean;
 };
 
 export type ProviderAccountStatusResponse = {
@@ -2597,6 +2598,20 @@ export function loginProviderAccount(
     {
       method: "POST"
     }
+  );
+}
+
+// Removes the client Lex Machina downloaded; the provider login stays.
+export function uninstallProviderAccountClient(
+  provider: ProviderId
+): Promise<{
+  provider: ProviderId;
+  removed: boolean;
+  status: ProviderAccountSessionStatus;
+}> {
+  return json(
+    `/api/provider-accounts/${provider}/uninstall`,
+    { method: "POST" }
   );
 }
 

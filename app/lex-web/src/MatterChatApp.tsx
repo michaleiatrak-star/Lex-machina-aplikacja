@@ -83,6 +83,7 @@ import {
   listCases,
   loginProviderAccount,
   logoutProviderAccount,
+  uninstallProviderAccountClient,
   startProviderAccountProvision,
   getProviderAccountProvision,
   provisionLocalModel,
@@ -2467,6 +2468,36 @@ export default function MatterChatApp({
     } catch {
       setProviderAccountMessage(
         "Nie udało się wylogować: sesja nadal jest aktywna (np. token ze środowiska albo klient bez polecenia wylogowania). Wyloguj w oficjalnym kliencie dostawcy."
+      );
+    } finally {
+      await refreshProviderAccountStatus().catch(() => undefined);
+      setProviderAccountBusy(false);
+    }
+  }
+
+  async function uninstallProviderAccount(): Promise<void> {
+    if (!isAccountPrimarySource(provider) || user.appRole !== "ADMIN" || providerAccountBusy) return;
+    const label = providerDefinition?.accountClientLabel ?? "klienta";
+    if (
+      !window.confirm(
+        `Odinstalować ${label} pobranego przez Lex Machina? Logowanie u dostawcy pozostaje; aby je usunąć, najpierw kliknij „Wyloguj”.`
+      )
+    ) {
+      return;
+    }
+    setProviderAccountBusy(true);
+    try {
+      const result = await uninstallProviderAccountClient(runtimeProvider);
+      setProviderAccountMessage(
+        result.status.installed
+          ? `Usunięto klienta Lex Machina, ale nadal działa inny klient (${result.status.command}) spoza katalogu Lex Machina — odinstaluj go w systemie.`
+          : "Klient odinstalowany. „Połącz konto” pobierze go ponownie."
+      );
+    } catch (error) {
+      setProviderAccountMessage(
+        error instanceof Error && error.message.includes("ACCOUNT_CLIENT_UNINSTALL_BUSY")
+          ? "Trwa pobieranie klienta — odinstaluj po jego zakończeniu."
+          : "Nie udało się odinstalować klienta (plik może być używany). Zamknij okna klienta i spróbuj ponownie."
       );
     } finally {
       await refreshProviderAccountStatus().catch(() => undefined);
@@ -7033,6 +7064,16 @@ export default function MatterChatApp({
                           onClick={() => void disconnectProviderAccount()}
                         >
                           Wyloguj
+                        </button>
+                      ) : null}
+                      {accountSession?.managedClientInstalled ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={providerAccountBusy}
+                          onClick={() => void uninstallProviderAccount()}
+                        >
+                          Odinstaluj klienta
                         </button>
                       ) : null}
                       <button
