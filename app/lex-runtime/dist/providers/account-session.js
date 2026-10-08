@@ -1072,7 +1072,11 @@ function runDirect(executable, args, stdinText, env, timeoutMs, cwd, abortSignal
         }
     });
 }
-async function ensureAccountExecutable(provider) {
+// pinnedFirst ("Połącz konto"): download the pinned client even when a system-wide CLI
+// exists, so the client Lex runs is its own and "Odinstaluj klienta" can remove it
+// (ChatGPT with a system Codex never got one). A system CLI stays the fallback when
+// the download fails. Chat calls keep using a system CLI without waiting for a download.
+async function ensureAccountExecutable(provider, { pinnedFirst = false } = {}) {
     if (provider === "openai" ||
         provider === "anthropic" ||
         provider === "google" ||
@@ -1090,7 +1094,8 @@ async function ensureAccountExecutable(provider) {
         // path. A system-wide Claude Code of another version may reject Lex's
         // headless flags; it shares the same login (~/.claude), so it is only a
         // fallback when provisioning the pinned client fails.
-        if (!privateExecutable &&
+        if (!pinnedFirst &&
+            !privateExecutable &&
             (provider === "openai" || provider === "google" || provider === "xai")) {
             const systemExecutable = await resolveCommand(CLI_NAMES[provider]);
             if (systemExecutable) {
@@ -1108,7 +1113,7 @@ async function ensureAccountExecutable(provider) {
         return await provisionPinnedAccountClient(provider);
     }
     catch (error) {
-        if (provider === "anthropic") {
+        if (provider === "anthropic" || pinnedFirst) {
             const systemExecutable = await resolveCommand(CLI_NAMES[provider]);
             if (systemExecutable) {
                 return systemExecutable;
@@ -1273,10 +1278,15 @@ async function provisionPinnedAccountClientOnce(provider) {
             clearInterval(sizeTimer);
     }
     report?.({ stage: "VERIFYING" });
+    const installed = result.code === 0 ? pinnedAccountClientExecutable(provider) : null;
+    if (!installed && !optionalAccountClientExecutable(provider)) {
+        // A failed first install leaves an empty directory that would read as an
+        // installed Lex client (managedClientInstalled) and stop the next retry.
+        await fsp.rm(installRoot, { recursive: true, force: true }).catch(() => { });
+    }
     if (result.code !== 0) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${npmFailureDetail(result.stderr)}`);
     }
-    const installed = pinnedAccountClientExecutable(provider);
     if (!installed) {
         throw new Error(`ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`);
     }
@@ -2083,11 +2093,13 @@ export class AccountSessionManager {
     }
     async clientStatus(provider) {
         const command = CLI_NAMES[provider];
-        // Status opiera `installed` na kliencie PRZYPIĘTYM (nie systemowym) dla
-        // wszystkich dostawców — connect pobiera wtedy klienta Lex dla Claude i
-        // ChatGPT tak samo jak dla Grok i Gemini. Klient systemowy pozostaje jedynie
-        // awaryjnym rozwiązaniem w ścieżce wykonania (ensureAccountExecutable).
-        const executable = pinnedAccountClientExecutable(provider);
+        // The client Lex runs: its own pinned one, else a system-wide CLI (the
+        // fallback of ensureAccountExecutable). "Połącz konto" downloads the pinned
+        // client whenever it is missing (managedClientInstalled), for every provider.
+        // A status that saw only the pinned client reported ChatGPT with a system Codex
+        // as "not installed, not logged in" after a login that ran and succeeded.
+        const executable = pinnedAccountClientExecutable(provider) ??
+            await resolveCommand(command);
         if (!executable) {
             return {
                 provider,
@@ -2116,7 +2128,9 @@ export class AccountSessionManager {
         let result;
         try {
             if (provider === "openai") {
-                result = await runCli(provider, ["login", "status"], undefined, STATUS_TIMEOUT_MS);
+                // The resolved client directly: a status poll must never start the
+                // (minutes-long) pinned-client download.
+                result = await runDirect(executable, ["login", "status"], undefined, accountEnvironment(provider), STATUS_TIMEOUT_MS);
             }
             else if (provider === "anthropic") {
                 // Probe the resolved client directly: a status poll must never
@@ -2262,7 +2276,7 @@ export class AccountSessionManager {
         });
         void (async () => {
             try {
-                const executable = await ensureAccountExecutable(provider);
+                const executable = await ensureAccountExecutable(provider, { pinnedFirst: true });
                 if (!executable) {
                     throw new Error(`ACCOUNT_SESSION_CLI_NOT_INSTALLED:${provider}`);
                 }
