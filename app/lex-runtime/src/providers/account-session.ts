@@ -1748,8 +1748,13 @@ function runDirect(
   });
 }
 
+// pinnedFirst ("Połącz konto"): download the pinned client even when a system-wide CLI
+// exists, so the client Lex runs is its own and "Odinstaluj klienta" can remove it
+// (ChatGPT with a system Codex never got one). A system CLI stays the fallback when
+// the download fails. Chat calls keep using a system CLI without waiting for a download.
 async function ensureAccountExecutable(
-  provider: ProviderId
+  provider: ProviderId,
+  { pinnedFirst = false }: { pinnedFirst?: boolean } = {}
 ): Promise<string | null> {
   if (
     provider === "openai" ||
@@ -1774,6 +1779,7 @@ async function ensureAccountExecutable(
     // headless flags; it shares the same login (~/.claude), so it is only a
     // fallback when provisioning the pinned client fails.
     if (
+      !pinnedFirst &&
       !privateExecutable &&
       (provider === "openai" || provider === "google" || provider === "xai")
     ) {
@@ -1796,7 +1802,7 @@ async function ensureAccountExecutable(
       provider
     );
   } catch (error) {
-    if (provider === "anthropic") {
+    if (provider === "anthropic" || pinnedFirst) {
       const systemExecutable =
         await resolveCommand(CLI_NAMES[provider]);
       if (systemExecutable) {
@@ -2039,13 +2045,19 @@ async function provisionPinnedAccountClientOnce(
   }
   report?.({ stage: "VERIFYING" });
 
+  const installed =
+    result.code === 0 ? pinnedAccountClientExecutable(provider) : null;
+  if (!installed && !optionalAccountClientExecutable(provider)) {
+    // A failed first install leaves an empty directory that would read as an
+    // installed Lex client (managedClientInstalled) and stop the next retry.
+    await fsp.rm(installRoot, { recursive: true, force: true }).catch(() => {});
+  }
   if (result.code !== 0) {
     throw new Error(
       `ACCOUNT_SESSION_CLI_PROVISION_FAILED:${provider}:${result.code}:${npmFailureDetail(result.stderr)}`
     );
   }
 
-  const installed = pinnedAccountClientExecutable(provider);
   if (!installed) {
     throw new Error(
       `ACCOUNT_SESSION_CLI_PROVISION_MISSING_BINARY:${provider}`
@@ -3356,12 +3368,14 @@ export class AccountSessionManager {
     provider: ProviderId
   ): Promise<ProviderAccountSessionStatus> {
     const command = CLI_NAMES[provider];
-    // Status opiera `installed` na kliencie PRZYPIĘTYM (nie systemowym) dla
-    // wszystkich dostawców — connect pobiera wtedy klienta Lex dla Claude i
-    // ChatGPT tak samo jak dla Grok i Gemini. Klient systemowy pozostaje jedynie
-    // awaryjnym rozwiązaniem w ścieżce wykonania (ensureAccountExecutable).
+    // The client Lex runs: its own pinned one, else a system-wide CLI (the
+    // fallback of ensureAccountExecutable). "Połącz konto" downloads the pinned
+    // client whenever it is missing (managedClientInstalled), for every provider.
+    // A status that saw only the pinned client reported ChatGPT with a system Codex
+    // as "not installed, not logged in" after a login that ran and succeeded.
     const executable =
-      pinnedAccountClientExecutable(provider);
+      pinnedAccountClientExecutable(provider) ??
+      await resolveCommand(command);
     if (!executable) {
       return {
         provider,
@@ -3393,10 +3407,13 @@ export class AccountSessionManager {
     let result: RunResult;
     try {
       if (provider === "openai") {
-        result = await runCli(
-          provider,
+        // The resolved client directly: a status poll must never start the
+        // (minutes-long) pinned-client download.
+        result = await runDirect(
+          executable,
           ["login", "status"],
           undefined,
+          accountEnvironment(provider),
           STATUS_TIMEOUT_MS
         );
       } else if (provider === "anthropic") {
@@ -3600,7 +3617,7 @@ export class AccountSessionManager {
     });
     void (async () => {
       try {
-        const executable = await ensureAccountExecutable(provider);
+        const executable = await ensureAccountExecutable(provider, { pinnedFirst: true });
         if (!executable) {
           throw new Error(`ACCOUNT_SESSION_CLI_NOT_INSTALLED:${provider}`);
         }

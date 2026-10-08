@@ -2535,7 +2535,12 @@ export default function MatterChatApp({
     setProviderAccountBusy(true);
     setAccountConnectPhase(null);
     try {
-      if (accountSession?.installed === false) {
+      // Lex's own pinned client is downloaded whenever it is missing, also when a
+      // system-wide CLI exists (it remains the runtime's fallback).
+      if (
+        accountSession?.installed === false ||
+        accountSession?.managedClientInstalled === false
+      ) {
         setProviderAccountMessage("");
         let progress =
           await startProviderAccountProvision(

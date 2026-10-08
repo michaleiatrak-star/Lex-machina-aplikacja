@@ -1356,8 +1356,9 @@
   order: 1;
 }
 
+/* Installation, login or API key right under the main model; local models after it. */
 .chat-settings-auth {
-  order: 3;
+  order: 2;
 }
 
 .chat-settings-advanced {
@@ -2083,7 +2084,7 @@
 
 .chat-settings-embedded-wide {
   grid-column: 1 / -1;
-  order: 2;
+  order: 3;
   min-width: 0;
 }
 
