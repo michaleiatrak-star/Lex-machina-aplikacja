@@ -241,3 +241,43 @@ describe.skipIf(!python)("PESEL surname register and foreign surnames", () => {
     expect(vault.restore(alone, "DAT").text).toBe("Tkachukowi");
   });
 });
+
+describe.skipIf(!python)("TERYT addresses: localities and streets", () => {
+  const morphology = () =>
+    new LocalPersonMorphology({
+      python: python!,
+      workerPath: path.resolve(__dirname, "../../privacy/polish_person_morphology.py")
+    });
+
+  it("traces an inflected locality or street back to its nominative and declines it", async () => {
+    const addresses = await morphology().analyzeAddresses([
+      "Ponikwi 15", "Ciemnej Woli", "Zurzycach", "ulicy Długiej 5", "al. Wrzosowej 3", "ul. Konopnickiej 3", "al. Chopina 1"
+    ]);
+    expect(addresses.map((address) => address!.canonical)).toEqual([
+      "Ponikiew 15", "Ciemna Wola", "Zurzyce", "ulica Długa 5", "al. Wrzosowa 3", "ul. Konopnickiej 3", "al. Chopina 1"
+    ]);
+    expect(addresses[0]!.forms.INS.text).toBe("Ponikwią 15");
+    expect(addresses[2]!.forms.GEN.text).toBe("Zurzyc");
+    expect(addresses[5]!.forms.LOC.text).toBe("ul. Konopnickiej 3");
+  });
+
+  it("masks a locality where a person lives or comes from, not in a court's name", async () => {
+    const { LocalGazetteerRecognizer } = await import("../src/privacy/gazetteer-ner.js");
+    const recognizer = new LocalGazetteerRecognizer({
+      python: python!,
+      workerPath: path.resolve(__dirname, "../../privacy/polish_pii_gazetteer.py")
+    });
+    const text =
+      "Pozwany zamieszkały w Ponikwi 15, wcześniej przy ulicy Długiej w Pcimiu, pochodzi z Ciemnej Woli. " +
+      "Sprawę rozpoznał Sąd Rejonowy w Krakowie. Powód mieszka z Janem Kowalskim.";
+    const vault = new PseudonymizationVault();
+    const result = await new LocalPolishPseudonymizer(vault, recognizer, morphology()).pseudonymize(text);
+    for (const leaked of ["Ponikwi", "Długiej", "Pcimiu", "Ciemnej"]) {
+      expect(result.text).not.toContain(leaked);
+    }
+    expect(result.text).toContain("Sąd Rejonowy w Krakowie");
+    const village = /w (\[PII:ADDRESS:\d{4}\]), wcześniej/.exec(result.text)![1]!;
+    expect(vault.restore(village, "GEN").text).toBe("Ponikwi 15");
+    expect(vault.restore(village, "NOM").text).toBe("Ponikiew 15");
+  });
+});

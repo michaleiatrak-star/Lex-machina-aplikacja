@@ -15,6 +15,13 @@ The re-identification map is kept in the Node backend's `PseudonymizationVault`.
 
 Structured detection currently covers PESEL, NIP, REGON, Polish IBAN, email and formatted Polish telephone numbers. Stanza contributes PERSON spans. Other NER classes are not automatically removed because legal analysis often needs public authorities, courts, places and organizations.
 
+Address registers (rebuild: `build_address_base.py`, sources in its docstring):
+
+- `localities_teryt.tsv`: GUS TERYT SIMC localities with the official genitive (GUGiK PRNG);
+- `streets_teryt.tsv`: GUS TERYT ULIC street names with their kind (ul., al., pl. ...).
+
+A locality is masked only where a person lives, lived or comes from ("zamieszkały w Ponikwi 15") or after a street address; "Sąd Rejonowy w Krakowie" stays.
+
 ## User-directed privacy review
 
 Automatic detection is a starting point, not an irreversible decision. In the local UI the user can select an exact text range on a page and choose:
