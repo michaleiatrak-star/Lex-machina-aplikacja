@@ -98,6 +98,7 @@ import {
   mandatoryPathInstructions,
   missingGateBlocks,
   pathProfile,
+  analysisRequested,
   preloadForTurn,
   routingTrace,
   type MandatoryPathModel,
@@ -1261,6 +1262,8 @@ export interface SessionExecutor {
   execute(request: SessionExecutionRequest): Promise<SessionExecutionResponse>;
   // Structured summary of older thread messages (pseudonymized for the model).
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
+  // The router's executive skill for a message without delivered material (AUTO).
+  executiveSkillFor?(message: string): string | null;
 }
 
 export class SafeSessionExecutor implements SessionExecutor {
@@ -1303,6 +1306,21 @@ export class SafeSessionExecutor implements SessionExecutor {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * The executive skill the router gives a message on its own (KROK 2 table,
+   * ACTIVATION-MATRIX, simple-letter catalogue), as this executor decides it in
+   * AUTO for a turn without delivered material. Null: no executive skill.
+   */
+  executiveSkillFor(message: string): string | null {
+    const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+    return (
+      decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+        skill: "pisma-proste-v2",
+        entries: schemaCatalog(this.registry, "pisma-proste-v2")
+      })?.primary ?? null
+    );
   }
 
   private taskRoutesCache: { root: string; routes: TaskRoute[] } | null = null;
@@ -1950,8 +1968,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       criminal:
         (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
         criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)) ||
-        // A follow-up of a criminal matter ("a jaki termin?") stays one.
-        (!request.auxiliaryText && criminalMatter(threadUserText(request.query))),
+        // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
+        // sends the latest message apart (auxiliaryText), so the thread is read as well.
+        criminalMatter(threadUserText(request.query)),
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
@@ -1966,7 +1985,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: pathFacts.criminal,
       documentGeneration: pathFacts.documentGeneration,
-      verification
+      verification,
+      analysis: legalTurn && analysisRequested(pathFacts.query)
     });
     // Already in the model's context: the router skill (AUTO gives it in full)
     // and the core legal resources.
@@ -2889,7 +2909,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: criminalAfter,
       documentGeneration: pathFacts.documentGeneration,
-      verification
+      verification,
+      analysis: legalTurn && analysisRequested(pathFacts.query)
     });
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {

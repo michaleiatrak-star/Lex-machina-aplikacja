@@ -166,11 +166,15 @@ const TRIVIAL_PART =
   "(?:test|testuję|testuje|hej|hejka|halo|cześć|czesc|siema|elo|witaj|witam|hello|hi|dzień dobry|dzien dobry|dobry wieczór|dobry wieczor|dobranoc|do widzenia|na razie|miłego dnia|milego dnia|dzięki|dzieki|wielkie dzięki|wielkie dzieki|dziękuję|dziekuje|dziękuję bardzo|dziekuje bardzo|thx|thanks|jesteś|jestes|działasz|dzialasz)";
 const ACK_PART =
   "(?:ok|okej|okay|super|great|jasne|rozumiem|spoko|dobrze|dobra|świetnie|swietnie|w porządku|w porzadku|aha)";
-// Greetings, thanks and goodbyes, alone or after an acknowledgement ("ok, dzięki").
+// "dziękuję za pomoc", "dzięki za odpowiedź": thanks for the answer just given.
+const THANKS_FOR = "(?:\\s+za\\s+(?:pomoc|odpowiedź|odpowiedz|informacje|informację|wyjaśnienie|wyjasnienie|wszystko|rozmowę|rozmowe))?";
+// Greetings, thanks and goodbyes, alone or after an acknowledgement ("ok, dzięki");
+// an acknowledgement closing the conversation ("super, to wszystko").
 const TRIVIAL_ALWAYS = new RegExp(
-  `^(?:${ACK_PART}[,!.]?\\s*)?${TRIVIAL_PART}(?:[,!.]?\\s*(?:to wszystko|${TRIVIAL_PART}))?[.!?]*$`
+  `^(?:(?:${ACK_PART}[,!.]?\\s*)?${TRIVIAL_PART}${THANKS_FOR}(?:[,!.]?\\s*(?:to wszystko|${TRIVIAL_PART}${THANKS_FOR}))?|${ACK_PART}[,!.]?\\s*to wszystko)[.!?]*$`
 );
-const TRIVIAL_ACK = new RegExp(`^${ACK_PART}(?:[,!.]?\\s*${ACK_PART})?[.!?]*$`);
+// "tak" / "nie" only here: after the assistant's question they answer it.
+const TRIVIAL_ACK = new RegExp(`^(?:${ACK_PART}|tak|nie)(?:[,!.]?\\s*${ACK_PART})?[.!?]*$`);
 
 function assistantAskedLast(query: string): boolean {
   const marker = query.lastIndexOf("\n\nUżytkownik: ");

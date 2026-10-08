@@ -549,21 +549,34 @@ export function pleadingPipelineNeeded(
 
 // Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
 // "umowę" or "dokumentu" never matched a \b-delimited pattern.
+// Patterns and message are compared without Polish letters: a message typed as
+// "sporzadz zgloszenie" is the same request as "sporządź zgłoszenie".
+function withoutPolishLetters(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l").replace(/Ł/gu, "L");
+}
+
 function polishWords(alternatives: string): RegExp {
-  return new RegExp(`(?<![\\p{L}\\d])(?:${alternatives})(?![\\p{L}\\d])`, "u");
+  return new RegExp(`(?<![\\p{L}\\d])(?:${withoutPolishLetters(alternatives)})(?![\\p{L}\\d])`, "u");
 }
 
 // A contract is written in the contract workflow (its mode, analizator-umow), so a
 // contract becomes a file directly only when a file is named as the result.
 const DOCUMENT_NOUN = polishWords(
-  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*"
+  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*|" +
+    // Other letters and acts one writes: "zawiadomienie o przestępstwie", "skarga do WSA",
+    // "odwołanie od decyzji", "petycja", "zgłoszenie", "wypowiedzenie", "procedura", "regulamin".
+    "zawiadomieni\\p{L}*|skarg\\p{L}*|odwołani\\p{L}*|protest\\p{L}*|petycj\\p{L}*|zgłoszeni\\p{L}*|wypowiedzeni\\p{L}*|upoważnieni\\p{L}*|procedur\\p{L}*|polityk\\p{L}*|regulamin\\p{L}*|uchwał\\p{L}*|kwestionariusz\\p{L}*|ankiet\\p{L}*|korekt\\p{L}*|żądani\\p{L}*|zarzut\\p{L}*|wyjaśnieni\\p{L}*|powiadomieni\\p{L}*|czynn\\p{L}*\\s+żal\\p{L}*"
 );
 const GENERATION_VERB = polishWords(
   "wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj|zapisz|wyeksportuj|eksportuj|zrób|przerób|zamień|przekształć"
 );
 // A file named as the result: "do pobrania", "w postaci dokumentu", "jako plik".
-const FILE_RESULT =
-  /(?<![\p{L}])(?:do\s+(?:pobrania|ściągnięcia|zapisania|wydruku)|(?:w\s+(?:postaci|formie|formacie)|jako)\s+(?:pliku|plik|dokumentu|dokument)(?![\p{L}]))/u;
+const FILE_RESULT = new RegExp(
+  withoutPolishLetters(
+    /(?<![\p{L}])(?:do\s+(?:pobrania|ściągnięcia|zapisania|wydruku)|(?:w\s+(?:postaci|formie|formacie)|jako)\s+(?:pliku|plik|dokumentu|dokument)(?![\p{L}]))/u.source
+  ),
+  "u"
+);
 // Reading a document is not writing one: analysis or verification of a file
 // goes to the chat unless a file is named as the result.
 const READING_INTENT = polishWords(
@@ -574,9 +587,11 @@ export function directDocumentRequest(
   input: string
 ): DirectDocumentRequest | null {
   const normalized =
-    input
-      .normalize("NFKC")
-      .toLocaleLowerCase("pl");
+    withoutPolishLetters(
+      input
+        .normalize("NFKC")
+        .toLocaleLowerCase("pl")
+    );
 
   const explicitFormat =
     polishWords("odt").test(normalized)
@@ -595,6 +610,10 @@ export function directDocumentRequest(
   if (!explicitFormat && !fileResult && !drafting) {
     return null;
   }
+  // "Jak zrobić tabelkę w Wordzie?" names the format but asks how to do something.
+  if (explicitFormat && !fileResult && !drafting && !GENERATION_VERB.test(normalized)) {
+    return null;
+  }
   // "Sprawdź, co jest w pliku" names a file but asks to read it.
   if (!explicitFormat && !drafting && !GENERATION_VERB.test(normalized) && READING_INTENT.test(normalized)) {
     return null;
@@ -610,7 +629,7 @@ export function directDocumentRequest(
           ? "opinion" as const
           : polishWords("raport\\p{L}*").test(normalized)
             ? "report" as const
-            : polishWords("wezwani\\p{L}*|reklamacj\\p{L}*|oświadczeni\\p{L}*|pełnomocnictw\\p{L}*|list\\p{L}*").test(normalized)
+            : polishWords("wezwani\\p{L}*|reklamacj\\p{L}*|oświadczeni\\p{L}*|pełnomocnictw\\p{L}*|list\\p{L}*|zawiadomieni\\p{L}*|petycj\\p{L}*|zgłoszeni\\p{L}*|wypowiedzeni\\p{L}*|upoważnieni\\p{L}*").test(normalized)
               ? "letter" as const
               : "other" as const;
 

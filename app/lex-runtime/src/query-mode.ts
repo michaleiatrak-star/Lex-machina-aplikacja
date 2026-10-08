@@ -43,6 +43,14 @@ const ACT_ABBREVIATIONS = /\b(?:KC|KPC|KK|KPK|KKW|KW|KPW|KKS|KP|KPA|KRO|KSH|PPSA
 // A provision cited by number and act, also in lower case: "233 kk", "art. 415 kc", "§ 2 kpc".
 const NUMBERED_PROVISION = /\b\d+[a-z]?\s*(?:§\s*\d+\s*)?(?:kc|kpc|kk|kpk|kkw|kw|kpw|kks|kp|kpa|kro|ksh|ppsa|pzp|k\.c\.|k\.k\.|k\.p\.c\.|k\.p\.k\.)(?![\p{L}])/iu;
 
+// A lawyer's own words, beyond the table's examples: the client named as a party
+// ("Mocodawca...", "Klient został..."), legal method terms (przesłanki, orzecznictwo,
+// wykładnia, legitymacja, powództwo) and an act named by its title ("z ustawy o...").
+// Matched on the text without Polish letters; lay stories rarely use them.
+const PROFESSIONAL_TERMS =
+  /(?<![\p{L}])(?:mocodawc\p{L}*|(?:moj\p{L}*|nasz\p{L}*)\s+klient\p{L}*|przeslan\p{L}*|orzecznictw\p{L}*|linii?\s+orzecznicz\p{L}*|wykladni\p{L}*|legitymacj\p{L}*|powodztw\p{L}*|(?:z|na\s+gruncie|w\s+rozumieniu)\s+(?:ustawy|rozporzadzenia|dyrektywy)\s+o?)/u;
+const CLIENT_AS_PARTY = /^\s*(?:klient|klientka)\s+(?!\p{L}*\s*(?:sklepu|banku))/iu;
+
 function matchesPrawnik(signal: string, text: string, folded: string): boolean {
   if (/^art\. X/.test(signal)) return /\bart\.?\s*\d+/i.test(text) || /§\s*\d+/.test(text) || NUMBERED_PROVISION.test(text);
   if (/^sygn\.?$/.test(signal)) return /\bsygn\.?\s*(akt)?\s*[A-Z]/i.test(text);
@@ -68,6 +76,7 @@ export function detectQueryMode(
   }
   const prawnik = [...new Set(signals.prawnik.filter((signal) => matchesPrawnik(signal, text, folded)))];
   if (ACT_ABBREVIATIONS.test(text) && !prawnik.some((signal) => /^[A-Z]{2,4}$/.test(signal))) prawnik.push("skrót aktu");
+  if (PROFESSIONAL_TERMS.test(folded) || CLIENT_AS_PARTY.test(text)) prawnik.push("terminologia zawodowa");
   const laik = signals.laik.filter((signal) => signal !== "__SYTUACJA_ZYCIOWA__" && folded.includes(fold(signal)));
   const direct = signals.direct.filter((signal) => !signal.startsWith("__") && new RegExp(`\\b${fold(signal)}\\b`).test(folded));
   const found = { laik, prawnik, direct };

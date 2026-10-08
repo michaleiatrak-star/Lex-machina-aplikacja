@@ -78,7 +78,8 @@ function stemPhrase(phrase: string): RegExp | null {
     .map((word) => {
       const base = (word.length >= 8 ? word.slice(0, word.length - 2) : word.length >= 5 ? word.slice(0, word.length - 1) : word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const dropped = /e[^aeiouyąęó\W\d]$/iu.test(word) && word.length >= 5 ? (word.slice(0, -2) + word.slice(-1)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : null;
-      return dropped ? `(?:${base}|${dropped})` : base;
+      // The dropped form takes only an ending: "pozwu", "pozwem", not "pozwolenie".
+      return dropped ? `(?:${base}|${dropped}\\p{L}{0,3}(?![\\p{L}]))` : base;
     });
   if (!words.length) return null;
   return new RegExp(`(?<![\\p{L}])${words.join("\\p{L}*\\s+")}`, "iu");

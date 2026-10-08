@@ -9492,11 +9492,32 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
       }
 
-      const previewPlan =
+      // AUTO with an API or account model and no delivered material: a stateful
+      // workflow (chronology, court, contract, pleading, report) starts only when
+      // the router gives the message that executive skill. A single word ("wyrok",
+      // "umowa", "klienta", "rekomendacje") used to start one against the router's
+      // decision, take the turn off model-selected skills and stop plain questions
+      // with *_STATE_REQUIRED (benchmark 2026-10-08, scenarios-5000).
+      const keywordPlan =
         previewSessionWorkflow(
           options.registry,
           request
         );
+      const routerExecutive =
+        request.modelSelectsSkills &&
+        sessionAttachments.length === 0 &&
+        !(knowledge.caseId && knowledge.includeCase) &&
+        keywordPlan.executionSkill &&
+        options.sessionExecutor?.executiveSkillFor
+          ? options.sessionExecutor.executiveSkillFor(
+              request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query)
+            )
+          : undefined;
+      const previewPlan =
+        routerExecutive !== undefined &&
+        routerExecutive !== keywordPlan.executionSkill
+          ? createDeterministicWorkflowPlan(options.registry, null)
+          : keywordPlan;
       let processContext:
         | {
             caseId: string;
