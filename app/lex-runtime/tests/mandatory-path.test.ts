@@ -114,6 +114,22 @@ describe("mandatory path model from the corpus", () => {
     expect(unrouted?.status).toBe("MISSING");
   });
 
+  it("names a verification marker the model wrote without a record (VER BEZ POKRYCIA)", () => {
+    const step = (removed: number) =>
+      evaluateMandatoryPath(
+        model,
+        facts("Odpowiedź.", {
+          events: [
+            { type: "gate", target: "G39I_CHAT_PRIVACY", status: "OK", detail: { pseudonymized: 0 } },
+            { type: "gate", target: "G39I_AUTO_POST_DRAFT_VERIFICATION", status: "OK", detail: { removedUnbackedMarkers: removed } }
+          ]
+        })
+      ).steps.find((item) => item.id === "VER-BEZ-POKRYCIA");
+    expect(step(2)).toMatchObject({ status: "MISSING", by: "MODEL" });
+    expect(step(2)?.evidence).toContain("VER BEZ POKRYCIA: 2");
+    expect(step(0)).toMatchObject({ status: "MET" });
+  });
+
   it("shows whether an act module of the read domain was read (not blocking)", () => {
     const step = (events: TurnFacts["events"]) =>
       evaluateMandatoryPath(model, facts("Odpowiedź.", { events })).steps.find((item) => item.id === "MODUŁ-AKTU:dr-03-prawo-karne-wykroczenia-egzekucja");

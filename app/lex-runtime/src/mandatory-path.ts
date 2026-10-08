@@ -648,6 +648,25 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
       : "każdy opis odpytania źródła ma zdarzenie w przebiegu"
   });
 
+  // ✅ [VER] the model wrote without a verification record: removed by the
+  // application, shown here (a fabricated verification, not a mere slip).
+  const unbackedMarkers = facts.events
+    .filter((event) => event.target === "G39I_AUTO_POST_DRAFT_VERIFICATION")
+    .reduce((sum, event) => sum + (Number(event.detail?.removedUnbackedMarkers) || 0), 0);
+  if (legal) {
+    steps.push({
+      layer: "HARD_GATE",
+      id: "VER-BEZ-POKRYCIA",
+      label: "Znaczniki ✅ [VER] tylko z rejestru weryfikacji",
+      requirement: "CORE",
+      status: unbackedMarkers ? "MISSING" : "MET",
+      by: "MODEL",
+      evidence: unbackedMarkers
+        ? `VER BEZ POKRYCIA: ${unbackedMarkers} znacznik(ów) wpisanych przez model bez wywołania narzędzia — usunięte przez aplikację`
+        : "każdy znacznik ✅ [VER] ma zapis w rejestrze weryfikacji"
+    });
+  }
+
   const missing = steps.filter((step) => step.status === "MISSING").map((step) => step.id);
   return {
     source: model.source,
