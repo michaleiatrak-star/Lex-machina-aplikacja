@@ -1,552 +1,192 @@
-# mod-PrRestr-dzial-IV-uczestnicy-wierzyciele — Dział IV i V Prawa restrukturyzacyjnego (Uczestnicy postępowania, spis wierzytelności, zgromadzenie i rada wierzycieli, art. 65-149)
+# Restrukturyzacja — uczestnicy, spis wierzytelności, zgromadzenie i rada wierzycieli (PrRestr art. 65–139)
 
-**Źródło:** Prawo restrukturyzacyjne — Dz.U. 2026 poz. 533 t.j. (ten sam
-akt co pozostałe moduły PrRestr w tym DR).
-**Data weryfikacji online:** 2026-08-19 (naprawa F-87, priorytet 2 wg
-tablicy sterującej audyt-systemu-v4, kontynuacja bezpośrednio po
-priorytecie 1 — Dział III — w tej samej sesji).
-**Metoda:** RZĄD 2/3 (lexlege, arslege, przepisy.gofin, sip.lex.pl,
-kancelarie specjalistyczne — wielokrotnie zgodne). ISAP nadal blokuje
-web_fetch w tym środowisku — ten sam znany limit narzędziowy.
-
-⚠️ [CZĘŚCIOWO NIEWERYFIKOWANE] — jak przy module Działu III: przed
-cytowaniem dosłownego brzmienia w piśmie procesowym, zweryfikować
-przeciw ISAP bezpośrednio jeśli dostęp będzie możliwy.
+**Status:** moduł klasy kancelaryjnej — poziom A / COV-ART (każdy obowiązujący artykuł z zakresu omówiony; uchylone oznaczone)
+**Źródło:** Prawo restrukturyzacyjne — t.j. [Dz.U. 2026 poz. 533](https://api.sejm.gov.pl/eli/acts/DU/2026/533/text.pdf) (ELI DU/2026/533; akt bazowy DU/2015/978), s. 21–35
+**Weryfikacja:** snapshot PDF 04.10.2026 (SHA-256 zgodny z `references/prrestr/metadata.json`); status t.j. „obowiązuje” potwierdzony w ELI 08.10.2026 ✅ [VER: isap_lookup DU/2015/978 → DU/2026/533, 2026-10-08]
+**Zmiany po t.j. w tym zakresie:** brak (późniejsze nowelizacje dotyczą art. 4 i 156 → `references/insolvency/wersje-i-przepisy-przejsciowe.md`).
+**ZASADA:** przed powołaniem odczytaj przepis: `python3 scripts/prrestr.py article 119 --verify-online`. Większości przy układzie liczy się z art. 119, nie z ogólnej reguły art. 111. Kursy NBP (art. 83) ustalaj z tabeli NBP z dnia otwarcia — nie z pamięci.
 
 ---
 
-## 1. STRUKTURA DZIAŁU IV I V (art. 65-149)
+## FAZA 0 — INTAKE
 
 ```
-DZIAŁ IV. Uczestnicy postępowania (65-139)
-  Rozdział 1. Przepisy ogólne (65-75)
-  Rozdział 2. Spis wierzytelności (76-103)
-  Rozdział 3. Zgromadzenie wierzycieli (104-120)
-    Oddział 1. Przepisy ogólne (104-112)
-    Oddział 2. Zgromadzenie wierzycieli w celu głosowania nad układem (113-120)
-  Rozdział 4. Rada wierzycieli (121-139)
-DZIAŁ V. Pomoc publiczna (139a-149)
+□ Status wierzyciela: bezsporny (spis dłużnika / tytuł egzekucyjny / spis wierzytelności) czy sporny (wezwanie, zawezwanie, pozew, zarzut potrącenia, arbitraż, zastrzeżenie dłużnika z art. 90) (65)
+□ Dłużnik: zarząd własny / pod nadzorem / zarządca; oznaczenie „w restrukturyzacji” (66–67); braki organów → kurator (68)
+□ Dłużnik w małżeństwie (wspólność ustawowa → majątek wspólny w masie, 73); rozdzielność po otwarciu z datą wsteczną — niedopuszczalna (74)
+□ Każda wierzytelność: data powstania (przed otwarciem?), okres rozliczeniowy (podział proporcjonalny, 77), niepieniężna (78), niewymagalna (79, 81), regresowa (80),
+  zabezpieczona za granicą (82), walutowa — kurs NBP z dnia otwarcia (83), zabezpieczona rzeczowo — suma = wartość przedmiotu (86 ust. 3, 86a)
+□ Objęta układem z mocy prawa / za zgodą — odrębne części spisu (86 ust. 1)
+□ Wykluczenie z głosu: regres niezaspokojony (80 ust. 3), nabycie po otwarciu (109), osoby bliskie / powiązane / > 25% kapitału (116)
+□ Sprzeciw (PU, sanacja): 2 tyg. od obwieszczenia złożenia spisu; dowody tylko z dokumentów lub opinii biegłego (91–93)
+□ Rada wierzycieli: wniosek dłużnika, ≥ 3 wierzycieli lub ≥ 1/5 sumy → ustanowienie w tydzień (121)
+□ Czynności dłużnika/zarządcy wymagające zezwolenia rady pod rygorem nieważności (129), w tym sprzedaż > 500 000 zł
 ```
 
-⚠️ **Rozbieżność numeracyjna wykryta między źródłami:** niektóre
-odpisy struktury podają zakres Oddziału 2 Rozdz. 3 jako "113-264"
-zamiast "113-120" — analogicznie do rozbieżności "55-64"/"55-103"
-przy wynagrodzeniu zarządcy w module Działu III. **NAJBARDZIEJ
-PRAWDOPODOBNE** (przez analizę spójności z resztą struktury — Rozdz.
-4 zaczyna się od art. 121, więc Oddział 2 Rozdz. 3 musi kończyć się
-przed 121): zakres to **113-120**, a "264" to artefakt błędu w źródle
-pochodnym (możliwe pomylenie z numerem artykułu z zupełnie innej
-części ustawy, np. Tytułu II). ⚠️ [NIEWERYFIKOWANE OSTATECZNIE] bez
-ISAP — przyjąć 113-120 jako roboczą hipotezę, NIE cytować zakresu
-w piśmie bez potwierdzenia.
+---
+
+## MAPA ARTYKUŁÓW
+
+| Zakres | Treść | Sekcja |
+|---|---|---|
+| 65–75 | uczestnicy, wierzytelność sporna, zdolność i zarząd dłużnika, kurator dłużnika i wierzyciela, śmierć dłużnika, małżonek | A |
+| 76–87 | zawartość spisu: wierzytelności przedotwarciowe, podział okresowy, niepieniężne, niewymagalne, regresowe, walutowe, zabezpieczone; rubryki spisu, spis sporny | B |
+| 89–103 | obwieszczenie spisu, zastrzeżenia w PPU, sprzeciw, zatwierdzenie spisu, wykreślenie, uzupełnienie, zmiana, sprostowanie, wyciąg jako tytuł egzekucyjny | C |
+| 104–112 | zgromadzenie wierzycieli: zwołanie, przewodnictwo, prawo głosu, głosowanie, uchwały | D |
+| 113–120 | zgromadzenie w celu głosowania nad układem: kworum, wyłączenia głosu, kolejność propozycji, warunki głosowania, większości, cram-down | E |
+| 121–139 | rada wierzycieli: ustanowienie, skład, kompetencje, zezwolenia, uchwały, zarzuty, wynagrodzenie, zastępstwo przez sędziego-komisarza | F |
+| uchylone | 88 (oraz 86 ust. 2 pkt 6 i 9, 89 ust. 1, 110 ust. 8, 136 ust. 1) | — |
 
 ---
 
-## 2. ⭐ FUNDAMENTALNA RÓŻNICA vs PRAWO UPADŁOŚCIOWE
+## A. Uczestnicy i dłużnik (art. 65–75)
 
-**KLUCZOWE dla praktyki:** Prawo restrukturyzacyjne **NIE PRZEWIDUJE
-instytucji zgłoszenia wierzytelności** — odmiennie niż postępowanie
-upadłościowe (gdzie wierzyciel musi aktywnie zgłosić wierzytelność
-pod rygorem poważnych konsekwencji, w tym utraty możliwości
-zaspokojenia).
+- **Art. 65:** uczestnicy: **dłużnik**, **wierzyciel osobisty z wierzytelnością bezsporną**, wierzyciel z **wierzytelnością sporną**, który ją uprawdopodobnił i został **dopuszczony przez sędziego-komisarza** (ust. 1). Wierzyciel = uprawniony do żądania świadczenia (ust. 2), także **składek i danin publicznych** (ust. 3). **Bezsporna** = wskazana w spisie wierzycieli dłużnika, stwierdzona tytułem egzekucyjnym lub umieszczona w spisie wierzytelności (ust. 4). **Sporna** = inna, skonkretyzowana co do świadczenia i podstawy — w szczególności po wezwaniu do zapłaty, zawezwaniu do próby ugodowej, pozwie, zarzucie potrącenia w sprawie dłużnika, w arbitrażu oraz z art. 90 ust. 2 (ust. 5). Dopuszczenie na wniosek (skutek od dnia wniosku) lub z urzędu (ust. 6). Wierzyciel spoza spisu **traci uprawnienia uczestnika** z prawomocnym oddaleniem sprzeciwu, upływem terminu na sprzeciw albo prawomocnym uwzględnieniem sprzeciwu co do jego wierzytelności (ust. 7).
+- **Art. 66:** otwarcie nie wpływa na **zdolność prawną i do czynności prawnych** (ust. 1); przedsiębiorca działa pod firmą z dodatkiem **„w restrukturyzacji”** (ust. 2).
+- **Art. 67:** **zarząd własny**, chyba że ustanowiono zarządcę; w zakresie art. 39 ust. 1 — pod nadzorem nadzorcy (ust. 1); czynności dotyczące mienia, wobec którego dłużnik utracił zarząd — **nieważne** (ust. 2); świadczenie do rąk dłużnika pozbawionego zarządu po obwieszczeniu **nie zwalnia**, chyba że równowartość wpłynęła do masy (ust. 3); dotyczy też czynności podlegających ujawnieniu w KW i rejestrach (ust. 4); wyjątek dla **zabezpieczeń finansowych** ustanowionych w dniu otwarcia w dobrej wierze oraz zabezpieczeń w systemach płatności (ust. 5).
+- **Art. 68:** utrata zdolności procesowej dłużnika po wniosku lub braki w organach → **kurator** ustanawiany przez sędziego-komisarza (przed otwarciem — sąd); kurator z art. 42 § 1 KC staje się tym kuratorem (ust. 1); pełni funkcję także po otwarciu (ust. 2); traci moc po usunięciu braków (ust. 3); odpowiedzialność odszkodowawcza (ust. 4).
+- **Art. 69:** wynagrodzenie i zwrot wydatków (ust. 1) według nakładu pracy, odpowiednio przepisy wykonawcze do art. 9 pkt 3 ustawy o kosztach sądowych w sprawach cywilnych (ust. 2); zażalenie, także kuratora (ust. 3).
+- **Art. 70:** wynagrodzenie kuratora będącego podatnikiem **VAT** podwyższa się o podatek.
+- **Art. 71:** koszty kuratora **obciążają dłużnika**; przy braku pokrycia — tymczasowa wypłata ze Skarbu Państwa i ściągnięcie jak opłaty sądowe.
+- **Art. 72:** śmierć dłużnika → uczestnikiem staje się **spadkobierca** (przy zarządzie sukcesyjnym — **zarządca sukcesyjny**); sędzia-komisarz z urzędu ustanawia kuratora (art. 68–71) (ust. 1); kurator traci umocowanie po wstąpieniu spadkobiercy wykazującego prawa postanowieniem o nabyciu spadku, europejskim poświadczeniem spadkowym lub aktem poświadczenia dziedziczenia (ust. 2); odpowiednio przy kuratorze spadku (ust. 3).
+- **Art. 73:** przy **wspólności majątkowej** majątek wspólny wchodzi do masy układowej/sanacyjnej i podlega nadzorowi albo zarządowi; stosuje się art. 34¹ i 36–39 KRO.
+- **Art. 74:** **rozdzielność majątkowa** ustanowiona po otwarciu **z datą wcześniejszą** — niedopuszczalna.
+- **Art. 75:** kurator dla **wierzyciela** bez zdolności procesowej lub z brakami organów, gdy usprawni postępowanie (ust. 1); art. 68 ust. 2–4, 69, 70 odpowiednio (ust. 2); koszty obciążają wierzyciela (ust. 3).
 
-W restrukturyzacji: **spis wierzytelności sporządza z URZĘDU
-nadzorca/zarządca**, bazując na księgach dłużnika, innych dokumentach,
-wpisach w księgach wieczystych i rejestrach — wierzyciel NIE musi nic
-zgłaszać, aby znaleźć się w spisie. Konsekwencja: pasywność wierzyciela
-jest mniej ryzykowna niż w upadłości, ALE wierzyciel powinien
-aktywnie SPRAWDZIĆ spis (dostęp przez KRZ po złożeniu wniosku o dostęp
-do akt) i w razie pominięcia — złożyć **sprzeciw** (nie zgłoszenie).
+## B. Zawartość spisu wierzytelności (art. 76–87)
 
-⭐ Sporządzenie spisu i jego zaskarżanie następuje w sposób
-**UPROSZCZONY**, bez pełnych gwarancji kontradyktoryjnego procesu
-cywilnego — walor szybkości (dla zawarcia układu) przeważa nad
-pełnym standardem dowodowym. Konsekwencja doktrynalna: rozstrzygnięcie
-sędziego-komisarza/sądu co do spisu **NIE tworzy powagi rzeczy
-osądzonej** (res iudicata) ani ugodzonej (res transacta) — brak
-zakazu ne bis in idem, wierzyciel może dochodzić roszczenia w
-odrębnym procesie mimo rozstrzygnięcia w spisie.
+- **Art. 76:** spis obejmuje **wierzytelności osobiste powstałe przed otwarciem** (ust. 1); umieszczenie określa **sumę udziału** w postępowaniu (ust. 2).
+- **Art. 77:** wierzytelność za **okres rozliczeniowy**, w którym otwarto postępowanie (czynsz, podatki, składki), dzieli się **proporcjonalnie** z mocy prawa na część przed- i po-otwarciową (ust. 1); dotyczy **leasingu**, gdy przedmiot **nie jest środkiem trwałym** dłużnika (ust. 2); przy należnościach publicznoprawnych obie części w **odrębnych deklaracjach** (ust. 3).
+- **Art. 78:** wierzytelność **niepieniężna** — w pieniądzu według wartości z dnia poprzedzającego otwarcie.
+- **Art. 79:** niewymagalna bez odsetek — pomniejszona o odsetki ustawowe „niewyższe jednak niż 6 % rocznie” (górna granica z ust. 1; to nie jest stawka odsetek ustawowych), za czas od otwarcia do wymagalności, **najdłużej 2 lata** (ust. 1); odsetki — do dnia poprzedzającego otwarcie włącznie (ust. 2).
+- **Art. 80:** regres **współdłużnika / poręczyciela** — w wysokości zaspokojenia wierzyciela (ust. 1); **gwarant / bank akredytywy** — jak wyżej (ust. 2); jeśli jeszcze nie zaspokoili — wierzytelność **warunkowa bez prawa głosu** (ust. 3).
+- **Art. 81:** niewymagalne ze stosunków **ciągłych** oraz z **kredytu i pożyczki** — dyskonto jak art. 79 (max 6%, max 2 lata) dla każdego świadczenia (ust. 1); świadczenia dożywotnie / nieoznaczone — wartość prawa (ust. 2), suma wykupu, jeżeli ustalona (ust. 3); raty **leasingu** przy środku trwałym — jak ust. 1 (ust. 4); **kredyt odnawialny** — kwota wykorzystana do otwarcia (ust. 5).
+- **Art. 82:** zabezpieczenie hipoteczne/rejestrowe na majątku **za granicą** — umieszczenie po dowodzie **wykreślenia** wpisu (ust. 1), chyba że postępowanie uznano w państwie położenia (ust. 2).
+- **Art. 83:** waluta obca — przeliczenie po **średnim kursie NBP z dnia otwarcia** (brak kursu — średnia cena rynkowa) (ust. 1); **nie przekształca** zobowiązania — wykonanie układu w walucie obcej, chyba że propozycje stanowią inaczej (ust. 2).
+- **Art. 84:** spis sporządza **nadzorca lub zarządca** na podstawie ksiąg, dokumentów, KW i rejestrów (ust. 1); w sanacji z uproszczonego wniosku (art. 328 ust. 1) — w miarę możliwości na podstawie wcześniejszego spisu (ust. 2).
+- **Art. 85:** spis uwzględnia proponowany **podział na grupy**.
+- **Art. 86:** odrębnie wierzytelności objęte układem **z mocy prawa** i **za zgodą** (ust. 1); rubryki: lp., dane wierzyciela (z NIP), **suma wierzytelności i suma głosu**, zabezpieczenie, warunek, okoliczności z art. 80 ust. 3, 109 ust. 1, 116, **uzasadnienie**, zgoda na objęcie układem, sumy ogółem i dla grup (ust. 2; pkt 6 i 9 uchylone); przy zabezpieczeniu rzeczowym i przewłaszczeniu — **suma odpowiadająca wartości przedmiotu zabezpieczenia** (ust. 3); uzasadnienie = stan faktyczny i dokumenty (ust. 4); załącznik — **oświadczenie dłużnika** o uznaniu/odmowie i okolicznościach wyłączających głos, albo informacja o jego braku z przyczyną (ust. 5); inne dane identyfikujące (ust. 6).
+- **Art. 86a:** suma odpowiadająca wartości zabezpieczenia = kwota, która zostałaby zaspokojona z przedmiotu **w upadłości** (ust. 1); gdy upadłość niedopuszczalna — **w egzekucji** (ust. 2).
+- **Art. 87:** **spis wierzytelności spornych** — zwięzła podstawa sporu; art. 86–86a odpowiednio.
+- **Art. 88:** uchylony.
 
----
+## C. Spis — obwieszczenie, sprzeciw, zatwierdzenie, skutki (art. 89–103)
 
-## 3. ROZDZIAŁ 1 — PRZEPISY OGÓLNE (art. 65-75)
+- **Art. 89:** obwieszczenie o **dacie złożenia** spisu i spisu spornych (ust. 2; ust. 1 uchylony).
+- **Art. 90:** w **PPU** dłużnik zgłasza **zastrzeżenia** (ust. 1); wierzytelność staje się **sporna**; sędzia-komisarz zmienia spisy, obwieszczenie daty postanowienia (ust. 2).
+- **Art. 91:** w **PU i sanacji** — **sprzeciw** do sędziego-komisarza w **2 tygodnie** od obwieszczenia z art. 89 ust. 2 co do **umieszczenia**; dłużnik — tylko gdy spis niezgodny z jego oświadczeniem (a bez oświadczenia — gdy wykaże przyczyny niezależne) (ust. 1); co do **pominięcia** — dłużnik lub pominięty wierzyciel (ust. 2).
+- **Art. 92:** wymogi pisma procesowego + wskazanie wierzytelności, wniosek, uzasadnienie, **dowody** (ust. 1); przy pominięciu dodatkowo: dane wierzyciela, suma i suma głosu, zabezpieczenie, okoliczności z 80 ust. 3/109 ust. 1/116, warunek zawieszający, prawo potrącenia, zgoda na objęcie układem (ust. 2; ust. 2a — dane identyfikujące); art. 86 ust. 3 (ust. 3); braki i opłata — art. 130 KPC; **odrzucenie** spóźnionego, niedopuszczalnego, nieuzupełnionego, nieopłaconego (ust. 4); **prekluzja** twierdzeń i dowodów niezgłoszonych w sprzeciwie (wyjątki: brak winy lub brak zwłoki) (ust. 5).
+- **Art. 93:** dowód **wyłącznie z dokumentu lub opinii biegłego** (ust. 1); wierzytelność z **prawomocnego orzeczenia** — sprzeciw tylko na zdarzeniach po zamknięciu rozprawy, dowód na piśmie (ust. 2).
+- **Art. 94:** doręczenia odpisów sprzeciwu (ust. 1–3); **odpowiedź** w terminie ≥ **tydzień** — nadzorca/zarządca obowiązkowo (ust. 4); spóźniona lub z brakami — zwrot (ust. 5); art. 92 ust. 1 i 4 odpowiednio (ust. 6).
+- **Art. 95:** rozpoznanie na posiedzeniu niejawnym w **2 miesiące** od wniesienia (sędzia-komisarz, zastępca lub wyznaczony sędzia) (ust. 1); rozprawa fakultatywna, niestawiennictwo nie wstrzymuje (ust. 2); możliwe wykorzystanie **opinii biegłego z innego postępowania** (ust. 3); nadzorca/zarządca ma prawa uczestnika (ust. 4); zażalenie dłużnika, nadzorcy/zarządcy, wierzycieli (ust. 5); uchylenie i przekazanie tylko przy potrzebie całego postępowania dowodowego lub nieważności (ust. 6).
+- **Art. 96:** po uprawomocnieniu uwzględnienia sprzeciwu — zmiana spisu.
+- **Art. 97:** w **PPU** spis zatwierdza się **na zgromadzeniu wierzycieli** (ust. 1); obwieszczenie (ust. 2).
+- **Art. 98:** w **PU i sanacji** — zatwierdzenie po upływie terminu na sprzeciw lub po prawomocnym rozpoznaniu (ust. 1); obwieszczenie (ust. 2); zatwierdzenie **częściowe**, jeżeli nierozpoznane sprzeciwy dotyczą **≤ 15%** sumy uprawniającej do głosu; postępowania sprzeciwowe nierozpoznane do głosowania — **umarza się** (ust. 3).
+- **Art. 99:** **wykreślenie z urzędu** wierzytelności nieistniejącej lub przysługującej innej osobie; doręczenie, zażalenie, obwieszczenie.
+- **Art. 100:** wierzytelność ujawniona po złożeniu spisu → **uzupełnienie spisu** (art. 84–91 odpowiednio) (ust. 1); zmiana nazwy lub osoby wierzyciela po złożeniu spisu — bez zmiany spisu i bez utraty udziału (ust. 2).
+- **Art. 101:** nieuwzględnienie w spisie **nie zamyka drogi** dochodzenia (ust. 1); zmiana spisu według **prawomocnych orzeczeń** z obwieszczeniem; art. 89 ust. 2, 90, 91 odpowiednio (ust. 2); **sprostowanie** oczywistych omyłek (art. 350, 353 KPC) przez sędziego-komisarza lub referendarza; skarga na postanowienie referendarza — sąd jednoosobowo jak zażalenie (ust. 3).
+- **Art. 102:** po prawomocnej **odmowie zatwierdzenia** układu lub **umorzeniu** — wyciąg ze spisu = **tytuł egzekucyjny** przeciw dłużnikowi (ust. 1); po prawomocnym **zatwierdzeniu** — wyciąg z wypisem postanowienia = tytuł przeciw dłużnikowi, **poręczycielowi wykonania układu** (przy dokumencie w aktach) i **zobowiązanemu do dopłat**; po uchyleniu układu — ust. 1 (ust. 2); powództwo dłużnika o ustalenie nieistnienia, jeżeli złożył sprzeciw i brak prawomocnego orzeczenia (ust. 3); po klauzuli — zarzut nieistnienia tylko w **powództwie przeciwegzekucyjnym** (ust. 4).
+- **Art. 103:** zwrot dokumentów z adnotacją o sumie umieszczonej w spisie.
 
-**Art. 65 — definicje kluczowe:**
-- **Wierzyciel osobisty, któremu przysługuje wierzytelność BEZSPORNA**
-  — wierzyciel: (a) wskazany przez dłużnika w spisie wierzycieli
-  załączonym do wniosku restrukturyzacyjnego, LUB (b) którego
-  wierzytelność stwierdzona TYTUŁEM EGZEKUCYJNYM, LUB (c) umieszczony
-  w spisie wierzytelności.
-- **Wierzytelność SPORNA** — każda INNA niż wskazana wyżej (definicja
-  przez wyłączenie).
-- ⛔ **ust. 7 — SANKCJA KLUCZOWA:** wierzyciel NIEUMIESZCZONY w spisie
-  wierzytelności TRACI uprawnienia uczestnika postępowania z dniem:
-  (a) uprawomocnienia się postanowienia o ODDALENIU jego sprzeciwu,
-  LUB (b) bezskutecznego upływu terminu do jego złożenia, LUB
-  (c) uprawomocnienia się postanowienia UWZGLĘDNIAJĄCEGO sprzeciw
-  INNEGO wierzyciela co do umieszczenia JEGO (pierwszego) wierzytelności
-  — czyli utrata praw możliwa też na skutek działania osoby trzeciej
-  kwestionującej cudzą wierzytelność.
-- ⚠️ Utrata uprawnień uczestnika DOTYCZY PRAWA GŁOSU i aktywnego
-  udziału w postępowaniu restrukturyzacyjnym, ale NIE stanowi
-  przeszkody do dochodzenia wierzytelności we WŁAŚCIWYM TRYBIE
-  (odrębny proces sądowy) — patrz sekcja 2 wyżej (brak res iudicata).
+## D. Zgromadzenie wierzycieli — przepisy ogólne (art. 104–112)
 
-**Art. 66 — wpływ na zdolność prawną:**
-Otwarcie postępowania restrukturyzacyjnego NIE MA WPŁYWU na zdolność
-prawną oraz zdolność do czynności prawnych dłużnika — dłużnik
-pozostaje pełnoprawnym podmiotem obrotu, ograniczeniu podlega
-WYŁĄCZNIE zakres samodzielnego zarządu majątkiem (patrz art. 39,
-moduł Działu III), NIE sama zdolność prawna.
+- **Art. 104:** zwołuje sędzia-komisarz: w celu głosowania nad układem, na uchwałę rady wierzycieli, gdy uzna za potrzebne.
+- **Art. 105:** zwołanie przez **obwieszczenie** (termin, miejsce, przedmiot, sposób głosowania, ewentualnie tryb zdalny z art. 110 ust. 6) (ust. 1) **≥ 2 tygodnie** przed (ust. 2); wezwanie dłużnika i nadzorcy/zarządcy — ich niestawiennictwo nie przeszkadza (ust. 3); **odroczenie** bez ponownego obwieszczenia; głos nieobecnego zachowuje moc przy tych samych lub korzystniejszych uchwałach (ust. 4); **zawiadomienia** przez nadzorcę/zarządcę — operator pocztowy, komornik, a wobec wierzyciela działającego w systemie — przez system (art. 131¹ § 2 KPC) (ust. 5); przed zgromadzeniem nadzorca/zarządca przedkłada: **karty do głosowania** z pełnomocnictwami i informacją o art. 116, **dowód wysłania zawiadomień ≥ 3 tygodnie** przed (na adres rejestrowy lub znany dłużnikowi), dowody doręczeń (ust. 6).
+- **Art. 106:** przewodniczy **sędzia-komisarz** (ust. 1); protokół (ust. 2); listę obecności (także głosujących na piśmie) sporządza nadzorca/zarządca w systemie (ust. 3).
+- **Art. 107:** prawo głosu: wierzyciele z **zatwierdzonego spisu** i stawiający się z **tytułem egzekucyjnym** (ust. 1); głos = suma ze spisu lub tytułu (ust. 2); dopuszczenie wierzyciela **warunkowego lub spornego uprawdopodobnionego** — na wniosek, po wysłuchaniu dłużnika; sumę głosu oznacza sędzia-komisarz (ust. 3).
+- **Art. 108:** wierzytelności **solidarne lub niepodzielne** — wspólny pełnomocnik (może być jeden z wierzycieli) (ust. 1); w braku — zarządca z KC o zarządzie rzeczą wspólną (ust. 2); brak wyboru nie blokuje zgromadzenia (ust. 3).
+- **Art. 109:** brak głosu z wierzytelności **nabytej przelewem lub indosem po otwarciu** (ust. 1), chyba że przejście wskutek spłaty długu, za który odpowiadał osobiście lub rzeczowo, ze stosunku sprzed otwarcia (ust. 2); nie dotyczy **PZU** (ust. 3).
+- **Art. 110:** głosowanie **w systemie teleinformatycznym**; osobiście obecny — ustnie do protokołu lub na piśmie (ust. 1); przeprowadza nadzorca/zarządca pod nadzorem sędziego-komisarza; spis głosów (art. 86 ust. 2) (ust. 2); pełnomocnik, także inny wierzyciel (ust. 3); treść głosu (ust. 4); **wstrzymujący się = nieuczestniczący** (ust. 5); **głosowanie zdalne** środkami elektronicznymi (ust. 6); przy znacznej liczbie wierzycieli — głosowanie **wyłącznie w systemie** postanowieniem obwieszczanym (ust. 7; ust. 8 uchylony).
+- **Art. 111:** uchwała (poza szczególnymi) — **większość głosujących** mających łącznie **≥ ½ sumy** wierzytelności głosujących.
+- **Art. 112:** sędzia-komisarz stwierdza przyjęcie uchwały postanowieniem z treścią uchwały (ust. 1); może ją **uchylić**, gdy sprzeczna z prawem, dobrymi obyczajami lub rażąco narusza interes wierzyciela głosującego przeciw (ust. 2); zażalenie (ust. 3).
 
-⚠️ **LUKA:** art. 67-75 (poza 65-66) — treść szczegółowa NIE ustalona
-tą sesją, priorytet do sprawdzenia przy konkretnej sprawie.
+## E. Zgromadzenie w celu głosowania nad układem (art. 113–120)
 
----
+- **Art. 113:** **kworum ≥ 1/5** wierzycieli uprawnionych do głosu (ust. 1); uprawnieni — wyłącznie wierzyciele z art. 107 ust. 1 i 3 **objęci układem** (ust. 2); brak dowodu doręczenia zawiadomień wierzycielom stanowiącym **≤ ½ liczby** i **≤ 1/3 sumy** nie blokuje głosowania (ust. 3); gdy ich głosy mogły przesądzić — **przerwa** dla prawidłowego doręczenia, chyba że dokument wykazuje ich wiedzę (ust. 4).
+- **Art. 114:** w PPU i PU nadzorca przedstawia **założenia planu** (ust. 1); w sanacji zarządca — **sprawozdanie z wykonania planu**, efekty i działania po przyjęciu układu (ust. 2).
+- **Art. 115:** nadzorca/zarządca składa **opinię o możliwości wykonania układu**.
+- **Art. 116 — brak prawa głosu w sprawach układu:** małżonek, krewni i powinowaci w linii prostej, w bocznej do 2. stopnia, przysposobieni; przy spółce handlowej — osoby uprawnione do reprezentacji; przy osobowej — wspólnik odpowiadający całym majątkiem (ust. 1); **spółka powiązana**, dominująca lub zależna i jej reprezentanci (ust. 2); spółka kapitałowa mająca **tę samą spółkę dominującą** (ust. 3); przy dłużniku-spółce kapitałowej — osoba fizyczna reprezentująca **> 25% kapitału** (w PSA — **> 25% akcji**) (ust. 4).
+- **Art. 117:** przy kilku propozycjach — kolejność ustala sędzia-komisarz; głosuje się nad wszystkimi; przyjęte = największe poparcie według **sumy wierzytelności** z uwzględnieniem art. 119 (ust. 1); **zmiany propozycji** na zgromadzeniu (dłużnik, zarządca, nadzorca) — pisemny głos „za” liczy się „za”, jeżeli zmiany są **korzystniejsze dla tego wierzyciela**; pozostałe — „przeciw” (ust. 2).
+- **Art. 118 — warunki dopuszczenia głosowania:** dokumenty potwierdzające wykonanie **zabezpieczeń osób trzecich, kredytu/pożyczki, zgód osób trzecich** (w tym zmiany hipotek i zastawów) (ust. 1) oraz powierzenia **zarządu** osobom wskazanym (ust. 2); przy **konwersji na udziały/akcje** — zgoda **Prezesa UOKiK lub Komisji Europejskiej** albo wykazanie zbędności (ust. 3); przy **pomocy publicznej** — zgoda organu albo wykazanie zbędności (ust. 4).
+- **Art. 119 — większości:** **większość głosujących** mających **≥ 2/3 sumy** wierzytelności głosujących (ust. 1); w grupach — w **każdej** grupie (ust. 2). **Cram-down** (ust. 3): układ przyjęty mimo braku większości w niektórych grupach, jeżeli (1) za głosowała **większość grup**, w tym co najmniej jedna grupa z art. 161 ust. 1a pkt 3 lub wierzycieli o wyższym stopniu zaspokojenia niż należności z art. 342 ust. 1 pkt 2 PrUp, albo (2) w braku tego — co najmniej jedna grupa, która w upadłości otrzymałaby jakiekolwiek zaspokojenie przy **wycenie zakładającej kontynuację** — i za głosowali wierzyciele mający **≥ ½ sumy** wierzytelności głosujących. **Reguła pierwszeństwa** (ust. 4): jeżeli grupa niższa otrzymuje cokolwiek, grupy wyższe głosujące przeciw muszą uzyskać **pełne zaspokojenie** w terminie układu; definicja stopnia zaspokojenia z uwzględnieniem planu oddzielnego (ust. 5); wyjątki z art. 160 lub 162 ust. 2 (ust. 6).
+- **Art. 120:** sędzia-komisarz stwierdza **przyjęcie układu** postanowieniem z treścią układu (ust. 1–2); **nie może uchylić** uchwały o przyjęciu układu (ust. 3); obwieszczenie (ust. 4).
 
-## 4. ROZDZIAŁ 2 — SPIS WIERZYTELNOŚCI (art. 76-103)
+## F. Rada wierzycieli (art. 121–139)
 
-**Sporządzenie spisu (art. 76-89, zakres dokładny [NIEWERYFIKOWANE]):**
-nadzorca/zarządca sporządza spis Z URZĘDU na podstawie ksiąg dłużnika,
-dokumentów, wpisów w KW i rejestrach (patrz sekcja 2). **Obwieszczenie**
-o dacie złożenia spisu następuje w Monitorze Sądowym i Gospodarczym
-(MSiG) — art. 89 (przywołany w odesłaniach jako "obwieszczenie
-o dacie złożenia spisów wierzytelności").
-
-**Art. 90 — zastrzeżenia DŁUŻNIKA (odmienne od sprzeciwu wierzyciela):**
-Dłużnik MOŻE złożyć sprzeciw, O ILE spis wierzytelności NIE JEST
-zgodny z jego OŚWIADCZENIEM (art. 86 ust. 2 pkt 9 — dokładna treść
-tego oświadczenia NIE ustalona tą sesją). Jeżeli dłużnik NIE złożył
-takiego oświadczenia — może złożyć sprzeciw TYLKO gdy wykaże, że NIE
-złożył go z przyczyn od niego niezależnych (⚠️ dokładne brzmienie
-przesłanki [NIEWERYFIKOWANE]).
-- Jeśli dłużnik zgłosił ZASTRZEŻENIA — wierzytelność staje się
-  SPORNA, sędzia-komisarz dokonuje zmian w spisie oraz spisie
-  wierzytelności SPORNYCH.
-
-**Art. 91 — sprzeciw WIERZYCIELA/UCZESTNIKA co do UMIESZCZENIA
-wierzytelności:**
-- ✅ [VER] RZĄD 1 2026-09-12l, ponownie 2026-09-16 — `Dz.U. 2026 poz. 533`,
-  art. 91 ust. 1–2 (podniesione z RZĘDU 2: terminy zawite domyka wyłącznie
-  odczyt treści). ⚠️ Kanał obwieszczenia: moduł wskazuje niżej MSiG —
-  w tych postępowaniach obwieszczenia idą do Krajowego Rejestru Zadłużonych;
-  NIEROZSTRZYGNIĘTE, zweryfikuj przepisy o KRZ przy sprawie.
-- W postępowaniu UKŁADOWYM oraz SANACYJNYM — w terminie **DWÓCH
-  TYGODNI (14 dni)** od dnia obwieszczenia (art. 89 ust. 2), uczestnicy
-  postępowania mogą złożyć DO SĘDZIEGO-KOMISARZA sprzeciw co do
-  UMIESZCZENIA wierzytelności w spisie (czyli kwestionować cudzą
-  wierzytelność).
-- ⚠️ W przyspieszonym postępowaniu układowym — MOŻLIWOŚĆ wniesienia
-  sprzeciwu co do umieszczenia JEST OGRANICZONA (źródło pośrednie:
-  "wierzyciel został pozbawiony tego prawa w postępowaniu układowym
-  przyspieszonym" — ⚠️ [NIEWERYFIKOWANE] dokładny mechanizm i podstawa
-  prawna tego wyłączenia, priorytet do potwierdzenia przy sprawie
-  dot. przyspieszonego postępowania układowego).
-
-**Sprzeciw co do POMINIĘCIA wierzytelności** (wierzyciel, którego
-wierzytelność NIE została umieszczona w spisie): analogiczny termin
-14 dni od obwieszczenia, TEN SAM tryb formalny.
-
-**Art. 92 — wymogi formalne sprzeciwu:**
-Sprzeciw powinien odpowiadać wymogom formalnym PISMA PROCESOWEGO,
-a ponadto WSKAZYWAĆ pominiętą lub zaskarżoną wierzytelność oraz
-zawierać WNIOSEK co do pominięcia lub umieszczenia wierzytelności
-w spisie, WRAZ Z UZASADNIENIEM i WSKAZANIEM DOWODÓW na jego poparcie
-— ⭐ istotne praktycznie: sprzeciw musi być w pełni umotywowany
-dowodowo już na etapie złożenia, nie jest to formularz standardowy.
-
-**Art. 94 — doręczenie odpisu sprzeciwu i odpowiedź:**
-Sędzia-komisarz doręcza odpis sprzeciwu wierzyciela (co do pominięcia
-LUB umieszczenia) nadzorcy sądowemu albo zarządcy oraz dłużnikowi
-(przy sprzeciwie co do umieszczenia — DODATKOWO wierzycielowi, którego
-wierzytelności sprzeciw dotyczy). Analogicznie przy sprzeciwie
-dłużnika. Uczestnik postępowania MOŻE złożyć ODPOWIEDŹ na sprzeciw
-w terminie wyznaczonym przez sędziego-komisarza, NIE KRÓTSZYM niż
-TYDZIEŃ od doręczenia odpisu. Nadzorca sądowy/zarządca jest
-OBOWIĄZANY w tym samym terminie złożyć [stanowisko/opinię — treść
-dokładna NIEWERYFIKOWANE, zdanie ucięte w źródle].
-
-**Terminy proceduralne (potwierdzone RZĄD 2, wielokrotnie zgodne):**
-- Sprzeciw do sędziego-komisarza: **14 dni** od obwieszczenia spisu
-  w MSiG.
-- Rozpatrzenie sprzeciwu przez sędziego-komisarza: **2 miesiące**
-  (termin instrukcyjny — przekroczenie NIE unieważnia rozstrzygnięcia,
-  ale sygnalizuje opóźnienie procesowe).
-- Po upływie terminu na sprzeciw MOŻLIWE przywrócenie terminu wg
-  zasad KPC (uprawdopodobnienie braku winy).
-- Na postanowienie w przedmiocie sprzeciwu — ZAŻALENIE (przysługuje
-  dłużnikowi, nadzorcy sądowemu/zarządcy, wierzycielom).
-
-**Art. 101-103 — zmiana spisu i zamknięcie procedury:**
-- Zmiana imienia/nazwiska/nazwy wierzyciela LUB zmiana osoby
-  wierzyciela (cesja) po złożeniu spisu sędziemu-komisarzowi — NIE
-  stanowi podstawy do zmiany spisu i NIE pozbawia wierzyciela prawa
-  udziału w dalszym postępowaniu (ciągłość uprawnień mimo cesji).
-- Nieuwzględnienie wierzytelności w spisie — NIE stanowi przeszkody
-  do jej dochodzenia we WŁAŚCIWYM TRYBIE (powtórzenie zasady z art.
-  65 ust. 7 — brak prekluzji materialnoprawnej, tylko utrata
-  uprawnień PROCESOWYCH w tym konkretnym postępowaniu).
-- Sędzia-komisarz zmienia spis STOSOWNIE do przedstawionych mu
-  PRAWOMOCNYCH ORZECZEŃ (np. wyrok w odrębnym procesie o istnienie
-  wierzytelności) — art. 89, 90, 91 stosuje się WTEDY odpowiednio.
-- **Art. 102 — powaga zatwierdzonego spisu (KLUCZOWY dla egzekucji):**
-  ust. 3: dłużnik MOŻE żądać USTALENIA, że wierzytelność objęta
-  zatwierdzonym spisem NIE ISTNIEJE albo istnieje w MNIEJSZYM zakresie
-  — POD WARUNKIEM że złożył sprzeciw w postępowaniu restrukturyzacyjnym
-  i co do wierzytelności NIE zapadło prawomocne orzeczenie sądowe.
-  ust. 4: PO NADANIU wyciągowi z zatwierdzonego spisu KLAUZULI
-  WYKONALNOŚCI — zarzut nieistnienia/mniejszego zakresu wierzytelności
-  dłużnik może podnieść WYŁĄCZNIE w drodze POWÓDZTWA O POZBAWIENIE
-  TYTUŁU WYKONAWCZEGO WYKONALNOŚCI (art. 840 i n. KPC) — czyli
-  zatwierdzony spis z klauzulą wykonalności działa jak TYTUŁ
-  WYKONAWCZY, analogicznie do wyroku sądowego.
-- **Art. 103** — wierzyciel MOŻE żądać ZWROTU dokumentów złożonych
-  w celu udowodnienia wierzytelności; na zarządzenie sędziego-komisarza
-  sekretarz sądowy wydaje dokumenty z zaznaczeniem sumy, w jakiej
-  wierzytelność została umieszczona w spisie.
-
-⚠️ **LUKA:** art. 76-89 (poza obwieszczeniem art. 89), art. 93,
-95-100 — treść szczegółowa NIE ustalona tą sesją (element proceduralny
-o niższym priorytecie praktycznym niż terminy i skutki sprzeciwu
-wyżej opracowane).
+- **Art. 121:** ustanawia sędzia-komisarz z urzędu lub na wniosek (ust. 1); obowiązkowo w **tydzień** na wniosek **dłużnika**, **≥ 3 wierzycieli** lub wierzycieli z **≥ 1/5 sumy** (bez wyłączonych z art. 80 ust. 3, 109 ust. 1, 116) (ust. 2); przed zatwierdzeniem spisu uprawnienia ustala się według spisu wierzycieli dłużnika, spisu bezspornych nadzorcy/zarządcy, tytułów egzekucyjnych lub wcześniejszego spisu (sanacja z art. 328 ust. 1) (ust. 3).
+- **Art. 122:** **5 członków i 2 zastępców** spośród wierzycieli-uczestników (ust. 1); **3 członków**, gdy uczestników **< 7** (ust. 2); zastępcy jak członkowie (ust. 3), głosują za nieobecnych w kolejności z postanowienia (ust. 4).
+- **Art. 123:** wierzyciele z **≥ 1/5 sumy** wskazują członka — powołanie, chyba że uzasadnione przypuszczenie nienależytego pełnienia; zażalenie tylko wnioskodawcy (ust. 1); przy **≥ 2/5** — po jednym kandydacie na każdą 1/5 (ust. 2); brak kolejnych wniosków, chyba że ich członek odwołany (ust. 3).
+- **Art. 124:** wierzyciel może **odmówić** przyjęcia funkcji.
+- **Art. 125:** odwołanie za nienależyte pełnienie i powołanie innych — zażalenie (ust. 1); odwołanie na wniosek członka (ust. 2); prawomocnie odwołany — bez ponownego powołania (ust. 3).
+- **Art. 126:** **zmiana składu** na wniosek wierzycieli z ≥ 1/5 sumy (ust. 1); art. 123 ust. 2–3 odpowiednio (ust. 2); członka powołanego z wniosku wierzycieli odwołuje się tylko na żądanie tych wierzycieli (ust. 3).
+- **Art. 127:** członkowie działają osobiście lub przez pełnomocników; pełnomocnictwo do akt przez przewodniczącego.
+- **Art. 128:** rada **pomaga i kontroluje** nadzorcę/zarządcę, bada fundusze masy, udziela zezwoleń, opiniuje na żądanie; kieruje się **interesem ogółu wierzycieli** (ust. 1); uwagi do sędziego-komisarza (ust. 2); żądanie wyjaśnień i badanie ksiąg z poszanowaniem **tajemnicy przedsiębiorstwa**; zakres w razie wątpliwości określa sędzia-komisarz (ust. 3).
+- **Art. 129 — zezwolenie rady pod rygorem nieważności:** obciążenie masy hipoteką/zastawem/zastawem rejestrowym/hipoteką morską dla wierzytelności **nieobjętej układem** (pkt 1), przewłaszczenie na zabezpieczenie takiej wierzytelności (pkt 2), inne obciążenia (pkt 3), **kredyty i pożyczki** (pkt 4), **dzierżawa przedsiębiorstwa** lub ZCP (pkt 5) (ust. 1); **sprzedaż przez dłużnika** nieruchomości lub składników **> 500 000 zł** (ust. 2); zezwolenie na kredyt i zabezpieczenia tylko, gdy niezbędne do bieżących kosztów i zobowiązań lub układu, z gwarancją wykorzystania zgodnie z uchwałą i **adekwatnym** zabezpieczeniem (ust. 3); czynności z ust. 1 za zezwoleniem **nie mogą być uznane za bezskuteczne wobec masy upadłości** (ust. 4).
+- **Art. 130:** na pierwszym posiedzeniu — **regulamin** (tryb, zawiadomienia, głosy, współpraca, wnioski) (ust. 1) i **przewodniczący** (ust. 2).
+- **Art. 131:** uchwały na posiedzeniach (także zdalnych), chyba że regulamin inaczej (ust. 1); poza posiedzeniem — głosują **wszyscy członkowie**, bez zastępców (ust. 2); uchwała w **2 tygodnie** od wniosku (ust. 3).
+- **Art. 132:** **zwykła większość** (ust. 1); kontrola przez wskazanych członków (ust. 2); badanie ksiąg przez członków lub specjalistów — **koszty nie są kosztami postępowania** i nie obciążają dłużnika (ust. 3); sprawozdania dla sędziego-komisarza (ust. 4).
+- **Art. 133:** uchwała pełnego składu **≥ 4 głosy** → sąd może pozwolić dłużnikowi na **zwykły zarząd** obok zarządcy (ust. 1); uchwała ≥ 4 głosy albo zgodna z wnioskiem dłużnika → sąd **zmienia nadzorcę/zarządcę** na osobę spełniającą art. 24 wskazaną przez radę, chyba że niezgodne z prawem, rażąco krzywdzące lub osoba nie da rękojmi; zażalenie na odmowę — członkowie rady i dłużnik (ust. 2); rada 3-osobowa — **jednomyślność** (ust. 3).
+- **Art. 134:** zwołuje przewodniczący; **pierwsze posiedzenie** — nadzorca/zarządca niezwłocznie (ust. 1); przewodniczy przewodniczący (ust. 2); może zwołać i prowadzić sędzia-komisarz (ust. 3).
+- **Art. 135:** protokół, podpisy (przy posiedzeniu zdalnym — przewodniczący) (ust. 1); odpis z uchwałami do sędziego-komisarza i nieobecnego nadzorcy/zarządcy (ust. 2); uchwała bez posiedzenia — odpis do sędziego-komisarza (ust. 3); nie dotyczy posiedzeń prowadzonych przez sędziego-komisarza (ust. 4).
+- **Art. 136:** **zarzuty** przeciw uchwale w **tydzień** — uczestnik, zarządca, nadzorca; spóźnione lub wadliwe — bez rozpoznania, bez wezwania z art. 130 § 1 KPC (ust. 2); rozpoznanie w **tydzień** (ust. 3); **uchylenie** uchwały sprzecznej z prawem lub interesem wierzycieli — po zarzutach lub z urzędu w **2 tygodnie** od przekazania; zażalenie skarżącego, dłużnika, członków rady (ust. 4); **wykonanie najwcześniej po 2 tygodniach** od przekazania; możliwe wstrzymanie (ust. 5; ust. 1 uchylony).
+- **Art. 137:** zwrot wydatków; wynagrodzenie **≤ 3%** przeciętnego wynagrodzenia z art. 55 ust. 3 **za dzień posiedzenia** — koszty postępowania (ust. 1); postanowienie po wysłuchaniu członka i nadzorcy/zarządcy (ust. 2).
+- **Art. 138:** członek rady **odpowiada za szkodę** z nienależytego pełnienia obowiązków.
+- **Art. 139:** bez rady — jej czynności wykonuje **sędzia-komisarz** (ust. 1), także gdy rada nie działa w wyznaczonym terminie (ust. 2).
 
 ---
 
-## 5. ROZDZIAŁ 3 — ZGROMADZENIE WIERZYCIELI (art. 104-120)
+## TERMINY I PROGI
 
-### Oddział 1 — Przepisy ogólne (art. 104-112)
+| Wartość | Znaczenie | Podstawa |
+|---|---|---|
+| max 6% rocznie, max 2 lata | dyskonto wierzytelności niewymagalnych | art. 79 ust. 1; 81 ust. 1 |
+| kurs średni NBP z dnia otwarcia | przeliczenie walut | art. 83 ust. 1 |
+| 2 tygodnie od obwieszczenia | sprzeciw (PU, sanacja) | art. 91 |
+| ≥ tydzień | odpowiedź na sprzeciw | art. 94 ust. 4 |
+| 2 miesiące | rozpoznanie sprzeciwu | art. 95 ust. 1 |
+| ≤ 15% | zatwierdzenie spisu mimo nierozpoznanych sprzeciwów | art. 98 ust. 3 |
+| ≥ 2 tyg. / ≥ 3 tyg. | obwieszczenie zgromadzenia / wysłanie zawiadomień | art. 105 ust. 2, 6 |
+| > ½ głosujących + ≥ ½ sumy | uchwały zwykłe | art. 111 |
+| ≥ 1/5 uprawnionych | kworum zgromadzenia układowego | art. 113 ust. 1 |
+| ≤ ½ liczby i ≤ 1/3 sumy | dopuszczalny brak dowodu doręczenia | art. 113 ust. 3 |
+| > 25% kapitału / akcji | wyłączenie głosu osoby fizycznej | art. 116 ust. 4 |
+| > ½ głosujących + ≥ 2/3 sumy | przyjęcie układu (w każdej grupie) | art. 119 ust. 1–2 |
+| większość grup + ≥ ½ sumy | cram-down | art. 119 ust. 3 |
+| tydzień; ≥ 3 wierzycieli lub ≥ 1/5 sumy | ustanowienie rady na wniosek | art. 121 ust. 2 |
+| 5 + 2 / 3 członków (< 7 uczestników) | skład rady | art. 122 |
+| 1/5 / 2/5 sumy | wskazanie członków rady | art. 123 |
+| > 500 000 zł | sprzedaż wymagająca zezwolenia rady | art. 129 ust. 2 |
+| 2 tygodnie | termin uchwały rady | art. 131 ust. 3 |
+| ≥ 4 głosy (3-osobowa — jednomyślnie) | zwykły zarząd dłużnika; zmiana nadzorcy/zarządcy | art. 133 |
+| tydzień / tydzień / 2 tyg. / 2 tyg. | zarzuty; rozpoznanie; uchylenie z urzędu; wstrzymanie wykonania | art. 136 |
+| ≤ 3% przeciętnego wynagrodzenia / dzień | wynagrodzenie członka rady | art. 137 ust. 1 |
 
-**Charakter prawny:** zgromadzenie wierzycieli to KOLEGIALNY organ
-wierzycieli — w doktrynie SPORNE czy jest to organ SĄDOWY czy WYRAZ
-zbiorowego działania wierzycieli jako uczestników postępowania;
-DOMINUJĄCY pogląd: organ o kompetencjach KONSTYTUTYWNYCH,
-PRAWOKSZTAŁTUJĄCYCH — samodzielnie decyduje o przyjęciu/odrzuceniu
-układu (nie tylko doradczo).
+## PUŁAPKI
 
-**Art. 104 — przesłanki zwołania:**
-Zgromadzenie wierzycieli zwołuje SĘDZIA-KOMISARZ (WYŁĄCZNA kompetencja
-— zwołuje TYLKO sędzia-komisarz, nawet jeśli inicjatywa pochodzi od
-rady wierzycieli) w przypadkach:
-1) celem GŁOSOWANIA nad układem (główny, najczęstszy przypadek);
-2) gdy RADA WIERZYCIELI podejmie uchwałę o zwołaniu zgromadzenia;
-3) gdy sędzia-komisarz UZNA to za POTRZEBNE (katalog OTWARTY — brak
-   zamkniętej listy okoliczności uzasadniających zwołanie).
-⭐ Praktyczny wniosek: zgromadzenie NIE jest ograniczone WYŁĄCZNIE do
-głosowania nad układem — może być zwołane w KAŻDEJ sprawie wymagającej
-zbiorowego stanowiska wierzycieli, ALE NIE MOŻE wkraczać w kompetencje
-zastrzeżone dla innych organów (zarządca, sędzia-komisarz).
+- Wierzytelność „sporna” w rozumieniu art. 65 ust. 5 wymaga konkretyzacji (wezwanie, pozew, arbitraż, zarzut potrącenia) — samo zaprzeczenie dłużnika bez tego nie wystarcza, poza zastrzeżeniem z art. 90 w PPU.
+- Wierzytelność zabezpieczona rzeczowo wchodzi do spisu tylko w wartości przedmiotu zabezpieczenia według hipotetycznej upadłości (86 ust. 3, 86a).
+- Okres rozliczeniowy obejmujący otwarcie — podział proporcjonalny z mocy prawa (77); osobne deklaracje podatkowe.
+- Waluta: przeliczenie służy tylko spisowi i głosowaniu; wykonanie układu w walucie (83 ust. 2).
+- PPU: brak sprzeciwów — zastrzeżenia dłużnika (90) i zatwierdzenie spisu na zgromadzeniu (97); PU/sanacja: sprzeciw (91–96) i zatwierdzenie po jego rozpoznaniu (98).
+- Prekluzja dowodowa sprzeciwu (92 ust. 5) i ograniczenie do dokumentów i opinii biegłego (93).
+- Wyciąg ze spisu staje się tytułem egzekucyjnym także po odmowie zatwierdzenia lub umorzeniu (102 ust. 1) — dłużnik broni się tylko, jeżeli złożył sprzeciw (102 ust. 3).
+- Wstrzymujący się nie liczy się do głosujących (110 ust. 5) — wpływa na większości z art. 111 i 119.
+- Wierzytelności nabyte po otwarciu nie dają głosu (109) — poza PZU.
+- Sędzia-komisarz nie może uchylić uchwały o przyjęciu układu (120 ust. 3) — kontrola następuje przy zatwierdzeniu układu przez sąd.
+- Brak zezwolenia rady na czynność z art. 129 = nieważność; zezwolenie chroni przed bezskutecznością w późniejszej upadłości (129 ust. 4).
+- Uchwały rady nie wykonuje się przed upływem 2 tygodni od przekazania sędziemu-komisarzowi (136 ust. 5).
 
-**Art. 105 — obwieszczenie i zwołanie:**
-- ust. 1: zwołuje się PRZEZ OBWIESZCZENIE — określa TERMIN, MIEJSCE,
-  PRZEDMIOT OBRAD, SPOSÓB GŁOSOWANIA, oraz CZY zgromadzenie będzie
-  przeprowadzone w sposób z art. 110 ust. 6 (⚠️ treść tego trybu
-  szczególnego NIEUSTALONA, prawdopodobnie dot. głosowania
-  zdalnego/elektronicznego, patrz art. 110 niżej).
-- ust. 2: obwieszczenie CO NAJMNIEJ NA DWA TYGODNIE przed terminem
-  zgromadzenia.
-- ust. 3: na termin WZYWA SIĘ dłużnika, nadzorcę sądowego albo
-  zarządcę — ICH NIESTAWIENNICTWO (choćby usprawiedliwione) NIE
-  stanowi przeszkody do odbycia zgromadzenia (zgromadzenie może
-  się odbyć bez nich).
-- ust. 4: przy ODROCZENIU — sędzia-komisarz podaje obecnym NOWY
-  termin i miejsce BEZ ponownego obwieszczenia (uproszczenie
-  proceduralne przy odroczeniu). Głos ODDANY WCZEŚNIEJ przez
-  wierzyciela nieobecnego na odroczonym zgromadzeniu ZACHOWUJE MOC
-  i jest uwzględniany, jeśli te SAME sprawy są poddane pod głosowanie.
+## POWIĄZANIA
 
-**Art. 107 — prawo głosu (KLUCZOWY przepis):**
-- Prawo głosu na zgromadzeniu mają: (a) wierzyciele, których
-  wierzytelności zostały umieszczone w ZATWIERDZONYM spisie
-  wierzytelności, ORAZ (b) wierzyciele, którzy STAWIĄ SIĘ na
-  zgromadzeniu i przedłożą sędziemu-komisarzowi TYTUŁ EGZEKUCYJNY
-  stwierdzający wierzytelność (droga alternatywna dla wierzycieli
-  spoza zatwierdzonego spisu).
-- **Waga głosu:** wierzyciele głosują SUMĄ wierzytelności umieszczoną
-  w zatwierdzonym spisie LUB w tytule egzekucyjnym — im większa
-  wierzytelność, tym większy wpływ na wynik głosowania (głosowanie
-  KAPITAŁOWE, nie "jeden wierzyciel = jeden głos").
-- Sędzia-komisarz MOŻE (na wniosek wierzyciela, po wysłuchaniu
-  dłużnika) dopuścić do udziału wierzyciela, którego wierzytelność
-  jest UZALEŻNIONA OD WARUNKU ZAWIESZAJĄCEGO lub SPORNA i została
-  UPRAWDOPODOBNIONA (obniżony standard dowodowy — wystarczy
-  prawdopodobieństwo, nie pełny dowód).
+- Nadzorca, zarządca, art. 24, 39, wynagrodzenie (art. 55) → `mod-PrRestr-dzial-III-nadzorca-zarzadca`
+- PPU/PU: spisy w 30 dni, zastrzeżenia do testów (art. 261–264, 280–282) → `mod-PrRestr-ppu-pu`
+- Sanacja, uproszczony wniosek (art. 328) → `mod-PrRestr-sanacja`; PZU → `mod-PrRestr-pzu`
+- Układ: grupy, art. 160–162, objęcie układem, zatwierdzenie → `mod-PrRestr-dzial-VI-uklad`
+- Pomoc publiczna (art. 118 ust. 4) → `mod-PrRestr-dzial-V-pomoc-publiczna`
+- Kategorie art. 342 PrUp (cram-down, art. 119 ust. 3) → `mod-PrUpad-podzial-335-360`
+- Bezskuteczność w upadłości (art. 129 ust. 4) → `mod-PrUpad-skutki-masa-bezskutecznosc`
+- Majątek wspólny (KRO art. 34¹, 36–39) → `mod-KRO-rodzinne`
 
-**Art. 110 — sposób głosowania:**
-Głosowanie na zgromadzeniu PRZEPROWADZA SIĘ za pośrednictwem SYSTEMU
-TELEINFORMATYCZNEGO obsługującego postępowanie sądowe (KRZ), opis
-przebiegu i wynik w PROTOKOLE. Wierzyciel obecny osobiście MOŻE oddać
-głos USTNIE do protokołu LUB NA PIŚMIE (pismo wprowadza się do
-protokołu i składa do zbioru dokumentów). Głosowanie PRZEPROWADZA
-nadzorca sądowy albo zarządca POD NADZOREM sędziego-komisarza.
-⚠️ Jeżeli po głosowaniu okaże się, że głosy wierzycieli DOPUSZCZONYCH
-WARUNKOWO (art. 107 ostatni akapit) MOGŁYBY WPŁYNĄĆ na wynik —
-sędzia-komisarz zarządza PRZERWĘ celem prawidłowego doręczenia
-zawiadomienia, CHYBA że stwierdzi z dowodu z dokumentu, że wierzyciele
-WIEDZIELI o zgromadzeniu (wyjątek od przerwy).
+## WYNIK
 
-**Art. 111 [NIEWERYFIKOWANE dokładna treść]** — cytowany pośrednio:
-"uchwała zgromadzenia wierzycieli zostaje przyjęta, jeżeli wypowie się
-za nią większość głosujących wierzycieli" — prawdopodobnie zasada
-ogólna dla uchwał NIEDOTYCZĄCYCH przyjęcia układu (dla układu
-obowiązuje inny, podwójny próg — patrz art. 119 w
-`mod-PrRestr-dzial-VI-uklad.md`, oraz próg jednej piątej niżej).
-
-### Oddział 2 — Zgromadzenie wierzycieli w celu głosowania nad układem (art. 113-120)
-
-**Art. 113 — quorum i uprawnieni do głosowania:**
-- ust. 1: układ MOŻNA zawrzeć na zgromadzeniu, JEŻELI uczestniczy
-  W NIM CO NAJMNIEJ JEDNA PIĄTA (1/5) wierzycieli UPRAWNIONYCH do
-  głosowania nad układem — próg formalny quorum, bez którego
-  procedura NIE MOŻE być kontynuowana.
-- ust. 2: uprawnieni do głosowania nad układem SĄ WYŁĄCZNIE wierzyciele
-  określeni w art. 107 ust. 1 i 3, którzy są OBJĘCI UKŁADEM (nie
-  wszyscy wierzyciele z prawem głosu — dodatkowy warunek "objęcia
-  układem", odsyłający do katalogu wierzytelności podlegających
-  układowi z art. 150-154, patrz `mod-PrRestr-dzial-VI-uklad.md`).
-- ust. 3: BRAK dowodu doręczenia zawiadomienia o zgromadzeniu
-  wierzycielom, których LICZBA NIE jest większa niż POŁOWA uprawnionych
-  do głosowania, A KWOTA ich wierzytelności NIE przekracza JEDNEJ
-  TRZECIEJ sumy wierzytelności uprawniających do głosowania — NIE
-  unieważnia głosowania (podwójny próg tolerancji: liczbowy i
-  kwotowy, oba muszą być spełnione łącznie dla zwolnienia z rygoru).
-  ⚠️ ust. 4: jeśli PO przeprowadzeniu głosowania okaże się, że głosy
-  wierzycieli z NIEPRAWIDŁOWYM doręczeniem MOGŁYBY wpłynąć na wynik —
-  sędzia-komisarz zarządza PRZERWĘ (ten sam mechanizm ochronny co
-  art. 110 dla wierzycieli warunkowych).
-
-**Art. 114 — prezentacja przez nadzorcę/zarządcę:**
-- ust. 1: w PRZYSPIESZONYM postępowaniu układowym oraz w postępowaniu
-  UKŁADOWYM — nadzorca SĄDOWY przedstawia na zgromadzeniu GŁÓWNE
-  ZAŁOŻENIA planu restrukturyzacyjnego.
-- ust. 2: w postępowaniu SANACYJNYM — ZARZĄDCA przedstawia
-  SPRAWOZDANIE z WYKONANIA planu restrukturyzacyjnego W TOKU
-  postępowania sanacyjnego ORAZ efekty podjętych działań, ORAZ główne
-  działania planowane PO PRZYJĘCIU układu (różnica: w sanacji
-  restrukturyzacja już trwa w momencie głosowania, więc raportuje się
-  postęp, nie tylko zamiar).
-- Nadzorca sądowy albo zarządca SKŁADA na zgromadzeniu OPINIĘ
-  o możliwości WYKONANIA układu (obowiązek niezależny od powyższych
-  prezentacji, wspólny dla obu trybów).
-
-**Próg przyjęcia układu (znany z odrębnych źródeł, potwierdzony
-wielokrotnie RZĄD 2/3):** uchwała o przyjęciu układu ZAPADA, jeżeli
-wypowie się za nią WIĘKSZOŚĆ głosujących wierzycieli, KTÓRZY ODDALI
-WAŻNY głos, mających ŁĄCZNIE co najmniej DWIE TRZECIE (2/3) sumy
-wierzytelności przysługujących GŁOSUJĄCYM wierzycielom — PODWÓJNY
-próg (większość OSOBOWA + większość KAPITAŁOWA 2/3), zgodny z art.
-119 opisanym już w `mod-PrRestr-dzial-VI-uklad.md` (przy głosowaniu
-W GRUPACH — patrz ten moduł dla mechanizmu cramdown).
-
-⚠️ **LUKA:** art. 106, 108-109, 112, 115-118, 120 — treść szczegółowa
-NIE ustalona tą sesją (m.in. art. 108: głosowanie przez wspólnego
-pełnomocnika — tytuł zrekonstruowany z odesłania w innym źródle, art.
-109: brak prawa głosu — analogicznie, art. 116: wyłączenia z prawa
-głosu — wspomniane w źródle pośrednim jako "art. 116 pr. restr." bez
-pełnej treści, art. 117: zgłoszenie kilku propozycji układowych —
-tytuł zrekonstruowany, art. 118: dodatkowe wymogi głosowania przy
-zabezpieczeniu przez osoby trzecie/kredycie — fragment znaleziony
-częściowo).
-
----
-
-## 6. ROZDZIAŁ 4 — RADA WIERZYCIELI (art. 121-139)
-
-**Charakter:** organ FAKULTATYWNY (nie każde postępowanie go ma) —
-kontrolny i DORADCZY, reprezentujący interesy WSZYSTKICH wierzycieli
-(nie tylko swoich członków). Jeśli rada NIE została powołana — jej
-kompetencje wykonuje SĘDZIA-KOMISARZ osobiście.
-
-⚠️ **Ograniczenie trybowe:** rada wierzycieli NIE WYSTĘPUJE w
-postępowaniu O ZATWIERDZENIE UKŁADU — dłużnik samodzielnie zbiera
-głosy wierzycieli w tym trybie (brak formalnego "otwarcia" procedury
-sądowej na tym etapie), co wyklucza funkcjonowanie rady. Rada
-możliwa w: przyspieszonym postępowaniu układowym, postępowaniu
-układowym, postępowaniu sanacyjnym.
-
-**Art. 121 — ustanowienie:**
-Radę USTANAWIA oraz POWOŁUJE i ODWOŁUJE jej członków SĘDZIA-KOMISARZ:
-(a) Z URZĘDU, o ile uzna to za potrzebne, LUB (b) NA WNIOSEK.
-Wniosek MOGĄ złożyć: dłużnik, TRZEJ LUB WIĘCEJ wierzycieli
-(NIEZALEŻNIE od sumy wierzytelności — próg liczbowy bez progu
-kwotowego), ALBO wierzyciel/wierzyciele mający ŁĄCZNIE CO NAJMNIEJ
-20% (1/5) OGÓLNEJ SUMY wierzytelności ujawnionych w spisie
-(alternatywny próg kwotowy przy MNIEJSZEJ liczbie wierzycieli).
-⛔ Skuteczny wniosek OBLIGUJE sędziego-komisarza do NIEZWŁOCZNEGO
-ustanowienia rady, NIE PÓŹNIEJ niż w ciągu TYGODNIA.
-⚠️ ust. 2 — wyłączenie pewnych kategorii wierzycieli z możliwości
-żądania ustanowienia rady, odsyłające do art. 80 ust. 3, art. 109
-ust. 1, art. 116 (przepisy o wierzycielach powiązanych/bez prawa
-głosu, patrz Rozdz. 2-3 wyżej — dokładna treść tych wyłączeń
-[NIEWERYFIKOWANE] w tym module).
-
-**Art. 122 — skład:**
-- Standardowo: **PIĘCIU CZŁONKÓW + DWÓCH ZASTĘPCÓW**, powoływanych
-  spośród wierzycieli dłużnika będących uczestnikami postępowania.
-- Rada MOŻE składać się z TRZECH członków, JEŻELI liczba wierzycieli
-  dłużnika będących uczestnikami postępowania JEST MNIEJSZA NIŻ
-  SIEDEM.
-- Zastępca UCZESTNICZY w posiedzeniach i GŁOSUJE w razie nieobecności
-  KTÓREGOKOLWIEK członka — w pierwszej kolejności głosuje zastępca
-  wymieniony NA PIERWSZYM MIEJSCU w postanowieniu o powołaniu (jeśli
-  obecny).
-
-**Art. 123 — powołanie na wniosek konkretnych wierzycieli:**
-Na wniosek wierzyciela/wierzycieli mających ŁĄCZNIE CO NAJMNIEJ
-JEDNĄ PIĄTĄ (1/5) sumy wierzytelności przysługujących wierzycielom-
-uczestnikom (z WYŁĄCZENIEM kategorii z art. 80 ust. 3, art. 109 ust.
-1, art. 116 — jak przy art. 121) — sędzia-komisarz POWOŁUJE na
-członka rady OSOBĘ WSKAZANĄ przez wnioskodawcę, CHYBA że zachodzi
-UZASADNIONE PRZYPUSZCZENIE, że NIE będzie należycie pełnić
-obowiązków (jedyna przesłanka odmowy). ⭐ Wierzyciele posiadający
-CO NAJMNIEJ 2/5 sumy MOGĄ wskazać PO JEDNYM kandydacie NA KAŻDĄ
-1/5 posiadanych wierzytelności (proporcjonalna reprezentacja
-dla dużych wierzycieli).
-
-**Art. 124 — dobrowolność funkcji:**
-Wierzyciel MOŻE NIE PRZYJĄĆ obowiązków członka rady (funkcja
-dobrowolna, nie przymusowa) — w takim wypadku powoływany jest
-KOLEJNY z listy.
-
-**Art. 125 — odwołanie:**
-Sędzia-komisarz MOŻE odwołać członków rady, którzy NIE PEŁNIĄ
-[obowiązków należycie — treść dokładna NIEWERYFIKOWANA, zdanie
-ucięte w źródle].
-
-**Art. 126 — zmiana składu na wniosek:**
-Na wniosek wierzyciela/wierzycieli mających CO NAJMNIEJ 1/5 sumy
-wierzytelności uczestników (z tymi samymi wyłączeniami co wyżej) —
-sędzia-komisarz ZMIENIA SKŁAD, powołując osobę WSKAZANĄ przez
-wnioskodawcę, CHYBA że zachodzi uzasadnione przypuszczenie
-nienależytego pełnienia obowiązków (analogicznie do art. 123).
-
-**Art. 128 — zakres kompetencji (szeroki katalog, KLUCZOWY dla
-praktyki):**
-1) udzielanie POMOCY nadzorcy sądowemu (zarządcy — w sanacji);
-2) KONTROLOWANIE czynności nadzorcy sądowego albo zarządcy;
-3) BADANIE stanu funduszów masy UKŁADOWEJ lub SANACYJNEJ;
-4) udzielanie ZEZWOLENIA na czynności, które mogą być dokonane
-   TYLKO za zezwoleniem rady wierzycieli (⭐ patrz niżej — przykład
-   sprzedaży nieruchomości);
-5) wyrażanie OPINII w innych sprawach, jeżeli zażąda tego
-   sędzia-komisarz, nadzorca sądowy/zarządca lub DŁUŻNIK.
-- Rada MOŻE żądać od dłużnika/nadzorcy/zarządcy WYJAŚNIEŃ oraz BADAĆ
-  KSIĘGI i DOKUMENTY przedsiębiorstwa dłużnika W ZAKRESIE, w jakim
-  NIE narusza to TAJEMNICY PRZEDSIĘBIORSTWA (ograniczenie
-  proporcjonalności kontroli).
-- ⭐ **Przykład konkretnego zezwolenia:** rada MOŻE udzielić zezwolenia
-  na zawarcie UMOWY KREDYTU/POŻYCZKI lub USTANOWIENIE zabezpieczeń —
-  WARUNKI: (a) NIEZBĘDNE do zachowania zdolności bieżącego
-  zaspokajania KOSZTÓW postępowania i zobowiązań powstałych PO jego
-  otwarciu LUB zawarcia i wykonania układu, (b) zagwarantowane, że
-  środki będą PRZEKAZANE dłużnikowi i wykorzystane zgodnie z uchwałą
-  rady, (c) zabezpieczenie ADEKWATNE do kredytu/pożyczki.
-- ⭐ **Inny przykład (znaleziony przy okazji, dot. art. 128 lub
-  okolicznego przepisu [NIEWERYFIKOWANE dokładny numer]):**
-  SPRZEDAŻ przez dłużnika NIERUCHOMOŚCI lub INNYCH składników majątku
-  o określonej wartości WYMAGA zezwolenia rady wierzycieli POD
-  RYGOREM NIEWAŻNOŚCI — sankcja NAJSUROWSZA (nieważność bezwzględna,
-  analogicznie do art. 39 przy braku zgody nadzorcy sądowego).
-
-**Art. 131-133 — podejmowanie uchwał:**
-- Art. 131: rada wykonuje czynności przez UCHWAŁY na POSIEDZENIACH,
-  CHYBA że regulamin rady stanowi inaczej. Posiedzenia MOGĄ odbywać
-  się PRZY UŻYCIU środków bezpośredniego porozumiewania na odległość
-  (wideokonferencja itp.). Jeżeli uchwała NIE jest podejmowana na
-  posiedzeniu — konieczne oddanie głosów przez WSZYSTKICH członków
-  (tryb obiegowy wymaga jednomyślnej partycypacji formalnej, nie
-  tylko większości głosującej).
-- Art. 132: uchwały PODEJMUJE SIĘ większością głosów, JEŻELI ustawa
-  nie stanowi inaczej (zasada ogólna — wyjątki patrz art. 133).
-- **Art. 133 — uchwały w PEŁNYM SKŁADZIE (podwyższony wymóg dla
-  decyzji szczególnie istotnych):** na skutek uchwały rady PODJĘTEJ
-  W PEŁNYM SKŁADZIE, za którą głosowało CO NAJMNIEJ CZTERECH członków,
-  ALBO na skutek uchwały PODJĘTEJ ZGODNIE Z WNIOSKIEM DŁUŻNIKA — SĄD
-  ZMIENIA nadzorcę sądowego albo zarządcę i POWOŁUJE do pełnienia tej
-  funkcji osobę WSKAZANĄ przez radę. ⚠️ Sędzia-komisarz MOŻE ODMÓWIĆ
-  powołania wskazanej osoby, JEŻELI: (a) byłoby to NIEZGODNE Z PRAWEM,
-  (b) RAŻĄCO NARUSZAŁOBY interes wierzycieli, LUB (c) zachodzi
-  UZASADNIONE PRZYPUSZCZENIE nienależytego pełnienia obowiązków —
-  ⭐ istotny mechanizm: rada MOŻE bezpośrednio DOPROWADZIĆ do zmiany
-  nadzorcy/zarządcy, wzmacniający realny wpływ wierzycieli na
-  przebieg postępowania (mechanizm silniejszy niż tylko opiniodawczy).
-
-⚠️ **LUKA:** art. 127, 129-130, 134-139 — treść szczegółowa NIE
-ustalona tą sesją (m.in. termin na podjęcie uchwały — wspomniany
-pośrednio jako "2 tygodnie, termin instrukcyjny" w źródle dot. rady
-wierzycieli w upadłości, ⚠️ [NIEWERYFIKOWANE] czy identyczny termin
-obowiązuje w PrRestr, NIE zakładać tożsamości bez potwierdzenia).
-
----
-
-## 7. DZIAŁ V — POMOC PUBLICZNA (art. 139a-149)
-
-⚠️ **LUKA CAŁKOWITA** — Dział V NIE zbadany tą sesją poza jednym
-fragmentem pośrednim: pomoc publiczna na restrukturyzację NIEPODLEGAJĄCA
-notyfikacji Komisji Europejskiej MOŻE być udzielona w okresie
-wskazanym w decyzji KE wydanej na podstawie art. 4 ust. 3 albo art.
-7 ust. 3 lub 4 rozporządzenia Rady (WE) nr 659/1999 (⚠️ ROZPORZĄDZENIE
-HISTORYCZNE — rozporządzenie 659/1999 zostało ZASTĄPIONE przez
-rozporządzenie (UE) 2015/1589 — ⛔ **RYZYKO NIEAKTUALNEGO ODESŁANIA**:
-czy PrRestr t.j. 2026 nadal odsyła do uchylonego aktu 659/1999, czy
-źródło pochodne cytuje NIEAKTUALNĄ wersję ustawy — NIEROZSTRZYGNIĘTE,
-priorytet WYSOKI dla weryfikacji przy pierwszej sprawie dot. pomocy
-publicznej w restrukturyzacji, bo błędne odesłanie w piśmie mogłoby
-być łatwo wychwycone przez stronę przeciwną).
-
-**Rekomendacja:** priorytet dla kolejnej sesji audytowej — to
-najsłabiej opracowany fragment całego Działu IV/V, z dodatkowym
-sygnałem możliwego przestarzałego odesłania unijnego.
-
----
-
-## 8. ROZGRANICZENIE I POWIĄZANIA
-
-- **Art. 39** (Dział III, zgoda nadzorcy sądowego) — powiązany z
-  art. 128 pkt 4 (zezwolenie RADY na niektóre czynności) — możliwa
-  KUMULACJA wymogów (zgoda nadzorcy + zezwolenie rady) przy
-  czynnościach szczególnie istotnych — DO POTWIERDZENIA per konkretna
-  czynność, nie zakładać automatycznie.
-- **Art. 119** (Dział VI, próg głosowania w grupach, cramdown) —
-  patrz `mod-PrRestr-dzial-VI-uklad.md` — bezpośrednio powiązany
-  z art. 113-114 tego modułu (mechanizm głosowania nad układem).
-- **KPC art. 840 i n.** (powództwo o pozbawienie tytułu wykonawczego
-  wykonalności) — powiązany z art. 102 ust. 4 (spis z klauzulą
-  wykonalności jako tytuł wykonawczy).
-- **Dział III** (nadzorca/zarządca, art. 23-64) — patrz
-  `mod-PrRestr-dzial-III-nadzorca-zarzadca.md` — organy sporządzające
-  spis wierzytelności i prowadzące głosowanie.
-- **PrUp** (Prawo upadłościowe) — KONTRAST kluczowy: instytucja
-  zgłoszenia wierzytelności ISTNIEJE w upadłości, NIE istnieje
-  w restrukturyzacji (patrz sekcja 2) — przy doradztwie klientowi
-  wchodzącemu w spór z dłużnikiem w obu trybach RÓWNOCZEŚNIE (możliwe
-  przy przekształceniu restrukturyzacji w upadłość) — uważać na
-  różnicę reżimów.
-
----
-
-## ⚠️ POZOSTAJE DO POGŁĘBIENIA (jawnie oznaczone, poza zakresem tej naprawy)
-
-1. Art. 67-75 (Rozdz. 1, poza 65-66) — treść nieustalona.
-2. Art. 76-89 (Rozdz. 2, sporządzenie spisu przed obwieszczeniem),
-   art. 93, 95-100 — treść szczegółowa nieustalona.
-3. Art. 106, 108-109, 112, 115-118, 120 (Rozdz. 3) — treść
-   nieustalona, w tym KLUCZOWY art. 116 (wyłączenia z prawa głosu)
-   wspomniany tylko przez odesłanie.
-4. Art. 127, 129-130, 134-139 (Rozdz. 4, rada wierzycieli) — treść
-   nieustalona, w tym termin na podjęcie uchwały (hipoteza 2 tygodnie
-   z PrUp, NIEPOTWIERDZONA dla PrRestr).
-5. **CAŁY Dział V (Pomoc publiczna, art. 139a-149)** — luka niemal
-   całkowita, PLUS ryzyko przestarzałego odesłania do uchylonego
-   rozporządzenia UE 659/1999 (możliwe że powinno być 2015/1589) —
-   priorytet WYSOKI.
-6. Rozbieżność numeracyjna zakresu Oddziału 2 Rozdz. 3 ("113-120"
-   vs "113-264" w źródłach) — przyjęto 113-120 jako hipotezę roboczą,
-   NIE potwierdzone ostatecznie.
-7. Dokładna treść art. 86 ust. 2 pkt 9 (oświadczenie dłużnika,
-   przywołane w art. 90 jako podstawa sprzeciwu dłużnika) — poza
-   zakresem, ale ISTOTNE dla zrozumienia mechanizmu art. 90 w pełni.
-
-**Rekomendacja:** priorytet dla kolejnej sesji — Dział V (pomoc
-publiczna) ze względu na sygnał nieaktualnego odesłania unijnego,
-oraz art. 116 (wyłączenia z prawa głosu) ze względu na częste
-praktyczne znaczenie przy sporach o ważność głosowania.
+Uczestnicy i status wierzytelności (65) → spis: kwalifikacja każdej pozycji (76–87) z uzasadnieniem i oświadczeniem dłużnika → obwieszczenie (89) → zastrzeżenia (PPU, 90) albo sprzeciwy w 2 tyg. (PU/sanacja, 91–96) → zatwierdzenie (97–98) → lista uprawnionych do głosu z wyłączeniami (107–109, 116) → zgromadzenie: kworum 1/5, dokumenty z art. 118, opinia nadzorcy → wyliczenie większości (119) i ewentualny cram-down z regułą pierwszeństwa → postanowienie (120); równolegle rada wierzycieli: skład, zezwolenia z art. 129, zarzuty i terminy wykonania uchwał.
