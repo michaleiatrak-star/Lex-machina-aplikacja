@@ -1010,6 +1010,28 @@ function accountLoginFailureText(code: string): string {
   }
 }
 
+const EXPORT_REFERENCE_STATUS: Record<string, string> = {
+  UNVERIFIED_MARKED: "niezweryfikowany w źródle",
+  UNVERIFIED_NOT_MARKED: "niezweryfikowany",
+  MISSING_LEDGER_RECORD: "bez weryfikacji",
+  MISSING_VERIFICATION_MARKER: "niespójny ślad weryfikacji",
+  VERIFICATION_MARKER_MISMATCH: "niespójny ślad weryfikacji"
+};
+
+/** A refused export in words: which provisions or judgments stopped the file. */
+export function exportBlockedMessage(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
+  const references = error.references ?? [];
+  const listed = references
+    .slice(0, 12)
+    .map((reference) => `${reference.claim} (${EXPORT_REFERENCE_STATUS[reference.status] ?? "orzeczenie: cytat lub teza niepotwierdzone"})`);
+  const more = references.length > listed.length ? ` i ${references.length - listed.length} innych` : "";
+  return listed.length
+    ? `Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: ${listed.join("; ")}${more}.` +
+        (error.draftAvailable ? " Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku." : " Popraw lub usuń te powołania i spróbuj ponownie.")
+    : `Pismo nie zostało zapisane: bramka eksportu (${error.code}).`;
+}
+
 export default function MatterChatApp({
   user,
   settingsPanels,
@@ -1213,6 +1235,11 @@ export default function MatterChatApp({
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
   const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  // Export refused for unverified references only: the user may save a draft naming them.
+  const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
+    caseId: string; text: string; messageId: string;
+  } | null>(null);
+  const [unverifiedDraftRetry, setUnverifiedDraftRetry] = useState<{ text: string; messageId: string } | null>(null);
   // A case workflow stopped the message (pleading pipeline not started, workflow finished):
   // the message waits for the user's choice and is resent through contractRetry.
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
@@ -3038,7 +3065,26 @@ export default function MatterChatApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractRetry, messages, executing]);
 
-  async function executeMessage(plain: string): Promise<void> {
+  useEffect(() => {
+    if (!unverifiedDraftRetry || executing) return;
+    if (messages.some((message) => message.id === unverifiedDraftRetry.messageId)) return;
+    const { text } = unverifiedDraftRetry;
+    setUnverifiedDraftRetry(null);
+    void executeMessage(text, { acceptUnverified: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unverifiedDraftRetry, messages, executing]);
+
+  function saveUnverifiedDraft(): void {
+    const pending = unverifiedDraftRequest;
+    if (!pending) return;
+    setUnverifiedDraftRequest(null);
+    setExecutionError("");
+    setExecutionDiagnostic(null);
+    setMessages((current) => current.filter((message) => message.id !== pending.messageId));
+    setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
+  }
+
+  async function executeMessage(plain: string, options: { acceptUnverified?: boolean } = {}): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3220,6 +3266,7 @@ export default function MatterChatApp({
               ...(firmTemplateIds.length > 0
                 ? { firmTemplates: firmTemplateIds }
                 : {}),
+              ...(options.acceptUnverified ? { acceptUnverified: true } : {}),
               filename:
                 (
                   documentRequest.documentType ===
@@ -3504,6 +3551,7 @@ export default function MatterChatApp({
                 id: messageId(),
                 role: "system",
                 content:
+                  exportBlockedMessage(documentError) ??
                   "Nie udało się utworzyć pliku pisma: " +
                   (documentError instanceof ApiError
                     ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
@@ -3552,6 +3600,9 @@ export default function MatterChatApp({
           suggested: suggestedContractMode(trimmed)
         });
       }
+      if (error instanceof ApiError && error.draftAvailable && exportBlockedMessage(error)) {
+        setUnverifiedDraftRequest({ caseId: executionCaseId, text: trimmed, messageId: userMessage.id });
+      }
       const recovery = workflowRecovery(code, reason);
       if (recovery) {
         setWorkflowRecoveryRequest({
@@ -3572,7 +3623,8 @@ export default function MatterChatApp({
         );
       }
       const friendly =
-        code ===
+        exportBlockedMessage(error) ??
+        (code ===
           "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
           ? "Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API."
         : code ===
@@ -3653,7 +3705,7 @@ export default function MatterChatApp({
                                     "Lokalny model wymaga naprawy profilu"
                                   )
                                   ? code
-                                  : `Nie udało się wykonać sesji: ${code}`;
+                                  : `Nie udało się wykonać sesji: ${code}`);
       setExecutionError(friendly);
       setExecutionDiagnostic({
         friendly,
@@ -5810,6 +5862,20 @@ export default function MatterChatApp({
                     ))}
                   </div>
                   <small>Tryb ustawia się raz dla sprawy; wiadomość zostanie wysłana ponownie po wyborze.</small>
+                </div>
+              ) : null}
+              {unverifiedDraftRequest && unverifiedDraftRequest.caseId === caseId ? (
+                <div className="chat-contract-mode" role="group" aria-label="Projekt z niezweryfikowanymi powołaniami">
+                  <strong>Zapisać pismo jako projekt?</strong>
+                  <div className="chat-contract-mode-options">
+                    <button type="button" className="chat-primary-action" disabled={executing} onClick={saveUnverifiedDraft}>
+                      Zapisz jako projekt z wykazem niezweryfikowanych powołań
+                    </button>
+                    <button type="button" className="chat-secondary-action" onClick={() => setUnverifiedDraftRequest(null)}>
+                      Nie zapisuj
+                    </button>
+                  </div>
+                  <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą tych powołań; decyzja trafia do audytu sesji. Wiadomość zostanie wysłana ponownie.</small>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (

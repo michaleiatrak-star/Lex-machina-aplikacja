@@ -110,6 +110,11 @@ export class ExportGate {
      */
     markedText?: string;
     documentKind: ExportDocumentKind;
+    /**
+     * The user chose to save a draft with the unverified references named in
+     * its heading (W3-WERYFIKACJA: wybór b); a blocked reference still blocks.
+     */
+    acceptUnverified?: boolean;
     documentSkill: string;
     ledger: VerificationLedger;
     audit: AuditTrail;
@@ -179,7 +184,13 @@ export class ExportGate {
       markers: args.markedText === undefined ? "removed" : "in-text"
     });
 
-    if (finalization.result !== "PASS") {
+    if (finalization.result === "DEGRADED" && args.acceptUnverified) {
+      args.audit.record("gate", "UNVERIFIED_ACCEPTED_BY_USER", "DEGRADED", {
+        references: finalization.findings
+          .filter((finding) => finding.status !== "VERIFIED")
+          .map((finding) => finding.reference.claim)
+      });
+    } else if (finalization.result !== "PASS") {
       const reason =
         finalization.result === "DEGRADED"
           ? "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
@@ -200,7 +211,12 @@ export class ExportGate {
       };
     }
 
-    const requireVerification = finalization.references.length > 0;
+    // A draft the user saves unverified has no verification to show for the
+    // references it names; any verified one still needs its trail.
+    const accepted = finalization.result === "DEGRADED" && args.acceptUnverified === true;
+    const requireVerification =
+      finalization.references.length > 0 &&
+      (!accepted || finalization.findings.some((finding) => finding.status === "VERIFIED"));
     const preClose = args.audit.validateCompletion({
       requireVerification
     });

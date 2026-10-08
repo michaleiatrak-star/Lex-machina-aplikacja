@@ -1237,6 +1237,15 @@ export type ApiFailure = {
   description?: string;
   stage?: string;
   trace?: ApiFailureTraceEvent[];
+  // Export refused: the provisions behind it, and whether a draft naming them may be saved.
+  references?: ExportBlockedReference[];
+  draftAvailable?: boolean;
+};
+
+export type ExportBlockedReference = {
+  claim: string;
+  status: string;
+  line: number;
 };
 
 export class ApiError extends Error {
@@ -1247,7 +1256,9 @@ export class ApiError extends Error {
     readonly reason?: string,
     readonly description?: string,
     readonly stage?: string,
-    readonly trace?: ApiFailureTraceEvent[]
+    readonly trace?: ApiFailureTraceEvent[],
+    readonly references?: ExportBlockedReference[],
+    readonly draftAvailable?: boolean
   ) {
     super(code);
     this.name = "ApiError";
@@ -1373,7 +1384,9 @@ async function json<T>(
       failure.reason,
       failure.description,
       failure.stage,
-      failure.trace
+      failure.trace,
+      failure.references,
+      failure.draftAvailable
     );
   }
   return payload as T;
@@ -2306,6 +2319,8 @@ export function generateLegalDocument(
       DocumentAttachmentSelection[];
     firmTemplates?: string[];
     filename?: string;
+    // Save a draft naming its unverified references (user's decision).
+    acceptUnverified?: boolean;
   }
 ): Promise<
   GeneratedDocumentResponse
