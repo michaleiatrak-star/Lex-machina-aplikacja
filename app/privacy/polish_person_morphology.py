@@ -248,10 +248,7 @@ class PersonMorphology:
         dictionary_surname = any(c.role == "surname" for c in found)
         # Surnames of the PESEL register SGJP does not know in this form
         # ("Klejny" is only a genitive there, "Tkachukiem" nothing at all).
-        # A word SGJP knows as a given name ("Annie", "Jana") stays one: the
-        # register's rare "Ann" or "Jano" would outvote the obvious reading.
-        given_name = any(c.role == "given" for c in found)
-        for gender in () if given_name else GENDERS:
+        for gender in GENDERS:
             for nominative, cases, _persons in surname_base.nominatives(word, gender):
                 if any(c.role == "surname" and gender in c.genders and c.lemma.lower() == nominative.lower()
                        for c in found):
@@ -269,9 +266,13 @@ class PersonMorphology:
         # fully regular: any case form gives the nominative and the gender.
         if not dictionary_surname:
             match = ADJECTIVAL_SURNAME.match(word)
+            # The register's own nominative (Vyshnevskyi) beats a guessed one (Vyshnevski).
+            registered = {g for c in found if c.lemma_id.startswith("pesel:") for g in c.genders}
             if match and match.group(1)[:1].isupper():
                 stem, ending = match.group(1), match.group(2).lower()
                 for gender, cases in ADJECTIVAL_ENDINGS.get(ending, []):
+                    if gender in registered:
+                        continue
                     base = stem + ("i" if gender == "m1" else "a")
                     found.append(Candidate(f"adjsurname:{base}", base, {gender}, set(cases), "surname", 0.3))
         return found
@@ -552,7 +553,18 @@ class PersonMorphology:
             # Gender came from a heuristic only (unknown first name).
             warnings.append("GENDER_HEURISTIC")
             status = "needs_review"
-        if any(w.startswith("NO_PARADIGM") for w in warnings) or min(confidence.values()) < 0.6:
+        # No word read as a given name although one could be ("Annie Kowalskim"
+        # read as the register surnames Ann + Kowalski): not trusted.
+        if (
+            len(name_words) > 1
+            and not any(c is not None and c.role == "given" for c in chosen)
+            and any(
+                c is not None and c.lemma_id.startswith("pesel:") and any(o.role == "given" for o in plan.candidates)
+                for plan, c in zip(plans, chosen)
+            )
+        ):
+            warnings.append("GIVEN_NAME_READ_AS_SURNAME")
+        if any(w.startswith("NO_PARADIGM") for w in warnings) or min(confidence.values()) < 0.6 or "GIVEN_NAME_READ_AS_SURNAME" in warnings:
             status = "needs_review"
         return {
             "surface": surface,

@@ -33,16 +33,16 @@
  },
  "trackB": {
   "persons": 15,
-  "genderAccuracy": 0.9333,
-  "formAccuracy": 0.68,
-  "flaggedForReview": 8,
+  "genderAccuracy": 1.0,
+  "formAccuracy": 1.0,
+  "flaggedForReview": 6,
   "wrongButNotFlagged": 0,
   "rows": [
    {
     "name": "Hans Müller",
     "status": "ok",
     "wrongCases": [],
-    "confidence": 0.75
+    "confidence": 0.85
    },
    {
     "name": "Emma Müller",
@@ -60,13 +60,13 @@
     "name": "Jerzy de Vries",
     "status": "ok",
     "wrongCases": [],
-    "confidence": 0.75
+    "confidence": 0.85
    },
    {
     "name": "Olga Petrenko",
-    "status": "needs_review",
+    "status": "ok",
     "wrongCases": [],
-    "confidence": 0.3
+    "confidence": 0.9
    },
    {
     "name": "Oksana Kowalenko",
@@ -78,60 +78,37 @@
     "name": "Mark Taylor",
     "status": "needs_review",
     "wrongCases": [],
-    "confidence": 0.75
+    "confidence": 0.85
    },
    {
     "name": "Sarah Brown",
     "status": "needs_review",
-    "wrongCases": [
-     "gen",
-     "dat",
-     "acc",
-     "inst",
-     "loc"
-    ],
-    "confidence": 0.75
+    "wrongCases": [],
+    "confidence": 0.9
    },
    {
     "name": "Ahmed Hassan",
     "status": "ok",
     "wrongCases": [],
-    "confidence": 0.75
+    "confidence": 0.85
    },
    {
     "name": "Viktor Orbanek",
     "status": "needs_review",
-    "wrongCases": [
-     "gen",
-     "dat",
-     "acc",
-     "inst",
-     "loc"
-    ],
+    "wrongCases": [],
     "confidence": 0.75
    },
    {
     "name": "Lukas Novotny",
     "status": "needs_review",
-    "wrongCases": [
-     "gen",
-     "dat",
-     "acc",
-     "inst",
-     "loc"
-    ],
-    "confidence": 0.3
+    "wrongCases": [],
+    "confidence": 0.75
    },
    {
     "name": "Anna Novotna",
-    "status": "needs_review",
-    "wrongCases": [
-     "gen",
-     "dat",
-     "acc",
-     "loc"
-    ],
-    "confidence": 0.5
+    "status": "ok",
+    "wrongCases": [],
+    "confidence": 0.8
    },
    {
     "name": "Tomasz Kowalczuk-Brandt",
@@ -148,14 +125,8 @@
    {
     "name": "Giovanni Rossi",
     "status": "needs_review",
-    "wrongCases": [
-     "gen",
-     "dat",
-     "acc",
-     "inst",
-     "loc"
-    ],
-    "confidence": 0.3
+    "wrongCases": [],
+    "confidence": 0.75
    }
   ]
  }
