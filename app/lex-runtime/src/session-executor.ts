@@ -94,6 +94,7 @@ import {
   evaluateMandatoryPath,
   gateCorrectionPrompt,
   loadMandatoryPathModel,
+  foreignJurisdiction,
   mandatoryPathInstructions,
   missingGateBlocks,
   pathProfile,
@@ -1940,7 +1941,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
-      foreignJurisdiction: false
+      foreignJurisdiction: foreignJurisdiction(request.query)
     };
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
     // A message typed without Polish letters gets them back for the executive routing phrases.

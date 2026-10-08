@@ -570,3 +570,15 @@ describe("personal data never leaves for an external source", () => {
     expect(events.at(-1)).toMatchObject({ decision: "BLOCK", outcome: "POLICY_BLOCKED" });
   });
 });
+
+describe("portions of long documents", () => {
+  it("says which characters the model saw and where the rest starts", async () => {
+    const { portionNote, annotateFederatedLegalContent } = await import("../src/legal-federation-tool-runtime.js");
+    const middle = { status: "FOUND", result: { tresc: "x".repeat(20_000), tresc_offset: 20_000, tresc_dlugosc: 65_000 } };
+    expect(portionNote(middle)).toBe(
+      "Treść porcjowana: znaki 20000–40000 z 65000. Znaków 0–20000 nie ma w tej porcji. Brakuje znaków 40000–65000: dobierz je wywołaniem get_federated_legal_document z offset=40000 (albo isap_tekst z artykul/szukaj). Nie cytuj ani nie streszczaj fragmentów, których nie widziałeś."
+    );
+    expect(portionNote({ result: { tresc: "krótki", tresc_offset: 0, tresc_dlugosc: 6 } })).toBeNull();
+    expect(JSON.parse(annotateFederatedLegalContent("isap", JSON.stringify(middle)))._lexPorcja).toContain("offset=40000");
+  });
+});

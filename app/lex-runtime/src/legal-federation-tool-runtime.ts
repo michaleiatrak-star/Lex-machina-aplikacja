@@ -100,6 +100,10 @@ const NATIVE_SEARCH: Record<
   uodo: (input) => ({ tool: "uodo_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } })
 };
 
+// Sources whose get tool takes an offset and serves 20 000-character portions.
+const PORTIONED_SOURCES = new Set<string>(["isap", "kio", "eureka", "uodo"]);
+const PORTION_CHARS = 20_000;
+
 const NATIVE_GET: Record<
   SourceId,
   (documentId: string) => NativeRequest
@@ -368,7 +372,13 @@ const GET_SCHEMA:
           },
           page: {
             type: "integer",
-            minimum: 1
+            minimum: 1,
+            description: "Portion number (20 000 characters each) for isap, kio, eureka and uodo; offset takes precedence."
+          },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            description: "Character offset of the next portion, as the previous portion's _lexPorcja says (isap, kio, eureka, uodo)."
           },
           extra: {
             type: "object"
@@ -671,6 +681,28 @@ function extractToolText(
   );
 }
 
+/**
+ * A document served in portions (isap_tekst, kio_pobierz: tresc with
+ * tresc_offset and tresc_dlugosc): which characters the model has seen and
+ * how to get the rest - it must not cite what it did not read.
+ */
+export function portionNote(parsed: Record<string, unknown>): string | null {
+  const result = (parsed.result && typeof parsed.result === "object" ? parsed.result : parsed) as Record<string, unknown>;
+  const text = result.tresc;
+  const offset = result.tresc_offset;
+  const total = result.tresc_dlugosc;
+  if (typeof text !== "string" || typeof offset !== "number" || typeof total !== "number") return null;
+  const end = offset + text.length;
+  if (offset === 0 && end >= total) return null;
+  const parts = [`Treść porcjowana: znaki ${offset}–${end} z ${total}.`];
+  if (offset > 0) parts.push(`Znaków 0–${offset} nie ma w tej porcji.`);
+  if (end < total) {
+    parts.push(`Brakuje znaków ${end}–${total}: dobierz je wywołaniem get_federated_legal_document z offset=${end} (albo isap_tekst z artykul/szukaj).`);
+  }
+  parts.push("Nie cytuj ani nie streszczaj fragmentów, których nie widziałeś.");
+  return parts.join(" ");
+}
+
 export function annotateFederatedLegalContent(
   source:
     string,
@@ -696,6 +728,7 @@ export function annotateFederatedLegalContent(
         parsed
       )
     ) {
+      const portion = portionNote(parsed as Record<string, unknown>);
       return JSON.stringify({
         ...(
           parsed as
@@ -704,6 +737,7 @@ export function annotateFederatedLegalContent(
               unknown
             >
         ),
+        ...(portion ? { _lexPorcja: portion } : {}),
         _lexSourcePolicy:
           sourcePolicy
       });
@@ -1043,6 +1077,8 @@ export class LegalFederationToolRuntime {
       "SAOS, CBOSA and ISAP connector results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",
       "EUREKA interpretations, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law. EUREKA search is discovery only: before citing an interpretation signature, call verify_interpretation (native Lex verification).",
       "After an empty federated search, call federated_legal_coverage before concluding that material is absent.",
+      "Long documents come in 20 000-character portions: _lexPorcja names the characters you saw and the offset of the rest. Fetch the missing part (get_federated_legal_document with offset) before relying on it; never cite or summarise what you did not read.",
+      "A business identifier of the case (NIP, REGON, KRS, account number as [PII:...] symbol) may be sent only to the register that answers for it: source krs, wl, ceidg or sudop; Lex puts the value back. Never send PESEL, ID card, e-mail or phone to any source.",
       "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the MCP connectors (they call public APIs). Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
       "If a federated result conflicts with a native official-source verifier, the native official verification path is authoritative; fail closed until the conflict is resolved.",
       "Do not expose connector implementation details or treat a source_unavailable error as absence of law."
@@ -1825,11 +1861,21 @@ export class LegalFederationToolRuntime {
         NATIVE_GET[source](
           documentId
         );
+      // Portion of a long document: offset, or page N of 20 000 characters.
+      const offset =
+        PORTIONED_SOURCES.has(source)
+          ? Number.isInteger(call.input.offset) && Number(call.input.offset) >= 0
+            ? Number(call.input.offset)
+            : Number.isInteger(call.input.page) && Number(call.input.page) > 1
+              ? (Number(call.input.page) - 1) * PORTION_CHARS
+              : undefined
+          : undefined;
       const content =
         await this.client.call(
           request.tool,
           withoutUndefined({
             ...request.args,
+            offset,
             ...extraFrom(
               call.input
             )

@@ -8,6 +8,7 @@ import type { VerificationLedger } from "../src/verification-ledger.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import {
   evaluateMandatoryPath,
+  foreignJurisdiction,
   loadMandatoryPathModel,
   pathProfile,
   preloadForTurn,
@@ -260,3 +261,26 @@ describe("router category [11]", () => {
   }, 60_000);
 });
 
+
+describe("UP-5: foreign jurisdiction from the question", () => {
+  it.each([
+    "Jak wygląda rozwód według prawa niemieckiego?",
+    "Czy wyrok sądu angielskiego będzie uznany w Polsce?",
+    "Które prawo właściwe dla umowy sprzedaży z kontrahentem z Czech?",
+    "Wykładnia art. 31 konwencji wiedeńskiej o prawie traktatów",
+    "Czy umowa międzynarodowa wymaga ratyfikacji za zgodą wyrażoną w ustawie?",
+    "Jurysdykcja w sprawie rozporządzenia Bruksela I bis",
+    "Orzecznictwo sądów niemieckich w sprawach pracowniczych"
+  ])("%s", (query) => {
+    expect(foreignJurisdiction(query)).toBe(true);
+  });
+
+  it.each([
+    "Sąsiad uszkodził mi samochód, należy mi się odszkodowanie?",
+    "Art. 415 KC — odpowiedzialność deliktowa",
+    "Pozwany mieszka w Niemczech, czy mogę go pozwać w Polsce?",
+    "Termin na apelację od wyroku sądu rejonowego"
+  ])("%s", (query) => {
+    expect(foreignJurisdiction(query)).toBe(false);
+  });
+});
