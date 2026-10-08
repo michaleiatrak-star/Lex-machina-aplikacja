@@ -1,4 +1,5 @@
 import { personalDataIn } from "./tool-broker-policy.js";
+import { LegalSourceFallbackStore, withSourceFallback } from "./legal-source-fallback.js";
 import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
 import {
   Client
@@ -734,7 +735,9 @@ class LexMcpClient {
 
   constructor(
     private readonly connectors:
-      LexMcpConnectorStore | undefined
+      LexMcpConnectorStore | undefined,
+    private readonly fallback =
+      new LegalSourceFallbackStore()
   ) {}
 
   installed(): SourceId[] {
@@ -864,8 +867,15 @@ class LexMcpClient {
     args:
       Record<string, unknown>
   ): Promise<string> {
-    const client =
-      await this.ensureClient();
+    let client: Client;
+    try {
+      client = await this.ensureClient();
+    } catch (error) {
+      // The connector does not start: the source's last good answer, dated.
+      const copy = withSourceFallback(this.fallback, name, args, null);
+      if (copy) return copy;
+      throw error;
+    }
     try {
       const result =
         await client.callTool(
@@ -882,9 +892,14 @@ class LexMcpClient {
           // desktop proxy's 300 s for direct search.
           { timeout: 280_000 }
         );
-      return extractToolText(
-        result
-      );
+      return withSourceFallback(
+        this.fallback,
+        name,
+        args,
+        extractToolText(
+          result
+        )
+      ) ?? "";
     } catch (error) {
       if (
         error instanceof Error &&
@@ -900,6 +915,9 @@ class LexMcpClient {
         // Best effort: the next call creates a fresh MCP transport.
       }
       this.client = null;
+      // The source is down: its last good answer, dated, if there is one.
+      const copy = withSourceFallback(this.fallback, name, args, null);
+      if (copy) return copy;
       throw error;
     }
   }
