@@ -278,6 +278,13 @@ function combineSkillPrompt(
     .join("\n\n---\n\n");
 }
 
+// R-2..R-4 of the mandatory core, given in full to a model that chooses its skills.
+const AUTO_CORE_RESOURCES = [
+  ["shared", "PRAWO-HARDGATE.md"],
+  ["prawny-router-v3", "references/KROK0A-anonimizer.md"],
+  ["prawny-router-v3", "references/KROK1-detekcja.md"]
+] as const;
+
 export function buildCoreLegalResourcePrompt(
   resources: ReadonlyMap<
     string,
@@ -2065,7 +2072,7 @@ export class LexExecutionEngine {
     // native corpus - and counted as read: router-v3 first by construction and
     // two tool rounds less on every legal question.
     const onPreloaded = native ? native.onRead : args.onCorpusPreloaded;
-    const preloaded = onPreloaded
+    const preloaded: Array<{ name: string; relative: string; text: string }> = onPreloaded
       ? (["prawny-router-v3", "prawo-polskie-v2"] as const).flatMap((name) => {
           const skill = this.registry.get(name);
           if (!skill || !allowed(name)) return [];
@@ -2080,14 +2087,32 @@ export class LexExecutionEngine {
           return [{ name, relative, text: compact.text }];
         })
       : [];
+    // The core the runtime counts as in context (R-2..R-4: HARD GATE,
+    // anonymizer, detection): it has to be in the prompt, or the model is
+    // told "already loaded" for a file it never saw.
+    if (onPreloaded && preloaded.length) {
+      for (const [skillName, file] of AUTO_CORE_RESOURCES) {
+        const skill = this.registry.get(skillName);
+        const absolute = skill ? path.join(skill.directory, file) : "";
+        if (!skill || !fs.existsSync(absolute)) continue;
+        const relative = `${path.basename(skill.directory)}/${file}`;
+        onPreloaded(relative);
+        const compact = compactForModel(fs.readFileSync(absolute, "utf8"));
+        if (compact.compacted.length) {
+          emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+        }
+        preloaded.push({ name: relative, relative, text: compact.text });
+      }
+    }
     const preloadedPrompt = preloaded.map(
-      (item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`
+      (item) =>
+        `# ${item.name === item.relative ? item.relative : `${item.name.toUpperCase()} (${item.relative}`}${item.name === item.relative ? " (" : ", "}już wczytany - nie czytaj ponownie)\n\n${item.text}`
     );
     // One selection methodology for every host (Claude with the native corpus,
     // ChatGPT, Gemini, Grok, API keys): only the read/list tools differ.
     const readTool = native ? "Read" : "read_legal_resource";
     const listTool = native ? "Glob z dokładnym wzorcem" : "list_legal_resources";
-    const preloadedNames = preloaded.map((item) => item.name).join(" i ");
+    const preloadedNames = preloaded.map((item) => item.name).join(", ");
     const methodology = [
       preloaded.length
         ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`

@@ -159,6 +159,9 @@ export type TurnFacts = {
   profile: PathProfile;
   // Resources the runtime put into the model's context this turn.
   contextResources: Set<string>;
+  // Resources whose job the runtime did itself instead of giving them to the
+  // model (mechanical routing): resource -> what was done.
+  executedByApp?: Map<string, string>;
   query: string;
   answer: string;
   legal: boolean;
@@ -237,9 +240,11 @@ export function preloadForTurn(model: MandatoryPathModel, facts: PreFacts): stri
   return [...new Set([...core, ...full, ...triggered])].filter((resource) => resource !== CRIMINAL_QUALIFIER);
 }
 
-function readEvidence(facts: Pick<TurnFacts, "events" | "contextResources">, resource: string): { by: "APLIKACJA" | "MODEL"; detail: string } | null {
+function readEvidence(facts: Pick<TurnFacts, "events" | "contextResources" | "executedByApp">, resource: string): { by: "APLIKACJA" | "MODEL"; detail: string } | null {
   const target = canonicalPath(resource);
   if (facts.contextResources.has(target)) return { by: "APLIKACJA", detail: "wczytany przez aplikację do kontekstu modelu" };
+  const executed = facts.executedByApp?.get(target);
+  if (executed) return { by: "APLIKACJA", detail: executed };
   for (const event of facts.events) {
     if ((event.type !== "resource_read" && event.type !== "skill_read") || event.status !== "OK") continue;
     const read = canonicalPath(event.target);

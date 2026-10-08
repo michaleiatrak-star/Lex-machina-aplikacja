@@ -97,6 +97,22 @@ describe("mandatory path model from the corpus", () => {
     };
   }
 
+  it("says the router was executed, not read, when the runtime routed mechanically", () => {
+    const contextResources = new Set(facts("Odpowiedź.").contextResources);
+    contextResources.delete("prawny-router-v3/SKILL.md");
+    const routed = evaluateMandatoryPath(
+      model,
+      facts("Odpowiedź.", {
+        contextResources,
+        executedByApp: new Map([["prawny-router-v3/SKILL.md", "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]])
+      })
+    ).steps.find((item) => item.id.startsWith("R-1"));
+    expect(routed).toMatchObject({ status: "MET", by: "APLIKACJA" });
+    expect(routed?.evidence).toContain("routing wykonany przez aplikację");
+    const unrouted = evaluateMandatoryPath(model, facts("Odpowiedź.", { contextResources })).steps.find((item) => item.id.startsWith("R-1"));
+    expect(unrouted?.status).toBe("MISSING");
+  });
+
   it("shows whether an act module of the read domain was read (not blocking)", () => {
     const step = (events: TurnFacts["events"]) =>
       evaluateMandatoryPath(model, facts("Odpowiedź.", { events })).steps.find((item) => item.id === "MODUŁ-AKTU:dr-03-prawo-karne-wykroczenia-egzekucja");

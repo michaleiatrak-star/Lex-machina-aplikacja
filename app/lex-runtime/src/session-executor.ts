@@ -1947,9 +1947,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       documentGeneration: pathFacts.documentGeneration,
       verification
     });
-    // Already in the model's context: the router skill and the core legal resources.
+    // Already in the model's context: the router skill (AUTO gives it in full)
+    // and the core legal resources.
     const contextResources = new Set<string>([
-      `${ROUTER_SKILL}/SKILL.md`,
+      ...(request.modelSelectsSkills ? [`${ROUTER_SKILL}/SKILL.md`] : []),
       "shared/PRAWO-HARDGATE.md",
       `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
       `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
@@ -3689,6 +3690,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             criminal: criminalAfter,
             profile: effectiveProfile,
             contextResources,
+            // Mechanical routing: the runtime routes, the model holds only the
+            // router's semantic contract (not its text).
+            ...(request.modelSelectsSkills
+              ? {}
+              : { executedByApp: new Map([[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]]) }),
             answer: processedDocumentCitations.text,
             ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),

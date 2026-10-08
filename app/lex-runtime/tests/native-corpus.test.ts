@@ -246,7 +246,12 @@ describe("AUTO with native corpus access", () => {
     expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "prawo-polskie-v2"]);
     expect(runtime.auditEvents()).toEqual([
       { tool: "read_legal_resource", target: "prawny-router-v3/SKILL.md", decision: "ALLOW", detail: { preloaded: true } },
-      { tool: "read_legal_resource", target: "prawo-polskie-v2/SKILL.md", decision: "ALLOW", detail: { preloaded: true } }
+      { tool: "read_legal_resource", target: "prawo-polskie-v2/SKILL.md", decision: "ALLOW", detail: { preloaded: true } },
+      // R-2..R-4: counted as read only because they are in the prompt.
+      { tool: "read_legal_resource", target: "shared/PRAWO-HARDGATE.md", decision: "ALLOW", detail: { preloaded: true } },
+      { tool: "read_legal_resource", target: "prawny-router-v3/references/KROK0A-anonimizer.md", decision: "ALLOW", detail: { preloaded: true } },
+      { tool: "read_legal_resource", target: "prawny-router-v3/references/KROK1-detekcja.md", decision: "ALLOW", detail: { preloaded: true } }
     ]);
+    expect(prompt).toContain("# shared/PRAWO-HARDGATE.md (już wczytany - nie czytaj ponownie)");
   });
 });
