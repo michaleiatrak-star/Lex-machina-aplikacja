@@ -30,6 +30,8 @@ from pathlib import Path
 
 import morfeusz2
 
+import surname_base
+
 UPPER = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÁÍÚÝČŠŽŘ"
 WORD_RE = re.compile(r"[^\W\d_]+(?:[-'’][^\W\d_]+)*")
 
@@ -129,13 +131,22 @@ def surname_keys(word: str, in_surname_position: bool = False) -> set[str]:
     stood in the surname position of a full name.
     """
     g, s, u, c, _geo, lemmas = word_class(word)
+    # A PESEL surname SGJP does not know in this form: its nominative is the key
+    # every case form shares ("Tkachuk" and "Tkachukiem", "Sharma" and "Sharmy").
+    pesel = set()
+    if (u or s or in_surname_position) and not (g and not in_surname_position):
+        pesel = {
+            "pesel:" + nominative.lower()
+            for gender in ("m1", "f")
+            for nominative, _cases, _count in surname_base.nominatives(word, gender)
+        }
     if s and (not g or in_surname_position):
-        return set(lemmas)
+        return set(lemmas) | pesel
     if u or (c and in_surname_position and ADJECTIVAL.match(word)):
         match = ADJECTIVAL.match(word)
         # Unknown adjectival surname: the stem is shared by all cases and genders.
-        return {"adj:" + (match.group(1) if match else word).lower()}
-    return set()
+        return {"adj:" + (match.group(1) if match else word).lower()} | pesel
+    return pesel
 
 
 def is_capitalized(word: str) -> bool:
@@ -230,10 +241,26 @@ def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, i
                 g, s, u, c, geo, _ = cls(nxt)
                 # An adjectival word after a given name is a surname even when
                 # SGJP also reads it as an adjective ("Ewa Czarnowelska").
-                if s or u or (not c and not geo) or ADJECTIVAL.match(words[nxt][2]):
-                    take(index, nxt)
-                    surname_positions.append(nxt)
-                    index = nxt + 1
+                # A PESEL surname that is also a common noun or a place right
+                # after a given name ("Anna Ląg", "Jan Piastun", "Barbara Kock")
+                # is the surname: left out, it stayed readable next to a masked name.
+                in_register = not is_generic(words[nxt][2]) and bool(surname_base.default_base().counts(words[nxt][2]))
+                if s or u or (not c and not geo) or ADJECTIVAL.match(words[nxt][2]) or in_register:
+                    last = nxt
+                    # Two-word surnames written with a space (Duran Perez,
+                    # Grzelak Tanguila): the next surname belongs to the name.
+                    while last - nxt < 2 and cap(last + 1) and linked(last, last + 1):
+                        g2, s2, u2, c2, geo2, _ = cls(last + 1)
+                        word2 = words[last + 1][2]
+                        in_pesel = bool(surname_base.default_base().counts(word2))
+                        if g2 or geo2 or is_generic(word2) or not (s2 or u2 or in_pesel):
+                            break
+                        if c2 and not s2 and not u2:
+                            break
+                        last += 1
+                    take(index, last)
+                    surname_positions.extend(range(nxt, last + 1))
+                    index = last + 1
                     continue
             # "Jan Maria" + surname already consumed above; two given names where
             # the second is also a surname ("Anna Jan") are accepted as a name.
