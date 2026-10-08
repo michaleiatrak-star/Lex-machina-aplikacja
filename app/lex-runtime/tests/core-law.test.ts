@@ -208,6 +208,21 @@ describe("core law index", () => {
     // Local models get the best articles in the prompt; small talk gets none.
     const rag = coreLawRetrievalPrompt(index, "Czy [PII:PERSON:0001|NOM] zakłócał spokój krzykiem i hałasem?");
     expect(rag).toContain("[DU/2025/734] Kodeks wykroczeń — art. 51");
+    // Every article carries the date of its text.
+    expect(rag).toContain("(tekst z ELI z dnia 2026-09-23");
+    // A pending amendment: the copy is not presented as the current wording.
+    const stale = coreLawRetrievalPrompt(
+      {
+        search: index.search.bind(index),
+        currentRecord: index.currentRecord.bind(index),
+        summaries: () =>
+          index.summaries().map((act) =>
+            act.eli === "DU/2025/734" ? { ...act, pendingAmendments: [{ eli: "DU/2026/1", title: "nowelizacja" } as never] } : act
+          )
+      },
+      "Czy sąsiad zakłócał spokój krzykiem i hałasem?"
+    );
+    expect(stale).toContain("UWAGA: nowe nowelizacje w ELI, jeszcze niezastosowane (1) — brzmienie sprawdź w ELI przed powołaniem");
     expect(rag).not.toContain("PII:");
     expect(coreLawRetrievalPrompt(index, "Napisz ok")).toBeNull();
     expect(JSON.parse(missing!.content)).toEqual({ status: "BLOCKED", error: "CORE_LAW_ARTICLE_NOT_FOUND" });

@@ -131,19 +131,25 @@ function excerpt(body: string, unit: string | undefined): string {
 }
 
 export function coreLawRetrievalPrompt(
-  index: Pick<CoreLawIndex, "search" | "currentRecord">,
+  index: Pick<CoreLawIndex, "search" | "currentRecord"> & Partial<Pick<CoreLawIndex, "summaries">>,
   query: string
 ): string | null {
+  // The date of each text and why it may not be current: the model says it.
+  const summaries = new Map((index.summaries?.() ?? []).map((act) => [act.eli, act]));
   const clean = query.replace(/\[(?:PII|LMPII):[^\]]+\]/g, " ");
   if (clean.replace(/\s+/g, " ").trim().length < 12) return null;
   const blocks: string[] = [];
   let used = 0;
   for (const hit of index.search(clean, { limit: 6 })) {
     if (hit.score < RAG_MIN_SCORE) break;
-    const body = index.currentRecord(hit.eli)?.articles[hit.article];
+    const record = index.currentRecord(hit.eli);
+    const body = record?.articles[hit.article];
     if (!body) continue;
     const text = body.length > RAG_ARTICLE_CHARS ? excerpt(body, hit.unit) : body;
-    const block = `[${hit.eli}] ${hit.title} — art. ${hit.article}${hit.unit ? `, trafienie: ${hit.unit}` : ""}\n${text}`;
+    const summary = summaries.get(hit.eli);
+    const caution = summary ? coreLawEliCaution(summary) : null;
+    const dated = record?.fetchedAt ? `tekst z ELI z dnia ${record.fetchedAt.slice(0, 10)}` : "data tekstu nieznana";
+    const block = `[${hit.eli}] ${hit.title} — art. ${hit.article}${hit.unit ? `, trafienie: ${hit.unit}` : ""} (${dated}${caution ? `; UWAGA: ${caution} — brzmienie sprawdź w ELI przed powołaniem` : ""})\n${text}`;
     if (used + block.length > RAG_MAX_CHARS) break;
     blocks.push(block);
     used += block.length;
@@ -151,7 +157,7 @@ export function coreLawRetrievalPrompt(
   if (blocks.length === 0) return null;
   return [
     "# LOKALNE TEKSTY USTAW (dobrane automatycznie z kopii ELI)",
-    "Poniższe artykuły pochodzą z lokalnej kopii tekstów jednolitych aktów z map DR. Cytuj je z ELI i numerem artykułu, nigdy z pamięci. Jeśli nie wystarczą, użyj search_core_law / read_core_law_article; brak artykułu tutaj nie oznacza braku przepisu.",
+    "Poniższe artykuły pochodzą z lokalnej kopii tekstów jednolitych aktów z map DR. Cytuj je z ELI i numerem artykułu, nigdy z pamięci. Przy przepisie podaj datę tekstu, a przy dopisku UWAGA nie przedstawiaj brzmienia jako aktualnego bez sprawdzenia w ELI. Jeśli nie wystarczą, użyj search_core_law / read_core_law_article; brak artykułu tutaj nie oznacza braku przepisu.",
     ...blocks
   ].join("\n\n");
 }
