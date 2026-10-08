@@ -1233,6 +1233,9 @@ export default function MatterChatApp({
   const [query, setQuery] = useState("");
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
+  // The case whose answer is being generated: the thread list stays on it
+  // until the answer lands (a late message must not reach another case).
+  const [executingCaseId, setExecutingCaseId] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState("");
   // CONTRACT_STATE_REQUIRED: the message waits for the contract mode; resent after it is chosen.
   const [contractModeRequest, setContractModeRequest] = useState<{
@@ -2147,6 +2150,7 @@ export default function MatterChatApp({
   ): void {
     if (
       caseBusy ||
+      executing ||
       !nextCaseId ||
       nextCaseId === caseId
     ) {
@@ -3159,6 +3163,7 @@ export default function MatterChatApp({
 
     setQuery("");
     setExecuting(true);
+    setExecutingCaseId(executionCaseId);
     setExecutionStage(
       "Przygotowanie sesji"
     );
@@ -3771,6 +3776,7 @@ export default function MatterChatApp({
         setAllowedDomainSkills([]);
       }
       setExecuting(false);
+      setExecutingCaseId(null);
     }
   }
 
@@ -4111,7 +4117,7 @@ export default function MatterChatApp({
             <strong>Sprawy</strong>
             <button
               type="button"
-              disabled={caseBusy}
+              disabled={caseBusy || executing}
               onClick={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa")}
             >
               + Nowa sprawa
@@ -4163,8 +4169,14 @@ export default function MatterChatApp({
                 <div key={item.caseId} className="matter-thread-row">
                   <button
                     type="button"
-                    disabled={caseBusy}
-                    className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
+                    disabled={caseBusy || executing}
+                    title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : undefined}
+                    aria-busy={item.caseId === executingCaseId}
+                    className={[
+                      "matter-thread",
+                      item.caseId === caseId ? "active" : "",
+                      item.caseId === executingCaseId ? "thinking" : ""
+                    ].filter(Boolean).join(" ")}
                     onClick={() => {
                       setPendingFirstMessage(null);
                       setExecutionError("");
@@ -4172,7 +4184,12 @@ export default function MatterChatApp({
                       setActiveTab("chat");
                     }}
                   >
-                    <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                    <strong>
+                      {item.caseId === executingCaseId ? (
+                        <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                      ) : null}
+                      {item.displayName || "Sprawa bez nazwy"}
+                    </strong>
                     <small>
                       {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
                     </small>
