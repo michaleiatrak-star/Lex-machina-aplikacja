@@ -21,6 +21,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import foreign_surnames
+import surname_base
+
 CASES = ("nom", "gen", "dat", "acc", "inst", "loc", "voc")
 GENDERS = ("m1", "f")
 LETTER = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿĄĆĘŁŃÓŚŹŻąćęłńóśźż]")
@@ -31,6 +34,12 @@ NAME_TYPES = {"imię": "given", "nazwisko": "surname"}
 # SGJP offers a common and a rare reading (Jacek/Jack, Martyna/Martyn), the
 # common one wins.
 COMMON_GIVEN = set(["Adam", "Adrian", "Agata", "Agnieszka", "Aleksander", "Aleksandra", "Alicja", "Andrzej", "Aneta", "Anna", "Antoni", "Arkadiusz", "Artur", "Barbara", "Bartosz", "Bartłomiej", "Beata", "Bogdan", "Bogumiła", "Bożena", "Bronisław", "Błażej", "Cezary", "Cyprian", "Czesław", "Dagmara", "Damian", "Daniel", "Danuta", "Dariusz", "Dawid", "Dominik", "Dominika", "Dorota", "Edward", "Elżbieta", "Emilia", "Ewa", "Ewelina", "Filip", "Franciszek", "Gabriela", "Grażyna", "Grzegorz", "Halina", "Hanna", "Henryk", "Ignacy", "Irena", "Iwona", "Izabela", "Jacek", "Jadwiga", "Jakub", "Jan", "Janina", "Janusz", "Jarosław", "Jerzy", "Joanna", "Jolanta", "Julia", "Justyna", "Józef", "Kacper", "Kamil", "Kamila", "Karol", "Karolina", "Katarzyna", "Kazimierz", "Kinga", "Klaudia", "Konrad", "Krystyna", "Krzysztof", "Leszek", "Lidia", "Lucyna", "Maciej", "Maciej", "Magdalena", "Maja", "Malwina", "Marcin", "Marek", "Maria", "Mariola", "Mariusz", "Marta", "Martyna", "Marzena", "Mateusz", "Michał", "Mieczysław", "Mirosław", "Mirosława", "Monika", "Natalia", "Norbert", "Olga", "Oliwia", "Patryk", "Paulina", "Paweł", "Piotr", "Przemysław", "Rafał", "Renata", "Robert", "Roman", "Ryszard", "Sandra", "Sebastian", "Stanisław", "Stanisława", "Stefan", "Sylwia", "Szymon", "Sławomir", "Tadeusz", "Teresa", "Tomasz", "Urszula", "Wanda", "Weronika", "Wiesław", "Wiesława", "Wiktor", "Wiktoria", "Wioletta", "Witold", "Wojciech", "Władysław", "Włodzimierz", "Zbigniew", "Zdzisław", "Zofia", "Zuzanna", "Łukasz"])
+# Frequent foreign women's names that do not end in -a (Sarah ends in -ah).
+FOREIGN_FEMALE_GIVEN = {"ruth", "judith", "esther", "ingrid", "astrid", "karin", "margit", "sigrid", "gudrun",
+                        "beatrix", "carmen", "mercedes", "dolores", "agnes", "doris", "iris", "alice", "grace",
+                        "rose", "marie", "sophie", "julie", "claire", "nicole", "michelle", "isabelle", "chloe",
+                        "zoe", "elif", "ayşe", "fatma", "mei", "yuki", "jennifer", "elizabeth", "catherine",
+                        "kathleen", "megan", "emily", "ashley", "kimberly", "lily", "ellen", "helen", "carol"}
 # Name particles are written as they are (Jerzy de Vries, Ludwig van Beethoven).
 PARTICLES = {"de", "van", "von", "da", "di", "del", "della", "der", "den", "du", "la", "le", "ten", "ter", "bin", "ibn", "al", "el", "y", "zu"}
 
@@ -60,7 +69,10 @@ def _match_case(surface: str, value: str) -> str:
     if surface.isupper() and len(surface) > 1:
         return value.upper()
     if surface[:1].isupper():
-        return value[:1].upper() + value[1:]
+        # "Podobalska", not SGJP's segmented lemma "podObalska"; a surface with
+        # inner capitals (McDonald) keeps the dictionary's.
+        rest = value[1:].lower() if surface[1:] == surface[1:].lower() else value[1:]
+        return value[:1].upper() + rest
     return value
 
 
@@ -162,6 +174,17 @@ def _rule_feminine(base: str) -> dict[str, str] | None:
     return None
 
 
+def surname_rule(base: str, gender: str) -> tuple[dict[str, str], float] | None:
+    """Paradigm of a surname SGJP does not know (foreign_surnames: the Polish
+    norms by ending and spelling origin) and the confidence the norm deserves."""
+    if gender == "m1":
+        ruled = foreign_surnames.masculine(base)
+    else:
+        db = surname_base.default_base()
+        ruled = foreign_surnames.feminine(base, lambda surname: db.count(surname, "m1"))
+    return (ruled[0], ruled[1]) if ruled else None
+
+
 ADJECTIVAL_SURNAME = re.compile(r"^(.{2,}(?:sk|ck|dzk))(i|iego|iemu|im|a|iej|ą)$", re.IGNORECASE)
 ADJECTIVAL_ENDINGS = {
     "i": [("m1", ("nom", "voc"))],
@@ -208,14 +231,43 @@ class PersonMorphology:
             penalty = 0.0 if roles else (0.6 if capitalized_lemma else 2.0)
             if "given" in roles and lemma not in COMMON_GIVEN:
                 penalty += 0.1
+                # "Barbara" read as a case of the rare "Barbar": the common
+                # name written exactly so is far more likely.
+                if word in COMMON_GIVEN:
+                    penalty += 0.3
+            # A prefix glued to a known name ("preKrasny", "stuKalski", "podObalska")
+            # is Morfeusz's segmentation, not a dictionary entry: a register
+            # surname or another reading wins over it.
+            if lemma[:1].islower() and any(ch.isupper() for ch in lemma[1:]):
+                penalty += 0.5
             # SGJP pairs every surname with an indeclinable feminine lemma; an
             # inflected reading (Siuty -> Siuta) is preferred when one exists.
             if cases >= set(CASES):
                 penalty += 0.15
             found.append(Candidate(lemma_id, lemma, genders, cases & set(CASES), roles[0] if roles else None, penalty))
+        dictionary_surname = any(c.role == "surname" for c in found)
+        # Surnames of the PESEL register SGJP does not know in this form
+        # ("Klejny" is only a genitive there, "Tkachukiem" nothing at all).
+        # A word SGJP knows as a given name ("Annie", "Jana") stays one: the
+        # register's rare "Ann" or "Jano" would outvote the obvious reading.
+        given_name = any(c.role == "given" for c in found)
+        for gender in () if given_name else GENDERS:
+            for nominative, cases, _persons in surname_base.nominatives(word, gender):
+                if any(c.role == "surname" and gender in c.genders and c.lemma.lower() == nominative.lower()
+                       for c in found):
+                    continue
+                rule = surname_rule(nominative, gender)
+                if rule and len(set(rule[0].values())) == 1:
+                    cases = set(CASES)
+                elif rule:
+                    # Only the cases whose form the rule really gives.
+                    cases = {case for case in CASES if rule[0][case].lower() == word.lower()} or cases
+                penalty = 0.25 if nominative.lower() == word.lower() else 0.35
+                found.append(Candidate(f"pesel:{nominative}", _match_case(word, nominative), {gender},
+                                       cases & set(CASES), "surname", penalty))
         # Adjectival surnames SGJP does not know (Dziewulinski, Kępińarska) are
         # fully regular: any case form gives the nominative and the gender.
-        if not any(c.role == "surname" for c in found):
+        if not dictionary_surname:
             match = ADJECTIVAL_SURNAME.match(word)
             if match and match.group(1)[:1].isupper():
                 stem, ending = match.group(1), match.group(2).lower()
@@ -422,9 +474,10 @@ class PersonMorphology:
             ):
                 score += 0.8
             # A first name unknown to SGJP (Hans, Emma): -a suggests a woman.
-            if name_words and not name_words[0].candidates:
+            # (A register surname reading, "Sarah" in PESEL, does not make it known.)
+            if name_words and not [c for c in name_words[0].candidates if not c.lemma_id.startswith("pesel:")]:
                 first = name_words[0].surface.lower()
-                looks_female = first.endswith("a")
+                looks_female = first.endswith(("a", "ah")) or first in FOREIGN_FEMALE_GIVEN
                 if (gender == "f") != looks_female:
                     score += 0.3
             # Nominative is the most frequent reading of an ambiguous mention.
@@ -527,6 +580,11 @@ class PersonMorphology:
         complete = self._corrected_forms(plan, candidate, gender)
         if len(complete) == len(CASES):
             return complete, "exception", 1.0
+        if candidate and candidate.lemma_id.startswith("pesel:"):
+            rule = surname_rule(candidate.lemma, gender)
+            if rule:
+                return {case: _match_case(plan.surface, form) for case, form in rule[0].items()}, "rule", rule[1]
+            return {case: candidate.lemma for case in CASES}, "unresolved", 0.3
         if candidate and candidate.lemma_id.startswith("adjsurname:"):
             rule = _rule_masculine(candidate.lemma) if gender == "m1" else _rule_feminine(candidate.lemma)
             if rule:
@@ -544,6 +602,15 @@ class PersonMorphology:
                 for case in parts[2] & set(CASES):
                     by_case[case].append(orth)
             if all(by_case[case] for case in CASES):
+                # An inflected variant beside an uninflected one (Caruso: Carusa
+                # and Caruso): one paradigm, the inflected one, not a mix.
+                nominative_forms = set(by_case["nom"])
+                for case in CASES:
+                    inflected = [form for form in by_case[case] if form not in nominative_forms]
+                    if case != "nom" and inflected and any(
+                        form not in nominative_forms for other in CASES if other != "nom" for form in by_case[other]
+                    ):
+                        by_case[case] = inflected if len(inflected) < len(by_case[case]) else by_case[case]
                 # Variant forms (Stępnia/Stępienia): follow the stem seen in the document.
                 paradigm = {
                     case: max(by_case[case], key=lambda form: (_common_prefix(form, word), -by_case[case].index(form)))
@@ -552,16 +619,11 @@ class PersonMorphology:
                 return paradigm, "sgjp", 1.0
         base = word if observed_case == "nom" else None
         if base is not None:
-            rule = _rule_masculine(base) if gender == "m1" else _rule_feminine(base)
-            if rule:
-                indeclinable = len(set(rule.values())) == 1
-                if indeclinable:
-                    return rule, "rule", 0.9
-                # Feminine -a words may be noun-like (Siuta -> Siucie) or
-                # adjectival (Novotna -> Novotnej): never trust the guess.
-                if gender == "f" and base.lower().endswith("a"):
-                    return rule, "rule", 0.5
-                return rule, "rule", 0.75
+            ruled = surname_rule(base, gender)
+            if ruled:
+                rule, conf = ruled
+                # Not in PESEL either: the ending alone, less certain.
+                return rule, "rule", min(conf, 0.75) if len(set(rule.values())) > 1 else conf
         return {case: word for case in CASES}, "unresolved", 0.3
 
 

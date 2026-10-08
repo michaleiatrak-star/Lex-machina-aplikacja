@@ -189,3 +189,55 @@ describe.skipIf(!python)("SGJP gazetteer and address morphology workers", () => 
     expect(vault.restore("[PII:PERSON:0003]", "NOM").text).toBe("Jan Kowalski");
   });
 });
+
+describe.skipIf(!python)("PESEL surname register and foreign surnames", () => {
+  const morphology = () =>
+    new LocalPersonMorphology({
+      python: python!,
+      workerPath: path.resolve(__dirname, "../../privacy/polish_person_morphology.py")
+    });
+
+  it("declines surnames SGJP does not know by the Polish norms for their ending", async () => {
+    const people = await morphology().analyze([
+      "Jan Tkachuk", "Jan Shevchenko", "Jan Sharma", "Jan Chornyi", "Jan Verdi", "Jan Caruso",
+      "Jan Li", "Jan Rusu", "Anna Tkachuk", "Anna Chorna", "Anna Ivanova", "Jan Filipek"
+    ]);
+    expect(people.map((person) => person!.forms.GEN.text)).toEqual([
+      "Jana Tkachuka", "Jana Shevchenki", "Jana Sharmy", "Jana Chornego", "Jana Verdiego", "Jana Carusa",
+      "Jana Li", "Jana Rusu", "Anny Tkachuk", "Anny Chornej", "Anny Ivanovej", "Jana Filipka"
+    ]);
+  });
+
+  it("traces an inflected form of a register surname back to the person", async () => {
+    const people = await morphology().analyze([
+      "Janem Tkachukiem", "Andrzejowi Shevchence", "Marii Chornej", "Adam Klejny", "Jana Raduchowskiego-Brochwicza"
+    ]);
+    expect(people.map((person) => person!.canonical)).toEqual([
+      "Jan Tkachuk", "Andrzej Shevchenko", "Maria Chorna", "Adam Klejny", "Jan Raduchowski-Brochwicz"
+    ]);
+    expect(people[3]!.gender).toBe("m1");
+  });
+
+  it("masks every later inflected mention of a foreign surname and restores the requested case", async () => {
+    const { LocalGazetteerRecognizer } = await import("../src/privacy/gazetteer-ner.js");
+    const recognizer = new LocalGazetteerRecognizer({
+      python: python!,
+      workerPath: path.resolve(__dirname, "../../privacy/polish_pii_gazetteer.py")
+    });
+    const text =
+      "Powód Piotr Tkachuk wniósł pozew przeciwko Annie Ląg. Sąd wezwał Tkachuka do zapłaty. " +
+      "Doręczono pismo Tkachukowi. Pozwana Ląg nie stawiła się. Świadek Jan Duran Perez zeznał, że Pereza nie było.";
+    const vault = new PseudonymizationVault();
+    const result = await new LocalPolishPseudonymizer(vault, recognizer, morphology()).pseudonymize(text);
+    for (const leaked of ["Tkachuk", "Ląg", "Duran", "Perez"]) {
+      expect(result.text).not.toContain(leaked);
+    }
+    const full = /Powód (\[PII:PERSON:\d{4}\])/.exec(result.text)![1]!;
+    expect(vault.restore(full, "INS").text).toBe("Piotrem Tkachukiem");
+    // The surname alone has its own token (no given name); every case of it is one.
+    const alone = /wezwał (\[PII:PERSON:\d{4}\]) do zapłaty/.exec(result.text)![1]!;
+    expect(result.text).toContain(`Doręczono pismo ${alone}.`);
+    expect(vault.restore(alone, "NOM").text).toBe("Tkachuk");
+    expect(vault.restore(alone, "DAT").text).toBe("Tkachukowi");
+  });
+});
