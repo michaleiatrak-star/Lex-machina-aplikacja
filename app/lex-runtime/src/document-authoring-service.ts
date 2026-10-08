@@ -47,6 +47,7 @@ import {
 } from "./export-gate.js";
 import { FinalizationGate, type FinalizationReport } from "./finalization-gate.js";
 import { stripAstVerificationMarkers } from "./verification-markers.js";
+import { documentCompletenessWarnings } from "./document-completeness.js";
 
 export type BlockedReference = {
   claim: string;
@@ -142,6 +143,8 @@ export type TokenizedDocumentResult = {
     string;
   deanonymizationKeyBound:
     true;
+  // Not reasons to refuse: what the user should check (fields, title, signature).
+  warnings: string[];
 };
 
 export type FinalDocumentResult = {
@@ -166,6 +169,7 @@ export type ReadyDocumentResult = {
     LegalDocumentFormat;
   sha256: string;
   text: string;
+  warnings: string[];
 };
 
 export class LocalDocumentAuthoringService {
@@ -472,7 +476,9 @@ export class LocalDocumentAuthoringService {
         text:
           rendered.text,
         deanonymizationKeyBound:
-          true
+          true,
+        warnings:
+          documentCompletenessWarnings(documentAst, rendered.text)
       };
     } finally {
       rendered.data.fill(0);
@@ -661,7 +667,9 @@ export class LocalDocumentAuthoringService {
           args.format,
         sha256,
         text:
-          validation.text
+          validation.text,
+        warnings:
+          documentCompletenessWarnings(documentAst, validation.text)
       };
     } finally {
       rendered.data.fill(0);

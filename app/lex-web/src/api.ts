@@ -419,6 +419,8 @@ export type GeneratedDocumentResponse = {
   aliasesUsed: string[];
   deanonymizationKeyBound?: boolean;
   readyForDownload?: boolean;
+  // Fields left in square brackets, missing title or signature.
+  warnings?: string[];
   downloadTicket?: {
     ticketId: string;
     caseId: string;

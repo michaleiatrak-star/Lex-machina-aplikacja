@@ -1018,6 +1018,11 @@ const EXPORT_REFERENCE_STATUS: Record<string, string> = {
   VERIFICATION_MARKER_MISMATCH: "niespójny ślad weryfikacji"
 };
 
+/** What to check in a generated file before using it (empty when nothing). */
+export function documentWarningsText(warnings: string[] | undefined): string {
+  return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
+}
+
 /** A refused export in words: which provisions or judgments stopped the file. */
 export function exportBlockedMessage(error: unknown): string | null {
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
@@ -3331,13 +3336,14 @@ export default function MatterChatApp({
                   role:
                     "assistant",
                   content:
-                    downloadedFinal
+                    (downloadedFinal
                       ? "Gotowy dokument " +
                         documentRequest.format.toUpperCase() +
                         " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
+                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).") +
+                    documentWarningsText(generated.warnings),
                   meta:
                     "dokument: " +
                     generated
@@ -3524,9 +3530,10 @@ export default function MatterChatApp({
                 id: messageId(),
                 role: "assistant",
                 content:
-                  stage === "FINAL"
+                  (stage === "FINAL"
                     ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
-                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.",
+                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
+                  documentWarningsText(generated.warnings),
                 meta: "dokument: " + generated.artifact.filename,
                 generatedDocument: {
                   artifactId: generated.artifact.artifactId,

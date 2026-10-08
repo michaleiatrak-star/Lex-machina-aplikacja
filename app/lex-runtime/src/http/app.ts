@@ -7347,6 +7347,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               ready.format,
             sha256:
               ready.sha256,
+            warnings:
+              ready.warnings,
             aliasesUsed: [],
             readyForDownload:
               true,
@@ -7427,6 +7429,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               .deanonymizationKeyBound,
           readyForDownload:
             false,
+          warnings:
+            tokenized.warnings,
           ...(templateProfile
             ? {
                 templateProfile
