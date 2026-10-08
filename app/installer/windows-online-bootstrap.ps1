@@ -152,13 +152,24 @@ function Install-VcRuntime([string]$installer, [Version]$required, [string]$logD
   if (-not (Test-IsAdministrator)) {
     $startArgs.Verb = "RunAs"
   }
-  $process = Start-Process @startArgs
-  if (-not $process.WaitForExit($timeoutMs)) {
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    throw "${errorPrefix}_TIMEOUT"
+  # A declined UAC prompt (per-user install) throws instead of returning a code:
+  # 1223 (ERROR_CANCELLED) takes the same fallback as a failed upgrade.
+  $process = $null
+  try {
+    $process = Start-Process @startArgs
+  } catch {
+    Write-Warning "vc_redist did not start: $($_.Exception.Message)"
   }
-  $process.Refresh()
-  $code = $process.ExitCode
+  if ($process) {
+    if (-not $process.WaitForExit($timeoutMs)) {
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      throw "${errorPrefix}_TIMEOUT"
+    }
+    $process.Refresh()
+    $code = $process.ExitCode
+  } else {
+    $code = 1223
+  }
   # 0 ok, 3010 ok after restart, 1638 a newer version is already installed.
   if ($code -in @(0, 1638, 3010)) { return $code }
   $present = Get-VcRuntimeVersion
