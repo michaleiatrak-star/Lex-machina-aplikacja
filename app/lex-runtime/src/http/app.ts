@@ -8923,6 +8923,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
       };
       request.onStep("PREPARE", "przygotowanie wiadomości");
+      // Document aliases in the live draft, from the same local vaults as the answer.
+      const documentService = options.documentService;
+      if (documentService?.deanonymize) {
+        request.restoreDocumentToken = (documentId, sourceToken) =>
+          documentService.deanonymize!(documentId, sourceToken);
+      }
       request.onDraft = (text) => {
         const entry =
           executionDrafts.get(

@@ -39,4 +39,23 @@ describe("live answer draft", () => {
     callbacks.onToolCallStart?.({ id: "t", name: "x", input: {} });
     expect(drafts.at(-1)).toBe("");
   });
+
+  it("restores document alias tokens in the live draft as well", () => {
+    const vault = new PseudonymizationVault();
+    const drafts: string[] = [];
+    const seen: Array<[number, string]> = [];
+    const callbacks = createDraftCallbacks(
+      vault,
+      (text) => drafts.push(text),
+      (documentNumber, sourceToken) => {
+        seen.push([documentNumber, sourceToken]);
+        return documentNumber === 1 ? "Janowi Kowalskiemu" : null;
+      }
+    );
+    callbacks.onContentDelta?.("Pismo doręczono [LMPII:D01:PER");
+    expect(drafts.at(-1)).toBe("Pismo doręczono ");
+    callbacks.onContentDelta?.("SON:0001|DAT] i [LMPII:D02:PERSON:0003].");
+    expect(drafts.at(-1)).toBe("Pismo doręczono Janowi Kowalskiemu i [LMPII:D02:PERSON:0003].");
+    expect(seen[0]).toEqual([1, "[PII:PERSON:0001|DAT]"]);
+  });
 });

@@ -284,6 +284,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): receives the live draft text of
   // the model answer with the chat pseudonyms already restored.
   onDraft?: (text: string) => void;
+  // Runtime-only: a document alias token ([PII:KIND:NNNN|CASE] of one
+  // document's own vault) restored for the live draft; throws when unknown.
+  restoreDocumentToken?: (documentId: string, sourceToken: string) => string;
   // Runtime-only: the stage of the turn and what was done in it (skills, tools).
   onStep?: ExecutionStepReporter;
   // Runtime-only (never parsed from HTTP): the matter's full files for the
@@ -1179,13 +1182,17 @@ function positiveEnvInt(name: string, fallback: number): number {
 
 const DRAFT_PII_TOKEN =
   /\[PII:([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
+const DRAFT_DOCUMENT_TOKEN =
+  /\[LMPII:D(\d{2}):([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
 // An incomplete token at the end of the stream is held back until complete.
 const DRAFT_PARTIAL_TOKEN_TAIL =
-  /\[(?:P(?:I(?:I(?::[A-Z_]*(?::\d{0,4}(?:\|[A-Z]{0,4})?)?)?)?)?)?$/;
+  /\[(?:P(?:I(?:I(?::[A-Z_]*(?::\d{0,4}(?:\|[A-Z]{0,4})?)?)?)?)?)?$|\[L(?:M(?:P(?:I(?:I(?::[A-Z0-9_:|]{0,30})?)?)?)?)?$/;
 
 export function createDraftCallbacks(
   vault: PseudonymizationVault,
-  onDraft: (text: string) => void
+  onDraft: (text: string) => void,
+  // Document alias D01..: the token in that document's own vault, or null.
+  restoreDocument?: (documentNumber: number, sourceToken: string) => string | null
 ): StreamCallbacks {
   let raw = "";
   const publish = () => {
@@ -1203,6 +1210,13 @@ export function createDraftCallbacks(
             ? vault.restore(base, requestedCase ?? null).text
             : token;
         }
+      ).replace(
+        DRAFT_DOCUMENT_TOKEN,
+        (token, documentNumber: string, kind: string, sequence: string, requestedCase?: string) =>
+          restoreDocument?.(
+            Number(documentNumber),
+            requestedCase ? `[PII:${kind}:${sequence}|${requestedCase}]` : `[PII:${kind}:${sequence}]`
+          ) ?? token
       )
     );
   };
@@ -2295,7 +2309,18 @@ export class SafeSessionExecutor implements SessionExecutor {
       request.onDraft
         ? createDraftCallbacks(
             chatPrivacyVault,
-            request.onDraft
+            request.onDraft,
+            request.restoreDocumentToken
+              ? (documentNumber, sourceToken) => {
+                  const documentId = aliasRegistry.documentIds()[documentNumber - 1];
+                  if (!documentId) return null;
+                  try {
+                    return request.restoreDocumentToken!(documentId, sourceToken);
+                  } catch {
+                    return null;
+                  }
+                }
+              : undefined
           )
         : undefined;
     const execution = await this.engine.executePolishLegalQuery({
@@ -2923,7 +2948,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (accepted) modelOutput = text;
         audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
           missing: missingGates.map((item) => item.block),
-          remaining: (accepted ? remaining : missingGates).map((item) => item.block)
+          remaining: (accepted ? remaining : missingGates).map((item) => item.block),
+          // The correction's own cost, apart from the turn's total.
+          ...(corrected.usage ? { inputTokens: corrected.usage.inputTokens, outputTokens: corrected.usage.outputTokens } : {})
         });
       } catch (error) {
         audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {

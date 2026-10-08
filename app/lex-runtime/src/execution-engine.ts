@@ -307,10 +307,11 @@ export function buildCoreLegalResourcePrompt(
     ].join("\n");
   }
 
+  // Sections the runtime executes itself become one line (as in AUTO).
   return [...resources.entries()]
     .map(
       ([resource, content]) =>
-        `# CORE LEGAL RESOURCE: ${resource}\n\n${content}`
+        `# CORE LEGAL RESOURCE: ${resource}\n\n${compactForModel(content).text}`
     )
     .join("\n\n---\n\n");
 }
