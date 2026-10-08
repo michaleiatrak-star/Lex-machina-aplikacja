@@ -73,7 +73,7 @@ pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist"
 # Always install into /Applications, never relocate onto another copy of the app.
 plutil -replace 0.BundleIsRelocatable -bool NO "$WORK/components.plist"
 pkgbuild --root "$WORK/root" --component-plist "$WORK/components.plist" \
-  --scripts "$INSTALLER/macos/scripts" --identifier pl.lexmachina.desktop --version 0.1.21 \
+  --scripts "$INSTALLER/macos/scripts" --identifier pl.lexmachina.desktop --version 0.1.22 \
   --install-location / "$WORK/LexMachina-component.pkg"
 mkdir -p "$WORK/resources"
 cp "$INSTALLER/macos/welcome.html" "$WORK/resources/welcome.html"
