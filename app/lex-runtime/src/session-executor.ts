@@ -165,6 +165,8 @@ import { detectLegalReferences, type LegalReferenceKind } from "./finalization-g
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
+import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
+import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
   ANALYSIS_INTENT,
@@ -218,6 +220,7 @@ import {
 } from "./privacy/local-llm-ner.js";
 import {
   parseSkillSelectionEnvelope,
+  SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
 
@@ -1291,6 +1294,15 @@ export class SafeSessionExecutor implements SessionExecutor {
     return routes;
   }
 
+  private accentCache: { root: string; map: AccentMap } | null = null;
+
+  // Polish spelling of the executive skills' words, for a message typed without it.
+  private accentMap(): AccentMap {
+    if (this.accentCache?.root === this.registry.root) return this.accentCache.map;
+    this.accentCache = { root: this.registry.root, map: buildAccentMap(executiveSkillTexts(this.registry)) };
+    return this.accentCache.map;
+  }
+
   private flashRoutesCache: { root: string; rows: FlashRoute[] } | null = null;
 
   // prawo-polskie-v2 "Routing błyskawiczny", re-read after a skill update.
@@ -1502,93 +1514,120 @@ export class SafeSessionExecutor implements SessionExecutor {
     let protectedProcessContext = request.processWorkflowContext;
     let protectedAuxiliaryText:
       string | undefined;
+    // A trivial command ("ok", "dzięki") is a fixed word of a closed list: it holds no
+    // personal data, and only that latest message reaches the model. The thread history is
+    // not run through PII detection (with a local model ready, one local inference per chunk).
+    // The web client sends the message also as auxiliaryText: that is the same text.
+    const latestMessage = latestUserTurn(parseSkillSelectionEnvelope(request.query).query).trim();
+    const trivialTurn =
+      request.conversationalOnly === true &&
+      isTrivialChatCommand(parseSkillSelectionEnvelope(request.query).query) &&
+      !request.documentAttachments?.length &&
+      (request.auxiliaryText === undefined || request.auxiliaryText.trim() === latestMessage) &&
+      !request.processWorkflowContext;
     try {
-      // Example data the assistant wrote earlier (a model letter) stays as written.
-      const exampleData =
-        /(?:^|\n\n)Asystent: /.test(request.query)
-          ? exampleDataKeepDirectives(
-              request.query,
-              (
-                await new LocalPolishPseudonymizer(
-                  new PseudonymizationVault(request.privacySeed),
-                  this.chatRecognizerFor(request.model),
-                  this.personMorphology
-                ).pseudonymize(request.query)
-              ).findings,
-              request.auxiliaryText ?? "",
-              request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null
-            )
-          : [];
-      const protectedPrimary =
-        await chatPseudonymizer
-          .pseudonymize(
-            request.query,
-            exampleData
-          );
-      // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
-      const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
-      protectedQuery =
-        primarySeal.text;
-      let sealedValues = primarySeal.sealed;
-
-      if (
-        request.auxiliaryText !==
-          undefined &&
-        request.auxiliaryText !==
-          request.query
-      ) {
-        const auxiliary =
+      if (trivialTurn) {
+        const header = request.query.startsWith(SKILL_SELECTION_ENVELOPE_PREFIX)
+          ? request.query.slice(0, request.query.indexOf("\n") + 1)
+          : "";
+        protectedQuery = header + latestMessage;
+        if (request.auxiliaryText !== undefined) protectedAuxiliaryText = latestMessage;
+        audit.record("gate", "G39I_CHAT_PRIVACY", "OK", {
+          pseudonymized: 0,
+          exampleDataKept: 0,
+          kinds: [],
+          vaultTokens: chatPrivacyVault.size,
+          residualSealed: 0,
+          detail: "trivial-command;latest-turn-only"
+        });
+      } else {
+        // Example data the assistant wrote earlier (a model letter) stays as written.
+        const exampleData =
+          /(?:^|\n\n)Asystent: /.test(request.query)
+            ? exampleDataKeepDirectives(
+                request.query,
+                (
+                  await new LocalPolishPseudonymizer(
+                    new PseudonymizationVault(request.privacySeed),
+                    this.chatRecognizerFor(request.model),
+                    this.personMorphology
+                  ).pseudonymize(request.query)
+                ).findings,
+                request.auxiliaryText ?? "",
+                request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null
+              )
+            : [];
+        const protectedPrimary =
           await chatPseudonymizer
             .pseudonymize(
-              request.auxiliaryText
+              request.query,
+              exampleData
             );
-        const auxiliarySeal = sealResidualValues(request.auxiliaryText, auxiliary.text, auxiliary.findings);
-        protectedAuxiliaryText =
-          auxiliarySeal.text;
-        sealedValues += auxiliarySeal.sealed;
-      } else if (
-        request.auxiliaryText !==
-          undefined
-      ) {
-        protectedAuxiliaryText =
-          protectedQuery;
-      }
+        // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
+        const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
+        protectedQuery =
+          primarySeal.text;
+        let sealedValues = primarySeal.sealed;
 
-      // The stored pleading draft and remarks reach the model like the chat text:
-      // pseudonymized with the same vault (restored in the answer).
-      if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
-        const context = request.processWorkflowContext;
-        protectedProcessContext = {
-          ...context,
-          ...(context.draft
-            ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
-            : {}),
-          ...(context.remarks ? { remarks: (await chatPseudonymizer.pseudonymize(context.remarks)).text } : {})
-        };
-      }
-      audit.record(
-        "gate",
-        "G39I_CHAT_PRIVACY",
-        "OK",
-        {
-          pseudonymized:
-            protectedPrimary
-              .findings.length,
-          exampleDataKept:
-            exampleData.length,
-          kinds:
-            Object.keys(
-              protectedPrimary
-                .counts
-            ).sort(),
-          vaultTokens:
-            chatPrivacyVault
-              .size,
-          // Occurrences of already replaced values found again by the leak test.
-          residualSealed:
-            sealedValues
+        if (
+          request.auxiliaryText !==
+            undefined &&
+          request.auxiliaryText !==
+            request.query
+        ) {
+          const auxiliary =
+            await chatPseudonymizer
+              .pseudonymize(
+                request.auxiliaryText
+              );
+          const auxiliarySeal = sealResidualValues(request.auxiliaryText, auxiliary.text, auxiliary.findings);
+          protectedAuxiliaryText =
+            auxiliarySeal.text;
+          sealedValues += auxiliarySeal.sealed;
+        } else if (
+          request.auxiliaryText !==
+            undefined
+        ) {
+          protectedAuxiliaryText =
+            protectedQuery;
         }
-      );
+
+        // The stored pleading draft and remarks reach the model like the chat text:
+        // pseudonymized with the same vault (restored in the answer).
+        if (request.processWorkflowContext?.draft || request.processWorkflowContext?.remarks) {
+          const context = request.processWorkflowContext;
+          protectedProcessContext = {
+            ...context,
+            ...(context.draft
+              ? { draft: { ...context.draft, text: (await chatPseudonymizer.pseudonymize(context.draft.text)).text } }
+              : {}),
+            ...(context.remarks ? { remarks: (await chatPseudonymizer.pseudonymize(context.remarks)).text } : {})
+          };
+        }
+        audit.record(
+          "gate",
+          "G39I_CHAT_PRIVACY",
+          "OK",
+          {
+            pseudonymized:
+              protectedPrimary
+                .findings.length,
+            exampleDataKept:
+              exampleData.length,
+            kinds:
+              Object.keys(
+                protectedPrimary
+                  .counts
+              ).sort(),
+            vaultTokens:
+              chatPrivacyVault
+                .size,
+            // Occurrences of already replaced values found again by the leak test.
+            residualSealed:
+              sealedValues
+          }
+        );
+      }
     } catch (error) {
       audit.record(
         "gate",
@@ -1625,6 +1664,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     const memory = request.threadEvidence;
     if (
       memory &&
+      // A conversational turn reads no provisions: no ELI round trip for them.
+      !request.conversationalOnly &&
       !request.model.startsWith("local/") &&
       (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)
     ) {
@@ -1896,7 +1937,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       foreignJurisdiction: false
     };
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
-    const verification = legalTurn && classifyTask(this.taskRoutes(), pathFacts.query)?.route.id === "11";
+    // A message typed without Polish letters gets them back for the executive routing phrases.
+    const taskQuery = legalTurn && !/[ąćęłńóśźż]/iu.test(pathFacts.query) ? restoreAccents(pathFacts.query, this.accentMap()) : pathFacts.query;
+    const verification = legalTurn && classifyTask(this.taskRoutes(), taskQuery)?.route.id === "11";
     const profile: PathProfile = pathProfile({
       mode: request.modeDecision?.mode ?? request.mode,
       simple: request.matterComplexity?.level === "SIMPLE",
@@ -2082,7 +2125,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           : [])
       ];
       routingMaterials = materials;
-      taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), pathFacts.query, materials, this.redactionTest(), {
+      taskRoute = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, materials, this.redactionTest(), {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       });

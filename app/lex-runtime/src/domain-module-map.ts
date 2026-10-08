@@ -75,7 +75,17 @@ function stemOf(word: string): string {
 // ("powi" of "powiat" is not "powierzenia").
 function hit(stem: string, tokens: string[]): boolean {
   if (stem.startsWith("=")) return tokens.includes(stem.slice(1));
-  return tokens.some((token) => token.startsWith(stem) && (stem.length > 4 || token.length <= stem.length + (stem.length <= 3 ? 3 : 6)));
+  return alternations(stem).some((form) =>
+    tokens.some((token) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)))
+  );
+}
+
+// Polish vowel alternation inside the stem, after folding: "urzędu"/"urząd" ("urzed"/"urzad"),
+// "męża"/"mąż" ("mez"/"maz"). The stem's last vowel e <-> a, for stems of four letters and more.
+function alternations(stem: string): string[] {
+  const match = /^(.{2,}?)([ae])([^aeiouy]+)$/u.exec(stem);
+  if (!match || stem.length < 4) return [stem];
+  return [stem, `${match[1]}${match[2] === "e" ? "a" : "e"}${match[3]}`];
 }
 
 // What a module says it covers: its headings and its "Zakres:" paragraph.
@@ -276,13 +286,34 @@ export function suggestDomainModules(registry: LexSkillRegistry, skill: string, 
  * The domains for this text: the flash-routing rows it names, else the domains
  * whose act maps it points to most (one specific act or scope).
  */
+// A foreign element (another country, its court or law, "za granicą"): the matter
+// always raises jurisdiction and the applicable law (DR-14), whatever else it is.
+const FOREIGN_ELEMENT = new RegExp(
+  "(?<![a-z])(?:" +
+    [
+      "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow",
+      "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
+      "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
+      "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
+      "wielkiej brytanii", "wielka brytani", "brytyjsk", "anglii\\b", "angli[ia]\\b", "szkocj", "stanach zjednoczonych", "usa\\b", "amerykansk",
+      "kanad", "australi", "chin(?:y|ach|ami)?\\b", "chinsk", "japoni", "indii\\b", "indyjsk", "turcj", "tureck", "izrael",
+      "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "praga", "pradze", "wilni", "kijow"
+    ].join("|") +
+    ")",
+  "u"
+);
+
+export function foreignElement(text: string): boolean {
+  return FOREIGN_ELEMENT.test(fold(text));
+}
+
 export function rankDomains(
   registry: LexSkillRegistry,
   rows: FlashRoute[],
   text: string,
   limit = 2
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[] }> {
-  const ranked = rankByPhrases(registry, rows, text, limit);
+  const ranked = withForeignElement(registry, text, rankByPhrases(registry, rows, text, limit), limit);
   // A criminal matter (the application already requires the qualifier): DR-03 first,
   // or second when another domain has a phrase of its own ("mandat posła" after a conviction).
   const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
@@ -293,6 +324,23 @@ export function rankDomains(
   const others = ranked.filter((row) => row.skill !== criminal);
   const order = (others[0]?.weight ?? 0) >= 2 ? [others[0]!, marked, ...others.slice(1)] : [marked, ...others];
   return order.slice(0, limit).map(({ weight: _weight, ...row }) => row);
+}
+
+// DR-14 named for a foreign element of a legal matter: second after the matter's own
+// domain. A country alone ("wakacje w Grecji") names no matter and no domain.
+function withForeignElement(
+  registry: LexSkillRegistry,
+  text: string,
+  ranked: Array<{ skill: string; matched: string[]; modules: DomainModule[]; weight: number }>,
+  limit: number
+): Array<{ skill: string; matched: string[]; modules: DomainModule[]; weight: number }> {
+  const international = [...registry.skills.keys()].find((name) => name.startsWith("dr-14-"));
+  if (!international || !ranked.length || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international)) return ranked;
+  const own = ranked.find((row) => row.skill === international);
+  const marked = { ...(own ?? { skill: international, matched: [], modules: suggestDomainModules(registry, international, text), weight: 0 }) };
+  marked.matched = ["element zagraniczny (jurysdykcja, prawo właściwe)", ...marked.matched];
+  const others = ranked.filter((row) => row.skill !== international);
+  return [others[0]!, marked, ...others.slice(1)].slice(0, limit);
 }
 
 function rankByPhrases(

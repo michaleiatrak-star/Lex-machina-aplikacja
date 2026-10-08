@@ -40,10 +40,25 @@ export function isTrivialChatCommand(query) {
         .toLowerCase()
         .replace(/[„”"'']/g, "")
         .replace(/\s+/g, " ");
-    return (/^(?:napisz|odpowiedz|powiedz)(?: tylko)?[: ]+ok[.!?]*$/
+    if (/^(?:napisz|odpowiedz|powiedz)(?: tylko)?[: ]+ok[.!?]*$/
         .test(normalized) ||
-        /^(?:ok|okej|okay|test|testuję|testuje|hej|hejka|halo|cześć|czesc|witaj|witam|dzień dobry|dzien dobry|dobry wieczór|dobry wieczor|dzięki|dzieki|dziękuję|dziekuje|jesteś|jestes|działasz|dzialasz)[.!?]*$/
-            .test(normalized));
+        TRIVIAL_ALWAYS.test(normalized)) {
+        return true;
+    }
+    // "ok", "dobrze", "jasne" answering the assistant's question ("Czy mam przygotować
+    // wezwanie?") is consent to the legal task, not small talk.
+    return TRIVIAL_ACK.test(normalized) && !assistantAskedLast(query);
+}
+const TRIVIAL_PART = "(?:test|testuję|testuje|hej|hejka|halo|cześć|czesc|siema|elo|witaj|witam|hello|hi|dzień dobry|dzien dobry|dobry wieczór|dobry wieczor|dobranoc|do widzenia|na razie|miłego dnia|milego dnia|dzięki|dzieki|wielkie dzięki|wielkie dzieki|dziękuję|dziekuje|dziękuję bardzo|dziekuje bardzo|thx|thanks|jesteś|jestes|działasz|dzialasz)";
+const ACK_PART = "(?:ok|okej|okay|super|great|jasne|rozumiem|spoko|dobrze|dobra|świetnie|swietnie|w porządku|w porzadku|aha)";
+// Greetings, thanks and goodbyes, alone or after an acknowledgement ("ok, dzięki").
+const TRIVIAL_ALWAYS = new RegExp(`^(?:${ACK_PART}[,!.]?\\s*)?${TRIVIAL_PART}(?:[,!.]?\\s*(?:to wszystko|${TRIVIAL_PART}))?[.!?]*$`);
+const TRIVIAL_ACK = new RegExp(`^${ACK_PART}(?:[,!.]?\\s*${ACK_PART})?[.!?]*$`);
+function assistantAskedLast(query) {
+    const marker = query.lastIndexOf("\n\nUżytkownik: ");
+    const before = marker >= 0 ? query.slice(0, marker) : "";
+    const reply = before.lastIndexOf("Asystent: ");
+    return reply >= 0 && /\?\s*$/u.test(before.slice(reply).trim());
 }
 export function isLocalLightweightConversation(model, query, hasBoundContext) {
     // Bound case/workflow state does not turn a trivial command into a legal
@@ -282,7 +297,9 @@ export class LexExecutionEngine {
                     conversationalOnly &&
                         !trivialChat
                         ? "Jesteś asystentem Lex Machina. Router uznał tę wiadomość za niezwiązaną z prawem, więc skille prawne nie zostały załadowane. Odpowiedz rzeczowo, w języku użytkownika. Nie powołuj przepisów, sygnatur ani terminów prawnych; jeśli pytanie jednak dotyczy sprawy prawnej, powiedz to wprost i poproś o doprecyzowanie, aby uruchomić pełną analizę prawną."
-                        : "Jesteś asystentem Lex Machina. Wykonaj dosłownie krótkie polecenie użytkownika. Jeśli prosi o napisanie konkretnego słowa lub zdania, odpowiedz wyłącznie tym tekstem, bez powitań i komentarzy. Na powitanie odpowiedz jednym krótkim zdaniem. Odpowiadaj po polsku."
+                        : "Jesteś asystentem Lex Machina. Wykonaj dosłownie krótkie polecenie użytkownika. Jeśli prosi o napisanie konkretnego słowa lub zdania, odpowiedz wyłącznie tym tekstem, bez powitań i komentarzy. Na powitanie odpowiedz jednym krótkim zdaniem. Odpowiadaj po polsku.",
+                    // "Jakim jesteś modelem?" goes this lane too: the application names the model.
+                    `Model tej sesji (podaje aplikacja): dostawca ${args.provider}, identyfikator ${args.model}. Pytany o model, podaj te dane; nie zgaduj nazwy ani wersji z pamięci.`
                 ].join("\n\n"),
                 ...(args.continuityKey
                     ? {
