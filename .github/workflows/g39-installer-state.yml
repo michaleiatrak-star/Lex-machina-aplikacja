@@ -51,6 +51,10 @@ jobs:
         shell: pwsh
         run: ./app/installer/windows-online-bootstrap-contract-selftest.ps1
 
+      - name: Visual C++ runtime install outcomes (1603, declined UAC, app-local)
+        shell: pwsh
+        run: ./app/installer/vc-runtime-install-selftest.ps1
+
       - name: Exercise Fresh / Upgrade / Repair / Current / DowngradeBlocked
         shell: pwsh
         run: ./app/installer/installer-state-machine-selftest.ps1
