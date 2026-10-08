@@ -37,6 +37,14 @@ describe("sections executed by the application", () => {
     expect(result.compacted).toEqual([expect.objectContaining({ heading: "ZNACZNIK OBOWIĄZKOWY", component: "G8" })]);
   });
 
+  it("replaces STRIP-VER-GATE: the application strips the markers from the file", () => {
+    const gate = ["# WERYFIKACJA", "<!-- lex:wykonuje-aplikacja: STRIP-VER -->", "## ⛔ STRIP-VER-GATE", "SVG-1 … SVG-4.", "## DALEJ", "Reguła."].join("\n");
+    const compact = compactForModel(gate);
+    expect(compact.text).toContain("## ⛔ STRIP-VER-GATE [wykonuje aplikacja: STRIP-VER]");
+    expect(compact.text).not.toContain("SVG-1");
+    expect(compact.text).toContain("Reguła.");
+  });
+
   it("keeps a section marked with a component the application does not run, and everything when switched off", () => {
     expect(compactForModel(text, true).text).toContain("## ZOSTAJE\nTreść.");
     expect(compactForModel(text, false).text).toBe(text);

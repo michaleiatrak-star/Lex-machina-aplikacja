@@ -17,6 +17,7 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   RESOLVER: "rozwiązywanie adresów skilli i shared/ do jednej kopii korpusu aplikacji (wynik w śladzie KROK 3A)",
   "WERYFIKACJA-ELI": "odczyt przepisów w ELI i rejestr weryfikacji powołań",
   G8: "znaczniki statusu powołań i bramka końcowa HARD GATE (G8)",
+  "STRIP-VER": "usunięcie znaczników weryfikacji z pliku pisma przed zapisem (STRIP-VER-GATE); ślad weryfikacji zostaje w rejestrze i w czacie",
   DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",
   "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi",
   "WIDGET-DANE": "widget z szablonu korpusu zasilany danymi (show_widget z path i data) oraz pasek eksportu/importu",
