@@ -1,250 +1,84 @@
-# mod-PrRestr-dzial-VII-uklad-czesciowy
+# Restrukturyzacja — układ częściowy (PrRestr art. 180–188)
 
-**Wersja:** 1.0.0 | **Dodano:** 2026-08-20 (NAPRAWA — F-87, ostatni
-priorytet z pierwotnego zakresu tej flagi: Dział VII PrRestr, art.
-180-188 — po tym module F-87 kwalifikuje się do przeglądu, czy pozostałe
-segmenty [189-209, 335-380, 381-433] wymagają nowej, osobnej flagi.)
-
-> ⛔ HARDGATE — zweryfikuj aktualny t.j. na ISAP przed użyciem w piśmie.
-> Akt bazowy: Prawo restrukturyzacyjne, Dz.U. 2026 poz. 533 t.j.
-> ⚠️ [NIEWERYFIKOWANE RZĄD 1] — ISAP zablokowany w tym środowisku.
-> RZĄD 2/3: 5 źródeł zgodnych (lexlege.pl, przepisy.gofin.pl, arslege.pl,
-> sip.lex.pl/OpenLEX, prawnik.cc) — jedno źródło (arslege) cytuje t.j.
-> 2022.2309, inne (sip.lex) t.j. 2022.2309 również — TREŚĆ przepisów
-> art. 180-188 NIE była przedmiotem nowelizacji między t.j. 2022.2309 a
-> aktualnym 2026.533 wg zgodności numeracji między źródłami, ale BEZ
-> bezpośredniego potwierdzenia RZĄD 1.
-
-**Rola w systemie:** komplementarny do `mod-PrRestr-dzial-VI-uklad.md`
-(Układ "zwykły", obejmujący z mocy prawa wszystkie wierzytelności
-sprzed otwarcia postępowania). Dział VII to WYJĄTEK od tej zasady —
-pozwala dłużnikowi ograniczyć restrukturyzację do WYBRANEJ grupy
-wierzycieli kluczowych dla dalszego funkcjonowania przedsiębiorstwa.
+**Status:** moduł klasy kancelaryjnej — poziom A / COV-ART (każdy obowiązujący artykuł z zakresu omówiony; uchylone oznaczone)
+**Źródło:** Prawo restrukturyzacyjne — t.j. [Dz.U. 2026 poz. 533](https://api.sejm.gov.pl/eli/acts/DU/2026/533/text.pdf) (ELI DU/2026/533; akt bazowy DU/2015/978), s. 48–49
+**Weryfikacja:** snapshot PDF 04.10.2026 (SHA-256 zgodny z `references/prrestr/metadata.json`); status t.j. „obowiązuje” potwierdzony w ELI 08.10.2026 ✅ [VER: isap_lookup DU/2015/978 → DU/2026/533, 2026-10-08]
+**Zmiany po t.j. w tym zakresie:** brak. Art. 180 ust. 5 dodany i art. 186 uchylony przez DU/2025/1085 — ujęte w t.j.; dla spraw sprzed 23.08.2025 → `mod-PrRestr-zrodla-i-wersje`.
+**ZASADA:** przed powołaniem odczytaj przepis: `python3 scripts/prrestr.py article 183 --verify-online`. Układ częściowy — **tylko w PZU i PPU** (182 ust. 1). Większości — art. 119 (art. 186 uchylony).
 
 ---
 
-## 1. STRUKTURA DZIAŁU VII (art. 180-188, bez podziału na rozdziały)
+## FAZA 0 — INTAKE
 
 ```
-Art. 180 — pojęcie i kryteria wyodrębnienia wierzycieli
-Art. 181 — objęcie wierzytelności układem częściowym (katalog przykładowy)
-Art. 182 — postępowanie o zatwierdzenie układu częściowego
-Art. 183 — zasady propozycji układowych (zakaz pokrzywdzenia wierzycieli
-  nieobjętych, bezskuteczność zabezpieczeń wobec masy przy upadłości
-  w ciągu roku)
-Art. 184 — karta do głosowania przy samodzielnym zbieraniu głosów przez
-  dłużnika
-Art. 185 — zastrzeżenia wierzyciela NIEOBJĘTEGO układem częściowym
-Art. 186 — warunki przyjęcia układu częściowego (próg głosowania)
-Art. 187 — zakres podmiotowy układu częściowego (kto jest nim związany)
-Art. 188 — zażalenie na postanowienie o zatwierdzeniu
-  ✅ ADRESAT (F-13, zweryfikowane 2026-08-21): postanowienie o
-  zatwierdzeniu układu częściowego wydaje SĄD restrukturyzacyjny (nie
-  sędzia-komisarz) — zgodnie z ogólną regułą adresata z art. 200 ust. 1a
-  Prawa restrukturyzacyjnego, zażalenia na postanowienia SĄDU
-  restrukturyzacyjnego rozpoznaje **ten sam sąd w INNYM SKŁADZIE**
-  (POZIOME, nie do sądu wyższej instancji), Z WYJĄTKIEM enumeratywnie
-  wskazanych postanowień (art. 30 ust. 5, art. 331 ust. 4, art. 332
-  ust. 3 — ŻADNE z nich nie dotyczy art. 188). Art. 188 NIE jest wśród
-  wyjątków → **POZIOME**, ta sama pułapka redakcyjna co art. 795 KPC
-  (klauzula wykonalności) już opisana w `shared/ZAZALENIE-ADRESAT-GATE.md`.
-  Zweryfikowane: lexlege.pl, arslege.pl (2×) — zgodne brzmienie art. 200.
+□ Tryb: PZU albo PPU (182 ust. 1); w sanacji — art. 192 (wierzyciele nieobjęci z mocy prawa, którzy nie zgodzili się na objęcie)
+□ Zobowiązania o zasadniczym wpływie na dalsze funkcjonowanie (180 ust. 1): finansujący, umowy kluczowe (dostawy, leasing), zabezpieczeni na majątku niezbędnym, największe kwotowo (180 ust. 4)
+□ Kryteria wyodrębnienia: obiektywne, jednoznaczne, uzasadnione ekonomicznie; zakaz kryteriów omijających przeciwnika (180 ust. 2–3); grupy — art. 161 (180 ust. 5)
+□ Wpływ na nieobjętych: zakaz korzyści zmniejszających ich zaspokojenie (183 ust. 1); nowe zabezpieczenia — ryzyko bezskuteczności przy upadłości w roku (183 ust. 2)
+□ Karta do głosowania (PZU): oznaczenie częściowości i kryteriów (184)
+□ Kontrola kryteriów: w PZU — przy zatwierdzeniu (182 ust. 2); w PPU — niezwłocznie po wniosku (182 ust. 3), jednorazowa zmiana (182 ust. 4–5)
+□ Lista związanych wierzycieli w postanowieniu (187)
 ```
 
 ---
 
-## 2. POJĘCIE I KRYTERIA WYODRĘBNIENIA (art. 180)
+## MAPA ARTYKUŁÓW
 
-```
-⭐⭐⭐ ART. 180 §1 — DŁUŻNIK MOŻE złożyć propozycje układowe dotyczące
-  JEDYNIE NIEKTÓRYCH zobowiązań, KTÓRYCH RESTRUKTURYZACJA MA ZASADNICZY
-  WPŁYW na dalsze funkcjonowanie przedsiębiorstwa dłużnika (⭐⭐ cel
-  instytucji — nie "wszyscy wierzyciele", tylko ci STRATEGICZNI dla
-  przetrwania firmy, np. główny dostawca, bank finansujący)
-
-⭐⭐⭐ §2 — WYODRĘBNIENIE wierzycieli objętych układem częściowym MUSI
-  odbywać się w oparciu o kryteria: (1) OBIEKTYWNE, (2) JEDNOZNACZNE,
-  (3) UZASADNIONE EKONOMICZNIE — dotyczące STOSUNKÓW PRAWNYCH wiążących
-  wierzycieli z dłużnikiem, z których wynikają zobowiązania objęte
-  propozycjami (⭐⭐ trójwarunkowy test, KAŻDE kryterium musi być
-  spełnione łącznie — brak dowolności dłużnika w doborze "wygodnych"
-  wierzycieli)
-
-⭐⭐⭐ §3 — ZAKAZ MANIPULACJI: kryteria wyodrębnienia MAJĄCE NA CELU
-  POMINIĘCIE wierzyciela PRZECIWNEGO zawarciu układu częściowego SĄ
-  NIEDOPUSZCZALNE (⭐⭐⭐ kluczowa ochrona proceduralna — dłużnik NIE
-  MOŻE tak skroić kryteriów, by wykluczyć z głosowania konkretnego,
-  "niewygodnego" wierzyciela; naruszenie tego zakazu jest wprost
-  podstawą zażalenia z art. 188, patrz pkt 7 niżej)
-```
+| Zakres | Treść | Sekcja |
+|---|---|---|
+| 180 | przedmiot, kryteria wyodrębnienia, typowe wierzytelności, grupy | A |
+| 182 | tryby, kontrola kryteriów w PZU i PPU, zażalenie, zmiana kryteriów | A |
+| 183–185 | ochrona wierzycieli nieobjętych, bezskuteczność zabezpieczeń, karta do głosowania, ograniczenia informacyjne i zastrzeżenia | B |
+| 187–188 | zakres związania, zażalenie wierzyciela nieobjętego | C |
+| uchylone | 181, 186 | — |
 
 ---
 
-## 3. KATALOG PRZYKŁADOWY WIERZYTELNOŚCI OBJĘTYCH (art. 181)
+## A. Przedmiot i kryteria (art. 180, 182)
 
-```
-⭐⭐ ART. 181 — wierzytelnościami objętymi układem częściowym MOGĄ być
-  W SZCZEGÓLNOŚCI (⭐ katalog PRZYKŁADOWY, nie zamknięty):
-  1) z tytułu FINANSOWANIA działalności dłużnika przez udzielone
-     kredyty, pożyczki i inne podobne instrumenty
-  2) z tytułu UMÓW o zasadniczym znaczeniu dla funkcjonowania
-     przedsiębiorstwa — w szczególności DOSTAWA najważniejszych
-     materiałów LUB umowy LEASINGU majątku niezbędnego dla działalności
-  3) ZABEZPIECZONE hipoteką, zastawem, zastawem rejestrowym, zastawem
-     skarbowym LUB hipoteką morską NA PRZEDMIOTACH i prawach
-     NIEZBĘDNYCH do prowadzenia przedsiębiorstwa dłużnika
-  ⭐⭐ PRAKTYCZNE ZASTOSOWANIE: te trzy kategorie to typowe "przypadki
-  podręcznikowe" uzasadniające sięgnięcie po układ częściowy — bank
-  finansujący (pkt 1), kluczowy dostawca/leasingodawca (pkt 2),
-  wierzyciel zabezpieczony na majątku produkcyjnym (pkt 3).
-```
+- **Art. 180:** dłużnik może złożyć propozycje obejmujące **tylko niektóre zobowiązania**, których restrukturyzacja ma **zasadniczy wpływ na dalsze funkcjonowanie** przedsiębiorstwa (ust. 1); wyodrębnienie według **obiektywnych, jednoznacznych i uzasadnionych ekonomicznie** kryteriów dotyczących stosunków prawnych z dłużnikiem (ust. 2); **zakaz** kryteriów mających na celu **pominięcie wierzyciela przeciwnego** układowi (ust. 3); w szczególności wierzytelności: z **finansowania** (kredyty, pożyczki, podobne instrumenty) (pkt 1), z **umów o zasadniczym znaczeniu** (dostawy najważniejszych materiałów, leasing majątku niezbędnego) (pkt 2), **zabezpieczone rzeczowo** na przedmiotach i prawach niezbędnych do prowadzenia przedsiębiorstwa (pkt 3), **największe według sumy** (pkt 4) (ust. 4); odpowiednio **art. 161** (grupy, w tym obowiązkowe) (ust. 5).
+- **Art. 181:** uchylony.
+- **Art. 182:** układ częściowy **wyłącznie w PZU albo PPU** (ust. 1). **PZU** — sąd **odmawia zatwierdzenia** przy niezgodnych z prawem kryteriach wskazanych we wniosku (ust. 2). **PPU** — sąd **niezwłocznie po wniosku** orzeka o zgodności kryteriów z prawem (ust. 3); zażalenie **dłużnika** na stwierdzenie niezgodności; w terminie zażalenia dłużnik może **zaproponować inne kryteria** (ust. 4); po uprawomocnieniu — **umorzenie**, chyba że zaproponowano inne kryteria; **kolejna zmiana niedopuszczalna** (ust. 5).
 
----
+## B. Ochrona nieobjętych (art. 183–185)
 
-## 4. ZASADY PROPOZYCJI UKŁADOWYCH — OCHRONA POZOSTAŁYCH WIERZYCIELI (art. 183)
+- **Art. 183:** propozycje nie mogą przewidywać dla objętych **korzyści zmniejszających możliwość zaspokojenia nieobjętych** (ust. 1). Nowe **zabezpieczenia** objętych (hipoteka, zastaw, zastaw rejestrowy, hipoteka morska, przewłaszczenie) są **bezskuteczne** wobec masy upadłości lub wierzycieli, jeżeli **upadłość** ogłoszono w ciągu **roku** od postanowienia o zatwierdzeniu układu częściowego albo w tym terminie **oddalono wniosek na podstawie art. 13 PrUp** (ust. 2).
+- **Art. 184:** przy samodzielnym zbieraniu głosów karta (art. 213) zawiera także informację o **częściowym charakterze** i **kryteriach** objęcia.
+- **Art. 185:** w PZU dłużnik i nadzorca układu **nie muszą udzielać nieobjętym** informacji o sytuacji majątkowej i wykonalności (ust. 1); nieobjęty może zgłaszać **zastrzeżenia** (art. 216 ust. 2) **wyłącznie** co do niezgodnych z prawem **kryteriów** i zgodności propozycji z **art. 183 ust. 1** (ust. 2).
+- **Art. 186:** uchylony.
 
-```
-⭐⭐⭐ ART. 183 §1 — ZAKAZ POKRZYWDZENIA: propozycje układowe NIE MOGĄ
-  przewidywać dla wierzycieli OBJĘTYCH układem częściowym korzyści,
-  KTÓRE ZMNIEJSZAJĄ możliwość zaspokojenia wierzytelności NIEOBJĘTYCH
-  układem (⭐⭐⭐ fundamentalna zasada równowagi — uprzywilejowanie
-  "wybranej" grupy wierzycieli NIE MOŻE odbywać się kosztem pozostałych)
+## C. Związanie i zaskarżenie (art. 187–188)
 
-⭐⭐ §2 — BEZSKUTECZNOŚĆ ZABEZPIECZEŃ PRZY NASTĘPCZEJ UPADŁOŚCI: jeżeli
-  propozycje układowe przewidują zabezpieczenie wierzytelności objętych
-  układem częściowym przez ustanowienie NA MAJĄTKU DŁUŻNIKA hipoteki,
-  zastawu, zastawu rejestrowego, hipoteki morskiej LUB przeniesienie
-  własności rzeczy/wierzytelności/prawa NA ZABEZPIECZENIE — zabezpieczenia
-  te będą BEZSKUTECZNE wobec masy upadłości/wierzycieli dłużnika, JEŻELI
-  upadłość dłużnika zostanie OGŁOSZONA W CIĄGU ROKU od dnia wydania
-  postanowienia o zatwierdzeniu układu częściowego [⚠️ dalszy warunek
-  czasowy alternatywny nie w pełni potwierdzony w tej sesji — punkt
-  startowy] (⭐⭐⭐ SANKCJA prewencyjna — zniechęca do nadmiernego
-  "zabezpieczania" wybranych wierzycieli kosztem przyszłej masy upadłości)
-```
+- **Art. 187:** układ częściowy obejmuje wierzycieli spełniających kryteria, którzy zostali **umieszczeni w spisie**, stawili się z **tytułem egzekucyjnym** albo zostali **dopuszczeni** na podstawie art. 107 ust. 3; **art. 166 ust. 1 nie stosuje się** (brak związania wierzycieli spoza spisu) (ust. 1); sąd w postanowieniu **wskazuje objętych wierzycieli** (ust. 2).
+- **Art. 188:** zażalenie na zatwierdzenie przysługuje także **wierzycielowi nieobjętemu** — wyłącznie z zarzutami naruszenia **art. 180** lub **art. 183 ust. 1**.
 
 ---
 
-## 5. ZASTRZEŻENIA WIERZYCIELA NIEOBJĘTEGO UKŁADEM (art. 185)
+## TERMINY I PROGI
 
-```
-⭐⭐⭐ ART. 185 — wierzyciel NIEOBJĘTY układem częściowym MA PRAWO
-  wnieść ZASTRZEŻENIA [⚠️ dokładna treść przesłanek i tryb wnoszenia
-  zastrzeżeń — NIE potwierdzone w pełni w tej sesji, ale MECHANIZM
-  koresponduje wprost z art. 188 — zastrzeżenia tego wierzyciela są
-  BAZĄ dla późniejszego zażalenia ograniczonego do zarzutów naruszenia
-  art. 180 lub art. 183 §1, patrz pkt 7] (⭐⭐ to jest GŁÓWNY mechanizm
-  ochronny dla wierzycieli POMINIĘTYCH w układzie częściowym — mogą
-  formalnie zakwestionować SAMO wyodrębnienie lub POKRZYWDZENIE)
-```
+| Wartość | Znaczenie | Podstawa |
+|---|---|---|
+| termin zażalenia | propozycja nowych kryteriów (jednokrotnie) | art. 182 ust. 4–5 |
+| rok od zatwierdzenia | bezskuteczność nowych zabezpieczeń przy upadłości / oddaleniu z art. 13 PrUp | art. 183 ust. 2 |
 
----
+## PUŁAPKI
 
-## 6. PRZYJĘCIE UKŁADU CZĘŚCIOWEGO — PRÓG GŁOSOWANIA (art. 186)
+- Układ częściowy poza PZU i PPU jest niedopuszczalny (182 ust. 1) — w sanacji tylko ścieżka z art. 192.
+- Kryteria nie mogą być dobrane pod pominięcie przeciwnika (180 ust. 3) — dokumentuj ekonomiczne uzasadnienie każdego kryterium.
+- PPU: jedna szansa na zmianę kryteriów; druga negatywna ocena = umorzenie (182 ust. 5).
+- Nowe zabezpieczenia dla objętych mogą upaść przy upadłości w roku (183 ust. 2) — informuj finansujących.
+- Związani są tylko wierzyciele ze spisu / z tytułem / dopuszczeni (187) — inaczej niż w zwykłym układzie (art. 166 ust. 1).
+- Wierzyciel nieobjęty ma ograniczone zastrzeżenia (185 ust. 2) i zażalenie (188) — tylko kryteria i art. 183 ust. 1.
+- Nie stosuj uchylonych art. 181 i 186 (dawne reguły zabezpieczeń i większości).
 
-```
-⭐⭐⭐ ART. 186 — układ częściowy ZOSTAJE PRZYJĘTY, JEŻELI większość
-  wierzycieli, KTÓRZY ODDALI WAŻNY GŁOS, mających ŁĄCZNIE 2/3 SUMY
-  wierzytelności PRZYSŁUGUJĄCEJ wierzycielom OBJĘTYM układem
-  częściowym I UPRAWNIONYM do głosowania, głosowała ZA przyjęciem
-  (⭐⭐⭐ PRÓG WYŻSZY i BARDZIEJ RESTRYKCYJNY niż przy układzie zwykłym
-  z art. 119 PrRestr — TAM próg kapitałowy to również 2/3, ALE liczony
-  od sumy wierzytelności GŁOSUJĄCYCH, podczas gdy przy układzie
-  częściowym doktryna — patrz `adamusrafal.pl/glosowanie-grupami` —
-  wskazuje na ODMIENNĄ, bardziej restrykcyjną konstrukcję: przepisy
-  ogólne o większości układowej NIE CHRONIĄ interesów wierzycieli
-  PASYWNYCH nawet gdyby ci byli w większości — próg dla układu
-  częściowego jest z tego powodu "ZNACZNIE BARDZIEJ RESTRYKCYJNY";
-  ⚠️ [NIEWERYFIKOWANE RZĄD 1] — dokładna różnica konstrukcyjna między
-  art. 119 a art. 186 wymaga bezpośredniego potwierdzenia brzmienia w
-  ISAP przed powołaniem w piśmie, ta interpretacja oparta na komentarzu
-  doktrynalnym, nie na literalnym porównaniu przepisów w tej sesji)
+## POWIĄZANIA
 
-⭐⭐ PROCEDURA: WYŁĄCZNIE dłużnik może złożyć wniosek o zatwierdzenie
-  układu częściowego do sądu — wierzyciele (w tym ci objęci układem)
-  NIE MAJĄ tego uprawnienia (⭐ różnica vs układ zwykły, gdzie art. 155
-  §2 PrRestr dopuszcza radę wierzycieli/nadzorcę/zarządcę/wierzycieli
-  30%+ jako wnioskodawców propozycji — TU inicjatywa PROCESOWA
-  zatwierdzenia należy wyłącznie do dłużnika, choć ⚠️ [NIEWERYFIKOWANE
-  RZĄD 1, źródło wtórne branżowe] co do wyłączności tego uprawnienia)
-```
+- Grupy (art. 161), układ, zatwierdzenie (art. 164–166) → `mod-PrRestr-dzial-VI-uklad`
+- Większości (art. 119), dopuszczenie (art. 107 ust. 3) → `mod-PrRestr-dzial-IV-uczestnicy-wierzyciele`
+- PZU: karta (art. 213), zastrzeżenia (art. 216) → `mod-PrRestr-pzu`; PPU → `mod-PrRestr-ppu-pu`
+- Kolejne postępowania i układ częściowy w sanacji (art. 191–192) → `mod-PrRestr-procedura-zakonczenie`
+- Oddalenie wniosku (art. 13 PrUp), bezskuteczność w upadłości → `mod-PrUpad-wniosek-ogloszenie`, `mod-PrUpad-skutki-masa-bezskutecznosc`
 
----
+## WYNIK
 
-## 7. ZAKRES PODMIOTOWY I ZAŻALENIE (art. 187-188)
-
-```
-⭐⭐⭐ ART. 187 §1 — układ częściowy OBEJMUJE wierzycieli, KTÓRZY:
-  (a) SPEŁNIAJĄ kryteria wyodrębnienia (art. 180 §2) ORAZ
-  (b) ZOSTALI UMIESZCZENI w spisie wierzytelności LUB stawili się na
-      zgromadzeniu wierzycieli, PRZEDKŁADAJĄC sędziemu-komisarzowi
-      tytuł egzekucyjny, LUB zostali dopuszczeni do udziału w
-      zgromadzeniu na podstawie art. 107 ust. 3
-  ⭐⭐ PRZEPISU ART. 166 UST. 1 (moc wiążąca układu ZWYKŁEGO wobec
-  wierzycieli NIEUMIESZCZONYCH w spisie, patrz
-  `mod-PrRestr-dzial-VI-uklad.md` pkt 5) NIE STOSUJE SIĘ do układu
-  częściowego (⭐⭐⭐ istotna różnica strukturalna — przy układzie
-  ZWYKŁYM wierzyciel jest związany układem Z MOCY USTAWY nawet jeśli
-  pominięty w spisie przez błąd; przy układzie CZĘŚCIOWYM ta ochrona
-  NIE DZIAŁA — formalne umieszczenie w spisie LUB czynny udział w
-  zgromadzeniu jest WARUNKIEM związania układem)
-  §2 — w POSTANOWIENIU o zatwierdzeniu układu SĄD WSKAZUJE wierzycieli
-  objętych układem częściowym (⭐ imienna lista w orzeczeniu — inaczej
-  niż przy układzie zwykłym, gdzie krąg wynika z ustawy)
-
-⭐⭐⭐ ART. 188 — na postanowienie o zatwierdzeniu układu częściowego
-  ZAŻALENIE PRZYSŁUGUJE RÓWNIEŻ wierzycielowi NIEOBJĘTEMU układem
-  częściowym (⭐⭐⭐ rozszerzenie legitymacji poza standardowy krąg
-  uczestników), PRZY CZYM taki wierzyciel MOŻE WNOSIĆ WYŁĄCZNIE zarzuty
-  NARUSZENIA ART. 180 (kryteria wyodrębnienia — w tym zakaz manipulacji
-  z §3) LUB ART. 183 UST. 1 (zakaz pokrzywdzenia wierzycieli
-  nieobjętych) (⭐⭐⭐ OGRANICZONY zakres kognicji — wierzyciel pominięty
-  NIE MOŻE kwestionować np. warunków samego układu wobec wierzycieli
-  objętych, TYLKO to, czy SAM ZOSTAŁ zasadnie wyłączony i czy układ GO
-  NIE POKRZYWDZIŁ)
-```
-
----
-
-## 8. ROZGRANICZENIE
-
-| Temat | Gdzie |
-|---|---|
-| Układ ZWYKŁY (obejmujący wszystkie wierzytelności sprzed otwarcia postępowania z mocy prawa) | `mod-PrRestr-dzial-VI-uklad.md` — INNY reżim, TAM art. 166 ust. 1 wiąże wierzycieli nawet pominiętych w spisie, TU (art. 187) — NIE |
-| Zgromadzenie wierzycieli w celu głosowania (art. 107 ust. 3 — dopuszczenie do udziału) | `mod-PrRestr-dzial-IV-uczestnicy-wierzyciele.md` |
-| Pomoc publiczna w propozycjach układu częściowego | `mod-PrRestr-dzial-V-pomoc-publiczna.md` — jeśli propozycje przewidują wsparcie państwowe, stosuje się reżim Działu V niezależnie od tego, czy układ jest zwykły czy częściowy |
-
-## ŁĄCZ Z
-
-| Sytuacja | Skill / Moduł |
-|---|---|
-| Zażalenie wierzyciela nieobjętego układem częściowym (art. 188) | `pisma-procesowe-v3` |
-| Ocena, czy kryteria wyodrębnienia wierzycieli są "obiektywne, jednoznaczne, uzasadnione ekonomicznie" w konkretnej sprawie | `analizator-dowodow-v3` |
-
----
-
-## ⚠️ POZOSTAJE DO POGŁĘBIENIA (jawnie oznaczone, poza zakresem tej naprawy)
-- Dokładna treść art. 182 (postępowanie o zatwierdzenie — elementy
-  wniosku, terminy) i art. 184 (karta do głosowania przy samodzielnym
-  zbieraniu głosów).
-- Pełna treść art. 185 (zastrzeżenia wierzyciela nieobjętego) — tryb i
-  termin wnoszenia, skutek procesowy.
-- Dokładny warunek czasowy alternatywny w art. 183 §2 (poza terminem
-  rocznym) — źródło sygnalizuje dalszą treść nieobjętą tą sesją.
-- Bezpośrednie potwierdzenie w ISAP różnicy konstrukcyjnej progu
-  głosowania art. 119 vs art. 186 (obecnie oparte na komentarzu
-  doktrynalnym wtórnym, nie na porównaniu literalnego brzmienia).
-- Potwierdzenie wyłączności dłużnika jako wnioskodawcy zatwierdzenia
-  (źródło branżowe, nie ISAP).
-
-**Bilans F-87 po tym module:** wszystkie 3 pierwotne priorytety (Dział
-III, IV/V, VI/VII) opracowane numerami artykułów. Pozostałe segmenty
-PrRestr poza pierwotnym zakresem F-87 — Dział VIII (przepisy ogólne o
-postępowaniu, 189-209), Tytuł III (postępowanie międzynarodowe,
-338-348), Tytuł IV (odrębne postępowania restrukturyzacyjne, dalsze
-artykuły) — NIE były nigdy częścią zdefiniowanego zakresu F-87 (patrz
-`mod-PrUpad-upadlosc-restrukturyzacja.md` — mapa tych trybów bez
-numerów artykułów, odrębna, wcześniejsza luka). Rekomendacja: przy
-następnym audycie rozważyć otwarcie NOWEJ flagi dla tych segmentów
-zamiast dalszego rozszerzania F-87, ponieważ pierwotny zakres F-87 (wg
-raportu zewnętrznego, sesja 2026-08-14e) jest już w całości zamknięty.
+Wybór trybu (182 ust. 1) → katalog zobowiązań kluczowych i kryteria z uzasadnieniem (180) → kontrola wpływu na nieobjętych i ryzyka zabezpieczeń (183) → karta z oznaczeniem częściowości (184) → kontrola kryteriów (182 ust. 2–5) → głosowanie (art. 119) → postanowienie z listą objętych (187) → zażalenia, także nieobjętych (188).
