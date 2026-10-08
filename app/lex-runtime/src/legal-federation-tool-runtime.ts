@@ -1,3 +1,4 @@
+import { personalDataIn } from "./tool-broker-policy.js";
 import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
 import {
   Client
@@ -553,6 +554,13 @@ function guardOutboundPayload(
   ) {
     throw new Error(
       "FEDERATED_CASE_DATA_FORBIDDEN"
+    );
+  }
+  // Second line: a personal identifier the recognizer missed, in clear text.
+  const personal = personalDataIn(value);
+  if (personal.length && process.env.LEX_TOOL_BROKER_MODE !== "audit") {
+    throw new Error(
+      `FEDERATED_PERSONAL_DATA_FORBIDDEN:${personal.join(",")}`
     );
   }
   return value;
@@ -1166,7 +1174,11 @@ export class LegalFederationToolRuntime {
             : String(
                 error
               );
+        // Case data or a personal identifier in the arguments: a policy refusal
+        // the model must correct, never a source outage.
+        const dataForbidden = /(?:CASE|PERSONAL)_DATA_FORBIDDEN/.test(message);
         const policyBlocked =
+          dataForbidden ||
           call.name ===
             ASSESS_SOURCE_TOOL ||
           (
@@ -1233,7 +1245,9 @@ export class LegalFederationToolRuntime {
               error:
                 message,
               instruction:
-                policyBlocked
+                dataForbidden
+                  ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
+                  : policyBlocked
                   ? "Source assessment was rejected by Lex source policy. Correct the URL/cross-check evidence; do not treat this as a source outage."
                   : "Do not infer absence of law from this failure. Use another verified source path or report the source as temporarily unavailable."
             })
@@ -1248,6 +1262,13 @@ export class LegalFederationToolRuntime {
     call:
       NormalizedToolCall
   ): Promise<string> {
+    // Before any connector is touched: a personal identifier never goes out.
+    if (call.name !== LIST_TOOL && call.name !== COVERAGE_TOOL) {
+      const personal = personalDataIn(call.input);
+      if (personal.length && process.env.LEX_TOOL_BROKER_MODE !== "audit") {
+        throw new Error(`FEDERATED_PERSONAL_DATA_FORBIDDEN:${personal.join(",")}`);
+      }
+    }
     if (
       call.name ===
         LIST_TOOL

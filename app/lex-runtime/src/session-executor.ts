@@ -37,6 +37,7 @@ import {
   type AuditEvent
 } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { discloseRegistryIdentifiers } from "./tool-broker-policy.js";
 import {
   LexExecutionEngine,
   latestUserTurn,
@@ -1170,6 +1171,11 @@ function transferExecutionEvents(
   }
 }
 
+function positiveEnvInt(name: string, fallback: number): number {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 const DRAFT_PII_TOKEN =
   /\[PII:([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
 // An incomplete token at the end of the stream is held back until complete.
@@ -2276,6 +2282,14 @@ export class SafeSessionExecutor implements SessionExecutor {
       (word) => roles.has(word)
     ));
 
+    const toolBudget = {
+      calls: 0,
+      skillReads: 0,
+      callLimit: positiveEnvInt("LEX_TOOL_CALL_BUDGET", 60),
+      skillReadLimit: positiveEnvInt("LEX_SKILL_READ_BUDGET", 40),
+      // LEX_TOOL_BROKER_MODE=audit: record the decisions, block nothing (rollout).
+      auditOnly: process.env.LEX_TOOL_BROKER_MODE === "audit"
+    };
     const draftCallbacks =
       request.onDraft
         ? createDraftCallbacks(
@@ -2447,7 +2461,41 @@ export class SafeSessionExecutor implements SessionExecutor {
                 }
               : {})
           }),
-      runTools: async (calls) => {
+      runTools: async (requestedCalls) => {
+        // Per-turn budgets: a looping model stops here, not at the bill.
+        const overBudget = new Set<string>();
+        for (const call of requestedCalls) {
+          const corpus = corpusTools.handles(call.name);
+          const used = corpus ? ++toolBudget.skillReads : ++toolBudget.calls;
+          if (used > (corpus ? toolBudget.skillReadLimit : toolBudget.callLimit)) overBudget.add(call.id);
+        }
+        if (overBudget.size) {
+          audit.record("gate", "TOOL_CALL_BUDGET", toolBudget.auditOnly ? "DEGRADED" : "BLOCKED", {
+            calls: toolBudget.calls,
+            skillReads: toolBudget.skillReads,
+            callLimit: toolBudget.callLimit,
+            skillReadLimit: toolBudget.skillReadLimit,
+            enforced: !toolBudget.auditOnly
+          });
+          if (toolBudget.auditOnly) overBudget.clear();
+        }
+        const calls = requestedCalls
+          .filter((call) => !overBudget.has(call.id))
+          .map((call) => {
+            if (!federationTools?.handles(call.name)) return call;
+            // A business identifier of the case to the public register that answers for it.
+            const shared = discloseRegistryIdentifiers(call, (token) =>
+              chatPrivacyVault.hasToken(token) ? chatPrivacyVault.restore(token, null).text : null
+            );
+            if (shared.disclosed.length) {
+              audit.record("gate", "REGISTRY_IDENTIFIER_DISCLOSED", "OK", {
+                tool: call.name,
+                source: String(call.input.source ?? call.input.sourceId ?? ""),
+                kinds: [...new Set(shared.disclosed)]
+              });
+            }
+            return shared.call;
+          });
         for (const call of calls) {
           if (corpusTools.handles(call.name)) {
             const target = [call.input.skill, call.input.path].filter((part) => typeof part === "string").join("/");
@@ -2572,14 +2620,25 @@ export class SafeSessionExecutor implements SessionExecutor {
           ])
         );
 
-        return calls.map((call) =>
-          byId.get(call.id) ?? {
-            tool_use_id: call.id,
-            content: JSON.stringify({
-              status: "BLOCKED",
-              error: "UNKNOWN_RUNTIME_TOOL"
-            })
-          }
+        return requestedCalls.map((call) =>
+          byId.get(call.id) ??
+          (overBudget.has(call.id)
+            ? {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                  status: "POLICY_BLOCKED",
+                  error: "TOOL_CALL_BUDGET_EXCEEDED",
+                  instruction:
+                    "Limit wywołań narzędzi w tej turze został wyczerpany. Odpowiedz na podstawie tego, co już masz, i wskaż, czego nie sprawdzono."
+                })
+              }
+            : {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                  status: "BLOCKED",
+                  error: "UNKNOWN_RUNTIME_TOOL"
+                })
+              })
         );
       }
     });

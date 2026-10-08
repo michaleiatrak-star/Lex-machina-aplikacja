@@ -554,3 +554,19 @@ describe(
     );
   }
 );
+
+describe("personal data never leaves for an external source", () => {
+  it("refuses a PESEL in the arguments as a policy block the model must correct", async () => {
+    const runtime = new LegalFederationToolRuntime();
+    const events: Parameters<LegalFederationToolRuntime["runTools"]>[1] = [];
+    const [result] = await runtime.runTools(
+      [{ id: "s-1", name: "search_federated_legal_sources", input: { source: "saos", query: "pozwany 44051401359 zadośćuczynienie" } }],
+      events
+    );
+    const payload = JSON.parse(result!.content) as { status: string; error: string; instruction: string };
+    expect(payload.status).toBe("POLICY_BLOCKED");
+    expect(payload.error).toBe("FEDERATED_PERSONAL_DATA_FORBIDDEN:PESEL");
+    expect(payload.instruction).toContain("Zadaj zapytanie ogólne");
+    expect(events.at(-1)).toMatchObject({ decision: "BLOCK", outcome: "POLICY_BLOCKED" });
+  });
+});
