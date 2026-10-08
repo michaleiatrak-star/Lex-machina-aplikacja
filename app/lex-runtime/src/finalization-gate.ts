@@ -236,14 +236,44 @@ function withoutAttachedMarkers(reference: DetectedLegalReference): string {
     .reduce((text, span) => text.slice(0, span.start) + text.slice(span.end), line);
 }
 
+/**
+ * "removed": the text is a document whose verification markers were stripped
+ * before rendering (STRIP-VER-GATE). Each reference is then judged by the
+ * ledger alone: VERIFIED passes, anything else needs the user's decision.
+ * The markers themselves were checked on the marked text before stripping.
+ */
+export type FinalizationMarkers = "in-text" | "removed";
+
+// "art. 46" mentioned, "art. 46 ust. 2 ustawy o ..." verified: one such record covers it.
+function soleCoveringVerifiedRecord(
+  ledger: VerificationLedger,
+  reference: DetectedLegalReference
+): VerificationRecord | undefined {
+  if (reference.kind !== "statute") return undefined;
+  const prefix = comparableClaim(reference.claim) + " ";
+  const covering = ledger
+    .all()
+    .filter((record) => record.status === "VERIFIED" && comparableClaim(record.claim).startsWith(prefix));
+  return new Set(covering.map((record) => comparableClaim(record.claim))).size === 1 ? covering.at(-1) : undefined;
+}
+
 export class FinalizationGate {
-  evaluate(text: string, ledger: VerificationLedger): FinalizationReport {
+  evaluate(text: string, ledger: VerificationLedger, options: { markers?: FinalizationMarkers | undefined } = {}): FinalizationReport {
     const references = detectLegalReferences(text);
     const findings: FinalizationFinding[] = [];
     const caseQuoteFindings: CaseQuoteFinding[] = [];
     const caseSupportFindings: CaseSupportFinding[] = [];
 
     for (const reference of references) {
+      if (options.markers === "removed") {
+        const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference);
+        findings.push(
+          record?.status === "VERIFIED"
+            ? { reference, status: "VERIFIED", record }
+            : { reference, status: "UNVERIFIED_MARKED", ...(record ? { record } : {}) }
+        );
+        continue;
+      }
       const lineMarkers:
         string[] =
           reference.lineText.match(

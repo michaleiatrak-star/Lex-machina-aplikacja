@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { AuditTrail, type AuditCompletenessReport } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
 import type { FinalizationReport } from "./finalization-gate.js";
+import { containsVerificationMarker } from "./verification-markers.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -100,7 +101,14 @@ export class ExportGate {
 
   evaluate(args: {
     documentContent: string | Uint8Array;
+    /** Text of the file itself: it must carry no verification marker. */
     documentText: string;
+    /**
+     * The document's text before its markers were stripped (STRIP-VER-GATE):
+     * G8 checks each reference against its marker there. Without it the file
+     * text is judged by the ledger alone ("removed").
+     */
+    markedText?: string;
     documentKind: ExportDocumentKind;
     documentSkill: string;
     ledger: VerificationLedger;
@@ -157,11 +165,18 @@ export class ExportGate {
       }
     );
 
+    if (containsVerificationMarker(args.documentText)) {
+      reasons.push("VERIFICATION_MARKER_IN_DOCUMENT");
+      args.audit.record("gate", "G10_EXPORT_GATE", "BLOCKED", { reason: "VERIFICATION_MARKER_IN_DOCUMENT" });
+      return { gate: "G10_EXPORT_GATE", result: "BLOCKED", reasons, verificationLog };
+    }
+
     const finalization = this.finalizer.finalize({
-      text: args.documentText,
+      text: args.markedText ?? args.documentText,
       ledger: args.ledger,
       audit: args.audit,
-      closeSession: false
+      closeSession: false,
+      markers: args.markedText === undefined ? "removed" : "in-text"
     });
 
     if (finalization.result !== "PASS") {

@@ -318,6 +318,14 @@ describe("document authoring lifecycle", () => {
                       "[LMPII:D01:PERSON:0001]"
                   }
                 ]
+              }, {
+                // A verification marker left in the AST never reaches the file.
+                type:
+                  "paragraph",
+                content: [{
+                  type: "text",
+                  text: "Strony ustalają, co następuje ✅ [VER: https://eli.gov.pl/, 2026-09-16]."
+                }]
               }]
             }
           });
@@ -328,6 +336,8 @@ describe("document authoring lifecycle", () => {
       ).toBe(
         "PROTECTED"
       );
+      expect(tokenized.text).toContain("Strony ustalają, co następuje.");
+      expect(tokenized.text).not.toContain("[VER");
       expect(
         tokenized.text
       ).toContain(
@@ -405,6 +415,7 @@ describe("document authoring lifecycle", () => {
       ).not.toContain(
         "LMPII"
       );
+      expect(final.text).not.toContain("[VER");
       expect(
         final
           .deanonymizationBasis

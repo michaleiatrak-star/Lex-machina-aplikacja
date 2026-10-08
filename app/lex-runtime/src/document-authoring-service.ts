@@ -44,6 +44,7 @@ import {
 import {
   ExportGate
 } from "./export-gate.js";
+import { stripAstVerificationMarkers } from "./verification-markers.js";
 
 export type TokenizedDocumentResult = {
   artifact:
@@ -221,12 +222,17 @@ export class LocalDocumentAuthoringService {
         args.ast,
         aliases.entries
       );
+    // STRIP-VER-GATE: the file carries the provisions, not their markers.
+    const documentAst =
+      stripAstVerificationMarkers(
+        validated.ast
+      ).ast;
 
     const rendered =
       await this.renderer
         .render(
           args.format,
-          validated.ast
+          documentAst
         );
     try {
       const validation =
@@ -237,7 +243,7 @@ export class LocalDocumentAuthoringService {
           );
       const astText =
         legalDocumentPlainText(
-          validated.ast
+          documentAst
         );
       if (
         validation.text
@@ -417,11 +423,20 @@ export class LocalDocumentAuthoringService {
       );
     }
 
+    // G8 reads the markers; the court gets the document without them.
+    const markedText =
+      legalDocumentPlainText(
+        validated.ast
+      );
+    const documentAst =
+      stripAstVerificationMarkers(
+        validated.ast
+      ).ast;
     const rendered =
       await this.renderer
         .render(
           args.format,
-          validated.ast
+          documentAst
         );
     try {
       const validation =
@@ -432,7 +447,7 @@ export class LocalDocumentAuthoringService {
           );
       const astText =
         legalDocumentPlainText(
-          validated.ast
+          documentAst
         );
       if (
         validation.aliases !==
@@ -477,6 +492,7 @@ export class LocalDocumentAuthoringService {
               rendered.data,
             documentText:
               validation.text,
+            markedText,
             documentKind:
               args.format,
             documentSkill:

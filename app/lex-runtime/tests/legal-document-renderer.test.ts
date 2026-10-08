@@ -149,3 +149,28 @@ describe("person case in generated documents", () => {
     });
   }
 });
+
+describe("drafts rendered with verification markers", () => {
+  for (const format of ["docx", "odt"] as const) {
+    it(`loses the markers when restored (${format})`, async () => {
+      const renderer = new LocalLegalDocumentRenderer({ timeoutMs: 10_000 });
+      // A tokenized draft from before the runtime stripped markers at render.
+      const legacy: LegalDocumentAst = {
+        ...ast,
+        blocks: [{
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Na podstawie art. 5 KC ✅ [VER: https://eli.gov.pl/, 2026-09-15] wzywam " },
+            { type: "pii_ref", alias: "[LMPII:D01:PERSON:0001]" },
+            { type: "text", text: " ⚠️ [NIEWERYFIKOWANE]." }
+          ]
+        }]
+      };
+      const rendered = await renderer.render(format, legacy);
+      const final = await renderer.deanonymize(format, rendered.data, new Map([["[LMPII:D01:PERSON:0001]", "Jan Kowalski"]]));
+      const checked = await renderer.validate(format, final.data);
+      expect(checked.text).not.toMatch(/\[(?:VER|NIEWERYFIKOWANE)/u);
+      expect(checked.text.replace(/\s+/g, " ")).toContain("Na podstawie art. 5 KC wzywam");
+    });
+  }
+});

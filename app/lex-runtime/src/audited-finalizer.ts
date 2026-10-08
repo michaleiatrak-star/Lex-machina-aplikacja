@@ -1,6 +1,7 @@
 import { AuditTrail } from "./audit-trail.js";
 import {
   FinalizationGate,
+  type FinalizationMarkers,
   type FinalizationReport
 } from "./finalization-gate.js";
 import { VerificationLedger } from "./verification-ledger.js";
@@ -13,6 +14,7 @@ export class AuditedFinalizer {
     ledger: VerificationLedger;
     audit: AuditTrail;
     closeSession?: boolean;
+    markers?: FinalizationMarkers;
   }): FinalizationReport {
     for (const record of args.ledger.all()) {
       args.audit.record(
@@ -42,7 +44,7 @@ export class AuditedFinalizer {
       );
     }
 
-    const report = this.gate.evaluate(args.text, args.ledger);
+    const report = this.gate.evaluate(args.text, args.ledger, { markers: args.markers });
     args.audit.record(
       "gate",
       report.gate,
