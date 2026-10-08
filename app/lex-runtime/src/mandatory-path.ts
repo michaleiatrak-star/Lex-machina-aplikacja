@@ -159,6 +159,9 @@ export type TurnFacts = {
   profile: PathProfile;
   // Resources the runtime put into the model's context this turn.
   contextResources: Set<string>;
+  // Resources whose job the runtime did itself instead of giving them to the
+  // model (mechanical routing): resource -> what was done.
+  executedByApp?: Map<string, string>;
   query: string;
   answer: string;
   legal: boolean;
@@ -179,6 +182,25 @@ export type TurnFacts = {
   // KROK 7: kto dał disclaimer na końcu odpowiedzi (aplikacja dokłada brakujący).
   disclaimerBy?: "MODEL" | "APLIKACJA";
 };
+
+// UP-5 (foreign jurisdiction): another state's law or an international treaty
+// named in the question. Countable, not a judgement; it only adds the
+// international gates (MG-1, MG-2) - nothing Polish is skipped.
+const FOREIGN_STATES =
+  "niemieck|francusk|angielsk|brytyjsk|amerykańsk|ukraińsk|czesk|słowack|litewsk|niderlandzk|holendersk|belgijsk|austriack|szwajcarsk|włosk|hiszpańsk|portugalsk|irlandzk|szwedzk|norwesk|duńsk|fińsk|białorusk|rosyjsk|węgiersk|rumuńsk|bułgarsk|chorwack|greck|turecki|chińsk|japońsk|kanadyjsk|izraelsk|luksembursk|maltańsk|cypryjsk|estońsk|łotewsk|słoweńsk|szkock";
+const FOREIGN_JURISDICTION = new RegExp(
+  [
+    `\\b(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*|jurysdykcj\\p{L}*)\\s+(?:${FOREIGN_STATES})\\p{L}*`,
+    `\\b(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
+    "\\b(?:prawo obce|prawa obcego|prawem obcym|prawo właściwe|prawa właściwego|jurysdykcj\\p{L}* zagraniczn\\p{L}*|sąd\\p{L}* zagraniczn\\p{L}*)",
+    "\\bumow\\p{L}* międzynarodow\\p{L}*|\\btraktat\\p{L}*|\\bkonwencj\\p{L}* (?:wiedeńsk|hask|nowojorsk|genewsk|montrealsk|warszawsk|CMR|o prawach)\\p{L}*|\\bratyfikac\\p{L}*|\\bRzym I{1,2}\\b|\\bBruksela I\\p{L}*"
+  ].join("|"),
+  "iu"
+);
+
+export function foreignJurisdiction(query: string): boolean {
+  return FOREIGN_JURISDICTION.test(query);
+}
 
 const DATE = /\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b|\b\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+\d{4}\b/giu;
 const ARTICLE = /\bart\.?\s*\d+/i;
@@ -237,9 +259,11 @@ export function preloadForTurn(model: MandatoryPathModel, facts: PreFacts): stri
   return [...new Set([...core, ...full, ...triggered])].filter((resource) => resource !== CRIMINAL_QUALIFIER);
 }
 
-function readEvidence(facts: Pick<TurnFacts, "events" | "contextResources">, resource: string): { by: "APLIKACJA" | "MODEL"; detail: string } | null {
+function readEvidence(facts: Pick<TurnFacts, "events" | "contextResources" | "executedByApp">, resource: string): { by: "APLIKACJA" | "MODEL"; detail: string } | null {
   const target = canonicalPath(resource);
   if (facts.contextResources.has(target)) return { by: "APLIKACJA", detail: "wczytany przez aplikację do kontekstu modelu" };
+  const executed = facts.executedByApp?.get(target);
+  if (executed) return { by: "APLIKACJA", detail: executed };
   for (const event of facts.events) {
     if ((event.type !== "resource_read" && event.type !== "skill_read") || event.status !== "OK") continue;
     const read = canonicalPath(event.target);
@@ -623,6 +647,25 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
       ? `bez zdarzenia w przebiegu: ${unbacked.map((claim) => `„${claim.text.trim()}”`).join("; ")}`
       : "każdy opis odpytania źródła ma zdarzenie w przebiegu"
   });
+
+  // ✅ [VER] the model wrote without a verification record: removed by the
+  // application, shown here (a fabricated verification, not a mere slip).
+  const unbackedMarkers = facts.events
+    .filter((event) => event.target === "G39I_AUTO_POST_DRAFT_VERIFICATION")
+    .reduce((sum, event) => sum + (Number(event.detail?.removedUnbackedMarkers) || 0), 0);
+  if (legal) {
+    steps.push({
+      layer: "HARD_GATE",
+      id: "VER-BEZ-POKRYCIA",
+      label: "Znaczniki ✅ [VER] tylko z rejestru weryfikacji",
+      requirement: "CORE",
+      status: unbackedMarkers ? "MISSING" : "MET",
+      by: "MODEL",
+      evidence: unbackedMarkers
+        ? `VER BEZ POKRYCIA: ${unbackedMarkers} znacznik(ów) wpisanych przez model bez wywołania narzędzia — usunięte przez aplikację`
+        : "każdy znacznik ✅ [VER] ma zapis w rejestrze weryfikacji"
+    });
+  }
 
   const missing = steps.filter((step) => step.status === "MISSING").map((step) => step.id);
   return {

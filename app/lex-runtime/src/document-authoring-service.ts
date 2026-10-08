@@ -42,8 +42,89 @@ import {
   validateLocalHybridDocument
 } from "./document-generation-validation.js";
 import {
-  ExportGate
+  ExportGate,
+  type ExportGateReport
 } from "./export-gate.js";
+import { FinalizationGate, type FinalizationReport } from "./finalization-gate.js";
+import { stripAstVerificationMarkers } from "./verification-markers.js";
+import { documentCompletenessWarnings } from "./document-completeness.js";
+
+export type BlockedReference = {
+  claim: string;
+  status: string;
+  line: number;
+};
+
+/**
+ * Export refused: the gate's reasons and the references behind them, so the
+ * user sees which provisions and judgments block the file. `draftAvailable`:
+ * only unverified (not blocked) references - a draft naming them may be saved.
+ */
+export class ExportGateBlockedError extends Error {
+  constructor(
+    code: string,
+    readonly reasons: string[],
+    readonly references: BlockedReference[],
+    readonly draftAvailable: boolean
+  ) {
+    super(`${code}:${reasons.join(",")}`);
+    this.name = "ExportGateBlockedError";
+  }
+}
+
+function blockedReferences(finalization: FinalizationReport | undefined): BlockedReference[] {
+  if (!finalization) return [];
+  return [
+    ...finalization.findings
+      .filter((finding) => finding.status !== "VERIFIED")
+      .map((finding) => ({ claim: finding.reference.claim, status: finding.status, line: finding.reference.line })),
+    ...finalization.caseQuoteFindings
+      .filter((finding) => finding.status !== "VERIFIED")
+      .map((finding) => ({ claim: finding.lineText.trim().slice(0, 160), status: finding.status, line: finding.line })),
+    ...finalization.caseSupportFindings
+      .filter((finding) => finding.status !== "SUPPORTED")
+      .map((finding) => ({ claim: finding.lineText.trim().slice(0, 160), status: finding.status, line: finding.line }))
+  ];
+}
+
+function exportBlocked(code: string, report: ExportGateReport): ExportGateBlockedError {
+  return new ExportGateBlockedError(
+    code,
+    report.reasons,
+    blockedReferences(report.finalization),
+    report.reasons.length === 1 && report.reasons[0] === "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
+  );
+}
+
+/**
+ * The user's choice "save it as a draft" (W3-WERYFIKACJA, wybór b): the
+ * references G8 finds unverified, named at the top of the file. Null when
+ * nothing is unverified or something blocks outright.
+ */
+function unverifiedDraft(
+  markedText: string,
+  context: DocumentGenerationValidationContext
+): { claims: string[]; ast: (ast: LegalDocumentAst) => LegalDocumentAst } | null {
+  const report = new FinalizationGate().evaluate(markedText, rebuildGenerationExportState(context).ledger);
+  if (report.result !== "DEGRADED") return null;
+  const claims = [...new Set(report.findings.filter((finding) => finding.status === "UNVERIFIED_MARKED").map((finding) => finding.reference.claim))];
+  return {
+    claims,
+    ast: (ast) => ({
+      ...ast,
+      blocks: [
+        {
+          type: "paragraph",
+          content: [{
+            type: "text",
+            text: `PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI. Powołania niezweryfikowane w źródle: ${claims.join("; ")}.`
+          }]
+        },
+        ...ast.blocks
+      ]
+    })
+  };
+}
 
 export type TokenizedDocumentResult = {
   artifact:
@@ -62,6 +143,8 @@ export type TokenizedDocumentResult = {
     string;
   deanonymizationKeyBound:
     true;
+  // Not reasons to refuse: what the user should check (fields, title, signature).
+  warnings: string[];
 };
 
 export type FinalDocumentResult = {
@@ -86,6 +169,7 @@ export type ReadyDocumentResult = {
     LegalDocumentFormat;
   sha256: string;
   text: string;
+  warnings: string[];
 };
 
 export class LocalDocumentAuthoringService {
@@ -107,6 +191,7 @@ export class LocalDocumentAuthoringService {
       Pick<
         DocumentGenerationStateStore,
         | "saveTokenized"
+        | "readState"
         | "loadAliases"
         | "loadValidationContext"
         | "markFinalized"
@@ -198,6 +283,8 @@ export class LocalDocumentAuthoringService {
       number;
     // Pipeline status of a pleading (draft files stay tokenized for good).
     processDocumentStatus?: "DRAFT" | "FINAL";
+    // The user saves a draft with its unverified references named.
+    acceptUnverified?: boolean;
     validationContext:
       DocumentGenerationValidationContext;
     filename?: string;
@@ -221,12 +308,22 @@ export class LocalDocumentAuthoringService {
         args.ast,
         aliases.entries
       );
+    // STRIP-VER-GATE: the file carries the provisions, not their markers.
+    const draft =
+      args.acceptUnverified
+        ? unverifiedDraft(legalDocumentPlainText(validated.ast), args.validationContext)
+        : null;
+    const stripped =
+      stripAstVerificationMarkers(
+        validated.ast
+      ).ast;
+    const documentAst = draft ? draft.ast(stripped) : stripped;
 
     const rendered =
       await this.renderer
         .render(
           args.format,
-          validated.ast
+          documentAst
         );
     try {
       const validation =
@@ -237,7 +334,7 @@ export class LocalDocumentAuthoringService {
           );
       const astText =
         legalDocumentPlainText(
-          validated.ast
+          documentAst
         );
       if (
         validation.text
@@ -354,6 +451,7 @@ export class LocalDocumentAuthoringService {
                 }
               : {}),
             ...(args.processDocumentStatus ? { processDocumentStatus: args.processDocumentStatus } : {}),
+            ...(draft ? { unverifiedAccepted: draft.claims } : {}),
             createdAt:
               new Date()
                 .toISOString()
@@ -378,7 +476,9 @@ export class LocalDocumentAuthoringService {
         text:
           rendered.text,
         deanonymizationKeyBound:
-          true
+          true,
+        warnings:
+          documentCompletenessWarnings(documentAst, rendered.text)
       };
     } finally {
       rendered.data.fill(0);
@@ -399,6 +499,8 @@ export class LocalDocumentAuthoringService {
     validationContext:
       DocumentGenerationValidationContext;
     filename?: string;
+    // The user saves a draft with its unverified references named.
+    acceptUnverified?: boolean;
   }): Promise<
     ReadyDocumentResult
   > {
@@ -417,11 +519,25 @@ export class LocalDocumentAuthoringService {
       );
     }
 
+    // G8 reads the markers; the court gets the document without them.
+    const markedText =
+      legalDocumentPlainText(
+        validated.ast
+      );
+    const draft =
+      args.acceptUnverified
+        ? unverifiedDraft(markedText, args.validationContext)
+        : null;
+    const stripped =
+      stripAstVerificationMarkers(
+        validated.ast
+      ).ast;
+    const documentAst = draft ? draft.ast(stripped) : stripped;
     const rendered =
       await this.renderer
         .render(
           args.format,
-          validated.ast
+          documentAst
         );
     try {
       const validation =
@@ -432,7 +548,7 @@ export class LocalDocumentAuthoringService {
           );
       const astText =
         legalDocumentPlainText(
-          validated.ast
+          documentAst
         );
       if (
         validation.aliases !==
@@ -477,6 +593,8 @@ export class LocalDocumentAuthoringService {
               rendered.data,
             documentText:
               validation.text,
+            markedText,
+            ...(draft ? { acceptUnverified: true } : {}),
             documentKind:
               args.format,
             documentSkill:
@@ -495,10 +613,9 @@ export class LocalDocumentAuthoringService {
         !exportReport
           .documentHash
       ) {
-        throw new Error(
-          "READY_DOCUMENT_EXPORT_GATE_BLOCKED:" +
-          exportReport.reasons
-            .join(",")
+        throw exportBlocked(
+          "READY_DOCUMENT_EXPORT_GATE_BLOCKED",
+          exportReport
         );
       }
 
@@ -550,7 +667,9 @@ export class LocalDocumentAuthoringService {
           args.format,
         sha256,
         text:
-          validation.text
+          validation.text,
+        warnings:
+          documentCompletenessWarnings(documentAst, validation.text)
       };
     } finally {
       rendered.data.fill(0);
@@ -858,9 +977,16 @@ export class LocalDocumentAuthoringService {
           rebuildGenerationExportState(
             validationContext
           );
+        // A draft saved with its unverified references named stays one.
+        const stored =
+          await this.states.readState(
+            args.target.caseId,
+            args.target.artifactId
+          );
         const exportReport =
           new ExportGate()
             .evaluate({
+              ...(stored?.unverifiedAccepted?.length ? { acceptUnverified: true } : {}),
               documentContent:
                 finalPackage
                   .data,
@@ -887,10 +1013,9 @@ export class LocalDocumentAuthoringService {
           !exportReport
             .documentHash
         ) {
-          throw new Error(
-            "FINAL_DOCUMENT_EXPORT_GATE_BLOCKED:" +
-            exportReport.reasons
-              .join(",")
+          throw exportBlocked(
+            "FINAL_DOCUMENT_EXPORT_GATE_BLOCKED",
+            exportReport
           );
         }
 

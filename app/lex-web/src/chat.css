@@ -125,6 +125,30 @@
   cursor: pointer;
 }
 
+.matter-thread-spinner {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-right: 0.4em;
+  vertical-align: -0.05em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: matter-thread-spin 0.8s linear infinite;
+}
+
+@keyframes matter-thread-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matter-thread-spinner { animation: none; border-right-color: currentColor; opacity: 0.6; }
+}
+
+.matter-thread:disabled:not(.thinking) {
+  opacity: 0.6;
+}
+
 .matter-thread:hover,
 .matter-thread.active {
   border-color: rgba(255, 255, 255, 0.14);

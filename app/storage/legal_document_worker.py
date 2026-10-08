@@ -330,12 +330,27 @@ def validate_odt(data):
     text = extract_odt_text(entries)
     return names, entries, text
 
+# Verification markers belong to the chat, not to a filed document
+# (STRIP-VER-GATE); drafts rendered before the runtime stripped them still
+# carry them. Same set as lex-runtime src/verification-markers.ts.
+VERIFICATION_MARKER_RE = re.compile(
+    r"[ \t]*(?:✅|🟢|🟡|🟠|🔴|🔗|🟨|📚|⚠️|⚠)?\uFE0F?\s*"
+    r"\[(?:VER(?:-FRAGMENT|-TREŚĆ)?|KALIBRACJA|BLOKADA|KOTWICA-TEKSTOWA|KOTWICA-URZĘDOWA|TREŚĆ|"
+    r"NIEWERYFIKOWANE|CASE-QUOTE|CASE-SUPPORT)(?::[^\]\r\n]*)?\]"
+)
+
+def strip_verification_markers(text):
+    stripped = VERIFICATION_MARKER_RE.sub("", text)
+    return re.sub(r"[ \t]+([.,;:)\]])", r"\1", stripped) if stripped != text else text
+
 def replace_text_nodes(root, tags, replacements):
     replaced = 0
     for node in root.iter():
+        if node.tag in tags and node.tail and VERIFICATION_MARKER_RE.search(node.tail):
+            node.tail = strip_verification_markers(node.tail)
         if node.tag not in tags or not node.text:
             continue
-        original = node.text
+        original = strip_verification_markers(node.text)
         def repl(match):
             nonlocal replaced
             alias = match.group(0)

@@ -118,8 +118,9 @@ import {
   ReauthorizationError,
   type DeanonymizationReauthorizationManager
 } from "../auth/reauthorization.js";
-import type {
-  LocalDocumentAuthoringService
+import {
+  ExportGateBlockedError,
+  type LocalDocumentAuthoringService
 } from "../document-authoring-service.js";
 import {
   DocumentAstSessionBlockedError,
@@ -968,6 +969,13 @@ function sendAuthError(
       : {})
   });
   return true;
+}
+
+/** The references behind a refused export, for the user (not only reason codes). */
+function exportBlockedDetails(error: unknown): Record<string, unknown> {
+  return error instanceof ExportGateBlockedError
+    ? { reasons: error.reasons, references: error.references, draftAvailable: error.draftAvailable }
+    : {};
 }
 
 function sendCaseAccessError(
@@ -7301,6 +7309,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   await options
                     .documentAuthoringService!
                     .createReady({
+                      ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
                       caseId,
                       createdByUserId:
                         context.user
@@ -7338,6 +7347,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               ready.format,
             sha256:
               ready.sha256,
+            warnings:
+              ready.warnings,
             aliasesUsed: [],
             readyForDownload:
               true,
@@ -7364,6 +7375,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   .documentAuthoringService!
                   .createTokenized({
                     ...(processDocumentStatus ? { processDocumentStatus } : {}),
+                    ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
                     caseId,
                     createdByUserId:
                       context.user
@@ -7417,6 +7429,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               .deanonymizationKeyBound,
           readyForDownload:
             false,
+          warnings:
+            tokenized.warnings,
           ...(templateProfile
             ? {
                 templateProfile
@@ -7438,6 +7452,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 Error
                 ? error.message
                 : "DOCUMENT_GENERATION_FAILED",
+            ...exportBlockedDetails(error),
             ...(error instanceof
               DocumentAstSessionBlockedError
               ? {
@@ -8036,7 +8051,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               error instanceof
                 Error
                 ? error.message
-                : "DEANONYMIZATION_FINALIZE_FAILED"
+                : "DEANONYMIZATION_FINALIZE_FAILED",
+            ...exportBlockedDetails(error)
           });
         }
       }
@@ -8907,6 +8923,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
       };
       request.onStep("PREPARE", "przygotowanie wiadomości");
+      // Document aliases in the live draft, from the same local vaults as the answer.
+      const documentService = options.documentService;
+      if (documentService?.deanonymize) {
+        request.restoreDocumentToken = (documentId, sourceToken) =>
+          documentService.deanonymize!(documentId, sourceToken);
+      }
       request.onDraft = (text) => {
         const entry =
           executionDrafts.get(

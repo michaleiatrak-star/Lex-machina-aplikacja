@@ -8,6 +8,7 @@ import type { VerificationLedger } from "../src/verification-ledger.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import {
   evaluateMandatoryPath,
+  foreignJurisdiction,
   loadMandatoryPathModel,
   pathProfile,
   preloadForTurn,
@@ -96,6 +97,38 @@ describe("mandatory path model from the corpus", () => {
       ...overrides
     };
   }
+
+  it("says the router was executed, not read, when the runtime routed mechanically", () => {
+    const contextResources = new Set(facts("Odpowiedź.").contextResources);
+    contextResources.delete("prawny-router-v3/SKILL.md");
+    const routed = evaluateMandatoryPath(
+      model,
+      facts("Odpowiedź.", {
+        contextResources,
+        executedByApp: new Map([["prawny-router-v3/SKILL.md", "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]])
+      })
+    ).steps.find((item) => item.id.startsWith("R-1"));
+    expect(routed).toMatchObject({ status: "MET", by: "APLIKACJA" });
+    expect(routed?.evidence).toContain("routing wykonany przez aplikację");
+    const unrouted = evaluateMandatoryPath(model, facts("Odpowiedź.", { contextResources })).steps.find((item) => item.id.startsWith("R-1"));
+    expect(unrouted?.status).toBe("MISSING");
+  });
+
+  it("names a verification marker the model wrote without a record (VER BEZ POKRYCIA)", () => {
+    const step = (removed: number) =>
+      evaluateMandatoryPath(
+        model,
+        facts("Odpowiedź.", {
+          events: [
+            { type: "gate", target: "G39I_CHAT_PRIVACY", status: "OK", detail: { pseudonymized: 0 } },
+            { type: "gate", target: "G39I_AUTO_POST_DRAFT_VERIFICATION", status: "OK", detail: { removedUnbackedMarkers: removed } }
+          ]
+        })
+      ).steps.find((item) => item.id === "VER-BEZ-POKRYCIA");
+    expect(step(2)).toMatchObject({ status: "MISSING", by: "MODEL" });
+    expect(step(2)?.evidence).toContain("VER BEZ POKRYCIA: 2");
+    expect(step(0)).toMatchObject({ status: "MET" });
+  });
 
   it("shows whether an act module of the read domain was read (not blocking)", () => {
     const step = (events: TurnFacts["events"]) =>
@@ -244,3 +277,26 @@ describe("router category [11]", () => {
   }, 60_000);
 });
 
+
+describe("UP-5: foreign jurisdiction from the question", () => {
+  it.each([
+    "Jak wygląda rozwód według prawa niemieckiego?",
+    "Czy wyrok sądu angielskiego będzie uznany w Polsce?",
+    "Które prawo właściwe dla umowy sprzedaży z kontrahentem z Czech?",
+    "Wykładnia art. 31 konwencji wiedeńskiej o prawie traktatów",
+    "Czy umowa międzynarodowa wymaga ratyfikacji za zgodą wyrażoną w ustawie?",
+    "Jurysdykcja w sprawie rozporządzenia Bruksela I bis",
+    "Orzecznictwo sądów niemieckich w sprawach pracowniczych"
+  ])("%s", (query) => {
+    expect(foreignJurisdiction(query)).toBe(true);
+  });
+
+  it.each([
+    "Sąsiad uszkodził mi samochód, należy mi się odszkodowanie?",
+    "Art. 415 KC — odpowiedzialność deliktowa",
+    "Pozwany mieszka w Niemczech, czy mogę go pozwać w Polsce?",
+    "Termin na apelację od wyroku sądu rejonowego"
+  ])("%s", (query) => {
+    expect(foreignJurisdiction(query)).toBe(false);
+  });
+});

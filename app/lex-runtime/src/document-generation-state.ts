@@ -39,6 +39,8 @@ export type StoredDocumentGenerationState = {
   // Pipeline status of the pleading when the file was made: a draft file is never
   // de-anonymized, even after the pipeline reaches FINAL.
   processDocumentStatus?: "DRAFT" | "FINAL";
+  // References the user accepted unverified (named in the file's heading).
+  unverifiedAccepted?: string[];
   createdAt: string;
   finalizedAt?: string;
   finalArtifactId?: string;
@@ -260,6 +262,11 @@ implements DeanonymizationTargetResolver {
         value.processDocumentStatus !== undefined &&
         value.processDocumentStatus !== "DRAFT" &&
         value.processDocumentStatus !== "FINAL"
+      ) ||
+      (
+        value.unverifiedAccepted !== undefined &&
+        (!Array.isArray(value.unverifiedAccepted) ||
+          !value.unverifiedAccepted.every((claim: unknown) => typeof claim === "string"))
       ) ||
       typeof value.createdAt !==
         "string"

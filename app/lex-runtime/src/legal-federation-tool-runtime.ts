@@ -1,3 +1,5 @@
+import { personalDataIn } from "./tool-broker-policy.js";
+import { LegalSourceFallbackStore, withSourceFallback } from "./legal-source-fallback.js";
 import { courtOfSignature, misroutedSignature } from "./court-of-signature.js";
 import {
   Client
@@ -97,6 +99,10 @@ const NATIVE_SEARCH: Record<
   sudop: (input) => ({ tool: "sudop_szukaj_pomocy", args: { nip: input.query } }),
   uodo: (input) => ({ tool: "uodo_szukaj", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, strona: input.page } })
 };
+
+// Sources whose get tool takes an offset and serves 20 000-character portions.
+const PORTIONED_SOURCES = new Set<string>(["isap", "kio", "eureka", "uodo"]);
+const PORTION_CHARS = 20_000;
 
 const NATIVE_GET: Record<
   SourceId,
@@ -366,7 +372,13 @@ const GET_SCHEMA:
           },
           page: {
             type: "integer",
-            minimum: 1
+            minimum: 1,
+            description: "Portion number (20 000 characters each) for isap, kio, eureka and uodo; offset takes precedence."
+          },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            description: "Character offset of the next portion, as the previous portion's _lexPorcja says (isap, kio, eureka, uodo)."
           },
           extra: {
             type: "object"
@@ -555,6 +567,13 @@ function guardOutboundPayload(
       "FEDERATED_CASE_DATA_FORBIDDEN"
     );
   }
+  // Second line: a personal identifier the recognizer missed, in clear text.
+  const personal = personalDataIn(value);
+  if (personal.length && process.env.LEX_TOOL_BROKER_MODE !== "audit") {
+    throw new Error(
+      `FEDERATED_PERSONAL_DATA_FORBIDDEN:${personal.join(",")}`
+    );
+  }
   return value;
 }
 
@@ -662,6 +681,28 @@ function extractToolText(
   );
 }
 
+/**
+ * A document served in portions (isap_tekst, kio_pobierz: tresc with
+ * tresc_offset and tresc_dlugosc): which characters the model has seen and
+ * how to get the rest - it must not cite what it did not read.
+ */
+export function portionNote(parsed: Record<string, unknown>): string | null {
+  const result = (parsed.result && typeof parsed.result === "object" ? parsed.result : parsed) as Record<string, unknown>;
+  const text = result.tresc;
+  const offset = result.tresc_offset;
+  const total = result.tresc_dlugosc;
+  if (typeof text !== "string" || typeof offset !== "number" || typeof total !== "number") return null;
+  const end = offset + text.length;
+  if (offset === 0 && end >= total) return null;
+  const parts = [`Treść porcjowana: znaki ${offset}–${end} z ${total}.`];
+  if (offset > 0) parts.push(`Znaków 0–${offset} nie ma w tej porcji.`);
+  if (end < total) {
+    parts.push(`Brakuje znaków ${end}–${total}: dobierz je wywołaniem get_federated_legal_document z offset=${end} (albo isap_tekst z artykul/szukaj).`);
+  }
+  parts.push("Nie cytuj ani nie streszczaj fragmentów, których nie widziałeś.");
+  return parts.join(" ");
+}
+
 export function annotateFederatedLegalContent(
   source:
     string,
@@ -687,6 +728,7 @@ export function annotateFederatedLegalContent(
         parsed
       )
     ) {
+      const portion = portionNote(parsed as Record<string, unknown>);
       return JSON.stringify({
         ...(
           parsed as
@@ -695,6 +737,7 @@ export function annotateFederatedLegalContent(
               unknown
             >
         ),
+        ...(portion ? { _lexPorcja: portion } : {}),
         _lexSourcePolicy:
           sourcePolicy
       });
@@ -726,7 +769,9 @@ class LexMcpClient {
 
   constructor(
     private readonly connectors:
-      LexMcpConnectorStore | undefined
+      LexMcpConnectorStore | undefined,
+    private readonly fallback =
+      new LegalSourceFallbackStore()
   ) {}
 
   installed(): SourceId[] {
@@ -856,8 +901,15 @@ class LexMcpClient {
     args:
       Record<string, unknown>
   ): Promise<string> {
-    const client =
-      await this.ensureClient();
+    let client: Client;
+    try {
+      client = await this.ensureClient();
+    } catch (error) {
+      // The connector does not start: the source's last good answer, dated.
+      const copy = withSourceFallback(this.fallback, name, args, null);
+      if (copy) return copy;
+      throw error;
+    }
     try {
       const result =
         await client.callTool(
@@ -874,9 +926,14 @@ class LexMcpClient {
           // desktop proxy's 300 s for direct search.
           { timeout: 280_000 }
         );
-      return extractToolText(
-        result
-      );
+      return withSourceFallback(
+        this.fallback,
+        name,
+        args,
+        extractToolText(
+          result
+        )
+      ) ?? "";
     } catch (error) {
       if (
         error instanceof Error &&
@@ -892,6 +949,9 @@ class LexMcpClient {
         // Best effort: the next call creates a fresh MCP transport.
       }
       this.client = null;
+      // The source is down: its last good answer, dated, if there is one.
+      const copy = withSourceFallback(this.fallback, name, args, null);
+      if (copy) return copy;
       throw error;
     }
   }
@@ -1017,6 +1077,8 @@ export class LegalFederationToolRuntime {
       "SAOS, CBOSA and ISAP connector results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",
       "EUREKA interpretations, UODO decisions and other administrative/case materials must be described with their actual legal status; do not present them as generally binding statutory law. EUREKA search is discovery only: before citing an interpretation signature, call verify_interpretation (native Lex verification).",
       "After an empty federated search, call federated_legal_coverage before concluding that material is absent.",
+      "Long documents come in 20 000-character portions: _lexPorcja names the characters you saw and the offset of the rest. Fetch the missing part (get_federated_legal_document with offset) before relying on it; never cite or summarise what you did not read.",
+      "A business identifier of the case (NIP, REGON, KRS, account number as [PII:...] symbol) may be sent only to the register that answers for it: source krs, wl, ceidg or sudop; Lex puts the value back. Never send PESEL, ID card, e-mail or phone to any source.",
       "Never send case facts, uploaded-document text, secrets, PII tokens or client-specific narrative to the MCP connectors (they call public APIs). Restrict calls to public legal concepts, act/case identifiers, citations and neutral search phrases.",
       "If a federated result conflicts with a native official-source verifier, the native official verification path is authoritative; fail closed until the conflict is resolved.",
       "Do not expose connector implementation details or treat a source_unavailable error as absence of law."
@@ -1166,7 +1228,11 @@ export class LegalFederationToolRuntime {
             : String(
                 error
               );
+        // Case data or a personal identifier in the arguments: a policy refusal
+        // the model must correct, never a source outage.
+        const dataForbidden = /(?:CASE|PERSONAL)_DATA_FORBIDDEN/.test(message);
         const policyBlocked =
+          dataForbidden ||
           call.name ===
             ASSESS_SOURCE_TOOL ||
           (
@@ -1233,7 +1299,9 @@ export class LegalFederationToolRuntime {
               error:
                 message,
               instruction:
-                policyBlocked
+                dataForbidden
+                  ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
+                  : policyBlocked
                   ? "Source assessment was rejected by Lex source policy. Correct the URL/cross-check evidence; do not treat this as a source outage."
                   : "Do not infer absence of law from this failure. Use another verified source path or report the source as temporarily unavailable."
             })
@@ -1248,6 +1316,13 @@ export class LegalFederationToolRuntime {
     call:
       NormalizedToolCall
   ): Promise<string> {
+    // Before any connector is touched: a personal identifier never goes out.
+    if (call.name !== LIST_TOOL && call.name !== COVERAGE_TOOL) {
+      const personal = personalDataIn(call.input);
+      if (personal.length && process.env.LEX_TOOL_BROKER_MODE !== "audit") {
+        throw new Error(`FEDERATED_PERSONAL_DATA_FORBIDDEN:${personal.join(",")}`);
+      }
+    }
     if (
       call.name ===
         LIST_TOOL
@@ -1786,11 +1861,21 @@ export class LegalFederationToolRuntime {
         NATIVE_GET[source](
           documentId
         );
+      // Portion of a long document: offset, or page N of 20 000 characters.
+      const offset =
+        PORTIONED_SOURCES.has(source)
+          ? Number.isInteger(call.input.offset) && Number(call.input.offset) >= 0
+            ? Number(call.input.offset)
+            : Number.isInteger(call.input.page) && Number(call.input.page) > 1
+              ? (Number(call.input.page) - 1) * PORTION_CHARS
+              : undefined
+          : undefined;
       const content =
         await this.client.call(
           request.tool,
           withoutUndefined({
             ...request.args,
+            offset,
             ...extraFrom(
               call.input
             )

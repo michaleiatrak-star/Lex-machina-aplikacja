@@ -1010,6 +1010,33 @@ function accountLoginFailureText(code: string): string {
   }
 }
 
+const EXPORT_REFERENCE_STATUS: Record<string, string> = {
+  UNVERIFIED_MARKED: "niezweryfikowany w źródle",
+  UNVERIFIED_NOT_MARKED: "niezweryfikowany",
+  MISSING_LEDGER_RECORD: "bez weryfikacji",
+  MISSING_VERIFICATION_MARKER: "niespójny ślad weryfikacji",
+  VERIFICATION_MARKER_MISMATCH: "niespójny ślad weryfikacji"
+};
+
+/** What to check in a generated file before using it (empty when nothing). */
+export function documentWarningsText(warnings: string[] | undefined): string {
+  return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
+}
+
+/** A refused export in words: which provisions or judgments stopped the file. */
+export function exportBlockedMessage(error: unknown): string | null {
+  if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
+  const references = error.references ?? [];
+  const listed = references
+    .slice(0, 12)
+    .map((reference) => `${reference.claim} (${EXPORT_REFERENCE_STATUS[reference.status] ?? "orzeczenie: cytat lub teza niepotwierdzone"})`);
+  const more = references.length > listed.length ? ` i ${references.length - listed.length} innych` : "";
+  return listed.length
+    ? `Pismo nie zostało zapisane: powołania bez potwierdzenia w źródle: ${listed.join("; ")}${more}.` +
+        (error.draftAvailable ? " Możesz zapisać je jako projekt z tymi powołaniami wskazanymi w nagłówku." : " Popraw lub usuń te powołania i spróbuj ponownie.")
+    : `Pismo nie zostało zapisane: bramka eksportu (${error.code}).`;
+}
+
 export default function MatterChatApp({
   user,
   settingsPanels,
@@ -1206,6 +1233,9 @@ export default function MatterChatApp({
   const [query, setQuery] = useState("");
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
+  // The case whose answer is being generated: the thread list stays on it
+  // until the answer lands (a late message must not reach another case).
+  const [executingCaseId, setExecutingCaseId] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState("");
   // CONTRACT_STATE_REQUIRED: the message waits for the contract mode; resent after it is chosen.
   const [contractModeRequest, setContractModeRequest] = useState<{
@@ -1213,6 +1243,11 @@ export default function MatterChatApp({
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
   const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  // Export refused for unverified references only: the user may save a draft naming them.
+  const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
+    caseId: string; text: string; messageId: string;
+  } | null>(null);
+  const [unverifiedDraftRetry, setUnverifiedDraftRetry] = useState<{ text: string; messageId: string } | null>(null);
   // A case workflow stopped the message (pleading pipeline not started, workflow finished):
   // the message waits for the user's choice and is resent through contractRetry.
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
@@ -2115,6 +2150,7 @@ export default function MatterChatApp({
   ): void {
     if (
       caseBusy ||
+      executing ||
       !nextCaseId ||
       nextCaseId === caseId
     ) {
@@ -3038,7 +3074,26 @@ export default function MatterChatApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractRetry, messages, executing]);
 
-  async function executeMessage(plain: string): Promise<void> {
+  useEffect(() => {
+    if (!unverifiedDraftRetry || executing) return;
+    if (messages.some((message) => message.id === unverifiedDraftRetry.messageId)) return;
+    const { text } = unverifiedDraftRetry;
+    setUnverifiedDraftRetry(null);
+    void executeMessage(text, { acceptUnverified: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unverifiedDraftRetry, messages, executing]);
+
+  function saveUnverifiedDraft(): void {
+    const pending = unverifiedDraftRequest;
+    if (!pending) return;
+    setUnverifiedDraftRequest(null);
+    setExecutionError("");
+    setExecutionDiagnostic(null);
+    setMessages((current) => current.filter((message) => message.id !== pending.messageId));
+    setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
+  }
+
+  async function executeMessage(plain: string, options: { acceptUnverified?: boolean } = {}): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3108,6 +3163,7 @@ export default function MatterChatApp({
 
     setQuery("");
     setExecuting(true);
+    setExecutingCaseId(executionCaseId);
     setExecutionStage(
       "Przygotowanie sesji"
     );
@@ -3220,6 +3276,7 @@ export default function MatterChatApp({
               ...(firmTemplateIds.length > 0
                 ? { firmTemplates: firmTemplateIds }
                 : {}),
+              ...(options.acceptUnverified ? { acceptUnverified: true } : {}),
               filename:
                 (
                   documentRequest.documentType ===
@@ -3284,13 +3341,14 @@ export default function MatterChatApp({
                   role:
                     "assistant",
                   content:
-                    downloadedFinal
+                    (downloadedFinal
                       ? "Gotowy dokument " +
                         documentRequest.format.toUpperCase() +
                         " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).",
+                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).") +
+                    documentWarningsText(generated.warnings),
                   meta:
                     "dokument: " +
                     generated
@@ -3477,9 +3535,10 @@ export default function MatterChatApp({
                 id: messageId(),
                 role: "assistant",
                 content:
-                  stage === "FINAL"
+                  (stage === "FINAL"
                     ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
-                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.",
+                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
+                  documentWarningsText(generated.warnings),
                 meta: "dokument: " + generated.artifact.filename,
                 generatedDocument: {
                   artifactId: generated.artifact.artifactId,
@@ -3504,6 +3563,7 @@ export default function MatterChatApp({
                 id: messageId(),
                 role: "system",
                 content:
+                  exportBlockedMessage(documentError) ??
                   "Nie udało się utworzyć pliku pisma: " +
                   (documentError instanceof ApiError
                     ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
@@ -3552,6 +3612,9 @@ export default function MatterChatApp({
           suggested: suggestedContractMode(trimmed)
         });
       }
+      if (error instanceof ApiError && error.draftAvailable && exportBlockedMessage(error)) {
+        setUnverifiedDraftRequest({ caseId: executionCaseId, text: trimmed, messageId: userMessage.id });
+      }
       const recovery = workflowRecovery(code, reason);
       if (recovery) {
         setWorkflowRecoveryRequest({
@@ -3572,7 +3635,8 @@ export default function MatterChatApp({
         );
       }
       const friendly =
-        code ===
+        exportBlockedMessage(error) ??
+        (code ===
           "ACCOUNT_SESSION_CLI_NOT_INSTALLED"
           ? "Tryb konta wymaga oficjalnego klienta dostawcy zainstalowanego osobno. Otwórz Ustawienia → Modele i AI, zainstaluj klienta albo przełącz źródło na API."
         : code ===
@@ -3653,7 +3717,7 @@ export default function MatterChatApp({
                                     "Lokalny model wymaga naprawy profilu"
                                   )
                                   ? code
-                                  : `Nie udało się wykonać sesji: ${code}`;
+                                  : `Nie udało się wykonać sesji: ${code}`);
       setExecutionError(friendly);
       setExecutionDiagnostic({
         friendly,
@@ -3712,6 +3776,7 @@ export default function MatterChatApp({
         setAllowedDomainSkills([]);
       }
       setExecuting(false);
+      setExecutingCaseId(null);
     }
   }
 
@@ -4052,7 +4117,7 @@ export default function MatterChatApp({
             <strong>Sprawy</strong>
             <button
               type="button"
-              disabled={caseBusy}
+              disabled={caseBusy || executing}
               onClick={() => void createLocalCase(newCaseName.trim() || "Nowa sprawa")}
             >
               + Nowa sprawa
@@ -4104,8 +4169,14 @@ export default function MatterChatApp({
                 <div key={item.caseId} className="matter-thread-row">
                   <button
                     type="button"
-                    disabled={caseBusy}
-                    className={item.caseId === caseId ? "matter-thread active" : "matter-thread"}
+                    disabled={caseBusy || executing}
+                    title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : undefined}
+                    aria-busy={item.caseId === executingCaseId}
+                    className={[
+                      "matter-thread",
+                      item.caseId === caseId ? "active" : "",
+                      item.caseId === executingCaseId ? "thinking" : ""
+                    ].filter(Boolean).join(" ")}
                     onClick={() => {
                       setPendingFirstMessage(null);
                       setExecutionError("");
@@ -4113,7 +4184,12 @@ export default function MatterChatApp({
                       setActiveTab("chat");
                     }}
                   >
-                    <strong>{item.displayName || "Sprawa bez nazwy"}</strong>
+                    <strong>
+                      {item.caseId === executingCaseId ? (
+                        <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                      ) : null}
+                      {item.displayName || "Sprawa bez nazwy"}
+                    </strong>
                     <small>
                       {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
                     </small>
@@ -5810,6 +5886,20 @@ export default function MatterChatApp({
                     ))}
                   </div>
                   <small>Tryb ustawia się raz dla sprawy; wiadomość zostanie wysłana ponownie po wyborze.</small>
+                </div>
+              ) : null}
+              {unverifiedDraftRequest && unverifiedDraftRequest.caseId === caseId ? (
+                <div className="chat-contract-mode" role="group" aria-label="Projekt z niezweryfikowanymi powołaniami">
+                  <strong>Zapisać pismo jako projekt?</strong>
+                  <div className="chat-contract-mode-options">
+                    <button type="button" className="chat-primary-action" disabled={executing} onClick={saveUnverifiedDraft}>
+                      Zapisz jako projekt z wykazem niezweryfikowanych powołań
+                    </button>
+                    <button type="button" className="chat-secondary-action" onClick={() => setUnverifiedDraftRequest(null)}>
+                      Nie zapisuj
+                    </button>
+                  </div>
+                  <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą tych powołań; decyzja trafia do audytu sesji. Wiadomość zostanie wysłana ponownie.</small>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (

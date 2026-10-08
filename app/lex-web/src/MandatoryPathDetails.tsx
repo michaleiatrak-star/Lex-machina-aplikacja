@@ -22,6 +22,8 @@ const STATUS: Record<MandatoryPathStep["status"], string> = {
 export function MandatoryPathDetails({ path }: { path: MandatoryPathView }) {
   const counted = path.steps.filter((step) => step.status === "MET" || step.status === "MISSING");
   const met = counted.filter((step) => step.status === "MET").length;
+  // Deferred resources whose trigger did not fire: shown, not counted.
+  const skipped = path.steps.filter((step) => step.status === "NOT_TRIGGERED");
   return (
     <details className="chat-evidence chat-mandatory-path">
       <summary>
@@ -55,6 +57,18 @@ export function MandatoryPathDetails({ path }: { path: MandatoryPathView }) {
           </div>
         );
       })}
+      {skipped.length ? (
+        <div>
+          <strong>Pominięte w tej turze (wyzwalacz nie wystąpił)</strong>
+          <ul>
+            {skipped.map((step) => (
+              <li key={step.id}>
+                <strong>{step.label}</strong> <span>{step.evidence}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </details>
   );
 }

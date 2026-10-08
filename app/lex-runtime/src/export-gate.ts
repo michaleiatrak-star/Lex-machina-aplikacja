@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { AuditTrail, type AuditCompletenessReport } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
 import type { FinalizationReport } from "./finalization-gate.js";
+import { containsVerificationMarker } from "./verification-markers.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -100,8 +101,20 @@ export class ExportGate {
 
   evaluate(args: {
     documentContent: string | Uint8Array;
+    /** Text of the file itself: it must carry no verification marker. */
     documentText: string;
+    /**
+     * The document's text before its markers were stripped (STRIP-VER-GATE):
+     * G8 checks each reference against its marker there. Without it the file
+     * text is judged by the ledger alone ("removed").
+     */
+    markedText?: string;
     documentKind: ExportDocumentKind;
+    /**
+     * The user chose to save a draft with the unverified references named in
+     * its heading (W3-WERYFIKACJA: wybór b); a blocked reference still blocks.
+     */
+    acceptUnverified?: boolean;
     documentSkill: string;
     ledger: VerificationLedger;
     audit: AuditTrail;
@@ -157,14 +170,27 @@ export class ExportGate {
       }
     );
 
+    if (containsVerificationMarker(args.documentText)) {
+      reasons.push("VERIFICATION_MARKER_IN_DOCUMENT");
+      args.audit.record("gate", "G10_EXPORT_GATE", "BLOCKED", { reason: "VERIFICATION_MARKER_IN_DOCUMENT" });
+      return { gate: "G10_EXPORT_GATE", result: "BLOCKED", reasons, verificationLog };
+    }
+
     const finalization = this.finalizer.finalize({
-      text: args.documentText,
+      text: args.markedText ?? args.documentText,
       ledger: args.ledger,
       audit: args.audit,
-      closeSession: false
+      closeSession: false,
+      markers: args.markedText === undefined ? "removed" : "in-text"
     });
 
-    if (finalization.result !== "PASS") {
+    if (finalization.result === "DEGRADED" && args.acceptUnverified) {
+      args.audit.record("gate", "UNVERIFIED_ACCEPTED_BY_USER", "DEGRADED", {
+        references: finalization.findings
+          .filter((finding) => finding.status !== "VERIFIED")
+          .map((finding) => finding.reference.claim)
+      });
+    } else if (finalization.result !== "PASS") {
       const reason =
         finalization.result === "DEGRADED"
           ? "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
@@ -185,7 +211,12 @@ export class ExportGate {
       };
     }
 
-    const requireVerification = finalization.references.length > 0;
+    // A draft the user saves unverified has no verification to show for the
+    // references it names; any verified one still needs its trail.
+    const accepted = finalization.result === "DEGRADED" && args.acceptUnverified === true;
+    const requireVerification =
+      finalization.references.length > 0 &&
+      (!accepted || finalization.findings.some((finding) => finding.status === "VERIFIED"));
     const preClose = args.audit.validateCompletion({
       requireVerification
     });

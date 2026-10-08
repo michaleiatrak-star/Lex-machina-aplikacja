@@ -70,6 +70,42 @@ describe("AUTO: the router's executive skill is loaded mechanically", () => {
     expect(steps.find((step) => step.id === "KONTRAKT:pisma-procesowe-v3")).toBeTruthy();
     expect(result.mandatoryPath!.routingTrace).toContain("PRIMARY: pisma-procesowe-v3 — ROUTER-WCZYTANY: TAK");
   }, 60_000);
+
+  it("puts the core it counts as read (R-2..R-4) into the prompt", async () => {
+    const registry = new LexSkillRegistry(CORPUS);
+    registry.scan();
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "auto",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Odpowiedź." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
+    const result = await executor.execute({
+      query: "Sąsiad uszkodził mi samochód, należy mi się odszkodowanie?",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      modelSelectsSkills: true,
+      mode: "PRAWNIK"
+    });
+    const prompt = calls[0]!.systemPrompt ?? "";
+    for (const resource of ["shared/PRAWO-HARDGATE.md", "prawny-router-v3/references/KROK0A-anonimizer.md", "prawny-router-v3/references/KROK1-detekcja.md"]) {
+      expect(prompt).toContain(`# ${resource} (już wczytany - nie czytaj ponownie)`);
+    }
+    // The body, not only a header: the HARD GATE's own heading.
+    const hardGate = fs.readFileSync(path.join(CORPUS, "shared", "PRAWO-HARDGATE.md"), "utf8");
+    const heading = hardGate.split("\n").find((line) => line.startsWith("# "))!;
+    expect(prompt).toContain(heading);
+    const core = result.mandatoryPath!.steps.filter((step) => /^R-[234]/u.test(step.id));
+    expect(core.length).toBeGreaterThan(0);
+    expect(core.every((step) => step.status === "MET")).toBe(true);
+  }, 60_000);
 });
 
 describe("materials the user delivers (documents and evidence)", () => {

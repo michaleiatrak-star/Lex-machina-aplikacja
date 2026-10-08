@@ -37,6 +37,7 @@ import {
   type AuditEvent
 } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { discloseRegistryIdentifiers } from "./tool-broker-policy.js";
 import {
   LexExecutionEngine,
   latestUserTurn,
@@ -93,6 +94,7 @@ import {
   evaluateMandatoryPath,
   gateCorrectionPrompt,
   loadMandatoryPathModel,
+  foreignJurisdiction,
   mandatoryPathInstructions,
   missingGateBlocks,
   pathProfile,
@@ -282,6 +284,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): receives the live draft text of
   // the model answer with the chat pseudonyms already restored.
   onDraft?: (text: string) => void;
+  // Runtime-only: a document alias token ([PII:KIND:NNNN|CASE] of one
+  // document's own vault) restored for the live draft; throws when unknown.
+  restoreDocumentToken?: (documentId: string, sourceToken: string) => string;
   // Runtime-only: the stage of the turn and what was done in it (skills, tools).
   onStep?: ExecutionStepReporter;
   // Runtime-only (never parsed from HTTP): the matter's full files for the
@@ -1170,15 +1175,24 @@ function transferExecutionEvents(
   }
 }
 
+function positiveEnvInt(name: string, fallback: number): number {
+  const value = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 const DRAFT_PII_TOKEN =
   /\[PII:([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
+const DRAFT_DOCUMENT_TOKEN =
+  /\[LMPII:D(\d{2}):([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
 // An incomplete token at the end of the stream is held back until complete.
 const DRAFT_PARTIAL_TOKEN_TAIL =
-  /\[(?:P(?:I(?:I(?::[A-Z_]*(?::\d{0,4}(?:\|[A-Z]{0,4})?)?)?)?)?)?$/;
+  /\[(?:P(?:I(?:I(?::[A-Z_]*(?::\d{0,4}(?:\|[A-Z]{0,4})?)?)?)?)?)?$|\[L(?:M(?:P(?:I(?:I(?::[A-Z0-9_:|]{0,30})?)?)?)?)?$/;
 
 export function createDraftCallbacks(
   vault: PseudonymizationVault,
-  onDraft: (text: string) => void
+  onDraft: (text: string) => void,
+  // Document alias D01..: the token in that document's own vault, or null.
+  restoreDocument?: (documentNumber: number, sourceToken: string) => string | null
 ): StreamCallbacks {
   let raw = "";
   const publish = () => {
@@ -1196,6 +1210,13 @@ export function createDraftCallbacks(
             ? vault.restore(base, requestedCase ?? null).text
             : token;
         }
+      ).replace(
+        DRAFT_DOCUMENT_TOKEN,
+        (token, documentNumber: string, kind: string, sequence: string, requestedCase?: string) =>
+          restoreDocument?.(
+            Number(documentNumber),
+            requestedCase ? `[PII:${kind}:${sequence}|${requestedCase}]` : `[PII:${kind}:${sequence}]`
+          ) ?? token
       )
     );
   };
@@ -1934,7 +1955,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
-      foreignJurisdiction: false
+      foreignJurisdiction: foreignJurisdiction(request.query)
     };
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
     // A message typed without Polish letters gets them back for the executive routing phrases.
@@ -1947,9 +1968,10 @@ export class SafeSessionExecutor implements SessionExecutor {
       documentGeneration: pathFacts.documentGeneration,
       verification
     });
-    // Already in the model's context: the router skill and the core legal resources.
+    // Already in the model's context: the router skill (AUTO gives it in full)
+    // and the core legal resources.
     const contextResources = new Set<string>([
-      `${ROUTER_SKILL}/SKILL.md`,
+      ...(request.modelSelectsSkills ? [`${ROUTER_SKILL}/SKILL.md`] : []),
       "shared/PRAWO-HARDGATE.md",
       `${ROUTER_SKILL}/references/KROK0A-anonimizer.md`,
       `${ROUTER_SKILL}/references/KROK1-detekcja.md`,
@@ -2275,11 +2297,30 @@ export class SafeSessionExecutor implements SessionExecutor {
       (word) => roles.has(word)
     ));
 
+    const toolBudget = {
+      calls: 0,
+      skillReads: 0,
+      callLimit: positiveEnvInt("LEX_TOOL_CALL_BUDGET", 60),
+      skillReadLimit: positiveEnvInt("LEX_SKILL_READ_BUDGET", 40),
+      // LEX_TOOL_BROKER_MODE=audit: record the decisions, block nothing (rollout).
+      auditOnly: process.env.LEX_TOOL_BROKER_MODE === "audit"
+    };
     const draftCallbacks =
       request.onDraft
         ? createDraftCallbacks(
             chatPrivacyVault,
-            request.onDraft
+            request.onDraft,
+            request.restoreDocumentToken
+              ? (documentNumber, sourceToken) => {
+                  const documentId = aliasRegistry.documentIds()[documentNumber - 1];
+                  if (!documentId) return null;
+                  try {
+                    return request.restoreDocumentToken!(documentId, sourceToken);
+                  } catch {
+                    return null;
+                  }
+                }
+              : undefined
           )
         : undefined;
     const execution = await this.engine.executePolishLegalQuery({
@@ -2446,7 +2487,41 @@ export class SafeSessionExecutor implements SessionExecutor {
                 }
               : {})
           }),
-      runTools: async (calls) => {
+      runTools: async (requestedCalls) => {
+        // Per-turn budgets: a looping model stops here, not at the bill.
+        const overBudget = new Set<string>();
+        for (const call of requestedCalls) {
+          const corpus = corpusTools.handles(call.name);
+          const used = corpus ? ++toolBudget.skillReads : ++toolBudget.calls;
+          if (used > (corpus ? toolBudget.skillReadLimit : toolBudget.callLimit)) overBudget.add(call.id);
+        }
+        if (overBudget.size) {
+          audit.record("gate", "TOOL_CALL_BUDGET", toolBudget.auditOnly ? "DEGRADED" : "BLOCKED", {
+            calls: toolBudget.calls,
+            skillReads: toolBudget.skillReads,
+            callLimit: toolBudget.callLimit,
+            skillReadLimit: toolBudget.skillReadLimit,
+            enforced: !toolBudget.auditOnly
+          });
+          if (toolBudget.auditOnly) overBudget.clear();
+        }
+        const calls = requestedCalls
+          .filter((call) => !overBudget.has(call.id))
+          .map((call) => {
+            if (!federationTools?.handles(call.name)) return call;
+            // A business identifier of the case to the public register that answers for it.
+            const shared = discloseRegistryIdentifiers(call, (token) =>
+              chatPrivacyVault.hasToken(token) ? chatPrivacyVault.restore(token, null).text : null
+            );
+            if (shared.disclosed.length) {
+              audit.record("gate", "REGISTRY_IDENTIFIER_DISCLOSED", "OK", {
+                tool: call.name,
+                source: String(call.input.source ?? call.input.sourceId ?? ""),
+                kinds: [...new Set(shared.disclosed)]
+              });
+            }
+            return shared.call;
+          });
         for (const call of calls) {
           if (corpusTools.handles(call.name)) {
             const target = [call.input.skill, call.input.path].filter((part) => typeof part === "string").join("/");
@@ -2571,14 +2646,25 @@ export class SafeSessionExecutor implements SessionExecutor {
           ])
         );
 
-        return calls.map((call) =>
-          byId.get(call.id) ?? {
-            tool_use_id: call.id,
-            content: JSON.stringify({
-              status: "BLOCKED",
-              error: "UNKNOWN_RUNTIME_TOOL"
-            })
-          }
+        return requestedCalls.map((call) =>
+          byId.get(call.id) ??
+          (overBudget.has(call.id)
+            ? {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                  status: "POLICY_BLOCKED",
+                  error: "TOOL_CALL_BUDGET_EXCEEDED",
+                  instruction:
+                    "Limit wywołań narzędzi w tej turze został wyczerpany. Odpowiedz na podstawie tego, co już masz, i wskaż, czego nie sprawdzono."
+                })
+              }
+            : {
+                tool_use_id: call.id,
+                content: JSON.stringify({
+                  status: "BLOCKED",
+                  error: "UNKNOWN_RUNTIME_TOOL"
+                })
+              })
         );
       }
     });
@@ -2862,7 +2948,9 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (accepted) modelOutput = text;
         audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
           missing: missingGates.map((item) => item.block),
-          remaining: (accepted ? remaining : missingGates).map((item) => item.block)
+          remaining: (accepted ? remaining : missingGates).map((item) => item.block),
+          // The correction's own cost, apart from the turn's total.
+          ...(corrected.usage ? { inputTokens: corrected.usage.inputTokens, outputTokens: corrected.usage.outputTokens } : {})
         });
       } catch (error) {
         audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {
@@ -3689,6 +3777,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             criminal: criminalAfter,
             profile: effectiveProfile,
             contextResources,
+            // Mechanical routing: the runtime routes, the model holds only the
+            // router's semantic contract (not its text).
+            ...(request.modelSelectsSkills
+              ? {}
+              : { executedByApp: new Map([[`${ROUTER_SKILL}/SKILL.md`, "routing wykonany przez aplikację (model ma kontrakt semantyczny routera)"]]) }),
             answer: processedDocumentCitations.text,
             ...(disclaimerTexts ? { disclaimerBy } : {}),
             records: ledger.all(),

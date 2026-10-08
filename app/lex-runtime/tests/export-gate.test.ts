@@ -37,12 +37,15 @@ function verifiedLedger(): VerificationLedger {
 describe("ExportGate", () => {
   it("passes a verified DOCX export and records its SHA-256 hash", () => {
     const audit = baseAudit();
-    const text =
+    // G8 reads the marked text; the file itself carries no marker (STRIP-VER-GATE).
+    const marked =
       "Znaczenie ma art. 5 KC. ✅ [VER: https://eli.gov.pl/, 2026-09-15]";
+    const text = "Znaczenie ma art. 5 KC.";
 
     const report = new ExportGate().evaluate({
       documentContent: text,
       documentText: text,
+      markedText: marked,
       documentKind: "docx",
       documentSkill: "pisma-procesowe-v3",
       ledger: verifiedLedger(),
@@ -94,6 +97,7 @@ describe("ExportGate", () => {
     const report = new ExportGate().evaluate({
       documentContent: "Art. 1234 KC.",
       documentText: "Art. 1234 KC.",
+      markedText: "Art. 1234 KC.",
       documentKind: "docx",
       documentSkill: "pisma-procesowe-v3",
       ledger: new VerificationLedger(),
@@ -119,11 +123,13 @@ describe("ExportGate", () => {
       verificationMethod: "web_search"
     });
 
-    const text =
+    const marked =
       "Orzeczenie sygn. III ABC 12/26 ⚠️ [NIEWERYFIKOWANE]";
+    const text = "Orzeczenie sygn. III ABC 12/26";
     const report = new ExportGate().evaluate({
       documentContent: text,
       documentText: text,
+      markedText: marked,
       documentKind: "pdf",
       documentSkill: "pisma-procesowe-v3",
       ledger,
@@ -177,5 +183,53 @@ describe("ExportGate", () => {
     });
 
     expect(report.result).toBe("PASS");
+  });
+
+  it("blocks a file that still carries a verification marker", () => {
+    const text =
+      "Znaczenie ma art. 5 KC. ✅ [VER: https://eli.gov.pl/, 2026-09-15]";
+    const report = new ExportGate().evaluate({
+      documentContent: text,
+      documentText: text,
+      markedText: text,
+      documentKind: "docx",
+      documentSkill: "pisma-procesowe-v3",
+      ledger: verifiedLedger(),
+      audit: baseAudit(),
+      hybridValidation: "PASS"
+    });
+
+    expect(report).toMatchObject({
+      result: "BLOCKED",
+      reasons: ["VERIFICATION_MARKER_IN_DOCUMENT"]
+    });
+  });
+
+  it("judges a stripped document by the ledger alone", () => {
+    const text = "Znaczenie ma art. 5 KC, a także art. 6 KC.";
+    const passing = new ExportGate().evaluate({
+      documentContent: "Znaczenie ma art. 5 KC.",
+      documentText: "Znaczenie ma art. 5 KC.",
+      documentKind: "docx",
+      documentSkill: "pisma-procesowe-v3",
+      ledger: verifiedLedger(),
+      audit: baseAudit(),
+      hybridValidation: "PASS"
+    });
+    expect(passing.result).toBe("PASS");
+
+    const unverified = new ExportGate().evaluate({
+      documentContent: text,
+      documentText: text,
+      documentKind: "docx",
+      documentSkill: "pisma-procesowe-v3",
+      ledger: verifiedLedger(),
+      audit: baseAudit(),
+      hybridValidation: "PASS"
+    });
+    expect(unverified).toMatchObject({
+      result: "BLOCKED",
+      reasons: ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"]
+    });
   });
 });

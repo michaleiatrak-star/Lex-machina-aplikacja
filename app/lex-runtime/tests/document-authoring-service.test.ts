@@ -20,6 +20,7 @@ import {
   DocumentGenerationStateStore
 } from "../src/document-generation-state.js";
 import {
+  ExportGateBlockedError,
   LocalDocumentAuthoringService
 } from "../src/document-authoring-service.js";
 
@@ -318,6 +319,14 @@ describe("document authoring lifecycle", () => {
                       "[LMPII:D01:PERSON:0001]"
                   }
                 ]
+              }, {
+                // A verification marker left in the AST never reaches the file.
+                type:
+                  "paragraph",
+                content: [{
+                  type: "text",
+                  text: "Strony ustalają, co następuje ✅ [VER: https://eli.gov.pl/, 2026-09-16]."
+                }]
               }]
             }
           });
@@ -328,6 +337,8 @@ describe("document authoring lifecycle", () => {
       ).toBe(
         "PROTECTED"
       );
+      expect(tokenized.text).toContain("Strony ustalają, co następuje.");
+      expect(tokenized.text).not.toContain("[VER");
       expect(
         tokenized.text
       ).toContain(
@@ -405,6 +416,7 @@ describe("document authoring lifecycle", () => {
       ).not.toContain(
         "LMPII"
       );
+      expect(final.text).not.toContain("[VER");
       expect(
         final
           .deanonymizationBasis
@@ -527,5 +539,96 @@ describe("document authoring lifecycle", () => {
     current
       .caseDataKey
       .fill(0);
+  });
+});
+
+describe("ready document with an unverified provision", () => {
+  const ast = {
+    schemaVersion: "1",
+    documentType: "letter",
+    locale: "pl-PL",
+    styleProfile: "lex-classic-clean-v1",
+    blocks: [{
+      type: "paragraph",
+      content: [{ type: "text", text: "Podstawą roszczenia jest art. 5 KC ⚠️ [NIEWERYFIKOWANE]." }]
+    }]
+  };
+
+  it("names the blocking provisions and saves a draft only on the user's decision", async () => {
+    const current = fixture();
+    const args = {
+      caseId: current.caseId,
+      createdByUserId: current.userId,
+      format: "docx" as const,
+      ast,
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1,
+      validationContext: validationContext(current.documentId)
+    };
+    const blocked = await current.service.createReady(args).catch((error: unknown) => error);
+    expect(blocked).toBeInstanceOf(ExportGateBlockedError);
+    expect(blocked).toMatchObject({
+      reasons: ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"],
+      draftAvailable: true,
+      references: [expect.objectContaining({ claim: "art. 5 KC", status: "UNVERIFIED_MARKED" })]
+    });
+
+    const draft = await current.service.createReady({ ...args, acceptUnverified: true });
+    expect(draft.text).toContain("PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI. Powołania niezweryfikowane w źródle: art. 5 KC.");
+    expect(draft.text).toContain("Podstawą roszczenia jest art. 5 KC.");
+    expect(draft.text).not.toContain("NIEWERYFIKOWANE]");
+  });
+
+  it("keeps the user's decision from the tokenized draft to the final file", async () => {
+    const current = fixture();
+    const vault = new PseudonymizationVault();
+    vault.getOrCreate("PERSON", "Jan Kowalski");
+    await current.vaultStore.saveDocumentVault({
+      caseId: current.caseId,
+      documentId: current.documentId,
+      vault,
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1
+    });
+    const common = {
+      caseId: current.caseId,
+      createdByUserId: current.userId,
+      format: "docx" as const,
+      sourceDocumentIds: [current.documentId],
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1,
+      validationContext: validationContext(current.documentId),
+      ast: {
+        ...ast,
+        blocks: [{
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Wzywam " },
+            { type: "pii_ref", alias: "[LMPII:D01:PERSON:0001]" },
+            { type: "text", text: " na podstawie art. 5 KC ⚠️ [NIEWERYFIKOWANE]." }
+          ]
+        }]
+      }
+    };
+    const finalize = async (tokenizedId: string) => {
+      const target = await current.states.resolve(current.caseId, tokenizedId);
+      return current.service.deanonymizeConsumed({
+        target: target!,
+        createdByUserId: current.userId,
+        caseDataKey: current.caseDataKey,
+        keyVersion: 1
+      });
+    };
+
+    const plain = await current.service.createTokenized(common);
+    const refused = await finalize(plain.artifact.artifactId).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(ExportGateBlockedError);
+    expect(refused).toMatchObject({ draftAvailable: true, references: [expect.objectContaining({ claim: "art. 5 KC" })] });
+
+    const accepted = await current.service.createTokenized({ ...common, acceptUnverified: true });
+    const final = await finalize(accepted.artifact.artifactId);
+    expect(final.text).toContain("Powołania niezweryfikowane w źródle: art. 5 KC.");
+    expect(final.text).toContain("Jan Kowalski");
+    expect(final.text).not.toContain("NIEWERYFIKOWANE]");
   });
 });
