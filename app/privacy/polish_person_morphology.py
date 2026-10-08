@@ -640,148 +640,7 @@ class PersonMorphology:
 
 
 
-# --- addresses -------------------------------------------------------------
-
-# Street type -> (gender the street name agrees with, lemma when written out).
-STREET_TYPES = {
-    "ul.": ("f", None), "al.": ("f", None), "pl.": ("m3", None), "os.": ("n", None),
-    "ulica": ("f", "ulica"), "aleja": ("f", "aleja"), "plac": ("m3", "plac"),
-    "osiedle": ("n", "osiedle"), "rondo": ("n", "rondo"), "skwer": ("m3", "skwer"),
-    "bulwar": ("m3", "bulwar"), "wybrzeże": ("n", "wybrzeże"),
-}
-ADDRESS_WORD = re.compile(r"\S+")
-# Streets named after women are written with the surname in the genitive, which
-# looks exactly like an agreeing adjective ("ul. Konopnickiej" vs "ul. Długiej").
-FEMALE_PATRON_STREETS = {
-    "konopnickiej", "orzeszkowej", "skłodowskiej", "curie-skłodowskiej", "skłodowskiej-curie",
-    "zapolskiej", "dąbrowskiej", "nałkowskiej", "szymborskiej", "żmichowskiej", "pawlikowskiej",
-    "pawlikowskiej-jasnorzewskiej", "kossak-szczuckiej", "rodziewiczówny", "gojawiczyńskiej",
-    "kuncewiczowej", "bacewiczówny", "grabskiej", "moniuszkowej", "prusowej", "ordonówny",
-    "krzywickiej", "świętochowskiej", "sempołowskiej", "kopernikowej", "wańkowiczowej",
-}
-HOUSE = re.compile(r"^(?:nr|\d{1,4}[A-Za-z]?(?:[/\-]\d{1,4}[A-Za-z]?)?[,.]?)$", re.I)
-
-
-class AddressMorphology:
-    """"ul. Długiej 5" -> canonical "ul. Długa 5" and the seven case forms.
-
-    Only an adjective that agrees with the street type inflects ("Długa",
-    "Grunwaldzka", "osiedle Słoneczne"); a noun in the genitive ("Mickiewicza",
-    "Armii Krajowej", "3 Maja") and everything after the name (house number,
-    postal code, town) stay as written.
-    """
-
-    def __init__(self, engine) -> None:
-        self.engine = engine
-
-    def _marker(self, word: str):
-        low = word.lower()
-        if low in STREET_TYPES:
-            return STREET_TYPES[low], {"nom"}
-        for _key, (gender, lemma) in STREET_TYPES.items():
-            if not lemma:
-                continue
-            cases: set[str] = set()
-            for _s, _e, (_orth, lem, tag, _types, _q) in self.engine.analyse(low):
-                parts = _features(tag)
-                if lem.split(":")[0] == lemma and parts[0] == {"subst"} and "sg" in parts[1]:
-                    cases |= parts[2] & set(CASES)
-            if cases:
-                return (gender, lemma), cases
-        return None, set()
-
-    def _adjective(self, word: str, gender: str, cases: set[str] | None):
-        for _s, _e, (_orth, lemma, tag, _types, _q) in self.engine.analyse(word):
-            parts = _features(tag)
-            if parts[0] == {"adj"} and "sg" in parts[1] and gender in parts[3]:
-                found = parts[2] & set(CASES)
-                if cases is None or found & cases:
-                    return lemma.split(":")[0], found if cases is None else found & cases
-        return None, set()
-
-    def _forms(self, lemma: str, pos: str, gender: str) -> dict[str, str]:
-        forms: dict[str, str] = {}
-        for orth, _lemma, tag, *_rest in self.engine.generate(lemma):
-            parts = _features(tag)
-            if parts[0] != {pos} or "sg" not in parts[1] or gender not in parts[3]:
-                continue
-            if pos == "adj" and "pos" not in parts[-1]:
-                continue
-            for case in parts[2] & set(CASES):
-                forms.setdefault(case, orth)
-        return forms
-
-    def analyze(self, surface: str) -> dict[str, Any]:
-        words = ADDRESS_WORD.findall(surface)
-        forms_by_case = {case: surface for case in CASES}
-        base = {
-            "surface": surface,
-            "canonical": surface,
-            "gender": "n",
-            "genderAlternatives": [],
-            "observedCase": "nom",
-            "status": "ok",
-            "warnings": [],
-        }
-        if not words:
-            return {**base, "forms": {c: {"text": surface, "source": "frozen", "confidence": 1.0} for c in CASES}}
-        (marker, observed) = self._marker(words[0])
-        if not marker:
-            # Village or postal address: written the same in every sentence.
-            return {**base, "forms": {c: {"text": surface, "source": "frozen", "confidence": 1.0} for c in CASES}}
-        gender, marker_lemma = marker
-        marker_forms = self._forms(marker_lemma, "subst", gender) if marker_lemma else {}
-        # Words of the street name: up to the house number.
-        plan: list[tuple[str, str | None]] = []  # (word, adjective lemma or None)
-        agreeing = True
-        name_done = False
-        cases = observed if marker_lemma else None
-        for word in words[1:]:
-            if name_done or HOUSE.match(word) or re.match(r"^\d{2}-\d{3}$", word):
-                name_done = True
-                plan.append((word, None))
-                continue
-            core = word.rstrip(",.")
-            lemma = None
-            if core.lower() in FEMALE_PATRON_STREETS:
-                agreeing = False
-            if agreeing and core[:1].isupper():
-                lemma, found = self._adjective(core, gender, cases)
-                if lemma:
-                    cases = found if cases is None else (cases & found or cases)
-            if not lemma:
-                agreeing = False
-            plan.append((word, lemma))
-        adjective_forms = {lemma: self._forms(lemma, "adj", gender) for _w, lemma in plan if lemma}
-        if not adjective_forms and not marker_forms:
-            return {**base, "forms": {c: {"text": surface, "source": "frozen", "confidence": 1.0} for c in CASES}}
-        result: dict[str, dict[str, Any]] = {}
-        complete = True
-        for case in CASES:
-            parts = []
-            first = words[0]
-            if marker_lemma and case in marker_forms:
-                parts.append(_match_case(first, marker_forms[case]))
-            else:
-                parts.append(first)
-            for word, lemma in plan:
-                if lemma and case in adjective_forms[lemma]:
-                    tail = word[len(word.rstrip(",.")):]
-                    parts.append(_match_case(word, adjective_forms[lemma][case]) + tail)
-                else:
-                    if lemma:
-                        complete = False
-                    parts.append(word)
-            result[case] = {"text": " ".join(parts), "source": "sgjp", "confidence": 1.0}
-        observed_case = sorted(cases)[0] if cases else "nom"
-        return {
-            **base,
-            "canonical": result["nom"]["text"],
-            "gender": gender,
-            "observedCase": observed_case,
-            "status": "ok" if complete else "needs_review",
-            "forms": result,
-        }
+# --- addresses: polish_address_morphology.AddressMorphology -----------------
 
 
 def main() -> None:
@@ -799,8 +658,11 @@ def main() -> None:
         engine.analyze(item["surface"], item.get("genderHint"), item.get("numberHint"))
         for item in requests.get("persons", [])
     ]
+    from polish_address_morphology import AddressMorphology
+
     address_engine = AddressMorphology(engine.engine)
-    addresses = [address_engine.analyze(item["surface"]) for item in requests.get("addresses", [])]
+    surfaces = tuple(item["surface"] for item in requests.get("addresses", []))
+    addresses = [address_engine.analyze(surface, surfaces) for surface in surfaces]
     # OCR correction: is the word a form known to the SGJP dictionary?
     known = [
         any(interp[2][2] != "ign" for interp in engine.engine.analyse(word))

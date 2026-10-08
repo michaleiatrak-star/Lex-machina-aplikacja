@@ -14,7 +14,11 @@ form. A span is a person when it looks like one in context:
 Addresses are recognized by structure: a street marker (ul., al., pl., os.,
 ulica, aleja, plac, osiedle, rondo ...) with a name and a house number,
 optionally followed by a postal code and town; a village address with a
-number and postal code; a postal code with a town.
+number and postal code; a postal code with a town. The TERYT register
+(address_base.py) adds a street named without a house number ("przy ulicy
+Długiej") and a locality, in any case form, where a text says someone lives,
+lived or comes from there ("zamieszkały w Ponikwi 15", "ul. Długa 5 w Pcimiu");
+a locality in a court's or office's name is not personal data.
 
 Input: text file. Output: JSON list of {start, end, kind, value}.
 The recognizer never sees the network and never writes the text anywhere.
@@ -30,6 +34,7 @@ from pathlib import Path
 
 import morfeusz2
 
+import address_base
 import surname_base
 
 UPPER = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÁÍÚÝČŠŽŘ"
@@ -71,9 +76,15 @@ STREET_MARKER = (
     r"bulwar(?:u|ze|em)?|wybrzeż(?:e|a|u|em))"
 )
 NAME_TOKEN = (
-    rf"(?:[{UPPER}][\w’'\-]*\.?|\d{{1,2}}(?=\s+[{UPPER}])|[IVX]{{1,4}}\b|"
-    r"(?:św|gen|ks|kard|marsz|płk|mjr|prof|dr|bpa|bp|abp|im|kpt|por|ppor|hetm|króla|kr)\.)"
+    rf"(?:[{UPPER}][\w’'\-]{{0,3}}\.(?=\s)|[{UPPER}][\w’'\-]*|\d{{1,3}}(?=\s+[{UPPER}])|\d{{1,4}}-[a-ząćęłńóśźż]+|[IVX]{{1,4}}\b|[„\"][^\"”\n]{{1,30}}[”\"]|"
+    # Titles and ranks before a patron's name: "gen. dyw.", "kpt. pilota", "księdza", "o."
+    r"[a-ząćęłńóśźż]{1,5}\.(?=\s+\S)|"
+    r"(?:księdza|majora|pilota|generała|pułkownika|kapitana|doktora|profesora|marszałka|biskupa|kardynała|"
+    r"porucznika|hetmana|króla|królowej|świętego|świętej|błogosławionego|błogosławionej|ojca|matki|siostry|"
+    r"brata|sierżanta|kaprala|rotmistrza|komandora|admirała|inżyniera|harcmistrza|podharcmistrza)(?=\s+\S))"
 )
+# "Żwirki i Wigury", "Bitwy pod Kutnem", "Poległym za Ojczyznę"
+NAME_LINK = r"(?:i|pod|za|przy|nad|na|w|we|z|ze|od|do)"
 HOUSE_NUMBER = (
     r"(?:nr\s*)?\d{1,4}[A-Za-z]?(?:\s*[/\-]\s*\d{1,4}[A-Za-z]?)?"
     r"(?:\s*(?:m\.|lok\.|lokal|m)\s*\d{1,4}[A-Za-z]?)?"
@@ -82,7 +93,7 @@ TOWN = rf"[{UPPER}][\w\-]+(?:[ \-][{UPPER}][\w\-]+){{0,2}}"
 POSTAL = rf"\d{{2}}-\d{{3}}\s+{TOWN}"
 
 STREET_ADDRESS_RE = re.compile(
-    rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+{NAME_TOKEN}){{0,5}}\s+{HOUSE_NUMBER}(?![\w/])"
+    rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+(?:{NAME_LINK}\s+)?{NAME_TOKEN}){{0,6}}\s+{HOUSE_NUMBER}(?![\w/])"
     rf"(?:\s*,?\s*{POSTAL})?"
 )
 VILLAGE_ADDRESS_RE = re.compile(
@@ -186,6 +197,159 @@ def adjacent(text: str, left: tuple[int, int, str], right: tuple[int, int, str])
     return gap in {" ", " "} or (gap == "" and False)
 
 
+# Where a text places a person: a locality after these is an address.
+RESIDENCE_CUE_RE = re.compile(
+    r"(?<![\w.])(?:"
+    r"(?:zamieszka[łn]\w*|zameldowan\w*|mieszka\w*|zamieszkuj\w*|przebywa\w*|zatrzyman\w*|"
+    r"wyprowadzi\w*\s+się|przeprowadzi\w*\s+się|przeni(?:ósł|osł\w*|esie\w*)\s+się|pochodz\w*|"
+    r"urodzi\w*\s+się|urodzon\w*|ur\.)"
+    r"(?:\s+(?:dnia\s+)?\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*(?:r\.)?)?"
+    r"(?:\s+(?:na\s+stałe|obecnie|aktualnie|wcześniej|dotychczas|ostatnio))?\s+(?P<prep>w|we|z|ze|do)\s+"
+    r"(?-i:(?:miejscowości|wsi|mieście|osadzie|kolonii)\s+)?"
+    r"|zam\.\s+(?:w(?:e)?\s+)?"
+    r"|(?:w|we|z|ze|do)\s+(?-i:miejscowości|wsi)\s+"
+    r"|(?:miejscowość|miejsce\s+zamieszkania|adres\s+zamieszkania)\s*:?\s+"
+    r")",
+    re.IGNORECASE,
+)
+LOCALITY_LINKS = ("nad", "pod", "za", "na", "od", "przy", "koło", "k.", "w", "we")
+LOCALITY_WORD_RE = re.compile(rf"(?:[{UPPER}][\w’'\-]*|(?:{'|'.join(re.escape(w) for w in LOCALITY_LINKS)})(?=\s+[{UPPER}]))")
+HOUSE_AFTER_RE = re.compile(rf"\s+(?:nr\s*)?\d{{1,4}}[A-Za-z]?(?:\s*/\s*\d{{1,4}}[A-Za-z]?)?(?![\w/.,]\d)(?!\s*(?:r\.|lat|roku|zł))")
+AFTER_STREET_RE = re.compile(r"(?:\s*,\s*|\s+(?:w|we)\s+)")
+
+# Villages share these names; after "pochodzi z" they are the country.
+COUNTRIES = frozenset("""Polska Niemcy Ukraina Białoruś Litwa Łotwa Estonia Rosja Czechy Słowacja Węgry
+Rumunia Bułgaria Serbia Chorwacja Słowenia Austria Szwajcaria Francja Hiszpania Portugalia Włochy Grecja
+Turcja Anglia Szkocja Irlandia Holandia Belgia Dania Szwecja Norwegia Finlandia Islandia Gruzja Armenia
+Mołdawia Kazachstan Indie Chiny Japonia Korea Wietnam Kanada Ameryka Meksyk Brazylia Argentyna Egipt
+Izrael Australia Europa Azja Afryka""".split())
+
+_ADDRESS_MORPHOLOGY = None
+
+
+def address_morphology():
+    global _ADDRESS_MORPHOLOGY
+    if _ADDRESS_MORPHOLOGY is None:
+        from polish_address_morphology import AddressMorphology
+
+        _ADDRESS_MORPHOLOGY = AddressMorphology(morfeusz2.Morfeusz())
+    return _ADDRESS_MORPHOLOGY
+
+
+def locality_at(text: str, start: int, country: bool = False) -> tuple[int, int] | None:
+    """The longest run of words at `start` that is a locality of the register
+    in some case form ("Ciemnej Woli", "Kępie nad Wisłą")."""
+    words: list[tuple[int, int]] = []
+    position = start
+    while len(words) < 4:
+        match = LOCALITY_WORD_RE.match(text, position)
+        if not match or (not words and not match.group()[:1].isupper()):
+            break
+        words.append((match.start(), match.end()))
+        gap = re.match(r"[ -]", text[match.end():match.end() + 1])
+        if not gap or text[match.end()] == "-" and not text[match.end() + 1:match.end() + 2].isupper():
+            break
+        position = match.end() + 1
+    morphology = address_morphology()
+    for count in range(len(words), 0, -1):
+        end = words[count - 1][1]
+        name = text[start:end].rstrip("-")
+        if not name[-1:].isalpha() or name.split(" ")[-1] in LOCALITY_LINKS:
+            continue
+        readings = morphology.locality_readings(name)
+        if readings:
+            if readings[0]["name"] in COUNTRIES and not country and not HOUSE_AFTER_RE.match(text, start + len(name)):
+                # "pochodzi z Ukrainy": the country; "ul. Długa 5, Włochy",
+                # "w Korei 13": the village or district of that name.
+                return None
+            return start, start + len(name)
+    return None
+
+
+def find_localities(text: str, taken: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    if not address_base.default_base().available:
+        return []
+    starts = []
+    for match in RESIDENCE_CUE_RE.finditer(text):
+        if (match.group("prep") or "").lower() in ("z", "ze", "do"):
+            # "mieszka z Janem", "przeprowadził się do Kowalskich": a person.
+            first = WORD_RE.match(text, match.end())
+            if first:
+                # A given name, alone or before a surname; a word that is only a
+                # surname may well be a village (Dąbrowa, Walaszki).
+                given, _surname, _u, _c, geographic, _l = word_class(first.group())
+                after = WORD_RE.match(text, first.end() + 1)
+                full_name = bool(after and after.group()[:1].isupper())
+                found = locality_at(text, match.end())
+                several_words = bool(found and " " in text[found[0]:found[1]].strip())
+                if given and (not geographic or full_name) and not several_words:
+                    continue
+        starts.append(match.end())
+    after_street = set()
+    # "ul. Długa 5, Pcim", "ul. Długiej 5 w Pcimiu"
+    for s, e in taken:
+        follow = AFTER_STREET_RE.match(text, e)
+        if follow and re.match(r"(?:ul\.|ulic|al\.|ale[ij]|pl\.|plac|os\.|osiedl|rond|skwer|bulwar|wybrzeż)", text[s:e], re.I):
+            starts.append(follow.end())
+            after_street.add(follow.end())
+    spans: list[tuple[int, int]] = []
+    for start in sorted(set(starts)):
+        if any(s <= start < e for s, e in taken + spans):
+            continue
+        found = locality_at(text, start, country=start in after_street)
+        if not found:
+            continue
+        s, e = found
+        house = HOUSE_AFTER_RE.match(text, e)
+        if house:
+            e = house.end()
+        spans.append((s, e))
+    return spans
+
+
+STREET_NAME_RE = re.compile(rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+(?:{NAME_LINK}\s+)?{NAME_TOKEN}){{0,6}}")
+
+
+# A street named without a number is someone's address only after these
+# ("mieszka przy ulicy Długiej"); a court's or office's street is not.
+STREET_CUE_RE = re.compile(
+    r"(?:zamieszka\w*|mieszka\w*|zam\.|zameldowan\w*|zamieszkuj\w*|przebywa\w*|przeprowadzi\w*\s+się|"
+    r"wyprowadzi\w*\s+się|przeni\w*\s+się|adres\w*)(?:\s+\S+){0,6}\s*:?\s*$",
+    re.IGNORECASE,
+)
+
+
+def find_named_streets(text: str, taken: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """A street the register knows, named without a house number, where a
+    text places a person."""
+    if not address_base.default_base().streets.available:
+        return []
+    morphology = address_morphology()
+    spans = []
+    for match in STREET_NAME_RE.finditer(text):
+        if any(match.start() < e and s < match.end() for s, e in taken):
+            continue
+        if not STREET_CUE_RE.search(text[max(0, match.start() - 60):match.start()]):
+            continue
+        words = match.group().split()
+        key, marker, cases = morphology._marker(words[0])
+        if not marker:
+            continue
+        if words[0][:1].isupper() and morphology.locality_readings(" ".join(w.rstrip(",.") for w in words[:2])):
+            # "Sąd Rejonowy w Osiedlu Robotniczym": a locality, not a street.
+            continue
+        gender, lemma = marker
+        kind = morphology.REGISTER_KIND.get(key, "ul.")
+        for count in range(len(words) - 1, 0, -1):
+            name = [w.rstrip(",.") if i == count - 1 else w for i, w in enumerate(words[1:count + 1])]
+            reading, _ = morphology._street_reading(name, gender, kind, cases if lemma else None)
+            if reading:
+                end = match.start() + len(" ".join(words[:count + 1]).rstrip(",."))
+                spans.append((match.start(), end))
+                break
+    return spans
+
+
 def find_addresses(text: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     for regex in (STREET_ADDRESS_RE, VILLAGE_ADDRESS_RE, POSTAL_RE):
@@ -194,7 +358,9 @@ def find_addresses(text: str) -> list[tuple[int, int]]:
             if any(start < e and s < end for s, e in spans):
                 continue
             spans.append((start, end))
-    return spans
+    spans += find_named_streets(text, spans)
+    spans += find_localities(text, spans)
+    return sorted(spans)
 
 
 def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, int]]:
