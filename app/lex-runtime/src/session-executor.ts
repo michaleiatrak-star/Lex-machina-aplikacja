@@ -978,6 +978,9 @@ export type SessionExecutionResponse = {
  * get none: their tokens are the chat's. Restoring an alias reads the
  * document id at position n-1 of documentIds().
  */
+// Act modules of the case's second domains loaded with the prompt (one each, at most this).
+const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
+
 export class DocumentAliasRegistry {
   private readonly prefixes = new Map<string, string>();
 
@@ -2084,6 +2087,30 @@ export class SafeSessionExecutor implements SessionExecutor {
         });
         pathSections.push(domainHintPrompt(domains));
         step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
+        // A second domain the case's kind or its own phrase names: its act module goes in
+        // with the prompt, not as one more round of the model (the whole context again).
+        const secondary = loadActModules(
+          this.registry,
+          domains
+            .slice(1)
+            .filter((domain) => domain.strong && domain.modules[0])
+            .map((domain) => ({ skill: domain.skill, resource: domain.modules[0]!.resource, rule: "NAZWA" as const, why: domain.modules[0]!.why })),
+          contextResources,
+          SECONDARY_DOMAIN_MODULES_BUDGET_CHARS
+        );
+        for (const item of secondary.loaded) {
+          contextResources.add(item.resource);
+          audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;domain-hint;secondary-domain" });
+        }
+        if (secondary.loaded.length) {
+          pathSections.push(
+            [
+              "# MODUŁ AKTU DZIEDZINY WTÓRNEJ (wskazówka routingu; aplikacja wczytała go za ciebie — nie czytaj go ponownie)",
+              ...secondary.loaded.map((item) => `## ${item.resource} (${item.why})\n\n${item.content}`)
+            ].join("\n\n")
+          );
+          step("PREPARE", `moduł dziedziny wtórnej wczytany: ${secondary.loaded.map((item) => path.basename(item.resource, ".md")).join(", ")}`);
+        }
       }
     }
     // Sections the skill's author marked as executed by the application go to the
