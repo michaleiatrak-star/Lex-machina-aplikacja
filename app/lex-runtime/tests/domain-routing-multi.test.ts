@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { rankDomains, parseFlashRouting } from "../src/domain-module-map.js";
+import { domainHintPrompt, rankDomains, parseFlashRouting } from "../src/domain-module-map.js";
 import { resolveAdditionalSkills } from "../src/skill-selection.js";
 import { criminalMatter } from "../src/matter-signals.js";
 import { LexSkillRegistry } from "../src/registry.js";
@@ -98,5 +98,14 @@ describe("two DR domains of one case", () => {
   it("recognises violence told object first", () => {
     expect(criminalMatter("Szef mnie uderzył w pracy")).toBe(true);
     expect(criminalMatter("Mnie bolała głowa w pracy")).toBe(false);
+  });
+
+  it("asks the model to read the domains the case's kind or own phrases name, not those of one word", () => {
+    const criminal = domainHintPrompt(rank("Pracodawca nie wypłacił mi wynagrodzenia, a monitoring w szatni nagrywa pracowników. Co grozi szefowi karnie?"));
+    expect(criminal).toMatch(/Sprawa wielodziedzinowa: oprócz dr-04-\S+ przeczytaj SKILL\.md dr-03-\S+, dr-11-/);
+    const oneWord = domainHintPrompt(rank("Fałszywy podpis na umowie, fałszerstwo dokumentu"));
+    expect(oneWord).toMatch(/Dziedzina możliwa \(jedno wspólne słowo\): dr-02-/);
+    expect(oneWord).not.toMatch(/wielodziedzinowa/);
+    expect(domainHintPrompt(rank("Chcę rozwodu z orzeczeniem o winie męża i alimentów na dzieci."))).not.toMatch(/wielodziedzinowa|możliwa/);
   });
 });
