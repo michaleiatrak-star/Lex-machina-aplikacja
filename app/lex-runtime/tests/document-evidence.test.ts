@@ -49,6 +49,14 @@ describe("page images as evidence", () => {
     expect(maskBoxes({ page: 1, text: "x", source: "OCR" }, [])).toBeNull();
   });
 
+  it("never sends the image of a page whose text has no line boxes (hand-edited page)", () => {
+    // Text typed by the user after a poor OCR: nothing ties it to the image any more.
+    const edited: IngestedPage = { page: 1, text: "Jan Kowalski 85010112345", source: "OCR", image, editedByUser: true };
+    expect(maskBoxes(edited, ["Jan Kowalski", "85010112345"])).toBeNull();
+    const noLines: IngestedPage = { page: 1, text: "Jan Kowalski", source: "OCR", image, lines: [] };
+    expect(maskBoxes(noLines, ["Jan Kowalski"])).toBeNull();
+  });
+
   it("photos go by default, text pages only on request, PDFs never by default", () => {
     const photo = page("STOP", [{ text: "STOP", box: [0, 0, 10, 10] }]);
     const scan = page("Sąd Rejonowy ".repeat(10), [{ text: "Sąd Rejonowy ".repeat(10), box: [0, 0, 10, 10] }]);

@@ -56,6 +56,10 @@ export function maskBoxes(page, values) {
     const lines = page.lines ?? [];
     if (!page.image || lines.some((line) => !line.box))
         return null;
+    // No line boxes for a page that has text (hand-edited, or OCR lines lost): the protected
+    // values cannot be located on the image, so it is not sent at all.
+    if (page.editedByUser || (lines.length === 0 && page.text.trim() !== ""))
+        return null;
     const offsets = [];
     let cursor = 0;
     for (const line of lines) {
