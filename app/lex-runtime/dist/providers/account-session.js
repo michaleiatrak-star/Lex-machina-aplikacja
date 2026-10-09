@@ -1333,9 +1333,67 @@ async function runCli(provider, args, stdinText, timeoutMs, cwd, abortSignal, se
         : executable, args, stdinText, accountEnvironment(provider), timeoutMs, cwd, abortSignal, settleOptions);
 }
 export function accountLoginLaunchMode(provider, platform = process.platform) {
-    return platform === "win32"
+    // macOS: Gemini CLI signs in only in its interactive window (no TTY and an empty
+    // stdin made it exit before the Google flow); Codex and Claude log in in the browser.
+    return platform === "win32" || (platform === "darwin" && provider === "google")
         ? "VISIBLE_TERMINAL"
         : "CAPTURED";
+}
+function shellQuote(value) {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+}
+/**
+ * macOS: the login script for a Terminal window. Terminal does not inherit the
+ * runtime's environment: the private PATH and the provider's own variables are set
+ * here, the API keys a user's shell may hold are unset (the account, never a key).
+ */
+export function macLoginScript(args) {
+    const label = args.provider === "google" ? "Gemini CLI" : args.provider === "openai" ? "Codex / ChatGPT" : args.provider === "anthropic" ? "Claude Code" : "Grok Build";
+    const passed = ["PATH", "GEMINI_CLI_NO_RELAUNCH", "CLAUDE_CODE_MCP_STARTUP_WAIT_MS", "MCP_CONNECTION_NONBLOCKING"]
+        .filter((name) => typeof args.env[name] === "string" && args.env[name])
+        .map((name) => `export ${name}=${shellQuote(args.env[name])}`);
+    return [
+        "#!/bin/bash",
+        `echo ${shellQuote(`Lex Machina otworzy logowanie: ${label}.`)}`,
+        `echo ${shellQuote("Dokończ oficjalne logowanie w przeglądarce i wróć do tego okna, jeśli klient poprosi o kod.")}`,
+        ...(args.provider === "google" ? [`echo ${shellQuote("Po zalogowaniu wpisz /quit i naciśnij Enter, aby zamknąć Gemini CLI.")}`] : []),
+        "unset GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_GENERATIVE_AI_API_KEY GOOGLE_GENAI_USE_VERTEXAI GOOGLE_GENAI_USE_GCA OPENAI_API_KEY ANTHROPIC_API_KEY XAI_API_KEY",
+        ...passed,
+        [args.executable, ...args.loginArgs].map(shellQuote).join(" "),
+        "code=$?",
+        `echo "$code" > ${shellQuote(args.exitFile)}`,
+        `if [ "$code" != "0" ]; then echo ${shellQuote(`Logowanie ${label} nie powiodło się.`)} "Kod: $code"; else echo ${shellQuote("Gotowe — możesz zamknąć to okno.")}; fi`,
+        'exit "$code"',
+        ""
+    ].join("\n");
+}
+async function runVisibleMacLogin(provider, args, timeoutMs) {
+    const executable = await ensureAccountExecutable(provider);
+    if (!executable) {
+        throw new Error(`ACCOUNT_SESSION_CLI_NOT_INSTALLED:${provider}`);
+    }
+    const root = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-login-"));
+    const scriptPath = path.join(root, "login.command");
+    const exitFile = path.join(root, "exit-code");
+    try {
+        await fsp.writeFile(scriptPath, macLoginScript({ provider, executable, loginArgs: args, exitFile, env: accountEnvironment(provider) }), { encoding: "utf8", mode: 0o700 });
+        const opened = await runDirect("open", ["-a", "Terminal", scriptPath], undefined, process.env, 30_000);
+        if (opened.code !== 0) {
+            return { code: opened.code, stdout: "", stderr: `ACCOUNT_LOGIN_TERMINAL_FAILED ${opened.stderr}`.trim() };
+        }
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            const written = await fsp.readFile(exitFile, "utf8").catch(() => null);
+            if (written !== null && written.trim()) {
+                return { code: Number.parseInt(written.trim(), 10) || 0, stdout: "", stderr: "" };
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
+        return { code: 1, stdout: "", stderr: "ACCOUNT_LOGIN_TIMEOUT" };
+    }
+    finally {
+        await fsp.rm(root, { recursive: true, force: true }).catch(() => { });
+    }
 }
 export function accountLoginArgs(provider) {
     if (provider === "openai") {
@@ -2316,7 +2374,9 @@ export class AccountSessionManager {
         const args = accountLoginArgs(provider);
         const runLogin = (loginArgs) => accountLoginLaunchMode(provider) ===
             "VISIBLE_TERMINAL"
-            ? runVisibleWindowsLogin(provider, loginArgs, AUTH_TIMEOUT_MS)
+            ? process.platform === "darwin"
+                ? runVisibleMacLogin(provider, loginArgs, AUTH_TIMEOUT_MS)
+                : runVisibleWindowsLogin(provider, loginArgs, AUTH_TIMEOUT_MS)
             : runCli(provider, loginArgs, undefined, AUTH_TIMEOUT_MS);
         let result = await runLogin(args);
         if (result.code !== 0) {

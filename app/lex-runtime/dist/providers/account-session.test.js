@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { accountLoginArgs, accountLoginFallbackArgs, accountLoginLaunchMode, accountSessionModelId, accountSessionResumeMode, claudeAutomationCredentialMode, claudeHeadlessArgs, claudeResultReady, claudeSubscriptionAuthenticated, classifyAccountCliFailureDetail, codexExecArgs, codexStoredAuthIsChatGpt, discoverLatestClaudeSessionId, isAccountSessionModel, isMissingResumableSessionMessage, mergeWindowsCommandPath, nativeClaudeExecutable, openAiChatGptAuthenticated, parseClaudeResult, pickResolvedCommand, sanitizeAccountCliFailureDetail, visibleWindowsLoginLauncher } from "./account-session.js";
+import { accountLoginArgs, accountLoginFallbackArgs, accountLoginLaunchMode, macLoginScript, accountSessionModelId, accountSessionResumeMode, claudeAutomationCredentialMode, claudeHeadlessArgs, claudeResultReady, claudeSubscriptionAuthenticated, classifyAccountCliFailureDetail, codexExecArgs, codexStoredAuthIsChatGpt, discoverLatestClaudeSessionId, isAccountSessionModel, isMissingResumableSessionMessage, mergeWindowsCommandPath, nativeClaudeExecutable, openAiChatGptAuthenticated, parseClaudeResult, pickResolvedCommand, sanitizeAccountCliFailureDetail, visibleWindowsLoginLauncher } from "./account-session.js";
 const cleanupRoots = [];
 afterEach(() => {
     delete process.env.LEX_CLAUDE_SESSIONS_ROOT;
@@ -139,6 +139,28 @@ describe("provider account-session transport", () => {
         expect(accountLoginArgs("xai")).toEqual([
             "login"
         ]);
+    });
+    // Zgłoszenie 2026-10-09 (macOS): Gemini CLI bez okna terminala kończył się przed
+    // logowaniem Google; na macOS loguje się w oknie Terminala.
+    it("signs in to Gemini in a Terminal window on macOS", async () => {
+        expect(accountLoginLaunchMode("google", "darwin")).toBe("VISIBLE_TERMINAL");
+        expect(accountLoginLaunchMode("anthropic", "darwin")).toBe("CAPTURED");
+        expect(accountLoginLaunchMode("openai", "darwin")).toBe("CAPTURED");
+        const script = macLoginScript({
+            provider: "google",
+            executable: "/Users/o'brien/Library/LexMachina/gemini",
+            loginArgs: [],
+            exitFile: "/tmp/lex login/exit-code",
+            env: { PATH: "/opt/lex/node/bin:/usr/bin", GEMINI_CLI_NO_RELAUNCH: "true", GEMINI_API_KEY: "secret", LEX_DESKTOP_BOOTSTRAP_TOKEN: "token" }
+        });
+        expect(script).toContain("export PATH='/opt/lex/node/bin:/usr/bin'");
+        expect(script).toContain("export GEMINI_CLI_NO_RELAUNCH='true'");
+        expect(script).toContain("unset GEMINI_API_KEY");
+        expect(script).not.toMatch(/secret|token'/);
+        expect(script).toContain("'/Users/o'\\''brien/Library/LexMachina/gemini'");
+        expect(script).toContain("> '/tmp/lex login/exit-code'");
+        const { spawnSync } = await import("node:child_process");
+        expect(spawnSync("/bin/bash", ["-n"], { input: script }).status).toBe(0);
     });
     it("launches Claude subscription OAuth in a visible Windows terminal", () => {
         expect(accountLoginLaunchMode("anthropic", "win32")).toBe("VISIBLE_TERMINAL");
