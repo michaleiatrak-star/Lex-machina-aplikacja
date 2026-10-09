@@ -30,6 +30,7 @@ import { SupportError } from "../support-service.js";
 import { parseGuideTransition } from "../guide-session-state.js";
 import { CaseAccessError } from "../case-access.js";
 import { ReauthorizationError } from "../auth/reauthorization.js";
+import { ExportGateBlockedError } from "../document-authoring-service.js";
 import { DocumentAstSessionBlockedError } from "../legal-document-ast-generator.js";
 import { ExecutionSteps } from "../execution-steps.js";
 import { ContextBudgetError, estimateDocumentFit, HOSTED_CONTEXT_TOKENS, LOCAL_MAX_DOCUMENT_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS } from "../context-orchestrator.js";
@@ -376,6 +377,12 @@ function sendAuthError(res, error) {
             : {})
     });
     return true;
+}
+/** The references behind a refused export, for the user (not only reason codes). */
+function exportBlockedDetails(error) {
+    return error instanceof ExportGateBlockedError
+        ? { reasons: error.reasons, references: error.references, draftAvailable: error.draftAvailable }
+        : {};
 }
 function sendCaseAccessError(res, error) {
     if (!(error instanceof
@@ -4323,6 +4330,7 @@ export function createLexHttpApp(options) {
                     .withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => await options
                     .documentAuthoringService
                     .createReady({
+                    ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
                     caseId,
                     createdByUserId: context.user
                         .userId,
@@ -4350,6 +4358,7 @@ export function createLexHttpApp(options) {
                     artifact: ready.artifact,
                     format: ready.format,
                     sha256: ready.sha256,
+                    warnings: ready.warnings,
                     aliasesUsed: [],
                     readyForDownload: true,
                     ...(templateProfile
@@ -4366,6 +4375,7 @@ export function createLexHttpApp(options) {
                 .documentAuthoringService
                 .createTokenized({
                 ...(processDocumentStatus ? { processDocumentStatus } : {}),
+                ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
                 caseId,
                 createdByUserId: context.user
                     .userId,
@@ -4404,6 +4414,7 @@ export function createLexHttpApp(options) {
                 deanonymizationKeyBound: tokenized
                     .deanonymizationKeyBound,
                 readyForDownload: false,
+                warnings: tokenized.warnings,
                 ...(templateProfile
                     ? {
                         templateProfile
@@ -4420,6 +4431,7 @@ export function createLexHttpApp(options) {
                         Error
                         ? error.message
                         : "DOCUMENT_GENERATION_FAILED",
+                    ...exportBlockedDetails(error),
                     ...(error instanceof
                         DocumentAstSessionBlockedError
                         ? {
@@ -4760,7 +4772,8 @@ export function createLexHttpApp(options) {
                     error: error instanceof
                         Error
                         ? error.message
-                        : "DEANONYMIZATION_FINALIZE_FAILED"
+                        : "DEANONYMIZATION_FINALIZE_FAILED",
+                    ...exportBlockedDetails(error)
                 });
             }
         }
@@ -5336,6 +5349,11 @@ export function createLexHttpApp(options) {
                 }
             };
             request.onStep("PREPARE", "przygotowanie wiadomości");
+            // Document aliases in the live draft, from the same local vaults as the answer.
+            const documentService = options.documentService;
+            if (documentService?.deanonymize) {
+                request.restoreDocumentToken = (documentId, sourceToken) => documentService.deanonymize(documentId, sourceToken);
+            }
             request.onDraft = (text) => {
                 const entry = executionDrafts.get(executionId);
                 if (entry && entry.owner === owner) {
@@ -5680,7 +5698,24 @@ export function createLexHttpApp(options) {
                         localTokenCharsPerToken;
                 }
             }
-            const previewPlan = previewSessionWorkflow(options.registry, request);
+            // AUTO with an API or account model and no delivered material: a stateful
+            // workflow (chronology, court, contract, pleading, report) starts only when
+            // the router gives the message that executive skill. A single word ("wyrok",
+            // "umowa", "klienta", "rekomendacje") used to start one against the router's
+            // decision, take the turn off model-selected skills and stop plain questions
+            // with *_STATE_REQUIRED (benchmark 2026-10-08, scenarios-5000).
+            const keywordPlan = previewSessionWorkflow(options.registry, request);
+            const routerExecutive = request.modelSelectsSkills &&
+                sessionAttachments.length === 0 &&
+                !(knowledge.caseId && knowledge.includeCase) &&
+                keywordPlan.executionSkill &&
+                options.sessionExecutor?.executiveSkillFor
+                ? options.sessionExecutor.executiveSkillFor(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query))
+                : undefined;
+            const previewPlan = routerExecutive !== undefined &&
+                routerExecutive !== keywordPlan.executionSkill
+                ? createDeterministicWorkflowPlan(options.registry, null)
+                : keywordPlan;
             let processContext = null;
             let pleadingDraftWritten = null;
             if (previewPlan.id ===

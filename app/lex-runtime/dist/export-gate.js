@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { containsVerificationMarker } from "./verification-markers.js";
 function bytesOf(content) {
     return typeof content === "string"
         ? new TextEncoder().encode(content)
@@ -71,13 +72,26 @@ export class ExportGate {
             status: args.hybridValidation,
             documentKind: args.documentKind
         });
+        if (containsVerificationMarker(args.documentText)) {
+            reasons.push("VERIFICATION_MARKER_IN_DOCUMENT");
+            args.audit.record("gate", "G10_EXPORT_GATE", "BLOCKED", { reason: "VERIFICATION_MARKER_IN_DOCUMENT" });
+            return { gate: "G10_EXPORT_GATE", result: "BLOCKED", reasons, verificationLog };
+        }
         const finalization = this.finalizer.finalize({
-            text: args.documentText,
+            text: args.markedText ?? args.documentText,
             ledger: args.ledger,
             audit: args.audit,
-            closeSession: false
+            closeSession: false,
+            markers: args.markedText === undefined ? "removed" : "in-text"
         });
-        if (finalization.result !== "PASS") {
+        if (finalization.result === "DEGRADED" && args.acceptUnverified) {
+            args.audit.record("gate", "UNVERIFIED_ACCEPTED_BY_USER", "DEGRADED", {
+                references: finalization.findings
+                    .filter((finding) => finding.status !== "VERIFIED")
+                    .map((finding) => finding.reference.claim)
+            });
+        }
+        else if (finalization.result !== "PASS") {
             const reason = finalization.result === "DEGRADED"
                 ? "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
                 : "G8_FINALIZATION_BLOCKED";
@@ -91,7 +105,11 @@ export class ExportGate {
                 verificationLog
             };
         }
-        const requireVerification = finalization.references.length > 0;
+        // A draft the user saves unverified has no verification to show for the
+        // references it names; any verified one still needs its trail.
+        const accepted = finalization.result === "DEGRADED" && args.acceptUnverified === true;
+        const requireVerification = finalization.references.length > 0 &&
+            (!accepted || finalization.findings.some((finding) => finding.status === "VERIFIED"));
         const preClose = args.audit.validateCompletion({
             requireVerification
         });

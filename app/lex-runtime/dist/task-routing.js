@@ -67,7 +67,8 @@ function stemPhrase(phrase) {
         .map((word) => {
         const base = (word.length >= 8 ? word.slice(0, word.length - 2) : word.length >= 5 ? word.slice(0, word.length - 1) : word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const dropped = /e[^aeiouyąęó\W\d]$/iu.test(word) && word.length >= 5 ? (word.slice(0, -2) + word.slice(-1)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : null;
-        return dropped ? `(?:${base}|${dropped})` : base;
+        // The dropped form takes only an ending: "pozwu", "pozwem", not "pozwolenie".
+        return dropped ? `(?:${base}|${dropped}\\p{L}{0,3}(?![\\p{L}]))` : base;
     });
     if (!words.length)
         return null;
@@ -78,11 +79,33 @@ function stemPhrase(phrase) {
  * [10] is the domain router, already in the context, and does not name an
  * executive skill). Null when no executive route matches.
  */
-const EVIDENCE_MEDIA = /^(?:maile|sms|nagrania)$/u;
+const EVIDENCE_MEDIA = /^(?:maile|sms|nagrania|faktury)$/u;
+// Router [1]: a contract named as the matter's background ("brak zgodności towaru z umową")
+// is not a contract to work on; [1] needs the contract as the object of the request.
+const CONTRACT_NOUNS = /^(?:umowa|kontrakt|ugoda|testament)$/u;
+const CONTRACT_OBJECT = /(?<![\p{L}])(?:(?:przeanalizuj|przeanalizować|analiz\p{L}*|sprawdź|sprawdzić|oceń|ocenić|przejrzyj|przejrzeć|zweryfikuj|zweryfikować|napisz|napisać|przygotuj|przygotować|sporządź|sporządzić|zredaguj|stwórz|negocj\p{L}*|podpis\p{L}*|zmień|zmienić|popraw\p{L}*|wypowiedz\p{L}*|rozwiąz\p{L}*)\s+(?:\p{L}+\s+){0,3}(?:umow|kontrakt|ugod|testament|owu)\p{L}*|(?:umow|kontrakt|ugod|testament)\p{L}*\s+(?:\p{L}+\s+){0,4}(?:przed\s+podpisaniem|do\s+podpisu|do\s+analizy|do\s+sprawdzenia)|klauzul\p{L}*|(?:zapis|postanowieni)\p{L}*\s+(?:tej\s+|tego\s+)?umow\p{L}*|paragraf\p{L}*|aneks\p{L}*|czy\s+(?:mogę|można)\s+(?:to\s+|tę\s+|ją\s+)?podpisać)/iu;
+// Router [8]: a witness or an expert told in the story is not a questioning to prepare;
+// "biegły rewident" is an auditor, not a court expert.
+const WITNESS_NOUNS = /^(?:świadek|biegły)$/u;
+const WITNESS_WORK = /(?<![\p{L}])(?:pytani\p{L}*|przesłuch\p{L}*|przygotow\p{L}*|zezna\p{L}*|cross|rozbi\p{L}*|krzyżow\p{L}*|podważ\p{L}*)(?![\p{L}])/iu;
 const EVIDENCE_INTENT = /(?<![\p{L}])(?:dow[oó]d\p{L}*|ocen\p{L}*|oceń|przeanalizuj|analiz\p{L}*|wykorzyst\p{L}*|użyć|sprawdź|zweryfikuj)(?![\p{L}])/iu;
 // "Pracuję na umowie zlecenie / o pracę": the person's employment, not a contract to analyse.
 const EMPLOYMENT_BASIS = /(?<![\p{L}])na\s+umowi\p{L}*\s+(?:o\s+prac\p{L}*|o\s+dzieło|zlecen\p{L}*|b2b|śmieciow\p{L}*)/giu;
-export function classifyTask(routes, rawQuestion) {
+/**
+ * The matched phrases that name the task, not only the matter's background: a bare
+ * "maile / faktury" without a question about evidence, a contract that is not the
+ * object of the request, a witness or expert told in the story (router [1], [6], [8]).
+ */
+function taskWords(matched, question, delivered = "") {
+    const background = (phrase) => 
+    // Delivered material ("umowa", "faktura") is the object of the work, never background.
+    !(delivered && stemPhrase(phrase)?.test(delivered)) &&
+        ((EVIDENCE_MEDIA.test(phrase) && !EVIDENCE_INTENT.test(question)) ||
+            (CONTRACT_NOUNS.test(phrase) && !CONTRACT_OBJECT.test(question)) ||
+            (WITNESS_NOUNS.test(phrase) && (!WITNESS_WORK.test(question) || /biegł\p{L}*\s+rewident/iu.test(question))));
+    return matched.every(background) ? [] : matched;
+}
+export function classifyTask(routes, rawQuestion, delivered = "") {
     // "233 kk" is "art. 233 KK" for the article row.
     const question = provisionsForDetection(rawQuestion).replace(EMPLOYMENT_BASIS, " ");
     let best = null;
@@ -93,7 +116,7 @@ export function classifyTask(routes, rawQuestion) {
         if (!matched.length)
             continue;
         // "SMS-y i śledzenie" tells the story; "czy te SMS-y są dowodem" asks about evidence.
-        if (matched.every((phrase) => EVIDENCE_MEDIA.test(phrase)) && !EVIDENCE_INTENT.test(question))
+        if (!taskWords(matched, question, delivered).length)
             continue;
         const score = matched.reduce((sum, phrase) => sum + phrase.length, 0);
         if (!best || score > best.score)
@@ -290,7 +313,7 @@ function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redacti
     const pleadingTask = routerPick?.route.primary === "pisma-procesowe-v3";
     let best = null;
     for (const rule of matrix) {
-        const phrases = rule.phrases.filter((phrase) => stemPhrase(phrase)?.test(question));
+        const phrases = taskWords(rule.phrases.filter((phrase) => stemPhrase(phrase)?.test(question)), question, materials.map((material) => material.label).join(" / "));
         const deliveredHits = rule.delivers.filter((word) => delivered.has(word));
         if (rule.withoutPleading && pleadingDelivered)
             continue;
@@ -335,7 +358,7 @@ function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redacti
     if (implied)
         return { source: "MATRIX", primary: implied.primary, then: null, reason: `macierz aktywacji: ${implied.row}` };
     // No matrix row: the router table on the question and the kinds of the documents.
-    const byDocuments = routerPick ?? classifyTask(routes, `${rawQuestion}\n${materials.map((material) => material.label).join(" / ")}`);
+    const byDocuments = routerPick ?? classifyTask(routes, `${rawQuestion}\n${materials.map((material) => material.label).join(" / ")}`, materials.map((material) => material.label).join(" / "));
     // The router row names a letter ("wezwanie do zapłaty"), but the user asks about one
     // ("dostałem wezwanie, czy muszę płacić?"): an explanation, not drafting.
     if (byDocuments && /^pisma-/.test(byDocuments.route.primary) && asksAbout(question) && known.has("przewodnik-prawny-v2")) {

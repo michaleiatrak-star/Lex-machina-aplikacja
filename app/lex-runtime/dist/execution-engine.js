@@ -17,6 +17,7 @@ export { latestUserTurn };
 import { createDeterministicWorkflowPlan, deterministicWorkflowPrompt } from "./deterministic-workflow.js";
 import { gateISemanticPrompt } from "./gate-i-semantic-contract.js";
 import { gateIRuntimePlan, gateIRuntimePlanPrompt } from "./gate-i-runtime-plan.js";
+import { withoutOutputContract } from "./document-output-contract.js";
 export class LexExecutionError extends Error {
     target;
     events;
@@ -51,9 +52,13 @@ export function isTrivialChatCommand(query) {
 }
 const TRIVIAL_PART = "(?:test|testuję|testuje|hej|hejka|halo|cześć|czesc|siema|elo|witaj|witam|hello|hi|dzień dobry|dzien dobry|dobry wieczór|dobry wieczor|dobranoc|do widzenia|na razie|miłego dnia|milego dnia|dzięki|dzieki|wielkie dzięki|wielkie dzieki|dziękuję|dziekuje|dziękuję bardzo|dziekuje bardzo|thx|thanks|jesteś|jestes|działasz|dzialasz)";
 const ACK_PART = "(?:ok|okej|okay|super|great|jasne|rozumiem|spoko|dobrze|dobra|świetnie|swietnie|w porządku|w porzadku|aha)";
-// Greetings, thanks and goodbyes, alone or after an acknowledgement ("ok, dzięki").
-const TRIVIAL_ALWAYS = new RegExp(`^(?:${ACK_PART}[,!.]?\\s*)?${TRIVIAL_PART}(?:[,!.]?\\s*(?:to wszystko|${TRIVIAL_PART}))?[.!?]*$`);
-const TRIVIAL_ACK = new RegExp(`^${ACK_PART}(?:[,!.]?\\s*${ACK_PART})?[.!?]*$`);
+// "dziękuję za pomoc", "dzięki za odpowiedź": thanks for the answer just given.
+const THANKS_FOR = "(?:\\s+za\\s+(?:pomoc|odpowiedź|odpowiedz|informacje|informację|wyjaśnienie|wyjasnienie|wszystko|rozmowę|rozmowe))?";
+// Greetings, thanks and goodbyes, alone or after an acknowledgement ("ok, dzięki");
+// an acknowledgement closing the conversation ("super, to wszystko").
+const TRIVIAL_ALWAYS = new RegExp(`^(?:(?:${ACK_PART}[,!.]?\\s*)?${TRIVIAL_PART}${THANKS_FOR}(?:[,!.]?\\s*(?:to wszystko|${TRIVIAL_PART}${THANKS_FOR}))?|${ACK_PART}[,!.]?\\s*to wszystko)[.!?]*$`);
+// "tak" / "nie" only here: after the assistant's question they answer it.
+const TRIVIAL_ACK = new RegExp(`^(?:${ACK_PART}|tak|nie)(?:[,!.]?\\s*${ACK_PART})?[.!?]*$`);
 function assistantAskedLast(query) {
     const marker = query.lastIndexOf("\n\nUżytkownik: ");
     const before = marker >= 0 ? query.slice(0, marker) : "";
@@ -126,6 +131,12 @@ function combineSkillPrompt(registry, skillNames, localModel = false) {
     })
         .join("\n\n---\n\n");
 }
+// R-2..R-4 of the mandatory core, given in full to a model that chooses its skills.
+const AUTO_CORE_RESOURCES = [
+    ["shared", "PRAWO-HARDGATE.md"],
+    ["prawny-router-v3", "references/KROK0A-anonimizer.md"],
+    ["prawny-router-v3", "references/KROK1-detekcja.md"]
+];
 export function buildCoreLegalResourcePrompt(resources, localModel) {
     if (localModel) {
         return [
@@ -138,8 +149,9 @@ export function buildCoreLegalResourcePrompt(resources, localModel) {
             "Do not invent a gate result, verified source, citation, tool result or deanonymized personal data."
         ].join("\n");
     }
+    // Sections the runtime executes itself become one line (as in AUTO).
     return [...resources.entries()]
-        .map(([resource, content]) => `# CORE LEGAL RESOURCE: ${resource}\n\n${content}`)
+        .map(([resource, content]) => `# CORE LEGAL RESOURCE: ${resource}\n\n${compactForModel(content).text}`)
         .join("\n\n---\n\n");
 }
 export class LexExecutionEngine {
@@ -164,6 +176,9 @@ export class LexExecutionEngine {
         };
         const skillEnvelope = parseSkillSelectionEnvelope(args.query);
         const effectiveQuery = skillEnvelope.query.trim();
+        // What the user asked, for decisions read from the text; the model still gets
+        // the document output contract with effectiveQuery.
+        const decisionQuery = withoutOutputContract(effectiveQuery);
         if (!effectiveQuery) {
             emit("route", "query", "BLOCKED", "EMPTY_QUERY_AFTER_SKILL_ENVELOPE");
             throw new LexExecutionError("The legal query is empty after skill selection metadata was removed.", "query", [...events]);
@@ -214,7 +229,7 @@ export class LexExecutionEngine {
         }
         emit("route", args.route.primarySkill, "OK", `mode=${args.route.mode};jurisdiction=PL;skillMode=${skillEnvelope.automatic ? "AUTO" : "MANUAL"};role=primary-domain`);
         emit("skill_read", args.route.primarySkill, "OK");
-        const skillSelection = resolveAdditionalSkills(this.registry, effectiveQuery, args.route.primarySkill, skillEnvelope.automatic, skillEnvelope.manualSkills, skillEnvelope.domainAllowList, skillEnvelope.domainRestrictionActive, skillEnvelope.executionAllowList, skillEnvelope.executionRestrictionActive, skillEnvelope.workflowExecutionSkill);
+        const skillSelection = resolveAdditionalSkills(this.registry, decisionQuery, args.route.primarySkill, skillEnvelope.automatic, skillEnvelope.manualSkills, skillEnvelope.domainAllowList, skillEnvelope.domainRestrictionActive, skillEnvelope.executionAllowList, skillEnvelope.executionRestrictionActive, skillEnvelope.workflowExecutionSkill);
         for (const domainSkill of skillSelection.domainSkills) {
             if (domainSkill === args.route.primarySkill)
                 continue;
@@ -276,7 +291,7 @@ export class LexExecutionEngine {
         // keep the full legal path.
         const conversationalOnly = args.conversationalOnly === true &&
             !boundContext;
-        const trivialLocal = isLocalLightweightConversation(args.model, effectiveQuery, Boolean(args.documentContext ||
+        const trivialLocal = isLocalLightweightConversation(args.model, decisionQuery, Boolean(args.documentContext ||
             args.guideContext ||
             args.processWorkflowContext ||
             args.courtWorkflowContext ||
@@ -284,7 +299,7 @@ export class LexExecutionEngine {
             args.contractWorkflowContext ||
             args.orderedCaseWorkflowContext ||
             !skillEnvelope.automatic));
-        const trivialChat = isTrivialChatCommand(effectiveQuery);
+        const trivialChat = isTrivialChatCommand(decisionQuery);
         const lightweightLocal = trivialChat ||
             conversationalOnly;
         if (lightweightLocal) {
@@ -354,7 +369,7 @@ export class LexExecutionEngine {
         // legal profile.
         const complexity = args.matterComplexity ??
             assessMatterComplexity({
-                query: effectiveQuery,
+                query: decisionQuery,
                 attachmentCount: args.documentContext ? 1 : 0,
                 workflowPinned: boundContext
             });
@@ -435,7 +450,7 @@ export class LexExecutionEngine {
             }
             emit("resource_read", resource, "OK", "runtime-preload;criminal-qualifier");
             if (quickLocal) {
-                const excerpt = criminalQualifierExcerpt(path.join(path.dirname(resolved), "kwalifikator-karnomaterialny"), latestUserTurn(effectiveQuery));
+                const excerpt = criminalQualifierExcerpt(path.join(path.dirname(resolved), "kwalifikator-karnomaterialny"), latestUserTurn(decisionQuery));
                 if (!excerpt) {
                     emit("resource_read", `${criminalDomain}/modules/kwalifikator-karnomaterialny`, "BLOCKED", "CRIMINAL_QUALIFIER_NODES_NOT_FOUND");
                     throw new LexExecutionError("No criminal-qualifier node matches this question.", resource, [...events]);
@@ -484,7 +499,7 @@ export class LexExecutionEngine {
                 // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
                 // conditional ones the question and the case documents trigger.
                 const modules = loadModules(this.registry, contract.skill, skillModules(this.registry, contract.skill, {
-                    text: [effectiveQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
+                    text: [decisionQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
                     stage: args.processWorkflowContext?.stage ?? null
                 }), new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]));
                 if (modules.loaded.length || modules.toRead.length) {
@@ -515,7 +530,7 @@ export class LexExecutionEngine {
         }
         // MAPA-AKTOW resolved mechanically from the question and the case documents.
         if (!args.model.startsWith("local/")) {
-            const acts = resolveActModulesWithChecks(this.registry, [effectiveQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+            const acts = resolveActModulesWithChecks(this.registry, [decisionQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
             if (acts.modules.length || acts.rejected.length) {
                 const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
                 for (const item of loaded.loaded)
@@ -535,7 +550,7 @@ export class LexExecutionEngine {
                 .map((skill) => ({
                 skill,
                 matched: ["dziedzina wybrana dla tej sprawy"],
-                modules: suggestDomainModules(this.registry, skill, [effectiveQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+                modules: suggestDomainModules(this.registry, skill, [decisionQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
             }))
                 .filter((domain) => domain.modules.length > 0);
             if (domains.length) {
@@ -1088,12 +1103,30 @@ export class LexExecutionEngine {
                 return [{ name, relative, text: compact.text }];
             })
             : [];
-        const preloadedPrompt = preloaded.map((item) => `# ${item.name.toUpperCase()} (${item.relative}, już wczytany - nie czytaj ponownie)\n\n${item.text}`);
+        // The core the runtime counts as in context (R-2..R-4: HARD GATE,
+        // anonymizer, detection): it has to be in the prompt, or the model is
+        // told "already loaded" for a file it never saw.
+        if (onPreloaded && preloaded.length) {
+            for (const [skillName, file] of AUTO_CORE_RESOURCES) {
+                const skill = this.registry.get(skillName);
+                const absolute = skill ? path.join(skill.directory, file) : "";
+                if (!skill || !fs.existsSync(absolute))
+                    continue;
+                const relative = `${path.basename(skill.directory)}/${file}`;
+                onPreloaded(relative);
+                const compact = compactForModel(fs.readFileSync(absolute, "utf8"));
+                if (compact.compacted.length) {
+                    emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+                }
+                preloaded.push({ name: relative, relative, text: compact.text });
+            }
+        }
+        const preloadedPrompt = preloaded.map((item) => `# ${item.name === item.relative ? item.relative : `${item.name.toUpperCase()} (${item.relative}`}${item.name === item.relative ? " (" : ", "}już wczytany - nie czytaj ponownie)\n\n${item.text}`);
         // One selection methodology for every host (Claude with the native corpus,
         // ChatGPT, Gemini, Grok, API keys): only the read/list tools differ.
         const readTool = native ? "Read" : "read_legal_resource";
         const listTool = native ? "Glob z dokładnym wzorcem" : "list_legal_resources";
-        const preloadedNames = preloaded.map((item) => item.name).join(" i ");
+        const preloadedNames = preloaded.map((item) => item.name).join(", ");
         const methodology = [
             preloaded.length
                 ? `Sprawa lub pytanie prawne: ${preloadedNames} są podane w całości na końcu tej instrukcji (liczą się jako przeczytane - nie czytaj ich ponownie). Wykonaj HARD GATE i routing routera.`

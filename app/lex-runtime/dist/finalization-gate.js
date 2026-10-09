@@ -128,13 +128,30 @@ function withoutAttachedMarkers(reference) {
         .sort((a, b) => b.start - a.start)
         .reduce((text, span) => text.slice(0, span.start) + text.slice(span.end), line);
 }
+// "art. 46" mentioned, "art. 46 ust. 2 ustawy o ..." verified: one such record covers it.
+function soleCoveringVerifiedRecord(ledger, reference) {
+    if (reference.kind !== "statute")
+        return undefined;
+    const prefix = comparableClaim(reference.claim) + " ";
+    const covering = ledger
+        .all()
+        .filter((record) => record.status === "VERIFIED" && comparableClaim(record.claim).startsWith(prefix));
+    return new Set(covering.map((record) => comparableClaim(record.claim))).size === 1 ? covering.at(-1) : undefined;
+}
 export class FinalizationGate {
-    evaluate(text, ledger) {
+    evaluate(text, ledger, options = {}) {
         const references = detectLegalReferences(text);
         const findings = [];
         const caseQuoteFindings = [];
         const caseSupportFindings = [];
         for (const reference of references) {
+            if (options.markers === "removed") {
+                const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference);
+                findings.push(record?.status === "VERIFIED"
+                    ? { reference, status: "VERIFIED", record }
+                    : { reference, status: "UNVERIFIED_MARKED", ...(record ? { record } : {}) });
+                continue;
+            }
             const lineMarkers = reference.lineText.match(VERIFIED_MARKER_TOKEN) ?? [];
             const allowedLineMarkers = new Set(references
                 .filter((candidate) => candidate.line ===

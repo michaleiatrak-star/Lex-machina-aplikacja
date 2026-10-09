@@ -26,7 +26,7 @@ export class AuditedFinalizer {
                 supportQuoteHash: record.supportQuoteHash ?? null
             });
         }
-        const report = this.gate.evaluate(args.text, args.ledger);
+        const report = this.gate.evaluate(args.text, args.ledger, { markers: args.markers });
         args.audit.record("gate", report.gate, report.result === "BLOCKED"
             ? "BLOCKED"
             : report.result === "DEGRADED"
