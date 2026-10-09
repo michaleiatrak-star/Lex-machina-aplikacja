@@ -7,10 +7,10 @@ import type { LexSkillRegistry } from "./registry.js";
 /**
  * Domain fallback (Settings, off by default): when no flash-routing phrase and no act
  * map names a domain, one short model call names one or two DR from their descriptions.
- * Measured 2026-10-09 on 298 questions the rules left without a domain or with one of
- * a single word: with no domain the model names the right one first in 61-68% (in its
- * two in 73-94%); with a word-named domain the rules are better (88-93% vs 75-78%), so
- * the model is asked only when the rules named none.
+ * Measured 2026-10-09 on questions the rules left without a domain or with one of a
+ * single word. No domain: the right one first — Bielik 11B v3 68%, Gemini flash-lite
+ * 61%, Mistral NeMo 12B 48% (in the model's two: 73%, 94%, 68%). A word-named domain:
+ * the rules are better (88-93% vs 55-78%), so the model is asked only when they named none.
  */
 export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
 export const DOMAIN_FALLBACK_CHOICES: readonly DomainFallbackChoice[] = ["off", "session", "local/bielik-11b-v3-q4km", "local/mistral-nemo-12b-q4km"];
