@@ -1,6 +1,6 @@
 ---
 name: prawny-router-v3
-version: "3.69"
+version: "3.70"
 type: orchestration
 status: production
 entrypoint: SKILL.md
@@ -120,7 +120,7 @@ required_modules:
   - shared/MOD-REM-GATE.md
   - dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md
 changelog: |
-  Wersja bieżąca: 3.69 (2026-10-09e): KROK 2 [5] ORZECZNICTWO: „wyszukaj/znajdź/podaj wyrok”, „orzeczenie Sądu Najwyższego”, „zweryfikowany wyrok”, „orzecznictwo” (wcześniej „wyszukaj wyroku … SN” trafiało do [2] analiza-sadowa-v6 przez samo słowo „wyrok”); [2]: „przeanalizuj/oceń wyrok, orzeczenie, postanowienie”, „analiza wyroku/postanowienia” — wyrok sądu apelacyjnego to nie apelacja [3]. Nazwa sądu wskazuje źródło, nie dziedzinę.
+  Wersja bieżąca: 3.70 (2026-10-09f): KANCELARIA-WORKFLOW, SOCIAL-SECURITY-LAW-STANDARD, DISCIPLINARY-PROCEEDINGS-STANDARD, JUDICIARY-LEGAL-STANDARD przeniesione z `shared/` do `references/` (jedyny konsument).
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---
 
