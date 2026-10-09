@@ -86,7 +86,7 @@ describe("turn decisions behind the outcome", () => {
   });
 
   it("criminal matters told in everyday words, not offices or suspicious things", () => {
-    for (const text of ["Były partner pisze, że mnie zabije.", "Ktoś przejął moje konto na Facebooku.", "Policjant mnie popchnął.", "Co grozi za niepłacenie alimentów?", "Wezwano mnie w charakterze podejrzanego."]) {
+    for (const text of ["Były partner pisze, że mnie zabije.", "Ktoś przejął moje konto na Facebooku.", "Policjant mnie popchnął.", "Co grozi za niepłacenie alimentów?", "Wezwano mnie w charakterze podejrzanego.", "Radca prawny został uderzony przez stronę przeciwną po rozprawie.", "Klient zwyzywał adwokata na korytarzu sądu."]) {
       expect(criminalMatter(text)).toBe(true);
     }
     for (const text of ["Kiedy poseł traci mandat?", "Dostaję podejrzane SMS-y po wycieku danych.", "Gmina sprzedała działkę, wygląda to podejrzanie."]) {

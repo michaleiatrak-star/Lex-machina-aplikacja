@@ -66,6 +66,8 @@ const LAY_CRIMINAL_WORDS = new RegExp(
       "kradzież\\p{L}*\\s+tożsamości",
       "czynn\\p{L}*\\s+żal\\p{L}*\\s+w\\s+sprawie\\s+karn\\p{L}*",
       "(?:bije|bił|biła|bili|biją|uderzył\\p{L}*|kopnął|kopnęła|dusił\\p{L}*)\\s+mnie",
+      // The same with the object first ("szef mnie uderzył w pracy").
+      "mnie\\s+(?:bije|bił|biła|bili|biją|uderzył\\p{L}*|kopnął|kopnęła|dusił\\p{L}*|pobił\\p{L}*|popchnął|popchnęła|spoliczkował\\p{L}*)",
       "grozi(?:ł|ła|li)?\\s+mi(?![\\p{L}])",
       "fałszow\\p{L}*",
       "(?:dosta|otrzyma|usłysza|postawi)\\p{L}*\\s+(?:\\p{L}+\\s+)?zarzut(?!\\p{L}*\\s+od\\s+nakazu)\\p{L}*",
@@ -78,6 +80,12 @@ const LAY_CRIMINAL_WORDS = new RegExp(
       "(?:że\\s+)?mnie\\s+zabij\\p{L}*|zabij\\p{L}*\\s+mnie|groz\\p{L}*\\s+(?:mi\\s+)?śmierci\\p{L}*",
       "przej(?:ął|ęła|ęli|ęto)\\s+(?:moje\\s+|mi\\s+)?kont\\p{L}*|przejęci\\p{L}*\\s+(?:mojego\\s+)?kont\\p{L}*",
       "(?:popchnął|popchnęła|popchnęli|spoliczkował\\p{L}*|szarpał\\p{L}*)(?:\\s+mnie)?",
+      // Told about someone else ("radca został uderzony", "zwyzywał adwokata na korytarzu").
+      "zosta\\p{L}*\\s+(?:uderzon|pobit|zaatakowan|napadnięt|popchnięt|spoliczkowan|zwyzywan)\\p{L}*",
+      "naruszen\\p{L}*\\s+nietykalnoś\\p{L}*",
+      "czynn\\p{L}*\\s+napa(?:ść|ści)\\p{L}*",
+      "napad(?:ł|ła|li|nięty|nięta)",
+      "(?:z)?wyzywa(?:ł|ła|li)\\p{L}*",
       "niealimentacj\\p{L}*",
       // "Co grozi za jazdę bez OC?": a question about the penalty.
       "co\\s+(?:mi\\s+|mu\\s+|jej\\s+|nam\\s+|im\\s+)?grozi\\s+za"
