@@ -62,6 +62,7 @@ import {
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
+import { configureDomainFallback } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -363,6 +364,8 @@ export async function startLocalServer(options?: {
     new LocalCaseFileStore();
   // Decisions downloaded once (verification, preview): quotes are marked on this copy.
   configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
+  // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
+  configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
   const authStore =
     new LocalAuthStore({
       rootDir:

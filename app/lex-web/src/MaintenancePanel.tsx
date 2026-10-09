@@ -21,6 +21,7 @@ import {
   useFloatingPanelDrag
 } from "./use-floating-panel.js";
 import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
+import { DomainFallbackSection } from "./DomainFallbackSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
 import { QualityBenchmarkSection } from "./QualityBenchmarkSection.js";
@@ -487,6 +488,7 @@ export function MaintenancePanel({
         <CoreLawUpdatesSection user={user} />
 
         <CaseLawLibrarySection />
+        <DomainFallbackSection />
 
         <AnomalyJournalSection user={user} />
 

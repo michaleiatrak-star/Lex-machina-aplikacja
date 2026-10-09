@@ -3813,6 +3813,16 @@ export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean 
   return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
 }
 
+export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
+
+export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {
+  return json("/api/settings/domain-fallback");
+}
+
+export function setDomainFallback(choice: DomainFallbackChoice): Promise<{ choice: DomainFallbackChoice }> {
+  return json("/api/settings/domain-fallback", { method: "PUT", body: JSON.stringify({ choice }) });
+}
+
 export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {
   return json("/api/case-law/library/remove", { method: "POST", body: JSON.stringify({ cardUrl }) });
 }
