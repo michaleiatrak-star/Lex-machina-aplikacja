@@ -127,6 +127,10 @@
     [
       "Komornik zajął mi całe wynagrodzenie, ile może zabrać?",
       null
+    ],
+    [
+      "Znieważenie radcy prawnego podczas rozprawy — art. 226 KK?",
+      "art222-226-ochrona-funkcjonariusza"
     ]
   ],
   "dr-04-prawo-pracy-zus-swiadczenia": [
@@ -501,6 +505,14 @@
     [
       "Wynagrodzenie notariusza, taksa notarialna",
       "notariat"
+    ],
+    [
+      "Czy adwokat korzysta z ochrony jak funkcjonariusz publiczny?",
+      "ustawa-adwokatura"
+    ],
+    [
+      "Ktoś podaje się za adwokata i ma szyld kancelaria adwokacka, choć nie jest adwokatem. Co grozi?",
+      "ustawa-adwokatura"
     ]
   ],
   "dr-13-sluzby-bezpieczenstwo-informacje-niejawne": [
