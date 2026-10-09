@@ -2013,6 +2013,20 @@ fn header_value(headers: &[(String, String)], name: &str) -> Option<String> {
         .map(|(_, value)| value.clone())
 }
 
+/// Okno główne aplikacji: jedyny webview, który może używać schematu lex-api.
+pub const MAIN_WEBVIEW_LABEL: &str = "main";
+
+/// Odpowiedź dla schematu lex-api wywołanego z innego okna (np. okna sn.pl z captchą,
+/// które ładuje zewnętrzną stronę): bez dostępu do API i bez nagłówków CORS, żeby skrypt
+/// obcej strony nie mógł czytać danych spraw z sesją użytkownika.
+pub fn foreign_webview_response() -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .header("Content-Type", "application/json")
+        .body(br#"{"error":"LEX_API_FOREIGN_WEBVIEW"}"#.to_vec())
+        .unwrap_or_else(|_| Response::new(Vec::new()))
+}
+
 fn cors_response(
     status: StatusCode,
     body: Vec<u8>,
@@ -2058,6 +2072,14 @@ fn unsafe_zero_string(value: &mut String) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn foreign_webview_gets_forbidden_without_cors() {
+        let response = super::foreign_webview_response();
+        assert_eq!(response.status(), tauri::http::StatusCode::FORBIDDEN);
+        assert!(response.headers().get("Access-Control-Allow-Origin").is_none());
+        assert_eq!(super::MAIN_WEBVIEW_LABEL, "main");
+    }
+
     use super::*;
 
     #[test]
