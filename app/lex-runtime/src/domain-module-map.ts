@@ -312,7 +312,7 @@ export function rankDomains(
   rows: FlashRoute[],
   text: string,
   limit = 2
-): Array<{ skill: string; matched: string[]; modules: DomainModule[] }> {
+): Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> {
   // A domain the case adds by its kind (criminal, foreign element) is one more, not one
   // instead of the matter's second domain ("monitoring w pracy" stays with "co grozi").
   const phrased = rankByPhrases(registry, rows, text, limit);
@@ -321,13 +321,20 @@ export function rankDomains(
   // A criminal matter (the application already requires the qualifier): DR-03 first,
   // or second when another domain has a phrase of its own ("mandat posła" after a conviction).
   const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
-  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.slice(0, room(ranked)).map(({ weight: _weight, ...row }) => row);
+  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.slice(0, room(ranked)).map(withStrength);
   const own = ranked.find((row) => row.skill === criminal);
   const marked = { ...(own ?? { skill: criminal, matched: [], modules: suggestDomainModules(registry, criminal, text), weight: 0 }) };
   marked.matched = ["sprawa karna (kwalifikator)", ...marked.matched];
   const others = ranked.filter((row) => row.skill !== criminal);
   const order = (others[0]?.weight ?? 0) >= 2 ? [others[0]!, marked, ...others.slice(1)] : [marked, ...others];
-  return order.slice(0, room(order)).map(({ weight: _weight, ...row }) => row);
+  return order.slice(0, room(order)).map(withStrength);
+}
+
+// A domain named by the kind of the case (criminal, foreign element) or by a phrase of two
+// words and more; one word ("umowa", "sąd", "sąsiad") names a domain only possibly involved.
+const MARKER = /^(?:sprawa karna \(kwalifikator\)|element zagraniczny)/u;
+function withStrength({ weight, ...row }: { skill: string; matched: string[]; modules: DomainModule[]; weight: number }) {
+  return { ...row, strong: weight >= 2 || MARKER.test(row.matched[0] ?? "") };
 }
 
 // DR-14 named for a foreign element of a legal matter: second after the matter's own
@@ -376,7 +383,12 @@ function rankByPhrases(
     .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0]!.why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
 }
 
-export function domainHintPrompt(domains: Array<{ skill: string; matched: string[]; modules: DomainModule[] }>): string {
+export function domainHintPrompt(domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong?: boolean }>): string {
+  // Several domains of one case: the ones its kind or a phrase of its own names are read
+  // (or set aside in a sentence); one shared word only lets the model reach for a domain.
+  const secondary = domains.slice(1);
+  const required = secondary.filter((domain) => domain.strong === true).map((domain) => domain.skill);
+  const possible = secondary.filter((domain) => domain.strong === false).map((domain) => domain.skill);
   return [
     "# DZIEDZINA I MODUŁ AKTU — WSKAZÓWKA APLIKACJI (prawo-polskie-v2: routing błyskawiczny, MAPA-AKTOW dziedziny)",
     ...domains.map(
@@ -384,6 +396,14 @@ export function domainHintPrompt(domains: Array<{ skill: string; matched: string
         `- ${domain.skill}: sygnały ${domain.matched.map((phrase) => `„${phrase}”`).join(", ")}` +
         (domain.modules.length ? `; moduły aktu dla tej sprawy: ${domain.modules.map((module) => `${module.resource} (${module.why})`).join("; ")}` : "")
     ),
-    "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy."
+    "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy.",
+    ...(required.length
+      ? [
+          `Sprawa wielodziedzinowa: oprócz ${domains[0]!.skill} przeczytaj SKILL.md ${required.join(", ")} i moduł aktu dla ich części sprawy, zanim odpowiesz. Dziedzinę, która nie dotyczy tej sprawy, pomiń, mówiąc w jednym zdaniu dlaczego.`
+        ]
+      : []),
+    ...(possible.length
+      ? [`Dziedzina możliwa (jedno wspólne słowo): ${possible.join(", ")} — wczytaj ją tylko, gdy pytanie dotyczy jej części sprawy.`]
+      : [])
   ].join("\n");
 }
