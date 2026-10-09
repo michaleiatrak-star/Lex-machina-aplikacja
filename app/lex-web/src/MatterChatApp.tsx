@@ -582,6 +582,12 @@ const FILE_RESULT = new RegExp(
 const READING_INTENT = polishWords(
   "przeanalizuj|analiz\\p{L}*|zweryfikuj|weryfik\\p{L}*|sprawdź|sprawdz|oceń|ocen\\p{L}*|porównaj|wskaż|zinterpretuj|wyjaśnij|streść|podsumuj|przejrzyj|co\\s+(?:jest|zawiera|wynika)"
 );
+// "procedura weryfikacji kontrahentów", "polityka oceny ryzyka": the reading word
+// names what the document governs, it is not a request to read something.
+const GOVERNED_ACTIVITY = new RegExp(
+  `(?<![\\p{L}\\d])(${withoutPolishLetters("procedur\\p{L}*|polityk\\p{L}*|regulamin\\p{L}*|instrukcj\\p{L}*")})\\s+\\p{L}+`,
+  "gu"
+);
 
 export function directDocumentRequest(
   input: string
@@ -605,7 +611,7 @@ export function directDocumentRequest(
   const drafting =
     DOCUMENT_NOUN.test(normalized) &&
     GENERATION_VERB.test(normalized) &&
-    !READING_INTENT.test(normalized);
+    !READING_INTENT.test(normalized.replace(GOVERNED_ACTIVITY, "$1"));
 
   if (!explicitFormat && !fileResult && !drafting) {
     return null;

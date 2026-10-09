@@ -107,6 +107,21 @@ describe("turn decisions behind the outcome", () => {
     expect(classifyTask(routes, "Złożyłem pozew w sądzie.")?.route.primary).toBe("pisma-procesowe-v3");
   });
 
+  it("a contract, an invoice or an expert in the story is not the task", () => {
+    const routes = parseRoutingTable(read("prawny-router-v3/SKILL.md"));
+    const primary = (text: string) => classifyTask(routes, text)?.route.primary ?? null;
+    for (const text of [
+      "Kupiłem pralkę, brak zgodności towaru z umową, proszę o analizę uprawnień.",
+      "Wystawiłem fakturę, a kontrahent od trzech miesięcy nie płaci.",
+      "Biegły rewident zakwestionował sprawozdanie spółki."
+    ]) {
+      expect(primary(text)).toBeNull();
+    }
+    expect(primary("Przeanalizuj umowę najmu przed podpisaniem.")).toBe("analizator-umow-v1");
+    expect(primary("Czy faktura jest dowodem w sprawie o zapłatę?")).toBe("analizator-dowodow-v3");
+    expect(primary("Przygotuj pytania do świadka na rozprawę.")).toBe("przesluchanie-swiadkow-v2-min90");
+  });
+
   it("the contract workflow starts for work on a contract, not for any contract named", () => {
     const registry = new LexSkillRegistry(CORPUS);
     registry.scan();

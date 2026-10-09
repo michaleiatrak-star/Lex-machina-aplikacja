@@ -1,0 +1,642 @@
+[
+{
+"q": "Czy Sejm może uchwalić ustawę bez udziału Senatu?",
+"dr": "dr-01"
+},
+{
+"q": "Kto może wystąpić do Trybunału Konstytucyjnego z wnioskiem o zbadanie ustawy?",
+"dr": "dr-01"
+},
+{
+"q": "Czy prezydent może skrócić kadencję Sejmu?",
+"dr": "dr-01"
+},
+{
+"q": "Na czym polega kontrasygnata aktów urzędowych prezydenta?",
+"dr": "dr-01"
+},
+{
+"q": "Czy referendum w sprawie zmiany konstytucji jest obowiązkowe?",
+"dr": "dr-01"
+},
+{
+"q": "Ile czasu ma Senat na rozpatrzenie ustawy uchwalonej przez Sejm?",
+"dr": "dr-01"
+},
+{
+"q": "Czy prawo miejscowe może być sprzeczne z rozporządzeniem?",
+"dr": "dr-01"
+},
+{
+"q": "Czy można ograniczyć prawo do zgromadzeń w ustawie?",
+"dr": "dr-01"
+},
+{
+"q": "Jakie są przesłanki wprowadzenia stanu wojennego?",
+"dr": "dr-01"
+},
+{
+"q": "Czy Rzecznik Praw Dziecka może przystąpić do sprawy sądowej?",
+"dr": "dr-01"
+},
+{
+"q": "Najemca zniszczył meble w wynajmowanym mieszkaniu, czy mogę potrącić z kaucji?",
+"dr": "dr-02"
+},
+{
+"q": "Jak podzielić majątek wspólny po rozwodzie, gdy dom jest na kredyt?",
+"dr": "dr-02"
+},
+{
+"q": "Czy mogę odwołać darowiznę mieszkania dla syna za rażącą niewdzięczność?",
+"dr": "dr-02"
+},
+{
+"q": "Kupiłem działkę z wadą prawną, sprzedający ukrył służebność.",
+"dr": "dr-02"
+},
+{
+"q": "Spadkobierca chce dział spadku, a ja mieszkam w tym domu od lat.",
+"dr": "dr-02"
+},
+{
+"q": "Kontrahent nie odebrał towaru, czy mogę żądać zapłaty ceny?",
+"dr": "dr-02"
+},
+{
+"q": "Jak założyć księgę wieczystą dla działki po dziadkach?",
+"dr": "dr-02"
+},
+{
+"q": "Sąd pierwszej instancji oddalił mój pozew o zapłatę, chcę złożyć apelację.",
+"dr": "dr-02"
+},
+{
+"q": "Czy mogę żądać rozwiązania spółki cywilnej z ważnych powodów?",
+"dr": "dr-02"
+},
+{
+"q": "Jak wyznaczyć kontakty z wnukiem, gdy synowa nie pozwala się widywać?",
+"dr": "dr-02"
+},
+{
+"q": "Zatrzymano mnie za posiadanie niewielkiej ilości marihuany.",
+"dr": "dr-03"
+},
+{
+"q": "Co grozi za prowadzenie samochodu bez prawa jazdy?",
+"dr": "dr-03"
+},
+{
+"q": "Komornik zajął mi rachunek bankowy, choć spłacam w ratach.",
+"dr": "dr-03"
+},
+{
+"q": "Sąsiad pobił mojego psa, czy to przestępstwo?",
+"dr": "dr-03"
+},
+{
+"q": "Mąż stosuje przemoc psychiczną, jak założyć niebieską kartę?",
+"dr": "dr-03"
+},
+{
+"q": "Czy mogę starać się o warunkowe przedterminowe zwolnienie po połowie kary?",
+"dr": "dr-03"
+},
+{
+"q": "Wyłudzono ode mnie pieniądze metodą na policjanta.",
+"dr": "dr-03"
+},
+{
+"q": "Dostałem wezwanie do prokuratury w charakterze świadka.",
+"dr": "dr-03"
+},
+{
+"q": "Jak wnieść o odroczenie wykonania kary pozbawienia wolności?",
+"dr": "dr-03"
+},
+{
+"q": "Ktoś podrobił mój podpis na umowie kredytu.",
+"dr": "dr-03"
+},
+{
+"q": "Pracodawca nie wypłacił mi pensji za dwa miesiące.",
+"dr": "dr-04"
+},
+{
+"q": "Czy na zwolnieniu lekarskim mogę zostać zwolniony z pracy?",
+"dr": "dr-04"
+},
+{
+"q": "Ile dni urlopu przysługuje po dziesięciu latach pracy?",
+"dr": "dr-04"
+},
+{
+"q": "Jak obliczyć rentę rodzinną po zmarłym mężu?",
+"dr": "dr-04"
+},
+{
+"q": "Czy umowa zlecenie wlicza się do stażu emerytalnego?",
+"dr": "dr-04"
+},
+{
+"q": "Pracodawca każe mi pracować w niedziele bez dnia wolnego.",
+"dr": "dr-04"
+},
+{
+"q": "Jak dostać świadczenie rehabilitacyjne z ZUS po zasiłku chorobowym?",
+"dr": "dr-04"
+},
+{
+"q": "Czy pracodawca może obniżyć mi pensję bez mojej zgody?",
+"dr": "dr-04"
+},
+{
+"q": "Jakie mam prawa jako pracownica wracająca z urlopu macierzyńskiego?",
+"dr": "dr-04"
+},
+{
+"q": "KRUS odmówił mi emerytury rolniczej.",
+"dr": "dr-04"
+},
+{
+"q": "Wojewoda odmówił mi wydania zezwolenia na pobyt stały.",
+"dr": "dr-05"
+},
+{
+"q": "Jak wnieść zażalenie na postanowienie organu administracji?",
+"dr": "dr-05"
+},
+{
+"q": "Starosta nie wydał decyzji w terminie, co mogę zrobić?",
+"dr": "dr-05"
+},
+{
+"q": "Czy mogę żądać wyłączenia urzędnika od mojej sprawy?",
+"dr": "dr-05"
+},
+{
+"q": "Jak napisać skargę kasacyjną do NSA?",
+"dr": "dr-05"
+},
+{
+"q": "Urząd nałożył na mnie karę administracyjną za brak zgłoszenia.",
+"dr": "dr-05"
+},
+{
+"q": "Czy decyzja administracyjna wydana przez niewłaściwy organ jest nieważna?",
+"dr": "dr-05"
+},
+{
+"q": "Jak uzyskać zaświadczenie z urzędu, którego odmawiają mi wydać?",
+"dr": "dr-05"
+},
+{
+"q": "Organ umorzył postępowanie administracyjne bez mojej zgody.",
+"dr": "dr-05"
+},
+{
+"q": "Jak przywrócić termin do wniesienia odwołania od decyzji?",
+"dr": "dr-05"
+},
+{
+"q": "Czy muszę zapłacić podatek od wygranej w konkursie?",
+"dr": "dr-06"
+},
+{
+"q": "Jak rozliczyć wynajem mieszkania ryczałtem?",
+"dr": "dr-06"
+},
+{
+"q": "Urząd skarbowy wszczął kontrolę podatkową w mojej firmie.",
+"dr": "dr-06"
+},
+{
+"q": "Czy mogę odliczyć VAT od samochodu osobowego?",
+"dr": "dr-06"
+},
+{
+"q": "Jak skorygować deklarację VAT po terminie?",
+"dr": "dr-06"
+},
+{
+"q": "Czy sprzedaż odziedziczonej działki jest opodatkowana?",
+"dr": "dr-06"
+},
+{
+"q": "Jakie są obowiązki AML kantoru wymiany walut?",
+"dr": "dr-06"
+},
+{
+"q": "Czy ulga na dziecko przysługuje po rozwodzie obojgu rodzicom?",
+"dr": "dr-06"
+},
+{
+"q": "Jak odwołać się od decyzji o podatku od spadku?",
+"dr": "dr-06"
+},
+{
+"q": "Czy fundacja rodzinna płaci CIT od zysku?",
+"dr": "dr-06"
+},
+{
+"q": "Zamawiający odrzucił naszą ofertę jako niezgodną z SWZ.",
+"dr": "dr-07"
+},
+{
+"q": "Czy możemy zadać pytania do specyfikacji przetargu po terminie?",
+"dr": "dr-07"
+},
+{
+"q": "Jak obliczyć wysokość wadium w przetargu?",
+"dr": "dr-07"
+},
+{
+"q": "Kiedy zamawiający może udzielić zamówienia z wolnej ręki?",
+"dr": "dr-07"
+},
+{
+"q": "Wykonawca zszedł z placu budowy w trakcie umowy z gminą.",
+"dr": "dr-07"
+},
+{
+"q": "Jak rozliczyć projekt z funduszy europejskich, gdy koszty wzrosły?",
+"dr": "dr-07"
+},
+{
+"q": "Instytucja zarządzająca nałożyła korektę finansową na projekt.",
+"dr": "dr-07"
+},
+{
+"q": "Czy podwykonawca może żądać zapłaty bezpośrednio od zamawiającego?",
+"dr": "dr-07"
+},
+{
+"q": "Jak przygotować odwołanie od czynności zamawiającego?",
+"dr": "dr-07"
+},
+{
+"q": "Czy próg bagatelności w zamówieniach publicznych dotyczy usług?",
+"dr": "dr-07"
+},
+{
+"q": "Rada miasta podjęła uchwałę krajobrazową, która zakazuje mojego szyldu.",
+"dr": "dr-08"
+},
+{
+"q": "Jak zostać sołtysem i kto go wybiera?",
+"dr": "dr-08"
+},
+{
+"q": "Czy gmina może odmówić zwrotu podatku od nieruchomości przez uchwałę?",
+"dr": "dr-08"
+},
+{
+"q": "Wojewoda stwierdził nieważność uchwały rady gminy, co dalej?",
+"dr": "dr-08"
+},
+{
+"q": "Jak działa skarga na działalność wójta?",
+"dr": "dr-08"
+},
+{
+"q": "Czy powiat odpowiada za utrzymanie drogi powiatowej zimą?",
+"dr": "dr-08"
+},
+{
+"q": "Jak mieszkańcy mogą zgłosić obywatelską inicjatywę uchwałodawczą?",
+"dr": "dr-08"
+},
+{
+"q": "Czy radny może głosować w sprawie, która dotyczy jego rodziny?",
+"dr": "dr-08"
+},
+{
+"q": "Gmina nie chce przyjąć mojego wniosku o dodatek mieszkaniowy.",
+"dr": "dr-08"
+},
+{
+"q": "Jak zaskarżyć regulamin utrzymania czystości w gminie?",
+"dr": "dr-08"
+},
+{
+"q": "Sąsiad buduje dom za blisko granicy mojej działki.",
+"dr": "dr-09"
+},
+{
+"q": "Czy mogę zmienić sposób użytkowania garażu na mieszkanie?",
+"dr": "dr-09"
+},
+{
+"q": "Jak uzyskać pozwolenie wodnoprawne na studnię?",
+"dr": "dr-09"
+},
+{
+"q": "Firma wywozi odpady bez wymaganego zezwolenia.",
+"dr": "dr-09"
+},
+{
+"q": "Czy instalacja pompy ciepła wymaga zgłoszenia?",
+"dr": "dr-09"
+},
+{
+"q": "Inspektor nadzoru budowlanego wstrzymał moją budowę.",
+"dr": "dr-09"
+},
+{
+"q": "Jak uzyskać decyzję środowiskową dla fermy drobiu?",
+"dr": "dr-09"
+},
+{
+"q": "Czy taksówkarz musi mieć licencję na przewóz osób?",
+"dr": "dr-09"
+},
+{
+"q": "Operator sieci odmówił przyłączenia mojej elektrowni słonecznej.",
+"dr": "dr-09"
+},
+{
+"q": "Czy mogę postawić dom letniskowy na działce rolnej bez pozwolenia?",
+"dr": "dr-09"
+},
+{
+"q": "Szpital odmówił mi przyjęcia mimo skierowania.",
+"dr": "dr-10"
+},
+{
+"q": "Czy lekarz może wypisać receptę bez badania pacjenta?",
+"dr": "dr-10"
+},
+{
+"q": "Jak zarejestrować produkt leczniczy w Polsce?",
+"dr": "dr-10"
+},
+{
+"q": "NFZ nie chce zrefundować mojego leczenia za granicą.",
+"dr": "dr-10"
+},
+{
+"q": "Czy rolnik może sprzedawać przetwory w ramach rolniczego handlu detalicznego?",
+"dr": "dr-10"
+},
+{
+"q": "Jak zgłosić niepożądane działanie leku?",
+"dr": "dr-10"
+},
+{
+"q": "Czy apteka internetowa może sprzedawać leki na receptę?",
+"dr": "dr-10"
+},
+{
+"q": "Inspekcja weterynaryjna zakazała mi sprzedaży mleka z gospodarstwa.",
+"dr": "dr-10"
+},
+{
+"q": "Jak uzyskać zgodę na eksperyment medyczny z udziałem pacjentów?",
+"dr": "dr-10"
+},
+{
+"q": "Czy mam prawo do drugiej opinii lekarskiej?",
+"dr": "dr-10"
+},
+{
+"q": "Pracownik wysłał bazę klientów na prywatny adres e-mail.",
+"dr": "dr-11"
+},
+{
+"q": "Czy mogę wykorzystać fragment piosenki w reklamie?",
+"dr": "dr-11"
+},
+{
+"q": "Jak zgłosić naruszenie ochrony danych do UODO w 72 godziny?",
+"dr": "dr-11"
+},
+{
+"q": "Konkurencja skopiowała moją stronę internetową.",
+"dr": "dr-11"
+},
+{
+"q": "Czy chatbot w sklepie musi informować, że jest sztuczną inteligencją?",
+"dr": "dr-11"
+},
+{
+"q": "Jak uzyskać ochronę wzoru przemysłowego?",
+"dr": "dr-11"
+},
+{
+"q": "Czy sklep internetowy może wysyłać newsletter bez zgody?",
+"dr": "dr-11"
+},
+{
+"q": "Ktoś zarejestrował domenę z nazwą mojej firmy.",
+"dr": "dr-11"
+},
+{
+"q": "Jakie obowiązki ma dostawca usług chmurowych wobec klienta w RODO?",
+"dr": "dr-11"
+},
+{
+"q": "Czy mogę nagrywać rozmowy z klientami na infolinii?",
+"dr": "dr-11"
+},
+{
+"q": "Jak zostać ławnikiem w sądzie rejonowym?",
+"dr": "dr-12"
+},
+{
+"q": "Czy notariusz może odmówić sporządzenia aktu?",
+"dr": "dr-12"
+},
+{
+"q": "Adwokat ujawnił moje sprawy osobie trzeciej.",
+"dr": "dr-12"
+},
+{
+"q": "Ile wynosi opłata od apelacji w sprawie o zapłatę?",
+"dr": "dr-12"
+},
+{
+"q": "Czy sędzia może orzekać po ukończeniu 65 lat?",
+"dr": "dr-12"
+},
+{
+"q": "Jak złożyć skargę na sędziego do prezesa sądu?",
+"dr": "dr-12"
+},
+{
+"q": "Kurator sądowy nie przychodzi na wyznaczone wizyty.",
+"dr": "dr-12"
+},
+{
+"q": "Czy radca prawny może prowadzić sprawę rozwodową?",
+"dr": "dr-12"
+},
+{
+"q": "Jak wygląda postępowanie dyscyplinarne wobec notariusza?",
+"dr": "dr-12"
+},
+{
+"q": "Czy aplikant adwokacki może występować w sądzie samodzielnie?",
+"dr": "dr-12"
+},
+{
+"q": "Czy policja może legitymować bez podania przyczyny?",
+"dr": "dr-13"
+},
+{
+"q": "Jak uzyskać dostęp do informacji niejawnych w pracy w ministerstwie?",
+"dr": "dr-13"
+},
+{
+"q": "Żołnierz rezerwy dostał kartę mobilizacyjną.",
+"dr": "dr-13"
+},
+{
+"q": "Czy Straż Graniczna może przeszukać bagaż w pociągu?",
+"dr": "dr-13"
+},
+{
+"q": "Jak zgłosić się do służby w Wojskach Obrony Terytorialnej?",
+"dr": "dr-13"
+},
+{
+"q": "Czy CBA może prowadzić kontrolę oświadczenia majątkowego?",
+"dr": "dr-13"
+},
+{
+"q": "Policjant odmówił przyjęcia mojego zawiadomienia.",
+"dr": "dr-13"
+},
+{
+"q": "Czy firma ochrony musi mieć koncesję MSWiA?",
+"dr": "dr-13"
+},
+{
+"q": "Jak odwołać się od cofnięcia poświadczenia bezpieczeństwa?",
+"dr": "dr-13"
+},
+{
+"q": "Czy żołnierz zawodowy może prowadzić działalność gospodarczą?",
+"dr": "dr-13"
+},
+{
+"q": "Czy wyrok sądu niemieckiego o zapłatę można wykonać w Polsce?",
+"dr": "dr-14"
+},
+{
+"q": "Jak złożyć skargę do Komisji Europejskiej na naruszenie prawa UE?",
+"dr": "dr-14"
+},
+{
+"q": "Czy Polak może mieszkać w Hiszpanii bez meldunku dłużej niż trzy miesiące?",
+"dr": "dr-14"
+},
+{
+"q": "Jak uzyskać europejski nakaz zapłaty?",
+"dr": "dr-14"
+},
+{
+"q": "Czy polski sąd jest właściwy w sprawie rozwodu małżonków mieszkających w Irlandii?",
+"dr": "dr-14"
+},
+{
+"q": "Europejski Trybunał Praw Człowieka uznał naruszenie, jak wznowić sprawę w Polsce?",
+"dr": "dr-14"
+},
+{
+"q": "Jakie prawo stosuje się do spadku po Polaku mieszkającym we Francji?",
+"dr": "dr-14"
+},
+{
+"q": "Czy mogę dostać emeryturę za pracę w Norwegii?",
+"dr": "dr-14"
+},
+{
+"q": "Jak działa ekstradycja z Polski do USA?",
+"dr": "dr-14"
+},
+{
+"q": "Czy ekstradycja obywatela Polski do innego państwa UE jest możliwa na podstawie ENA?",
+"dr": "dr-14"
+},
+{
+"q": "Jak wdrożyć system zarządzania zgodnością w spółce akcyjnej?",
+"dr": "dr-15"
+},
+{
+"q": "Czy nasza firma musi mieć kanał zgłoszeń dla sygnalistów przy 30 pracownikach?",
+"dr": "dr-15"
+},
+{
+"q": "Jak przeprowadzić audyt wewnętrzny procedur zakupowych?",
+"dr": "dr-15"
+},
+{
+"q": "Kto odpowiada za zarządzanie ryzykiem braku zgodności w banku?",
+"dr": "dr-15"
+},
+{
+"q": "Jak przygotować kodeks etyki dla pracowników?",
+"dr": "dr-15"
+},
+{
+"q": "Czy rada nadzorcza musi oceniać system kontroli wewnętrznej?",
+"dr": "dr-15"
+},
+{
+"q": "Jak udokumentować due diligence dostawców w łańcuchu dostaw?",
+"dr": "dr-15"
+},
+{
+"q": "Czy firma musi raportować wskaźniki ESG od przyszłego roku?",
+"dr": "dr-15"
+},
+{
+"q": "Jak prowadzić rejestr konfliktów interesów w zarządzie?",
+"dr": "dr-15"
+},
+{
+"q": "Jak przygotować się do certyfikacji ISO 37001 antykorupcyjnej?",
+"dr": "dr-15"
+},
+{
+"q": "Jakie argumenty przygotować na rozprawę o zapłatę przeciwko deweloperowi?",
+"dr": "dr-16"
+},
+{
+"q": "Jak ocenić siłę dowodów przed złożeniem pozwu?",
+"dr": "dr-16"
+},
+{
+"q": "Znajdź orzeczenia Sądu Najwyższego o zadośćuczynieniu za śmierć osoby bliskiej.",
+"dr": "dr-16"
+},
+{
+"q": "Jak zbudować strategię procesową w sporze o mobbing?",
+"dr": "dr-16"
+},
+{
+"q": "Jak policzyć termin na apelację, gdy uzasadnienie doręczono w sobotę?",
+"dr": "dr-16"
+},
+{
+"q": "Jak zweryfikować sygnaturę wyroku, który podał pełnomocnik przeciwnika?",
+"dr": "dr-16"
+},
+{
+"q": "Jakie pytania zadać świadkowi strony przeciwnej?",
+"dr": "dr-16"
+},
+{
+"q": "Jak przygotować plan dowodowy do sprawy o naruszenie dóbr osobistych?",
+"dr": "dr-16"
+},
+{
+"q": "Czy wyrok SN w podobnej sprawie wiąże sąd w mojej sprawie?",
+"dr": "dr-16"
+},
+{
+"q": "Jak skutecznie podważyć opinię biegłego?",
+"dr": "dr-16"
+}
+]

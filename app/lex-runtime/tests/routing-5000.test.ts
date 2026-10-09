@@ -42,7 +42,7 @@ describe("routing of 5000 chat messages", () => {
 
   it("chooses the executive skill and the domain", () => {
     expect(rate(report.executive)).toBeGreaterThanOrEqual(0.99);
-    expect(rate(report.domainTop1)).toBeGreaterThanOrEqual(0.895);
+    expect(rate(report.domainTop1)).toBeGreaterThanOrEqual(0.935);
   });
 
   it("requires the criminal qualifier for every criminal matter", () => {

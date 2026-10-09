@@ -24,4 +24,10 @@ describe("prośba o plik w 5000 scenariuszach czatu", () => {
     expect(directDocumentRequest("Jak zrobić tabelkę w Wordzie?")).toBeNull();
     expect(directDocumentRequest("sporzadz zawiadomienie o podejrzeniu popelnienia przestepstwa")).toEqual({ format: "docx", documentType: "letter" });
   });
+
+  it("procedura weryfikacji to dokument do napisania, nie prośba o sprawdzenie", () => {
+    expect(directDocumentRequest("Przygotuj mi procedurę weryfikacji kontrahentów pod kątem sankcji.")).not.toBeNull();
+    expect(directDocumentRequest("Napisz politykę oceny ryzyka AML dla biura rachunkowego.")).not.toBeNull();
+    expect(directDocumentRequest("Przeanalizuj regulamin sklepu i przygotuj uwagi.")).toBeNull();
+  });
 });
