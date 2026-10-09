@@ -1,3 +1,4 @@
+import { parseFlashRouting, rankDomains } from "./domain-module-map.js";
 export const SKILL_SELECTION_ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
 export const MANDATORY_SESSION_SKILLS = [
     "prawny-router-v3",
@@ -489,13 +490,25 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
             executionSkills.add(name);
             selected.add(name);
         }
-        const rankedDomains = rankSkills(candidates.filter((skill) => isDomainSkill(skill) &&
-            domainAllowed(skill.name)), queryTokens)
-            .filter((item) => item.score >= 4)
-            .slice(0, 3);
-        for (const item of rankedDomains) {
-            domainSkills.add(item.skill.name);
-            selected.add(item.skill.name);
+        // The domains of the chat's hint (prawo-polskie-v2: routing błyskawiczny, the
+        // criminal qualifier, a foreign element); the skills' descriptions only when no
+        // phrase names a domain, so a document and a chat answer of one case share them.
+        const flashRows = parseFlashRouting(registry.get("prawo-polskie-v2")?.body ?? "");
+        const flashDomains = flashRows.length
+            ? rankDomains(registry, flashRows, currentTurn).map((domain) => domain.skill)
+            : [];
+        const rankedDomains = flashDomains.length
+            ? flashDomains
+                .filter((name) => name !== primarySkill && domainAllowed(name))
+                .slice(0, 3)
+            : rankSkills(candidates.filter((skill) => isDomainSkill(skill) &&
+                domainAllowed(skill.name)), queryTokens)
+                .filter((item) => item.score >= 4)
+                .slice(0, 3)
+                .map((item) => item.skill.name);
+        for (const name of rankedDomains) {
+            domainSkills.add(name);
+            selected.add(name);
         }
         const rankedAuxiliary = rankSkills(candidates.filter((skill) => !isExecutionSkill(skill) &&
             !isDomainSkill(skill)), queryTokens)

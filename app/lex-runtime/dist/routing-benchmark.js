@@ -55,6 +55,7 @@ export function runRoutingBenchmark(router, cases) {
         legalGate: { nonLegalLoadedSkills: bucket(), legalSkipped: bucket(), trivialSkipped: bucket() },
         domainTop1: bucket(),
         domainTop2: bucket(),
+        domainTop1Accepted: bucket(),
         domainByDr: {},
         domainByVariant: {},
         executive: bucket(),
@@ -90,6 +91,7 @@ export function runRoutingBenchmark(router, cases) {
             const ok = top === item.dr;
             tally(report.domainTop1, ok);
             tally(report.domainTop2, got.domains.slice(0, 2).some((name) => name.startsWith(item.dr)));
+            tally(report.domainTop1Accepted, ok || (top !== null && (item.alt ?? []).includes(top)));
             tally((report.domainByDr[item.dr] ??= bucket()), ok);
             tally((report.domainByVariant[item.variant ?? "-"] ??= bucket()), ok);
             if (!ok)

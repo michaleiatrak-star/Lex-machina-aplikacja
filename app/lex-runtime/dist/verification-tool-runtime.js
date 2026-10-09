@@ -498,6 +498,13 @@ function searchCaseLawLibrary(input) {
         instruction: "Local copies of official decisions; the card (cardUrl) is the source to cite. Verify before citing as VERIFIED."
     });
 }
+// sn.pl (Imperva) stopped the request until a person passes its check: the chat shows
+// the user the sn.pl verification window and repeats the question afterwards.
+export function snVerificationNeeded(reason) {
+    return /^SN_[A-Z_]*(?:HTTP_403|BOT_PROTECTION)$/.test(reason ?? "");
+}
+const SN_VERIFICATION_INSTRUCTION = "SN_WERYFIKACJA_WYMAGANA: sn.pl requires a person to pass its check (captcha). The application shows the user the sn.pl verification window and repeats the question once it is passed. " +
+    "Say so in one sentence; never say SN has no such decision. Meanwhile search source=SAOS (it holds SN decisions with their text) and mark its hits as SAOS candidates, not verified.";
 export class LegalVerificationToolRuntime {
     ledger;
     verifier;
@@ -573,7 +580,9 @@ export class LegalVerificationToolRuntime {
                 return JSON.stringify({
                     ...result,
                     verificationStatus: "DISCOVERY_ONLY",
-                    instruction: "Do not cite a candidate as verified. Run the applicable case verification workflow first."
+                    instruction: snVerificationNeeded(result.reason)
+                        ? SN_VERIFICATION_INSTRUCTION
+                        : "Do not cite a candidate as verified. Run the applicable case verification workflow first."
                 });
             }
         });
@@ -771,7 +780,8 @@ export class LegalVerificationToolRuntime {
                         status: result.status,
                         error: result.reason ?? null,
                         normalizedSignature: result.normalizedSignature,
-                        rejectedNearMatches: result.rejectedNearMatches
+                        rejectedNearMatches: result.rejectedNearMatches,
+                        ...(snVerificationNeeded(result.reason) ? { instruction: SN_VERIFICATION_INSTRUCTION } : {})
                     });
                 }
                 this.ledger.add(result.record);
