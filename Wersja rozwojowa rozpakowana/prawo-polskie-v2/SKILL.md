@@ -1,6 +1,6 @@
 ---
 name: prawo-polskie-v2
-version: "6.53"
+version: "6.54"
 type: domain-router
 status: production
 compatibility: "live_web_lookup, cross_skill_file_read"
@@ -10,7 +10,7 @@ dependencies:
     - shared
   # 2026-09-27e: jawna zależność (każdy skill systemu korzysta z `shared`); pole czytane przy imporcie z marketplace
 changelog: |
-  Wersja bieżąca: 6.53 (2026-10-09e): Routing błyskawiczny DR-01: „Sąd Najwyższy” zastąpione przez „ustawa o Sądzie Najwyższym”, „Izba Kontroli Nadzwyczajnej” — nazwa sądu w pytaniu o orzecznictwo („wyszukaj wyrok SN o grupie przestępczej”) wskazywała DR-01 zamiast dziedziny sprawy (DR-03).
+  Wersja bieżąca: 6.54 (2026-10-09f): ROUTING-MAP: ⛔ wiersz „ustawa o zarządzaniu kryzysowym i ochronie ludności — 2024/1907” rozdzielony na dwie ustawy; zarządzanie kryzysowe — nowelizacje po t.j. 815 i 1206 art. 15 (od 11.01.2027); nowy wiersz rozp. w sprawie chorób zawodowych (t.j. 2026/1297); 7 wzmianek historycznych zapisanych jako RRRR/NNNN, żeby indeks RAG nie pobierał wygasłych t.j. ELI 2026-10-09.
   Poprzednia: 6.46 (2026-10-07f): ROUTING-MAP — procedury i pełne korpusy PrUp (Dz.U. 2026 poz. 913) i PrRestr (Dz.U. 2026 poz. 533) z PR #85; wiersz zmian po t.j. (2026/1206 od 11.01.2027, 2026/176 od 18.02.2027); licencja doradcy restrukturyzacyjnego 2022/1007 potwierdzona w ELI jako najnowszy t.j.
   Pełna historia: references/CHANGELOG.md (ZASADA 15).
 ---

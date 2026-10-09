@@ -1,5 +1,7 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.54 (2026-10-09f, AUDYT-2026-10-09f): ROUTING-MAP: ⛔ wiersz „ustawa o zarządzaniu kryzysowym i ochronie ludności — 2024/1907” rozdzielony na dwie ustawy; zarządzanie kryzysowe — nowelizacje po t.j. 815 i 1206 art. 15 (od 11.01.2027); nowy wiersz rozp. w sprawie chorób zawodowych (t.j. 2026/1297); 7 wzmianek historycznych zapisanych jako RRRR/NNNN, żeby indeks RAG nie pobierał wygasłych t.j. ELI 2026-10-09.
+
 - 6.53 (2026-10-09e, AUDYT-2026-10-09e): Routing błyskawiczny DR-01: „Sąd Najwyższy” zastąpione przez „ustawa o Sądzie Najwyższym”, „Izba Kontroli Nadzwyczajnej” — nazwa sądu w pytaniu o orzecznictwo („wyszukaj wyrok SN o grupie przestępczej”) wskazywała DR-01 zamiast dziedziny sprawy (DR-03).
 
 - 6.52 (2026-10-09d, AUDYT-2026-10-09d): Routing błyskawiczny: DR-02 „wspólnota”, „zarząd wspólnoty” (wcześniej trafiało tylko przypadkiem przez rdzeń „wspólnika”), DR-10 „pielęgniarka środowiskowa”, DR-11 „zdjęcie bez zgody”, DR-12 „koszty pozwu”. Treść prawna bez zmian.
