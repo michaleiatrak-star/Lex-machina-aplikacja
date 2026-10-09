@@ -62,6 +62,8 @@ import {
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
+import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
+import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
 import { TemporalSourceFreshnessChecker } from "../temporal-source-freshness.js";
 import { OfficialLegalSourceVerifier } from "../legal-source-verifier.js";
@@ -572,6 +574,7 @@ export async function startLocalServer(options?: {
           )
       ) ?? runtimeRoot
     );
+  const snFetch = withSnSession(globalThis.fetch.bind(globalThis), () => mcpConnectors.snSession());
   const legalFederationTools =
     new LegalFederationToolRuntime(
       undefined,
@@ -629,8 +632,10 @@ export async function startLocalServer(options?: {
           legalSourceVerifier,
           undefined,
           new TemporalSourceFreshnessChecker(),
-          undefined,
-          undefined,
+          // sn.pl with the session the user verified in the app's sn.pl window,
+          // as the SN connector of the case-law search does.
+          new SupremeCourtCaseVerifier(snFetch),
+          new CaseLawSearchService(snFetch),
           coreLawIndex,
           undefined,
           (act) => coreLawIndex.adopt(act),

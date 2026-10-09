@@ -133,7 +133,11 @@
 "legal": true,
 "dr": "dr-01",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05",
+"dr-12"
+]
 },
 {
 "q": "Specustawa a ustawa ogólna, która ma pierwszeństwo przy kolizji?",

@@ -12,7 +12,9 @@
     "Oceń wyrok sądu pierwszej instancji, czy warto apelować",
     "Przeanalizuj akta sprawy i oceń moją pozycję procesową",
     "Oceń szanse wygrania sprawy o zachowek",
-    "Przeanalizuj pismo przeciwnika procesowego"
+    "Przeanalizuj pismo przeciwnika procesowego",
+    "Przeanalizuj wyrok sądu apelacyjnego w mojej sprawie",
+    "Oceń wyrok, który dostałem"
   ],
   "pisma-procesowe-v3": [
     "Napisz pozew o zapłatę 12 000 zł za niezapłacone faktury",
@@ -36,7 +38,10 @@
     "Znajdź orzecznictwo SN w sprawie zadośćuczynienia za śmierć osoby bliskiej",
     "Linia orzecznicza NSA w sprawie ulgi na złe długi",
     "Zweryfikuj sygnaturę III CZP 6/21",
-    "Znajdź wyrok TSUE w sprawie kredytów frankowych"
+    "Znajdź wyrok TSUE w sprawie kredytów frankowych",
+    "wyszukaj wyroku dotyczącego grupy przestępczej na stronach Sądu Najwyższego i podaj mi zweryfikowany wyrok",
+    "Podaj wyrok Sądu Najwyższego w sprawie zachowku",
+    "Znajdź wyrok SN o zasiedzeniu i przeanalizuj go"
   ],
   "analizator-przepisow-v2": [
     "Co oznacza art. 415 KC i jakie są przesłanki odpowiedzialności?",

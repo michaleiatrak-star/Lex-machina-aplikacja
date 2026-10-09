@@ -2652,6 +2652,12 @@ export class SafeSessionExecutor implements SessionExecutor {
                 )
             : [];
 
+        // The chat's own SN tools stopped by sn.pl's check: the same verification window
+        // as the case-law search (the connector), then the question again.
+        if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
+          snVerificationRequired = true;
+        }
+
         const byId = new Map(
           [
             ...corpusResults,
