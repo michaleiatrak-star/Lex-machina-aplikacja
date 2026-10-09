@@ -84,6 +84,13 @@ jobs:
           [ -n "$address" ] || { cat "$log"; kill "$pid"; exit 1; }
           # The desktop-mode runtime answers only requests carrying the bootstrap token.
           curl -fsS -H "x-lex-desktop-bootstrap: $token" "$address/health"
+          # First start: admin/admin exists and the status flags it until the password changes.
+          status_json="$(curl -fsS -H "x-lex-desktop-bootstrap: $token" "$address/api/auth/status")"
+          echo "$status_json"
+          echo "$status_json" | grep -q '"temporaryAdminCredentialsActive":true' || { echo "ADMIN_NOTICE_FLAG_MISSING" >&2; kill "$pid"; exit 1; }
+          curl -fsS -H "x-lex-desktop-bootstrap: $token" -H "Content-Type: application/json" \
+            -d '{"loginName":"admin","password":"admin"}' "$address/api/auth/login" | grep -q sessionToken \
+            || { echo "ADMIN_ADMIN_LOGIN_FAILED" >&2; kill "$pid"; exit 1; }
           kill "$pid"
 
       - name: Launch the installed app (it must start its runtime)
