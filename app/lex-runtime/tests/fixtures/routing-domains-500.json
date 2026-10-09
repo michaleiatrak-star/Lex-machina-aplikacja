@@ -880,7 +880,10 @@
  {
   "q": "Dzierżawa gruntu od gminy, przetarg na najem",
   "dr": "dr-08",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-02"
+  ]
  },
  {
   "q": "Opłata adiacencka po budowie drogi gminnej",
@@ -914,7 +917,10 @@
  {
   "q": "Nadzór regionalnej izby obrachunkowej nad uchwałą budżetową gminy",
   "dr": "dr-08",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-07"
+  ]
  },
  {
   "q": "Pracownik samorządowy, nabór na stanowisko urzędnicze",
@@ -1147,7 +1153,10 @@
  {
   "q": "Pracodawca monitoruje służbową pocztę e-mail pracowników",
   "dr": "dr-11",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-04"
+  ]
  },
  {
   "q": "Kamera sąsiada nagrywa moje podwórko, czy to legalne?",
@@ -1324,7 +1333,10 @@
  {
   "q": "Prokuratura, zażalenie na przewlekłość działań prokuratora",
   "dr": "dr-12",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-03"
+  ]
  },
  {
   "q": "Kurator sądowy, obowiązki wobec skazanego",
@@ -1582,7 +1594,10 @@
  {
   "q": "Audyt wewnętrzny w jednostce sektora finansów publicznych",
   "dr": "dr-15",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-06"
+  ]
  },
  {
   "q": "Polityka whistleblowingu w spółce giełdowej",

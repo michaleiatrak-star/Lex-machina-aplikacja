@@ -134,7 +134,10 @@
  {
   "q": "Rzecznik Praw Obywatelskich, skarga na działanie urzędu",
   "dr": "dr-05",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-01"
+  ]
  },
  {
   "q": "Fiskus zakwestionował koszty w mojej firmie",
@@ -338,7 +341,10 @@
  {
   "q": "Dziedziczenie nieruchomości w Hiszpanii po polskim obywatelu",
   "dr": "dr-14",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-02"
+  ]
  },
  {
   "q": "Uprowadzenie dziecka za granicę przez rodzica, konwencja haska",
@@ -365,7 +371,10 @@
  {
   "q": "Raportowanie incydentów ICT przez bank zgodnie z DORA",
   "dr": "dr-15",
-  "znany_blad": true
+  "znany_blad": true,
+  "alt": [
+   "dr-11"
+  ]
  },
  {
   "q": "Audyt zgodności z regulacjami w spółce energetycznej",

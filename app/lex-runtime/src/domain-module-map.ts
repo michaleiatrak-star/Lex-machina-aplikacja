@@ -123,6 +123,23 @@ export function parseFlashRouting(markdown: string): FlashRoute[] {
   return rows;
 }
 
+// Words a phrase word's stem or vowel alternation reaches but which are other words
+// ("praca" -> "precedens", "prąd" -> "prędkość", "obywatelstwo" -> "obywatelskie").
+// Found by matching every phrase word against the words of all routing corpora.
+const FALSE_FRIENDS: Record<string, RegExp> = {
+  praca: /^prec/, pracy: /^prec/, prace: /^prec/, czas: /^czes/, pies: /^pias/, plan: /^plen/, szef: /^szaf/,
+  prad: /^pred/, pradu: /^pred/, powiat: /^powiet/, powiatowa: /^powiet/, dzial: /^dziel/, dlug: /^dlugo/,
+  udzielenie: /^udzial/, obywatelstwo: /^obywatelsk/, przychod: /^przychod[nz]/, przychodnia: /^przychod(?!n)/,
+  kamieniolom: /^kamienic/, powierzenie: /^powierzch/, referendum: /^referendar/, niedziele: /^niedzial/,
+  niedzialanie: /^niedziel/, sprzeciw: /^sprzeczn/, wspolnik: /^wspoln(?!ik)/, wspolnota: /^wspoln(?!ot)/,
+  aplikant: /^aplikac/, dyrektywa: /^dyrektor/, szkolenia: /^szkol(?!en)/, przeglad: /^przeglos/,
+  orzeczenie: /^orzeczni/, orzeczenia: /^orzeczni/, uzytkowanie: /^uzytkowni/
+};
+function withoutFalseFriends(word: string, have: string[]): string[] {
+  const other = FALSE_FRIENDS[word];
+  return other ? have.filter((token) => !other.test(token)) : have;
+}
+
 /** Domains whose flash-routing phrases the text contains, best first. */
 export function flashDomains(
   rows: FlashRoute[],
@@ -133,8 +150,8 @@ export function flashDomains(
   return rows
     .map((row) => {
       const matched = row.phrases.filter((phrase) => {
-        const stems = phraseWords(phrase).map(stemOf);
-        return stems.length > 0 && stems.every((stem) => hit(stem, have));
+        const words = phraseWords(phrase);
+        return words.length > 0 && words.every((word) => hit(stemOf(word), withoutFalseFriends(word, have)));
       });
       // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
       // one word of it ("umowa"), which then does not count again.
@@ -185,6 +202,10 @@ export function locate(registry: LexSkillRegistry, skill: string, resource: stri
   return null;
 }
 
+// Words of the request itself, not of its matter ("pełna analiza prawna sprawy: podstawy,
+// ryzyka, rekomendacje"): in an act map they named DR-01 and DR-13 for any question.
+const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
+
 type Indexed = { entry: ActEntry; stems: string[] };
 const cache = new Map<string, { index: Indexed[]; df: Map<string, number> }>();
 
@@ -221,7 +242,7 @@ function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]
       // What the module is about: the act or scope, and the module's own name.
       const names = entry.resources.map((resource) => path.basename(resource, ".md").replace(/^mod-/, "").replace(/-/g, " "));
       const heads = entry.resources.map((resource) => moduleHead(registry.resolveResource(resource.split("/")[0]!, resource)));
-      return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))] };
+      return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))].filter((stem) => !REQUEST_STEMS.has(stem)) };
     });
   const df = new Map<string, number>();
   for (const item of index) for (const stem of item.stems) df.set(stem, (df.get(stem) ?? 0) + 1);

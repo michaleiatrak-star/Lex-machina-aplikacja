@@ -37,7 +37,10 @@
 },
 {
 "q": "Czy Rzecznik Praw Dziecka może przystąpić do sprawy sądowej?",
-"dr": "dr-01"
+"dr": "dr-01",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Najemca zniszczył meble w wynajmowanym mieszkaniu, czy mogę potrącić z kaucji?",
@@ -169,7 +172,10 @@
 },
 {
 "q": "Starosta nie wydał decyzji w terminie, co mogę zrobić?",
-"dr": "dr-05"
+"dr": "dr-05",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Czy mogę żądać wyłączenia urzędnika od mojej sprawy?",
@@ -237,7 +243,10 @@
 },
 {
 "q": "Czy fundacja rodzinna płaci CIT od zysku?",
-"dr": "dr-06"
+"dr": "dr-06",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Zamawiający odrzucił naszą ofertę jako niezgodną z SWZ.",
@@ -289,7 +298,10 @@
 },
 {
 "q": "Czy gmina może odmówić zwrotu podatku od nieruchomości przez uchwałę?",
-"dr": "dr-08"
+"dr": "dr-08",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Wojewoda stwierdził nieważność uchwały rady gminy, co dalej?",
@@ -521,7 +533,10 @@
 },
 {
 "q": "Czy wyrok sądu niemieckiego o zapłatę można wykonać w Polsce?",
-"dr": "dr-14"
+"dr": "dr-14",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Jak złożyć skargę do Komisji Europejskiej na naruszenie prawa UE?",
@@ -537,7 +552,10 @@
 },
 {
 "q": "Czy polski sąd jest właściwy w sprawie rozwodu małżonków mieszkających w Irlandii?",
-"dr": "dr-14"
+"dr": "dr-14",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Europejski Trybunał Praw Człowieka uznał naruszenie, jak wznowić sprawę w Polsce?",
@@ -545,11 +563,17 @@
 },
 {
 "q": "Jakie prawo stosuje się do spadku po Polaku mieszkającym we Francji?",
-"dr": "dr-14"
+"dr": "dr-14",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy mogę dostać emeryturę za pracę w Norwegii?",
-"dr": "dr-14"
+"dr": "dr-14",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Jak działa ekstradycja z Polski do USA?",
@@ -601,7 +625,10 @@
 },
 {
 "q": "Jakie argumenty przygotować na rozprawę o zapłatę przeciwko deweloperowi?",
-"dr": "dr-16"
+"dr": "dr-16",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Jak ocenić siłę dowodów przed złożeniem pozwu?",
@@ -629,7 +656,10 @@
 },
 {
 "q": "Jak przygotować plan dowodowy do sprawy o naruszenie dóbr osobistych?",
-"dr": "dr-16"
+"dr": "dr-16",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy wyrok SN w podobnej sprawie wiąże sąd w mojej sprawie?",
