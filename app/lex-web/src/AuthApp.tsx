@@ -253,8 +253,9 @@ function AuthPanel({
             : "Sesja oraz odblokowane klucze istnieją wyłącznie w pamięci lokalnego runtime."}
         </p>
 
-        {phase === "login" &&
-          !lastUser &&
+        {/* Shown until the admin's password is changed, whoever signed in last
+            (zgłoszenie 2026-10-09: znikało po pierwszej próbie logowania). */}
+        {phase !== "bootstrap" &&
           temporaryAdminCredentialsActive && (
           <div
             className="auth-onboarding-note"
@@ -500,6 +501,23 @@ export default function AuthenticatedApp() {
       cancelled = true;
     };
   }, []);
+
+  // The sign-in and lock screens ask the runtime again: the admin/admin notice stays
+  // until the password is changed (also by another session) and not a moment longer.
+  useEffect(() => {
+    if (phase !== "login" && phase !== "locked") return;
+    let cancelled = false;
+    void getAuthStatus()
+      .then((status) => {
+        if (!cancelled) setTemporaryAdminCredentialsActive(status.temporaryAdminCredentialsActive === true);
+      })
+      .catch(() => {
+        // The runtime unreachable: keep what is known.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
 
   useEffect(() => {
     setAuthenticationFailureHandler(

@@ -116,6 +116,9 @@ const checks = {
       'const DESKTOP_API_BASE = "http://lex-api.localhost"'
     ) &&
     webApi.includes(
+      'const DESKTOP_API_BASE_WEBKIT = "lex-api://localhost"'
+    ) &&
+    webApi.includes(
       "if (isDesktopShell()) {\n    return {};"
     ),
   osCredentialVault:

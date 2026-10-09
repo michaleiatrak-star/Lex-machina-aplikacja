@@ -1269,6 +1269,15 @@ export class ApiError extends Error {
 
 const DEFAULT_API_BASE = "http://127.0.0.1:4317";
 const DESKTOP_API_BASE = "http://lex-api.localhost";
+// Tauri serves the lex-api protocol at http://lex-api.localhost on Windows (WebView2)
+// and at lex-api://localhost on macOS and Linux (WKWebView, WebKitGTK). With the
+// Windows address on a Mac no request reached the runtime: the first sign-in failed
+// and the admin/admin notice never showed (its status request failed too).
+const DESKTOP_API_BASE_WEBKIT = "lex-api://localhost";
+
+export function desktopApiBase(userAgent: string): string {
+  return /Windows/i.test(userAgent) ? DESKTOP_API_BASE : DESKTOP_API_BASE_WEBKIT;
+}
 
 export function isDesktopShell(): boolean {
   if (
@@ -1327,7 +1336,7 @@ export function authorizationHeaders():
 
 export function apiBase(): string {
   if (isDesktopShell()) {
-    return DESKTOP_API_BASE;
+    return desktopApiBase(typeof navigator === "undefined" ? "" : navigator.userAgent);
   }
   const configured = import.meta.env.VITE_LEX_API_BASE;
   return typeof configured === "string" && configured.trim()
