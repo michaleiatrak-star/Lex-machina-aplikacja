@@ -91,6 +91,9 @@ export class DocumentGenerationStateStore {
             (value.processDocumentStatus !== undefined &&
                 value.processDocumentStatus !== "DRAFT" &&
                 value.processDocumentStatus !== "FINAL") ||
+            (value.unverifiedAccepted !== undefined &&
+                (!Array.isArray(value.unverifiedAccepted) ||
+                    !value.unverifiedAccepted.every((claim) => typeof claim === "string"))) ||
             typeof value.createdAt !==
                 "string") {
             throw new Error("GENERATION_STATE_INVALID");

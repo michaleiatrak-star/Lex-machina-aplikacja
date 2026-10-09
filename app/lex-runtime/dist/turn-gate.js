@@ -40,6 +40,11 @@ const LEGAL_STEMS = [
     "rozdzielnos", "ubezwlasnowol", "ojcostw", "wspolwlasnos", "konwencj", "konsul", "dyskrymin", "wywiez", "uprowadz", "przyjeci",
     "dopuszcz", "kara?t[ay] (?:polaka|pobytu)", "licencj", "certyfik", "iso", "aml", "dora", "nis2", "ai act",
     "akt(?:a|ach|ami|om)\\b", "dokument", "spraw(?:a|y|ie|e|ach|om|ami)\\b", "klient", "rozprawa", "protokol",
+    // Matters told without a legal word (benchmark 2026-10-08, scenarios-5000): a gift,
+    // a petition, a brand, whistleblowing, a carrier's liability, ESG, an internal inquiry.
+    "darowizn", "zglasz", "podpis", "nieprawidlowos", "zastrzec", "zastrzez", "esg", "csrd", "antykorupc", "dochodzeni",
+    "przewozn", "odpowiada za", "ukrad", "nazw\\w* (?:dla )?(?:mojej |naszej )?(?:marki|firmy|sklepu|produktu)", "praktyk\\w* lekarsk", "zalozyc (?:firm|spolk|fundacj|stowarzysz|dzialalnos|praktyk)",
+    "usun\\w* (?:moje |moj )?(?:zdjec|zdjeci|wpis|komentarz|dane)\\w* z (?:internet|sieci|portal|forum|google|facebook|serwis|strony)",
 ];
 const LEGAL_LEXICON = new RegExp(`(?<![a-z0-9])(?:${LEGAL_STEMS.join("|")})`, "u");
 // Questions about rights and duties, whatever the topic.

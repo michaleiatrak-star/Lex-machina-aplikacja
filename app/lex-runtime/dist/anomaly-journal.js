@@ -207,6 +207,7 @@ export function withAnomalyJournal(inner, journal) {
     return {
         execute,
         ...(inner.resolveAutoRouting ? { resolveAutoRouting: (request) => inner.resolveAutoRouting(request) } : {}),
-        ...(inner.summarizeThread ? { summarizeThread: (request) => inner.summarizeThread(request) } : {})
+        ...(inner.summarizeThread ? { summarizeThread: (request) => inner.summarizeThread(request) } : {}),
+        ...(inner.executiveSkillFor ? { executiveSkillFor: (message) => inner.executiveSkillFor(message) } : {})
     };
 }

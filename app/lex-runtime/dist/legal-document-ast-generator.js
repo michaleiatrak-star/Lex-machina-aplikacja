@@ -1,5 +1,6 @@
 import { SESSION_EXECUTION_INTERNAL } from "./session-executor.js";
 import { DOCUMENT_TYPES, STYLE_PROFILES, validateLegalDocumentAst } from "./legal-document-ast.js";
+import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 function extractJson(value) {
     const trimmed = value.trim();
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
@@ -193,7 +194,7 @@ function generationInstruction(request) {
                 ""
             ]
             : []),
-        "# OUTPUT CONTRACT — LEGAL DOCUMENT AST",
+        DOCUMENT_OUTPUT_CONTRACT_HEADING,
         "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
         "schemaVersion must equal \"1\".",
         "documentType must equal \"" + request.documentType + "\".",
