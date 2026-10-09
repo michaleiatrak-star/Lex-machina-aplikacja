@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CoreLawIndex,
+  coreLawEliCaution,
   extractCoreActs,
   htmlToText,
   splitArticles
@@ -369,6 +370,99 @@ describe("core law index", () => {
       text: expect.stringContaining("w nowym brzmieniu"),
       amendmentsAfter: []
     });
+  });
+
+  it("leaves out numbers a map names only to set them aside", () => {
+    const root = corpus();
+    fs.writeFileSync(
+      path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"),
+      [
+        "| Szkody w środowisku | t.j. Dz.U. 2020 poz. 2187 ⚠️ KOREKTA: było „Dz.U. 2007 poz. 75 ze zm.” | x | ✅ |",
+        "| Nadzór KNF | Dz.U. 2026 poz. 935 t.j. (poprzedni t.j. Dz.U. 2024 poz. 135) | x | ✅ |",
+        "| NATO | Dz.U. 2000 poz. 970 | x | ✅ VER; usunięto błędne Dz.U. 2020 poz. 1287 |",
+        "| PKPiR | Dz.U. 2025 poz. 1299 ⛔ ZASTĄPIŁO Dz.U. 2019 poz. 2544 | x | ✅ |"
+      ].join("\n")
+    );
+    const elis = extractCoreActs(root).map((act) => act.eli);
+    expect(elis).toEqual(expect.arrayContaining(["DU/2020/2187", "DU/2026/935", "DU/2000/970", "DU/2025/1299"]));
+    for (const aside of ["DU/2007/75", "DU/2024/135", "DU/2020/1287", "DU/2019/2544"]) expect(elis).not.toContain(aside);
+  });
+
+  it("lists and indexes an act once although two map numbers lead to its current text; an amendment does not take the row's name", async () => {
+    const root = corpus();
+    fs.writeFileSync(
+      path.join(root, "prawo-polskie-v2", "ROUTING-MAP.md"),
+      "| Kodeks karny — zabójstwo | Dz.U. 2026 poz. 999 (zmiana), Dz.U. 2026 poz. 1500 t.j. | x | ✅ |\n"
+    );
+    const eli = fakeEli({
+      amendmentText: true,
+      references: {
+        "DU/2025/383": { "Tekst jednolity dla aktu": [{ act: { ELI: "DU/1997/553" } }] },
+        "DU/1997/553": {
+          "Inf. o tekście jednolitym": [
+            { act: { ELI: "DU/2025/383", status: "akt objęty tekstem jednolitym" } },
+            { act: { ELI: "DU/2026/1500", status: "obowiązujący" } }
+          ]
+        },
+        "DU/2026/1500": { "Tekst jednolity dla aktu": [{ act: { ELI: "DU/1997/553" } }] }
+      }
+    });
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    const first = new CoreLawIndex(store, eli.fetcher as never, eli.pdf as never, () => start, 0);
+    first.load(root);
+    await first.refresh();
+    const index = new CoreLawIndex(store, eli.fetcher as never, eli.pdf as never, () => start + DAY, 0);
+    index.load(root);
+    await index.refresh();
+
+    const served = index.search("zabija człowieka", { limit: 10 }).filter((hit) => hit.article === "148");
+    expect(served.map((hit) => hit.eli)).toEqual(["DU/2026/1500"]);
+    expect(index.distinctSummaries().filter((act) => act.currentEli === "DU/2026/1500")).toHaveLength(1);
+    expect(index.summary("DU/2026/999")?.labels).toEqual([]);
+    expect(index.resolve("Kodeks karny — zabójstwo")?.eli).not.toBe("DU/2026/999");
+  });
+
+  it("flags a t.j. that already carries a change not in force yet, also on the newer t.j. it serves", async () => {
+    const store = tempDir("lex-core-store-");
+    const start = Date.parse("2026-09-23T12:00:00Z");
+    await downloadedIndex(store, start);
+    const { index } = later(store, start + DAY, {
+      references: {
+        "DU/2025/383": { "Tekst jednolity dla aktu": [{ act: { ELI: "DU/1997/553" } }] },
+        "DU/1997/553": {
+          "Inf. o tekście jednolitym": [
+            { act: { ELI: "DU/2025/383", status: "akt objęty tekstem jednolitym", promulgation: "2025-03-27" } },
+            { act: { ELI: "DU/2026/1500", status: "obowiązujący", promulgation: "2026-09-01" } }
+          ],
+          "Akty zmieniające": [
+            { act: { ELI: "DU/2026/1046", title: "Ustawa o zmianie ustawy — Kodeks karny", promulgation: "2026-08-04" }, date: "2026-11-05" },
+            { act: { ELI: "DU/2026/17", title: "Ustawa o zmianie ustawy — Kodeks karny", promulgation: "2026-01-10" }, date: "2026-02-01" },
+            { act: { ELI: "DU/2026/1700", title: "Ustawa o zmianie ustawy — Kodeks karny", promulgation: "2026-09-20" }, date: "2026-12-01" }
+          ]
+        }
+      }
+    });
+    await index.refresh();
+
+    const kk = index.summary("DU/2025/383")!;
+    expect(kk.currentEli).toBe("DU/2026/1500");
+    // In force already (2026/17) or published after the t.j. (2026/1700): not inside it.
+    expect(kk.notYetInForce).toEqual([{ eli: "DU/2026/1046", title: "Ustawa o zmianie ustawy — Kodeks karny", from: "2026-11-05" }]);
+    expect(coreLawEliCaution(kk)).toContain("jeszcze nieobowiązujące (DU/2026/1046 od 2026-11-05)");
+    expect(coreLawEliCaution({ ...kk, notYetInForce: [], status: "uznany za uchylony" })).toBe("akt nieobowiązujący według ELI (uznany za uchylony)");
+    expect(coreLawEliCaution({ ...kk, notYetInForce: [], status: "obowiązujący" })).toBeNull();
+    // One short article in the test corpus scores under the prompt threshold; the ranking is not under test.
+    const rag = coreLawRetrievalPrompt(
+      {
+        search: (query: string, options?: { limit?: number }) => index.search(query, options).map((hit) => ({ ...hit, score: 10 })),
+        currentRecord: (eli: string) => index.currentRecord(eli),
+        summaries: () => index.summaries()
+      },
+      "kto zabija człowieka, kara w nowym brzmieniu"
+    );
+    expect(rag).toContain("[DU/2026/1500]");
+    expect(rag).toContain("UWAGA: tekst jednolity zawiera zmiany jeszcze nieobowiązujące");
   });
 
   it("keeps the texts it has when ELI refuses access", async () => {

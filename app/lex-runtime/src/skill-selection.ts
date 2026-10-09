@@ -275,12 +275,13 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
   {
     skill: "analizator-umow-v1",
     patterns: [
-      /\bumow[a-z]*\b/,
+      // A contract as the object of the work (to analyse, check, draft, sign), not
+      // a contract the matter is about ("umowa o pracę", "umowa międzynarodowa"):
+      // the stateful contract workflow otherwise stops a plain question with
+      // CONTRACT_STATE_REQUIRED (benchmark 2026-10-08, scenarios-5000).
+      /^(?=.*\b(?:umow|kontrakt|ugod|testament)[a-z]*\b)(?!.*\bumow[a-z]* miedzynarodow)(?=.*\b(?:przeanaliz|analiz|sprawdz|ocen|przejrz|zweryfik|napisz|napisac|przygotuj|przygotowac|sporzadz|zredaguj|stworz|utworz|opracuj|negocj|podpis|zapis|postanowien|paragraf|aneks|wzor|projekt|zmien|popraw|klauzul|ryzyk)[a-z]*\b)/,
       /\bowu\b/,
-      /\bkontrakt[a-z]*\b/,
-      /\bugod[a-z]*\b/,
       /\bregulamin[a-z]*\b/,
-      /\btestament[a-z]*\b/,
       /\bklauzul[a-z]*\b/
     ]
   },

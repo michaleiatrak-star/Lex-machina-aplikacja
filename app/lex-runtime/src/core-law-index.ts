@@ -88,6 +88,9 @@ export type CoreActSummary = {
   // t.j. replaces the text, new amendments are added to RAG as documents.
   pendingConsolidated: CoreAmendment | null;
   pendingAmendments: CoreAmendment[];
+  // Amendments the served t.j. already contains that are not in force yet
+  // (ELI "Akty zmieniające" of the base act: entry into force after today).
+  notYetInForce: CoreAmendmentInForce[];
   // MAP: z map DR; VERIFIED: dołączony po weryfikacji przepisu w ELI;
   // USER: dodany przez użytkownika (sprawdzony w ELI przy dodaniu).
   origin: "MAP" | "VERIFIED" | "USER";
@@ -99,10 +102,21 @@ export type CoreActSummary = {
  * Why the copy of an act cannot be taken as the current wording (verification
  * from the copy is refused and the act must be checked in ELI), or null.
  */
+// ELI status of a text that is no longer law ("uchylony", "uznany za uchylony",
+// "wygaśnięcie aktu"); a superseded t.j. is replaced by the newer one before use.
+const NOT_IN_FORCE = /uchylon|wygaśnięcie|nieobowiązując/iu;
+
 export function coreLawEliCaution(
   act: Pick<CoreActSummary, "amendmentsAfter" | "pendingConsolidated" | "pendingAmendments"> &
-    Partial<Pick<CoreActSummary, "textSource">>
+    Partial<Pick<CoreActSummary, "textSource" | "notYetInForce" | "status">>
 ): string | null {
+  if (act.status && NOT_IN_FORCE.test(act.status)) {
+    return `akt nieobowiązujący według ELI (${act.status})`;
+  }
+  if (act.notYetInForce?.length) {
+    const listed = act.notYetInForce.map((item) => `${item.eli} od ${item.from}`).join(", ");
+    return `tekst jednolity zawiera zmiany jeszcze nieobowiązujące (${listed}) — do zdarzeń sprzed tych dat stosuje się brzmienie sprzed zmiany`;
+  }
   if (act.pendingConsolidated) return "w ELI jest nowszy tekst jednolity, jeszcze niezastosowany";
   if (act.pendingAmendments.length) {
     return `nowe nowelizacje w ELI, jeszcze niezastosowane (${act.pendingAmendments.length})`;
@@ -170,6 +184,8 @@ export type CoreLawStatus = {
   acts: CoreLawActStatus[];
 };
 
+export type CoreAmendmentInForce = { eli: string; title: string | null; from: string };
+
 export type CoreAmendment = {
   eli: string;
   title: string | null;
@@ -220,6 +236,16 @@ function cleanNote(line: string): string {
 }
 
 // "✅ DODANE 2026-10-04 (AUDYT-2026-10-04h):" — a status note of the map, not the act's name.
+// "było „Dz.U. 2007 poz. 75”", "poprzedni t.j. Dz.U. 2024 poz. 135", "nie mylić z ...",
+// "potwierdzone krzyżowo w Dz.U. ...": a number the map names only to set it aside.
+const HISTORICAL_MENTION =
+  /(?:było|poprzedn\p{L}*|dawn\p{L}*|błędn\p{L}*|zamiast|zastąpi\p{L}*|potwierdzon\p{L}*\s+krzyżowo\s+w)\s*[„"“(]?[^|„"“]{0,30}$/iu;
+
+function historicalMention(line: string, index: number): boolean {
+  const cellStart = line.lastIndexOf("|", index) + 1;
+  return HISTORICAL_MENTION.test(line.slice(Math.max(cellStart, index - 45), index));
+}
+
 const STATUS_NOTE =
   /^[\s✅⚠⛔🟨⬛\uFE0F]*(?:DODANE|DODANY|NOWY|NOWE|ZMIANA|ZMIENIONE|UWAGA|AKTUALIZACJA|SYNCHRONIZACJA|KOREKTA)\b[^:]*:\s*/iu;
 
@@ -276,6 +302,9 @@ function sourceRegistries(corpusRoot: string): Array<{ domain: string; file: str
 // t.j.) are reference points for a past state, not wording to quote as current law.
 const REGISTRY_ROLES = new Set(["nowelizacja"]);
 
+// ELI title of an act that amends others ("Ustawa z dnia ... o zmianie ustawy ...").
+const AMENDING_ACT = /^Ustawa(?: z dnia [^,]{5,40}?)? (?:o zmianie|zmieniająca)\b/u;
+
 /** All Dz.U. acts named in the domain act maps, the routing map and the source registries. */
 export function extractCoreActs(corpusRoot: string): CoreActRef[] {
   const acts = new Map<string, CoreActRef>();
@@ -306,6 +335,7 @@ export function extractCoreActs(corpusRoot: string): CoreActRef[] {
       // "nie mylić z ...") are named by their ELI title, not by this row.
       let first = true;
       for (const match of line.matchAll(REF_PATTERN)) {
+        if (historicalMention(line, match.index ?? 0)) continue;
         const year = match[1]!;
         const tail = match[3] ?? "";
         const consolidated = Boolean(match[4]) && tail.trim() === "";
@@ -492,6 +522,7 @@ type ActState = {
   amendmentsAfter?: CoreAmendment[];
   pendingConsolidated?: CoreAmendment | null;
   pendingAmendments?: CoreAmendment[];
+  notYetInForce?: CoreAmendmentInForce[];
   // Po trwałym błędzie pobrania: wcześniej nie ponawiać (poza wymuszonym).
   retryAt?: string | null;
   // Trwały brak tekstu w ELI (nie awaria): opis przyczyny.
@@ -536,6 +567,8 @@ export type EliActLink = {
   title: string | null;
   promulgation: string | null;
   status: string;
+  // The relation's date: for "Akty zmieniające" the day the change takes effect.
+  date: string | null;
 };
 
 function adoptedRef(entry: AdoptedAct): CoreActRef {
@@ -568,7 +601,8 @@ export function eliLinks(refs: unknown, relation: (key: string) => boolean): Eli
         pos: Number(match[3]),
         title: typeof act.title === "string" ? act.title : null,
         promulgation: typeof act.promulgation === "string" ? act.promulgation : null,
-        status: typeof act.status === "string" ? act.status : ""
+        status: typeof act.status === "string" ? act.status : "",
+        date: typeof wrapper.date === "string" ? wrapper.date : null
       });
     }
   }
@@ -704,8 +738,19 @@ export class CoreLawIndex {
     void this.refresh().catch(() => undefined);
   }
 
+  /**
+   * The map row's name, unless ELI shows the act is an amendment the row only
+   * mentions ("Prawo budowlane ... Dz.U. 2026 poz. 1161": an act amending it).
+   */
+  private labelsOf(ref: CoreActRef): string[] {
+    const title = this.state.acts[ref.eli]?.title ?? "";
+    if (!AMENDING_ACT.test(title)) return ref.labels;
+    return ref.labels.filter((label) => /zmian|noweliz|zmieniaj/iu.test(label));
+  }
+
   summaries(): CoreActSummary[] {
     const adopted = new Map((this.state.adopted ?? []).map((entry) => [entry.eli, entry]));
+    const today = new Date(this.now()).toISOString().slice(0, 10);
     return this.refs.map((ref) => {
       const state = this.state.acts[ref.eli];
       const entry = adopted.get(ref.eli);
@@ -714,7 +759,7 @@ export class CoreLawIndex {
         title: state?.title ?? null,
         status: state?.status ?? null,
         consolidated: ref.consolidated,
-        labels: ref.labels,
+        labels: this.labelsOf(ref),
         domains: ref.domains,
         textSource: state?.textSource ?? null,
         articleCount: state?.articleCount ?? 0,
@@ -726,6 +771,7 @@ export class CoreLawIndex {
         amendmentsAfter: state?.amendmentsAfter ?? [],
         pendingConsolidated: state?.pendingConsolidated ?? null,
         pendingAmendments: state?.pendingAmendments ?? [],
+        notYetInForce: (state?.notYetInForce ?? []).filter((item) => item.from > today),
         origin: entry ? (entry.origin === "USER" ? "USER" : "VERIFIED") : "MAP",
         addedAt: entry?.addedAt ?? null,
         addedBy: entry?.addedBy ?? null
@@ -887,6 +933,31 @@ export class CoreLawIndex {
     return this.summaries().find((act) => act.eli === eli) ?? null;
   }
 
+  /**
+   * One entry per text actually served: map numbers of the same act (its
+   * original, an older and a newer t.j.) lead to one current text and are
+   * merged, labels and domains together; the first map number names it.
+   */
+  distinctSummaries(): CoreActSummary[] {
+    const byCurrent = new Map<string, CoreActSummary>();
+    for (const act of this.summaries()) {
+      const key = act.articleCount > 0 ? act.currentEli : act.eli;
+      const held = byCurrent.get(key);
+      if (!held) {
+        byCurrent.set(key, { ...act, labels: [...act.labels], domains: [...act.domains] });
+        continue;
+      }
+      for (const label of act.labels) if (!held.labels.includes(label)) held.labels.push(label);
+      for (const domain of act.domains) if (!held.domains.includes(domain)) held.domains.push(domain);
+      held.consolidated ||= act.consolidated;
+      for (const amendment of act.amendmentsAfter) {
+        if (!held.amendmentsAfter.some((item) => item.eli === amendment.eli)) held.amendmentsAfter = [...held.amendmentsAfter, amendment];
+      }
+      held.pendingConsolidated ??= act.pendingConsolidated;
+    }
+    return [...byCurrent.values()];
+  }
+
   /** The text to serve for a map act: its newest downloaded t.j. */
   currentRecord(eli: string): CoreActRecord | null {
     const current = this.state.acts[eli]?.currentEli ?? eli;
@@ -927,7 +998,7 @@ export class CoreLawIndex {
     const scored = this.refs
       .map((ref) => {
         const names = [
-          ...ref.labels,
+          ...this.labelsOf(ref),
           this.state.acts[ref.eli]?.title ?? ""
         ].map((name) => normalizeForSearch(name).replace(/[.\s]+/g, ""));
         const exact = names.some((name) => name === wanted);
@@ -950,7 +1021,7 @@ export class CoreLawIndex {
   search(query: string, options: { eli?: string; limit?: number } = {}): SearchHit[] {
     if (!this.searchIndex) {
       const articles: SearchableArticle[] = [];
-      for (const act of this.summaries()) {
+      for (const act of this.distinctSummaries()) {
         if (act.articleCount === 0) continue;
         const record = this.currentRecord(act.eli);
         if (!record) continue;
@@ -1182,6 +1253,17 @@ export class CoreLawIndex {
       ) {
         newer = { eli: newest.eli, title: newest.title, promulgation: newest.promulgation };
       }
+      // A t.j. carries every change published before it, also one still in
+      // vacatio legis (KP t.j. 2026/1245 with 2026/1046 in force from 5.11.2026).
+      const served = apply && newer ? newer.eli : current;
+      const servedPromulgation = eliLinks(baseReferences, (key) => /^Inf\. o tekście jednolitym$/i.test(key))
+        .find((link) => link.eli === served)?.promulgation;
+      const today = new Date(this.now()).toISOString().slice(0, 10);
+      state.notYetInForce = servedPromulgation
+        ? eliLinks(baseReferences, (key) => /^Akty zmieniające$/i.test(key))
+            .filter((link) => link.date && link.date > today && link.promulgation && link.promulgation <= servedPromulgation)
+            .map((link) => ({ eli: link.eli, title: link.title, from: link.date! }))
+        : [];
     }
 
     if (!apply) {

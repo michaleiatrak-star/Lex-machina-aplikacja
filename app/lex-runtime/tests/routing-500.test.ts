@@ -50,3 +50,30 @@ describe.each([
     expect(cases.filter((item) => item.dr === null && rankDomains(registry, rows, item.q).length > 0).map((item) => item.q)).toEqual([]);
   });
 });
+
+// routing-holdout-2026-10-09.json: 160 questions, 10 per DR, written after the
+// 2026-10-09 vocabulary and never used to tune it. Measured as a whole, not per case.
+describe("DR choice: control set 2026-10-09", () => {
+  const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "routing-holdout-2026-10-09.json"), "utf8")) as Case[];
+  const ranked = cases.map((item) => ({ item, domains: rankDomains(registry, rows, item.q).map((entry) => entry.skill.slice(0, 5)) }));
+  const share = (hit: (entry: (typeof ranked)[number]) => boolean, list = ranked) => list.filter(hit).length / list.length;
+
+  it("has 10 questions for each domain", () => {
+    expect(cases).toHaveLength(160);
+    for (let index = 1; index <= 16; index++) {
+      expect(cases.filter((item) => item.dr === `dr-${String(index).padStart(2, "0")}`)).toHaveLength(10);
+    }
+  });
+
+  it("puts the right domain first and among the first two", () => {
+    expect(share((entry) => entry.domains[0] === entry.item.dr)).toBeGreaterThanOrEqual(0.85);
+    expect(share((entry) => entry.domains.slice(0, 2).includes(entry.item.dr!))).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("leaves no domain behind", () => {
+    for (let index = 1; index <= 16; index++) {
+      const dr = `dr-${String(index).padStart(2, "0")}`;
+      expect(share((entry) => entry.domains[0] === dr, ranked.filter((entry) => entry.item.dr === dr))).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+});

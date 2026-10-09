@@ -150,9 +150,24 @@ export function pathProfile(args: {
   documentGeneration: boolean;
   // Router category [11]: verifying someone else's legal material (full K0–K6 protocol).
   verification?: boolean;
+  // The user asks for a legal analysis (chances, risks): a lay user gets it in plain
+  // language, but never as the light profile's short answer.
+  analysis?: boolean;
 }): PathProfile {
-  if (args.criminal || args.documentGeneration || args.verification) return "PELNY";
+  if (args.criminal || args.documentGeneration || args.verification || args.analysis) return "PELNY";
   return args.mode === "PRAWNIK" && !args.simple ? "PELNY" : "LEKKI";
+}
+
+const foldPl = (value: string): string => value.normalize("NFKD").replace(/\p{M}/gu, "").replace(/ł/gu, "l").replace(/Ł/gu, "L").toLowerCase();
+// Asked for an analysis of the matter, not for a short answer: "przeanalizuj", "oceń
+// moje szanse", "pełna analiza", "szanse i ryzyka", "proszę o analizę" (also without
+// Polish letters). "Czy jest szansa, że..." alone is a question, not this request.
+const ANALYSIS_REQUEST =
+  /(?<![\p{L}])(?:przeanalizuj|zanalizuj|ocen\s+(?:moje\s+|nasze\s+|jego\s+|jej\s+)?(?:szans|ryzyk|sytuacj|spraw)\p{L}*|(?:peln|kompleksow|calosciow|szczegolow|wszechstronn)\p{L}*\s+analiz\p{L}*|analiz\p{L}*\s+(?:prawn|szans|ryzyk|sprawy|sytuacji)\p{L}*|prosz\p{L}*\s+o\s+(?:\p{L}+\s+)?analiz\p{L}*|szans\p{L}*\s+(?:i|oraz)\s+ryzyk\p{L}*|ryzyk\p{L}*\s+(?:i|oraz)\s+szans\p{L}*)/u;
+
+/** The message asks for a legal analysis of the matter (profile PEŁNY whatever the mode). */
+export function analysisRequested(message: string): boolean {
+  return ANALYSIS_REQUEST.test(foldPl(message));
 }
 
 export type TurnFacts = {

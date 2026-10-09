@@ -98,6 +98,7 @@ import {
   mandatoryPathInstructions,
   missingGateBlocks,
   pathProfile,
+  analysisRequested,
   preloadForTurn,
   routingTrace,
   type MandatoryPathModel,
@@ -225,6 +226,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
+import { withoutOutputContract } from "./document-output-contract.js";
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -1261,6 +1263,8 @@ export interface SessionExecutor {
   execute(request: SessionExecutionRequest): Promise<SessionExecutionResponse>;
   // Structured summary of older thread messages (pseudonymized for the model).
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
+  // The router's executive skill for a message without delivered material (AUTO).
+  executiveSkillFor?(message: string): string | null;
 }
 
 export class SafeSessionExecutor implements SessionExecutor {
@@ -1303,6 +1307,21 @@ export class SafeSessionExecutor implements SessionExecutor {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * The executive skill the router gives a message on its own (KROK 2 table,
+   * ACTIVATION-MATRIX, simple-letter catalogue), as this executor decides it in
+   * AUTO for a turn without delivered material. Null: no executive skill.
+   */
+  executiveSkillFor(message: string): string | null {
+    const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+    return (
+      decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+        skill: "pisma-proste-v2",
+        entries: schemaCatalog(this.registry, "pisma-proste-v2")
+      })?.primary ?? null
+    );
   }
 
   private taskRoutesCache: { root: string; routes: TaskRoute[] } | null = null;
@@ -1780,7 +1799,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // replies in the history ("w pliku", "te dokumenty") are not this request's input.
     const gateIInput =
       evaluateGateIInputCompleteness(
-        latestUserTurn(request.query),
+        withoutOutputContract(latestUserTurn(request.query)),
         request.documentAttachments
           ?.length ?? 0
       );
@@ -1941,21 +1960,22 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Mandatory path (hosted models): the profile, the corpus files the router's
     // mandatory gates require, loaded up front, and the mode decided at the entry.
     const mandatoryModel = request.model.startsWith("local/") ? null : this.mandatoryModel();
-    const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(latestUserTurn(request.query));
+    const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(withoutOutputContract(latestUserTurn(request.query)));
     const pathFacts = {
-      query: request.auxiliaryText ?? latestUserTurn(request.query),
+      query: withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query)),
       legal: legalTurn,
       // AUTO: primarySkill is a placeholder until the model reads a domain skill,
       // so the criminal matter comes from the question itself.
       criminal:
         (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
-        criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)) ||
-        // A follow-up of a criminal matter ("a jaki termin?") stays one.
-        (!request.auxiliaryText && criminalMatter(threadUserText(request.query))),
+        criminalMatter(withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query))) ||
+        // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
+        // sends the latest message apart (auxiliaryText), so the thread is read as well.
+        criminalMatter(withoutOutputContract(threadUserText(request.query))),
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
-      foreignJurisdiction: foreignJurisdiction(request.query)
+      foreignJurisdiction: foreignJurisdiction(withoutOutputContract(request.query))
     };
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
     // A message typed without Polish letters gets them back for the executive routing phrases.
@@ -1966,7 +1986,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: pathFacts.criminal,
       documentGeneration: pathFacts.documentGeneration,
-      verification
+      verification,
+      analysis: legalTurn && analysisRequested(pathFacts.query)
     });
     // Already in the model's context: the router skill (AUTO gives it in full)
     // and the core legal resources.
@@ -2326,7 +2347,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const execution = await this.engine.executePolishLegalQuery({
       ...(this.coreLawIndex
         ? {
-            coreLaw: this.coreLawIndex.summaries().map((act) => ({
+            coreLaw: this.coreLawIndex.distinctSummaries().map((act) => ({
               eli: act.eli,
               title: act.title,
               labels: act.labels,
@@ -2889,7 +2910,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       simple: request.matterComplexity?.level === "SIMPLE",
       criminal: criminalAfter,
       documentGeneration: pathFacts.documentGeneration,
-      verification
+      verification,
+      analysis: legalTurn && analysisRequested(pathFacts.query)
     });
     if (mandatoryModel && legalTurn && effectiveProfile !== profile) {
       for (const resource of preloadForTurn(mandatoryModel, { ...pathFacts, criminal: criminalAfter, profile: effectiveProfile })) {

@@ -5,7 +5,7 @@ import { provisionsForDetection } from "./legal-act-abbreviations.js";
 // karna zawsze PEŁNY; "Karne: +kwalifikator").
 const CRIMINAL_ACT = /\bart\.?\s*\d+[a-z]?(?:\s*§\s*\d+[a-z]?)?\s+(?:KK|KPK|KKS|KKW|KW|KPW)\b/u;
 const CRIMINAL_WORDS =
-  /\b(?:kodeks\p{L}*\s+karn\p{L}*|kodeks\p{L}*\s+postępowania\s+karnego|przestęp\p{L}*|wykrocze\p{L}*|oskarżon\p{L}*|podejrzan\p{L}*|akt\p{L}*\s+oskarżenia|prokurat\p{L}*|postępowani\p{L}*\s+karn\p{L}*|odpowiedzialnoś\p{L}*\s+karn\p{L}*|zarzut\p{L}*\s+popełnienia|kar\p{L}*\s+pozbawienia\s+wolności|grzywn\p{L}*|mandat\p{L}*\s+karn\p{L}*|skarbow\p{L}*\s+(?:przestęp|wykrocz)\p{L}*|karnie|kradzie\p{L}*|ukradł\p{L}*|pobi(?:cie|ł\p{L}*|t[yaeo]\p{L}*)|oszust\p{L}*|podrobi\p{L}*|podrobion\p{L}*|sfałszow\p{L}*|fałszerstw\p{L}*|pijan\p{L}*\s+kierow\p{L}*|nietrzeźw\p{L}*|po\s+pijanemu|groźb\p{L}*\s+karaln\p{L}*)/iu;
+  /\b(?:kodeks\p{L}*\s+karn\p{L}*|kodeks\p{L}*\s+postępowania\s+karnego|przestęp\p{L}*|wykrocze\p{L}*|oskarżon\p{L}*|podejrzan\p{L}*\s+(?:o|w\s+sprawie)|(?:jestem|został\p{L}*|uznan\p{L}*\s+za|status\p{L}*|w\s+charakterze|jako)\s+podejrzan\p{L}*|akt\p{L}*\s+oskarżenia|prokurat\p{L}*|postępowani\p{L}*\s+karn\p{L}*|odpowiedzialnoś\p{L}*\s+karn\p{L}*|zarzut\p{L}*\s+popełnienia|kar\p{L}*\s+pozbawienia\s+wolności|grzywn\p{L}*|mandat\p{L}*\s+karn\p{L}*|skarbow\p{L}*\s+(?:przestęp|wykrocz)\p{L}*|karnie|kradzie\p{L}*|ukradł\p{L}*|pobi(?:cie|ł\p{L}*|t[yaeo]\p{L}*)|oszust\p{L}*|podrobi\p{L}*|podrobion\p{L}*|sfałszow\p{L}*|fałszerstw\p{L}*|pijan\p{L}*\s+kierow\p{L}*|nietrzeźw\p{L}*|po\s+pijanemu|groźb\p{L}*\s+karaln\p{L}*)/iu;
 
 // The same matter told in everyday words ("pobił mnie", "jazda po alkoholu", "mandat"):
 // the qualifier is still required. Not "dochodzenie" (also a civil claim) and not
@@ -42,7 +42,8 @@ const LAY_CRIMINAL_WORDS = new RegExp(
       "areszt\\p{L}*",
       "zawiadomi\\p{L}*\\s+o\\s+(?:podejrzeniu\\s+)?(?:popełnieni|przestęp)\\p{L}*",
       "groźb\\p{L}*\\s+karaln\\p{L}*",
-      "mandat(?:u|em|y|ów|ami|ach|cie)?(?!\\s+(?:posła|posłanki|radnego|radnej|senatora|wójta|burmistrza|prezydenta|członka|dla\\s+pracodawcy))",
+      // Not the mandate of an office, in either order ("mandat posła", "poseł traci mandat").
+      "(?<!(?:pose[łl]|posłank\\p{L}*|radn\\p{L}*|senator\\p{L}*|wójt\\p{L}*|burmistrz\\p{L}*)(?:\\s+\\p{L}+){0,2}\\s+)mandat(?:u|em|y|ów|ami|ach|cie)?(?!\\s+(?:posła|posłanki|radnego|radnej|senatora|wójta|burmistrza|prezydenta|członka|dla\\s+pracodawcy|poselsk\\p{L}*|radnego))",
       "zniewa(?:ż|g)\\p{L}*",
       "zniesławi\\p{L}*",
       "pomówi\\p{L}*",
@@ -72,7 +73,14 @@ const LAY_CRIMINAL_WORDS = new RegExp(
       "(?:wy)?łudzi\\p{L}*",
       "na\\s+wnuczka",
       "włama\\p{L}*",
-      "okradzi\\p{L}*|okradł\\p{L}*"
+      "okradzi\\p{L}*|okradł\\p{L}*",
+      // Threats to kill, an account taken over, a push: offences told in everyday words.
+      "(?:że\\s+)?mnie\\s+zabij\\p{L}*|zabij\\p{L}*\\s+mnie|groz\\p{L}*\\s+(?:mi\\s+)?śmierci\\p{L}*",
+      "przej(?:ął|ęła|ęli|ęto)\\s+(?:moje\\s+|mi\\s+)?kont\\p{L}*|przejęci\\p{L}*\\s+(?:mojego\\s+)?kont\\p{L}*",
+      "(?:popchnął|popchnęła|popchnęli|spoliczkował\\p{L}*|szarpał\\p{L}*)(?:\\s+mnie)?",
+      "niealimentacj\\p{L}*",
+      // "Co grozi za jazdę bez OC?": a question about the penalty.
+      "co\\s+(?:mi\\s+|mu\\s+|jej\\s+|nam\\s+|im\\s+)?grozi\\s+za"
     ].join("|") +
     ")(?![\\p{L}])",
   "iu"

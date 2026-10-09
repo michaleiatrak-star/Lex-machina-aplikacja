@@ -93,6 +93,15 @@ describe("anomaly journal", () => {
     expect(executor.resolveAutoRouting).toBeUndefined();
   });
 
+  it("passes the router's executive skill through (AUTO workflow preview needs it)", () => {
+    const executor = withAnomalyJournal({
+      execute: async () => { throw new Error("unused"); },
+      executiveSkillFor: (message) => (message.includes("umowę") ? "analizator-umow-v1" : null)
+    }, new AnomalyJournal(tempDir()));
+    expect(executor.executiveSkillFor?.("Przeanalizuj umowę")).toBe("analizator-umow-v1");
+    expect(executor.executiveSkillFor?.("Ile trwa wypowiedzenie?")).toBeNull();
+  });
+
   it("does not count a failed native Read as read", () => {
     const root = tempDir();
     fs.mkdirSync(path.join(root, "dr-02"));

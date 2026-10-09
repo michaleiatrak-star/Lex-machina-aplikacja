@@ -93,7 +93,12 @@ export function matchSchema(entries: SchemaEntry[], text: string): (SchemaEntry 
 
 const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz|zrób|wyślij|złóż|wnieś|projekt\p{L}*|wzór|wzoru|szablon\p{L}*)(?![\p{L}])/iu;
 const REVIEW =
-  /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|mogę|można|jest|są|należy|powinien\p{L}*|trzeba)|policz|oblicz|wylicz|do\s+kiedy|kiedy\s+(?:mija|upływa)|jakie\s+mam\s+prawa|co\s+(?:mam\s+)?(?:zrobić|robić))(?![\p{L}])/iu;
+  /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|mogę|można|jest|są|należy|powinien\p{L}*|trzeba)|policz|oblicz|wylicz|do\s+kiedy|kiedy\s+(?:mija|upływa)|jakie\s+mam\s+prawa|co\s+(?:mam\s+)?(?:zrobić|robić)|ile\s+(?:mam\s+)?(?:czasu|dni|kosztuj\p{L}*|wynosi|trwa|zapłac\p{L}*|płac\p{L}*)|jaki\s+(?:mam\s+|jest\s+)?termin|termin\s+na|jak\s+długo|czy\s+potrzebuj\p{L}*)(?![\p{L}])/iu;
+// "Jak napisać apelację?", "Jak złożyć skargę na lekarza?", "Co w niej napisać?": how
+// to do it, asked as a question; the user has not asked for the letter itself.
+const HOW_TO =
+  /(?:^|[.!?]\s+|,\s*)(?:a\s+)?(?:jak|co\s+(?:w\s+(?:niej|nim)\s+)?)\s*(?:mam\s+|można\s+|się\s+)?(?:napisać|złożyć|wnieść|przygotować|sporządzić|zaskarżyć|odwołać)(?![\p{L}])[^.!]*\?\s*$/iu;
+
 const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu;
 
 /**
@@ -113,7 +118,7 @@ export function draftingSchema(
   if (demand && REPLY_TO_DEMAND.test(text)) return null;
   if (DRAFT.test(text)) return schema;
   // No drafting verb: a question about the letter, or the same letter delivered, is analysis.
-  if (REVIEW.test(text) || (demand && delivered.demand)) return null;
+  if (REVIEW.test(text) || HOW_TO.test(text) || (demand && delivered.demand)) return null;
   return schema;
 }
 
@@ -123,7 +128,7 @@ export function asksToDraft(text: string): boolean {
 
 /** A question about a letter (received or one's own), not a request to draft it. */
 export function asksAbout(text: string): boolean {
-  return REVIEW.test(text) && !DRAFT.test(text);
+  return (REVIEW.test(text) && !DRAFT.test(text)) || HOW_TO.test(text);
 }
 
 export function repliesToDemand(text: string): boolean {
