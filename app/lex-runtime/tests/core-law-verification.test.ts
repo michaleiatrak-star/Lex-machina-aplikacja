@@ -73,6 +73,7 @@ function act(options: {
     amendmentsAfter: options.amendmentsAfter ?? [],
     pendingConsolidated: options.pendingConsolidated ?? null,
     pendingAmendments: options.pendingAmendments ?? [],
+    notYetInForce: [],
     origin: "MAP",
     addedAt: null,
     addedBy: null

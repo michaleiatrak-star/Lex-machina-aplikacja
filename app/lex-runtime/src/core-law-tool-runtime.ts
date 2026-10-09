@@ -135,7 +135,8 @@ export function coreLawRetrievalPrompt(
   query: string
 ): string | null {
   // The date of each text and why it may not be current: the model says it.
-  const summaries = new Map((index.summaries?.() ?? []).map((act) => [act.eli, act]));
+  // Keyed by the text served too: a hit carries the ELI of the newer t.j.
+  const summaries = new Map((index.summaries?.() ?? []).flatMap((act) => [[act.currentEli, act], [act.eli, act]] as const));
   const clean = query.replace(/\[(?:PII|LMPII):[^\]]+\]/g, " ");
   if (clean.replace(/\s+/g, " ").trim().length < 12) return null;
   const blocks: string[] = [];
