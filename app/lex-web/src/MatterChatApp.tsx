@@ -7044,7 +7044,8 @@ export default function MatterChatApp({
                         : runtimeProvider === "google"
                           ? " Gemini CLI (logowanie kontem Google; po zalogowaniu wpisz /quit w oknie terminala)"
                           : " Grok Build"}.
-                    Na Windows Lex Machina otwiera widoczny terminal, a klient prowadzi
+                    Lex Machina otwiera widoczne okno terminala (Windows; na macOS Terminal dla Gemini CLI,
+                    a Codex i Claude Code logują się od razu w przeglądarce), a klient prowadzi
                     dalej przez swój oficjalny login w przeglądarce lub flow kodu urządzenia.
                     Token OAuth pozostaje po stronie klienta i nie jest kopiowany do UI Lex Machina.
                   </p>

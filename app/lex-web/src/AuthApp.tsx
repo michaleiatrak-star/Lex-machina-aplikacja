@@ -26,7 +26,10 @@ import {
   isDesktopShell,
   reportUserActivity,
   setAuthenticationFailureHandler,
-  type AuthMeResponse
+  type AuthMeResponse,
+  desktopRuntimeStatus,
+  repairDesktopRuntime,
+  type DesktopRuntimeStatus
 } from "./api.js";
 
 const USER_ACTIVITY_REPORT_INTERVAL_MS =
@@ -47,7 +50,8 @@ function AuthPanel({
   onChangeUser,
   onRecover,
   temporaryAdminCredentialsActive,
-  runtimeUnreachable = false
+  runtimeUnreachable = false,
+  runtimeStatus = null
 }: {
   phase: "bootstrap" | "login" | "locked";
   lastUser?: AuthMeResponse["user"];
@@ -58,7 +62,9 @@ function AuthPanel({
   onRecover: () => void;
   temporaryAdminCredentialsActive: boolean;
   runtimeUnreachable?: boolean;
+  runtimeStatus?: DesktopRuntimeStatus | null;
 }) {
+  const [repairMessage, setRepairMessage] = useState("");
   const [loginName, setLoginName] =
     useState(
       phase === "locked"
@@ -267,6 +273,31 @@ function AuthPanel({
             <span>
               Aplikacja nie otrzymała odpowiedzi od lokalnego runtime, więc nie może sprawdzić logowania ani danych pierwszego logowania. Uruchom aplikację ponownie.
             </span>
+            {runtimeStatus?.error && (
+              <span>
+                Przyczyna: <code>{runtimeStatus.error}</code>
+              </span>
+            )}
+            {runtimeStatus?.logPath && (
+              <span>
+                Dziennik błędów: <code>{runtimeStatus.logPath}</code>
+              </span>
+            )}
+            {runtimeStatus?.repairAvailable && (
+              <button
+                type="button"
+                className="chat-secondary-action"
+                onClick={() => {
+                  setRepairMessage("");
+                  repairDesktopRuntime()
+                    .then(() => setRepairMessage("Otwarto okno Terminala z naprawą instalacji. Po komunikacie „Gotowe” uruchom Lex Machina ponownie."))
+                    .catch((failure) => setRepairMessage(failure instanceof ApiError ? failure.code : String(failure)));
+                }}
+              >
+                Napraw instalację (pobierz brakujące komponenty)
+              </button>
+            )}
+            {repairMessage && <span>{repairMessage}</span>}
           </div>
         )}
 
@@ -321,7 +352,7 @@ function AuthPanel({
 
         {nativeUnlock ? (
           <p className="auth-copy">
-            To konto jest chronione przez magazyn poświadczeń Windows. Odblokowanie nie wymaga wpisywania hasła aplikacji.
+            To konto jest chronione przez systemowy magazyn poświadczeń (Windows: Menedżer poświadczeń, macOS: pęk kluczy). Odblokowanie nie wymaga wpisywania hasła aplikacji.
           </p>
         ) : (
           <label>
@@ -461,6 +492,8 @@ export default function AuthenticatedApp() {
   ] = useState(false);
   const [runtimeUnreachable, setRuntimeUnreachable] =
     useState(false);
+  const [runtimeStatus, setRuntimeStatus] =
+    useState<DesktopRuntimeStatus | null>(null);
   useEffect(() => {
     let cancelled = false;
 
@@ -510,6 +543,9 @@ export default function AuthenticatedApp() {
         } catch {
           if (!cancelled) {
             setRuntimeUnreachable(true);
+            void desktopRuntimeStatus().then((status) => {
+              if (!cancelled) setRuntimeStatus(status);
+            });
             setPhase("login");
           }
         }
@@ -772,6 +808,9 @@ export default function AuthenticatedApp() {
           }
           runtimeUnreachable={
             runtimeUnreachable
+          }
+          runtimeStatus={
+            runtimeStatus
           }
           onAuthenticated={(value) => {
             setAuth(value);

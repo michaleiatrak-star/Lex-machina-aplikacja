@@ -862,6 +862,13 @@ export async function startLocalServer(options?: {
   });
 }
 
+// The parent at start (the desktop app); an orphan is re-parented, on macOS and Linux
+// to launchd/init (pid 1).
+const PARENT_AT_START = process.ppid;
+export function desktopParentGone(ppid = process.ppid, platform = process.platform): boolean {
+  return ppid !== PARENT_AT_START || (platform !== "win32" && ppid === 1);
+}
+
 if (
   process.argv[1] &&
   path.resolve(fileURLToPath(import.meta.url)) ===
@@ -871,4 +878,12 @@ if (
   process.stdout.write(
     `Lex Machina runtime listening on http://${server.host}:${server.port}\n`
   );
+  // Desktop: the runtime ends with the application that started it. On macOS an app
+  // that crashed or was force-quit left node and its Python workers running (a new
+  // set at every launch); the parent changing means it is gone.
+  if (process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim()) {
+    setInterval(() => {
+      if (desktopParentGone()) process.exit(0);
+    }, 5_000).unref();
+  }
 }

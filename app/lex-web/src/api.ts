@@ -2782,6 +2782,34 @@ export function downloadApplicationUpdate():
   );
 }
 
+function tauriInvoke(): ((command: string, args?: Record<string, unknown>) => Promise<unknown>) | null {
+  if (!isDesktopShell()) return null;
+  return (
+    (window as Window & { __TAURI_INTERNALS__?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> } })
+      .__TAURI_INTERNALS__?.invoke ?? null
+  );
+}
+
+export type DesktopRuntimeStatus = { error: string | null; logPath: string | null; repairAvailable: boolean };
+
+/** Desktop: why the local runtime did not start and where its log is (null in a browser). */
+export async function desktopRuntimeStatus(): Promise<DesktopRuntimeStatus | null> {
+  const invoke = tauriInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke("runtime_start_status")) as DesktopRuntimeStatus;
+  } catch {
+    return null;
+  }
+}
+
+/** macOS: runs the installer's component bootstrap again in a Terminal window. */
+export async function repairDesktopRuntime(): Promise<void> {
+  const invoke = tauriInvoke();
+  if (!invoke) throw new ApiError("TAURI_INVOKE_UNAVAILABLE", 503);
+  await invoke("runtime_repair");
+}
+
 export async function installStagedApplicationUpdate(
   receiptToken: string
 ): Promise<void> {

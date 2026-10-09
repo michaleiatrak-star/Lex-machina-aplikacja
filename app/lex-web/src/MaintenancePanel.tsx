@@ -73,6 +73,12 @@ function friendlyError(error: unknown): string {
   ) {
     return "Aktualizacja programu jest zablokowana przez politykę bezpieczeństwa: produkcyjny podpis Authenticode nie został jeszcze poprawnie skonfigurowany albo nie przeszedł weryfikacji.";
   }
+  if (
+    code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
+    code.includes("APPLICATION_UPDATE_PLATFORM_UNSUPPORTED")
+  ) {
+    return "Na macOS aplikację aktualizuje się instalatorem: pobierz najnowszy pakiet .pkg Lex Machina i uruchom go (dane i ustawienia zostają).";
+  }
   if (code === "APPLICATION_UPDATE_NOT_AVAILABLE") {
     return "Brak nowszej wersji programu do pobrania.";
   }

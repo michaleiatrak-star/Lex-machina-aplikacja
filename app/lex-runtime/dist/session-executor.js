@@ -44,7 +44,9 @@ import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js"
 import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
-import { domainHintPrompt, parseFlashRouting, rankDomains } from "./domain-module-map.js";
+import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules } from "./domain-module-map.js";
+import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./domain-fallback.js";
+import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
@@ -344,6 +346,8 @@ export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL
  * get none: their tokens are the chat's. Restoring an alias reads the
  * document id at position n-1 of documentIds().
  */
+// Act modules of the case's second domains loaded with the prompt (one each, at most this).
+const SECONDARY_DOMAIN_MODULES_BUDGET_CHARS = 25_000;
 export class DocumentAliasRegistry {
     prefixes = new Map();
     prefixFor(documentId) {
@@ -1122,15 +1126,50 @@ export class SafeSessionExecutor {
         if (mandatoryModel && legalTurn && request.modelSelectsSkills) {
             // A follow-up naming no domain of its own keeps the domain of the thread.
             const ownDomains = rankDomains(this.registry, this.flashRoutes(), caseText);
-            const domains = ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
+            let domains = ownDomains.length || request.auxiliaryText || !laterTurn(request.query)
                 ? ownDomains
                 : rankDomains(this.registry, this.flashRoutes(), [threadUserText(request.query), caseText].join("\n"));
+            // No phrase and no act map named a domain: the optional fallback model (Settings)
+            // names it from the domains' descriptions, on the pseudonymized question only.
+            const fallbackTarget = domains.length || isNonLegalMessage(request.query, this.flashRoutes())
+                ? null
+                : domainFallbackTarget(domainFallbackChoice(), { provider: request.provider, model: request.model });
+            if (fallbackTarget) {
+                const fallback = await fallbackDomains(this.providers, this.registry, fallbackTarget, protectedAuxiliaryText ?? latestUserTurn(protectedQuery));
+                audit.record("gate", "DOMAIN_FALLBACK", fallback.domains.length ? "OK" : "DEGRADED", {
+                    detail: `${fallbackTarget.model}:${fallback.domains.join(",") || "brak"}${fallback.error ? `;${fallback.error}` : ""}`
+                });
+                domains = fallback.domains.map((skill) => ({
+                    skill,
+                    matched: [`model zapasowy routingu (${fallbackTarget.model})`],
+                    modules: suggestDomainModules(this.registry, skill, caseText),
+                    strong: false
+                }));
+                step("PREPARE", `model zapasowy routingu: ${fallback.domains.join(", ") || "brak dziedziny"}`);
+            }
             if (domains.length) {
                 audit.record("gate", "DOMAIN_HINT", "OK", {
                     detail: domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
                 });
                 pathSections.push(domainHintPrompt(domains));
                 step("PREPARE", `dziedzina wg routingu błyskawicznego: ${domains.map((domain) => domain.skill).join(", ")}`);
+                // A second domain the case's kind or its own phrase names: its act module goes in
+                // with the prompt, not as one more round of the model (the whole context again).
+                const secondary = loadActModules(this.registry, domains
+                    .slice(1)
+                    .filter((domain) => domain.strong && domain.modules[0])
+                    .map((domain) => ({ skill: domain.skill, resource: domain.modules[0].resource, rule: "NAZWA", why: domain.modules[0].why })), contextResources, SECONDARY_DOMAIN_MODULES_BUDGET_CHARS);
+                for (const item of secondary.loaded) {
+                    contextResources.add(item.resource);
+                    audit.record("resource_read", item.resource, "OK", { detail: "runtime-preload;domain-hint;secondary-domain" });
+                }
+                if (secondary.loaded.length) {
+                    pathSections.push([
+                        "# MODUŁ AKTU DZIEDZINY WTÓRNEJ (wskazówka routingu; aplikacja wczytała go za ciebie — nie czytaj go ponownie)",
+                        ...secondary.loaded.map((item) => `## ${item.resource} (${item.why})\n\n${item.content}`)
+                    ].join("\n\n"));
+                    step("PREPARE", `moduł dziedziny wtórnej wczytany: ${secondary.loaded.map((item) => path.basename(item.resource, ".md")).join(", ")}`);
+                }
             }
         }
         // Sections the skill's author marked as executed by the application go to the

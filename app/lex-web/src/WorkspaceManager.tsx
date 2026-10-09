@@ -1492,7 +1492,7 @@ export function WorkspaceManager({
           ) : (
             <p>
               Ten format nie ma bezpiecznego podglądu w webview. Użyj „Otwórz w systemie”,
-              aby uruchomić go w domyślnej aplikacji Windows.
+              aby uruchomić go w domyślnej aplikacji systemu.
             </p>
           )}
         </section>

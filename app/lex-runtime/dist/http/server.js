@@ -38,6 +38,7 @@ import { MaintenanceService, commitSkillOverlayRuntimeHealth, recoverSkillOverla
 import { LocalModelRuntime } from "../local-model-runtime.js";
 import { SafeSessionExecutor } from "../session-executor.js";
 import { LegalVerificationToolRuntime } from "../verification-tool-runtime.js";
+import { configureDomainFallback } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, withSnSession } from "../case-law-verifier.js";
 import { CaseLawSearchService } from "../case-law-search.js";
 import { LegalFederationToolRuntime } from "../legal-federation-tool-runtime.js";
@@ -197,6 +198,8 @@ export async function startLocalServer(options) {
     const caseFileStore = new LocalCaseFileStore();
     // Decisions downloaded once (verification, preview): quotes are marked on this copy.
     configureCaseLawStore(path.join(caseFileStore.rootDir, "case-law"));
+    // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony).
+    configureDomainFallback(path.join(caseFileStore.rootDir, "settings"));
     const authStore = new LocalAuthStore({
         rootDir: caseFileStore.rootDir
     });
@@ -456,9 +459,24 @@ export async function startLocalServer(options) {
         });
     });
 }
+// The parent at start (the desktop app); an orphan is re-parented, on macOS and Linux
+// to launchd/init (pid 1).
+const PARENT_AT_START = process.ppid;
+export function desktopParentGone(ppid = process.ppid, platform = process.platform) {
+    return ppid !== PARENT_AT_START || (platform !== "win32" && ppid === 1);
+}
 if (process.argv[1] &&
     path.resolve(fileURLToPath(import.meta.url)) ===
         path.resolve(process.argv[1])) {
     const server = await startLocalServer();
     process.stdout.write(`Lex Machina runtime listening on http://${server.host}:${server.port}\n`);
+    // Desktop: the runtime ends with the application that started it. On macOS an app
+    // that crashed or was force-quit left node and its Python workers running (a new
+    // set at every launch); the parent changing means it is gone.
+    if (process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim()) {
+        setInterval(() => {
+            if (desktopParentGone())
+                process.exit(0);
+        }, 5_000).unref();
+    }
 }

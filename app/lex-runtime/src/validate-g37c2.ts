@@ -61,8 +61,10 @@ const checks = {
     desktopLib.includes(
       ".ensure_managed_identity()"
     ) &&
+    // Restored at every managed sign-in; a Keychain error no longer stops the app
+    // (macOS, ad-hoc signed updates), it is logged and the key entered again.
     trust.includes(
-      "self.restore_provider_credentials()?;"
+      "if let Err(error) = self.restore_provider_credentials() {"
     ) &&
     trust.includes(
       "let _ = self.restore_provider_credentials();"

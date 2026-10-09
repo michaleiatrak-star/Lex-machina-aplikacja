@@ -2,7 +2,6 @@ mod trust_boundary;
 
 use std::{
     env,
-    io,
     path::{Path, PathBuf},
     process::Command,
     sync::Arc,
@@ -139,6 +138,72 @@ fn open_external_url(url: String) -> Result<(), String> {
         Ok(())
     } else {
         Err("EXTERNAL_BROWSER_LAUNCH_FAILED".to_string())
+    }
+}
+
+/// Why the local runtime did not start, the log to send, and whether a repair can run.
+#[tauri::command]
+fn runtime_start_status(bridge: tauri::State<'_, Arc<RuntimeBridge>>) -> serde_json::Value {
+    serde_json::json!({
+        "error": bridge.start_error(),
+        "logPath": trust_boundary::runtime_log_path().map(|path| path.display().to_string()),
+        "repairAvailable": cfg!(target_os = "macos")
+    })
+}
+
+/// The repair script: the installer's component bootstrap for this user, run in a
+/// Terminal window (it downloads Node, Python and the models; then the app restarts).
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn write_repair_script(code_root: &Path, target: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let bootstrap = code_root.join("bootstrap").join("macos-online-bootstrap.sh");
+    if !bootstrap.is_file() {
+        return Err("RUNTIME_REPAIR_BOOTSTRAP_MISSING".to_string());
+    }
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "'\\''"));
+    std::fs::write(
+        target,
+        format!(
+            "#!/bin/bash\necho 'Lex Machina: naprawa instalacji (pobieranie komponentów)'\n/bin/bash {} {} && echo 'Gotowe. Zamknij to okno i uruchom Lex Machina ponownie.' || echo 'Naprawa nie powiodła się — prześlij powyższy komunikat.'\n",
+            quote(&bootstrap),
+            quote(code_root)
+        ),
+    )
+    .map_err(|error| format!("RUNTIME_REPAIR_SCRIPT_FAILED:{error}"))?;
+    std::fs::set_permissions(target, std::fs::Permissions::from_mode(0o700))
+        .map_err(|error| format!("RUNTIME_REPAIR_SCRIPT_FAILED:{error}"))
+}
+
+/// macOS: runs the component bootstrap again (a failed or missing first bootstrap,
+/// another user of this Mac) in a Terminal window.
+#[tauri::command]
+fn runtime_repair(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let code_root = app
+            .path()
+            .resource_dir()
+            .map_err(|error| format!("RUNTIME_REPAIR_RESOURCES_MISSING:{error}"))?
+            .join("runtime");
+        let script = env::temp_dir().join("LexMachina-naprawa.command");
+        write_repair_script(&code_root, &script)?;
+        let status = Command::new("open")
+            .arg("-a")
+            .arg("Terminal")
+            .arg(&script)
+            .status()
+            .map_err(|error| format!("RUNTIME_REPAIR_TERMINAL_FAILED:{error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("RUNTIME_REPAIR_TERMINAL_FAILED".to_string())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err("RUNTIME_REPAIR_PLATFORM_UNSUPPORTED".to_string())
     }
 }
 
@@ -335,9 +400,11 @@ pub fn run() {
     );
     let protocol_bridge = Arc::clone(&bridge);
     let setup_bridge = Arc::clone(&bridge);
+    let status_bridge = Arc::clone(&bridge);
     let exit_bridge = Arc::clone(&bridge);
 
     let app = tauri::Builder::default()
+        .manage(status_bridge)
         .invoke_handler(
             tauri::generate_handler![
                 open_external_url,
@@ -346,7 +413,9 @@ pub fn run() {
                 sn_verification_open,
                 sn_verification_cookies,
                 sn_verification_finish,
-                sn_verification_close
+                sn_verification_close,
+                runtime_start_status,
+                runtime_repair
             ]
         )
         .register_asynchronous_uri_scheme_protocol(
@@ -363,12 +432,15 @@ pub fn run() {
         .setup(move |app| {
             let resource_dir =
                 app.path().resource_dir()?;
-            setup_bridge
+            // A runtime that does not start (macOS: components missing for this user,
+            // a failed bootstrap) is reported on the sign-in screen with its log, not
+            // a crash: Tauri closed the app at launch without a word.
+            let started = setup_bridge
                 .start(&resource_dir)
-                .map_err(io::Error::other)?;
-            setup_bridge
-                .ensure_managed_identity()
-                .map_err(io::Error::other)?;
+                .and_then(|_| setup_bridge.ensure_managed_identity().map(|_| ()));
+            if let Err(error) = started {
+                setup_bridge.record_start_error(error);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -390,6 +462,24 @@ mod tests {
         valid_update_receipt_token,
         valid_workspace_open_token,
     };
+
+    #[cfg(unix)]
+    #[test]
+    fn repair_script_runs_the_bootstrap_with_quoted_paths() {
+        let root = std::env::temp_dir().join(format!("lex repair {}", std::process::id()));
+        let code_root = root.join("O'Brien runtime");
+        std::fs::create_dir_all(code_root.join("bootstrap")).unwrap();
+        std::fs::write(code_root.join("bootstrap").join("macos-online-bootstrap.sh"), "#!/bin/bash\n").unwrap();
+        let script = root.join("naprawa.command");
+        super::write_repair_script(&code_root, &script).unwrap();
+        let text = std::fs::read_to_string(&script).unwrap();
+        assert!(text.starts_with("#!/bin/bash\n"));
+        assert!(text.contains("O'\\''Brien runtime/bootstrap/macos-online-bootstrap.sh"));
+        let output = std::process::Command::new("/bin/bash").arg("-n").arg(&script).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(super::write_repair_script(&root.join("missing"), &script).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn external_url_requires_https() {
