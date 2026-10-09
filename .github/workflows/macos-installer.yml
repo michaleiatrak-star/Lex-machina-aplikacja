@@ -98,8 +98,10 @@ jobs:
           set -euo pipefail
           open -a "/Applications/Lex Machina.app"
           started=0
+          # On unix the sidecar execs node, so the runtime runs as node .../app/dist/http/server.js.
+          runtime_pattern="Lex Machina.app/Contents/Resources/runtime/app/dist/http/server.js"
           for _ in $(seq 1 90); do
-            if pgrep -f "Lex Machina.app/Contents/Resources/runtime/lex-runtime-sidecar" >/dev/null; then
+            if pgrep -f "$runtime_pattern" >/dev/null; then
               started=1
               break
             fi
@@ -108,6 +110,14 @@ jobs:
           pgrep -fl "Lex Machina" || true
           osascript -e 'tell application "Lex Machina" to quit' || pkill -f "Lex Machina.app" || true
           [ "$started" = 1 ] || { echo "APP_DID_NOT_START_RUNTIME" >&2; exit 1; }
+          # Quitting the app must not leave the runtime behind (TERM on exit, parent watchdog).
+          for _ in $(seq 1 20); do
+            pgrep -f "$runtime_pattern" >/dev/null || exit 0
+            sleep 1
+          done
+          pgrep -fl "$runtime_pattern" || true
+          echo "RUNTIME_ORPHANED_AFTER_QUIT" >&2
+          exit 1
 
       - name: Receipt
         run: |
