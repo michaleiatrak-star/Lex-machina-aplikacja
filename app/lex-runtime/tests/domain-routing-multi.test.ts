@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { rankDomains, parseFlashRouting } from "../src/domain-module-map.js";
+import { resolveAdditionalSkills } from "../src/skill-selection.js";
 import { criminalMatter } from "../src/matter-signals.js";
 import { LexSkillRegistry } from "../src/registry.js";
 
@@ -44,5 +45,58 @@ describe("two DR domains of one case", () => {
       expect(criminalMatter(text)).toBe(true);
     }
     expect(criminalMatter("kara umowna za opóźnienie dostawy")).toBe(false);
+  });
+
+  // Audyt 2026-10-09c: sprawy wymagające 2–3 dziedzin (tests/fixtures/routing-multidomain.json).
+  // Bez tej poprawki: obie dziedziny wskazane w 62,8% spraw, ścieżka silnika (pisma) 16,8%.
+  describe("multi-domain fixture", () => {
+    const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/routing-multidomain.json"), "utf8")) as Array<{ q: string; dr: string[]; mods?: Record<string, string> }>;
+    const covered = (list: string[], required: string[]) => required.every((dr) => list.some((name) => name.startsWith(dr)));
+
+    it("names every domain the case needs", () => {
+      const all = fixture.filter((item) => covered(domains(item.q), item.dr)).length / fixture.length;
+      const first = fixture.filter((item) => item.dr.includes(domains(item.q)[0] ?? "")).length / fixture.length;
+      expect(all).toBeGreaterThanOrEqual(0.77);
+      expect(first).toBeGreaterThanOrEqual(0.96);
+    });
+
+    it("gives the document path the same domains as the chat hint", () => {
+      for (const item of fixture) {
+        const flash = rank(item.q).map((domain) => domain.skill);
+        if (!flash.length) continue;
+        const selected = resolveAdditionalSkills(registry, item.q, flash[0]!, true, []).domainSkills;
+        expect(selected, item.q).toEqual(expect.arrayContaining(flash));
+      }
+    });
+
+    it("points to the act module of each domain", () => {
+      for (const item of fixture) {
+        for (const [dr, module] of Object.entries(item.mods ?? {})) {
+          const hint = rank(item.q).find((domain) => domain.skill.startsWith(dr))?.modules.map((entry) => entry.resource).join(" ") ?? "";
+          expect(hint, item.q).toContain(module);
+        }
+      }
+    });
+  });
+
+  it("keeps the second domain of the matter next to the criminal or foreign one", () => {
+    // Before: DR-03 (kwalifikator) took the second place of DR-04.
+    expect(domains("Pracodawca nie wypłacił mi wynagrodzenia, a monitoring w szatni nagrywa pracowników. Co grozi szefowi karnie?")).toEqual(
+      expect.arrayContaining(["dr-03", "dr-04", "dr-11"])
+    );
+    expect(domains("Czy nasz kontrahent z Rosji jest na liście sankcyjnej UE i co grozi za obejście sankcji?")).toEqual(
+      expect.arrayContaining(["dr-03", "dr-14", "dr-15"])
+    );
+    expect(domains("Rozwód z orzeczeniem o winie i alimenty na dzieci.").length).toBe(1);
+  });
+
+  it("names DR-14 alone for a foreign element when no phrase names the matter", () => {
+    expect(domains("Firma z Czech nie zapłaciła mi za dostawę towaru.")).toEqual(["dr-14"]);
+    expect(domains("Karta Polaka — konsul odmówił mi jej przyznania.")).toEqual(["dr-05", "dr-14"]);
+  });
+
+  it("recognises violence told object first", () => {
+    expect(criminalMatter("Szef mnie uderzył w pracy")).toBe(true);
+    expect(criminalMatter("Mnie bolała głowa w pracy")).toBe(false);
   });
 });

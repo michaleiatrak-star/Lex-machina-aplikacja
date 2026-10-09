@@ -291,7 +291,7 @@ export function suggestDomainModules(registry: LexSkillRegistry, skill: string, 
 const FOREIGN_ELEMENT = new RegExp(
   "(?<![a-z])(?:" +
     [
-      "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow",
+      "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow", "panstw(?:a|ie|em|o|ach) trzeci", "konsul(?:a|em|owi|ie|at|atu|acie)?\\b", "azj(?:a|i|ii)\\b", "azjatyck",
       "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
       "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
       "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
@@ -313,21 +313,26 @@ export function rankDomains(
   text: string,
   limit = 2
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[] }> {
-  const ranked = withForeignElement(registry, text, rankByPhrases(registry, rows, text, limit), limit);
+  // A domain the case adds by its kind (criminal, foreign element) is one more, not one
+  // instead of the matter's second domain ("monitoring w pracy" stays with "co grozi").
+  const phrased = rankByPhrases(registry, rows, text, limit);
+  const ranked = withForeignElement(registry, text, phrased, limit);
+  const room = (list: Array<{ skill: string }>) => limit + (list.some((row) => !phrased.some((own) => own.skill === row.skill)) ? 1 : 0);
   // A criminal matter (the application already requires the qualifier): DR-03 first,
   // or second when another domain has a phrase of its own ("mandat posła" after a conviction).
   const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
-  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.map(({ weight: _weight, ...row }) => row);
+  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.slice(0, room(ranked)).map(({ weight: _weight, ...row }) => row);
   const own = ranked.find((row) => row.skill === criminal);
   const marked = { ...(own ?? { skill: criminal, matched: [], modules: suggestDomainModules(registry, criminal, text), weight: 0 }) };
   marked.matched = ["sprawa karna (kwalifikator)", ...marked.matched];
   const others = ranked.filter((row) => row.skill !== criminal);
   const order = (others[0]?.weight ?? 0) >= 2 ? [others[0]!, marked, ...others.slice(1)] : [marked, ...others];
-  return order.slice(0, limit).map(({ weight: _weight, ...row }) => row);
+  return order.slice(0, room(order)).map(({ weight: _weight, ...row }) => row);
 }
 
 // DR-14 named for a foreign element of a legal matter: second after the matter's own
-// domain. A country alone ("wakacje w Grecji") names no matter and no domain.
+// domain. Alone only when its act map names a module of the case ("firma z Czech nie
+// zapłaciła za dostawę"); a country alone ("wakacje w Grecji") names no matter.
 function withForeignElement(
   registry: LexSkillRegistry,
   text: string,
@@ -335,12 +340,13 @@ function withForeignElement(
   limit: number
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[]; weight: number }> {
   const international = [...registry.skills.keys()].find((name) => name.startsWith("dr-14-"));
-  if (!international || !ranked.length || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international)) return ranked;
+  if (!international || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international)) return ranked;
   const own = ranked.find((row) => row.skill === international);
   const marked = { ...(own ?? { skill: international, matched: [], modules: suggestDomainModules(registry, international, text), weight: 0 }) };
   marked.matched = ["element zagraniczny (jurysdykcja, prawo właściwe)", ...marked.matched];
   const others = ranked.filter((row) => row.skill !== international);
-  return [others[0]!, marked, ...others.slice(1)].slice(0, limit);
+  if (others.length) return [others[0]!, marked, ...others.slice(1)];
+  return marked.modules.length ? [marked] : [];
 }
 
 function rankByPhrases(

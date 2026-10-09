@@ -66,6 +66,8 @@ const LAY_CRIMINAL_WORDS = new RegExp(
       "kradzież\\p{L}*\\s+tożsamości",
       "czynn\\p{L}*\\s+żal\\p{L}*\\s+w\\s+sprawie\\s+karn\\p{L}*",
       "(?:bije|bił|biła|bili|biją|uderzył\\p{L}*|kopnął|kopnęła|dusił\\p{L}*)\\s+mnie",
+      // The same with the object first ("szef mnie uderzył w pracy").
+      "mnie\\s+(?:bije|bił|biła|bili|biją|uderzył\\p{L}*|kopnął|kopnęła|dusił\\p{L}*|pobił\\p{L}*|popchnął|popchnęła|spoliczkował\\p{L}*)",
       "grozi(?:ł|ła|li)?\\s+mi(?![\\p{L}])",
       "fałszow\\p{L}*",
       "(?:dosta|otrzyma|usłysza|postawi)\\p{L}*\\s+(?:\\p{L}+\\s+)?zarzut(?!\\p{L}*\\s+od\\s+nakazu)\\p{L}*",
