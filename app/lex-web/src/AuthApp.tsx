@@ -46,7 +46,8 @@ function AuthPanel({
   onAuthenticated,
   onChangeUser,
   onRecover,
-  temporaryAdminCredentialsActive
+  temporaryAdminCredentialsActive,
+  runtimeUnreachable = false
 }: {
   phase: "bootstrap" | "login" | "locked";
   lastUser?: AuthMeResponse["user"];
@@ -56,6 +57,7 @@ function AuthPanel({
   onChangeUser: () => void;
   onRecover: () => void;
   temporaryAdminCredentialsActive: boolean;
+  runtimeUnreachable?: boolean;
 }) {
   const [loginName, setLoginName] =
     useState(
@@ -158,6 +160,12 @@ function AuthPanel({
         setError(
           "Sprawdź login, nazwę użytkownika i hasło. Nowe hasło musi mieć co najmniej 10 znaków."
         );
+      } else if (!(failure instanceof ApiError)) {
+        // The request never reached the runtime (zgłoszenie 2026-10-09, macOS: this
+        // showed as a wrong password).
+        setError(
+          "Brak połączenia z lokalnym silnikiem Lex Machina — logowanie nie zostało sprawdzone. Uruchom aplikację ponownie; jeśli to się powtarza, zgłoś błąd."
+        );
       } else {
         setError(
           phase === "bootstrap"
@@ -252,6 +260,15 @@ function AuthPanel({
             ? "Pierwsze konto administruje aplikacją. Dostęp do poszczególnych spraw będzie nadawany osobno w kolejnym etapie."
             : "Sesja oraz odblokowane klucze istnieją wyłącznie w pamięci lokalnego runtime."}
         </p>
+
+        {phase !== "bootstrap" && runtimeUnreachable && (
+          <div className="auth-onboarding-note" role="alert">
+            <strong>Brak połączenia z lokalnym silnikiem</strong>
+            <span>
+              Aplikacja nie otrzymała odpowiedzi od lokalnego runtime, więc nie może sprawdzić logowania ani danych pierwszego logowania. Uruchom aplikację ponownie.
+            </span>
+          </div>
+        )}
 
         {/* Shown until the admin's password is changed, whoever signed in last
             (zgłoszenie 2026-10-09: znikało po pierwszej próbie logowania). */}
@@ -442,6 +459,8 @@ export default function AuthenticatedApp() {
     temporaryAdminCredentialsActive,
     setTemporaryAdminCredentialsActive
   ] = useState(false);
+  const [runtimeUnreachable, setRuntimeUnreachable] =
+    useState(false);
   useEffect(() => {
     let cancelled = false;
 
@@ -490,6 +509,7 @@ export default function AuthenticatedApp() {
           );
         } catch {
           if (!cancelled) {
+            setRuntimeUnreachable(true);
             setPhase("login");
           }
         }
@@ -509,10 +529,12 @@ export default function AuthenticatedApp() {
     let cancelled = false;
     void getAuthStatus()
       .then((status) => {
-        if (!cancelled) setTemporaryAdminCredentialsActive(status.temporaryAdminCredentialsActive === true);
+        if (cancelled) return;
+        setRuntimeUnreachable(false);
+        setTemporaryAdminCredentialsActive(status.temporaryAdminCredentialsActive === true);
       })
       .catch(() => {
-        // The runtime unreachable: keep what is known.
+        if (!cancelled) setRuntimeUnreachable(true);
       });
     return () => {
       cancelled = true;
@@ -747,6 +769,9 @@ export default function AuthenticatedApp() {
           }}
           temporaryAdminCredentialsActive={
             temporaryAdminCredentialsActive
+          }
+          runtimeUnreachable={
+            runtimeUnreachable
           }
           onAuthenticated={(value) => {
             setAuth(value);
