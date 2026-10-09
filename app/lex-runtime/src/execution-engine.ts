@@ -82,6 +82,7 @@ import type {
 import type {
   GateIRuntimePreludeResult
 } from "./gate-i-runtime-prelude.js";
+import { withoutOutputContract } from "./document-output-contract.js";
 
 export type RouteDecision = {
   jurisdiction: "PL";
@@ -459,6 +460,9 @@ export class LexExecutionEngine {
       parseSkillSelectionEnvelope(args.query);
     const effectiveQuery =
       skillEnvelope.query.trim();
+    // What the user asked, for decisions read from the text; the model still gets
+    // the document output contract with effectiveQuery.
+    const decisionQuery = withoutOutputContract(effectiveQuery);
     if (!effectiveQuery) {
       emit("route", "query", "BLOCKED", "EMPTY_QUERY_AFTER_SKILL_ENVELOPE");
       throw new LexExecutionError(
@@ -600,7 +604,7 @@ export class LexExecutionEngine {
     const skillSelection =
       resolveAdditionalSkills(
         this.registry,
-        effectiveQuery,
+        decisionQuery,
         args.route.primarySkill,
         skillEnvelope.automatic,
         skillEnvelope.manualSkills,
@@ -738,7 +742,7 @@ export class LexExecutionEngine {
     const trivialLocal =
       isLocalLightweightConversation(
         args.model,
-        effectiveQuery,
+        decisionQuery,
         Boolean(
           args.documentContext ||
           args.guideContext ||
@@ -753,7 +757,7 @@ export class LexExecutionEngine {
 
     const trivialChat =
       isTrivialChatCommand(
-        effectiveQuery
+        decisionQuery
       );
     const lightweightLocal =
       trivialChat ||
@@ -866,7 +870,7 @@ export class LexExecutionEngine {
     const complexity =
       args.matterComplexity ??
       assessMatterComplexity({
-        query: effectiveQuery,
+        query: decisionQuery,
         attachmentCount: args.documentContext ? 1 : 0,
         workflowPinned: boundContext
       });
@@ -1052,7 +1056,7 @@ export class LexExecutionEngine {
               path.dirname(resolved!),
               "kwalifikator-karnomaterialny"
             ),
-            latestUserTurn(effectiveQuery)
+            latestUserTurn(decisionQuery)
           );
         if (!excerpt) {
           emit(
@@ -1124,7 +1128,7 @@ export class LexExecutionEngine {
           this.registry,
           contract.skill,
           skillModules(this.registry, contract.skill, {
-            text: [effectiveQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
+            text: [decisionQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
             stage: args.processWorkflowContext?.stage ?? null
           }),
           new Set([...inContext, ...loaded.loaded.map((item) => item.resource)])
@@ -1170,7 +1174,7 @@ export class LexExecutionEngine {
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
     if (!args.model.startsWith("local/")) {
-      const acts = resolveActModulesWithChecks(this.registry, [effectiveQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+      const acts = resolveActModulesWithChecks(this.registry, [decisionQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
       if (acts.modules.length || acts.rejected.length) {
         const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
         for (const item of loaded.loaded) emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule}`);
@@ -1193,7 +1197,7 @@ export class LexExecutionEngine {
         .map((skill) => ({
           skill,
           matched: ["dziedzina wybrana dla tej sprawy"],
-          modules: suggestDomainModules(this.registry, skill, [effectiveQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+          modules: suggestDomainModules(this.registry, skill, [decisionQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
         }))
         .filter((domain) => domain.modules.length > 0);
       if (domains.length) {

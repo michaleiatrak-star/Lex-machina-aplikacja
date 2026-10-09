@@ -226,6 +226,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
+import { withoutOutputContract } from "./document-output-contract.js";
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -1798,7 +1799,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // replies in the history ("w pliku", "te dokumenty") are not this request's input.
     const gateIInput =
       evaluateGateIInputCompleteness(
-        latestUserTurn(request.query),
+        withoutOutputContract(latestUserTurn(request.query)),
         request.documentAttachments
           ?.length ?? 0
       );
@@ -1959,22 +1960,22 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Mandatory path (hosted models): the profile, the corpus files the router's
     // mandatory gates require, loaded up front, and the mode decided at the entry.
     const mandatoryModel = request.model.startsWith("local/") ? null : this.mandatoryModel();
-    const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(latestUserTurn(request.query));
+    const legalTurn = !request.conversationalOnly && !isTrivialChatCommand(withoutOutputContract(latestUserTurn(request.query)));
     const pathFacts = {
-      query: request.auxiliaryText ?? latestUserTurn(request.query),
+      query: withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query)),
       legal: legalTurn,
       // AUTO: primarySkill is a placeholder until the model reads a domain skill,
       // so the criminal matter comes from the question itself.
       criminal:
         (!request.modelSelectsSkills && request.primarySkill.startsWith("dr-03-")) ||
-        criminalMatter(request.auxiliaryText ?? latestUserTurn(request.query)) ||
+        criminalMatter(withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query))) ||
         // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
         // sends the latest message apart (auxiliaryText), so the thread is read as well.
-        criminalMatter(threadUserText(request.query)),
+        criminalMatter(withoutOutputContract(threadUserText(request.query))),
       documents: attachments.length > 0,
       documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
-      foreignJurisdiction: foreignJurisdiction(request.query)
+      foreignJurisdiction: foreignJurisdiction(withoutOutputContract(request.query))
     };
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
     // A message typed without Polish letters gets them back for the executive routing phrases.

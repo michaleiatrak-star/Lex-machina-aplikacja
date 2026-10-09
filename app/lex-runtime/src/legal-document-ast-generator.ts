@@ -18,6 +18,7 @@ import type { ProcessPleadingStage } from "./process-pleading-state.js";
 import type {
   DocumentGenerationValidationContext
 } from "./document-generation-validation.js";
+import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 
 export type LegalDocumentAstGenerationRequest = {
   query: string;
@@ -254,7 +255,7 @@ function generationInstruction(
           ""
         ]
       : []),
-    "# OUTPUT CONTRACT — LEGAL DOCUMENT AST",
+    DOCUMENT_OUTPUT_CONTRACT_HEADING,
     "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
     "schemaVersion must equal \"1\".",
     "documentType must equal \"" + request.documentType + "\".",
