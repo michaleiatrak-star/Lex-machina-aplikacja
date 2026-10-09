@@ -123,6 +123,23 @@ export function parseFlashRouting(markdown: string): FlashRoute[] {
   return rows;
 }
 
+// Words a phrase word's stem or vowel alternation reaches but which are other words
+// ("praca" -> "precedens", "prąd" -> "prędkość", "obywatelstwo" -> "obywatelskie").
+// Found by matching every phrase word against the words of all routing corpora.
+const FALSE_FRIENDS: Record<string, RegExp> = {
+  praca: /^prec/, pracy: /^prec/, prace: /^prec/, czas: /^czes/, pies: /^pias/, plan: /^plen/, szef: /^szaf/,
+  prad: /^pred/, pradu: /^pred/, powiat: /^powiet/, powiatowa: /^powiet/, dzial: /^dziel/, dlug: /^dlugo/,
+  udzielenie: /^udzial/, obywatelstwo: /^obywatelsk/, przychod: /^przychod[nz]/, przychodnia: /^przychod(?!n)/,
+  kamieniolom: /^kamienic/, powierzenie: /^powierzch/, referendum: /^referendar/, niedziele: /^niedzial/,
+  niedzialanie: /^niedziel/, sprzeciw: /^sprzeczn/, wspolnik: /^wspoln(?!ik)/, wspolnota: /^wspoln(?!ot)/,
+  aplikant: /^aplikac/, dyrektywa: /^dyrektor/, szkolenia: /^szkol(?!en)/, przeglad: /^przeglos/,
+  orzeczenie: /^orzeczni/, orzeczenia: /^orzeczni/, uzytkowanie: /^uzytkowni/
+};
+function withoutFalseFriends(word: string, have: string[]): string[] {
+  const other = FALSE_FRIENDS[word];
+  return other ? have.filter((token) => !other.test(token)) : have;
+}
+
 /** Domains whose flash-routing phrases the text contains, best first. */
 export function flashDomains(
   rows: FlashRoute[],
@@ -133,8 +150,8 @@ export function flashDomains(
   return rows
     .map((row) => {
       const matched = row.phrases.filter((phrase) => {
-        const stems = phraseWords(phrase).map(stemOf);
-        return stems.length > 0 && stems.every((stem) => hit(stem, have));
+        const words = phraseWords(phrase);
+        return words.length > 0 && words.every((word) => hit(stemOf(word), withoutFalseFriends(word, have)));
       });
       // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
       // one word of it ("umowa"), which then does not count again.
@@ -185,6 +202,10 @@ export function locate(registry: LexSkillRegistry, skill: string, resource: stri
   return null;
 }
 
+// Words of the request itself, not of its matter ("pełna analiza prawna sprawy: podstawy,
+// ryzyka, rekomendacje"): in an act map they named DR-01 and DR-13 for any question.
+const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
+
 type Indexed = { entry: ActEntry; stems: string[] };
 const cache = new Map<string, { index: Indexed[]; df: Map<string, number> }>();
 
@@ -221,7 +242,7 @@ function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]
       // What the module is about: the act or scope, and the module's own name.
       const names = entry.resources.map((resource) => path.basename(resource, ".md").replace(/^mod-/, "").replace(/-/g, " "));
       const heads = entry.resources.map((resource) => moduleHead(registry.resolveResource(resource.split("/")[0]!, resource)));
-      return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))] };
+      return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))].filter((stem) => !REQUEST_STEMS.has(stem)) };
     });
   const df = new Map<string, number>();
   for (const item of index) for (const stem of item.stems) df.set(stem, (df.get(stem) ?? 0) + 1);
@@ -312,7 +333,7 @@ export function rankDomains(
   rows: FlashRoute[],
   text: string,
   limit = 2
-): Array<{ skill: string; matched: string[]; modules: DomainModule[] }> {
+): Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> {
   // A domain the case adds by its kind (criminal, foreign element) is one more, not one
   // instead of the matter's second domain ("monitoring w pracy" stays with "co grozi").
   const phrased = rankByPhrases(registry, rows, text, limit);
@@ -321,13 +342,20 @@ export function rankDomains(
   // A criminal matter (the application already requires the qualifier): DR-03 first,
   // or second when another domain has a phrase of its own ("mandat posła" after a conviction).
   const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
-  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.slice(0, room(ranked)).map(({ weight: _weight, ...row }) => row);
+  if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal) return ranked.slice(0, room(ranked)).map(withStrength);
   const own = ranked.find((row) => row.skill === criminal);
   const marked = { ...(own ?? { skill: criminal, matched: [], modules: suggestDomainModules(registry, criminal, text), weight: 0 }) };
   marked.matched = ["sprawa karna (kwalifikator)", ...marked.matched];
   const others = ranked.filter((row) => row.skill !== criminal);
   const order = (others[0]?.weight ?? 0) >= 2 ? [others[0]!, marked, ...others.slice(1)] : [marked, ...others];
-  return order.slice(0, room(order)).map(({ weight: _weight, ...row }) => row);
+  return order.slice(0, room(order)).map(withStrength);
+}
+
+// A domain named by the kind of the case (criminal, foreign element) or by a phrase of two
+// words and more; one word ("umowa", "sąd", "sąsiad") names a domain only possibly involved.
+const MARKER = /^(?:sprawa karna \(kwalifikator\)|element zagraniczny)/u;
+function withStrength({ weight, ...row }: { skill: string; matched: string[]; modules: DomainModule[]; weight: number }) {
+  return { ...row, strong: weight >= 2 || MARKER.test(row.matched[0] ?? "") };
 }
 
 // DR-14 named for a foreign element of a legal matter: second after the matter's own
@@ -376,7 +404,12 @@ function rankByPhrases(
     .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0]!.why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
 }
 
-export function domainHintPrompt(domains: Array<{ skill: string; matched: string[]; modules: DomainModule[] }>): string {
+export function domainHintPrompt(domains: Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong?: boolean }>): string {
+  // Several domains of one case: the ones its kind or a phrase of its own names are read
+  // (or set aside in a sentence); one shared word only lets the model reach for a domain.
+  const secondary = domains.slice(1);
+  const required = secondary.filter((domain) => domain.strong === true).map((domain) => domain.skill);
+  const possible = secondary.filter((domain) => domain.strong === false).map((domain) => domain.skill);
   return [
     "# DZIEDZINA I MODUŁ AKTU — WSKAZÓWKA APLIKACJI (prawo-polskie-v2: routing błyskawiczny, MAPA-AKTOW dziedziny)",
     ...domains.map(
@@ -384,6 +417,14 @@ export function domainHintPrompt(domains: Array<{ skill: string; matched: string
         `- ${domain.skill}: sygnały ${domain.matched.map((phrase) => `„${phrase}”`).join(", ")}` +
         (domain.modules.length ? `; moduły aktu dla tej sprawy: ${domain.modules.map((module) => `${module.resource} (${module.why})`).join("; ")}` : "")
     ),
-    "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy."
+    "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy.",
+    ...(required.length
+      ? [
+          `Sprawa wielodziedzinowa: oprócz ${domains[0]!.skill} przeczytaj SKILL.md ${required.join(", ")} i moduł aktu dla ich części sprawy, zanim odpowiesz. Dziedzinę, która nie dotyczy tej sprawy, pomiń, mówiąc w jednym zdaniu dlaczego.`
+        ]
+      : []),
+    ...(possible.length
+      ? [`Dziedzina możliwa (jedno wspólne słowo): ${possible.join(", ")} — wczytaj ją tylko, gdy pytanie dotyczy jej części sprawy.`]
+      : [])
   ].join("\n");
 }

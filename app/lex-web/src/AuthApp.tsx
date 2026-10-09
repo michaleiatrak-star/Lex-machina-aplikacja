@@ -26,7 +26,10 @@ import {
   isDesktopShell,
   reportUserActivity,
   setAuthenticationFailureHandler,
-  type AuthMeResponse
+  type AuthMeResponse,
+  desktopRuntimeStatus,
+  repairDesktopRuntime,
+  type DesktopRuntimeStatus
 } from "./api.js";
 
 const USER_ACTIVITY_REPORT_INTERVAL_MS =
@@ -46,7 +49,9 @@ function AuthPanel({
   onAuthenticated,
   onChangeUser,
   onRecover,
-  temporaryAdminCredentialsActive
+  temporaryAdminCredentialsActive,
+  runtimeUnreachable = false,
+  runtimeStatus = null
 }: {
   phase: "bootstrap" | "login" | "locked";
   lastUser?: AuthMeResponse["user"];
@@ -56,7 +61,10 @@ function AuthPanel({
   onChangeUser: () => void;
   onRecover: () => void;
   temporaryAdminCredentialsActive: boolean;
+  runtimeUnreachable?: boolean;
+  runtimeStatus?: DesktopRuntimeStatus | null;
 }) {
+  const [repairMessage, setRepairMessage] = useState("");
   const [loginName, setLoginName] =
     useState(
       phase === "locked"
@@ -158,6 +166,12 @@ function AuthPanel({
         setError(
           "Sprawdź login, nazwę użytkownika i hasło. Nowe hasło musi mieć co najmniej 10 znaków."
         );
+      } else if (!(failure instanceof ApiError)) {
+        // The request never reached the runtime (zgłoszenie 2026-10-09, macOS: this
+        // showed as a wrong password).
+        setError(
+          "Brak połączenia z lokalnym silnikiem Lex Machina — logowanie nie zostało sprawdzone. Uruchom aplikację ponownie; jeśli to się powtarza, zgłoś błąd."
+        );
       } else {
         setError(
           phase === "bootstrap"
@@ -253,8 +267,43 @@ function AuthPanel({
             : "Sesja oraz odblokowane klucze istnieją wyłącznie w pamięci lokalnego runtime."}
         </p>
 
-        {phase === "login" &&
-          !lastUser &&
+        {phase !== "bootstrap" && runtimeUnreachable && (
+          <div className="auth-onboarding-note" role="alert">
+            <strong>Brak połączenia z lokalnym silnikiem</strong>
+            <span>
+              Aplikacja nie otrzymała odpowiedzi od lokalnego runtime, więc nie może sprawdzić logowania ani danych pierwszego logowania. Uruchom aplikację ponownie.
+            </span>
+            {runtimeStatus?.error && (
+              <span>
+                Przyczyna: <code>{runtimeStatus.error}</code>
+              </span>
+            )}
+            {runtimeStatus?.logPath && (
+              <span>
+                Dziennik błędów: <code>{runtimeStatus.logPath}</code>
+              </span>
+            )}
+            {runtimeStatus?.repairAvailable && (
+              <button
+                type="button"
+                className="chat-secondary-action"
+                onClick={() => {
+                  setRepairMessage("");
+                  repairDesktopRuntime()
+                    .then(() => setRepairMessage("Otwarto okno Terminala z naprawą instalacji. Po komunikacie „Gotowe” uruchom Lex Machina ponownie."))
+                    .catch((failure) => setRepairMessage(failure instanceof ApiError ? failure.code : String(failure)));
+                }}
+              >
+                Napraw instalację (pobierz brakujące komponenty)
+              </button>
+            )}
+            {repairMessage && <span>{repairMessage}</span>}
+          </div>
+        )}
+
+        {/* Shown until the admin's password is changed, whoever signed in last
+            (zgłoszenie 2026-10-09: znikało po pierwszej próbie logowania). */}
+        {phase !== "bootstrap" &&
           temporaryAdminCredentialsActive && (
           <div
             className="auth-onboarding-note"
@@ -303,7 +352,7 @@ function AuthPanel({
 
         {nativeUnlock ? (
           <p className="auth-copy">
-            To konto jest chronione przez magazyn poświadczeń Windows. Odblokowanie nie wymaga wpisywania hasła aplikacji.
+            To konto jest chronione przez systemowy magazyn poświadczeń (Windows: Menedżer poświadczeń, macOS: pęk kluczy). Odblokowanie nie wymaga wpisywania hasła aplikacji.
           </p>
         ) : (
           <label>
@@ -441,6 +490,10 @@ export default function AuthenticatedApp() {
     temporaryAdminCredentialsActive,
     setTemporaryAdminCredentialsActive
   ] = useState(false);
+  const [runtimeUnreachable, setRuntimeUnreachable] =
+    useState(false);
+  const [runtimeStatus, setRuntimeStatus] =
+    useState<DesktopRuntimeStatus | null>(null);
   useEffect(() => {
     let cancelled = false;
 
@@ -489,6 +542,10 @@ export default function AuthenticatedApp() {
           );
         } catch {
           if (!cancelled) {
+            setRuntimeUnreachable(true);
+            void desktopRuntimeStatus().then((status) => {
+              if (!cancelled) setRuntimeStatus(status);
+            });
             setPhase("login");
           }
         }
@@ -500,6 +557,25 @@ export default function AuthenticatedApp() {
       cancelled = true;
     };
   }, []);
+
+  // The sign-in and lock screens ask the runtime again: the admin/admin notice stays
+  // until the password is changed (also by another session) and not a moment longer.
+  useEffect(() => {
+    if (phase !== "login" && phase !== "locked") return;
+    let cancelled = false;
+    void getAuthStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setRuntimeUnreachable(false);
+        setTemporaryAdminCredentialsActive(status.temporaryAdminCredentialsActive === true);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeUnreachable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase]);
 
   useEffect(() => {
     setAuthenticationFailureHandler(
@@ -729,6 +805,12 @@ export default function AuthenticatedApp() {
           }}
           temporaryAdminCredentialsActive={
             temporaryAdminCredentialsActive
+          }
+          runtimeUnreachable={
+            runtimeUnreachable
+          }
+          runtimeStatus={
+            runtimeStatus
           }
           onAuthenticated={(value) => {
             setAuth(value);

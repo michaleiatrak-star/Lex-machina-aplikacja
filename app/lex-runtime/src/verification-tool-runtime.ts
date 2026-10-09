@@ -677,6 +677,15 @@ function searchCaseLawLibrary(input: Record<string, unknown>): string {
   });
 }
 
+// sn.pl (Imperva) stopped the request until a person passes its check: the chat shows
+// the user the sn.pl verification window and repeats the question afterwards.
+export function snVerificationNeeded(reason: string | undefined): boolean {
+  return /^SN_[A-Z_]*(?:HTTP_403|BOT_PROTECTION)$/.test(reason ?? "");
+}
+const SN_VERIFICATION_INSTRUCTION =
+  "SN_WERYFIKACJA_WYMAGANA: sn.pl requires a person to pass its check (captcha). The application shows the user the sn.pl verification window and repeats the question once it is passed. " +
+  "Say so in one sentence; never say SN has no such decision. Meanwhile search source=SAOS (it holds SN decisions with their text) and mark its hits as SAOS candidates, not verified.";
+
 export class LegalVerificationToolRuntime {
   // Pobieranie źródła zastępczego (testy podstawiają własne).
   substituteFetcher: typeof fetch | null = null;
@@ -776,7 +785,9 @@ export class LegalVerificationToolRuntime {
           verificationStatus:
             "DISCOVERY_ONLY",
           instruction:
-            "Do not cite a candidate as verified. Run the applicable case verification workflow first."
+            snVerificationNeeded(result.reason)
+              ? SN_VERIFICATION_INSTRUCTION
+              : "Do not cite a candidate as verified. Run the applicable case verification workflow first."
         });
       }
     });
@@ -1077,7 +1088,8 @@ export class LegalVerificationToolRuntime {
             normalizedSignature:
               result.normalizedSignature,
             rejectedNearMatches:
-              result.rejectedNearMatches
+              result.rejectedNearMatches,
+            ...(snVerificationNeeded(result.reason) ? { instruction: SN_VERIFICATION_INSTRUCTION } : {})
           });
         }
 

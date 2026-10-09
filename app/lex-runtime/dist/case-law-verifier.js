@@ -119,6 +119,37 @@ async function fetchSn(fetcher, input) {
         ? new Response(null, { status: 403, statusText: "SN_BOT_PROTECTION" })
         : second;
 }
+/**
+ * sn.pl requests with the session the user verified in the app's sn.pl window
+ * (Imperva captcha): its cookies, and its browser's User-Agent the session is bound
+ * to. Cookies sn.pl sets on the way keep their newer value. Other hosts unchanged.
+ */
+export function withSnSession(base, session) {
+    return async (input, init) => {
+        const saved = session();
+        let host = "";
+        try {
+            host = new URL(String(input)).hostname;
+        }
+        catch {
+            host = "";
+        }
+        if (!saved || !SN_HOSTS.has(host))
+            return base(input, init);
+        const headers = new Headers(init?.headers);
+        const byName = new Map();
+        for (const part of [...saved.cookie.split(";"), ...(headers.get("cookie") ?? "").split(";")]) {
+            const pair = part.trim();
+            const name = pair.split("=")[0];
+            if (name && pair.includes("="))
+                byName.set(name, pair);
+        }
+        headers.set("cookie", [...byName.values()].join("; "));
+        if (saved.userAgent)
+            headers.set("user-agent", saved.userAgent);
+        return base(input, { ...init, headers });
+    };
+}
 /** A 403, or an HTML page where the widget's endpoints answer JSON (or PDF). */
 async function snBlocked(response) {
     if (response.status === 403)

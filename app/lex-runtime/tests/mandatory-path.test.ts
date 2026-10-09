@@ -169,6 +169,18 @@ describe("mandatory path model from the corpus", () => {
     expect(byId["REM-GATE-BLOK"]).toBe("MET");
   });
 
+  it("does not ask a list of decisions found for CN-GATE and REM-GATE blocks", () => {
+    // Czat 2026-10-09: „wyszukaj wyrok SN” w sprawie karnej (profil PEŁNY) kończył się
+    // TRYBEM ZDEGRADOWANYM za brak bloków bram, które dotyczą rozstrzygnięcia i analizy.
+    const answer = [
+      "Znalazłem w bazie SN wyrok z 12.03.2024 r., sygn. II KK 123/23 (karta: https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=abc).",
+      "To ogólna informacja prawna, nie indywidualna porada prawna."
+    ].join("\n");
+    const ids = evaluateMandatoryPath(model, facts(answer)).steps.map((step) => step.id);
+    expect(ids).not.toContain("CN-GATE-BLOK");
+    expect(ids).not.toContain("REM-GATE-BLOK");
+  });
+
   it("flags a description of querying a source with no call behind it", () => {
     const report = evaluateMandatoryPath(model, facts("📡 Odpytałem bazę SAOS i sprawdziłem w ISAP brzmienie art. 233 KK.", { records: [] }));
     const claims = report.steps.find((step) => step.id === "DEKLARACJE-WYKONANIA")!;

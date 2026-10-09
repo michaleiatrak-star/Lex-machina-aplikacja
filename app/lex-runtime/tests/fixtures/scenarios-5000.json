@@ -771,7 +771,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Urzad od roku nie reaguje na moje skargi, a sad odrzucil pozew z powodow formalnych. Czuje, ze moje prawa sa lamane. Czy RPO moze mi pomoc?",
@@ -779,7 +782,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "urzad od roku nie reaguje na moje skargi, a sad odrzucil pozew z powodow formalnych. czuje, ze moje prawa sa lamane. czy rpo moze mi pomoc",
@@ -787,7 +793,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, urząd od roku nie reaguje na moje skargi, a sąd odrzucił pozew z powodów formalnych. Czuję, że moje prawa są łamane. Czy RPO może mi pomóc?",
@@ -795,7 +804,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Urząd od roku nie reaguje na moje skargi, a sąd odrzucił pozew z powodów formalnych. Czuję, że moje prawa są łamane. Czy RPO może mi pomóc?",
@@ -803,7 +815,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Mocodawca wyczerpał drogę sądową w sprawie naruszenia prawa do sądu. Proszę o analizę kompetencji RPO z ustawy o Rzeczniku Praw Obywatelskich i możliwości przystąpienia do postępowania.",
@@ -1013,7 +1028,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "W naszej gminie po powodzi wojewoda zakazal wjazdu do wsi. Mieszkam tam i nie moge dojechac do domu. Czy maja prawo?",
@@ -1021,7 +1039,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "w naszej gminie po powodzi wojewoda zakazal wjazdu do wsi. mieszkam tam i nie moge dojechac do domu. czy maja prawo",
@@ -1029,7 +1050,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, w naszej gminie po powodzi wojewoda zakazał wjazdu do wsi. Mieszkam tam i nie mogę dojechać do domu. Czy mają prawo?",
@@ -1037,7 +1061,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. W naszej gminie po powodzi wojewoda zakazał wjazdu do wsi. Mieszkam tam i nie mogę dojechać do domu. Czy mają prawo?",
@@ -1045,7 +1072,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Klient kwestionuje ograniczenie swobody przemieszczania się wprowadzone w stanie klęski żywiołowej. Proszę o analizę granic ograniczeń z art. 233 Konstytucji i ustawy o stanie klęski żywiołowej.",
@@ -1981,7 +2011,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Sad w mojej sprawie pominal przepis konwencji, ktory mi sprzyja, i zastosowal polska ustawe. Czy mogl tak zrobic?",
@@ -1989,7 +2022,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "sad w mojej sprawie pominal przepis konwencji, ktory mi sprzyja, i zastosowal polska ustawe. czy mogl tak zrobic",
@@ -1997,7 +2033,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Dzień dobry, sąd w mojej sprawie pominął przepis konwencji, który mi sprzyja, i zastosował polską ustawę. Czy mógł tak zrobić?",
@@ -2005,7 +2044,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Proszę o pomoc. Sąd w mojej sprawie pominął przepis konwencji, który mi sprzyja, i zastosował polską ustawę. Czy mógł tak zrobić?",
@@ -2013,7 +2055,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Mocodawca powołuje się na ratyfikowaną umowę międzynarodową sprzeczną z ustawą. Proszę o analizę pierwszeństwa z art. 91 Konstytucji i obowiązku stosowania przez sąd.",
@@ -2062,7 +2107,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Napisz mi apelacje z zarzutem pominiecia umowy miedzynarodowej w sprawie pierwszenstwa umowy miedzynarodowej.",
@@ -2071,7 +2119,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "napisz mi apelacje z zarzutem pominiecia umowy miedzynarodowej w sprawie pierwszenstwa umowy miedzynarodowej",
@@ -2080,7 +2131,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Dzień dobry, napisz mi apelację z zarzutem pominięcia umowy międzynarodowej w sprawie pierwszeństwa umowy międzynarodowej.",
@@ -2089,7 +2143,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz mi apelację z zarzutem pominięcia umowy międzynarodowej w sprawie pierwszeństwa umowy międzynarodowej.",
@@ -2098,7 +2155,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy pierwszeństwa umowy międzynarodowej: podstawy, ryzyka, rekomendacje.",
@@ -2106,7 +2166,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Prosze o pelna analize prawna sprawy pierwszenstwa umowy miedzynarodowej: podstawy, ryzyka, rekomendacje.",
@@ -2114,7 +2177,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "prosze o pelna analize prawna sprawy pierwszenstwa umowy miedzynarodowej: podstawy, ryzyka, rekomendacje",
@@ -2122,7 +2188,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Dzień dobry, proszę o pełną analizę prawną sprawy pierwszeństwa umowy międzynarodowej: podstawy, ryzyka, rekomendacje.",
@@ -2130,7 +2199,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "Proszę o pomoc. Proszę o pełną analizę prawną sprawy pierwszeństwa umowy międzynarodowej: podstawy, ryzyka, rekomendacje.",
@@ -2138,7 +2210,10 @@
 "dr": "dr-01",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-14"
+]
 },
 {
 "q": "A jaki mam termin?",
@@ -4240,7 +4315,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Sporzadz wniosek o rozgraniczenie nieruchomosci w sprawie plotu postawionego na mojej dzialce.",
@@ -4249,7 +4327,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "sporzadz wniosek o rozgraniczenie nieruchomosci w sprawie plotu postawionego na mojej dzialce",
@@ -4258,7 +4339,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, sporządź wniosek o rozgraniczenie nieruchomości w sprawie płotu postawionego na mojej działce.",
@@ -4267,7 +4351,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Sporządź wniosek o rozgraniczenie nieruchomości w sprawie płotu postawionego na mojej działce.",
@@ -4276,7 +4363,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy płotu postawionego na mojej działce: podstawy, ryzyka, rekomendacje.",
@@ -5571,7 +5661,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Czy policja moze przeszukac moj samochod bez nakazu?",
@@ -5579,7 +5672,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "czy policja moze przeszukac moj samochod bez nakazu",
@@ -5587,7 +5683,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Dzień dobry, czy policja może przeszukać mój samochód bez nakazu?",
@@ -5595,7 +5694,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Proszę o pomoc. Czy policja może przeszukać mój samochód bez nakazu?",
@@ -5603,7 +5705,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Policja zatrzymała mnie do kontroli i przeszukała auto bez żadnego papieru. Znaleźli trochę marihuany. Czy to legalne?",
@@ -5611,7 +5716,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Policja zatrzymala mnie do kontroli i przeszukala auto bez zadnego papieru. Znalezli troche marihuany. Czy to legalne?",
@@ -5619,7 +5727,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "policja zatrzymala mnie do kontroli i przeszukala auto bez zadnego papieru. znalezli troche marihuany. czy to legalne",
@@ -5627,7 +5738,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Dzień dobry, policja zatrzymała mnie do kontroli i przeszukała auto bez żadnego papieru. Znaleźli trochę marihuany. Czy to legalne?",
@@ -5635,7 +5749,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Proszę o pomoc. Policja zatrzymała mnie do kontroli i przeszukała auto bez żadnego papieru. Znaleźli trochę marihuany. Czy to legalne?",
@@ -5643,7 +5760,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Klientowi przeszukano pojazd bez postanowienia, znaleziono środki odurzające. Proszę o analizę legalności przeszukania z KPK i kwalifikacji posiadania z ustawy o przeciwdziałaniu narkomanii.",
@@ -5692,7 +5812,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Napisz mi zazalenie na przeszukanie w sprawie przeszukania samochodu.",
@@ -5701,7 +5824,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "napisz mi zazalenie na przeszukanie w sprawie przeszukania samochodu",
@@ -5710,7 +5836,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Dzień dobry, napisz mi zażalenie na przeszukanie w sprawie przeszukania samochodu.",
@@ -5719,7 +5848,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz mi zażalenie na przeszukanie w sprawie przeszukania samochodu.",
@@ -5728,7 +5860,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy przeszukania samochodu: podstawy, ryzyka, rekomendacje.",
@@ -5736,7 +5871,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Prosze o pelna analize prawna sprawy przeszukania samochodu: podstawy, ryzyka, rekomendacje.",
@@ -5744,7 +5882,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "prosze o pelna analize prawna sprawy przeszukania samochodu: podstawy, ryzyka, rekomendacje",
@@ -5752,7 +5893,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Dzień dobry, proszę o pełną analizę prawną sprawy przeszukania samochodu: podstawy, ryzyka, rekomendacje.",
@@ -5760,7 +5904,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Proszę o pomoc. Proszę o pełną analizę prawną sprawy przeszukania samochodu: podstawy, ryzyka, rekomendacje.",
@@ -5768,7 +5915,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-13"
+]
 },
 {
 "q": "Czy potrzebuję do tego prawnika?",
@@ -6704,7 +6854,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie nieplacenia alimentow.",
@@ -6712,7 +6865,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przeanalizuj szanse i ryzyka w sprawie nieplacenia alimentow",
@@ -6720,7 +6876,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przeanalizuj szanse i ryzyka w sprawie niepłacenia alimentów.",
@@ -6728,7 +6887,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przeanalizuj szanse i ryzyka w sprawie niepłacenia alimentów.",
@@ -6736,7 +6898,10 @@
 "dr": "dr-03",
 "criminal": true,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy potrzebuję do tego prawnika?",
@@ -9725,7 +9890,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Urzad odmowil mi pozwolenia na budowe garazu. Decyzje dostalem tydzien temu. Uwazam, ze nieslusznie. Co dalej?",
@@ -9733,7 +9901,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "urzad odmowil mi pozwolenia na budowe garazu. decyzje dostalem tydzien temu. uwazam, ze nieslusznie. co dalej",
@@ -9741,7 +9912,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, urząd odmówił mi pozwolenia na budowę garażu. Decyzję dostałem tydzień temu. Uważam, że niesłusznie. Co dalej?",
@@ -9749,7 +9923,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Urząd odmówił mi pozwolenia na budowę garażu. Decyzję dostałem tydzień temu. Uważam, że niesłusznie. Co dalej?",
@@ -9757,7 +9934,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Klient otrzymał decyzję odmowną organu pierwszej instancji. Proszę o analizę terminu i wymogów odwołania z KPA oraz zarzutów naruszenia przepisów postępowania.",
@@ -9850,7 +10030,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Ocen moje szanse w sprawie odmowy pozwolenia na budowe garazu i wskaz ryzyka.",
@@ -9858,7 +10041,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "ocen moje szanse w sprawie odmowy pozwolenia na budowe garazu i wskaz ryzyka",
@@ -9866,7 +10052,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, oceń moje szanse w sprawie odmowy pozwolenia na budowę garażu i wskaż ryzyka.",
@@ -9874,7 +10063,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Oceń moje szanse w sprawie odmowy pozwolenia na budowę garażu i wskaż ryzyka.",
@@ -9882,7 +10074,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "A jaki mam termin?",
@@ -10334,7 +10529,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie wywlaszczenia dzialki.",
@@ -10342,7 +10540,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "przeanalizuj szanse i ryzyka w sprawie wywlaszczenia dzialki",
@@ -10350,7 +10551,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, przeanalizuj szanse i ryzyka w sprawie wywłaszczenia działki.",
@@ -10358,7 +10562,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Przeanalizuj szanse i ryzyka w sprawie wywłaszczenia działki.",
@@ -10366,7 +10573,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "A co jeśli druga strona się nie zgodzi?",
@@ -10693,7 +10903,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Gmina nie chce mi pokazac umow z firma, ktora remontuje droge. Mowia, ze to tajemnica. Czy mam prawo je zobaczyc?",
@@ -10701,7 +10914,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "gmina nie chce mi pokazac umow z firma, ktora remontuje droge. mowia, ze to tajemnica. czy mam prawo je zobaczyc",
@@ -10709,7 +10925,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, gmina nie chce mi pokazać umów z firmą, która remontuje drogę. Mówią, że to tajemnica. Czy mam prawo je zobaczyć?",
@@ -10717,7 +10936,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Gmina nie chce mi pokazać umów z firmą, która remontuje drogę. Mówią, że to tajemnica. Czy mam prawo je zobaczyć?",
@@ -10725,7 +10947,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Mocodawca wystąpił o udostępnienie umów zawartych przez gminę. Proszę o analizę dostępu do informacji publicznej, tajemnicy przedsiębiorcy i skargi na bezczynność.",
@@ -11137,7 +11362,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Czy mandat od strazy miejskiej mozna zaskarzyc?",
@@ -11145,7 +11374,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "czy mandat od strazy miejskiej mozna zaskarzyc",
@@ -11153,7 +11386,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, czy mandat od straży miejskiej można zaskarżyć?",
@@ -11161,7 +11398,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Czy mandat od straży miejskiej można zaskarżyć?",
@@ -11169,7 +11410,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Straż miejska założyła blokadę na koło, choć parkowałem prawidłowo. Mam zdjęcia. Czy mogę się odwołać?",
@@ -11177,7 +11422,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Straz miejska zalozyla blokade na kolo, choc parkowalem prawidlowo. Mam zdjecia. Czy moge sie odwolac?",
@@ -11185,7 +11434,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "straz miejska zalozyla blokade na kolo, choc parkowalem prawidlowo. mam zdjecia. czy moge sie odwolac",
@@ -11193,7 +11446,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, straż miejska założyła blokadę na koło, choć parkowałem prawidłowo. Mam zdjęcia. Czy mogę się odwołać?",
@@ -11201,7 +11458,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Straż miejska założyła blokadę na koło, choć parkowałem prawidłowo. Mam zdjęcia. Czy mogę się odwołać?",
@@ -11209,7 +11470,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Klient kwestionuje założenie blokady i nałożenie kary przez straż miejską. Proszę o analizę trybu odmowy przyjęcia mandatu i postępowania w sprawach o wykroczenia.",
@@ -11217,7 +11482,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Klient kwestionuje zalozenie blokady i nalozenie kary przez straz miejska. Prosze o analize trybu odmowy przyjecia mandatu i postepowania w sprawach o wykroczenia.",
@@ -11225,7 +11494,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "klient kwestionuje zalozenie blokady i nalozenie kary przez straz miejska. prosze o analize trybu odmowy przyjecia mandatu i postepowania w sprawach o wykroczenia",
@@ -11233,7 +11506,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, klient kwestionuje założenie blokady i nałożenie kary przez straż miejską. Proszę o analizę trybu odmowy przyjęcia mandatu i postępowania w sprawach o wykroczenia.",
@@ -11241,7 +11518,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Klient kwestionuje założenie blokady i nałożenie kary przez straż miejską. Proszę o analizę trybu odmowy przyjęcia mandatu i postępowania w sprawach o wykroczenia.",
@@ -11249,7 +11530,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Przygotuj pismo z odmową przyjęcia mandatu i wyjaśnieniami w sprawie blokady założonej przez straż miejską.",
@@ -11258,7 +11543,11 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Przygotuj pismo z odmowa przyjecia mandatu i wyjasnieniami w sprawie blokady zalozonej przez straz miejska.",
@@ -11267,7 +11556,11 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "przygotuj pismo z odmowa przyjecia mandatu i wyjasnieniami w sprawie blokady zalozonej przez straz miejska",
@@ -11276,7 +11569,11 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, przygotuj pismo z odmową przyjęcia mandatu i wyjaśnieniami w sprawie blokady założonej przez straż miejską.",
@@ -11285,7 +11582,11 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj pismo z odmową przyjęcia mandatu i wyjaśnieniami w sprawie blokady założonej przez straż miejską.",
@@ -11294,7 +11595,11 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03",
+"dr-08"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie blokady założonej przez straż miejską i wskaż ryzyka.",
@@ -11302,7 +11607,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Ocen moje szanse w sprawie blokady zalozonej przez straz miejska i wskaz ryzyka.",
@@ -11310,7 +11619,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "ocen moje szanse w sprawie blokady zalozonej przez straz miejska i wskaz ryzyka",
@@ -11318,7 +11631,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, oceń moje szanse w sprawie blokady założonej przez straż miejską i wskaż ryzyka.",
@@ -11326,7 +11643,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Oceń moje szanse w sprawie blokady założonej przez straż miejską i wskaż ryzyka.",
@@ -11334,7 +11655,11 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08",
+"dr-03"
+]
 },
 {
 "q": "A co jeśli druga strona się nie zgodzi?",
@@ -11661,7 +11986,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Gmina wydala nakaz rozbiorki nielegalnej budowy sasiada trzy lata temu i nic sie nie dzieje. Budowa mi zaslania slonce. Co zrobic?",
@@ -11669,7 +11997,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "gmina wydala nakaz rozbiorki nielegalnej budowy sasiada trzy lata temu i nic sie nie dzieje. budowa mi zaslania slonce. co zrobic",
@@ -11677,7 +12008,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, gmina wydała nakaz rozbiórki nielegalnej budowy sąsiada trzy lata temu i nic się nie dzieje. Budowa mi zasłania słońce. Co zrobić?",
@@ -11685,7 +12019,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Gmina wydała nakaz rozbiórki nielegalnej budowy sąsiada trzy lata temu i nic się nie dzieje. Budowa mi zasłania słońce. Co zrobić?",
@@ -11693,7 +12030,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Klient jest stroną postępowania, w którym organ nie egzekwuje ostatecznego nakazu rozbiórki. Proszę o analizę ustawy o postępowaniu egzekucyjnym w administracji i ponaglenia.",
@@ -11786,7 +12126,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie niewykonanego nakazu rozbiorki.",
@@ -11794,7 +12137,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "przeanalizuj szanse i ryzyka w sprawie niewykonanego nakazu rozbiorki",
@@ -11802,7 +12148,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, przeanalizuj szanse i ryzyka w sprawie niewykonanego nakazu rozbiórki.",
@@ -11810,7 +12159,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Przeanalizuj szanse i ryzyka w sprawie niewykonanego nakazu rozbiórki.",
@@ -11818,7 +12170,10 @@
 "dr": "dr-05",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "A jaki mam termin?",
@@ -12347,7 +12702,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Jak odwolac sie od decyzji urzedu skarbowego?",
@@ -12355,7 +12713,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "jak odwolac sie od decyzji urzedu skarbowego",
@@ -12363,7 +12724,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, jak odwołać się od decyzji urzędu skarbowego?",
@@ -12371,7 +12735,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Jak odwołać się od decyzji urzędu skarbowego?",
@@ -12379,7 +12746,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Urząd skarbowy naliczył mi 40 tysięcy zaległego VAT po kontroli. Twierdzą, że faktury są puste. Ja naprawdę kupiłem ten towar. Co robić?",
@@ -13073,7 +13443,10 @@
 "dr": "dr-06",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Co grozi za spoznione zlozenie PIT?",
@@ -13081,7 +13454,10 @@
 "dr": "dr-06",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "co grozi za spoznione zlozenie pit",
@@ -13089,7 +13465,10 @@
 "dr": "dr-06",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, co grozi za spóźnione złożenie PIT?",
@@ -13097,7 +13476,10 @@
 "dr": "dr-06",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Co grozi za spóźnione złożenie PIT?",
@@ -13105,7 +13487,10 @@
 "dr": "dr-06",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Zapomniałem złożyć PIT za zeszły rok. Minęły dwa miesiące od terminu. Co mi grozi?",
@@ -13637,7 +14022,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient jest zobowiazanym w egzekucji administracyjnej naleznosci podatkowych. Prosze o analize zarzutow w sprawie egzekucji i wniosku o wstrzymanie.",
@@ -13645,7 +14033,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "klient jest zobowiazanym w egzekucji administracyjnej naleznosci podatkowych. prosze o analize zarzutow w sprawie egzekucji i wniosku o wstrzymanie",
@@ -13653,7 +14044,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, klient jest zobowiązanym w egzekucji administracyjnej należności podatkowych. Proszę o analizę zarzutów w sprawie egzekucji i wniosku o wstrzymanie.",
@@ -13661,7 +14055,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Klient jest zobowiązanym w egzekucji administracyjnej należności podatkowych. Proszę o analizę zarzutów w sprawie egzekucji i wniosku o wstrzymanie.",
@@ -13669,7 +14066,10 @@
 "dr": "dr-06",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj zarzuty w sprawie prowadzenia egzekucji w sprawie zajęcia konta przez urząd skarbowy.",
@@ -16340,7 +16740,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Sporzadz pismo z wnioskiem o miarkowanie kary umownej w sprawie kary za opoznienie dostawy.",
@@ -16349,7 +16752,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "sporzadz pismo z wnioskiem o miarkowanie kary umownej w sprawie kary za opoznienie dostawy",
@@ -16358,7 +16764,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, sporządź pismo z wnioskiem o miarkowanie kary umownej w sprawie kary za opóźnienie dostawy.",
@@ -16367,7 +16776,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Sporządź pismo z wnioskiem o miarkowanie kary umownej w sprawie kary za opóźnienie dostawy.",
@@ -16376,7 +16788,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie kary za opóźnienie dostawy i wskaż ryzyka.",
@@ -17267,7 +17682,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient, organizator zgromadzenia, otrzymal decyzje zakazujaca. Prosze o analize prawa o zgromadzeniach i odwolania.",
@@ -17275,7 +17693,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "klient, organizator zgromadzenia, otrzymal decyzje zakazujaca. prosze o analize prawa o zgromadzeniach i odwolania",
@@ -17283,7 +17704,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, klient, organizator zgromadzenia, otrzymał decyzję zakazującą. Proszę o analizę prawa o zgromadzeniach i odwołania.",
@@ -17291,7 +17715,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Klient, organizator zgromadzenia, otrzymał decyzję zakazującą. Proszę o analizę prawa o zgromadzeniach i odwołania.",
@@ -17299,7 +17726,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj odwołanie od zakazu zgromadzenia w sprawie zakazu zgromadzenia.",
@@ -17509,7 +17939,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Mocodawcy, grupa mieszkancow, planuja wniesc petycje. Prosze o analize wymogow ustawy o petycjach i terminu rozpatrzenia.",
@@ -17517,7 +17950,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "mocodawcy, grupa mieszkancow, planuja wniesc petycje. prosze o analize wymogow ustawy o petycjach i terminu rozpatrzenia",
@@ -17525,7 +17961,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mocodawcy, grupa mieszkańców, planują wnieść petycję. Proszę o analizę wymogów ustawy o petycjach i terminu rozpatrzenia.",
@@ -17533,7 +17972,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawcy, grupa mieszkańców, planują wnieść petycję. Proszę o analizę wymogów ustawy o petycjach i terminu rozpatrzenia.",
@@ -17541,7 +17983,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Sporządź petycję do rady miasta w sprawie budowy placu zabaw.",
@@ -18477,7 +18922,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mocodawca poniosl szkode na drodze zarzadzanej przez gmine. Prosze o analize odpowiedzialnosci zarzadcy drogi z KC i ustawy o drogach publicznych.",
@@ -18485,7 +18933,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "mocodawca poniosl szkode na drodze zarzadzanej przez gmine. prosze o analize odpowiedzialnosci zarzadcy drogi z kc i ustawy o drogach publicznych",
@@ -18493,7 +18944,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, mocodawca poniósł szkodę na drodze zarządzanej przez gminę. Proszę o analizę odpowiedzialności zarządcy drogi z KC i ustawy o drogach publicznych.",
@@ -18501,7 +18955,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca poniósł szkodę na drodze zarządzanej przez gminę. Proszę o analizę odpowiedzialności zarządcy drogi z KC i ustawy o drogach publicznych.",
@@ -18509,7 +18966,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przygotuj wezwanie gminy do zapłaty odszkodowania w sprawie szkody na dziurawej drodze.",
@@ -18518,7 +18978,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przygotuj wezwanie gminy do zaplaty odszkodowania w sprawie szkody na dziurawej drodze.",
@@ -18527,7 +18990,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przygotuj wezwanie gminy do zaplaty odszkodowania w sprawie szkody na dziurawej drodze",
@@ -18536,7 +19002,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przygotuj wezwanie gminy do zapłaty odszkodowania w sprawie szkody na dziurawej drodze.",
@@ -18545,7 +19014,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj wezwanie gminy do zapłaty odszkodowania w sprawie szkody na dziurawej drodze.",
@@ -18554,7 +19026,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie szkody na dziurawej drodze i wskaż ryzyka.",
@@ -18679,7 +19154,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Nowy plan zagospodarowania zrobil z mojej dzialki budowlanej teren zielony. Stracilem na wartosci. Co moge zrobic?",
@@ -18687,7 +19165,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "nowy plan zagospodarowania zrobil z mojej dzialki budowlanej teren zielony. stracilem na wartosci. co moge zrobic",
@@ -18695,7 +19176,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Dzień dobry, nowy plan zagospodarowania zrobił z mojej działki budowlanej teren zielony. Straciłem na wartości. Co mogę zrobić?",
@@ -18703,7 +19187,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Proszę o pomoc. Nowy plan zagospodarowania zrobił z mojej działki budowlanej teren zielony. Straciłem na wartości. Co mogę zrobić?",
@@ -18711,7 +19198,10 @@
 "dr": "dr-08",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-09"
+]
 },
 {
 "q": "Klient kwestionuje miejscowy plan zagospodarowania przestrzennego. Proszę o analizę skargi z ustawy o samorządzie gminnym i roszczeń z ustawy o planowaniu.",
@@ -19849,7 +20339,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Jak uzyskac warunki zabudowy?",
@@ -19857,7 +20350,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "jak uzyskac warunki zabudowy",
@@ -19865,7 +20361,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, jak uzyskać warunki zabudowy?",
@@ -19873,7 +20372,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Jak uzyskać warunki zabudowy?",
@@ -19881,7 +20383,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Kupiłem działkę rolną i chcę postawić dom. W gminie nie ma planu. Od czego zacząć?",
@@ -19889,7 +20394,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Kupilem dzialke rolna i chce postawic dom. W gminie nie ma planu. Od czego zaczac?",
@@ -19897,7 +20405,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "kupilem dzialke rolna i chce postawic dom. w gminie nie ma planu. od czego zaczac",
@@ -19905,7 +20416,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, kupiłem działkę rolną i chcę postawić dom. W gminie nie ma planu. Od czego zacząć?",
@@ -19913,7 +20427,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Kupiłem działkę rolną i chcę postawić dom. W gminie nie ma planu. Od czego zacząć?",
@@ -19921,7 +20438,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Klient wnosi o decyzję o warunkach zabudowy dla działki bez planu miejscowego. Proszę o analizę zasady dobrego sąsiedztwa i ustawy o planowaniu i zagospodarowaniu przestrzennym.",
@@ -19929,7 +20449,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Klient wnosi o decyzje o warunkach zabudowy dla dzialki bez planu miejscowego. Prosze o analize zasady dobrego sasiedztwa i ustawy o planowaniu i zagospodarowaniu przestrzennym.",
@@ -19937,7 +20460,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "klient wnosi o decyzje o warunkach zabudowy dla dzialki bez planu miejscowego. prosze o analize zasady dobrego sasiedztwa i ustawy o planowaniu i zagospodarowaniu przestrzennym",
@@ -19945,7 +20471,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, klient wnosi o decyzję o warunkach zabudowy dla działki bez planu miejscowego. Proszę o analizę zasady dobrego sąsiedztwa i ustawy o planowaniu i zagospodarowaniu przestrzennym.",
@@ -19953,7 +20482,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Klient wnosi o decyzję o warunkach zabudowy dla działki bez planu miejscowego. Proszę o analizę zasady dobrego sąsiedztwa i ustawy o planowaniu i zagospodarowaniu przestrzennym.",
@@ -19961,7 +20493,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Sporządź wniosek o wydanie warunków zabudowy w sprawie warunków zabudowy domu.",
@@ -19970,7 +20505,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Sporzadz wniosek o wydanie warunkow zabudowy w sprawie warunkow zabudowy domu.",
@@ -19979,7 +20517,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "sporzadz wniosek o wydanie warunkow zabudowy w sprawie warunkow zabudowy domu",
@@ -19988,7 +20529,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, sporządź wniosek o wydanie warunków zabudowy w sprawie warunków zabudowy domu.",
@@ -19997,7 +20541,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Sporządź wniosek o wydanie warunków zabudowy w sprawie warunków zabudowy domu.",
@@ -20006,7 +20553,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie warunków zabudowy domu i wskaż ryzyka.",
@@ -20014,7 +20564,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Ocen moje szanse w sprawie warunkow zabudowy domu i wskaz ryzyka.",
@@ -20022,7 +20575,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "ocen moje szanse w sprawie warunkow zabudowy domu i wskaz ryzyka",
@@ -20030,7 +20586,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, oceń moje szanse w sprawie warunków zabudowy domu i wskaż ryzyka.",
@@ -20038,7 +20597,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Proszę o pomoc. Oceń moje szanse w sprawie warunków zabudowy domu i wskaż ryzyka.",
@@ -20046,7 +20608,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "A co jeśli druga strona się nie zgodzi?",
@@ -20413,7 +20978,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient usunal drzewo bez zezwolenia. Prosze o analize administracyjnej kary pienieznej z ustawy o ochronie przyrody i przeslanek odstapienia.",
@@ -20421,7 +20989,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "klient usunal drzewo bez zezwolenia. prosze o analize administracyjnej kary pienieznej z ustawy o ochronie przyrody i przeslanek odstapienia",
@@ -20429,7 +21000,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, klient usunął drzewo bez zezwolenia. Proszę o analizę administracyjnej kary pieniężnej z ustawy o ochronie przyrody i przesłanek odstąpienia.",
@@ -20437,7 +21011,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Klient usunął drzewo bez zezwolenia. Proszę o analizę administracyjnej kary pieniężnej z ustawy o ochronie przyrody i przesłanek odstąpienia.",
@@ -20445,7 +21022,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj mi odwołanie od decyzji o karze za wycinkę drzewa w sprawie kary za wycinkę drzewa.",
@@ -20454,7 +21034,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj mi odwolanie od decyzji o karze za wycinke drzewa w sprawie kary za wycinke drzewa.",
@@ -20463,7 +21046,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "przygotuj mi odwolanie od decyzji o karze za wycinke drzewa w sprawie kary za wycinke drzewa",
@@ -20472,7 +21058,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, przygotuj mi odwołanie od decyzji o karze za wycinkę drzewa w sprawie kary za wycinkę drzewa.",
@@ -20481,7 +21070,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj mi odwołanie od decyzji o karze za wycinkę drzewa w sprawie kary za wycinkę drzewa.",
@@ -20490,7 +21082,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie kary za wycinkę drzewa.",
@@ -20857,7 +21452,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przez awarie nie mialem pradu cztery dni. Zepsula sie lodowka. Czy dostawca musi mi cos zaplacic?",
@@ -20865,7 +21463,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przez awarie nie mialem pradu cztery dni. zepsula sie lodowka. czy dostawca musi mi cos zaplacic",
@@ -20873,7 +21474,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przez awarię nie miałem prądu cztery dni. Zepsuła się lodówka. Czy dostawca musi mi coś zapłacić?",
@@ -20881,7 +21485,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przez awarię nie miałem prądu cztery dni. Zepsuła się lodówka. Czy dostawca musi mi coś zapłacić?",
@@ -20889,7 +21496,10 @@
 "dr": "dr-09",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient doznał szkody wskutek przerwy w dostawie energii. Proszę o analizę bonifikat z Prawa energetycznego i odpowiedzialności odszkodowawczej.",
@@ -21664,7 +22274,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przygotuj mi reklamacje do przewoznika w sprawie uszkodzonej przesylki.",
@@ -21673,7 +22286,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przygotuj mi reklamacje do przewoznika w sprawie uszkodzonej przesylki",
@@ -21682,7 +22298,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przygotuj mi reklamację do przewoźnika w sprawie uszkodzonej przesyłki.",
@@ -21691,7 +22310,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj mi reklamację do przewoźnika w sprawie uszkodzonej przesyłki.",
@@ -21700,7 +22322,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy uszkodzonej przesyłki: podstawy, ryzyka, rekomendacje.",
@@ -23761,7 +24386,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Pies zmarl po rutynowym zabiegu kastracji. Weterynarz mowi, ze to powiklanie. Czy moge zadac odszkodowania?",
@@ -23769,7 +24397,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pies zmarl po rutynowym zabiegu kastracji. weterynarz mowi, ze to powiklanie. czy moge zadac odszkodowania",
@@ -23777,7 +24408,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, pies zmarł po rutynowym zabiegu kastracji. Weterynarz mówi, że to powikłanie. Czy mogę żądać odszkodowania?",
@@ -23785,7 +24419,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Pies zmarł po rutynowym zabiegu kastracji. Weterynarz mówi, że to powikłanie. Czy mogę żądać odszkodowania?",
@@ -23793,7 +24430,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klientka podnosi błąd lekarza weterynarii skutkujący śmiercią zwierzęcia. Proszę o analizę odpowiedzialności kontraktowej z KC i dowodu z opinii biegłego.",
@@ -23801,7 +24441,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klientka podnosi blad lekarza weterynarii skutkujacy smiercia zwierzecia. Prosze o analize odpowiedzialnosci kontraktowej z KC i dowodu z opinii bieglego.",
@@ -23809,7 +24452,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "klientka podnosi blad lekarza weterynarii skutkujacy smiercia zwierzecia. prosze o analize odpowiedzialnosci kontraktowej z kc i dowodu z opinii bieglego",
@@ -23817,7 +24463,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, klientka podnosi błąd lekarza weterynarii skutkujący śmiercią zwierzęcia. Proszę o analizę odpowiedzialności kontraktowej z KC i dowodu z opinii biegłego.",
@@ -23825,7 +24474,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Klientka podnosi błąd lekarza weterynarii skutkujący śmiercią zwierzęcia. Proszę o analizę odpowiedzialności kontraktowej z KC i dowodu z opinii biegłego.",
@@ -23833,7 +24485,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Napisz mi wezwanie weterynarza do zapłaty odszkodowania w sprawie śmierci psa po zabiegu.",
@@ -23842,7 +24497,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Napisz mi wezwanie weterynarza do zaplaty odszkodowania w sprawie smierci psa po zabiegu.",
@@ -23851,7 +24509,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "napisz mi wezwanie weterynarza do zaplaty odszkodowania w sprawie smierci psa po zabiegu",
@@ -23860,7 +24521,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, napisz mi wezwanie weterynarza do zapłaty odszkodowania w sprawie śmierci psa po zabiegu.",
@@ -23869,7 +24533,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz mi wezwanie weterynarza do zapłaty odszkodowania w sprawie śmierci psa po zabiegu.",
@@ -23878,7 +24545,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy śmierci psa po zabiegu: podstawy, ryzyka, rekomendacje.",
@@ -24043,7 +24713,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Mocodawca otrzymal decyzje organu Panstwowej Inspekcji Sanitarnej o unieruchomieniu zakladu. Prosze o analize rygoru natychmiastowej wykonalnosci i odwolania.",
@@ -24051,7 +24724,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "mocodawca otrzymal decyzje organu panstwowej inspekcji sanitarnej o unieruchomieniu zakladu. prosze o analize rygoru natychmiastowej wykonalnosci i odwolania",
@@ -24059,7 +24735,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mocodawca otrzymał decyzję organu Państwowej Inspekcji Sanitarnej o unieruchomieniu zakładu. Proszę o analizę rygoru natychmiastowej wykonalności i odwołania.",
@@ -24067,7 +24746,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca otrzymał decyzję organu Państwowej Inspekcji Sanitarnej o unieruchomieniu zakładu. Proszę o analizę rygoru natychmiastowej wykonalności i odwołania.",
@@ -24075,7 +24757,10 @@
 "dr": "dr-10",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj mi odwołanie od decyzji sanepidu w sprawie zamknięcia restauracji przez sanepid.",
@@ -24084,7 +24769,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj mi odwolanie od decyzji sanepidu w sprawie zamkniecia restauracji przez sanepid.",
@@ -24093,7 +24781,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "przygotuj mi odwolanie od decyzji sanepidu w sprawie zamkniecia restauracji przez sanepid",
@@ -24102,7 +24793,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, przygotuj mi odwołanie od decyzji sanepidu w sprawie zamknięcia restauracji przez sanepid.",
@@ -24111,7 +24805,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj mi odwołanie od decyzji sanepidu w sprawie zamknięcia restauracji przez sanepid.",
@@ -24120,7 +24817,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie zamknięcia restauracji przez sanepid.",
@@ -24568,7 +25268,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Przygotuj zawiadomienie do Panstwowej Inspekcji Pracy w sprawie kamer w pokoju socjalnym.",
@@ -24577,7 +25280,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "przygotuj zawiadomienie do panstwowej inspekcji pracy w sprawie kamer w pokoju socjalnym",
@@ -24586,7 +25292,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Dzień dobry, przygotuj zawiadomienie do Państwowej Inspekcji Pracy w sprawie kamer w pokoju socjalnym.",
@@ -24595,7 +25304,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj zawiadomienie do Państwowej Inspekcji Pracy w sprawie kamer w pokoju socjalnym.",
@@ -24604,7 +25316,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy kamer w pokoju socjalnym: podstawy, ryzyka, rekomendacje.",
@@ -25697,7 +26412,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Prowadze przychodnie z piecioma lekarzami. Ktos mi powiedzial, ze musze zatrudnic IOD. Czy to prawda?",
@@ -25705,7 +26423,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "prowadze przychodnie z piecioma lekarzami. ktos mi powiedzial, ze musze zatrudnic iod. czy to prawda",
@@ -25713,7 +26434,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Dzień dobry, prowadzę przychodnię z pięcioma lekarzami. Ktoś mi powiedział, że muszę zatrudnić IOD. Czy to prawda?",
@@ -25721,7 +26445,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Proszę o pomoc. Prowadzę przychodnię z pięcioma lekarzami. Ktoś mi powiedział, że muszę zatrudnić IOD. Czy to prawda?",
@@ -25729,7 +26456,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Klient przetwarza dane szczególnych kategorii na dużą skalę. Proszę o analizę obowiązku wyznaczenia IOD z RODO.",
@@ -25899,7 +26629,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Co grozi za wlamanie na cudzy Facebook?",
@@ -25907,7 +26640,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "co grozi za wlamanie na cudzy facebook",
@@ -25915,7 +26651,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, co grozi za włamanie na cudzy Facebook?",
@@ -25923,7 +26662,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Co grozi za włamanie na cudzy Facebook?",
@@ -25931,7 +26673,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Ktoś przejął moje konto na Facebooku i wysyła prośby o BLIK do znajomych. Co mogę zrobić?",
@@ -25979,7 +26724,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mocodawca padl ofiara przejecia konta. Prosze o analize kwalifikacji z art. 267 KK i oszustwa komputerowego oraz zabezpieczenia dowodow.",
@@ -25987,7 +26735,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "mocodawca padl ofiara przejecia konta. prosze o analize kwalifikacji z art. 267 kk i oszustwa komputerowego oraz zabezpieczenia dowodow",
@@ -25995,7 +26746,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mocodawca padł ofiarą przejęcia konta. Proszę o analizę kwalifikacji z art. 267 KK i oszustwa komputerowego oraz zabezpieczenia dowodów.",
@@ -26003,7 +26757,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca padł ofiarą przejęcia konta. Proszę o analizę kwalifikacji z art. 267 KK i oszustwa komputerowego oraz zabezpieczenia dowodów.",
@@ -26011,7 +26768,10 @@
 "dr": "dr-11",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Sporządź zawiadomienie o przestępstwie przejęcia konta w sprawie przejęcia konta na Facebooku.",
@@ -26141,7 +26901,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy sklep internetowy moze mi zablokowac konto?",
@@ -26149,7 +26912,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "czy sklep internetowy moze mi zablokowac konto",
@@ -26157,7 +26923,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, czy sklep internetowy może mi zablokować konto?",
@@ -26165,7 +26934,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Czy sklep internetowy może mi zablokować konto?",
@@ -26173,7 +26945,10 @@
 "dr": "dr-11",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Platforma sprzedażowa zablokowała mi konto sprzedawcy bez uzasadnienia. Mam tam towar za 20 tysięcy. Co robić?",
@@ -27351,7 +28126,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Czy moge zlozyc skarge na przewleklosc postepowania?",
@@ -27359,7 +28137,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "czy moge zlozyc skarge na przewleklosc postepowania",
@@ -27367,7 +28148,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, czy mogę złożyć skargę na przewlekłość postępowania?",
@@ -27375,7 +28159,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Czy mogę złożyć skargę na przewlekłość postępowania?",
@@ -27383,7 +28170,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Moja sprawa w sądzie trwa już cztery lata, a rozprawy są co pół roku. Czy mogę coś zrobić?",
@@ -27431,7 +28221,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient jest strona postepowania cywilnego trwajacego ponad cztery lata. Prosze o analize skargi na przewleklosc z ustawy o skardze i wysokosci sumy pienieznej.",
@@ -27439,7 +28232,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "klient jest strona postepowania cywilnego trwajacego ponad cztery lata. prosze o analize skargi na przewleklosc z ustawy o skardze i wysokosci sumy pienieznej",
@@ -27447,7 +28243,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, klient jest stroną postępowania cywilnego trwającego ponad cztery lata. Proszę o analizę skargi na przewlekłość z ustawy o skardze i wysokości sumy pieniężnej.",
@@ -27455,7 +28254,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Klient jest stroną postępowania cywilnego trwającego ponad cztery lata. Proszę o analizę skargi na przewlekłość z ustawy o skardze i wysokości sumy pieniężnej.",
@@ -27463,7 +28265,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Napisz mi skargę na przewlekłość postępowania w sprawie przewlekłości postępowania.",
@@ -27472,7 +28277,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Napisz mi skarge na przewleklosc postepowania w sprawie przewleklosci postepowania.",
@@ -27481,7 +28289,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "napisz mi skarge na przewleklosc postepowania w sprawie przewleklosci postepowania",
@@ -27490,7 +28301,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, napisz mi skargę na przewlekłość postępowania w sprawie przewlekłości postępowania.",
@@ -27499,7 +28313,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz mi skargę na przewlekłość postępowania w sprawie przewlekłości postępowania.",
@@ -27508,7 +28325,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy przewlekłości postępowania: podstawy, ryzyka, rekomendacje.",
@@ -27516,7 +28336,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Prosze o pelna analize prawna sprawy przewleklosci postepowania: podstawy, ryzyka, rekomendacje.",
@@ -27524,7 +28347,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "prosze o pelna analize prawna sprawy przewleklosci postepowania: podstawy, ryzyka, rekomendacje",
@@ -27532,7 +28358,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, proszę o pełną analizę prawną sprawy przewlekłości postępowania: podstawy, ryzyka, rekomendacje.",
@@ -27540,7 +28369,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Proszę o pełną analizę prawną sprawy przewlekłości postępowania: podstawy, ryzyka, rekomendacje.",
@@ -27548,7 +28380,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Ile to będzie kosztować?",
@@ -28682,7 +29517,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Napisz mi upowaznienie do obrony w sprawie obroncy w sprawie karnej.",
@@ -28691,7 +29529,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "napisz mi upowaznienie do obrony w sprawie obroncy w sprawie karnej",
@@ -28700,7 +29541,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, napisz mi upoważnienie do obrony w sprawie obrońcy w sprawie karnej.",
@@ -28709,7 +29553,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz mi upoważnienie do obrony w sprawie obrońcy w sprawie karnej.",
@@ -28718,7 +29565,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie obrońcy w sprawie karnej i wskaż ryzyka.",
@@ -28726,7 +29576,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Ocen moje szanse w sprawie obroncy w sprawie karnej i wskaz ryzyka.",
@@ -28734,7 +29587,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "ocen moje szanse w sprawie obroncy w sprawie karnej i wskaz ryzyka",
@@ -28742,7 +29598,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, oceń moje szanse w sprawie obrońcy w sprawie karnej i wskaż ryzyka.",
@@ -28750,7 +29609,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Oceń moje szanse w sprawie obrońcy w sprawie karnej i wskaż ryzyka.",
@@ -28758,7 +29620,10 @@
 "dr": "dr-12",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "A co jeśli druga strona się nie zgodzi?",
@@ -29851,7 +30716,10 @@
 "dr": "dr-13",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Mocodawca otrzymal decyzje odmowna komendanta wojewodzkiego Policji. Prosze o analize ustawy o broni i amunicji i odwolania.",
@@ -29859,7 +30727,10 @@
 "dr": "dr-13",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "mocodawca otrzymal decyzje odmowna komendanta wojewodzkiego policji. prosze o analize ustawy o broni i amunicji i odwolania",
@@ -29867,7 +30738,10 @@
 "dr": "dr-13",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mocodawca otrzymał decyzję odmowną komendanta wojewódzkiego Policji. Proszę o analizę ustawy o broni i amunicji i odwołania.",
@@ -29875,7 +30749,10 @@
 "dr": "dr-13",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca otrzymał decyzję odmowną komendanta wojewódzkiego Policji. Proszę o analizę ustawy o broni i amunicji i odwołania.",
@@ -29883,7 +30760,10 @@
 "dr": "dr-13",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Napisz mi odwołanie od odmowy pozwolenia na broń w sprawie pozwolenia na broń.",
@@ -30860,7 +31740,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Sporzadz wniosek do IPN o udostepnienie dokumentow w sprawie teczki w IPN.",
@@ -30869,7 +31752,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "sporzadz wniosek do ipn o udostepnienie dokumentow w sprawie teczki w ipn",
@@ -30878,7 +31764,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, sporządź wniosek do IPN o udostępnienie dokumentów w sprawie teczki w IPN.",
@@ -30887,7 +31776,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Sporządź wniosek do IPN o udostępnienie dokumentów w sprawie teczki w IPN.",
@@ -30896,7 +31788,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie teczki w IPN i wskaż ryzyka.",
@@ -31223,7 +32118,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Jak zostac policjantem z wyrokiem w zawieszeniu?",
@@ -31231,7 +32129,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "jak zostac policjantem z wyrokiem w zawieszeniu",
@@ -31239,7 +32140,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, jak zostać policjantem z wyrokiem w zawieszeniu?",
@@ -31247,7 +32151,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Jak zostać policjantem z wyrokiem w zawieszeniu?",
@@ -31255,7 +32162,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mam wyrok w zawieszeniu za bójkę sprzed pięciu lat. Chcę iść do policji. Czy to mnie dyskwalifikuje?",
@@ -31263,7 +32173,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mam wyrok w zawieszeniu za bojke sprzed pieciu lat. Chce isc do policji. Czy to mnie dyskwalifikuje?",
@@ -31271,7 +32184,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "mam wyrok w zawieszeniu za bojke sprzed pieciu lat. chce isc do policji. czy to mnie dyskwalifikuje",
@@ -31279,7 +32195,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mam wyrok w zawieszeniu za bójkę sprzed pięciu lat. Chcę iść do policji. Czy to mnie dyskwalifikuje?",
@@ -31287,7 +32206,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Mam wyrok w zawieszeniu za bójkę sprzed pięciu lat. Chcę iść do policji. Czy to mnie dyskwalifikuje?",
@@ -31295,7 +32217,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mocodawca, kandydat do służby, był karany. Proszę o analizę wymogu niekaralności z ustawy o Policji i zatarcia skazania z KK.",
@@ -31303,7 +32228,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mocodawca, kandydat do sluzby, byl karany. Prosze o analize wymogu niekaralnosci z ustawy o Policji i zatarcia skazania z KK.",
@@ -31311,7 +32239,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "mocodawca, kandydat do sluzby, byl karany. prosze o analize wymogu niekaralnosci z ustawy o policji i zatarcia skazania z kk",
@@ -31319,7 +32250,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mocodawca, kandydat do służby, był karany. Proszę o analizę wymogu niekaralności z ustawy o Policji i zatarcia skazania z KK.",
@@ -31327,7 +32261,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca, kandydat do służby, był karany. Proszę o analizę wymogu niekaralności z ustawy o Policji i zatarcia skazania z KK.",
@@ -31335,7 +32272,10 @@
 "dr": "dr-13",
 "criminal": true,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Przygotuj mi wniosek o zatarcie skazania w sprawie kandydowania do policji z wyrokiem.",
@@ -31344,7 +32284,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Przygotuj mi wniosek o zatarcie skazania w sprawie kandydowania do policji z wyrokiem.",
@@ -31353,7 +32296,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "przygotuj mi wniosek o zatarcie skazania w sprawie kandydowania do policji z wyrokiem",
@@ -31362,7 +32308,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, przygotuj mi wniosek o zatarcie skazania w sprawie kandydowania do policji z wyrokiem.",
@@ -31371,7 +32320,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj mi wniosek o zatarcie skazania w sprawie kandydowania do policji z wyrokiem.",
@@ -31380,7 +32332,10 @@
 "criminal": true,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-procesowe-v3"
+"skill": "pisma-procesowe-v3",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie kandydowania do policji z wyrokiem.",
@@ -32231,7 +33186,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Rozwiodlam sie w Wielkiej Brytanii. Teraz chce wziac slub w Polsce. Czy ten rozwod jest tu wazny?",
@@ -32239,7 +33197,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "rozwiodlam sie w wielkiej brytanii. teraz chce wziac slub w polsce. czy ten rozwod jest tu wazny",
@@ -32247,7 +33208,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, rozwiodłam się w Wielkiej Brytanii. Teraz chcę wziąć ślub w Polsce. Czy ten rozwód jest tu ważny?",
@@ -32255,7 +33219,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Rozwiodłam się w Wielkiej Brytanii. Teraz chcę wziąć ślub w Polsce. Czy ten rozwód jest tu ważny?",
@@ -32263,7 +33230,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mocodawczyni uzyskała rozwód przed sądem państwa trzeciego. Proszę o analizę uznania orzeczenia z KPC i wpisu do aktu stanu cywilnego.",
@@ -32356,7 +33326,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Ocen moje szanse w sprawie zagranicznego rozwodu i wskaz ryzyka.",
@@ -32364,7 +33337,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "ocen moje szanse w sprawie zagranicznego rozwodu i wskaz ryzyka",
@@ -32372,7 +33348,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, oceń moje szanse w sprawie zagranicznego rozwodu i wskaż ryzyka.",
@@ -32380,7 +33359,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Oceń moje szanse w sprawie zagranicznego rozwodu i wskaż ryzyka.",
@@ -32388,7 +33370,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Ile to będzie kosztować?",
@@ -32675,7 +33660,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy moge sciagnac alimenty od ojca w Holandii?",
@@ -32683,7 +33671,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "czy moge sciagnac alimenty od ojca w holandii",
@@ -32691,7 +33682,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, czy mogę ściągnąć alimenty od ojca w Holandii?",
@@ -32699,7 +33693,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Czy mogę ściągnąć alimenty od ojca w Holandii?",
@@ -32707,7 +33704,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Ojciec mojego dziecka wyjechał do Holandii i nie płaci alimentów. Mam polski wyrok. Jak to wyegzekwować?",
@@ -32715,7 +33715,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Ojciec mojego dziecka wyjechal do Holandii i nie placi alimentow. Mam polski wyrok. Jak to wyegzekwowac?",
@@ -32723,7 +33726,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "ojciec mojego dziecka wyjechal do holandii i nie placi alimentow. mam polski wyrok. jak to wyegzekwowac",
@@ -32731,7 +33737,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, ojciec mojego dziecka wyjechał do Holandii i nie płaci alimentów. Mam polski wyrok. Jak to wyegzekwować?",
@@ -32739,7 +33748,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Ojciec mojego dziecka wyjechał do Holandii i nie płaci alimentów. Mam polski wyrok. Jak to wyegzekwować?",
@@ -32747,7 +33759,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mocodawczyni posiada polskie orzeczenie alimentacyjne, dłużnik przebywa w Niderlandach. Proszę o analizę rozporządzenia 4/2009 i trybu przez sąd okręgowy.",
@@ -32755,7 +33770,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mocodawczyni posiada polskie orzeczenie alimentacyjne, dluznik przebywa w Niderlandach. Prosze o analize rozporzadzenia 4/2009 i trybu przez sad okregowy.",
@@ -32763,7 +33781,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "mocodawczyni posiada polskie orzeczenie alimentacyjne, dluznik przebywa w niderlandach. prosze o analize rozporzadzenia 4/2009 i trybu przez sad okregowy",
@@ -32771,7 +33792,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, mocodawczyni posiada polskie orzeczenie alimentacyjne, dłużnik przebywa w Niderlandach. Proszę o analizę rozporządzenia 4/2009 i trybu przez sąd okręgowy.",
@@ -32779,7 +33803,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawczyni posiada polskie orzeczenie alimentacyjne, dłużnik przebywa w Niderlandach. Proszę o analizę rozporządzenia 4/2009 i trybu przez sąd okręgowy.",
@@ -32787,7 +33814,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Napisz wniosek o egzekucję alimentów za granicą w sprawie alimentów od ojca w Holandii.",
@@ -32840,7 +33870,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie alimentow od ojca w Holandii.",
@@ -32848,7 +33881,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przeanalizuj szanse i ryzyka w sprawie alimentow od ojca w holandii",
@@ -32856,7 +33892,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przeanalizuj szanse i ryzyka w sprawie alimentów od ojca w Holandii.",
@@ -32864,7 +33903,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przeanalizuj szanse i ryzyka w sprawie alimentów od ojca w Holandii.",
@@ -32872,7 +33914,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy potrzebuję do tego prawnika?",
@@ -32957,7 +34002,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Jestem z Bialorusi, w kraju grozi mi wiezienie za udzial w protestach. Czy moge zostac w Polsce?",
@@ -32965,7 +34013,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "jestem z bialorusi, w kraju grozi mi wiezienie za udzial w protestach. czy moge zostac w polsce",
@@ -32973,7 +34024,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, jestem z Białorusi, w kraju grozi mi więzienie za udział w protestach. Czy mogę zostać w Polsce?",
@@ -32981,7 +34035,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Jestem z Białorusi, w kraju grozi mi więzienie za udział w protestach. Czy mogę zostać w Polsce?",
@@ -32989,7 +34046,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient, obywatel Białorusi, obawia się prześladowań. Proszę o analizę statusu uchodźcy z Konwencji genewskiej i ustawy o udzielaniu cudzoziemcom ochrony.",
@@ -33038,7 +34098,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Przygotuj wniosek o udzielenie ochrony miedzynarodowej w sprawie ochrony miedzynarodowej.",
@@ -33047,7 +34110,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "przygotuj wniosek o udzielenie ochrony miedzynarodowej w sprawie ochrony miedzynarodowej",
@@ -33056,7 +34122,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, przygotuj wniosek o udzielenie ochrony międzynarodowej w sprawie ochrony międzynarodowej.",
@@ -33065,7 +34134,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj wniosek o udzielenie ochrony międzynarodowej w sprawie ochrony międzynarodowej.",
@@ -33074,7 +34146,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Oceń moje szanse w sprawie ochrony międzynarodowej i wskaż ryzyka.",
@@ -33199,7 +34274,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Prowadze sklep internetowy i coraz wiecej klientow jest z Francji. Czy musze tam cos rejestrowac?",
@@ -33207,7 +34285,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "prowadze sklep internetowy i coraz wiecej klientow jest z francji. czy musze tam cos rejestrowac",
@@ -33215,7 +34296,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Dzień dobry, prowadzę sklep internetowy i coraz więcej klientów jest z Francji. Czy muszę tam coś rejestrować?",
@@ -33223,7 +34307,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Proszę o pomoc. Prowadzę sklep internetowy i coraz więcej klientów jest z Francji. Czy muszę tam coś rejestrować?",
@@ -33231,7 +34318,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Mocodawca prowadzi sprzedaż wysyłkową do konsumentów w UE. Proszę o analizę swobody świadczenia usług, procedury OSS w VAT i prawa właściwego dla umów konsumenckich.",
@@ -33441,7 +34531,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Byla zona wywiozla syna do Irlandii bez mojej zgody i nie chce wrocic. Mamy wspolna wladze rodzicielska. Co robic?",
@@ -33449,7 +34542,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "byla zona wywiozla syna do irlandii bez mojej zgody i nie chce wrocic. mamy wspolna wladze rodzicielska. co robic",
@@ -33457,7 +34553,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, była żona wywiozła syna do Irlandii bez mojej zgody i nie chce wrócić. Mamy wspólną władzę rodzicielską. Co robić?",
@@ -33465,7 +34564,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Była żona wywiozła syna do Irlandii bez mojej zgody i nie chce wrócić. Mamy wspólną władzę rodzicielską. Co robić?",
@@ -33473,7 +34575,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient wnosi o powrót dziecka uprowadzonego do Irlandii. Proszę o analizę Konwencji haskiej z 1980 roku i rozporządzenia Bruksela II ter.",
@@ -33683,7 +34788,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-15"
+]
 },
 {
 "q": "Moja firma sprzedaje czesci maszyn do Kazachstanu. Kontrahent pyta o dostawy dalej. Czy moge miec problem z sankcjami?",
@@ -33691,7 +34799,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-15"
+]
 },
 {
 "q": "moja firma sprzedaje czesci maszyn do kazachstanu. kontrahent pyta o dostawy dalej. czy moge miec problem z sankcjami",
@@ -33699,7 +34810,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-15"
+]
 },
 {
 "q": "Dzień dobry, moja firma sprzedaje części maszyn do Kazachstanu. Kontrahent pyta o dostawy dalej. Czy mogę mieć problem z sankcjami?",
@@ -33707,7 +34821,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-15"
+]
 },
 {
 "q": "Proszę o pomoc. Moja firma sprzedaje części maszyn do Kazachstanu. Kontrahent pyta o dostawy dalej. Czy mogę mieć problem z sankcjami?",
@@ -33715,7 +34832,10 @@
 "dr": "dr-14",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-15"
+]
 },
 {
 "q": "Mocodawca eksportuje towary podwójnego zastosowania do państwa trzeciego. Proszę o analizę rozporządzeń sankcyjnych UE i ryzyka obchodzenia sankcji.",
@@ -34207,7 +35327,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mocodawca przygotowuje sie do certyfikacji ISMS. Prosze o analize wymagan normy, deklaracji stosowania i powiazan z RODO i KSC.",
@@ -34215,7 +35338,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "mocodawca przygotowuje sie do certyfikacji isms. prosze o analize wymagan normy, deklaracji stosowania i powiazan z rodo i ksc",
@@ -34223,7 +35349,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, mocodawca przygotowuje się do certyfikacji ISMS. Proszę o analizę wymagań normy, deklaracji stosowania i powiązań z RODO i KSC.",
@@ -34231,7 +35360,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca przygotowuje się do certyfikacji ISMS. Proszę o analizę wymagań normy, deklaracji stosowania i powiązań z RODO i KSC.",
@@ -34239,7 +35371,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Przygotuj politykę bezpieczeństwa informacji w sprawie audytu ISO 27001.",
@@ -34409,7 +35544,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Zglosilem przelozonemu, ze firma falszuje faktury. Tydzien pozniej dostalem wypowiedzenie. Czy to zemsta i co moge zrobic?",
@@ -34417,7 +35555,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "zglosilem przelozonemu, ze firma falszuje faktury. tydzien pozniej dostalem wypowiedzenie. czy to zemsta i co moge zrobic",
@@ -34425,7 +35566,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Dzień dobry, zgłosiłem przełożonemu, że firma fałszuje faktury. Tydzień później dostałem wypowiedzenie. Czy to zemsta i co mogę zrobić?",
@@ -34433,7 +35577,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pomoc. Zgłosiłem przełożonemu, że firma fałszuje faktury. Tydzień później dostałem wypowiedzenie. Czy to zemsta i co mogę zrobić?",
@@ -34441,7 +35588,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient dokonał zgłoszenia nieprawidłowości, następnie otrzymał wypowiedzenie. Proszę o analizę zakazu działań odwetowych z ustawy o ochronie sygnalistów i roszczeń z KP.",
@@ -34449,7 +35599,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient dokonal zgloszenia nieprawidlowosci, nastepnie otrzymal wypowiedzenie. Prosze o analize zakazu dzialan odwetowych z ustawy o ochronie sygnalistow i roszczen z KP.",
@@ -34457,7 +35610,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "klient dokonal zgloszenia nieprawidlowosci, nastepnie otrzymal wypowiedzenie. prosze o analize zakazu dzialan odwetowych z ustawy o ochronie sygnalistow i roszczen z kp",
@@ -34465,7 +35621,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Dzień dobry, klient dokonał zgłoszenia nieprawidłowości, następnie otrzymał wypowiedzenie. Proszę o analizę zakazu działań odwetowych z ustawy o ochronie sygnalistów i roszczeń z KP.",
@@ -34473,7 +35632,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pomoc. Klient dokonał zgłoszenia nieprawidłowości, następnie otrzymał wypowiedzenie. Proszę o analizę zakazu działań odwetowych z ustawy o ochronie sygnalistów i roszczeń z KP.",
@@ -34481,7 +35643,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Sporządź odwołanie od wypowiedzenia z powołaniem na ochronę sygnalisty w sprawie zwolnienia sygnalisty.",
@@ -34893,7 +36058,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Jestem czlonkiem zarzadu spolki. Pojawily sie nieprawidlowosci w dziale zakupow. Czy moge za to odpowiadac osobiscie?",
@@ -34901,7 +36069,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "jestem czlonkiem zarzadu spolki. pojawily sie nieprawidlowosci w dziale zakupow. czy moge za to odpowiadac osobiscie",
@@ -34909,7 +36080,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, jestem członkiem zarządu spółki. Pojawiły się nieprawidłowości w dziale zakupów. Czy mogę za to odpowiadać osobiście?",
@@ -34917,7 +36091,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Jestem członkiem zarządu spółki. Pojawiły się nieprawidłowości w dziale zakupów. Czy mogę za to odpowiadać osobiście?",
@@ -34925,7 +36102,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient, członek zarządu, pyta o odpowiedzialność za brak nadzoru nad zgodnością. Proszę o analizę KSH, business judgment rule i odpowiedzialności podmiotów zbiorowych.",
@@ -34933,7 +36113,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient, czlonek zarzadu, pyta o odpowiedzialnosc za brak nadzoru nad zgodnoscia. Prosze o analize KSH, business judgment rule i odpowiedzialnosci podmiotow zbiorowych.",
@@ -34941,7 +36124,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "klient, czlonek zarzadu, pyta o odpowiedzialnosc za brak nadzoru nad zgodnoscia. prosze o analize ksh, business judgment rule i odpowiedzialnosci podmiotow zbiorowych",
@@ -34949,7 +36135,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, klient, członek zarządu, pyta o odpowiedzialność za brak nadzoru nad zgodnością. Proszę o analizę KSH, business judgment rule i odpowiedzialności podmiotów zbiorowych.",
@@ -34957,7 +36146,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Klient, członek zarządu, pyta o odpowiedzialność za brak nadzoru nad zgodnością. Proszę o analizę KSH, business judgment rule i odpowiedzialności podmiotów zbiorowych.",
@@ -34965,7 +36157,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przygotuj mi uchwałę zarządu o podziale odpowiedzialności za compliance w sprawie odpowiedzialności zarządu za compliance.",
@@ -35135,7 +36330,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Podejrzewamy, ze pracownik dzialu finansow wyprowadza pieniadze. Jak to sprawdzic zgodnie z prawem?",
@@ -35143,7 +36341,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "podejrzewamy, ze pracownik dzialu finansow wyprowadza pieniadze. jak to sprawdzic zgodnie z prawem",
@@ -35151,7 +36352,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, podejrzewamy, że pracownik działu finansów wyprowadza pieniądze. Jak to sprawdzić zgodnie z prawem?",
@@ -35159,7 +36363,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Proszę o pomoc. Podejrzewamy, że pracownik działu finansów wyprowadza pieniądze. Jak to sprawdzić zgodnie z prawem?",
@@ -35167,7 +36374,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Mocodawca planuje postępowanie wyjaśniające wobec pracownika. Proszę o analizę granic kontroli pracownika z KP i RODO oraz zabezpieczenia dowodów.",
@@ -35175,7 +36385,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Mocodawca planuje postepowanie wyjasniajace wobec pracownika. Prosze o analize granic kontroli pracownika z KP i RODO oraz zabezpieczenia dowodow.",
@@ -35183,7 +36396,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "mocodawca planuje postepowanie wyjasniajace wobec pracownika. prosze o analize granic kontroli pracownika z kp i rodo oraz zabezpieczenia dowodow",
@@ -35191,7 +36407,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Dzień dobry, mocodawca planuje postępowanie wyjaśniające wobec pracownika. Proszę o analizę granic kontroli pracownika z KP i RODO oraz zabezpieczenia dowodów.",
@@ -35199,7 +36418,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca planuje postępowanie wyjaśniające wobec pracownika. Proszę o analizę granic kontroli pracownika z KP i RODO oraz zabezpieczenia dowodów.",
@@ -35207,7 +36429,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Napisz regulamin postępowania wyjaśniającego w sprawie wewnętrznego dochodzenia.",
@@ -36063,7 +37288,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Czy firma musi szkolic pracownikow z RODO?",
@@ -36071,7 +37299,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "czy firma musi szkolic pracownikow z rodo",
@@ -36079,7 +37310,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, czy firma musi szkolić pracowników z RODO?",
@@ -36087,7 +37321,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Czy firma musi szkolić pracowników z RODO?",
@@ -36095,7 +37332,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Kontrola zarzuciła nam, że pracownicy nie znają zasad ochrony danych. Czy szkolenia są obowiązkowe?",
@@ -36103,7 +37343,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Kontrola zarzucila nam, ze pracownicy nie znaja zasad ochrony danych. Czy szkolenia sa obowiazkowe?",
@@ -36111,7 +37354,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "kontrola zarzucila nam, ze pracownicy nie znaja zasad ochrony danych. czy szkolenia sa obowiazkowe",
@@ -36119,7 +37365,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, kontrola zarzuciła nam, że pracownicy nie znają zasad ochrony danych. Czy szkolenia są obowiązkowe?",
@@ -36127,7 +37376,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Kontrola zarzuciła nam, że pracownicy nie znają zasad ochrony danych. Czy szkolenia są obowiązkowe?",
@@ -36135,7 +37387,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mocodawca otrzymał zalecenia pokontrolne. Proszę o analizę zasady rozliczalności z RODO i dokumentowania szkoleń.",
@@ -36143,7 +37398,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mocodawca otrzymal zalecenia pokontrolne. Prosze o analize zasady rozliczalnosci z RODO i dokumentowania szkolen.",
@@ -36151,7 +37409,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "mocodawca otrzymal zalecenia pokontrolne. prosze o analize zasady rozliczalnosci z rodo i dokumentowania szkolen",
@@ -36159,7 +37420,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, mocodawca otrzymał zalecenia pokontrolne. Proszę o analizę zasady rozliczalności z RODO i dokumentowania szkoleń.",
@@ -36167,7 +37431,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca otrzymał zalecenia pokontrolne. Proszę o analizę zasady rozliczalności z RODO i dokumentowania szkoleń.",
@@ -36175,7 +37442,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Przygotuj mi program szkoleń z ochrony danych w sprawie szkoleń z RODO.",
@@ -36184,7 +37454,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Przygotuj mi program szkolen z ochrony danych w sprawie szkolen z RODO.",
@@ -36193,7 +37466,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "przygotuj mi program szkolen z ochrony danych w sprawie szkolen z rodo",
@@ -36202,7 +37478,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, przygotuj mi program szkoleń z ochrony danych w sprawie szkoleń z RODO.",
@@ -36211,7 +37490,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Przygotuj mi program szkoleń z ochrony danych w sprawie szkoleń z RODO.",
@@ -36220,7 +37502,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy szkoleń z RODO: podstawy, ryzyka, rekomendacje.",
@@ -36228,7 +37513,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Prosze o pelna analize prawna sprawy szkolen z RODO: podstawy, ryzyka, rekomendacje.",
@@ -36236,7 +37524,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "prosze o pelna analize prawna sprawy szkolen z rodo: podstawy, ryzyka, rekomendacje",
@@ -36244,7 +37535,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, proszę o pełną analizę prawną sprawy szkoleń z RODO: podstawy, ryzyka, rekomendacje.",
@@ -36252,7 +37546,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Proszę o pomoc. Proszę o pełną analizę prawną sprawy szkoleń z RODO: podstawy, ryzyka, rekomendacje.",
@@ -36260,7 +37557,10 @@
 "dr": "dr-15",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Ile to będzie kosztować?",
@@ -36305,7 +37605,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Jak napisac apelacje od wyroku?",
@@ -36313,7 +37616,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "jak napisac apelacje od wyroku",
@@ -36321,7 +37627,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, jak napisać apelację od wyroku?",
@@ -36329,7 +37638,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Jak napisać apelację od wyroku?",
@@ -36337,7 +37649,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Przegrałem sprawę o zapłatę w sądzie rejonowym. Wyrok dostałem z uzasadnieniem tydzień temu. Uważam, że sąd źle ocenił świadków.",
@@ -36587,7 +37902,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Moja kolezanka bedzie swiadkiem w mojej sprawie o mobbing. Boi sie, co ja zapytaja. Jak ja przygotowac?",
@@ -36595,7 +37913,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "moja kolezanka bedzie swiadkiem w mojej sprawie o mobbing. boi sie, co ja zapytaja. jak ja przygotowac",
@@ -36603,7 +37924,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Dzień dobry, moja koleżanka będzie świadkiem w mojej sprawie o mobbing. Boi się, co ją zapytają. Jak ją przygotować?",
@@ -36611,7 +37935,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Proszę o pomoc. Moja koleżanka będzie świadkiem w mojej sprawie o mobbing. Boi się, co ją zapytają. Jak ją przygotować?",
@@ -36619,7 +37946,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient prowadzi spór, w którym kluczowe jest przesłuchanie świadka. Proszę o analizę zakresu pytań i granic przygotowania świadka.",
@@ -37273,7 +38603,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Jakie dowody zglosic w pozwie?",
@@ -37281,7 +38614,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "jakie dowody zglosic w pozwie",
@@ -37289,7 +38625,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, jakie dowody zgłosić w pozwie?",
@@ -37297,7 +38636,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Jakie dowody zgłosić w pozwie?",
@@ -37305,7 +38647,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Chcę pozwać firmę remontową za źle położone płytki. Mam zdjęcia i SMS-y. Czy to wystarczy?",
@@ -37353,7 +38698,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Mocodawca przygotowuje powodztwo o naprawienie szkody z wadliwego wykonania robot. Prosze o analize materialu dowodowego, prekluzji i dowodu z opinii bieglego.",
@@ -37361,7 +38709,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "mocodawca przygotowuje powodztwo o naprawienie szkody z wadliwego wykonania robot. prosze o analize materialu dowodowego, prekluzji i dowodu z opinii bieglego",
@@ -37369,7 +38720,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, mocodawca przygotowuje powództwo o naprawienie szkody z wadliwego wykonania robót. Proszę o analizę materiału dowodowego, prekluzji i dowodu z opinii biegłego.",
@@ -37377,7 +38731,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Mocodawca przygotowuje powództwo o naprawienie szkody z wadliwego wykonania robót. Proszę o analizę materiału dowodowego, prekluzji i dowodu z opinii biegłego.",
@@ -37385,7 +38742,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Przygotuj mi pozew o odszkodowanie za wadliwy remont w sprawie źle położonych płytek.",
@@ -37555,7 +38915,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chce wiedziec, jak sady rozstrzygaja sprawy o kary umowne dla deweloperow. Gdzie to znalezc?",
@@ -37563,7 +38926,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chce wiedziec, jak sady rozstrzygaja sprawy o kary umowne dla deweloperow. gdzie to znalezc",
@@ -37571,7 +38937,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, chcę wiedzieć, jak sądy rozstrzygają sprawy o kary umowne dla deweloperów. Gdzie to znaleźć?",
@@ -37579,7 +38948,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Chcę wiedzieć, jak sądy rozstrzygają sprawy o kary umowne dla deweloperów. Gdzie to znaleźć?",
@@ -37587,7 +38959,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient potrzebuje przeglądu orzecznictwa w sprawach kar umownych z umów deweloperskich. Proszę o analizę linii orzeczniczej SN i sądów apelacyjnych.",
@@ -37595,7 +38970,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient potrzebuje przegladu orzecznictwa w sprawach kar umownych z umow deweloperskich. Prosze o analize linii orzeczniczej SN i sadow apelacyjnych.",
@@ -37603,7 +38981,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "klient potrzebuje przegladu orzecznictwa w sprawach kar umownych z umow deweloperskich. prosze o analize linii orzeczniczej sn i sadow apelacyjnych",
@@ -37611,7 +38992,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, klient potrzebuje przeglądu orzecznictwa w sprawach kar umownych z umów deweloperskich. Proszę o analizę linii orzeczniczej SN i sądów apelacyjnych.",
@@ -37619,7 +39003,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Klient potrzebuje przeglądu orzecznictwa w sprawach kar umownych z umów deweloperskich. Proszę o analizę linii orzeczniczej SN i sądów apelacyjnych.",
@@ -37627,7 +39014,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "C-opis-prawnika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Napisz zestawienie orzecznictwa w sprawie kar umownych dla deweloperów.",
@@ -37636,7 +39026,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "oryginal",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Napisz zestawienie orzecznictwa w sprawie kar umownych dla deweloperow.",
@@ -37645,7 +39038,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "bez-polskich-znakow",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "napisz zestawienie orzecznictwa w sprawie kar umownych dla deweloperow",
@@ -37654,7 +39050,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "male-litery",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, napisz zestawienie orzecznictwa w sprawie kar umownych dla deweloperów.",
@@ -37663,7 +39062,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "powitanie",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Napisz zestawienie orzecznictwa w sprawie kar umownych dla deweloperów.",
@@ -37672,7 +39074,10 @@
 "criminal": false,
 "frame": "D-prosba-o-pismo",
 "variant": "prosba",
-"skill": "pisma-proste-v2"
+"skill": "pisma-proste-v2",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pełną analizę prawną sprawy kar umownych dla deweloperów: podstawy, ryzyka, rekomendacje.",
@@ -37680,7 +39085,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Prosze o pelna analize prawna sprawy kar umownych dla deweloperow: podstawy, ryzyka, rekomendacje.",
@@ -37688,7 +39096,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "prosze o pelna analize prawna sprawy kar umownych dla deweloperow: podstawy, ryzyka, rekomendacje",
@@ -37696,7 +39107,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, proszę o pełną analizę prawną sprawy kar umownych dla deweloperów: podstawy, ryzyka, rekomendacje.",
@@ -37704,7 +39118,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Proszę o pełną analizę prawną sprawy kar umownych dla deweloperów: podstawy, ryzyka, rekomendacje.",
@@ -37712,7 +39129,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy potrzebuję do tego prawnika?",
@@ -37757,7 +39177,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Jak napisac odpowiedz na pozew?",
@@ -37765,7 +39188,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "jak napisac odpowiedz na pozew",
@@ -37773,7 +39199,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, jak napisać odpowiedź na pozew?",
@@ -37781,7 +39210,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Jak napisać odpowiedź na pozew?",
@@ -37789,7 +39221,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dostałam pozew od byłego wspólnika o 100 tysięcy. Sąd dał mi miesiąc na odpowiedź. Co w niej napisać?",
@@ -37797,7 +39232,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dostalam pozew od bylego wspolnika o 100 tysiecy. Sad dal mi miesiac na odpowiedz. Co w niej napisac?",
@@ -37805,7 +39243,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "dostalam pozew od bylego wspolnika o 100 tysiecy. sad dal mi miesiac na odpowiedz. co w niej napisac",
@@ -37813,7 +39254,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, dostałam pozew od byłego wspólnika o 100 tysięcy. Sąd dał mi miesiąc na odpowiedź. Co w niej napisać?",
@@ -37821,7 +39265,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Dostałam pozew od byłego wspólnika o 100 tysięcy. Sąd dał mi miesiąc na odpowiedź. Co w niej napisać?",
@@ -37829,7 +39276,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "B-opis-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Mocodawczyni jest pozwaną w sporze między byłymi wspólnikami. Proszę o analizę strategii obrony, zarzutów merytorycznych i formalnych.",
@@ -37999,7 +39449,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Czy warto isc na mediacje?",
@@ -38007,7 +39460,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "czy warto isc na mediacje",
@@ -38015,7 +39471,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Dzień dobry, czy warto iść na mediację?",
@@ -38023,7 +39482,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Proszę o pomoc. Czy warto iść na mediację?",
@@ -38031,7 +39493,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Sąd zaproponował nam mediację w sprawie o podział majątku z byłym mężem. Czy to się opłaca?",
@@ -38241,7 +39706,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Jak napisac zazalenie na postanowienie sadu?",
@@ -38249,7 +39717,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "jak napisac zazalenie na postanowienie sadu",
@@ -38257,7 +39728,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Dzień dobry, jak napisać zażalenie na postanowienie sądu?",
@@ -38265,7 +39739,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Proszę o pomoc. Jak napisać zażalenie na postanowienie sądu?",
@@ -38273,7 +39750,10 @@
 "dr": "dr-02",
 "criminal": false,
 "frame": "A-pytanie-laika",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-16"
+]
 },
 {
 "q": "Sąd oddalił mój wniosek o zabezpieczenie konta dłużnika. Boję się, że wyprowadzi pieniądze. Co mogę zrobić?",
@@ -38648,7 +40128,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "oryginal"
+"variant": "oryginal",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Przeanalizuj szanse i ryzyka w sprawie sporu z firma budowlana.",
@@ -38656,7 +40139,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "bez-polskich-znakow"
+"variant": "bez-polskich-znakow",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "przeanalizuj szanse i ryzyka w sprawie sporu z firma budowlana",
@@ -38664,7 +40150,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "male-litery"
+"variant": "male-litery",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, przeanalizuj szanse i ryzyka w sprawie sporu z firmą budowlaną.",
@@ -38672,7 +40161,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "powitanie"
+"variant": "powitanie",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Proszę o pomoc. Przeanalizuj szanse i ryzyka w sprawie sporu z firmą budowlaną.",
@@ -38680,7 +40172,10 @@
 "dr": "dr-16",
 "criminal": false,
 "frame": "E-prosba-o-analize",
-"variant": "prosba"
+"variant": "prosba",
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy potrzebuję do tego prawnika?",

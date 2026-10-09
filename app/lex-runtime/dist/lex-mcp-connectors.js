@@ -314,6 +314,19 @@ export class LexMcpConnectorStore {
             return null;
         }
     }
+    // Sesja sn.pl dla narzędzi czatu (search_case_law, verify_case_reference): te same
+    // ciasteczka i przeglądarka, co serwer sn konektora po weryfikacji użytkownika.
+    snSession() {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(this.snSessionFile, "utf8"));
+            if (typeof parsed.cookie !== "string" || !parsed.cookie)
+                return null;
+            return { cookie: parsed.cookie, userAgent: typeof parsed.userAgent === "string" ? parsed.userAgent : null };
+        }
+        catch {
+            return null;
+        }
+    }
     // Serwer sn czyta plik przy każdym zapytaniu, więc klient MCP nie musi startować od nowa.
     setSnSession(rawCookie, rawUserAgent) {
         const cookies = rawCookie

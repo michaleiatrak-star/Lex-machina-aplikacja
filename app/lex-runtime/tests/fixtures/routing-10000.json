@@ -341,7 +341,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Zaginely akta mojej sprawy w sadzie — jakie mam prawa?",
@@ -349,7 +352,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Pomocy, firma z Czech nie zapłaciła za dostawę towaru!",
@@ -357,7 +363,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pomocy, firma z czech nie zaplacila za dostawe towaru!",
@@ -365,7 +374,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Potrzebuję porady, sąd od dwóch lat nie wyznaczył rozprawy.",
@@ -1237,7 +1249,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "klinika zgubila teczke z wynikami pacjentow, co dalej?",
@@ -1245,7 +1260,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Dostałem spadek z zagranicy i nie wiem o podatku. Gdzie się zwrócić?",
@@ -1669,7 +1687,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "chce wymeldowac najemce, ktory sie wyprowadzil, co dalej?",
@@ -1677,7 +1698,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Jak zbudować strategię procesową w sporze z ubezpieczycielem.",
@@ -1925,7 +1949,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "chce wymeldowac najemce, ktory sie wyprowadzil. gdzie sie zwrocic?",
@@ -1933,7 +1960,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Sprawa wygląda tak: deweloper nie usunął usterek w nowym mieszkaniu. Jak to rozwiązać?",
@@ -2197,7 +2227,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "dron policyjny nagrywa moja posesje, co dalej?",
@@ -2205,7 +2238,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Pracodawca czyta moje prywatne maile. Jakie przepisy tu obowiązują?",
@@ -2629,7 +2665,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "potrzebuje porady, firma z czech nie zaplacila za dostawe towaru.",
@@ -2637,7 +2676,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient pyta: urząd wojewódzki zgubił dokumenty do mojej karty pobytu.",
@@ -2805,7 +2847,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Pomocy, chce wymeldowac najemce, ktory sie wyprowadzil!",
@@ -2813,7 +2858,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Kupiłam pralkę, która zepsuła się po tygodniu, a sklep odsyła mnie do serwisu. Jakie przepisy tu obowiązują?",
@@ -3477,7 +3525,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Od miesiaca pracowalem w Norwegii i nie dostalem wynagrodzenia. Co radzicie?",
@@ -3485,7 +3536,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Chcę zgłosić obywatelski projekt ustawy o ochronie zwierząt — jakie mam prawa?",
@@ -3557,7 +3611,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mam problem: dron policyjny nagrywa moja posesje.",
@@ -3565,7 +3622,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "nie stać mnie na opłatę od apelacji, co dalej?",
@@ -4277,7 +4337,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Pracowalem w Norwegii i nie dostalem wynagrodzenia. Jakie przepisy tu obowiazuja?",
@@ -4285,7 +4348,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Ktoś rozpowszechnia moje intymne zdjęcia. Gdzie się zwrócić?",
@@ -4741,7 +4807,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "sprawa wyglada tak: klinika zgubila teczke z wynikami pacjentow. jak to rozwiazac?",
@@ -4749,7 +4818,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Mam problem: lekarz nie skierował mnie na badania i choroba się rozwinęła.",
@@ -4901,7 +4973,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "pracowalem w norwegii i nie dostalem wynagrodzenia, co dalej?",
@@ -4909,7 +4984,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Potrzebuję porady, Rzecznik Praw Obywatelskich nie odpowiada na mój wniosek.",
@@ -5637,7 +5715,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Pomocy, chce uznac w Polsce rozwod z Wielkiej Brytanii!",
@@ -5645,7 +5726,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: chcemy odwołać burmistrza w referendum.",
@@ -6149,7 +6233,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Czy cos moge zrobic? Chce wymeldowac najemce, ktory sie wyprowadzil.",
@@ -6157,7 +6244,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Klient pyta: polski sąd naruszył moje prawo do obrony, chcę iść do Strasburga.",
@@ -6197,7 +6287,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient pyta: firma z Czech nie zaplacila za dostawe towaru.",
@@ -6205,7 +6298,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient pyta: sędzia przerywa mi na rozprawie i nie dopuszcza dowodów.",
@@ -6293,7 +6389,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "od miesiaca klinika zgubila teczke z wynikami pacjentow. co radzicie?",
@@ -6301,7 +6400,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Najemca zniszczył mieszkanie i wyprowadził się bez płacenia. Jakie przepisy tu obowiązują?",
@@ -6613,7 +6715,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "pracowalem w norwegii i nie dostalem wynagrodzenia — jakie mam prawa?",
@@ -6621,7 +6726,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "chcę wstąpić do Wojsk Obrony Terytorialnej i mam wątpliwości co do kontraktu, co dalej?",
@@ -6757,7 +6865,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "klient pyta: nasza oferta zostala odrzucona za brak podpisu kwalifikowanego.",
@@ -6765,7 +6876,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "polski sąd naruszył moje prawo do obrony, chcę iść do Strasburga, co dalej?",
@@ -7589,7 +7703,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Sprawa wyglada tak: nasza oferta zostala odrzucona za brak podpisu kwalifikowanego. Jak to rozwiazac?",
@@ -7597,7 +7714,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Bank naliczył mi prowizję za wcześniejszą spłatę kredytu.",
@@ -8709,7 +8829,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Pomocy, zaginely akta mojej sprawy w sadzie!",
@@ -8717,7 +8840,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Kontrola celno-skarbowa w mojej hurtowni. Jakie przepisy tu obowiązują?",
@@ -8869,7 +8995,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: chce uznac w Polsce rozwod z Wielkiej Brytanii.",
@@ -8877,7 +9006,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Bank musi dostosować umowy z dostawcami IT do DORA. Jakie przepisy tu obowiązują?",
@@ -9093,7 +9225,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Czy cos moge zrobic? Zaginely akta mojej sprawy w sadzie.",
@@ -9101,7 +9236,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Chcę zmienić adwokata w trakcie procesu — jakie mam prawa?",
@@ -9237,7 +9375,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient pyta: pracowalem w Norwegii i nie dostalem wynagrodzenia.",
@@ -9245,7 +9386,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Chciałbym zapytać, senator ma postępowanie o uchylenie immunitetu. Czy to zgodne z prawem?",
@@ -9317,7 +9461,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "czy cos moge zrobic? pracowalem w norwegii i nie dostalem wynagrodzenia.",
@@ -9325,7 +9472,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Mam problem: jestem obywatelem Ukrainy i chcę uzyskać ochronę czasową.",
@@ -9365,7 +9515,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "pracowalem w norwegii i nie dostalem wynagrodzenia. gdzie sie zwrocic?",
@@ -9373,7 +9526,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient pyta: chcę wstąpić do Wojsk Obrony Terytorialnej i mam wątpliwości co do kontraktu.",
@@ -10197,7 +10353,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Od miesiaca zaginely akta mojej sprawy w sadzie. Co radzicie?",
@@ -10205,7 +10364,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Klient pyta: policjanci weszli do mojego mieszkania bez nakazu.",
@@ -10229,7 +10391,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "sprawa wyglada tak: zaginely akta mojej sprawy w sadzie. jak to rozwiazac?",
@@ -10237,7 +10402,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Sprawa wygląda tak: hakerzy zaszyfrowali dane w naszej firmie. Jak to rozwiązać?",
@@ -10309,7 +10477,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "dron policyjny nagrywa moja posesje — jakie mam prawa?",
@@ -10317,7 +10488,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Potrzebuję porady, zarząd chce przyjąć kodeks postępowania etycznego.",
@@ -10501,7 +10675,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Od miesiaca firma z Czech nie zaplacila za dostawe towaru. Co radzicie?",
@@ -10509,7 +10686,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient pyta: moja babcia była obywatelką Polski i chcę odzyskać obywatelstwo.",
@@ -10613,7 +10793,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "pomocy, dron policyjny nagrywa moja posesje!",
@@ -10621,7 +10804,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Chciałbym zapytać, policjanci weszli do mojego mieszkania bez nakazu. Czy to zgodne z prawem?",
@@ -10949,7 +11135,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy cos moge zrobic? Firma z Czech nie zaplacila za dostawe towaru.",
@@ -10957,7 +11146,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Senator ma postępowanie o uchylenie immunitetu. Gdzie się zwrócić?",
@@ -10981,7 +11173,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "zaginely akta mojej sprawy w sadzie. gdzie sie zwrocic?",
@@ -10989,7 +11184,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Mam problem: urząd wojewódzki zgubił dokumenty do mojej karty pobytu.",
@@ -11317,7 +11515,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "od miesiaca chce uznac w polsce rozwod z wielkiej brytanii. co radzicie?",
@@ -11325,7 +11526,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dostałem decyzję o zwrocie świadczenia po 5 latach. Jakie przepisy tu obowiązują?",
@@ -12053,7 +12257,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "nasza oferta zostala odrzucona za brak podpisu kwalifikowanego — jakie mam prawa?",
@@ -12061,7 +12268,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Sprawa wygląda tak: chcę wymeldować najemcę, który się wyprowadził. Jak to rozwiązać?",
@@ -12069,7 +12279,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Sprawa wyglada tak: chce wymeldowac najemce, ktory sie wyprowadzil. Jak to rozwiazac?",
@@ -12077,7 +12290,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Nie dostałem ekwiwalentu za urlop po zwolnieniu — jakie mam prawa?",
@@ -12133,7 +12349,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "potrzebuje porady, zaginely akta mojej sprawy w sadzie.",
@@ -12141,7 +12360,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Sprawa wygląda tak: uczelnia nie uznała moich zaliczeń z Erasmusa. Jak to rozwiązać?",
@@ -12293,7 +12515,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "zaginely akta mojej sprawy w sadzie, co dalej?",
@@ -12301,7 +12526,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Sprawa wygląda tak: żołnierz zawodowy chce odejść ze służby. Jak to rozwiązać?",
@@ -12517,7 +12745,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "klinika zgubila teczke z wynikami pacjentow. jakie przepisy tu obowiazuja?",
@@ -12525,7 +12756,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Klient pyta: organ wydał decyzję bez przeprowadzenia oględzin.",
@@ -12853,7 +13087,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Klinika zgubila teczke z wynikami pacjentow. Gdzie sie zwrocic?",
@@ -12861,7 +13098,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Sprawa wygląda tak: wspólnota nie naprawia przeciekającego dachu. Jak to rozwiązać?",
@@ -13301,7 +13541,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "zaginely akta mojej sprawy w sadzie. jakie przepisy tu obowiazuja?",
@@ -13309,7 +13552,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Klient pyta: ZUS wyliczył mi bardzo niską emeryturę.",
@@ -13493,7 +13739,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Potrzebuje porady, chce wymeldowac najemce, ktory sie wyprowadzil.",
@@ -13501,7 +13750,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Potrzebuję porady, dostałem wypowiedzenie zmieniające z niższą pensją.",
@@ -14501,7 +14753,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "chcialbym zapytac, chce wymeldowac najemce, ktory sie wyprowadzil. czy to zgodne z prawem?",
@@ -14509,7 +14764,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Pomocy, sąd od dwóch lat nie wyznaczył rozprawy!",
@@ -15605,7 +15863,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chce uznac w polsce rozwod z wielkiej brytanii. jakie przepisy tu obowiazuja?",
@@ -15613,7 +15874,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "policja użyła wobec mnie gazu podczas demonstracji, co dalej?",
@@ -16485,7 +16749,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "potrzebuje porady, nasza oferta zostala odrzucona za brak podpisu kwalifikowanego.",
@@ -16493,7 +16760,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Klient pyta: posłowie przegłosowali ustawę w nocy bez czytania w komisji.",
@@ -16549,7 +16819,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Firma z Czech nie zaplacila za dostawe towaru. Gdzie sie zwrocic?",
@@ -16557,7 +16830,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Potrzebuję porady, szpital wypisał tatę mimo gorączki.",
@@ -16645,7 +16921,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chce uznac w Polsce rozwod z Wielkiej Brytanii, co dalej?",
@@ -16653,7 +16932,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Otrzymałem darowiznę od wujka na mieszkanie — jakie mam prawa?",
@@ -16997,7 +17279,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "chcialbym zapytac, dron policyjny nagrywa moja posesje. czy to zgodne z prawem?",
@@ -17005,7 +17290,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Inspektor nadzoru budowlanego wstrzymał moją budowę. Gdzie się zwrócić?",
@@ -17093,7 +17381,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "od miesiaca dron policyjny nagrywa moja posesje. co radzicie?",
@@ -17101,7 +17392,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Chcemy zmienić termin realizacji umowy z gminą. Jakie przepisy tu obowiązują?",
@@ -17589,7 +17883,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Czy cos moge zrobic? Nasza oferta zostala odrzucona za brak podpisu kwalifikowanego.",
@@ -17597,7 +17894,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Pomocy, ktoś założył fałszywy profil z moimi zdjęciami!",
@@ -19477,7 +19777,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Chcialbym zapytac, pracowalem w Norwegii i nie dostalem wynagrodzenia. Czy to zgodne z prawem?",
@@ -19485,7 +19788,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Klient pyta: zaginęły akta mojej sprawy w sądzie.",
@@ -19493,7 +19799,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Klient pyta: zaginely akta mojej sprawy w sadzie.",
@@ -19501,7 +19810,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Mam problem: aplikacja zbiera lokalizację bez mojej zgody.",
@@ -21221,7 +21533,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chce uznac w Polsce rozwod z Wielkiej Brytanii. Gdzie sie zwrocic?",
@@ -21229,7 +21544,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Kontrahent nie płaci za wykonane usługi remontowe. Gdzie się zwrócić?",
@@ -21285,7 +21603,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Mam problem: klinika zgubila teczke z wynikami pacjentow.",
@@ -21293,7 +21614,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Potrzebuję porady, przychodnia nie chce zapisać mnie do lekarza.",
@@ -21669,7 +21993,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "sprawa wyglada tak: dron policyjny nagrywa moja posesje. jak to rozwiazac?",
@@ -21677,7 +22004,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Chciałbym zapytać, polski sąd naruszył moje prawo do obrony, chcę iść do Strasburga. Czy to zgodne z prawem?",
@@ -21701,7 +22031,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "mam problem: chce wymeldowac najemce, ktory sie wyprowadzil.",
@@ -21709,7 +22042,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Portal internetowy nie chce opublikować mojego sprostowania.",
@@ -23829,7 +24165,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Sprawa wyglada tak: pracowalem w Norwegii i nie dostalem wynagrodzenia. Jak to rozwiazac?",
@@ -23837,7 +24176,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Sprawa wygląda tak: chcę postawić wiatę garażową na działce. Jak to rozwiązać?",
@@ -23989,7 +24331,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Pomocy, nasza oferta zostala odrzucona za brak podpisu kwalifikowanego!",
@@ -23997,7 +24342,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Ustawa podatkowa działa wstecz od stycznia — jakie mam prawa?",
@@ -24741,7 +25089,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chce uznac w Polsce rozwod z Wielkiej Brytanii — jakie mam prawa?",
@@ -24749,7 +25100,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Pomocy, urząd nie zawiadomił mnie o wszczęciu postępowania!",
@@ -24805,7 +25159,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Potrzebuje porady, dron policyjny nagrywa moja posesje.",
@@ -24813,7 +25170,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Prokurator chce dla mnie kary pozbawienia wolności za oszustwo — jakie mam prawa?",
@@ -24997,7 +25357,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Potrzebuje porady, klinika zgubila teczke z wynikami pacjentow.",
@@ -25005,7 +25368,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Potrzebuję porady, potrzebuję wyrobić paszport dla noworodka.",
@@ -25077,7 +25443,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "czy cos moge zrobic? klinika zgubila teczke z wynikami pacjentow.",
@@ -25085,7 +25454,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Sprawa wygląda tak: zarząd chce przyjąć kodeks postępowania etycznego. Jak to rozwiązać?",
@@ -25269,7 +25641,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "klient pyta: chce wymeldowac najemce, ktory sie wyprowadzil.",
@@ -25277,7 +25652,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Potrzebuję porady, pracuję z informacjami niejawnymi i nie dostałem certyfikatu.",
@@ -25461,7 +25839,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "firma z czech nie zaplacila za dostawe towaru. jakie przepisy tu obowiazuja?",
@@ -25469,7 +25850,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chciałbym zapytać, sklep wysłał moje dane do firmy windykacyjnej bez podstawy. Czy to zgodne z prawem?",
@@ -25925,7 +26309,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Potrzebuje porady, chce uznac w Polsce rozwod z Wielkiej Brytanii.",
@@ -25933,7 +26320,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Sprawa wygląda tak: Straż Graniczna odmówiła mi wjazdu do strefy. Jak to rozwiązać?",
@@ -26341,7 +26731,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "dron policyjny nagrywa moja posesje. gdzie sie zwrocic?",
@@ -26349,7 +26742,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "gmina odmówiła udostępnienia umów z wykonawcami, co dalej?",
@@ -26485,7 +26881,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "nasza oferta zostala odrzucona za brak podpisu kwalifikowanego, co dalej?",
@@ -26493,7 +26892,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "ZUS zakwestionował moje zwolnienie lekarskie. Gdzie się zwrócić?",
@@ -26613,7 +27015,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: firma z Czech nie zaplacila za dostawe towaru.",
@@ -26621,7 +27026,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "nie wiem, jak rozliczyć wynajem krótkoterminowy, co dalej?",
@@ -27141,7 +27549,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Klient pyta: chce uznac w Polsce rozwod z Wielkiej Brytanii.",
@@ -27149,7 +27560,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Nasza oferta została odrzucona za brak podpisu kwalifikowanego. Jakie przepisy tu obowiązują?",
@@ -27157,7 +27571,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Nasza oferta zostala odrzucona za brak podpisu kwalifikowanego. Jakie przepisy tu obowiazuja?",
@@ -27165,7 +27582,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Odmówiono mi świadczenia rehabilitacyjnego — jakie mam prawa?",
@@ -27461,7 +27881,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Potrzebuje porady, pracowalem w Norwegii i nie dostalem wynagrodzenia.",
@@ -27469,7 +27892,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Mam problem: plan miejscowy przewiduje drogę przez mój ogród.",
@@ -28277,7 +28703,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "klinika zgubila teczke z wynikami pacjentow — jakie mam prawa?",
@@ -28285,7 +28714,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Pomocy, pracownik zgłosił nadużycia kierownika przez kanał sygnalisty!",
@@ -28373,7 +28805,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dron policyjny nagrywa moja posesje. Jakie przepisy tu obowiazuja?",
@@ -28381,7 +28816,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mam problem: nie zgadzam się z wynikiem wyborów prezydenckich w mojej komisji.",
@@ -28645,7 +29083,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Nasza oferta zostala odrzucona za brak podpisu kwalifikowanego. Gdzie sie zwrocic?",
@@ -28653,7 +29094,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Sprawa wygląda tak: dostałem wezwanie z urzędu skarbowego do złożenia wyjaśnień. Jak to rozwiązać?",
@@ -28677,7 +29121,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "klient pyta: klinika zgubila teczke z wynikami pacjentow.",
@@ -28685,7 +29132,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Od miesiąca chcę wymeldować najemcę, który się wyprowadził. Co radzicie?",
@@ -28693,7 +29143,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "od miesiaca chce wymeldowac najemce, ktory sie wyprowadzil. co radzicie?",
@@ -28701,7 +29154,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Były mąż nie płaci alimentów na córkę od roku. Gdzie się zwrócić?",
@@ -28837,7 +29293,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Chce wymeldowac najemce, ktory sie wyprowadzil. Jakie przepisy tu obowiazuja?",
@@ -28845,7 +29304,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Potrzebuję porady, sprzedawca z Allegro oszukał mnie na 3 tysiące.",
@@ -29461,7 +29923,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "chcialbym zapytac, zaginely akta mojej sprawy w sadzie. czy to zgodne z prawem?",
@@ -29469,7 +29934,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Zamawiający żąda od nas kar za opóźnienie dostawy. Gdzie się zwrócić?",
@@ -29589,7 +30057,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chcialbym zapytac, firma z Czech nie zaplacila za dostawe towaru. Czy to zgodne z prawem?",
@@ -29597,7 +30068,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Kurator oświaty nie odpowiada na skargę.",
@@ -29685,7 +30159,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Chce wymeldowac najemce, ktory sie wyprowadzil — jakie mam prawa?",
@@ -29693,7 +30170,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Partia nie złożyła sprawozdania finansowego do PKW — jakie mam prawa?",
@@ -29749,7 +30229,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "chcialbym zapytac, klinika zgubila teczke z wynikami pacjentow. czy to zgodne z prawem?",
@@ -29757,7 +30240,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "Mam problem: posłowie przegłosowali ustawę w nocy bez czytania w komisji.",
@@ -29893,7 +30379,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Pomocy, pracowalem w Norwegii i nie dostalem wynagrodzenia!",
@@ -29901,7 +30390,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Potrzebuję porady, cudzoziemiec dostał decyzję o zobowiązaniu do powrotu.",
@@ -30901,7 +31393,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Sprawa wyglada tak: chce uznac w Polsce rozwod z Wielkiej Brytanii. Jak to rozwiazac?",
@@ -30909,7 +31404,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: dostałem wypowiedzenie zmieniające z niższą pensją.",
@@ -31925,7 +32423,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Od miesiaca nasza oferta zostala odrzucona za brak podpisu kwalifikowanego. Co radzicie?",
@@ -31933,7 +32434,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Od miesiąca agencja żąda zwrotu dofinansowania z programu unijnego. Co radzicie?",
@@ -32085,7 +32589,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Klient pyta: dron policyjny nagrywa moja posesje.",
@@ -32093,7 +32600,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Od miesiąca partner mnie bije i grozi mi. Co radzicie?",
@@ -32405,7 +32915,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy cos moge zrobic? Chce uznac w Polsce rozwod z Wielkiej Brytanii.",
@@ -32413,7 +32926,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Potrzebuję porady, nowa ekspresówka przebiega przez moje pole.",
@@ -33237,7 +33753,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "mam problem: nasza oferta zostala odrzucona za brak podpisu kwalifikowanego.",
@@ -33245,7 +33764,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Sprawa wygląda tak: firma z Czech nie zapłaciła za dostawę towaru. Jak to rozwiązać?",
@@ -33253,7 +33775,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Sprawa wyglada tak: firma z Czech nie zaplacila za dostawe towaru. Jak to rozwiazac?",
@@ -33261,7 +33786,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Potrzebuję porady, pracownik zgłosił nadużycia kierownika przez kanał sygnalisty.",
@@ -33605,7 +34133,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Czy cos moge zrobic? Dron policyjny nagrywa moja posesje.",
@@ -33613,7 +34144,10 @@
 "legal": true,
 "dr": "dr-13",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Pomocy, konsorcjant wycofał się z przetargu po wyborze oferty!",
@@ -34069,7 +34603,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Mam problem: pracowalem w Norwegii i nie dostalem wynagrodzenia.",
@@ -34077,7 +34614,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Zalegam z podatkiem od nieruchomości. Gdzie się zwrócić?",
@@ -34341,7 +34881,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chcialbym zapytac, chce uznac w polsce rozwod z wielkiej brytanii. czy to zgodne z prawem?",
@@ -34349,7 +34892,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: ktoś włamał się do mojego samochodu.",
@@ -34869,7 +35415,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "pomocy, klinika zgubila teczke z wynikami pacjentow!",
@@ -34877,7 +35426,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-10"
+]
 },
 {
 "q": "NFZ nie refunduje mi leku na cukrzycę. Jakie przepisy tu obowiązują?",
@@ -35717,7 +36269,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Firma z Czech nie zaplacila za dostawe towaru — jakie mam prawa?",
@@ -35725,7 +36280,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chciałbym zapytać, wojewoda nie przedłużył zezwolenia na pobyt czasowy. Czy to zgodne z prawem?",
@@ -35813,7 +36371,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Mam problem: zaginely akta mojej sprawy w sadzie.",
@@ -35821,7 +36382,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "kontrahent z Niemiec pozwał mnie przed sądem w Monachium, co dalej?",
@@ -36197,7 +36761,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "chcialbym zapytac, nasza oferta zostala odrzucona za brak podpisu kwalifikowanego. czy to zgodne z prawem?",
@@ -36205,7 +36772,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Mam problem: kupiłem działkę, przez którą biegnie linia wysokiego napięcia.",

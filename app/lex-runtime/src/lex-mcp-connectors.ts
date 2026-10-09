@@ -82,6 +82,9 @@ const PASSED_ENV = [
   "SystemRoot",
   "TEMP",
   "TMP",
+  // macOS: the per-user temporary directory and the locale.
+  "TMPDIR",
+  "LANG",
   "HTTPS_PROXY",
   "HTTP_PROXY",
   // Sesja sn.pl ustawiona ręcznie (poza oknem weryfikacji aplikacji); wartości nie logujemy.
@@ -437,6 +440,18 @@ export class LexMcpConnectorStore {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.snSessionFile, "utf8")) as { saved_at?: unknown };
       return typeof parsed.saved_at === "string" ? parsed.saved_at : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Sesja sn.pl dla narzędzi czatu (search_case_law, verify_case_reference): te same
+  // ciasteczka i przeglądarka, co serwer sn konektora po weryfikacji użytkownika.
+  snSession(): { cookie: string; userAgent: string | null } | null {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(this.snSessionFile, "utf8")) as { cookie?: unknown; userAgent?: unknown };
+      if (typeof parsed.cookie !== "string" || !parsed.cookie) return null;
+      return { cookie: parsed.cookie, userAgent: typeof parsed.userAgent === "string" ? parsed.userAgent : null };
     } catch {
       return null;
     }

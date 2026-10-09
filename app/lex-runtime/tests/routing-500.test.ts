@@ -13,7 +13,8 @@ import { decideTask, parseActivationMatrix, parseRedactionTest, parseRoutingTabl
 //   measure of how the routing does on wording it has not seen.
 // "znany_blad": a case the routing gets wrong today (mostly matters of two domains).
 // Every other case must pass; a new failure is a regression. A known one fixed is fine.
-type Case = { q: string; dr: string | null; skill?: string; znany_blad?: boolean };
+// "alt": another domain as right as dr for a matter of two (top-1 in dr or alt passes).
+type Case = { q: string; dr: string | null; alt?: string[]; skill?: string; znany_blad?: boolean };
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const read = (file: string) => fs.readFileSync(path.join(CORPUS, file), "utf8");
@@ -28,7 +29,7 @@ const simple = { skill: "pisma-proste-v2", entries: schemaCatalog(registry, "pis
 function routed(item: Case): boolean {
   const domain = rankDomains(registry, rows, item.q)[0]?.skill.slice(0, 5) ?? null;
   const skill = item.skill ? (decideTask(routes, matrix, item.q, [], redaction, simple)?.primary ?? "-") : null;
-  return domain === item.dr && (!item.skill || skill === item.skill);
+  return (domain === item.dr || (domain !== null && (item.alt ?? []).includes(domain))) && (!item.skill || skill === item.skill);
 }
 
 describe.each([

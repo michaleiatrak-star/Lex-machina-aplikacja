@@ -32,8 +32,9 @@ describe("routing of 10 000 chat messages (holdout)", () => {
   });
 
   it("does not lose domain hints it gives today", () => {
-    expect(rate(report.domainTop2)).toBeGreaterThanOrEqual(0.91);
-    expect(rate(report.domainTop1)).toBeGreaterThanOrEqual(0.875);
+    expect(rate(report.domainTop2)).toBeGreaterThanOrEqual(0.95);
+    expect(rate(report.domainTop1)).toBeGreaterThanOrEqual(0.92);
+    expect(rate(report.domainTop1Accepted)).toBeGreaterThanOrEqual(0.945);
   });
 });
 

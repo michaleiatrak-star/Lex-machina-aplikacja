@@ -231,7 +231,8 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
     let paddle_official = required_dir(paddle.join("official_models"), "SIDECAR_PADDLE_OFFICIAL_MODELS_MISSING")?;
     let stanza = required_dir(components.join("models").join("stanza"), "SIDECAR_STANZA_MODELS_MISSING")?;
 
-    let status = Command::new(node)
+    let mut command = Command::new(node);
+    command
         .arg(server)
         .current_dir(root.join("app"))
         .env("LEX_RUNTIME_ROOT", root)
@@ -253,11 +254,25 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|error| format!("SIDECAR_NODE_START_FAILED:{error}"))?;
+        .stderr(Stdio::inherit());
 
-    Ok(status.code().unwrap_or(1))
+    // macOS/Linux: node replaces this process, so it is the desktop app's own child
+    // and ends with it. A spawned node outlived the app there (only this sidecar was
+    // killed), leaving node and its Python workers running after every quit.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let error = command.exec();
+        Err(format!("SIDECAR_NODE_START_FAILED:{error}"))
+    }
+    // Windows: taskkill /T ends the whole tree, so the sidecar may wait for node.
+    #[cfg(not(unix))]
+    {
+        let status = command
+            .status()
+            .map_err(|error| format!("SIDECAR_NODE_START_FAILED:{error}"))?;
+        Ok(status.code().unwrap_or(1))
+    }
 }
 
 fn run() -> Result<i32, String> {

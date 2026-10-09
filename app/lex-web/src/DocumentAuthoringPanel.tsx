@@ -544,7 +544,7 @@ export function DocumentAuthoringPanel({
             <>
               {isDesktopShell() ? (
                 <p className="auth-copy">
-                  Jednorazowa reautoryzacja zostanie wykonana natywnie przez magazyn poświadczeń Windows. Hasło nie trafia do Reacta.
+                  Jednorazowa reautoryzacja zostanie wykonana natywnie przez systemowy magazyn poświadczeń (Windows: Menedżer poświadczeń, macOS: pęk kluczy). Hasło nie trafia do Reacta.
                 </p>
               ) : (
                 <label>

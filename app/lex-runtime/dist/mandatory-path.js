@@ -329,7 +329,11 @@ export function evaluateMandatoryPath(model, facts) {
             if (!item.block || item.block === "ST")
                 continue;
             const gate = item.block;
-            if (gate === "WYJ-GATE" && !ARTICLE.test(facts.answer))
+            // Each gate's own trigger: WYJ-GATE an article cited; CN-GATE a ruling, charge, claim
+            // or qualification, REM-GATE an analysis, opinion or letter handed over — both rest
+            // on a provision of law. A list of decisions found (search, verified signatures)
+            // is none of them (chat 2026-10-09: "wyszukaj wyrok SN" degraded for missing blocks).
+            if ((gate === "WYJ-GATE" || gate === "CN-GATE" || gate === "REM-GATE") && !ARTICLE.test(facts.answer))
                 continue;
             const visible = new RegExp(gate.replace("-", "[- ]?"), "i").test(facts.answer);
             const shown = item.steps.filter((step) => new RegExp(`\\b${step}\\b`).test(facts.answer));

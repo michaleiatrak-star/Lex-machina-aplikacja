@@ -1,5 +1,6 @@
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
+import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
 import { AuthError } from "../auth/service.js";
@@ -319,6 +320,24 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             const code = /^(SOURCE_PREVIEW|CASE_PREVIEW|SN_FULL_TEXT|SN)_[A-Z0-9_]+$/.test(message) ? message : "CASE_LAW_RESOLVE_FAILED";
             res.status(/URL_INVALID|HOST_NOT_ALLOWED|REDIRECT_INVALID/.test(code) ? 400 : 502).json({ error: code });
         }
+    });
+    // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony): gdy reguły nie
+    // wskazały dziedziny, krótkie zapytanie do modelu sesji albo lokalnego Bielika/Mistrala.
+    app.get("/api/settings/domain-fallback", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        res.json({ choice: domainFallbackChoice(), choices: DOMAIN_FALLBACK_CHOICES });
+    });
+    app.put("/api/settings/domain-fallback", (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const choice = req.body?.choice;
+        if (typeof choice !== "string" || !DOMAIN_FALLBACK_CHOICES.includes(choice)) {
+            res.status(400).json({ error: "DOMAIN_FALLBACK_INVALID" });
+            return;
+        }
+        setDomainFallbackChoice(choice);
+        res.json({ choice: domainFallbackChoice() });
     });
     // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.
     app.get("/api/case-law/library", (req, res) => {

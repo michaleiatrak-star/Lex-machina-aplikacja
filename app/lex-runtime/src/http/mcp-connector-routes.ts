@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { CaseLawPreviewService } from "../case-law-preview.js";
 import { caseLawRepository } from "../case-law-store.js";
+import { DOMAIN_FALLBACK_CHOICES, domainFallbackChoice, setDomainFallbackChoice, type DomainFallbackChoice } from "../domain-fallback.js";
 import { SupremeCourtCaseVerifier, supremeCourtCardId } from "../case-law-verifier.js";
 import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
 import {
@@ -401,6 +402,23 @@ export function registerMcpConnectorRoutes(
       }
     }
   );
+
+  // Model zapasowy routingu dziedzin (Ustawienia, domyślnie wyłączony): gdy reguły nie
+  // wskazały dziedziny, krótkie zapytanie do modelu sesji albo lokalnego Bielika/Mistrala.
+  app.get("/api/settings/domain-fallback", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    res.json({ choice: domainFallbackChoice(), choices: DOMAIN_FALLBACK_CHOICES });
+  });
+  app.put("/api/settings/domain-fallback", (req, res) => {
+    if (!requireUser(req, res, authService)) return;
+    const choice = req.body?.choice;
+    if (typeof choice !== "string" || !DOMAIN_FALLBACK_CHOICES.includes(choice as DomainFallbackChoice)) {
+      res.status(400).json({ error: "DOMAIN_FALLBACK_INVALID" });
+      return;
+    }
+    setDomainFallbackChoice(choice as DomainFallbackChoice);
+    res.json({ choice: domainFallbackChoice() });
+  });
 
   // Baza orzeczeń (Ustawienia, domyślnie wyłączona): katalog pobranych orzeczeń.
   app.get("/api/case-law/library", (req, res) => {

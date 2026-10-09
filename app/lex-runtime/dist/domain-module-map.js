@@ -99,14 +99,30 @@ export function parseFlashRouting(markdown) {
     }
     return rows;
 }
+// Words a phrase word's stem or vowel alternation reaches but which are other words
+// ("praca" -> "precedens", "prąd" -> "prędkość", "obywatelstwo" -> "obywatelskie").
+// Found by matching every phrase word against the words of all routing corpora.
+const FALSE_FRIENDS = {
+    praca: /^prec/, pracy: /^prec/, prace: /^prec/, czas: /^czes/, pies: /^pias/, plan: /^plen/, szef: /^szaf/,
+    prad: /^pred/, pradu: /^pred/, powiat: /^powiet/, powiatowa: /^powiet/, dzial: /^dziel/, dlug: /^dlugo/,
+    udzielenie: /^udzial/, obywatelstwo: /^obywatelsk/, przychod: /^przychod[nz]/, przychodnia: /^przychod(?!n)/,
+    kamieniolom: /^kamienic/, powierzenie: /^powierzch/, referendum: /^referendar/, niedziele: /^niedzial/,
+    niedzialanie: /^niedziel/, sprzeciw: /^sprzeczn/, wspolnik: /^wspoln(?!ik)/, wspolnota: /^wspoln(?!ot)/,
+    aplikant: /^aplikac/, dyrektywa: /^dyrektor/, szkolenia: /^szkol(?!en)/, przeglad: /^przeglos/,
+    orzeczenie: /^orzeczni/, orzeczenia: /^orzeczni/, uzytkowanie: /^uzytkowni/
+};
+function withoutFalseFriends(word, have) {
+    const other = FALSE_FRIENDS[word];
+    return other ? have.filter((token) => !other.test(token)) : have;
+}
 /** Domains whose flash-routing phrases the text contains, best first. */
 export function flashDomains(rows, text, generic = () => false) {
     const have = tokens(text);
     return rows
         .map((row) => {
         const matched = row.phrases.filter((phrase) => {
-            const stems = phraseWords(phrase).map(stemOf);
-            return stems.length > 0 && stems.every((stem) => hit(stem, have));
+            const words = phraseWords(phrase);
+            return words.length > 0 && words.every((word) => hit(stemOf(word), withoutFalseFriends(word, have)));
         });
         // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
         // one word of it ("umowa"), which then does not count again.
@@ -159,6 +175,9 @@ export function locate(registry, skill, resource) {
     }
     return null;
 }
+// Words of the request itself, not of its matter ("pełna analiza prawna sprawy: podstawy,
+// ryzyka, rekomendacje"): in an act map they named DR-01 and DR-13 for any question.
+const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
 const cache = new Map();
 function actIndex(registry, skill) {
     const record = registry.get(skill);
@@ -197,7 +216,7 @@ function actIndex(registry, skill) {
         // What the module is about: the act or scope, and the module's own name.
         const names = entry.resources.map((resource) => path.basename(resource, ".md").replace(/^mod-/, "").replace(/-/g, " "));
         const heads = entry.resources.map((resource) => moduleHead(registry.resolveResource(resource.split("/")[0], resource)));
-        return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))] };
+        return { entry, stems: [...new Set(words([entry.scope, ...names, ...heads].join(" ")).map(stemOf))].filter((stem) => !REQUEST_STEMS.has(stem)) };
     });
     const df = new Map();
     for (const item of index)
@@ -262,7 +281,7 @@ export function suggestDomainModules(registry, skill, text, limit = 3) {
 // always raises jurisdiction and the applicable law (DR-14), whatever else it is.
 const FOREIGN_ELEMENT = new RegExp("(?<![a-z])(?:" +
     [
-        "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow",
+        "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow", "panstw(?:a|ie|em|o|ach) trzeci", "konsul(?:a|em|owi|ie|at|atu|acie)?\\b", "azj(?:a|i|ii)\\b", "azjatyck",
         "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
         "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
         "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
@@ -275,30 +294,43 @@ export function foreignElement(text) {
     return FOREIGN_ELEMENT.test(fold(text));
 }
 export function rankDomains(registry, rows, text, limit = 2) {
-    const ranked = withForeignElement(registry, text, rankByPhrases(registry, rows, text, limit), limit);
+    // A domain the case adds by its kind (criminal, foreign element) is one more, not one
+    // instead of the matter's second domain ("monitoring w pracy" stays with "co grozi").
+    const phrased = rankByPhrases(registry, rows, text, limit);
+    const ranked = withForeignElement(registry, text, phrased, limit);
+    const room = (list) => limit + (list.some((row) => !phrased.some((own) => own.skill === row.skill)) ? 1 : 0);
     // A criminal matter (the application already requires the qualifier): DR-03 first,
     // or second when another domain has a phrase of its own ("mandat posła" after a conviction).
     const criminal = [...registry.skills.keys()].find((name) => name.startsWith("dr-03-"));
     if (!criminal || !criminalMatter(text) || ranked[0]?.skill === criminal)
-        return ranked.map(({ weight: _weight, ...row }) => row);
+        return ranked.slice(0, room(ranked)).map(withStrength);
     const own = ranked.find((row) => row.skill === criminal);
     const marked = { ...(own ?? { skill: criminal, matched: [], modules: suggestDomainModules(registry, criminal, text), weight: 0 }) };
     marked.matched = ["sprawa karna (kwalifikator)", ...marked.matched];
     const others = ranked.filter((row) => row.skill !== criminal);
     const order = (others[0]?.weight ?? 0) >= 2 ? [others[0], marked, ...others.slice(1)] : [marked, ...others];
-    return order.slice(0, limit).map(({ weight: _weight, ...row }) => row);
+    return order.slice(0, room(order)).map(withStrength);
+}
+// A domain named by the kind of the case (criminal, foreign element) or by a phrase of two
+// words and more; one word ("umowa", "sąd", "sąsiad") names a domain only possibly involved.
+const MARKER = /^(?:sprawa karna \(kwalifikator\)|element zagraniczny)/u;
+function withStrength({ weight, ...row }) {
+    return { ...row, strong: weight >= 2 || MARKER.test(row.matched[0] ?? "") };
 }
 // DR-14 named for a foreign element of a legal matter: second after the matter's own
-// domain. A country alone ("wakacje w Grecji") names no matter and no domain.
+// domain. Alone only when its act map names a module of the case ("firma z Czech nie
+// zapłaciła za dostawę"); a country alone ("wakacje w Grecji") names no matter.
 function withForeignElement(registry, text, ranked, limit) {
     const international = [...registry.skills.keys()].find((name) => name.startsWith("dr-14-"));
-    if (!international || !ranked.length || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international))
+    if (!international || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international))
         return ranked;
     const own = ranked.find((row) => row.skill === international);
     const marked = { ...(own ?? { skill: international, matched: [], modules: suggestDomainModules(registry, international, text), weight: 0 }) };
     marked.matched = ["element zagraniczny (jurysdykcja, prawo właściwe)", ...marked.matched];
     const others = ranked.filter((row) => row.skill !== international);
-    return [others[0], marked, ...others.slice(1)].slice(0, limit);
+    if (others.length)
+        return [others[0], marked, ...others.slice(1)];
+    return marked.modules.length ? [marked] : [];
 }
 function rankByPhrases(registry, rows, text, limit) {
     const flash = flashDomains(rows, text, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
@@ -323,10 +355,23 @@ function rankByPhrases(registry, rows, text, limit) {
         .map((row) => ({ skill: row.skill, matched: [`mapa aktów: ${row.modules[0].why.replace(/^MAPA-AKTOW: /, "")}`], modules: row.modules, weight: 0 }));
 }
 export function domainHintPrompt(domains) {
+    // Several domains of one case: the ones its kind or a phrase of its own names are read
+    // (or set aside in a sentence); one shared word only lets the model reach for a domain.
+    const secondary = domains.slice(1);
+    const required = secondary.filter((domain) => domain.strong === true).map((domain) => domain.skill);
+    const possible = secondary.filter((domain) => domain.strong === false).map((domain) => domain.skill);
     return [
         "# DZIEDZINA I MODUŁ AKTU — WSKAZÓWKA APLIKACJI (prawo-polskie-v2: routing błyskawiczny, MAPA-AKTOW dziedziny)",
         ...domains.map((domain) => `- ${domain.skill}: sygnały ${domain.matched.map((phrase) => `„${phrase}”`).join(", ")}` +
             (domain.modules.length ? `; moduły aktu dla tej sprawy: ${domain.modules.map((module) => `${module.resource} (${module.why})`).join("; ")}` : "")),
-        "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy."
+        "Ścieżka prawo-polskie-v2: SKILL.md właściwej dziedziny, potem moduł aktu prawnego z jej MAPA-AKTOW. Gdy treść sprawy wskazuje inną dziedzinę lub inny moduł, powiedz to wprost i wczytaj właściwy.",
+        ...(required.length
+            ? [
+                `Sprawa wielodziedzinowa: oprócz ${domains[0].skill} przeczytaj SKILL.md ${required.join(", ")} i moduł aktu dla ich części sprawy, zanim odpowiesz. Dziedzinę, która nie dotyczy tej sprawy, pomiń, mówiąc w jednym zdaniu dlaczego.`
+            ]
+            : []),
+        ...(possible.length
+            ? [`Dziedzina możliwa (jedno wspólne słowo): ${possible.join(", ")} — wczytaj ją tylko, gdy pytanie dotyczy jej części sprawy.`]
+            : [])
     ].join("\n");
 }

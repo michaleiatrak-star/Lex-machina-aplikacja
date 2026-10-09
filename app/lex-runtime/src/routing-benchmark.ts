@@ -22,6 +22,9 @@ export type RoutingCase = {
   kind: string;
   legal: boolean;
   dr: string | null;
+  // Other domains as right as dr for a matter of two (audit 2026-10-09: wymeldowanie
+  // is DR-05 and DR-16, a foreign divorce DR-14 and DR-02).
+  alt?: string[];
   skill?: string | null;
   criminal?: boolean;
   variant?: string;
@@ -77,6 +80,8 @@ export type BenchmarkReport = {
   legalGate: { nonLegalLoadedSkills: Bucket; legalSkipped: Bucket; trivialSkipped: Bucket };
   domainTop1: Bucket;
   domainTop2: Bucket;
+  /** Top-1 is dr or one of alt. */
+  domainTop1Accepted: Bucket;
   domainByDr: Record<string, Bucket>;
   domainByVariant: Record<string, Bucket>;
   executive: Bucket;
@@ -98,6 +103,7 @@ export function runRoutingBenchmark(router: TurnRouter, cases: RoutingCase[]): B
     legalGate: { nonLegalLoadedSkills: bucket(), legalSkipped: bucket(), trivialSkipped: bucket() },
     domainTop1: bucket(),
     domainTop2: bucket(),
+    domainTop1Accepted: bucket(),
     domainByDr: {},
     domainByVariant: {},
     executive: bucket(),
@@ -131,6 +137,7 @@ export function runRoutingBenchmark(router: TurnRouter, cases: RoutingCase[]): B
       const ok = top === item.dr;
       tally(report.domainTop1, ok);
       tally(report.domainTop2, got.domains.slice(0, 2).some((name) => name.startsWith(item.dr!)));
+      tally(report.domainTop1Accepted, ok || (top !== null && (item.alt ?? []).includes(top)));
       tally((report.domainByDr[item.dr] ??= bucket()), ok);
       tally((report.domainByVariant[item.variant ?? "-"] ??= bucket()), ok);
       if (!ok) fail(item.dr, got.domains.map((name) => name.slice(0, 5)).join(",") || "brak DR");

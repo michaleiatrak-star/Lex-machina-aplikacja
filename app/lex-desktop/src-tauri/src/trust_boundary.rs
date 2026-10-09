@@ -11,9 +11,10 @@ use keyring::{Entry, Error as KeyringError};
 use serde_json::{json, Value};
 use std::{
     env,
+    fs,
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{mpsc, Mutex},
     thread,
@@ -56,6 +57,8 @@ struct BridgeState {
     service_token: Option<String>,
     managed_password: Option<String>,
     child: Option<Child>,
+    // Why the runtime did not start (shown on the sign-in screen instead of a crash).
+    start_error: Option<String>,
 }
 
 pub struct RuntimeBridge {
@@ -81,6 +84,7 @@ impl RuntimeBridge {
                 service_token: None,
                 managed_password: None,
                 child: None,
+                start_error: None,
             }),
         })
     }
@@ -135,7 +139,9 @@ impl RuntimeBridge {
             )
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            // The sidecar's and the runtime's errors (a missing component, a failed
+            // bootstrap) go to a log the user can send; before they were discarded.
+            .stderr(runtime_log_file().map(Stdio::from).unwrap_or_else(Stdio::null));
 
         if let Some(identity) =
             support_identity.as_ref()
@@ -204,6 +210,16 @@ impl RuntimeBridge {
         Ok(())
     }
 
+    pub fn record_start_error(&self, error: String) {
+        if let Ok(mut state) = self.state.lock() {
+            state.start_error = Some(error);
+        }
+    }
+
+    pub fn start_error(&self) -> Option<String> {
+        self.state.lock().ok().and_then(|state| state.start_error.clone())
+    }
+
     pub fn shutdown(&self) -> Result<(), String> {
         let mut state = self
             .state
@@ -234,6 +250,20 @@ impl RuntimeBridge {
 
             #[cfg(not(target_os = "windows"))]
             {
+                // The runtime is this child (the sidecar execs node): SIGTERM lets it
+                // stop its Python workers; SIGKILL only if it does not end in 5 s.
+                let _ = Command::new("kill")
+                    .args(["-TERM", &child.id().to_string()])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while std::time::Instant::now() < deadline {
+                    if matches!(child.try_wait(), Ok(Some(_))) {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
                 let _ = child.kill();
             }
 
@@ -329,7 +359,12 @@ impl RuntimeBridge {
         if let Some(secret) = password {
             self.replace_managed_password(secret);
         }
-        self.restore_provider_credentials()?;
+        // A Keychain item the system will not hand over (after an update of the
+        // ad-hoc signed macOS app, or "Deny") must not stop the application: the
+        // key is entered again in Settings.
+        if let Err(error) = self.restore_provider_credentials() {
+            eprintln!("{error}");
+        }
         Ok(true)
     }
 
@@ -1322,6 +1357,25 @@ fn inject_managed_password(
     *request.body_mut() = serde_json::to_vec(&value)
         .map_err(|_| "DESKTOP_MANAGED_REQUEST_INVALID".to_string())?;
     Ok(())
+}
+
+/// The runtime's error log: ~/Library/Logs/LexMachina on macOS, the application data
+/// directory elsewhere. Rewritten at each start.
+pub fn runtime_log_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    let dir = PathBuf::from(env::var_os("HOME")?).join("Library").join("Logs").join("LexMachina");
+    #[cfg(not(target_os = "macos"))]
+    let dir = match env::var_os("LOCALAPPDATA") {
+        Some(local) => PathBuf::from(local).join("LexMachina").join("logs"),
+        None => PathBuf::from(env::var_os("HOME")?).join(".lex-machina").join("logs"),
+    };
+    Some(dir.join("runtime.log"))
+}
+
+fn runtime_log_file() -> Option<fs::File> {
+    let path = runtime_log_path()?;
+    fs::create_dir_all(path.parent()?).ok()?;
+    fs::File::create(path).ok()
 }
 
 fn runtime_executable_name() -> &'static str {

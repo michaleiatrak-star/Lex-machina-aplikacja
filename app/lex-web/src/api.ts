@@ -1269,6 +1269,15 @@ export class ApiError extends Error {
 
 const DEFAULT_API_BASE = "http://127.0.0.1:4317";
 const DESKTOP_API_BASE = "http://lex-api.localhost";
+// Tauri serves the lex-api protocol at http://lex-api.localhost on Windows (WebView2)
+// and at lex-api://localhost on macOS and Linux (WKWebView, WebKitGTK). With the
+// Windows address on a Mac no request reached the runtime: the first sign-in failed
+// and the admin/admin notice never showed (its status request failed too).
+const DESKTOP_API_BASE_WEBKIT = "lex-api://localhost";
+
+export function desktopApiBase(userAgent: string): string {
+  return /Windows/i.test(userAgent) ? DESKTOP_API_BASE : DESKTOP_API_BASE_WEBKIT;
+}
 
 export function isDesktopShell(): boolean {
   if (
@@ -1327,7 +1336,7 @@ export function authorizationHeaders():
 
 export function apiBase(): string {
   if (isDesktopShell()) {
-    return DESKTOP_API_BASE;
+    return desktopApiBase(typeof navigator === "undefined" ? "" : navigator.userAgent);
   }
   const configured = import.meta.env.VITE_LEX_API_BASE;
   return typeof configured === "string" && configured.trim()
@@ -2773,6 +2782,34 @@ export function downloadApplicationUpdate():
   );
 }
 
+function tauriInvoke(): ((command: string, args?: Record<string, unknown>) => Promise<unknown>) | null {
+  if (!isDesktopShell()) return null;
+  return (
+    (window as Window & { __TAURI_INTERNALS__?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> } })
+      .__TAURI_INTERNALS__?.invoke ?? null
+  );
+}
+
+export type DesktopRuntimeStatus = { error: string | null; logPath: string | null; repairAvailable: boolean };
+
+/** Desktop: why the local runtime did not start and where its log is (null in a browser). */
+export async function desktopRuntimeStatus(): Promise<DesktopRuntimeStatus | null> {
+  const invoke = tauriInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke("runtime_start_status")) as DesktopRuntimeStatus;
+  } catch {
+    return null;
+  }
+}
+
+/** macOS: runs the installer's component bootstrap again in a Terminal window. */
+export async function repairDesktopRuntime(): Promise<void> {
+  const invoke = tauriInvoke();
+  if (!invoke) throw new ApiError("TAURI_INVOKE_UNAVAILABLE", 503);
+  await invoke("runtime_repair");
+}
+
 export async function installStagedApplicationUpdate(
   receiptToken: string
 ): Promise<void> {
@@ -3811,6 +3848,16 @@ export function getCaseLawLibrary(query = ""): Promise<{ enabled: boolean; avail
 
 export function setCaseLawLibrary(enabled: boolean): Promise<{ enabled: boolean }> {
   return json("/api/case-law/library", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export type DomainFallbackChoice = "off" | "session" | "local/bielik-11b-v3-q4km" | "local/mistral-nemo-12b-q4km";
+
+export function getDomainFallback(): Promise<{ choice: DomainFallbackChoice; choices: DomainFallbackChoice[] }> {
+  return json("/api/settings/domain-fallback");
+}
+
+export function setDomainFallback(choice: DomainFallbackChoice): Promise<{ choice: DomainFallbackChoice }> {
+  return json("/api/settings/domain-fallback", { method: "PUT", body: JSON.stringify({ choice }) });
 }
 
 export function removeCaseLawLibraryEntry(cardUrl: string): Promise<{ removed: boolean }> {

@@ -133,7 +133,11 @@
 "legal": true,
 "dr": "dr-01",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05",
+"dr-12"
+]
 },
 {
 "q": "Specustawa a ustawa ogólna, która ma pierwszeństwo przy kolizji?",
@@ -1749,7 +1753,10 @@
 "legal": true,
 "dr": "dr-08",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Opłata adiacencka po budowie drogi gminnej",
@@ -1813,7 +1820,10 @@
 "legal": true,
 "dr": "dr-08",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-07"
+]
 },
 {
 "q": "Pracownik samorządowy, nabór na stanowisko urzędnicze",
@@ -2277,7 +2287,10 @@
 "legal": true,
 "dr": "dr-11",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-04"
+]
 },
 {
 "q": "Kamera sąsiada nagrywa moje podwórko, czy to legalne?",
@@ -2629,7 +2642,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Kurator sądowy, obowiązki wobec skazanego",
@@ -3141,7 +3157,10 @@
 "legal": true,
 "dr": "dr-15",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Polityka whistleblowingu w spółce giełdowej",
@@ -4152,7 +4171,10 @@
 "legal": true,
 "dr": "dr-05",
 "variant": "fixture-holdout",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-01"
+]
 },
 {
 "q": "Fiskus zakwestionował koszty w mojej firmie",
@@ -4536,7 +4558,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "fixture-holdout",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Uprowadzenie dziecka za granicę przez rodzica, konwencja haska",
@@ -4584,7 +4609,10 @@
 "legal": true,
 "dr": "dr-15",
 "variant": "fixture-holdout",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Audyt zgodności z regulacjami w spółce energetycznej",
@@ -8210,7 +8238,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "oryginal",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Urzad celno-skarbowy wszczal postepowanie karne skarbowe za niezaplacony VAT.",
@@ -8218,7 +8249,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "bez-polskich-znakow",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "urzad celno-skarbowy wszczal postepowanie karne skarbowe za niezaplacony vat",
@@ -8226,7 +8260,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "male-litery",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Urząd celno-skarbowy wszczął postępowanie karne skarbowe za niezapłacony VAT.",
@@ -8234,7 +8271,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "powitanie",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Urząd celno-skarbowy wszczął postępowanie karne skarbowe za niezapłacony VAT. Co mogę zrobić?",
@@ -8242,7 +8282,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "prosba",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "Ktoś włamał się na moje konto bankowe i ukradł oszczędności.",
@@ -11530,7 +11573,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Decyzja wymiarowa naczelnika urzedu skarbowego, odwolanie do dyrektora izby administracji skarbowej.",
@@ -11538,7 +11584,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "decyzja wymiarowa naczelnika urzedu skarbowego, odwolanie do dyrektora izby administracji skarbowej",
@@ -11546,7 +11595,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Decyzja wymiarowa naczelnika urzędu skarbowego, odwołanie do dyrektora izby administracji skarbowej.",
@@ -11554,7 +11606,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Decyzja wymiarowa naczelnika urzędu skarbowego, odwołanie do dyrektora izby administracji skarbowej. Co mogę zrobić?",
@@ -11562,7 +11617,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Zaległość podatkowa, czy mogę wnioskować o rozłożenie na raty?",
@@ -12010,7 +12068,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "RIO zakwestionowala uchwale budzetowa gminy.",
@@ -12018,7 +12079,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "rio zakwestionowala uchwale budzetowa gminy",
@@ -12026,7 +12090,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. RIO zakwestionowała uchwałę budżetową gminy.",
@@ -12034,7 +12101,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "RIO zakwestionowała uchwałę budżetową gminy. Co mogę zrobić?",
@@ -12042,7 +12112,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "Naruszenie dyscypliny finansów publicznych przez kierownika jednostki.",
@@ -16650,7 +16723,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Jak wybrac komornika z innego rewiru do egzekucji?",
@@ -16658,7 +16734,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "jak wybrac komornika z innego rewiru do egzekucji",
@@ -16666,7 +16745,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Jak wybrać komornika z innego rewiru do egzekucji?",
@@ -16674,7 +16756,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Jak wybrać komornika z innego rewiru do egzekucji. Co mogę zrobić?",
@@ -16682,7 +16767,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Kurator sądowy nie przychodzi na wizyty, skarga do prezesa sądu.",
@@ -16770,7 +16858,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Skarga na przewleklosc postepowania sadowego, sprawa trwa 4 lata.",
@@ -16778,7 +16869,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "skarga na przewleklosc postepowania sadowego, sprawa trwa 4 lata",
@@ -16786,7 +16880,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Skarga na przewlekłość postępowania sądowego, sprawa trwa 4 lata.",
@@ -16794,7 +16891,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Skarga na przewlekłość postępowania sądowego, sprawa trwa 4 lata. Co mogę zrobić?",
@@ -16802,7 +16902,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Koszty zastępstwa procesowego, ile zwróci przegrywający?",
@@ -17010,7 +17113,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Oplata egzekucyjna komornika po umorzeniu egzekucji.",
@@ -17018,7 +17124,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "oplata egzekucyjna komornika po umorzeniu egzekucji",
@@ -17026,7 +17135,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Opłata egzekucyjna komornika po umorzeniu egzekucji.",
@@ -17034,7 +17146,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Opłata egzekucyjna komornika po umorzeniu egzekucji. Co mogę zrobić?",
@@ -17042,7 +17157,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Doradca restrukturyzacyjny, jak uzyskać licencję?",
@@ -17090,7 +17208,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Jak zlozyc skarge na prokuratora prowadzacego sledztwo do prokuratora nadrzednego?",
@@ -17098,7 +17219,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "jak zlozyc skarge na prokuratora prowadzacego sledztwo do prokuratora nadrzednego",
@@ -17106,7 +17230,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Jak złożyć skargę na prokuratora prowadzącego śledztwo do prokuratora nadrzędnego?",
@@ -17114,7 +17241,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Jak złożyć skargę na prokuratora prowadzącego śledztwo do prokuratora nadrzędnego. Co mogę zrobić?",
@@ -17122,7 +17252,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "Asesor sądowy wydał wyrok, czy jest ważny?",
@@ -17170,7 +17303,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Rzecznik patentowy czy adwokat do sporu o znak towarowy?",
@@ -17178,7 +17314,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "rzecznik patentowy czy adwokat do sporu o znak towarowy",
@@ -17186,7 +17325,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Rzecznik patentowy czy adwokat do sporu o znak towarowy?",
@@ -17194,7 +17336,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Rzecznik patentowy czy adwokat do sporu o znak towarowy. Co mogę zrobić?",
@@ -17202,7 +17347,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "Ile kosztuje apelacja w sprawie o rozwód?",
@@ -18130,7 +18278,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Rozwod z mezem Niemcem, sad ktorego kraju jest wlasciwy?",
@@ -18138,7 +18289,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "rozwod z mezem niemcem, sad ktorego kraju jest wlasciwy",
@@ -18146,7 +18300,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Rozwód z mężem Niemcem, sąd którego kraju jest właściwy?",
@@ -18154,7 +18311,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Rozwód z mężem Niemcem, sąd którego kraju jest właściwy. Co mogę zrobić?",
@@ -18162,7 +18322,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Wyrok sądu niemieckiego o zapłatę, jak go wyegzekwować w Polsce?",
@@ -18170,7 +18333,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Wyrok sadu niemieckiego o zaplate, jak go wyegzekwowac w Polsce?",
@@ -18178,7 +18344,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "wyrok sadu niemieckiego o zaplate, jak go wyegzekwowac w polsce",
@@ -18186,7 +18355,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Wyrok sądu niemieckiego o zapłatę, jak go wyegzekwować w Polsce?",
@@ -18194,7 +18366,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Wyrok sądu niemieckiego o zapłatę, jak go wyegzekwować w Polsce. Co mogę zrobić?",
@@ -18202,7 +18377,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Skarga do Europejskiego Trybunału Praw Człowieka na przewlekłość w Polsce.",
@@ -18650,7 +18828,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Spadek po ojcu, ktory mieszkal w Hiszpanii, ktore prawo spadkowe?",
@@ -18658,7 +18839,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "spadek po ojcu, ktory mieszkal w hiszpanii, ktore prawo spadkowe",
@@ -18666,7 +18850,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Spadek po ojcu, który mieszkał w Hiszpanii, które prawo spadkowe?",
@@ -18674,7 +18861,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Spadek po ojcu, który mieszkał w Hiszpanii, które prawo spadkowe. Co mogę zrobić?",
@@ -18682,7 +18872,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Europejski tytuł egzekucyjny dla alimentów z Wielkiej Brytanii.",
@@ -19850,7 +20043,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Wymeldowanie bylego partnera z mieszkania, ktory sie wyprowadzil.",
@@ -19858,7 +20054,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "wymeldowanie bylego partnera z mieszkania, ktory sie wyprowadzil",
@@ -19866,7 +20065,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Wymeldowanie byłego partnera z mieszkania, który się wyprowadził.",
@@ -19874,7 +20076,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Wymeldowanie byłego partnera z mieszkania, który się wyprowadził. Co mogę zrobić?",
@@ -19882,7 +20087,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "Jak uzyskać obywatelstwo polskie po 8 latach pobytu?",
@@ -33085,7 +33293,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "pytanie-male-litery",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "pytanie: ktos wlamal sie na moje konto bankowe i ukradl oszczednosci",
@@ -33749,7 +33960,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: zaleglosc podatkowa, czy moge wnioskowac o rozlozenie na raty",
@@ -33845,7 +34059,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "pytanie: naruszenie dyscypliny finansow publicznych przez kierownika jednostki",
@@ -34773,7 +34990,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: kurator sadowy nie przychodzi na wizyty, skarga do prezesa sadu",
@@ -34797,7 +35017,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: koszty zastepstwa procesowego, ile zwroci przegrywajacy",
@@ -34845,7 +35068,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: doradca restrukturyzacyjny, jak uzyskac licencje",
@@ -34861,7 +35087,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: asesor sadowy wydal wyrok, czy jest wazny",
@@ -34877,7 +35106,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "pytanie: ile kosztuje apelacja w sprawie o rozwod",
@@ -35069,7 +35301,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: wyrok sadu niemieckiego o zaplate, jak go wyegzekwowac w polsce",
@@ -35077,7 +35312,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: skarga do europejskiego trybunalu praw czlowieka na przewleklosc w polsce",
@@ -35173,7 +35411,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: europejski tytul egzekucyjny dla alimentow z wielkiej brytanii",
@@ -35413,7 +35654,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: jak uzyskac obywatelstwo polskie po 8 latach pobytu",
@@ -36245,7 +36489,10 @@
 "legal": true,
 "dr": "dr-03",
 "variant": "pytanie-male-litery",
-"criminal": true
+"criminal": true,
+"alt": [
+"dr-06"
+]
 },
 {
 "q": "pytanie: ktos wlamal sie na moje konto bankowe i ukradl oszczednosci",
@@ -36909,7 +37156,10 @@
 "legal": true,
 "dr": "dr-06",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: zaleglosc podatkowa, czy moge wnioskowac o rozlozenie na raty",
@@ -37005,7 +37255,10 @@
 "legal": true,
 "dr": "dr-07",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-08"
+]
 },
 {
 "q": "pytanie: naruszenie dyscypliny finansow publicznych przez kierownika jednostki",
@@ -37933,7 +38186,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: kurator sadowy nie przychodzi na wizyty, skarga do prezesa sadu",
@@ -37957,7 +38213,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: koszty zastepstwa procesowego, ile zwroci przegrywajacy",
@@ -38005,7 +38264,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: doradca restrukturyzacyjny, jak uzyskac licencje",
@@ -38021,7 +38283,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-03"
+]
 },
 {
 "q": "pytanie: asesor sadowy wydal wyrok, czy jest wazny",
@@ -38037,7 +38302,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-11"
+]
 },
 {
 "q": "pytanie: ile kosztuje apelacja w sprawie o rozwod",
@@ -38229,7 +38497,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: wyrok sadu niemieckiego o zaplate, jak go wyegzekwowac w polsce",
@@ -38237,7 +38508,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: skarga do europejskiego trybunalu praw czlowieka na przewleklosc w polsce",
@@ -38333,7 +38607,10 @@
 "legal": true,
 "dr": "dr-14",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "pytanie: europejski tytul egzekucyjny dla alimentow z wielkiej brytanii",
@@ -38573,7 +38850,10 @@
 "legal": true,
 "dr": "dr-16",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-05"
+]
 },
 {
 "q": "pytanie: jak uzyskac obywatelstwo polskie po 8 latach pobytu",

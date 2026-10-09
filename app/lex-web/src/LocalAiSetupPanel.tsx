@@ -751,6 +751,10 @@ export function LocalAiSetupPanel({
     );
   }
 
+  // Provisioning runs on Windows only (PowerShell, Vulkan/CPU builds); macOS has no
+  // llama.cpp/Metal package yet (installer: NOT_AVAILABLE_ON_MACOS_YET).
+  const macDesktop =
+    isDesktopShell() && typeof navigator !== "undefined" && /Macintosh|Mac OS X/i.test(navigator.userAgent);
   return (
     <details
       className={
@@ -1070,7 +1074,18 @@ export function LocalAiSetupPanel({
         ) : null}
 
         {message ? <p className="local-ai-message">{message}</p> : null}
-        {error ? <p className="local-ai-error">{error}</p> : null}
+        {macDesktop ? (
+          <p className="local-ai-error">
+            Instalacja lokalnych modeli (Bielik, Mistral) z aplikacji działa na razie tylko w Windows. Na macOS korzystaj z modeli przez klucz API albo konto dostawcy.
+          </p>
+        ) : null}
+        {error ? (
+          <p className="local-ai-error">
+            {error.includes("PLATFORM_UNSUPPORTED")
+              ? "Ta operacja lokalnego AI nie jest jeszcze dostępna w tym systemie (działa w Windows)."
+              : error}
+          </p>
+        ) : null}
       </div>
     </details>
   );

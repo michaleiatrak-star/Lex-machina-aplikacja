@@ -30,6 +30,7 @@ const checks = {
         trust.includes("X-Lex-Desktop-Bootstrap"),
     reactNoDesktopBearer: webApi.includes("isDesktopShell()") &&
         webApi.includes('const DESKTOP_API_BASE = "http://lex-api.localhost"') &&
+        webApi.includes('const DESKTOP_API_BASE_WEBKIT = "lex-api://localhost"') &&
         webApi.includes("if (isDesktopShell()) {\n    return {};"),
     osCredentialVault: trust.includes("MANAGED_KEYRING_SERVICE") &&
         trust.includes("PROVIDER_KEYRING_SERVICE") &&
