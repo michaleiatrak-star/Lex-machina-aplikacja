@@ -757,6 +757,43 @@ async function persistWorkflowAuditArtifact(
 }
 
 
+/**
+ * Ostatni handler błędów: klient dostaje tylko kod w JSON, a nie domyślną stronę Express
+ * ze stosem wywołań i ścieżkami bezwzględnymi (NODE_ENV nie jest ustawiane). Szczegóły
+ * zostają w logu serwera.
+ */
+export function jsonErrorHandler(
+  error: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const status =
+    typeof (error as { status?: unknown })?.status === "number"
+      ? (error as { status: number }).status
+      : typeof (error as { statusCode?: unknown })?.statusCode === "number"
+        ? (error as { statusCode: number }).statusCode
+        : 500;
+  const clientError = status >= 400 && status < 500;
+  if (!clientError) {
+    console.error("HTTP_UNHANDLED_ERROR", error);
+  }
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+  const type = (error as { type?: unknown })?.type;
+  res.status(clientError ? status : 500).json({
+    error: !clientError
+      ? "INTERNAL_ERROR"
+      : type === "entity.too.large"
+        ? "REQUEST_BODY_TOO_LARGE"
+        : type === "entity.parse.failed"
+          ? "INVALID_JSON_BODY"
+          : "BAD_REQUEST"
+  });
+}
+
 function safeDiagnosticText(
   value: unknown
 ): string {
@@ -11770,6 +11807,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       error: "NOT_FOUND"
     });
   });
+  app.use(jsonErrorHandler);
 
   return app;
 }

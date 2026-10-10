@@ -11,7 +11,7 @@ import helmet from "helmet";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLexHttpApp } from "./app.js";
+import { createLexHttpApp, jsonErrorHandler } from "./app.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
@@ -822,6 +822,7 @@ export async function startLocalServer(options?: {
     )
   });
   app.use(coreApp);
+  app.use(jsonErrorHandler);
 
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host);

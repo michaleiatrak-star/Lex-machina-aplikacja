@@ -143,7 +143,10 @@ function sendError(res: Response, error: unknown): void {
     res.status(422).json({ error: code });
     return;
   }
-  res.status(500).json({ error: "WORKSPACE_OPERATION_FAILED", detail: code });
+  // Do klienta trafia tylko kod błędu, nie treść komunikatu (np. ENOENT ze ścieżką).
+  const detail = /^[A-Z][A-Z0-9_]{2,80}$/.test(code) ? code : undefined;
+  if (!detail) console.error("WORKSPACE_OPERATION_FAILED", error);
+  res.status(500).json({ error: "WORKSPACE_OPERATION_FAILED", ...(detail ? { detail } : {}) });
 }
 
 /**
