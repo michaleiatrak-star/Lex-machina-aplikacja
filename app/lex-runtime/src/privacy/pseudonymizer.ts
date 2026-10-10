@@ -471,6 +471,20 @@ export class PseudonymizationVault {
       return sameEntity;
     }
 
+    // "JAN KOWALSKI" from a heading, without a paradigm: the same person as a
+    // known "Jan Kowalski" (one token, restored in normal spelling).
+    if (ENTITY_KINDS.has(kind) && !entity && isShouting(value)) {
+      const upper = value.toLocaleUpperCase("pl");
+      for (const [token, known] of this.tokenToValue) {
+        if (this.tokenMetadata.get(token)?.kind !== kind || this.tokenEntities.get(token)?.type === "organization") continue;
+        if (known.toLocaleUpperCase("pl") === upper) {
+          this.keyToToken.set(key, token);
+          this.tokenSurfaces.get(token)?.add(value);
+          return token;
+        }
+      }
+    }
+
     const next =
       (
         this.counters.get(
@@ -852,7 +866,12 @@ export class LocalPolishPseudonymizer {
     // missed (another page, another case form) are matched by known forms.
     const propagatedEntities =
       new Map<string, PersonEntity>();
-    for (const form of this.vault.knownEntityForms()) {
+    // Also the all-caps spelling of a known form ("POWÓD: JAN KOWALSKI" in a heading).
+    const knownForms = this.vault.knownEntityForms().flatMap((form) => {
+      const shouted = form.text.toLocaleUpperCase("pl");
+      return shouted === form.text ? [form] : [form, { ...form, text: shouted }];
+    });
+    for (const form of knownForms) {
       const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       for (const match of text.matchAll(
         new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu")

@@ -890,21 +890,12 @@ implements DocumentService {
     let keptRanges = 0;
 
     const onProgress = security?.onProgress;
-    const pseudonymizePages = async (): Promise<void> => {
-    for (const [pageIndex, page] of record.source.pages.entries()) {
-      onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
-      const pageDirectives = directives
-        .filter(
-          (directive) =>
-            directive.page === page.page
-        )
-        .map(({ page: _page, ...directive }) =>
-          directive
-        );
-
-      const protectedPage =
-        await new LocalPolishPseudonymizer(
-          record.vault,
+    // Wyniki rozpoznawania osób per strona: drugi przebieg ich nie liczy od nowa.
+    const pageMemory = record.source.pages.map(() => new Map<string, PiiSpan[]>());
+    const protectPage = (pageIndex: number, page: IngestedPage, pageDirectives: ManualPrivacyDirective[]) =>
+      new LocalPolishPseudonymizer(
+        record.vault,
+        rememberingRecognizer(
           withAiMemory(privacyRecognizerFor(
             this.namedEntities,
             page.source === "OCR",
@@ -915,11 +906,31 @@ implements DocumentService {
                 }
               : undefined
           ), record.aiFindings),
-          this.personMorphology
-        ).pseudonymize(
-          page.text,
-          pageDirectives
-        );
+          pageMemory[pageIndex]!
+        ),
+        this.personMorphology
+      ).pseudonymize(page.text, pageDirectives);
+    const directivesFor = (page: IngestedPage): ManualPrivacyDirective[] =>
+      directives
+        .filter((directive) => directive.page === page.page)
+        .map(({ page: _page, ...directive }) => directive);
+    const pseudonymizePages = async (): Promise<void> => {
+    const multiPage = record.source.pages.length > 1;
+    if (multiPage) {
+      // Pierwszy przebieg zbiera do klucza osoby ze wszystkich stron, żeby
+      // osoba rozpoznana dopiero na s. 3 była chroniona także na s. 1.
+      for (const [pageIndex, page] of record.source.pages.entries()) {
+        onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+        await protectPage(pageIndex, page, directivesFor(page));
+      }
+    }
+    for (const [pageIndex, page] of record.source.pages.entries()) {
+      if (!multiPage) {
+        onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+      }
+      const pageDirectives = directivesFor(page);
+
+      const protectedPage = await protectPage(pageIndex, page, pageDirectives);
       findings += protectedPage.findings.length;
       manualPseudonymizations +=
         protectedPage.findings.filter(
