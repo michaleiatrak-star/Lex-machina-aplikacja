@@ -203,6 +203,9 @@ const SN_CHAMBERS = [
   "Izba Kontroli Nadzwyczajnej i Spraw Publicznych", "Izba Dyscyplinarna"
 ];
 
+const SAOS_COURT_TYPES = ["SUPREME", "COMMON", "ADMINISTRATIVE", "CONSTITUTIONAL_TRIBUNAL", "NATIONAL_APPEAL_CHAMBER"];
+const SAOS_JUDGMENT_TYPES = ["SENTENCE", "DECISION", "RESOLUTION", "REASONS", "REGULATION"];
+
 const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
   type: "function",
   function: {
@@ -233,7 +236,9 @@ const CASE_SEARCH_TOOL_SCHEMA: NormalizedToolSchema = {
         judge: { type: "string", description: "SN only: judge on the panel (surname)." },
         presiding: { type: "string", description: "SN only: presiding judge." },
         rapporteur: { type: "string", description: "SN only: judge rapporteur." },
-        reasonsAuthor: { type: "string", description: "SN only: author of the reasons." }
+        reasonsAuthor: { type: "string", description: "SN only: author of the reasons." },
+        courtType: { type: "string", enum: SAOS_COURT_TYPES, description: "SAOS only: court type (SUPREME = Sąd Najwyższy)." },
+        judgmentType: { type: "string", enum: SAOS_JUDGMENT_TYPES, description: "SAOS only: SENTENCE = wyrok, DECISION = postanowienie, RESOLUTION = uchwała." }
       }
     }
   }
@@ -626,9 +631,10 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
   "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
   "- Case-law discovery policy: (a) signature known -> look it up by repertory in the official registry (verify_case_reference / CBOSA / court portal); no web search, no SAOS. " +
-    "(b) Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018, or rulings of the last 2-3 years) -> web_search (when available) with an abstract legal phrase, never case data, to find signatures in secondary sources, in parallel with the official full-text search (search_case_law source=SN / source=CBOSA). SAOS does not hold these rulings. " +
+    "(b) Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018, or rulings of the last 2-3 years) -> web_search (when available) with an abstract legal phrase, never case data, to find signatures in secondary sources, in parallel with the official full-text search (search_case_law source=SN / source=CBOSA) using the topic in its legal terms and the provision (e.g. 'zorganizowana grupa przestępcza', 'art. 258 k.k.'), then a second phrasing if the first gives nothing usable. SAOS does not hold these rulings. " +
     "(c) Older rulings or common courts -> search_case_law source=SAOS plus web_search; SAOS also serves as a citator. " +
     "Secondary sources (web pages, commentaries, news) give only the signature: the thesis and any quote come only from the verified official text.",
+  "- Form of the decision: when the user asks for a judgment (wyrok), pass form=wyrok (SN) or judgmentType=SENTENCE (SAOS) and never present a postanowienie or uchwała as a wyrok; if only another form exists, say so plainly.",
   "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
   "- NSA/WSA (CBOSA) material is a dated SNAPSHOT: present it as a snapshot and never promote it to VERIFIED. A CBOSA search with no hits is OUT_OF_SCOPE, never evidence that no judgment exists.",
   "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
@@ -664,6 +670,13 @@ function snSearchFilters(input: Record<string, unknown>): Record<string, string>
     autor_uzasadnienia: text(input.reasonsAuthor, 80)
   };
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value));
+}
+
+// search_case_law source=SAOS: court type and form of the decision.
+function saosSearchFilters(input: Record<string, unknown>): { courtType?: string; judgmentType?: string } {
+  const courtType = typeof input.courtType === "string" && SAOS_COURT_TYPES.includes(input.courtType) ? input.courtType : undefined;
+  const judgmentType = typeof input.judgmentType === "string" && SAOS_JUDGMENT_TYPES.includes(input.judgmentType) ? input.judgmentType : undefined;
+  return { ...(courtType ? { courtType } : {}), ...(judgmentType ? { judgmentType } : {}) };
 }
 
 function searchCaseLawLibrary(input: Record<string, unknown>): string {
@@ -781,6 +794,7 @@ export class LegalVerificationToolRuntime {
           await this.caseLawSearch.search({
             query,
             ...(Object.keys(sn).length ? { sn } : {}),
+            ...(source === "SAOS" ? { saos: saosSearchFilters(input) } : {}),
             source:
               source as CaseLawSearchSource,
             ...(limit !== undefined

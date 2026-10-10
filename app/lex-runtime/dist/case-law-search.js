@@ -314,7 +314,7 @@ export class CaseLawSearchService {
             };
         }
         return request.source === "SAOS"
-            ? await this.searchSaos(query, limit)
+            ? await this.searchSaos(query, limit, request.saos ?? {})
             : await this.searchCbosa(query, limit);
     }
     // sn.pl search form: text of the decision and its reasons plus the other
@@ -361,9 +361,13 @@ export class CaseLawSearchService {
             ...(hits.length > matching.length ? { reason: `REJECTED_${hits.length - matching.length}_NOT_MATCHING_FILTERS` } : {})
         };
     }
-    async searchSaos(query, limit) {
+    async searchSaos(query, limit, filters = {}) {
         const url = new URL(SAOS_ENDPOINT);
         url.searchParams.set("all", query);
+        if (filters.courtType)
+            url.searchParams.set("courtType", filters.courtType);
+        if (filters.judgmentType)
+            url.searchParams.set("judgmentTypes", filters.judgmentType);
         url.searchParams.set("pageSize", String(Math.max(10, limit)));
         url.searchParams.set("pageNumber", "0");
         url.searchParams.set("sortingField", "JUDGMENT_DATE");

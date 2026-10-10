@@ -59,7 +59,7 @@
  {"q":"Sędzia nie wyznaczył rozprawy od roku w sprawie o zachowek. Czy mogę złożyć skargę na przewlekłość?","dr":["dr-12","dr-02"]},
  {"q":"Koszty sądowe w sprawie o podział majątku są za wysokie. Jak złożyć wniosek o zwolnienie od kosztów?","dr":["dr-12","dr-02"],"mods":{"dr-12":"mod-KSCU-koszty-sadowe-i-pomoc-prawna"}},
  {"q":"Radca prawny został uderzony przez stronę przeciwną po rozprawie. Jaka kwalifikacja czynu?","dr":["dr-03","dr-12"]},
- {"q":"Komornik zajął mi wynagrodzenie powyżej kwoty wolnej. Jak złożyć skargę na czynności komornika?","dr":["dr-03","dr-04"]},
+ {"q":"Komornik zajął mi wynagrodzenie powyżej kwoty wolnej. Jak złożyć skargę na czynności komornika?","dr":["dr-02","dr-04"]},
  {"q":"Notariusz źle sporządził akt notarialny sprzedaży mieszkania. Czy odpowiada za szkodę?","dr":["dr-12","dr-02"]},
  {"q":"Jestem członkiem zarządu spółki z o.o. W dziale zakupów wykryto nadużycia. Czy odpowiadam osobiście i jak przeprowadzić dochodzenie wewnętrzne?","dr":["dr-15","dr-02"]},
  {"q":"Czy firma musi szkolić pracowników z RODO i jak dokumentować szkolenia zgodnie z zasadą rozliczalności?","dr":["dr-11","dr-15"]},

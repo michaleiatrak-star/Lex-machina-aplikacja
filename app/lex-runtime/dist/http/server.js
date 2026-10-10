@@ -285,9 +285,11 @@ export async function startLocalServer(options) {
     // is loaded once, in the background now, not for every checked message.
     const stanzaRecognizer = new LocalStanzaNamedEntityRecognizer();
     stanzaRecognizer.warmUp();
+    const gazetteerRecognizer = new LocalGazetteerRecognizer();
+    gazetteerRecognizer.warmUp();
     const stanzaNamedEntities = new CompositeRecognizer([
         stanzaRecognizer,
-        new LocalGazetteerRecognizer()
+        gazetteerRecognizer
     ]);
     const privacyNamedEntities = new LocalLlmPrivacyNamedEntityRecognizer(providerGateway, localModels, stanzaNamedEntities);
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
@@ -437,6 +439,7 @@ export async function startLocalServer(options) {
                 commitSkillOverlayRuntimeHealth(baseRuntimeRoot);
             }
             catch (error) {
+                gazetteerRecognizer.close();
                 server.close(() => {
                     reject(error instanceof Error
                         ? error
@@ -456,6 +459,7 @@ export async function startLocalServer(options) {
                     server.close((error) => {
                         void localModels.stop();
                         stanzaRecognizer.close();
+                        gazetteerRecognizer.close();
                         credentials.close();
                         supportService.close();
                         unsubscribeGuideRevocation();

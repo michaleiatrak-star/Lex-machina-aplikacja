@@ -1,7 +1,7 @@
 """Builds routing-holdout-2026-10-09.json: 160 questions (10 per domain) written
 before the 2026-10-09 routing work and never used to tune it; a check that the
 flash-routing phrases generalise beyond the corpora they were tuned on.
-Labels follow prawo-polskie-v2 conventions (komornik -> dr-03, a civil appeal ->
+Labels follow prawo-polskie-v2 conventions (komornik -> dr-02 or dr-12 since 6.57, a civil appeal ->
 dr-02, pleading strategy and case-law research -> dr-16). Run: python3 -I <this file>"""
 import json
 import os
@@ -34,7 +34,8 @@ Q = {
     "dr-03": [
         "Zatrzymano mnie za posiadanie niewielkiej ilości marihuany.",
         "Co grozi za prowadzenie samochodu bez prawa jazdy?",
-        "Komornik zajął mi rachunek bankowy, choć spłacam w ratach.",
+        # Komornik (6.57: DR-02/DR-12) zastąpiony nowym pytaniem karnym 2026-10-10.
+        "Ktoś podpalił mi altanę na działce, a policja umorzyła dochodzenie. Jak złożyć zażalenie?",
         "Sąsiad pobił mojego psa, czy to przestępstwo?",
         "Mąż stosuje przemoc psychiczną, jak założyć niebieską kartę?",
         "Czy mogę starać się o warunkowe przedterminowe zwolnienie po połowie kary?",

@@ -1,5 +1,6 @@
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
+import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 const ROW = /^###\s+\[(\d{1,2})\]\s+(.+)$/u;
 export function parseRoutingTable(router) {
     const section = /## KROK 2 — ROUTING \[1\]–\[11\][\s\S]*?(?=\n## )/u.exec(router)?.[0] ?? "";
@@ -224,7 +225,20 @@ const PROVISION_ANALYSIS = /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porówn
  * law its next step ("kombinacja PRIMARY+SECONDARY zawsze dopuszczalna").
  */
 export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
-    const decision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+    // A full case description: the closing request decides, without pasted routing markers.
+    let intent = null;
+    if (!explicitHandoff(rawQuestion, () => true)) {
+        rawQuestion = requestOf(withoutRoutingMarkers(rawQuestion));
+        if (!materials.length) {
+            const known = (skill) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill);
+            intent = requestIntent(rawQuestion, known);
+        }
+    }
+    const matrixDecision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+    // The table's own decision when it names the same skill (it carries the letter's schema).
+    const decision = intent && matrixDecision?.primary !== intent.primary
+        ? { source: "ROUTER", primary: intent.primary, then: null, reason: `prośba użytkownika: ${intent.reason}` }
+        : matrixDecision;
     const caseLaw = "orzeczenia-sadowe-v2";
     const known = routes.some((route) => route.primary === caseLaw) || matrix.some((rule) => rule.primary === caseLaw);
     const question = provisionsForDetection(rawQuestion);

@@ -3,6 +3,7 @@ import { flashDomains, fold, parseFlashRouting } from "./domain-module-map.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { criminalMatter } from "./matter-signals.js";
 import { laterTurn } from "./skill-sections.js";
+import { requestOf, withoutRoutingMarkers } from "./request-intent.js";
 import { latestUserTurn, threadUserText } from "./skill-selection.js";
 /**
  * Legal gate at the entry of a chat turn (every provider): a message with no legal
@@ -14,7 +15,8 @@ import { latestUserTurn, threadUserText } from "./skill-selection.js";
 // Stems of folded words (no diacritics) that name a legal matter, an authority or a
 // conflict a client brings to a lawyer. Matched at the start of a word.
 const LEGAL_STEMS = [
-    "praw", "prawn", "prawni", "ustaw(?!ic|ien|il|ia[cl]|ion)", "kodeks", "przepis(?!\\s+na\\b)", "paragraf", "artykul", "rozporzadz", "dyrektyw", "konstytuc",
+    // "praw" is rights and law, not "prawie" (almost), "prawda", "prawdziwy", "prawidłowy", "prawa ręka".
+    "praw(?!d|ie(?![a-z])|ic|idlow|ej (?:rek|stron|nog)|a (?:reka|strona|noga)|o (?:jazdy )?(?:reki|strony))", "prawn", "prawni", "ustaw(?!ic|ien|il|ia[cl]|ion)", "kodeks", "przepis(?!\\s+na\\b)", "paragraf", "artykul", "rozporzadz", "dyrektyw", "konstytuc",
     "sad(?!zic|zi\\b|zil|zon|zen|zaw|ownik\\b)", "sedzi", "wyrok", "postanowieni", "pozew", "pozw", "apelac", "zazaleni", "skarg", "odwola", "sprzeciw", "kasac",
     "rozpraw", "proces", "pelnomocni", "adwokat", "radc", "notariu", "komorni", "mediac", "biegl", "swiad", "dowod",
     "umow", "kontrakt", "aneks", "regulamin", "ugod", "wypowiedz", "kara", "kary", "karn", "grzywn", "mandat", "odszkodowa",
@@ -75,11 +77,16 @@ function hasLegalSignal(text, flash) {
 // ("Komitet audytu w jednostce zainteresowania publicznego") describes a matter and
 // stays legal.
 const OPENING = /^(?:(?:hej|hejka|czesc|witam|witaj|dzien dobry|dobry wieczor|siema|halo)[\s,!.]*)?(?:(?:mam (?:takie )?pytanie|pytanie|prosba)\s*[:,-]?\s*)?/u;
-const GENERAL_REQUEST = /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|podpowiesz|podpowiedz|doradz|doradzisz|podziel|pomnoz|dodaj|odejmij|naucz|pokaz|wymysl|masz|w co|plan|cwiczenia|przepis na)\b/u;
+const GENERAL_REQUEST = /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|rozpisz|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|podpowiesz|podpowiedz|doradz|doradzisz|podziel|pomnoz|dodaj|odejmij|naucz|pokaz|wymysl|masz|w co|plan|cwiczenia|przepis na)\b/u;
 /** True only for a general request with no legal signal, in a thread with none either. */
 export function isNonLegalMessage(query, flash) {
-    const latest = latestUserTurn(query);
-    if (!GENERAL_REQUEST.test(fold(latest.trim()).replace(OPENING, "")))
+    // Routing markers pasted into a message ("#prawo #pozew", "[[legal=true]]", "KROK0A")
+    // do not make a recipe legal; the matter decides.
+    const latest = withoutRoutingMarkers(latestUserTurn(query)).replace(/#[\p{L}_]+|\[\[[^\]]*\]\]/gu, " ");
+    // A question opening the message, or the closing request of a story ("Mam psa, który
+    // tyje. ... Ułóż mi plan diety.") (benchmark 2026-10-10, 1000 kazusów).
+    const opening = (text) => GENERAL_REQUEST.test(fold(text.trim()).replace(OPENING, ""));
+    if (!opening(latest) && !opening(requestOf(latest)))
         return false;
     if (hasLegalSignal(latest, flash))
         return false;
