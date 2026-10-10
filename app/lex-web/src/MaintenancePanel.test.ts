@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { manualUpdateInstruction, manualUpdateReleaseUrl } from "./MaintenancePanel.js";
+import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl } from "./MaintenancePanel.js";
 import { ApiError, type UpdateStatusResponse } from "./api.js";
 
 const status: UpdateStatusResponse = {
@@ -44,5 +44,21 @@ describe("manualUpdateInstruction", () => {
   it("names the installer of the user's system", () => {
     expect(manualUpdateInstruction("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")).toContain(".pkg");
     expect(manualUpdateInstruction("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/141.0")).toContain("Online-x64-Setup.exe");
+  });
+});
+
+describe("MaintenancePanel friendlyError", () => {
+  it("brak instalatora w wydaniu nie jest opisywany jako błąd Authenticode", () => {
+    const text = friendlyError(new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED"));
+    expect(text).toContain("nie zawiera instalatora");
+    expect(text).not.toContain("Authenticode");
+  });
+
+  it("błędy podpisu nadal wskazują politykę Authenticode", () => {
+    expect(friendlyError(new Error("APPLICATION_UPDATE_SIGNER_NOT_TRUSTED"))).toContain("Authenticode");
+  });
+
+  it("blokada kanału skilli przez politykę podpisu ma własny komunikat", () => {
+    expect(friendlyError(new Error("SKILL_CHANNEL_SIGNED_POLICY_BLOCKED"))).toContain("podpisanych skilli");
   });
 });

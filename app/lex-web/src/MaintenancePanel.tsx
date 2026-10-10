@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import {
@@ -57,7 +58,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function friendlyError(error: unknown): string {
+export function friendlyError(error: unknown): string {
   const code =
     error instanceof ApiError
       ? error.code
@@ -67,6 +68,10 @@ function friendlyError(error: unknown): string {
 
   if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
     return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
+  }
+  // Wydanie bez instalatora dla tego systemu (z sumą SHA-256 GitHub), nie błąd podpisu.
+  if (code === "APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED") {
+    return "Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.";
   }
   if (
     code.includes("SIGNER_POLICY_MISSING") ||
@@ -152,8 +157,10 @@ export function MaintenancePanel({
   const [channel, setChannel] =
     useState<SkillChannel>("stable");
   // Bez wyboru użytkownika panel pokazuje kanał zainstalowanych skilli (znacznik nakładki).
-  const [channelChosen, setChannelChosen] =
-    useState(false);
+  // Ref, nie stan: refresh() wywołany zaraz po wyborze (i odświeżenie już w toku)
+  // widziałby starą wartość i cofał panel do kanału zainstalowanego.
+  const channelChosen =
+    useRef(false);
   const [skillStatus, setSkillStatus] =
     useState<SkillChannelStatusResponse | null>(null);
   const [staged, setStaged] =
@@ -206,7 +213,7 @@ export function MaintenancePanel({
         ]);
       setAppStatus(application);
       const installedChannel = skills?.installed?.channel;
-      if (!channelChosen && installedChannel && installedChannel !== selected) {
+      if (!channelChosen.current && installedChannel && installedChannel !== selected) {
         setChannel(installedChannel);
         setSkillStatus(await getSkillChannelStatus(installedChannel));
       } else {
@@ -319,7 +326,7 @@ export function MaintenancePanel({
 
   function selectChannel(next: SkillChannel): void {
     setChannel(next);
-    setChannelChosen(true);
+    channelChosen.current = true;
     setSkillStatus(null);
     void refresh(next);
   }
