@@ -439,6 +439,7 @@ export async function startLocalServer(options) {
                 commitSkillOverlayRuntimeHealth(baseRuntimeRoot);
             }
             catch (error) {
+                gazetteerRecognizer.close();
                 server.close(() => {
                     reject(error instanceof Error
                         ? error
@@ -458,6 +459,7 @@ export async function startLocalServer(options) {
                     server.close((error) => {
                         void localModels.stop();
                         stanzaRecognizer.close();
+                        gazetteerRecognizer.close();
                         credentials.close();
                         supportService.close();
                         unsubscribeGuideRevocation();

@@ -134,8 +134,11 @@ function executor(registry, mode) {
         headers: {
             "content-type": "text/html; charset=utf-8"
         }
-    }), () => "2026-09-15T18:30:00.000Z");
-    return new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, (ledger) => new LegalVerificationToolRuntime(ledger, verifier, undefined, new TemporalSourceFreshnessChecker(g16FreshnessFetcher, () => "2026-09-15T18:30:00.000Z")));
+    }), 
+    // Sprawdzenie w ELI "teraz": I-D2 odrzuca brzmienie CURRENT ze sprawdzenia
+    // starszego niż FRESHNESS_MAX_AGE_MS, więc stała data psułaby test z upływem dni.
+    () => new Date().toISOString());
+    return new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, (ledger) => new LegalVerificationToolRuntime(ledger, verifier, undefined, new TemporalSourceFreshnessChecker(g16FreshnessFetcher, () => new Date().toISOString())));
 }
 function appFor(registry, mode) {
     return createLexHttpApp({
