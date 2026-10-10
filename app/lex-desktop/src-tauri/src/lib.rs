@@ -420,7 +420,13 @@ pub fn run() {
         )
         .register_asynchronous_uri_scheme_protocol(
             "lex-api",
-            move |_context, request, responder| {
+            move |context, request, responder| {
+                // Schemat jest rejestrowany dla wszystkich webview aplikacji, także dla
+                // okna sn.pl (zewnętrzna strona). API z sesją użytkownika tylko dla okna głównego.
+                if context.webview_label() != trust_boundary::MAIN_WEBVIEW_LABEL {
+                    responder.respond(trust_boundary::foreign_webview_response());
+                    return;
+                }
                 let bridge = Arc::clone(&protocol_bridge);
                 std::thread::spawn(move || {
                     responder.respond(

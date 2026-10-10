@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $manifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "windows-release-source.json") |
   ConvertFrom-Json

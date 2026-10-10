@@ -1,5 +1,5 @@
 export const CURRENT_APPLICATION_VERSION =
-  "0.1.25";
+  "0.1.26";
 
 export type UpdateAvailability =
   | "NO_RELEASE"

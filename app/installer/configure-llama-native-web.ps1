@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$RuntimeRoot,
   [string]$LocalAiRoot
 )

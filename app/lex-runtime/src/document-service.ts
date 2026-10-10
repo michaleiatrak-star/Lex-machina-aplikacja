@@ -765,7 +765,9 @@ implements DocumentService {
     if (index < 0) throw new Error("INVALID_DOCUMENT_PAGE");
     const clean = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n");
     if (clean.length > MAX_EDITED_PAGE_CHARS) throw new Error("DOCUMENT_PAGE_TEXT_TOO_LONG");
-    const { lines: _lines, corrections: _corrections, ...previous } = record.source.pages[index]!;
+    // The page image goes with the OCR lines: masking needs the line boxes, and a hand-edited
+    // text no longer matches the image, so the image could only be sent unmasked.
+    const { lines: _lines, corrections: _corrections, image: _image, ...previous } = record.source.pages[index]!;
     const page: IngestedPage = { ...previous, text: clean, editedByUser: true };
     const pages = record.source.pages.map((item, at) => (at === index ? page : item));
     const source: DocumentIngestionResult = {

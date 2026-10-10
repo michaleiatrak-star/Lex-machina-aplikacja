@@ -1,4 +1,4 @@
-param()
+﻿param()
 
 $ErrorActionPreference = "Stop"
 $probe = Join-Path $PSScriptRoot "get-install-state.ps1"

@@ -18,7 +18,9 @@ const checks = {
         trust.includes('const ACCOUNT_OAUTH_KEYRING_SERVICE: &str = "LexMachina/AccountOAuthCredential"') &&
         trust.includes("Entry::new("),
     restoreOnEveryAuthenticatedSession: desktopLib.includes(".ensure_managed_identity()") &&
-        trust.includes("self.restore_provider_credentials()?;") &&
+        // Restored at every managed sign-in; a Keychain error no longer stops the app
+        // (macOS, ad-hoc signed updates), it is logged and the key entered again.
+        trust.includes("if let Err(error) = self.restore_provider_credentials() {") &&
         trust.includes("let _ = self.restore_provider_credentials();"),
     restoreDoesNotDropTheStoredCredential: trust.includes('"persistence": "OS_KEYRING"'),
     restoreIntoMemoryOnlyRuntime: trust.includes('"/api/admin/providers/{provider}/credential"') &&

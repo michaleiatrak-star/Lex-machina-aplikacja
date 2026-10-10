@@ -89,7 +89,10 @@ function Wait-ParentExit([int]$ProcessId) {
 function Get-InstallSize([string]$Root) {
   $sum = Get-ChildItem -LiteralPath $Root -File -Recurse -Force -ErrorAction Stop |
     Measure-Object -Property Length -Sum
-  return [int64]($sum.Sum ?? 0)
+  # Windows PowerShell 5.1 (runner aktualizacji) nie zna operatora ??.
+  $total = $sum.Sum
+  if ($null -eq $total) { $total = 0 }
+  return [int64]$total
 }
 
 function Assert-BackupCapacity([string]$BackupBase, [int64]$InstallBytes) {
