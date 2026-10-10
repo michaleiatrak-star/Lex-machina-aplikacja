@@ -28,6 +28,7 @@ import {
   setProviderApiKey,
   clearProviderApiKey,
   saveToDownloads,
+  setAuthenticationFailureHandler,
   uploadCaseFile,
   validateRoute
 } from "./api.js";
@@ -38,6 +39,41 @@ afterEach(() => {
 });
 
 describe("local API client", () => {
+
+  it("a wrong password on re-authentication does not sign the user out", async () => {
+    const authPayload = {
+      user: { userId: "user_0123456789abcdef0123456789abcdef", loginName: "owner", displayName: "Owner", appRole: "ADMIN", status: "ACTIVE", createdAt: "2026-09-16T08:00:00.000Z" },
+      session: {
+        sessionId: "authsess_0123456789abcdef0123456789abcdef",
+        userId: "user_0123456789abcdef0123456789abcdef",
+        createdAt: "2026-09-16T08:00:00.000Z",
+        lastActivityAt: "2026-09-16T08:00:00.000Z",
+        lastFullAuthenticationAt: "2026-09-16T08:00:00.000Z",
+        idleExpiresAt: "2026-09-16T08:15:00.000Z",
+        overallExpiresAt: "2026-09-16T16:00:00.000Z"
+      },
+      sessionToken: "B".repeat(43)
+    };
+    const onFailure = vi.fn();
+    setAuthenticationFailureHandler(onFailure);
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify(authPayload), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "INVALID_CREDENTIALS" }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "SESSION_REVOKED" }), { status: 401 }));
+    try {
+      await login({ loginName: "owner", password: "Bardzo dlugie haslo testowe 2026" });
+      await expect(
+        reauthorizeDeanonymization("intent_0123456789abcdef0123456789abcdef", "literowka")
+      ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+      expect(onFailure).not.toHaveBeenCalled();
+      await expect(listCases()).rejects.toMatchObject({ code: "SESSION_REVOKED" });
+      const headers = new Headers(fetchMock.mock.calls[2]?.[1]?.headers);
+      expect(headers.get("Authorization")).toBe(`Bearer ${"B".repeat(43)}`);
+      expect(onFailure).toHaveBeenCalledTimes(1);
+    } finally {
+      setAuthenticationFailureHandler(null);
+    }
+  });
 
   it("keeps the login bearer in memory and attaches it to private requests", async () => {
     const authPayload = {

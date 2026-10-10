@@ -1380,9 +1380,13 @@ async function json<T>(
   if (!response.ok) {
     const failure =
       payload as ApiFailure;
+    // Błędne hasło przy ponownym potwierdzeniu (zmiana hasła, kod odzyskiwania,
+    // odanonimizowanie) to też 401, ale sesja pozostaje ważna: bez wylogowania.
     if (
       authenticated &&
-      response.status === 401
+      response.status === 401 &&
+      failure.error !== "INVALID_CREDENTIALS" &&
+      failure.error !== "INVALID_RECOVERY_CREDENTIALS"
     ) {
       clearAuthSession();
       authenticationFailureHandler?.();

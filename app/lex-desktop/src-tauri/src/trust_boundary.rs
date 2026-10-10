@@ -621,7 +621,7 @@ impl RuntimeBridge {
         if status == StatusCode::UNAUTHORIZED {
             if path.starts_with("/api/support/") {
                 self.clear_service_session();
-            } else {
+            } else if unauthorized_ends_session(&proxied.body) {
                 self.clear_session();
             }
         }
@@ -1417,6 +1417,19 @@ fn runtime_address_from_line(line: &str) -> Option<SocketAddr> {
     parse_loopback_address(raw).ok()
 }
 
+/// 401 po błędnym haśle przy ponownym potwierdzeniu (zmiana hasła, kod odzyskiwania,
+/// ponowna autoryzacja odanonimizowania) nie kończy ważnej sesji: wylogowanie po literówce
+/// zostawiało sesję w runtime aktywną. Sesja jest czyszczona przy każdym innym 401.
+fn unauthorized_ends_session(body: &[u8]) -> bool {
+    let code = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|value| value.get("error").and_then(Value::as_str).map(str::to_owned));
+    !matches!(
+        code.as_deref(),
+        Some("INVALID_CREDENTIALS" | "INVALID_RECOVERY_CREDENTIALS")
+    )
+}
+
 fn requires_session(path: &str) -> bool {
     // Ramka widgetu nie dostaje tokenu sesji: widget nie działa w imieniu użytkownika.
     if path.starts_with("/api/support/") || is_widget_frame_route(path) {
@@ -2092,6 +2105,15 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn wrong_password_on_reauthentication_keeps_the_session() {
+        assert!(!unauthorized_ends_session(br#"{"error":"INVALID_CREDENTIALS"}"#));
+        assert!(!unauthorized_ends_session(br#"{"error":"INVALID_RECOVERY_CREDENTIALS"}"#));
+        assert!(unauthorized_ends_session(br#"{"error":"SESSION_REVOKED"}"#));
+        assert!(unauthorized_ends_session(br#"{"error":"AUTHENTICATION_REQUIRED"}"#));
+        assert!(unauthorized_ends_session(b"not json"));
+    }
 
     #[test]
     fn preflight_allows_every_custom_header_sent_by_the_web_ui() {
