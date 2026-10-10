@@ -14,3 +14,5 @@ app/lex-runtime/config/google-oauth-client.json
 .claude/settings.local.json
 tools/claude-dev-config/statusline
 tools/claude-dev-config/statusline.exe
+.claude/statusline
+.claude/statusline.exe

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "macos-arm64",
-  "applicationVersion": "0.1.28",
+  "applicationVersion": "0.1.30",
   "installerMode": "ONLINE_BOOTSTRAP_PKG_POSTINSTALL",
   "applicationUpdate": {
     "verification": "MANUAL_PKG_FROM_OFFICIAL_RELEASE",

@@ -139,7 +139,8 @@ const CASE_SEARCH_TOOL_SCHEMA = {
     function: {
         name: CASE_SEARCH_TOOL_NAME,
         description: "Search Polish case-law candidates. source=SN: the official sn.pl search form (text of the decision and its reasons, signature, form, date range, chamber, panel, judges); hits carry the decision's card. " +
-            "source=CBOSA for NSA/WSA. SAOS is an academic aggregator (lowest rank): broad full-text discovery, and the fallback when the court's official source fails. " +
+            "source=CBOSA for NSA/WSA. SAOS is an academic aggregator (lowest rank) with partial coverage: common courts current, SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA; use it for older rulings and common courts, as a citator, and as the fallback when the court's official source fails. " +
+            "A known signature goes straight to the official registry (verify_case_reference / CBOSA / court portal), not here and not to web search. For recent rulings (SN after 2016, TK after 2015, KIO after 2018, or the last 2-3 years) run web_search with an abstract legal phrase (never case data) to find signatures in secondary sources, in parallel with source=SN or source=CBOSA. " +
             "This is discovery only: returned candidates are NOT verified for citation. After selecting a candidate, run the applicable verification workflow before citing it.",
         parameters: {
             type: "object",
@@ -447,6 +448,10 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
     "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
+    "- Case-law discovery policy: (a) signature known -> look it up by repertory in the official registry (verify_case_reference / CBOSA / court portal); no web search, no SAOS. " +
+        "(b) Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018, or rulings of the last 2-3 years) -> web_search (when available) with an abstract legal phrase, never case data, to find signatures in secondary sources, in parallel with the official full-text search (search_case_law source=SN / source=CBOSA). SAOS does not hold these rulings. " +
+        "(c) Older rulings or common courts -> search_case_law source=SAOS plus web_search; SAOS also serves as a citator. " +
+        "Secondary sources (web pages, commentaries, news) give only the signature: the thesis and any quote come only from the verified official text.",
     "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
     "- NSA/WSA (CBOSA) material is a dated SNAPSHOT: present it as a snapshot and never promote it to VERIFIED. A CBOSA search with no hits is OUT_OF_SCOPE, never evidence that no judgment exists.",
     "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
@@ -454,9 +459,9 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- Before emitting a case signature (sygn.), call verify_case_reference.",
     "- The first supported courtFamily is SN. Pass claim + signature + courtFamily; pass card_url only when the user gave a card link or ID. Never invent an sn.pl URL.",
     "- SN source = the decision's card (https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=ID) returned by verify_case_reference: cite it, never a PDF/text address. A blob: link is a temporary copy in one browser tab; the old /sites/orzecznictwo/Orzeczenia… PDF directory no longer serves decisions. Neither proves anything; no hit there is not evidence that a decision is unpublished.",
-    "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl via SAOS; TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
+    "- Look a signature up where its court publishes: SN repertories (CSK, CSKP, CZP, KK, UK…) → verify_case_reference; NSA/WSA (OSK, FSK, GSK, SA/xx) → CBOSA; KIO → kio; common courts (C, Ca, ACa, K, AKa, P, U…) → orzeczenia.ms.gov.pl (court portal; SAOS as fallback); TK (K, P, SK, U) → ipo.trybunal.gov.pl. Never search an SN signature in CBOSA. A misrouted call returns SIGNATURE_OF_OTHER_COURT with the right tool.",
     "- With the case-law library enabled, search_case_law_library finds decisions downloaded earlier (by signature, court or phrase); cite their card.",
-    "- SAOS is an academic aggregator (lowest rank): use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
+    "- SAOS is an academic aggregator (lowest rank, coverage: common courts current, SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA): to confirm a ruling use the court's official source first; SAOS only when the official server fails, or as the permanent link when the official portal gives none (SN has its card, so not for SN).",
     "- VERIFIED case output confirms exact official signature/metadata and full-text identity. It does not authorize an invented thesis or quote.",
     "- For a verbatim quotation attributed to SN, call verify_case_quote. Copy the exact quote plus both returned markers onto the SAME LINE as the exact case citation.",
     "- For a paraphrased proposition attributed to SN, call verify_case_proposition with the exact proposition plus an exact supporting quotation.",
@@ -505,7 +510,9 @@ export function snVerificationNeeded(reason) {
     return /^SN_[A-Z_]*(?:HTTP_403|BOT_PROTECTION)$/.test(reason ?? "");
 }
 const SN_VERIFICATION_INSTRUCTION = "SN_WERYFIKACJA_WYMAGANA: sn.pl requires a person to pass its check (captcha). The application shows the user the sn.pl verification window and repeats the question once it is passed. " +
-    "Say so in one sentence; never say SN has no such decision. Meanwhile search source=SAOS (it holds SN decisions with their text) and mark its hits as SAOS candidates, not verified.";
+    "Say so in one sentence; never say SN has no such decision and never conclude that the ruling does not exist. " +
+    "Meanwhile use web_search (abstract legal phrase, never case data) for leads to signatures in secondary sources; search source=SAOS only for SN rulings issued before 2017 (SAOS holds SN decisions only up to 2016). " +
+    "Mark every such hit as an unverified candidate; the thesis and quotes come only from the verified sn.pl text.";
 export class LegalVerificationToolRuntime {
     ledger;
     verifier;
