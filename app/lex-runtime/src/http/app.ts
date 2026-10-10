@@ -757,6 +757,43 @@ async function persistWorkflowAuditArtifact(
 }
 
 
+/**
+ * Ostatni handler błędów: klient dostaje tylko kod w JSON, a nie domyślną stronę Express
+ * ze stosem wywołań i ścieżkami bezwzględnymi (NODE_ENV nie jest ustawiane). Szczegóły
+ * zostają w logu serwera.
+ */
+export function jsonErrorHandler(
+  error: unknown,
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const status =
+    typeof (error as { status?: unknown })?.status === "number"
+      ? (error as { status: number }).status
+      : typeof (error as { statusCode?: unknown })?.statusCode === "number"
+        ? (error as { statusCode: number }).statusCode
+        : 500;
+  const clientError = status >= 400 && status < 500;
+  if (!clientError) {
+    console.error("HTTP_UNHANDLED_ERROR", error);
+  }
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+  const type = (error as { type?: unknown })?.type;
+  res.status(clientError ? status : 500).json({
+    error: !clientError
+      ? "INTERNAL_ERROR"
+      : type === "entity.too.large"
+        ? "REQUEST_BODY_TOO_LARGE"
+        : type === "entity.parse.failed"
+          ? "INVALID_JSON_BODY"
+          : "BAD_REQUEST"
+  });
+}
+
 function safeDiagnosticText(
   value: unknown
 ): string {
@@ -1004,6 +1041,57 @@ const EXECUTION_DRAFT_MAX_ENTRIES = 64;
 const EXECUTION_DRAFT_MAX_CHARS = 200_000;
 // While a request is still running, refresh the idle deadline this often.
 const IN_FLIGHT_ACTIVITY_INTERVAL_MS = 60_000;
+
+/**
+ * Żądanie zmieniające stan (nie GET, nie blokada) przedłuża sesję; trwające żądanie
+ * (długa odpowiedź lokalnego modelu, OCR, render) podtrzymuje ją, dopóki się nie skończy.
+ * Raz na żądanie: trasy rejestrowane w server.ts przed coreApp też tu trafiają.
+ */
+function trackSessionActivity(
+  authService: Pick<AuthService, "touchSession">,
+  req: Request,
+  res: Response,
+  sessionId: string
+): void {
+  if (
+    req.method === "GET" ||
+    req.path === "/auth/lock" ||
+    res.locals.lexSessionActivity === true
+  ) {
+    return;
+  }
+  res.locals.lexSessionActivity = true;
+  authService.touchSession(sessionId);
+  const keepAlive = setInterval(
+    () => authService.touchSession(sessionId),
+    IN_FLIGHT_ACTIVITY_INTERVAL_MS
+  );
+  keepAlive.unref();
+  const stop = () => clearInterval(keepAlive);
+  res.once("finish", stop);
+  res.once("close", stop);
+}
+
+/**
+ * Aktywność sesji dla tras zarejestrowanych poza createLexHttpApp (workspace, faktury,
+ * MCP, akty podstawowe...): uwierzytelniają się same, ale nie przedłużały sesji.
+ * Brak lub błąd sesji nie jest tu obsługiwany: odpowiada sama trasa.
+ */
+export function sessionActivityMiddleware(
+  authService: Pick<AuthService, "authenticateAuthorization" | "touchSession">
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    if (req.method !== "GET" && req.get("authorization")) {
+      try {
+        const context = authService.authenticateAuthorization(req.get("authorization"));
+        trackSessionActivity(authService, req, res, context.session.sessionId);
+      } catch {
+        // Trasa sama odpowie błędem uwierzytelnienia.
+      }
+    }
+    next();
+  };
+}
 
 export const MAX_SESSION_QUERY_CHARS = 320_000;
 
@@ -2423,39 +2511,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           res.locals.lexAuth =
             context;
 
-          if (
-            req.method !== "GET" &&
-            req.path !==
-              "/auth/lock"
-          ) {
-            const sessionId =
-              context.session
-                .sessionId;
-            options.authService!
-              .touchSession(
-                sessionId
-              );
-            // A request the user is still waiting for (a long local-model
-            // answer, OCR) is activity: keep the session from idling out
-            // while it runs.
-            const keepAlive =
-              setInterval(
-                () => {
-                  options.authService!
-                    .touchSession(
-                      sessionId
-                    );
-                },
-                IN_FLIGHT_ACTIVITY_INTERVAL_MS
-              );
-            keepAlive.unref();
-            const stop = () =>
-              clearInterval(
-                keepAlive
-              );
-            res.once("finish", stop);
-            res.once("close", stop);
-          }
+          trackSessionActivity(
+            options.authService!,
+            req,
+            res,
+            context.session.sessionId
+          );
           next();
         } catch (error) {
           if (
@@ -6596,7 +6657,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (!sendCaseAccessError(res, error)) {
           const code = error instanceof Error ? error.message : "";
           res.status(422).json({
-            error: /^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_TEXT_TOO_LONG)$/.test(code)
+            error: /^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_TEXT_TOO_LONG|DOCUMENT_VAULT_CONTEXT_REQUIRED)$/.test(code)
               ? code
               : "DOCUMENT_PAGE_EDIT_FAILED"
           });
@@ -8197,13 +8258,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           "X-Content-Type-Options",
           "nosniff"
         );
-        try {
-          res.send(
-            payload.data
-          );
-        } finally {
-          payload.data.fill(0);
-        }
+        // Bufor zerujemy dopiero po zamknięciu odpowiedzi: przy dużym pliku gniazdo czyta
+        // go jeszcze po powrocie z send(), a bilet jest już zużyty (nie ma ponowienia).
+        const sent = payload.data;
+        res.once("close", () => sent.fill(0));
+        res.send(sent);
       } catch (error) {
         if (
           !sendCaseAccessError(
@@ -11772,6 +11831,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       error: "NOT_FOUND"
     });
   });
+  app.use(jsonErrorHandler);
 
   return app;
 }

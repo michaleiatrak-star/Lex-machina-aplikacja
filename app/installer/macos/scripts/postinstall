@@ -21,6 +21,8 @@ USER_HOME="$(dscl . -read "/Users/$USER_NAME" NFSHomeDirectory | awk '{print $2}
 LOG_DIR="$USER_HOME/Library/Logs/LexMachina"
 
 /usr/bin/sudo -u "$USER_NAME" /bin/mkdir -p "$LOG_DIR"
+# The log is written by root on purpose (the user may not own an old log); chown below.
+# shellcheck disable=SC2024
 /usr/bin/sudo -u "$USER_NAME" -H /bin/bash "$CODE_ROOT/bootstrap/macos-online-bootstrap.sh" "$CODE_ROOT" \
   >"$LOG_DIR/install.log" 2>&1
 status=$?

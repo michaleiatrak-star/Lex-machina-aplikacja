@@ -44,9 +44,27 @@ describe("page images as evidence", () => {
     expect(boxes.filter((box) => box[1] === 27).length).toBeGreaterThan(0);
   });
 
+  it("masks a protected value written in a different letter case", () => {
+    const scan = page("POWÓD: JAN KOWALSKI\nul. ŁĄKOWA 5", [
+      { text: "POWÓD: JAN KOWALSKI", box: [0, 0, 380, 20] },
+      { text: "ul. ŁĄKOWA 5", box: [0, 30, 240, 50] }
+    ]);
+    const boxes = maskBoxes(scan, ["Jan Kowalski", "ul. Łąkowa 5"])!;
+    expect(boxes.filter((box) => box[1] === -3).length).toBeGreaterThan(0);
+    expect(boxes.filter((box) => box[1] === 27).length).toBeGreaterThan(0);
+  });
+
   it("sends nothing when the image and the text cannot be aligned", () => {
     expect(maskBoxes(page("inny tekst", [{ text: "Najemca", box: [0, 0, 1, 1] }]), [])).toBeNull();
     expect(maskBoxes({ page: 1, text: "x", source: "OCR" }, [])).toBeNull();
+  });
+
+  it("never sends the image of a page whose text has no line boxes (hand-edited page)", () => {
+    // Text typed by the user after a poor OCR: nothing ties it to the image any more.
+    const edited: IngestedPage = { page: 1, text: "Jan Kowalski 85010112345", source: "OCR", image, editedByUser: true };
+    expect(maskBoxes(edited, ["Jan Kowalski", "85010112345"])).toBeNull();
+    const noLines: IngestedPage = { page: 1, text: "Jan Kowalski", source: "OCR", image, lines: [] };
+    expect(maskBoxes(noLines, ["Jan Kowalski"])).toBeNull();
   });
 
   it("photos go by default, text pages only on request, PDFs never by default", () => {

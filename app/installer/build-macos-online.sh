@@ -16,6 +16,20 @@ WORK="$(mktemp -d)"
 
 [ "$(uname -s)" = "Darwin" ] || { echo "macOS installer must be built on macOS" >&2; exit 1; }
 
+# One version for the app, the manifests and the package (a missed bump would ship a .pkg
+# whose receipt and manifest would disagree with the app inside).
+VERSION="$(plutil -extract version raw -o - "$TAURI/tauri.conf.json")"
+manifest_version="$(plutil -extract applicationVersion raw -o - "$INSTALLER/macos-release-source.json")"
+# The release names the .pkg after the Windows manifest's version.
+release_version="$(plutil -extract applicationVersion raw -o - "$INSTALLER/windows-release-source.json")"
+distribution_version="$(sed -n 's/.*<pkg-ref id="pl.lexmachina.desktop" version="\([^"]*\)".*/\1/p' "$INSTALLER/macos/distribution.xml")"
+[ -n "$VERSION" ] && [ "$manifest_version" = "$VERSION" ] && [ "$distribution_version" = "$VERSION" ] \
+  && [ "$release_version" = "$VERSION" ] || {
+  echo "VERSION_MISMATCH: tauri.conf.json=$VERSION macos-release-source.json=$manifest_version" \
+    "distribution.xml=$distribution_version windows-release-source.json=$release_version" >&2
+  exit 1
+}
+
 echo "[1/6] Runtime JS"
 (cd "$REPO/app/lex-runtime" && npm install --no-audit --no-fund && npm run build)
 rm -rf "$PAYLOAD" && mkdir -p "$PAYLOAD/app"
@@ -73,7 +87,7 @@ pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist"
 # Always install into /Applications, never relocate onto another copy of the app.
 plutil -replace 0.BundleIsRelocatable -bool NO "$WORK/components.plist"
 pkgbuild --root "$WORK/root" --component-plist "$WORK/components.plist" \
-  --scripts "$INSTALLER/macos/scripts" --identifier pl.lexmachina.desktop --version 0.1.25 \
+  --scripts "$INSTALLER/macos/scripts" --identifier pl.lexmachina.desktop --version "$VERSION" \
   --install-location / "$WORK/LexMachina-component.pkg"
 mkdir -p "$WORK/resources"
 cp "$INSTALLER/macos/welcome.html" "$WORK/resources/welcome.html"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Każda trasa HTTP runtime (app/lex-runtime/src/http/*.ts) a allowlista proxy desktopu
+"""Każda trasa HTTP runtime (app/lex-runtime/src/http/*.ts i src/google/http-routes.ts) a allowlista proxy desktopu
 (route_allowed w src-tauri/src/trust_boundary.rs). Kompiluje route_allowed z rustc i
 wypisuje trasy, których proxy nie przepuszcza. Kod wyjścia 1 = trasa spoza listy
 INTENTIONALLY_BLOCKED.
@@ -15,10 +15,23 @@ import tempfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 RUNTIME_HTTP = os.path.join(ROOT, "app", "lex-runtime", "src", "http")
+# Trasy rejestrowane poza src/http (odzyskiwanie konta przez Google).
+RUNTIME_EXTRA = [os.path.join(ROOT, "app", "lex-runtime", "src", "google", "http-routes.ts")]
 TRUST = os.path.join(ROOT, "app", "lex-desktop", "src-tauri", "src", "trust_boundary.rs")
 
 # Obsługiwane przez desktop wewnętrznie, nie z okna aplikacji.
-INTENTIONALLY_BLOCKED = {("POST", "/api/auth/bootstrap-managed")}
+INTENTIONALLY_BLOCKED = {
+    ("POST", "/api/auth/bootstrap-managed"),
+    # Odzyskiwanie konta przez Google: interfejs aplikacji go nie używa, więc proxy
+    # desktopu go nie przepuszcza (dodać do route_allowed razem z UI).
+    ("GET", "/api/auth/google-recovery/available"),
+    ("POST", "/api/auth/google-recovery/start"),
+    ("POST", "/api/auth/google-recovery/result"),
+    ("GET", "/api/google/status"),
+    ("POST", "/api/google/recovery/link/start"),
+    ("POST", "/api/google/recovery/link/result"),
+    ("POST", "/api/google/recovery/unlink"),
+}
 SAMPLE = {
     ":server": "nbp",
     ":executionId": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
@@ -44,7 +57,7 @@ def rust_function(source: str, name: str) -> str:
 
 def main() -> int:
     routes = set()
-    for path in glob.glob(os.path.join(RUNTIME_HTTP, "*.ts")):
+    for path in glob.glob(os.path.join(RUNTIME_HTTP, "*.ts")) + RUNTIME_EXTRA:
         text = open(path, encoding="utf8").read()
         for match in re.finditer(r'\b(?:app|coreApp|router)\.(get|post|put|patch|delete)\(\s*"([^"]+)"', text):
             routes.add((match.group(1).upper(), match.group(2)))

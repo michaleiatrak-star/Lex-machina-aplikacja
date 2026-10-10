@@ -151,8 +151,19 @@ function splitLosslessly(
 ): string[] {
   if (value.length <= maxChars) return [value];
   const parts: string[] = [];
-  for (let offset = 0; offset < value.length; offset += maxChars) {
-    parts.push(value.slice(offset, offset + maxChars));
+  for (let offset = 0; offset < value.length; ) {
+    let end = Math.min(value.length, offset + maxChars);
+    if (end < value.length) {
+      // Never inside a token ([PII:PERSON:0001|GEN], [LMPII:...]): split
+      // in two, it is neither restored nor recognized as a placeholder.
+      const open = value.lastIndexOf("[", end - 1);
+      const token = open > offset ? /^\[(?:LMPII|PII):[^\]\s]*\]/.exec(value.slice(open, open + 64)) : null;
+      if (token && open + token[0].length > end) end = open;
+      // Never between the halves of a surrogate pair.
+      else if (/[\uD800-\uDBFF]/.test(value[end - 1] ?? "") && end - 1 > offset) end -= 1;
+    }
+    parts.push(value.slice(offset, end));
+    offset = end;
   }
   return parts;
 }

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $desktopRoot = Join-Path $PSScriptRoot "..\lex-desktop\src-tauri"
 $baseConfigPath = Join-Path $desktopRoot "tauri.conf.json"

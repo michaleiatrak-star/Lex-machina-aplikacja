@@ -61,6 +61,9 @@ const PASSED_ENV = [
     "SystemRoot",
     "TEMP",
     "TMP",
+    // macOS: the per-user temporary directory and the locale.
+    "TMPDIR",
+    "LANG",
     "HTTPS_PROXY",
     "HTTP_PROXY",
     // Sesja sn.pl ustawiona ręcznie (poza oknem weryfikacji aplikacji); wartości nie logujemy.

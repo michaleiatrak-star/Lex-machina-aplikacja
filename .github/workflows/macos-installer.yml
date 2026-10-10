@@ -108,7 +108,9 @@ jobs:
             sleep 1
           done
           pgrep -fl "Lex Machina" || true
-          osascript -e 'tell application "Lex Machina" to quit' || pkill -f "Lex Machina.app" || true
+          # Fallback: end the app process only; "Lex Machina.app" also matches the runtime
+          # (node .../Resources/runtime/...), which would hide an orphaned runtime below.
+          osascript -e 'tell application "Lex Machina" to quit' || pkill -f "Lex Machina.app/Contents/MacOS/" || true
           [ "$started" = 1 ] || { echo "APP_DID_NOT_START_RUNTIME" >&2; exit 1; }
           # Quitting the app must not leave the runtime behind (TERM on exit, parent watchdog).
           for _ in $(seq 1 20); do

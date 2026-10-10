@@ -70,6 +70,9 @@ function escape(value: string): string {
 export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
   const lines = page.lines ?? [];
   if (!page.image || lines.some((line) => !line.box)) return null;
+  // No line boxes for a page that has text (hand-edited, or OCR lines lost): the protected
+  // values cannot be located on the image, so it is not sent at all.
+  if (page.editedByUser || (lines.length === 0 && page.text.trim() !== "")) return null;
   const offsets: number[] = [];
   let cursor = 0;
   for (const line of lines) {
@@ -95,7 +98,8 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
     if (typeof line.score === "number" && line.score < LOW_SCORE_LINE) boxes.push(lineBox(index, 0, line.text.length));
   });
   for (const value of values) {
-    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escape(value).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "gu");
+    // Case-insensitive: "JAN KOWALSKI" on a photo, "Jan Kowalski" in the key.
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escape(value).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "giu");
     for (const match of page.text.matchAll(pattern)) {
       const start = match.index!;
       const end = start + match[0].length;

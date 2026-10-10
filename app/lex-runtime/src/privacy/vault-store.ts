@@ -716,6 +716,25 @@ function decodeEnvelope(args: {
   }
 }
 
+/**
+ * Wpisy klucza, których token ([PII:RODZAJ:NNNN], także z przypadkiem
+ * [PII:RODZAJ:NNNN|DOP]) występuje w którymś z tekstów. Liczniki zostają,
+ * więc usunięty numer nie trafi do innej osoby.
+ */
+export function pruneSnapshot(
+  snapshot: PseudonymizationVaultSnapshot,
+  texts: string[]
+): PseudonymizationVaultSnapshot {
+  const used = new Set<string>();
+  for (const text of texts) {
+    for (const match of text.matchAll(/\[PII:[A-Z_]+:\d{4}(?=[\]|])/g)) used.add(match[0]);
+  }
+  return {
+    counters: { ...snapshot.counters },
+    tokens: snapshot.tokens.filter((token) => used.has(token.token.replace(/\]$/, "")))
+  };
+}
+
 export class EncryptedPrivacyVaultStore {
   readonly rootDir: string;
   private readonly queues =
@@ -1201,11 +1220,19 @@ export class EncryptedPrivacyVaultStore {
     });
   }
 
+  /**
+   * Usuwa klucz dokumentu. Wspólny klucz sprawy traci wpisy, których nie
+   * używa już żaden z pozostałych dokumentów (prawo do usunięcia danych):
+   * `remainingText` zwraca zanonimizowany tekst pozostałych członków, a gdy
+   * któregoś nie da się odczytać (null), wspólny klucz zostaje bez zmian.
+   * Bez członków wspólny klucz znika w całości.
+   */
   async deleteDocumentVault(args: {
     caseId: string;
     documentId: string;
     caseDataKey: Buffer;
     keyVersion: number;
+    remainingText?: (documentIds: string[]) => Promise<string[] | null>;
   }): Promise<boolean> {
     if (
       !validDocumentId(
@@ -1238,22 +1265,28 @@ export class EncryptedPrivacyVaultStore {
         delete documents[
           args.documentId
         ];
+        const { shared: _shared, ...rest } = payload;
+        let shared = payload.shared;
+        if (shared) {
+          const members = shared.members.filter((id) => id !== args.documentId);
+          let snapshot = shared.snapshot;
+          if (members.length > 0 && args.remainingText) {
+            const texts = await args.remainingText(members);
+            if (texts) snapshot = pruneSnapshot(snapshot, texts);
+          }
+          for (const id of members) {
+            if (documents[id] !== undefined) documents[id] = snapshot;
+          }
+          shared = members.length > 0 ? { snapshot, members } : undefined;
+        }
         const next:
           PrivacyVaultPayloadV1 = {
-            ...payload,
+            ...rest,
             generation:
               payload.generation +
               1,
             documents,
-            // The shared key keeps its entries: other documents may use them.
-            ...(payload.shared
-              ? {
-                  shared: {
-                    snapshot: payload.shared.snapshot,
-                    members: payload.shared.members.filter((id) => id !== args.documentId)
-                  }
-                }
-              : {})
+            ...(shared ? { shared } : {})
           };
         await this.writePayload(
           args.caseId,

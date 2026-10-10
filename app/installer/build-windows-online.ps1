@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Configuration = "release",
   # The standalone offline installer reuses this thin payload; its NSIS hook
   # runs bootstrap\windows-offline-bundle-install.ps1 when the offline runtime

@@ -433,6 +433,31 @@ type PrivateDocumentRecord = {
   aiFindings?: Map<string, PiiSpan[]>;
 };
 
+/**
+ * Tekst w postaci NFC ("ó" jako jeden znak, nie "o" + znak łączący, jak w
+ * tekście z macOS lub z części PDF-ów): bez tego znane wartości z klucza,
+ * słownik i granice słów nie trafiają w zapis rozłożony.
+ */
+export function nfcIngestion(source: DocumentIngestionResult): DocumentIngestionResult {
+  const nfc = (text: string) => text.normalize("NFC");
+  const changed = (text: string) => nfc(text) !== text;
+  if (
+    !source.pages.some((page) => changed(page.text) || page.lines?.some((line) => changed(line.text))) &&
+    !source.chunks.some((chunk) => changed(chunk.text))
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    pages: source.pages.map((page) => ({
+      ...page,
+      text: nfc(page.text),
+      ...(page.lines ? { lines: page.lines.map((line) => ({ ...line, text: nfc(line.text) })) } : {})
+    })),
+    chunks: source.chunks.map((chunk) => ({ ...chunk, text: nfc(chunk.text) }))
+  };
+}
+
 function withAiMemory(
   recognizer: NamedEntityRecognizer,
   memory: Map<string, PiiSpan[]> | undefined
@@ -633,11 +658,11 @@ implements DocumentService {
   ): Promise<PublicDocumentReview> {
     const onProgress = security?.onProgress;
     onProgress?.({ stage: "READING" });
-    const extracted = await this.extract(
+    const extracted = nfcIngestion(await this.extract(
       data,
       mediaType,
       onProgress
-    );
+    ));
     const source =
       shouldCorrectOcr(security)
         ? await this.correctOcr(extracted, onProgress)
@@ -761,11 +786,18 @@ implements DocumentService {
   ): Promise<{ page: PublicDocumentReview["pages"][number]; suggestions: PublicPrivacySuggestion[] }> {
     const record = this.documents.get(documentId);
     if (!record) throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+    // Dokument sprawy edytuje tylko ktoś z dostępem do TEJ sprawy (i jej kluczem): inaczej
+    // dostęp do własnej sprawy wystarczałby, by nadpisać źródło dokumentu cudzej sprawy.
+    if (record.caseId && security?.caseId !== record.caseId) {
+      throw new Error("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+    }
     const index = record.source.pages.findIndex((item) => item.page === pageNumber);
     if (index < 0) throw new Error("INVALID_DOCUMENT_PAGE");
     const clean = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n");
     if (clean.length > MAX_EDITED_PAGE_CHARS) throw new Error("DOCUMENT_PAGE_TEXT_TOO_LONG");
-    const { lines: _lines, corrections: _corrections, ...previous } = record.source.pages[index]!;
+    // The page image goes with the OCR lines: masking needs the line boxes, and a hand-edited
+    // text no longer matches the image, so the image could only be sent unmasked.
+    const { lines: _lines, corrections: _corrections, image: _image, ...previous } = record.source.pages[index]!;
     const page: IngestedPage = { ...previous, text: clean, editedByUser: true };
     const pages = record.source.pages.map((item, at) => (at === index ? page : item));
     const source: DocumentIngestionResult = {
@@ -883,21 +915,12 @@ implements DocumentService {
     let keptRanges = 0;
 
     const onProgress = security?.onProgress;
-    const pseudonymizePages = async (): Promise<void> => {
-    for (const [pageIndex, page] of record.source.pages.entries()) {
-      onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
-      const pageDirectives = directives
-        .filter(
-          (directive) =>
-            directive.page === page.page
-        )
-        .map(({ page: _page, ...directive }) =>
-          directive
-        );
-
-      const protectedPage =
-        await new LocalPolishPseudonymizer(
-          record.vault,
+    // Wyniki rozpoznawania osób per strona: drugi przebieg ich nie liczy od nowa.
+    const pageMemory = record.source.pages.map(() => new Map<string, PiiSpan[]>());
+    const protectPage = (pageIndex: number, page: IngestedPage, pageDirectives: ManualPrivacyDirective[]) =>
+      new LocalPolishPseudonymizer(
+        record.vault,
+        rememberingRecognizer(
           withAiMemory(privacyRecognizerFor(
             this.namedEntities,
             page.source === "OCR",
@@ -908,11 +931,31 @@ implements DocumentService {
                 }
               : undefined
           ), record.aiFindings),
-          this.personMorphology
-        ).pseudonymize(
-          page.text,
-          pageDirectives
-        );
+          pageMemory[pageIndex]!
+        ),
+        this.personMorphology
+      ).pseudonymize(page.text, pageDirectives);
+    const directivesFor = (page: IngestedPage): ManualPrivacyDirective[] =>
+      directives
+        .filter((directive) => directive.page === page.page)
+        .map(({ page: _page, ...directive }) => directive);
+    const pseudonymizePages = async (): Promise<void> => {
+    const multiPage = record.source.pages.length > 1;
+    if (multiPage) {
+      // Pierwszy przebieg zbiera do klucza osoby ze wszystkich stron, żeby
+      // osoba rozpoznana dopiero na s. 3 była chroniona także na s. 1.
+      for (const [pageIndex, page] of record.source.pages.entries()) {
+        onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+        await protectPage(pageIndex, page, directivesFor(page));
+      }
+    }
+    for (const [pageIndex, page] of record.source.pages.entries()) {
+      if (!multiPage) {
+        onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+      }
+      const pageDirectives = directivesFor(page);
+
+      const protectedPage = await protectPage(pageIndex, page, pageDirectives);
       findings += protectedPage.findings.length;
       manualPseudonymizations +=
         protectedPage.findings.filter(
@@ -1300,7 +1343,7 @@ implements DocumentService {
         vault,
         sharedKey,
         source:
-          source.source,
+          nfcIngestion(source.source),
         protectedIngestion:
           protectedResult,
         protectedChunks:

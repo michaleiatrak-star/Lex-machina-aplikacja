@@ -48,6 +48,15 @@ describe("deanonymizing a file with placeholders", () => {
     expect(result.unresolved).toEqual(["[PII:X:0009]"]);
   });
 
+  it("refuses a sheet the editor read only in part instead of saving it cut down", () => {
+    expect(() =>
+      deanonymizeModel(
+        { kind: "sheet", truncated: true, sheets: [{ name: "A", rows: [["[PII:PESEL:0001]"]] }] },
+        restore
+      )
+    ).toThrow("FILE_DEANONYMIZATION_TOO_LARGE");
+  });
+
   it("restores sheet cells", () => {
     const result = deanonymizeModel(
       { kind: "sheet", truncated: false, sheets: [{ name: "A", rows: [["[PII:PESEL:0001]", "x"]] }] },

@@ -13,7 +13,8 @@ import {
   SKILLS_REPOSITORY,
   downloadSkillChannelArchive,
   resolveSkillChannel,
-  verifiedChannelRoot,
+  extractSkillChannelDirectory,
+  verifyChannelFiles,
   type SkillChannel
 } from "./skill-channel.js";
 import {
@@ -887,9 +888,9 @@ export class MaintenanceService {
         | "SIGNED_REQUIRED"
         | "UNSIGNED_ALLOWED" =
       modelPackSignatureMode,
-    private readonly archiveExtractor:
-      (zipPath: string, destination: string) => void =
-      extractZip
+    private readonly channelExtractor:
+      (zip: Uint8Array, directory: string, destination: string) => unknown =
+      extractSkillChannelDirectory
   ) {}
 
   private installedChannel(): SkillChannelInstalled | null {
@@ -954,22 +955,36 @@ export class MaintenanceService {
    * start z nieudaną walidacją wraca do poprzedniej albo do wbudowanej).
    */
   async refreshSkillsFromChannel(channel: SkillChannel): Promise<SkillChannelRefreshResult> {
+    // Kanał to gałąź repozytorium bez podpisanego indeksu: zgodność sum git dowodzi
+    // tylko spójności dwóch odpowiedzi GitHub, nie autorstwa. Polityka wymagająca
+    // podpisu skilli blokuje więc odświeżenie z kanału. Bez LEX_RUNTIME_ROOT (runtime
+    // uruchomiony z repozytorium) nie ma zainstalowanej polityki; uszkodzona polityka
+    // instalacji blokuje.
+    let signatureMode: "SIGNED_REQUIRED" | "UNSIGNED_ALLOWED" | null = null;
+    try {
+      signatureMode = this.skillSignatureMode();
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "SKILL_UPDATE_RUNTIME_ROOT_MISSING")) {
+        throw error;
+      }
+    }
+    if (signatureMode === "SIGNED_REQUIRED") {
+      throw new Error("SKILL_CHANNEL_SIGNED_POLICY_BLOCKED");
+    }
     const snapshot = await resolveSkillChannel(channel, this.fetchImpl);
     const bytes = await downloadSkillChannelArchive(snapshot, this.fetchImpl);
     const skillsRoot = path.join(localAppDataRoot(), "skills");
+    // Krótki katalog roboczy i rozpakowanie samego katalogu kanału (bez prefiksu
+    // archiwum): ścieżki skilli mieszczą się wtedy w limicie Windows (MAX_PATH).
     const workRoot = path.join(
       skillsRoot,
-      `channel-${Date.now()}-${randomBytes(4).toString("hex")}`
+      `c-${randomBytes(4).toString("hex")}`
     );
-    const zipPath = path.join(workRoot, "skills.zip");
-    const extracted = path.join(workRoot, "extracted");
-    const candidate = path.join(workRoot, "candidate");
+    const candidate = path.join(workRoot, "s");
     fs.mkdirSync(workRoot, { recursive: true });
     try {
-      fs.writeFileSync(zipPath, bytes);
-      this.archiveExtractor(zipPath, extracted);
-      const sourceRoot = verifiedChannelRoot(extracted, snapshot);
-      fs.cpSync(sourceRoot, candidate, { recursive: true, force: true });
+      this.channelExtractor(bytes, snapshot.directory, candidate);
+      verifyChannelFiles(candidate, snapshot);
 
       const validation = new LexSkillRegistry(candidate);
       const issues = [...validation.scan(), ...validation.validateDeclarations()];
@@ -1041,7 +1056,12 @@ export class MaintenanceService {
       throw new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED");
     }
     // macOS: the update is installed by opening the new .pkg (no in-app runner).
-    if (process.platform === "darwin") {
+    // Windows: bez skonfigurowanego wydawcy Authenticode (instalatory bez podpisu)
+    // weryfikator odrzuci każdy plik - użytkownik pobiera instalator ze strony wydania.
+    if (
+      process.platform === "darwin" ||
+      this.installerVerifier.ready?.() === false
+    ) {
       throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
     }
     const version = requireLatestVersion(status);

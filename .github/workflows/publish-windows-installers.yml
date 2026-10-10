@@ -247,7 +247,11 @@ jobs:
 
           - **Online** — small core installer; downloads and verifies missing runtime components during installation.
           - **Offline** — standalone installer with the complete core runtime bundle for a network-blocked installation.
-          - **macOS (Apple silicon) online** — `.pkg`; downloads and verifies the runtime components on first start.
+          - **macOS (Apple silicon) online** — `.pkg`; downloads and verifies the runtime components during installation (internet required, about 2 GB).
+
+          ### macOS: first opening of the package
+
+          The macOS package is not signed with an Apple Developer ID. If macOS refuses to open it, open **System Settings → Privacy & Security** and choose **Open Anyway** for the package (or run `xattr -d com.apple.quarantine <file>.pkg`), then open it again. A macOS update is installed by opening the newer `.pkg`; data and settings are kept.
 
           ### Local AI
 

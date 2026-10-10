@@ -1,8 +1,10 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
+import { startGuardedPolling } from "./guarded-polling.js";
 import {
   apiBase,
   authorizationHeaders,
@@ -376,19 +378,32 @@ export function LocalAiSetupPanel({
     void refresh();
   }, [available, user.appRole]);
 
-  function startProvisioningPolling(): number {
-    return window.setInterval(() => {
-      void request<LocalModelsResponse>(
-        "/api/local-models"
-      )
-        .then((next) => {
-          setData(next);
-        })
-        .catch(() => {
-          // The provisioning request owns user-visible errors.
-        });
-    }, 750);
+  // Zatrzymanie odpytywania w toku (także przy odmontowaniu panelu).
+  const stopActivePolling =
+    useRef<(() => void) | null>(null);
+
+  function startProvisioningPolling(): () => void {
+    stopActivePolling.current?.();
+    const stop = startGuardedPolling(
+      () => request<LocalModelsResponse>("/api/local-models"),
+      setData,
+      750
+    );
+    stopActivePolling.current = stop;
+    return stop;
   }
+
+  function stopProvisioningPolling(stop: () => void): void {
+    stop();
+    if (stopActivePolling.current === stop) {
+      stopActivePolling.current = null;
+    }
+  }
+
+  useEffect(() => () => {
+    stopActivePolling.current?.();
+    stopActivePolling.current = null;
+  }, []);
 
   useEffect(() => {
     if (!selected) return;
@@ -482,7 +497,7 @@ export function LocalAiSetupPanel({
       setError(problem instanceof Error ? problem.message : String(problem));
       setMessage("");
     } finally {
-      window.clearInterval(
+      stopProvisioningPolling(
         polling
       );
       await refresh();
@@ -564,7 +579,7 @@ export function LocalAiSetupPanel({
       );
       setMessage("");
     } finally {
-      window.clearInterval(
+      stopProvisioningPolling(
         polling
       );
       await refresh();
@@ -606,7 +621,7 @@ export function LocalAiSetupPanel({
       setError(problem instanceof Error ? problem.message : String(problem));
       setMessage("");
     } finally {
-      window.clearInterval(
+      stopProvisioningPolling(
         polling
       );
       await refresh();

@@ -5,7 +5,9 @@ import {
   vi
 } from "vitest";
 import {
+  APPLICATION_RELEASE_REPOSITORY,
   GitHubReleaseUpdateDiscovery,
+  applicationUpdateDiscovery,
   compareVersions
 } from "../src/update-discovery.js";
 
@@ -158,5 +160,40 @@ describe("GitHub release update discovery", () => {
       status:
         "UNAVAILABLE"
     });
+  });
+
+  it("finds the published app release (pre-release in the app repository)", async () => {
+    const repo = "michaleiatrak-star/Lex-machina-aplikacja";
+    const asset = (name: string, digit: string) => ({
+      name,
+      browser_download_url: `https://github.com/${repo}/releases/download/v99.0.0/${name}`,
+      digest: `sha256:${digit.repeat(64)}`,
+      size: 1000
+    });
+    const fetchImpl = vi.fn(async (url: string) => {
+      expect(url).toBe(`https://api.github.com/repos/${repo}/releases?per_page=20`);
+      return new Response(JSON.stringify([{
+        tag_name: "v99.0.0",
+        html_url: `https://github.com/${repo}/releases/tag/v99.0.0`,
+        draft: false,
+        prerelease: true,
+        assets: [
+          asset("Lex-Machina-99.0.0-macOS-arm64-Online.pkg", "a"),
+          asset("Lex-Machina-99.0.0-Online-x64-Setup.exe", "b"),
+          asset("SHA256SUMS.txt", "c")
+        ]
+      }]), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    expect(APPLICATION_RELEASE_REPOSITORY).toBe(repo);
+    const result = await applicationUpdateDiscovery(fetchImpl).check();
+    expect(result).toMatchObject({
+      status: "AVAILABLE",
+      latestVersion: "99.0.0"
+    });
+    const expected = process.platform === "darwin"
+      ? "Lex-Machina-99.0.0-macOS-arm64-Online.pkg"
+      : "Lex-Machina-99.0.0-Online-x64-Setup.exe";
+    expect(result.installer?.name).toBe(expected);
   });
 });

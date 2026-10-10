@@ -127,6 +127,13 @@ type Detector = {
 
 const DETECTORS: Detector[] = [
   { kind: "PESEL", regex: /(?<![\d-])\d{11}(?![\d-])/g, validate: validPesel },
+  // Digits split by spaces or hyphens: "850 101 12345", "85 01 01 12345", a form
+  // with one digit per box ("8 5 0 1 0 1 1 2 3 4 5" after joining PDF text items).
+  {
+    kind: "PESEL",
+    regex: /(?<!\d[ \u00a0-]?)\d(?:[ \u00a0-]?\d){10}(?![ \u00a0-]?\d)/g,
+    validate: (value) => /[ \u00a0-]/.test(value) && validPesel(value)
+  },
   {
     kind: "NIP",
     regex: /(?<![\w-])(?:PL\s?)?(?:\d{3}-\d{3}-\d{2}-\d{2}|\d{3}-\d{2}-\d{2}-\d{3}|\d{3} \d{3} \d{2} \d{2}|\d{10})(?![\w-])/g,
