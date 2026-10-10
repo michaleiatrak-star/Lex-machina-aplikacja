@@ -65,6 +65,9 @@ function friendlyError(error: unknown): string {
         ? error.message
         : String(error);
 
+  if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
+    return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
+  }
   if (
     code.includes("SIGNER_POLICY_MISSING") ||
     code.includes("SIGNER_NOT_TRUSTED") ||

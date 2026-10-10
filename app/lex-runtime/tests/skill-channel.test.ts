@@ -147,6 +147,28 @@ describe("kanały skilli z repozytorium Lex Machina", () => {
     expect((await maintenance.skillChannelStatus("stable")).status).not.toBe("UP_TO_DATE");
   });
 
+  it("polityka wymagająca podpisu skilli blokuje odświeżenie z kanału", async () => {
+    process.env.LOCALAPPDATA = tempDir();
+    const { fetcher, requested } = github(FILES);
+    const maintenance = new MaintenanceService(
+      { check: async () => ({ currentVersion: "0.1.10", status: "NO_RELEASE", checkedAt: "" }) },
+      fetcher as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => "SIGNED_REQUIRED",
+      undefined,
+      (_zip, _directory, destination) => writeChannel(destination, FILES)
+    );
+    await expect(maintenance.refreshSkillsFromChannel("development")).rejects.toThrow(
+      "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED"
+    );
+    expect(requested).toEqual([]);
+    expect(fs.existsSync(installedSkillOverlayRoot())).toBe(false);
+  });
+
   it("brak dostępu do GitHub: stan UNAVAILABLE z przyczyną, bez zmian w nakładce", async () => {
     process.env.LOCALAPPDATA = tempDir();
     const maintenance = new MaintenanceService(

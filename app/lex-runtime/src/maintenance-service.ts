@@ -955,6 +955,22 @@ export class MaintenanceService {
    * start z nieudaną walidacją wraca do poprzedniej albo do wbudowanej).
    */
   async refreshSkillsFromChannel(channel: SkillChannel): Promise<SkillChannelRefreshResult> {
+    // Kanał to gałąź repozytorium bez podpisanego indeksu: zgodność sum git dowodzi
+    // tylko spójności dwóch odpowiedzi GitHub, nie autorstwa. Polityka wymagająca
+    // podpisu skilli blokuje więc odświeżenie z kanału. Bez LEX_RUNTIME_ROOT (runtime
+    // uruchomiony z repozytorium) nie ma zainstalowanej polityki; uszkodzona polityka
+    // instalacji blokuje.
+    let signatureMode: "SIGNED_REQUIRED" | "UNSIGNED_ALLOWED" | null = null;
+    try {
+      signatureMode = this.skillSignatureMode();
+    } catch (error) {
+      if (!(error instanceof Error && error.message === "SKILL_UPDATE_RUNTIME_ROOT_MISSING")) {
+        throw error;
+      }
+    }
+    if (signatureMode === "SIGNED_REQUIRED") {
+      throw new Error("SKILL_CHANNEL_SIGNED_POLICY_BLOCKED");
+    }
     const snapshot = await resolveSkillChannel(channel, this.fetchImpl);
     const bytes = await downloadSkillChannelArchive(snapshot, this.fetchImpl);
     const skillsRoot = path.join(localAppDataRoot(), "skills");
