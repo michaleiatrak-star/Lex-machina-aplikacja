@@ -1,4 +1,5 @@
 import { detectLegalReferences } from "./finalization-gate.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 export const ROUTER_SKILL = "prawny-router-v3";
 const PROFILE = "references/PROFIL-LEKKI.md";
 const ROUTER_FILE = `${ROUTER_SKILL}/SKILL.md`;
@@ -112,7 +113,7 @@ export function analysisRequested(message) {
 const FOREIGN_STATES = "niemieck|francusk|angielsk|brytyjsk|amerykańsk|ukraińsk|czesk|słowack|litewsk|niderlandzk|holendersk|belgijsk|austriack|szwajcarsk|włosk|hiszpańsk|portugalsk|irlandzk|szwedzk|norwesk|duńsk|fińsk|białorusk|rosyjsk|węgiersk|rumuńsk|bułgarsk|chorwack|greck|turecki|chińsk|japońsk|kanadyjsk|izraelsk|luksembursk|maltańsk|cypryjsk|estońsk|łotewsk|słoweńsk|szkock";
 const FOREIGN_JURISDICTION = new RegExp([
     `\\b(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*|jurysdykcj\\p{L}*)\\s+(?:${FOREIGN_STATES})\\p{L}*`,
-    `\\b(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
+    `(?<![\\p{L}\\d])(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
     "\\b(?:prawo obce|prawa obcego|prawem obcym|prawo właściwe|prawa właściwego|jurysdykcj\\p{L}* zagraniczn\\p{L}*|sąd\\p{L}* zagraniczn\\p{L}*)",
     "\\bumow\\p{L}* międzynarodow\\p{L}*|\\btraktat\\p{L}*|\\bkonwencj\\p{L}* (?:wiedeńsk|hask|nowojorsk|genewsk|montrealsk|warszawsk|CMR|o prawach)\\p{L}*|\\bratyfikac\\p{L}*|\\bRzym I{1,2}\\b|\\bBruksela I\\p{L}*"
 ].join("|"), "iu");
@@ -120,7 +121,7 @@ export function foreignJurisdiction(query) {
     return FOREIGN_JURISDICTION.test(query);
 }
 const DATE = /\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b|\b\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+\d{4}\b/giu;
-const ARTICLE = /\bart\.?\s*\d+/i;
+const ARTICLE = new RegExp(`${ARTICLE_LEAD}\\d+`, "iu");
 function preTrigger(name, facts) {
     switch (name) {
         case "MOD-CN-GATE.md":

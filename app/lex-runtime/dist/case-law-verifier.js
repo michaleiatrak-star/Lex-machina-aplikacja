@@ -1,4 +1,4 @@
-import { SN_REPERTORIES, signaturesIn } from "./court-of-signature.js";
+import { SN_REPERTORIES, courtOfSignature, signaturesIn } from "./court-of-signature.js";
 import { createHash } from "node:crypto";
 import { caseLawRepository } from "./case-law-store.js";
 import { documentText } from "./official-text.js";
@@ -48,6 +48,11 @@ function signatureParts(value) {
     };
 }
 export function isSupremeCourtSignature(value) {
+    // Wielkość liter rozstrzyga przed normalizacją: "II Cz 123/20" i "III Ko 5/21" to sądy
+    // powszechne, nie repertoria SN CZ i KO.
+    const court = courtOfSignature(value);
+    if (court && court !== "SN")
+        return false;
     const parts = signatureParts(value);
     return Boolean(parts &&
         SN_REPERTORIES.has(parts.repertory));
@@ -426,7 +431,11 @@ export class SupremeCourtCaseVerifier {
     }
     async verify(request) {
         const normalizedSignature = normalizeCaseSignature(request.signature);
+        // Sąd z zapisu przed normalizacją (wielkość liter), repertorium po normalizacji.
+        const writtenCourt = courtOfSignature(request.signature);
         if (!request.claim.trim() ||
+            (writtenCourt !== null &&
+                writtenCourt !== "SN") ||
             !isSupremeCourtSignature(normalizedSignature)) {
             return {
                 status: "OUT_OF_SCOPE",

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { inflateRawSync } from "node:zlib";
 /**
  * Skille z repozytorium Lex Machina (nie z wydań aplikacji): dwa kanały rozwijane
  * dwutorowo — rozwojowy ("Wersja rozwojowa rozpakowana") i stabilny ("Wersja stabilna
@@ -112,18 +113,99 @@ function listFiles(root, base = root) {
     return out;
 }
 /**
- * Katalog kanału z rozpakowanego archiwum ("<repo>-<commit>/<katalog>") po weryfikacji
- * każdego pliku sumą git z drzewa commita. Zwraca ścieżkę katalogu kanału.
+ * Rozpakowuje z archiwum GitHub ("<repo>-<commit>/<katalog>/...") tylko pliki katalogu
+ * kanału, wprost do `destination` (bez prefiksu archiwum). Rozpakowanie w Node, nie przez
+ * Expand-Archive: Windows PowerShell 5.1 nie zapisze ścieżki dłuższej niż 260 znaków
+ * (MAX_PATH), a prefiks archiwum z nazwą katalogu kanału i najdłuższym skillem ją
+ * przekraczał. Wpisy z "..", ścieżką bezwzględną albo dowiązaniem są odrzucane.
  */
-export function verifiedChannelRoot(extracted, snapshot) {
-    const candidates = fs
-        .readdirSync(extracted, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => path.join(extracted, entry.name, snapshot.directory))
-        .filter((dir) => fs.existsSync(dir));
-    if (candidates.length !== 1)
-        throw new Error("SKILL_CHANNEL_ARCHIVE_LAYOUT_INVALID");
-    const root = candidates[0];
+export function extractSkillChannelDirectory(zip, directory, destination) {
+    const data = Buffer.from(zip.buffer, zip.byteOffset, zip.byteLength);
+    // Koniec katalogu centralnego (EOCD): sygnatura 0x06054b50, komentarz do 64 KiB.
+    let eocd = -1;
+    for (let i = data.length - 22; i >= Math.max(0, data.length - 22 - 0xffff); i--) {
+        if (data.readUInt32LE(i) === 0x06054b50) {
+            eocd = i;
+            break;
+        }
+    }
+    if (eocd < 0)
+        throw new Error("SKILL_CHANNEL_ARCHIVE_INVALID");
+    const entryCount = data.readUInt16LE(eocd + 10);
+    let offset = data.readUInt32LE(eocd + 16);
+    if (entryCount === 0xffff || offset === 0xffffffff) {
+        throw new Error("SKILL_CHANNEL_ARCHIVE_ZIP64_UNSUPPORTED");
+    }
+    const wanted = directory.normalize("NFC").split("/").filter(Boolean);
+    const root = path.resolve(destination);
+    fs.mkdirSync(root, { recursive: true });
+    let written = 0;
+    for (let n = 0; n < entryCount; n++) {
+        if (offset + 46 > data.length || data.readUInt32LE(offset) !== 0x02014b50) {
+            throw new Error("SKILL_CHANNEL_ARCHIVE_INVALID");
+        }
+        const method = data.readUInt16LE(offset + 10);
+        const compressedSize = data.readUInt32LE(offset + 20);
+        const size = data.readUInt32LE(offset + 24);
+        const nameLength = data.readUInt16LE(offset + 28);
+        const extraLength = data.readUInt16LE(offset + 30);
+        const commentLength = data.readUInt16LE(offset + 32);
+        const externalAttributes = data.readUInt32LE(offset + 38);
+        const localOffset = data.readUInt32LE(offset + 42);
+        const rawName = data.subarray(offset + 46, offset + 46 + nameLength);
+        offset += 46 + nameLength + extraLength + commentLength;
+        // Nazwy w archiwach GitHub są w UTF-8.
+        const name = rawName.toString("utf8").normalize("NFC");
+        if (name.endsWith("/"))
+            continue;
+        const segments = name.split("/");
+        if (name.includes("\\") ||
+            name.includes("\0") ||
+            name.startsWith("/") ||
+            segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+            throw new Error("SKILL_CHANNEL_ARCHIVE_PATH_INVALID");
+        }
+        // Pierwszy segment to "<repo>-<commit>"; dalej katalog kanału.
+        if (segments.length <= wanted.length + 1)
+            continue;
+        if (!wanted.every((segment, index) => segments[index + 1] === segment))
+            continue;
+        if (((externalAttributes >>> 16) & 0o170000) === 0o120000) {
+            throw new Error("SKILL_CHANNEL_SYMLINK_FORBIDDEN");
+        }
+        const relative = segments.slice(wanted.length + 1);
+        const target = path.resolve(root, ...relative);
+        if (!target.startsWith(root + path.sep)) {
+            throw new Error("SKILL_CHANNEL_ARCHIVE_PATH_INVALID");
+        }
+        if (localOffset + 30 > data.length || data.readUInt32LE(localOffset) !== 0x04034b50) {
+            throw new Error("SKILL_CHANNEL_ARCHIVE_INVALID");
+        }
+        const dataStart = localOffset + 30 + data.readUInt16LE(localOffset + 26) + data.readUInt16LE(localOffset + 28);
+        if (dataStart + compressedSize > data.length) {
+            throw new Error("SKILL_CHANNEL_ARCHIVE_INVALID");
+        }
+        const compressed = data.subarray(dataStart, dataStart + compressedSize);
+        let content;
+        if (method === 0)
+            content = Buffer.from(compressed);
+        else if (method === 8)
+            content = inflateRawSync(compressed, { maxOutputLength: Math.max(size, 1) });
+        else
+            throw new Error("SKILL_CHANNEL_ARCHIVE_METHOD_UNSUPPORTED");
+        if (content.byteLength !== size)
+            throw new Error("SKILL_CHANNEL_ARCHIVE_INVALID");
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, content, { flag: "wx" });
+        written++;
+    }
+    return written;
+}
+/**
+ * Sprawdza katalog kanału (już bez prefiksu archiwum): każdy plik sumą git z drzewa
+ * commita, brak albo nadmiar pliku = odmowa.
+ */
+export function verifyChannelFiles(root, snapshot) {
     const expected = new Map(snapshot.files.map((file) => [file.path.normalize("NFC"), file]));
     const actual = listFiles(root);
     if (actual.length !== expected.size)
@@ -136,5 +218,4 @@ export function verifiedChannelRoot(extracted, snapshot) {
             throw new Error("SKILL_CHANNEL_FILE_HASH_MISMATCH");
         }
     }
-    return root;
 }

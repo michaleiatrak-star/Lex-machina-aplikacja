@@ -198,6 +198,23 @@ export class WindowsAuthenticodeInstallerVerifier {
         this.probe = probe;
         this.productVersionProbe = productVersionProbe;
     }
+    ready() {
+        if (this.configuredTrustedThumbprints) {
+            return true;
+        }
+        try {
+            readApplicationUpdateTrustPolicy(this.manifestPath);
+            return true;
+        }
+        catch (error) {
+            if (error instanceof Error &&
+                error.message ===
+                    "APPLICATION_UPDATE_SIGNER_POLICY_MISSING") {
+                return false;
+            }
+            throw error;
+        }
+    }
     verify(installerPath, expectedVersion) {
         const policy = this.configuredTrustedThumbprints
             ? {

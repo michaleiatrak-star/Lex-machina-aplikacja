@@ -67,6 +67,8 @@ export class AmendmentApplicabilityResolver {
             const response = await this.fetcher(url, {
                 method: "GET",
                 redirect: "error",
+                // Zawieszone ELI nie blokuje tury na czas domyślnego limitu undici.
+                signal: AbortSignal.timeout(15_000),
                 headers: {
                     Accept: "application/json"
                 }

@@ -180,6 +180,8 @@ export class PseudonymizationVault {
             }
             this.keyToToken.set(key, item.token);
             this.tokenToValue.set(item.token, item.value);
+            // As in getOrCreate: a key read from disk merges entities by surface too.
+            this.tokenSurfaces.set(item.token, new Set([item.value]));
             this.tokenMetadata.set(item.token, {
                 kind: item.kind,
                 createdAt: item.createdAt
@@ -225,6 +227,20 @@ export class PseudonymizationVault {
                 this.tokenEntities.set(sameEntity, calmEntity(entity));
             }
             return sameEntity;
+        }
+        // "JAN KOWALSKI" from a heading, without a paradigm: the same person as a
+        // known "Jan Kowalski" (one token, restored in normal spelling).
+        if (ENTITY_KINDS.has(kind) && !entity && isShouting(value)) {
+            const upper = value.toLocaleUpperCase("pl");
+            for (const [token, known] of this.tokenToValue) {
+                if (this.tokenMetadata.get(token)?.kind !== kind || this.tokenEntities.get(token)?.type === "organization")
+                    continue;
+                if (known.toLocaleUpperCase("pl") === upper) {
+                    this.keyToToken.set(key, token);
+                    this.tokenSurfaces.get(token)?.add(value);
+                    return token;
+                }
+            }
         }
         const next = (this.counters.get(kind) ?? 0) + 1;
         this.counters.set(kind, next);
@@ -500,7 +516,12 @@ export class LocalPolishPseudonymizer {
         // A person found once is protected everywhere: mentions the recognizer
         // missed (another page, another case form) are matched by known forms.
         const propagatedEntities = new Map();
-        for (const form of this.vault.knownEntityForms()) {
+        // Also the all-caps spelling of a known form ("POWÓD: JAN KOWALSKI" in a heading).
+        const knownForms = this.vault.knownEntityForms().flatMap((form) => {
+            const shouted = form.text.toLocaleUpperCase("pl");
+            return shouted === form.text ? [form] : [form, { ...form, text: shouted }];
+        });
+        for (const form of knownForms) {
             const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
                 autoSpans.push({

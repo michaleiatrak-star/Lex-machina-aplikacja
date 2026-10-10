@@ -25,6 +25,15 @@ describe("Gate I automatic statutory verification", () => {
             asOf: "2020-06-01"
         });
     });
+    it("rozpoznaje datę stanu prawnego zapisaną słownie i z kropkami", () => {
+        expect(detectHistoricalAsOf("Jaki był stan prawny na 1 maja 2023 r. dla art. 5 KC?")).toBe("2023-05-01");
+        expect(detectHistoricalAsOf("Brzmienie art. 5 KC na dzień 01.05.2023.")).toBe("2023-05-01");
+        expect(detectHistoricalAsOf("Według stanu prawnego na 1.5.2023 art. 5 KC.")).toBe("2023-05-01");
+        // Nieistniejąca data nie ustawia stanu historycznego.
+        expect(detectHistoricalAsOf("stan na 31.02.2023")).toBeUndefined();
+        // Ta sama data w dwóch zapisach to jeden stan.
+        expect(detectHistoricalAsOf("stan na 1 maja 2023, czyli na dzień 2023-05-01")).toBe("2023-05-01");
+    });
     it("never upgrades an explicit unverified marker to a current-law verification", () => {
         const ledger = new VerificationLedger();
         ledger.add({

@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import { caseLawRepository } from "./case-law-store.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import { SupremeCourtCaseVerifier, propositionEvidenceHash, supremeCourtSearchUrl } from "./case-law-verifier.js";
@@ -917,7 +918,7 @@ export class LegalVerificationToolRuntime {
                 claim,
                 index: this.coreLaw,
                 fetcher: this.eliFetch,
-                today: new Date().toISOString().slice(0, 10)
+                today: todayWarsaw()
             });
             return described ? { act: described } : {};
         }

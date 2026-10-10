@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
@@ -532,6 +533,17 @@ export const THREAD_SUMMARY_PROMPT = [
     "- Jeśli jest dotychczasowe streszczenie, zaktualizuj je o nowe wiadomości i zachowaj jego poprawki (mogła je wprowadzić osoba prowadząca sprawę).",
     "- Najwyżej ok. 6000 znaków; zwięźle, w punktach."
 ].join("\n");
+/**
+ * Wiadomość w postaci NFC przed pseudonimizacją: tekst wklejony z macOS bywa
+ * rozłożony (NFD) i wtedy znane nazwiska oraz granice słów nie trafiają.
+ */
+export function nfcRequest(request) {
+    const query = request.query.normalize("NFC");
+    const auxiliaryText = request.auxiliaryText?.normalize("NFC");
+    if (query === request.query && auxiliaryText === request.auxiliaryText)
+        return request;
+    return { ...request, query, ...(auxiliaryText !== undefined ? { auxiliaryText } : {}) };
+}
 export class SafeSessionExecutor {
     registry;
     providers;
@@ -698,6 +710,7 @@ export class SafeSessionExecutor {
             : undefined;
     }
     async resolveAutoRouting(request) {
+        request = nfcRequest(request);
         const vault = new PseudonymizationVault(request.privacySeed);
         const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
         let protectedQuery;
@@ -733,6 +746,7 @@ export class SafeSessionExecutor {
         };
     }
     async execute(request) {
+        request = nfcRequest(request);
         // Tokens of every model call in this turn (benchmark and cost display).
         const { result, usage } = await meterUsage(() => this.executeTurn(request));
         result.usage = usage;
@@ -2359,7 +2373,7 @@ export class SafeSessionExecutor {
         // KROK 4: provisions verified in their current wording, checked again on the
         // event date from the question (separate ledger: answer markers stay as they are).
         const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
-            ? eventDates(pathFacts.query, new Date().toISOString().slice(0, 10))
+            ? eventDates(pathFacts.query, todayWarsaw())
             : [];
         const eventDateCheck = dates.length
             ? await checkProvisionsAtEventDates({

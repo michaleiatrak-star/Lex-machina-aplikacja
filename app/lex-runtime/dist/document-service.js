@@ -104,6 +104,28 @@ export function highlightProtected(protectedText, source, surfaces, fallback) {
     }
     return { text, marks };
 }
+/**
+ * Tekst w postaci NFC ("ó" jako jeden znak, nie "o" + znak łączący, jak w
+ * tekście z macOS lub z części PDF-ów): bez tego znane wartości z klucza,
+ * słownik i granice słów nie trafiają w zapis rozłożony.
+ */
+export function nfcIngestion(source) {
+    const nfc = (text) => text.normalize("NFC");
+    const changed = (text) => nfc(text) !== text;
+    if (!source.pages.some((page) => changed(page.text) || page.lines?.some((line) => changed(line.text))) &&
+        !source.chunks.some((chunk) => changed(chunk.text))) {
+        return source;
+    }
+    return {
+        ...source,
+        pages: source.pages.map((page) => ({
+            ...page,
+            text: nfc(page.text),
+            ...(page.lines ? { lines: page.lines.map((line) => ({ ...line, text: nfc(line.text) })) } : {})
+        })),
+        chunks: source.chunks.map((chunk) => ({ ...chunk, text: nfc(chunk.text) }))
+    };
+}
 function withAiMemory(recognizer, memory) {
     return memory ? rememberingRecognizer(recognizer, memory) : recognizer;
 }
@@ -235,7 +257,7 @@ export class LocalPrivateDocumentService {
     async review(data, mediaType, security) {
         const onProgress = security?.onProgress;
         onProgress?.({ stage: "READING" });
-        const extracted = await this.extract(data, mediaType, onProgress);
+        const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
         const source = shouldCorrectOcr(security)
             ? await this.correctOcr(extracted, onProgress)
             : extracted;
@@ -321,6 +343,11 @@ export class LocalPrivateDocumentService {
         const record = this.documents.get(documentId);
         if (!record)
             throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+        // Dokument sprawy edytuje tylko ktoś z dostępem do TEJ sprawy (i jej kluczem): inaczej
+        // dostęp do własnej sprawy wystarczałby, by nadpisać źródło dokumentu cudzej sprawy.
+        if (record.caseId && security?.caseId !== record.caseId) {
+            throw new Error("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+        }
         const index = record.source.pages.findIndex((item) => item.page === pageNumber);
         if (index < 0)
             throw new Error("INVALID_DOCUMENT_PAGE");
@@ -415,17 +442,32 @@ export class LocalPrivateDocumentService {
         let manualPseudonymizations = 0;
         let keptRanges = 0;
         const onProgress = security?.onProgress;
+        // Wyniki rozpoznawania osób per strona: drugi przebieg ich nie liczy od nowa.
+        const pageMemory = record.source.pages.map(() => new Map());
+        const protectPage = (pageIndex, page, pageDirectives) => new LocalPolishPseudonymizer(record.vault, rememberingRecognizer(withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR", record.localAi
+            ? {
+                onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
+            }
+            : undefined), record.aiFindings), pageMemory[pageIndex]), this.personMorphology).pseudonymize(page.text, pageDirectives);
+        const directivesFor = (page) => directives
+            .filter((directive) => directive.page === page.page)
+            .map(({ page: _page, ...directive }) => directive);
         const pseudonymizePages = async () => {
+            const multiPage = record.source.pages.length > 1;
+            if (multiPage) {
+                // Pierwszy przebieg zbiera do klucza osoby ze wszystkich stron, żeby
+                // osoba rozpoznana dopiero na s. 3 była chroniona także na s. 1.
+                for (const [pageIndex, page] of record.source.pages.entries()) {
+                    onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+                    await protectPage(pageIndex, page, directivesFor(page));
+                }
+            }
             for (const [pageIndex, page] of record.source.pages.entries()) {
-                onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
-                const pageDirectives = directives
-                    .filter((directive) => directive.page === page.page)
-                    .map(({ page: _page, ...directive }) => directive);
-                const protectedPage = await new LocalPolishPseudonymizer(record.vault, withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR", record.localAi
-                    ? {
-                        onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
-                    }
-                    : undefined), record.aiFindings), this.personMorphology).pseudonymize(page.text, pageDirectives);
+                if (!multiPage) {
+                    onProgress?.({ stage: "PSEUDONYMIZING", done: pageIndex, total: record.source.pages.length, page: page.page });
+                }
+                const pageDirectives = directivesFor(page);
+                const protectedPage = await protectPage(pageIndex, page, pageDirectives);
                 findings += protectedPage.findings.length;
                 manualPseudonymizations +=
                     protectedPage.findings.filter((item) => item.source === "USER").length;
@@ -661,7 +703,7 @@ export class LocalPrivateDocumentService {
             caseId: args.caseId,
             vault,
             sharedKey,
-            source: source.source,
+            source: nfcIngestion(source.source),
             protectedIngestion: protectedResult,
             protectedChunks: protectedResult
                 .chunks

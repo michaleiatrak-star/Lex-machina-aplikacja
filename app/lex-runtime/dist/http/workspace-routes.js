@@ -1,7 +1,7 @@
 import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks } from "../process-pleading-draft.js";
 import { FORMAT_MEDIA_TYPE, editableMediaType } from "../office-edit.js";
 import { randomBytes } from "node:crypto";
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { documentIdFromSha256, purgeSecureCaseDocument } from "../case-document-purge.js";
@@ -76,7 +76,11 @@ function sendError(res, error) {
         res.status(422).json({ error: code });
         return;
     }
-    res.status(500).json({ error: "WORKSPACE_OPERATION_FAILED", detail: code });
+    // Do klienta trafia tylko kod błędu, nie treść komunikatu (np. ENOENT ze ścieżką).
+    const detail = /^[A-Z][A-Z0-9_]{2,80}$/.test(code) ? code : undefined;
+    if (!detail)
+        console.error("WORKSPACE_OPERATION_FAILED", error);
+    res.status(500).json({ error: "WORKSPACE_OPERATION_FAILED", ...(detail ? { detail } : {}) });
 }
 /**
  * Sends file bytes and wipes them once the response is done: the socket may
@@ -99,6 +103,36 @@ export function contentDisposition(filename) {
     // ERR_INVALID_CHAR): ASCII fallback plus the RFC 5987 UTF-8 name.
     const ascii = safe.replace(/[^\x20-\x7e]/g, "_");
     return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
+// "Otwórz w programie" uruchamia domyślną aplikację dla rozszerzenia: tylko dokumenty
+// i obrazy, nigdy pliki wykonywalne (.exe, .bat, .hta, .command...) ani dokumenty z makrami.
+// Lista zgodna z OPEN_ALLOWED_EXTENSIONS w lex-desktop/src-tauri/src/lib.rs.
+export const OPEN_ALLOWED_EXTENSIONS = new Set([
+    "pdf", "docx", "doc", "odt", "rtf", "txt", "md", "csv",
+    "xlsx", "xls", "ods", "pptx", "ppt", "odp",
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff"
+]);
+/** Odszyfrowana kopia do otwarcia w zewnętrznym programie; zwraca token pliku. */
+export async function stageWorkspaceOpenCopy(root, filename, data) {
+    const extension = extensionFor(filename);
+    if (!OPEN_ALLOWED_EXTENSIONS.has(extension))
+        throw new Error("WORKSPACE_OPEN_FILE_TYPE_INVALID");
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    // Wspólny /tmp (Linux): katalog założony wcześniej przez kogoś innego, link symboliczny
+    // albo katalog zapisywalny dla innych nie dostaje odszyfrowanej treści.
+    const info = await lstat(root);
+    const uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+    if (!info.isDirectory() ||
+        info.isSymbolicLink() ||
+        (uid !== undefined && (info.uid !== uid || (info.mode & 0o077) !== 0))) {
+        throw new Error("WORKSPACE_OPEN_ROOT_UNSAFE");
+    }
+    await cleanupOpenCopies(root);
+    const token = `open_${randomBytes(16).toString("hex")}.${extension}`;
+    if (!OPEN_TOKEN.test(token))
+        throw new Error("WORKSPACE_OPEN_TOKEN_INVALID");
+    await writeFile(path.join(root, token), data, { flag: "wx", mode: 0o600 });
+    return token;
 }
 async function cleanupOpenCopies(root) {
     let names;
@@ -1096,12 +1130,44 @@ export function registerWorkspaceRoutes(app, dependencies) {
                             ...upload.extracted.map((entry) => entry.sha256)
                         ].map(documentIdFromSha256))
                     ];
+                    // Ten sam plik wgrany drugi raz ma ten sam dokument: jego wersja
+                    // zanonimizowana i klucz zostają, dopóki używa ich inny upload.
+                    const stillUsed = new Set(data.uploads
+                        .filter((item) => item.uploadId !== itemId)
+                        .flatMap((item) => [item.sha256, ...item.extracted.map((entry) => entry.sha256)])
+                        .map(documentIdFromSha256));
                     for (const documentId of documentIds) {
+                        if (stillUsed.has(documentId))
+                            continue;
+                        const protectedDocuments = dependencies.protectedDocuments;
                         await dependencies.privacyVaults.deleteDocumentVault({
                             caseId,
                             documentId,
                             caseDataKey,
-                            keyVersion: data.caseView.keyVersion
+                            keyVersion: data.caseView.keyVersion,
+                            ...(protectedDocuments
+                                ? {
+                                    remainingText: async (memberIds) => {
+                                        const texts = [];
+                                        for (const memberId of memberIds) {
+                                            try {
+                                                const ingestion = await protectedDocuments.loadProtected({
+                                                    caseId,
+                                                    documentId: memberId,
+                                                    caseDataKey,
+                                                    keyVersion: data.caseView.keyVersion
+                                                });
+                                                texts.push(JSON.stringify(ingestion));
+                                            }
+                                            catch {
+                                                // Nieczytelny dokument: nie wiadomo, czego używa, klucz zostaje.
+                                                return null;
+                                            }
+                                        }
+                                        return texts;
+                                    }
+                                }
+                                : {})
                         });
                         await purgeSecureCaseDocument({
                             rootDir: dependencies.rootDir,
@@ -1332,15 +1398,7 @@ export function registerWorkspaceRoutes(app, dependencies) {
             const actor = actorFor(req);
             const item = await readItem(actor, caseIdFrom(req), String(req.params.itemId ?? ""), OPEN_MAX_BYTES);
             payload = item.data;
-            const root = path.join(os.tmpdir(), "LexMachinaOpen");
-            await mkdir(root, { recursive: true, mode: 0o700 });
-            await cleanupOpenCopies(root);
-            const extension = extensionFor(item.filename);
-            const token = `open_${randomBytes(16).toString("hex")}${extension ? `.${extension}` : ""}`;
-            if (!OPEN_TOKEN.test(token))
-                throw new Error("WORKSPACE_OPEN_TOKEN_INVALID");
-            const target = path.join(root, token);
-            await writeFile(target, payload, { flag: "wx", mode: 0o600 });
+            const token = await stageWorkspaceOpenCopy(path.join(os.tmpdir(), "LexMachinaOpen"), item.filename, payload);
             res.json({
                 token,
                 filename: item.filename,
