@@ -1,4 +1,5 @@
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { POLISH_DATE_SOURCE, polishDateToIso } from "./event-date-check.js";
 import {
   detectLegalReferences,
   type DetectedLegalReference
@@ -20,8 +21,12 @@ const SUPREME_COURT =
   /\b(?:SN|SĄD\s+NAJWYŻSZY|SĄDU\s+NAJWYŻSZEGO)\b/iu;
 const CASE_SIGNATURE =
   /\bsygn\.?\s*(?:akt\s*)?([A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,12}){0,3}\s+\d+\/\d{2,4})\b/iu;
+// "stan prawny na 1 maja 2023", "na dzień 01.05.2023", "według stanu na 2023-05-01".
 const HISTORICAL_SCOPE =
-  /\b(?:według\s+stanu\s+na|stan(?:u)?\s+(?:prawa\s+)?na|na\s+dzień)\s+(\d{4}-\d{2}-\d{2})\b/giu;
+  new RegExp(
+    `\\b(?:według\\s+stanu\\s+na|stan(?:u)?\\s+(?:prawn\\p{L}*\\s+|prawa\\s+)?na|na\\s+dzień)\\s+(?:dzień\\s+)?(${POLISH_DATE_SOURCE})\\b`,
+    "giu"
+  );
 const EXPLICIT_UNVERIFIED_MARKER =
   "⚠️ [NIEWERYFIKOWANE]";
 
@@ -33,7 +38,11 @@ export function detectHistoricalAsOf(
       HISTORICAL_SCOPE
     )
   ]
-    .map((match) => match[1])
+    .map((match) =>
+      match[1]
+        ? polishDateToIso(match[1])
+        : null
+    )
     .filter(
       (date): date is string =>
         Boolean(date)
