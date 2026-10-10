@@ -1,3 +1,7 @@
+> Przeniesione z `.claude/` (nie ładuje się już automatycznie przy otwarciu repozytorium).
+> Aby użyć: skopiuj zawartość tego katalogu do `~/.claude/`.
+> `.gitignore` tutaj to szablon dla `~/.claude/`.
+
 # Personal Claude Code Configuration
 
 This repository contains my personal configuration settings for [Claude Code](https://claude.ai/code).
