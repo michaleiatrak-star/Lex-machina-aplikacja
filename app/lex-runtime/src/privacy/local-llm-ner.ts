@@ -422,7 +422,9 @@ implements NamedEntityRecognizer {
         process.stderr.write(
           `LOCAL_PRIVACY_FALLBACK_DEGRADED:${diagnostic(error)}\n`
         );
-        throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE");
+        throw error instanceof Error && error.message.startsWith("PRIVACY_RECOGNIZER_UNAVAILABLE")
+          ? error
+          : new Error(`PRIVACY_RECOGNIZER_UNAVAILABLE:${diagnostic(error)}`);
       }
     }
 

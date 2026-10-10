@@ -15,6 +15,8 @@ export type CaseLawSearchRequest = {
   limit?: number;
   // SN only: the other fields of the sn.pl search form.
   sn?: Omit<SupremeCourtSearchFilters, "tresc" | "strona" | "rozmiar_strony">;
+  // SAOS only: court type (SUPREME, COMMON, ...) and form (SENTENCE = wyrok, DECISION, RESOLUTION).
+  saos?: { courtType?: string; judgmentType?: string };
 };
 
 export type CaseLawSearchCandidate = {
@@ -616,7 +618,8 @@ export class CaseLawSearchService {
     return request.source === "SAOS"
       ? await this.searchSaos(
           query,
-          limit
+          limit,
+          request.saos ?? {}
         )
       : await this.searchCbosa(
           query,
@@ -680,7 +683,8 @@ export class CaseLawSearchService {
 
   private async searchSaos(
     query: string,
-    limit: number
+    limit: number,
+    filters: NonNullable<CaseLawSearchRequest["saos"]> = {}
   ): Promise<CaseLawSearchResult> {
     const url =
       new URL(SAOS_ENDPOINT);
@@ -688,6 +692,8 @@ export class CaseLawSearchService {
       "all",
       query
     );
+    if (filters.courtType) url.searchParams.set("courtType", filters.courtType);
+    if (filters.judgmentType) url.searchParams.set("judgmentTypes", filters.judgmentType);
     url.searchParams.set(
       "pageSize",
       String(

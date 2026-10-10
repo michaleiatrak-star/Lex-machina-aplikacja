@@ -3,8 +3,8 @@
 Fields: q (message, "Użytkownik:/Asystent:" history for a thread), kind
 (legal | executive | nonlegal | trivial | followup), legal (bool), dr ("dr-NN" or
 null), skill (executive skill or absent), criminal (bool, legal only), variant.
-Domain labels follow prawo-polskie-v2 "Routing błyskawiczny" (e.g. komornik ->
-dr-03, obywatelstwo -> dr-16). Run: python3 -I build-routing-5000.py
+Domain labels follow prawo-polskie-v2 "Routing błyskawiczny" (e.g. bailiff
+enforcement -> dr-02 or dr-12 since 6.57, obywatelstwo -> dr-16). Run: python3 -I build-routing-5000.py
 """
 import json
 import os
@@ -615,6 +615,7 @@ FOLLOWUP_TRIVIAL = [
 ]
 
 ENFORCEMENT = re.compile(r"komorni|egzekuc|zaje(?:l|ci)|zajeci", re.I)
+BAILIFF = re.compile(r"komorni|zaje(?:l|ci)|zajeci", re.I)
 DIACRITICS = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
 
 
@@ -635,7 +636,13 @@ def main():
     criminal_domain = "dr-03"
 
     def add(q, kind, legal, dr=None, skill=None, variant="oryginal"):
+        # prawo-polskie-v2 6.57: bailiff enforcement is civil (KPC, DR-02) or the bailiff's
+        # profession (DR-12), never DR-03.
+        if dr == criminal_domain and BAILIFF.search(plain(q)):
+            dr = "dr-02"
         item = {"q": q, "kind": kind, "legal": legal, "dr": dr, "variant": variant}
+        if dr == "dr-02" and BAILIFF.search(plain(q)):
+            item["alt"] = ["dr-12"]
         if skill:
             item["skill"] = skill
         if legal:

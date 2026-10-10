@@ -363,11 +363,17 @@
  },
  {
   "q": "Komornik zajął mi rachunek bankowy, ile może zabrać?",
-  "dr": "dr-03"
+  "dr": "dr-02",
+  "alt": [
+   "dr-12"
+  ]
  },
  {
   "q": "Egzekucja komornicza z wynagrodzenia za pracę, kwota wolna",
-  "dr": "dr-03"
+  "dr": "dr-02",
+  "alt": [
+   "dr-12"
+  ]
  },
  {
   "q": "Pranie pieniędzy, przelew z nieznanego konta",
@@ -580,7 +586,10 @@
  },
  {
   "q": "Pełnomocnik w postępowaniu administracyjnym, opłata skarbowa od pełnomocnictwa",
-  "dr": "dr-05"
+  "dr": "dr-05",
+  "alt": [
+   "dr-06"
+  ]
  },
  {
   "q": "Zaświadczenie z urzędu, odmowa wydania",
@@ -1324,11 +1333,17 @@
  },
  {
   "q": "Komornik sądowy, skarga na opłatę egzekucyjną",
-  "dr": "dr-12"
+  "dr": "dr-12",
+  "alt": [
+   "dr-02"
+  ]
  },
  {
   "q": "Wybór komornika przez wierzyciela",
-  "dr": "dr-12"
+  "dr": "dr-12",
+  "alt": [
+   "dr-02"
+  ]
  },
  {
   "q": "Notariusz pobrał zbyt wysoką taksę",
@@ -1815,8 +1830,11 @@
  },
  {
   "q": "Napisz skargę na czynności komornika, który zajął wynagrodzenie",
-  "dr": "dr-03",
-  "skill": "pisma-proste-v2"
+  "dr": "dr-02",
+  "skill": "pisma-proste-v2",
+  "alt": [
+   "dr-12"
+  ]
  },
  {
   "q": "Przeanalizuj umowę najmu mieszkania przed podpisaniem",

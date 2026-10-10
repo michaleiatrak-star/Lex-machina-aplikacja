@@ -711,7 +711,16 @@ export function mandatoryPathInstructions(model: MandatoryPathModel, profile: Pa
     const gates = model.full.filter((item) => item.block && item.block !== "ST");
     lines.push(
       "Sprawa prawnicza typowa: wykonaj bramki obowiązkowe routera i pokaż je w odpowiedzi jako widoczne bloki z krokami:",
-      ...gates.map((item) => `- ${item.block}${item.steps.length ? `: ${item.steps.join(", ")}` : ""} (${basename(item.resource)})${item.block === "WYJ-GATE" ? " — przy pierwszym powołaniu aktu" : ""}`),
+      ...gates.map(
+        (item) =>
+          `- ${item.block}${item.steps.length ? `: ${item.steps.join(", ")}` : ""} (${basename(item.resource)})` +
+          (item.block === "WYJ-GATE"
+            ? " — przy pierwszym powołaniu aktu"
+            : item.block === "CN-GATE" || item.block === "REM-GATE"
+              // The same trigger the application checks: a ruling with a cited provision.
+              ? " — gdy odpowiedź rozstrzyga z podstawą prawną (powołuje przepis); przy samym wyszukaniu lub weryfikacji orzeczenia bloku nie pisz"
+              : "")
+      ),
       "Każdy przepis ze statusem z rejestru weryfikacji (VER-GRAIN); disclaimer z shared/DISCLAIMER.md na końcu."
     );
   } else {

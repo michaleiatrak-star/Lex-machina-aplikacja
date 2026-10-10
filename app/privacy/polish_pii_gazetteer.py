@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -532,11 +533,37 @@ def recognize(text: str) -> list[dict]:
     return sorted(result, key=lambda item: item["start"])
 
 
+def serve() -> None:
+    # One JSON request per stdin line, one JSON answer per stdout line: Morfeusz, the
+    # PESEL surname base and TERYT are loaded once, not for every checked message.
+    recognize("Jan Kowalski mieszka przy ul. Długiej 5 w Krakowie.")
+    sys.stdout.write(json.dumps({"ready": True}) + "\n")
+    sys.stdout.flush()
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        request_id = None
+        try:
+            request = json.loads(line)
+            request_id = request.get("id")
+            answer = {"id": request_id, "spans": recognize(str(request["text"]))}
+        except Exception as error:  # the worker survives one bad request
+            answer = {"id": request_id, "error": str(error)[:500]}
+        sys.stdout.write(json.dumps(answer, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--input")
+    parser.add_argument("--output")
+    parser.add_argument("--serve", action="store_true")
     args = parser.parse_args()
+    if args.serve:
+        serve()
+        return
+    if not args.input or not args.output:
+        parser.error("--input and --output are required without --serve")
     text = Path(args.input).read_text(encoding="utf-8")
     Path(args.output).write_text(json.dumps(recognize(text), ensure_ascii=False), encoding="utf-8")
 

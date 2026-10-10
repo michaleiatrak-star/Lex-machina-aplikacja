@@ -134,6 +134,8 @@ const SN_CHAMBERS = [
     "Izba Pracy, Ubezpieczeń Społecznych i Spraw Publicznych", "Izba Wojskowa", "Izba Administracyjna, Pracy i Ubezpieczeń Społecznych",
     "Izba Kontroli Nadzwyczajnej i Spraw Publicznych", "Izba Dyscyplinarna"
 ];
+const SAOS_COURT_TYPES = ["SUPREME", "COMMON", "ADMINISTRATIVE", "CONSTITUTIONAL_TRIBUNAL", "NATIONAL_APPEAL_CHAMBER"];
+const SAOS_JUDGMENT_TYPES = ["SENTENCE", "DECISION", "RESOLUTION", "REASONS", "REGULATION"];
 const CASE_SEARCH_TOOL_SCHEMA = {
     type: "function",
     function: {
@@ -162,7 +164,9 @@ const CASE_SEARCH_TOOL_SCHEMA = {
                 judge: { type: "string", description: "SN only: judge on the panel (surname)." },
                 presiding: { type: "string", description: "SN only: presiding judge." },
                 rapporteur: { type: "string", description: "SN only: judge rapporteur." },
-                reasonsAuthor: { type: "string", description: "SN only: author of the reasons." }
+                reasonsAuthor: { type: "string", description: "SN only: author of the reasons." },
+                courtType: { type: "string", enum: SAOS_COURT_TYPES, description: "SAOS only: court type (SUPREME = Sąd Najwyższy)." },
+                judgmentType: { type: "string", enum: SAOS_JUDGMENT_TYPES, description: "SAOS only: SENTENCE = wyrok, DECISION = postanowienie, RESOLUTION = uchwała." }
             }
         }
     }
@@ -447,6 +451,8 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- Never invent a verification marker, source URL, or tool result.",
     "- For UNVERIFIED/DENIED results, do not represent the citation as verified.",
     "- For case-law discovery, call search_case_law. Search SAOS and CBOSA as separate sources when both are relevant.",
+    "- Finding a decision on a topic (e.g. 'wyrok SN o zorganizowanej grupie przestępczej'), cheapest reliable order: (1) the court's official source with the topic in its legal terms and the provision (e.g. 'zorganizowana grupa przestępcza', 'art. 258 k.k.'), then a second phrasing if the first gives nothing usable; (2) SAOS with courtType and judgmentType; (3) only then web_search with a neutral public phrase (no case facts) to discover signatures. Every signature found on the web or in SAOS is checked with verify_case_reference before it is cited; a web snippet is never a source.",
+    "- Form of the decision: when the user asks for a judgment (wyrok), pass form=wyrok (SN) or judgmentType=SENTENCE (SAOS) and never present a postanowienie or uchwała as a wyrok; if only another form exists, say so plainly.",
     "- search_case_law returns candidates only and never creates a VERIFIED ledger record. Never cite a discovered signature as verified without the applicable verification step.",
     "- NSA/WSA (CBOSA) material is a dated SNAPSHOT: present it as a snapshot and never promote it to VERIFIED. A CBOSA search with no hits is OUT_OF_SCOPE, never evidence that no judgment exists.",
     "- SAOS is a discovery source; CBOSA discovery is direct NSA/WSA retrieval but remains DISCOVERY until the candidate is verified under the case-law rules.",
@@ -481,6 +487,12 @@ function snSearchFilters(input) {
         autor_uzasadnienia: text(input.reasonsAuthor, 80)
     };
     return Object.fromEntries(Object.entries(fields).filter(([, value]) => value));
+}
+// search_case_law source=SAOS: court type and form of the decision.
+function saosSearchFilters(input) {
+    const courtType = typeof input.courtType === "string" && SAOS_COURT_TYPES.includes(input.courtType) ? input.courtType : undefined;
+    const judgmentType = typeof input.judgmentType === "string" && SAOS_JUDGMENT_TYPES.includes(input.judgmentType) ? input.judgmentType : undefined;
+    return { ...(courtType ? { courtType } : {}), ...(judgmentType ? { judgmentType } : {}) };
 }
 function searchCaseLawLibrary(input) {
     const repository = caseLawRepository();
@@ -573,6 +585,7 @@ export class LegalVerificationToolRuntime {
                 const result = await this.caseLawSearch.search({
                     query,
                     ...(Object.keys(sn).length ? { sn } : {}),
+                    ...(source === "SAOS" ? { saos: saosSearchFilters(input) } : {}),
                     source: source,
                     ...(limit !== undefined
                         ? { limit }

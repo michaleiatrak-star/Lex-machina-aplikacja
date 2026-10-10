@@ -1,5 +1,6 @@
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand, type SchemaEntry } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
+import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
 // has its trigger phrases and the PRIMARY executive skill. The application uses it
@@ -284,7 +285,21 @@ export function decideTask(
   redaction: RedactionTest | null = null,
   simpleLetters: { skill: string; entries: SchemaEntry[] } | null = null
 ): TaskDecision | null {
-  const decision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+  // A full case description: the closing request decides, without pasted routing markers.
+  let intent: { primary: string; reason: string } | null = null;
+  if (!explicitHandoff(rawQuestion, () => true)) {
+    rawQuestion = requestOf(withoutRoutingMarkers(rawQuestion));
+    if (!materials.length) {
+      const known = (skill: string) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill);
+      intent = requestIntent(rawQuestion, known);
+    }
+  }
+  const matrixDecision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
+  // The table's own decision when it names the same skill (it carries the letter's schema).
+  const decision =
+    intent && matrixDecision?.primary !== intent.primary
+      ? { source: "ROUTER" as const, primary: intent.primary, then: null, reason: `prośba użytkownika: ${intent.reason}` }
+      : matrixDecision;
   const caseLaw = "orzeczenia-sadowe-v2";
   const known = routes.some((route) => route.primary === caseLaw) || matrix.some((rule) => rule.primary === caseLaw);
   const question = provisionsForDetection(rawQuestion);

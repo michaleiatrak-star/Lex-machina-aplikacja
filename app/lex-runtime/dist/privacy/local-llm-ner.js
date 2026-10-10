@@ -234,7 +234,9 @@ export class LocalLlmPrivacyNamedEntityRecognizer {
                 // Bez słownika i Stanzy nie wiemy, gdzie są osoby i adresy:
                 // blokujemy wysyłkę zamiast przepuszczać jawny tekst.
                 process.stderr.write(`LOCAL_PRIVACY_FALLBACK_DEGRADED:${diagnostic(error)}\n`);
-                throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE");
+                throw error instanceof Error && error.message.startsWith("PRIVACY_RECOGNIZER_UNAVAILABLE")
+                    ? error
+                    : new Error(`PRIVACY_RECOGNIZER_UNAVAILABLE:${diagnostic(error)}`);
             }
         }
         const modelId = this.localModels
