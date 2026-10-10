@@ -1,4 +1,5 @@
 import { CORE_LEGAL_RESOURCES } from "./legal-session.js";
+import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 function routerFirst(events) {
     const firstSkill = events.find((event) => event.type ===
         "skill_read");
@@ -136,7 +137,7 @@ function sourceHierarchy(records) {
             : `invalidTier=${invalid.length}`
     };
 }
-function temporalFreshness(records) {
+function temporalFreshness(records, now) {
     const statutory = records.filter((record) => record.status ===
         "VERIFIED" &&
         (record.kind ===
@@ -147,11 +148,17 @@ function temporalFreshness(records) {
         const expected = record.temporalMode ??
             "CURRENT";
         const checkedAt = record.freshnessCheckedAt;
+        // Brzmienie obowiązujące: sprawdzenie w ELI nie starsze niż limit.
         return (record
             .temporalFreshnessStatus !==
             expected ||
             !checkedAt ||
-            Number.isNaN(Date.parse(checkedAt)));
+            Number.isNaN(Date.parse(checkedAt)) ||
+            (expected ===
+                "CURRENT" &&
+                now -
+                    Date.parse(checkedAt) >
+                    FRESHNESS_MAX_AGE_MS));
     });
     return {
         id: "TEMPORAL_FRESHNESS",
@@ -249,7 +256,8 @@ export function evaluateGateIInvariants(args) {
         workflowResources(args.workflowReads),
         provenance(args.verificationRecords),
         sourceHierarchy(args.verificationRecords),
-        temporalFreshness(args.verificationRecords),
+        temporalFreshness(args.verificationRecords, args.now ??
+            Date.now()),
         citationLedger(args.finalization),
         citations(args.finalization),
         caseSignatures(args.finalization),

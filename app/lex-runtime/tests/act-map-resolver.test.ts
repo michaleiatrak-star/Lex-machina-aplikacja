@@ -74,6 +74,14 @@ describe("MAPA-AKTOW resolved mechanically", () => {
     const result = resolveActModulesWithChecks(local, "ustawa o elektromobilności i paliwach alternatywnych");
     expect(result.modules).toEqual([]);
     expect(result.rejected.map((item) => path.basename(item.resource))).toEqual(["mod-inny.md"]);
+
+    // Edycja mapy o tej samej długości też odświeża indeks (klucz z mtime, nie z długości).
+    const map = path.join(skill, "MAPA-AKTOW.md");
+    fs.writeFileSync(path.join(skill, "modules", "mod-inna.md"), "# Inna\nCertyfikaty budynków.\n");
+    fs.writeFileSync(map, fs.readFileSync(map, "utf8").replace("mod-inny", "mod-inna"));
+    fs.utimesSync(map, new Date(), new Date(Date.now() + 5_000));
+    const edited = resolveActModulesWithChecks(local, "ustawa o elektromobilności i paliwach alternatywnych");
+    expect(edited.rejected.map((item) => path.basename(item.resource))).toEqual(["mod-inna.md"]);
   });
 
   it("nothing for questions that name no act, article or scope", () => {

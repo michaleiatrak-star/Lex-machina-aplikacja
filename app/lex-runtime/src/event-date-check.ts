@@ -22,6 +22,28 @@ const MONTHS: Record<string, string> = {
 };
 const DATE =
   /\b(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[./](\d{1,2})[./](\d{4})|(\d{1,2})\s+(stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+(\d{4}))\b/giu;
+// Ta sama data jako fragment innego wzorca (bez grup przechwytujących).
+export const POLISH_DATE_SOURCE =
+  "\\d{4}-\\d{2}-\\d{2}|\\d{1,2}[./]\\d{1,2}[./]\\d{4}|\\d{1,2}\\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\\s+\\d{4}";
+
+function isoFromMatch(match: RegExpMatchArray): string | null {
+  const [year, month, day] = match[1]
+    ? [match[1], match[2]!, match[3]!]
+    : match[6]
+      ? [match[6], match[5]!, match[4]!]
+      : [match[9]!, MONTHS[match[8]!.toLocaleLowerCase("pl")]!, match[7]!];
+  const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const parsed = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso ? null : iso;
+}
+
+/** "2023-05-01", "01.05.2023", "1 maja 2023" -> "2023-05-01"; inna wartość albo zła data: null. */
+export function polishDateToIso(value: string): string | null {
+  DATE.lastIndex = 0;
+  const match = DATE.exec(value.trim());
+  DATE.lastIndex = 0;
+  return match && match.index === 0 && match[0].length === value.trim().length ? isoFromMatch(match) : null;
+}
 // "ustawa z dnia 6 czerwca 1997 r.", "Dz.U. z 2025 r." - data aktu, nie zdarzenia.
 const ACT_DATE_BEFORE = /(?:ustaw\p{L}*|kodeks\p{L}*|rozporządzeni\p{L}*|obwieszczeni\p{L}*|dekret\p{L}*|uchwał\p{L}*|wyrok\p{L}*|postanowieni\p{L}*|interpretacj\p{L}*)\s+(?:\S+\s+){0,6}z\s+dnia\s*$/iu;
 // Termin na przyszłość ("do dnia", "termin upływa") nie jest datą zdarzenia.
@@ -37,15 +59,8 @@ export function eventDates(text: string, today: string): string[] {
   for (const match of text.matchAll(DATE)) {
     const before = text.slice(Math.max(0, match.index! - 80), match.index!);
     if (ACT_DATE_BEFORE.test(before) || DEADLINE_BEFORE.test(before)) continue;
-    const [year, month, day] = match[1]
-      ? [match[1], match[2]!, match[3]!]
-      : match[6]
-        ? [match[6], match[5]!, match[4]!]
-        : [match[9]!, MONTHS[match[8]!.toLocaleLowerCase("pl")]!, match[7]!];
-    const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-    const parsed = new Date(`${iso}T00:00:00Z`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso) continue;
-    if (iso >= today || iso < "1990-01-01") continue;
+    const iso = isoFromMatch(match);
+    if (!iso || iso >= today || iso < "1990-01-01") continue;
     dates.add(iso);
   }
   const sorted = [...dates].sort();

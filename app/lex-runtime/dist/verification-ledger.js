@@ -1,5 +1,8 @@
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { assertVerificationTierPolicy } from "./legal-source-policy.js";
+// Najstarsze sprawdzenie aktualności t.j. w ELI, które jeszcze potwierdza brzmienie
+// obowiązujące (relacje ELI są odświeżane raz dziennie).
+export const FRESHNESS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 function normalizeClaim(value) {
     return compactActAbbreviations(value.normalize("NFKC"))
         .toLocaleLowerCase("pl")

@@ -51,10 +51,51 @@ function stemOf(word) {
 }
 // A short stem is an ending away from its word, not the start of another one
 // ("powi" of "powiat" is not "powierzenia").
+// A stem's test for one token, built once ("=kp" whole, else its forms by prefix).
+const stemTests = new Map();
+function stemTest(stem) {
+    let test = stemTests.get(stem);
+    if (!test)
+        stemTests.set(stem, (test = buildStemTest(stem)));
+    return test;
+}
+function buildStemTest(stem) {
+    if (stem.startsWith("=")) {
+        const whole = stem.slice(1);
+        return (token) => token === whole;
+    }
+    const forms = alternations(stem);
+    return (token) => forms.some((form) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)));
+}
 function hit(stem, tokens) {
-    if (stem.startsWith("="))
-        return tokens.includes(stem.slice(1));
-    return alternations(stem).some((form) => tokens.some((token) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6))));
+    return tokens.some(stemTest(stem));
+}
+/**
+ * The words of a phrase in one place of the text, not scattered over a story: "umowa o
+ * pracę" is not "bez umowy ... kolega z pracy", "sąd pracy" is not "sądu ... po pracy"
+ * (benchmark 2026-10-10, 1000 kazusów). Words may stand in any order, a few words apart.
+ */
+const phraseTests = new Map();
+function phraseHit(phrase, have) {
+    let tests = phraseTests.get(phrase);
+    if (!tests) {
+        tests = phraseWords(phrase).map((word) => {
+            const test = stemTest(stemOf(word));
+            const other = FALSE_FRIENDS[word];
+            return other ? (token) => !other.test(token) && test(token) : test;
+        });
+        phraseTests.set(phrase, tests);
+    }
+    if (!tests.length)
+        return false;
+    // Cheap test first: most phrases have a word the text lacks.
+    if (!tests.every((test) => have.some(test)))
+        return false;
+    if (tests.length === 1)
+        return true;
+    const positions = tests.map((test) => have.flatMap((token, index) => (test(token) ? [index] : [])));
+    const span = 2 * tests.length + 2;
+    return positions[0].some((anchor) => positions.slice(1).every((list) => list.some((index) => Math.abs(index - anchor) <= span)));
 }
 // Polish vowel alternation inside the stem, after folding: "urzędu"/"urząd" ("urzed"/"urzad"),
 // "męża"/"mąż" ("mez"/"maz"). The stem's last vowel e <-> a, for stems of four letters and more.
@@ -111,19 +152,12 @@ const FALSE_FRIENDS = {
     aplikant: /^aplikac/, dyrektywa: /^dyrektor/, szkolenia: /^szkol(?!en)/, przeglad: /^przeglos/,
     orzeczenie: /^orzeczni/, orzeczenia: /^orzeczni/, uzytkowanie: /^uzytkowni/
 };
-function withoutFalseFriends(word, have) {
-    const other = FALSE_FRIENDS[word];
-    return other ? have.filter((token) => !other.test(token)) : have;
-}
 /** Domains whose flash-routing phrases the text contains, best first. */
 export function flashDomains(rows, text, generic = () => false) {
     const have = tokens(text);
     return rows
         .map((row) => {
-        const matched = row.phrases.filter((phrase) => {
-            const words = phraseWords(phrase);
-            return words.length > 0 && words.every((word) => hit(stemOf(word), withoutFalseFriends(word, have)));
-        });
+        const matched = row.phrases.filter((phrase) => phraseHit(phrase, have));
         // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
         // one word of it ("umowa"), which then does not count again.
         const sets = matched.map((phrase) => phraseWords(phrase).map(stemOf));
@@ -178,12 +212,27 @@ export function locate(registry, skill, resource) {
 // Words of the request itself, not of its matter ("pełna analiza prawna sprawy: podstawy,
 // ryzyka, rekomendacje"): in an act map they named DR-01 and DR-13 for any question.
 const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
+/** Znacznik zmiany pliku (mtime i rozmiar) dla cache czytanych map; "-" gdy brak pliku. */
+export function fileStamp(file) {
+    try {
+        const stat = fs.statSync(file);
+        return `${stat.mtimeMs}:${stat.size}`;
+    }
+    catch {
+        return "-";
+    }
+}
+// Jeden wpis na mapę; klucz z mtime i rozmiaru, plik czytany tylko po zmianie.
 const cache = new Map();
 function actIndex(registry, skill) {
     const record = registry.get(skill);
     if (!record)
         return { index: [], df: new Map() };
     const file = path.join(record.directory, "MAPA-AKTOW.md");
+    const key = fileStamp(file);
+    const cached = cache.get(file);
+    if (cached?.key === key)
+        return cached.value;
     let body = "";
     try {
         body = fs.readFileSync(file, "utf8");
@@ -191,9 +240,6 @@ function actIndex(registry, skill) {
     catch {
         return { index: [], df: new Map() };
     }
-    const key = `${file}:${body.length}`;
-    if (cache.has(key))
-        return cache.get(key);
     const mapped = parseActMap(body, skill)
         .map((entry) => ({ ...entry, resources: entry.resources.map((resource) => locate(registry, skill, resource)).filter((resource) => resource !== null) }))
         .filter((entry) => entry.resources.length > 0);
@@ -223,7 +269,7 @@ function actIndex(registry, skill) {
         for (const stem of item.stems)
             df.set(stem, (df.get(stem) ?? 0) + 1);
     const value = { index, df };
-    cache.set(key, value);
+    cache.set(file, { key, value });
     return value;
 }
 // In how many domains' act maps a stem appears: a word of four domains and more is generic.
@@ -282,16 +328,20 @@ export function suggestDomainModules(registry, skill, text, limit = 3) {
 const FOREIGN_ELEMENT = new RegExp("(?<![a-z])(?:" +
     [
         "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow", "panstw(?:a|ie|em|o|ach) trzeci", "konsul(?:a|em|owi|ie|at|atu|acie)?\\b", "azj(?:a|i|ii)\\b", "azjatyck",
-        "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
-        "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
+        "niemc", "niemiec", "francj", "francusk", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
+        "belgi", "austri", "szwajcar", "szwec", "szwedz", "danii\\b", "dunsk", "finlandi", "czech(?:y|ach|ami|om)?\\b", "czesk", "slowac", "wegr", "wegier",
         "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
         "wielkiej brytanii", "wielka brytani", "brytyjsk", "anglii\\b", "angli[ia]\\b", "szkocj", "stanach zjednoczonych", "usa\\b", "amerykansk",
         "kanad", "australi", "chin(?:y|ach|ami)?\\b", "chinsk", "japoni", "indii\\b", "indyjsk", "turcj", "tureck", "izrael",
-        "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "praga", "pradze", "wilni", "kijow"
+        "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "w pradze\\b", "wilni", "kijow"
     ].join("|") +
     ")", "u");
+// "Dania" (kraj) bez polskich znaków to też "dania" (potrawy): kraj tylko w formach
+// jednoznacznych ("Danię", "Danią") albo wielką literą wewnątrz zdania.
+const DENMARK_FORMS = /(?<![\p{L}])dani[ęą](?![\p{L}])/iu;
+const DENMARK_NAME = /(?<=[\p{Ll}\d,;:]\s{1,3})Dania(?![\p{L}])/u;
 export function foreignElement(text) {
-    return FOREIGN_ELEMENT.test(fold(text));
+    return FOREIGN_ELEMENT.test(fold(text)) || DENMARK_FORMS.test(text) || DENMARK_NAME.test(text);
 }
 export function rankDomains(registry, rows, text, limit = 2) {
     // A domain the case adds by its kind (criminal, foreign element) is one more, not one
@@ -332,12 +382,40 @@ function withForeignElement(registry, text, ranked, limit) {
         return [others[0], marked, ...others.slice(1)];
     return marked.modules.length ? [marked] : [];
 }
+// Words of the procedure, not of the matter: an administrative decision, a court, a judge,
+// a lawyer, court fees. A building permit appealed to the WSA is DR-09 first, a child taken
+// abroad heard by a judge is DR-14 first (benchmark 2026-10-10, 1000 kazusów: such words
+// put DR-05 or DR-12 first in 61 full case descriptions).
+const PROCEDURE = {
+    "dr-05": new Set([
+        "KPA", "decyzja urzędu", "decyzja administracyjna", "SKO", "WSA", "NSA", "bezczynność", "przewlekłość", "Samorządowe kolegium odwoławcze",
+        "postępowanie administracyjne", "interes prawny", "zaświadczenie", "ponaglenie", "organ administracji", "sąd administracyjny",
+        "wojewódzki sąd administracyjny", "skarga kasacyjna", "skarga kasacyjna do NSA", "decyzja wojewody", "wojewoda odmówił", "odwołanie od decyzji",
+        "decyzja ostateczna", "organ pierwszej instancji", "organ drugiej instancji", "urzędnik", "urząd nie odpowiada", "uchylenie decyzji",
+        "przywrócenie terminu do wniesienia odwołania", "nie rozpatruje wniosku", "rozpatrzenie wniosku", "skarga do sądu administracyjnego",
+        "odrzucenie skargi", "stwierdzenie nieważności decyzji", "wznowienie postępowania administracyjnego", "braki wniosku",
+        "uzupełnienie braków wniosku", "wszczęcie postępowania administracyjnego", "zawiadomienie o wszczęciu postępowania", "skarga na bezczynność",
+        "kara administracyjna", "administracyjna kara pieniężna", "starostwo", "oględziny", "decyzja o zwrocie"
+    ].map((phrase) => phrase.toLocaleLowerCase("pl"))),
+    "dr-12": new Set([
+        "Sąd", "adwokat", "radca", "radca prawny", "sędzia", "pełnomocnik z urzędu", "adwokat z urzędu", "kancelaria adwokacka", "prezes sądu",
+        "nie wyznaczył rozprawy", "wyznaczenie rozprawy", "biegły sądowy", "koszty zastępstwa procesowego", "koszty pozwu", "koszty sądowe",
+        "opłata sądowa", "opłata od pozwu", "opłata od apelacji", "zwolnienie od kosztów sądowych", "referendarz", "mediacja", "mediator", "notariusz"
+    ].map((phrase) => phrase.toLocaleLowerCase("pl")))
+};
+function substanceFirst(ranked) {
+    const top = ranked[0];
+    const words = top ? PROCEDURE[top.skill.slice(0, 5)] : undefined;
+    if (!top || !words || !top.matched.every((phrase) => words.has(phrase.toLocaleLowerCase("pl"))))
+        return ranked;
+    const matter = ranked.find((row) => row !== top && !PROCEDURE[row.skill.slice(0, 5)] && row.weight >= Math.max(2, top.weight * 0.75));
+    return matter ? [matter, ...ranked.filter((row) => row !== matter)] : ranked;
+}
 function rankByPhrases(registry, rows, text, limit) {
-    const flash = flashDomains(rows, text, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
+    const flash = substanceFirst(flashDomains(rows, text, (stem) => domainSpread(registry).get(stem) >= GENERIC_DOMAINS)
         .filter((row) => registry.get(row.skill))
         .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
-        .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
-        .slice(0, limit);
+        .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))).slice(0, limit);
     if (flash.length)
         return flash;
     const have = tokens(text);

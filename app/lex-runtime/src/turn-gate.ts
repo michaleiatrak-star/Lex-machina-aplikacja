@@ -88,7 +88,7 @@ function hasLegalSignal(text: string, flash: FlashRoute[]): boolean {
 // stays legal.
 const OPENING = /^(?:(?:hej|hejka|czesc|witam|witaj|dzien dobry|dobry wieczor|siema|halo)[\s,!.]*)?(?:(?:mam (?:takie )?pytanie|pytanie|prosba)\s*[:,-]?\s*)?/u;
 const GENERAL_REQUEST =
-  /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|chce|chcialbym|chcialabym|chcemy|prosze|prosimy|potrzebuje|potrzebujemy|przygotuj|rozpisz|sprawdz|szukam|poszukaj|znajdz|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|podpowiesz|podpowiedz|doradz|doradzisz|podziel|pomnoz|dodaj|odejmij|naucz|pokaz|wymysl|masz|w co|plan|cwiczenia|przepis na)\b/u;
+  /^(?:jak|jaki|jaka|jakie|jakiego|jakim|ile|rozpisz|kto|kim|komu|kiedy|gdzie|skad|dokad|dlaczego|czemu|po co|co|czym|czy|ktory|ktora|ktore|napisz|wymysl|przetlumacz|policz|oblicz|rozwiaz|przelicz|podaj|polec|zaproponuj|opowiedz|stresc|wyjasnij|wytlumacz|uloz|zagrajmy|popraw|wymien|opisz|zrob|stworz|narysuj|zaplanuj|pomoz|daj|powiedz|wskaz|porownaj|polecisz|polecasz|podpowiesz|podpowiedz|doradz|doradzisz|podziel|pomnoz|dodaj|odejmij|naucz|pokaz|wymysl|masz|w co|plan|cwiczenia|przepis na)\b/u;
 
 /** True only for a general request with no legal signal, in a thread with none either. */
 export function isNonLegalMessage(query: string, flash: FlashRoute[]): boolean {

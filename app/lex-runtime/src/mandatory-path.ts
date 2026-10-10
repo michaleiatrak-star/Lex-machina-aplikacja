@@ -1,5 +1,6 @@
 import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import type { VerificationRecord } from "./verification-ledger.js";
 
 /**
@@ -206,7 +207,7 @@ const FOREIGN_STATES =
 const FOREIGN_JURISDICTION = new RegExp(
   [
     `\\b(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*|jurysdykcj\\p{L}*)\\s+(?:${FOREIGN_STATES})\\p{L}*`,
-    `\\b(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
+    `(?<![\\p{L}\\d])(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
     "\\b(?:prawo obce|prawa obcego|prawem obcym|prawo właściwe|prawa właściwego|jurysdykcj\\p{L}* zagraniczn\\p{L}*|sąd\\p{L}* zagraniczn\\p{L}*)",
     "\\bumow\\p{L}* międzynarodow\\p{L}*|\\btraktat\\p{L}*|\\bkonwencj\\p{L}* (?:wiedeńsk|hask|nowojorsk|genewsk|montrealsk|warszawsk|CMR|o prawach)\\p{L}*|\\bratyfikac\\p{L}*|\\bRzym I{1,2}\\b|\\bBruksela I\\p{L}*"
   ].join("|"),
@@ -218,7 +219,7 @@ export function foreignJurisdiction(query: string): boolean {
 }
 
 const DATE = /\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b|\b\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+\d{4}\b/giu;
-const ARTICLE = /\bart\.?\s*\d+/i;
+const ARTICLE = new RegExp(`${ARTICLE_LEAD}\\d+`, "iu");
 
 // Triggers known before the answer (the runtime can load the resource up front).
 type PreFacts = Pick<TurnFacts, "profile" | "query" | "legal" | "criminal" | "documents" | "documentsTruncated" | "documentGeneration" | "foreignJurisdiction">;

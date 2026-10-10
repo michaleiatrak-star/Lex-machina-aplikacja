@@ -2,7 +2,7 @@ import { compactForModel } from "./skill-sections.js";
 import fs from "node:fs";
 import path from "node:path";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
-import { fold, locate } from "./domain-module-map.js";
+import { fileStamp, fold, locate } from "./domain-module-map.js";
 const CODES = {
     KK: /kodeks\s+karny(?!\s+(?:skarbowy|wykonawczy))/iu,
     KW: /kodeks\s+wykrocze/iu,
@@ -137,21 +137,25 @@ function headOf(label) {
     const words = tokens.filter((token) => token.length >= 4 && !GENERIC.has(token.toLocaleLowerCase("pl")));
     return words.length ? new RegExp(`(?<![a-z])${words.map(stemPattern).join("(?:\\s+[a-z]+){0,1}\\s+")}`, "u") : null;
 }
+// Jeden wpis na katalog skilli; klucz z mtime i rozmiaru map (edycja tej samej długości
+// też unieważnia indeks), pliki czytane tylko po zmianie.
 const cache = new Map();
 const RARE_IN_MODULES = 10;
 function actRows(registry) {
     const skills = [...registry.skills.values()].filter((skill) => /^dr-\d{2}-/.test(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
-    const bodies = skills.map((skill) => {
+    const files = skills.map((skill) => path.join(skill.directory, "MAPA-AKTOW.md"));
+    const key = files.map((file) => `${file}=${fileStamp(file)}`).join(",");
+    const cached = cache.get(registry.root);
+    if (cached?.key === key)
+        return cached.rows;
+    const bodies = files.map((file) => {
         try {
-            return fs.readFileSync(path.join(skill.directory, "MAPA-AKTOW.md"), "utf8");
+            return fs.readFileSync(file, "utf8");
         }
         catch {
             return "";
         }
     });
-    const key = `${registry.root}:${bodies.map((body) => body.length).join(",")}`;
-    if (cache.has(key))
-        return cache.get(key);
     const rows = [];
     skills.forEach((skill, position) => {
         let moduleColumn = -1;
@@ -221,7 +225,7 @@ function actRows(registry) {
         row.unique = row.singles.filter((pattern) => labels.every((label, other) => other === position || !pattern.test(label)) &&
             moduleTexts.filter((text) => pattern.test(text)).length <= RARE_IN_MODULES);
     }
-    cache.set(key, rows);
+    cache.set(registry.root, { key, rows });
     return rows;
 }
 function dzuPairs(text) {

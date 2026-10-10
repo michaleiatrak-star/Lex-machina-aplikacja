@@ -63,7 +63,7 @@ export function requestOf(text: string): string {
 }
 
 const DRAFT_VERB =
-  "(?:napisz\\w*|napisac|przygotuj\\w*|przygotowac|przygotowanie|sporzadz\\w*|zredaguj\\w*|zredagowac|napisanie|projekt\\w*|redakcj\\w*|potrzebuje(?:my)?|pomoz\\w*(?: mi| nam)? (?:napisac|przygotowac|zredagowac|sformulowac|zlozyc|zrobic)|chce (?:napisac|wyslac)|zrob\\w*(?: mi)?)";
+  "(?:napisz\\w*|napisac|przygotuj\\w*|przygotowac|przygotowanie|sporzadz\\w*|zredaguj\\w*|zredagowac|napisanie|projekt\\w*|redakcj\\w*|potrzebuje(?:my)?|pomoz\\w*(?: mi| nam)? (?:napisac|przygotowac|zredagowac|sformulowac|zlozyc|zrobic)|chce (?:napisac|wyslac))";
 const NEAR = "(?:[^.?!]{0,70}?)";
 // router v3 [3] PISMO ZŁOŻONE: a pleading to a court (or KIO).
 const PLEADING_NOUN =
@@ -92,7 +92,7 @@ const INTENTS: Intent[] = [
     primary: "analizator-umow-v1",
     reason: "umowa jako przedmiot pracy (router [1])",
     pattern:
-      /(?<![a-z])(?:(?:przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj|przeczytaj|analiz)\w*(?: [^.?!]{0,40}?)? (?:umow|porozumieni|ugod|regulamin|owu|aneks|klauzul|zapis|warunk|projekt umowy|kontrakt)\w*|czy (?:moge|mozna|powinien\w*|powinnam|mamy|warto) (?:to |ja |je |go |ten |te )?(?:bezpiecznie |spokojnie )?podpisac|przed podpisaniem|co (?:renegocjowac|zmienic w umowie))/u
+      /^(?![\s\S]*dowod)[\s\S]*?(?<![a-z])(?:(?:przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj|przeczytaj|analiz)\w*(?: [^.?!]{0,40}?)? (?:umow|porozumieni|ugod|regulamin|owu|aneks|klauzul|zapis|warunk|projekt umowy|kontrakt)\w*|czy (?:moge|mozna|powinien\w*|powinnam|mamy|warto) (?:to |ja |je |go |ten |te )?(?:bezpiecznie |spokojnie )?podpisac|przed podpisaniem|co (?:renegocjowac|zmienic w umowie))/u
   },
   {
     primary: "analiza-sadowa-v6",
@@ -111,13 +111,13 @@ const INTENTS: Intent[] = [
     primary: "analiza-sadowa-v6",
     reason: "ocena szans (router [2])",
     pattern:
-      /(?<![a-z])(?:szans\w*|czy (?:w ogole |wiec |naprawde |realnie )?(?:warto|jest sens|ma sens|oplaca sie|oplaci sie)|ile (?:realnie |mniej wiecej )?(?:moge|mozemy|mozna|moglbym|moglabym) (?:wywalczyc|uzyskac|dostac|odzyskac|wygrac)|czy (?:mam|mamy|klient ma) (?:jakas |jakiekolwiek |realne )?(?:szans|podstaw)\w*)/u
+      /(?<![a-z])(?:szans\w*|czy (?:w ogole |wiec |naprawde |realnie )?(?:warto|jest sens|ma sens|oplaca sie|oplaci sie)(?: [^.?!]{0,40}?)? (?:sad\w*|pozw\w*|pozyw\w*|apel\w*|odwol\w*|zaskarz\w*|skarg\w*|proces\w*|walcz\w*|wnos\w*|sklada\w*|odrzuc\w*)|ile (?:realnie |mniej wiecej )?(?:moge|mozemy|mozna|moglbym|moglabym) (?:wywalczyc|uzyskac|dostac|odzyskac|wygrac)|czy (?:mam|mamy|klient ma) (?:jakas |jakiekolwiek |realne )?(?:szans|podstaw)\w*)/u
   },
   {
     primary: "analizator-dowodow-v3",
     reason: "termin procesowy albo ocena dowodu (router [6])",
     pattern:
-      /(?<![a-z])(?:policz\w*|oblicz\w*|do kiedy (?:dokladnie )?(?:mam|mamy|trzeba|moge|mozna|musze|nalezy)|od (?:ktorej|jakiej) daty (?:liczy|biegnie)|kiedy (?:dokladnie )?(?:uplywa|mija) termin|(?:dowod\w*|moc dowodow\w*|wartosc dowodow\w*|przed sadem|w sadzie)(?: [^.?!]{0,30}?)? (?:sie licz|wystarcz|maja wartosc|sa wazn|beda wazn)|czy (?:te |ten |to |moje |nasze |takie )?(?:[a-z-]+ ){0,4}(?:moga byc|beda|sa|jest|bedzie|stanowi\w*|moze byc) (?:dowod|wystarczajac)|ocen\w*(?: [^.?!]{0,30}?)? dowod\w*|(?:wiadomosci|nagrani|zdjeci|sms|maile?)\w*(?: [^.?!]{0,40}?)? (?:sie licz|dowod))/u
+      /(?<![a-z])(?:(?:policz|oblicz)\w*(?: [^.?!]{0,40}?)? (?:termin\w*|do kiedy|kiedy (?:uplywa|mija))|do kiedy (?:dokladnie )?(?:mam|mamy|trzeba|moge|mozna|musze|nalezy)|od (?:ktorej|jakiej) daty (?:liczy|biegnie)|kiedy (?:dokladnie )?(?:uplywa|mija) termin|(?:dowod\w*|moc dowodow\w*|wartosc dowodow\w*|przed sadem|w sadzie)(?: [^.?!]{0,30}?)? (?:sie licz|wystarcz|maja wartosc|sa wazn|beda wazn)|czy (?:te |ten |to |moje |nasze |takie )?(?:[a-z-]+ ){0,4}(?:moga byc|beda|sa|jest|bedzie|stanowi\w*|moze byc) (?:dowod|wystarczajac)|ocen\w*(?: [^.?!]{0,30}?)? dowod\w*|(?:wiadomosci|nagrani|zdjeci|sms|maile?)\w*(?: [^.?!]{0,40}?)? (?:sie licz|dowod))/u
   },
   {
     primary: "analizator-przepisow-v2",
@@ -149,6 +149,8 @@ const INTENTS: Intent[] = [
   }
 ];
 
+const HOW_TO_DRAFT = /(?<![a-z])jak (?:mam |moge |mozna |nalezy |powinien\w* |powinnam )?(?:napisac|przygotowac|sporzadzic|zredagowac|zlozyc|wniesc|sformulowac)(?![a-z])/u;
+
 // Looking a judgment up is router [5] (orzeczenia-sadowe-v2), decided by the case-law rule.
 const CASE_LAW_SEARCH =
   /(?<![a-z])(?:(?:znajdz|wyszukaj|poszukaj|podaj|przytocz|wskaz|zweryfikuj)\w*(?: [^.?!]{0,40}?)? (?:wyrok|orzecz|uchwal|sygnatur)|orzecznictw|linia orzecznicz|linii orzecznicz|sygnatur)/u;
@@ -157,7 +159,10 @@ const CASE_LAW_SEARCH =
 export function requestIntent(request: string, known: (skill: string) => boolean): { primary: string; reason: string } | null {
   const text = fold(request);
   if (CASE_LAW_SEARCH.test(text) && !new RegExp(`(?<![a-z])${DRAFT_VERB}`, "u").test(text)) return null;
+  // "Jak napisać apelację?" asks how, it does not ask for the letter (a simple answer).
+  const howTo = HOW_TO_DRAFT.test(text);
   for (const intent of INTENTS) {
+    if (howTo && /^pisma-/u.test(intent.primary)) continue;
     if (known(intent.primary) && intent.pattern.test(text)) return { primary: intent.primary, reason: intent.reason };
   }
   return null;

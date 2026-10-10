@@ -1319,7 +1319,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "klient pyta: komornik sadowy naliczyl mi wysokie koszty egzekucji.",
@@ -1327,7 +1330,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: kontrahent figuruje na liście sankcyjnej.",
@@ -3809,7 +3815,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "od miesiaca komornik sadowy naliczyl mi wysokie koszty egzekucji. co radzicie?",
@@ -3817,7 +3826,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Od miesiąca chcę przekształcić strych w mieszkanie. Co radzicie?",
@@ -5267,7 +5279,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Komornik sadowy naliczyl mi wysokie koszty egzekucji. Jakie przepisy tu obowiazuja?",
@@ -5275,7 +5290,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Zwolnili mnie tydzień po powrocie z urlopu macierzyńskiego.",
@@ -7063,7 +7081,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "komornik sadowy naliczyl mi wysokie koszty egzekucji, co dalej?",
@@ -7071,7 +7092,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy coś mogę zrobić? Nie stać mnie na opłatę od apelacji.",
@@ -8701,7 +8725,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chcialbym zapytac, komornik sadowy naliczyl mi wysokie koszty egzekucji. Czy to zgodne z prawem?",
@@ -8709,7 +8736,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Posłowie przegłosowali ustawę w nocy bez czytania w komisji. Gdzie się zwrócić?",
@@ -11071,7 +11101,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Komornik sadowy naliczyl mi wysokie koszty egzekucji — jakie mam prawa?",
@@ -11079,7 +11112,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chcę podłączyć dom do sieci gazowej, a operator odmawia, co dalej?",
@@ -21245,7 +21281,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "potrzebuje porady, komornik sadowy naliczyl mi wysokie koszty egzekucji.",
@@ -21253,7 +21292,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "kontrahent nie płaci za wykonane usługi remontowe, co dalej?",
@@ -24085,7 +24127,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: komornik sadowy naliczyl mi wysokie koszty egzekucji.",
@@ -24093,7 +24138,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Pomocy, radca prawny zażądał wyższego honorarium niż w umowie!",
@@ -28319,7 +28367,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "sprawa wyglada tak: komornik sadowy naliczyl mi wysokie koszty egzekucji. jak to rozwiazac?",
@@ -28327,7 +28378,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Mam problem: chcę podłączyć dom do sieci gazowej, a operator odmawia.",
@@ -34919,7 +34973,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Czy cos moge zrobic? Komornik sadowy naliczyl mi wysokie koszty egzekucji.",
@@ -34927,7 +34984,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "chcemy zmienić termin realizacji umowy z gminą, co dalej?",
@@ -35597,7 +35657,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Pomocy, komornik sadowy naliczyl mi wysokie koszty egzekucji!",
@@ -35605,7 +35668,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Chciałbym zapytać, szpital nie powiadomił rodziny o śmierci pacjenta. Czy to zgodne z prawem?",
@@ -36061,7 +36127,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Komornik sadowy naliczyl mi wysokie koszty egzekucji. Gdzie sie zwrocic?",
@@ -36069,7 +36138,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "kompozycja-bez-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Firma szkoleniowa skopiowała mój kurs online — jakie mam prawa?",
@@ -63208,7 +63280,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-zgoda",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Funkcjonariusz SOP nie wylegitymował się.\n\nAsystent: Ile czasu minęło od zdarzenia?\n\nUżytkownik: ponad rok",
@@ -64391,7 +64466,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-odpowiedz",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Starostwo od roku nie rozpatruje mojego wniosku.\n\nAsystent: Czy mam przygotować projekt pisma?\n\nUżytkownik: dobrze",
@@ -65302,7 +65380,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-odpowiedz",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Zakład przemysłowy truje rzekę ściekami.\n\nAsystent: Czy ma Pan dokumenty?\n\nUżytkownik: tak, mam wszystko w mailach",
@@ -65923,7 +66004,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-odpowiedz",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Obok mojego domu ma powstać biogazownia.\n\nAsystent: Czy ma Pan dokumenty?\n\nUżytkownik: nie pamiętam dokładnie, chyba w marcu",
@@ -66844,7 +66928,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-odpowiedz",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Inspektor nadzoru budowlanego wstrzymał moją budowę.\n\nAsystent: Czy mam opisać kolejne kroki?\n\nUżytkownik: jasne",
@@ -70093,7 +70180,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-zgoda",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Szpital nie powiadomił rodziny o śmierci pacjenta.\n\nAsystent: Czy przygotować wezwanie?\n\nUżytkownik: spoko",
@@ -72759,7 +72849,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "watek-zgoda",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Użytkownik: Rada miasta uchwaliła zakaz handlu na targowisku.\n\nAsystent: Proszę pilnować terminów i zachować korespondencję.\n\nUżytkownik: ok, thx",

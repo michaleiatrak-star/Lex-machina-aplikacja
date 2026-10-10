@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -3828,7 +3829,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // event date from the question (separate ledger: answer markers stay as they are).
     const dates =
       mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
-        ? eventDates(pathFacts.query, new Date().toISOString().slice(0, 10))
+        ? eventDates(pathFacts.query, todayWarsaw())
         : [];
     const eventDateCheck = dates.length
       ? await checkProvisionsAtEventDates({

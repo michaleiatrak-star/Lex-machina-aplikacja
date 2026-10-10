@@ -719,17 +719,23 @@
 "q": "Komornik zajął mi rachunek bankowy, ile może zabrać?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Egzekucja komornicza z wynagrodzenia za pracę, kwota wolna",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Pranie pieniędzy, przelew z nieznanego konta",
@@ -1153,6 +1159,9 @@
 "legal": true,
 "dr": "dr-05",
 "variant": "fixture-500",
+"alt": [
+"dr-06"
+],
 "criminal": false
 },
 {
@@ -2618,7 +2627,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Wybór komornika przez wierzyciela",
@@ -2626,7 +2638,10 @@
 "legal": true,
 "dr": "dr-12",
 "variant": "fixture-500",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-02"
+]
 },
 {
 "q": "Notariusz pobrał zbyt wysoką taksę",
@@ -3560,10 +3575,13 @@
 "q": "Napisz skargę na czynności komornika, który zajął wynagrodzenie",
 "kind": "executive",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "fixture-500",
 "skill": "pisma-proste-v2",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Przeanalizuj umowę najmu mieszkania przed podpisaniem",
@@ -7636,41 +7654,56 @@
 "q": "Komornik zajął mi rachunek bankowy, a są tam tylko pieniądze z pensji.",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Komornik zajal mi rachunek bankowy, a sa tam tylko pieniadze z pensji.",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "komornik zajal mi rachunek bankowy, a sa tam tylko pieniadze z pensji",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Komornik zajął mi rachunek bankowy, a są tam tylko pieniądze z pensji.",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Komornik zajął mi rachunek bankowy, a są tam tylko pieniądze z pensji. Co mogę zrobić?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Policja znalazła przy mnie 2 gramy marihuany, co mi grozi?",
@@ -7996,41 +8029,56 @@
 "q": "Komornik prowadzi egzekucję z mojego wynagrodzenia, ile może zabrać?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Komornik prowadzi egzekucje z mojego wynagrodzenia, ile moze zabrac?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "komornik prowadzi egzekucje z mojego wynagrodzenia, ile moze zabrac",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Dzień dobry, mam pytanie. Komornik prowadzi egzekucję z mojego wynagrodzenia, ile może zabrać?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Komornik prowadzi egzekucję z mojego wynagrodzenia, ile może zabrać. Co mogę zrobić?",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Groził mi, że mnie zabije, czy to groźby karalne?",
@@ -16725,7 +16773,8 @@
 "variant": "oryginal",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -16736,7 +16785,8 @@
 "variant": "bez-polskich-znakow",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -16747,7 +16797,8 @@
 "variant": "male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -16758,7 +16809,8 @@
 "variant": "powitanie",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -16769,7 +16821,8 @@
 "variant": "prosba",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -17115,7 +17168,8 @@
 "variant": "oryginal",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -17126,7 +17180,8 @@
 "variant": "bez-polskich-znakow",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -17137,7 +17192,8 @@
 "variant": "male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -17148,7 +17204,8 @@
 "variant": "powitanie",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -17159,7 +17216,8 @@
 "variant": "prosba",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -32320,41 +32378,56 @@
 "q": "Użytkownik: Komornik zajął mi konto.\n\nAsystent: Czy na koncie jest tylko pensja?\n\nUżytkownik: tak, tylko wynagrodzenie",
 "kind": "followup",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "oryginal",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Użytkownik: Komornik zajął mi konto.\n\nAsystent: Czy na koncie jest tylko pensja?\n\nUżytkownik: tak, tylko wynagrodzenie",
 "kind": "followup",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "bez-polskich-znakow",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Użytkownik: Komornik zajął mi konto.\n\nAsystent: Czy na koncie jest tylko pensja?\n\nUżytkownik: tak, tylko wynagrodzenie",
 "kind": "followup",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Użytkownik: Komornik zajął mi konto.\n\nAsystent: Czy na koncie jest tylko pensja?\n\nUżytkownik: Dzień dobry, mam pytanie. tak, tylko wynagrodzenie",
 "kind": "followup",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "powitanie",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Użytkownik: Komornik zajął mi konto.\n\nAsystent: Czy na koncie jest tylko pensja?\n\nUżytkownik: tak, tylko wynagrodzenie. Co mogę zrobić?",
 "kind": "followup",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "prosba",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "Użytkownik: Wynajmujący nie oddaje mi kaucji po wyprowadzce.\n\nAsystent: Czy mam przygotować wezwanie do zwrotu kaucji?\n\nUżytkownik: ok",
@@ -33171,9 +33244,12 @@
 "q": "pytanie: komornik zajal mi rachunek bankowy, a sa tam tylko pieniadze z pensji",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "pytanie: policja znalazla przy mnie 2 gramy marihuany, co mi grozi",
@@ -33243,9 +33319,12 @@
 "q": "pytanie: komornik prowadzi egzekucje z mojego wynagrodzenia, ile moze zabrac",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "pytanie: grozil mi, ze mnie zabije, czy to grozby karalne",
@@ -34992,7 +35071,8 @@
 "variant": "pytanie-male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -35070,7 +35150,8 @@
 "variant": "pytanie-male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -36367,9 +36448,12 @@
 "q": "pytanie: komornik zajal mi rachunek bankowy, a sa tam tylko pieniadze z pensji",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "pytanie: policja znalazla przy mnie 2 gramy marihuany, co mi grozi",
@@ -36439,9 +36523,12 @@
 "q": "pytanie: komornik prowadzi egzekucje z mojego wynagrodzenia, ile moze zabrac",
 "kind": "legal",
 "legal": true,
-"dr": "dr-03",
+"dr": "dr-02",
 "variant": "pytanie-male-litery",
-"criminal": false
+"criminal": false,
+"alt": [
+"dr-12"
+]
 },
 {
 "q": "pytanie: grozil mi, ze mnie zabije, czy to grozby karalne",
@@ -38188,7 +38275,8 @@
 "variant": "pytanie-male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {
@@ -38266,7 +38354,8 @@
 "variant": "pytanie-male-litery",
 "criminal": false,
 "alt": [
-"dr-03"
+"dr-03",
+"dr-02"
 ]
 },
 {

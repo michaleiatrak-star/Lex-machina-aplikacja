@@ -1,3 +1,5 @@
+import { ARTICLE_LEAD, compactActAbbreviations } from "./legal-act-abbreviations.js";
+
 export type DomainLockReport = {
   gate: "G39I_DOMAIN_LOCK";
   result: "PASS" | "BLOCKED";
@@ -20,8 +22,12 @@ export type RateCompletenessReport = {
   missing: string[];
 };
 
+// Na tekście po compactActAbbreviations: "art. 148 k.k." -> "art. 148 KK".
 const CRIMINAL_REFERENCE =
-  /\bart\.?\s+\d+[a-ząćęłńóśźż]*(?:\s*§\s*\d+[a-z]*)?\s+(?:KK|KPK|KKS|KW|KPW)\b/giu;
+  new RegExp(
+    `${ARTICLE_LEAD}\\d+[a-ząćęłńóśźż]*(?:\\s*§\\s*\\d+[a-z]*)?\\s+(?:KK|KPK|KKS|KKW|KW|KPW)\\b`,
+    "giu"
+  );
 const HIGH_RISK_CRIMINAL_SIGNAL =
   /\b(?:zawiadomieni[ae]\s+o\s+(?:możliwości\s+)?popełnieni[ua]\s+przestępstwa|odpowiedzialność\s+karna|kwalifikacja\s+karna)\b/giu;
 
@@ -54,7 +60,9 @@ export function evaluateDomainLock(args: {
   const criminalLegalReferences =
     unique(
       [
-        ...args.text.matchAll(
+        ...compactActAbbreviations(
+          args.text
+        ).matchAll(
           CRIMINAL_REFERENCE
         )
       ].map(
@@ -98,12 +106,14 @@ export function evaluateDomainLock(args: {
 
 const RATE_TOPIC =
   /\b(?:odsetk\w*|waloryzac\w*|inflacj\w*|minimaln\w*\s+wynagrodzen\w*|przeciętn\w*\s+wynagrodzen\w*|rekompensat\w*\s+za\s+koszty\s+odzyskiwania\s+należności)\b/iu;
+// Granice słowa przez \p{L}: JS-owe \b jest tylko ASCII, więc po "%" i "zł" oraz
+// przed "ł" nigdy nie pasowało.
 const NUMERIC_RATE =
-  /(?:\b\d{1,3}(?:[.,]\d{1,4})?\s*%\b|\b\d{1,3}(?:[ .]\d{3})*(?:[.,]\d{1,2})?\s*(?:zł|PLN)\b)/iu;
+  /(?:\b\d{1,3}(?:[.,]\d{1,4})?\s*%(?![\p{L}\d])|\b\d{1,3}(?:[ .]\d{3})*(?:[.,]\d{1,2})?\s*(?:zł(?:ot\p{L}*)?|PLN)(?![\p{L}\d]))/iu;
 const VERIFIED_OR_GAP =
   /(?:✅\s*\[VER:|⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA|⬛\s*\[(?:DO UZUPEŁNIENIA|UZUPEŁNIJ))/iu;
 const AGGREGATE =
-  /\b(?:łącznie|suma|kwota\s+łączna|razem\s+do\s+zapłaty|należność\s+łącznie)\b/iu;
+  /(?<![\p{L}\d])(?:łącznie|suma|kwota\s+łączna|razem\s+do\s+zapłaty|należność\s+łącznie)(?![\p{L}\d])/iu;
 const EXPLICIT_INTERVAL =
   /\b(?:od\s+\d{1,4}[-./]\d{1,2}[-./]\d{1,4}\s+do\s+\d{1,4}[-./]\d{1,2}[-./]\d{1,4}|przedział\s*[:=-]\s*\d{1,4}[-./]\d{1,2}[-./]\d{1,4}\s*(?:–|-|do)\s*\d{1,4}[-./]\d{1,2}[-./]\d{1,4})\b/iu;
 const SERIES_HEADER =
@@ -148,7 +158,7 @@ export function evaluateRateCompleteness(
     AGGREGATE.test(text) &&
     (
       NUMERIC_RATE.test(text) ||
-      /\b\d+(?:[.,]\d+)?\s*(?:zł|PLN)\b/iu.test(
+      /\b\d+(?:[.,]\d+)?\s*(?:zł(?:ot\p{L}*)?|PLN)(?![\p{L}\d])/iu.test(
         text
       )
     );

@@ -340,6 +340,41 @@ const LOCAL_CATALOG_DESCRIPTION_CHARS = 220;
 // A short legal question on a local model is answered in the quick lane
 // (domain + provisions), so the router only has to name the domain.
 const LOCAL_QUICK_CATALOG_DESCRIPTION_CHARS = 140;
+// Zawieszony dostawca nie blokuje tury na czas domyślnego limitu undici (ok. 300 s);
+// model lokalny na CPU czyta katalog i mapę routingu dłużej.
+const ROUTING_TIMEOUT_MS = 60_000;
+
+// ROUTING-MAP.md (~24k znaków) czytana z dysku tylko po zmianie (mtime i rozmiar).
+const routingMapCache = new Map<string, { stamp: string; text: string }>();
+
+async function routingMapText(
+  file: string
+): Promise<string> {
+  const fsp =
+    await import(
+      "node:fs/promises"
+    );
+  const stat =
+    await fsp.stat(file);
+  const stamp =
+    `${stat.mtimeMs}:${stat.size}`;
+  const cached =
+    routingMapCache.get(file);
+  if (cached?.stamp === stamp) {
+    return cached.text;
+  }
+  const text =
+    await fsp.readFile(
+      file,
+      "utf8"
+    );
+  routingMapCache.set(
+    file,
+    { stamp, text }
+  );
+  return text;
+}
+const LOCAL_ROUTING_TIMEOUT_MS = 180_000;
 
 function catalogLine(
   skill: LexSkillRecord,
@@ -466,19 +501,12 @@ export class ModelAutoRouter {
           "prawo-polskie-v2",
           "prawo-polskie-v2/ROUTING-MAP.md"
         );
-    const routingMapText =
-      routingMap
-        ? (
-            await import(
-              "node:fs/promises"
-            )
-          ).readFile(
-            routingMap,
-            "utf8"
-          )
-        : Promise.resolve("");
     const mapText =
-      await routingMapText;
+      routingMap
+        ? await routingMapText(
+            routingMap
+          )
+        : "";
 
     const quickLocal =
       localModel &&
@@ -599,7 +627,13 @@ export class ModelAutoRouter {
                 // The decision is one short JSON object.
                 ...(localModel
                   ? { localMaxOutputTokens: 256 }
-                  : {})
+                  : {}),
+                abortSignal:
+                  AbortSignal.timeout(
+                    localModel
+                      ? LOCAL_ROUTING_TIMEOUT_MS
+                      : ROUTING_TIMEOUT_MS
+                  )
               }
             );
         return response

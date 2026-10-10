@@ -39,10 +39,19 @@ describe("routing of 10 000 chat messages (holdout)", () => {
 });
 
 describe("foreign element", () => {
-  it.each(["pracowałem w Norwegii", "firma z Czech", "sąd w Monachium", "zagraniczny wyrok", "mieszka w USA"])("%s", (text) => {
+  it.each([
+    "pracowałem w Norwegii", "firma z Czech", "sąd w Monachium", "zagraniczny wyrok", "mieszka w USA",
+    "pracuję we Francji", "Francja wydała nakaz", "francuski sąd", "wyjazd do Czech", "Czechy wydały wyrok",
+    "mieszka w Czechach", "pracuję w Danii", "jadę na Danię", "spółka, której siedzibą jest Dania", "duński pracodawca",
+    "wypadek w Pradze w Czechach"
+  ])("%s", (text) => {
     expect(foreignElement(text)).toBe(true);
   });
-  it.each(["Cześć, mam pytanie", "czesne na studiach", "danie główne", "włosy", "włoski orzech", "indywidualna interpretacja"])("not: %s", (text) => {
+  it.each([
+    "Cześć, mam pytanie", "czesne na studiach", "danie główne", "włosy", "włoski orzech", "indywidualna interpretacja",
+    "mieszkanie na Pradze-Południe", "Praga Północ, lokal komunalny", "umowa franczyzy", "Pan Franciszek nie płaci",
+    "Dania nieświeże w restauracji", "podano dania nieświeże", "sąd w Czechowicach-Dziedzicach", "Czechowice-Dziedzice"
+  ])("not: %s", (text) => {
     expect(foreignElement(text)).toBe(false);
   });
 });
