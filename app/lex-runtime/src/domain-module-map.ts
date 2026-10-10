@@ -207,20 +207,32 @@ export function locate(registry: LexSkillRegistry, skill: string, resource: stri
 const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
 
 type Indexed = { entry: ActEntry; stems: string[] };
-const cache = new Map<string, { index: Indexed[]; df: Map<string, number> }>();
+/** Znacznik zmiany pliku (mtime i rozmiar) dla cache czytanych map; "-" gdy brak pliku. */
+export function fileStamp(file: string): string {
+  try {
+    const stat = fs.statSync(file);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "-";
+  }
+}
+
+// Jeden wpis na mapę; klucz z mtime i rozmiaru, plik czytany tylko po zmianie.
+const cache = new Map<string, { key: string; value: { index: Indexed[]; df: Map<string, number> } }>();
 
 function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]; df: Map<string, number> } {
   const record = registry.get(skill);
   if (!record) return { index: [], df: new Map() };
   const file = path.join(record.directory, "MAPA-AKTOW.md");
+  const key = fileStamp(file);
+  const cached = cache.get(file);
+  if (cached?.key === key) return cached.value;
   let body = "";
   try {
     body = fs.readFileSync(file, "utf8");
   } catch {
     return { index: [], df: new Map() };
   }
-  const key = `${file}:${body.length}`;
-  if (cache.has(key)) return cache.get(key)!;
   const mapped = parseActMap(body, skill)
     .map((entry) => ({ ...entry, resources: entry.resources.map((resource) => locate(registry, skill, resource)).filter((resource): resource is string => resource !== null) }))
     .filter((entry) => entry.resources.length > 0);
@@ -247,7 +259,7 @@ function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]
   const df = new Map<string, number>();
   for (const item of index) for (const stem of item.stems) df.set(stem, (df.get(stem) ?? 0) + 1);
   const value = { index, df };
-  cache.set(key, value);
+  cache.set(file, { key, value });
   return value;
 }
 
