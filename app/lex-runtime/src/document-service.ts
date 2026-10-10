@@ -433,6 +433,31 @@ type PrivateDocumentRecord = {
   aiFindings?: Map<string, PiiSpan[]>;
 };
 
+/**
+ * Tekst w postaci NFC ("ó" jako jeden znak, nie "o" + znak łączący, jak w
+ * tekście z macOS lub z części PDF-ów): bez tego znane wartości z klucza,
+ * słownik i granice słów nie trafiają w zapis rozłożony.
+ */
+export function nfcIngestion(source: DocumentIngestionResult): DocumentIngestionResult {
+  const nfc = (text: string) => text.normalize("NFC");
+  const changed = (text: string) => nfc(text) !== text;
+  if (
+    !source.pages.some((page) => changed(page.text) || page.lines?.some((line) => changed(line.text))) &&
+    !source.chunks.some((chunk) => changed(chunk.text))
+  ) {
+    return source;
+  }
+  return {
+    ...source,
+    pages: source.pages.map((page) => ({
+      ...page,
+      text: nfc(page.text),
+      ...(page.lines ? { lines: page.lines.map((line) => ({ ...line, text: nfc(line.text) })) } : {})
+    })),
+    chunks: source.chunks.map((chunk) => ({ ...chunk, text: nfc(chunk.text) }))
+  };
+}
+
 function withAiMemory(
   recognizer: NamedEntityRecognizer,
   memory: Map<string, PiiSpan[]> | undefined
@@ -633,11 +658,11 @@ implements DocumentService {
   ): Promise<PublicDocumentReview> {
     const onProgress = security?.onProgress;
     onProgress?.({ stage: "READING" });
-    const extracted = await this.extract(
+    const extracted = nfcIngestion(await this.extract(
       data,
       mediaType,
       onProgress
-    );
+    ));
     const source =
       shouldCorrectOcr(security)
         ? await this.correctOcr(extracted, onProgress)
@@ -1318,7 +1343,7 @@ implements DocumentService {
         vault,
         sharedKey,
         source:
-          source.source,
+          nfcIngestion(source.source),
         protectedIngestion:
           protectedResult,
         protectedChunks:
