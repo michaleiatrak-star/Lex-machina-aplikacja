@@ -532,6 +532,17 @@ export const THREAD_SUMMARY_PROMPT = [
     "- Jeśli jest dotychczasowe streszczenie, zaktualizuj je o nowe wiadomości i zachowaj jego poprawki (mogła je wprowadzić osoba prowadząca sprawę).",
     "- Najwyżej ok. 6000 znaków; zwięźle, w punktach."
 ].join("\n");
+/**
+ * Wiadomość w postaci NFC przed pseudonimizacją: tekst wklejony z macOS bywa
+ * rozłożony (NFD) i wtedy znane nazwiska oraz granice słów nie trafiają.
+ */
+export function nfcRequest(request) {
+    const query = request.query.normalize("NFC");
+    const auxiliaryText = request.auxiliaryText?.normalize("NFC");
+    if (query === request.query && auxiliaryText === request.auxiliaryText)
+        return request;
+    return { ...request, query, ...(auxiliaryText !== undefined ? { auxiliaryText } : {}) };
+}
 export class SafeSessionExecutor {
     registry;
     providers;
@@ -698,6 +709,7 @@ export class SafeSessionExecutor {
             : undefined;
     }
     async resolveAutoRouting(request) {
+        request = nfcRequest(request);
         const vault = new PseudonymizationVault(request.privacySeed);
         const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
         let protectedQuery;
@@ -733,6 +745,7 @@ export class SafeSessionExecutor {
         };
     }
     async execute(request) {
+        request = nfcRequest(request);
         // Tokens of every model call in this turn (benchmark and cost display).
         const { result, usage } = await meterUsage(() => this.executeTurn(request));
         result.usage = usage;

@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { WindowsAuthenticodeInstallerVerifier } from "./application-update-verifier.js";
 import { LexSkillRegistry } from "./registry.js";
-import { SKILLS_REPOSITORY, downloadSkillChannelArchive, resolveSkillChannel, verifiedChannelRoot } from "./skill-channel.js";
+import { SKILLS_REPOSITORY, downloadSkillChannelArchive, resolveSkillChannel, extractSkillChannelDirectory, verifyChannelFiles } from "./skill-channel.js";
 import { skillUpdateSignatureMode, skillUpdateTrustReady, verifySkillUpdateIndex } from "./skill-update-verifier.js";
 import { modelPackSignatureMode, modelPackTrustReady, modelUpdateFamilyForId, verifyModelPackIndex } from "./model-pack-verifier.js";
 import { CURRENT_APPLICATION_VERSION, compareVersions } from "./update-discovery.js";
@@ -425,8 +425,8 @@ export class MaintenanceService {
     modelPackIndexVerifier;
     skillSignatureMode;
     modelSignatureMode;
-    archiveExtractor;
-    constructor(discovery, fetchImpl = fetch, installerVerifier = new WindowsAuthenticodeInstallerVerifier(), skillTrustReady = skillUpdateTrustReady, skillIndexVerifier = (indexBytes, signatureBytes) => verifySkillUpdateIndex(indexBytes, signatureBytes), modelPackTrustPolicyReady = modelPackTrustReady, modelPackIndexVerifier = (indexBytes, signatureBytes) => verifyModelPackIndex(indexBytes, signatureBytes), skillSignatureMode = skillUpdateSignatureMode, modelSignatureMode = modelPackSignatureMode, archiveExtractor = extractZip) {
+    channelExtractor;
+    constructor(discovery, fetchImpl = fetch, installerVerifier = new WindowsAuthenticodeInstallerVerifier(), skillTrustReady = skillUpdateTrustReady, skillIndexVerifier = (indexBytes, signatureBytes) => verifySkillUpdateIndex(indexBytes, signatureBytes), modelPackTrustPolicyReady = modelPackTrustReady, modelPackIndexVerifier = (indexBytes, signatureBytes) => verifyModelPackIndex(indexBytes, signatureBytes), skillSignatureMode = skillUpdateSignatureMode, modelSignatureMode = modelPackSignatureMode, channelExtractor = extractSkillChannelDirectory) {
         this.discovery = discovery;
         this.fetchImpl = fetchImpl;
         this.installerVerifier = installerVerifier;
@@ -436,7 +436,7 @@ export class MaintenanceService {
         this.modelPackIndexVerifier = modelPackIndexVerifier;
         this.skillSignatureMode = skillSignatureMode;
         this.modelSignatureMode = modelSignatureMode;
-        this.archiveExtractor = archiveExtractor;
+        this.channelExtractor = channelExtractor;
     }
     installedChannel() {
         const marker = readSkillHealthMarker(installedSkillOverlayRoot());
@@ -494,19 +494,34 @@ export class MaintenanceService {
      * start z nieudaną walidacją wraca do poprzedniej albo do wbudowanej).
      */
     async refreshSkillsFromChannel(channel) {
+        // Kanał to gałąź repozytorium bez podpisanego indeksu: zgodność sum git dowodzi
+        // tylko spójności dwóch odpowiedzi GitHub, nie autorstwa. Polityka wymagająca
+        // podpisu skilli blokuje więc odświeżenie z kanału. Bez LEX_RUNTIME_ROOT (runtime
+        // uruchomiony z repozytorium) nie ma zainstalowanej polityki; uszkodzona polityka
+        // instalacji blokuje.
+        let signatureMode = null;
+        try {
+            signatureMode = this.skillSignatureMode();
+        }
+        catch (error) {
+            if (!(error instanceof Error && error.message === "SKILL_UPDATE_RUNTIME_ROOT_MISSING")) {
+                throw error;
+            }
+        }
+        if (signatureMode === "SIGNED_REQUIRED") {
+            throw new Error("SKILL_CHANNEL_SIGNED_POLICY_BLOCKED");
+        }
         const snapshot = await resolveSkillChannel(channel, this.fetchImpl);
         const bytes = await downloadSkillChannelArchive(snapshot, this.fetchImpl);
         const skillsRoot = path.join(localAppDataRoot(), "skills");
-        const workRoot = path.join(skillsRoot, `channel-${Date.now()}-${randomBytes(4).toString("hex")}`);
-        const zipPath = path.join(workRoot, "skills.zip");
-        const extracted = path.join(workRoot, "extracted");
-        const candidate = path.join(workRoot, "candidate");
+        // Krótki katalog roboczy i rozpakowanie samego katalogu kanału (bez prefiksu
+        // archiwum): ścieżki skilli mieszczą się wtedy w limicie Windows (MAX_PATH).
+        const workRoot = path.join(skillsRoot, `c-${randomBytes(4).toString("hex")}`);
+        const candidate = path.join(workRoot, "s");
         fs.mkdirSync(workRoot, { recursive: true });
         try {
-            fs.writeFileSync(zipPath, bytes);
-            this.archiveExtractor(zipPath, extracted);
-            const sourceRoot = verifiedChannelRoot(extracted, snapshot);
-            fs.cpSync(sourceRoot, candidate, { recursive: true, force: true });
+            this.channelExtractor(bytes, snapshot.directory, candidate);
+            verifyChannelFiles(candidate, snapshot);
             const validation = new LexSkillRegistry(candidate);
             const issues = [...validation.scan(), ...validation.validateDeclarations()];
             if (validation.skills.size === 0 || issues.length > 0) {
@@ -566,7 +581,10 @@ export class MaintenanceService {
             throw new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED");
         }
         // macOS: the update is installed by opening the new .pkg (no in-app runner).
-        if (process.platform === "darwin") {
+        // Windows: bez skonfigurowanego wydawcy Authenticode (instalatory bez podpisu)
+        // weryfikator odrzuci każdy plik - użytkownik pobiera instalator ze strony wydania.
+        if (process.platform === "darwin" ||
+            this.installerVerifier.ready?.() === false) {
             throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
         }
         const version = requireLatestVersion(status);

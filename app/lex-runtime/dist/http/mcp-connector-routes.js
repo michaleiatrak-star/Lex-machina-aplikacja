@@ -6,6 +6,7 @@ import { caseLinkProblem, courtOfSignature } from "../court-of-signature.js";
 import { AuthError } from "../auth/service.js";
 import { isLexMcpServerId } from "../lex-mcp-connectors.js";
 import { fetchSourcePreview } from "../source-preview.js";
+import { CaseAccessError } from "../case-access.js";
 function requireAdmin(req, res, authService) {
     return authorize(req, res, authService, true);
 }
@@ -55,8 +56,24 @@ function sendConnectorError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMcpConnectorRoutes(app, dependencies) {
-    const { authService, connectors, search, previewFetch } = dependencies;
+    const { authService, connectors, search, previewFetch, caseAccess } = dependencies;
     const caseLawPreview = new CaseLawPreviewService(previewFetch);
+    // Orzeczenia w katalogu sprawy: podgląd wymaga dostępu do sprawy, zapis kopii prawa zapisu.
+    const caseAllowed = (req, res, caseId, capability) => {
+        if (!caseId || !caseAccess)
+            return true;
+        try {
+            caseAccess.assertAccess(authService.authenticateAuthorization(req.get("authorization")), caseId, capability);
+            return true;
+        }
+        catch (error) {
+            if (error instanceof CaseAccessError || error instanceof AuthError) {
+                res.status(error.httpStatus).json({ error: error.code });
+                return false;
+            }
+            throw error;
+        }
+    };
     app.get("/api/admin/mcp-connectors", (req, res) => {
         if (!requireAdmin(req, res, authService))
             return;
@@ -243,6 +260,8 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             res.status(400).json({ error: "CASE_PREVIEW_INVALID" });
             return;
         }
+        if (!caseAllowed(req, res, previewCase, "READ"))
+            return;
         try {
             res.json(await caseLawPreview.preview({
                 sourceUrl,
@@ -270,6 +289,8 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         }
         try {
             const caseId = typeof req.body?.caseId === "string" && req.body.caseId.length <= 100 ? req.body.caseId.trim() : "";
+            if (!caseAllowed(req, res, caseId, "WRITE"))
+                return;
             res.json(await caseLawPreview.copy({ sourceUrl, ...(signature ? { signature } : {}), ...(caseId ? { caseId } : {}) }));
         }
         catch (error) {
@@ -288,6 +309,8 @@ export function registerMcpConnectorRoutes(app, dependencies) {
         const link = field(req.body?.cardUrl, 2000);
         let signature = field(req.body?.signature, 200);
         const caseId = field(req.body?.caseId, 100);
+        if (!caseAllowed(req, res, caseId, "WRITE"))
+            return;
         try {
             const problem = link ? caseLinkProblem(link) : null;
             if (problem?.signature && !signature)

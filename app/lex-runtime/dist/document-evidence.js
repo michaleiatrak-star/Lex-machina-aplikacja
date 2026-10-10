@@ -87,7 +87,8 @@ export function maskBoxes(page, values) {
             boxes.push(lineBox(index, 0, line.text.length));
     });
     for (const value of values) {
-        const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escape(value).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "gu");
+        // Case-insensitive: "JAN KOWALSKI" on a photo, "Jan Kowalski" in the key.
+        const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escape(value).replace(/\s+/g, "\\s+")}(?![\\p{L}\\p{N}])`, "giu");
         for (const match of page.text.matchAll(pattern)) {
             const start = match.index;
             const end = start + match[0].length;
