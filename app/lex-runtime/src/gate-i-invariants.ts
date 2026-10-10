@@ -10,8 +10,9 @@ import type {
 import type {
   DeterministicWorkflowReadReport
 } from "./deterministic-workflow.js";
-import type {
-  VerificationRecord
+import {
+  FRESHNESS_MAX_AGE_MS,
+  type VerificationRecord
 } from "./verification-ledger.js";
 
 export type GateICheckId =
@@ -298,7 +299,8 @@ function sourceHierarchy(
 
 function temporalFreshness(
   records:
-    readonly VerificationRecord[]
+    readonly VerificationRecord[],
+  now: number
 ): GateICheck {
   const statutory =
     records.filter(
@@ -320,6 +322,7 @@ function temporalFreshness(
           "CURRENT";
         const checkedAt =
           record.freshnessCheckedAt;
+        // Brzmienie obowiązujące: sprawdzenie w ELI nie starsze niż limit.
         return (
           record
             .temporalFreshnessStatus !==
@@ -329,6 +332,15 @@ function temporalFreshness(
             Date.parse(
               checkedAt
             )
+          ) ||
+          (
+            expected ===
+              "CURRENT" &&
+            now -
+              Date.parse(
+                checkedAt
+              ) >
+              FRESHNESS_MAX_AGE_MS
           )
         );
       }
@@ -509,6 +521,7 @@ export function evaluateGateIInvariants(
       rejected: number;
       quotedWithoutExactHighlight: number;
     };
+    now?: number;
   }
 ): GateIInvariantReport {
   const checks:
@@ -528,7 +541,9 @@ export function evaluateGateIInvariants(
         args.verificationRecords
       ),
       temporalFreshness(
-        args.verificationRecords
+        args.verificationRecords,
+        args.now ??
+          Date.now()
       ),
       citationLedger(
         args.finalization

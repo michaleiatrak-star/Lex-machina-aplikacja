@@ -28,6 +28,10 @@ export type VerificationMethod =
   | "provider_tool"
   | "file_read";
 
+// Najstarsze sprawdzenie aktualności t.j. w ELI, które jeszcze potwierdza brzmienie
+// obowiązujące (relacje ELI są odświeżane raz dziennie).
+export const FRESHNESS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type VerificationRecord = {
   claim: string;
   kind: VerificationKind;

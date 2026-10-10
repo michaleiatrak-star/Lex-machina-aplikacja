@@ -1,9 +1,10 @@
 import type { CoreLawIndex } from "./core-law-index.js";
 import { searchStems } from "./core-law-search.js";
 import { anchoredUrl } from "./source-anchor.js";
-import type {
-  VerificationKind,
-  VerificationRecord
+import {
+  FRESHNESS_MAX_AGE_MS,
+  type VerificationKind,
+  type VerificationRecord
 } from "./verification-ledger.js";
 
 /**
@@ -156,6 +157,12 @@ export function verifyFromCoreLaw(args: {
   ) {
     return { decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" };
   }
+  // T.j. zawiera zmiany w vacatio legis (KP t.j. 2026/1245 ze zmianą od 5.11.2026): bez
+  // tekstu noweli nie wiadomo, czy dotyka artykułu, więc brzmienie z kopii nie jest
+  // pewnym brzmieniem obowiązującym dziś. Numer Dz.U. t.j. pozostaje prawidłowy.
+  if (args.kind === "statute" && summary.notYetInForce.length > 0) {
+    return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+  }
 
   let evidence: string | undefined;
   let anchor: string | undefined;
@@ -205,6 +212,12 @@ export function verifyFromCoreLaw(args: {
     Date.parse(summary.relationsCheckedAt) > Date.parse(record.fetchedAt)
       ? summary.relationsCheckedAt
       : record.fetchedAt;
+
+  // Kopia niesprawdzana w ELI dłużej niż limit (ELI zablokowane, odświeżanie wyłączone)
+  // nie jest podstawą VERIFIED/CURRENT.
+  if (evidence && !(now - Date.parse(checkedAt) <= FRESHNESS_MAX_AGE_MS)) {
+    return { decision: "DENY", reason: "TEMPORAL_COPY_STALE" };
+  }
 
   const sourceAnchorUrl = anchoredUrl(record.sourceUrl, anchor);
   const verificationRecord: VerificationRecord = evidence
