@@ -403,6 +403,8 @@ export class PseudonymizationVault {
         item.token,
         item.value
       );
+      // As in getOrCreate: a key read from disk merges entities by surface too.
+      this.tokenSurfaces.set(item.token, new Set([item.value]));
       this.tokenMetadata.set(
         item.token,
         {
