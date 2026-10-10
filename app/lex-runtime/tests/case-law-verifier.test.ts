@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  SupremeCourtCaseVerifier
+  SupremeCourtCaseVerifier,
+  isSupremeCourtSignature
 } from "../src/case-law-verifier.js";
 
 function json(value: unknown): Response {
@@ -534,6 +535,26 @@ describe("SupremeCourtCaseVerifier", () => {
       status: "OUT_OF_SCOPE",
       reason:
         "INVALID_OR_NON_SN_SIGNATURE"
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("nie szuka na sn.pl sygnatur sądów powszechnych podobnych do repertoriów SN (II Cz, III Ko)", async () => {
+    expect(isSupremeCourtSignature("II Cz 123/20")).toBe(false);
+    expect(isSupremeCourtSignature("III Ko 5/21")).toBe(false);
+    expect(isSupremeCourtSignature("III CZ 12/20")).toBe(true);
+    const fetcher = vi.fn();
+    const result =
+      await new SupremeCourtCaseVerifier(
+        fetcher
+      ).verify({
+        claim: "sygn. II Cz 123/20",
+        signature: "II Cz 123/20",
+        toolCallId: "case-tool-cz"
+      });
+    expect(result).toMatchObject({
+      status: "OUT_OF_SCOPE",
+      reason: "INVALID_OR_NON_SN_SIGNATURE"
     });
     expect(fetcher).not.toHaveBeenCalled();
   });

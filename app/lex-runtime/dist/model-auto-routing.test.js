@@ -104,6 +104,9 @@ describe("ModelAutoRouter", () => {
         // Account sessions: the router never resumes or records a shared CLI thread.
         expect(setup.adapter.calls[0]
             ?.accountContinuity).toBe("none");
+        // Zawieszony dostawca nie blokuje tury: wywołanie routingu ma limit czasu.
+        expect(setup.adapter.calls[0]
+            ?.abortSignal).toBeInstanceOf(AbortSignal);
     });
     it("does not call a local model to route a trivial chat command", async () => {
         const setup = router(fixture(), []);

@@ -1,4 +1,4 @@
-import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
@@ -86,7 +86,7 @@ export function expectedVerificationMarker(
 }
 
 const ARTICLE_PATTERN = new RegExp(
-  `\\bart\\.?\\s+\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  `${ARTICLE_LEAD}\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
   "giu"
 );
 
@@ -118,7 +118,8 @@ function collectMatches(
   for (const match of lineText.matchAll(pattern)) {
     // "art. 233 k.k." and "art. 233 KK" are one provision.
     const written = match[0]?.trim() ?? "";
-    const claim = kind === "statute" ? compactActAbbreviations(written) : written;
+    // "art.415 KC" i "artykułem 415 KC" to ten sam przepis co "art. 415 KC".
+    const claim = kind === "statute" ? canonicalArticleLead(compactActAbbreviations(written)) : written;
     if (!claim) continue;
     references.push({ claim, kind, line, lineText, ...(claim !== written ? { span: written } : {}) });
   }

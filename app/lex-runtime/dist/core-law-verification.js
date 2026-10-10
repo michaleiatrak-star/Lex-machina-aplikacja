@@ -1,9 +1,11 @@
 import { searchStems } from "./core-law-search.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { anchoredUrl } from "./source-anchor.js";
+import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
 function articleToken(claim) {
-    return /\bart(?:\.|ykuł\p{L}*)?\s+(\d+[a-ząćęłńóśźż]*)/iu
+    return new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*)`, "iu")
         .exec(claim)?.[1]
         ?.toLocaleLowerCase("pl") ?? null;
 }
@@ -95,6 +97,12 @@ export function verifyFromCoreLaw(args) {
         !record.status.toLocaleLowerCase("pl").includes("obowiązując")) {
         return { decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" };
     }
+    // T.j. zawiera zmiany w vacatio legis (KP t.j. 2026/1245 ze zmianą od 5.11.2026): bez
+    // tekstu noweli nie wiadomo, czy dotyka artykułu, więc brzmienie z kopii nie jest
+    // pewnym brzmieniem obowiązującym dziś. Numer Dz.U. t.j. pozostaje prawidłowy.
+    if (args.kind === "statute" && summary.notYetInForce.length > 0) {
+        return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+    }
     let evidence;
     let anchor;
     let failure = "";
@@ -142,6 +150,11 @@ export function verifyFromCoreLaw(args) {
         Date.parse(summary.relationsCheckedAt) > Date.parse(record.fetchedAt)
         ? summary.relationsCheckedAt
         : record.fetchedAt;
+    // Kopia niesprawdzana w ELI dłużej niż limit (ELI zablokowane, odświeżanie wyłączone)
+    // nie jest podstawą VERIFIED/CURRENT.
+    if (evidence && !(now - Date.parse(checkedAt) <= FRESHNESS_MAX_AGE_MS)) {
+        return { decision: "DENY", reason: "TEMPORAL_COPY_STALE" };
+    }
     const sourceAnchorUrl = anchoredUrl(record.sourceUrl, anchor);
     const verificationRecord = evidence
         ? {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   CoreActRecord,
   CoreActRef,
@@ -14,7 +14,17 @@ import { VerificationLedger } from "../src/verification-ledger.js";
 import { OfficialLegalSourceVerifier } from "../src/legal-source-verifier.js";
 import { LegalVerificationToolRuntime } from "../src/verification-tool-runtime.js";
 
-const NOW = Date.parse("2026-09-29T10:00:00.000Z");
+// Kopia z 20.09 ma 5 dni: w limicie wieku kopii (CORE_LAW_COPY_MAX_AGE_MS). Zegar
+// runtime (Date.now()) ustawiony na ten sam dzień, żeby wynik nie zależał od daty testu.
+const NOW = Date.parse("2026-09-25T10:00:00.000Z");
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: NOW });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 const KW_URL = "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.html";
 const TRZ_URL = "https://api.sejm.gov.pl/eli/acts/DU/2026/1214/text.html";
 
@@ -34,6 +44,7 @@ function act(options: {
   amendmentsAfter?: CoreActSummary["amendmentsAfter"];
   pendingConsolidated?: CoreActSummary["pendingConsolidated"];
   pendingAmendments?: CoreActSummary["pendingAmendments"];
+  notYetInForce?: CoreActSummary["notYetInForce"];
   relationsCheckedAt?: string | null;
 }): Act {
   const ref: CoreActRef = {
@@ -73,7 +84,7 @@ function act(options: {
     amendmentsAfter: options.amendmentsAfter ?? [],
     pendingConsolidated: options.pendingConsolidated ?? null,
     pendingAmendments: options.pendingAmendments ?? [],
-    notYetInForce: [],
+    notYetInForce: options.notYetInForce ?? [],
     origin: "MAP",
     addedAt: null,
     addedBy: null
@@ -210,6 +221,50 @@ describe("verifyFromCoreLaw", () => {
       .toEqual({ decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" });
     expect(verify(index(kw()), { act: "XYZ" }))
       .toEqual({ decision: "DENY", reason: "UNKNOWN_LEGAL_ACT" });
+  });
+
+  it("odmawia brzmienia z t.j. zawierającego zmianę jeszcze nieobowiązującą", () => {
+    const pending = kw({ notYetInForce: [{ eli: "DU/2026/1046", title: null, from: "2026-11-05" }] });
+    expect(verify(index(pending))).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    // Numer Dz.U. t.j. pozostaje prawidłowy.
+    const journal = verifyFromCoreLaw({
+      index: index(pending),
+      claim: "Dz.U. 2025 poz. 734",
+      kind: "journal",
+      act: "KW",
+      toolCallId: "call_1",
+      now: NOW
+    });
+    expect(journal.decision === "RECORD" && journal.record.status).toBe("VERIFIED");
+  });
+
+  it("kopia niesprawdzana w ELI dłużej niż 7 dni nie daje VERIFIED", () => {
+    const stale = verifyFromCoreLaw({
+      index: index(kw()),
+      claim: "art. 51 § 1 KW",
+      kind: "statute",
+      act: "KW",
+      toolCallId: "call_1",
+      now: Date.parse("2026-09-28T08:00:01.000Z")
+    });
+    expect(stale).toEqual({ decision: "DENY", reason: "TEMPORAL_COPY_STALE" });
+    // Świeże sprawdzenie relacji w ELI odnawia kopię.
+    const rechecked = verifyFromCoreLaw({
+      index: index(kw({ relationsCheckedAt: "2026-09-27T08:00:00.000Z" })),
+      claim: "art. 51 § 1 KW",
+      kind: "statute",
+      act: "KW",
+      toolCallId: "call_1",
+      now: Date.parse("2026-09-28T08:00:01.000Z")
+    });
+    expect(rechecked.decision === "RECORD" && rechecked.record.status).toBe("VERIFIED");
+  });
+
+  it("rozpoznaje artykuł zapisany bez spacji i pełnym słowem", () => {
+    for (const claim of ["art.51 § 1 KW", "artykułu 51 § 1 KW"]) {
+      const outcome = verify(index(kw()), { claim });
+      expect(outcome.decision === "RECORD" && outcome.record.status).toBe("VERIFIED");
+    }
   });
 
   it("the verified record passes the HARD GATE with its ELI marker", () => {

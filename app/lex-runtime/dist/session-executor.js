@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
@@ -2372,7 +2373,7 @@ export class SafeSessionExecutor {
         // KROK 4: provisions verified in their current wording, checked again on the
         // event date from the question (separate ledger: answer markers stay as they are).
         const dates = mandatoryModel && legalTurn && this.verificationToolFactory && !requestedHistoricalAsOf
-            ? eventDates(pathFacts.query, new Date().toISOString().slice(0, 10))
+            ? eventDates(pathFacts.query, todayWarsaw())
             : [];
         const eventDateCheck = dates.length
             ? await checkProvisionsAtEventDates({

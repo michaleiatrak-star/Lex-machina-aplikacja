@@ -144,7 +144,8 @@ describe("Gate I common legal invariants", () => {
                 accepted: 0,
                 rejected: 0,
                 quotedWithoutExactHighlight: 0
-            }
+            },
+            now: Date.parse("2026-09-18T12:00:00.000Z")
         });
         expect(pass.checks.find((check) => check.id ===
             "SOURCE_HIERARCHY")?.result).toBe("PASS");
@@ -171,6 +172,27 @@ describe("Gate I common legal invariants", () => {
             }
         });
         expect(stale.checks.find((check) => check.id ===
+            "TEMPORAL_FRESHNESS")?.result).toBe("BLOCKED");
+        // Sprawdzenie aktualności starsze niż 7 dni nie potwierdza brzmienia obowiązującego.
+        const aged = evaluateGateIInvariants({
+            events: baseEvents(),
+            workflowReads: reads(),
+            verificationRecords: [
+                good
+            ],
+            finalization: finalization(),
+            outputValidation: {
+                result: "PASS",
+                detail: "workflow=PASS"
+            },
+            documentCitations: {
+                accepted: 0,
+                rejected: 0,
+                quotedWithoutExactHighlight: 0
+            },
+            now: Date.parse("2026-09-25T10:00:00.000Z")
+        });
+        expect(aged.checks.find((check) => check.id ===
             "TEMPORAL_FRESHNESS")?.result).toBe("BLOCKED");
     });
     it("blocks rejected or unanchored local document citations", () => {

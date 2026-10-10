@@ -280,6 +280,13 @@ describe(
           setup.adapter.calls[0]
             ?.accountContinuity
         ).toBe("none");
+        // Zawieszony dostawca nie blokuje tury: wywołanie routingu ma limit czasu.
+        expect(
+          setup.adapter.calls[0]
+            ?.abortSignal
+        ).toBeInstanceOf(
+          AbortSignal
+        );
       }
     );
 

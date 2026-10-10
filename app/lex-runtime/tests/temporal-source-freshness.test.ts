@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  TemporalSourceFreshnessChecker
+  TemporalSourceFreshnessChecker,
+  amendmentHasEntryIntoForceExceptions,
+  amendmentMentionsArticle
 } from "../src/temporal-source-freshness.js";
 import {
   DeterministicLegalActResolver
@@ -431,6 +433,128 @@ describe("TemporalSourceFreshnessChecker", () => {
         effectiveFrom: "2026-10-01"
       })
     ]);
+  });
+
+  it("liczy dzień wejścia noweli w życie w czasie polskim, nie w UTC", async () => {
+    // 00:30 w Warszawie 1.07.2026, w UTC jeszcze 30.06.2026.
+    const result = await new TemporalSourceFreshnessChecker(
+      fixtureFetcher({
+        amendments: [{
+          eli: "DU/2026/999",
+          relationDate: "2026-07-01",
+          promulgation: "2026-06-20",
+          entryIntoForce: "2026-07-01"
+        }]
+      }),
+      () => "2026-06-30T22:30:00.000Z"
+    ).check(kc);
+
+    expect(result.status).toBe("POST_TJ_AMENDMENTS");
+
+    const historical = await new TemporalSourceFreshnessChecker(
+      historicalFetcher(),
+      () => "2026-06-30T22:30:00.000Z"
+    ).check(kc, { asOf: "2026-06-30" });
+    expect(historical.status).not.toBe("INVALID_HISTORICAL_DATE");
+  });
+
+  it("rozpoznaje artykuł w zakresie i wyliczeniu w tekście noweli", () => {
+    expect(amendmentMentionsArticle("uchyla się art. 10–15;", "12")).toBe(true);
+    expect(amendmentMentionsArticle("uchyla się art. 10-15;", "12a")).toBe(true);
+    expect(amendmentMentionsArticle("uchyla się art. 10 do 15;", "15")).toBe(true);
+    expect(amendmentMentionsArticle("art. 10, 11 i 12 otrzymują brzmienie", "11")).toBe(true);
+    expect(amendmentMentionsArticle("w art. 10 oraz 14 wyrazy", "14")).toBe(true);
+    expect(amendmentMentionsArticle("uchyla się art. 10–15;", "15a")).toBe(false);
+    expect(amendmentMentionsArticle("uchyla się art. 10–15;", "1")).toBe(false);
+    // Po "§" kolejne liczby to paragrafy, nie artykuły.
+    expect(amendmentMentionsArticle("w art. 10 § 2 i 3 otrzymują brzmienie", "3")).toBe(false);
+    // Zakres z odwróconymi granicami: nie wiadomo.
+    expect(amendmentMentionsArticle("uchyla się art. 15–10;", "12")).toBeNull();
+  });
+
+  it("fails closed when a post-t.j. amendment repeals a range containing the requested article", async () => {
+    for (const text of [
+      "<html><body>Art. 1. Uchyla się art. 188–192.</body></html>",
+      "<html><body>Art. 1. Art. 189, 190a i 191 otrzymują brzmienie:</body></html>"
+    ]) {
+      const result = await new TemporalSourceFreshnessChecker(
+        fixtureFetcher({
+          amendments: [{
+            eli: "DU/2026/999",
+            relationDate: "2026-07-01",
+            promulgation: "2026-06-20",
+            entryIntoForce: "2026-07-01"
+          }],
+          amendmentTexts: { "DU/2026/999": text }
+        }),
+        () => "2026-09-15T20:00:00.000Z"
+      ).check(kc, { claim: "art. 190a KK" });
+
+      expect(result).toMatchObject({
+        status: "POST_TJ_AMENDMENTS",
+        reason: "POST_TJ_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"
+      });
+    }
+  });
+
+  it("nowela ogłoszona, wchodząca w życie później, z wyjątkiem dla artykułu: UNKNOWN zamiast CURRENT", async () => {
+    const check = (text: string) =>
+      new TemporalSourceFreshnessChecker(
+        fixtureFetcher({
+          amendments: [{
+            eli: "DU/2026/1001",
+            relationDate: "2027-01-01",
+            promulgation: "2026-09-01",
+            entryIntoForce: "2027-01-01"
+          }],
+          amendmentTexts: { "DU/2026/1001": text }
+        }),
+        () => "2026-09-15T20:00:00.000Z"
+      ).check(kc, { claim: "art. 190a KK" });
+
+    const exception = await check(
+      "<html><body>Art. 1. W art. 190a § 1 wyrazy X zastępuje się wyrazami Y. Art. 2. Ustawa wchodzi w życie z dniem 1 stycznia 2027 r., z wyjątkiem art. 1, który wchodzi w życie po upływie 14 dni od dnia ogłoszenia.</body></html>"
+    );
+    expect(exception).toMatchObject({
+      status: "AMENDMENT_EFFECT_DATE_UNKNOWN",
+      reason: "FUTURE_AMENDMENT_ARTICLE_EFFECT_DATE_UNKNOWN"
+    });
+
+    // Jedna data wejścia w życie dla całej noweli: dziś obowiązuje brzmienie sprzed zmiany.
+    const single = await check(
+      "<html><body>Art. 1. W art. 190a § 1 wyrazy X zastępuje się wyrazami Y. Art. 2. Ustawa wchodzi w życie z dniem 1 stycznia 2027 r.</body></html>"
+    );
+    expect(single.status).toBe("CURRENT");
+
+    // Wyjątek dotyczy innej jednostki, której artykuł nie jest powołany.
+    const other = await check(
+      "<html><body>Art. 1. W art. 191 § 1 wyrazy X zastępuje się wyrazami Y. Art. 2. Ustawa wchodzi w życie z dniem 1 stycznia 2027 r., z wyjątkiem art. 1, który wchodzi w życie z dniem ogłoszenia.</body></html>"
+    );
+    expect(other.status).toBe("CURRENT");
+
+    expect(amendmentHasEntryIntoForceExceptions("ustawa wchodzi w życie z dniem 1 stycznia 2027 r.")).toBe(false);
+  });
+
+  it("każde zapytanie do ELI ma limit czasu (AbortSignal)", async () => {
+    const signals: unknown[] = [];
+    const base = fixtureFetcher({
+      amendments: [{
+        eli: "DU/2026/999",
+        relationDate: "2026-07-01",
+        promulgation: "2026-06-20",
+        entryIntoForce: "2026-07-01"
+      }]
+    });
+    await new TemporalSourceFreshnessChecker(
+      async (input, init) => {
+        signals.push(init?.signal);
+        return base(input);
+      },
+      () => "2026-09-15T20:00:00.000Z"
+    ).check(kc, { claim: "art. 190a KK" });
+
+    expect(signals.length).toBeGreaterThan(3);
+    for (const signal of signals) expect(signal).toBeInstanceOf(AbortSignal);
   });
 
   it("blocks when an amendment effect date cannot be established", async () => {

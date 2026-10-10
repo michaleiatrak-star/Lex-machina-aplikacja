@@ -65,6 +65,10 @@ describe("mandatory path model from the corpus", () => {
     const light = preloadForTurn(model, { ...base, profile: "LEKKI" });
     expect(light).toContain("prawny-router-v3/references/SELF-CHECK.md");
     expect(light).not.toContain("shared/MOD-CN-GATE.md");
+    // Artykuł zapisany bez spacji albo pełnym słowem też uruchamia bramkę wyjątków.
+    for (const query of ["art.415 KC", "artykułem 415 KC"]) {
+      expect(preloadForTurn(model, { ...base, query, profile: "PELNY" })).toContain("shared/MOD-WYJATEK-GATE.md");
+    }
   });
 
   function facts(answer: string, overrides: Partial<TurnFacts> = {}): TurnFacts {
@@ -298,7 +302,8 @@ describe("UP-5: foreign jurisdiction from the question", () => {
     "Wykładnia art. 31 konwencji wiedeńskiej o prawie traktatów",
     "Czy umowa międzynarodowa wymaga ratyfikacji za zgodą wyrażoną w ustawie?",
     "Jurysdykcja w sprawie rozporządzenia Bruksela I bis",
-    "Orzecznictwo sądów niemieckich w sprawach pracowniczych"
+    "Orzecznictwo sądów niemieckich w sprawach pracowniczych",
+    "Łotewskie prawo spółek a polska spółka córka"
   ])("%s", (query) => {
     expect(foreignJurisdiction(query)).toBe(true);
   });

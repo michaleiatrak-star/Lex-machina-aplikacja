@@ -207,20 +207,32 @@ export function locate(registry: LexSkillRegistry, skill: string, resource: stri
 const REQUEST_STEMS = new Set(["prawn", "prawnej", "praw", "spraw", "podstaw", "analiz", "ryzyk", "rekomenda", "szans", "peln", "pelnej", "=pelna"]);
 
 type Indexed = { entry: ActEntry; stems: string[] };
-const cache = new Map<string, { index: Indexed[]; df: Map<string, number> }>();
+/** Znacznik zmiany pliku (mtime i rozmiar) dla cache czytanych map; "-" gdy brak pliku. */
+export function fileStamp(file: string): string {
+  try {
+    const stat = fs.statSync(file);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "-";
+  }
+}
+
+// Jeden wpis na mapę; klucz z mtime i rozmiaru, plik czytany tylko po zmianie.
+const cache = new Map<string, { key: string; value: { index: Indexed[]; df: Map<string, number> } }>();
 
 function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]; df: Map<string, number> } {
   const record = registry.get(skill);
   if (!record) return { index: [], df: new Map() };
   const file = path.join(record.directory, "MAPA-AKTOW.md");
+  const key = fileStamp(file);
+  const cached = cache.get(file);
+  if (cached?.key === key) return cached.value;
   let body = "";
   try {
     body = fs.readFileSync(file, "utf8");
   } catch {
     return { index: [], df: new Map() };
   }
-  const key = `${file}:${body.length}`;
-  if (cache.has(key)) return cache.get(key)!;
   const mapped = parseActMap(body, skill)
     .map((entry) => ({ ...entry, resources: entry.resources.map((resource) => locate(registry, skill, resource)).filter((resource): resource is string => resource !== null) }))
     .filter((entry) => entry.resources.length > 0);
@@ -247,7 +259,7 @@ function actIndex(registry: LexSkillRegistry, skill: string): { index: Indexed[]
   const df = new Map<string, number>();
   for (const item of index) for (const stem of item.stems) df.set(stem, (df.get(stem) ?? 0) + 1);
   const value = { index, df };
-  cache.set(key, value);
+  cache.set(file, { key, value });
   return value;
 }
 
@@ -313,19 +325,24 @@ const FOREIGN_ELEMENT = new RegExp(
   "(?<![a-z])(?:" +
     [
       "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow", "panstw(?:a|ie|em|o|ach) trzeci", "konsul(?:a|em|owi|ie|at|atu|acie)?\\b", "azj(?:a|i|ii)\\b", "azjatyck",
-      "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
-      "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
+      "niemc", "niemiec", "francj", "francusk", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
+      "belgi", "austri", "szwajcar", "szwec", "szwedz", "danii\\b", "dunsk", "finlandi", "czech(?:y|ach|ami|om)?\\b", "czesk", "slowac", "wegr", "wegier",
       "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
       "wielkiej brytanii", "wielka brytani", "brytyjsk", "anglii\\b", "angli[ia]\\b", "szkocj", "stanach zjednoczonych", "usa\\b", "amerykansk",
       "kanad", "australi", "chin(?:y|ach|ami)?\\b", "chinsk", "japoni", "indii\\b", "indyjsk", "turcj", "tureck", "izrael",
-      "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "praga", "pradze", "wilni", "kijow"
+      "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "w pradze\\b", "wilni", "kijow"
     ].join("|") +
     ")",
   "u"
 );
 
+// "Dania" (kraj) bez polskich znaków to też "dania" (potrawy): kraj tylko w formach
+// jednoznacznych ("Danię", "Danią") albo wielką literą wewnątrz zdania.
+const DENMARK_FORMS = /(?<![\p{L}])dani[ęą](?![\p{L}])/iu;
+const DENMARK_NAME = /(?<=[\p{Ll}\d,;:]\s{1,3})Dania(?![\p{L}])/u;
+
 export function foreignElement(text: string): boolean {
-  return FOREIGN_ELEMENT.test(fold(text));
+  return FOREIGN_ELEMENT.test(fold(text)) || DENMARK_FORMS.test(text) || DENMARK_NAME.test(text);
 }
 
 export function rankDomains(

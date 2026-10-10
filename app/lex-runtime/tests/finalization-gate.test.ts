@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FinalizationGate } from "../src/finalization-gate.js";
+import { FinalizationGate, detectLegalReferences, markUnverifiedReferences } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 
 describe("FinalizationGate", () => {
@@ -19,6 +19,33 @@ describe("FinalizationGate", () => {
     );
     expect(report.result).toBe("BLOCKED");
     expect(report.findings[0]?.status).toBe("MISSING_LEDGER_RECORD");
+  });
+
+  it("wykrywa artykuł bez spacji po kropce i zapisany pełnym słowem", () => {
+    for (const text of ["Zgodnie z art.415 KC sprawca odpowiada.", "Zgodnie z artykułem 415 KC sprawca odpowiada."]) {
+      const references = detectLegalReferences(text);
+      expect(references.map((reference) => reference.claim)).toEqual(["art. 415 KC"]);
+      const report = new FinalizationGate().evaluate(text, new VerificationLedger());
+      expect(report.result).toBe("BLOCKED");
+      expect(markUnverifiedReferences(text, report)).toContain("415 KC ⚠️ [NIEWERYFIKOWANE]");
+    }
+    // Zapis kanoniczny bez zmian.
+    expect(detectLegalReferences("Art. 233 § 1 KK").map((reference) => reference.claim)).toEqual(["Art. 233 § 1 KK"]);
+  });
+
+  it("zapis \"art.415 KC\" przechodzi z rekordem zweryfikowanym dla \"art. 415 KC\"", () => {
+    const ledger = new VerificationLedger();
+    ledger.add({
+      claim: "art. 415 KC",
+      kind: "statute",
+      status: "VERIFIED",
+      sourceUrl: "https://eli.gov.pl/",
+      sourceTier: "R1",
+      fetchedAt: "2026-09-15T00:00:00Z",
+      toolCallId: "fetch-1"
+    });
+    const report = new FinalizationGate().evaluate("Zgodnie z artykułem 415 KC ✅ [VER: https://eli.gov.pl/, 2026-09-15] sprawca odpowiada.", ledger);
+    expect(report.result).toBe("PASS");
   });
 
   it("blocks a verified record when the output hides the verification marker", () => {
