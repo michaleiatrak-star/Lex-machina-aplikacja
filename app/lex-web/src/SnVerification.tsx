@@ -47,6 +47,11 @@ export function SnVerification({
   const [stage, setStage] = useState<"idle" | "open" | "saving">("idle");
   const [message, setMessage] = useState("");
   const doneRef = useRef(false);
+  // Rodzice podają onVerified jako nową lambdę przy każdym renderze; w zależnościach
+  // efektu restartowałaby odliczanie sondowania (i przy częstych renderach nie
+  // wykonałaby się żadna próba).
+  const onVerifiedRef = useRef(onVerified);
+  onVerifiedRef.current = onVerified;
 
   // Auto-„Gotowe”: dopóki okno sn.pl jest otwarte, co kilka sekund sondujemy snproxy
   // ciasteczkami okna. Gdy przeszło (brak captchy albo rozwiązana przez użytkownika),
@@ -70,7 +75,7 @@ export function SnVerification({
               // okno mogło już zostać zamknięte
             }
             setStage("idle");
-            onVerified();
+            onVerifiedRef.current();
             return;
           }
         }
@@ -88,7 +93,7 @@ export function SnVerification({
       window.clearInterval(timer);
       window.clearTimeout(first);
     };
-  }, [invoke, stage, onVerified]);
+  }, [invoke, stage]);
 
   async function open(): Promise<void> {
     if (!invoke) return;
