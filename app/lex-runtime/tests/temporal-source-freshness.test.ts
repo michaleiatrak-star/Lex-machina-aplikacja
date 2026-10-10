@@ -433,6 +433,29 @@ describe("TemporalSourceFreshnessChecker", () => {
     ]);
   });
 
+  it("liczy dzień wejścia noweli w życie w czasie polskim, nie w UTC", async () => {
+    // 00:30 w Warszawie 1.07.2026, w UTC jeszcze 30.06.2026.
+    const result = await new TemporalSourceFreshnessChecker(
+      fixtureFetcher({
+        amendments: [{
+          eli: "DU/2026/999",
+          relationDate: "2026-07-01",
+          promulgation: "2026-06-20",
+          entryIntoForce: "2026-07-01"
+        }]
+      }),
+      () => "2026-06-30T22:30:00.000Z"
+    ).check(kc);
+
+    expect(result.status).toBe("POST_TJ_AMENDMENTS");
+
+    const historical = await new TemporalSourceFreshnessChecker(
+      historicalFetcher(),
+      () => "2026-06-30T22:30:00.000Z"
+    ).check(kc, { asOf: "2026-06-30" });
+    expect(historical.status).not.toBe("INVALID_HISTORICAL_DATE");
+  });
+
   it("blocks when an amendment effect date cannot be established", async () => {
     const result = await new TemporalSourceFreshnessChecker(
       fixtureFetcher({

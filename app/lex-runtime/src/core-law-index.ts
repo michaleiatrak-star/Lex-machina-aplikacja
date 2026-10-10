@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import {
   CoreLawSearchIndex,
   type SearchHit,
@@ -750,7 +751,7 @@ export class CoreLawIndex {
 
   summaries(): CoreActSummary[] {
     const adopted = new Map((this.state.adopted ?? []).map((entry) => [entry.eli, entry]));
-    const today = new Date(this.now()).toISOString().slice(0, 10);
+    const today = todayWarsaw(this.now());
     return this.refs.map((ref) => {
       const state = this.state.acts[ref.eli];
       const entry = adopted.get(ref.eli);
@@ -1258,7 +1259,7 @@ export class CoreLawIndex {
       const served = apply && newer ? newer.eli : current;
       const servedPromulgation = eliLinks(baseReferences, (key) => /^Inf\. o tekście jednolitym$/i.test(key))
         .find((link) => link.eli === served)?.promulgation;
-      const today = new Date(this.now()).toISOString().slice(0, 10);
+      const today = todayWarsaw(this.now());
       state.notYetInForce = servedPromulgation
         ? eliLinks(baseReferences, (key) => /^Akty zmieniające$/i.test(key))
             .filter((link) => link.date && link.date > today && link.promulgation && link.promulgation <= servedPromulgation)

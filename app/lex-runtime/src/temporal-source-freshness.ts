@@ -1,3 +1,4 @@
+import { todayWarsaw } from "./warsaw-date.js";
 import {
   LocalPdfTextExtractor,
   type PdfTextExtractor
@@ -769,7 +770,7 @@ export class TemporalSourceFreshnessChecker {
         }
       );
 
-    const today = checkedAt.slice(0, 10);
+    const today = todayWarsaw(checkedAt);
     if (!validIsoDate(asOf) || asOf >= today) {
       return fail(
         "INVALID_HISTORICAL_DATE",
@@ -1209,7 +1210,7 @@ export class TemporalSourceFreshnessChecker {
         amendmentsBetween(
           baseRefs,
           promulgation,
-          checkedAt.slice(0, 10)
+          todayWarsaw(checkedAt)
         ),
         postTjByApi(currentRefs)
       );
@@ -1218,7 +1219,7 @@ export class TemporalSourceFreshnessChecker {
       amendmentsAfter.length > 0
         ? await this.amendmentResolver.classify(
             amendmentsAfter,
-            checkedAt.slice(0, 10)
+            todayWarsaw(checkedAt)
           )
         : [];
 
