@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import {
   LocalPdfTextExtractor,
   type PdfTextExtractor
@@ -244,19 +245,19 @@ function articleTokenFromClaim(
 ): string | null {
   const match =
     claim?.match(
-      /\bart\.?\s+(\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)/iu
+      new RegExp(`${ARTICLE_LEAD}(\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu")
     );
   return match?.[1]
     ?.toLocaleLowerCase("pl") ??
     null;
 }
 
-async function amendmentTouchesArticle(
+// Tekst noweli z ELI (HTML albo PDF), znormalizowany do porównań; null, gdy niedostępny.
+async function amendmentBody(
   fetcher: EliFetch,
   pdfTextExtractor: PdfTextExtractor,
-  eli: string,
-  article: string
-): Promise<boolean | null> {
+  eli: string
+): Promise<string | null> {
   const metadataUrl =
     apiUrl(eli);
   const htmlUrl =
@@ -365,27 +366,180 @@ async function amendmentTouchesArticle(
     return null;
   }
 
-  const body =
-    rawText
-      .normalize("NFKC")
-      .replace(/<[^>]+>/gu, " ")
-      .replace(/&nbsp;|&#160;/giu, " ")
-      .replace(/\s+/gu, " ")
-      .toLocaleLowerCase("pl");
-
-  const escaped =
-    article.replace(
-      /[.*+?^$()|[\]\\{}]/g,
-      (match) =>
-        "\\" + match
-    );
-  return new RegExp(
-    "\\bart\\.?\\s*" +
-      escaped +
-      "(?=\\s|[.§,;:()])",
-    "iu"
-  ).test(body);
+  return rawText
+    .normalize("NFKC")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/&nbsp;|&#160;/giu, " ")
+    .replace(/\s+/gu, " ")
+    .toLocaleLowerCase("pl");
 }
+
+const ARTICLE_UNIT =
+  "\\d+[a-ząćęłńóśźż]*";
+// "art. 10", "art. 10–15", "art. 10 do 15", "art. 10, 11 i 12"; po "§", "ust.", "pkt"
+// kolejne liczby to jednostki niższego rzędu, więc wyliczenie się kończy.
+const ARTICLE_GROUP =
+  new RegExp(
+    `\\bart\\.?\\s*(${ARTICLE_UNIT}(?:\\s*(?:[–—-]|,|\\bi\\b|\\boraz\\b|\\bdo\\b)\\s*${ARTICLE_UNIT})*)(?![\\p{L}\\d])`,
+    "giu"
+  );
+const ARTICLE_GROUP_PART =
+  new RegExp(
+    `([–—-]|\\bdo\\b)|(${ARTICLE_UNIT})`,
+    "giu"
+  );
+
+function articleKey(
+  unit: string
+): [number, string] | null {
+  const match =
+    /^(\d+)([a-ząćęłńóśźż]*)$/u.exec(
+      unit.toLocaleLowerCase("pl")
+    );
+  return match
+    ? [Number(match[1]), match[2]!]
+    : null;
+}
+
+function compareArticles(
+  a: [number, string],
+  b: [number, string]
+): number {
+  return a[0] - b[0] ||
+    (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0);
+}
+
+/**
+ * Czy tekst noweli powołuje artykuł, także w zakresie ("art. 10–15") albo wyliczeniu
+ * ("art. 10, 11 i 12"). Zakres bez pewnego rozstrzygnięcia (odwrócone granice): null.
+ */
+export function amendmentMentionsArticle(
+  body: string,
+  article: string
+): boolean | null {
+  const wanted =
+    articleKey(article);
+  if (!wanted) return null;
+  let uncertain = false;
+  for (const group of body.matchAll(ARTICLE_GROUP)) {
+    let previous: [number, string] | null = null;
+    let range = false;
+    for (const part of group[1]!.matchAll(ARTICLE_GROUP_PART)) {
+      if (part[1]) {
+        range = true;
+        continue;
+      }
+      const key =
+        articleKey(part[2]!);
+      if (!key) {
+        uncertain = true;
+        continue;
+      }
+      if (compareArticles(key, wanted) === 0) return true;
+      if (range && previous) {
+        if (compareArticles(previous, key) > 0) uncertain = true;
+        else if (
+          compareArticles(previous, wanted) < 0 &&
+          compareArticles(wanted, key) < 0
+        ) {
+          return true;
+        }
+      }
+      previous = key;
+      range = false;
+    }
+  }
+  return uncertain ? null : false;
+}
+
+// Nowela z odrębną datą wejścia w życie części przepisów ("wchodzi w życie ...,
+// z wyjątkiem art. 1 pkt 3, który wchodzi w życie ..."); bez przepisu o wejściu
+// w życie w tekście też nie wiadomo, od kiedy stosuje się zmianę.
+export function amendmentHasEntryIntoForceExceptions(
+  body: string
+): boolean {
+  const entries =
+    body.match(/wchodz\p{L}*\s+w\s+życie/gu) ?? [];
+  return (
+    entries.length !== 1 ||
+    /wchodz\p{L}*\s+w\s+życie[^]{0,300}?z\s+wyjątkiem/u.test(body)
+  );
+}
+
+async function amendmentTouchesArticle(
+  fetcher: EliFetch,
+  pdfTextExtractor: PdfTextExtractor,
+  eli: string,
+  article: string
+): Promise<boolean | null> {
+  const body =
+    await amendmentBody(
+      fetcher,
+      pdfTextExtractor,
+      eli
+    );
+  return body === null
+    ? null
+    : amendmentMentionsArticle(
+        body,
+        article
+      );
+}
+
+/**
+ * Nowele już ogłoszone, ale wchodzące w życie po dniu sprawdzenia: data wejścia
+ * w życie z ELI dotyczy części głównej aktu, a zmiana artykułu może obowiązywać
+ * wcześniej (wyjątek w przepisie o wejściu w życie). Zwraca ELI nowel, które
+ * dotykają artykułu (albo nie wiadomo) i mają taki wyjątek (albo nie wiadomo).
+ */
+async function futureAmendmentsMayApplyToArticle(
+  fetcher: EliFetch,
+  pdfTextExtractor: PdfTextExtractor,
+  decisions: AmendmentApplicabilityDecision[],
+  today: string,
+  claim?: string
+): Promise<string[]> {
+  const article =
+    articleTokenFromClaim(
+      claim
+    );
+  if (!article) return [];
+  const promulgated =
+    decisions.filter(
+      (decision) =>
+        decision.status ===
+          "FUTURE" &&
+        Boolean(decision.promulgation) &&
+        decision.promulgation! <= today
+    );
+  const checks =
+    await Promise.all(
+      promulgated.map(
+        async (decision) => {
+          const body =
+            await amendmentBody(
+              fetcher,
+              pdfTextExtractor,
+              decision.eli
+            );
+          const uncertain =
+            body === null ||
+            (
+              amendmentMentionsArticle(body, article) !== false &&
+              amendmentHasEntryIntoForceExceptions(body)
+            );
+          return uncertain
+            ? decision.eli
+            : null;
+        }
+      )
+    );
+  return checks.filter(
+    (eli): eli is string =>
+      eli !== null
+  );
+}
+
 
 async function effectiveAmendmentsTouchArticle(
   fetcher: EliFetch,
@@ -1255,6 +1409,23 @@ export class TemporalSourceFreshnessChecker {
       return fail(
         "AMENDMENT_EFFECT_DATE_UNKNOWN",
         "OFFICIAL_AMENDMENT_EFFECT_DATE_UNKNOWN",
+        common
+      );
+    }
+
+    const earlyFuture =
+      await futureAmendmentsMayApplyToArticle(
+        this.fetcher,
+        this.pdfTextExtractor,
+        amendmentApplicability,
+        todayWarsaw(checkedAt),
+        claim
+      );
+
+    if (earlyFuture.length > 0) {
+      return fail(
+        "AMENDMENT_EFFECT_DATE_UNKNOWN",
+        "FUTURE_AMENDMENT_ARTICLE_EFFECT_DATE_UNKNOWN",
         common
       );
     }
