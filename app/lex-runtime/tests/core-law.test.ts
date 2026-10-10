@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CoreLawIndex,
   coreLawEliCaution,
@@ -107,6 +107,26 @@ describe("core law index", () => {
     fs.appendFileSync(map, "\n| Taryfikator | Dz.U. 2013 poz. 1624 t.j. | `mod-x` | ✅ |\n");
     fs.utimesSync(map, new Date(), new Date(Date.now() + 5_000));
     expect(index.reloadMapsIfChanged()).toEqual(["DU/2013/1624"]);
+  });
+
+  it("wymuszone odświeżenie rusza także po błędzie trwającego", async () => {
+    const index = new CoreLawIndex(tempDir("lex-core-refresh-chain-"));
+    const calls: string[] = [];
+    const refreshAll = vi
+      .spyOn(index as unknown as { refreshAll: (options: unknown) => Promise<void> }, "refreshAll")
+      .mockImplementationOnce(async () => {
+        calls.push("first");
+        throw new Error("ELI_HTTP_503");
+      })
+      .mockImplementationOnce(async () => {
+        calls.push("forced");
+      });
+    const first = index.refresh();
+    const forced = index.refresh({ force: true });
+    await expect(first).rejects.toThrow("ELI_HTTP_503");
+    await expect(forced).resolves.toBeUndefined();
+    expect(calls).toEqual(["first", "forced"]);
+    expect(refreshAll).toHaveBeenCalledTimes(2);
   });
 
   it("names an act by its own row, never by a status note or by the row of another act", () => {

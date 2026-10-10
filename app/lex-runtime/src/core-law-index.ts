@@ -1073,7 +1073,8 @@ export class CoreLawIndex {
   refresh(options: RefreshOptions = {}): Promise<void> {
     // A requested check/apply runs after the one in progress, not instead of it.
     const run: Promise<void> = (this.refreshing && options.force
-      ? this.refreshing.then(() => this.refreshAll(options))
+      ? // Błąd trwającego odświeżenia nie anuluje wymuszonego.
+        this.refreshing.catch(() => undefined).then(() => this.refreshAll(options))
       : this.refreshing ?? this.refreshAll(options)
     ).finally(() => {
       if (this.refreshing === run) this.refreshing = null;
