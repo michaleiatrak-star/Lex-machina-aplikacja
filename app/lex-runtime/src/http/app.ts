@@ -8197,13 +8197,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           "X-Content-Type-Options",
           "nosniff"
         );
-        try {
-          res.send(
-            payload.data
-          );
-        } finally {
-          payload.data.fill(0);
-        }
+        // Bufor zerujemy dopiero po zamknięciu odpowiedzi: przy dużym pliku gniazdo czyta
+        // go jeszcze po powrocie z send(), a bilet jest już zużyty (nie ma ponowienia).
+        const sent = payload.data;
+        res.once("close", () => sent.fill(0));
+        res.send(sent);
       } catch (error) {
         if (
           !sendCaseAccessError(
