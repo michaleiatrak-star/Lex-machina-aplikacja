@@ -267,5 +267,23 @@ describe(
         );
       }
     );
+
+    it("reports not ready when the shipped policy trusts no signer", () => {
+      const shipped = manifest({
+        verification: "SHA256_AND_AUTHENTICODE_PINNED_PUBLISHER",
+        trustedSignerThumbprints: [],
+        temporaryUnsignedAllowed: false
+      });
+      expect(
+        new WindowsAuthenticodeInstallerVerifier(undefined, shipped).ready()
+      ).toBe(false);
+      const pinned = manifest({
+        verification: "SHA256_AND_AUTHENTICODE_PINNED_PUBLISHER",
+        trustedSignerThumbprints: ["A".repeat(40)]
+      });
+      expect(
+        new WindowsAuthenticodeInstallerVerifier(undefined, pinned).ready()
+      ).toBe(true);
+    });
   }
 );

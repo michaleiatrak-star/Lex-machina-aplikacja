@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { manualUpdateReleaseUrl } from "./MaintenancePanel.js";
+import { manualUpdateInstruction, manualUpdateReleaseUrl } from "./MaintenancePanel.js";
 import { ApiError, type UpdateStatusResponse } from "./api.js";
 
 const status: UpdateStatusResponse = {
@@ -37,5 +37,12 @@ describe("manualUpdateReleaseUrl (macOS: update by opening the new .pkg)", () =>
     ]) {
       expect(manualUpdateReleaseUrl(error, { ...status, releaseUrl })).toBeNull();
     }
+  });
+});
+
+describe("manualUpdateInstruction", () => {
+  it("names the installer of the user's system", () => {
+    expect(manualUpdateInstruction("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")).toContain(".pkg");
+    expect(manualUpdateInstruction("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/141.0")).toContain("Online-x64-Setup.exe");
   });
 });

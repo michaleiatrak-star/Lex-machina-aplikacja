@@ -43,7 +43,7 @@ import {
 } from "../providers/account-session.js";
 import { ProviderGateway } from "../providers/gateway.js";
 import {
-  GitHubReleaseUpdateDiscovery
+  applicationUpdateDiscovery
 } from "../update-discovery.js";
 import {
   applyAccountSkills
@@ -514,7 +514,7 @@ export async function startLocalServer(options?: {
     );
 
   const updateDiscovery =
-    new GitHubReleaseUpdateDiscovery();
+    applicationUpdateDiscovery();
   const maintenance =
     new MaintenanceService(
       updateDiscovery

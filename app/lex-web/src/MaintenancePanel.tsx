@@ -77,7 +77,7 @@ function friendlyError(error: unknown): string {
     code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
     code.includes("APPLICATION_UPDATE_PLATFORM_UNSUPPORTED")
   ) {
-    return "Na macOS aplikację aktualizuje się instalatorem: pobierz najnowszy pakiet .pkg Lex Machina i uruchom go (dane i ustawienia zostają).";
+    return "Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).";
   }
   if (code === "APPLICATION_UPDATE_NOT_AVAILABLE") {
     return "Brak nowszej wersji programu do pobrania.";
@@ -88,8 +88,14 @@ function friendlyError(error: unknown): string {
   return code;
 }
 
+export function manualUpdateInstruction(userAgent: string): string {
+  return /Mac OS X|Macintosh/i.test(userAgent)
+    ? "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
+    : "Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.";
+}
+
 /**
- * macOS: no in-app installer; the release page of the discovered version opens in the
+ * macOS, and Windows while no Authenticode publisher is trusted: no in-app installer; the release page of the discovered version opens in the
  * browser so the user can take the new .pkg (only an https GitHub release page).
  */
 export function manualUpdateReleaseUrl(
@@ -243,7 +249,9 @@ export function MaintenancePanel({
         try {
           await openReleasePage(releaseUrl);
           setMessage(
-            "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
+            manualUpdateInstruction(
+              typeof navigator === "undefined" ? "" : navigator.userAgent
+            )
           );
           return;
         } catch {

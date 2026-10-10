@@ -1041,7 +1041,12 @@ export class MaintenanceService {
       throw new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED");
     }
     // macOS: the update is installed by opening the new .pkg (no in-app runner).
-    if (process.platform === "darwin") {
+    // Windows: bez skonfigurowanego wydawcy Authenticode (instalatory bez podpisu)
+    // weryfikator odrzuci każdy plik - użytkownik pobiera instalator ze strony wydania.
+    if (
+      process.platform === "darwin" ||
+      this.installerVerifier.ready?.() === false
+    ) {
       throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
     }
     const version = requireLatestVersion(status);

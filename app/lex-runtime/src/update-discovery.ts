@@ -209,11 +209,29 @@ function chooseAssets(
   };
 }
 
+// Instalatory aplikacji publikuje publish-windows-installers.yml w repozytorium
+// aplikacji, zawsze jako pre-release (instalatory bez podpisu Authenticode/Apple).
+// Repozytorium Lex-Machina trzyma skille; jego wydania kończą się na 0.1.11.
+export const APPLICATION_RELEASE_REPOSITORY =
+  "michaleiatrak-star/Lex-machina-aplikacja";
+
+export function applicationUpdateDiscovery(
+  fetchImpl: typeof fetch = fetch
+): GitHubReleaseUpdateDiscovery {
+  return new GitHubReleaseUpdateDiscovery(
+    CURRENT_APPLICATION_VERSION,
+    APPLICATION_RELEASE_REPOSITORY,
+    fetchImpl,
+    () => Date.now(),
+    true
+  );
+}
+
 export class GitHubReleaseUpdateDiscovery
 implements UpdateDiscovery {
   constructor(
     private readonly currentVersion: string = CURRENT_APPLICATION_VERSION,
-    private readonly repository: string = "michaleiatrak-star/Lex-Machina",
+    private readonly repository: string = APPLICATION_RELEASE_REPOSITORY,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly now: () => number = () => Date.now(),
     private readonly includePrerelease = false
