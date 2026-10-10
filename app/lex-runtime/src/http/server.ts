@@ -550,10 +550,13 @@ export async function startLocalServer(options?: {
   const stanzaRecognizer =
     new LocalStanzaNamedEntityRecognizer();
   stanzaRecognizer.warmUp();
+  const gazetteerRecognizer =
+    new LocalGazetteerRecognizer();
+  gazetteerRecognizer.warmUp();
   const stanzaNamedEntities =
     new CompositeRecognizer([
       stanzaRecognizer,
-      new LocalGazetteerRecognizer()
+      gazetteerRecognizer
     ]);
   const privacyNamedEntities =
     new LocalLlmPrivacyNamedEntityRecognizer(

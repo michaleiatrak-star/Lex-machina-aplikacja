@@ -285,9 +285,11 @@ export async function startLocalServer(options) {
     // is loaded once, in the background now, not for every checked message.
     const stanzaRecognizer = new LocalStanzaNamedEntityRecognizer();
     stanzaRecognizer.warmUp();
+    const gazetteerRecognizer = new LocalGazetteerRecognizer();
+    gazetteerRecognizer.warmUp();
     const stanzaNamedEntities = new CompositeRecognizer([
         stanzaRecognizer,
-        new LocalGazetteerRecognizer()
+        gazetteerRecognizer
     ]);
     const privacyNamedEntities = new LocalLlmPrivacyNamedEntityRecognizer(providerGateway, localModels, stanzaNamedEntities);
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
