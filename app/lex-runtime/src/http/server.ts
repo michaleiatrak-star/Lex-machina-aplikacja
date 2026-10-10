@@ -799,6 +799,8 @@ export async function startLocalServer(options?: {
     app,
     {
       authService,
+      caseAccess:
+        caseAccessService,
       connectors:
         mcpConnectors,
       search:
