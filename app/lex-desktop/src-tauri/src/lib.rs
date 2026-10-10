@@ -37,13 +37,36 @@ fn valid_workspace_open_token(token: &str) -> bool {
     {
         return false;
     }
-    extension.map_or(true, |value| {
-        !value.is_empty()
-            && value.len() <= 10
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-    })
+    // Domyślny program uruchamia się tylko dla dokumentów i obrazów, nigdy dla pliku
+    // wykonywalnego (.exe, .bat, .hta, .command) ani dokumentu z makrami.
+    extension.is_some_and(|value| OPEN_ALLOWED_EXTENSIONS.contains(&value))
+}
+
+// Zgodne z OPEN_ALLOWED_EXTENSIONS w lex-runtime/src/http/workspace-routes.ts.
+const OPEN_ALLOWED_EXTENSIONS: &[&str] = &[
+    "pdf", "docx", "doc", "odt", "rtf", "txt", "md", "csv", "xlsx", "xls", "ods", "pptx", "ppt",
+    "odp", "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff",
+];
+
+fn workspace_open_root() -> PathBuf {
+    env::temp_dir().join("LexMachinaOpen")
+}
+
+/// Przy zamknięciu aplikacji usuwa odszyfrowane kopie "Otwórz w programie" (best-effort:
+/// plik wciąż otwarty w innym programie na Windows zostaje do następnego otwarcia).
+fn wipe_workspace_open_copies(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with("open_") && entry.file_type().is_ok_and(|kind| kind.is_file()) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 // Katalog stagingu aktualizacji jak w runtime (os.tmpdir(): najpierw TEMP) i runnerze
@@ -81,7 +104,7 @@ fn authorized_workspace_open_path(token: &str) -> Result<PathBuf, String> {
     if !valid_workspace_open_token(token) {
         return Err("WORKSPACE_OPEN_TOKEN_INVALID".to_string());
     }
-    let root = env::temp_dir().join("LexMachinaOpen");
+    let root = workspace_open_root();
     let root = root
         .canonicalize()
         .map_err(|_| "WORKSPACE_OPEN_ROOT_MISSING".to_string())?;
@@ -465,6 +488,7 @@ pub fn run() {
     app.run(move |_app_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
             let _ = exit_bridge.shutdown();
+            wipe_workspace_open_copies(&workspace_open_root());
         }
     });
 }
@@ -542,7 +566,7 @@ mod tests {
         assert!(valid_workspace_open_token(
             "open_0123456789abcdef0123456789abcdef.pdf"
         ));
-        assert!(valid_workspace_open_token(
+        assert!(!valid_workspace_open_token(
             "open_0123456789abcdef0123456789abcdef"
         ));
         assert!(!valid_workspace_open_token("../secret.pdf"));
@@ -552,6 +576,30 @@ mod tests {
         assert!(!valid_workspace_open_token(
             "open_0123456789abcdef0123456789abcdef.PDF"
         ));
+    }
+
+    #[test]
+    fn workspace_open_token_never_launches_executables() {
+        for extension in ["exe", "bat", "cmd", "hta", "command", "app", "js", "vbs", "docm", "lnk"] {
+            assert!(!valid_workspace_open_token(&format!(
+                "open_0123456789abcdef0123456789abcdef.{extension}"
+            )));
+        }
+        assert!(valid_workspace_open_token(
+            "open_0123456789abcdef0123456789abcdef.docx"
+        ));
+    }
+
+    #[test]
+    fn exit_wipes_only_open_copies() {
+        let root = std::env::temp_dir().join(format!("lex-open-wipe-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("open_0123456789abcdef0123456789abcdef.pdf"), b"x").unwrap();
+        std::fs::write(root.join("inny.txt"), b"y").unwrap();
+        super::wipe_workspace_open_copies(&root);
+        assert!(!root.join("open_0123456789abcdef0123456789abcdef.pdf").exists());
+        assert!(root.join("inny.txt").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
