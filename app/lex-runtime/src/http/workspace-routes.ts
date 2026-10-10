@@ -1811,7 +1811,16 @@ export function registerWorkspaceRoutes(
                 ].map(documentIdFromSha256)
               )
             ];
+            // Ten sam plik wgrany drugi raz ma ten sam dokument: jego wersja
+            // zanonimizowana i klucz zostają, dopóki używa ich inny upload.
+            const stillUsed = new Set(
+              data.uploads
+                .filter((item) => item.uploadId !== itemId)
+                .flatMap((item) => [item.sha256, ...item.extracted.map((entry) => entry.sha256)])
+                .map(documentIdFromSha256)
+            );
             for (const documentId of documentIds) {
+              if (stillUsed.has(documentId)) continue;
               const protectedDocuments = dependencies.protectedDocuments;
               await dependencies.privacyVaults.deleteDocumentVault({
                 caseId,
