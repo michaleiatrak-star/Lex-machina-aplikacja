@@ -73,11 +73,52 @@ function stemOf(word: string): string {
 
 // A short stem is an ending away from its word, not the start of another one
 // ("powi" of "powiat" is not "powierzenia").
+// A stem's test for one token, built once ("=kp" whole, else its forms by prefix).
+const stemTests = new Map<string, (token: string) => boolean>();
+
+function stemTest(stem: string): (token: string) => boolean {
+  let test = stemTests.get(stem);
+  if (!test) stemTests.set(stem, (test = buildStemTest(stem)));
+  return test;
+}
+
+function buildStemTest(stem: string): (token: string) => boolean {
+  if (stem.startsWith("=")) {
+    const whole = stem.slice(1);
+    return (token) => token === whole;
+  }
+  const forms = alternations(stem);
+  return (token) => forms.some((form) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)));
+}
+
 function hit(stem: string, tokens: string[]): boolean {
-  if (stem.startsWith("=")) return tokens.includes(stem.slice(1));
-  return alternations(stem).some((form) =>
-    tokens.some((token) => token.startsWith(form) && (form.length > 4 || token.length <= form.length + (form.length <= 3 ? 3 : 6)))
-  );
+  return tokens.some(stemTest(stem));
+}
+
+/**
+ * The words of a phrase in one place of the text, not scattered over a story: "umowa o
+ * pracę" is not "bez umowy ... kolega z pracy", "sąd pracy" is not "sądu ... po pracy"
+ * (benchmark 2026-10-10, 1000 kazusów). Words may stand in any order, a few words apart.
+ */
+const phraseTests = new Map<string, Array<(token: string) => boolean>>();
+
+function phraseHit(phrase: string, have: string[]): boolean {
+  let tests = phraseTests.get(phrase);
+  if (!tests) {
+    tests = phraseWords(phrase).map((word) => {
+      const test = stemTest(stemOf(word));
+      const other = FALSE_FRIENDS[word];
+      return other ? (token: string) => !other.test(token) && test(token) : test;
+    });
+    phraseTests.set(phrase, tests);
+  }
+  if (!tests.length) return false;
+  // Cheap test first: most phrases have a word the text lacks.
+  if (!tests.every((test) => have.some(test))) return false;
+  if (tests.length === 1) return true;
+  const positions = tests.map((test) => have.flatMap((token, index) => (test(token) ? [index] : [])));
+  const span = 2 * tests.length + 2;
+  return positions[0]!.some((anchor) => positions.slice(1).every((list) => list.some((index) => Math.abs(index - anchor) <= span)));
 }
 
 // Polish vowel alternation inside the stem, after folding: "urzędu"/"urząd" ("urzed"/"urzad"),
@@ -135,11 +176,6 @@ const FALSE_FRIENDS: Record<string, RegExp> = {
   aplikant: /^aplikac/, dyrektywa: /^dyrektor/, szkolenia: /^szkol(?!en)/, przeglad: /^przeglos/,
   orzeczenie: /^orzeczni/, orzeczenia: /^orzeczni/, uzytkowanie: /^uzytkowni/
 };
-function withoutFalseFriends(word: string, have: string[]): string[] {
-  const other = FALSE_FRIENDS[word];
-  return other ? have.filter((token) => !other.test(token)) : have;
-}
-
 /** Domains whose flash-routing phrases the text contains, best first. */
 export function flashDomains(
   rows: FlashRoute[],
@@ -149,10 +185,7 @@ export function flashDomains(
   const have = tokens(text);
   return rows
     .map((row) => {
-      const matched = row.phrases.filter((phrase) => {
-        const words = phraseWords(phrase);
-        return words.length > 0 && words.every((word) => hit(stemOf(word), withoutFalseFriends(word, have)));
-      });
+      const matched = row.phrases.filter((phrase) => phraseHit(phrase, have));
       // A phrase of two words ("umowa o pracę", "monitoring wizyjny") says more than
       // one word of it ("umowa"), which then does not count again.
       const sets = matched.map((phrase) => phraseWords(phrase).map(stemOf));
@@ -377,17 +410,52 @@ function withForeignElement(
   return marked.modules.length ? [marked] : [];
 }
 
+// Words of the procedure, not of the matter: an administrative decision, a court, a judge,
+// a lawyer, court fees. A building permit appealed to the WSA is DR-09 first, a child taken
+// abroad heard by a judge is DR-14 first (benchmark 2026-10-10, 1000 kazusów: such words
+// put DR-05 or DR-12 first in 61 full case descriptions).
+const PROCEDURE: Record<string, Set<string>> = {
+  "dr-05": new Set(
+    [
+      "KPA", "decyzja urzędu", "decyzja administracyjna", "SKO", "WSA", "NSA", "bezczynność", "przewlekłość", "Samorządowe kolegium odwoławcze",
+      "postępowanie administracyjne", "interes prawny", "zaświadczenie", "ponaglenie", "organ administracji", "sąd administracyjny",
+      "wojewódzki sąd administracyjny", "skarga kasacyjna", "skarga kasacyjna do NSA", "decyzja wojewody", "wojewoda odmówił", "odwołanie od decyzji",
+      "decyzja ostateczna", "organ pierwszej instancji", "organ drugiej instancji", "urzędnik", "urząd nie odpowiada", "uchylenie decyzji",
+      "przywrócenie terminu do wniesienia odwołania", "nie rozpatruje wniosku", "rozpatrzenie wniosku", "skarga do sądu administracyjnego",
+      "odrzucenie skargi", "stwierdzenie nieważności decyzji", "wznowienie postępowania administracyjnego", "braki wniosku",
+      "uzupełnienie braków wniosku", "wszczęcie postępowania administracyjnego", "zawiadomienie o wszczęciu postępowania", "skarga na bezczynność",
+      "kara administracyjna", "administracyjna kara pieniężna", "starostwo", "oględziny", "decyzja o zwrocie"
+    ].map((phrase) => phrase.toLocaleLowerCase("pl"))
+  ),
+  "dr-12": new Set(
+    [
+      "Sąd", "adwokat", "radca", "radca prawny", "sędzia", "pełnomocnik z urzędu", "adwokat z urzędu", "kancelaria adwokacka", "prezes sądu",
+      "nie wyznaczył rozprawy", "wyznaczenie rozprawy", "biegły sądowy", "koszty zastępstwa procesowego", "koszty pozwu", "koszty sądowe",
+      "opłata sądowa", "opłata od pozwu", "opłata od apelacji", "zwolnienie od kosztów sądowych", "referendarz", "mediacja", "mediator", "notariusz"
+    ].map((phrase) => phrase.toLocaleLowerCase("pl"))
+  )
+};
+
+function substanceFirst<T extends { skill: string; matched: string[]; weight: number }>(ranked: T[]): T[] {
+  const top = ranked[0];
+  const words = top ? PROCEDURE[top.skill.slice(0, 5)] : undefined;
+  if (!top || !words || !top.matched.every((phrase) => words.has(phrase.toLocaleLowerCase("pl")))) return ranked;
+  const matter = ranked.find((row) => row !== top && !PROCEDURE[row.skill.slice(0, 5)] && row.weight >= Math.max(2, top.weight * 0.75));
+  return matter ? [matter, ...ranked.filter((row) => row !== matter)] : ranked;
+}
+
 function rankByPhrases(
   registry: LexSkillRegistry,
   rows: FlashRoute[],
   text: string,
   limit: number
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[]; weight: number }> {
-  const flash = flashDomains(rows, text, (stem) => domainSpread(registry).get(stem)! >= GENERIC_DOMAINS)
-    .filter((row) => registry.get(row.skill))
-    .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
-    .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
-    .slice(0, limit);
+  const flash = substanceFirst(
+    flashDomains(rows, text, (stem) => domainSpread(registry).get(stem)! >= GENERIC_DOMAINS)
+      .filter((row) => registry.get(row.skill))
+      .map((row) => ({ ...row, modules: suggestDomainModules(registry, row.skill, text) }))
+      .sort((a, b) => b.weight - a.weight || (b.modules[0]?.score ?? 0) - (a.modules[0]?.score ?? 0))
+  ).slice(0, limit);
   if (flash.length) return flash;
   const have = tokens(text);
   return [...registry.skills.values()]
