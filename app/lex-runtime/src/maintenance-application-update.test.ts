@@ -325,5 +325,55 @@ describe(
         ).toBe("0.1.4");
       }
     );
+
+    it(
+      "skips the download when no signer is trusted (manual install from the release page)",
+      async () => {
+        const discovery:
+          UpdateDiscovery = {
+            async check() {
+              return {
+                currentVersion: "0.1.25",
+                status: "AVAILABLE",
+                checkedAt: "2026-10-10T08:00:00.000Z",
+                latestVersion: "0.1.26",
+                releaseUrl:
+                  "https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/tag/v0.1.26",
+                installer: {
+                  name: "Lex-Machina-0.1.26-Online-x64-Setup.exe",
+                  url:
+                    "https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/download/v0.1.26/Lex-Machina-0.1.26-Online-x64-Setup.exe",
+                  sha256: "a".repeat(64)
+                }
+              };
+            }
+          };
+        const fetchImpl =
+          vi.fn() as unknown as typeof fetch;
+        const verify = vi.fn();
+        const maintenance =
+          new MaintenanceService(
+            discovery,
+            fetchImpl,
+            { verify, ready: () => false },
+            () => false,
+            () => {
+              throw new Error("UNUSED_SKILL_VERIFIER");
+            },
+            () => false,
+            () => {
+              throw new Error("UNUSED_MODEL_PACK_VERIFIER");
+            }
+          );
+
+        await expect(
+          maintenance.downloadApplicationUpdate()
+        ).rejects.toThrow(
+          "APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED"
+        );
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(verify).not.toHaveBeenCalled();
+      }
+    );
   }
 );

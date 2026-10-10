@@ -45,6 +45,33 @@ describe("user correction of a page's text", () => {
     await expect(current.editPage("doc_000000000000000000000000", 1, "x")).rejects.toThrow("UNKNOWN_LOCAL_DOCUMENT");
   });
 
+  it("does not let access to one case overwrite a document of another case", async () => {
+    const saveSource = vi.fn(async () => undefined);
+    const pdf = new CompleteDocumentIngestor({
+      extract: async (data) => ({ bytes: data.byteLength, pages: [{ page: 1, text: "Umowa zlecenia zawarta w Krakowie pomiędzy stronami niniejszej umowy." }] })
+    });
+    const store = { saveSource, saveProtected: vi.fn(), loadSource: vi.fn(), loadProtected: vi.fn() };
+    const current = new LocalPrivateDocumentService(
+      pdf, { recognize: async () => [] }, 24_000, undefined, undefined, store as never
+    );
+    const keyB = Buffer.alloc(32, 2);
+    const caseB = `case_${"b".repeat(32)}`;
+    const review = await current.review(Buffer.from("pdf"), "application/pdf", {
+      caseId: caseB, caseDataKey: keyB, keyVersion: 1
+    });
+    saveSource.mockClear();
+    await expect(
+      current.editPage(review.documentId, 1, "Nadpisane", {
+        caseId: `case_${"a".repeat(32)}`, caseDataKey: Buffer.alloc(32, 1), keyVersion: 1
+      })
+    ).rejects.toThrow("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+    await expect(current.editPage(review.documentId, 1, "Nadpisane")).rejects.toThrow("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+    expect(saveSource).not.toHaveBeenCalled();
+    const own = await current.editPage(review.documentId, 1, "Poprawione", { caseId: caseB, caseDataKey: keyB, keyVersion: 1 });
+    expect(own.page.text).toBe("Poprawione");
+    expect(saveSource).toHaveBeenCalledWith(expect.objectContaining({ caseId: caseB }));
+  });
+
   it("exposes the correction over HTTP with input validation", async () => {
     const editPage = vi.fn(async (_documentId: string, page: number, text: string) => ({
       page: { page, text, source: "OCR" as const, editedByUser: true },

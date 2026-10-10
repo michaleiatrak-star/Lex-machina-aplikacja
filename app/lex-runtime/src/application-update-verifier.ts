@@ -23,6 +23,9 @@ export interface ApplicationInstallerVerifier {
     installerPath: string,
     expectedVersion?: string
   ): VerifiedApplicationPublisher;
+  // false: polityka podpisu nie dopuszcza żadnego instalatora (brak zaufanego
+  // wydawcy), więc pobieranie nie ma sensu - aktualizacja ręczna ze strony wydania.
+  ready?(): boolean;
 }
 
 export type AuthenticodeProbeResult = {
@@ -416,6 +419,27 @@ implements ApplicationInstallerVerifier {
       ProductVersionProbe =
         probeWindowsProductVersion
   ) {}
+
+  ready(): boolean {
+    if (this.configuredTrustedThumbprints) {
+      return true;
+    }
+    try {
+      readApplicationUpdateTrustPolicy(
+        this.manifestPath
+      );
+      return true;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "APPLICATION_UPDATE_SIGNER_POLICY_MISSING"
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
 
   verify(
     installerPath: string,

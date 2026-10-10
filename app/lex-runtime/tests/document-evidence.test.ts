@@ -44,6 +44,16 @@ describe("page images as evidence", () => {
     expect(boxes.filter((box) => box[1] === 27).length).toBeGreaterThan(0);
   });
 
+  it("masks a protected value written in a different letter case", () => {
+    const scan = page("POWÓD: JAN KOWALSKI\nul. ŁĄKOWA 5", [
+      { text: "POWÓD: JAN KOWALSKI", box: [0, 0, 380, 20] },
+      { text: "ul. ŁĄKOWA 5", box: [0, 30, 240, 50] }
+    ]);
+    const boxes = maskBoxes(scan, ["Jan Kowalski", "ul. Łąkowa 5"])!;
+    expect(boxes.filter((box) => box[1] === -3).length).toBeGreaterThan(0);
+    expect(boxes.filter((box) => box[1] === 27).length).toBeGreaterThan(0);
+  });
+
   it("sends nothing when the image and the text cannot be aligned", () => {
     expect(maskBoxes(page("inny tekst", [{ text: "Najemca", box: [0, 0, 1, 1] }]), [])).toBeNull();
     expect(maskBoxes({ page: 1, text: "x", source: "OCR" }, [])).toBeNull();

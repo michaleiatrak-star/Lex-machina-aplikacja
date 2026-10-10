@@ -1272,6 +1272,17 @@ export interface SessionExecutor {
   executiveSkillFor?(message: string): string | null;
 }
 
+/**
+ * Wiadomość w postaci NFC przed pseudonimizacją: tekst wklejony z macOS bywa
+ * rozłożony (NFD) i wtedy znane nazwiska oraz granice słów nie trafiają.
+ */
+export function nfcRequest(request: SessionExecutionRequest): SessionExecutionRequest {
+  const query = request.query.normalize("NFC");
+  const auxiliaryText = request.auxiliaryText?.normalize("NFC");
+  if (query === request.query && auxiliaryText === request.auxiliaryText) return request;
+  return { ...request, query, ...(auxiliaryText !== undefined ? { auxiliaryText } : {}) };
+}
+
 export class SafeSessionExecutor implements SessionExecutor {
   private readonly engine: LexExecutionEngine;
   private readonly autoRouter:
@@ -1453,6 +1464,7 @@ export class SafeSessionExecutor implements SessionExecutor {
   async resolveAutoRouting(
     request: SessionExecutionRequest
   ): Promise<ModelAutoRoutingResult> {
+    request = nfcRequest(request);
     const vault =
       new PseudonymizationVault(request.privacySeed);
     const pseudonymizer =
@@ -1523,6 +1535,7 @@ export class SafeSessionExecutor implements SessionExecutor {
   async execute(
     request: SessionExecutionRequest
   ): Promise<SessionExecutionResponse> {
+    request = nfcRequest(request);
     // Tokens of every model call in this turn (benchmark and cost display).
     const { result, usage } = await meterUsage(() => this.executeTurn(request));
     result.usage = usage;

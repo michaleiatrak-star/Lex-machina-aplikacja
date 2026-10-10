@@ -199,8 +199,7 @@ impl RuntimeBridge {
         let address = match rx.recv_timeout(Duration::from_secs(60)) {
             Ok(address) => address,
             Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_runtime_tree(&mut child);
                 return Err("DESKTOP_RUNTIME_START_TIMEOUT".to_string());
             }
         };
@@ -239,14 +238,7 @@ impl RuntimeBridge {
 
         if let Some(mut child) = state.child.take() {
             #[cfg(target_os = "windows")]
-            {
-                let pid = child.id().to_string();
-                let _ = Command::new("taskkill.exe")
-                    .args(["/PID", &pid, "/T", "/F"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            }
+            kill_runtime_tree(&mut child);
 
             #[cfg(not(target_os = "windows"))]
             {
@@ -629,7 +621,7 @@ impl RuntimeBridge {
         if status == StatusCode::UNAUTHORIZED {
             if path.starts_with("/api/support/") {
                 self.clear_service_session();
-            } else {
+            } else if unauthorized_ends_session(&proxied.body) {
                 self.clear_session();
             }
         }
@@ -839,6 +831,26 @@ impl RuntimeBridge {
     }
 }
 
+// Windows: sidecar uruchamia node jako własne dziecko, a Child::kill kończy tylko
+// sidecar; node zostawał wtedy osierocony i blokował pliki instalacji (kopia
+// zapasowa aktualizacji, deinstalacja). taskkill /T kończy całe drzewo.
+fn kill_runtime_tree(child: &mut Child) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let pid = child.id().to_string();
+        let _ = Command::new("taskkill.exe")
+            .args(["/PID", &pid, "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 impl Drop for RuntimeBridge {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.lock() {
@@ -853,8 +865,7 @@ impl Drop for RuntimeBridge {
             }
             unsafe_zero_string(&mut state.bootstrap_token);
             if let Some(child) = state.child.as_mut() {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_runtime_tree(child);
             }
         }
     }
@@ -1404,6 +1415,19 @@ fn runtime_address_from_line(line: &str) -> Option<SocketAddr> {
     let start = line.find(marker)? + marker.len();
     let raw = line[start..].trim();
     parse_loopback_address(raw).ok()
+}
+
+/// 401 po błędnym haśle przy ponownym potwierdzeniu (zmiana hasła, kod odzyskiwania,
+/// ponowna autoryzacja odanonimizowania) nie kończy ważnej sesji: wylogowanie po literówce
+/// zostawiało sesję w runtime aktywną. Sesja jest czyszczona przy każdym innym 401.
+fn unauthorized_ends_session(body: &[u8]) -> bool {
+    let code = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|value| value.get("error").and_then(Value::as_str).map(str::to_owned));
+    !matches!(
+        code.as_deref(),
+        Some("INVALID_CREDENTIALS" | "INVALID_RECOVERY_CREDENTIALS")
+    )
 }
 
 fn requires_session(path: &str) -> bool {
@@ -2081,6 +2105,15 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn wrong_password_on_reauthentication_keeps_the_session() {
+        assert!(!unauthorized_ends_session(br#"{"error":"INVALID_CREDENTIALS"}"#));
+        assert!(!unauthorized_ends_session(br#"{"error":"INVALID_RECOVERY_CREDENTIALS"}"#));
+        assert!(unauthorized_ends_session(br#"{"error":"SESSION_REVOKED"}"#));
+        assert!(unauthorized_ends_session(br#"{"error":"AUTHENTICATION_REQUIRED"}"#));
+        assert!(unauthorized_ends_session(b"not json"));
+    }
 
     #[test]
     fn preflight_allows_every_custom_header_sent_by_the_web_ui() {

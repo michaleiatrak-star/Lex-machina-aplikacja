@@ -6,6 +6,7 @@ import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
 import { AuthError, type AuthService } from "../src/auth/service.js";
 import { caseLawRepository, configureCaseLawStore } from "../src/case-law-store.js";
+import { CaseAccessError } from "../src/case-access.js";
 import { registerMcpConnectorRoutes } from "../src/http/mcp-connector-routes.js";
 import { LegalFederationToolRuntime } from "../src/legal-federation-tool-runtime.js";
 import { LexMcpConnectorStore } from "../src/lex-mcp-connectors.js";
@@ -77,5 +78,32 @@ describe("decisions the user points to", () => {
     const library = await request(app).get("/api/case-law/library?q=CSKP").set("Authorization", "Bearer user");
     expect(library.body.entries).toEqual([expect.objectContaining({ court: "SN", signature: "II CSKP 89/26", date: "2026-07-08", form: "wyrok" })]);
     expect((await request(app).get("/api/case-law/library")).status).toBe(401);
+  });
+});
+
+describe("case-law routes and case access", () => {
+  it("does not read or write rulings in a case the user has no access to", async () => {
+    const guarded = express();
+    guarded.use(express.json());
+    const assertAccess = (_actor: unknown, caseId: string) => {
+      if (caseId !== "sprawa-wlasna") throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+      return {} as never;
+    };
+    registerMcpConnectorRoutes(guarded, { authService, connectors, search, previewFetch, caseAccess: { assertAccess } });
+    const cardUrl = `https://www.sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=${ID}`;
+    for (const route of ["/api/case-law/resolve", "/api/case-law/copy", "/api/case-law/preview"]) {
+      const denied = await request(guarded)
+        .post(route)
+        .set("Authorization", "Bearer user")
+        .send({ cardUrl, sourceUrl: cardUrl, caseId: "sprawa-cudza" });
+      expect(denied.status).toBe(403);
+      expect(denied.body).toEqual({ error: "CASE_ACCESS_DENIED" });
+    }
+    expect(caseLawRepository()?.forCase("sprawa-cudza")?.get(`https://sn.pl/pl/wyszukiwarka-orzeczen?orzeczenie=${ID}`)).toBeNull();
+    const own = await request(guarded)
+      .post("/api/case-law/resolve")
+      .set("Authorization", "Bearer user")
+      .send({ cardUrl, caseId: "sprawa-wlasna" });
+    expect(own.status).toBe(200);
   });
 });

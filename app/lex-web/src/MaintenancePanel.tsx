@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import {
@@ -57,7 +58,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function friendlyError(error: unknown): string {
+export function friendlyError(error: unknown): string {
   const code =
     error instanceof ApiError
       ? error.code
@@ -65,6 +66,13 @@ function friendlyError(error: unknown): string {
         ? error.message
         : String(error);
 
+  if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
+    return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
+  }
+  // Wydanie bez instalatora dla tego systemu (z sumą SHA-256 GitHub), nie błąd podpisu.
+  if (code === "APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED") {
+    return "Najnowsze wydanie nie zawiera instalatora dla tego systemu (z sumą SHA-256) — aktualizacji nie można pobrać z poziomu programu.";
+  }
   if (
     code.includes("SIGNER_POLICY_MISSING") ||
     code.includes("SIGNER_NOT_TRUSTED") ||
@@ -77,7 +85,7 @@ function friendlyError(error: unknown): string {
     code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
     code.includes("APPLICATION_UPDATE_PLATFORM_UNSUPPORTED")
   ) {
-    return "Na macOS aplikację aktualizuje się instalatorem: pobierz najnowszy pakiet .pkg Lex Machina i uruchom go (dane i ustawienia zostają).";
+    return "Aplikację aktualizuje się instalatorem ze strony wydania: pobierz najnowszy instalator Lex Machina (Windows: Online-x64-Setup.exe, macOS: .pkg) i uruchom go (dane i ustawienia zostają).";
   }
   if (code === "APPLICATION_UPDATE_NOT_AVAILABLE") {
     return "Brak nowszej wersji programu do pobrania.";
@@ -86,6 +94,55 @@ function friendlyError(error: unknown): string {
     return "Brak nowszego pakietu skilli do zastosowania.";
   }
   return code;
+}
+
+export function manualUpdateInstruction(userAgent: string): string {
+  return /Mac OS X|Macintosh/i.test(userAgent)
+    ? "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
+    : "Otworzono stronę wydania w przeglądarce: pobierz plik Online-x64-Setup.exe i uruchom go (instalator bez podpisu: w oknie SmartScreen wybierz „Więcej informacji” > „Uruchom mimo to”). Dane i ustawienia zostają.";
+}
+
+/**
+ * macOS, and Windows while no Authenticode publisher is trusted: no in-app installer; the release page of the discovered version opens in the
+ * browser so the user can take the new .pkg (only an https GitHub release page).
+ */
+export function manualUpdateReleaseUrl(
+  error: unknown,
+  status: UpdateStatusResponse | null
+): string | null {
+  const code =
+    error instanceof ApiError
+      ? error.code
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  const url = status?.releaseUrl;
+  if (
+    !code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
+    !url ||
+    !/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/releases\/[^\s]*$/.test(url)
+  ) {
+    return null;
+  }
+  return url;
+}
+
+async function openReleasePage(url: string): Promise<void> {
+  const internals = (
+    window as Window & {
+      __TAURI_INTERNALS__?: {
+        invoke?: (
+          command: string,
+          args?: Record<string, unknown>
+        ) => Promise<unknown>;
+      };
+    }
+  ).__TAURI_INTERNALS__;
+  if (internals?.invoke) {
+    await internals.invoke("open_external_url", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function MaintenancePanel({
@@ -100,8 +157,10 @@ export function MaintenancePanel({
   const [channel, setChannel] =
     useState<SkillChannel>("stable");
   // Bez wyboru użytkownika panel pokazuje kanał zainstalowanych skilli (znacznik nakładki).
-  const [channelChosen, setChannelChosen] =
-    useState(false);
+  // Ref, nie stan: refresh() wywołany zaraz po wyborze (i odświeżenie już w toku)
+  // widziałby starą wartość i cofał panel do kanału zainstalowanego.
+  const channelChosen =
+    useRef(false);
   const [skillStatus, setSkillStatus] =
     useState<SkillChannelStatusResponse | null>(null);
   const [staged, setStaged] =
@@ -154,7 +213,7 @@ export function MaintenancePanel({
         ]);
       setAppStatus(application);
       const installedChannel = skills?.installed?.channel;
-      if (!channelChosen && installedChannel && installedChannel !== selected) {
+      if (!channelChosen.current && installedChannel && installedChannel !== selected) {
         setChannel(installedChannel);
         setSkillStatus(await getSkillChannelStatus(installedChannel));
       } else {
@@ -195,6 +254,20 @@ export function MaintenancePanel({
       );
     } catch (problem) {
       setMessage("");
+      const releaseUrl = manualUpdateReleaseUrl(problem, appStatus);
+      if (releaseUrl) {
+        try {
+          await openReleasePage(releaseUrl);
+          setMessage(
+            manualUpdateInstruction(
+              typeof navigator === "undefined" ? "" : navigator.userAgent
+            )
+          );
+          return;
+        } catch {
+          // Fall through to the instruction without the page.
+        }
+      }
       setError(friendlyError(problem));
     } finally {
       setBusy(null);
@@ -253,7 +326,7 @@ export function MaintenancePanel({
 
   function selectChannel(next: SkillChannel): void {
     setChannel(next);
-    setChannelChosen(true);
+    channelChosen.current = true;
     setSkillStatus(null);
     void refresh(next);
   }
