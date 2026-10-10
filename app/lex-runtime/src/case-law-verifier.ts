@@ -78,10 +78,10 @@ const SN_PROXY =
 const SN_HUMAN =
   "https://sn.pl/pl/wyszukiwarka-orzeczen";
 
-// Bez sesji użytkownika: uczciwy identyfikator klienta. Zapory sn.pl (Incapsula) nie obchodzimy
-// podmianą UA; przy 403 użytkownik przechodzi weryfikację w oknie sn.pl, a sesja niesie UA jego przeglądarki.
-const SN_CLIENT_UA =
-  "Lex-Machina/1.0 (+https://github.com/michaleiatrak-star/Lex-machina-aplikacja)";
+const SN_BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/128.0.0.0 Safari/537.36";
 
 const SN_HOSTS = new Set([
   "sn.pl",
@@ -338,7 +338,7 @@ async function fetchSnOnce(
           ),
         headers: {
           "User-Agent":
-            SN_CLIENT_UA,
+            SN_BROWSER_UA,
           "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
           ...(page
             ? { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }

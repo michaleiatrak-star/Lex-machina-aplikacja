@@ -34,10 +34,11 @@ export const LEX_MCP_SERVER_IDS = [
 export type LexMcpServerId =
   (typeof LEX_MCP_SERVER_IDS)[number];
 
-// Ten sam identyfikator, którego serwer SN używa bez sesji (sn-mcp-server.js 1.6.0). Sesja z okna
-// weryfikacji niesie UA przeglądarki użytkownika i ten jest wysyłany, gdy jest zapamiętany.
+// Ten sam UA, którego serwer SN używa do zapytań snproxy (sn-mcp-server.js). Sonda musi
+// wysłać go, gdy sesja nie zapamiętała UA, inaczej Incapsula może potraktować ją inaczej.
 const SN_PROBE_USER_AGENT =
-  "LexMachina-MCP/1.6 (+https://github.com/michaleiatrak-star/Lex-Machina)";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
 export type LexMcpServerInfo = {
   id: LexMcpServerId;
