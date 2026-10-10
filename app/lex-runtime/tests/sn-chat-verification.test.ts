@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SupremeCourtCaseVerifier, withSnSession, type CaseLawFetch } from "../src/case-law-verifier.js";
 import { CaseLawSearchService } from "../src/case-law-search.js";
-import { LegalVerificationToolRuntime, snVerificationNeeded } from "../src/verification-tool-runtime.js";
+import { LEGAL_VERIFICATION_SYSTEM_APPENDIX, LegalVerificationToolRuntime, snVerificationNeeded } from "../src/verification-tool-runtime.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 
 // Błąd z czatu 2026-10-09: wyszukiwarka orzeczeń (konektor SN) otwierała okno weryfikacji
@@ -43,5 +43,32 @@ describe("sn.pl verification in the chat", () => {
     expect(verify!.content).toContain("SN_WERYFIKACJA_WYMAGANA");
     expect(snVerificationNeeded("SN_SEARCH_HTTP_403")).toBe(true);
     expect(snVerificationNeeded("SN_SEARCH_HTTP_500")).toBe(false);
+  });
+
+  // Pokrycie SAOS: SN tylko do 2016, więc przy captchy sn.pl nowsze orzeczenia szuka się przez web_search.
+  it("points to web_search and limits SAOS to SN rulings before 2017 when sn.pl needs a captcha", async () => {
+    const blocked: CaseLawFetch = async () => new Response("<html>Incapsula</html>", { status: 403, headers: { "content-type": "text/html" } });
+    const runtime = new LegalVerificationToolRuntime(
+      new VerificationLedger(),
+      undefined,
+      undefined,
+      null,
+      new SupremeCourtCaseVerifier(blocked),
+      new CaseLawSearchService(blocked)
+    );
+    const [search] = await runtime.runTools([{ id: "1", name: "search_case_law", input: { source: "SN", query: "grupa przestępcza" } }]);
+    const instruction = String((JSON.parse(search!.content) as { instruction?: unknown }).instruction);
+    expect(instruction).toContain("SN_WERYFIKACJA_WYMAGANA");
+    expect(instruction).toContain("web_search");
+    expect(instruction).toContain("only for SN rulings issued before 2017");
+    expect(instruction).toContain("never conclude that the ruling does not exist");
+    expect(instruction).not.toContain("it holds SN decisions with their text");
+  });
+
+  it("tells the model to find recent rulings with web_search, not SAOS", () => {
+    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toContain("Topic search for recent rulings (SN after 2016, TK after 2015, KIO after 2018");
+    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toContain("web_search (when available) with an abstract legal phrase, never case data");
+    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toContain("signature known -> look it up by repertory in the official registry");
+    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toContain("the thesis and any quote come only from the verified official text");
   });
 });

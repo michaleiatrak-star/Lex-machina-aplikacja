@@ -208,7 +208,7 @@ const FEDERATED_POLICIES = {
         verificationAuthority: "LEX_NATIVE_ONLY",
         verificationEligible: false,
         crossCheckRequired: true,
-        note: "SAOS is an academic aggregator (R3): check the court's official source first (sn.pl card, CBOSA, orzeczenia.ms.gov.pl, UZP, TK); SAOS only when that source fails or gives no permanent link."
+        note: "SAOS is an academic aggregator (R3) with partial coverage (common courts current, SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA): check the court's official source first (sn.pl card, CBOSA, orzeczenia.ms.gov.pl, UZP, TK); SAOS only when that source fails or gives no permanent link. For recent rulings SAOS has no data: find signatures via web_search and the official full-text search."
     },
     cbosa: {
         sourceTier: "R2A",

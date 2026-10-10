@@ -151,7 +151,7 @@ const LOCAL_COVERAGE: Record<
     family: "case-law",
     authority: "SAOS",
     role: "discovery/support",
-    fallback: "Native Lex SAOS discovery; SN citations still require the official SN verifier."
+    fallback: "Native Lex SAOS discovery for older rulings and common courts (SN only to 2016, TK to 2015, KIO to 2018, no NSA/WSA); recent rulings: web_search + official full-text search. SN citations still require the official SN verifier."
   },
   cbosa: {
     family: "administrative-case-law",
@@ -163,13 +163,13 @@ const LOCAL_COVERAGE: Record<
     family: "supreme-court-case-law",
     authority: "Sąd Najwyższy (sn.pl snproxy)",
     role: "official retrieval; the decision's card is the source",
-    fallback: "Native verify_case_reference (sn.pl card); SAOS only when sn.pl fails."
+    fallback: "Native verify_case_reference (sn.pl card); when sn.pl fails, web_search for leads and SAOS only for SN rulings before 2017."
   },
   sp: {
     family: "common-court-case-law",
     authority: "Portal Orzeczeń Sądów Powszechnych (orzeczenia.ms.gov.pl + portale sądów)",
     role: "official retrieval; the link is the decision itself (/content/$N/{id})",
-    fallback: "SAOS (R3) only when the portal fails; signature not unique nationally -> court portal resolves AMBIGUOUS."
+    fallback: "SAOS (R3, current for common courts) when the portal fails, plus web_search for leads; signature not unique nationally -> court portal resolves AMBIGUOUS."
   },
   tk: {
     family: "constitutional-court-case-law",
@@ -496,6 +496,7 @@ const WEB_SEARCH_SCHEMA:
       description:
         "General internet search (DuckDuckGo, or Brave when BRAVE_SEARCH_API_KEY is set). " +
         "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3. Snippets are never evidence: " +
+        "for case law, use it with an abstract legal phrase to find signatures of recent rulings (not in SAOS), then verify them in the official registry; " +
         "verify R1/R2A hits with the native verifiers and read R2B/R3 hits with fetch_auxiliary_legal_source.",
       parameters: {
         type: "object",
@@ -1071,7 +1072,7 @@ export class LegalFederationToolRuntime {
       "Every federated search/get/call result carries _lexSourcePolicy with sourceTier, provenance and verificationAuthority=LEX_NATIVE_ONLY. Preserve that metadata when reasoning about the result.",
       "Use assess_legal_source for classification only. Use fetch_auxiliary_legal_source to retrieve a specific public R2B/R3 page through the SSRF-protected HTTPS channel; the fetched page remains auxiliary evidence.",
       "R2B and R3 material is auxiliary only: it can never create VERIFIED or formal SUPPORTED status and can never be the sole legal basis. Cross-check the proposition against R1/R2A before using it.",
-      "Use web_search for general internet discovery (current events, non-legal facts, locating a page). Send only neutral public phrases, never case facts or PII tokens. Snippets are not evidence: verify R1/R2A hits with verify_legal_reference / verify_case_* and read R2B/R3 hits with fetch_auxiliary_legal_source before relying on them.",
+      "Use web_search for general internet discovery (current events, non-legal facts, locating a page) and to find signatures of recent rulings (SN after 2016, TK after 2015, KIO after 2018, last 2-3 years) in secondary sources, where SAOS has no data; secondary sources give only the signature, the thesis and quotes come only from the verified official text. A known signature goes straight to the official registry, not to web_search. Send only neutral public phrases, never case facts or PII tokens. Snippets are not evidence: verify R1/R2A hits with verify_legal_reference / verify_case_* and read R2B/R3 hits with fetch_auxiliary_legal_source before relying on them.",
       "For R3 material, check publication/update date. Missing date or material older than 24 months requires an explicit staleness warning.",
       "For Polish statutory citations and current legal wording, verify_legal_reference remains authoritative. For Sąd Najwyższy signatures/quotes/propositions, use verify_case_reference / verify_case_quote / verify_case_proposition.",
       "SAOS, CBOSA and ISAP connector results can broaden discovery or retrieve source material, but they do not replace the native Lex verification path.",

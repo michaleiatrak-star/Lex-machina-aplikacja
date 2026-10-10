@@ -19,7 +19,7 @@ describe("case-law search: court and form of the decision", () => {
 
   it("tells the model the order of sources and not to pass a postanowienie off as a wyrok", () => {
     expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toContain("never present a postanowienie or uchwała as a wyrok");
-    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toMatch(/only then web_search[\s\S]*verify_case_reference before it is cited/);
+    expect(LEGAL_VERIFICATION_SYSTEM_APPENDIX).toMatch(/recent rulings[\s\S]*web_search[\s\S]*verify_case_reference before it is cited/);
   });
 
   it("asks for CN-GATE and REM-GATE only for a ruling with a cited provision", () => {

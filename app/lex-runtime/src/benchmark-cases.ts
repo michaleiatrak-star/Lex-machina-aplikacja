@@ -5,7 +5,8 @@
  * (TurnRouter) and, with --executor, from the session executor itself (simulated model,
  * no network), with the time of each.
  *
- * tsx src/benchmark-cases.ts --cases tests/fixtures/cases-1000.json [--executor] [--out report.json]
+ * tsx src/benchmark-cases.ts --cases tests/fixtures/cases-1000.json [--executor] [--split] [--out report.json]
+ * --split: separate reports for the tuning part and the holdout (cases with holdout: true).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -13,11 +14,14 @@ import { ProviderGateway, ProviderRegistry } from "./providers/gateway.js";
 import { LexSkillRegistry } from "./registry.js";
 import { TurnRouter, type TurnRouting } from "./routing-benchmark.js";
 import { SafeSessionExecutor } from "./session-executor.js";
+import { isNonLegalMessage, registryFlashRoutes } from "./turn-gate.js";
 
 export type Case = {
   id: string;
   q: string;
-  kind: "single" | "multi" | "nonlegal" | "manipulation";
+  kind: "single" | "multi" | "nonlegal" | "manipulation" | "suggested";
+  length?: "short" | "long";
+  holdout?: boolean;
   legal: boolean;
   dr: string | null;
   alt?: string[];
@@ -66,6 +70,7 @@ export type Report = {
   criminal: { detected: Bucket; noFalse: Bucket };
   fullyCorrect: Bucket;
   byKind: Record<string, Bucket>;
+  byLength: Record<string, Bucket>;
   byDr: Record<string, Bucket>;
   byExecutive: Record<string, Bucket>;
   byAttack: Record<string, Bucket>;
@@ -90,6 +95,7 @@ export function report(cases: Case[], outcomes: Outcome[], times: number[]): Rep
     criminal: { detected: bucket(), noFalse: bucket() },
     fullyCorrect: bucket(),
     byKind: {},
+    byLength: {},
     byDr: {},
     byExecutive: {},
     byAttack: {},
@@ -120,6 +126,7 @@ export function report(cases: Case[], outcomes: Outcome[], times: number[]): Rep
     const ok = passed(value);
     tally(result.fullyCorrect, ok);
     tally((result.byKind[item.kind] ??= bucket()), ok);
+    if (item.length) tally((result.byLength[item.length] ??= bucket()), ok);
     if (item.attack) tally((result.byAttack[String(item.attack)] ??= bucket()), ok);
     if (!ok) {
       const what = Object.entries(value)
@@ -147,6 +154,7 @@ export function formatReport(title: string, value: Report): string {
     `Skill wykonawczy: ${pct(value.executive)}`,
     `Kwalifikator karny: wykryty ${pct(value.criminal.detected)}; bez fałszywego ${pct(value.criminal.noFalse)}`,
     `Wg rodzaju: ${Object.entries(value.byKind).map(([kind, item]) => `${kind} ${pct(item)}`).join("; ")}`,
+    ...(Object.keys(value.byLength).length ? [`Wg długości: ${Object.entries(value.byLength).map(([kind, item]) => `${kind} ${pct(item)}`).join("; ")}`] : []),
     `Manipulacje wg typu: ${Object.entries(value.byAttack).map(([kind, item]) => `${kind}: ${pct(item)}`).join("; ")}`,
     `DR (przyjęty): ${Object.entries(value.byDr).sort().map(([dr, item]) => `${dr} ${pct(item)}`).join("; ")}`,
     `Skill: ${Object.entries(value.byExecutive).sort().map(([skill, item]) => `${skill} ${pct(item)}`).join("; ")}`,
@@ -178,9 +186,16 @@ export async function executorOutcomes(corpus: string, cases: Case[]): Promise<{
   const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers));
   const outcomes: Outcome[] = [];
   const times: number[] = [];
+  const flash = registryFlashRoutes(registry);
   for (const item of cases) {
     prompt = "";
     const started = performance.now();
+    // The legal gate runs before the executor (http/app.ts: conversationalOnly); measured here the same way.
+    if (isNonLegalMessage(item.q, flash)) {
+      times.push(performance.now() - started);
+      outcomes.push({ legal: false, domains: [], executive: null, criminal: null });
+      continue;
+    }
     const result = await executor.execute({
       query: `Użytkownik: ${item.q}`,
       provider: "openai",
@@ -222,6 +237,13 @@ async function main(): Promise<void> {
   const routed = report(cases, outcomes, times);
   const out: Record<string, Report> = { router: routed };
   console.log(formatReport("Routing aplikacji (TurnRouter)", routed));
+  if (process.argv.includes("--split")) {
+    for (const [name, holdout] of [["część strojeniowa", false], ["zestaw kontrolny", true]] as const) {
+      const index = cases.flatMap((item, at) => (Boolean(item.holdout) === holdout ? [at] : []));
+      out[holdout ? "routerHoldout" : "routerTuning"] = report(index.map((at) => cases[at]!), index.map((at) => outcomes[at]!), index.map((at) => times[at]!));
+      console.log(`\n${formatReport(`Routing aplikacji — ${name}`, out[holdout ? "routerHoldout" : "routerTuning"]!)}`);
+    }
+  }
   if (process.argv.includes("--executor")) {
     const run = await executorOutcomes(corpus, cases);
     out.executor = report(cases, run.outcomes, run.times);
