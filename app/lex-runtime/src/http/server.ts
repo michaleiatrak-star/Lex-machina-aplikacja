@@ -285,8 +285,19 @@ export function resolveRuntimeRoot(): string {
     );
   }
 
+  // Desktop (sidecar) podaje korpus wbudowany osobno, aby nakładka skilli
+  // przeszła walidację przy starcie i w razie awarii wróciła do poprzedniej
+  // lub wbudowanej wersji.
+  const bundledFromEnv =
+    process.env
+      .LEX_BUNDLED_SKILLS_PATH
+      ?.trim();
   const bundled =
-    bundledRuntimeRoot();
+    bundledFromEnv
+      ? path.resolve(
+          bundledFromEnv
+        )
+      : bundledRuntimeRoot();
   const recovered =
     recoverSkillOverlayForStartup(
       bundled

@@ -175,21 +175,6 @@ fn validate_component_lock(root: &Path, components_dir: &Path) -> Result<usize, 
     Ok(verified)
 }
 
-fn installed_skill_overlay() -> Option<PathBuf> {
-    // Same location as the runtime's localAppDataRoot(): %LOCALAPPDATA%\LexMachina
-    // on Windows, ~/.lex-machina elsewhere.
-    let base = match env::var_os("LOCALAPPDATA") {
-        Some(local) => PathBuf::from(local).join("LexMachina"),
-        None => PathBuf::from(env::var_os("HOME")?).join(".lex-machina"),
-    };
-    let root = base.join("skills").join("current");
-    if root.join(".lex-skills-version.json").is_file() && root.is_dir() {
-        Some(root)
-    } else {
-        None
-    }
-}
-
 fn self_test(root: &Path) -> Result<(), String> {
     let components = components_root(root);
     required_file(node_executable(&components), "SIDECAR_NODE_MISSING")?;
@@ -225,8 +210,9 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
     runtime_paths.extend(env::split_paths(&inherited_path));
     let runtime_path = env::join_paths(runtime_paths)
         .map_err(|error| format!("SIDECAR_PATH_BUILD_FAILED:{error}"))?;
+    // LEX_SKILLS_PATH wyłączyłby w runtime walidację nakładki przy starcie i powrót
+    // do poprzednich (lub wbudowanych) skilli; runtime sam wybiera nakładkę.
     let bundled_corpus = required_dir(root.join("corpus"), "SIDECAR_CORPUS_MISSING")?;
-    let skills = installed_skill_overlay().unwrap_or(bundled_corpus);
     let paddle = required_dir(components.join("models").join("paddle"), "SIDECAR_PADDLE_MODELS_MISSING")?;
     let paddle_official = required_dir(paddle.join("official_models"), "SIDECAR_PADDLE_OFFICIAL_MODELS_MISSING")?;
     let stanza = required_dir(components.join("models").join("stanza"), "SIDECAR_STANZA_MODELS_MISSING")?;
@@ -236,7 +222,8 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
         .arg(server)
         .current_dir(root.join("app"))
         .env("LEX_RUNTIME_ROOT", root)
-        .env("LEX_SKILLS_PATH", skills)
+        .env("LEX_BUNDLED_SKILLS_PATH", bundled_corpus)
+        .env_remove("LEX_SKILLS_PATH")
         .env("LEX_OCR_PYTHON", &python)
         .env("LEX_NER_PYTHON", &python)
         .env("LEX_STORAGE_PYTHON", &python)
