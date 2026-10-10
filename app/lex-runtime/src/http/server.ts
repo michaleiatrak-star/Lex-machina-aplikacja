@@ -11,7 +11,7 @@ import helmet from "helmet";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLexHttpApp, jsonErrorHandler } from "./app.js";
+import { createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
@@ -741,6 +741,7 @@ export async function startLocalServer(options?: {
   app.use(desktopBootstrapGuard);
   app.use(loopbackOriginGuard);
   app.use(express.json({ limit: "2mb" }));
+  app.use("/api", sessionActivityMiddleware(authService));
   registerLegacyMigrationRoutes(
     app,
     {

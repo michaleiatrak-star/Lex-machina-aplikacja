@@ -1042,6 +1042,57 @@ const EXECUTION_DRAFT_MAX_CHARS = 200_000;
 // While a request is still running, refresh the idle deadline this often.
 const IN_FLIGHT_ACTIVITY_INTERVAL_MS = 60_000;
 
+/**
+ * Żądanie zmieniające stan (nie GET, nie blokada) przedłuża sesję; trwające żądanie
+ * (długa odpowiedź lokalnego modelu, OCR, render) podtrzymuje ją, dopóki się nie skończy.
+ * Raz na żądanie: trasy rejestrowane w server.ts przed coreApp też tu trafiają.
+ */
+function trackSessionActivity(
+  authService: Pick<AuthService, "touchSession">,
+  req: Request,
+  res: Response,
+  sessionId: string
+): void {
+  if (
+    req.method === "GET" ||
+    req.path === "/auth/lock" ||
+    res.locals.lexSessionActivity === true
+  ) {
+    return;
+  }
+  res.locals.lexSessionActivity = true;
+  authService.touchSession(sessionId);
+  const keepAlive = setInterval(
+    () => authService.touchSession(sessionId),
+    IN_FLIGHT_ACTIVITY_INTERVAL_MS
+  );
+  keepAlive.unref();
+  const stop = () => clearInterval(keepAlive);
+  res.once("finish", stop);
+  res.once("close", stop);
+}
+
+/**
+ * Aktywność sesji dla tras zarejestrowanych poza createLexHttpApp (workspace, faktury,
+ * MCP, akty podstawowe...): uwierzytelniają się same, ale nie przedłużały sesji.
+ * Brak lub błąd sesji nie jest tu obsługiwany: odpowiada sama trasa.
+ */
+export function sessionActivityMiddleware(
+  authService: Pick<AuthService, "authenticateAuthorization" | "touchSession">
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    if (req.method !== "GET" && req.get("authorization")) {
+      try {
+        const context = authService.authenticateAuthorization(req.get("authorization"));
+        trackSessionActivity(authService, req, res, context.session.sessionId);
+      } catch {
+        // Trasa sama odpowie błędem uwierzytelnienia.
+      }
+    }
+    next();
+  };
+}
+
 export const MAX_SESSION_QUERY_CHARS = 320_000;
 
 function responseAuthContext(
@@ -2460,39 +2511,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           res.locals.lexAuth =
             context;
 
-          if (
-            req.method !== "GET" &&
-            req.path !==
-              "/auth/lock"
-          ) {
-            const sessionId =
-              context.session
-                .sessionId;
-            options.authService!
-              .touchSession(
-                sessionId
-              );
-            // A request the user is still waiting for (a long local-model
-            // answer, OCR) is activity: keep the session from idling out
-            // while it runs.
-            const keepAlive =
-              setInterval(
-                () => {
-                  options.authService!
-                    .touchSession(
-                      sessionId
-                    );
-                },
-                IN_FLIGHT_ACTIVITY_INTERVAL_MS
-              );
-            keepAlive.unref();
-            const stop = () =>
-              clearInterval(
-                keepAlive
-              );
-            res.once("finish", stop);
-            res.once("close", stop);
-          }
+          trackSessionActivity(
+            options.authService!,
+            req,
+            res,
+            context.session.sessionId
+          );
           next();
         } catch (error) {
           if (
