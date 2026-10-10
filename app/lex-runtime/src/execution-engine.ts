@@ -163,6 +163,13 @@ export function isTrivialChatCommand(
   return TRIVIAL_ACK.test(normalized) && !assistantAskedLast(query);
 }
 
+// Polityka wyszukiwania orzeczeń dla promptów AUTO (pokrycie SAOS: SN do 2016, TK do 2015, KIO do 2018, bez NSA/WSA).
+export const CASE_LAW_DISCOVERY_RULE =
+  "Orzecznictwo: znana sygnatura - od razu rejestr urzędowy według repertorium (verify_case_reference, CBOSA, portal sądu), bez web_search i bez SAOS. " +
+  "Nowsze orzeczenia (SN po 2016, TK po 2015, KIO po 2018 albo z ostatnich 2-3 lat): web_search z abstrakcyjną frazą prawną (nigdy dane sprawy) w celu znalezienia sygnatur w źródłach wtórnych, równolegle z urzędowym wyszukiwaniem pełnotekstowym (search_case_law source=SN / CBOSA); SAOS ich nie zawiera. " +
+  "Starsze orzeczenia i sądy powszechne: SAOS + web_search; SAOS także jako cytator. " +
+  "Źródło wtórne daje tylko sygnaturę; teza i cytat wyłącznie ze zweryfikowanego tekstu urzędowego.";
+
 const TRIVIAL_PART =
   "(?:test|testuję|testuje|hej|hejka|halo|cześć|czesc|siema|elo|witaj|witam|hello|hi|dzień dobry|dzien dobry|dobry wieczór|dobry wieczor|dobranoc|do widzenia|na razie|miłego dnia|milego dnia|dzięki|dzieki|wielkie dzięki|wielkie dzieki|dziękuję|dziekuje|dziękuję bardzo|dziekuje bardzo|thx|thanks|jesteś|jestes|działasz|dzialasz)";
 const ACK_PART =
@@ -2158,7 +2165,8 @@ export class LexExecutionEngine {
             ...methodology,
             "Ścieżki podawaj względem katalogu roboczego (np. dr-02-.../SKILL.md, dr-02-.../modules/<plik>).",
             `Prawo karne (DR-03): przed kwalifikacją przeczytaj obowiązkowy kwalifikator karnomaterialny <folder DR-03>/${CRIMINAL_QUALIFIER_INDEX} i zastosuj go.`,
-            "Narzędzia Lex masz jako mcp__lex__<nazwa>: rdzeń aktów prawnych z tekstami z ELI (read_core_law_article, search_core_law - lokalnie, szybko), weryfikacja przepisów i orzeczeń, orzecznictwo (SAOS, CBOSA, SN) i źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne). Brzmienie przepisu bierz z rdzenia aktów albo weryfikacji ELI, nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
+            "Narzędzia Lex masz jako mcp__lex__<nazwa>: rdzeń aktów prawnych z tekstami z ELI (read_core_law_article, search_core_law - lokalnie, szybko), weryfikacja przepisów i orzeczeń, orzecznictwo (SN, CBOSA, SAOS) i źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne). Brzmienie przepisu bierz z rdzenia aktów albo weryfikacji ELI, nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
+            CASE_LAW_DISCOVERY_RULE,
             "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z przeczytanego skilla.",
             "Odpowiadaj po polsku, chyba że użytkownik pisze w innym języku."
           ].join("\n"),
@@ -2189,6 +2197,7 @@ export class LexExecutionEngine {
         "Polecenia skilli typu view modules/..., shared/... wykonujesz narzędziem read_legal_resource (skill=<nazwa> path=<ścieżka w skillu>).",
         "Prawo karne (DR-03): runtime dołącza obowiązkowy kwalifikator karnomaterialny przy pierwszym SKILL.md DR-03; zastosuj go przed kwalifikacją.",
         "Przepisy cytuj wyłącznie po weryfikacji narzędziami (ELI), nigdy z pamięci. Orzeczenia NSA/WSA z CBOSA pozostają snapshotem bez awansu; brak trafień = OUT_OF_SCOPE.",
+        CASE_LAW_DISCOVERY_RULE,
         "Przed wygenerowaniem pisma (.docx) obowiązuje walidacja HYBRID-VAL z wczytanego skilla.",
         "Odpowiadaj po polsku, chyba że użytkownik pisze w innym języku."
       ].join("\n"),
