@@ -88,6 +88,49 @@ function friendlyError(error: unknown): string {
   return code;
 }
 
+/**
+ * macOS: no in-app installer; the release page of the discovered version opens in the
+ * browser so the user can take the new .pkg (only an https GitHub release page).
+ */
+export function manualUpdateReleaseUrl(
+  error: unknown,
+  status: UpdateStatusResponse | null
+): string | null {
+  const code =
+    error instanceof ApiError
+      ? error.code
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  const url = status?.releaseUrl;
+  if (
+    !code.includes("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED") ||
+    !url ||
+    !/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/releases\/[^\s]*$/.test(url)
+  ) {
+    return null;
+  }
+  return url;
+}
+
+async function openReleasePage(url: string): Promise<void> {
+  const internals = (
+    window as Window & {
+      __TAURI_INTERNALS__?: {
+        invoke?: (
+          command: string,
+          args?: Record<string, unknown>
+        ) => Promise<unknown>;
+      };
+    }
+  ).__TAURI_INTERNALS__;
+  if (internals?.invoke) {
+    await internals.invoke("open_external_url", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export function MaintenancePanel({
   user,
   embedded = false
@@ -195,6 +238,18 @@ export function MaintenancePanel({
       );
     } catch (problem) {
       setMessage("");
+      const releaseUrl = manualUpdateReleaseUrl(problem, appStatus);
+      if (releaseUrl) {
+        try {
+          await openReleasePage(releaseUrl);
+          setMessage(
+            "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
+          );
+          return;
+        } catch {
+          // Fall through to the instruction without the page.
+        }
+      }
       setError(friendlyError(problem));
     } finally {
       setBusy(null);
