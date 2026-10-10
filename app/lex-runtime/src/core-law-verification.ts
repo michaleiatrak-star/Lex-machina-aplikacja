@@ -1,5 +1,6 @@
 import type { CoreLawIndex } from "./core-law-index.js";
 import { searchStems } from "./core-law-search.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { anchoredUrl } from "./source-anchor.js";
 import {
   FRESHNESS_MAX_AGE_MS,
@@ -47,7 +48,7 @@ export type CoreLawVerificationOutcome =
 const TITLE_MATCH_MIN = 0.75;
 
 function articleToken(claim: string): string | null {
-  return /\bart(?:\.|ykuł\p{L}*)?\s+(\d+[a-ząćęłńóśźż]*)/iu
+  return new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*)`, "iu")
     .exec(claim)?.[1]
     ?.toLocaleLowerCase("pl") ?? null;
 }

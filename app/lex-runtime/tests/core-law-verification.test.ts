@@ -260,6 +260,13 @@ describe("verifyFromCoreLaw", () => {
     expect(rechecked.decision === "RECORD" && rechecked.record.status).toBe("VERIFIED");
   });
 
+  it("rozpoznaje artykuł zapisany bez spacji i pełnym słowem", () => {
+    for (const claim of ["art.51 § 1 KW", "artykułu 51 § 1 KW"]) {
+      const outcome = verify(index(kw()), { claim });
+      expect(outcome.decision === "RECORD" && outcome.record.status).toBe("VERIFIED");
+    }
+  });
+
   it("the verified record passes the HARD GATE with its ELI marker", () => {
     const outcome = verify(index(kw()));
     if (outcome.decision !== "RECORD") throw new Error("expected record");

@@ -1,5 +1,6 @@
 import type { EventDateCheck } from "./event-date-check.js";
 import { detectLegalReferences } from "./finalization-gate.js";
+import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import type { VerificationRecord } from "./verification-ledger.js";
 
 /**
@@ -218,7 +219,7 @@ export function foreignJurisdiction(query: string): boolean {
 }
 
 const DATE = /\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b|\b\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)\s+\d{4}\b/giu;
-const ARTICLE = /\bart\.?\s*\d+/i;
+const ARTICLE = new RegExp(`${ARTICLE_LEAD}\\d+`, "iu");
 
 // Triggers known before the answer (the runtime can load the resource up front).
 type PreFacts = Pick<TurnFacts, "profile" | "query" | "legal" | "criminal" | "documents" | "documentsTruncated" | "documentGeneration" | "foreignJurisdiction">;
