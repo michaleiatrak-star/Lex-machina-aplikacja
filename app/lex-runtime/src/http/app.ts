@@ -6596,7 +6596,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (!sendCaseAccessError(res, error)) {
           const code = error instanceof Error ? error.message : "";
           res.status(422).json({
-            error: /^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_TEXT_TOO_LONG)$/.test(code)
+            error: /^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|DOCUMENT_PAGE_TEXT_TOO_LONG|DOCUMENT_VAULT_CONTEXT_REQUIRED)$/.test(code)
               ? code
               : "DOCUMENT_PAGE_EDIT_FAILED"
           });

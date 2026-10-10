@@ -761,6 +761,11 @@ implements DocumentService {
   ): Promise<{ page: PublicDocumentReview["pages"][number]; suggestions: PublicPrivacySuggestion[] }> {
     const record = this.documents.get(documentId);
     if (!record) throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+    // Dokument sprawy edytuje tylko ktoś z dostępem do TEJ sprawy (i jej kluczem): inaczej
+    // dostęp do własnej sprawy wystarczałby, by nadpisać źródło dokumentu cudzej sprawy.
+    if (record.caseId && security?.caseId !== record.caseId) {
+      throw new Error("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+    }
     const index = record.source.pages.findIndex((item) => item.page === pageNumber);
     if (index < 0) throw new Error("INVALID_DOCUMENT_PAGE");
     const clean = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n");
