@@ -225,6 +225,11 @@ function apiUrl(eli: string, suffix = ""): string | null {
   );
 }
 
+// Zawieszone ELI nie blokuje tury na czas domyślnego limitu undici (ok. 300 s).
+const ELI_REQUEST_TIMEOUT_MS = 15_000;
+// Tekst noweli w PDF bywa duży (cały numer Dz.U.).
+const ELI_PDF_TIMEOUT_MS = 60_000;
+
 async function json(
   fetcher: EliFetch,
   url: string
@@ -232,6 +237,7 @@ async function json(
   const response = await fetcher(url, {
     method: "GET",
     redirect: "error",
+    signal: AbortSignal.timeout(ELI_REQUEST_TIMEOUT_MS),
     headers: { Accept: "application/json" }
   });
   if (!response.ok) {
@@ -305,6 +311,7 @@ async function amendmentBody(
           {
             method: "GET",
             redirect: "error",
+            signal: AbortSignal.timeout(ELI_REQUEST_TIMEOUT_MS),
             headers: {
               Accept:
                 "text/html,application/xhtml+xml,text/plain"
@@ -338,6 +345,7 @@ async function amendmentBody(
           {
             method: "GET",
             redirect: "error",
+            signal: AbortSignal.timeout(ELI_PDF_TIMEOUT_MS),
             headers: {
               Accept:
                 "application/pdf"

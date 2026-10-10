@@ -535,6 +535,28 @@ describe("TemporalSourceFreshnessChecker", () => {
     expect(amendmentHasEntryIntoForceExceptions("ustawa wchodzi w życie z dniem 1 stycznia 2027 r.")).toBe(false);
   });
 
+  it("każde zapytanie do ELI ma limit czasu (AbortSignal)", async () => {
+    const signals: unknown[] = [];
+    const base = fixtureFetcher({
+      amendments: [{
+        eli: "DU/2026/999",
+        relationDate: "2026-07-01",
+        promulgation: "2026-06-20",
+        entryIntoForce: "2026-07-01"
+      }]
+    });
+    await new TemporalSourceFreshnessChecker(
+      async (input, init) => {
+        signals.push(init?.signal);
+        return base(input);
+      },
+      () => "2026-09-15T20:00:00.000Z"
+    ).check(kc, { claim: "art. 190a KK" });
+
+    expect(signals.length).toBeGreaterThan(3);
+    for (const signal of signals) expect(signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("blocks when an amendment effect date cannot be established", async () => {
     const result = await new TemporalSourceFreshnessChecker(
       fixtureFetcher({

@@ -340,6 +340,10 @@ const LOCAL_CATALOG_DESCRIPTION_CHARS = 220;
 // A short legal question on a local model is answered in the quick lane
 // (domain + provisions), so the router only has to name the domain.
 const LOCAL_QUICK_CATALOG_DESCRIPTION_CHARS = 140;
+// Zawieszony dostawca nie blokuje tury na czas domyślnego limitu undici (ok. 300 s);
+// model lokalny na CPU czyta katalog i mapę routingu dłużej.
+const ROUTING_TIMEOUT_MS = 60_000;
+const LOCAL_ROUTING_TIMEOUT_MS = 180_000;
 
 function catalogLine(
   skill: LexSkillRecord,
@@ -599,7 +603,13 @@ export class ModelAutoRouter {
                 // The decision is one short JSON object.
                 ...(localModel
                   ? { localMaxOutputTokens: 256 }
-                  : {})
+                  : {}),
+                abortSignal:
+                  AbortSignal.timeout(
+                    localModel
+                      ? LOCAL_ROUTING_TIMEOUT_MS
+                      : ROUTING_TIMEOUT_MS
+                  )
               }
             );
         return response
