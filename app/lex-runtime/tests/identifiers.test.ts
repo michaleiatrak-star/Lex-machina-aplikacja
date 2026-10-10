@@ -78,4 +78,15 @@ describe("identifier detectors", () => {
     expect(found.some(([, value]) => value === "123456789")).toBe(false);
     expect(found.some(([, value]) => String(value).includes("1234/25"))).toBe(false);
   });
+
+  it("detects a PESEL whose digits are split by spaces or hyphens", () => {
+    for (const written of ["440 514 01359", "44 05 14 01359", "4 4 0 5 1 4 0 1 3 5 9", "440514-01359"]) {
+      const found = detectIdentifiers(`PESEL: ${written}, adres jak wyżej.`);
+      expect(found.filter((span) => span.kind === "PESEL").map((span) => span.value)).toEqual([written]);
+    }
+    // A wrong checksum, a longer digit run or a phone number is not a PESEL.
+    expect(detectIdentifiers("nr 440 514 01358").some((span) => span.kind === "PESEL")).toBe(false);
+    expect(detectIdentifiers("konto 44 0514 0135 9123").some((span) => span.kind === "PESEL")).toBe(false);
+    expect(detectIdentifiers("tel. 601 234 567").some((span) => span.kind === "PESEL")).toBe(false);
+  });
 });
