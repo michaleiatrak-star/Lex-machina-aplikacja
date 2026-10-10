@@ -77,6 +77,20 @@ function Stop-LexProcesses([string]$ApplicationRoot) {
     }
 }
 
+function Test-LexRunning([string]$ApplicationRoot) {
+  $normalizedRoot = (Full-Path $ApplicationRoot).TrimEnd('\') + '\'
+  $running = @(
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        $path = [string]$_.ExecutablePath
+        if (-not $path) { return $false }
+        $full = try { Full-Path $path } catch { return $false }
+        return $full.StartsWith($normalizedRoot, [StringComparison]::OrdinalIgnoreCase)
+      }
+  )
+  return ($running.Count -gt 0)
+}
+
 function Wait-ParentExit([int]$ProcessId) {
   if ($ProcessId -le 0) { return }
   $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
@@ -283,18 +297,35 @@ $journalState = [ordered]@{
 }
 Write-JsonAtomic $journal $journalState
 
-Wait-ParentExit $ParentPid
-Stop-LexProcesses $install
-Start-Sleep -Milliseconds 500
+# Failures before the install step (parent timeout, no space, locked file during
+# backup, reg export) must not leave the app closed with a partial backup on disk:
+# remove the partial backup and start the unchanged application again.
+try {
+  Wait-ParentExit $ParentPid
+  Stop-LexProcesses $install
+  Start-Sleep -Milliseconds 500
 
-$installBytes = Get-InstallSize $install
-Assert-BackupCapacity $backupBase $installBytes
-New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-Copy-DirectoryContents $install $filesBackup
-Backup-UninstallRegistry $registryBackup
-$journalState.state = "BACKED_UP"
-$journalState.backupBytes = $installBytes
-Write-JsonAtomic $journal $journalState
+  $installBytes = Get-InstallSize $install
+  Assert-BackupCapacity $backupBase $installBytes
+  New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+  Copy-DirectoryContents $install $filesBackup
+  Backup-UninstallRegistry $registryBackup
+  $journalState.state = "BACKED_UP"
+  $journalState.backupBytes = $installBytes
+  Write-JsonAtomic $journal $journalState
+} catch {
+  $abortFailure = $_.Exception.Message
+  Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+  $journalState.state = "ABORTED_BEFORE_INSTALL"
+  $journalState.lastError = $abortFailure
+  Write-JsonAtomic $journal $journalState
+  if (-not (Test-LexRunning $install) -and (Test-Path -LiteralPath $appExe -PathType Leaf)) {
+    Start-Process -FilePath $appExe | Out-Null
+  }
+  # Write-Error would terminate here ($ErrorActionPreference = Stop) before exit 30.
+  [Console]::Error.WriteLine("LEX_APPLICATION_UPDATE_ABORTED:$abortFailure")
+  exit 30
+}
 
 $rollbackRequired = $true
 try {
@@ -369,6 +400,8 @@ try {
       $journalState.state = "ROLLED_BACK"
       $journalState.rolledBackAt = (Get-Date).ToUniversalTime().ToString("o")
       Write-JsonAtomic $journal $journalState
+      # Restored and health-checked: the backup copy is no longer needed.
+      Remove-Item -LiteralPath $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
       if (Test-Path -LiteralPath $appExe -PathType Leaf) {
         Start-Process -FilePath $appExe | Out-Null
       }
