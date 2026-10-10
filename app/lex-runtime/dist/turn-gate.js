@@ -24,7 +24,7 @@ const LEGAL_STEMS = [
     "spadk", "spadek", "testament", "zachow", "dziedzicz", "rozwod", "alimen", "opiek", "wladz", "separac", "malzen",
     "najem", "najm", "wynajm", "wynajem", "czynsz", "kaucj", "lokator", "eksmis", "wlasciciel", "wlasnos", "nieruchomos", "dzialk", "dzialc", "bez (?:mojej|jego|jej|naszej) wiedzy",
     "sasiad", "pracodaw", "pracowni", "zwolni", "urlop", "wynagrodz", "zus", "krus", "emerytur", "rent", "zasil", "swiadcze",
-    "urzad", "urzedni", "decyzj", "organ", "gmin", "wojewod", "starost", "burmistrz", "wojt", "skarbow", "podat", "vat", "pit", "cit",
+    "urzad", "urzedni", "decyzj", "organ", "gmin", "wojewod", "starost", "burmistrz", "wojt", "(?<!obligacj\\w* )skarbow", "podat", "vat", "pit", "cit",
     "polic(?!z)", "prokurat", "przestep", "wykrocz", "oszu", "krad", "pobi", "grozi", "nek", "zglos", "zawiadom",
     "reklamac", "rekojm", "gwarancj", "zwrot", "odstap", "konsument", "ubezpiecz", "polis", "kredyt", "pozyczk", "zablokow",
     "rodo", "dane osobow", "wizerun", "autorsk", "licencj", "patent", "znak towar", "zezwoleni", "pozwoleni", "koncesj",
@@ -60,12 +60,41 @@ const TOPIC_ONLY = new Set([
     "prasa", "redakcja", "narzędzia", "kalkulator", "strategia", "spam", "cookies", "newsletter", "wojsko", "odpady", "farmacja",
     "lekarz rodzinny", "IP", "za granicą", "Konwencja", "dyrektywa", "uchwała", "wynagrodzenie", "urlop", "emerytura", "recepta"
 ]);
+// Words that name a legal matter in any context. In a message whose topic is plainly not
+// legal (code, a recipe, a novel, a game, physics, a garden), the everyday words of the
+// lexicon above ("prawo Newtona", "proces", "sąd" of apple trees, "wyrok" in a song,
+// "dowód" in maths, "świadek" in a novel) are no evidence; one of these, a citation or
+// a question about rights is (benchmark series 3, 2026-10-10: 26.4% of non-legal
+// messages answered without the legal path).
+const STRONG_LEGAL_STEMS = [
+    "prawn", "prawnik", "ustaw(?!ic|ien|il|ia[cl]|ion|i[eć]|ia\\b|iaj)", "rozporzadz", "konstytuc", "kodeks\\w* (?:karn|cywiln|prac|rodzin|wykroczen|spolek|postepowani)", "pozew", "pozw(?!ol)", "apelac",
+    "zazaleni", "kasac", "pelnomocni", "adwokat", "radc\\w* prawn", "notariu", "notarial", "komorni", "odszkodowa", "zadoscuczyn", "roszczen", "wierzyc", "windyk",
+    "spadk", "testament", "zachowek", "zachowku", "rozwod", "alimen", "eksmis", "kaucj", "zus", "krus", "urzad", "urzedni", "wojewod", "starost", "skarbow", "podat",
+    "vat", "prokurat", "przestep", "wykrocz", "oszust", "oszuk", "reklamac", "rekojm", "konsument", "rodo", "dane osobow", "wizerun", "praw\\w* autorsk", "patent",
+    "znak\\w* towarow", "zezwoleni", "pozwoleni\\w* (?:na budow|wodnopraw)", "koncesj", "upadlos", "krs", "ceidg", "przetarg", "cudzoziem", "przedawni", "wezwani\\w* do zaplat",
+    "nielegaln", "przysluguj", "opodatk", "wierzytel", "syndyk", "korupc", "sankcj", "intercyz", "ubezwlasnowol", "ojcostw", "dyskrymin", "grzywn", "mobbing",
+    "pracodaw", "wypowiedzeni\\w* umow", "umow\\w* (?:o prac|najm|zleceni|o dzielo|sprzedazy|kupna|pozyczk|darowizn|licencyjn)", "nieruchomos", "dzialk", "ksieg\\w* wieczyst",
+    "spolk", "zamowieni\\w* publiczn", "decyzj\\w* (?:administracyjn|urzedu|organu|wojewody|starosty|zus)", "mandat\\w* (?:karn|za)", "policj", "zatrzyma\\w* przez", "areszt", "oskarz",
+    "sad\\w* (?:rejonow|okregow|apelacyjn|najwyzsz|administracyjn|pracy|rodzinn|powszechn)", "w sadzie", "do sadu", "przed sadem", "sprawa sadow", "wsa", "nsa", "uodo", "uokik", "kio",
+    "plan\\w* miejscow", "gmin", "oplat", "przepis\\w* (?:tu )?obowiazuj", "antykorupc", "pogryz", "ugryz", "baner", "zgod", "petycj", "formaln", "samowol",
+    "tablic\\w* budowy", "przybudow", "opakowani", "plagiat", "prac\\w* dyplomow", "dyscyplinar", "ukaral", "w reklamie", "fundusz\\w* (?:europejsk|unijn)", "rolnicz\\w* handl", "ochron\\w* (?:prawn|przed)", "mam ochron", "uporczyw", "nekan",
+    "przedsiebiorc", "zazadal", "zadal\\w* zwrotu", "niejawn", "wspolnik", "zabezpiecz\\w* (?:te |tych )?dowod", "nie wyplac", "inspekc"
+];
+const STRONG_LEGAL = new RegExp(`(?<![a-z0-9])(?:${STRONG_LEGAL_STEMS.join("|")})`, "u");
+const RIGHTS_QUESTION = /(?<![a-z])(?:co (?:moge|mozemy|mozna) (?:z tym |w tej sytuacji )?zrobic|czy (?:moge|mozemy) w ogole|mam prawo|ma prawo|maja prawo|jakie mam prawa|co (?:mi|nam|mu|jej|im) grozi|czy (?:to )?(?:jest )?(?:legaln|zgodn\w* z prawem|zgodn\w* z przepisami)|czy wolno|kto (?:odpowiada|ponosi|zaplaci)|do kogo (?:sie )?(?:zwrocic|zglosic)|bez (?:mojej |jego |jej |naszej )?zgody)/u;
+// The topic of a message that is plainly not a legal matter.
+// Fiction and games: a crime in the plot is no criminal matter.
+const FICTION = /(?<![a-z])(?:powiesc\w*|powiesci|opowiadani\w*|bohater\w*|scen\w* (?:procesu|w|z)|rozdzial\w*|gracz\w*|grze\b|rpg|piosenk\w*|refren\w*|kryminal\w*|zabaw\w* w sad)/u;
+const NONLEGAL_TOPIC = /(?<![a-z])(?:python\w*|javascript|typescript|bash\w*|skrypt\w*|excel\w*|arkusz\w* kalkul|github\w*|repo\b|pypi|npm|package\.json|pyproject|docker\w*|kubernetes|request\w*|promise|foreach|petl\w*|kod\w* (?:w|pythona|programu)|program\w* (?:w|czasem)|raspberry|gpio|wordpress|wtyczk\w*|scheduler\w*|modul\w* (?:w|pdf)|merge|powiesc\w*|powiesci|opowiadani\w*|bohater\w*|scen\w* (?:procesu|w|z)|rozdzial\w*|gracz\w*|grze\b|gry (?:planszow|komputer)|planszow\w*|rpg|rzuty? kosc\w*|piosenk\w*|refren\w*|rym\w*|wiersz\w*|teatr\w*|aktorsk\w*|zuch\w*|harcer\w*|przepis\w* na (?!podstaw)|sernik\w*|piekarnik\w*|ugotowa\w*|rosol\w*|jogurt\w*|pizz\w*|drozdz\w*|fermentac\w*|newton\w*|archimedes\w*|coulomb\w*|fizyk\w*|dynamiki|matematyczn\w*|pierwiast\w*|liczb\w* pierwsz\w*|niewymiern\w*|indukcj\w*|elastycznosc\w*|popytu|trener\w*|zawodnik\w*|druzyn\w*|spalon\w*|ligi\b|treningow\w*|plywa\w*|roslin\w*|jablon\w*|pomidor\w*|szklarni\w*|fikus\w*|wkretark\w*|poziomic\w*|zawias\w*|syfon\w*|placu manewrow\w*|parkowani\w* rownoleg\w*|zabaw\w* w sad|repozytori\w* (?:na )?git\w*|egzamin\w* praktyczn\w*|smut\w*|psychoterapi\w*|etf|fundusz\w* indeksow\w*|nocleg\w*|szlak\w*|lewad\w*|warcab\w*|chorze\b|wiedzmin\w*|szach\w*|unity|javie|dysk\w* ssd|linux\w*|gitlab\w*|kanban\w*|scrum\w*|retrospektyw\w*|termodynamik\w*|ohma|jadlospis\w*|refluks\w*|behawiorys\w*|debat\w*|gr\w* slow|kawiarni\w*|ishikaw\w*|amortyzator\w*|wahacz\w*|sprzegl\w*|kursant\w*)/u;
 // Citations: an article or a section, a case number, a Dz.U. reference.
 const CITATION = /\bart\.?\s*\d|§\s*\d|\bsygn\.?|\bdz\.?\s?u\.?|\b[ivx]+\s+[a-z]{1,4}\s+\d+\/\d{2}\b/iu;
 function hasLegalSignal(text, flash) {
     if (!text.trim())
         return false;
     const folded = fold(provisionsForDetection(text));
+    if (NONLEGAL_TOPIC.test(folded)) {
+        return CITATION.test(text) || STRONG_LEGAL.test(folded) || RIGHTS_QUESTION.test(folded) || (!FICTION.test(folded) && criminalMatter(text));
+    }
     return (CITATION.test(text) ||
         LEGAL_LEXICON.test(folded) ||
         LEGAL_INTENT.test(folded) ||
@@ -86,7 +115,8 @@ export function isNonLegalMessage(query, flash) {
     // A question opening the message, or the closing request of a story ("Mam psa, który
     // tyje. ... Ułóż mi plan diety.") (benchmark 2026-10-10, 1000 kazusów).
     const opening = (text) => GENERAL_REQUEST.test(fold(text.trim()).replace(OPENING, ""));
-    if (!opening(latest) && !opening(requestOf(latest)))
+    const lastSentence = latest.trim().split(/(?<=[.!?])\s+/u).pop() ?? "";
+    if (!opening(latest) && !opening(requestOf(latest)) && !(NONLEGAL_TOPIC.test(fold(latest)) && opening(lastSentence)))
         return false;
     if (hasLegalSignal(latest, flash))
         return false;

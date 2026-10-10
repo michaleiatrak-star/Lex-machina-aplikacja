@@ -369,6 +369,9 @@ const FOREIGN_ELEMENT = new RegExp(
   "u"
 );
 
+const CONFLICT_QUESTION =
+  /(?<![a-z])(?:praw\w* (?:ktorego|jakiego) (?:kraju|panstwa)|(?:wedlug|wg|na podstawie) (?:jakiego|ktorego) prawa|jakie prawo (?:bedzie |jest |sie )?(?:stosowan|wlasciw|zastosowan)|prawo\w* wlasciw\w*|(?:ktory|jaki) sad (?:bedzie |jest )?wlasciw|przed (?:ktorym|jakim) sadem|w (?:ktorym|jakim) kraju|jurysdykcj\w*|uznani\w* (?:wyroku|orzeczeni|rozwodu)|wykonani\w* (?:jego |tego )?(?:w polsce|wyroku|orzeczeni)|europejsk\w* (?:postepowani\w* w sprawie drobnych|nakaz\w* zaplaty|poswiadczeni\w* spadkow)|uprowadz\w*|konwencj\w* haask\w*|ekstradyc\w*|wybor\w* prawa|arbitraz\w*|skarg\w* (?:do etpc|miedzynarodow)|odzyskac (?:corke|syna|dziecko)|dziecko? (?:wrocil|wrocila) do polski|corka wrocila|syn wrocil)/u;
+
 // "Dania" (kraj) bez polskich znaków to też "dania" (potrawy): kraj tylko w formach
 // jednoznacznych ("Danię", "Danią") albo wielką literą wewnątrz zdania.
 const DENMARK_FORMS = /(?<![\p{L}])dani[ęą](?![\p{L}])/iu;
@@ -418,12 +421,17 @@ function withForeignElement(
   limit: number
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[]; weight: number }> {
   const international = [...registry.skills.keys()].find((name) => name.startsWith("dr-14-"));
-  if (!international || !foreignElement(text) || ranked.slice(0, limit).some((row) => row.skill === international)) return ranked;
+  if (!international || !foreignElement(text)) return ranked;
+  // The question is the conflict itself (which law, which court, a foreign judgment, a child
+  // taken abroad): DR-14 first, the matter second (benchmark series 3, 2026-10-10).
+  const conflict = CONFLICT_QUESTION.test(fold(text));
+  if (!conflict && ranked.slice(0, limit).some((row) => row.skill === international)) return ranked;
   const own = ranked.find((row) => row.skill === international);
   const marked = { ...(own ?? { skill: international, matched: [], modules: suggestDomainModules(registry, international, text), weight: 0 }) };
-  marked.matched = ["element zagraniczny (jurysdykcja, prawo właściwe)", ...marked.matched];
+  if (!own) marked.matched = ["element zagraniczny (jurysdykcja, prawo właściwe)", ...marked.matched];
   const others = ranked.filter((row) => row.skill !== international);
-  if (others.length) return [others[0]!, marked, ...others.slice(1)];
+  if (others.length) return conflict ? [marked, ...others] : [others[0]!, marked, ...others.slice(1)];
+  if (own) return ranked;
   return marked.modules.length ? [marked] : [];
 }
 

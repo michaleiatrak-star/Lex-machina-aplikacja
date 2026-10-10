@@ -84,7 +84,21 @@ const LAY_CRIMINAL_WORDS = new RegExp("(?<![\\p{L}])(?:" +
         "(?:z)?wyzywa(?:ł|ła|li)\\p{L}*",
         "niealimentacj\\p{L}*",
         // "Co grozi za jazdę bez OC?": a question about the penalty.
-        "co\\s+(?:mi\\s+|mu\\s+|jej\\s+|nam\\s+|im\\s+)?grozi\\s+za"
+        "co\\s+(?:mi\\s+|mu\\s+|jej\\s+|nam\\s+|im\\s+)?grozi\\s+za",
+        // Series 3 (2026-10-10): offences and criminal proceedings told without the words above.
+        "pozbawieni\\p{L}*\\s+wolności",
+        "przedterminow\\p{L}*\\s+zwolnieni\\p{L}*",
+        "proces\\p{L}*\\s+karn\\p{L}*",
+        "dopisuj\\p{L}*\\s+głos\\p{L}*",
+        "kop(?:ie|ał|ała|nął|nęła)\\s+(?:mnie|leżąc\\p{L}*)",
+        "molestow\\p{L}*",
+        "rzucił\\p{L}*\\s+we\\s+mnie",
+        "(?<!pod\\s+)groźb(?:ami|y|ą|a)(?!\\s+(?:utraty|wypowiedzenia|zwolnienia|kary\\s+umownej))",
+        "(?<!nie\\s+(?:był\\p{L}*\\s+)?)pijan(?:y|a|ego|ym|i)",
+        "wynosił\\p{L}*\\s+(?:gotówkę|pieniądze|towar)\\p{L}*",
+        "zawyżan\\p{L}*\\s+faktur\\p{L}*",
+        "zawiadomi\\p{L}*\\s+(?:na\\s+policję|policj\\p{L}*|do\\s+prokuratur\\p{L}*|o\\s+nękaniu)",
+        "km/h\\s+za\\s+szybko"
     ].join("|") +
     ")(?![\\p{L}])", "iu");
 // Messages are often typed without Polish letters ("pobil mnie sasiad"): the same

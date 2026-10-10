@@ -74,6 +74,25 @@ describe("legal gate of a chat turn", () => {
     expect(isNonLegalMessage(question, flash)).toBe(false);
   });
 
+  // Series 3 (2026-10-10): legal words in a plainly non-legal topic, and the reverse.
+  it.each([
+    "Mam w Pythonie listę słowników i chcę ją posortować po polu 'data' malejąco. Jak to zrobić jedną linijką?",
+    "Mój bohater w powieści kryminalnej jest jedynym świadkiem zbrodni i milczy. Jak pokazać jego wewnętrzny konflikt?",
+    "Jak wytłumaczyć uczniom drugie prawo termodynamiki na przykładzie stygnącej herbaty?",
+    "W Bashu mam skrypt, który przerywa egzekucję po pierwszym błędzie przez set -e. Jak to obejść?"
+  ])("non-legal despite legal words: %s", (question) => {
+    expect(isNonLegalMessage(question, flash)).toBe(true);
+  });
+
+  it.each([
+    "Mam zrzuty ekranu, na których były wspólnik publikuje nasz kod źródłowy na GitHubie. Jak zabezpieczyć te dowody, żeby sąd je uznał?",
+    "Plan miejscowy przewiduje drogę przez mój ogród. Gdzie się zwrócić?",
+    "Czy mogę wykorzystać fragment piosenki w reklamie?",
+    "Klub sportowy nie wypłaca kontraktu zawodnikowi. Co mogę zrobić?"
+  ])("legal despite a non-legal topic: %s", (question) => {
+    expect(isNonLegalMessage(question, flash)).toBe(false);
+  });
+
   it("a follow-up of a legal thread stays legal", () => {
     expect(isNonLegalMessage("Użytkownik: Pracodawca zwolnił mnie dyscyplinarnie.\n\nAsystent: Kiedy?\n\nUżytkownik: jak to policzyć?", flash)).toBe(false);
   });

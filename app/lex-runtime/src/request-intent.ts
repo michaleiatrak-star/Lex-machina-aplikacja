@@ -81,7 +81,7 @@ const INTENTS: Intent[] = [
     primary: "przesluchanie-swiadkow-v2-min90",
     reason: "pytania do świadka lub biegłego (router [8])",
     pattern:
-      /(?<![a-z])(?:pyta\w*(?: [^.?!]{0,40}?)? (?:do|dla) (?:swiad\w*|bieglego|biegl\w*|tych |tego |tej |niego|niej|nich|sasiad\w*|kolegi|policjant\w*|funkcjonariusz\w*|pana |pani )|pyta\w*,? (?:ktore|jakie) (?:powinien\w*|powinnam|mam|moge|musze) (?:mu|jej|im)|(?:do|na|przed) przesluchani\w*|przesluchac (?:swiadk|bieglego))/u
+      /(?<![a-z])(?:pyta\w*(?: [^.?!]{0,40}?)? (?:do|dla) (?:swiad\w*|bieglego|biegl\w*|tych |tego |tej |niego|niej|nich|sasiad\w*|kolegi|policjant\w*|funkcjonariusz\w*|pana |pani )|pyta\w*,? (?:ktore|jakie) (?:powinien\w*|powinnam|mam|moge|musze) (?:mu|jej|im)|(?:do|na|przed) przesluchani\w*|przesluchac (?:swiadk|bieglego)|(?:przygotuj|przygotowa\w*|uloz|ulozy\w*|napisz|sporzadz)\w*(?: [^.?!]{0,20}?)? pyta\w* (?:do |dla |glown|kontroln|otwart|krzyzow|zadawan|ktore (?:pokaz|wykaz|ujawni|podwaz)))/u
   },
   {
     primary: "chronologia-sprawy-v1",
@@ -95,10 +95,16 @@ const INTENTS: Intent[] = [
       /^(?![\s\S]*dowod)[\s\S]*?(?<![a-z])(?:(?:przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj|przeczytaj|analiz)\w*(?: [^.?!]{0,40}?)? (?:umow|porozumieni|ugod|regulamin|owu|aneks|klauzul|zapis|warunk|projekt umowy|kontrakt)\w*|czy (?:moge|mozna|powinien\w*|powinnam|mamy|warto) (?:to |ja |je |go |ten |te )?(?:bezpiecznie |spokojnie )?podpisac|przed podpisaniem|co (?:renegocjowac|zmienic w umowie))/u
   },
   {
+    primary: "analizator-umow-v1",
+    reason: "projekt umowy, regulaminu lub procedury (router [1])",
+    pattern:
+      /(?<![a-z])(?:(?:napisz|przygotuj|sporzadz|zredaguj|potrzebuj|przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj)\w*(?: (?:mi|nam|prosze|projekt\w*|wzor\w*|now\w*|nasz\w*|wewnetrzn\w*|kompletn\w*|ten|ta|te|tego|tej|przeglad|tych)){0,3} (?:umow|polityk|procedur|regulamin|kodeks\w* etyki|aneks)\w*|(?:umow|polityk|procedur|regulamin)\w*[^?!]{0,120}?(?:napisz|przygotuj|sporzadz|zredaguj)\w*(?: mi| nam| prosze)? (?:ja|je|go)(?![a-z]))/u
+  },
+  {
     primary: "analiza-sadowa-v6",
     reason: "analiza orzeczenia, które użytkownik ma (router [2])",
     pattern: new RegExp(
-      `(?<![a-z])(?:przeanalizuj\\w*|przejrz\\w*|ocen\\w*|analiz\\w*|sprawdz\\w*|omow\\w*)${NEAR}(?:ten |tego |to |te |moj\\w* |otrzyman\\w* )?(?:wyrok\\w*|postanowieni\\w*|orzeczeni\\w*|uzasadnieni\\w*)|czy sad (?:dobrze|slusznie|prawidlowo|mial racje)`,
+      `(?<![a-z])(?:przeanalizuj\\w*|przejrz\\w*|ocen\\w*|analiz\\w*|sprawdz\\w*|omow\\w*)${NEAR}(?:ten |tego |to |te |moj\\w* |otrzyman\\w* )?(?:wyrok\\w*|postanowieni\\w*|orzeczeni\\w*|uzasadnieni\\w*|rozstrzygnieci\\w* nadzorcz\\w*)|(?:wyrok|postanowieni|orzeczeni|decyzj|rozstrzygnieci)\\w*[^?!]{0,80}?(?:przeanalizuj|ocen)\\w*(?: prosze)? (?:je|go|ja)(?![a-z])|czy sad (?:dobrze|slusznie|prawidlowo|mial racje)`,
       "u"
     )
   },
@@ -111,30 +117,30 @@ const INTENTS: Intent[] = [
     primary: "analiza-sadowa-v6",
     reason: "ocena szans (router [2])",
     pattern:
-      /(?<![a-z])(?:szans\w*|czy (?:w ogole |wiec |naprawde |realnie )?(?:warto|jest sens|ma sens|oplaca sie|oplaci sie)(?: [^.?!]{0,40}?)? (?:sad\w*|pozw\w*|pozyw\w*|apel\w*|odwol\w*|zaskarz\w*|skarg\w*|proces\w*|walcz\w*|wnos\w*|sklada\w*|odrzuc\w*)|ile (?:realnie |mniej wiecej )?(?:moge|mozemy|mozna|moglbym|moglabym) (?:wywalczyc|uzyskac|dostac|odzyskac|wygrac)|czy (?:mam|mamy|klient ma) (?:jakas |jakiekolwiek |realne )?(?:szans|podstaw)\w*)/u
+      /(?<![a-z])(?:(?<!czy jest )(?<!czy jest jakas )(?<!czy jest jakakolwiek )szans\w*(?! zdac| na lagodniejsz)|czy (?:w ogole |wiec |naprawde |realnie )?(?:warto|jest sens|ma sens|oplaca sie|oplaci sie)(?: [^.?!]{0,40}?)? (?:sad\w*|pozw\w*|pozyw\w*|apel\w*|odwol\w*|zaskarz\w*|skarg\w*|proces\w*|walcz\w*|wnos\w*|sklada\w*|odrzuc\w*)|ile (?:realnie |mniej wiecej )?(?:moge|mozemy|mozna|moglbym|moglabym) (?:wywalczyc|uzyskac|dostac|odzyskac|wygrac)|czy (?:mam|mamy|klient ma) (?:jakas |jakiekolwiek |realne )?(?:szans|podstaw)\w*|slab\w* (?:punkt|stron)\w*|strategi\w*|czy (?:ta |moja |nasza )?(?:walka|sprawa|odwolanie|skarga)(?: [^.?!]{0,40}?)? ma sens|(?:calosciow|kompleksow)\w* ocen\w*|ocen\w* (?:prosze )?(?:cala |nasza |moja )?sytuacj\w*)/u
   },
   {
     primary: "analizator-dowodow-v3",
     reason: "termin procesowy albo ocena dowodu (router [6])",
     pattern:
-      /(?<![a-z])(?:(?:policz|oblicz)\w*(?: [^.?!]{0,40}?)? (?:termin\w*|do kiedy|kiedy (?:uplywa|mija))|do kiedy (?:dokladnie )?(?:mam|mamy|trzeba|moge|mozna|musze|nalezy)|od (?:ktorej|jakiej) daty (?:liczy|biegnie)|kiedy (?:dokladnie )?(?:uplywa|mija) termin|(?:dowod\w*|moc dowodow\w*|wartosc dowodow\w*|przed sadem|w sadzie)(?: [^.?!]{0,30}?)? (?:sie licz|wystarcz|maja wartosc|sa wazn|beda wazn)|czy (?:te |ten |to |moje |nasze |takie )?(?:[a-z-]+ ){0,4}(?:moga byc|beda|sa|jest|bedzie|stanowi\w*|moze byc) (?:dowod|wystarczajac)|ocen\w*(?: [^.?!]{0,30}?)? dowod\w*|(?:wiadomosci|nagrani|zdjeci|sms|maile?)\w*(?: [^.?!]{0,40}?)? (?:sie licz|dowod))/u
+      /(?<![a-z])(?:(?:policz|oblicz)\w*(?: [^.?!]{0,40}?)? (?:termin\w*|do kiedy|kiedy (?:uplywa|mija))|do kiedy (?:dokladnie )?(?:mam|mamy|trzeba|moge|mozna|musze|nalezy)|od (?:ktorej|jakiej) daty (?:liczy|biegnie)|kiedy (?:dokladnie )?(?:uplywa|mija) termin|(?:dowod\w*|moc dowodow\w*|wartosc dowodow\w*|przed sadem|w sadzie)(?: [^.?!]{0,30}?)? (?:sie licz|wystarcz|maja wartosc|sa wazn|beda wazn)|czy (?:te |ten |to |moje |nasze |takie )?(?:[a-z-]+ ){0,4}(?:moga byc|beda|sa|jest|bedzie|stanowi\w*|moze byc) (?:dowod|wystarczajac)|ocen\w*(?: [^.?!]{0,30}?)? (?:dowod|dokument)\w*|zabezpiecz\w*(?: [^.?!]{0,20}?)? dowod\w*|czy (?:to|te|takie [a-z]+) (?:wystarczy|wystarcza|wystarcza)(?: [^.?!]{0,10}?)? (?:w sadzie|przed sadem|zeby|aby|jako|zamiast)|(?:wiadomosci|nagrani|zdjeci|sms|maile?)\w*(?: [^.?!]{0,40}?)? (?:sie licz|dowod))/u
   },
   {
     primary: "analizator-przepisow-v2",
     reason: "analiza przepisu (router [9], [11])",
     pattern:
-      /(?<![a-z])(?:(?:wyjasnij|wytlumacz|omow|przeanalizuj|rozloz)\w*(?: [^.?!]{0,40}?)? (?:przepis|art\.|artykul|pojeci|definicj)\w*|co (?:dokladnie |wlasciwie )?(?:mowi|oznacza|znaczy|stanowi) (?:ten |ta |to |te )?(?:przepis|art|artykul|pojecie|termin|ustawa|konstytucja)\w*|przeslank\w*|wykladni\w*|przytoczon\w*|powolan\w* (?:prawidlowo|dobrze|poprawnie)|czy (?:te |ten )?przepis\w*(?: [^.?!]{0,30}?)? (?:prawidlowo|dobrze|poprawnie|sie zgadzaj))/u
-  },
-  {
-    primary: "raport-sytuacyjny-v2",
-    reason: "raport sytuacyjny (ACTIVATION-MATRIX)",
-    pattern: /(?<![a-z])(?:raport\w* sytuacyjn\w*|(?:raport|podsumowani|informacj|zestawieni)\w*(?: [^.?!]{0,40}?)? dla (?:zarzadu|rady nadzorczej|komitetu|wspolnikow|walnego))/u
+      /(?<![a-z])(?:(?:wyjasnij|wyjasnic|wyjasnieni\w*|wytlumacz|omow|przeanalizuj|rozloz)\w*(?: [^.?!]{0,40}?)? (?:przepis|art\.|artykul|pojeci|definicj)\w*|(?:^|[.!?] )(?:wyjasnij|wytlumacz|omow)(?![a-z])(?! (?:mi )?(?:moja|nasza|cala )?sytuacj)|co (?:dokladnie |wlasciwie )?(?:mowi|oznacza|znaczy|stanowi) (?:ten |ta |to |te )?(?:przepis|art|artykul|pojecie|termin|ustawa|konstytucja)\w*|przeslank\w*|wykladni\w*|przytoczon\w*|powolan\w* (?:prawidlowo|dobrze|poprawnie)|czy (?:te |ten )?przepis\w*(?: [^.?!]{0,30}?)? (?:prawidlowo|dobrze|poprawnie|sie zgadzaj))/u
   },
   {
     primary: "raport-klienta-v1",
     reason: "raport dla klienta (ACTIVATION-MATRIX)",
     pattern:
-      /(?<![a-z])(?:(?:raport|informacj|podsumowani|notatk)\w*(?: [^.?!]{0,50}?)? dla (?:klient\w*|mocodawc\w*|niego|niej|nich|prezesa)|dla (?:klient\w*|mocodawc\w*|niego|niej|nich)(?: [^.?!]{0,40}?)? (?:raport|podsumowani|informacj)\w*|(?:czytelne|przystepne|zrozumiale) podsumowani\w*)/u
+      /(?<![a-z])(?:(?:raport|informacj|podsumowani|notatk)\w*(?: [^.?!]{0,50}?)? dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|prezesa)|dla (?:(?:moj|nasz|tego|tej)\w* )?(?:klient\w*|mocodawc\w*|niego|niej|nich|mamy|taty|rodzicow)(?: [^.?!]{0,40}?)? (?:raport|podsumowani|informacj)\w*|(?:czytelne|przystepne|zrozumiale) podsumowani\w*|raport\w*(?: [^.?!]{0,40}?)? prostym jezykiem|prost\w* (?:zrozumial\w* )?raport\w*)/u
+  },
+  {
+    primary: "raport-sytuacyjny-v2",
+    reason: "raport sytuacyjny (ACTIVATION-MATRIX)",
+    pattern: /(?<![a-z])(?:raport\w* sytuacyjn\w*|(?:raport|podsumowani|informacj|zestawieni)\w*(?: [^.?!]{0,40}?)? dla (?:zarzadu|rady nadzorczej|komitetu|wspolnikow|walnego))/u
   },
   {
     primary: "pisma-proste-v2",
@@ -145,7 +151,7 @@ const INTENTS: Intent[] = [
     primary: "przewodnik-prawny-v2",
     reason: "użytkownik nie wie, od czego zacząć (router [7])",
     pattern:
-      /(?<![a-z])(?:od czego (?:mam |mamy |powinien\w* )?zacz\w*|co (?:mam|mamy|powinien\w*|powinnam|powinnismy|nalezy|musze|musimy) (?:teraz |dalej |po kolei |najpierw |w tej sytuacji |w ogole |z tym )*(?:zrobic|robic)|krok po kroku|co (?:teraz |dalej )?(?:robic|zrobic)\??$|jakie (?:kroki|sa kroki)|nie wiem,? (?:co|od czego|do kogo|gdzie|jak) )/u
+      /(?<![a-z])(?:od czego (?:mam |mamy |powinien\w* |powinn\w* )?zacz\w*|co (?:mam|mamy|powinien\w*|powinn\w*|nalezy|musze|musimy) (?:teraz |dalej |po kolei |najpierw |w tej sytuacji |w ogole |z tym )*(?:zrobic|robic)|krok po kroku|co (?:teraz |dalej )?(?:robic|zrobic)\??$|jakie (?:kroki|sa kroki)|nie wiem,? (?:co (?:mam|robic|zrobic|dalej)|od czego|do kogo (?:sie )?(?:zwrocic|udac|isc)|gdzie (?:sie )?(?:zglosic|udac|zwrocic|isc)|jak (?:sie )?(?:do tego zabrac|postapic)))/u
   }
 ];
 
@@ -157,7 +163,7 @@ const CASE_LAW_SEARCH =
 
 /** The executive skill a closing request names unambiguously, or null. */
 export function requestIntent(request: string, known: (skill: string) => boolean): { primary: string; reason: string } | null {
-  const text = fold(request);
+  const text = fold(request).replace(/\s*[,:;]\s*/gu, " ");
   if (CASE_LAW_SEARCH.test(text) && !new RegExp(`(?<![a-z])${DRAFT_VERB}`, "u").test(text)) return null;
   // "Jak napisać apelację?" asks how, it does not ask for the letter (a simple answer).
   const howTo = HOW_TO_DRAFT.test(text);
