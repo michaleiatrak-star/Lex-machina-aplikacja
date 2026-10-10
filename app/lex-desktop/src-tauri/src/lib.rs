@@ -46,6 +46,17 @@ fn valid_workspace_open_token(token: &str) -> bool {
     })
 }
 
+// Katalog stagingu aktualizacji jak w runtime (os.tmpdir(): najpierw TEMP) i runnerze
+// ($env:TEMP). env::temp_dir() czyta najpierw TMP, więc przy różnych TMP i TEMP
+// paragon nie był znajdowany (APPLICATION_UPDATE_RECEIPT_MISSING).
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn update_staging_root(temp: Option<std::ffi::OsString>) -> PathBuf {
+    temp.filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(env::temp_dir)
+        .join("LexMachinaUpdate")
+}
+
 fn valid_update_receipt_token(token: &str) -> bool {
     if token.len() < 16
         || token.len() > 180
@@ -343,8 +354,7 @@ fn install_application_update(
             return Err("APPLICATION_UPDATE_RUNNER_MISSING".to_string());
         }
 
-        let receipt = env::temp_dir()
-            .join("LexMachinaUpdate")
+        let receipt = update_staging_root(env::var_os("TEMP"))
             .join(&receipt_token);
         if !receipt.is_file() {
             return Err("APPLICATION_UPDATE_RECEIPT_MISSING".to_string());
@@ -465,9 +475,27 @@ mod tests {
         cookie_header,
         is_allowed_external_url,
         is_sn_url,
+        update_staging_root,
         valid_update_receipt_token,
         valid_workspace_open_token,
     };
+
+    #[test]
+    fn update_staging_root_prefers_temp_like_runtime_and_runner() {
+        let temp = std::env::temp_dir().join("lex-temp-variable");
+        assert_eq!(
+            update_staging_root(Some(temp.clone().into_os_string())),
+            temp.join("LexMachinaUpdate")
+        );
+        assert_eq!(
+            update_staging_root(Some(std::ffi::OsString::new())),
+            std::env::temp_dir().join("LexMachinaUpdate")
+        );
+        assert_eq!(
+            update_staging_root(None),
+            std::env::temp_dir().join("LexMachinaUpdate")
+        );
+    }
 
     #[cfg(unix)]
     #[test]
