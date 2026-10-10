@@ -313,19 +313,24 @@ const FOREIGN_ELEMENT = new RegExp(
   "(?<![a-z])(?:" +
     [
       "za granic", "zagraniczn", "z zagranicy", "transgraniczn", "miedzynarodow", "panstw(?:a|ie|em|o|ach) trzeci", "konsul(?:a|em|owi|ie|at|atu|acie)?\\b", "azj(?:a|i|ii)\\b", "azjatyck",
-      "niemc", "niemiec", "franc", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
-      "belgi", "austri", "szwajcar", "szwec", "szwedz", "dani[ia]\\b", "dunsk", "finlandi", "czech", "czesk", "slowac", "wegr", "wegier",
+      "niemc", "niemiec", "francj", "francusk", "we wloszech", "wloch(?:y|ow|ami)?\\b", "wlosk(?:i|a|ie|iego|iej|im)\\b(?! orzech| kapust| koper)", "hiszpan", "portugal", "irland", "norweg", "norwe", "holand", "niderland",
+      "belgi", "austri", "szwajcar", "szwec", "szwedz", "danii\\b", "dunsk", "finlandi", "czech(?:y|ach|ami|om)?\\b", "czesk", "slowac", "wegr", "wegier",
       "litw", "lotw", "estoni", "ukrain", "bialorus", "rosj", "rosyjsk", "rumuni", "bulgar", "grecj", "greck", "chorwac",
       "wielkiej brytanii", "wielka brytani", "brytyjsk", "anglii\\b", "angli[ia]\\b", "szkocj", "stanach zjednoczonych", "usa\\b", "amerykansk",
       "kanad", "australi", "chin(?:y|ach|ami)?\\b", "chinsk", "japoni", "indii\\b", "indyjsk", "turcj", "tureck", "izrael",
-      "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "praga", "pradze", "wilni", "kijow"
+      "strasburg", "luksemburg", "monachium", "berlin", "londyn", "paryz", "wiedni", "w pradze\\b", "wilni", "kijow"
     ].join("|") +
     ")",
   "u"
 );
 
+// "Dania" (kraj) bez polskich znaków to też "dania" (potrawy): kraj tylko w formach
+// jednoznacznych ("Danię", "Danią") albo wielką literą wewnątrz zdania.
+const DENMARK_FORMS = /(?<![\p{L}])dani[ęą](?![\p{L}])/iu;
+const DENMARK_NAME = /(?<=[\p{Ll}\d,;:]\s{1,3})Dania(?![\p{L}])/u;
+
 export function foreignElement(text: string): boolean {
-  return FOREIGN_ELEMENT.test(fold(text));
+  return FOREIGN_ELEMENT.test(fold(text)) || DENMARK_FORMS.test(text) || DENMARK_NAME.test(text);
 }
 
 export function rankDomains(
