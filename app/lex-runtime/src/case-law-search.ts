@@ -64,8 +64,8 @@ const MAX_CBOSA_TRANSPORT_ATTEMPTS = 3;
 
 const USER_AGENT =
   "Lex-Machina/0.1 (+local legal research runtime)";
-const CBOSA_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+// Bez podszywania się pod przeglądarkę (shared/DOSTEP-MASZYNOWY-API.md §0).
+const CBOSA_USER_AGENT = USER_AGENT;
 
 function clampLimit(
   value: number | undefined
