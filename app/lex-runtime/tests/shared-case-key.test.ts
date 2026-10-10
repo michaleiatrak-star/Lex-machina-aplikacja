@@ -108,6 +108,39 @@ describe("one anonymization key per case", () => {
     expect(new PseudonymizationVault(after!.snapshot).hasToken("[PII:CUSTOM:0001]")).toBe(true);
   });
 
+  it("deleting a document removes from the shared key the entries no other document uses", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-shared-key-"));
+    roots.push(root);
+    const key = randomBytes(32);
+    const store = new EncryptedPrivacyVaultStore({ rootDir: root });
+    const docs = documents();
+    const current = service(store, docs);
+    const security = { caseId: CASE_ID, caseDataKey: key, keyVersion: 1 };
+
+    const first = await processText(current, "Jan Kowalski jest pozwanym.", ["Jan Kowalski"], key);
+    const witness = await processText(current, "Świadek Ewa Lis widziała Jan Kowalski.", ["Ewa Lis", "Jan Kowalski"], key);
+    const remainingText = async (ids: string[]) =>
+      Promise.all(ids.map(async (documentId) => JSON.stringify(await docs.loadProtected({ documentId }))));
+
+    await store.deleteDocumentVault({ ...security, documentId: witness.documentId, remainingText });
+    const after = await current.sharedKeyState(security);
+    const values = after!.snapshot.tokens.map((token) => token.value).join("|");
+    expect(values).toContain("Jan Kowalski");
+    expect(values).not.toContain("Ewa Lis");
+    expect([...after!.members]).toEqual([first.documentId]);
+    // The member's own copy is pruned too; the number is not reused.
+    const own = await store.loadDocumentVault({ ...security, documentId: first.documentId });
+    expect(own.snapshot().tokens.some((token) => token.value === "Ewa Lis")).toBe(false);
+    expect(own.snapshot().counters.PERSON).toBe(2);
+
+    // An unreadable member keeps the whole key; the last member removes it.
+    const third = await processText(current, "Ewa Lis zeznała.", ["Ewa Lis"], key);
+    await store.deleteDocumentVault({ ...security, documentId: third.documentId, remainingText: async () => null });
+    expect((await current.sharedKeyState(security))!.snapshot.tokens.some((token) => token.value === "Ewa Lis")).toBe(true);
+    await store.deleteDocumentVault({ ...security, documentId: first.documentId, remainingText });
+    expect(await current.sharedKeyState(security)).toBeNull();
+  });
+
   it("gives shared-key documents one alias per token in document generation", () => {
     const vault = new PseudonymizationVault();
     vault.getOrCreate("PESEL", "44051401359");

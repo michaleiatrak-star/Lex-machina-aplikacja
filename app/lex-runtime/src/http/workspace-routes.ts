@@ -33,6 +33,7 @@ import type { SecureCaseUploadStore } from "../case-secure-store.js";
 import type { LocalSharedTemplateStore } from "../shared-template-store.js";
 import type { EncryptedPrivacyVaultStore } from "../privacy/vault-store.js";
 import type { LocalPrivateDocumentService } from "../document-service.js";
+import type { SecureCaseDocumentStore } from "../case-document-store.js";
 import type { SecureCaseArtifactStore } from "../case-artifact-store.js";
 import {
   documentIdFromSha256,
@@ -254,6 +255,9 @@ export function registerWorkspaceRoutes(
       LocalPrivateDocumentService,
       "forget"
     >;
+    // Zanonimizowane wersje pozostałych dokumentów: z nich wiadomo, które
+    // wpisy wspólnego klucza sprawy są jeszcze używane po usunięciu dokumentu.
+    protectedDocuments?: Pick<SecureCaseDocumentStore, "loadProtected">;
     workspace: EncryptedCaseWorkspaceStore;
     rootDir: string;
     officeEditor?: Pick<LocalOfficeEditor, "read" | "write">;
@@ -1808,11 +1812,34 @@ export function registerWorkspaceRoutes(
               )
             ];
             for (const documentId of documentIds) {
+              const protectedDocuments = dependencies.protectedDocuments;
               await dependencies.privacyVaults.deleteDocumentVault({
                 caseId,
                 documentId,
                 caseDataKey,
-                keyVersion: data.caseView.keyVersion
+                keyVersion: data.caseView.keyVersion,
+                ...(protectedDocuments
+                  ? {
+                      remainingText: async (memberIds: string[]) => {
+                        const texts: string[] = [];
+                        for (const memberId of memberIds) {
+                          try {
+                            const ingestion = await protectedDocuments.loadProtected({
+                              caseId,
+                              documentId: memberId,
+                              caseDataKey,
+                              keyVersion: data.caseView.keyVersion
+                            });
+                            texts.push(JSON.stringify(ingestion));
+                          } catch {
+                            // Nieczytelny dokument: nie wiadomo, czego używa, klucz zostaje.
+                            return null;
+                          }
+                        }
+                        return texts;
+                      }
+                    }
+                  : {})
               });
               await purgeSecureCaseDocument({
                 rootDir: dependencies.rootDir,

@@ -764,6 +764,8 @@ export async function startLocalServer(options?: {
       privacyVaults:
         privacyVaultStore,
       documentService,
+      protectedDocuments:
+        secureCaseDocumentStore,
       workspace:
         workspaceStore,
       rootDir:
