@@ -199,8 +199,7 @@ impl RuntimeBridge {
         let address = match rx.recv_timeout(Duration::from_secs(60)) {
             Ok(address) => address,
             Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_runtime_tree(&mut child);
                 return Err("DESKTOP_RUNTIME_START_TIMEOUT".to_string());
             }
         };
@@ -239,14 +238,7 @@ impl RuntimeBridge {
 
         if let Some(mut child) = state.child.take() {
             #[cfg(target_os = "windows")]
-            {
-                let pid = child.id().to_string();
-                let _ = Command::new("taskkill.exe")
-                    .args(["/PID", &pid, "/T", "/F"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            }
+            kill_runtime_tree(&mut child);
 
             #[cfg(not(target_os = "windows"))]
             {
@@ -839,6 +831,26 @@ impl RuntimeBridge {
     }
 }
 
+// Windows: sidecar uruchamia node jako własne dziecko, a Child::kill kończy tylko
+// sidecar; node zostawał wtedy osierocony i blokował pliki instalacji (kopia
+// zapasowa aktualizacji, deinstalacja). taskkill /T kończy całe drzewo.
+fn kill_runtime_tree(child: &mut Child) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let pid = child.id().to_string();
+        let _ = Command::new("taskkill.exe")
+            .args(["/PID", &pid, "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 impl Drop for RuntimeBridge {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.lock() {
@@ -853,8 +865,7 @@ impl Drop for RuntimeBridge {
             }
             unsafe_zero_string(&mut state.bootstrap_token);
             if let Some(child) = state.child.as_mut() {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_runtime_tree(child);
             }
         }
     }
