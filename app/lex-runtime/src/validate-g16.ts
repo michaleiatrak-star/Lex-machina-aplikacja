@@ -256,7 +256,8 @@ function executor(
           }
         }
       ),
-    () => "2026-09-15T18:30:00.000Z"
+    // Bieżący czas: I-D2 odrzuca sprawdzenie ELI starsze niż 7 dni.
+    () => new Date().toISOString()
   );
 
   return new SafeSessionExecutor(
@@ -271,7 +272,7 @@ function executor(
         new TemporalSourceFreshnessChecker(
           g16FreshnessFetcher,
           () =>
-            "2026-09-15T18:30:00.000Z"
+            new Date().toISOString()
         )
       )
   );
