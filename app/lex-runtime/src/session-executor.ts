@@ -825,6 +825,12 @@ export type SessionExecutionInternalState = {
 export const SESSION_EXECUTION_INTERNAL =
   Symbol("LEX_SESSION_EXECUTION_INTERNAL");
 
+/** CHAT_PRIVACY_GATE_FAILED with the cause (recognizer codes, never the text) for diagnostics. */
+export function privacyGateFailure(error: unknown): Error & { reason?: string } {
+  const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 400);
+  return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
+}
+
 export type SessionExecutionResponse = {
   sessionId: string;
   status: "DRAFT_PRESENTABLE" | "BLOCKED";
@@ -1484,10 +1490,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               request.query
             )
         ).text;
-    } catch {
-      throw new Error(
-        "CHAT_PRIVACY_GATE_FAILED"
-      );
+    } catch (error) {
+      throw privacyGateFailure(error);
     }
 
     const routed =
@@ -1705,9 +1709,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             "PRIVACY_GATE"
         }
       );
-      throw new Error(
-        "CHAT_PRIVACY_GATE_FAILED"
-      );
+      throw privacyGateFailure(error);
     }
 
     const requestedHistoricalAsOf =

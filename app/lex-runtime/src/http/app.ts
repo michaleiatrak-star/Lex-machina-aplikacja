@@ -264,6 +264,12 @@ const PROVIDERS = new Set<ProviderId>([
   "google"
 ]);
 
+// Recognizer codes behind CHAT_PRIVACY_GATE_FAILED ("Powód" in the chat diagnostics).
+function privacyGateReason(error: unknown): { reason?: string } {
+  const reason = (error as { reason?: unknown } | null)?.reason;
+  return typeof reason === "string" && reason ? { reason } : {};
+}
+
 function isProviderId(value: string): value is ProviderId {
   return PROVIDERS.has(value as ProviderId);
 }
@@ -2039,7 +2045,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           ) {
             res.status(503).json({
               error:
-                "CHAT_PRIVACY_GATE_FAILED"
+                "CHAT_PRIVACY_GATE_FAILED",
+              ...privacyGateReason(error)
             });
             return false;
           }
@@ -11788,7 +11795,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       ) {
         res.status(503).json({
           error:
-            "CHAT_PRIVACY_GATE_FAILED"
+            "CHAT_PRIVACY_GATE_FAILED",
+          ...privacyGateReason(error)
         });
         return;
       }

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mayContainPersonalNames } from "./name-candidates.js";
 import type { NamedEntityRecognizer, PiiKind, PiiSpan } from "./pseudonymizer.js";
 
 function defaultWorkerPath(): string {
@@ -90,28 +91,30 @@ export class LocalGazetteerRecognizer implements NamedEntityRecognizer {
 }
 
 /**
- * Union of several recognizers; one failing never hides the others. When all
- * of them fail, it throws: an empty result would send names and addresses
- * to the model in plain text (fail closed, not open).
+ * Union of several recognizers; one failing never hides the others. When all of them
+ * fail on a text that may hold a name or an address, it throws: an empty result would
+ * send them to the model in plain text (fail closed). A text with no such candidate
+ * ("wyszukaj wyrok SN dotyczący grupy przestępczej") goes on with the deterministic
+ * identifiers masked, so a broken NER runtime does not stop every question.
  */
 export class CompositeRecognizer implements NamedEntityRecognizer {
   constructor(private readonly recognizers: NamedEntityRecognizer[]) {}
 
   async recognize(text: string): Promise<PiiSpan[]> {
-    let failed = 0;
+    const reasons: string[] = [];
     const results = await Promise.all(
       this.recognizers.map((recognizer) =>
         recognizer.recognize(text).catch((error: unknown) => {
-          failed += 1;
-          process.stderr.write(
-            `PRIVACY_RECOGNIZER_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`
-          );
+          const reason = error instanceof Error ? error.message : String(error);
+          reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
+          process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
           return [] as PiiSpan[];
         })
       )
     );
-    if (this.recognizers.length > 0 && failed === this.recognizers.length && text.trim()) {
-      throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE");
+    if (this.recognizers.length > 0 && reasons.length === this.recognizers.length && text.trim()) {
+      if (mayContainPersonalNames(text)) throw new Error(`PRIVACY_RECOGNIZER_UNAVAILABLE:${reasons.join(" | ")}`);
+      process.stderr.write("PRIVACY_RECOGNIZER_UNAVAILABLE_NO_NAME_CANDIDATES\n");
     }
     const seen = new Set<string>();
     return results.flat().filter((span) => {

@@ -340,6 +340,11 @@ export function publicEvidenceBundle(records, answer) {
     return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
 }
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");
+/** CHAT_PRIVACY_GATE_FAILED with the cause (recognizer codes, never the text) for diagnostics. */
+export function privacyGateFailure(error) {
+    const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 400);
+    return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
+}
 /**
  * Prefixes D01, D02... of own-key documents, in the order they reach the
  * model (context first, then case files read by tools). Shared-key documents
@@ -718,8 +723,8 @@ export class SafeSessionExecutor {
                 (await pseudonymizer
                     .pseudonymize(request.query)).text;
         }
-        catch {
-            throw new Error("CHAT_PRIVACY_GATE_FAILED");
+        catch (error) {
+            throw privacyGateFailure(error);
         }
         const routed = await this.autoRouter
             .resolve({
@@ -857,7 +862,7 @@ export class SafeSessionExecutor {
             audit.close("BLOCKED", {
                 finalization: "PRIVACY_GATE"
             });
-            throw new Error("CHAT_PRIVACY_GATE_FAILED");
+            throw privacyGateFailure(error);
         }
         const requestedHistoricalAsOf = detectHistoricalAsOf(protectedQuery);
         const ledger = new VerificationLedger();
