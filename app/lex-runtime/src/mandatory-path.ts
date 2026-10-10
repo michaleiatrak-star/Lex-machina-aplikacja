@@ -207,7 +207,7 @@ const FOREIGN_STATES =
 const FOREIGN_JURISDICTION = new RegExp(
   [
     `\\b(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*|jurysdykcj\\p{L}*)\\s+(?:${FOREIGN_STATES})\\p{L}*`,
-    `\\b(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
+    `(?<![\\p{L}\\d])(?:${FOREIGN_STATES})\\p{L}*\\s+(?:praw\\p{L}*|sąd\\p{L}*|kodeks\\p{L}*|ustaw\\p{L}*|przepis\\p{L}*|orzecznictw\\p{L}*)`,
     "\\b(?:prawo obce|prawa obcego|prawem obcym|prawo właściwe|prawa właściwego|jurysdykcj\\p{L}* zagraniczn\\p{L}*|sąd\\p{L}* zagraniczn\\p{L}*)",
     "\\bumow\\p{L}* międzynarodow\\p{L}*|\\btraktat\\p{L}*|\\bkonwencj\\p{L}* (?:wiedeńsk|hask|nowojorsk|genewsk|montrealsk|warszawsk|CMR|o prawach)\\p{L}*|\\bratyfikac\\p{L}*|\\bRzym I{1,2}\\b|\\bBruksela I\\p{L}*"
   ].join("|"),
