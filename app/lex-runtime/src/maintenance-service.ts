@@ -13,7 +13,8 @@ import {
   SKILLS_REPOSITORY,
   downloadSkillChannelArchive,
   resolveSkillChannel,
-  verifiedChannelRoot,
+  extractSkillChannelDirectory,
+  verifyChannelFiles,
   type SkillChannel
 } from "./skill-channel.js";
 import {
@@ -887,9 +888,9 @@ export class MaintenanceService {
         | "SIGNED_REQUIRED"
         | "UNSIGNED_ALLOWED" =
       modelPackSignatureMode,
-    private readonly archiveExtractor:
-      (zipPath: string, destination: string) => void =
-      extractZip
+    private readonly channelExtractor:
+      (zip: Uint8Array, directory: string, destination: string) => unknown =
+      extractSkillChannelDirectory
   ) {}
 
   private installedChannel(): SkillChannelInstalled | null {
@@ -957,19 +958,17 @@ export class MaintenanceService {
     const snapshot = await resolveSkillChannel(channel, this.fetchImpl);
     const bytes = await downloadSkillChannelArchive(snapshot, this.fetchImpl);
     const skillsRoot = path.join(localAppDataRoot(), "skills");
+    // Krótki katalog roboczy i rozpakowanie samego katalogu kanału (bez prefiksu
+    // archiwum): ścieżki skilli mieszczą się wtedy w limicie Windows (MAX_PATH).
     const workRoot = path.join(
       skillsRoot,
-      `channel-${Date.now()}-${randomBytes(4).toString("hex")}`
+      `c-${randomBytes(4).toString("hex")}`
     );
-    const zipPath = path.join(workRoot, "skills.zip");
-    const extracted = path.join(workRoot, "extracted");
-    const candidate = path.join(workRoot, "candidate");
+    const candidate = path.join(workRoot, "s");
     fs.mkdirSync(workRoot, { recursive: true });
     try {
-      fs.writeFileSync(zipPath, bytes);
-      this.archiveExtractor(zipPath, extracted);
-      const sourceRoot = verifiedChannelRoot(extracted, snapshot);
-      fs.cpSync(sourceRoot, candidate, { recursive: true, force: true });
+      this.channelExtractor(bytes, snapshot.directory, candidate);
+      verifyChannelFiles(candidate, snapshot);
 
       const validation = new LexSkillRegistry(candidate);
       const issues = [...validation.scan(), ...validation.validateDeclarations()];

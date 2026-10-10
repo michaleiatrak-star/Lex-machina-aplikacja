@@ -6,7 +6,7 @@ import {
   channelDirectory,
   gitBlobSha,
   resolveSkillChannel,
-  verifiedChannelRoot,
+  verifyChannelFiles,
   type SkillChannelSnapshot
 } from "../src/skill-channel.js";
 import { MaintenanceService, installedSkillOverlayRoot } from "../src/maintenance-service.js";
@@ -63,9 +63,10 @@ function github(files: Record<string, string>) {
   return { fetcher, requested };
 }
 
-function writeArchive(destination: string, files: Record<string, string>): void {
+// Katalog kanału po rozpakowaniu (bez prefiksu archiwum).
+function writeChannel(destination: string, files: Record<string, string>): void {
   for (const [file, content] of Object.entries(files)) {
-    const target = path.join(destination, `Lex-Machina-${COMMIT}`, DEV, file);
+    const target = path.join(destination, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, content);
   }
@@ -94,16 +95,16 @@ describe("kanały skilli z repozytorium Lex Machina", () => {
   it("odrzuca archiwum ze zmienionym albo dodatkowym plikiem", async () => {
     const snapshot: SkillChannelSnapshot = await resolveSkillChannel("development", github(FILES).fetcher as never);
     const good = tempDir();
-    writeArchive(good, FILES);
-    expect(verifiedChannelRoot(good, snapshot)).toContain(DEV);
+    writeChannel(good, FILES);
+    expect(() => verifyChannelFiles(good, snapshot)).not.toThrow();
 
     const tampered = tempDir();
-    writeArchive(tampered, { ...FILES, "prawny-router-v3/SKILL.md": "---\nname: podmieniony\n---\n" });
-    expect(() => verifiedChannelRoot(tampered, snapshot)).toThrow("SKILL_CHANNEL_FILE_HASH_MISMATCH");
+    writeChannel(tampered, { ...FILES, "prawny-router-v3/SKILL.md": "---\nname: podmieniony\n---\n" });
+    expect(() => verifyChannelFiles(tampered, snapshot)).toThrow("SKILL_CHANNEL_FILE_HASH_MISMATCH");
 
     const extra = tempDir();
-    writeArchive(extra, { ...FILES, "dodatkowy.md": "x" });
-    expect(() => verifiedChannelRoot(extra, snapshot)).toThrow("SKILL_CHANNEL_FILE_SET_MISMATCH");
+    writeChannel(extra, { ...FILES, "dodatkowy.md": "x" });
+    expect(() => verifyChannelFiles(extra, snapshot)).toThrow("SKILL_CHANNEL_FILE_SET_MISMATCH");
   });
 
   it("odświeża skille z kanału jako nakładkę i raportuje stan kanału", async () => {
@@ -119,7 +120,10 @@ describe("kanały skilli z repozytorium Lex Machina", () => {
       undefined,
       undefined,
       undefined,
-      (_zip, destination) => writeArchive(destination, FILES)
+      (_zip, directory, destination) => {
+        expect(directory).toBe(DEV);
+        writeChannel(destination, FILES);
+      }
     );
 
     expect(await maintenance.skillChannelStatus("development")).toMatchObject({
