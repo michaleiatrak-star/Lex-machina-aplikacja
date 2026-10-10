@@ -256,8 +256,7 @@ function executor(
           }
         }
       ),
-    // Sprawdzenie w ELI "teraz": I-D2 odrzuca brzmienie CURRENT ze sprawdzenia
-    // starszego niż FRESHNESS_MAX_AGE_MS, więc stała data psułaby test z upływem dni.
+    // Bieżący czas: I-D2 odrzuca sprawdzenie ELI starsze niż 7 dni.
     () => new Date().toISOString()
   );
 

@@ -135,8 +135,7 @@ function executor(registry, mode) {
             "content-type": "text/html; charset=utf-8"
         }
     }), 
-    // Sprawdzenie w ELI "teraz": I-D2 odrzuca brzmienie CURRENT ze sprawdzenia
-    // starszego niż FRESHNESS_MAX_AGE_MS, więc stała data psułaby test z upływem dni.
+    // Bieżący czas: I-D2 odrzuca sprawdzenie ELI starsze niż 7 dni.
     () => new Date().toISOString());
     return new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, (ledger) => new LegalVerificationToolRuntime(ledger, verifier, undefined, new TemporalSourceFreshnessChecker(g16FreshnessFetcher, () => new Date().toISOString())));
 }
