@@ -7,7 +7,7 @@ import helmet from "helmet";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLexHttpApp } from "./app.js";
+import { createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
@@ -30,7 +30,7 @@ import { EnvironmentCredentialResolver, MemoryOverlayCredentialResolver } from "
 import { createLiveProviderRegistry } from "../providers/ai-sdk-adapter.js";
 import { AccountSessionManager } from "../providers/account-session.js";
 import { ProviderGateway } from "../providers/gateway.js";
-import { GitHubReleaseUpdateDiscovery } from "../update-discovery.js";
+import { applicationUpdateDiscovery } from "../update-discovery.js";
 import { applyAccountSkills } from "../account-skills.js";
 import { CoreLawIndex } from "../core-law-index.js";
 import { LocalPersonMorphology } from "../privacy/person-morphology.js";
@@ -155,7 +155,15 @@ export function resolveRuntimeRoot() {
     if (explicitlyConfigured) {
         return path.resolve(explicitlyConfigured);
     }
-    const bundled = bundledRuntimeRoot();
+    // Desktop (sidecar) podaje korpus wbudowany osobno, aby nakładka skilli
+    // przeszła walidację przy starcie i w razie awarii wróciła do poprzedniej
+    // lub wbudowanej wersji.
+    const bundledFromEnv = process.env
+        .LEX_BUNDLED_SKILLS_PATH
+        ?.trim();
+    const bundled = bundledFromEnv
+        ? path.resolve(bundledFromEnv)
+        : bundledRuntimeRoot();
     const recovered = recoverSkillOverlayForStartup(bundled);
     return recovered.root ??
         bundled;
@@ -266,7 +274,7 @@ export async function startLocalServer(options) {
     const documentAuthoringService = new LocalDocumentAuthoringService(privacyVaultStore, secureCaseArtifactStore, documentGenerationState);
     const reauthorizationManager = new DeanonymizationReauthorizationManager(authService, caseAccessService, authStore, documentGenerationState);
     const sensitiveDownloadTickets = new SensitiveDownloadTicketManager(authService);
-    const updateDiscovery = new GitHubReleaseUpdateDiscovery();
+    const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
     const localModels = new LocalModelRuntime();
     const credentials = new MemoryOverlayCredentialResolver(new EnvironmentCredentialResolver());
@@ -365,6 +373,7 @@ export async function startLocalServer(options) {
     app.use(desktopBootstrapGuard);
     app.use(loopbackOriginGuard);
     app.use(express.json({ limit: "2mb" }));
+    app.use("/api", sessionActivityMiddleware(authService));
     registerLegacyMigrationRoutes(app, {
         authService,
         securityEvents: authStore,
@@ -378,6 +387,7 @@ export async function startLocalServer(options) {
         templates: sharedTemplateStore,
         privacyVaults: privacyVaultStore,
         documentService,
+        protectedDocuments: secureCaseDocumentStore,
         workspace: workspaceStore,
         rootDir: caseFileStore.rootDir,
         officeEditor,
@@ -405,6 +415,7 @@ export async function startLocalServer(options) {
     });
     registerMcpConnectorRoutes(app, {
         authService,
+        caseAccess: caseAccessService,
         connectors: mcpConnectors,
         search: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
@@ -417,6 +428,7 @@ export async function startLocalServer(options) {
         legalText: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
     app.use(coreApp);
+    app.use(jsonErrorHandler);
     return new Promise((resolve, reject) => {
         const server = app.listen(port, host);
         server.once("error", reject);

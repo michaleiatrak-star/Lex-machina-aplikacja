@@ -26,6 +26,10 @@ export function deanonymizeModel(model, restore) {
         return result.text;
     };
     if (model.kind === "sheet") {
+        // The editor read only part of the workbook (row/column limit): writing it
+        // back would silently save a cut-down "(deanonimizowany)" copy.
+        if (model.truncated)
+            throw new Error("FILE_DEANONYMIZATION_TOO_LARGE");
         return {
             model: {
                 ...model,

@@ -217,11 +217,23 @@ export class LocalCaseAccessService {
         if (!record) {
             throw new CaseAccessError("CASE_NOT_FOUND", 404);
         }
-        return {
+        const view = {
             ...record,
             role: access.role,
             canReidentify: access.canReidentify
         };
+        // Trasy otwierają sprawę przed blokadą, a keyVersion czytają już w withCaseDataKey.
+        // Gdy rotacja klucza przeszła między jednym a drugim, wersja z migawki byłaby stara
+        // (zapis nowym kluczem z metką starej wersji jest nie do odczytania). Dlatego
+        // keyVersion widoku zawsze odpowiada bieżącemu rekordowi sprawy.
+        Object.defineProperty(view, "keyVersion", {
+            enumerable: true,
+            configurable: true,
+            get: () => this.store.getCase(caseId)
+                ?.keyVersion ??
+                record.keyVersion
+        });
+        return view;
     }
     async listCaseSchedule(context, caseId) {
         if (!this.schedule) {

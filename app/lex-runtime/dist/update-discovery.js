@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.26";
+export const CURRENT_APPLICATION_VERSION = "0.1.27";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
@@ -97,13 +97,20 @@ function chooseAssets(release, repository) {
         ...(modelPackSignature ? { modelPackSignature } : {})
     };
 }
+// Instalatory aplikacji publikuje publish-windows-installers.yml w repozytorium
+// aplikacji, zawsze jako pre-release (instalatory bez podpisu Authenticode/Apple).
+// Repozytorium Lex-Machina trzyma skille; jego wydania kończą się na 0.1.11.
+export const APPLICATION_RELEASE_REPOSITORY = "michaleiatrak-star/Lex-machina-aplikacja";
+export function applicationUpdateDiscovery(fetchImpl = fetch) {
+    return new GitHubReleaseUpdateDiscovery(CURRENT_APPLICATION_VERSION, APPLICATION_RELEASE_REPOSITORY, fetchImpl, () => Date.now(), true);
+}
 export class GitHubReleaseUpdateDiscovery {
     currentVersion;
     repository;
     fetchImpl;
     now;
     includePrerelease;
-    constructor(currentVersion = CURRENT_APPLICATION_VERSION, repository = "michaleiatrak-star/Lex-Machina", fetchImpl = fetch, now = () => Date.now(), includePrerelease = false) {
+    constructor(currentVersion = CURRENT_APPLICATION_VERSION, repository = APPLICATION_RELEASE_REPOSITORY, fetchImpl = fetch, now = () => Date.now(), includePrerelease = false) {
         this.currentVersion = currentVersion;
         this.repository = repository;
         this.fetchImpl = fetchImpl;

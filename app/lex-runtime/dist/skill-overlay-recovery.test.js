@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { installedSkillOverlayPreviousRoot, installedSkillOverlayRoot, installedSkillOverlayVersion, commitSkillOverlayRuntimeHealth, recoverSkillOverlayForStartup } from "./maintenance-service.js";
 import { CURRENT_APPLICATION_VERSION } from "./update-discovery.js";
 let root = "";
@@ -174,5 +174,58 @@ describe("skill overlay restart recovery", () => {
         }
         fs.mkdirSync(bundled, { recursive: true });
         expect(() => recoverSkillOverlayForStartup(bundled)).toThrow("SKILL_OVERLAY_STARTUP_INVALID_NO_ROLLBACK");
+    });
+});
+describe("desktop runtime root (LEX_BUNDLED_SKILLS_PATH)", () => {
+    let previousSkillsPath;
+    let previousBundledPath;
+    let resolveRuntimeRoot;
+    // Pierwszy import serwera trwa kilka sekund (cały runtime).
+    beforeAll(async () => {
+        ({ resolveRuntimeRoot } =
+            await import("./http/server.js"));
+    }, 60_000);
+    beforeEach(() => {
+        previousSkillsPath =
+            process.env.LEX_SKILLS_PATH;
+        previousBundledPath =
+            process.env
+                .LEX_BUNDLED_SKILLS_PATH;
+        delete process.env
+            .LEX_SKILLS_PATH;
+    });
+    afterEach(() => {
+        for (const [key, value] of [
+            ["LEX_SKILLS_PATH", previousSkillsPath],
+            ["LEX_BUNDLED_SKILLS_PATH", previousBundledPath]
+        ]) {
+            if (value === undefined) {
+                delete process.env[key];
+            }
+            else {
+                process.env[key] = value;
+            }
+        }
+    });
+    it("validates a pending overlay at startup instead of trusting it blindly", () => {
+        const current = installedSkillOverlayRoot();
+        writeSkillCorpus(current, "0.1.9", "PENDING_RESTART_VALIDATION");
+        const bundled = path.join(root, "bundled");
+        writeSkillCorpus(bundled);
+        process.env.LEX_BUNDLED_SKILLS_PATH =
+            bundled;
+        expect(resolveRuntimeRoot()).toBe(current);
+        expect(marker(current).health).toBe("RUNTIME_VALIDATION_IN_PROGRESS");
+    });
+    it("falls back to the bundled corpus when the installed overlay is broken", () => {
+        const current = installedSkillOverlayRoot();
+        writeSkillCorpus(current, "0.1.9");
+        fs.rmSync(path.join(current, "shared"), { recursive: true, force: true });
+        const bundled = path.join(root, "bundled");
+        writeSkillCorpus(bundled);
+        process.env.LEX_BUNDLED_SKILLS_PATH =
+            bundled;
+        expect(resolveRuntimeRoot()).toBe(path.resolve(bundled));
+        expect(fs.existsSync(current)).toBe(false);
     });
 });

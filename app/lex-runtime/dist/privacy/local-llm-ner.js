@@ -231,7 +231,10 @@ export class LocalLlmPrivacyNamedEntityRecognizer {
                         .recognize(text);
             }
             catch (error) {
+                // Bez słownika i Stanzy nie wiemy, gdzie są osoby i adresy:
+                // blokujemy wysyłkę zamiast przepuszczać jawny tekst.
                 process.stderr.write(`LOCAL_PRIVACY_FALLBACK_DEGRADED:${diagnostic(error)}\n`);
+                throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE");
             }
         }
         const modelId = this.localModels

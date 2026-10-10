@@ -73,17 +73,26 @@ export class LocalGazetteerRecognizer {
         }
     }
 }
-/** Union of several recognizers; one failing never hides the others. */
+/**
+ * Union of several recognizers; one failing never hides the others. When all
+ * of them fail, it throws: an empty result would send names and addresses
+ * to the model in plain text (fail closed, not open).
+ */
 export class CompositeRecognizer {
     recognizers;
     constructor(recognizers) {
         this.recognizers = recognizers;
     }
     async recognize(text) {
+        let failed = 0;
         const results = await Promise.all(this.recognizers.map((recognizer) => recognizer.recognize(text).catch((error) => {
+            failed += 1;
             process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
             return [];
         })));
+        if (this.recognizers.length > 0 && failed === this.recognizers.length && text.trim()) {
+            throw new Error("PRIVACY_RECOGNIZER_UNAVAILABLE");
+        }
         const seen = new Set();
         return results.flat().filter((span) => {
             const key = `${span.kind}:${span.start}:${span.end}`;
