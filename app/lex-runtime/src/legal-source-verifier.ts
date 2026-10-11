@@ -291,9 +291,10 @@ export class LegalSourceVerificationError extends Error {
       | "SOURCE_FETCH_FAILED"
       | "SOURCE_TOO_LARGE"
       | "UNSUPPORTED_SOURCE_CONTENT"
-      | "PDF_EXTRACTION_FAILED"
+      | "PDF_EXTRACTION_FAILED",
+    options?: { cause?: unknown }
   ) {
-    super(message);
+    super(message, options);
     this.name = "LegalSourceVerificationError";
   }
 }
@@ -355,10 +356,12 @@ export class OfficialLegalSourceVerifier {
             "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1"
         }
       });
-    } catch {
+    } catch (error) {
+      // The cause (DNS, refused connection, a redirect, timeout) stays for diagnostics (G17).
       throw new LegalSourceVerificationError(
         "Official legal source could not be fetched without redirects.",
-        "SOURCE_FETCH_FAILED"
+        "SOURCE_FETCH_FAILED",
+        { cause: error }
       );
     }
 

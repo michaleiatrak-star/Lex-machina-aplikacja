@@ -173,8 +173,8 @@ function isPdfResponse(url, contentType) {
 }
 export class LegalSourceVerificationError extends Error {
     code;
-    constructor(message, code) {
-        super(message);
+    constructor(message, code, options) {
+        super(message, options);
         this.code = code;
         this.name = "LegalSourceVerificationError";
     }
@@ -218,8 +218,9 @@ export class OfficialLegalSourceVerifier {
                 }
             });
         }
-        catch {
-            throw new LegalSourceVerificationError("Official legal source could not be fetched without redirects.", "SOURCE_FETCH_FAILED");
+        catch (error) {
+            // The cause (DNS, refused connection, a redirect, timeout) stays for diagnostics (G17).
+            throw new LegalSourceVerificationError("Official legal source could not be fetched without redirects.", "SOURCE_FETCH_FAILED", { cause: error });
         }
         if (!response.ok) {
             throw new LegalSourceVerificationError("Official legal source returned HTTP " + response.status + ".", "SOURCE_FETCH_FAILED");

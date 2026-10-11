@@ -732,6 +732,15 @@ export function documentProcessingOptions(header) {
         ...(flags.has("ocr-fix") ? { ocrFix: true } : {})
     };
 }
+// Workflows the engine runs only with their persisted state (G39I state binding).
+const CHAT_PIPELINE_WORKFLOWS = new Set([
+    "LEGAL_GUIDE_V1",
+    "COURT_ANALYSIS_V1",
+    "CHRONOLOGY_V1",
+    "CONTRACT_ANALYSIS_V1",
+    "EVIDENCE_ANALYSIS_V1",
+    "WITNESS_QUESTIONING_V1"
+]);
 function previewSessionWorkflow(registry, request) {
     const envelope = parseSkillSelectionEnvelope(request.query);
     const effectiveQuery = envelope.query.trim();
@@ -4326,6 +4335,17 @@ export function createLexHttpApp(options) {
                 if (latest)
                     pleadingSource = { version: latest.version, text: latest.text };
             }
+            else {
+                // A workflow with persisted checkpoints (contract, chronology, court analysis,
+                // evidence, witness questioning, guide) produces its document in its own pipeline
+                // in the chat, after the mode is chosen; a one-shot file has no such state, and the
+                // engine refused it with HTTP 422 ("Persisted contract-analysis context is required").
+                const statefulWorkflow = previewSessionWorkflow(options.registry, sessionRequest).id;
+                if (CHAT_PIPELINE_WORKFLOWS.has(statefulWorkflow)) {
+                    res.status(409).json({ error: "WORKFLOW_PIPELINE_REQUIRED", workflow: statefulWorkflow });
+                    return;
+                }
+            }
             const generated = await options
                 .documentAstGenerator
                 .generate({
@@ -5767,8 +5787,14 @@ export function createLexHttpApp(options) {
                 options.sessionExecutor?.executiveSkillFor
                 ? options.sessionExecutor.executiveSkillFor(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query))
                 : undefined;
-            const previewPlan = routerExecutive !== undefined &&
-                routerExecutive !== keywordPlan.executionSkill
+            // pisma-procesowe-v3 Test A: editing the form of a pleading the user pasted is
+            // MOD-REDAKCJA (the executor preloads it), not a new pipeline W1–W3 with its state.
+            const pleadingRedaction = routerExecutive === "pisma-procesowe-v3" &&
+                keywordPlan.id === "PROCESS_PLEADING_V1" &&
+                options.sessionExecutor?.pleadingRedactionFor?.(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query)) === true;
+            const previewPlan = pleadingRedaction ||
+                (routerExecutive !== undefined &&
+                    routerExecutive !== keywordPlan.executionSkill)
                 ? createDeterministicWorkflowPlan(options.registry, null)
                 : keywordPlan;
             let processContext = null;

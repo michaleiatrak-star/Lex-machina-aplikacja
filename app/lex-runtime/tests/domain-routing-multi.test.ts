@@ -90,6 +90,13 @@ describe("two DR domains of one case", () => {
     expect(domains("Rozwód z orzeczeniem o winie i alimenty na dzieci.").length).toBe(1);
   });
 
+  // prawo-polskie-v2 6.58: the DR-04 phrase "umowa na czas określony" took a lease for a fixed term.
+  it("keeps a lease for a fixed term in DR-02 and an employment contract in DR-04", () => {
+    expect(domains("Napisz umowę najmu mieszkania na czas określony 12 miesięcy.")[0]).toBe("dr-02");
+    expect(domains("Umowa najmu na czas nieokreślony — jak ją wypowiedzieć?")[0]).toBe("dr-02");
+    expect(domains("Pracodawca nie przedłużył mi umowy na czas określony.")[0]).toBe("dr-04");
+  });
+
   it("names DR-14 alone for a foreign element when no phrase names the matter", () => {
     expect(domains("Firma z Czech nie zapłaciła mi za dostawę towaru.")).toEqual(["dr-14"]);
     expect(domains("Karta Polaka — konsul odmówił mi jej przyznania.")).toEqual(["dr-05", "dr-14"]);

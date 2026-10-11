@@ -79,8 +79,8 @@ const INTENTS = [
     },
     {
         primary: "analizator-umow-v1",
-        reason: "projekt umowy, regulaminu lub procedury (router [1])",
-        pattern: /(?<![a-z])(?:(?:napisz|przygotuj|sporzadz|zredaguj|potrzebuj|przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj)\w*(?: (?:mi|nam|prosze|projekt\w*|wzor\w*|now\w*|nasz\w*|wewnetrzn\w*|kompletn\w*|ten|ta|te|tego|tej|przeglad|tych)){0,3} (?:umow|polityk|procedur|regulamin|kodeks\w* etyki|aneks)\w*|(?:umow|polityk|procedur|regulamin)\w*[^?!]{0,120}?(?:napisz|przygotuj|sporzadz|zredaguj)\w*(?: mi| nam| prosze)? (?:ja|je|go)(?![a-z]))/u
+        reason: "projekt, redakcja lub ocena poprawności umowy, regulaminu, procedury, dokumentu korporacyjnego (router [1])",
+        pattern: /(?<![a-z])(?:(?:napisz|przygotuj|sporzadz|zredaguj|przeredaguj|popraw(?!n)|skoryguj|napraw|dostosuj|wygeneruj|potrzebuj|przejrz|sprawdz|ocen|przeanalizuj|zweryfikuj)\w*(?: (?:mi|nam|prosze|projekt\w*|wzor\w*|now\w*|nasz\w*|wewnetrzn\w*|kompletn\w*|ten|ta|te|tego|tej|przeglad|tych|bledy w|zapisy|zapisow|poprawnosc|zgodnosc)){0,3} (?:umow|polityk|procedur|regulamin|kodeks\w* etyki|aneks|uchwal\w* (?:zgromadzenia|wspolnik|zarzadu|rady nadzorczej|walnego|akcjonariusz)|statut|protokol\w* (?:z posiedzenia|zgromadzenia|zarzadu|walnego)|klauzul\w* informacyjn)\w*|czy (?:ta |ten |to |te |moja |moj |nasza |nasz )?(?:umowa|aneks|regulamin|porozumienie|klauzula|zapis\w*|statut|polityka)(?: [^.?!]{0,30}?)? (?:jest |sa |bedzie )?(?:zgodn|wazn|poprawn|skuteczn|legaln|abuzywn|niedozwolon)\w*|(?:umow|polityk|procedur|regulamin)\w*[^?!]{0,120}?(?:napisz|przygotuj|sporzadz|zredaguj)\w*(?: mi| nam| prosze)? (?:ja|je|go)(?![a-z]))/u
     },
     {
         primary: "analiza-sadowa-v6",

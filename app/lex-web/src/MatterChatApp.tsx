@@ -3332,6 +3332,11 @@ export default function MatterChatApp({
             ) {
               return null;
             }
+            // A contract, chronology, court analysis and the other workflows with saved
+            // checkpoints write their document in the chat pipeline (mode first).
+            if (error instanceof ApiError && error.code === "WORKFLOW_PIPELINE_REQUIRED") {
+              return null;
+            }
             throw error;
           });
         if (generated) {

@@ -240,6 +240,8 @@ const NEW_SUBSTANCE = /(?<![\p{L}])(?:dodaj|dopisz|nowy\s+zarzut|nowe\s+zarzuty|
 // "mój sprzeciw", "moje pismo", "naszą odpowiedź na pozew" — not "moje dane osobowe".
 const OWN_DOCUMENT =
   /(?<![\p{L}])(?:(?:m[oó]j|moj\p{L}*|nasz\p{L}*|własn\p{L}*)(?:\s+\p{L}+){0,2}?\s+(?:pism\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*|pozew|pozw\p{L}*|wezwani\p{L}*|odwołani\p{L}*|zażaleni\p{L}*|apelacj\p{L}*|projekt\p{L}*|odpowied\p{L}*|zarzut\p{L}*|dokument\p{L}*|tekst\p{L}*|wersj\p{L}*|draft\p{L}*|oświadczeni\p{L}*|umow\p{L}*)|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
+const OWN_CONTRACT =
+  /(?<![\p{L}])(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|t[eę]j|t[aą]|ten|tego)(?:\s+\p{L}+){0,2}?\s+(?:umow\p{L}*|aneks\p{L}*|regulamin\p{L}*|porozumieni\p{L}*|polis\p{L}*|kontrakt\p{L}*)(?![\p{L}])/iu;
 
 /**
  * Entry point for the task: the activation matrix first (phrases of the question
@@ -267,6 +269,29 @@ const IMPLIED_ROWS: Array<{ pattern: RegExp; primary: string; row: string }> = [
 // "linia orzecznicza", "podaj wyroki SN", "sprawdź sygnaturę").
 const CASE_LAW =
   /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecznicz\p{L}*|precedens\p{L}*|sygnatur\p{L}*|(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*|orzecze\p{L}*|orzeczeń)\s+(?:SN|NSA|WSA|TK|TSUE|ETPC\p{L}*|SA|sąd\p{L}*|Trybunał\p{L}*|Sąd\p{L}*)|(?:podaj|znajdź|wskaż|przytocz|wyszukaj)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|uchwał\p{L}*)|jak\s+(?:to\s+)?(?:sądy|SN|NSA)\s+(?:interpretuj\p{L}*|rozumi\p{L}*|stosuj\p{L}*|orzekaj\p{L}*|wykładaj\p{L}*|ocenia\p{L}*))(?![\p{L}])/iu;
+// Substantive defences of a letter (sprzeciw, zarzuty). pisma-proste-v2, "Kiedy eskalować do
+// pisma-procesowe-v3 (obowiązkowo)": more than one legal basis to analyse; router v3 [4]:
+// not for more than one thread. One defence (przedawnienie alone) stays a simple letter.
+const DEFENCES = [
+  /przedawni/u,
+  /potrac/u,
+  /legitymacj/u,
+  /niewaznos|niewazn\w* (?:umow|czynnos|klauzul)/u,
+  /niewymagaln/u,
+  /abuzywn|niedozwolon\w* (?:postanowi|klauzul)/u,
+  /razaco wygorowan|miarkowani/u,
+  /(?:zakwestionow|kwestionuj|kwestionow|zaprzecz)\w* (?:\p{L}+ ){0,2}(?:wysokos|istnieni|zasadnos|podstaw)/u,
+  /rekojm|wad\w* (?:towar|rzecz|uslug|robot)/u,
+  /uchyl\w* sie od skutkow/u
+];
+
+const DRAFT_NOUN = /(?<![\p{L}])(?:przygotowani\p{L}*|napisani\p{L}*|sporządzeni\p{L}*|zredagowani\p{L}*)(?![\p{L}])/iu;
+
+function defenceCount(question: string): number {
+  const text = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l");
+  return DEFENCES.filter((defence) => defence.test(text)).length;
+}
+
 const PASSING_DOCUMENT_ROWS = new Set(["analizator-umow-v1", "pisma-procesowe-v3", "pisma-proste-v2"]);
 const QUESTION_ONLY = /\?\s*$|(?:^|[.!?]\s+)(?:chcę|chciał\p{L}*)\s+(?:zrozumieć|wiedzieć|się\s+dowiedzieć)(?![\p{L}])/iu;
 const REVIEW_REQUEST = /(?<![\p{L}])(?:przeanalizuj|przejrzyj|oceń|sprawdź|zweryfikuj|przeczytaj|popraw|zbadaj|zapis\p{L}*|klauzul\p{L}*|co\s+(?:oznacza\p{L}*|znacz\p{L}*)|m(?:ój|oja|oje|ojej|ojego)\s+(?:umow|polis|regulamin|aneks)\p{L}*)(?![\p{L}])/iu;
@@ -305,6 +330,14 @@ export function decideTask(
     intent && matrixDecision?.primary !== intent.primary
       ? { source: "ROUTER" as const, primary: intent.primary, then: null, reason: `prośba użytkownika: ${intent.reason}` }
       : matrixDecision;
+  if (decision?.primary === "pisma-proste-v2" && (asksToDraft(rawQuestion) || DRAFT_NOUN.test(rawQuestion)) && defenceCount(rawQuestion) >= 2) {
+    return {
+      source: "ROUTER",
+      primary: "pisma-procesowe-v3",
+      then: null,
+      reason: "kilka zarzutów merytorycznych: obowiązkowa eskalacja z pisma-proste-v2 (więcej niż jedna podstawa prawna)"
+    };
+  }
   const caseLaw = "orzeczenia-sadowe-v2";
   const known = routes.some((route) => route.primary === caseLaw) || matrix.some((rule) => rule.primary === caseLaw);
   const question = provisionsForDetection(rawQuestion);
@@ -361,8 +394,11 @@ function decideTaskByMatrix(
   }
   // Test A: a finished pleading delivered (or "my letter") and a request about its form.
   if (redaction && !NEW_SUBSTANCE.test(question)) {
+    // "Popraw zapisy w mojej umowie": the user's own contract is redacted by analizator-umow-v1
+    // (REDACTION mode), not by the pleading redaction of Test A.
+    const ownContract = OWN_CONTRACT.test(question) && !materials.some((material) => material.category === "PISMO_PROCESOWE");
     const ownPleading =
-      materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question);
+      !ownContract && (materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question));
     // The skill's signals, and their verbs ("popraw", "zredaguj", "skróć"...) for the user's own letter.
     const verbs = [...new Set(redaction.signals.map((phrase) => phrase.split(/\s+/u)[0]!))];
     const signal =

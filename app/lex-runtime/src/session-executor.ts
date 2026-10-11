@@ -1277,6 +1277,7 @@ export interface SessionExecutor {
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
   // The router's executive skill for a message without delivered material (AUTO).
   executiveSkillFor?(message: string): string | null;
+  pleadingRedactionFor?(message: string): boolean;
 }
 
 /**
@@ -1345,6 +1346,19 @@ export class SafeSessionExecutor implements SessionExecutor {
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       })?.primary ?? null
     );
+  }
+
+  /**
+   * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
+   * its form (shorter, firmer, smoother), handled by MOD-REDAKCJA without W1–W3.
+   */
+  pleadingRedactionFor(message: string): boolean {
+    const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return decision?.primary === "pisma-procesowe-v3" && (decision.modules ?? []).some((module) => /MOD-REDAKCJA/u.test(module));
   }
 
   private taskRoutesCache: { root: string; routes: TaskRoute[] } | null = null;

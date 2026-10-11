@@ -23,6 +23,13 @@ async function runAttempt() {
         toolCallId: "g17-live-eli-art-5"
     });
 }
+function errorDetail(error) {
+    const parts = [];
+    for (let current = error, depth = 0; current instanceof Error && depth < 4; current = current.cause, depth += 1) {
+        parts.push(current.message);
+    }
+    return parts.join(" <- ").slice(0, 400);
+}
 let result = null;
 let lastError = null;
 let attempts = 0;
@@ -75,7 +82,10 @@ process.stdout.write(JSON.stringify({
                 ? lastError.code
                 : lastError instanceof Error
                     ? lastError.name
-                    : "UNKNOWN_ERROR"
+                    : "UNKNOWN_ERROR",
+            // What the fetch reported (HTTP status, refused connection, timeout): a block of
+            // CI runner addresses by the source is told apart from a fault of the verifier.
+            errorDetail: errorDetail(lastError)
         }
         : {})
 }, null, 2) + "\n");

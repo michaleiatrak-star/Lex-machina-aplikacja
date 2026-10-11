@@ -95,7 +95,19 @@ describe("drafting a letter vs analysing one", () => {
     ["Odpowiedz na to wezwanie do zapłaty", [demand], "analizator-dowodow-v3 | pisma-proste-v2"],
     ["Przeanalizuj nakaz zapłaty", [order], "analiza-sadowa-v6"],
     ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | SPA-sprzeciw.md"],
-    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"]
+    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    // The user's own contract is redacted by the contract skill, not by Test A of pleadings.
+    ["Popraw zapisy o karach umownych w mojej umowie.", [], "analizator-umow-v1"],
+    // analizator-umow-v1: assessing correctness, redacting and drafting documents of its generators.
+    ["Czy ten aneks jest zgodny z prawem?", [], "analizator-umow-v1"],
+    ["Przeredaguj umowę tak, żeby była korzystniejsza dla mnie.", [], "analizator-umow-v1"],
+    ["Dostosuj umowę do wymogów RODO.", [], "analizator-umow-v1"],
+    ["Przygotuj uchwałę zgromadzenia wspólników o podziale zysku.", [], "analizator-umow-v1"],
+    ["Popraw pozew o zapłatę.", [], "pisma-procesowe-v3"],
+    // pisma-proste-v2, obowiązkowa eskalacja: więcej niż jedna podstawa prawna.
+    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia.", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia, potrącenia i braku legitymacji czynnej.", [], "pisma-procesowe-v3"],
+    ["Napisz zarzuty od nakazu zapłaty: niewymagalność i potrącenie wzajemnej wierzytelności.", [], "pisma-procesowe-v3"]
   ] as const)("%s", (question, materials, expected) => {
     expect(pick(question, [...materials])).toBe(expected);
   });
