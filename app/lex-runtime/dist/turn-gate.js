@@ -46,6 +46,7 @@ const LEGAL_STEMS = [
     // a petition, a brand, whistleblowing, a carrier's liability, ESG, an internal inquiry.
     "darowizn", "zglasz", "podpis", "nieprawidlowos", "zastrzec", "zastrzez", "esg", "csrd", "antykorupc", "dochodzeni",
     "przewozn", "odpowiada za", "ukrad", "nazw\\w* (?:dla )?(?:mojej |naszej )?(?:marki|firmy|sklepu|produktu)", "praktyk\\w* lekarsk", "zalozyc (?:firm|spolk|fundacj|stowarzysz|dzialalnos|praktyk)",
+    "polityk\\w* prywatnosc", "klauzul\\w* informacyjn", "statut", "fundacj", "stowarzyszeni",
     "usun\\w* (?:moje |moj )?(?:zdjec|zdjeci|wpis|komentarz|dane)\\w* z (?:internet|sieci|portal|forum|google|facebook|serwis|strony)",
 ];
 const LEGAL_LEXICON = new RegExp(`(?<![a-z0-9])(?:${LEGAL_STEMS.join("|")})`, "u");

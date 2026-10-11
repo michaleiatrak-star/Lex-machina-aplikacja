@@ -88,7 +88,9 @@ describe("legal gate of a chat turn", () => {
     "Mam zrzuty ekranu, na których były wspólnik publikuje nasz kod źródłowy na GitHubie. Jak zabezpieczyć te dowody, żeby sąd je uznał?",
     "Plan miejscowy przewiduje drogę przez mój ogród. Gdzie się zwrócić?",
     "Czy mogę wykorzystać fragment piosenki w reklamie?",
-    "Klub sportowy nie wypłaca kontraktu zawodnikowi. Co mogę zrobić?"
+    "Klub sportowy nie wypłaca kontraktu zawodnikowi. Co mogę zrobić?",
+    "Napisz politykę prywatności dla mojej strony.",
+    "Napisz statut fundacji."
   ])("legal despite a non-legal topic: %s", (question) => {
     expect(isNonLegalMessage(question, flash)).toBe(false);
   });
