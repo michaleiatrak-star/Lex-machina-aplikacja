@@ -314,6 +314,7 @@ function fixture(
       }
     );
 
+  const generate = vi.fn();
   const core =
     createLexHttpApp({
       registry: registry(),
@@ -335,7 +336,10 @@ function fixture(
         artifacts,
       sessionExecutor: {
         execute
-      }
+      },
+      documentAstGenerator: { generate } as never,
+      documentAuthoringService: { createReady: vi.fn() } as never,
+      documentService: { forget: vi.fn(() => false) } as never
     });
 
   const app = express();
@@ -392,7 +396,8 @@ function fixture(
     root,
     app,
     auth,
-    execute
+    execute,
+    generate
   };
 }
 
@@ -527,6 +532,31 @@ describe(
           current.execute
         ).not.toHaveBeenCalled();
 
+        current.auth.close();
+      }
+    );
+
+    it(
+      "sends a contract file request to the chat pipeline instead of the engine's 422",
+      async () => {
+        const current = fixture();
+        const { authorization, caseId } = await bootstrapCase(current, "file");
+        // Before: the file path ran CONTRACT_ANALYSIS_V1 without its state and the engine
+        // answered HTTP 422 "Persisted contract-analysis context is required.".
+        await request(current.app)
+          .post(`/api/cases/${caseId}/artifacts/generate`)
+          .set("Authorization", authorization)
+          .send({
+            ...sessionBody(caseId),
+            query: "Przygotuj projekt umowy i wykonaj analizę kontraktową w pliku docx.",
+            format: "docx",
+            documentType: "contract",
+            styleProfile: "lex-classic-clean-v1",
+            attachments: []
+          })
+          .expect(409, { error: "WORKFLOW_PIPELINE_REQUIRED", workflow: "CONTRACT_ANALYSIS_V1" });
+        expect(current.generate).not.toHaveBeenCalled();
+        expect(current.execute).not.toHaveBeenCalled();
         current.auth.close();
       }
     );

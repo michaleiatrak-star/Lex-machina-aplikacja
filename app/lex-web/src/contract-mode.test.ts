@@ -10,6 +10,9 @@ describe("contract mode suggested from the request", () => {
     ["Popraw zapisy o karach umownych", "REDACTION"],
     ["Napisz umowę o dzieło dla grafika", "DRAFT"],
     ["Przygotuj projekt umowy najmu okazjonalnego", "DRAFT"],
+    ["Wygeneruj profesjonale pismo dotyczące powierzenia pracy rekrutacji pracowników przez rekrutera na rzecz firmy Nescafe.", "DRAFT"],
+    ["Przygotuj umowę kupna sprzedaży samochodu", "DRAFT"],
+    ["Sporządź porozumienie o rozwiązaniu umowy o pracę", "DRAFT"],
     ["Przygotuj aneks do umowy o pracę", "SUPPLEMENT"],
     ["Dodaj klauzulę poufności do umowy", "SUPPLEMENT"]
   ])("%s -> %s", (text, mode) => {

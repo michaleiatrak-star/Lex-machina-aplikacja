@@ -95,7 +95,9 @@ describe("drafting a letter vs analysing one", () => {
     ["Odpowiedz na to wezwanie do zapłaty", [demand], "analizator-dowodow-v3 | pisma-proste-v2"],
     ["Przeanalizuj nakaz zapłaty", [order], "analiza-sadowa-v6"],
     ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | SPA-sprzeciw.md"],
-    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"]
+    ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    // The user's own contract is redacted by the contract skill, not by Test A of pleadings.
+    ["Popraw zapisy o karach umownych w mojej umowie.", [], "analizator-umow-v1"]
   ] as const)("%s", (question, materials, expected) => {
     expect(pick(question, [...materials])).toBe(expected);
   });

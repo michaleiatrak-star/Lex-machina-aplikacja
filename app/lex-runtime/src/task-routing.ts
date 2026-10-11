@@ -240,6 +240,8 @@ const NEW_SUBSTANCE = /(?<![\p{L}])(?:dodaj|dopisz|nowy\s+zarzut|nowe\s+zarzuty|
 // "mój sprzeciw", "moje pismo", "naszą odpowiedź na pozew" — not "moje dane osobowe".
 const OWN_DOCUMENT =
   /(?<![\p{L}])(?:(?:m[oó]j|moj\p{L}*|nasz\p{L}*|własn\p{L}*)(?:\s+\p{L}+){0,2}?\s+(?:pism\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*|pozew|pozw\p{L}*|wezwani\p{L}*|odwołani\p{L}*|zażaleni\p{L}*|apelacj\p{L}*|projekt\p{L}*|odpowied\p{L}*|zarzut\p{L}*|dokument\p{L}*|tekst\p{L}*|wersj\p{L}*|draft\p{L}*|oświadczeni\p{L}*|umow\p{L}*)|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
+const OWN_CONTRACT =
+  /(?<![\p{L}])(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|t[eę]j|t[aą]|ten|tego)(?:\s+\p{L}+){0,2}?\s+(?:umow\p{L}*|aneks\p{L}*|regulamin\p{L}*|porozumieni\p{L}*|polis\p{L}*|kontrakt\p{L}*)(?![\p{L}])/iu;
 
 /**
  * Entry point for the task: the activation matrix first (phrases of the question
@@ -361,8 +363,11 @@ function decideTaskByMatrix(
   }
   // Test A: a finished pleading delivered (or "my letter") and a request about its form.
   if (redaction && !NEW_SUBSTANCE.test(question)) {
+    // "Popraw zapisy w mojej umowie": the user's own contract is redacted by analizator-umow-v1
+    // (REDACTION mode), not by the pleading redaction of Test A.
+    const ownContract = OWN_CONTRACT.test(question) && !materials.some((material) => material.category === "PISMO_PROCESOWE");
     const ownPleading =
-      materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question);
+      !ownContract && (materials.some((material) => material.category === "PISMO_PROCESOWE") || OWN_DOCUMENT.test(question));
     // The skill's signals, and their verbs ("popraw", "zredaguj", "skróć"...) for the user's own letter.
     const verbs = [...new Set(redaction.signals.map((phrase) => phrase.split(/\s+/u)[0]!))];
     const signal =
