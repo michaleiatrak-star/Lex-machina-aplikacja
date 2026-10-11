@@ -5787,8 +5787,14 @@ export function createLexHttpApp(options) {
                 options.sessionExecutor?.executiveSkillFor
                 ? options.sessionExecutor.executiveSkillFor(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query))
                 : undefined;
-            const previewPlan = routerExecutive !== undefined &&
-                routerExecutive !== keywordPlan.executionSkill
+            // pisma-procesowe-v3 Test A: editing the form of a pleading the user pasted is
+            // MOD-REDAKCJA (the executor preloads it), not a new pipeline W1–W3 with its state.
+            const pleadingRedaction = routerExecutive === "pisma-procesowe-v3" &&
+                keywordPlan.id === "PROCESS_PLEADING_V1" &&
+                options.sessionExecutor?.pleadingRedactionFor?.(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query)) === true;
+            const previewPlan = pleadingRedaction ||
+                (routerExecutive !== undefined &&
+                    routerExecutive !== keywordPlan.executionSkill)
                 ? createDeterministicWorkflowPlan(options.registry, null)
                 : keywordPlan;
             let processContext = null;

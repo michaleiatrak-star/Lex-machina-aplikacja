@@ -603,6 +603,18 @@ export class SafeSessionExecutor {
             entries: schemaCatalog(this.registry, "pisma-proste-v2")
         })?.primary ?? null);
     }
+    /**
+     * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
+     * its form (shorter, firmer, smoother), handled by MOD-REDAKCJA without W1–W3.
+     */
+    pleadingRedactionFor(message) {
+        const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+        const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+            skill: "pisma-proste-v2",
+            entries: schemaCatalog(this.registry, "pisma-proste-v2")
+        });
+        return decision?.primary === "pisma-procesowe-v3" && (decision.modules ?? []).some((module) => /MOD-REDAKCJA/u.test(module));
+    }
     taskRoutesCache = null;
     // The router's KROK 2 table, re-read after a skill update.
     taskRoutes() {

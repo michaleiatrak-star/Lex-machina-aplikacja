@@ -103,7 +103,11 @@ describe("drafting a letter vs analysing one", () => {
     ["Przeredaguj umowę tak, żeby była korzystniejsza dla mnie.", [], "analizator-umow-v1"],
     ["Dostosuj umowę do wymogów RODO.", [], "analizator-umow-v1"],
     ["Przygotuj uchwałę zgromadzenia wspólników o podziale zysku.", [], "analizator-umow-v1"],
-    ["Popraw pozew o zapłatę.", [], "pisma-procesowe-v3"]
+    ["Popraw pozew o zapłatę.", [], "pisma-procesowe-v3"],
+    // pisma-proste-v2, obowiązkowa eskalacja: więcej niż jedna podstawa prawna.
+    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia.", [], "pisma-proste-v2 | SPA-sprzeciw.md"],
+    ["Napisz sprzeciw od nakazu zapłaty z zarzutem przedawnienia, potrącenia i braku legitymacji czynnej.", [], "pisma-procesowe-v3"],
+    ["Napisz zarzuty od nakazu zapłaty: niewymagalność i potrącenie wzajemnej wierzytelności.", [], "pisma-procesowe-v3"]
   ] as const)("%s", (question, materials, expected) => {
     expect(pick(question, [...materials])).toBe(expected);
   });
