@@ -85,7 +85,8 @@
     "benchmark:local-context": "tsx src/benchmark-local-context.ts",
     "benchmark:local-legal-quality": "tsx src/benchmark-local-legal-quality.ts",
     "validate:g40-live": "tsx src/validate-g40-live.ts",
-    "validate:g40-courts": "tsx src/validate-g40-courts.ts"
+    "validate:g40-courts": "tsx src/validate-g40-courts.ts",
+    "build:akt-pdf": "node scripts/build-akt-pdf.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.49",

@@ -11,6 +11,9 @@ import { SMALL_LINE_MARK } from "./pdf-text-extractor.js";
 // Początek przypisu: numer, nawias bez spacji, wielka litera („2) Zdanie drugie…”). Punkty
 // przepisu zaczynają się małą literą („1) zaznajamiać…”), a znacznik w treści ma spację („25 )”).
 const NOTE_START = /^(\d{1,3})\)\s+(?=\p{Lu})/u;
+// W bloku drobnego druku numer bywa oddzielony od nawiasu („1 ) Niniejsza…”: pdf.js 4.x stawia
+// indeks górny osobno); tam spacja jest bezpieczna, bo blok to już wyłącznie przypisy.
+const NOTE_START_SMALL = /^(\d{1,3}) ?\)\s+(?=\p{Lu})/u;
 // Treść odnośnika t.j. zaczyna się jednym z tych zwrotów; bez tego warunku punkt pisany wielką
 // literą („2) Skarb Państwa…”) mógłby uciąć resztę strony.
 const NOTE_VOCABULARY =
@@ -37,15 +40,15 @@ export function extractPageFootnotes(pageTexts: readonly string[]): {
     let start = lines.length;
     while (start > 0 && (lines[start - 1]!.startsWith(SMALL_LINE_MARK) || !lines[start - 1]!.trim())) start -= 1;
     const block = lines.slice(start).map((line) => line.replaceAll(SMALL_LINE_MARK, "").trim()).filter(Boolean);
-    const numbered = block.some((line) => NOTE_START.test(line));
+    const numbered = block.some((line) => NOTE_START_SMALL.test(line));
     // Mały druk na dole bez numeru odnośnika i bez otwartego przypisu (np. tabela) zostaje w treści.
     if (!block.length || (!numbered && open === null)) return page.replaceAll(SMALL_LINE_MARK, "");
-    let current = NOTE_START.test(block[0]!) ? null : open;
+    let current = NOTE_START_SMALL.test(block[0]!) ? null : open;
     for (const line of block) {
-      const number = NOTE_START.exec(line)?.[1];
+      const number = NOTE_START_SMALL.exec(line)?.[1];
       if (number) {
         current = number;
-        footnotes[number] = line.replace(NOTE_START, "").trim();
+        footnotes[number] = line.replace(NOTE_START_SMALL, "").trim();
       } else if (current) {
         footnotes[current] = `${footnotes[current]} ${line}`.trim();
       }
@@ -53,8 +56,14 @@ export function extractPageFootnotes(pageTexts: readonly string[]): {
     open = current;
     return lines.slice(0, start).join("\n").replaceAll(SMALL_LINE_MARK, "");
   });
-  if (pages.some((page, index) => page !== pageTexts[index])) return { pages, footnotes };
+  if (pages.some((page, index) => page !== pageTexts[index])) return { pages: pages.map(spacedMarkers), footnotes };
   return extractFootnotesByContent(pageTexts, footnotes);
+}
+
+// pdf.js 4.x skleja znacznik za nawiasem („(uchylony) 9)”), 6.x go rozdziela („9 )”). Tylko ten
+// kontekst: samo „N)” po dwukropku czy kropce to punkt wyliczenia, nie znacznik odnośnika.
+function spacedMarkers(page: string): string {
+  return page.replace(/\) (\d{1,3})\)(?=\s|$)/gu, ") $1 )");
 }
 
 function extractFootnotesByContent(
@@ -183,7 +192,10 @@ export function articleWording(
   footnotes: Record<string, string>,
   today: string
 ): ArticleWording {
-  const lines = markedText.split("\n");
+  // Znacznik sklejony z etykietą („Art. 10. 8) 1.”, pdf.js 4.x) do postaci „8 )”, którą czyta UNIT_LINE.
+  const lines = markedText
+    .split("\n")
+    .map((line) => line.replace(LABEL_MARKER, (marker, number: string) => (footnotes[number] === undefined ? marker : `${number} )`)));
   const units: { label: string; level: number; note: string | null; start: number; end: number }[] = [];
   lines.forEach((line, index) => {
     const unit = UNIT_LINE.exec(line);
