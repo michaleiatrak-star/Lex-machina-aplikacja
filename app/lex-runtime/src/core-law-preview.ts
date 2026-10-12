@@ -1,4 +1,5 @@
 import type { CoreActRecord, CoreLawIndex } from "./core-law-index.js";
+import { normalizeArticleId } from "./source-anchor.js";
 
 /**
  * In-app preview of a provision from the local copy of the official ELI text:
@@ -8,7 +9,7 @@ import type { CoreActRecord, CoreLawIndex } from "./core-law-index.js";
 export const PROVISION_ANCHOR = "lex-provision";
 
 const ELI_IN_URL = /\/eli\/acts\/(DU|MP)\/(\d{4})\/(\d{1,6})(?:\/|$)/;
-const ARTICLE = /\bart\.?\s*(\d+[a-z]{0,4})\b/i;
+const ARTICLE = /\bart\.?\s*(\d+[a-z]{0,4}(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+[a-z]{0,4}|\[\d+[a-z]{0,4}\])?)(?![\p{L}\d])/iu;
 const PARAGRAPH = /§\s*(\d+[a-z]{0,3})/;
 const SECTION = /\bust\.?\s*(\d+[a-z]{0,3})\b/i;
 // Act named after the article: "art. 233 KK", "art. 415 k.c.", "art. 6 ustawy o VAT".
@@ -25,7 +26,7 @@ export function provisionReference(claim: string, sourceUrl?: string): Provision
   return {
     act: ACT_AFTER.exec(claim)?.[1]?.trim() || null,
     eli: eli ? `${eli[1]}/${eli[2]}/${Number(eli[3])}` : null,
-    article: article.toLowerCase(),
+    article: normalizeArticleId(article),
     unit: paragraph ? `§ ${paragraph}` : section ? `ust. ${section}` : null
   };
 }

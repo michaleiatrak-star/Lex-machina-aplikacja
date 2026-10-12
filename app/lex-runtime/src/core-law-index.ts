@@ -14,7 +14,12 @@ import {
 } from "./pdf-text-extractor.js";
 import type { OcrEngine } from "./document-ingestion.js";
 import type { CoreLawActLookup } from "./core-law-act-lookup.js";
-import { htmlArticleAnchors, pdfArticleAnchors } from "./source-anchor.js";
+import {
+  articleHeadingPattern,
+  articleIdFromHeading,
+  htmlArticleAnchors,
+  pdfArticleAnchors
+} from "./source-anchor.js";
 
 /**
  * Core law: every Dz.U. act named in the domain act maps (dr-* MAPA-AKTOW.md)
@@ -42,8 +47,9 @@ export type CoreActRecord = {
   // ocr: PDF ELI to skan (strony bez warstwy tekstowej) odczytany lokalnym OCR.
   textSource: "html" | "pdf" | "ocr" | "none";
   // Wersja ekstrakcji: 2 = pusty HTML obwieszczenia t.j. -> PDF, PDF z wierszami (0.1.10 hotfix 7);
-  // 3 = kotwice jednostek (articleAnchors) liczone przy pobraniu.
-  extraction?: 2 | 3;
+  // 3 = kotwice jednostek (articleAnchors) liczone przy pobraniu;
+  // 4 = artykuły z indeksem górnym osobno (11¹), bez przytoczeń z części obwieszczenia t.j.
+  extraction?: 2 | 3 | 4;
   // Strony PDF odczytane OCR (pozostałe z warstwy tekstowej).
   ocrPages?: number[];
   pages?: number;
@@ -141,7 +147,7 @@ export type CoreLawUseCheck = {
 /** Kopia sprzed kotwic jednostek: link bez kotwicy, do ponownego pobrania. */
 export function needsAnchorUpgrade(record: Pick<CoreActRecord, "extraction" | "textSource" | "articleOrder">): boolean {
   return (
-    (record.extraction ?? 0) < 3 &&
+    (record.extraction ?? 0) < EXTRACTION_VERSION &&
     (record.textSource === "html" || record.textSource === "pdf") &&
     record.articleOrder.length > 0
   );
@@ -394,9 +400,19 @@ const ENTITIES: Record<string, string> = {
   hellip: "…"
 };
 
+const EXTRACTION_VERSION = 4;
+
+/** Początek załącznika obwieszczenia t.j. (tekst ustawy); -1, gdy go nie ma. */
+function annexStart(text: string): number {
+  const match = /(?:^|\n)[ \t]*Załącznik\s+do\s+obwieszczenia\b/u.exec(text);
+  return match ? match.index + (match[0].startsWith("\n") ? 1 : 0) : -1;
+}
+
 export function htmlToText(html: string): string {
   return html
     .replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, "")
+    // Indeks górny numeru artykułu (<sup>1</sup>) jak w PDF: „Art. 11[1].”, nie „Art. 111.”.
+    .replace(/<sup[^>]*>\s*(\d+[a-z]{0,4})\s*<\/sup>/gi, "[$1]")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|h[1-6]|li|tr|table|section|article)>/gi, "\n")
     .replace(/<[^>]+>/g, "")
@@ -451,8 +467,7 @@ function articleBase(id: string): number {
  * nagłówek: tekst brakującego artykułu dopisał się do poprzedniego.
  */
 export function checkArticleExtraction(text: string, order: string[]): ExtractionCheck {
-  const marks = [...text.matchAll(/(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu)]
-    .map((match) => (match[1] ?? match[2])!);
+  const marks = [...text.matchAll(articleHeadingPattern())].map(articleIdFromHeading);
   const gaps: string[] = [];
   const suspect = new Set<string>();
   let outOfOrder = 0;
@@ -484,10 +499,9 @@ export function splitArticles(text: string): {
   order: string[];
   articles: Record<string, string>;
 } {
-  // "Art. 5." w ustawach; "Artykuł 5" w umowach międzynarodowych.
-  const pattern = /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
-  const marks = [...text.matchAll(pattern)].map((match) => ({
-    id: (match[1] ?? match[2])!,
+  // "Art. 5." w ustawach, "Art. 11[1]." (art. 11¹) w PDF Dz.U.; "Artykuł 5" w umowach międzynarodowych.
+  const marks = [...text.matchAll(articleHeadingPattern())].map((match) => ({
+    id: articleIdFromHeading(match),
     start: match.index! + (match[0].startsWith("\n") ? 1 : 0)
   }));
   const order: string[] = [];
@@ -1336,7 +1350,23 @@ export class CoreLawIndex {
         (options.force ||
           !state.checkedAt ||
           this.now() - Date.parse(state.checkedAt) >= CHECK_AFTER_MS);
-      if (downloaded && !checkDue && !upgrade) continue;
+      if (downloaded && !checkDue && !upgrade) {
+        // Pobrany inną drogą (np. nowelizacja ściągnięta przy sprawdzaniu t.j.): bez stanu
+        // akt na liście wyglądałby na niepobrany (DU/2026/184 przy t.j. 2023/501).
+        if (!state.fetchedAt) {
+          Object.assign(state, {
+            title: held!.title,
+            status: held!.status,
+            textSource: held!.textSource,
+            articleCount: held!.articleOrder.length,
+            fetchedAt: held!.fetchedAt,
+            currentEli: state.currentEli ?? ref.eli
+          });
+          this.state.acts[ref.eli] = state;
+          this.saveState();
+        }
+        continue;
+      }
       if (!downloaded && !options.force && state.retryAt && Date.parse(state.retryAt) > this.now()) continue;
       const apply =
         options.apply === "all" ||
@@ -1529,6 +1559,19 @@ export class CoreLawIndex {
       pages = pdf.pages;
       textSource = ocrPages.length ? "ocr" : "pdf";
     }
+    // Obwieszczenie t.j.: przed „Załącznik do obwieszczenia” są przytoczone przepisy ustaw
+    // zmieniających („Art. 6. Uprawnienia pracownicze…”), które jako pierwsze wystąpienie numeru
+    // zastępowały artykuły samego aktu. Artykuły są tylko w załączniku.
+    const annex = meta.type === "Obwieszczenie" ? annexStart(body) : -1;
+    if (annex > 0) {
+      body = body.slice(annex);
+      const page = pageTexts.findIndex((text) => annexStart(text) >= 0);
+      if (page >= 0) {
+        pageTexts = pageTexts.map((text, index) =>
+          index < page ? "" : index === page ? text.slice(annexStart(text)) : text
+        );
+      }
+    }
     const { order, articles } = splitArticles(body);
     const extractionCheck = textSource === "pdf" ? checkArticleExtraction(body, order) : null;
     const articleAnchors =
@@ -1556,7 +1599,7 @@ export class CoreLawIndex {
       status: text(meta.status),
       promulgation: text(meta.promulgation),
       textSource,
-      extraction: 3,
+      extraction: EXTRACTION_VERSION,
       ...(ocrPages.length ? { ocrPages } : {}),
       ...(pages ? { pages } : {}),
       fetchedAt: new Date(this.now()).toISOString(),

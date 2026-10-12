@@ -1,7 +1,7 @@
 import type { CoreLawIndex } from "./core-law-index.js";
 import { searchStems } from "./core-law-search.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
-import { anchoredUrl } from "./source-anchor.js";
+import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import {
   FRESHNESS_MAX_AGE_MS,
   type VerificationKind,
@@ -48,9 +48,10 @@ export type CoreLawVerificationOutcome =
 const TITLE_MATCH_MIN = 0.75;
 
 function articleToken(claim: string): string | null {
-  return new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*)`, "iu")
-    .exec(claim)?.[1]
-    ?.toLocaleLowerCase("pl") ?? null;
+  // „art. 11¹”, „art. 11[1]”, „art. 151⁹a” -> klucz kopii „11¹”, „151⁹a”.
+  const token = new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+[a-z]*|\\[\\d+[a-z]*\\]|\\^\\d+[a-z]*)?)`, "iu")
+    .exec(claim)?.[1];
+  return token ? normalizeArticleId(token) : null;
 }
 
 function journalMatches(claim: string, elis: string[]): boolean {
