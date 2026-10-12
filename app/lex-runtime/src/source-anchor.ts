@@ -16,6 +16,31 @@ const UNIT_KIND: Record<string, UnitStep["kind"]> = {
   "lit": "lett"
 };
 
+// Numer artykułu z indeksem górnym: PDF Dz.U. zapisuje „Art. 11¹.” jako „Art. 11[1].”
+// (pdf.js: „Art. 11 [1] .”), HTML jako <sup>; klucz kopii to zapis z cytatu: „11¹”, „151⁹a”.
+const TO_SUPERSCRIPT = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+
+/** Nagłówek artykułu: grupy 1 numer, 2 cyfry indeksu górnego, 3 litery po indeksie, 4 „Artykuł N”. */
+export function articleHeadingPattern(): RegExp {
+  return /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})(?:\s*\[\s*(\d+)\s*([a-z]{0,4})\s*\])?\s*\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
+}
+
+export function articleIdFromHeading(match: RegExpMatchArray): string {
+  if (match[4]) return match[4];
+  const sup = match[2] ? [...match[2]].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("") : "";
+  return `${match[1]!}${sup}${match[3] ?? ""}`;
+}
+
+/** „11^1”, „11[1]”, „11 [1a]”, „art. 11¹” -> „11¹” / „11¹a”; inny zapis bez zmian (małe litery). */
+export function normalizeArticleId(raw: string): string {
+  const value = raw.replace(/^art\.?\s*/iu, "").replace(/\s+/gu, "").toLocaleLowerCase("pl");
+  const marked = /^(\d+[a-z]{0,4})(?:\[(\d+)([a-z]{0,4})\]|\^(\d+)([a-z]{0,4}))$/u.exec(value);
+  if (!marked) return value;
+  const digits = marked[2] ?? marked[4]!;
+  const letters = marked[3] ?? marked[5] ?? "";
+  return `${marked[1]}${[...digits].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("")}${letters}`;
+}
+
 const SUPERSCRIPT: Record<string, string> = {
   "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
   "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"
@@ -155,11 +180,10 @@ export function htmlArticleAnchors(html: string, articles: readonly string[]): R
 
 /** Kotwice stron PDF artykułów (numer -> "page=N"): strona pierwszego nagłówka, jak w splitArticles. */
 export function pdfArticleAnchors(pageTexts: readonly string[]): Record<string, string> {
-  const heading = /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
   const anchors: Record<string, string> = {};
   pageTexts.forEach((page, index) => {
-    for (const match of page.matchAll(heading)) {
-      const article = (match[1] ?? match[2])!;
+    for (const match of page.matchAll(articleHeadingPattern())) {
+      const article = articleIdFromHeading(match);
       anchors[article] ??= `page=${index + 1}`;
     }
   });

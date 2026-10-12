@@ -16,7 +16,7 @@ import {
   parseLegalActReference,
   type EliFetch
 } from "./core-law-act-lookup.js";
-import { anchoredUrl } from "./source-anchor.js";
+import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 
 const LIST_TOOL = "list_core_law_acts";
 const SEARCH_TOOL = "search_core_law";
@@ -96,7 +96,7 @@ const SCHEMAS: NormalizedToolSchema[] = [
           },
           article: {
             type: "string",
-            description: "Article number, e.g. 148, 991, 17a."
+            description: "Article number, e.g. 148, 991, 17a, 11¹ (superscript as ¹ or [1])."
           }
         }
       }
@@ -301,10 +301,7 @@ export class CoreLawToolRuntime {
     }
 
     if (call.name === READ_TOOL) {
-      const article = String(call.input.article ?? "")
-        .replace(/^art\.?\s*/i, "")
-        .trim()
-        .toLowerCase();
+      const article = normalizeArticleId(String(call.input.article ?? "").trim());
       if (!article) throw new Error("CORE_LAW_ARTICLE_REQUIRED");
       const resolved = await this.resolveAct(call.input.act);
       if ("result" in resolved) return resolved.result;
