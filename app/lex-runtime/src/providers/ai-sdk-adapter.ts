@@ -2011,7 +2011,13 @@ async function streamModelOnce(
     // ~30k tokens. The prompt itself is unchanged. OpenAI and Gemini cache a
     // repeated prefix on their own.
     ...(isAnthropicModel(model)
-      ? { providerOptions: { anthropic: { cacheControl: { type: "ephemeral" as const } } } }
+      ? {
+          providerOptions: {
+            anthropic: {
+              cacheControl: { type: "ephemeral" as const, ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) }
+            }
+          }
+        }
       : {}),
     messages: [...(sdkMessages(params.messages, images) as ModelMessage[]), ...extra.messages],
     ...(tools ? { tools } : {}),

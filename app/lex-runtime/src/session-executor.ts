@@ -2069,7 +2069,18 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // AUTO: the domain (prawo-polskie-v2 flash routing) and its act modules
     // (MAPA-AKTOW) the case points to; the model decides and reads them.
-    const caseText = [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n");
+    // A checkpoint workflow's turn ("Kontynuuj"): the matter is everything the user wrote.
+    const workflowTurn = Boolean(
+      request.contractWorkflowContext ||
+        request.processWorkflowContext ||
+        request.courtWorkflowContext ||
+        request.chronologyWorkflowContext ||
+        request.orderedCaseWorkflowContext
+    );
+    const caseText = [
+      workflowTurn ? withoutOutputContract(threadUserText(request.query)) : pathFacts.query,
+      ...recognisedDocuments.map((document) => document.label)
+    ].join("\n");
     corpusTools.setCaseText(caseText);
     // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
     // named): those modules are loaded and required; the hint below covers the rest.
@@ -2536,6 +2547,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               request.chronologyWorkflowContext
           }
         : {}),
+      resourcesInContext: [...contextResources],
+      criminalMatter: pathFacts.criminal,
       ...(request.contractWorkflowContext
         ? {
             contractWorkflowContext:

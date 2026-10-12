@@ -64,6 +64,10 @@ export type ProviderStreamParams = {
   // neither resumes nor records a thread. For self-contained calls (skill router,
   // document generator) whose prompt already carries the whole context.
   accountContinuity?: "none";
+  // Anthropic API prompt cache lifetime. "1h" for checkpoint workflows: the next
+  // checkpoint of the same matter (often after more than five minutes) reads the
+  // unchanged prompt from the cache instead of writing it again.
+  promptCacheTtl?: "5m" | "1h";
   tools?: NormalizedToolSchema[];
   maxIterations?: number;
   callbacks?: StreamCallbacks;

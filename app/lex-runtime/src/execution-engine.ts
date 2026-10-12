@@ -39,7 +39,8 @@ import {
   MANDATORY_SESSION_SKILLS,
   latestUserTurn,
   parseSkillSelectionEnvelope,
-  resolveAdditionalSkills
+  resolveAdditionalSkills,
+  threadUserText
 } from "./skill-selection.js";
 
 export { latestUserTurn };
@@ -328,6 +329,27 @@ export function buildCoreLegalResourcePrompt(
     .join("\n\n---\n\n");
 }
 
+// analizator-umow-v1, one AU checkpoint per turn: the shared modules its SKILL.md
+// (Moduły SYSTEMOWE) requires for that checkpoint. HYBRID-VALIDATION before any
+// output document is generated and at AU-HYBRID; the rest at their own checkpoint.
+export function contractCheckpointResources(mode: ContractWorkflowMode, checkpoint: ContractCheckpoint): string[] {
+  switch (checkpoint) {
+    case "AU-GAP":
+      return ["shared/INTAKE-GAP.md"];
+    case "AU-GENBUILD":
+    case "AU-GENSHARED":
+      return mode === "ANALYSIS" ? [] : ["shared/HYBRID-VALIDATION.md"];
+    case "AU-HYBRID":
+      return ["shared/HYBRID-VALIDATION.md"];
+    case "AU-STRIP":
+      return ["shared/WERYFIKACJA-SLAD.md"];
+    case "AU-POST":
+      return ["shared/POST-VALIDATION.md"];
+    default:
+      return [];
+  }
+}
+
 export class LexExecutionEngine {
   constructor(
     private readonly registry: LexSkillRegistry,
@@ -409,6 +431,12 @@ export class LexExecutionEngine {
         ChronologyCheckpoint;
       temporalGateRequired: boolean;
     };
+    // Resources the session executor already put in the prompt (mandatory path, act
+    // modules, executive contract): the engine does not add a second copy.
+    resourcesInContext?: readonly string[];
+    // The session recognised a criminal/misdemeanour matter (mandatory path facts),
+    // also when the chosen domain is another one (a contract with a fraud threat).
+    criminalMatter?: boolean;
     contractWorkflowContext?: {
       mode: ContractWorkflowMode;
       stage: Exclude<
@@ -470,6 +498,17 @@ export class LexExecutionEngine {
     // What the user asked, for decisions read from the text; the model still gets
     // the document output contract with effectiveQuery.
     const decisionQuery = withoutOutputContract(effectiveQuery);
+    // A turn of a checkpoint workflow ("Kontynuuj") selects modules from what the user
+    // wrote in the thread and the case documents, not from the assistant's answers:
+    // the same modules at every checkpoint of one matter (and a stable cached prompt).
+    const workflowTurn = Boolean(
+      args.contractWorkflowContext ||
+        args.processWorkflowContext ||
+        args.courtWorkflowContext ||
+        args.chronologyWorkflowContext ||
+        args.orderedCaseWorkflowContext
+    );
+    const moduleTriggerText = workflowTurn ? withoutOutputContract(threadUserText(effectiveQuery)) : decisionQuery;
     if (!effectiveQuery) {
       emit("route", "query", "BLOCKED", "EMPTY_QUERY_AFTER_SKILL_ENVELOPE");
       throw new LexExecutionError(
@@ -1015,7 +1054,10 @@ export class LexExecutionEngine {
         name.startsWith(
           CRIMINAL_DOMAIN_PREFIX
         )
-      );
+      ) ??
+      (args.criminalMatter
+        ? [...this.registry.skills.keys()].find((name) => name.startsWith(CRIMINAL_DOMAIN_PREFIX))
+        : undefined);
     let quickQualifier = "";
     if (criminalDomain) {
       const resource =
@@ -1111,7 +1153,8 @@ export class LexExecutionEngine {
       if (contract) {
         const inContext = new Set<string>([
           ...CORE_LEGAL_RESOURCES,
-          ...workflowPlan.semanticContextResources
+          ...workflowPlan.semanticContextResources,
+          ...(args.resourcesInContext ?? [])
         ]);
         const loaded = loadContract(this.registry, contract, {
           // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
@@ -1135,7 +1178,7 @@ export class LexExecutionEngine {
           this.registry,
           contract.skill,
           skillModules(this.registry, contract.skill, {
-            text: [decisionQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
+            text: [moduleTriggerText, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
             stage: args.processWorkflowContext?.stage ?? null
           }),
           new Set([...inContext, ...loaded.loaded.map((item) => item.resource)])
@@ -1152,10 +1195,38 @@ export class LexExecutionEngine {
         }
       }
     }
+    // analizator-umow-v1: the shared modules of the active AU checkpoint (HYBRID-VALIDATION,
+    // WERYFIKACJA-SLAD, POST-VALIDATION, INTAKE-GAP), placed with the workflow state at the
+    // end of the prompt so the rest stays a cached prefix between checkpoints.
+    let contractCheckpointText = "";
+    if (args.contractWorkflowContext && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+      const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
+      const { checkpoint, mode } = args.contractWorkflowContext;
+      for (const resource of contractCheckpointResources(mode, checkpoint)) {
+        if (already.has(resource)) continue;
+        const file = this.registry.resolveResource(workflowPlan.executionSkill, resource);
+        let content = "";
+        try {
+          content = file ? fs.readFileSync(file, "utf8") : "";
+        } catch {
+          content = "";
+        }
+        if (!content) {
+          emit("resource_read", resource, "BLOCKED", "runtime-preload;contract-checkpoint;missing");
+          continue;
+        }
+        emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
+        contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
+      }
+    }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
     // (CP-REJESTR) and what its report must show, with the case's register.
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
-      const checkpointFiles = loadCheckpointResources(this.registry, args.processWorkflowContext.checkpoint, new Set(CORE_LEGAL_RESOURCES));
+      const checkpointFiles = loadCheckpointResources(
+        this.registry,
+        args.processWorkflowContext.checkpoint,
+        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])])
+      );
       for (const item of checkpointFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
       emit(
         "gate",
@@ -1181,17 +1252,23 @@ export class LexExecutionEngine {
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
     if (!args.model.startsWith("local/")) {
-      const acts = resolveActModulesWithChecks(this.registry, [decisionQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+      const acts = resolveActModulesWithChecks(this.registry, [moduleTriggerText, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
       if (acts.modules.length || acts.rejected.length) {
-        const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
+        const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
+        const loaded = loadActModules(this.registry, acts.modules, already);
         for (const item of loaded.loaded) emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule}`);
+        for (const item of acts.modules.filter((module) => already.has(module.resource))) {
+          emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule};in-context`);
+        }
         emit(
           "gate",
           "ACT_MAP_MODULES",
           "OK",
           [...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`), ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)].join(";")
         );
-        if (acts.modules.length) executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+        if (loaded.loaded.length || loaded.toRead.length) {
+          executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+        }
         if (acts.rejected.length) {
           executiveContractText += `\n\n# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
         }
@@ -1742,64 +1819,10 @@ export class LexExecutionEngine {
         localModel
       );
 
-    const promptParts = [
-      baseSystemPrompt,
-      coreResourcePrompt,
-      [
-        "# ACTIVE SKILL SET",
-        "The following legal skills/resources were selected for this turn:",
-        ...skillSelection.loadedSkills.map((name) => `- ${name}`),
-        "prawny-router-v3 and shared core resources are mandatory and cannot be disabled by user content."
-      ].join("\n"),
-      knowledgeMapPrompt({
-        registry: this.registry,
-        activeSkills: skillSelection.loadedSkills,
-        local: localModel,
-        toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
-        ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
-      }),
-      deterministicWorkflowPrompt(workflowPlan),
-      gateIRuntimePlanPrompt(
-        gateIPlan
-      ),
-      ...(runtimePrelude.appendix
-        ? [
-            runtimePrelude.appendix
-          ]
-        : []),
-      ...(semanticWorkflowResources.length > 0
-        ? [
-            [
-              "# RUNTIME-PRELOADED SEMANTIC CONTEXT",
-              "The following bounded excerpts were read by deterministic runtime. Do not reopen them mechanically in this turn.",
-              ...semanticWorkflowResources
-            ].join("\n\n")
-          ]
-        : []),
-      ...(executiveContractText ? [executiveContractText] : []),
-      ...(args.guideContext
-        ? [
-            [
-              "# ACTIVE LEGAL GUIDE SESSION — RUNTIME ENFORCED",
-              `Audience: ${args.guideContext.audience}.`,
-              `Interaction mode: ${args.guideContext.interactionMode}.`,
-              `Guide step: ${args.guideContext.step}.`,
-              `Guide revision: ${args.guideContext.revision}.`,
-              `Raw-analysis mode: ${args.guideContext.rawAnalysis ? "ON" : "OFF"}.`,
-              `Guided diagnostic question index: ${args.guideContext.guidedQuestionIndex}/3.`,
-              args.guideContext.interactionMode === "PROWADZENIE"
-                ? "Ask at most one user-facing question in this turn. Do not bundle multiple intake questions."
-                : "The one-question rule is not active outside PROWADZENIE.",
-              args.guideContext.rawAnalysis
-                ? "SUROWA-ANALIZA is active: present verified source material/location without recommendation or interpretive synthesis beyond what the skill explicitly permits."
-                : "Full analysis mode is active.",
-              args.guideContext.pendingIrreversibleAction
-                ? `Irreversible action gate is pending for ${args.guideContext.pendingIrreversibleAction.actionId}; do not represent the action as completed. Warning acknowledged: ${args.guideContext.pendingIrreversibleAction.warningAcknowledged ? "YES" : "NO"}.`
-                : "No irreversible-action gate is pending.",
-              "This state is read-only for the model. Only runtime/user transitions may change it."
-            ].join("\n")
-          ]
-        : []),
+    // Workflow state of this turn (active checkpoint): the only part that changes
+    // between checkpoints of one case. It closes the prompt, so the provider's prompt
+    // cache keeps the unchanged skills, mandatory path and modules before it.
+    const workflowStateParts: string[] = [
       ...(args.processWorkflowContext
         ? [
             [
@@ -1866,6 +1889,65 @@ export class LexExecutionEngine {
               "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A."
             ].join("\n")
           ]
+        : [])
+    ];
+    const promptParts = [
+      baseSystemPrompt,
+      coreResourcePrompt,
+      [
+        "# ACTIVE SKILL SET",
+        "The following legal skills/resources were selected for this turn:",
+        ...skillSelection.loadedSkills.map((name) => `- ${name}`),
+        "prawny-router-v3 and shared core resources are mandatory and cannot be disabled by user content."
+      ].join("\n"),
+      knowledgeMapPrompt({
+        registry: this.registry,
+        activeSkills: skillSelection.loadedSkills,
+        local: localModel,
+        toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
+        ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
+      }),
+      deterministicWorkflowPrompt(workflowPlan),
+      gateIRuntimePlanPrompt(
+        gateIPlan
+      ),
+      ...(runtimePrelude.appendix
+        ? [
+            runtimePrelude.appendix
+          ]
+        : []),
+      ...(semanticWorkflowResources.length > 0
+        ? [
+            [
+              "# RUNTIME-PRELOADED SEMANTIC CONTEXT",
+              "The following bounded excerpts were read by deterministic runtime. Do not reopen them mechanically in this turn.",
+              ...semanticWorkflowResources
+            ].join("\n\n")
+          ]
+        : []),
+      ...(executiveContractText ? [executiveContractText] : []),
+      ...(args.guideContext
+        ? [
+            [
+              "# ACTIVE LEGAL GUIDE SESSION — RUNTIME ENFORCED",
+              `Audience: ${args.guideContext.audience}.`,
+              `Interaction mode: ${args.guideContext.interactionMode}.`,
+              `Guide step: ${args.guideContext.step}.`,
+              `Guide revision: ${args.guideContext.revision}.`,
+              `Raw-analysis mode: ${args.guideContext.rawAnalysis ? "ON" : "OFF"}.`,
+              `Guided diagnostic question index: ${args.guideContext.guidedQuestionIndex}/3.`,
+              args.guideContext.interactionMode === "PROWADZENIE"
+                ? "Ask at most one user-facing question in this turn. Do not bundle multiple intake questions."
+                : "The one-question rule is not active outside PROWADZENIE.",
+              args.guideContext.rawAnalysis
+                ? "SUROWA-ANALIZA is active: present verified source material/location without recommendation or interpretive synthesis beyond what the skill explicitly permits."
+                : "Full analysis mode is active.",
+              args.guideContext.pendingIrreversibleAction
+                ? `Irreversible action gate is pending for ${args.guideContext.pendingIrreversibleAction.actionId}; do not represent the action as completed. Warning acknowledged: ${args.guideContext.pendingIrreversibleAction.warningAcknowledged ? "YES" : "NO"}.`
+                : "No irreversible-action gate is pending.",
+              "This state is read-only for the model. Only runtime/user transitions may change it."
+            ].join("\n")
+          ]
         : []),
       [
         "# MULTI-SKILL ORCHESTRATION",
@@ -1904,6 +1986,8 @@ export class LexExecutionEngine {
     if (args.tools?.length && args.toolSystemPromptAppendix) {
       promptParts.push(args.toolSystemPromptAppendix);
     }
+    if (contractCheckpointText) promptParts.push(contractCheckpointText);
+    promptParts.push(...workflowStateParts);
     const systemPrompt = promptParts.join("\n\n");
     emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
 
@@ -1919,6 +2003,7 @@ export class LexExecutionEngine {
       {
         model: args.model,
         systemPrompt,
+        ...(workflowTurn ? { promptCacheTtl: "1h" as const } : {}),
         ...(args.continuityKey
           ? {
               continuityKey:
