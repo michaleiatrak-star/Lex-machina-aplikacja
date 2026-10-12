@@ -238,6 +238,22 @@ describe("verifyFromCoreLaw", () => {
     expect(journal.decision === "RECORD" && journal.record.status).toBe("VERIFIED");
   });
 
+  it("zmiana w vacatio legis: odmowa tylko dla artykułu, którego odnośniki ją zapowiadają", () => {
+    const pending = kw({
+      notYetInForce: [{ eli: "DU/2026/1046", title: null, from: "2026-11-05" }],
+      articles: { "51": KW_ART_51, "52": "Art. 52. § 1. Pierwsze brzmienie." }
+    });
+    Object.assign(pending.record, {
+      textSource: "pdf",
+      footnotes: { "4": "W tym brzmieniu obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 5 .", "5": "Dodany przez ustawę, która wejdzie w życie z dniem 5 listopada 2026 r." },
+      articleNotes: { "52": ["4", "5"] },
+      markedArticles: { "52": "Art. 52. § 1. 4 ) Pierwsze brzmienie.\n§ 1. 5 ) Drugie brzmienie." }
+    });
+    const art51 = verify(index(pending));
+    expect(art51.decision === "RECORD" && art51.record.status).toBe("VERIFIED");
+    expect(verify(index(pending), { claim: "art. 52 § 1 KW" })).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+  });
+
   it("kopia niesprawdzana w ELI dłużej niż 7 dni nie daje VERIFIED", () => {
     const stale = verifyFromCoreLaw({
       index: index(kw()),
