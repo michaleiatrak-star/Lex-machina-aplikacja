@@ -10,13 +10,20 @@ import os from "node:os";
 import path from "node:path";
 import {
   LocalPdfTextExtractor,
+  SMALL_LINE_MARK,
   type PdfTextExtractor
 } from "./pdf-text-extractor.js";
 import type { OcrEngine } from "./document-ingestion.js";
 import type { CoreLawActLookup } from "./core-law-act-lookup.js";
 import {
+  articleFootnotes,
+  articleWording,
+  extractPageFootnotes,
+  stripTrailingHeadings
+} from "./core-law-footnotes.js";
+import {
   articleHeadingPattern,
-  articleIdFromHeading,
+  articleIdsFromHeading,
   htmlArticleAnchors,
   pdfArticleAnchors
 } from "./source-anchor.js";
@@ -48,8 +55,20 @@ export type CoreActRecord = {
   textSource: "html" | "pdf" | "ocr" | "none";
   // Wersja ekstrakcji: 2 = pusty HTML obwieszczenia t.j. -> PDF, PDF z wierszami (0.1.10 hotfix 7);
   // 3 = kotwice jednostek (articleAnchors) liczone przy pobraniu;
-  // 4 = artykuły z indeksem górnym osobno (11¹), bez przytoczeń z części obwieszczenia t.j.
-  extraction?: 2 | 3 | 4;
+  // 4 = artykuły z indeksem górnym osobno (11¹), bez przytoczeń z części obwieszczenia t.j.;
+  // 5 = PDF: wyrazy rozbite przez pdf.js złączone, przypisy z dołu strony poza treścią
+  // artykułu (footnotes), bez nagłówków rozdziałów; zakresy „Art. 133–142.”.
+  extraction?: 2 | 3 | 4 | 5;
+  // PDF: suma SHA-256 urzędowego pliku i sposób odczytu (nieurzędowy odczyt urzędowego PDF).
+  pdfSha256?: string;
+  extractor?: string;
+  // Odnośniki t.j. z PDF: numer -> treść; numery odnośników artykułu; treść artykułu ze
+  // znacznikami „N )” (tylko artykuły z odnośnikami) do wyboru brzmienia obowiązującego.
+  footnotes?: Record<string, string>;
+  articleNotes?: Record<string, string[]>;
+  markedArticles?: Record<string, string>;
+  // Odczyt PDF porównany ze starszym t.j. w urzędowym HTML: artykuły identyczne co do słowa.
+  htmlCheck?: { eli: string; confirmed: string[]; compared: number };
   // Strony PDF odczytane OCR (pozostałe z warstwy tekstowej).
   ocrPages?: number[];
   pages?: number;
@@ -400,7 +419,38 @@ const ENTITIES: Record<string, string> = {
   hellip: "…"
 };
 
-const EXTRACTION_VERSION = 4;
+const EXTRACTION_VERSION = 5;
+// Odczyt PDF w kopii: pdf.js (warstwa tekstowa), wiersze i elementy łączone geometrią.
+const PDF_EXTRACTOR = "pdf.js-lines/2";
+
+/**
+ * HTML ELI obwieszczenia t.j.: część obwieszczenia to bloki id="pass_N" z przytoczonymi
+ * przepisami ustaw zmieniających (np. „Art. 5. Ustawa wchodzi w życie…” w KSH t.j. 2024/18),
+ * które jako pierwsze wystąpienie numeru zastępowały artykuły aktu. Usuwa te bloki.
+ */
+export function withoutQuotedHtmlUnits(html: string): string {
+  const open = /<div\b[^>]*\sid="pass_\d+"[^>]*>/giu;
+  let out = "";
+  let cursor = 0;
+  for (let match = open.exec(html); match; match = open.exec(html)) {
+    if (match.index < cursor) continue;
+    const tags = /<\/?div\b[^>]*>/giu;
+    tags.lastIndex = match.index;
+    let depth = 0;
+    let end = html.length;
+    for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+      depth += tag[0].startsWith("</") ? -1 : 1;
+      if (depth === 0) {
+        end = tag.index + tag[0].length;
+        break;
+      }
+    }
+    out += html.slice(cursor, match.index);
+    cursor = end;
+    open.lastIndex = end;
+  }
+  return out + html.slice(cursor);
+}
 
 /** Początek załącznika obwieszczenia t.j. (tekst ustawy); -1, gdy go nie ma. */
 function annexStart(text: string): number {
@@ -411,6 +461,14 @@ function annexStart(text: string): number {
 export function htmlToText(html: string): string {
   return html
     .replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, "")
+    // Treść odnośnika w dymku (<span class="tooltip-text">) i jego znacznik „2)” nie należą
+    // do brzmienia przepisu: bez tego trafiały do środka artykułu („społeczny.2)Zdanie trzecie…”).
+    .replace(/<span class="tooltip-text">[\s\S]*?<\/span>\s*<\/span>/gi, "")
+    .replace(/<sup[^>]*>\s*\d{1,3}\)\s*<\/sup>/gi, "")
+    // Zbiorcza lista odnośników na końcu dokumentu (<div class="gloss">) i przycisk „Pokaż
+    // całość”: inaczej doklejały się do ostatniego artykułu (KSH t.j. 2024/18, art. 633).
+    .replace(/<div class="gloss"[^>]*>\s*<div>[^<]*<\/div>\s*<div>[\s\S]*?<\/div>\s*<\/div>/gi, "")
+    .replace(/<div id="show-all"[\s\S]*?<\/div>/gi, "")
     // Indeks górny numeru artykułu (<sup>1</sup>) jak w PDF: „Art. 11[1].”, nie „Art. 111.”.
     .replace(/<sup[^>]*>\s*(\d+[a-z]{0,4})\s*<\/sup>/gi, "[$1]")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -425,21 +483,56 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
+const NOTE_PLACEHOLDER = "\u2060";
+
+/**
+ * HTML t.j. z odnośnikami: znacznik odnośnika (<sup>6)</sup> z dymkiem) zostaje w tekście jako
+ * „6 )” — jak w PDF — a treść odnośnika trafia do footnotes. Znacznik przy nagłówku artykułu
+ * („Art. 3b<sup>6)</sup>.”) staje za kropką, żeby nagłówek był rozpoznany.
+ */
+export function htmlToTextWithNotes(html: string): { text: string; footnotes: Record<string, string> } {
+  const footnotes: Record<string, string> = {};
+  const marked = html.replace(
+    /<a class="gloss-link[^"]*"[^>]*>\s*<sup>\s*(\d{1,3})\)\s*<\/sup>\s*<span class="tooltip-text">\s*<span class="pro-gloss-inner">([\s\S]*?)<\/span>\s*<\/span>\s*<\/a>/giu,
+    (_, number: string, body: string) => {
+      footnotes[number] = htmlToText(body).replace(/\s+/gu, " ").trim();
+      return `${NOTE_PLACEHOLDER}${number}${NOTE_PLACEHOLDER}`;
+    }
+  );
+  const text = htmlToText(marked)
+    .replace(
+      new RegExp(String.raw`((?:Art\.|§)\s*\d+[a-z]*(?:\[[^\]\n]+\][a-z]*)?)\s*${NOTE_PLACEHOLDER}(\d{1,3})${NOTE_PLACEHOLDER}\s*\.`, "gu"),
+      "$1. $2 )"
+    )
+    .replace(new RegExp(String.raw`\s*${NOTE_PLACEHOLDER}(\d{1,3})${NOTE_PLACEHOLDER}`, "gu"), " $1 )");
+  return { text, footnotes };
+}
+
 // Nagłówek/stopka strony Dz.U. z ISAP ("©Kancelaria Sejmu s. 12/180", data t.j.) przerywa
 // artykuł na granicy stron i psułby porównanie cytatu.
 export function stripPdfPageHeaders(text: string): string {
+  // Wiersz małą czcionką ma na początku SMALL_LINE_MARK; filtry nagłówków go pomijają.
+  const plain = (line: string) => line.replaceAll(SMALL_LINE_MARK, "");
   return text
     .split("\n")
-    .filter((line) => !/^\s*©?\s*Kancelaria Sejmu\s+s\.\s*\d+\s*\/\s*\d+\s*$/iu.test(line))
-    .filter((line) => !/^\s*\d{4}-\d{2}-\d{2}\s*$/u.test(line))
-    .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]\s*Poz\.\s*\d+(?:\s+www\.rcl\.gov\.pl)?\s*$/iu.test(line))
-    .filter((line) => !/^\s*www\.rcl\.gov\.pl\s*$/iu.test(line))
+    .filter((line) => !/^\s*©?\s*Kancelaria Sejmu\s+s\.\s*\d+\s*\/\s*\d+\s*$/iu.test(plain(line)))
+    .filter((line) => !/^\s*\d{4}-\d{2}-\d{2}\s*$/u.test(plain(line)))
+    .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]\s*Poz\.\s*\d+(?:\s+www\.rcl\.gov\.pl)?\s*$/iu.test(plain(line)))
+    .filter((line) => !/^\s*www\.rcl\.gov\.pl\s*$/iu.test(plain(line)))
     // OCR dzieli nagłówek na dwa wiersze: "Dziennik Ustaw Nr 103 — 7712 —" i "Poz. 858".
-    .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]?\s*$/iu.test(line))
-    .filter((line) => !/^\s*Poz\.\s*\d+\s*$/iu.test(line))
+    .filter((line) => !/^\s*Dziennik Ustaw(?:\s+Nr\s*\d+)?\s*[–—-]\s*\d+\s*[–—-]?\s*$/iu.test(plain(line)))
+    .filter((line) => !/^\s*Poz\.\s*\d+\s*$/iu.test(plain(line)))
     .join("\n")
-    // Przeniesienie wyrazu na granicy wiersza ("zna-\nleziony").
-    .replace(/(\p{L})-\n(\p{Ll})/gu, "$1$2");
+    // Przeniesienie wyrazu na granicy wiersza ("zna-\nleziony"), także w przypisie.
+    .replace(new RegExp(`(\\p{L})-\\n${SMALL_LINE_MARK}?(\\p{Ll})`, "gu"), "$1$2")
+    // Warstwa tekstowa PDF Dz.U. skleja „nie” ze stopniem wyższym („niepóźniej”, „niedłuższy”),
+    // choć wydruk i HTML mają odstęp; te formy piszą się osobno („niemniej” zostaje).
+    .replace(
+      /(?<!\p{L})([Nn]ie)(później|wcześniej|dłużej|dłuższ\p{L}*|krócej|krótsz\p{L}*|wyżej|wyższ\p{L}*|niżej|niższ\p{L}*|większ\p{L}*|mniejsz\p{L}*|więcej|rzadziej|częściej|dawniej|dalej|bliżej|prędzej)(?!\p{L})/gu,
+      "$1 $2"
+    )
+    // „niemniej” przed „niż” to „nie mniej niż” („niemniej jednak” zostaje).
+    .replace(/(?<!\p{L})([Nn]ie)(mniej)(?=\s+niż(?!\p{L}))/gu, "$1 $2");
 }
 
 // PDF Dz.U. z lat ok. 2003-2011 mają czcionki z własnym kodowaniem: pdf.js zwraca
@@ -467,13 +560,25 @@ function articleBase(id: string): number {
  * nagłówek: tekst brakującego artykułu dopisał się do poprzedniego.
  */
 export function checkArticleExtraction(text: string, order: string[]): ExtractionCheck {
-  const marks = [...text.matchAll(articleHeadingPattern())].map(articleIdFromHeading);
+  // Zakres „Art. 133–142. (pominięte)” to jeden nagłówek: liczy się raz, numery z niego nie są luką.
+  const headings = [...text.matchAll(articleHeadingPattern())];
+  const marks = headings.map((match) => articleIdsFromHeading(match)[0]!);
+  const startOf = new Map<string, number>();
+  headings.forEach((match, index) => {
+    if (!startOf.has(marks[index]!)) startOf.set(marks[index]!, match.index!);
+  });
   const gaps: string[] = [];
   const suspect = new Set<string>();
   let outOfOrder = 0;
   for (let index = 1; index < order.length; index += 1) {
     const previous = articleBase(order[index - 1]!);
     const current = articleBase(order[index]!);
+    // Luka po rozdziale uchylonym w całości („Rozdział 13\n(uchylony)”, PrAut t.j. 2025/24) to
+    // nie zgubiony nagłówek: między artykułami stoi nagłówek jednostki z „(uchylony)”.
+    const between = text.slice(startOf.get(order[index - 1]!) ?? 0, startOf.get(order[index]!) ?? 0);
+    if (current > previous + 1 && /\n(?:Rozdział|ROZDZIAŁ|DZIAŁ|Dział|Oddział|TYTUŁ|Tytuł)\s[^\n]*\n\s*\(uchylon[yae]\)/u.test(between)) {
+      continue;
+    }
     if (current > previous + 1) {
       gaps.push(current === previous + 2 ? String(previous + 1) : `${previous + 1}–${current - 1}`);
       suspect.add(order[index - 1]!);
@@ -494,25 +599,38 @@ export function checkArticleExtraction(text: string, order: string[]): Extractio
   return { gaps, outOfOrder, duplicates, suspectArticles: [...suspect].filter((id) => order.includes(id)) };
 }
 
-/** Article number -> article text. The first occurrence of a number wins. */
+/**
+ * Article number -> article text. The first occurrence of a number wins; later occurrences
+ * (t.j. drukuje cały artykuł w dwóch brzmieniach: obecnym i wchodzącym w życie) są w repeats.
+ */
 export function splitArticles(text: string): {
   order: string[];
   articles: Record<string, string>;
+  repeats: Record<string, string[]>;
 } {
   // "Art. 5." w ustawach, "Art. 11[1]." (art. 11¹) w PDF Dz.U.; "Artykuł 5" w umowach międzynarodowych.
   const marks = [...text.matchAll(articleHeadingPattern())].map((match) => ({
-    id: articleIdFromHeading(match),
+    ids: articleIdsFromHeading(match),
     start: match.index! + (match[0].startsWith("\n") ? 1 : 0)
   }));
   const order: string[] = [];
   const articles: Record<string, string> = {};
+  const repeats: Record<string, string[]> = {};
   marks.forEach((mark, index) => {
-    if (articles[mark.id] !== undefined) return;
     const end = marks[index + 1]?.start ?? text.length;
-    articles[mark.id] = text.slice(mark.start, end).trim();
-    order.push(mark.id);
+    const body = text.slice(mark.start, end).trim();
+    if (articles[mark.ids[0]!] !== undefined) {
+      if (mark.ids.length === 1) (repeats[mark.ids[0]!] ??= []).push(body);
+      return;
+    }
+    // „Art. 133–142. (pominięte)”: każdy numer z zakresu ma ten wpis, a art. 132 go nie wchłania.
+    for (const id of mark.ids) {
+      if (articles[id] !== undefined) continue;
+      articles[id] = body;
+      order.push(id);
+    }
   });
-  return { order, articles };
+  return { order, articles, repeats };
 }
 
 export function normalizeForSearch(value: string): string {
@@ -669,7 +787,8 @@ export class CoreLawIndex {
     // jednolity dostępny tylko w PDF (np. kodeksy) dawał zero artykułów.
     private readonly pdf: PdfTextExtractor = new LocalPdfTextExtractor(CORE_LAW_PDF_LIMITS, {
       lines: true,
-      allowEmpty: true
+      allowEmpty: true,
+      markSmallLines: true
     }),
     private readonly now: () => number = () => Date.now(),
     private readonly gapMs: number = REQUEST_GAP_MS,
@@ -1537,10 +1656,14 @@ export class CoreLawIndex {
     let sourceUrl = base;
     let html = "";
     let pageTexts: string[] = [];
+    let footnotes: Record<string, string> = {};
+    let pdfSha256: string | undefined;
     if (meta.textHTML === true) {
       sourceUrl = `${base}/text.html`;
-      html = await (await this.get(sourceUrl, "text/html")).text();
-      body = htmlToText(html);
+      html = withoutQuotedHtmlUnits(await (await this.get(sourceUrl, "text/html")).text());
+      const withNotes = htmlToTextWithNotes(html);
+      body = withNotes.text;
+      footnotes = withNotes.footnotes;
       textSource = "html";
     }
     // text.html obwieszczenia t.j. bywa pusty (0 B): obowiązujące brzmienie jest tylko w PDF.
@@ -1553,8 +1676,12 @@ export class CoreLawIndex {
         await (await this.get(sourceUrl, "application/pdf", PDF_TIMEOUT_MS)).arrayBuffer()
       );
       const pdf = await this.pdfText(eli, bytes);
-      body = pdf.text;
-      pageTexts = pdf.pageTexts;
+      // Przypisy z dołu stron poza treścią: inaczej wpadały do artykułu kończącego stronę.
+      const split = extractPageFootnotes(pdf.pageTexts);
+      pageTexts = split.pages;
+      body = pageTexts.filter(Boolean).join("\n");
+      footnotes = split.footnotes;
+      pdfSha256 = createHash("sha256").update(bytes).digest("hex");
       ocrPages = pdf.ocrPages;
       pages = pdf.pages;
       textSource = ocrPages.length ? "ocr" : "pdf";
@@ -1572,7 +1699,28 @@ export class CoreLawIndex {
         );
       }
     }
-    const { order, articles } = splitArticles(body);
+    const { order, articles, repeats } = splitArticles(body);
+    const articleNotes: Record<string, string[]> = {};
+    const markedArticles: Record<string, string> = {};
+    const today = todayWarsaw(this.now());
+    for (const id of order) {
+      // Artykuł drukowany kilka razy (brzmienie obecne i wchodzące w życie): wszystkie wydruki
+      // zostają w markedArticles, w articles — brzmienie obowiązujące w dniu pobrania.
+      const prints = [articles[id]!, ...(repeats[id] ?? [])].map(stripTrailingHeadings);
+      const text = prints.join("\n");
+      const marked = articleFootnotes(text, footnotes);
+      articles[id] = marked.text;
+      if (marked.notes.length) {
+        articleNotes[id] = marked.notes;
+        markedArticles[id] = text;
+      }
+      if (prints.length > 1) {
+        // Bez daty w odnośniku: pierwszy wydruk (jak dotąd), a odczyt poda ostrzeżenie (unresolved).
+        const wording = articleWording(text, footnotes, today);
+        articles[id] = wording.unresolved ? articleFootnotes(prints[0]!, footnotes).text : wording.text;
+        markedArticles[id] = text;
+      }
+    }
     const extractionCheck = textSource === "pdf" ? checkArticleExtraction(body, order) : null;
     const articleAnchors =
       textSource === "html"
@@ -1592,6 +1740,12 @@ export class CoreLawIndex {
         true
       );
     }
+    // Niezależne potwierdzenie odczytu PDF: artykuł słowo w słowo zgodny ze starszym t.j. w
+    // urzędowym HTML ELI. Tylko potwierdza (różnica to zwykle nowelizacja), nie odmawia.
+    const htmlCheck =
+      (textSource === "pdf" || textSource === "ocr") && meta.type === "Obwieszczenie"
+        ? await this.officialHtmlCheck(eli, articles).catch(() => null)
+        : null;
     return {
       eli,
       title: text(meta.title) ?? eli,
@@ -1610,7 +1764,49 @@ export class CoreLawIndex {
       ...(extractionCheck && (extractionCheck.suspectArticles.length || extractionCheck.gaps.length)
         ? { extractionCheck }
         : {}),
+      ...(pdfSha256 ? { pdfSha256, extractor: textSource === "ocr" ? `${PDF_EXTRACTOR}+ocr` : PDF_EXTRACTOR } : {}),
+      ...(Object.keys(articleNotes).length ? { footnotes, articleNotes, markedArticles } : {}),
+      ...(htmlCheck ? { htmlCheck } : {}),
       text: body
     };
+  }
+
+  /**
+   * Starszy t.j. tego samego aktu w urzędowym HTML (najwyżej 3 wcześniejsze t.j.): numery
+   * artykułów, których słowa są identyczne z odczytem PDF. null: brak HTML w ELI.
+   */
+  private async officialHtmlCheck(
+    eli: string,
+    articles: Record<string, string>
+  ): Promise<{ eli: string; confirmed: string[]; compared: number } | null> {
+    const references = await (await this.get(`${ELI_API}/acts/${eli}/references`, "application/json")).json();
+    const base = eliLinks(references, (key) => /jednolit\S* dla/i.test(key))[0];
+    if (!base) return null;
+    await this.pause();
+    const baseReferences = await (await this.get(`${ELI_API}/acts/${base.eli}/references`, "application/json")).json();
+    const older = eliLinks(baseReferences, (key) => /^Inf\. o tekście jednolitym$/i.test(key))
+      .filter((link) => link.eli !== eli)
+      .sort((a, b) => b.year - a.year || b.pos - a.pos)
+      .slice(0, 3);
+    for (const candidate of older) {
+      await this.pause();
+      const meta = (await (await this.get(`${ELI_API}/acts/${candidate.eli}`, "application/json")).json()) as Record<string, unknown>;
+      if (meta.textHTML !== true) continue;
+      await this.pause();
+      const html = withoutQuotedHtmlUnits(await (await this.get(`${ELI_API}/acts/${candidate.eli}/text.html`, "text/html")).text());
+      const parsed = htmlToTextWithNotes(html);
+      const split = splitArticles(parsed.text);
+      const words = (value: string) => (value.match(/[^\W\d_⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu) ?? []).join(" ");
+      const confirmed: string[] = [];
+      let compared = 0;
+      for (const id of split.order) {
+        if (articles[id] === undefined) continue;
+        compared += 1;
+        const official = articleFootnotes(stripTrailingHeadings(split.articles[id]!), parsed.footnotes).text;
+        if (words(official) === words(articles[id]!)) confirmed.push(id);
+      }
+      return { eli: candidate.eli, confirmed, compared };
+    }
+    return null;
   }
 }

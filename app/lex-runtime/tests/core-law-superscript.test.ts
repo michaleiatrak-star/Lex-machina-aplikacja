@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CoreLawIndex, htmlToText, splitArticles } from "../src/core-law-index.js";
+import { CoreLawIndex, checkArticleExtraction, htmlToText, splitArticles } from "../src/core-law-index.js";
 import { CoreLawToolRuntime } from "../src/core-law-tool-runtime.js";
 import { normalizeArticleId, pdfArticleAnchors } from "../src/source-anchor.js";
 
@@ -56,6 +56,25 @@ describe("artykuły z indeksem górnym i obwieszczenia t.j.", () => {
     expect(pdfArticleAnchors(["Art. 11. A", "Art. 11[1]. B"])).toEqual({ "11": "page=1", "11¹": "page=2" });
   });
 
+  it("zakres „Art. 133–142. (pominięte)” to wpis każdego numeru, nie luka ani część art. 132", () => {
+    const text = ["Art. 132. Orzekanie w sprawach.", "Art. 133–142. (pominięte)", "Art. 143. Dalej."].join("\n");
+    const { order, articles } = splitArticles(text);
+    expect(order).toEqual(["132", ...Array.from({ length: 10 }, (_, i) => String(133 + i)), "143"]);
+    expect(articles["132"]).not.toContain("pominięte");
+    expect(articles["137"]).toBe("Art. 133–142. (pominięte)");
+    expect(checkArticleExtraction(text, order)).toMatchObject({ gaps: [], suspectArticles: [] });
+  });
+
+  it("indeks górny jako cyfry oddzielone spacją („Art. 6 1 .”) i litera za indeksem w HTML", () => {
+    expect(splitArticles("Art. 6. Definicje.\nArt. 6 1 . Rozpowszechnianie.\nArt. 6 2 . Dalej.").order).toEqual(["6", "6¹", "6²"]);
+    expect(splitArticles(htmlToText("<p>Art. 300<sup>71</sup>a. Rada nadzorcza.</p><p>Art. 301. Dalej.</p>")).order).toEqual(["300⁷¹a", "301"]);
+  });
+
+  it("luka po rozdziale uchylonym w całości nie oznacza artykułu jako podejrzanego", () => {
+    const text = "Art. 103. Spory.\nRozdział 13\n(uchylony)\nRozdział 14\nOdpowiedzialność karna\nArt. 115. Kto przywłaszcza.";
+    expect(checkArticleExtraction(text, splitArticles(text).order)).toMatchObject({ gaps: [], suspectArticles: [] });
+  });
+
   it("<sup> w HTML nie skleja numeru (art. 11¹, nie art. 111)", () => {
     const { order } = splitArticles(htmlToText("<p>Art. 11<sup>1</sup>. Tekst.</p><p>Art. 12. Dalej.</p>"));
     expect(order).toEqual(["11¹", "12"]);
@@ -88,6 +107,30 @@ describe("artykuły z indeksem górnym i obwieszczenia t.j.", () => {
       { id: "1", name: "read_core_law_article", input: { act: "DU/2026/1245", article: "11[1]" } }
     ]);
     expect(JSON.parse(read!.content).text).toContain("szanować godność");
+  });
+
+  it("artykuł drukowany w HTML t.j. dwa razy: brzmienie obowiązujące wg odnośników (u.ś.u.d.e. art. 3b)", async () => {
+    const gloss = (n: string, text: string) =>
+      `<A class="gloss-link tooltip" href="#gloss-0:${n}:"><sup>${n})</sup><span class="tooltip-text"><span class="pro-gloss-inner">${text}</span></span></A>`;
+    const html =
+      `<p>Art. 1. Ustawa określa zasady.</p>` +
+      `<p>Art. 3b${gloss("6", "Obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 7.")}. Stare brzmienie przepisu.</p>` +
+      `<p>Art. 3b${gloss("7", "W brzmieniu ustalonym przez ustawę, która wejdzie w życie z dniem 10 listopada 2024 r.")}. 1. Nowe brzmienie przepisu.</p>` +
+      `<p>Art. 4. Dalej.</p>`;
+    const fetcher = async (url: string) => {
+      if (url.endsWith("/references")) return Response.json({});
+      if (url.endsWith("/DU/2024/1513")) return Response.json({ title: "Obwieszczenie — u.ś.u.d.e.", type: "Obwieszczenie", status: "obowiązujący", textHTML: true });
+      if (url.endsWith("/DU/2024/1513/text.html")) return new Response(html);
+      return Response.json({ title: "Inny akt", textHTML: false, textPDF: false });
+    };
+    const index = new CoreLawIndex(tempDir("lex-core-store-"), fetcher as never, noPdf as never, () => Date.parse("2026-10-12T10:00:00Z"), 0);
+    index.load(corpus(["| u.ś.u.d.e. | Dz.U. 2024 poz. 1513 t.j. | dr-11 | ✅ |"]));
+    await index.refresh({ force: true });
+    const record = index.currentRecord("DU/2024/1513")!;
+    expect(record.articleOrder).toEqual(["1", "3b", "4"]);
+    expect(record.articles["3b"]).toContain("Nowe brzmienie");
+    expect(record.articles["3b"]).not.toContain("Stare brzmienie");
+    expect(record.footnotes?.["7"]).toContain("10 listopada 2024");
   });
 
   it("nowelizacja pobrana przy sprawdzaniu t.j. nie zostaje na liście jako niepobrana", async () => {

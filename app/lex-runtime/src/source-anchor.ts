@@ -20,15 +20,32 @@ const UNIT_KIND: Record<string, UnitStep["kind"]> = {
 // (pdf.js: „Art. 11 [1] .”), HTML jako <sup>; klucz kopii to zapis z cytatu: „11¹”, „151⁹a”.
 const TO_SUPERSCRIPT = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
 
-/** Nagłówek artykułu: grupy 1 numer, 2 cyfry indeksu górnego, 3 litery po indeksie, 4 „Artykuł N”. */
+/**
+ * Nagłówek artykułu. Indeks górny w PDF Dz.U.: „Art. 11[1].” / „Art. 11 [1] .” (pdf.js),
+ * „Art. 6 1 .” (cyfry indeksu oddzielone spacją, kropka po spacji — inne PDF), w HTML
+ * „Art. 300[71]a.” (litera za indeksem). Zakres „Art. 133–142. (pominięte)”. „Artykuł 5” w umowach.
+ */
 export function articleHeadingPattern(): RegExp {
-  return /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})(?:\s*\[\s*(\d+)\s*([a-z]{0,4})\s*\])?\s*\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
+  return /(?:^|\n)\s*(?:Art\.\s*(?<num>\d+[a-z]{0,4})(?:\s*\[\s*(?<sup>\d+)\s*(?<supIn>[a-z]{0,4})\s*\]\s*(?<supAfter>[a-z]{0,4})|\s+(?<supSpaced>\d{1,3})(?<supSpacedLetters>[a-z]{0,4})(?=\s+\.))?\s*\.|Artykuł\s+(?<treaty>\d+[a-z]{0,4})\.?|Art\.\s*(?<from>\d+)\s*[–—-]\s*(?<to>\d+)\s*\.)(?=\s)/gu;
 }
 
-export function articleIdFromHeading(match: RegExpMatchArray): string {
-  if (match[4]) return match[4];
-  const sup = match[2] ? [...match[2]].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("") : "";
-  return `${match[1]!}${sup}${match[3] ?? ""}`;
+// Zakres dłuższy niż to jest raczej błędem odczytu niż jednym wpisem t.j.
+const MAX_RANGE = 500;
+
+/** Numery artykułów z nagłówka; zakres „Art. 133–142.” daje każdy numer z zakresu. */
+export function articleIdsFromHeading(match: RegExpMatchArray): string[] {
+  const group = match.groups ?? {};
+  if (group.from && group.to) {
+    const from = Number(group.from);
+    const to = Number(group.to);
+    if (to <= from || to - from > MAX_RANGE) return [`${group.from}–${group.to}`];
+    return Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+  }
+  if (group.treaty) return [group.treaty];
+  const digits = group.sup ?? group.supSpaced ?? "";
+  const sup = [...digits].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("");
+  // Litera w nawiasie („[71a]”, PDF) albo za nim („<sup>71</sup>a”, HTML).
+  return [`${group.num!}${sup}${group.supIn || group.supAfter || group.supSpacedLetters || ""}`];
 }
 
 /** „11^1”, „11[1]”, „11 [1a]”, „art. 11¹” -> „11¹” / „11¹a”; inny zapis bez zmian (małe litery). */
@@ -183,8 +200,7 @@ export function pdfArticleAnchors(pageTexts: readonly string[]): Record<string, 
   const anchors: Record<string, string> = {};
   pageTexts.forEach((page, index) => {
     for (const match of page.matchAll(articleHeadingPattern())) {
-      const article = articleIdFromHeading(match);
-      anchors[article] ??= `page=${index + 1}`;
+      for (const article of articleIdsFromHeading(match)) anchors[article] ??= `page=${index + 1}`;
     }
   });
   return anchors;

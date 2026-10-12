@@ -301,7 +301,7 @@ describe("core law index", () => {
     await downloadedIndex(store, start);
     const file = path.join(store, "DU_2025_734.json");
     const stale = JSON.parse(fs.readFileSync(file, "utf8"));
-    expect(stale.extraction).toBe(4);
+    expect(stale.extraction).toBe(5);
     delete stale.extraction;
     stale.articleOrder = [];
     stale.articles = {};
@@ -603,7 +603,7 @@ describe("core law index", () => {
       "https://api.sejm.gov.pl/eli/acts/DU/2025/734/text.pdf"
     ]);
     const record = index.currentRecord("DU/2025/734")!;
-    expect(record).toMatchObject({ extraction: 4, articleAnchors: { "51": "page=1" } });
+    expect(record).toMatchObject({ extraction: 5, articleAnchors: { "51": "page=1" } });
 
     await index.refresh();
     expect(eli.requested).toHaveLength(2);
