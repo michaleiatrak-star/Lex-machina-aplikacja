@@ -8,6 +8,8 @@ import {
   consumeDocumentDropFile,
   createDocumentDropQueueState,
   describeDocumentFile,
+  documentDropSummary,
+  documentStepLabel,
   enqueueDocumentDropFiles
 } from "./document-drop-queue.js";
 
@@ -113,5 +115,22 @@ describe("document drop queue", () => {
     ).toBe(
       "512 B · .md"
     );
+  });
+
+  it("keeps outcomes apart: a skipped file is not ready (0 gotowych, 1 pominięty)", () => {
+    const txt = new File(["Anna Testowa zamówiła usługę."], "DEMO-audyt.txt", { type: "text/plain" });
+    let state = enqueueDocumentDropFiles(createDocumentDropQueueState(), [txt]);
+    expect(documentDropSummary(state)).toBe("plik 1 z 1");
+    state = consumeDocumentDropFile(state, "SKIPPED");
+    expect(state).toMatchObject({ ready: 0, skipped: 1, stored: 0, completed: 1, files: [] });
+    expect(documentDropSummary(state)).toBe("1 plik w kolejce · 1 pominięty");
+    expect(documentDropSummary(state)).not.toMatch(/gotow|zakończono/u);
+  });
+
+  it("names the step by file kind: OCR only where a scan can need it", () => {
+    expect(documentStepLabel(new File(["x"], "a.txt", { type: "text/plain" }))).toBe("Odczytaj i ukryj dane osobowe");
+    expect(documentStepLabel(new File(["x"], "a.docx", { type: "" }))).toBe("Odczytaj i ukryj dane osobowe");
+    expect(documentStepLabel(new File(["x"], "skan.jpg", { type: "image/jpeg" }))).toMatch(/OCR/u);
+    expect(documentStepLabel(new File(["x"], "pozew.pdf", { type: "application/pdf" }))).toMatch(/OCR tylko dla skanowanych/u);
   });
 });

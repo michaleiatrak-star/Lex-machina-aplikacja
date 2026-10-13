@@ -760,7 +760,7 @@ describe("local API client", () => {
       "http://127.0.0.1:4317/api/documents/review",
       expect.objectContaining({
         method: "POST",
-        body: file,
+        body: await file.arrayBuffer(),
         headers: expect.objectContaining({
           "Content-Type": "image/png",
           "X-Lex-Case-Id":
@@ -885,7 +885,7 @@ describe("local API client", () => {
       `http://127.0.0.1:4317/api/cases/${payload.caseId}/files`,
       expect.objectContaining({
         method: "POST",
-        body: file,
+        body: await file.arrayBuffer(),
         headers: expect.objectContaining({
           "Content-Type": "application/zip",
           "X-Lex-Filename":
@@ -912,7 +912,7 @@ describe("local API client", () => {
       "http://127.0.0.1:4317/api/downloads/save",
       expect.objectContaining({
         method: "POST",
-        body: blob,
+        body: await blob.arrayBuffer(),
         headers: expect.objectContaining({
           "X-Lex-Filename": encodeURIComponent("LexMachina-pismo.docx")
         })

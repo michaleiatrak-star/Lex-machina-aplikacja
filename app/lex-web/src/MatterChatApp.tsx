@@ -39,6 +39,7 @@ import {
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
+import { documentFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
@@ -127,6 +128,8 @@ import {
   DOCUMENT_FILE_ACCEPT,
   MAX_DOCUMENT_DROP_QUEUE,
   consumeDocumentDropFile,
+  documentDropSummary,
+  documentStepLabel,
   createDocumentDropQueueState,
   describeDocumentFile,
   enqueueDocumentDropFiles
@@ -2312,7 +2315,7 @@ export default function MatterChatApp({
           error:
             processingModeUsesLocalAi(mode) && /LOCAL_PRIVACY_MODEL/.test(code)
               ? "tryb z AI wymaga uruchomionego modelu lokalnego (zakładka Sprawa → Uruchom model lokalny)"
-              : code
+              : documentFailure(error).message
         })
       );
     }
@@ -2392,7 +2395,7 @@ export default function MatterChatApp({
         setDocumentStaging((current) =>
           updateStagedDocument(current, item.id, {
             status: "FAILED",
-            error: error instanceof Error ? error.message : String(error)
+            error: documentFailure(error).message
           })
         );
       }
@@ -4271,8 +4274,10 @@ export default function MatterChatApp({
               onClick={() => setActiveTab(id)}
             >
               {label}
-              {id === "case" && documentDropQueue.total + documentStaging.items.length > 0 ? (
-                <span>{documentDropQueue.total + documentStaging.items.length}</span>
+              {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
+                <span title="Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)">
+                  {documentDropQueue.files.length + documentStaging.items.length}
+                </span>
               ) : null}
             </button>
           ))}
@@ -4793,7 +4798,7 @@ export default function MatterChatApp({
                           ? ` · ${progressLabel(documentProgress[item.id]!)}`
                           : " · zapisuję i przetwarzam…"
                         : ""}
-                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
+                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? "spróbuj ponownie"}` : ""}
                     </small>
                     <span className="chat-file-actions">
                       <select
@@ -4861,20 +4866,17 @@ export default function MatterChatApp({
         ) : null}
 
         {documentDropQueue.total > 0 ? (
-          <section className="chat-card-stack chat-document-flow" aria-label="OCR i prywatność plików">
+          <section className="chat-card-stack chat-document-flow" aria-label="Odczyt plików i ochrona danych">
             <article className="chat-card">
-              <p className="eyebrow">OCR w czacie · plik po pliku</p>
-              <h2>
-                {documentDropQueue.completed}/{documentDropQueue.total} zakończono
-              </h2>
+              <p className="eyebrow">Dodawanie plików · plik po pliku</p>
+              <h2 aria-live="polite">{documentDropSummary(documentDropQueue)}</h2>
               <p>
-                Każdy plik przechodzi osobno: wykrycie skanu → lokalny OCR → decyzja o anonimizacji →
-                osobny zaszyfrowany vault. Następny plik nie rozpocznie decyzji prywatności, dopóki
-                bieżący nie zostanie zakończony lub pominięty.
+                Każdy plik jest odczytywany na tym komputerze, a Ty decydujesz, które dane osobowe
+                ukryć, zanim plik trafi do akt. Następny plik czeka, aż skończysz z bieżącym albo go pominiesz.
               </p>
               {documentDropQueue.rejected > 0 ? (
                 <p className="chat-inline-error">
-                  Pominięto {documentDropQueue.rejected} plików.
+                  Nie dodano plików: {documentDropQueue.rejected} (puste albo ponad limit {MAX_DOCUMENT_DROP_QUEUE} w kolejce).
                 </p>
               ) : null}
               <ul className="chat-file-list">
@@ -4882,7 +4884,7 @@ export default function MatterChatApp({
                   <li key={`${file.name}-${file.lastModified}-${index}`}>
                     <strong>{file.name}</strong>
                     <small>
-                      {index === 0 ? "OCR / decyzja prywatności" : "Oczekuje"} · {describeDocumentFile(file)}
+                      {index === 0 ? documentStepLabel(file) : "Oczekuje"} · {describeDocumentFile(file)}
                     </small>
                   </li>
                 ))}
@@ -4897,8 +4899,8 @@ export default function MatterChatApp({
                 const mode = reviewModes.current.get(file);
                 return mode ? processingModeOptions(mode) : undefined;
               }}
-              onIncomingFileConsumed={() =>
-                setDocumentDropQueue((current) => consumeDocumentDropFile(current))
+              onIncomingFileConsumed={(outcome) =>
+                setDocumentDropQueue((current) => consumeDocumentDropFile(current, outcome))
               }
               onCaseFilesChange={() =>
                 setWorkspaceRefresh((value) => value + 1)
