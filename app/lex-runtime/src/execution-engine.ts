@@ -1,4 +1,5 @@
 import { draftPrompt } from "./process-pleading-draft.js";
+import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
 import { compactForModel } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -1871,6 +1872,7 @@ export class LexExecutionEngine {
               "# ACTIVE COURT ANALYSIS STATE — RUNTIME ENFORCED",
               `Stage: ${args.courtWorkflowContext.stage}.`,
               `Active checkpoint: ${args.courtWorkflowContext.checkpoint}.`,
+              `Część skilla analiza-sadowa-v6 dla tego punktu: ${COURT_CHECKPOINT_SECTIONS[args.courtWorkflowContext.checkpoint]}`,
               "Execute only this court-analysis checkpoint in this turn.",
               "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
               "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass."
@@ -1884,6 +1886,7 @@ export class LexExecutionEngine {
               `Stage: ${args.chronologyWorkflowContext.stage}.`,
               `Active checkpoint: ${args.chronologyWorkflowContext.checkpoint}.`,
               `Temporal OŚ-GATE required: ${args.chronologyWorkflowContext.temporalGateRequired ? "YES" : "NO"}.`,
+              `Część skilla chronologia-sprawy-v1 dla tego punktu: ${CHRONOLOGY_CHECKPOINT_SECTIONS[args.chronologyWorkflowContext.checkpoint]}`,
               "Execute only this chronology checkpoint in this turn.",
               "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
               "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization."

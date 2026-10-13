@@ -73,5 +73,6 @@ describe("domain fallback model", () => {
     expect(named.router).toHaveLength(0);
     const off = await run("off", "Mój ojciec zmarł w Kanadzie i zostawił tam majątek.");
     expect(off.router).toHaveLength(0);
-  });
+    // Three full executor turns: ~5 s alone, more under the parallel suite.
+  }, 30_000);
 });

@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import path from "node:path";
+import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "../src/checkpoint-skill-sections.js";
 import { describe, expect, it } from "vitest";
 import { documentTriggerText } from "../src/execution-engine.js";
 import { anthropicSystem } from "../src/providers/ai-sdk-adapter.js";
@@ -121,5 +123,20 @@ describe("Anthropic API: the workflow's unchanged part as its own cached system 
     expect(anthropicSystem({ provider: "openai.responses" } as never, { model: "m", systemPrompt, systemPromptCachePrefix: 5_002, messages: [] })).toBe(systemPrompt);
     expect(anthropicSystem(model, { model: "m", systemPrompt, systemPromptCachePrefix: 100, messages: [] })).toBe(systemPrompt);
     expect(anthropicSystem(model, { model: "m", systemPrompt, messages: [] })).toBe(systemPrompt);
+  });
+});
+
+describe("court analysis and chronology: the checkpoint names the skill's part", () => {
+  // Each mapping quotes a heading of the skill; a renamed heading breaks the mapping silently.
+  it.each([
+    ["analiza-sadowa-v6", COURT_CHECKPOINT_SECTIONS],
+    ["chronologia-sprawy-v1", CHRONOLOGY_CHECKPOINT_SECTIONS]
+  ] as const)("%s: every checkpoint quotes a heading present in SKILL.md", (skill, sections) => {
+    const body = fs.readFileSync(path.join(CORPUS, skill, "SKILL.md"), "utf8");
+    for (const [checkpoint, text] of Object.entries(sections)) {
+      const quoted = text.match(/[A-ZĄĆĘŁŃÓŚŹŻ][A-ZĄĆĘŁŃÓŚŹŻ0-9 .—-]{9,}[A-ZĄĆĘŁŃÓŚŹŻ]/gu) ?? [];
+      expect(quoted.length, checkpoint).toBeGreaterThan(0);
+      expect(quoted.some((heading) => body.includes(heading)), `${checkpoint}: ${quoted.join(" | ")}`).toBe(true);
+    }
   });
 });
