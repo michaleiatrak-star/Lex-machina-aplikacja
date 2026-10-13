@@ -1217,6 +1217,8 @@ export default function MatterChatApp({
   const [model, setModel] = useState(rememberedModel?.model ?? "");
   const localAutoStartTried = useRef(false);
   const [modelError, setModelError] = useState("");
+  // The chosen model disappeared from its source and another one was picked: said, not silent.
+  const [modelNotice, setModelNotice] = useState("");
   const [
     modelCatalogLoading,
     setModelCatalogLoading
@@ -1920,19 +1922,16 @@ export default function MatterChatApp({
             response.models
           );
         setModels(sourceModels);
-        setModel(
-          (current) =>
-            sourceModels.some(
-              (item) =>
-                item.id === current &&
-                item.selectable
-            )
-              ? current
-              : sourceModels.find(
-                  (item) =>
-                    item.selectable
-                )?.id ?? ""
-        );
+        setModel((current) => {
+          if (sourceModels.some((item) => item.id === current && item.selectable)) return current;
+          const next = sourceModels.find((item) => item.selectable);
+          if (current && next) {
+            queueMicrotask(() =>
+              setModelNotice(`Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: ${next.displayName}.`)
+            );
+          }
+          return next?.id ?? "";
+        });
         setModelCatalogLoading(false);
       })
       .catch((error) => {
@@ -4385,6 +4384,14 @@ export default function MatterChatApp({
                       )?.label ??
                       provider}
                 </small>
+                {modelNotice ? (
+                  <small className="chat-model-dock-notice" role="status">
+                    {modelNotice}{" "}
+                    <button type="button" className="chat-link-button" onClick={() => setModelNotice("")}>
+                      OK
+                    </button>
+                  </small>
+                ) : null}
               </div>
             </div>
             <div className="chat-model-dock-controls">

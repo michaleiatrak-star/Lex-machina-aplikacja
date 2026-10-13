@@ -142,9 +142,9 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
     <section className="core-law-updates">
       <div className="maintenance-heading">
         <div>
-          <strong>Przepisy (RAG)</strong>
+          <strong>Przepisy prawne</strong>
           <small>
-            lokalna kopia aktów z Sejm ELI · ostatnie sprawdzenie: {day(status?.lastCheckAt)}
+            kopia aktów z Dziennika Ustaw na tym komputerze · ostatnie sprawdzenie: {day(status?.lastCheckAt)}
             {status?.refreshing ? " · sprawdzanie w toku…" : ""}
             {status?.progress ? ` · ${status.progress.eli}: ${coreLawProgressText(status.progress)}` : ""}
           </small>
@@ -152,9 +152,11 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
         <span>
           {!status
             ? "—"
-            : groups.needsUpdate.length
-              ? `do aktualizacji: ${groups.needsUpdate.length}`
-              : "aktualne"}
+            : status.refreshing
+              ? "sprawdzanie…"
+              : groups.needsUpdate.length
+                ? `do aktualizacji: ${groups.needsUpdate.length}`
+                : "aktualne"}
         </span>
       </div>
 

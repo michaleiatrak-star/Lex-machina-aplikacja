@@ -396,8 +396,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           ) : null}
         </div>
         <p className="field-help">
-          KSeF: {settings ? (settings.ksef.tokenConfigured ? "token zapisany" : "brak tokenu") : "…"}
-          {settings ? ` · środowisko ${settings.ksef.environment === "production" ? "PRODUKCYJNE" : "testowe"}` : ""}
+          Wysyłka do KSeF: niedostępna w tej wersji. Faktury wystawiasz i drukujesz lokalnie.
         </p>
         <input
           type="search"

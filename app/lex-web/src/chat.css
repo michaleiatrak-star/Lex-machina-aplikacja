@@ -3165,3 +3165,20 @@ mark.restored {
   flex: 1;
   border-top: 1px solid rgba(184, 119, 0, 0.35);
 }
+
+.chat-model-dock-notice {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--warn-text, #7a5410);
+}
+
+.chat-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
