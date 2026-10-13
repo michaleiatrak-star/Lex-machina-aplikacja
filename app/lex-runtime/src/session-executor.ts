@@ -229,11 +229,13 @@ import {
   privacyRecognizerFor
 } from "./privacy/local-llm-ner.js";
 import {
+  earlierUserTurns,
   parseSkillSelectionEnvelope,
   SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn } from "./case-content-grounding.js";
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -369,6 +371,8 @@ export type SessionExecutionRequest = {
   };
 };
 
+// A follow-up this short ("ok, robisz to.") carries no task of its own.
+const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
@@ -1814,6 +1818,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       PublicAuxiliarySourceItem[] =
       [];
     let snVerificationRequired = false;
+    // Texts the source tools returned in this turn (judgments, hit lists): what the
+    // answer may say a judgment is about (case-content-grounding).
+    const caseSourceTexts: string[] = [];
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -2288,6 +2295,20 @@ export class SafeSessionExecutor implements SessionExecutor {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       });
+      // A short follow-up with no task of its own ("ok, robisz to.", "tak, szukaj dalej")
+      // continues the thread's last routed request instead of dropping its executive skill.
+      if (!taskRoute && !materials.length && pathFacts.query.trim().length <= FOLLOW_UP_MAX_CHARS) {
+        for (const earlier of earlierUserTurns(request.query).slice(0, 3)) {
+          const inherited = decideTask(this.taskRoutes(), this.activationMatrix(), withoutOutputContract(earlier), [], this.redactionTest(), {
+            skill: "pisma-proste-v2",
+            entries: schemaCatalog(this.registry, "pisma-proste-v2")
+          });
+          if (inherited) {
+            taskRoute = { ...inherited, reason: `kontynuacja wątku (${inherited.reason})` };
+            break;
+          }
+        }
+      }
       const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
         const skill = record.name;
@@ -2728,6 +2749,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
         }
+        for (const result of federationResults) caseSourceTexts.push(result.content);
         for (
           const result
           of federationResults
@@ -2776,6 +2798,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
           snVerificationRequired = true;
         }
+        for (const result of verificationResults) caseSourceTexts.push(result.content);
 
         const byId = new Map(
           [
@@ -3094,7 +3117,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const domainSkillRead = audit.events.some(
       (event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2"
     );
-    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0);
+    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
     const missingGates =
       mandatoryModel &&
       legalTurn &&
@@ -3145,6 +3168,55 @@ export class SafeSessionExecutor implements SessionExecutor {
         audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {
           missing: missingGates.map((item) => item.block),
           error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
+        });
+      }
+    }
+
+    // What the answer says a judgment is about must be in the text read from the source
+    // (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling). One correcting
+    // round; what remains is shown to the user next to the answer.
+    if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
+      const topic = threadUserText(protectedQuery).split("\n").slice(-3).join("\n");
+      const grounding = caseContentFindings(modelOutput, caseSourceTexts, topic);
+      if (grounding.length) {
+        step("MODEL", `kontrola treści orzeczeń: ${grounding.map((item) => item.signature).join(", ")}`);
+        let remaining = grounding;
+        try {
+          const corrected = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: [
+              ...(placeholderKey ? [placeholderKey] : []),
+              identityPrompt,
+              ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+              ...pathSections
+            ].join("\n\n"),
+            messages: [
+              { role: "user", content: protectedQuery },
+              { role: "assistant", content: modelOutput },
+              { role: "user", content: caseContentCorrectionPrompt(grounding) }
+            ],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          const text = corrected.fullText.trim();
+          const after = text ? caseContentFindings(text, caseSourceTexts, topic) : grounding;
+          if (text && after.flatMap((item) => item.missing).length < grounding.flatMap((item) => item.missing).length) {
+            modelOutput = text;
+            remaining = after;
+          }
+        } catch {
+          remaining = grounding;
+        }
+        if (remaining.length) {
+          // Before the model's closing disclaimer, which stays the last element.
+          const parts = splitTrailingDisclaimer(modelOutput);
+          modelOutput = parts.disclaimer
+            ? `${parts.body.trimEnd()}\n\n${caseContentWarning(remaining)}\n\n${parts.disclaimer}`
+            : `${modelOutput.trimEnd()}\n\n${caseContentWarning(remaining)}`;
+        }
+        audit.record("gate", "CASE_CONTENT_GROUNDING", remaining.length ? "DEGRADED" : "OK", {
+          findings: grounding.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+          remaining: remaining.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
         });
       }
     }
@@ -3955,7 +4027,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
     const freeText = !request.documentAstOutput && !reportBlueprint;
     const disclaimerTexts =
-      legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+      // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
+      (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
       : modelDisclaimer.disclaimer

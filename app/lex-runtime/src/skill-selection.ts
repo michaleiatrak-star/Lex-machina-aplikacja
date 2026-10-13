@@ -82,6 +82,14 @@ export function threadUserText(
     .join("\n");
 }
 
+// The user's earlier turns, newest first (without the latest one): the request a short
+// follow-up ("ok, robisz to.") continues.
+export function earlierUserTurns(query: string): string[] {
+  const parts = query.split(/\n\n(?=Użytkownik: |Asystent: )/u);
+  const users = parts.filter((part, index) => index === 0 ? !part.startsWith("Asystent: ") : part.startsWith("Użytkownik: ")).map((part) => part.replace(/^Użytkownik: /u, ""));
+  return users.slice(0, -1).reverse();
+}
+
 function normalize(value: string): string {
   return value
     .normalize("NFKD")

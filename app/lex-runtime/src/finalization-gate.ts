@@ -219,6 +219,18 @@ function coveringVerifiedRecord(
   return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
 }
 
+// Rekord orzeczenia nosi brzmienie podane przez model ("uchwała SN, sygn. I KZP 3/24"),
+// a odpowiedź pisze "sygn. I KZP 3/24": rozstrzyga sygnatura znormalizowana przy weryfikacji.
+const caseSignatureKey = (value: string): string =>
+  value.replace(/^sygn\.?\s*(?:akt\s*)?/iu, "").replace(/\./g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pl");
+
+export function caseSignatureRecord(ledger: VerificationLedger, reference: DetectedLegalReference): VerificationRecord | undefined {
+  if (reference.kind !== "case") return undefined;
+  const key = caseSignatureKey(reference.claim);
+  const records = ledger.all().filter((record) => record.kind === "case" && (record.caseScope ?? "FULL_TEXT") === "FULL_TEXT" && record.caseSignature && caseSignatureKey(record.caseSignature) === key);
+  return records.filter((record) => record.status === "VERIFIED").at(-1) ?? records.at(-1);
+}
+
 // ⚠️ przypięty do wartości liczbowej albo do innej sygnatury interpretacji nie oznacza
 // powołania, które sprawdzamy (każde ma mieć własny znacznik).
 function withoutAttachedMarkers(reference: DetectedLegalReference): string {
@@ -267,7 +279,7 @@ export class FinalizationGate {
 
     for (const reference of references) {
       if (options.markers === "removed") {
-        const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference);
+        const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference) ?? caseSignatureRecord(ledger, reference);
         findings.push(
           record?.status === "VERIFIED"
             ? { reference, status: "VERIFIED", record }
@@ -297,7 +309,8 @@ export class FinalizationGate {
                   ledger,
                   candidate,
                   lineMarkers
-                )
+                ) ??
+                caseSignatureRecord(ledger, candidate)
             )
             .filter(
               (
@@ -335,7 +348,8 @@ export class FinalizationGate {
 
       const record =
         ledger.latest(reference.claim) ??
-        coveringVerifiedRecord(ledger, reference, lineMarkers);
+        coveringVerifiedRecord(ledger, reference, lineMarkers) ??
+        caseSignatureRecord(ledger, reference);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
