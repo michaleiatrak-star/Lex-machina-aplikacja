@@ -1,5 +1,5 @@
 import { draftPrompt } from "./process-pleading-draft.js";
-import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
+import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS, ORDERED_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
 import { compactForModel, markdownSection } from "./skill-sections.js";
 import { WAITING_FOR_USER_RULE, waitsForUser } from "./workflow-wait.js";
 import { reductionOffer } from "./skill-switch.js";
@@ -1972,6 +1972,9 @@ export class LexExecutionEngine {
               "# ACTIVE ORDERED LEGAL WORKFLOW — RUNTIME ENFORCED",
               `Workflow: ${args.orderedCaseWorkflowContext.workflowId}.`,
               `Active checkpoint: ${args.orderedCaseWorkflowContext.checkpoint}.`,
+              ...(ORDERED_CHECKPOINT_SECTIONS[args.orderedCaseWorkflowContext.workflowId]?.[args.orderedCaseWorkflowContext.checkpoint]
+                ? [`Część skilla ${workflowPlan.executionSkill ?? ""} dla tego punktu: ${ORDERED_CHECKPOINT_SECTIONS[args.orderedCaseWorkflowContext.workflowId]![args.orderedCaseWorkflowContext.checkpoint]}`]
+                : []),
               `Revision: ${args.orderedCaseWorkflowContext.revision}.`,
               "Execute only this checkpoint in this turn.",
               "Do not claim completion of any later checkpoint.",

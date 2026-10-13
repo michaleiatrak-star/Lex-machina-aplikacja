@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "../src/checkpoint-skill-sections.js";
+import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS, ORDERED_CHECKPOINT_SECTIONS } from "../src/checkpoint-skill-sections.js";
+import { ORDERED_CASE_WORKFLOW_SEQUENCES } from "../src/ordered-case-workflow-state.js";
 import { describe, expect, it } from "vitest";
 import { documentTriggerText } from "../src/execution-engine.js";
 import { anthropicSystem } from "../src/providers/ai-sdk-adapter.js";
@@ -139,6 +140,50 @@ describe("court analysis and chronology: the checkpoint names the skill's part",
       expect(quoted.some((heading) => body.includes(heading)), `${checkpoint}: ${quoted.join(" | ")}`).toBe(true);
     }
   });
+});
+
+describe("evidence and witness workflows: the checkpoint names the skill's part", () => {
+  // The checkpoint names are only in the frontmatter list; each mapping must start with a heading of the body.
+  it.each([
+    ["EVIDENCE_ANALYSIS_V1", "analizator-dowodow-v3"],
+    ["WITNESS_QUESTIONING_V1", "przesluchanie-swiadkow-v2-min90"]
+  ] as const)("%s: every checkpoint maps to a heading present in SKILL.md", (workflow, skill) => {
+    const headings = fs
+      .readFileSync(path.join(CORPUS, skill, "SKILL.md"), "utf8")
+      .split("\n")
+      .filter((line) => /^#{2,4}\s/u.test(line))
+      .map((line) => line.replace(/^#+\s*/u, "").trim());
+    const sections = ORDERED_CHECKPOINT_SECTIONS[workflow]!;
+    expect(Object.keys(sections).sort()).toEqual([...ORDERED_CASE_WORKFLOW_SEQUENCES[workflow]].sort());
+    for (const [checkpoint, text] of Object.entries(sections)) {
+      const lead = text.replace(/^#+\s*/u, "").replace(/^ETAP W1: /u, "").split(/ \(| oraz |\.$/u)[0]!.trim();
+      expect(headings.some((heading) => heading.startsWith(lead)), `${checkpoint}: ${lead}`).toBe(true);
+    }
+  });
+
+  it("the active evidence checkpoint names the register of parties, not the minimal mode of KROK 2", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "evidence",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Rejestr stron." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    await executor.execute({
+      query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: ["analizator-dowodow-v3"], caseType: ["analizator-dowodow-v3"] })}\nOceń dowody w sprawie pożyczki.`,
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK",
+      orderedCaseWorkflowContext: { workflowId: "EVIDENCE_ANALYSIS_V1", checkpoint: "AD-BLOKG-STRONY", revision: 7 }
+    } as never);
+    expect(calls[0]!.systemPrompt).toContain("Część skilla analizator-dowodow-v3 dla tego punktu: ## BLOK G — Rejestr stron");
+  }, 120_000);
 });
 
 describe("client report: the report the model wrote without its blueprint", () => {
