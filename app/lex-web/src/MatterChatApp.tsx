@@ -521,12 +521,28 @@ type DirectDocumentRequest = {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow"
   >
-): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
+): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   // Questions to the user or an offer to switch the letter skill: no letter yet.
   if (result.waitingForUser || result.skillSwitch) return null;
+  // analizator-umow-v1: the contract drafted or corrected in its pipeline becomes a file in the
+  // turn that closed AU-STRIP (after AU-HYBRID); the server checks the same state.
+  const contract = result.contractWorkflow;
+  if (contract && contract.mode && contract.mode !== "ANALYSIS" && contract.closedCheckpoints?.includes("AU-HYBRID") && contract.closedCheckpoints.includes("AU-STRIP") && contract.nextCheckpoint === "AU-POST") {
+    return { documentType: "contract", stage: "FINAL" };
+  }
+  // MOD-REDAKCJA: the corrected pleading as a file ("jako artefakt/plik"); a draft while
+  // fields are missing (⬛) or suggestions wait for a decision.
+  if (result.taskMode === "REDACTION") {
+    const ready =
+      result.finalization === "PASS" &&
+      result.gateI?.result !== "BLOCKED" &&
+      result.verification.unverified === 0 &&
+      !/⬛|WYMAGA DECYZJI/u.test(result.answer);
+    return { documentType: "pleading", stage: ready ? "FINAL" : "DRAFT", source: "REDACTION" };
+  }
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
     if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
     return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
@@ -549,9 +565,10 @@ export function letterDocumentPlan(
 
 /** AUTO chose the process pleading skill, but its pipeline (and its file) has not started. */
 export function pleadingPipelineNeeded(
-  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow">
+  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow" | "taskMode">
 ): boolean {
-  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow;
+  // A corrected pleading (Test A, MOD-REDAKCJA) needs no W1–W3 pipeline.
+  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow && result.taskMode !== "REDACTION";
 }
 
 // Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
@@ -3601,7 +3618,9 @@ export default function MatterChatApp({
                         { id: messageId(), role: "user", content: trimmed },
                         answerMessage
                       ],
-                      "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, uwagi dla prawnika).",
+                      letterWorkflow === "contract"
+                        ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
+                        : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
                       conversationChars
                     ),
                     automaticSkills,
@@ -3621,8 +3640,13 @@ export default function MatterChatApp({
                 ...(firmTemplateIds.length > 0
                   ? { firmTemplates: firmTemplateIds }
                   : {}),
+                ...(letterPlan.source ? { source: letterPlan.source } : {}),
                 filename:
-                  (letterWorkflow === "pleading"
+                  (letterPlan.source === "REDACTION"
+                    ? "LexMachina-pismo-poprawione"
+                    : letterWorkflow === "contract"
+                    ? "LexMachina-umowa"
+                    : letterWorkflow === "pleading"
                     ? "LexMachina-pismo-procesowe"
                     : "LexMachina-pismo") +
                   (stage === "DRAFT" ? "-szkic" : "") +

@@ -38,3 +38,38 @@ describe("no letter file for questions or a switch offer", async () => {
     expect(letterDocumentPlan(base as never)).toEqual({ documentType: "letter", stage: "FINAL" });
   });
 });
+
+describe("corrected pleading (MOD-REDAKCJA)", async () => {
+  const { letterDocumentPlan, pleadingPipelineNeeded } = await import("./MatterChatApp.js");
+  const redaction = {
+    status: "DRAFT_PRESENTABLE" as const,
+    answer: "RAPORT REDAKCJI\nSTATUS: POPRAWIONA WERSJA GOTOWA\n\nPOZEW O ZAPŁATĘ ...",
+    taskSkill: "pisma-procesowe-v3",
+    taskMode: "REDACTION" as const,
+    finalization: "PASS" as const,
+    verification: { records: 0, verified: 0, supported: 0, unverified: 0 }
+  };
+  it("the corrected text becomes a pleading file from the redaction, not an offer of the W1–W3 pipeline", () => {
+    expect(letterDocumentPlan(redaction as never)).toEqual({ documentType: "pleading", stage: "FINAL", source: "REDACTION" });
+    expect(letterDocumentPlan({ ...redaction, answer: redaction.answer + "\nSTATUS: WYMAGA DECYZJI co do sugestii" } as never)?.stage).toBe("DRAFT");
+    expect(pleadingPipelineNeeded(redaction as never)).toBe(false);
+    expect(pleadingPipelineNeeded({ ...redaction, taskMode: undefined } as never)).toBe(true);
+  });
+});
+
+describe("contract file from the analizator-umow-v1 pipeline", async () => {
+  const { letterDocumentPlan } = await import("./MatterChatApp.js");
+  const turn = (closed: string[], next: string | null, mode = "DRAFT") => ({
+    status: "DRAFT_PRESENTABLE" as const,
+    answer: "UMOWA NAJMU LOKALU ...",
+    finalization: "PASS" as const,
+    verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+    contractWorkflow: { mode, closedCheckpoints: closed, nextCheckpoint: next }
+  });
+  it("the turn that closed AU-STRIP after AU-HYBRID makes the contract file; analysis and earlier turns do not", () => {
+    expect(letterDocumentPlan(turn(["AU-HYBRID", "AU-STRIP"], "AU-POST") as never)).toEqual({ documentType: "contract", stage: "FINAL" });
+    expect(letterDocumentPlan(turn(["AU-HYBRID"], "AU-STRIP") as never)).toBeNull();
+    expect(letterDocumentPlan(turn(["AU-HYBRID", "AU-STRIP", "AU-POST"], "AU-DISC") as never)).toBeNull();
+    expect(letterDocumentPlan(turn(["AU-HYBRID", "AU-STRIP"], "AU-POST", "ANALYSIS") as never)).toBeNull();
+  });
+});

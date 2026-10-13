@@ -1122,8 +1122,10 @@ export type SessionExecutionResponse = {
   courtWorkflow?: CourtAnalysisWorkflowView;
   // Other checkpoint workflows: only what the chat needs to continue by itself.
   chronologyWorkflow?: { nextCheckpoint: string | null };
-  contractWorkflow?: { nextCheckpoint: string | null };
+  contractWorkflow?: { nextCheckpoint: string | null; mode?: string; closedCheckpoints?: string[] };
   orderedCaseWorkflow?: { status: "ACTIVE" | "COMPLETE"; nextCheckpoint: string | null };
+  // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA).
+  taskMode?: "REDACTION";
   // The answer ends a checkpoint with a question to the user.
   waitingForUser?: boolean;
   // The letter skill hands the matter to the other one; the chat offers the switch.
@@ -2345,6 +2347,8 @@ export function generateLegalDocument(
     filename?: string;
     // Save a draft naming its unverified references (user's decision).
     acceptUnverified?: boolean;
+    // The user's own pleading corrected in the chat (MOD-REDAKCJA), not the W1–W3 pipeline.
+    source?: "REDACTION";
   }
 ): Promise<
   GeneratedDocumentResponse

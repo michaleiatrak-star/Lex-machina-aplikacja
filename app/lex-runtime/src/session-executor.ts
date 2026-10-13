@@ -846,6 +846,8 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
+  taskMode?: "REDACTION";
   // The firm's default template the application used (none picked by the user).
   firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecision;
@@ -1285,7 +1287,7 @@ export interface SessionExecutor {
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
   // The router's executive skill for a message without delivered material (AUTO).
   executiveSkillFor?(message: string): string | null;
-  pleadingRedactionFor?(message: string): boolean;
+  pleadingRedactionFor?(message: string, attachments?: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): boolean;
 }
 
 /**
@@ -1360,9 +1362,17 @@ export class SafeSessionExecutor implements SessionExecutor {
    * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
    * its form (shorter, firmer, smoother), handled by MOD-REDAKCJA without W1–W3.
    */
-  pleadingRedactionFor(message: string): boolean {
+  pleadingRedactionFor(
+    message: string,
+    // Files delivered with the message: an attached pleading ("popraw ten pozew" + file)
+    // is Test A as well; before, only text pasted into the chat was.
+    attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }> = []
+  ): boolean {
     const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
-    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+    const materials = attachments
+      .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+      .map((attachment) => classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n"), images: attachment.images?.length ?? 0 }));
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, materials, this.redactionTest(), {
       skill: "pisma-proste-v2",
       entries: schemaCatalog(this.registry, "pisma-proste-v2")
     });
@@ -4102,6 +4112,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
       ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
+      ...(taskRoute?.modules?.some((module) => /MOD-REDAKCJA/u.test(module)) ? { taskMode: "REDACTION" as const } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,

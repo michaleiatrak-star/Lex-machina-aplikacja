@@ -7270,9 +7270,22 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         let pleadingSource: { version: number; text: string } | undefined;
         // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
         // names no pleading keyword; its document type does.
+        // pisma-procesowe-v3 Test A (MOD-REDAKCJA): the user's own pleading corrected in the
+        // chat. Its file renders that corrected text without the W1–W3 pipeline (the redaction
+        // ran its own HYBRID-VALIDATION, G3); the user's earlier messages must still be Test A.
+        const earlierUserTurns = parseSkillSelectionEnvelope(sessionRequest.query)
+          .query.split(/\n\n(?=Użytkownik: |Asystent: )/u)
+          .filter((part) => part.startsWith("Użytkownik: "))
+          .slice(0, -1)
+          .map((part) => part.replace(/^Użytkownik: /u, ""));
+        const redactionFile =
+          req.body?.source === "REDACTION" &&
+          earlierUserTurns.length > 0 &&
+          options.sessionExecutor?.pleadingRedactionFor?.(earlierUserTurns.join("\n")) === true;
         if (
-          documentType === "pleading" ||
-          previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1"
+          !redactionFile &&
+          (documentType === "pleading" ||
+          previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1")
         ) {
           const store = options.processWorkflowStore;
           const stored = store
@@ -7304,7 +7317,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           // in the chat, after the mode is chosen; a one-shot file has no such state, and the
           // engine refused it with HTTP 422 ("Persisted contract-analysis context is required").
           const statefulWorkflow = previewSessionWorkflow(options.registry, sessionRequest).id;
-          if (CHAT_PIPELINE_WORKFLOWS.has(statefulWorkflow)) {
+          // analizator-umow-v1: a contract drafted, corrected or supplemented in its pipeline is
+          // exported once AU-HYBRID (HYBRID-VALIDATION) and AU-STRIP (markers removed) are closed.
+          // Before, such a contract could never become a file.
+          const contractExportReady =
+            statefulWorkflow === "CONTRACT_ANALYSIS_V1" && options.contractWorkflowStore
+              ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => {
+                  const state = await options.contractWorkflowStore!.getContractAnalysisState({ caseId, caseDataKey, keyVersion: caseView.keyVersion });
+                  return Boolean(state && state.mode !== "ANALYSIS" && state.closedCheckpoints.includes("AU-HYBRID") && state.closedCheckpoints.includes("AU-STRIP"));
+                })
+              : false;
+          if (CHAT_PIPELINE_WORKFLOWS.has(statefulWorkflow) && !contractExportReady) {
             res.status(409).json({ error: "WORKFLOW_PIPELINE_REQUIRED", workflow: statefulWorkflow });
             return;
           }
@@ -9601,11 +9624,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           : undefined;
       // pisma-procesowe-v3 Test A: editing the form of a pleading the user pasted is
       // MOD-REDAKCJA (the executor preloads it), not a new pipeline W1–W3 with its state.
+      // With a file attached the router is not asked (routerExecutive), so Test A is checked
+      // on the message and the attached document itself.
       const pleadingRedaction =
-        routerExecutive === "pisma-procesowe-v3" &&
         keywordPlan.id === "PROCESS_PLEADING_V1" &&
+        (routerExecutive === "pisma-procesowe-v3" || (request.modelSelectsSkills && sessionAttachments.length > 0)) &&
         options.sessionExecutor?.pleadingRedactionFor?.(
-          request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query)
+          request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query),
+          sessionAttachments
         ) === true;
       const previewPlan =
         pleadingRedaction ||
