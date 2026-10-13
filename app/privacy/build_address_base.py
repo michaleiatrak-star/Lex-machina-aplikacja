@@ -61,8 +61,13 @@ def expand_genitive(name: str, notation: str) -> str | None:
     return " ".join(out)
 
 
+# A soft consonant before the ending is written with an accent in the nominative only
+# (Poznań - Pozna|nia, Toruń - Toru|nia): matched as its plain letter.
+_SOFT = str.maketrans("ńćśźŃĆŚŹ", "ncszNCSZ")
+
+
 def _apply(word: str, ending: str) -> str | None:
-    low, end = word.lower(), ending.lower()
+    low, end = word.lower().translate(_SOFT), ending.lower()
     for size in (3, 2, 1):
         if len(end) < size:
             continue
