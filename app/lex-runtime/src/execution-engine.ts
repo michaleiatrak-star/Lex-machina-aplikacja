@@ -173,6 +173,7 @@ export const CASE_LAW_DISCOVERY_RULE =
   "Orzecznictwo: znana sygnatura - od razu rejestr urzędowy według repertorium (verify_case_reference, CBOSA, portal sądu), bez web_search i bez SAOS. " +
   "Nowsze orzeczenia (SN po 2016, TK po 2015, KIO po 2018 albo z ostatnich 2-3 lat): web_search z abstrakcyjną frazą prawną (nigdy dane sprawy) w celu znalezienia sygnatur w źródłach wtórnych, równolegle z urzędowym wyszukiwaniem pełnotekstowym (search_case_law source=SN / CBOSA); SAOS ich nie zawiera. " +
   "Starsze orzeczenia i sądy powszechne: SAOS + web_search; SAOS także jako cytator. " +
+  "Wyniki wyszukiwarki, LEX, Legalis, portali prawniczych i prasy są tropami (sygnatura i data orzeczenia, Dz.U. nowelizacji, data wejścia w życie): sprawdź każdy w źródle urzędowym według gradacji (R1 ELI/Dz.U. > R2A rejestry sądów > R2B > R3), zanim go powołasz; tropu niepotwierdzonego nie powołuj jako ustalonego. " +
   "Źródło wtórne daje tylko sygnaturę; teza i cytat wyłącznie ze zweryfikowanego tekstu urzędowego.";
 
 const TRIVIAL_PART =
@@ -2356,7 +2357,8 @@ export class LexExecutionEngine {
       ["weryfikacja sygnatury interpretacji podatkowej (EUREKA)", "verify_interpretation"],
       ["weryfikacja sygnatury, cytatu i tezy orzeczenia", "verify_case_reference, verify_case_quote, verify_case_proposition"],
       ["źródła prawne przez MCP (ISAP, EUR-Lex, KRS i inne)", "list_federated_legal_sources, search_federated_legal_sources, get_federated_legal_document, call_federated_legal_source"],
-      ["web_search / wyszukiwanie w internecie", "web_search"]
+      ["web_search / wyszukiwanie w internecie (także site:sn.pl, site:orzeczenia.nsa.gov.pl)", "web_search"],
+      ["web_fetch / odczyt strony spoza źródeł urzędowych (URL z R1/R2A sprawdzaj narzędziami verify_*)", "fetch_auxiliary_legal_source"]
     ]
       .filter(([, tools]) =>
         tools!.split(/[ ,()]+/).some((name) => toolNames.has(name))

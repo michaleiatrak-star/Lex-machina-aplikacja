@@ -1,3 +1,4 @@
+import { signatureRedirect, signaturesIn } from "./court-of-signature.js";
 import {
   classifyKnownLegalSourceUrl,
   type LegalSourceTier
@@ -327,10 +328,47 @@ export class PublicWebSearch implements WebSearchProvider {
   }
 }
 
+// Leads in a title or snippet of any result, verified at their official source before use
+// (gradation of sources: a commercial database or a news site can point to a ruling, an
+// amendment or a date of entry into force, but never stands as their source).
+export type WebSearchLeads = {
+  signatures?: Array<{ signature: string; court: string; verifyWith: string }>;
+  journals?: Array<{ citation: string; eli: string }>;
+  entryIntoForce?: string[];
+};
+
+const JOURNAL = /Dz\.\s?U\.\s*(?:z\s*)?(\d{4})\s*(?:r\.)?\s*(?:,?\s*Nr\s*\d+\s*)?,?\s*poz\.\s*(\d{1,5})/gu;
+const IN_FORCE = /(?:wchodzi|wejdzie|wesz[łl]\p{L}*|wejści\p{L}*)\s+w\s+życi\p{L}*[^.;\n]{0,80}|obowiązuj\p{L}*\s+od\s+[^.;\n]{0,60}/giu;
+
+export function webSearchLeads(text: string): WebSearchLeads {
+  const leads: WebSearchLeads = {};
+  const signatures = signaturesIn(text)
+    .map((item) => ({ item, redirect: signatureRedirect(item.signature) }))
+    .filter((entry) => entry.redirect)
+    .map(({ item, redirect }) => ({ signature: item.signature, court: redirect!.court, verifyWith: redirect!.useInstead }));
+  if (signatures.length) leads.signatures = signatures.slice(0, 5);
+  const journals = [...text.matchAll(JOURNAL)].map((match) => ({ citation: `Dz.U. ${match[1]} poz. ${match[2]}`, eli: `DU/${match[1]}/${match[2]}` }));
+  if (journals.length) leads.journals = journals.filter((item, index) => journals.findIndex((other) => other.eli === item.eli) === index).slice(0, 5);
+  const inForce = [...text.matchAll(IN_FORCE)].map((match) => match[0].replace(/\s+/g, " ").trim());
+  if (inForce.length) leads.entryIntoForce = [...new Set(inForce)].slice(0, 3);
+  return leads;
+}
+
+const PAID_DATABASES = new Set(["lex.pl", "sip.lex.pl", "legalis.pl", "sip.legalis.pl"]);
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./u, "");
+  } catch {
+    return "";
+  }
+}
+
 export type ClassifiedWebSearchHit =
   WebSearchHit & {
     sourceTier: LegalSourceTier;
     nextStep: string;
+    leads?: WebSearchLeads;
   };
 
 export function classifyWebSearchHits(
@@ -339,15 +377,20 @@ export function classifyWebSearchHits(
   return hits.map((hit) => {
     const sourceTier =
       classifyKnownLegalSourceUrl(hit.url) ?? "R3";
+    const leads = webSearchLeads(`${hit.title}\n${hit.snippet}`);
+    const hasLeads = Boolean(leads.signatures || leads.journals || leads.entryIntoForce);
     return {
       ...hit,
       sourceTier,
+      ...(hasLeads ? { leads } : {}),
       nextStep:
         sourceTier === "R1"
           ? "Official statute source: verify the exact provision with verify_legal_reference before citing."
           : sourceTier === "R2A"
             ? "Official case-law/register source: verify with the matching verify_case_* tool or federated document fetch before citing."
-            : "Auxiliary source: read it with fetch_auxiliary_legal_source; it can never be the sole legal basis."
+            : PAID_DATABASES.has(hostOf(hit.url))
+              ? "Commercial database (LEX/Legalis, usually behind a login): do not cite it and do not read the paid page; use the leads it shows (case signature and date, Dz.U. of an amendment, date of entry into force) and verify each at the official source: signatures with leads.signatures[].verifyWith, acts and amendments with verify_legal_reference (asOf) / ELI. A lead not confirmed officially stays unverified."
+              : "Lead, not a source: verify every signature, Dz.U. reference and date it shows at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing; read the page with fetch_auxiliary_legal_source when the snippet is not enough. It can never be the sole legal basis."
     };
   });
 }
