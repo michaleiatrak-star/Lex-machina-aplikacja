@@ -15,6 +15,8 @@ export type ProcessAutoNodeOutcome<T> = {
   commit: boolean;
   // The answer found this conditional checkpoint not applicable (reason).
   notApplicable?: string | null;
+  // The step is done but asks the user something (WAIT_FOR_USER_MARKER): stop after it.
+  waitForUser?: boolean;
 };
 
 export type ProcessAutoStep<T> = {
@@ -30,7 +32,8 @@ export type ProcessAutoSequenceResult<T> = {
   stopped:
     | "FINAL"
     | "LIMIT_REACHED"
-    | "NODE_BLOCKED";
+    | "NODE_BLOCKED"
+    | "WAITING_FOR_USER";
   limitReached: boolean;
   blockedResult?: T;
 };
@@ -201,6 +204,14 @@ export async function runBoundedProcessAutoSequence<T>(args: {
         state,
         steps,
         stopped: "FINAL",
+        limitReached: false
+      };
+    }
+    if (node.waitForUser) {
+      return {
+        state,
+        steps,
+        stopped: "WAITING_FOR_USER",
         limitReached: false
       };
     }

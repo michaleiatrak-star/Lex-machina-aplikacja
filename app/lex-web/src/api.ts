@@ -1100,7 +1100,8 @@ export type SessionExecutionResponse = {
     stopped:
       | "FINAL"
       | "LIMIT_REACHED"
-      | "NODE_BLOCKED";
+      | "NODE_BLOCKED"
+      | "WAITING_FOR_USER";
     limitReached: boolean;
     steps: Array<{
       stage:
@@ -1119,6 +1120,10 @@ export type SessionExecutionResponse = {
   };
   processWorkflow?: ProcessPleadingWorkflowView;
   courtWorkflow?: CourtAnalysisWorkflowView;
+  // Checkpoint workflows of a case: the next step and the closed ones.
+  contractWorkflow?: { caseId: string; revision: number; mode: string; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  chronologyWorkflow?: { caseId: string; revision: number; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  orderedCaseWorkflow?: { workflowId: string; caseId: string; revision: number; status: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
 };
 
 export type ProcessPleadingCheckpoint =

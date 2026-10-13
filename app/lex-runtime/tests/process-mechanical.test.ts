@@ -196,3 +196,25 @@ describe("client report: the report the model wrote without its blueprint", () =
     expect(result.status).toBe("DRAFT_PRESENTABLE");
   }, 120_000);
 });
+
+describe("AUTO pleading: a step that asks the user ends the server's batch", () => {
+  it("commits the step and stops with WAITING_FOR_USER", async () => {
+    const { runBoundedProcessAutoSequence } = await import("../src/process-pleading-auto-runner.js");
+    const { acceptProcessPleadingStart, createProcessPleadingState } = await import("../src/process-pleading-state.js");
+    const { waitsForUser, WAIT_FOR_USER_MARKER } = await import("../src/workflow-wait.js");
+    const initial = acceptProcessPleadingStart(createProcessPleadingState(`case_${"b".repeat(32)}`, "AUTO"));
+    const answers = ["[CP-1a] raport ✅ CHECKPOINT CLAIM-VALIDATION — ZAKOŃCZONY", `Brak daty doręczenia nakazu. Podaj ją.\n${WAIT_FOR_USER_MARKER}`, "nie powinien się wykonać"];
+    let call = 0;
+    const result = await runBoundedProcessAutoSequence({
+      initialState: initial,
+      execute: async () => {
+        const answer = answers[call++]!;
+        return { result: answer, commit: true, waitForUser: waitsForUser(answer) };
+      },
+      persist: async (_previous, next) => next
+    });
+    expect(result.stopped).toBe("WAITING_FOR_USER");
+    expect(result.steps).toHaveLength(2);
+    expect(call).toBe(2);
+  });
+});

@@ -208,6 +208,7 @@ import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
+import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 
 type TabId =
   | "home"
@@ -1273,6 +1274,11 @@ export default function MatterChatApp({
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
   const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  // Checkpoint workflows: the next step the chat sends by itself, the closed steps per
+  // case (progress check) and the user's "Zatrzymaj".
+  const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
+  const workflowClosedRef = useRef<Record<string, number>>({});
+  const autoStopRef = useRef(false);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
     caseId: string; text: string; messageId: string;
@@ -3092,6 +3098,19 @@ export default function MatterChatApp({
   }
 
   useEffect(() => {
+    if (!autoNext || executing) return;
+    if (autoStopRef.current || autoNext.caseId !== caseId) {
+      setAutoNext(null);
+      return;
+    }
+    const next = autoNext;
+    setAutoNext(null);
+    void executeMessage(next.text, { autoStep: next.step, autoMeta: next.meta });
+    // executeMessage reads the current thread state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNext, executing, caseId]);
+
+  useEffect(() => {
     if (!contractRetry || executing) return;
     if (messages.some((message) => message.id === contractRetry.messageId)) return;
     const { text } = contractRetry;
@@ -3120,7 +3139,10 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
-  async function executeMessage(plain: string, options: { acceptUnverified?: boolean } = {}): Promise<void> {
+  async function executeMessage(
+    plain: string,
+    options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string } = {}
+  ): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3169,15 +3191,19 @@ export default function MatterChatApp({
         id: messageId(),
         role: "user",
         content: trimmed,
-        ...(conversationIsNew
-          ? {
-              meta:
-                deterministicActionMeta(
-                  deterministicAction
-                )
-            }
-          : {})
+        ...(options.autoMeta
+          ? { meta: options.autoMeta }
+          : conversationIsNew
+            ? {
+                meta:
+                  deterministicActionMeta(
+                    deterministicAction
+                  )
+              }
+            : {})
       };
+    // A message the user sends starts a new chain of automatic steps.
+    if (options.autoStep === undefined) autoStopRef.current = false;
 
     // Optimistic UI: move the message into the thread immediately. Provider
     // login/model startup/repair happens only after the user sees what was sent.
@@ -3489,6 +3515,22 @@ export default function MatterChatApp({
           ...current,
           answerMessage
         ]);
+      }
+
+      // Checkpoint workflows go on by themselves; the thread names the next step.
+      const autoDecision = autoAdvanceDecision(
+        result,
+        workflowClosedRef.current[executionCaseId] ?? null,
+        options.autoStep ?? 0
+      );
+      const autoProgress = workflowProgress(result);
+      if (autoProgress) workflowClosedRef.current[executionCaseId] = autoProgress.closed;
+      const autoNote = autoAdvanceNote(result, autoDecision);
+      if (autoNote && activeCaseIdRef.current === executionCaseId) {
+        setMessages((current) => [...current, { id: messageId(), role: "system", content: autoNote }]);
+      }
+      if (autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId) {
+        setAutoNext({ caseId: executionCaseId, text: autoDecision.message, meta: autoDecision.meta, step: (options.autoStep ?? 0) + 1 });
       }
 
       // Letter workflows end with a file, like a document artifact: after each
@@ -5387,6 +5429,19 @@ export default function MatterChatApp({
                   <div className="chat-message-content">
                     {executionStage}
                   </div>
+                  {(messages.at(-1)?.meta ?? "").startsWith("automatycznie") && !autoStopRef.current ? (
+                    <button
+                      type="button"
+                      className="chat-link-button"
+                      onClick={() => {
+                        autoStopRef.current = true;
+                        setAutoNext(null);
+                        setGeneratedDocumentMessage("Automatyczne kroki zatrzymane po bieżącym kroku. Napisz „Kontynuuj”, aby iść dalej.");
+                      }}
+                    >
+                      Zatrzymaj automatyczne kroki
+                    </button>
+                  ) : null}
                   {executionSteps ? (
                     <ol className="chat-steps" aria-label="Etapy pracy">
                       <li className="chat-steps-summary">

@@ -1,6 +1,9 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveActModules } from "../src/act-map-resolver.js";
+import { CONTRACT_CHECKPOINT_SECTIONS, markdownSection } from "../src/checkpoint-skill-sections.js";
+import { CONTRACT_CHECKPOINTS } from "../src/contract-analysis-state.js";
+import fs from "node:fs";
 import { ProviderGateway, ProviderRegistry } from "../src/providers/gateway.js";
 import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
@@ -112,4 +115,25 @@ describe("mechanical mode: analizator-umow-v1 per AU checkpoint", () => {
     expect(first.systemPrompt).toContain("mod-kaucja-najem-lokalu");
     expect(later.systemPrompt).toContain("mod-kaucja-najem-lokalu");
   }, 120_000);
+});
+
+describe("AU checkpoints name and carry their part of the skill", () => {
+  it("AU-B gets MODUŁ B of mod-core-checklist (not A or F), at the end with the state", async () => {
+    const call = await run({ query: "Kontynuuj.", contract: { mode: "ANALYSIS", stage: "ANALYSIS", checkpoint: "AU-B" }, doc: B2B });
+    const tail = call.systemPrompt.slice(call.systemPromptCachePrefix!);
+    expect(tail).toContain("## MODUŁ B — ANALIZA KLAUZUL");
+    expect(call.systemPrompt).not.toContain("## MODUŁ A — IDENTYFIKACJA DOKUMENTU");
+    expect(tail).toContain("Część skilla analizator-umow-v1 dla tego punktu: MODUŁ B — ANALIZA KLAUZUL");
+  }, 120_000);
+
+  it("MODUŁ F keeps its report template (## headings inside the code block)", () => {
+    const body = fs.readFileSync(path.join(CORPUS, "analizator-umow-v1/references/mod-core-checklist.md"), "utf8");
+    const f = markdownSection(body, "## MODUŁ F");
+    expect(f).toContain("## 13. DISCLAIMER");
+    expect(f).not.toContain("## SKALOWANIE RAPORTU");
+  });
+
+  it("every AU checkpoint has a description", () => {
+    for (const checkpoint of CONTRACT_CHECKPOINTS) expect(CONTRACT_CHECKPOINT_SECTIONS[checkpoint]).toBeTruthy();
+  });
 });
