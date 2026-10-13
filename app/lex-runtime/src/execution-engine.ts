@@ -2094,7 +2094,10 @@ export class LexExecutionEngine {
     // matter: the provider caches it as a separate block (systemPromptCachePrefix).
     // One rule for every checkpoint workflow: a checkpoint waiting for the user says so,
     // so the AUTO loop and the chat's automatic continuation stop there.
-    if (workflowStateParts.length) workflowStateParts.push(`# PUNKT CZEKAJĄCY NA UŻYTKOWNIKA\n${WAITING_FOR_USER_RULE}`);
+    // Also a mechanical turn without checkpoints (simple letter, statute, case law, reports).
+    if (workflowStateParts.length || (workflowPlan.executionSkill && !args.model.startsWith("local/"))) {
+      workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\n${WAITING_FOR_USER_RULE}`);
+    }
     const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
     const stablePromptLength = promptParts.join("\n\n").length + 2;
     promptParts.push(...turnTail);

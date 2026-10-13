@@ -5,8 +5,8 @@
 export const WAITING_FOR_USER_MARKER = "=== CZEKAM NA ODPOWIEDŹ ===";
 
 export const WAITING_FOR_USER_RULE =
-  `Gdy ten punkt wymaga odpowiedzi użytkownika (brak danych, decyzja, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią \`${WAITING_FOR_USER_MARKER}\`; punkt pozostaje otwarty do odpowiedzi. ` +
-  "Bez tej linii aplikacja może sama przejść do następnego punktu, więc nie używaj jej, gdy punkt jest wykonany.";
+  `Gdy ten krok wymaga odpowiedzi użytkownika (brak danych, decyzja, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią \`${WAITING_FOR_USER_MARKER}\`; krok pozostaje otwarty do odpowiedzi. ` +
+  "Bez tej linii aplikacja może sama przejść do następnego kroku, więc nie używaj jej, gdy krok jest wykonany.";
 
 const MARKER_LINE = /^[ \t>*_`]*=== CZEKAM NA ODPOWIEDŹ ===[ \t*_`]*$/mu;
 

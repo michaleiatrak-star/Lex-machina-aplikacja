@@ -2802,7 +2802,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
         ? execution.workflowPlan.id
         : null;
-    if (blueprintKind && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
+    // raport-klienta-v1 / raport-sytuacyjny-v2: "jeśli niejasne z kontekstu — zapytaj prawnika
+    // jednym pytaniem". A question to the user is the answer of this turn, not a report without
+    // its blueprint: no repair call and no block.
+    const reportQuestion = Boolean(blueprintKind) && waitsForUser(execution.output);
+    if (blueprintKind && !reportQuestion && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
       step("MODEL", "zapis raportu w formacie aplikacji");
       try {
         await this.providers.stream(request.provider, {
@@ -3082,6 +3086,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.chronologyWorkflowContext &&
       !request.contractWorkflowContext &&
       !request.orderedCaseWorkflowContext &&
+      // Questions to the user (missing facts) are not the legal answer the gates belong to.
+      !waitsForUser(modelOutput) &&
       legalAnswer(modelOutput)
         ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
         : [];
@@ -3293,7 +3299,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         request.courtWorkflowContext ||
         request.orderedCaseWorkflowContext ||
         request.contractWorkflowContext ||
-        request.chronologyWorkflowContext
+        request.chronologyWorkflowContext ||
+        execution.workflowPlan.executionSkill
           ? {
               checkpointTurn: true,
               ...(request.processWorkflowContext
@@ -3402,7 +3409,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         : null;
     const reportBlueprintBlocked =
       requiredReportKind !== null &&
-      reportBlueprint === null;
+      reportBlueprint === null &&
+      !reportQuestion;
 
     audit.record(
       "gate",
@@ -3416,6 +3424,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         accepted:
           reportBlueprint?.kind ??
           null,
+        ...(reportQuestion ? { waitingForUser: true } : {}),
         toolEvents:
           reportAudit.length
       }
