@@ -18,7 +18,8 @@ describe.each(Object.keys(recorded))("recorded judge %s", (judge) => {
     const verdict = check.verdicts[0]!;
     expect(verdict.topic).toBe(scenario.expected.topic);
     expect([scenario.expected.claim, scenario.alsoAcceptable]).toContain(verdict.claim);
-    const shouldCorrect = scenario.expected.topic !== "MATCH" || verdict.claim !== "SUPPORTED";
+    // Correction policy: off-topic or a misstated claim; a faithful partial match needs none.
+    const shouldCorrect = scenario.expected.topic === "NO_MATCH" || verdict.claim !== "SUPPORTED";
     expect(semanticProblems(check).length > 0).toBe(shouldCorrect);
   });
 });

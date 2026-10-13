@@ -235,8 +235,12 @@ import {
   threadUserText
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
-import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments } from "./case-content-grounding.js";
-import { SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
+import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+
+// The judge: the competent authority's decision only, on passages labelled by role
+// (calibration on 1000 cases, 2026-10-13).
+const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -3213,8 +3217,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         try {
           const verdict = await this.providers.stream(request.provider, {
             model: request.model,
-            systemPrompt: SEMANTIC_JUDGE_SYSTEM,
-            messages: [{ role: "user", content: semanticJudgePrompt(topic, documents) }],
+            systemPrompt: JUDGE_SYSTEM,
+            messages: [{ role: "user", content: semanticJudgePrompt(topic, documents, { roles: true }) }],
             accountContinuity: "none",
             reasoning: "none"
           });
@@ -3232,16 +3236,22 @@ export class SafeSessionExecutor implements SessionExecutor {
         return {
           check,
           semantic: check ? semanticProblems(check) : [],
-          lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature))
+          lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature)),
+          courts: courtAttributionFindings(answer)
         };
       };
-      const size = (state: Awaited<ReturnType<typeof review>>) => state.semantic.length + state.lexical.flatMap((item) => item.missing).length;
+      const size = (state: Awaited<ReturnType<typeof review>>) =>
+        state.semantic.length + state.lexical.flatMap((item) => item.missing).length + state.courts.length;
       const first = await review(modelOutput);
       let final = first;
       if (size(first)) {
-        step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic.map((item) => item.signature), ...first.lexical.map((item) => item.signature)].join(", ")}`);
+        step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic, ...first.lexical, ...first.courts].map((item) => item.signature).join(", ")}`);
         const text = await correct(
-          [...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []), ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : [])].join("\n\n")
+          [
+            ...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []),
+            ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : []),
+            ...(first.courts.length ? [courtCorrectionPrompt(first.courts)] : [])
+          ].join("\n\n")
         );
         if (text) {
           const second = await review(text);
@@ -3265,12 +3275,19 @@ export class SafeSessionExecutor implements SessionExecutor {
           remaining: final.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
         });
       }
+      if (first.courts.length) {
+        audit.record("gate", "CASE_COURT_ATTRIBUTION", final.courts.length ? "DEGRADED" : "OK", {
+          findings: first.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`),
+          remaining: final.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`)
+        });
+      }
       const lexical = final.lexical;
       const semantic: SemanticVerdict[] = final.semantic;
 
       const warnings = [
         ...(lexical.length ? [caseContentWarning(lexical)] : []),
-        ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : [])
+        ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : []),
+        ...(final.courts.length ? [courtWarning(final.courts)] : [])
       ].filter(Boolean);
       if (warnings.length) {
         // Before the model's closing disclaimer, which stays the last element.
