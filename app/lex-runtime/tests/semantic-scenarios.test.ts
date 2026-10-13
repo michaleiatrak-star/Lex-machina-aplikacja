@@ -14,7 +14,7 @@ describe("semantic check scenarios: what the judge receives", () => {
     expect(document, "cited document found").toBeTruthy();
     const prompt = semanticJudgePrompt(scenario.question, [document!]);
     expect(squeeze(prompt)).toContain(squeeze(scenario.decisive));
-    expect(relevantExcerpt(document!.text, scenario.question, document!.claim).length).toBeLessThanOrEqual(6_400);
+    expect(relevantExcerpt(document!.text, scenario.question, document!.claim).length).toBeLessThanOrEqual(8_000);
     expect(prompt).not.toMatch(/\\u0[0-9a-f]{3}|\\n/u);
     if (scenario.excluded) expect(prompt).not.toContain(scenario.excluded);
     const lexical = caseContentFindings(scenario.answer, scenario.sources, scenario.question);

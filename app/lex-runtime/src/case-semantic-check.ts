@@ -22,33 +22,88 @@ export type SemanticCheck = {
 
 const MAX_DOCUMENTS = 4;
 const HEAD_CHARS = 1_500;
-const CHUNK_CHARS = 1_200;
-const MAX_CHUNKS = 4;
+const PASSAGE_CHARS = 900;
+const BUDGET_CHARS = 8_000;
 
 const fold = (value: string): string =>
   value.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l").replace(/Ł/g, "L").toLocaleLowerCase("pl");
 const squeeze = (value: string): string => fold(value).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
-const words = (value: string): Set<string> =>
-  new Set(squeeze(value).split(" ").filter((word) => word.length >= 5).map((word) => word.slice(0, 6)));
+const stems = (value: string): string[] => squeeze(value).split(" ").filter((word) => word.length >= 5).map((word) => word.slice(0, 6));
 
-/** The document's head (court, date, subject) and its passages closest to the question and claim. */
-export function relevantExcerpt(text: string, question: string, claim: string): string {
-  const plain = text.replace(/\\[nrt]/g, " ").replace(/\s+/g, " ").trim();
-  if (plain.length <= HEAD_CHARS + CHUNK_CHARS * MAX_CHUNKS) return plain;
-  const wanted = new Set([...words(question), ...words(claim)]);
-  const chunks: Array<{ at: number; text: string; score: number }> = [];
-  for (let at = HEAD_CHARS; at < plain.length; at += CHUNK_CHARS) {
-    const chunk = plain.slice(at, at + CHUNK_CHARS);
-    const score = [...words(chunk)].filter((word) => wanted.has(word)).length;
-    chunks.push({ at, text: chunk, score });
+// Lines of a court portal around the document (ETPC base of the Ministry of Justice, SAOS, CBOSA).
+const PORTAL_LINE =
+  /browser is ancient|chrome frame|pliki?\s+cookies|cookies|liczba dokumentów w bazie|ostatnia aktualizacja|^\s*(?:metryka|treść|drukuj|pobierz|bip|x|d)\s*$/iu;
+// Where the court's or authority's own assessment begins: what separates its view from a
+// party's argument it reports.
+const ASSESSMENT =
+  /(?:sąd|izba|trybunał|organ|prezes(?:\s+urzędu)?|sąd najwyższy|sąd apelacyjny|sąd okręgowy|sąd rejonowy|sąd odwoławczy|krajowa izba odwoławcza)\s+(?:\p{L}+\s+){0,3}(?:zważył|zważyła|ustalił(?:a)?\s+i\s+zważył(?:a)?|uznał(?:a)?,|stwierdził(?:a)?,|podzielił(?:a)?|nie\s+podzielił(?:a)?)|ocena\s+stanowiska|uzasadnienie\s+interpretacji|stanowisko\s+organu|w\s+ocenie\s+(?:sądu|izby|trybunału|organu|prezesa)|apelacja\s+(?:nie\s+)?(?:jest|była|zasługiwała)|skarga\s+(?:kasacyjna\s+)?(?:nie\s+)?(?:jest|zasługuje|zasługiwała)|odwołanie\s+(?:nie\s+)?zasługuje|zarzut\p{L}*\s+(?:\p{L}+\s+){0,2}(?:okazał|nie\s+zasługuj|jest\s+bezzasadn|są\s+bezzasadn|chybion)/iu;
+
+function cleanText(text: string): string {
+  return text
+    .replace(/\\[nrt]/g, "\n")
+    .split(/\n+/u)
+    .filter((line) => !PORTAL_LINE.test(line))
+    .join("\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Passages of whole sentences, so a sentence the judge must quote is not cut at a boundary.
+function passages(plain: string): Array<{ at: number; text: string }> {
+  const sentences = plain.match(/[^.!?;]+(?:[.!?;]+|$)\s*/gu) ?? [plain];
+  const out: Array<{ at: number; text: string }> = [];
+  let at = 0, current = "", start = 0;
+  for (const sentence of sentences) {
+    if (current && current.length + sentence.length > PASSAGE_CHARS) {
+      out.push({ at: start, text: current.trim() });
+      start = at;
+      current = "";
+    }
+    current += sentence;
+    at += sentence.length;
   }
-  const best = chunks
-    .filter((chunk) => chunk.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_CHUNKS)
-    .sort((a, b) => a.at - b.at);
-  return [plain.slice(0, HEAD_CHARS), ...best.map((chunk) => chunk.text)].join("\n[…]\n");
+  if (current.trim()) out.push({ at: start, text: current.trim() });
+  return out;
+}
+
+/** The document's head (court, date, subject), the start of the court's own assessment and
+ * the passages closest to the question and claim, weighted by how rare their words are. */
+export function relevantExcerpt(text: string, question: string, claim: string): string {
+  const plain = cleanText(text);
+  if (plain.length <= BUDGET_CHARS) return plain;
+  const head = plain.slice(0, HEAD_CHARS).replace(/\s\S*$/u, "");
+  const rest = passages(plain.slice(head.length));
+  const df = new Map<string, number>();
+  const passageStems = rest.map((passage) => new Set(stems(passage.text)));
+  for (const set of passageStems) for (const stem of set) df.set(stem, (df.get(stem) ?? 0) + 1);
+  const wanted = new Set([...stems(question), ...stems(claim)]);
+  const scored = rest.map((passage, index) => {
+    let score = 0;
+    for (const stem of passageStems[index]!) if (wanted.has(stem)) score += Math.log(1 + rest.length / (df.get(stem) ?? 1));
+    return { ...passage, index, score };
+  });
+  const chosen = new Set<number>();
+  // The court's assessment: the first passage where it begins, and the next one.
+  const assessment = scored.find((passage) => ASSESSMENT.test(passage.text));
+  if (assessment) {
+    chosen.add(assessment.index);
+    if (assessment.index + 1 < scored.length) chosen.add(assessment.index + 1);
+  }
+  let used = head.length + [...chosen].reduce((sum, index) => sum + scored[index]!.text.length, 0);
+  for (const passage of [...scored].filter((item) => item.score > 0).sort((a, b) => b.score - a.score)) {
+    if (chosen.has(passage.index)) continue;
+    if (used + passage.text.length > BUDGET_CHARS) continue;
+    chosen.add(passage.index);
+    used += passage.text.length;
+  }
+  const parts: string[] = [head];
+  let previous = -2;
+  for (const index of [...chosen].sort((a, b) => a - b)) {
+    parts.push(index === previous + 1 ? scored[index]!.text : `[…] ${scored[index]!.text}`);
+    previous = index;
+  }
+  return parts.join("\n");
 }
 
 export const SEMANTIC_JUDGE_SYSTEM =
@@ -57,7 +112,10 @@ export const SEMANTIC_JUDGE_SYSTEM =
   "(MATCH: tak; PARTIAL: dotyczy tylko części kryteriów pytania, np. innego podmiotu lub innego sądu niż pytany; NO_MATCH: innego problemu); " +
   "(2) claim — czy to, co odpowiedź mówi o dokumencie, wynika z jego tekstu (SUPPORTED: sens się zgadza, także przy parafrazie lub innych słowach; " +
   "PARTIAL: część twierdzenia nie wynika z tekstu albo pominięto istotne zastrzeżenie; UNSUPPORTED: tekst mówi co innego lub odwrotnie). " +
-  "Różnica słów przy tym samym sensie to nie PARTIAL. Oceniaj to, co odpowiedź mówi o treści i rozstrzygnięciu; dane identyfikacyjne " +
+  "Różnica słów przy tym samym sensie to nie PARTIAL. " +
+  "Odróżniaj stanowisko sądu lub organu od stanowiska strony, które dokument tylko relacjonuje (żądanie lub zarzuty powoda, apelującego, skarżącego, odwołującego, " +
+  "wnioskodawcy interpretacji, organu w odpowiedzi na skargę, prokuratora): gdy odpowiedź przypisuje sądowi lub organowi to, co w tekście jest argumentem strony, " +
+  "którego sąd lub organ nie podzielił albo nie rozstrzygał, claim = UNSUPPORTED, a quote wskaż z fragmentu z oceną sądu lub organu, jeśli jest. Oceniaj to, co odpowiedź mówi o treści i rozstrzygnięciu; dane identyfikacyjne " +
   "(sąd wynikający z sygnatury, data, rodzaj orzeczenia) sprawdza osobno aplikacja — ich brak w podanym fragmencie nie jest powodem do PARTIAL. " +
   "Pole quote: dosłowny fragment tekstu dokumentu (10–300 znaków), który najlepiej uzasadnia ocenę; kopiuj znak w znak, bez skracania w środku. " +
   "Nie korzystaj z wiedzy spoza podanego tekstu. Zwróć wyłącznie JSON: " +

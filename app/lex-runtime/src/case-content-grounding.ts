@@ -151,23 +151,32 @@ function hitListEntry(key: string, source: string): string | null {
 }
 
 function sourceTextFor(key: string, raw: string[]): string | null {
+  // The document itself, fetched in the turn, comes before its line on a hit list: the list
+  // has only the title, the judge needs the reasoning.
+  const whole = raw.filter((source) => !hitListEntry(key, source) && signatureKey(readableSource(source)).includes(key));
   const texts: string[] = [];
-  for (const entry of raw.map((source) => hitListEntry(key, source))) if (entry) texts.push(entry);
+  for (const entry of whole.length ? [] : raw.map((source) => hitListEntry(key, source))) if (entry) texts.push(entry);
   if (texts.length) return texts.join("\n");
+  raw = whole.length ? whole : raw;
   for (const source of raw.map(readableSource)) {
     const normalized = signatureKey(source);
     const at = normalized.indexOf(key);
     if (at < 0) continue;
     const others = new Set([...source.matchAll(SIGNATURE)].map((match) => signatureKey(match[0])));
-    texts.push(others.size >= 3 ? source.slice(Math.max(0, at - 1500), at + 3000) : source);
+    // A result naming many cases is cut around the signature; the document itself (its
+    // signature in the heading) stays whole, though its reasoning cites other judgments.
+    const itself = at < 800;
+    texts.push(!itself && others.size >= 3 ? source.slice(Math.max(0, at - 1500), at + 3000) : source);
   }
   return texts.length ? texts.join("\n") : null;
 }
 
 // Other legal texts with a signature: TK (K 3/21, SK 12/20), KIO 1234/24, TSUE and General
-// Court (C-123/22, T-45/21), UODO decisions (DKN.5130.123.2024), ETPC applications (nr 12345/19).
+// Court (C-123/22, T-45/21), UODO decisions (DKN.5130.123.2024, DKE.523.18.2021, ZSOŚS.440.58.2018,
+// ZSPR.421.2.2019), ETPC applications (nr 12345/19), SN chambers without a Roman division
+// (SNO 11/16 disciplinary, WZ 5/16 military, I DSI 3/24 is caught by SIGNATURE).
 const OTHER_SIGNATURE =
-  /(?<![\p{L}\d-])(?:(?:Kpt|Kp|SK|Pp|Ts|K|P|U|S)\s+\d{1,4}\/\d{2}|KIO\s+\d{1,5}\/\d{2}|[CT]-\d{1,4}\/\d{2}|DKN\.\d{4}\.\d{1,5}\.\d{4}|(?<=(?:skarg[aięi]|application)\s+(?:nr|no\.?)\s*)\d{3,6}\/\d{2})(?![\d\p{L}])/gu;
+  /(?<![\p{L}\d-])(?:(?:Kpt|Kp|SK|Pp|Ts|K|P|U|S)\s+\d{1,4}\/\d{2}|KIO\s+\d{1,5}\/\d{2}|[CT]-\d{1,4}\/\d{2}|(?:DKN|DKE|DKUE|DOL|DS|DIS|ZSOŚS|ZSZZS|ZSPR|ZSPU|ZKE|ZSZ|ZWAD)\.\d{3,4}\.\d{1,5}\.\d{4}|(?:SNO|SDI|SDU|WZ|WO|WK)\s+\d{1,4}\/\d{2}|(?<=(?:skarg[aięi]|application)\s+(?:nr|no\.?)\s*)\d{3,6}\/\d{2})(?![\d\p{L}])/gu;
 
 const comparableClaim = (value: string): string =>
   value.normalize("NFKC").toLocaleLowerCase("pl").replace(/[.,;:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
@@ -232,6 +241,13 @@ export function citedDocuments(answer: string, sources: string[]): CitedDocument
 }
 
 function interpretationTextFor(signature: string, raw: string[]): string | null {
+  // As for judgments: the interpretation itself before its line on a hit list, and from a
+  // list only its own entry (another hit's subject is not this interpretation's).
+  const key = signatureKey(signature);
+  const whole = raw.filter((source) => !hitListEntry(key, source) && canonicalInterpretationSignature(readableSource(source)).includes(signature));
+  if (whole.length) return whole.map(readableSource).join("\n");
+  const entries = raw.map((source) => hitListEntry(key, source)).filter((entry): entry is string => Boolean(entry));
+  if (entries.length) return entries.join("\n");
   const texts = raw.map(readableSource).filter((source) => canonicalInterpretationSignature(source).includes(signature));
   return texts.length ? texts.join("\n") : null;
 }
