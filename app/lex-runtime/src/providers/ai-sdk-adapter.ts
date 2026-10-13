@@ -1,4 +1,4 @@
-import type { LanguageModel, ModelMessage, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "ai";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import {
   MissingProviderCredentialError,
@@ -1985,6 +1985,24 @@ function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean
   );
 }
 
+// Anthropic API: the workflow's unchanged part and the checkpoint's part as two system
+// blocks, a cache breakpoint after the first (ProviderStreamParams.systemPromptCachePrefix).
+// The text the model reads is the same as one block.
+export function anthropicSystem(model: LanguageModel, params: ProviderStreamParams): string | SystemModelMessage[] {
+  const split = params.systemPromptCachePrefix ?? 0;
+  if (!isAnthropicModel(model) || split < 4_096 || split >= params.systemPrompt.length) return params.systemPrompt;
+  return [
+    {
+      role: "system",
+      content: params.systemPrompt.slice(0, split),
+      providerOptions: {
+        anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) } }
+      }
+    },
+    { role: "system", content: params.systemPrompt.slice(split) }
+  ];
+}
+
 /** A model served by the Anthropic API provider (not an account CLI or a local server). */
 export function isAnthropicModel(model: LanguageModel): boolean {
   return typeof model === "object" && model !== null && String((model as { provider?: unknown }).provider ?? "").startsWith("anthropic");
@@ -2004,7 +2022,7 @@ async function streamModelOnce(
 ): Promise<StreamOnceResult> {
   const result = sdk.streamText({
     model,
-    system: params.systemPrompt,
+    system: anthropicSystem(model, params),
     // Anthropic API: automatic prompt caching (a top-level cache breakpoint that
     // moves with the conversation), so each tool round of a turn reads the
     // unchanged system prompt and history from the cache instead of re-processing

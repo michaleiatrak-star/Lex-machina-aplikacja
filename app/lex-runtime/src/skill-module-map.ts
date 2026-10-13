@@ -271,6 +271,16 @@ export function triggeredModules(entries: ModuleEntry[], args: { text: string; s
     const conditionStems = stems(trigger ?? entry.condition);
     const hits = conditionStems.filter((variants) => variants.some((stem) => stem.test(args.text))).length;
     const needed = entry.minHits ? Math.min(entry.minHits, conditionStems.length) : !trigger && conditionStems.length >= 5 ? 2 : 1;
+    // A trigger listing situations as „a / b / c” („≥2 podmioty / różne KRS na umowach /
+    // zmiana nazwy pracodawcy”) is met by one situation, not by one common word („umowach”).
+    const alternatives = trigger && !entry.minHits ? trigger.split(/\s\/\s/u).map(stems).filter((group) => group.length) : [];
+    if (alternatives.length > 1) {
+      const met = alternatives.some(
+        (group) => group.filter((variants) => variants.some((stem) => stem.test(args.text))).length >= Math.min(2, group.length)
+      );
+      if (met) result.push({ ...entry, why: `warunek: ${entry.condition.slice(0, 80)}` });
+      continue;
+    }
     if (hits >= needed && hits > 0) result.push({ ...entry, why: `warunek: ${entry.condition.slice(0, 80)}` });
   }
   return result.filter((entry, position) => result.findIndex((other) => other.resource === entry.resource) === position);
@@ -353,9 +363,13 @@ export function loadModules(
   return { loaded, toRead };
 }
 
-export function modulesPrompt(skill: string, result: ReturnType<typeof loadModules>): string {
+export function modulesPrompt(
+  skill: string,
+  result: ReturnType<typeof loadModules>,
+  heading = `# MODUŁY SKILLA ${skill} WYZWOLONE W TEJ SPRAWIE (aplikacja, z mapy modułów w SKILL.md)`
+): string {
   return [
-    `# MODUŁY SKILLA ${skill} WYZWOLONE W TEJ SPRAWIE (aplikacja, z mapy modułów w SKILL.md)`,
+    heading,
     ...result.loaded.map((item) => `- ${item.resource} — ${item.why} (wczytany poniżej)`),
     ...result.toRead.map((item) => `- ${item.resource} — ${item.why} (wczytaj sam narzędziem korpusu; aplikacja to sprawdza)`),
     "Pozostałe moduły z mapy wczytuj, gdy ich warunek pojawi się w toku pracy.",

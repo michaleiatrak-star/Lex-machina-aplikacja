@@ -4,7 +4,7 @@ import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
@@ -214,6 +214,22 @@ export const CRIMINAL_DOMAIN_PREFIX =
   "dr-03-";
 export const CRIMINAL_QUALIFIER_INDEX =
   "modules/mod-KK-kwalifikator-karnomaterialny.md";
+
+// The case documents as text that selects modules: without the application's own
+// labels ("[DOCUMENT doc_… · CHUNK 0]", "STRON: 1 · każda strona…", "=== STRONA 1/3 ===")
+// and notes, whose words („strona”, „umowa” in an id) are not the case and selected
+// e.g. MOD-IDENTYFIKACJA-STRONY-UMOWY for every attached file. A file name stays.
+export function documentTriggerText(context: string | undefined, max: number): string {
+  if (!context) return "";
+  return context
+    .split(/\n\n---\n\n/u)
+    .filter((block) => !/^# (?:MATERIAŁY KANCELARII|OBRAZY JAKO DOWÓD)/u.test(block))
+    .join("\n")
+    .replace(/^\[[^\]\n]* · PLIK: ([^\n]*)\]$/gmu, "$1")
+    .replace(/^\[[^\]\n]*\]$/gmu, "")
+    .replace(/^=== STRONA [^\n]* ===$/gmu, "")
+    .slice(0, max);
+}
 
 const LOCAL_SKILL_DIGEST_CHARS = 2_400;
 const LOCAL_SKILL_RULE =
@@ -1148,6 +1164,7 @@ export class LexExecutionEngine {
     // goes to the model's context. Before, the "mechanical-policy" resources were
     // only checked for existence and logged as read without reaching the model.
     let executiveContractText = "";
+    let stageModulesText = "";
     if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       const contract = executiveContract(this.registry, workflowPlan.executionSkill);
       if (contract) {
@@ -1172,26 +1189,36 @@ export class LexExecutionEngine {
           `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
         );
         executiveContractText = contractPrompt(loaded);
-        // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
-        // conditional ones the question and the case documents trigger.
+        // Module map: the conditional modules the question and the case documents trigger,
+        // and the current stage's modules (W1/W2/W3 of a pleading). The stage's modules
+        // change with the stage, so they go to the end of the prompt with the checkpoint;
+        // they keep the budget's priority.
+        const triggered = skillModules(this.registry, contract.skill, {
+          text: [moduleTriggerText, documentTriggerText(args.documentContext, 20_000)].join("\n"),
+          stage: args.processWorkflowContext?.stage ?? null
+        });
+        const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
+        const stageEntries = args.processWorkflowContext ? triggered.filter((entry) => entry.stage) : [];
+        const stage = loadModules(this.registry, contract.skill, stageEntries, already);
         const modules = loadModules(
           this.registry,
           contract.skill,
-          skillModules(this.registry, contract.skill, {
-            text: [moduleTriggerText, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
-            stage: args.processWorkflowContext?.stage ?? null
-          }),
-          new Set([...inContext, ...loaded.loaded.map((item) => item.resource)])
+          triggered.filter((entry) => !stageEntries.includes(entry)),
+          new Set([...already, ...stage.loaded.map((item) => item.resource)]),
+          Math.max(0, MODULE_BUDGET_CHARS - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
         );
-        if (modules.loaded.length || modules.toRead.length) {
-          for (const item of modules.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
+        if (modules.loaded.length || modules.toRead.length || stage.loaded.length || stage.toRead.length) {
+          for (const item of [...modules.loaded, ...stage.loaded]) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
           emit(
             "gate",
             "SKILL_MODULES",
             "OK",
-            `skill=${contract.skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`
+            `skill=${contract.skill};loaded=${[...modules.loaded, ...stage.loaded].map((item) => item.resource).join(",")};toRead=${[...modules.toRead, ...stage.toRead].map((item) => item.resource).join(",")}`
           );
-          executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+        }
+        if (modules.loaded.length || modules.toRead.length) executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+        if (stage.loaded.length || stage.toRead.length) {
+          stageModulesText = modulesPrompt(contract.skill, stage, `# MODUŁY ETAPU ${args.processWorkflowContext!.stage} SKILLA ${contract.skill} (aplikacja, z mapy modułów w SKILL.md)`);
         }
       }
     }
@@ -1220,7 +1247,8 @@ export class LexExecutionEngine {
       }
     }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
-    // (CP-REJESTR) and what its report must show, with the case's register.
+    // (CP-REJESTR) and what its report must show, with the case's register, and the
+    // pleading's current draft; at the end of the prompt like the AU checkpoint.
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpointFiles = loadCheckpointResources(
         this.registry,
@@ -1234,14 +1262,14 @@ export class LexExecutionEngine {
         "OK",
         `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`
       );
-      executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+      contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
       const pleading = draftPrompt({
         checkpoint: args.processWorkflowContext.checkpoint,
         draft: args.processWorkflowContext.draft ? { ...args.processWorkflowContext.draft, createdAt: "" } : null,
         remarks: args.processWorkflowContext.remarks ?? null
       });
       if (pleading) {
-        executiveContractText += `\n\n${pleading}`;
+        contractCheckpointText += `\n\n${pleading}`;
         emit(
           "gate",
           "PROCESS_PLEADING_DRAFT",
@@ -1252,7 +1280,7 @@ export class LexExecutionEngine {
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
     if (!args.model.startsWith("local/")) {
-      const acts = resolveActModulesWithChecks(this.registry, [moduleTriggerText, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+      const acts = resolveActModulesWithChecks(this.registry, [moduleTriggerText, documentTriggerText(args.documentContext, 30_000)].join("\n"));
       if (acts.modules.length || acts.rejected.length) {
         const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
         const loaded = loadActModules(this.registry, acts.modules, already);
@@ -1281,7 +1309,7 @@ export class LexExecutionEngine {
         .map((skill) => ({
           skill,
           matched: ["dziedzina wybrana dla tej sprawy"],
-          modules: suggestDomainModules(this.registry, skill, [decisionQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+          modules: suggestDomainModules(this.registry, skill, [moduleTriggerText, documentTriggerText(args.documentContext, 5_000)].join("\n"))
         }))
         .filter((domain) => domain.modules.length > 0);
       if (domains.length) {
@@ -1986,9 +2014,15 @@ export class LexExecutionEngine {
     if (args.tools?.length && args.toolSystemPromptAppendix) {
       promptParts.push(args.toolSystemPromptAppendix);
     }
-    if (contractCheckpointText) promptParts.push(contractCheckpointText);
-    promptParts.push(...workflowStateParts);
+    // Everything before the checkpoint's own part is the same between checkpoints of one
+    // matter: the provider caches it as a separate block (systemPromptCachePrefix).
+    const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
+    const stablePromptLength = promptParts.join("\n\n").length + 2;
+    promptParts.push(...turnTail);
     const systemPrompt = promptParts.join("\n\n");
+    const promptCache = workflowTurn
+      ? { promptCacheTtl: "1h" as const, ...(turnTail.length ? { systemPromptCachePrefix: stablePromptLength } : {}) }
+      : {};
     emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
 
     emit(
@@ -2003,7 +2037,7 @@ export class LexExecutionEngine {
       {
         model: args.model,
         systemPrompt,
-        ...(workflowTurn ? { promptCacheTtl: "1h" as const } : {}),
+        ...promptCache,
         ...(args.continuityKey
           ? {
               continuityKey:
@@ -2073,6 +2107,7 @@ export class LexExecutionEngine {
           const corrected = await this.providers.stream(args.provider, {
             model: args.model,
             systemPrompt,
+            ...promptCache,
             messages: [
               ...(args.documentContext
                 ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
