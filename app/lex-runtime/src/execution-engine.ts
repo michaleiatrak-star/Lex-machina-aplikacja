@@ -382,6 +382,9 @@ export class LexExecutionEngine {
 
   async executePolishLegalQuery(args: {
     query: string;
+    // How the turn compacts skill text (sections the application executes, stages
+    // reached); the executive SKILL.md of a mechanical turn is compacted the same way.
+    instructionCompaction?: { inactive: string[]; stages: string[] };
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -1196,7 +1199,35 @@ export class LexExecutionEngine {
           "OK",
           `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
         );
-        executiveContractText = contractPrompt(loaded);
+        // The executive skill's own SKILL.md in full (compacted like in AUTO): the
+        // contract above names its gates, the checkpoints name its sections; without the
+        // text the model had to read it with a tool in every turn or work without it.
+        // It sits in the cached part of the prompt, the same for every checkpoint.
+        const skillResource = `${contract.skill}/SKILL.md`;
+        const skillRecord = this.registry.get(contract.skill);
+        let skillText = "";
+        if (skillRecord && !inContext.has(skillResource)) {
+          try {
+            skillText = compactForModel(
+              fs.readFileSync(skillRecord.skillFile, "utf8"),
+              undefined,
+              new Set(args.instructionCompaction?.inactive ?? []),
+              args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined
+            ).text;
+          } catch {
+            skillText = "";
+          }
+          if (skillText) {
+            inContext.add(skillResource);
+            emit("resource_read", skillResource, "OK", "runtime-preload;executive-skill");
+          }
+        }
+        executiveContractText = [
+          ...(skillText
+            ? [`# SKILL WYKONAWCZY: ${contract.skill} (SKILL.md wczytany przez aplikację w całości; nie czytaj go ponownie)\n\n${skillText}`]
+            : []),
+          contractPrompt(loaded)
+        ].join("\n\n");
         // Module map: the conditional modules the question and the case documents trigger,
         // and the current stage's modules (W1/W2/W3 of a pleading). The stage's modules
         // change with the stage, so they go to the end of the prompt with the checkpoint;

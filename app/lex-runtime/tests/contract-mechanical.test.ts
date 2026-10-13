@@ -137,3 +137,14 @@ describe("AU checkpoints name and carry their part of the skill", () => {
     for (const checkpoint of CONTRACT_CHECKPOINTS) expect(CONTRACT_CHECKPOINT_SECTIONS[checkpoint]).toBeTruthy();
   });
 });
+
+describe("mechanical mode carries the executive SKILL.md itself", () => {
+  it("once, compacted, in the cached part of the prompt", async () => {
+    const call = await run({ query: "Kontynuuj.", contract: { mode: "ANALYSIS", stage: "ANALYSIS", checkpoint: "AU-C" }, doc: B2B });
+    const prompt = call.systemPrompt;
+    expect(count(prompt, "# SKILL WYKONAWCZY: analizator-umow-v1")).toBe(1);
+    expect(prompt.indexOf("# SKILL WYKONAWCZY: analizator-umow-v1")).toBeLessThan(call.systemPromptCachePrefix!);
+    expect(count(prompt, "## FAZA 0 — INTAKE: pytania przed analizą")).toBe(1);
+    expect(prompt).toContain("# pominięte metadane (czyta aplikacja): type, status, dependencies");
+  }, 120_000);
+});

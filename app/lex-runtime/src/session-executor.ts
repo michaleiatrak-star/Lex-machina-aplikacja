@@ -2435,6 +2435,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           )
         : undefined;
     const execution = await this.engine.executePolishLegalQuery({
+      instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages] },
       ...(this.coreLawIndex
         ? {
             coreLaw: this.coreLawIndex.distinctSummaries().map((act) => ({
