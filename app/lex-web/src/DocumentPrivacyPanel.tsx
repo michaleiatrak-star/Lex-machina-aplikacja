@@ -20,6 +20,8 @@ import {
   type StoredUploadResponse
 } from "./api.js";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
+import { documentFailure, type DocumentFailure } from "./document-errors.js";
+import type { DocumentDropOutcome } from "./document-drop-queue.js";
 
 const PII_KINDS: Array<{
   value: PiiKind;
@@ -180,7 +182,7 @@ export function DocumentPrivacyPanel({
   incomingFile?: File | null;
   // Per-file processing chosen before upload (AI personal-data check, AI OCR fix).
   processingOptionsFor?: (file: File) => { localAi?: boolean; ocrFix?: boolean } | undefined;
-  onIncomingFileConsumed?: () => void;
+  onIncomingFileConsumed?: (outcome: DocumentDropOutcome) => void;
   onAttachmentSelectionChange?: (
     selection: DocumentAttachmentSelection | null
   ) => void;
@@ -223,6 +225,9 @@ export function DocumentPrivacyPanel({
   const [batchFinalizing, setBatchFinalizing] =
     useState(false);
   const [error, setError] = useState("");
+  // The file that failed to read: plain message, code for the details, retry or not.
+  const [failure, setFailure] = useState<DocumentFailure | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
   const [batchDrafts, setBatchDrafts] =
     useState<DocumentPrivacyDraft[]>([]);
   const [finalizedBatch, setFinalizedBatch] =
@@ -304,6 +309,7 @@ export function DocumentPrivacyPanel({
     if (!file) return;
     setLoading(true);
     setError("");
+    setFailure(null);
     setActiveFileName(file.name);
     activeFileRef.current = file;
     setReview(null);
@@ -342,7 +348,7 @@ export function DocumentPrivacyPanel({
           fileName: file.name,
           stage: "ARCHIVE_STORED"
         });
-        onIncomingFileConsumed?.();
+        onIncomingFileConsumed?.("STORED");
         return;
       }
 
@@ -383,14 +389,9 @@ export function DocumentPrivacyPanel({
         suggestions: result.suggestions.length
       });
     } catch (cause) {
-      setError(
-        cause instanceof ApiError &&
-        cause.description
-          ? `${cause.code}: ${cause.description}`
-          : cause instanceof Error
-            ? cause.message
-            : "DOCUMENT_REVIEW_FAILED"
-      );
+      const failed = documentFailure(cause);
+      setFailure(failed);
+      setError(failed.message);
     } finally {
       setLoading(false);
     }
@@ -585,7 +586,7 @@ export function DocumentPrivacyPanel({
     setPrivacyMode("ASK");
     activeFileRef.current = null;
     setActiveFileName("");
-    onIncomingFileConsumed?.();
+    onIncomingFileConsumed?.("READY");
   }
 
   async function finalizeBatch(): Promise<void> {
@@ -762,24 +763,66 @@ export function DocumentPrivacyPanel({
       </div>
 
       {error && (
-        <div className="alert alert-error">
-          <span>{error}</span>
-          {incomingFile ? (
-            <button
-              type="button"
-              onClick={() => {
-                setReview(null);
-                setDirectives([]);
-                setSelection(null);
-                setArchiveUpload(null);
-                activeFileRef.current = null;
-                setActiveFileName("");
-                setError("");
-                onIncomingFileConsumed?.();
-              }}
-            >
-              Pomiń ten plik
-            </button>
+        <div className="alert alert-error document-failure" role="alert">
+          <span>
+            {activeFileName ? <strong>{activeFileName}: </strong> : null}
+            {error}
+          </span>
+          {failure ? (
+            <details className="document-failure-code">
+              <summary>Szczegóły techniczne</summary>
+              <code>{failure.code}</code>
+            </details>
+          ) : null}
+          {failure ? (
+            <div className="document-failure-actions">
+              {failure.retryable && (activeFileRef.current || incomingFile) ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void openFile(activeFileRef.current ?? incomingFile ?? undefined)}
+                >
+                  Ponów
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => replaceInputRef.current?.click()}
+              >
+                Wybierz plik ponownie
+              </button>
+              <input
+                ref={replaceInputRef}
+                type="file"
+                hidden
+                aria-label="Wybierz plik ponownie"
+                onChange={(event) => {
+                  const replacement = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (replacement) void openFile(replacement);
+                }}
+              />
+              {incomingFile ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setReview(null);
+                    setDirectives([]);
+                    setSelection(null);
+                    setArchiveUpload(null);
+                    activeFileRef.current = null;
+                    setActiveFileName("");
+                    setError("");
+                    setFailure(null);
+                    onIncomingFileConsumed?.("SKIPPED");
+                  }}
+                >
+                  Pomiń ten plik
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       )}

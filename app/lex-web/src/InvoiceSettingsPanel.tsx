@@ -101,119 +101,129 @@ export function InvoiceSettingsPanel() {
       {message ? <div className="alert">{message}</div> : null}
 
       <section>
-        <h3>Token KSeF</h3>
-        <p className="field-help">
-          {ksef?.tokenConfigured
-            ? `Token zapisany (${ksef.tokenHint ?? ""}${ksef.tokenSetAt ? `, ${new Date(ksef.tokenSetAt).toLocaleString("pl-PL")}` : ""}).`
-            : "Brak tokenu. Bez niego faktury można wystawiać i drukować, ale nie wysyłać do KSeF."}
+        <h3>KSeF</h3>
+        <p className="alert" role="note">
+          <strong>Wysyłka do KSeF jest niedostępna w tej wersji.</strong> Faktury wystawiasz, zapisujesz i drukujesz
+          w programie. Token ani środowisko nie są teraz potrzebne do pracy.
         </p>
-        <div className="invoice-grid">
-          <label>
-            Token
-            <input
-              type="password"
-              autoComplete="off"
-              value={token}
-              placeholder={ksef?.tokenConfigured ? "Wklej nowy token, aby zastąpić" : "Wklej token wygenerowany w KSeF"}
-              onChange={(event) => setToken(event.target.value)}
-            />
-          </label>
-          <label>
-            NIP kontekstu (podmiotu w KSeF)
-            <input
-              inputMode="numeric"
-              value={contextNip}
-              onChange={(event) => setContextNip(event.target.value)}
-            />
-          </label>
-        </div>
-        <div className="chat-form-row">
-          <button
-            type="button"
-            className="chat-primary-action"
-            disabled={busy || !token.trim()}
-            onClick={() =>
-              void run(async () => {
-                const next = await setKsefToken(token.trim(), contextNip.trim() || undefined);
-                setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                setToken("");
-              }, "Token KSeF zapisany.")
-            }
-          >
-            Zapisz token
-          </button>
-          {ksef?.tokenConfigured ? (
+        <details className="ksef-later">
+          <summary>Ustawienia KSeF na czas, gdy wysyłka będzie dostępna</summary>
+        <section>
+          <h3>Token KSeF</h3>
+          <p className="field-help">
+            {ksef?.tokenConfigured
+              ? `Token zapisany (${ksef.tokenHint ?? ""}${ksef.tokenSetAt ? `, ${new Date(ksef.tokenSetAt).toLocaleString("pl-PL")}` : ""}).`
+              : "Brak tokenu. Nie jest potrzebny, dopóki wysyłka do KSeF nie zostanie udostępniona."}
+          </p>
+          <div className="invoice-grid">
+            <label>
+              Token
+              <input
+                type="password"
+                autoComplete="off"
+                value={token}
+                placeholder={ksef?.tokenConfigured ? "Wklej nowy token, aby zastąpić" : "Wklej token wygenerowany w KSeF"}
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </label>
+            <label>
+              NIP kontekstu (podmiotu w KSeF)
+              <input
+                inputMode="numeric"
+                value={contextNip}
+                onChange={(event) => setContextNip(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="chat-form-row">
+            <button
+              type="button"
+              className="chat-primary-action"
+              disabled={busy || !token.trim()}
+              onClick={() =>
+                void run(async () => {
+                  const next = await setKsefToken(token.trim(), contextNip.trim() || undefined);
+                  setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
+                  setToken("");
+                }, "Token KSeF zapisany.")
+              }
+            >
+              Zapisz token
+            </button>
+            {ksef?.tokenConfigured ? (
+              <button
+                type="button"
+                className="chat-secondary-action"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const next = await clearKsefToken();
+                    setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
+                  }, "Token KSeF usunięty.")
+                }
+              >
+                Usuń token
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section>
+          <h3>Środowisko KSeF</h3>
+          <p className={ksef?.environment === "production" ? "alert alert-error" : "field-help"}>
+            {ksef?.environment === "production"
+              ? "Środowisko PRODUKCYJNE: gdy wysyłka zostanie udostępniona, faktury będą trafiać do produkcyjnego systemu KSeF."
+              : "Środowisko TESTOWE (domyślne): gdy wysyłka zostanie udostępniona, faktury będą trafiać do testowego środowiska KSeF."}
+          </p>
+          {ksef?.environment === "production" ? (
             <button
               type="button"
               className="chat-secondary-action"
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  const next = await clearKsefToken();
+                  const next = await setKsefEnvironment("test");
                   setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                }, "Token KSeF usunięty.")
+                }, "Przełączono na środowisko testowe.")
               }
             >
-              Usuń token
+              Wróć na środowisko testowe
             </button>
-          ) : null}
-        </div>
-      </section>
-
-      <section>
-        <h3>Środowisko KSeF</h3>
-        <p className={ksef?.environment === "production" ? "alert alert-error" : "field-help"}>
-          {ksef?.environment === "production"
-            ? "Środowisko PRODUKCYJNE: wysyłki trafią do produkcyjnego systemu KSeF."
-            : "Środowisko TESTOWE (domyślne): wysyłki trafią do testowego środowiska KSeF."}
-        </p>
-        {ksef?.environment === "production" ? (
-          <button
-            type="button"
-            className="chat-secondary-action"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const next = await setKsefEnvironment("test");
-                setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-              }, "Przełączono na środowisko testowe.")
-            }
-          >
-            Wróć na środowisko testowe
-          </button>
-        ) : askProduction ? (
-          <div className="invoice-confirm">
-            <p>
-              Aby przełączyć na produkcję, wpisz <strong>{PRODUCTION_PHRASE}</strong>. Każda wysyłka i tak
-              będzie wymagać osobnego potwierdzenia.
-            </p>
-            <div className="chat-form-row">
-              <input value={productionPhrase} onChange={(event) => setProductionPhrase(event.target.value)} />
-              <button
-                type="button"
-                className="chat-primary-action"
-                disabled={busy || productionPhrase !== PRODUCTION_PHRASE}
-                onClick={() =>
-                  void run(async () => {
-                    const next = await setKsefEnvironment("production", true);
-                    setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
-                    setAskProduction(false);
-                    setProductionPhrase("");
-                  }, "Przełączono na środowisko produkcyjne.")
-                }
-              >
-                Przełącz na produkcję
-              </button>
-              <button type="button" className="chat-secondary-action" onClick={() => setAskProduction(false)}>
-                Anuluj
-              </button>
+          ) : askProduction ? (
+            <div className="invoice-confirm">
+              <p>
+                Aby przełączyć na produkcję, wpisz <strong>{PRODUCTION_PHRASE}</strong>. Każda przyszła wysyłka
+                będzie wymagać osobnego potwierdzenia.
+              </p>
+              <div className="chat-form-row">
+                <input value={productionPhrase} onChange={(event) => setProductionPhrase(event.target.value)} />
+                <button
+                  type="button"
+                  className="chat-primary-action"
+                  disabled={busy || productionPhrase !== PRODUCTION_PHRASE}
+                  onClick={() =>
+                    void run(async () => {
+                      const next = await setKsefEnvironment("production", true);
+                      setSettings((current) => (current ? { ...current, ksef: next.ksef } : current));
+                      setAskProduction(false);
+                      setProductionPhrase("");
+                    }, "Przełączono na środowisko produkcyjne.")
+                  }
+                >
+                  Przełącz na produkcję
+                </button>
+                <button type="button" className="chat-secondary-action" onClick={() => setAskProduction(false)}>
+                  Anuluj
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <button type="button" className="chat-secondary-action" disabled={busy || !settings} onClick={() => setAskProduction(true)}>
-            Przełącz na produkcję…
-          </button>
-        )}
+          ) : (
+            <button type="button" className="chat-secondary-action" disabled={busy || !settings} onClick={() => setAskProduction(true)}>
+              Przełącz na produkcję…
+            </button>
+          )}
+        </section>
+        </details>
       </section>
 
       <section>

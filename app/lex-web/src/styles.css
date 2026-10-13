@@ -2267,3 +2267,18 @@ textarea:focus {
 .authenticated-shell {
   display: contents;
 }
+
+/* Błąd odczytu pliku: komunikat, szczegóły techniczne i działania w jednym bloku. */
+.document-failure {
+  display: grid;
+  gap: 8px;
+}
+.document-failure-code summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.document-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

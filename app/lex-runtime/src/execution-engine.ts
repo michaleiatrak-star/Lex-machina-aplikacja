@@ -1,10 +1,18 @@
 import { draftPrompt } from "./process-pleading-draft.js";
+import { WAIT_FOR_USER_INSTRUCTION } from "./workflow-wait.js";
+import {
+  CHRONOLOGY_CHECKPOINT_SECTIONS,
+  CONTRACT_CHECKPOINT_EXCERPTS,
+  CONTRACT_CHECKPOINT_SECTIONS,
+  COURT_CHECKPOINT_SECTIONS,
+  markdownSection
+} from "./checkpoint-skill-sections.js";
 import { compactForModel } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
 import { contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
-import { loadModules, modulesPrompt, skillModules } from "./skill-module-map.js";
+import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
@@ -39,7 +47,8 @@ import {
   MANDATORY_SESSION_SKILLS,
   latestUserTurn,
   parseSkillSelectionEnvelope,
-  resolveAdditionalSkills
+  resolveAdditionalSkills,
+  threadUserText
 } from "./skill-selection.js";
 
 export { latestUserTurn };
@@ -214,6 +223,22 @@ export const CRIMINAL_DOMAIN_PREFIX =
 export const CRIMINAL_QUALIFIER_INDEX =
   "modules/mod-KK-kwalifikator-karnomaterialny.md";
 
+// The case documents as text that selects modules: without the application's own
+// labels ("[DOCUMENT doc_… · CHUNK 0]", "STRON: 1 · każda strona…", "=== STRONA 1/3 ===")
+// and notes, whose words („strona”, „umowa” in an id) are not the case and selected
+// e.g. MOD-IDENTYFIKACJA-STRONY-UMOWY for every attached file. A file name stays.
+export function documentTriggerText(context: string | undefined, max: number): string {
+  if (!context) return "";
+  return context
+    .split(/\n\n---\n\n/u)
+    .filter((block) => !/^# (?:MATERIAŁY KANCELARII|OBRAZY JAKO DOWÓD)/u.test(block))
+    .join("\n")
+    .replace(/^\[[^\]\n]* · PLIK: ([^\n]*)\]$/gmu, "$1")
+    .replace(/^\[[^\]\n]*\]$/gmu, "")
+    .replace(/^=== STRONA [^\n]* ===$/gmu, "")
+    .slice(0, max);
+}
+
 const LOCAL_SKILL_DIGEST_CHARS = 2_400;
 const LOCAL_SKILL_RULE =
   /(⛔|HARD GATE|NIGDY|ZAKAZ|OBOWI[ĄA]ZKOW|ZAWSZE|MUSI|FAIL[- ]CLOSED)/iu;
@@ -328,6 +353,27 @@ export function buildCoreLegalResourcePrompt(
     .join("\n\n---\n\n");
 }
 
+// analizator-umow-v1, one AU checkpoint per turn: the shared modules its SKILL.md
+// (Moduły SYSTEMOWE) requires for that checkpoint. HYBRID-VALIDATION before any
+// output document is generated and at AU-HYBRID; the rest at their own checkpoint.
+export function contractCheckpointResources(mode: ContractWorkflowMode, checkpoint: ContractCheckpoint): string[] {
+  switch (checkpoint) {
+    case "AU-GAP":
+      return ["shared/INTAKE-GAP.md"];
+    case "AU-GENBUILD":
+    case "AU-GENSHARED":
+      return mode === "ANALYSIS" ? [] : ["shared/HYBRID-VALIDATION.md"];
+    case "AU-HYBRID":
+      return ["shared/HYBRID-VALIDATION.md"];
+    case "AU-STRIP":
+      return ["shared/WERYFIKACJA-SLAD.md"];
+    case "AU-POST":
+      return ["shared/POST-VALIDATION.md"];
+    default:
+      return [];
+  }
+}
+
 export class LexExecutionEngine {
   constructor(
     private readonly registry: LexSkillRegistry,
@@ -336,6 +382,9 @@ export class LexExecutionEngine {
 
   async executePolishLegalQuery(args: {
     query: string;
+    // How the turn compacts skill text (sections the application executes, stages
+    // reached); the executive SKILL.md of a mechanical turn is compacted the same way.
+    instructionCompaction?: { inactive: string[]; stages: string[] };
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -409,6 +458,12 @@ export class LexExecutionEngine {
         ChronologyCheckpoint;
       temporalGateRequired: boolean;
     };
+    // Resources the session executor already put in the prompt (mandatory path, act
+    // modules, executive contract): the engine does not add a second copy.
+    resourcesInContext?: readonly string[];
+    // The session recognised a criminal/misdemeanour matter (mandatory path facts),
+    // also when the chosen domain is another one (a contract with a fraud threat).
+    criminalMatter?: boolean;
     contractWorkflowContext?: {
       mode: ContractWorkflowMode;
       stage: Exclude<
@@ -470,6 +525,17 @@ export class LexExecutionEngine {
     // What the user asked, for decisions read from the text; the model still gets
     // the document output contract with effectiveQuery.
     const decisionQuery = withoutOutputContract(effectiveQuery);
+    // A turn of a checkpoint workflow ("Kontynuuj") selects modules from what the user
+    // wrote in the thread and the case documents, not from the assistant's answers:
+    // the same modules at every checkpoint of one matter (and a stable cached prompt).
+    const workflowTurn = Boolean(
+      args.contractWorkflowContext ||
+        args.processWorkflowContext ||
+        args.courtWorkflowContext ||
+        args.chronologyWorkflowContext ||
+        args.orderedCaseWorkflowContext
+    );
+    const moduleTriggerText = workflowTurn ? withoutOutputContract(threadUserText(effectiveQuery)) : decisionQuery;
     if (!effectiveQuery) {
       emit("route", "query", "BLOCKED", "EMPTY_QUERY_AFTER_SKILL_ENVELOPE");
       throw new LexExecutionError(
@@ -1015,7 +1081,10 @@ export class LexExecutionEngine {
         name.startsWith(
           CRIMINAL_DOMAIN_PREFIX
         )
-      );
+      ) ??
+      (args.criminalMatter
+        ? [...this.registry.skills.keys()].find((name) => name.startsWith(CRIMINAL_DOMAIN_PREFIX))
+        : undefined);
     let quickQualifier = "";
     if (criminalDomain) {
       const resource =
@@ -1106,12 +1175,14 @@ export class LexExecutionEngine {
     // goes to the model's context. Before, the "mechanical-policy" resources were
     // only checked for existence and logged as read without reaching the model.
     let executiveContractText = "";
+    let stageModulesText = "";
     if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       const contract = executiveContract(this.registry, workflowPlan.executionSkill);
       if (contract) {
         const inContext = new Set<string>([
           ...CORE_LEGAL_RESOURCES,
-          ...workflowPlan.semanticContextResources
+          ...workflowPlan.semanticContextResources,
+          ...(args.resourcesInContext ?? [])
         ]);
         const loaded = loadContract(this.registry, contract, {
           // Router KROK 5-6: a letter from the delivered material -> shared/FAKTY_v2.md.
@@ -1128,34 +1199,118 @@ export class LexExecutionEngine {
           "OK",
           `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
         );
-        executiveContractText = contractPrompt(loaded);
-        // Module map: the current stage's modules (W1/W2/W3 of a pleading) and the
-        // conditional ones the question and the case documents trigger.
+        // The executive skill's own SKILL.md in full (compacted like in AUTO): the
+        // contract above names its gates, the checkpoints name its sections; without the
+        // text the model had to read it with a tool in every turn or work without it.
+        // It sits in the cached part of the prompt, the same for every checkpoint.
+        const skillResource = `${contract.skill}/SKILL.md`;
+        const skillRecord = this.registry.get(contract.skill);
+        let skillText = "";
+        if (skillRecord && !inContext.has(skillResource)) {
+          try {
+            skillText = compactForModel(
+              fs.readFileSync(skillRecord.skillFile, "utf8"),
+              undefined,
+              new Set(args.instructionCompaction?.inactive ?? []),
+              args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined
+            ).text;
+          } catch {
+            skillText = "";
+          }
+          if (skillText) {
+            inContext.add(skillResource);
+            emit("resource_read", skillResource, "OK", "runtime-preload;executive-skill");
+          }
+        }
+        executiveContractText = [
+          ...(skillText
+            ? [`# SKILL WYKONAWCZY: ${contract.skill} (SKILL.md wczytany przez aplikację w całości; nie czytaj go ponownie)\n\n${skillText}`]
+            : []),
+          contractPrompt(loaded)
+        ].join("\n\n");
+        // Module map: the conditional modules the question and the case documents trigger,
+        // and the current stage's modules (W1/W2/W3 of a pleading). The stage's modules
+        // change with the stage, so they go to the end of the prompt with the checkpoint;
+        // they keep the budget's priority.
+        const triggered = skillModules(this.registry, contract.skill, {
+          text: [moduleTriggerText, documentTriggerText(args.documentContext, 20_000)].join("\n"),
+          stage: args.processWorkflowContext?.stage ?? null
+        });
+        const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
+        const stageEntries = args.processWorkflowContext ? triggered.filter((entry) => entry.stage) : [];
+        const stage = loadModules(this.registry, contract.skill, stageEntries, already);
         const modules = loadModules(
           this.registry,
           contract.skill,
-          skillModules(this.registry, contract.skill, {
-            text: [decisionQuery, (args.documentContext ?? "").slice(0, 20_000)].join("\n"),
-            stage: args.processWorkflowContext?.stage ?? null
-          }),
-          new Set([...inContext, ...loaded.loaded.map((item) => item.resource)])
+          triggered.filter((entry) => !stageEntries.includes(entry)),
+          new Set([...already, ...stage.loaded.map((item) => item.resource)]),
+          Math.max(0, MODULE_BUDGET_CHARS - stage.loaded.reduce((sum, item) => sum + item.content.length, 0))
         );
-        if (modules.loaded.length || modules.toRead.length) {
-          for (const item of modules.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
+        if (modules.loaded.length || modules.toRead.length || stage.loaded.length || stage.toRead.length) {
+          for (const item of [...modules.loaded, ...stage.loaded]) emit("resource_read", item.resource, "OK", "runtime-preload;skill-module-map");
           emit(
             "gate",
             "SKILL_MODULES",
             "OK",
-            `skill=${contract.skill};loaded=${modules.loaded.map((item) => item.resource).join(",")};toRead=${modules.toRead.map((item) => item.resource).join(",")}`
+            `skill=${contract.skill};loaded=${[...modules.loaded, ...stage.loaded].map((item) => item.resource).join(",")};toRead=${[...modules.toRead, ...stage.toRead].map((item) => item.resource).join(",")}`
           );
-          executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+        }
+        if (modules.loaded.length || modules.toRead.length) executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+        if (stage.loaded.length || stage.toRead.length) {
+          stageModulesText = modulesPrompt(contract.skill, stage, `# MODUŁY ETAPU ${args.processWorkflowContext!.stage} SKILLA ${contract.skill} (aplikacja, z mapy modułów w SKILL.md)`);
         }
       }
     }
+    // analizator-umow-v1: the shared modules of the active AU checkpoint (HYBRID-VALIDATION,
+    // WERYFIKACJA-SLAD, POST-VALIDATION, INTAKE-GAP), placed with the workflow state at the
+    // end of the prompt so the rest stays a cached prefix between checkpoints.
+    let contractCheckpointText = "";
+    if (args.contractWorkflowContext && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+      const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
+      const { checkpoint, mode } = args.contractWorkflowContext;
+      for (const resource of contractCheckpointResources(mode, checkpoint)) {
+        if (already.has(resource)) continue;
+        const file = this.registry.resolveResource(workflowPlan.executionSkill, resource);
+        let content = "";
+        try {
+          content = file ? fs.readFileSync(file, "utf8") : "";
+        } catch {
+          content = "";
+        }
+        if (!content) {
+          emit("resource_read", resource, "BLOCKED", "runtime-preload;contract-checkpoint;missing");
+          continue;
+        }
+        emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
+        contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
+      }
+      for (const excerpt of CONTRACT_CHECKPOINT_EXCERPTS[checkpoint] ?? []) {
+        if (already.has(excerpt.resource)) continue;
+        const file = this.registry.resolveResource(workflowPlan.executionSkill, excerpt.resource);
+        let body = "";
+        try {
+          body = file ? fs.readFileSync(file, "utf8") : "";
+        } catch {
+          body = "";
+        }
+        const content = excerpt.heading ? markdownSection(body, excerpt.heading) : body;
+        if (!content) {
+          emit("resource_read", excerpt.resource, "BLOCKED", `runtime-preload;contract-checkpoint;missing:${excerpt.heading ?? "file"}`);
+          continue;
+        }
+        emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
+        contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
+      }
+    }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
-    // (CP-REJESTR) and what its report must show, with the case's register.
+    // (CP-REJESTR) and what its report must show, with the case's register, and the
+    // pleading's current draft; at the end of the prompt like the AU checkpoint.
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
-      const checkpointFiles = loadCheckpointResources(this.registry, args.processWorkflowContext.checkpoint, new Set(CORE_LEGAL_RESOURCES));
+      const checkpointFiles = loadCheckpointResources(
+        this.registry,
+        args.processWorkflowContext.checkpoint,
+        new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])])
+      );
       for (const item of checkpointFiles.loaded) emit("resource_read", item.resource, "OK", "runtime-preload;process-checkpoint");
       emit(
         "gate",
@@ -1163,14 +1318,14 @@ export class LexExecutionEngine {
         "OK",
         `checkpoint=${args.processWorkflowContext.checkpoint};loaded=${checkpointFiles.loaded.map((item) => item.resource).join(",")};toRead=${checkpointFiles.toRead.join(",")}`
       );
-      executiveContractText += `${executiveContractText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
+      contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}${checkpointPrompt(args.processWorkflowContext.checkpoint, checkpointFiles, args.processWorkflowContext.register)}`;
       const pleading = draftPrompt({
         checkpoint: args.processWorkflowContext.checkpoint,
         draft: args.processWorkflowContext.draft ? { ...args.processWorkflowContext.draft, createdAt: "" } : null,
         remarks: args.processWorkflowContext.remarks ?? null
       });
       if (pleading) {
-        executiveContractText += `\n\n${pleading}`;
+        contractCheckpointText += `\n\n${pleading}`;
         emit(
           "gate",
           "PROCESS_PLEADING_DRAFT",
@@ -1181,17 +1336,23 @@ export class LexExecutionEngine {
     }
     // MAPA-AKTOW resolved mechanically from the question and the case documents.
     if (!args.model.startsWith("local/")) {
-      const acts = resolveActModulesWithChecks(this.registry, [decisionQuery, (args.documentContext ?? "").slice(0, 30_000)].join("\n"));
+      const acts = resolveActModulesWithChecks(this.registry, [moduleTriggerText, documentTriggerText(args.documentContext, 30_000)].join("\n"));
       if (acts.modules.length || acts.rejected.length) {
-        const loaded = loadActModules(this.registry, acts.modules, new Set(CORE_LEGAL_RESOURCES));
+        const already = new Set([...CORE_LEGAL_RESOURCES, ...(args.resourcesInContext ?? [])]);
+        const loaded = loadActModules(this.registry, acts.modules, already);
         for (const item of loaded.loaded) emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule}`);
+        for (const item of acts.modules.filter((module) => already.has(module.resource))) {
+          emit("resource_read", item.resource, "OK", `runtime-preload;act-map;${item.rule};in-context`);
+        }
         emit(
           "gate",
           "ACT_MAP_MODULES",
           "OK",
           [...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`), ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)].join(";")
         );
-        if (acts.modules.length) executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+        if (loaded.loaded.length || loaded.toRead.length) {
+          executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+        }
         if (acts.rejected.length) {
           executiveContractText += `\n\n# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
         }
@@ -1204,7 +1365,7 @@ export class LexExecutionEngine {
         .map((skill) => ({
           skill,
           matched: ["dziedzina wybrana dla tej sprawy"],
-          modules: suggestDomainModules(this.registry, skill, [decisionQuery, (args.documentContext ?? "").slice(0, 5_000)].join("\n"))
+          modules: suggestDomainModules(this.registry, skill, [moduleTriggerText, documentTriggerText(args.documentContext, 5_000)].join("\n"))
         }))
         .filter((domain) => domain.modules.length > 0);
       if (domains.length) {
@@ -1742,6 +1903,86 @@ export class LexExecutionEngine {
         localModel
       );
 
+    // Workflow state of this turn (active checkpoint): the only part that changes
+    // between checkpoints of one case. It closes the prompt, so the provider's prompt
+    // cache keeps the unchanged skills, mandatory path and modules before it.
+    const workflowStateParts: string[] = [
+      ...(args.processWorkflowContext
+        ? [
+            [
+              "# ACTIVE PROCESS PLEADING STATE — RUNTIME ENFORCED",
+              `Stage: ${args.processWorkflowContext.stage}.`,
+              `Active checkpoint: ${args.processWorkflowContext.checkpoint}.`,
+              `Mode: ${args.processWorkflowContext.mode}.`,
+              "Execute only the active checkpoint in this turn.",
+              "Do not continue to a later checkpoint or later stage.",
+              "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",
+              "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it.",
+              ...(args.processWorkflowContext.mode === "AUTO" ? [WAIT_FOR_USER_INSTRUCTION] : [])
+            ].join("\n")
+          ]
+        : []),
+      ...(args.courtWorkflowContext
+        ? [
+            [
+              "# ACTIVE COURT ANALYSIS STATE — RUNTIME ENFORCED",
+              `Stage: ${args.courtWorkflowContext.stage}.`,
+              `Active checkpoint: ${args.courtWorkflowContext.checkpoint}.`,
+              `Część skilla analiza-sadowa-v6 dla tego punktu: ${COURT_CHECKPOINT_SECTIONS[args.courtWorkflowContext.checkpoint]}`,
+              "Execute only this court-analysis checkpoint in this turn.",
+              "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
+              "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass.",
+              WAIT_FOR_USER_INSTRUCTION
+            ].join("\n")
+          ]
+        : []),
+      ...(args.chronologyWorkflowContext
+        ? [
+            [
+              "# ACTIVE CHRONOLOGY STATE — RUNTIME ENFORCED",
+              `Stage: ${args.chronologyWorkflowContext.stage}.`,
+              `Active checkpoint: ${args.chronologyWorkflowContext.checkpoint}.`,
+              `Temporal OŚ-GATE required: ${args.chronologyWorkflowContext.temporalGateRequired ? "YES" : "NO"}.`,
+              `Część skilla chronologia-sprawy-v1 dla tego punktu: ${CHRONOLOGY_CHECKPOINT_SECTIONS[args.chronologyWorkflowContext.checkpoint]}`,
+              "Execute only this chronology checkpoint in this turn.",
+              "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
+              "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization.",
+              WAIT_FOR_USER_INSTRUCTION
+            ].join("\n")
+          ]
+        : []),
+      ...(args.orderedCaseWorkflowContext
+        ? [
+            [
+              "# ACTIVE ORDERED LEGAL WORKFLOW — RUNTIME ENFORCED",
+              `Workflow: ${args.orderedCaseWorkflowContext.workflowId}.`,
+              `Active checkpoint: ${args.orderedCaseWorkflowContext.checkpoint}.`,
+              `Revision: ${args.orderedCaseWorkflowContext.revision}.`,
+              "Execute only this checkpoint in this turn.",
+              "Do not claim completion of any later checkpoint.",
+              "The runtime, not the model, owns checkpoint order, required resources, source verification, citations, provenance and commit.",
+              "Return only the semantic work product needed for the active checkpoint.",
+              WAIT_FOR_USER_INSTRUCTION
+            ].join("\n")
+          ]
+        : []),
+      ...(args.contractWorkflowContext
+        ? [
+            [
+              "# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED",
+              `Mode: ${args.contractWorkflowContext.mode}.`,
+              `Stage: ${args.contractWorkflowContext.stage}.`,
+              `Active AU checkpoint: ${args.contractWorkflowContext.checkpoint}.`,
+              `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[args.contractWorkflowContext.checkpoint]}`,
+              "Execute only this AU checkpoint in this turn.",
+              "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
+              "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
+              "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A.",
+              WAIT_FOR_USER_INSTRUCTION
+            ].join("\n")
+          ]
+        : [])
+    ];
     const promptParts = [
       baseSystemPrompt,
       coreResourcePrompt,
@@ -1800,73 +2041,6 @@ export class LexExecutionEngine {
             ].join("\n")
           ]
         : []),
-      ...(args.processWorkflowContext
-        ? [
-            [
-              "# ACTIVE PROCESS PLEADING STATE — RUNTIME ENFORCED",
-              `Stage: ${args.processWorkflowContext.stage}.`,
-              `Active checkpoint: ${args.processWorkflowContext.checkpoint}.`,
-              `Mode: ${args.processWorkflowContext.mode}.`,
-              "Execute only the active checkpoint in this turn.",
-              "Do not continue to a later checkpoint or later stage.",
-              "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",
-              "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it."
-            ].join("\n")
-          ]
-        : []),
-      ...(args.courtWorkflowContext
-        ? [
-            [
-              "# ACTIVE COURT ANALYSIS STATE — RUNTIME ENFORCED",
-              `Stage: ${args.courtWorkflowContext.stage}.`,
-              `Active checkpoint: ${args.courtWorkflowContext.checkpoint}.`,
-              "Execute only this court-analysis checkpoint in this turn.",
-              "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
-              "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass."
-            ].join("\n")
-          ]
-        : []),
-      ...(args.chronologyWorkflowContext
-        ? [
-            [
-              "# ACTIVE CHRONOLOGY STATE — RUNTIME ENFORCED",
-              `Stage: ${args.chronologyWorkflowContext.stage}.`,
-              `Active checkpoint: ${args.chronologyWorkflowContext.checkpoint}.`,
-              `Temporal OŚ-GATE required: ${args.chronologyWorkflowContext.temporalGateRequired ? "YES" : "NO"}.`,
-              "Execute only this chronology checkpoint in this turn.",
-              "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
-              "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization."
-            ].join("\n")
-          ]
-        : []),
-      ...(args.orderedCaseWorkflowContext
-        ? [
-            [
-              "# ACTIVE ORDERED LEGAL WORKFLOW — RUNTIME ENFORCED",
-              `Workflow: ${args.orderedCaseWorkflowContext.workflowId}.`,
-              `Active checkpoint: ${args.orderedCaseWorkflowContext.checkpoint}.`,
-              `Revision: ${args.orderedCaseWorkflowContext.revision}.`,
-              "Execute only this checkpoint in this turn.",
-              "Do not claim completion of any later checkpoint.",
-              "The runtime, not the model, owns checkpoint order, required resources, source verification, citations, provenance and commit.",
-              "Return only the semantic work product needed for the active checkpoint."
-            ].join("\n")
-          ]
-        : []),
-      ...(args.contractWorkflowContext
-        ? [
-            [
-              "# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED",
-              `Mode: ${args.contractWorkflowContext.mode}.`,
-              `Stage: ${args.contractWorkflowContext.stage}.`,
-              `Active AU checkpoint: ${args.contractWorkflowContext.checkpoint}.`,
-              "Execute only this AU checkpoint in this turn.",
-              "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
-              "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
-              "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A."
-            ].join("\n")
-          ]
-        : []),
       [
         "# MULTI-SKILL ORCHESTRATION",
         "More than one execution skill and more than one legal DR domain may be active in the same turn.",
@@ -1904,7 +2078,15 @@ export class LexExecutionEngine {
     if (args.tools?.length && args.toolSystemPromptAppendix) {
       promptParts.push(args.toolSystemPromptAppendix);
     }
+    // Everything before the checkpoint's own part is the same between checkpoints of one
+    // matter: the provider caches it as a separate block (systemPromptCachePrefix).
+    const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
+    const stablePromptLength = promptParts.join("\n\n").length + 2;
+    promptParts.push(...turnTail);
     const systemPrompt = promptParts.join("\n\n");
+    const promptCache = workflowTurn
+      ? { promptCacheTtl: "1h" as const, ...(turnTail.length ? { systemPromptCachePrefix: stablePromptLength } : {}) }
+      : {};
     emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
 
     emit(
@@ -1919,6 +2101,7 @@ export class LexExecutionEngine {
       {
         model: args.model,
         systemPrompt,
+        ...promptCache,
         ...(args.continuityKey
           ? {
               continuityKey:
@@ -1988,6 +2171,7 @@ export class LexExecutionEngine {
           const corrected = await this.providers.stream(args.provider, {
             model: args.model,
             systemPrompt,
+            ...promptCache,
             messages: [
               ...(args.documentContext
                 ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]

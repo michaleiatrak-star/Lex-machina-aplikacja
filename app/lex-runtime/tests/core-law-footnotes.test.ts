@@ -75,4 +75,39 @@ describe("łączenie elementów wiersza PDF", () => {
     expect(joinLineItems([item("osoby ubezwłas", 100, 60), item("nowol-", 160, 25, true), item("nione", 50, 20)])).toBe("osoby ubezwłasnowol-\nnione");
     expect(joinLineItems([item("ustawa", 100, 30), item("kodeks", 133, 30)])).toBe("ustawa kodeks");
   });
+
+  // Wiersz jak w ekstraktorze: odstępy zwinięte do jednej spacji.
+  const line = (items: unknown[]) => joinLineItems(items).replace(/\s+/g, " ");
+  it("pdf.js 4.x: stykające się elementy tej samej czcionki („Art” + „.”, „4” + „3a.”) bez spacji", () => {
+    expect(line([item("Art", 72, 15), item(".", 87, 2.5), item(" ", 89.5, 2.5), item("21.", 92, 12.5)])).toBe("Art. 21.");
+    expect(line([item("Art.", 72, 17.5), item(" ", 89.5, 2.5), item("4", 92, 5), item("3a.", 97, 12.5)])).toBe("Art. 43a.");
+  });
+
+  it("indeks górny i nawias znacznika odnośnika nie są doklejane („Art. 6 1 .”, „25 )”)", () => {
+    const sup = (str: string, x: number, width: number) => ({ str, transform: [6.5, 0, 0, 6.5, x, 704], width, hasEOL: false });
+    expect(line([item("Art. 6", 72, 25), sup("1", 97, 3.3), item(" .", 100.3, 5)])).toBe("Art. 6 1 .");
+    expect(line([item("2b)", 72, 12), sup("25", 84, 6.6), sup(")", 90.6, 2.2)])).toBe("2b) 25 )");
+  });
+});
+
+describe("zapis pdf.js 4.x w przypisach i znacznikach", () => {
+  it("numer przypisu oddzielony od nawiasu w bloku drobnego druku („1 ) Niniejsza…”)", () => {
+    const page = ["Art. 12. Nie mają zdolności do czynności prawnych.", "\u20631 ) Niniejsza ustawa wdraża dyrektywę 2000/31/WE."].join("\n");
+    const { pages, footnotes } = extractPageFootnotes([page]);
+    expect(pages[0]).toBe("Art. 12. Nie mają zdolności do czynności prawnych.");
+    expect(footnotes["1"]).toBe("Niniejsza ustawa wdraża dyrektywę 2000/31/WE.");
+  });
+
+  it("znacznik sklejony z etykietą i po „(uchylony)” wybiera brzmienie (u.ś.u.d.e. art. 10)", () => {
+    const notes = {
+      "3": "Ze zmianą wprowadzoną przez ustawę, która wejdzie w życie z dniem 10 listopada 2024 r.",
+      "8": "Obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 9.",
+      "9": "Przez art. 26 pkt 3 ustawy, o której mowa w odnośniku 3."
+    };
+    const page = ["Art. 10. 8) 1. Zakazane jest przesyłanie informacji.", "2. Zgoda odbiorcy.", "Art. 10. (uchylony) 9)", "\u20638) Obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 9."].join("\n");
+    const { pages } = extractPageFootnotes([page]);
+    expect(pages[0]).toContain("(uchylony) 9 )");
+    expect(articleWording(pages[0]!, notes, "2026-10-12").text.trim()).toBe("Art. 10. (uchylony)");
+    expect(articleWording(pages[0]!, notes, "2024-10-01").text).toContain("Zakazane jest przesyłanie");
+  });
 });

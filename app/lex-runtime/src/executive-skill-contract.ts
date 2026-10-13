@@ -9,7 +9,14 @@ import type { LexSkillRegistry } from "./registry.js";
  * the corpus on every skill update, never hand-copied into code.
  */
 export type ExecutiveGate = { title: string; resources: string[] };
-export type ExecutiveContract = { skill: string; gates: ExecutiveGate[]; resources: string[] };
+// A gate step that applies only in some matters ("KROK 5 → Wczytaj M6-oplaty.md [jeśli
+// pismo wymaga opłaty]"): not loaded up front; the skill module map loads it when the
+// case meets the condition, otherwise the model reads it when the step applies.
+export type ConditionalResource = { resource: string; condition: string };
+export type ExecutiveContract = { skill: string; gates: ExecutiveGate[]; resources: string[]; conditional: ConditionalResource[] };
+
+// "[jeśli …]", "(gdy …)", "dla wezwania ostatecznego: …"; a step marked "zawsze" stays mandatory.
+const CONDITIONAL_STEP = /(?:\[|\(|\b)(?:jeśli|jeżeli|gdy|opcjonaln\p{L}*)\b|\bdla\s+\p{L}+\s+\p{L}+:/iu;
 
 const GATE_HEADING = /HARD GATE|OBOWIĄZ|⛔|BRAMK|-GATE\b|KROK 0\b|ZAWSZE|SEKWENCJ/iu;
 const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b/g;
@@ -32,6 +39,7 @@ export function executiveContract(registry: LexSkillRegistry, skill: string, asS
   if (cache.has(key)) return cache.get(key)!;
   const gates: ExecutiveGate[] = [];
   let current: { title: string; level: number; resources: Set<string> } | null = null;
+  const conditional = new Map<string, string>();
   const close = () => {
     if (current) gates.push({ title: current.title, resources: [...current.resources] });
     current = null;
@@ -47,7 +55,13 @@ export function executiveContract(registry: LexSkillRegistry, skill: string, asS
       }
       continue;
     }
-    if (current) for (const match of line.matchAll(RESOURCE)) (current as { resources: Set<string> }).resources.add(match[0]);
+    if (current) {
+      const step = CONDITIONAL_STEP.test(line) && !/\bzawsze\b/iu.test(line);
+      for (const match of line.matchAll(RESOURCE)) {
+        if (step) conditional.set(match[0], line.replace(/[`*]/g, "").replace(/\s+/g, " ").trim().slice(0, 200));
+        else (current as { resources: Set<string> }).resources.add(match[0]);
+      }
+    }
   }
   close();
   // Frontmatter "dependencies: required: [MOD-...]": shared modules the skill needs every time.
@@ -65,7 +79,11 @@ export function executiveContract(registry: LexSkillRegistry, skill: string, asS
   const contract: ExecutiveContract = {
     skill,
     gates: gates.map((gate) => ({ ...gate, resources: gate.resources.filter((resource) => resources.includes(resource)) })),
-    resources
+    resources,
+    // Named also as a mandatory step elsewhere: mandatory wins.
+    conditional: [...conditional.entries()]
+      .map(([resource, condition]) => ({ resource: canonical(resource), condition }))
+      .filter((item) => !resources.includes(item.resource) && registry.resolveResource(skill, item.resource))
   };
   cache.set(key, contract);
   return contract;
@@ -124,6 +142,12 @@ export function contractPrompt(loaded: LoadedContract): string {
       : "",
     loaded.toRead.length
       ? `Zasoby zbyt duże do wczytania z góry — wczytaj je sam narzędziem korpusu przed bramką, która ich wymaga (aplikacja to sprawdza): ${loaded.toRead.join(", ")}.`
+      : "",
+    contract.conditional.length
+      ? [
+          "Kroki warunkowe skilla (zasada ekonomii z SKILL.md): wczytaj zasób narzędziem korpusu tylko, gdy warunek zachodzi w tej sprawie; jeśli aplikacja już go wczytała (moduły wyzwolone), nie otwieraj go ponownie:",
+          ...contract.conditional.map((item) => `- ${item.resource} — ${item.condition}`)
+        ].join("\n")
       : "",
     ...loaded.loaded.map((item) => `## ZASÓB KONTRAKTU: ${item.resource}\n\n${item.content}`)
   ]

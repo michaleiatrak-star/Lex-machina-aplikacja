@@ -442,8 +442,11 @@ def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, i
     for index in range(len(words) - 1):
         if cap(index) and cap(index + 1) and linked(index, index + 1):
             g, s, u, c, geo, _ = cls(index)
+            # A surname that is also a village (Nowak, Zielińska) before a given name is
+            # the surname when the PESEL register has it for many persons.
+            frequent = geo and max(surname_base.default_base().counts(words[index][2]) or (0,)) >= 200
             if (
-                s and not geo and cls(index + 1)[0]
+                s and (not geo or frequent) and cls(index + 1)[0]
                 and not is_generic(words[index][2])
                 and not ROMAN_AFTER.match(text, words[index + 1][1])
             ):
@@ -451,7 +454,8 @@ def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, i
                 surname_positions.append(index)
 
     # 3. Initial(s) + surname ("J. Kowalski", "J.M. Nowak").
-    for match in re.finditer(rf"\b(?:[{UPPER}]\.\s?){{1,2}}\s?([{UPPER}][^\W\d_]+(?:-[{UPPER}][^\W\d_]+)?)", text):
+    # Not the inside of an abbreviation: "P.H.U. Marex" is a firm, not "H.U. Marex".
+    for match in re.finditer(rf"(?<![\w.])(?:[{UPPER}]\.\s?){{1,2}}\s?([{UPPER}][^\W\d_]+(?:-[{UPPER}][^\W\d_]+)?)", text):
         surname = match.group(1)
         g, s, u, c, geo, _ = word_class(surname)
         if (s or u) and not any(match.start() < be and bs < match.end() for bs, be in blocked + spans):

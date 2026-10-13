@@ -1,3 +1,4 @@
+import { waitsForUser } from "../workflow-wait.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
@@ -10597,7 +10598,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   result:
                     nodeResult,
                   commit,
-                  notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
+                  notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null,
+                  waitForUser: commit && waitsForUser(nodeResult.answer)
                 };
               },
             persist:

@@ -114,6 +114,7 @@ import {
   type AcceptedReportBlueprint,
   type ReportBlueprintKind
 } from "./report-blueprint-tool-runtime.js";
+import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import {
   evaluateDeterministicWorkflowOutput,
   evaluateDeterministicWorkflowReads,
@@ -949,7 +950,8 @@ export type SessionExecutionResponse = {
     stopped:
       | "FINAL"
       | "LIMIT_REACHED"
-      | "NODE_BLOCKED";
+      | "NODE_BLOCKED"
+      | "WAITING_FOR_USER";
     limitReached: boolean;
     steps: Array<{
       stage: Exclude<
@@ -2069,7 +2071,18 @@ export class SafeSessionExecutor implements SessionExecutor {
     }
     // AUTO: the domain (prawo-polskie-v2 flash routing) and its act modules
     // (MAPA-AKTOW) the case points to; the model decides and reads them.
-    const caseText = [pathFacts.query, ...recognisedDocuments.map((document) => document.label)].join("\n");
+    // A checkpoint workflow's turn ("Kontynuuj"): the matter is everything the user wrote.
+    const workflowTurn = Boolean(
+      request.contractWorkflowContext ||
+        request.processWorkflowContext ||
+        request.courtWorkflowContext ||
+        request.chronologyWorkflowContext ||
+        request.orderedCaseWorkflowContext
+    );
+    const caseText = [
+      workflowTurn ? withoutOutputContract(threadUserText(request.query)) : pathFacts.query,
+      ...recognisedDocuments.map((document) => document.label)
+    ].join("\n");
     corpusTools.setCaseText(caseText);
     // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
     // named): those modules are loaded and required; the hint below covers the rest.
@@ -2422,6 +2435,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           )
         : undefined;
     const execution = await this.engine.executePolishLegalQuery({
+      instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages] },
       ...(this.coreLawIndex
         ? {
             coreLaw: this.coreLawIndex.distinctSummaries().map((act) => ({
@@ -2536,6 +2550,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               request.chronologyWorkflowContext
           }
         : {}),
+      resourcesInContext: [...contextResources],
+      criminalMatter: pathFacts.criminal,
       ...(request.contractWorkflowContext
         ? {
             contractWorkflowContext:
@@ -2774,6 +2790,42 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
 
     transferExecutionEvents(execution.events, audit);
+
+    // A client or situation report without its blueprint would end as a technical block
+    // although the model wrote the report: one repair call with only the report tool.
+    const blueprintKind: ReportBlueprintKind | null =
+      execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
+        ? execution.workflowPlan.id
+        : null;
+    if (blueprintKind && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
+      step("MODEL", "zapis raportu w formacie aplikacji");
+      try {
+        await this.providers.stream(request.provider, {
+          model: request.model,
+          systemPrompt: [reportTools.systemPromptAppendix(), blueprintRepairSchema(this.registry, blueprintKind)].filter(Boolean).join("\n\n"),
+          messages: [
+            ...(documentContext
+              ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
+              : []),
+            { role: "user", content: protectedQuery },
+            { role: "assistant", content: execution.output },
+            { role: "user", content: BLUEPRINT_REPAIR_REQUEST }
+          ],
+          tools: reportTools.schemas(),
+          runTools: async (calls) => [
+            ...(await reportTools.runTools(calls.filter((call) => reportTools.handles(call.name)))),
+            ...calls
+              .filter((call) => !reportTools.handles(call.name))
+              .map((call) => ({ tool_use_id: call.id, content: JSON.stringify({ status: "BLOCKED", error: "ONLY_SUBMIT_REPORT_BLUEPRINT" }) }))
+          ],
+          maxIterations: 3,
+          reasoning: "none"
+        });
+      } catch {
+        // The block below names the missing blueprint.
+      }
+      audit.record("gate", "REPORT_BLUEPRINT_REPAIR", reportTools.acceptedFor(blueprintKind) ? "OK" : "BLOCKED", { kind: blueprintKind });
+    }
 
     const modelSelectedSkills =
       execution.events.some(

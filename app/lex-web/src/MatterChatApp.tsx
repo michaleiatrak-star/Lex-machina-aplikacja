@@ -39,6 +39,7 @@ import {
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
+import { documentFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
@@ -127,6 +128,8 @@ import {
   DOCUMENT_FILE_ACCEPT,
   MAX_DOCUMENT_DROP_QUEUE,
   consumeDocumentDropFile,
+  documentDropSummary,
+  documentStepLabel,
   createDocumentDropQueueState,
   describeDocumentFile,
   enqueueDocumentDropFiles
@@ -205,6 +208,7 @@ import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
+import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 
 type TabId =
   | "home"
@@ -1214,6 +1218,8 @@ export default function MatterChatApp({
   const [model, setModel] = useState(rememberedModel?.model ?? "");
   const localAutoStartTried = useRef(false);
   const [modelError, setModelError] = useState("");
+  // The chosen model disappeared from its source and another one was picked: said, not silent.
+  const [modelNotice, setModelNotice] = useState("");
   const [
     modelCatalogLoading,
     setModelCatalogLoading
@@ -1268,6 +1274,11 @@ export default function MatterChatApp({
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
   const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  // Checkpoint workflows: the next step the chat sends by itself, the closed steps per
+  // case (progress check) and the user's "Zatrzymaj".
+  const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
+  const workflowClosedRef = useRef<Record<string, number>>({});
+  const autoStopRef = useRef(false);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
     caseId: string; text: string; messageId: string;
@@ -1917,19 +1928,16 @@ export default function MatterChatApp({
             response.models
           );
         setModels(sourceModels);
-        setModel(
-          (current) =>
-            sourceModels.some(
-              (item) =>
-                item.id === current &&
-                item.selectable
-            )
-              ? current
-              : sourceModels.find(
-                  (item) =>
-                    item.selectable
-                )?.id ?? ""
-        );
+        setModel((current) => {
+          if (sourceModels.some((item) => item.id === current && item.selectable)) return current;
+          const next = sourceModels.find((item) => item.selectable);
+          if (current && next) {
+            queueMicrotask(() =>
+              setModelNotice(`Poprzednio wybrany model jest niedostępny w tym źródle. Wybrano: ${next.displayName}.`)
+            );
+          }
+          return next?.id ?? "";
+        });
         setModelCatalogLoading(false);
       })
       .catch((error) => {
@@ -2312,7 +2320,7 @@ export default function MatterChatApp({
           error:
             processingModeUsesLocalAi(mode) && /LOCAL_PRIVACY_MODEL/.test(code)
               ? "tryb z AI wymaga uruchomionego modelu lokalnego (zakładka Sprawa → Uruchom model lokalny)"
-              : code
+              : documentFailure(error).message
         })
       );
     }
@@ -2392,7 +2400,7 @@ export default function MatterChatApp({
         setDocumentStaging((current) =>
           updateStagedDocument(current, item.id, {
             status: "FAILED",
-            error: error instanceof Error ? error.message : String(error)
+            error: documentFailure(error).message
           })
         );
       }
@@ -3090,6 +3098,19 @@ export default function MatterChatApp({
   }
 
   useEffect(() => {
+    if (!autoNext || executing) return;
+    if (autoStopRef.current || autoNext.caseId !== caseId) {
+      setAutoNext(null);
+      return;
+    }
+    const next = autoNext;
+    setAutoNext(null);
+    void executeMessage(next.text, { autoStep: next.step, autoMeta: next.meta });
+    // executeMessage reads the current thread state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNext, executing, caseId]);
+
+  useEffect(() => {
     if (!contractRetry || executing) return;
     if (messages.some((message) => message.id === contractRetry.messageId)) return;
     const { text } = contractRetry;
@@ -3118,7 +3139,10 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
-  async function executeMessage(plain: string, options: { acceptUnverified?: boolean } = {}): Promise<void> {
+  async function executeMessage(
+    plain: string,
+    options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string } = {}
+  ): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3167,15 +3191,19 @@ export default function MatterChatApp({
         id: messageId(),
         role: "user",
         content: trimmed,
-        ...(conversationIsNew
-          ? {
-              meta:
-                deterministicActionMeta(
-                  deterministicAction
-                )
-            }
-          : {})
+        ...(options.autoMeta
+          ? { meta: options.autoMeta }
+          : conversationIsNew
+            ? {
+                meta:
+                  deterministicActionMeta(
+                    deterministicAction
+                  )
+              }
+            : {})
       };
+    // A message the user sends starts a new chain of automatic steps.
+    if (options.autoStep === undefined) autoStopRef.current = false;
 
     // Optimistic UI: move the message into the thread immediately. Provider
     // login/model startup/repair happens only after the user sees what was sent.
@@ -3487,6 +3515,22 @@ export default function MatterChatApp({
           ...current,
           answerMessage
         ]);
+      }
+
+      // Checkpoint workflows go on by themselves; the thread names the next step.
+      const autoDecision = autoAdvanceDecision(
+        result,
+        workflowClosedRef.current[executionCaseId] ?? null,
+        options.autoStep ?? 0
+      );
+      const autoProgress = workflowProgress(result);
+      if (autoProgress) workflowClosedRef.current[executionCaseId] = autoProgress.closed;
+      const autoNote = autoAdvanceNote(result, autoDecision);
+      if (autoNote && activeCaseIdRef.current === executionCaseId) {
+        setMessages((current) => [...current, { id: messageId(), role: "system", content: autoNote }]);
+      }
+      if (autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId) {
+        setAutoNext({ caseId: executionCaseId, text: autoDecision.message, meta: autoDecision.meta, step: (options.autoStep ?? 0) + 1 });
       }
 
       // Letter workflows end with a file, like a document artifact: after each
@@ -4271,8 +4315,10 @@ export default function MatterChatApp({
               onClick={() => setActiveTab(id)}
             >
               {label}
-              {id === "case" && documentDropQueue.total + documentStaging.items.length > 0 ? (
-                <span>{documentDropQueue.total + documentStaging.items.length}</span>
+              {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
+                <span title="Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)">
+                  {documentDropQueue.files.length + documentStaging.items.length}
+                </span>
               ) : null}
             </button>
           ))}
@@ -4380,6 +4426,14 @@ export default function MatterChatApp({
                       )?.label ??
                       provider}
                 </small>
+                {modelNotice ? (
+                  <small className="chat-model-dock-notice" role="status">
+                    {modelNotice}{" "}
+                    <button type="button" className="chat-link-button" onClick={() => setModelNotice("")}>
+                      OK
+                    </button>
+                  </small>
+                ) : null}
               </div>
             </div>
             <div className="chat-model-dock-controls">
@@ -4793,7 +4847,7 @@ export default function MatterChatApp({
                           ? ` · ${progressLabel(documentProgress[item.id]!)}`
                           : " · zapisuję i przetwarzam…"
                         : ""}
-                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? ""}` : ""}
+                      {item.status === "FAILED" ? ` · nie zapisano: ${item.error ?? "spróbuj ponownie"}` : ""}
                     </small>
                     <span className="chat-file-actions">
                       <select
@@ -4861,20 +4915,17 @@ export default function MatterChatApp({
         ) : null}
 
         {documentDropQueue.total > 0 ? (
-          <section className="chat-card-stack chat-document-flow" aria-label="OCR i prywatność plików">
+          <section className="chat-card-stack chat-document-flow" aria-label="Odczyt plików i ochrona danych">
             <article className="chat-card">
-              <p className="eyebrow">OCR w czacie · plik po pliku</p>
-              <h2>
-                {documentDropQueue.completed}/{documentDropQueue.total} zakończono
-              </h2>
+              <p className="eyebrow">Dodawanie plików · plik po pliku</p>
+              <h2 aria-live="polite">{documentDropSummary(documentDropQueue)}</h2>
               <p>
-                Każdy plik przechodzi osobno: wykrycie skanu → lokalny OCR → decyzja o anonimizacji →
-                osobny zaszyfrowany vault. Następny plik nie rozpocznie decyzji prywatności, dopóki
-                bieżący nie zostanie zakończony lub pominięty.
+                Każdy plik jest odczytywany na tym komputerze, a Ty decydujesz, które dane osobowe
+                ukryć, zanim plik trafi do akt. Następny plik czeka, aż skończysz z bieżącym albo go pominiesz.
               </p>
               {documentDropQueue.rejected > 0 ? (
                 <p className="chat-inline-error">
-                  Pominięto {documentDropQueue.rejected} plików.
+                  Nie dodano plików: {documentDropQueue.rejected} (puste albo ponad limit {MAX_DOCUMENT_DROP_QUEUE} w kolejce).
                 </p>
               ) : null}
               <ul className="chat-file-list">
@@ -4882,7 +4933,7 @@ export default function MatterChatApp({
                   <li key={`${file.name}-${file.lastModified}-${index}`}>
                     <strong>{file.name}</strong>
                     <small>
-                      {index === 0 ? "OCR / decyzja prywatności" : "Oczekuje"} · {describeDocumentFile(file)}
+                      {index === 0 ? documentStepLabel(file) : "Oczekuje"} · {describeDocumentFile(file)}
                     </small>
                   </li>
                 ))}
@@ -4897,8 +4948,8 @@ export default function MatterChatApp({
                 const mode = reviewModes.current.get(file);
                 return mode ? processingModeOptions(mode) : undefined;
               }}
-              onIncomingFileConsumed={() =>
-                setDocumentDropQueue((current) => consumeDocumentDropFile(current))
+              onIncomingFileConsumed={(outcome) =>
+                setDocumentDropQueue((current) => consumeDocumentDropFile(current, outcome))
               }
               onCaseFilesChange={() =>
                 setWorkspaceRefresh((value) => value + 1)
@@ -5378,6 +5429,19 @@ export default function MatterChatApp({
                   <div className="chat-message-content">
                     {executionStage}
                   </div>
+                  {(messages.at(-1)?.meta ?? "").startsWith("automatycznie") && !autoStopRef.current ? (
+                    <button
+                      type="button"
+                      className="chat-link-button"
+                      onClick={() => {
+                        autoStopRef.current = true;
+                        setAutoNext(null);
+                        setGeneratedDocumentMessage("Automatyczne kroki zatrzymane po bieżącym kroku. Napisz „Kontynuuj”, aby iść dalej.");
+                      }}
+                    >
+                      Zatrzymaj automatyczne kroki
+                    </button>
+                  ) : null}
                   {executionSteps ? (
                     <ol className="chat-steps" aria-label="Etapy pracy">
                       <li className="chat-steps-summary">

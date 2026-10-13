@@ -1,3 +1,4 @@
+import { detectFirmNames } from "./firm-names.js";
 import { personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
 import {
@@ -863,6 +864,10 @@ export class LocalPolishPseudonymizer {
       }));
 
     const autoSpans: PiiSpan[] = detectIdentifiers(text);
+    // Private firms ([FIRMA]): a name before a legal form or after a business prefix,
+    // and its later mentions; one organization token per name.
+    const firms = detectFirmNames(text);
+    autoSpans.push(...firms);
 
     // A person found once is protected everywhere: mentions the recognizer
     // missed (another page, another case form) are matched by known forms.
@@ -893,7 +898,15 @@ export class LocalPolishPseudonymizer {
     if (this.namedEntities) {
       const named =
         await this.namedEntities.recognize(text);
-      for (const found of named) {
+      for (const recognized of named) {
+        // A name never runs over a line: "Paweł Kania⏎os. Kosmonautów 86/9" (a heading
+        // and the address under it) is the name; the address is found on its own.
+        const lineEnd = recognized.kind === "PERSON" ? recognized.value.indexOf("\n") : -1;
+        const found =
+          lineEnd > 0
+            ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
+            : recognized;
+        if (lineEnd > 0) found.end = found.start + found.value.length;
         // "Bank", "Rada Gminy": an institution; "Najemca Jan Kowalski": the name only.
         const span = found.kind === "PERSON" ? personPart(text, found) : found;
         if (
@@ -936,6 +949,7 @@ export class LocalPolishPseudonymizer {
     // to exact-surface identity.
     const entities =
       new Map<string, PersonEntity>(propagatedEntities);
+    for (const firm of firms) entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.value, firm.legalForm));
     // Surfaces written after "państwo", "małżonkowie", a plural role...: a family.
     const plural = new Set(
       findings

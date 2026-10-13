@@ -444,7 +444,12 @@ export function LocalAiSetupPanel({
   const extended = Boolean(
     selected && contextTokens > selected.nativeContextWindow
   );
+  // Installation runs on Windows only (runtime: LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED);
+  // elsewhere the action is not offered as available.
+  const provisioningSupported =
+    data?.runtime.hardware?.platform ? data.runtime.hardware.platform === "win32" : !/Macintosh|Mac OS X|Linux/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
   const canProvision =
+    provisioningSupported &&
     user.appRole === "ADMIN" &&
     Boolean(selected) &&
     !busy &&
@@ -766,10 +771,6 @@ export function LocalAiSetupPanel({
     );
   }
 
-  // Provisioning runs on Windows only (PowerShell, Vulkan/CPU builds); macOS has no
-  // llama.cpp/Metal package yet (installer: NOT_AVAILABLE_ON_MACOS_YET).
-  const macDesktop =
-    isDesktopShell() && typeof navigator !== "undefined" && /Macintosh|Mac OS X/i.test(navigator.userAgent);
   return (
     <details
       className={
@@ -835,10 +836,17 @@ export function LocalAiSetupPanel({
       </summary>
 
       <div className="local-ai-body">
-        <p>
-          Program działa bez modelu lokalnego. Dopiero ten przycisk pobiera llama.cpp i jeden
-          wybrany model do profilu użytkownika. Inferencja po instalacji działa lokalnie.
-        </p>
+        {provisioningSupported ? (
+          <p>
+            Program działa bez modelu lokalnego. Przycisk instalacji pobiera program do uruchamiania
+            modelu i jeden wybrany model; potem model działa wyłącznie na tym komputerze.
+          </p>
+        ) : (
+          <p className="local-ai-error" role="note">
+            Instalacja modelu lokalnego jest dostępna tylko w Windows. W tym systemie korzystaj z modeli
+            przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
+          </p>
+        )}
 
         {data ? (
           <>
@@ -1089,11 +1097,7 @@ export function LocalAiSetupPanel({
         ) : null}
 
         {message ? <p className="local-ai-message">{message}</p> : null}
-        {macDesktop ? (
-          <p className="local-ai-error">
-            Instalacja lokalnych modeli (Bielik, Mistral) z aplikacji działa na razie tylko w Windows. Na macOS korzystaj z modeli przez klucz API albo konto dostawcy.
-          </p>
-        ) : null}
+
         {error ? (
           <p className="local-ai-error">
             {error.includes("PLATFORM_UNSUPPORTED")

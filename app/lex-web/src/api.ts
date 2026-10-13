@@ -1100,7 +1100,8 @@ export type SessionExecutionResponse = {
     stopped:
       | "FINAL"
       | "LIMIT_REACHED"
-      | "NODE_BLOCKED";
+      | "NODE_BLOCKED"
+      | "WAITING_FOR_USER";
     limitReached: boolean;
     steps: Array<{
       stage:
@@ -1119,6 +1120,10 @@ export type SessionExecutionResponse = {
   };
   processWorkflow?: ProcessPleadingWorkflowView;
   courtWorkflow?: CourtAnalysisWorkflowView;
+  // Checkpoint workflows of a case: the next step and the closed ones.
+  contractWorkflow?: { caseId: string; revision: number; mode: string; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  chronologyWorkflow?: { caseId: string; revision: number; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  orderedCaseWorkflow?: { workflowId: string; caseId: string; revision: number; status: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
 };
 
 export type ProcessPleadingCheckpoint =
@@ -2294,7 +2299,7 @@ export async function uploadSharedTemplate(
             file.name
           )
       },
-      body: file
+      body: await binaryBody(file)
     }
   );
   const payload =
@@ -3260,7 +3265,7 @@ export async function saveToDownloads(
         ...authorizationHeaders(),
         "X-Lex-Filename": encodeURIComponent(filename)
       },
-      body: blob
+      body: await binaryBody(blob)
     }
   );
   const payload =
@@ -3274,6 +3279,13 @@ export async function saveToDownloads(
     );
   }
   return payload as { path: string; filename: string };
+}
+
+// A File/Blob request body sent as bytes. WKWebView (macOS) hands a Blob body to the
+// lex-api:// scheme handler as an HTTPBodyStream, which the handler can read as 0 bytes
+// (DOCUMENT_BODY_REQUIRED for a non-empty file); an ArrayBuffer goes in HTTPBody.
+export function binaryBody(blob: Blob): Promise<ArrayBuffer> {
+  return blob.arrayBuffer();
 }
 
 export async function uploadCaseFile(
@@ -3291,7 +3303,7 @@ export async function uploadCaseFile(
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },
-      body: file
+      body: await binaryBody(file)
     }
   );
   const payload =
@@ -3332,7 +3344,7 @@ export async function reviewDocument(
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },
-      body: file
+      body: await binaryBody(file)
     }
   );
   const payload =

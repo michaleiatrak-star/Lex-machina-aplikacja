@@ -118,7 +118,19 @@ export function joinLineItems(items: readonly unknown[], markSmall = false): str
           /\p{L}$/u.test(previous.str) &&
           // Dywiz przeniesienia bywa osobnym elementem innym fontem („przedsię” + „-”).
           /^(?:\p{L}|-$)/u.test(item.str);
-        out += glue ? "" : " ";
+        // pdf.js 4.x tnie wyraz na stykające się elementy tej samej czcionki („Art” + „.”,
+        // „4” + „3a.”): odstęp zerowy na tej samej linii bazowej to ciąg dalszy, nie spacja.
+        // Indeks górny ma inny rozmiar i wysokość, więc nie jest doklejany („Art. 6 1 .”).
+        const touching =
+          transform !== null &&
+          em > 0 &&
+          Math.abs(y - previous.y) < em * 0.1 &&
+          Math.abs(size - previous.size) < em * 0.05 &&
+          Math.abs(gap) < em * 0.05 &&
+          /[\p{L}\d]$/u.test(previous.str) &&
+          // Bez nawiasu: znacznik odnośnika „25 )” musi zostać rozdzielony.
+          /^[\p{L}\d.]/u.test(item.str);
+        out += glue || touching ? "" : " ";
       }
     }
     out += item.str;

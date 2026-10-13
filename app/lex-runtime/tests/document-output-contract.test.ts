@@ -44,8 +44,10 @@ describe("document output contract", () => {
     registry.scan();
     const sent = await instructionFor("Przygotuj mi uchwałę zarządu o podziale odpowiedzialności za compliance.");
     const triggered = (text: string) => skillModules(registry, "pisma-proste-v2", { text }).map((item) => path.basename(item.resource));
-    // The contract's own words ("WEZWANIE DO ZAPŁATY ... amount, due date") did it.
-    expect(triggered(sent)).toEqual(expect.arrayContaining(["SPE-ostateczne.md", "SPM-skd-oswiadczenie.md"]));
+    // The contract's own words ("WEZWANIE DO ZAPŁATY ... amount, due date") still name a payment
+    // demand; the consumer-credit statement needs its own name („sankcji kredytu darmowego”).
+    expect(triggered(sent)).toContain("SPE-ostateczne.md");
+    expect(triggered(sent)).not.toContain("SPM-skd-oswiadczenie.md");
     const fromRequest = triggered(withoutOutputContract(sent));
     for (const name of ["SPE-ostateczne.md", "SPM-skd-oswiadczenie.md", "mod-ustawa-kredyt-konsumencki-SKD.md"]) {
       expect(fromRequest).not.toContain(name);

@@ -96,6 +96,23 @@ export function friendlyError(error: unknown): string {
   return code;
 }
 
+export function appStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case "UP_TO_DATE":
+      return "aktualny";
+    case "AVAILABLE":
+      return "dostępna aktualizacja";
+    case "UNAVAILABLE":
+      return "nie można sprawdzić";
+    case "NO_RELEASE":
+      return "brak opublikowanego wydania";
+    case undefined:
+      return "sprawdzanie…";
+    default:
+      return status;
+  }
+}
+
 export function manualUpdateInstruction(userAgent: string): string {
   return /Mac OS X|Macintosh/i.test(userAgent)
     ? "Otworzono stronę wydania w przeglądarce: pobierz plik .pkg dla macOS (Apple silicon) i uruchom go. Dane i ustawienia zostają."
@@ -183,6 +200,8 @@ export function MaintenancePanel({
   const skillUpdateAvailable =
     skillStatus?.status === "AVAILABLE";
 
+  // "AKTUALNE" only after a finished check said so: never while checking, after an
+  // error, or without any result.
   const badge = useMemo(() => {
     if (appUpdateAvailable || skillUpdateAvailable) {
       return "AKTUALIZACJA";
@@ -190,11 +209,23 @@ export function MaintenancePanel({
     if (appStatus?.status === "UNAVAILABLE") {
       return "OFFLINE";
     }
+    if (!desktop) {
+      return "—";
+    }
+    if (busy === "refresh" || !appStatus) {
+      return "SPRAWDZANIE";
+    }
+    if (error) {
+      return "BŁĄD SPRAWDZANIA";
+    }
     return "AKTUALNE";
   }, [
-    appStatus?.status,
+    appStatus,
     appUpdateAvailable,
-    skillUpdateAvailable
+    skillUpdateAvailable,
+    busy,
+    error,
+    desktop
   ]);
 
   async function refresh(
@@ -448,12 +479,14 @@ export function MaintenancePanel({
                   : "sprawdzanie…"}
               </small>
             </div>
-            <span>{appStatus?.status ?? "—"}</span>
+            <span>{appStatusLabel(appStatus?.status)}</span>
           </div>
 
-          <small className="maintenance-trust-warning">
-            Aktualizacja programu wymaga weryfikacji SHA-256, wersji oraz zaufanego podpisu Authenticode zgodnie z polityką runtime.
-          </small>
+          {!/Mac OS X|Macintosh/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? (
+            <small className="maintenance-trust-warning">
+              Program instaluje aktualizację tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.
+            </small>
+          ) : null}
 
           {user.appRole === "ADMIN" ? (
             <div className="maintenance-actions">

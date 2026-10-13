@@ -17,13 +17,18 @@ export type ModuleEntry = {
   heading: string;
   stage: string | null;
   always: boolean;
+  // A schema table row names the letter in several words („sankcji kredytu darmowego”):
+  // two of them must be in the case, one common word („kredytu”) is not that letter.
+  minHits?: number;
 };
 
 const MAP_HEADING = /MODUŁ|MODUL|WCZYT|REFERENCES|LAZY|MAPA/iu;
 // A path of another skill: an executive skill (…-v3, …-min90) or a domain skill (dr-02-…).
 const RESOURCE = /(?:shared|references|modules|assets|templates)\/[A-Za-z0-9._\-/]+?\.md\b|(?:[a-z0-9-]+-v\d+(?:-min90)?|dr-\d{2}-[a-z0-9-]+)\/(?:references|modules)\/[A-Za-z0-9._\-/]+?\.md\b/g;
 const STAGE = /\b(W[1-6])(?:\.\d+[a-z]?)?\b/u;
-const STOP = new Set(["umowa", "umowy", "każdy", "każda", "wczytaj", "moduł", "ścieżka", "sprawa", "sprawy", "gdy", "przed", "pismo", "pisma", "zawsze", "obowiązkowe"]);
+const STOP = new Set(["umowa", "umowy", "każdy", "każda", "wczytaj", "moduł", "ścieżka", "sprawa", "sprawy", "gdy", "przed", "pismo", "pisma", "zawsze", "obowiązkowe",
+  // Words of any letter's description („Oświadczenie o skorzystaniu z …”): never the case alone.
+  "oświadczenie", "oświadczenia", "skorzystaniu", "skorzystanie"]);
 
 const cache = new Map<string, ModuleEntry[]>();
 
@@ -168,7 +173,19 @@ function loadInstructions(registry: LexSkillRegistry, skill: string, lines: stri
         if (!previous.trim() || /^\s*→/u.test(previous) || /^#/.test(previous)) break;
         above.unshift(previous.trim());
       }
-      const condition = [...above, line]
+      // A table row ("| SPM — Oświadczenie SKD | `references/…` | Oświadczenie o … — UWAGA: …
+      // jeśli sprawa wymaga pozwu o zapłatę …"): its name and the first clause of the
+      // description; the remarks after " — " are instructions, not the case they apply to.
+      const row = line.trim().startsWith("|")
+        ? line
+            .split("|")
+            .map((cell) => cell.replace(RESOURCE, " ").replace(/`/g, " ").trim())
+            .filter(Boolean)
+            .map((cell, position) => (position === 0 ? cell : cell.split(/\s+[—–]\s+/u)[0]!))
+            .join(" ")
+        : null;
+      RESOURCE.lastIndex = 0;
+      const condition = (row !== null ? [row] : [...above, line])
         .join(" ")
         .replace(RESOURCE, " ")
         .replace(/`|view|wczytaj|\*\*|→/giu, " ")
@@ -176,7 +193,14 @@ function loadInstructions(registry: LexSkillRegistry, skill: string, lines: stri
         .trim();
       RESOURCE.lastIndex = 0;
       if (known.some((entry) => entry.resource === resource) && !/\bzawsze\b|ZAWSZE/u.test(condition)) continue;
-      entries.push({ resource, condition, heading, stage: STAGE.exec(heading)?.[1] ?? null, always: /\bzawsze\b|ZAWSZE/u.test(condition) && !/\bgdy\b/iu.test(condition) });
+      entries.push({
+        resource,
+        condition,
+        heading,
+        stage: STAGE.exec(heading)?.[1] ?? null,
+        always: /\bzawsze\b|ZAWSZE/u.test(condition) && !/\bgdy\b/iu.test(condition),
+        ...(row !== null ? { minHits: 2 } : {})
+      });
     }
     RESOURCE.lastIndex = 0;
   }
@@ -246,7 +270,18 @@ export function triggeredModules(entries: ModuleEntry[], args: { text: string; s
     const trigger = /\bgdy:?\s+([^—–;(]+)/iu.exec(entry.condition)?.[1];
     const conditionStems = stems(trigger ?? entry.condition);
     const hits = conditionStems.filter((variants) => variants.some((stem) => stem.test(args.text))).length;
-    if (hits >= (!trigger && conditionStems.length >= 5 ? 2 : 1)) result.push({ ...entry, why: `warunek: ${entry.condition.slice(0, 80)}` });
+    const needed = entry.minHits ? Math.min(entry.minHits, conditionStems.length) : !trigger && conditionStems.length >= 5 ? 2 : 1;
+    // A trigger listing situations as „a / b / c” („≥2 podmioty / różne KRS na umowach /
+    // zmiana nazwy pracodawcy”) is met by one situation, not by one common word („umowach”).
+    const alternatives = trigger && !entry.minHits ? trigger.split(/\s\/\s/u).map(stems).filter((group) => group.length) : [];
+    if (alternatives.length > 1) {
+      const met = alternatives.some(
+        (group) => group.filter((variants) => variants.some((stem) => stem.test(args.text))).length >= Math.min(2, group.length)
+      );
+      if (met) result.push({ ...entry, why: `warunek: ${entry.condition.slice(0, 80)}` });
+      continue;
+    }
+    if (hits >= needed && hits > 0) result.push({ ...entry, why: `warunek: ${entry.condition.slice(0, 80)}` });
   }
   return result.filter((entry, position) => result.findIndex((other) => other.resource === entry.resource) === position);
 }
@@ -328,9 +363,13 @@ export function loadModules(
   return { loaded, toRead };
 }
 
-export function modulesPrompt(skill: string, result: ReturnType<typeof loadModules>): string {
+export function modulesPrompt(
+  skill: string,
+  result: ReturnType<typeof loadModules>,
+  heading = `# MODUŁY SKILLA ${skill} WYZWOLONE W TEJ SPRAWIE (aplikacja, z mapy modułów w SKILL.md)`
+): string {
   return [
-    `# MODUŁY SKILLA ${skill} WYZWOLONE W TEJ SPRAWIE (aplikacja, z mapy modułów w SKILL.md)`,
+    heading,
     ...result.loaded.map((item) => `- ${item.resource} — ${item.why} (wczytany poniżej)`),
     ...result.toRead.map((item) => `- ${item.resource} — ${item.why} (wczytaj sam narzędziem korpusu; aplikacja to sprawdza)`),
     "Pozostałe moduły z mapy wczytuj, gdy ich warunek pojawi się w toku pracy.",
