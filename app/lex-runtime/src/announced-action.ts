@@ -8,7 +8,7 @@ const ANNOUNCEMENT =
 
 // What a finished answer carries: a result, an explicit no-hit, a question to the user, a link.
 const RESULT =
-  /(?<![\p{L}\d])[IVXL]{1,5}\s+[A-ZĄĆĘŁŃÓŚŹŻ]{1,6}(?:\/[A-Z][a-z]{0,2})?\s+\d{1,5}\/\d{2,4}|nie\s+znalaz\p{L}*|nie\s+znaleziono|brak\s+(?:trafień|wyników|orzecze\p{L}*)|https?:\/\/|\[CZEKAM NA ODPOWIEDŹ\]|\?\s*$/imu;
+  /(?<![\p{L}\d])[IVXL]{1,5}\s+[A-ZĄĆĘŁŃÓŚŹŻ][A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż]{0,5}(?:\/[A-Z][a-z]{0,2})?\s+\d{1,5}\/\d{2,4}|nie\s+znalaz\p{L}*|nie\s+znaleziono|brak\s+(?:trafień|wyników|orzecze\p{L}*)|https?:\/\/|\[CZEKAM NA ODPOWIEDŹ\]|\?\s*$/imu;
 
 const DISCLAIMER_START = /\n\s*(?:⚖️|\*\*?Ważna informacja|Ważna informacja|Informacja ma charakter|To wyjaśnienie ma charakter)/u;
 

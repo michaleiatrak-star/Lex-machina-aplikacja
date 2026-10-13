@@ -13,8 +13,45 @@ export type CaseGroundingFinding = {
 };
 
 // I KZP 3/24, III CZP 25/11, II SAB/Po 175/26, II SA/Wa 123/24, I OSK 12/24, XXV C 123/20.
+// Common courts write the repertory in mixed case: II Ca 990/26, I ACa 12/25, IV Ka 3/26, III Ns 5/24.
 const SIGNATURE =
-  /(?<![\p{L}\d])[IVXL]{1,5}\s+[A-ZĄĆĘŁŃÓŚŹŻ]{1,6}(?:\/[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{0,2})?(?:-[A-Z]{1,3})?\s+\d{1,5}\/\d{2,4}(?!\d)/gu;
+  /(?<![\p{L}\d])[IVXL]{1,5}\s+[A-ZĄĆĘŁŃÓŚŹŻ][A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż]{0,5}(?:\/[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{0,2})?(?:-[A-Z]{1,3})?\s+\d{1,5}\/\d{2,4}(?!\d)/gu;
+
+// Tool results arrive as JSON with the document nested as a string (escaped line breaks,
+// quotes, sometimes \u escapes of a Python server, sometimes JSON inside JSON): the plain text.
+export function readableSource(source: string): string {
+  const strings: string[] = [];
+  const collect = (value: unknown, depth: number): void => {
+    if (typeof value === "string") {
+      const nested = depth < 3 && /^\s*[[{]/u.test(value) ? tryParse(value) : undefined;
+      if (nested !== undefined) collect(nested, depth + 1);
+      else strings.push(value);
+    } else if (Array.isArray(value)) {
+      for (const item of value) collect(item, depth);
+    } else if (value && typeof value === "object") {
+      for (const item of Object.values(value)) collect(item, depth);
+    } else if (typeof value === "number") {
+      strings.push(String(value));
+    }
+  };
+  const parsed = tryParse(source);
+  if (parsed === undefined) {
+    return source
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\[nrt]/g, "\n")
+      .replace(/\\(["\\/])/g, "$1");
+  }
+  collect(parsed, 0);
+  return strings.join("\n");
+}
+
+function tryParse(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
 
 export function caseSignaturesIn(text: string): string[] {
   return [...text.matchAll(SIGNATURE)].map((match) => match[0].replace(/\s+/g, " "));
@@ -88,9 +125,36 @@ function quotesIn(window: string): string[] {
 }
 
 // The document's text for one signature: a full document whole; a hit list only around it.
-function sourceTextFor(key: string, sources: string[]): string | null {
+// In a hit list (an array of entries), the one entry that carries the signature: the other
+// hits' subjects must not be read as this judgment's.
+function hitListEntry(key: string, source: string): string | null {
+  const parsed = tryParse(source);
+  let found: string | null = null;
+  const visit = (value: unknown): void => {
+    if (found || !value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      if (value.length > 1) {
+        for (const item of value) {
+          if (item && typeof item === "object" && signatureKey(readableSource(JSON.stringify(item))).includes(key)) {
+            found = readableSource(JSON.stringify(item));
+            return;
+          }
+        }
+      }
+      for (const item of value) visit(item);
+      return;
+    }
+    for (const item of Object.values(value)) visit(item);
+  };
+  visit(parsed);
+  return found;
+}
+
+function sourceTextFor(key: string, raw: string[]): string | null {
   const texts: string[] = [];
-  for (const source of sources) {
+  for (const entry of raw.map((source) => hitListEntry(key, source))) if (entry) texts.push(entry);
+  if (texts.length) return texts.join("\n");
+  for (const source of raw.map(readableSource)) {
     const normalized = signatureKey(source);
     const at = normalized.indexOf(key);
     if (at < 0) continue;
@@ -167,8 +231,8 @@ export function citedDocuments(answer: string, sources: string[]): CitedDocument
   return [...cited.values()];
 }
 
-function interpretationTextFor(signature: string, sources: string[]): string | null {
-  const texts = sources.filter((source) => canonicalInterpretationSignature(source).includes(signature));
+function interpretationTextFor(signature: string, raw: string[]): string | null {
+  const texts = raw.map(readableSource).filter((source) => canonicalInterpretationSignature(source).includes(signature));
   return texts.length ? texts.join("\n") : null;
 }
 

@@ -3175,11 +3175,12 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // What the answer says a judgment or interpretation is about must come from the text read
     // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
-    // 1) Lexical: the user's topic words and quotations given to it are in its text.
-    // 2) Semantic: the connected model, in a separate context with only the question, the
+    // 1) Semantic: the connected model, in a separate context with only the question, the
     //    answer's claim and the document, judges topic and claim; each verdict quotes the
-    //    document and the application checks the quote. One correcting round per check;
-    //    what remains is shown to the user next to the answer.
+    //    document and the application checks the quote.
+    // 2) Lexical, for documents without a valid verdict: the user's topic words and quotations
+    //    given to it are in its text.
+    // One correcting round for both; what remains is shown to the user next to the answer.
     if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
       const topic = threadUserText(protectedQuery).split("\n").slice(-3).join("\n");
       const correctionPrompt = [
@@ -3206,25 +3207,6 @@ export class SafeSessionExecutor implements SessionExecutor {
           return "";
         }
       };
-      const missingCount = (findings: ReturnType<typeof caseContentFindings>) => findings.flatMap((item) => item.missing).length;
-
-      let lexical = caseContentFindings(modelOutput, caseSourceTexts, topic);
-      const lexicalFirst = lexical;
-      if (lexical.length) {
-        step("MODEL", `kontrola treści orzeczeń: ${lexical.map((item) => item.signature).join(", ")}`);
-        const text = await correct(caseContentCorrectionPrompt(lexical));
-        const after = text ? caseContentFindings(text, caseSourceTexts, topic) : lexical;
-        if (text && missingCount(after) < missingCount(lexical)) {
-          modelOutput = text;
-          lexical = after;
-        }
-        audit.record("gate", "CASE_CONTENT_GROUNDING", lexical.length ? "DEGRADED" : "OK", {
-          findings: lexicalFirst.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
-          remaining: lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
-        });
-      }
-
-      let semantic: SemanticVerdict[] = [];
       const judge = async (answer: string) => {
         const documents = citedDocuments(answer, caseSourceTexts);
         if (!documents.length || request.model.startsWith("local/")) return null;
@@ -3241,30 +3223,50 @@ export class SafeSessionExecutor implements SessionExecutor {
           return null;
         }
       };
-      const firstCheck = await judge(modelOutput);
-      if (firstCheck) {
-        semantic = semanticProblems(firstCheck);
-        const semanticFirst = semantic;
-        if (semantic.length) {
-          step("MODEL", `kontrola zgodności z pytaniem: ${semantic.map((item) => item.signature).join(", ")}`);
-          const text = await correct(semanticCorrectionPrompt(semantic));
-          if (text) {
-            const secondCheck = await judge(text);
-            const after = secondCheck ? semanticProblems(secondCheck) : semantic;
-            if (after.length < semantic.length) {
-              modelOutput = text;
-              semantic = after;
-              lexical = caseContentFindings(text, caseSourceTexts, topic);
-            }
+      // The semantic verdict decides where there is one; the lexical check covers the documents
+      // without a valid verdict (local model, judge failure, a quote not in the document). Lexically
+      // a correct paraphrase can look like a missing word, so it does not override a verdict.
+      const review = async (answer: string) => {
+        const check = await judge(answer);
+        const judged = new Set((check?.verdicts ?? []).map((item) => item.signature.replace(/\s+/g, " ")));
+        return {
+          check,
+          semantic: check ? semanticProblems(check) : [],
+          lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature))
+        };
+      };
+      const size = (state: Awaited<ReturnType<typeof review>>) => state.semantic.length + state.lexical.flatMap((item) => item.missing).length;
+      const first = await review(modelOutput);
+      let final = first;
+      if (size(first)) {
+        step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic.map((item) => item.signature), ...first.lexical.map((item) => item.signature)].join(", ")}`);
+        const text = await correct(
+          [...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []), ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : [])].join("\n\n")
+        );
+        if (text) {
+          const second = await review(text);
+          if (size(second) < size(first)) {
+            modelOutput = text;
+            final = second;
           }
         }
-        audit.record("gate", "CASE_SEMANTIC_CHECK", semantic.length ? "DEGRADED" : "OK", {
-          verdicts: firstCheck.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
-          ...(firstCheck.rejected.length ? { rejectedQuotes: firstCheck.rejected } : {}),
-          corrected: semanticFirst.map((item) => item.signature),
-          remaining: semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
+      }
+      if (first.check) {
+        audit.record("gate", "CASE_SEMANTIC_CHECK", final.semantic.length ? "DEGRADED" : "OK", {
+          verdicts: first.check.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+          ...(first.check.rejected.length ? { rejectedQuotes: first.check.rejected } : {}),
+          corrected: first.semantic.map((item) => item.signature),
+          remaining: final.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
         });
       }
+      if (first.lexical.length) {
+        audit.record("gate", "CASE_CONTENT_GROUNDING", final.lexical.length ? "DEGRADED" : "OK", {
+          findings: first.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+          remaining: final.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
+        });
+      }
+      const lexical = final.lexical;
+      const semantic: SemanticVerdict[] = final.semantic;
 
       const warnings = [
         ...(lexical.length ? [caseContentWarning(lexical)] : []),
