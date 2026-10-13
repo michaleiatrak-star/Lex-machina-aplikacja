@@ -1,6 +1,6 @@
 import { draftPrompt } from "./process-pleading-draft.js";
 import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
-import { compactForModel } from "./skill-sections.js";
+import { compactForModel, markdownSection } from "./skill-sections.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -362,6 +362,29 @@ export function contractCheckpointResources(mode: ContractWorkflowMode, checkpoi
       return ["shared/WERYFIKACJA-SLAD.md"];
     case "AU-POST":
       return ["shared/POST-VALIDATION.md"];
+    default:
+      return [];
+  }
+}
+
+// analizator-umow-v1: the part of its core checklist (references/mod-core-checklist.md,
+// MODUŁ A-F) that the AU checkpoint executes. The checkpoint's name alone did not tell
+// the model what to do; the whole checklist is 691 lines, one module is what the step needs.
+const CONTRACT_CHECKLIST = "references/mod-core-checklist.md";
+export function contractCheckpointSections(checkpoint: ContractCheckpoint): RegExp[] {
+  switch (checkpoint) {
+    case "AU-A":
+      return [/^## MODUŁ A\b/u];
+    case "AU-B":
+      return [/^## MODUŁ B\b/u];
+    case "AU-C":
+      return [/^## MODUŁ C\b/u];
+    case "AU-D":
+      return [/^## MODUŁ D\b/u];
+    case "AU-F":
+      return [/^## MODUŁ F\b/u, /^## SKALOWANIE RAPORTU\b/u];
+    case "AU-GENCORE":
+      return [/^## MODUŁ E\b/u];
     default:
       return [];
   }
@@ -1245,6 +1268,25 @@ export class LexExecutionEngine {
         }
         emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
         contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
+      }
+      const sections = contractCheckpointSections(checkpoint);
+      const checklist = sections.length && !already.has(`${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`)
+        ? this.registry.resolveResource(workflowPlan.executionSkill, CONTRACT_CHECKLIST)
+        : null;
+      if (checklist) {
+        let body = "";
+        try {
+          body = fs.readFileSync(checklist, "utf8");
+        } catch {
+          body = "";
+        }
+        const text = sections.map((heading) => markdownSection(body, heading)).filter(Boolean).join("\n\n");
+        if (text) {
+          emit("resource_read", `${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`, "OK", `runtime-preload;contract-checkpoint-section;${checkpoint}`);
+          contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# CZĘŚĆ SKILLA DO WYKONANIA W PUNKCIE ${checkpoint}: ${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}\n\n${text}`;
+        } else {
+          emit("resource_read", `${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`, "BLOCKED", `runtime-preload;contract-checkpoint-section;${checkpoint};section-missing`);
+        }
       }
     }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint

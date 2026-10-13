@@ -6,6 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { SKILL_SELECTION_ENVELOPE_PREFIX } from "../src/skill-selection.js";
+import { markdownSection } from "../src/skill-sections.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const registry = new LexSkillRegistry(CORPUS);
@@ -112,4 +113,36 @@ describe("mechanical mode: analizator-umow-v1 per AU checkpoint", () => {
     expect(first.systemPrompt).toContain("mod-kaucja-najem-lokalu");
     expect(later.systemPrompt).toContain("mod-kaucja-najem-lokalu");
   }, 120_000);
+
+  it("AU-A..AU-F: the checkpoint's module of the core checklist is in the checkpoint part, the rest of the prompt stays shared", async () => {
+    const later = "Użytkownik: Przeanalizuj tę umowę B2B przed podpisaniem.\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.";
+    const a = await run({ query: later, contract: { mode: "ANALYSIS", stage: "ANALYSIS", checkpoint: "AU-A" } });
+    const f = await run({ query: later, contract: { mode: "ANALYSIS", stage: "ANALYSIS", checkpoint: "AU-F" } });
+    const tailA = a.systemPrompt.slice(a.systemPromptCachePrefix!);
+    const tailF = f.systemPrompt.slice(f.systemPromptCachePrefix!);
+    expect(tailA).toContain("# CZĘŚĆ SKILLA DO WYKONANIA W PUNKCIE AU-A");
+    expect(tailA).toContain("## MODUŁ A — IDENTYFIKACJA DOKUMENTU");
+    expect(tailA).not.toContain("## MODUŁ B");
+    // MODUŁ F: the report template in a code block ("## 13. DISCLAIMER") stays in the section.
+    expect(tailF).toContain("## MODUŁ F — RAPORT KOŃCOWY ANALIZY");
+    expect(tailF).toContain("## 13. DISCLAIMER");
+    expect(tailF).toContain("### F.3 Widget statusu sprawy");
+    expect(tailF).toContain("## SKALOWANIE RAPORTU WG WARTOŚCI UMOWY");
+    expect(tailF).not.toContain("## REGUŁY NADRZĘDNE");
+    expect(a.systemPrompt.slice(0, a.systemPromptCachePrefix!)).toBe(f.systemPrompt.slice(0, f.systemPromptCachePrefix!));
+  }, 120_000);
+});
+
+describe("markdownSection", () => {
+  it("a heading inside a code block does not end the section", () => {
+    const text = ["# T", "## A", "a1", "```", "## 1. W BLOKU", "```", "a2", "### A.1", "a3", "## B", "b"].join("\n");
+    expect(markdownSection(text, /^## A\b/u)).toBe(["## A", "a1", "```", "## 1. W BLOKU", "```", "a2", "### A.1", "a3"].join("\n"));
+    expect(markdownSection(text, /^## B\b/u)).toBe("## B\nb");
+    expect(markdownSection(text, /^## C\b/u)).toBe("");
+  });
+
+  it("a matching line inside a code block is not the section's heading", () => {
+    const text = ["```", "## A", "```", "## A", "real", "## B"].join("\n");
+    expect(markdownSection(text, /^## A\b/u)).toBe("## A\nreal");
+  });
 });
