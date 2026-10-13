@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LocalPolishPseudonymizer, PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
 import {
   addressForms,
+  ceidgForms,
   firmNameForms,
   RegistryEnrichment,
   registryKeys,
@@ -22,6 +23,12 @@ const WL = {
       { rola: "wspolnik", imie: null, nazwisko: null, nazwa_firmy: "BUDEX SPÓŁKA AKCYJNA", nip: "1234563218" }
     ]
   }
+};
+const WL_COMPANY = { ...WL, result: { ...WL.result, krs: "0000019193" } };
+// CEIDG: the fixture shape of ceidg_szukaj_firmy (fictitious data).
+const CEIDG = {
+  status: "FOUND",
+  result: { identyfikator: "1234563218", tytul_lub_nazwa: "Marex Usługi Remontowe Marek Zając", wlasciciel: "Marek Zając", adres_dzialalnosci: "ul. Przykładowa 1/2 43-600 Jaworzno" }
 };
 const KRS = { status: "FOUND", result: { tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", adres: "JANA PAWŁA II 12/4, 25-001 KIELCE" } };
 
@@ -51,7 +58,7 @@ describe("register forms", () => {
 
   it("keys: NIP in any spelling and KRS numbers", () => {
     expect(registryKeys("NIP 526-104-08-28, KRS 0000019193")).toEqual([
-      { source: "wl", id: "5261040828" },
+      { source: "nip", id: "5261040828" },
       { source: "krs", id: "0000019193" }
     ]);
   });
@@ -64,7 +71,7 @@ describe("pseudonymization with register data", () => {
 
   it("name without a legal form, address, representative and partner firm are masked; firms keyed as firms", async () => {
     const vault = new PseudonymizationVault();
-    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL, "krs:0000019193": KRS }));
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "krs:0000019193": KRS }));
     const result = await new LocalPolishPseudonymizer(vault, undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Transkom", "TRANSKOM", "Jana Pawła", "25-001", "Wiśniewska", "Budex"]) expect(result.text).not.toContain(leak);
     const firms = placeholderGrammar(result.text, vault).filter((item) => item.entity === "organization");
@@ -94,7 +101,7 @@ describe("pseudonymization with register data", () => {
     fail = false;
     const second = await pseudonymizer.pseudonymize("Kontrahent NIP 5261040828. Transkom nie zapłacił.");
     expect(second.text).not.toContain("Transkom");
-    expect(calls).toEqual(["wl", "wl"]);
+    expect(calls).toEqual(["wl", "ceidg", "wl", "ceidg"]);
 
     const slow = new RegistryEnrichment(() => new Promise(() => {}), { timeoutMs: 20 });
     expect(await slow.forms("NIP 5261040828")).toEqual([]);
@@ -106,6 +113,59 @@ describe("pseudonymization with register data", () => {
     const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL }, calls));
     await registry.forms("NIP 5261040828");
     await registry.forms("NIP: 526-104-08-28 ponownie");
-    expect(calls).toEqual(["wl:5261040828"]);
+    expect(calls).toEqual(["wl:5261040828", "ceidg:5261040828"]);
+  });
+});
+
+describe("CEIDG for a NIP outside KRS (sole trader), when its key is set", () => {
+  it("forms: business name, owner in both orders, address without a comma before the code", () => {
+    const texts = ceidgForms(CEIDG).map((form) => form.text);
+    expect(texts).toEqual(expect.arrayContaining(["Marex Usługi Remontowe Marek Zając", "Marek Zając", "Zając Marek", "Przykładowa 1/2", "43-600 Jaworzno"]));
+  });
+
+  it("a company with KRS on the white list is not asked in CEIDG; a sole trader is", async () => {
+    const calls: string[] = [];
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "ceidg:1234563218": CEIDG }, calls));
+    await registry.forms("NIP 5261040828");
+    const forms = await registry.forms("NIP 1234563218");
+    expect(calls).toEqual(["wl:5261040828", "wl:1234563218", "ceidg:1234563218"]);
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(
+      "Wykonawca: Marex Usługi Remontowe Marek Zając, NIP 1234563218, ul. Przykładowa 1/2, 43-600 Jaworzno. Zając Marek nie usunął wad."
+    );
+    for (const leak of ["Marex", "Zając", "Przykładowa", "43-600"]) expect(result.text).not.toContain(leak);
+    expect(forms.length).toBeGreaterThan(0);
+  });
+
+  it("no CEIDG key: the white list alone, CEIDG asked again only after 10 minutes", async () => {
+    let now = 0;
+    const calls: string[] = [];
+    const registry = new RegistryEnrichment(
+      async (request) => {
+        calls.push(request.source);
+        if (request.source === "ceidg") return { ok: false, result: { status: "SOURCE_UNAVAILABLE" } };
+        return { ok: true, result: WL };
+      },
+      { now: () => now }
+    );
+    expect((await registry.forms("NIP 5261040828")).map((form) => form.text)).toContain("Transkom");
+    await registry.forms("NIP 5261040828");
+    expect(calls).toEqual(["wl", "ceidg"]);
+    now = 11 * 60_000;
+    await registry.forms("NIP 5261040828");
+    expect(calls).toEqual(["wl", "ceidg", "wl", "ceidg"]);
+    expect(registry.events.some((event) => event.source === "ceidg")).toBe(false);
+  });
+
+  it("a slow CEIDG answer does not hold the text and protects the next one", async () => {
+    let answer: (value: { ok: boolean; result: unknown }) => void = () => {};
+    const registry = new RegistryEnrichment(
+      async (request) =>
+        request.source === "ceidg" ? new Promise((resolve) => (answer = resolve)) : { ok: true, result: { status: "NOT_FOUND" } },
+      { timeoutMs: 30 }
+    );
+    expect(await registry.forms("NIP 1234563218")).toEqual([]);
+    answer({ ok: true, result: CEIDG });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect((await registry.forms("NIP 1234563218")).map((form) => form.text)).toContain("Marek Zając");
   });
 });
