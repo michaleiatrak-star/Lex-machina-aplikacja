@@ -84,6 +84,10 @@ describe("mechanical mode: analizator-umow-v1 per AU checkpoint", () => {
     expect(prompt.trimEnd()).toMatch(/# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED[\s\S]*Active AU checkpoint: AU-F0[\s\S]*$/u);
     expect(prompt.slice(prompt.indexOf("# ACTIVE CONTRACT ANALYSIS STATE"))).not.toContain("\n# MANDATORY PATH RESOURCE");
     expect(call.promptCacheTtl).toBe("1h");
+    // The executive skill's SKILL.md in full (not only its semantic contract), once, in the cached part.
+    expect(count(prompt, "# SKILL WYKONAWCZY: analizator-umow-v1")).toBe(1);
+    expect(count(prompt, "ST-INIT: zainicjuj podzbiór REJESTRU")).toBe(1);
+    expect(prompt.indexOf("# SKILL WYKONAWCZY: analizator-umow-v1")).toBeLessThan(call.systemPromptCachePrefix ?? 0);
   }, 120_000);
 
   it("AU-HYBRID loads HYBRID-VALIDATION in full (not a mention) at the end, with the state", async () => {

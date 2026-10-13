@@ -1213,6 +1213,27 @@ export class LexExecutionEngine {
           `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
         );
         executiveContractText = contractPrompt(loaded);
+        // The executive skill's SKILL.md in full (sections the application executes as one
+        // line, as in AUTO). The semantic contract alone left out the steps of the skill;
+        // in AUTO the model reads the same file, so both modes execute the same text. It is
+        // the same in every checkpoint, so it stays in the cached part of the prompt.
+        const record = this.registry.get(contract.skill);
+        let skillBody = "";
+        try {
+          skillBody = record ? fs.readFileSync(record.skillFile, "utf8") : "";
+        } catch {
+          skillBody = "";
+        }
+        if (skillBody && !inContext.has(`${contract.skill}/SKILL.md`)) {
+          const relative = `${path.basename(record!.directory)}/SKILL.md`;
+          const compact = compactForModel(skillBody);
+          if (compact.compacted.length) {
+            emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+          }
+          emit("resource_read", relative, "OK", "runtime-preload;executive-skill");
+          args.onCorpusPreloaded?.(relative);
+          executiveContractText = `# SKILL WYKONAWCZY: ${contract.skill} — ${relative} w całości (wczytała aplikacja, nie czytaj ponownie)\n\n${compact.text}\n\n${executiveContractText}`;
+        }
         // Module map: the conditional modules the question and the case documents trigger,
         // and the current stage's modules (W1/W2/W3 of a pleading). The stage's modules
         // change with the stage, so they go to the end of the prompt with the checkpoint;
