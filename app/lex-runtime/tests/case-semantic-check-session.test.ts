@@ -35,7 +35,7 @@ async function run(options: { correction: string; secondVerdict: string; firstQu
     label: "semantic",
     capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
     async stream(received) {
-      if (received.systemPrompt === SEMANTIC_JUDGE_SYSTEM) {
+      if (String(received.systemPrompt).startsWith(SEMANTIC_JUDGE_SYSTEM)) {
         judged.push(received);
         return { fullText: judged.length === 1 ? verdict("UNSUPPORTED", options.firstQuote ?? "nie powoduje automatycznie nieważności orzeczenia") : options.secondVerdict };
       }

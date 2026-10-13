@@ -252,6 +252,78 @@ function interpretationTextFor(signature: string, raw: string[]): string | null 
   return texts.length ? texts.join("\n") : null;
 }
 
+// The court the answer names for a judgment against the court of its signature (II SA/Wa ...
+// is a WSA, I OSK ... the NSA, I ACa ... a court of appeal). The judge leaves identification
+// to the application; this is that check.
+type CourtGroup = "SN" | "NSA" | "WSA" | "SA" | "TK" | "KIO";
+const NSA_REPERTORIES = new Set(["OSK", "FSK", "GSK", "OZ", "FZ", "GZ", "OPS", "FPS", "GPS", "OW", "FW", "GW", "OPK", "FPK", "GPK"]);
+const SN_GROUP = new Set(["CSK", "CSKP", "CZP", "CNP", "CNPP", "KK", "KZP", "KO", "KS", "KZ", "KA", "PK", "PSK", "PSKP", "PZP", "PZ", "UK", "USK", "UZP", "NSNZP", "NSNK", "NSNP", "NSK", "NO", "NZP", "NSP", "IZP", "SNO", "ZO", "CO"]);
+function courtOfDocument(signature: string): CourtGroup | null {
+  if (/^KIO\s/u.test(signature)) return "KIO";
+  const match = /^(?:[IVXL]{1,5}\s+)?([A-ZĄĆĘŁŃÓŚŹŻ][A-Za-ząćęłńóśźż]{0,5})(\/[A-Z][a-z]{1,2})?\s+\d/u.exec(signature);
+  if (!match) return null;
+  const [, repertory, seat] = match as unknown as [string, string, string | undefined];
+  if (seat) return "WSA";
+  if (NSA_REPERTORIES.has(repertory)) return "NSA";
+  if (SN_GROUP.has(repertory)) return "SN";
+  if (/^A[A-Z][a-z]$/u.test(repertory)) return "SA";
+  if (/^(?:K|SK|P|U|Kp|Kpt|Pp|Ts)$/u.test(repertory) && !/^[IVXL]/u.test(signature)) return "TK";
+  return null;
+}
+const COURT_NAMES: Array<[CourtGroup, RegExp]> = [
+  ["NSA", /(?<![\p{L}])(?:NSA|Naczeln\p{L}*\s+Sąd\p{L}*\s+Administracyjn\p{L}*)(?![\p{L}])/u],
+  ["WSA", /(?<![\p{L}])(?:WSA|Wojewódzk\p{L}*\s+Sąd\p{L}*\s+Administracyjn\p{L}*)(?![\p{L}])/u],
+  ["SN", /(?<![\p{L}])(?:SN|Sąd\p{L}*\s+Najwyższ\p{L}*)(?![\p{L}])/u],
+  ["SA", /(?<![\p{L}])Sąd\p{L}*\s+Apelacyjn\p{L}*(?![\p{L}])/u],
+  ["TK", /(?<![\p{L}])(?:TK|Trybunał\p{L}*\s+Konstytucyjn\p{L}*)(?![\p{L}])/u],
+  ["KIO", /(?<![\p{L}])(?:KIO|Krajow\p{L}*\s+Izb\p{L}*\s+Odwoławcz\p{L}*)(?![\p{L}])/u]
+];
+// "to nie jest orzeczenie NSA", "nie NSA, lecz WSA": a named court that is denied.
+const DENIED_COURT = /(?<![\p{L}])nie(?:\s+jest)?(?:\s+(?:to|orzeczenie|wyrok|uchwała|postanowienie))*\s+(?:\p{L}+\s+){0,2}$/iu;
+
+export type CourtFinding = { signature: string; named: CourtGroup; actual: CourtGroup };
+
+export function courtAttributionFindings(answer: string): CourtFinding[] {
+  const findings: CourtFinding[] = [];
+  const paragraphs = answer.split(/\n\s*\n/u);
+  paragraphs.forEach((paragraph, index) => {
+    for (const match of paragraph.matchAll(SIGNATURE)) {
+      const signature = match[0].replace(/\s+/g, " ");
+      const actual = courtOfDocument(signature);
+      if (!actual || findings.some((item) => item.signature === signature)) continue;
+      // The sentence that carries the signature, where the court is named for it.
+      const window = claimWindow(paragraphs, index);
+      // From the previous signature (or 200 characters back) to the end of this clause.
+      const at = window.indexOf(match[0]);
+      const before = [...window.slice(0, at).matchAll(SIGNATURE)].at(-1);
+      const start = Math.max(before ? before.index! + before[0].length : 0, at - 200);
+      const tail = window.slice(at + match[0].length, at + match[0].length + 60);
+      const sentence = window.slice(start, at + match[0].length) + tail.split(/[;.\n]/u)[0];
+      const named = COURT_NAMES.filter(([group, pattern]) => {
+        const found = pattern.exec(sentence);
+        return found && !DENIED_COURT.test(sentence.slice(0, found.index)) && group !== undefined;
+      }).map(([group]) => group);
+      if (!named.length || named.includes(actual)) continue;
+      findings.push({ signature, named: named[0]!, actual });
+    }
+  });
+  return findings;
+}
+
+const COURT_LABEL: Record<CourtGroup, string> = { SN: "Sąd Najwyższy", NSA: "Naczelny Sąd Administracyjny", WSA: "wojewódzki sąd administracyjny", SA: "sąd apelacyjny", TK: "Trybunał Konstytucyjny", KIO: "Krajowa Izba Odwoławcza" };
+
+export function courtCorrectionPrompt(findings: CourtFinding[]): string {
+  return [
+    "KONTROLA SĄDU (aplikacja, według sygnatury):",
+    ...findings.map((item) => `- sygn. ${item.signature} to orzeczenie: ${COURT_LABEL[item.actual]}, a odpowiedź przypisuje je: ${COURT_LABEL[item.named]}.`),
+    "Popraw nazwę sądu; gdy pytanie dotyczyło innego sądu, napisz wprost, że to orzeczenie innego sądu niż pytany."
+  ].join("\n");
+}
+
+export function courtWarning(findings: CourtFinding[]): string {
+  return findings.map((item) => `⚠️ Kontrola aplikacji: sygn. ${item.signature} to orzeczenie — ${COURT_LABEL[item.actual]}, nie ${COURT_LABEL[item.named]}.`).join("\n");
+}
+
 export function caseContentFindings(answer: string, sources: string[], topicText: string): CaseGroundingFinding[] {
   const terms = topicTerms(topicText);
   if (!terms.length || !sources.length) return [];

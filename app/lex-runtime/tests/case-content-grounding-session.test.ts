@@ -61,7 +61,7 @@ describe("case content grounding in a turn", () => {
   it("a correcting round replaces the fabricated description", async () => {
     const { result, calls, gate } = await run(HONEST);
     // The semantic judge (a separate call) is not part of the answer's calls.
-    const answerCalls = calls.filter((call) => call.systemPrompt !== SEMANTIC_JUDGE_SYSTEM);
+    const answerCalls = calls.filter((call) => !String(call.systemPrompt).startsWith(SEMANTIC_JUDGE_SYSTEM));
     expect(answerCalls).toHaveLength(2);
     expect(String(answerCalls[1]!.messages.at(-1)?.content)).toContain("sygn. II SAB/Po 175/26: w pobranym tekście nie ma: AI");
     expect(result.answer).toContain("dotyczy bezczynności burmistrza");

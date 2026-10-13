@@ -106,6 +106,104 @@ export function relevantExcerpt(text: string, question: string, claim: string): 
   return parts.join("\n");
 }
 
+// Who says what in the document: only the competent authority's decision (operative part,
+// thesis, its own reasoning) can support "the court/organ held". A party's argument, an
+// appeal ground, an applicant's view the organ rejected or a dissent cannot.
+export type PassageRole = "ROZSTRZYGNIĘCIE" | "TEZA" | "OCENA ORGANU ORZEKAJĄCEGO" | "STANOWISKO STRONY" | "ZDANIE ODRĘBNE" | "INNE";
+
+const ROLE_MARKERS: Array<[RegExp, PassageRole]> = [
+  [/^\s*zdanie\s+odrębne/iu, "ZDANIE ODRĘBNE"],
+  [/stanowisk\p{L}*[^.]{0,160}?\bjest\s+(?:nie)?prawidłow\p{L}*/iu, "ROZSTRZYGNIĘCIE"],
+  [/^\s*(?:sentencja|teza)\b/iu, "TEZA"],
+  [/^\s*(?:\p{Lu}[\p{L} ]{0,80}\s)?(?:orzeka|postanawia|oddala|uchyla|zasądza|umarza|uwzględnia|odrzuca|nakłada|nakazuje|zobowiązuje|stwierdza nieważność)\b/iu, "ROZSTRZYGNIĘCIE"],
+  [/(?:\bzważył\p{L}*|\bIzba\s+zważyła|W\s+ocenie\s+(?:Sądu|Izby|Trybunału|Prezesa|organu)|Trybunał\s+(?:Konstytucyjny\s+)?(?:stwierdza|uznał|uznaje)|Prezes\s+(?:Urzędu|UODO)\s+(?:ustalił|uznał|stwierdził)|Ocena\s+stanowiska|Uzasadnienie\s+interpretacji|Zarzut\p{L}*\s+(?:ten|te|nie|są|jest)|Sąd\s+(?:Najwyższy\s+|Apelacyjny\s+|Okręgowy\s+|Rejonowy\s+)?(?:w\s+tym\s+składzie\s+)?(?:uznał|uznaje|stwierdza|stwierdził|podziela|nie\s+podziela|przyjął))/u, "OCENA ORGANU ORZEKAJĄCEGO"],
+  [/(?:\bW\s+(?:skardze|apelacji|kasacji|odwołaniu|zażaleniu|sprzeciwie|odpowiedzi\s+na)|\b(?:Skarżąc\p{L}*|Powód\p{L}*|Powódk\p{L}*|Pozwan\p{L}*|Odwołując\p{L}*|Obrońca|Oskarżon\p{L}*|Wnioskodawc\p{L}*|Uczestni\p{L}*)\s+(?:podn\p{L}*|twierdzi\p{L}*|wnosi\p{L}*|zarzuci\p{L}*|uważa\p{L}*|argumentowa\p{L}*|wskazywa\p{L}*)|Stanowisko\s+Wnioskodawcy|Rząd\s+twierdził|Administrator\s+wyjaśnił|[Bb]ank\s+wnosił|Prokurator\s+(?:Generalny\s+)?wnosił|[Oo]rgan\s+(?:w\s+odpowiedzi|podatkowy\s+twierdził|twierdził)|\bW\s+piśmie\s+procesowym|\bW\s+postępowaniu\s+głównym)/iu, "STANOWISKO STRONY"]
+];
+
+/** The text in sentences, each with the role of the passage it stands in. */
+export function passageRoles(text: string): Array<{ role: PassageRole; text: string }> {
+  const sentences = text.replace(/\\[nrt]/g, "\n").split(/(?<=[.;!?])(?<!\b(?:r|art|ust|pkt|poz|sygn|nr|tj|np|tzw|ok|zm|Dz|U|par|lit|godz|zł|ww|t)\.)\s+|\n+/u).map((sentence) => sentence.trim()).filter(Boolean);
+  let current: PassageRole = "INNE";
+  let dissent = false;
+  return sentences.map((sentence) => {
+    const marked = ROLE_MARKERS.find(([pattern]) => pattern.test(sentence))?.[1];
+    if (marked === "ZDANIE ODRĘBNE") dissent = true;
+    if (marked && !dissent) current = marked;
+    return { role: dissent ? "ZDANIE ODRĘBNE" : current, text: sentence };
+  });
+}
+
+const DECISIVE: PassageRole[] = ["ROZSTRZYGNIĘCIE", "TEZA"];
+
+// What the case is about, as the document or its register entry names it ("w przedmiocie
+// udostępnienia informacji publicznej", CBOSA "Hasła tematyczne", EUREKA "Temat
+// interpretacji"). Pinned at the top of the excerpt: the judge reads it first and it is never
+// cut out of a long document (calibration 2026-10-13: a separate subject-only call is safe but
+// costs more than it saves when checking an answer).
+const SUBJECT_PATTERNS = [
+  /(?:Sprawa\s+ze\s+skargi|skargi|odwołania|wniosku)[^.\n]{0,200}?\bw\s+przedmiocie\s+[^.\n]{5,200}/iu,
+  /\bw\s+przedmiocie\s+[^.\n]{5,200}/iu,
+  /\bHasła\s+tematyczne\s*[:\-]?\s*[^\n]{3,200}/iu,
+  /\bTemat\s+interpretacji\s*[:\-]?\s*[^\n]{3,200}/iu,
+  /\bprzedmiot(?:\s+sprawy)?\s*[:\-]\s*[^\n]{3,200}/iu,
+  /\bw\s+sprawie\s+(?:z\s+powództwa|ze\s+skargi|z\s+wniosku)[^.\n]{5,240}/iu
+];
+
+export function caseSubject(text: string): string | null {
+  const plain = text.replace(/\\[nrt]/g, "\n");
+  for (const pattern of SUBJECT_PATTERNS) {
+    const found = pattern.exec(plain)?.[0]?.trim();
+    if (found) return found.replace(/\s+/g, " ");
+  }
+  return null;
+}
+
+/** Passages labelled by role: the decision always, then the closest reasoning and other passages. */
+export function roleExcerpt(text: string, question: string, claim: string): string {
+  const passages: Array<{ role: PassageRole; text: string; at: number }> = [];
+  passageRoles(text).forEach((sentence, at) => {
+    const last = passages.at(-1);
+    if (last && last.role === sentence.role && last.text.length + sentence.text.length < CHUNK_CHARS) last.text += ` ${sentence.text}`;
+    else passages.push({ ...sentence, at });
+  });
+  const total = passages.reduce((sum, passage) => sum + passage.text.length, 0);
+  const label = (passage: { role: PassageRole; text: string }) => `[${passage.role}] ${passage.text}`;
+  const subject = caseSubject(text);
+  const pinned = subject ? `[OKREŚLENIE SPRAWY] ${subject}\n` : "";
+  if (total <= HEAD_CHARS + CHUNK_CHARS * MAX_CHUNKS) return pinned + passages.map(label).join("\n");
+  const wanted = new Set([...words(question), ...words(claim)]);
+  const score = (value: string) => [...words(value)].filter((word) => wanted.has(word)).length;
+  const head: typeof passages = [];
+  let headChars = 0;
+  for (const passage of passages) {
+    if (headChars >= HEAD_CHARS / 2) break;
+    head.push(passage);
+    headChars += passage.text.length;
+  }
+  const rest = passages.filter((passage) => !head.includes(passage));
+  const decisive = rest.filter((passage) => DECISIVE.includes(passage.role));
+  const others = rest
+    .filter((passage) => !DECISIVE.includes(passage.role))
+    .map((passage) => ({ passage, score: score(passage.text) + (passage.role === "OCENA ORGANU ORZEKAJĄCEGO" ? 1 : 0) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CHUNKS + 1)
+    .map((item) => item.passage);
+  const chosen = [...head, ...decisive.slice(0, 3), ...others].sort((a, b) => a.at - b.at);
+  return pinned + chosen.map(label).join("\n[…]\n");
+}
+
+// The competent authority's decision, not a party's claim.
+export const AUTHORITY_RULE =
+  "Twierdzenie, że sąd lub organ coś orzekł, uznał lub przyjął, popiera wyłącznie rozstrzygnięcie, teza albo własne rozważania właściwego organu orzekającego. " +
+  "Argument strony, zarzut skargi, apelacji lub kasacji, stanowisko organu będącego stroną sporu sądowego, stanowisko wnioskodawcy uznane za nieprawidłowe i zdanie odrębne " +
+  "nie są stanowiskiem organu — przypisanie ich sądowi lub organowi to UNSUPPORTED (chyba że organ je przyjął, np. „stanowisko wnioskodawcy jest prawidłowe”). ";
+
+export const ROLE_LEGEND =
+  "Fragmenty tekstu mają w nawiasach kwadratowych rolę nadaną mechanicznie przez aplikację (OKREŚLENIE SPRAWY, ROZSTRZYGNIĘCIE, TEZA, OCENA ORGANU ORZEKAJĄCEGO, STANOWISKO STRONY, ZDANIE ODRĘBNE, INNE); " +
+  "określenie sprawy mówi, czego dotyczy dokument — gdy wyraźnie wskazuje inny problem niż pytanie, to NO_MATCH; " +
+  "traktuj ją jako wskazówkę, a w razie sprzeczności z treścią rozstrzyga treść. Cytat w polu quote kopiuj bez etykiety. ";
+
 export const SEMANTIC_JUDGE_SYSTEM =
   "OCENA ZGODNOŚCI ORZECZEŃ, INTERPRETACJI I PRZEPISÓW Z PYTANIEM. Jesteś kontrolerem, nie autorem odpowiedzi. " +
   "Dla każdego dokumentu oceń wyłącznie na podstawie jego podanego tekstu: (1) topic — czy dokument dotyczy problemu z pytania użytkownika " +
@@ -123,14 +221,18 @@ export const SEMANTIC_JUDGE_SYSTEM =
 
 const KIND_LABEL: Record<CitedDocument["kind"], string> = { case: "orzeczenie", interpretation: "interpretacja", other: "orzeczenie lub decyzja", statute: "przepis (brzmienie z ELI)" };
 
-export function semanticJudgePrompt(question: string, documents: CitedDocument[]): string {
+export type JudgeOptions = { roles?: boolean; fullText?: boolean };
+
+export function semanticJudgePrompt(question: string, documents: CitedDocument[], options: JudgeOptions = {}): string {
   return [
     `PYTANIE UŻYTKOWNIKA (wątek):\n${question.trim()}`,
     ...documents.slice(0, MAX_DOCUMENTS).map((document, index) =>
       [
         `DOKUMENT D${index + 1}: ${KIND_LABEL[document.kind]} ${document.signature}`,
         `CO ODPOWIEDŹ MÓWI O NIM:\n${document.claim.trim()}`,
-        `TEKST DOKUMENTU (fragmenty pobrane ze źródła):\n${relevantExcerpt(document.text, question, document.claim)}`
+        options.fullText
+          ? `TEKST DOKUMENTU (pełny):\n${document.text}`
+          : `TEKST DOKUMENTU (fragmenty pobrane ze źródła):\n${options.roles ? roleExcerpt(document.text, question, document.claim) : relevantExcerpt(document.text, question, document.claim)}`
       ].join("\n\n")
     )
   ].join("\n\n---\n\n");
@@ -171,8 +273,11 @@ export function parseSemanticVerdicts(output: string, documents: CitedDocument[]
   return { verdicts, rejected };
 }
 
+// Correction when the document is off the question or the answer misstates it. A document
+// that answers only part of the question, described faithfully, needs none (calibration
+// 2026-10-13: such answers usually say so themselves).
 export const semanticProblems = (check: SemanticCheck): SemanticVerdict[] =>
-  check.verdicts.filter((verdict) => verdict.topic !== "MATCH" || verdict.claim !== "SUPPORTED");
+  check.verdicts.filter((verdict) => verdict.topic === "NO_MATCH" || verdict.claim !== "SUPPORTED");
 
 export function semanticCorrectionPrompt(problems: SemanticVerdict[]): string {
   return [
