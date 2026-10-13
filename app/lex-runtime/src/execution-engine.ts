@@ -10,6 +10,7 @@ import {
 } from "./checkpoint-skill-sections.js";
 import { compactForModel } from "./skill-sections.js";
 import { reductionOffer } from "./skill-switch.js";
+import { ANNOUNCED_ACTION_PROMPT, onlyAnnouncesWork } from "./announced-action.js";
 import { defenceCount } from "./task-routing.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -2533,6 +2534,27 @@ export class LexExecutionEngine {
           [...events]
         );
       }
+    }
+    // "Szukam teraz..." with nothing found: one more round runs the announced search.
+    if (onlyAnnouncesWork(response.fullText)) {
+      const followed = await this.providers.stream(args.provider, {
+        model: args.model,
+        systemPrompt: promptParts.join("\n\n"),
+        ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
+        ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
+        messages: [
+          { role: "user", content: effectiveQuery },
+          { role: "assistant", content: response.fullText },
+          { role: "user", content: ANNOUNCED_ACTION_PROMPT }
+        ],
+        tools: args.tools,
+        runTools: args.runTools,
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        reasoning: "none"
+      }).catch(() => null);
+      const text = followed?.fullText.trim() ?? "";
+      emit("gate", "ANNOUNCED_ACTION_FOLLOW_UP", "OK", text && !onlyAnnouncesWork(text) ? "result" : "still-announced");
+      if (text) response.fullText = text;
     }
     emit("provider_end", args.provider, "OK", args.model);
     emit(

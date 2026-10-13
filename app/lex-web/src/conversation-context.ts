@@ -24,8 +24,25 @@ export function conversationBudgetChars(
   return HOSTED_CONVERSATION_CHARS[provider] ?? LOCAL_CONVERSATION_CHARS;
 }
 
+// What the application recorded for an earlier answer (its verification register and
+// auxiliary sources): asked "what went wrong", the model answers from it, not by guessing.
+function register(item: CaseChatMessage): string {
+  if (item.role !== "assistant") return "";
+  const evidence = (item.evidence ?? []).filter((record) => record.role !== "gate");
+  const auxiliary = item.auxiliarySources ?? [];
+  if (!evidence.length && !auxiliary.length) {
+    return item.mandatoryPath ? "\n[Rejestr aplikacji dla tej odpowiedzi: brak zapisów weryfikacji i źródeł pomocniczych]" : "";
+  }
+  const items = [
+    ...evidence.map((record) => `${record.status} ${record.claim}${record.sourceTier ? ` (${record.sourceTier})` : ""}`),
+    ...auxiliary.map((source) => `pomocnicze ${source.sourceTier} ${source.sourceUrl}`)
+  ];
+  const shown = items.slice(0, 8).join("; ");
+  return `\n[Rejestr aplikacji dla tej odpowiedzi: ${shown}${items.length > 8 ? `; i ${items.length - 8} więcej` : ""}]`;
+}
+
 function turn(item: CaseChatMessage): string {
-  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}`;
+  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}${register(item)}`;
 }
 
 // Newest turns first, whole messages only; older turns that do not fit are dropped
