@@ -1,20 +1,16 @@
-// A workflow checkpoint that needs the user's answer (missing facts, a decision, a choice
-// of variant) says so with one fixed line. Without it the application may go on to the
-// next checkpoint by itself (AUTO pleading loop, automatic continuation in the chat).
+// Checkpoint workflows go on to the next step by themselves (the chat sends it). A step
+// that needs the user's answer (missing data, a choice) says so with this line, and the
+// chain stops there until the user replies.
+export const WAIT_FOR_USER_MARKER = "[CZEKAM NA ODPOWIEDŹ]";
 
-export const WAITING_FOR_USER_MARKER = "=== CZEKAM NA ODPOWIEDŹ ===";
+export const WAIT_FOR_USER_INSTRUCTION =
+  `Po tym punkcie aplikacja sama uruchomi następny. Jeśli do wykonania tego punktu potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}; bez tej linii nie pytaj użytkownika o zgodę na dalsze kroki.`;
 
-export const WAITING_FOR_USER_RULE =
-  `Gdy ten krok wymaga odpowiedzi użytkownika (brak danych, decyzja, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią \`${WAITING_FOR_USER_MARKER}\`; krok pozostaje otwarty do odpowiedzi. ` +
-  "Bez tej linii aplikacja może sama przejść do następnego kroku, więc nie używaj jej, gdy krok jest wykonany.";
-
-const MARKER_LINE = /^[ \t>*_`]*=== CZEKAM NA ODPOWIEDŹ ===[ \t*_`]*$/mu;
-
-export function waitsForUser(answer: string | null | undefined): boolean {
-  return typeof answer === "string" && MARKER_LINE.test(answer);
+export function waitsForUser(answer: string | undefined | null): boolean {
+  return typeof answer === "string" && answer.includes(WAIT_FOR_USER_MARKER);
 }
 
-/** The answer without the marker line (the user sees the questions, not the signal). */
-export function withoutWaitingMarker(answer: string): string {
-  return answer.replace(new RegExp(MARKER_LINE.source, "gmu"), "").replace(/\n{3,}/g, "\n\n").trim();
-}
+// Process pleading in CHECKPOINT mode: the user confirms every step, but a step that cannot
+// be done without missing data is not closed (the runtime keeps the checkpoint open).
+export const WAIT_FOR_USER_CHECKPOINT_INSTRUCTION =
+  `Jeśli do wykonania tego punktu potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}; punkt pozostanie otwarty do odpowiedzi.`;

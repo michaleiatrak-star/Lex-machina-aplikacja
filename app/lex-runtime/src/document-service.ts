@@ -55,6 +55,7 @@ import {
   type PlaceholderGrammar
 } from "./privacy/token-legend.js";
 import { genericWords } from "./privacy/generic-words.js";
+import type { RegistryFormsProvider } from "./privacy/registry-enrichment.js";
 import {
   PERSON_CASES,
   type PersonCase,
@@ -514,7 +515,9 @@ implements DocumentService {
     // Masks personal data on scanned pages sent to a model as evidence.
     private readonly pageMasker?: PageImageMasker,
     // "z lokalnym AI": fixes OCR errors before anonymization.
-    private readonly ocrCorrector?: Pick<LocalOcrCorrector, "correct">
+    private readonly ocrCorrector?: Pick<LocalOcrCorrector, "correct">,
+    // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
+    private readonly registryForms?: RegistryFormsProvider
   ) {}
 
   private digitalTextResult(
@@ -736,7 +739,8 @@ implements DocumentService {
                 }
               : undefined
           ), this.documents.get(documentId)?.aiFindings),
-          this.personMorphology
+          this.personMorphology,
+          this.registryForms
         ).pseudonymize(
           page.text
         );
@@ -823,7 +827,8 @@ implements DocumentService {
     const preview = await new LocalPolishPseudonymizer(
       new PseudonymizationVault(),
       withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings),
-      this.personMorphology
+      this.personMorphology,
+      this.registryForms
     ).pseudonymize(clean);
     return {
       page: {
@@ -933,7 +938,8 @@ implements DocumentService {
           ), record.aiFindings),
           pageMemory[pageIndex]!
         ),
-        this.personMorphology
+        this.personMorphology,
+        this.registryForms
       ).pseudonymize(page.text, pageDirectives);
     const directivesFor = (page: IngestedPage): ManualPrivacyDirective[] =>
       directives

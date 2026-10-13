@@ -1,7 +1,14 @@
 import { draftPrompt } from "./process-pleading-draft.js";
-import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS, ORDERED_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
-import { compactForModel, markdownSection } from "./skill-sections.js";
-import { WAITING_FOR_USER_RULE, waitsForUser } from "./workflow-wait.js";
+import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
+import {
+  CHRONOLOGY_CHECKPOINT_SECTIONS,
+  CONTRACT_CHECKPOINT_EXCERPTS,
+  CONTRACT_CHECKPOINT_SECTIONS,
+  COURT_CHECKPOINT_SECTIONS,
+  ORDERED_CHECKPOINT_SECTIONS,
+  markdownSection
+} from "./checkpoint-skill-sections.js";
+import { compactForModel } from "./skill-sections.js";
 import { reductionOffer } from "./skill-switch.js";
 import { defenceCount } from "./task-routing.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
@@ -371,29 +378,6 @@ export function contractCheckpointResources(mode: ContractWorkflowMode, checkpoi
   }
 }
 
-// analizator-umow-v1: the part of its core checklist (references/mod-core-checklist.md,
-// MODUŁ A-F) that the AU checkpoint executes. The checkpoint's name alone did not tell
-// the model what to do; the whole checklist is 691 lines, one module is what the step needs.
-const CONTRACT_CHECKLIST = "references/mod-core-checklist.md";
-export function contractCheckpointSections(checkpoint: ContractCheckpoint): RegExp[] {
-  switch (checkpoint) {
-    case "AU-A":
-      return [/^## MODUŁ A\b/u];
-    case "AU-B":
-      return [/^## MODUŁ B\b/u];
-    case "AU-C":
-      return [/^## MODUŁ C\b/u];
-    case "AU-D":
-      return [/^## MODUŁ D\b/u];
-    case "AU-F":
-      return [/^## MODUŁ F\b/u, /^## SKALOWANIE RAPORTU\b/u];
-    case "AU-GENCORE":
-      return [/^## MODUŁ E\b/u];
-    default:
-      return [];
-  }
-}
-
 export class LexExecutionEngine {
   constructor(
     private readonly registry: LexSkillRegistry,
@@ -402,6 +386,9 @@ export class LexExecutionEngine {
 
   async executePolishLegalQuery(args: {
     query: string;
+    // How the turn compacts skill text (sections the application executes, stages
+    // reached); the executive SKILL.md of a mechanical turn is compacted the same way.
+    instructionCompaction?: { inactive: string[]; stages: string[] };
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -1216,28 +1203,37 @@ export class LexExecutionEngine {
           "OK",
           `skill=${contract.skill};gates=${contract.gates.length};loaded=${loaded.loaded.map((item) => item.resource).join(",")};toRead=${loaded.toRead.join(",")}`
         );
-        executiveContractText = contractPrompt(loaded);
-        // The executive skill's SKILL.md in full (sections the application executes as one
-        // line, as in AUTO). The semantic contract alone left out the steps of the skill;
-        // in AUTO the model reads the same file, so both modes execute the same text. It is
-        // the same in every checkpoint, so it stays in the cached part of the prompt.
-        const record = this.registry.get(contract.skill);
-        let skillBody = "";
-        try {
-          skillBody = record ? fs.readFileSync(record.skillFile, "utf8") : "";
-        } catch {
-          skillBody = "";
-        }
-        if (skillBody && !inContext.has(`${contract.skill}/SKILL.md`)) {
-          const relative = `${path.basename(record!.directory)}/SKILL.md`;
-          const compact = compactForModel(skillBody);
-          if (compact.compacted.length) {
-            emit("gate", "SECTIONS_EXECUTED_BY_APP", "OK", `${relative}:${compact.compacted.map((item) => `${item.component}:${item.heading}`).join("|")}`);
+        // The executive skill's own SKILL.md in full (compacted like in AUTO): the
+        // contract above names its gates, the checkpoints name its sections; without the
+        // text the model had to read it with a tool in every turn or work without it.
+        // It sits in the cached part of the prompt, the same for every checkpoint.
+        const skillResource = `${contract.skill}/SKILL.md`;
+        const skillRecord = this.registry.get(contract.skill);
+        let skillText = "";
+        if (skillRecord && !inContext.has(skillResource)) {
+          try {
+            skillText = compactForModel(
+              fs.readFileSync(skillRecord.skillFile, "utf8"),
+              undefined,
+              new Set(args.instructionCompaction?.inactive ?? []),
+              args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined
+            ).text;
+          } catch {
+            skillText = "";
           }
-          emit("resource_read", relative, "OK", "runtime-preload;executive-skill");
-          args.onCorpusPreloaded?.(relative);
-          executiveContractText = `# SKILL WYKONAWCZY: ${contract.skill} — ${relative} w całości (wczytała aplikacja, nie czytaj ponownie)\n\n${compact.text}\n\n${executiveContractText}`;
+          if (skillText) {
+            inContext.add(skillResource);
+            emit("resource_read", skillResource, "OK", "runtime-preload;executive-skill");
+            // The register of the mandatory path counts the file as read.
+            args.onCorpusPreloaded?.(`${path.basename(skillRecord.directory)}/SKILL.md`);
+          }
         }
+        executiveContractText = [
+          ...(skillText
+            ? [`# SKILL WYKONAWCZY: ${contract.skill} (SKILL.md wczytany przez aplikację w całości; nie czytaj go ponownie)\n\n${skillText}`]
+            : []),
+          contractPrompt(loaded)
+        ].join("\n\n");
         // Module map: the conditional modules the question and the case documents trigger,
         // and the current stage's modules (W1/W2/W3 of a pleading). The stage's modules
         // change with the stage, so they go to the end of the prompt with the checkpoint;
@@ -1294,24 +1290,22 @@ export class LexExecutionEngine {
         emit("resource_read", resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}`);
         contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${resource}\n\n${content}`;
       }
-      const sections = contractCheckpointSections(checkpoint);
-      const checklist = sections.length && !already.has(`${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`)
-        ? this.registry.resolveResource(workflowPlan.executionSkill, CONTRACT_CHECKLIST)
-        : null;
-      if (checklist) {
+      for (const excerpt of CONTRACT_CHECKPOINT_EXCERPTS[checkpoint] ?? []) {
+        if (already.has(excerpt.resource)) continue;
+        const file = this.registry.resolveResource(workflowPlan.executionSkill, excerpt.resource);
         let body = "";
         try {
-          body = fs.readFileSync(checklist, "utf8");
+          body = file ? fs.readFileSync(file, "utf8") : "";
         } catch {
           body = "";
         }
-        const text = sections.map((heading) => markdownSection(body, heading)).filter(Boolean).join("\n\n");
-        if (text) {
-          emit("resource_read", `${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`, "OK", `runtime-preload;contract-checkpoint-section;${checkpoint}`);
-          contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# CZĘŚĆ SKILLA DO WYKONANIA W PUNKCIE ${checkpoint}: ${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}\n\n${text}`;
-        } else {
-          emit("resource_read", `${workflowPlan.executionSkill}/${CONTRACT_CHECKLIST}`, "BLOCKED", `runtime-preload;contract-checkpoint-section;${checkpoint};section-missing`);
+        const content = excerpt.heading ? markdownSection(body, excerpt.heading) : body;
+        if (!content) {
+          emit("resource_read", excerpt.resource, "BLOCKED", `runtime-preload;contract-checkpoint;missing:${excerpt.heading ?? "file"}`);
+          continue;
         }
+        emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
+        contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
       }
     }
     // pisma-proste-v2 pinned by the user: the same check the AUTO router makes (several
@@ -1936,7 +1930,8 @@ export class LexExecutionEngine {
               "Execute only the active checkpoint in this turn.",
               "Do not continue to a later checkpoint or later stage.",
               "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",
-              "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it."
+              "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it.",
+              args.processWorkflowContext.mode === "AUTO" ? WAIT_FOR_USER_INSTRUCTION : WAIT_FOR_USER_CHECKPOINT_INSTRUCTION
             ].join("\n")
           ]
         : []),
@@ -1949,7 +1944,8 @@ export class LexExecutionEngine {
               `Część skilla analiza-sadowa-v6 dla tego punktu: ${COURT_CHECKPOINT_SECTIONS[args.courtWorkflowContext.checkpoint]}`,
               "Execute only this court-analysis checkpoint in this turn.",
               "Do not perform, claim completion of, or present output reserved for a later court-analysis stage.",
-              "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass."
+              "The runtime will close this checkpoint only after deterministic workflow, source, citation and finalization gates pass.",
+              WAIT_FOR_USER_INSTRUCTION
             ].join("\n")
           ]
         : []),
@@ -1963,7 +1959,8 @@ export class LexExecutionEngine {
               `Część skilla chronologia-sprawy-v1 dla tego punktu: ${CHRONOLOGY_CHECKPOINT_SECTIONS[args.chronologyWorkflowContext.checkpoint]}`,
               "Execute only this chronology checkpoint in this turn.",
               "Do not claim completion of inventory, thread identification, extraction, temporal analysis, contradiction indexing or final report stages that are later than the active checkpoint.",
-              "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization."
+              "Event meaning, certainty class, provenance and contradiction significance remain semantic work; the runtime controls only stage order and finalization.",
+              WAIT_FOR_USER_INSTRUCTION
             ].join("\n")
           ]
         : []),
@@ -1980,7 +1977,8 @@ export class LexExecutionEngine {
               "Execute only this checkpoint in this turn.",
               "Do not claim completion of any later checkpoint.",
               "The runtime, not the model, owns checkpoint order, required resources, source verification, citations, provenance and commit.",
-              "Return only the semantic work product needed for the active checkpoint."
+              "Return only the semantic work product needed for the active checkpoint.",
+              WAIT_FOR_USER_INSTRUCTION
             ].join("\n")
           ]
         : []),
@@ -1991,10 +1989,12 @@ export class LexExecutionEngine {
               `Mode: ${args.contractWorkflowContext.mode}.`,
               `Stage: ${args.contractWorkflowContext.stage}.`,
               `Active AU checkpoint: ${args.contractWorkflowContext.checkpoint}.`,
+              `Część skilla analizator-umow-v1 dla tego punktu: ${CONTRACT_CHECKPOINT_SECTIONS[args.contractWorkflowContext.checkpoint]}`,
               "Execute only this AU checkpoint in this turn.",
               "Do not advance, claim completion of, or synthesize output reserved for a later AU checkpoint.",
               "Clause risk, interpretation, negotiation position and proposed wording remain semantic model work; the runtime controls only intake/routing, step order, validation and finalization.",
-              "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A."
+              "AU-HYBRID, AU-STRIP, AU-POST and AU-DISC are mandatory finalization gates and cannot be treated as N/A.",
+              WAIT_FOR_USER_INSTRUCTION
             ].join("\n")
           ]
         : [])
@@ -2096,11 +2096,10 @@ export class LexExecutionEngine {
     }
     // Everything before the checkpoint's own part is the same between checkpoints of one
     // matter: the provider caches it as a separate block (systemPromptCachePrefix).
-    // One rule for every checkpoint workflow: a checkpoint waiting for the user says so,
-    // so the AUTO loop and the chat's automatic continuation stop there.
-    // Also a mechanical turn without checkpoints (simple letter, statute, case law, reports).
-    if (workflowStateParts.length || (workflowPlan.executionSkill && !args.model.startsWith("local/"))) {
-      workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\n${WAITING_FOR_USER_RULE}`);
+    // Checkpoint states carry WAIT_FOR_USER_INSTRUCTION; a mechanical turn without checkpoints
+    // (simple letter, statute, case law, reports) gets the same signal for its questions.
+    if (!workflowStateParts.length && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+      workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\nGdy potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}.`);
     }
     const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
     const stablePromptLength = promptParts.join("\n\n").length + 2;

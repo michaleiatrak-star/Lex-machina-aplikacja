@@ -208,7 +208,7 @@ import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
-import { AUTO_ADVANCE_MESSAGE, autoAdvanceDecision, autoAdvanceNote, autoAdvanceStopNote } from "./workflow-auto-advance.js";
+import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 
 type TabId =
@@ -1294,6 +1294,11 @@ export default function MatterChatApp({
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
   const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string; switchTo?: { action: DeterministicActionId; label: string } } | null>(null);
+  // Checkpoint workflows: the next step the chat sends by itself, the closed steps per
+  // case (progress check) and the user's "Zatrzymaj".
+  const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
+  const workflowClosedRef = useRef<Record<string, number>>({});
+  const autoStopRef = useRef(false);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
     caseId: string; text: string; messageId: string;
@@ -1301,10 +1306,6 @@ export default function MatterChatApp({
   const [unverifiedDraftRetry, setUnverifiedDraftRetry] = useState<{ text: string; messageId: string } | null>(null);
   // A case workflow stopped the message (pleading pipeline not started, workflow finished):
   // the message waits for the user's choice and is resent through contractRetry.
-  // Automatic continuation of a mechanical workflow ("Kontynuuj." after a closed checkpoint).
-  const [autoAdvanceRequest, setAutoAdvanceRequest] = useState<{ caseId: string; label: string } | null>(null);
-  const autoAdvanceChain = useRef<{ count: number; next: string | null; paused: boolean }>({ count: 0, next: null, paused: false });
-  const [, setAutoAdvanceTick] = useState(0);
   // Escalation / reduction between the letter skills offered by the runtime, and a switch being sent.
   const [skillSwitchOffer, setSkillSwitchOffer] = useState<{ caseId: string; offer: SkillSwitchOffer } | null>(null);
   const [pendingSkillSwitch, setPendingSkillSwitch] = useState<{ caseId: string; action: DeterministicActionId; text: string; label: string } | null>(null);
@@ -2198,15 +2199,6 @@ export default function MatterChatApp({
       void executeMessage(pending);
     }
   }, [pendingFirstMessage, caseId, threadLoading, executing]);
-
-  useEffect(() => {
-    if (!autoAdvanceRequest || executing || threadLoading) return;
-    const request = autoAdvanceRequest;
-    setAutoAdvanceRequest(null);
-    // Another matter opened in the meantime: the continuation belongs to the previous one.
-    if (request.caseId !== caseId || autoAdvanceChain.current.paused) return;
-    void executeMessage(AUTO_ADVANCE_MESSAGE, { autoStep: request.label });
-  }, [autoAdvanceRequest, caseId, threadLoading, executing]);
 
   // The switch is sent once the thread's action shows the new skill (fresh routing state).
   useEffect(() => {
@@ -3158,6 +3150,19 @@ export default function MatterChatApp({
   }
 
   useEffect(() => {
+    if (!autoNext || executing) return;
+    if (autoStopRef.current || autoNext.caseId !== caseId) {
+      setAutoNext(null);
+      return;
+    }
+    const next = autoNext;
+    setAutoNext(null);
+    void executeMessage(next.text, { autoStep: next.step, autoMeta: next.meta });
+    // executeMessage reads the current thread state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNext, executing, caseId]);
+
+  useEffect(() => {
     if (!contractRetry || executing) return;
     if (messages.some((message) => message.id === contractRetry.messageId)) return;
     const { text, switchTo } = contractRetry;
@@ -3192,7 +3197,10 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
-  async function executeMessage(plain: string, options: { acceptUnverified?: boolean; autoStep?: string; switchTo?: { action: DeterministicActionId; label: string } } = {}): Promise<void> {
+  async function executeMessage(
+    plain: string,
+    options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string; switchTo?: { action: DeterministicActionId; label: string } } = {}
+  ): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3236,26 +3244,26 @@ export default function MatterChatApp({
 
     const priorMessages =
       messages;
-    // A message of the user starts a new chain of automatic continuations.
-    if (!options.autoStep) autoAdvanceChain.current = { count: 0, next: null, paused: false };
     const userMessage:
       CaseChatMessage = {
         id: messageId(),
         role: "user",
         content: trimmed,
-        ...(conversationIsNew
-          ? {
-              meta:
-                deterministicActionMeta(
-                  deterministicAction
-                )
-            }
-          : options.switchTo
-            ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
-            : options.autoStep
-              ? { meta: `Automatyczne przejście · ${options.autoStep}` }
+        ...(options.autoMeta
+          ? { meta: options.autoMeta }
+          : conversationIsNew
+            ? {
+                meta:
+                  deterministicActionMeta(
+                    deterministicAction
+                  )
+              }
+            : options.switchTo
+              ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
               : {})
       };
+    // A message the user sends starts a new chain of automatic steps.
+    if (options.autoStep === undefined) autoStopRef.current = false;
 
     // Optimistic UI: move the message into the thread immediately. Provider
     // login/model startup/repair happens only after the user sees what was sent.
@@ -3568,16 +3576,22 @@ export default function MatterChatApp({
           answerMessage
         ]);
         setSkillSwitchOffer(result.skillSwitch ? { caseId: executionCaseId, offer: result.skillSwitch } : null);
-        const chain = autoAdvanceChain.current;
-        const decision = autoAdvanceDecision(result, chain.count, chain.next);
-        if (decision.advance && !chain.paused) {
-          autoAdvanceChain.current = { count: chain.count + 1, next: decision.next, paused: false };
-          setMessages((current) => [...current, { id: messageId(), role: "system", content: autoAdvanceNote(decision.label) }]);
-          setAutoAdvanceRequest({ caseId: executionCaseId, label: decision.label });
-        } else if (!decision.advance && chain.count > 0) {
-          const note = autoAdvanceStopNote(decision);
-          if (note) setMessages((current) => [...current, { id: messageId(), role: "system", content: note }]);
-        }
+      }
+
+      // Checkpoint workflows go on by themselves; the thread names the next step.
+      const autoDecision = autoAdvanceDecision(
+        result,
+        workflowClosedRef.current[executionCaseId] ?? null,
+        options.autoStep ?? 0
+      );
+      const autoProgress = workflowProgress(result);
+      if (autoProgress) workflowClosedRef.current[executionCaseId] = autoProgress.closed;
+      const autoNote = autoAdvanceNote(result, autoDecision);
+      if (autoNote && activeCaseIdRef.current === executionCaseId) {
+        setMessages((current) => [...current, { id: messageId(), role: "system", content: autoNote }]);
+      }
+      if (autoDecision.advance && !autoStopRef.current && activeCaseIdRef.current === executionCaseId) {
+        setAutoNext({ caseId: executionCaseId, text: autoDecision.message, meta: autoDecision.meta, step: (options.autoStep ?? 0) + 1 });
       }
 
       // Letter workflows end with a file, like a document artifact: after each
@@ -5484,6 +5498,19 @@ export default function MatterChatApp({
                   <div className="chat-message-content">
                     {executionStage}
                   </div>
+                  {(messages.at(-1)?.meta ?? "").startsWith("automatycznie") && !autoStopRef.current ? (
+                    <button
+                      type="button"
+                      className="chat-link-button"
+                      onClick={() => {
+                        autoStopRef.current = true;
+                        setAutoNext(null);
+                        setGeneratedDocumentMessage("Automatyczne kroki zatrzymane po bieżącym kroku. Napisz „Kontynuuj”, aby iść dalej.");
+                      }}
+                    >
+                      Zatrzymaj automatyczne kroki
+                    </button>
+                  ) : null}
                   {executionSteps ? (
                     <ol className="chat-steps" aria-label="Etapy pracy">
                       <li className="chat-steps-summary">
@@ -6055,22 +6082,6 @@ export default function MatterChatApp({
                       ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
                       : "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."}
                   </small>
-                </div>
-              ) : null}
-              {(autoAdvanceRequest?.caseId === caseId || (executing && autoAdvanceChain.current.count > 0 && !autoAdvanceChain.current.paused)) ? (
-                <div className="chat-contract-mode" role="group" aria-label="Automatyczne przejście">
-                  <small>Kolejne kroki przechodzą automatycznie.</small>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    onClick={() => {
-                      autoAdvanceChain.current = { ...autoAdvanceChain.current, paused: true };
-                      setAutoAdvanceRequest(null);
-                      setAutoAdvanceTick((tick) => tick + 1);
-                    }}
-                  >
-                    Wstrzymaj automatyczne przejście
-                  </button>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (

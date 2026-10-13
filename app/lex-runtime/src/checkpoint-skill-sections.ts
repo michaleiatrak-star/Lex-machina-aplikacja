@@ -1,4 +1,5 @@
 import type { ChronologyCheckpoint } from "./chronology-state.js";
+import type { ContractCheckpoint } from "./contract-analysis-state.js";
 import type { CourtAnalysisCheckpoint } from "./court-analysis-state.js";
 
 // The runtime's checkpoint names are its own (PASS_II_SOURCES_VERIFIED); the skill names
@@ -26,6 +27,56 @@ export const CHRONOLOGY_CHECKPOINT_SECTIONS: Readonly<Record<ChronologyCheckpoin
   CONTRADICTION_INDEX_COMPLETE: "INDEKS SPRZECZNOŚCI (z references/sprzecznosci-dat.md) i LUKI CZASOWE.",
   CHRONOLOGY_REPORT_COMPLETE: "FORMAT RAPORTU CHRONOLOGICZNEGO (TRYB A): pełny raport, blok OŚ-GATE przed wnioskami."
 };
+
+// analizator-umow-v1: AU-A…AU-F are MODUŁ A…F of references/mod-core-checklist.md.
+export const CONTRACT_CHECKPOINT_SECTIONS: Readonly<Record<ContractCheckpoint, string>> = {
+  "AU-F0": "FAZA 0 — INTAKE: tryb, dokument, cel i kontekst decyzyjny; pytania przed analizą.",
+  "AU-GAP": "INTAKE-GAP (shared/INTAKE-GAP.md): braki danych; N/A gdy brak pól do uzupełnienia.",
+  "AU-POV": "BLOK POV-B/C: weryfikacja podmiotów umowy; N/A gdy w dokumencie brak firmy i numeru PESEL.",
+  "AU-ROUTE": "ROUTING DO MODUŁÓW: moduł PRIMARY/DOMAIN według typu umowy.",
+  "AU-A": "MODUŁ A — IDENTYFIKACJA DOKUMENTU (references/mod-core-checklist.md).",
+  "AU-B": "MODUŁ B — ANALIZA KLAUZUL (references/mod-core-checklist.md).",
+  "AU-C": "MODUŁ C — OCENA ZGODNOŚCI Z PRAWEM (references/mod-core-checklist.md).",
+  "AU-D": "MODUŁ D — OCENA BALANSU DOKUMENTU (references/mod-core-checklist.md).",
+  "AU-F": "MODUŁ F — RAPORT KOŃCOWY ANALIZY (references/mod-core-checklist.md).",
+  "AU-GENCORE": "GENEROWANIE DOKUMENTÓW: rdzeń (references/generator/rdzen-generowania.md) i MODUŁ E — TRYBY REDAKCJI.",
+  "AU-GENBUILD": "GENEROWANIE DOKUMENTÓW: treść dokumentu według workflow generatora i stylu.",
+  "AU-GENSHARED": "Moduły shared dokumentu (DPA, siła wyższa, waloryzacja, zakaz konkurencji, NDA, IP); N/A dla nietriggerowanych.",
+  "AU-HYBRID": "HYBRID-VALIDATION (shared/HYBRID-VALIDATION.md) gotowego dokumentu.",
+  "AU-STRIP": "STRIP-VER-GATE: usunięcie znaczników weryfikacji (shared/WERYFIKACJA-SLAD.md).",
+  "AU-POST": "POST-VALIDATION (shared/POST-VALIDATION.md).",
+  "AU-DISC": "DISCLAIMER i REJESTR KROKÓW końcowy."
+};
+
+// The part of a reference file the checkpoint needs, not the whole file.
+export const CONTRACT_CHECKPOINT_EXCERPTS: Partial<Record<ContractCheckpoint, Array<{ resource: string; heading?: string }>>> = {
+  "AU-A": [{ resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ A" }],
+  "AU-B": [{ resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ B" }],
+  "AU-C": [{ resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ C" }],
+  "AU-D": [{ resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ D" }],
+  "AU-F": [{ resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ F" }],
+  "AU-GENCORE": [
+    { resource: "analizator-umow-v1/references/generator/rdzen-generowania.md" },
+    { resource: "analizator-umow-v1/references/mod-core-checklist.md", heading: "## MODUŁ E" }
+  ]
+};
+
+/** The "## heading" section of a markdown file up to the next "## " heading outside a code block. */
+export function markdownSection(body: string, heading: string): string {
+  const lines = body.split("\n");
+  const start = lines.findIndex((line) => line.startsWith(heading));
+  if (start < 0) return "";
+  let fenced = false;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index++) {
+    if (lines[index]!.startsWith("```")) fenced = !fenced;
+    else if (!fenced && lines[index]!.startsWith("## ")) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n").trim();
+}
 
 // analizator-dowodow-v3 and przesluchanie-swiadkow-v2-min90 name their checkpoints only in
 // the frontmatter list (pipeline.stages); the body uses its own headings. "BLOK G" is there

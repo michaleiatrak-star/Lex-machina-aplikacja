@@ -243,7 +243,7 @@ describe("client report: the report the model wrote without its blueprint", () =
 });
 
 describe("mechanical checkpoint that asks the user", () => {
-  it("the rule is in the checkpoint part; the answer is flagged and the marker line removed", async () => {
+  it("the rule is in the checkpoint part; the answer is flagged and presented, not blocked", async () => {
     const calls: ProviderStreamParams[] = [];
     const providers = new ProviderRegistry();
     providers.register({
@@ -252,7 +252,7 @@ describe("mechanical checkpoint that asks the user", () => {
       capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
       async stream(received) {
         calls.push(received);
-        return { fullText: "Podaj datę doręczenia faktury FV 7/2026.\n\n=== CZEKAM NA ODPOWIEDŹ ===" };
+        return { fullText: "Podaj datę doręczenia faktury FV 7/2026.\n\n[CZEKAM NA ODPOWIEDŹ]" };
       }
     });
     const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
@@ -266,10 +266,34 @@ describe("mechanical checkpoint that asks the user", () => {
       processWorkflowContext: { stage: "W1", checkpoint: "CP-1a", mode: "AUTO" }
     } as never);
     const call = calls[0]!;
-    expect(call.systemPrompt.slice(call.systemPromptCachePrefix!)).toContain("=== CZEKAM NA ODPOWIEDŹ ===");
+    expect(call.systemPrompt.slice(call.systemPromptCachePrefix!)).toContain("[CZEKAM NA ODPOWIEDŹ]");
     expect(result.waitingForUser).toBe(true);
     expect(result.answer ?? "").toContain("Podaj datę doręczenia");
-    expect(result.answer ?? "").not.toContain("CZEKAM NA ODPOWIEDŹ");
+    // The chat's automatic continuation reads the marker in the answer.
+    expect(result.answer ?? "").toContain("[CZEKAM NA ODPOWIEDŹ]");
   }, 120_000);
 });
 
+
+describe("AUTO pleading: a step that asks the user ends the server's batch", () => {
+  it("stops with WAITING_FOR_USER; the step that asked stays open for the reply", async () => {
+    const { runBoundedProcessAutoSequence } = await import("../src/process-pleading-auto-runner.js");
+    const { acceptProcessPleadingStart, createProcessPleadingState } = await import("../src/process-pleading-state.js");
+    const { waitsForUser, WAIT_FOR_USER_MARKER } = await import("../src/workflow-wait.js");
+    const initial = acceptProcessPleadingStart(createProcessPleadingState(`case_${"b".repeat(32)}`, "AUTO"));
+    const answers = ["[CP-1a] raport ✅ CHECKPOINT CLAIM-VALIDATION — ZAKOŃCZONY", `Brak daty doręczenia nakazu. Podaj ją.\n${WAIT_FOR_USER_MARKER}`, "nie powinien się wykonać"];
+    let call = 0;
+    const result = await runBoundedProcessAutoSequence({
+      initialState: initial,
+      execute: async () => {
+        const answer = answers[call++]!;
+        return { result: answer, commit: true, waitingForUser: waitsForUser(answer) };
+      },
+      persist: async (_previous, next) => next
+    });
+    expect(result.stopped).toBe("WAITING_FOR_USER");
+    expect(result.steps).toHaveLength(1);
+    expect(result.waitingResult).toContain("Podaj ją.");
+    expect(call).toBe(2);
+  });
+});

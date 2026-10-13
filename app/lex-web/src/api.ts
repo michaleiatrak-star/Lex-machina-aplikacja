@@ -1120,10 +1120,10 @@ export type SessionExecutionResponse = {
   };
   processWorkflow?: ProcessPleadingWorkflowView;
   courtWorkflow?: CourtAnalysisWorkflowView;
-  // Other checkpoint workflows: only what the chat needs to continue by itself.
-  chronologyWorkflow?: { nextCheckpoint: string | null };
-  contractWorkflow?: { nextCheckpoint: string | null; mode?: string; closedCheckpoints?: string[] };
-  orderedCaseWorkflow?: { status: "ACTIVE" | "COMPLETE"; nextCheckpoint: string | null };
+  // Checkpoint workflows of a case: the next step and the closed ones.
+  contractWorkflow?: { caseId: string; revision: number; mode: string; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  chronologyWorkflow?: { caseId: string; revision: number; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  orderedCaseWorkflow?: { workflowId: string; caseId: string; revision: number; status: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
   // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA).
   taskMode?: "REDACTION";
   // The answer ends a checkpoint with a question to the user.

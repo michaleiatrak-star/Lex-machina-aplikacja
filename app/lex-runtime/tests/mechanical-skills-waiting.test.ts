@@ -35,9 +35,9 @@ const SC: Sc[] = [
   { skill: "raport-sytuacyjny-v2", q: "Przygotuj raport sytuacyjny sprawy pożyczki.", ctx: [{}, {}] },
   { skill: "raport-klienta-v1", q: "Przygotuj raport dla klienta w sprawie pożyczki.", ctx: [{}, {}] }
 ];
-const QUESTION = "Podaj datę doręczenia wezwania do zwrotu pożyczki.\n\n=== CZEKAM NA ODPOWIEDŹ ===";
+const QUESTION = "Podaj datę doręczenia wezwania do zwrotu pożyczki.\n\n[CZEKAM NA ODPOWIEDŹ]";
 
-async function turn(sc: Sc, index: number): Promise<{ result: SessionExecutionResponse; calls: ProviderStreamParams[] }> {
+async function turn(sc: Sc, index: number, later = index > 0): Promise<{ result: SessionExecutionResponse; calls: ProviderStreamParams[] }> {
   const calls: ProviderStreamParams[] = [];
   const providers = new ProviderRegistry();
   providers.register({
@@ -50,7 +50,7 @@ async function turn(sc: Sc, index: number): Promise<{ result: SessionExecutionRe
     }
   });
   const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
-  const query = index === 0 ? sc.q : `Użytkownik: ${sc.q}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`;
+  const query = !later ? sc.q : `Użytkownik: ${sc.q}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`;
   const result = await executor.execute({
     query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: [sc.skill], caseType: [sc.skill] })}\n${query}`,
     provider: "openai",
@@ -65,19 +65,24 @@ async function turn(sc: Sc, index: number): Promise<{ result: SessionExecutionRe
 
 describe("mechanical mode, every executive skill: a turn that asks the user", () => {
   for (const sc of SC) {
-    it(`${sc.skill}: presented in one call, flagged, marker removed; executive SKILL.md once; stable cached part`, async () => {
+    it(`${sc.skill}: presented in one call, flagged, marker kept; executive SKILL.md once; stable cached part across later checkpoints`, async () => {
       const prefixes: string[] = [];
       for (const index of [0, 1]) {
         const { result, calls } = await turn(sc, index);
         expect(result.status).toBe("DRAFT_PRESENTABLE");
         expect(result.waitingForUser).toBe(true);
         expect(result.answer ?? "").toContain("Podaj datę doręczenia");
-        expect(result.answer ?? "").not.toContain("CZEKAM NA ODPOWIEDŹ");
+        expect(result.answer ?? "").toContain("[CZEKAM NA ODPOWIEDŹ]");
         expect(calls).toHaveLength(1);
         const prompt = calls[0]!.systemPrompt;
         expect(prompt.split(`# SKILL WYKONAWCZY: ${sc.skill}`).length - 1).toBe(1);
-        expect(prompt).toContain("=== CZEKAM NA ODPOWIEDŹ ===");
-        if (calls[0]!.systemPromptCachePrefix) prefixes.push(prompt.slice(0, calls[0]!.systemPromptCachePrefix));
+        expect(prompt).toContain("[CZEKAM NA ODPOWIEDŹ]");
+      }
+      // Sections marked KOLEJNA-TURA join from the second turn on, so the cached part is
+      // compared between two later turns on different checkpoints.
+      for (const index of [0, 1]) {
+        const { calls } = await turn(sc, index, true);
+        if (calls[0]!.systemPromptCachePrefix) prefixes.push(calls[0]!.systemPrompt.slice(0, calls[0]!.systemPromptCachePrefix));
       }
       if (prefixes.length === 2) expect(prefixes[0]).toBe(prefixes[1]);
     }, 120_000);

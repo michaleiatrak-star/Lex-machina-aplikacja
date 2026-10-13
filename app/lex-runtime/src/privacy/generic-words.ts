@@ -60,6 +60,9 @@ export function personPart<T extends { start: number; end: number; value: string
   const before = text.slice(Math.max(0, span.start - 40), span.start).match(WORD);
   const previous = before?.[before.length - 1]?.toLowerCase();
   if (previous && words.personOnlyTriggers.has(previous)) return span;
+  // "M. Kozłowska", "S. Nowak": a capital with a dot before a name is an initial, not
+  // "m." (miasto) or a role abbreviation.
+  if (/^\p{Lu}\.\s*\p{Lu}/u.test(span.value)) return span;
   if (words.institutions.has(first)) return null;
   let index = 0;
   while (index < tokens.length && words.partyRoles.has(tokens[index]![0].toLowerCase())) index += 1;

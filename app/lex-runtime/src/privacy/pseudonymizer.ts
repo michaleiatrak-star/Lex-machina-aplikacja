@@ -1,5 +1,7 @@
+import { detectFirmNames } from "./firm-names.js";
 import { personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
+import type { RegistryFormsProvider } from "./registry-enrichment.js";
 import {
   PERSON_CASES,
   type PersonCase,
@@ -828,7 +830,9 @@ export class LocalPolishPseudonymizer {
   constructor(
     private readonly vault: PseudonymizationVault,
     private readonly namedEntities?: NamedEntityRecognizer,
-    private readonly morphology?: PersonMorphology
+    private readonly morphology?: PersonMorphology,
+    // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the text.
+    private readonly registry?: RegistryFormsProvider
   ) {}
 
   async pseudonymize(
@@ -863,6 +867,27 @@ export class LocalPolishPseudonymizer {
       }));
 
     const autoSpans: PiiSpan[] = detectIdentifiers(text);
+    // Private firms ([FIRMA]): a name before a legal form or after a business prefix,
+    // and its later mentions; one organization token per name.
+    const firms = detectFirmNames(text);
+    autoSpans.push(...firms);
+
+    // Register data of firms named by NIP/KRS: their names, addresses and people are
+    // protected even where no legal form or prefix marks them ("umowę z Transkomem").
+    const registryFirms = new Map<string, string | undefined>();
+    let registered: Awaited<ReturnType<RegistryFormsProvider["forms"]>> = [];
+    try {
+      registered = this.registry ? await this.registry.forms(text) : [];
+    } catch (error) {
+      process.stderr.write(`REGISTRY_ENRICHMENT_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+    }
+    for (const form of registered) {
+      const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
+        autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO" });
+        if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
+      }
+    }
 
     // A person found once is protected everywhere: mentions the recognizer
     // missed (another page, another case form) are matched by known forms.
@@ -893,7 +918,15 @@ export class LocalPolishPseudonymizer {
     if (this.namedEntities) {
       const named =
         await this.namedEntities.recognize(text);
-      for (const found of named) {
+      for (const recognized of named) {
+        // A name never runs over a line: "Paweł Kania⏎os. Kosmonautów 86/9" (a heading
+        // and the address under it) is the name; the address is found on its own.
+        const lineEnd = recognized.kind === "PERSON" ? recognized.value.indexOf("\n") : -1;
+        const found =
+          lineEnd > 0
+            ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
+            : recognized;
+        if (lineEnd > 0) found.end = found.start + found.value.length;
         // "Bank", "Rada Gminy": an institution; "Najemca Jan Kowalski": the name only.
         const span = found.kind === "PERSON" ? personPart(text, found) : found;
         if (
@@ -936,6 +969,10 @@ export class LocalPolishPseudonymizer {
     // to exact-surface identity.
     const entities =
       new Map<string, PersonEntity>(propagatedEntities);
+    for (const firm of firms) entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.value, firm.legalForm));
+    for (const [value, legalForm] of registryFirms) {
+      if (!entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
+    }
     // Surfaces written after "państwo", "małżonkowie", a plural role...: a family.
     const plural = new Set(
       findings
