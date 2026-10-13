@@ -56,6 +56,8 @@ export function titleCase(value: string): string {
       if (/^\s+$/u.test(word) || !word) return word;
       const upper = word.toLocaleUpperCase("pl");
       if (ROMAN.test(upper.replace(/[.,]$/u, ""))) return upper;
+      // A house number keeps its letter: "7A/12".
+      if (/^\d/u.test(word)) return upper;
       if (index > 0 && LOWER_WORDS.has(word)) return word;
       return word.replace(/(^|[-'’„"(])(\p{L})/gu, (_, before: string, letter: string) => before + letter.toLocaleUpperCase("pl"));
     })
@@ -102,8 +104,9 @@ export function addressForms(address: string | undefined): RegistryForm[] {
     if (!/\d/u.test(part)) continue;
     const street = titleCase(part);
     const bare = street.replace(STREET_PREFIX, "");
-    if (bare.replace(/[\d\s/a-zA-Z]*$/u, "").length < 3) continue;
-    forms.push(street, bare, part.toLocaleUpperCase("pl"), part.toLocaleUpperCase("pl").replace(STREET_PREFIX, ""));
+    // A street name before the house number ("Kolorowa 12", "Długa 5/3", "Polna 7A"), not a bare number.
+    if (bare.replace(/\s*\d+\p{L}?(?:\s*\/\s*\d+\p{L}?)?$/u, "").trim().length < 3) continue;
+    forms.push(street, bare, part, part.replace(STREET_PREFIX, ""), part.toLocaleUpperCase("pl"), part.toLocaleUpperCase("pl").replace(STREET_PREFIX, ""));
   }
   return [...new Set(forms)].map((form) => ({ text: form, kind: "ADDRESS" }));
 }

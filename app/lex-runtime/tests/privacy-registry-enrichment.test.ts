@@ -54,6 +54,10 @@ describe("register forms", () => {
     expect(forms).toEqual(expect.arrayContaining(["Ul. Jana Pawła II 12/4", "Jana Pawła II 12/4", "25-001 Kielce"]));
     expect(forms).not.toContain("Kielce");
     expect(titleCase("SKŁODOWSKIEJ-CURIE 5")).toBe("Skłodowskiej-Curie 5");
+    // A street name of ASCII letters only (found on live CEIDG data: the street was dropped).
+    expect(addressForms("ul. Kolorowa 123 25-001 Kielce").map((form) => form.text)).toEqual(expect.arrayContaining(["Ul. Kolorowa 123", "Kolorowa 123", "25-001 Kielce"]));
+    expect(addressForms("Polna 7A/12, 00-001 Warszawa").map((form) => form.text)).toContain("Polna 7A/12");
+    expect(addressForms("12, 00-001 Warszawa").map((form) => form.text)).toEqual(["00-001 Warszawa", "00-001 WARSZAWA"]);
   });
 
   it("keys: NIP in any spelling and KRS numbers", () => {
