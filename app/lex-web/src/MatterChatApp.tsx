@@ -208,6 +208,7 @@ import "./chat.css";
 import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
+import { AUTO_ADVANCE_MESSAGE, autoAdvanceDecision, autoAdvanceNote, autoAdvanceStopNote } from "./workflow-auto-advance.js";
 
 type TabId =
   | "home"
@@ -1280,6 +1281,10 @@ export default function MatterChatApp({
   const [unverifiedDraftRetry, setUnverifiedDraftRetry] = useState<{ text: string; messageId: string } | null>(null);
   // A case workflow stopped the message (pleading pipeline not started, workflow finished):
   // the message waits for the user's choice and is resent through contractRetry.
+  // Automatic continuation of a mechanical workflow ("Kontynuuj." after a closed checkpoint).
+  const [autoAdvanceRequest, setAutoAdvanceRequest] = useState<{ caseId: string; label: string } | null>(null);
+  const autoAdvanceChain = useRef<{ count: number; next: string | null; paused: boolean }>({ count: 0, next: null, paused: false });
+  const [, setAutoAdvanceTick] = useState(0);
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
     caseId: string; text: string; messageId: string; recovery: WorkflowRecovery;
   } | null>(null);
@@ -2171,6 +2176,15 @@ export default function MatterChatApp({
       void executeMessage(pending);
     }
   }, [pendingFirstMessage, caseId, threadLoading, executing]);
+
+  useEffect(() => {
+    if (!autoAdvanceRequest || executing || threadLoading) return;
+    const request = autoAdvanceRequest;
+    setAutoAdvanceRequest(null);
+    // Another matter opened in the meantime: the continuation belongs to the previous one.
+    if (request.caseId !== caseId || autoAdvanceChain.current.paused) return;
+    void executeMessage(AUTO_ADVANCE_MESSAGE, { autoStep: request.label });
+  }, [autoAdvanceRequest, caseId, threadLoading, executing]);
 
   function switchToCase(
     nextCaseId: string
@@ -3120,7 +3134,7 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
-  async function executeMessage(plain: string, options: { acceptUnverified?: boolean } = {}): Promise<void> {
+  async function executeMessage(plain: string, options: { acceptUnverified?: boolean; autoStep?: string } = {}): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3164,6 +3178,8 @@ export default function MatterChatApp({
 
     const priorMessages =
       messages;
+    // A message of the user starts a new chain of automatic continuations.
+    if (!options.autoStep) autoAdvanceChain.current = { count: 0, next: null, paused: false };
     const userMessage:
       CaseChatMessage = {
         id: messageId(),
@@ -3176,7 +3192,9 @@ export default function MatterChatApp({
                   deterministicAction
                 )
             }
-          : {})
+          : options.autoStep
+            ? { meta: `Automatyczne przejście · ${options.autoStep}` }
+            : {})
       };
 
     // Optimistic UI: move the message into the thread immediately. Provider
@@ -3489,6 +3507,16 @@ export default function MatterChatApp({
           ...current,
           answerMessage
         ]);
+        const chain = autoAdvanceChain.current;
+        const decision = autoAdvanceDecision(result, chain.count, chain.next);
+        if (decision.advance && !chain.paused) {
+          autoAdvanceChain.current = { count: chain.count + 1, next: decision.next, paused: false };
+          setMessages((current) => [...current, { id: messageId(), role: "system", content: autoAdvanceNote(decision.label) }]);
+          setAutoAdvanceRequest({ caseId: executionCaseId, label: decision.label });
+        } else if (!decision.advance && chain.count > 0) {
+          const note = autoAdvanceStopNote(decision);
+          if (note) setMessages((current) => [...current, { id: messageId(), role: "system", content: note }]);
+        }
       }
 
       // Letter workflows end with a file, like a document artifact: after each
@@ -5939,6 +5967,22 @@ export default function MatterChatApp({
                     </button>
                   </div>
                   <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą tych powołań; decyzja trafia do audytu sesji. Wiadomość zostanie wysłana ponownie.</small>
+                </div>
+              ) : null}
+              {(autoAdvanceRequest?.caseId === caseId || (executing && autoAdvanceChain.current.count > 0 && !autoAdvanceChain.current.paused)) ? (
+                <div className="chat-contract-mode" role="group" aria-label="Automatyczne przejście">
+                  <small>Kolejne kroki przechodzą automatycznie.</small>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    onClick={() => {
+                      autoAdvanceChain.current = { ...autoAdvanceChain.current, paused: true };
+                      setAutoAdvanceRequest(null);
+                      setAutoAdvanceTick((tick) => tick + 1);
+                    }}
+                  >
+                    Wstrzymaj automatyczne przejście
+                  </button>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (

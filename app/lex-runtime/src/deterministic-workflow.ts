@@ -1,4 +1,5 @@
 import { evaluateCheckpointOutput } from "./process-checkpoint-contract.js";
+import { waitsForUser } from "./workflow-wait.js";
 import fs from "node:fs";
 import type { LegalCorpusAuditEvent } from "./legal-corpus-tool-runtime.js";
 import type { LexSkillRegistry } from "./registry.js";
@@ -63,7 +64,9 @@ export type DeterministicWorkflowOutputReport = {
     | "CASE_LAW_FINAL"
     | "CHRONOLOGY_FINAL"
     | "WITNESS_CHECKPOINT"
-    | "WITNESS_W3_FINAL";
+    | "WITNESS_W3_FINAL"
+    // A checkpoint answer that asks the user (workflow-wait.ts): presented, not committed.
+    | "WAITING_FOR_USER";
   required: string[];
   observed: string[];
   missing: string[];
@@ -595,8 +598,15 @@ export function evaluateDeterministicWorkflowOutput(
     courtCheckpoint?:
       CourtAnalysisCheckpoint;
     orderedCheckpoint?: string;
+    // Any checkpoint workflow of this turn (contract and chronology included).
+    checkpointTurn?: boolean;
   }
 ): DeterministicWorkflowOutputReport {
+  // A checkpoint that asks the user for missing facts or a decision is not its report:
+  // the questions are presented, the checkpoint stays open and runs again after the reply.
+  if (context?.checkpointTurn && waitsForUser(text)) {
+    return { workflow: plan.id, mode: "WAITING_FOR_USER", required: [], observed: [], missing: [], orderValid: true, result: "PASS" };
+  }
   const normalized =
     text
       .normalize("NFC")

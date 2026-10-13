@@ -1,6 +1,7 @@
 import { draftPrompt } from "./process-pleading-draft.js";
 import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
 import { compactForModel, markdownSection } from "./skill-sections.js";
+import { WAITING_FOR_USER_RULE, waitsForUser } from "./workflow-wait.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -2082,6 +2083,9 @@ export class LexExecutionEngine {
     }
     // Everything before the checkpoint's own part is the same between checkpoints of one
     // matter: the provider caches it as a separate block (systemPromptCachePrefix).
+    // One rule for every checkpoint workflow: a checkpoint waiting for the user says so,
+    // so the AUTO loop and the chat's automatic continuation stop there.
+    if (workflowStateParts.length) workflowStateParts.push(`# PUNKT CZEKAJĄCY NA UŻYTKOWNIKA\n${WAITING_FOR_USER_RULE}`);
     const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
     const stablePromptLength = promptParts.join("\n\n").length + 2;
     promptParts.push(...turnTail);
@@ -2167,7 +2171,9 @@ export class LexExecutionEngine {
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpoint = args.processWorkflowContext.checkpoint;
       const first = evaluateCheckpointOutput(checkpoint, output);
-      if (first.result === "BLOCKED") {
+      if (waitsForUser(output)) {
+        emit("gate", "PROCESS_CHECKPOINT_WAITING_FOR_USER", "OK", `checkpoint=${checkpoint}`);
+      } else if (first.result === "BLOCKED") {
         let remaining = first.missing;
         try {
           const corrected = await this.providers.stream(args.provider, {

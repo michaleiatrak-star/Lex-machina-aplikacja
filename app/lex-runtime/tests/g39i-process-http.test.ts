@@ -740,6 +740,46 @@ describe(
       }
     );
 
+    it("AUTO stops at a checkpoint that asks the user and leaves it open", async () => {
+      const current = fixture();
+      const base = current.execute.getMockImplementation()!;
+      current.execute.mockImplementation(async (input) => {
+        const result = await base(input);
+        return input.processWorkflowContext?.checkpoint === "CP-1b"
+          ? { ...result, answer: "Podaj datę doręczenia nakazu.", waitingForUser: true }
+          : result;
+      });
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner-wait", displayName: "Owner Wait", password: "G39I wait strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const createdCase = await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "AUTO wait" }).expect(201);
+      const caseId = String(createdCase.body.caseId);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/initialize`).set("Authorization", authorization).send({ mode: "AUTO" }).expect(201);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`).set("Authorization", authorization).send({}).expect(200);
+      const response = await request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({
+          query: "Przygotuj pismo procesowe w trybie automatycznym.",
+          provider: "openai",
+          model: "gpt-test",
+          primarySkill: DR,
+          mode: "PRAWNIK",
+          knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+        })
+        .expect(200);
+      expect(current.execute.mock.calls.map((call) => call[0].processWorkflowContext?.checkpoint)).toEqual(["CP-1a", "CP-1b"]);
+      expect(response.body.processAuto.stopped).toBe("WAITING_FOR_USER");
+      expect(response.body.processAuto.steps).toHaveLength(1);
+      expect(response.body.waitingForUser).toBe(true);
+      expect(response.body.processWorkflow.checkpoints["CP-1a"]).toBe("CLOSED");
+      expect(response.body.processWorkflow.checkpoints["CP-1b"]).not.toBe("CLOSED");
+      expect(String(response.body.answer)).toContain("## CP-1a");
+      expect(String(response.body.answer)).toContain("Podaj datę doręczenia nakazu.");
+    });
+
     it(
       "runs at most four AUTO semantic checkpoints while preserving deterministic applicability and encrypted state",
       async () => {

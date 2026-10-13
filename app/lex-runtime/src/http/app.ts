@@ -10597,6 +10597,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   result:
                     nodeResult,
                   commit,
+                  waitingForUser: nodeResult.waitingForUser === true,
                   notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
                 };
               },
@@ -10661,6 +10662,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             ?.result;
         const response =
           auto.blockedResult ??
+          auto.waitingResult ??
           lastSuccessful;
         if (!response) {
           throw new Error(
@@ -10687,6 +10689,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 ].join("\n\n")
             );
 
+        // The checkpoint that asked the user closes the answer: its questions are last.
+        if (auto.waitingResult?.answer?.trim() && successfulAnswers.length > 0) {
+          successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${auto.waitingResult.answer.trim()}`);
+        }
         if (
           response.status ===
             "DRAFT_PRESENTABLE" &&
@@ -10828,7 +10834,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             orderedCaseContext
               .permit.workflowId &&
           result.workflow.result ===
-            "PASS"
+            "PASS" &&
+          // A checkpoint that asked the user stays open until the reply.
+          result.waitingForUser !== true
         ) {
           if (
             !options
@@ -10996,7 +11004,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id ===
             "CONTRACT_ANALYSIS_V1" &&
           result.workflow.result ===
-            "PASS"
+            "PASS" &&
+          // A checkpoint that asked the user stays open until the reply.
+          result.waitingForUser !== true
         ) {
           if (
             !options
@@ -11154,7 +11164,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id ===
             "CHRONOLOGY_V1" &&
           result.workflow.result ===
-            "PASS"
+            "PASS" &&
+          // A checkpoint that asked the user stays open until the reply.
+          result.waitingForUser !== true
         ) {
           if (
             !options
@@ -11313,7 +11325,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id ===
             "COURT_ANALYSIS_V1" &&
           result.workflow.result ===
-            "PASS"
+            "PASS" &&
+          // A checkpoint that asked the user stays open until the reply.
+          result.waitingForUser !== true
         ) {
           if (
             !options
@@ -11462,7 +11476,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id ===
             "PROCESS_PLEADING_V1" &&
           result.workflow.result ===
-            "PASS"
+            "PASS" &&
+          // A checkpoint that asked the user stays open until the reply.
+          result.waitingForUser !== true
         ) {
           state =
             await options

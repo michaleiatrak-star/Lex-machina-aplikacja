@@ -196,3 +196,35 @@ describe("client report: the report the model wrote without its blueprint", () =
     expect(result.status).toBe("DRAFT_PRESENTABLE");
   }, 120_000);
 });
+
+describe("mechanical checkpoint that asks the user", () => {
+  it("the rule is in the checkpoint part; the answer is flagged and the marker line removed", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "mechanical",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Podaj datę doręczenia faktury FV 7/2026.\n\n=== CZEKAM NA ODPOWIEDŹ ===" };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    const envelope = { auto: false, manual: ["pisma-procesowe-v3"], caseType: ["pisma-procesowe-v3"] };
+    const result = await executor.execute({
+      query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify(envelope)}\n${CASE}`,
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK",
+      processWorkflowContext: { stage: "W1", checkpoint: "CP-1a", mode: "AUTO" }
+    } as never);
+    const call = calls[0]!;
+    expect(call.systemPrompt.slice(call.systemPromptCachePrefix!)).toContain("=== CZEKAM NA ODPOWIEDŹ ===");
+    expect(result.waitingForUser).toBe(true);
+    expect(result.answer ?? "").toContain("Podaj datę doręczenia");
+    expect(result.answer ?? "").not.toContain("CZEKAM NA ODPOWIEDŹ");
+  }, 120_000);
+});
+

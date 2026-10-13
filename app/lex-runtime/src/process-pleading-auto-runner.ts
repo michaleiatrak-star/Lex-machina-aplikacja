@@ -15,6 +15,9 @@ export type ProcessAutoNodeOutcome<T> = {
   commit: boolean;
   // The answer found this conditional checkpoint not applicable (reason).
   notApplicable?: string | null;
+  // The checkpoint asked the user (missing facts, a decision): not committed, the loop
+  // stops and the user's reply runs the same checkpoint again.
+  waitingForUser?: boolean;
 };
 
 export type ProcessAutoStep<T> = {
@@ -30,9 +33,11 @@ export type ProcessAutoSequenceResult<T> = {
   stopped:
     | "FINAL"
     | "LIMIT_REACHED"
-    | "NODE_BLOCKED";
+    | "NODE_BLOCKED"
+    | "WAITING_FOR_USER";
   limitReached: boolean;
   blockedResult?: T;
+  waitingResult?: T;
 };
 
 function assertSameWorkflow(
@@ -143,6 +148,17 @@ export async function runBoundedProcessAutoSequence<T>(args: {
         permit,
         state
       );
+    if (node.commit && node.waitingForUser) {
+      return {
+        state,
+        steps,
+        stopped:
+          "WAITING_FOR_USER",
+        limitReached: false,
+        waitingResult:
+          node.result
+      };
+    }
     if (!node.commit) {
       return {
         state,

@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { waitsForUser, withoutWaitingMarker } from "./workflow-wait.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -945,12 +946,15 @@ export type SessionExecutionResponse = {
     closedCheckpoints:
       string[];
   };
+  // The answer ends a checkpoint with a question to the user (workflow-wait.ts).
+  waitingForUser?: boolean;
   processAuto?: {
     maxSteps: number;
     stopped:
       | "FINAL"
       | "LIMIT_REACHED"
-      | "NODE_BLOCKED";
+      | "NODE_BLOCKED"
+      | "WAITING_FOR_USER";
     limitReached: boolean;
     steps: Array<{
       stage: Exclude<
@@ -3284,8 +3288,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         processedDocumentCitations.text,
         request.processWorkflowContext ||
         request.courtWorkflowContext ||
-        request.orderedCaseWorkflowContext
+        request.orderedCaseWorkflowContext ||
+        request.contractWorkflowContext ||
+        request.chronologyWorkflowContext
           ? {
+              checkpointTurn: true,
               ...(request.processWorkflowContext
                 ? {
                     processCheckpoint:
@@ -4069,6 +4076,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
         ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
         : null;
+    // A checkpoint that asks the user (WAITING_FOR_USER_MARKER): flagged, the marker line removed.
+    const waitingForUser = waitsForUser(restoredAnswer.text);
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
@@ -4093,7 +4102,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(safeToPresent
         ? {
             answer:
-              restoredAnswer.text,
+              waitingForUser ? withoutWaitingMarker(restoredAnswer.text) : restoredAnswer.text,
+            ...(waitingForUser ? { waitingForUser: true } : {}),
             ...(restoredAnswer.restorations.length > 0
               ? { restorations: restoredAnswer.restorations }
               : {}),

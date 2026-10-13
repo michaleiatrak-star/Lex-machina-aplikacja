@@ -1100,7 +1100,8 @@ export type SessionExecutionResponse = {
     stopped:
       | "FINAL"
       | "LIMIT_REACHED"
-      | "NODE_BLOCKED";
+      | "NODE_BLOCKED"
+      | "WAITING_FOR_USER";
     limitReached: boolean;
     steps: Array<{
       stage:
@@ -1119,6 +1120,12 @@ export type SessionExecutionResponse = {
   };
   processWorkflow?: ProcessPleadingWorkflowView;
   courtWorkflow?: CourtAnalysisWorkflowView;
+  // Other checkpoint workflows: only what the chat needs to continue by itself.
+  chronologyWorkflow?: { nextCheckpoint: string | null };
+  contractWorkflow?: { nextCheckpoint: string | null };
+  orderedCaseWorkflow?: { status: "ACTIVE" | "COMPLETE"; nextCheckpoint: string | null };
+  // The answer ends a checkpoint with a question to the user.
+  waitingForUser?: boolean;
 };
 
 export type ProcessPleadingCheckpoint =
