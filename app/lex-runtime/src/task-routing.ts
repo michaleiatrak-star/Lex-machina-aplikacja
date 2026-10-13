@@ -287,7 +287,7 @@ const DEFENCES = [
 
 const DRAFT_NOUN = /(?<![\p{L}])(?:przygotowani\p{L}*|napisani\p{L}*|sporządzeni\p{L}*|zredagowani\p{L}*)(?![\p{L}])/iu;
 
-function defenceCount(question: string): number {
+export function defenceCount(question: string): number {
   const text = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l");
   return DEFENCES.filter((defence) => defence.test(text)).length;
 }

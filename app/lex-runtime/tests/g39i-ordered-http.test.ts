@@ -714,6 +714,23 @@ describe(
         current.auth.close();
       }
     );
+    it("does not advance evidence state when the checkpoint asks the user", async () => {
+      const current = fixture(false);
+      const base = current.execute.getMockImplementation()!;
+      current.execute.mockImplementation(async (input) => ({ ...(await base(input)), answer: "Podaj datę faktury.", waitingForUser: true }));
+      const { authorization, caseId } = await bootstrap(current, "waiting");
+      const response = await run(current, authorization, caseId, "Przeanalizuj fakturę jako dowód w tej sprawie.");
+      expect(response.body.status).toBe("DRAFT_PRESENTABLE");
+      expect(response.body.waitingForUser).toBe(true);
+      expect(response.body.orderedCaseWorkflow).toMatchObject({
+        workflowId: "EVIDENCE_ANALYSIS_V1",
+        revision: 1,
+        status: "ACTIVE",
+        nextCheckpoint: "AD-KROK0-BLOKADA",
+        closedCheckpoints: []
+      });
+      current.auth.close();
+    });
     it(
       "answers a finished evidence workflow with 409 naming the workflow (offered reset), not 500",
       async () => {

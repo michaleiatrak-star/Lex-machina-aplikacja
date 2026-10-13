@@ -32,6 +32,7 @@ import {
   WebSearchError,
   assertPublicWebSearchQuery,
   classifyWebSearchHits,
+  webSearchLeads,
   type WebSearchProvider
 } from "./web-search.js";
 
@@ -495,9 +496,9 @@ const WEB_SEARCH_SCHEMA:
         WEB_SEARCH_TOOL,
       description:
         "General internet search (DuckDuckGo, or Brave when BRAVE_SEARCH_API_KEY is set). " +
-        "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3. Snippets are never evidence: " +
-        "for case law, use it with an abstract legal phrase to find signatures of recent rulings (not in SAOS), then verify them in the official registry; " +
-        "verify R1/R2A hits with the native verifiers and read R2B/R3 hits with fetch_auxiliary_legal_source.",
+        "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3, with leads extracted from them (case signatures with the tool that verifies them, Dz.U. references with ELI, dates of entry into force). Snippets are never evidence, but every result is worth a look: " +
+        "for case law, search with an abstract legal phrase (also site:sn.pl, site:orzeczenia.nsa.gov.pl, site:orzeczenia.ms.gov.pl) to find signatures of recent rulings (not in SAOS); results from LEX, Legalis, law portals and news sites are leads to signatures, amendments and dates of entry into force; " +
+        "verify every lead at its official source (gradation of sources: R1 > R2A > R2B > R3) before citing; read R2B/R3 pages with fetch_auxiliary_legal_source when needed.",
       parameters: {
         type: "object",
         additionalProperties:
@@ -1636,9 +1637,17 @@ export class LegalFederationToolRuntime {
       };
       const textLimit =
         80_000;
+      // LEX/Legalis and other paid services answer with a login or offer page: its text is
+      // not the document, only what the search snippet showed can serve as a lead.
+      const loginWall =
+        fetched.text.length < 6_000 &&
+        /zaloguj|logowani|wykup|dostęp\s+(?:płatny|tylko)|subskrypc|abonament|zarejestruj/iu.test(fetched.text.slice(0, 6_000));
+      const leads = webSearchLeads(fetched.text.slice(0, textLimit));
       return JSON.stringify({
         status:
           "OK",
+        ...(loginWall ? { access: "LOGIN_OR_PAYWALL" } : {}),
+        ...(leads.signatures || leads.journals || leads.entryIntoForce ? { leads } : {}),
         classification:
           finalKnownTier
             ? "KNOWN_DOMAIN"
@@ -1692,7 +1701,10 @@ export class LegalFederationToolRuntime {
             textLimit
         },
         instruction:
-          "This is auxiliary R2B/R3 research material. Do not create VERIFIED/SUPPORTED from it and do not use it as the sole legal basis. For a legal proposition, obtain a real R1/R2A verification record for the same claim."
+          (loginWall
+            ? "This is a login or paywall page, not the document: do not quote it; use only the leads the search result showed. "
+            : "") +
+          "This is auxiliary R2B/R3 research material, a lead: verify every signature, Dz.U. reference and date it gives at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing. Do not create VERIFIED/SUPPORTED from it and do not use it as the sole legal basis. For a legal proposition, obtain a real R1/R2A verification record for the same claim."
       });
     }
 

@@ -1,4 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { waitsForUser } from "./workflow-wait.js";
+import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -845,6 +847,8 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
+  taskMode?: "REDACTION";
   // The firm's default template the application used (none picked by the user).
   firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecision;
@@ -946,6 +950,10 @@ export type SessionExecutionResponse = {
     closedCheckpoints:
       string[];
   };
+  // The answer ends a checkpoint with a question to the user (workflow-wait.ts).
+  waitingForUser?: boolean;
+  // The letter skill hands the matter to the other one (skill-switch.ts); the chat offers the switch.
+  skillSwitch?: SkillSwitchOffer;
   processAuto?: {
     maxSteps: number;
     stopped:
@@ -1280,7 +1288,7 @@ export interface SessionExecutor {
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
   // The router's executive skill for a message without delivered material (AUTO).
   executiveSkillFor?(message: string): string | null;
-  pleadingRedactionFor?(message: string): boolean;
+  pleadingRedactionFor?(message: string, attachments?: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): boolean;
 }
 
 /**
@@ -1355,9 +1363,17 @@ export class SafeSessionExecutor implements SessionExecutor {
    * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
    * its form (shorter, firmer, smoother), handled by MOD-REDAKCJA without W1–W3.
    */
-  pleadingRedactionFor(message: string): boolean {
+  pleadingRedactionFor(
+    message: string,
+    // Files delivered with the message: an attached pleading ("popraw ten pozew" + file)
+    // is Test A as well; before, only text pasted into the chat was.
+    attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }> = []
+  ): boolean {
     const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
-    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+    const materials = attachments
+      .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+      .map((attachment) => classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n"), images: attachment.images?.length ?? 0 }));
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, materials, this.redactionTest(), {
       skill: "pisma-proste-v2",
       entries: schemaCatalog(this.registry, "pisma-proste-v2")
     });
@@ -2807,7 +2823,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
         ? execution.workflowPlan.id
         : null;
-    if (blueprintKind && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
+    // raport-klienta-v1 / raport-sytuacyjny-v2: "jeśli niejasne z kontekstu — zapytaj prawnika
+    // jednym pytaniem". A question to the user is the answer of this turn, not a report without
+    // its blueprint: no repair call and no block.
+    const reportQuestion = Boolean(blueprintKind) && waitsForUser(execution.output);
+    if (blueprintKind && !reportQuestion && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
       step("MODEL", "zapis raportu w formacie aplikacji");
       try {
         await this.providers.stream(request.provider, {
@@ -3087,6 +3107,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.chronologyWorkflowContext &&
       !request.contractWorkflowContext &&
       !request.orderedCaseWorkflowContext &&
+      // Questions to the user (missing facts) are not the legal answer the gates belong to.
+      !waitsForUser(modelOutput) &&
       legalAnswer(modelOutput)
         ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
         : [];
@@ -3296,8 +3318,12 @@ export class SafeSessionExecutor implements SessionExecutor {
         processedDocumentCitations.text,
         request.processWorkflowContext ||
         request.courtWorkflowContext ||
-        request.orderedCaseWorkflowContext
+        request.orderedCaseWorkflowContext ||
+        request.contractWorkflowContext ||
+        request.chronologyWorkflowContext ||
+        execution.workflowPlan.executionSkill
           ? {
+              checkpointTurn: true,
               ...(request.processWorkflowContext
                 ? {
                     processCheckpoint:
@@ -3404,7 +3430,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         : null;
     const reportBlueprintBlocked =
       requiredReportKind !== null &&
-      reportBlueprint === null;
+      reportBlueprint === null &&
+      !reportQuestion;
 
     audit.record(
       "gate",
@@ -3418,6 +3445,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         accepted:
           reportBlueprint?.kind ??
           null,
+        ...(reportQuestion ? { waitingForUser: true } : {}),
         toolEvents:
           reportAudit.length
       }
@@ -4081,11 +4109,21 @@ export class SafeSessionExecutor implements SessionExecutor {
       : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
         ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
         : null;
+    // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
+    // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
+    const skillSwitch =
+      workflowOutput.mode === "ESCALATION_REQUIRED"
+        ? escalationOffer(restoredAnswer.text)
+        : workflowOutput.mode === "REDUCTION_OFFERED"
+          ? reductionOffer(restoredAnswer.text)
+          : null;
+    const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
       ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
+      ...(taskRoute?.modules?.some((module) => /MOD-REDAKCJA/u.test(module)) ? { taskMode: "REDACTION" as const } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,
@@ -4106,6 +4144,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? {
             answer:
               restoredAnswer.text,
+            ...(waitingForUser ? { waitingForUser: true } : {}),
+            ...(skillSwitch ? { skillSwitch } : {}),
             ...(restoredAnswer.restorations.length > 0
               ? { restorations: restoredAnswer.restorations }
               : {}),

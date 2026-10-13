@@ -21,11 +21,11 @@ const F = JSON.parse(readFileSync(new URL("./fixtures/wl.json", import.meta.url)
 { assert.ok(nipPoprawny("5261040828") && nipPoprawny("526-104-08-28")); assert.ok(!nipPoprawny("5261040829"));
   assert.ok(nrbPoprawny("41101000000000000012345678") && nrbPoprawny("PL41 1010 0000 0000 0000 1234 5678")); assert.ok(!nrbPoprawny("1".repeat(26)));
   console.log("OK: walidacja lokalna NIP (mod 11) i NRB (mod 97) zgodna z werdyktami API"); }
-{ const s = { representatives: [{ firstName: "JAN", lastName: "KOWALSKI", pesel: "44051401359", nip: null, companyName: null }],
+{ const s = { representatives: [{ firstName: "JAN", lastName: "KOWALSKI", pesel: "44051401358", nip: null, companyName: null }],
     authorizedClerks: [{ firstName: "ANNA", lastName: "NOWAK", pesel: null }], partners: [{ companyName: "TRANSKOM SP. Z O.O.", nip: "5261040828" }, { firstName: null, lastName: null }] };
   const o = osobyPodmiotu(s);
   assert.deepStrictEqual(o.map((x) => x.rola), ["reprezentant", "prokurent", "wspolnik"]);
-  assert.ok(!JSON.stringify(o).includes("44051401359"), "PESEL nie wychodzi z serwera");
+  assert.ok(!JSON.stringify(o).includes("44051401358"), "PESEL nie wychodzi z serwera");
   assert.deepStrictEqual(normalizujPodmiot(F.szukaj_gus, "5261040828", "2026-09-28").result.osoby, []);
   console.log("OK: osoby z wykazu (reprezentant/prokurent/wspólnik) bez PESEL; puste wpisy pominięte"); }
 console.log("\nWSZYSTKIE TESTY JEDNOSTKOWE (bez sieci) PRZESZŁY");

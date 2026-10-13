@@ -212,3 +212,26 @@ describe(
     );
   }
 );
+
+describe("bounded process AUTO runner: a checkpoint that asks the user", () => {
+  it("stops without committing the checkpoint; earlier steps stay committed", async () => {
+    const executed: string[] = [];
+    const result = await runBoundedProcessAutoSequence({
+      initialState: autoState(),
+      execute: async (permit) => {
+        executed.push(permit.checkpoint);
+        return { result: permit.checkpoint, commit: true, waitingForUser: permit.checkpoint === "CP-1b" };
+      },
+      persist: async (_previous, next) => next
+    });
+    expect(executed).toEqual(["CP-1a", "CP-1b"]);
+    expect(result.stopped).toBe("WAITING_FOR_USER");
+    expect(result.limitReached).toBe(false);
+    expect(result.steps.map((step) => step.permit.checkpoint)).toEqual(["CP-1a"]);
+    expect(result.waitingResult).toBe("CP-1b");
+    expect(result.state.checkpoints["CP-1a"]).toBe("CLOSED");
+    expect(result.state.checkpoints["CP-1b"]).not.toBe("CLOSED");
+    expect(result.state.pendingCheckpoint ?? "CP-1b").toBe("CP-1b");
+  });
+});
+

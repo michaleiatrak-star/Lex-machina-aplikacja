@@ -149,3 +149,34 @@ export function compactForModel(
   }
   return { text: out.join("\n"), compacted };
 }
+
+/**
+ * One section of a Markdown file: from the first heading line matching `heading` to the
+ * next heading of the same or a higher level. Lines inside ``` blocks are not headings
+ * (a report template with "## 1. IDENTYFIKACJA" in a code block stays in its section).
+ */
+export function markdownSection(text: string, heading: RegExp): string {
+  const lines = text.split("\n");
+  let inFence = false;
+  let start = -1;
+  let level = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    if (/^\s*```/u.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = /^(#{1,6})\s+(.*)$/u.exec(line);
+    if (!match) continue;
+    if (start < 0) {
+      if (heading.test(line)) {
+        start = index;
+        level = match[1]!.length;
+      }
+    } else if (match[1]!.length <= level) {
+      return lines.slice(start, index).join("\n").trim();
+    }
+  }
+  return start < 0 ? "" : lines.slice(start).join("\n").trim();
+}

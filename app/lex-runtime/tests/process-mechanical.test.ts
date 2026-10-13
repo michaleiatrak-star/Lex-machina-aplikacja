@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "../src/checkpoint-skill-sections.js";
+import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS, ORDERED_CHECKPOINT_SECTIONS } from "../src/checkpoint-skill-sections.js";
+import { ORDERED_CASE_WORKFLOW_SEQUENCES } from "../src/ordered-case-workflow-state.js";
 import { describe, expect, it } from "vitest";
 import { documentTriggerText } from "../src/execution-engine.js";
 import { anthropicSystem } from "../src/providers/ai-sdk-adapter.js";
@@ -141,6 +142,50 @@ describe("court analysis and chronology: the checkpoint names the skill's part",
   });
 });
 
+describe("evidence and witness workflows: the checkpoint names the skill's part", () => {
+  // The checkpoint names are only in the frontmatter list; each mapping must start with a heading of the body.
+  it.each([
+    ["EVIDENCE_ANALYSIS_V1", "analizator-dowodow-v3"],
+    ["WITNESS_QUESTIONING_V1", "przesluchanie-swiadkow-v2-min90"]
+  ] as const)("%s: every checkpoint maps to a heading present in SKILL.md", (workflow, skill) => {
+    const headings = fs
+      .readFileSync(path.join(CORPUS, skill, "SKILL.md"), "utf8")
+      .split("\n")
+      .filter((line) => /^#{2,4}\s/u.test(line))
+      .map((line) => line.replace(/^#+\s*/u, "").trim());
+    const sections = ORDERED_CHECKPOINT_SECTIONS[workflow]!;
+    expect(Object.keys(sections).sort()).toEqual([...ORDERED_CASE_WORKFLOW_SEQUENCES[workflow]].sort());
+    for (const [checkpoint, text] of Object.entries(sections)) {
+      const lead = text.replace(/^#+\s*/u, "").replace(/^ETAP W1: /u, "").split(/ \(| oraz |\.$/u)[0]!.trim();
+      expect(headings.some((heading) => heading.startsWith(lead)), `${checkpoint}: ${lead}`).toBe(true);
+    }
+  });
+
+  it("the active evidence checkpoint names the register of parties, not the minimal mode of KROK 2", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "evidence",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Rejestr stron." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    await executor.execute({
+      query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: ["analizator-dowodow-v3"], caseType: ["analizator-dowodow-v3"] })}\nOceń dowody w sprawie pożyczki.`,
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK",
+      orderedCaseWorkflowContext: { workflowId: "EVIDENCE_ANALYSIS_V1", checkpoint: "AD-BLOKG-STRONY", revision: 7 }
+    } as never);
+    expect(calls[0]!.systemPrompt).toContain("Część skilla analizator-dowodow-v3 dla tego punktu: ## BLOK G — Rejestr stron");
+  }, 120_000);
+});
+
 describe("client report: the report the model wrote without its blueprint", () => {
   it("one repair call with only submit_report_blueprint turns it into a presentable report", async () => {
     const calls: ProviderStreamParams[] = [];
@@ -197,8 +242,41 @@ describe("client report: the report the model wrote without its blueprint", () =
   }, 120_000);
 });
 
+describe("mechanical checkpoint that asks the user", () => {
+  it("the rule is in the checkpoint part; the answer is flagged and presented, not blocked", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "mechanical",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        return { fullText: "Podaj datę doręczenia faktury FV 7/2026.\n\n[CZEKAM NA ODPOWIEDŹ]" };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    const envelope = { auto: false, manual: ["pisma-procesowe-v3"], caseType: ["pisma-procesowe-v3"] };
+    const result = await executor.execute({
+      query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify(envelope)}\n${CASE}`,
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK",
+      processWorkflowContext: { stage: "W1", checkpoint: "CP-1a", mode: "AUTO" }
+    } as never);
+    const call = calls[0]!;
+    expect(call.systemPrompt.slice(call.systemPromptCachePrefix!)).toContain("[CZEKAM NA ODPOWIEDŹ]");
+    expect(result.waitingForUser).toBe(true);
+    expect(result.answer ?? "").toContain("Podaj datę doręczenia");
+    // The chat's automatic continuation reads the marker in the answer.
+    expect(result.answer ?? "").toContain("[CZEKAM NA ODPOWIEDŹ]");
+  }, 120_000);
+});
+
+
 describe("AUTO pleading: a step that asks the user ends the server's batch", () => {
-  it("commits the step and stops with WAITING_FOR_USER", async () => {
+  it("stops with WAITING_FOR_USER; the step that asked stays open for the reply", async () => {
     const { runBoundedProcessAutoSequence } = await import("../src/process-pleading-auto-runner.js");
     const { acceptProcessPleadingStart, createProcessPleadingState } = await import("../src/process-pleading-state.js");
     const { waitsForUser, WAIT_FOR_USER_MARKER } = await import("../src/workflow-wait.js");
@@ -209,12 +287,13 @@ describe("AUTO pleading: a step that asks the user ends the server's batch", () 
       initialState: initial,
       execute: async () => {
         const answer = answers[call++]!;
-        return { result: answer, commit: true, waitForUser: waitsForUser(answer) };
+        return { result: answer, commit: true, waitingForUser: waitsForUser(answer) };
       },
       persist: async (_previous, next) => next
     });
     expect(result.stopped).toBe("WAITING_FOR_USER");
-    expect(result.steps).toHaveLength(2);
+    expect(result.steps).toHaveLength(1);
+    expect(result.waitingResult).toContain("Podaj ją.");
     expect(call).toBe(2);
   });
 });

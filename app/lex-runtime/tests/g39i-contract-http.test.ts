@@ -561,6 +561,45 @@ describe(
       }
     );
 
+    it("exports a drafted contract only after AU-HYBRID and AU-STRIP are closed", async () => {
+      const current = fixture();
+      const { authorization, caseId } = await bootstrapCase(current, "export");
+      const original = EncryptedCaseWorkspaceStore.prototype.getContractAnalysisState;
+      let closed: string[] = ["AU-F0", "AU-GAP", "AU-POV", "AU-ROUTE", "AU-GENCORE", "AU-GENBUILD", "AU-GENSHARED", "AU-HYBRID"];
+      const spy = vi
+        .spyOn(EncryptedCaseWorkspaceStore.prototype, "getContractAnalysisState")
+        .mockImplementation(async function (this: EncryptedCaseWorkspaceStore, args) {
+          const state = await original.call(this, args);
+          const now = "2026-10-13T08:00:00.000Z";
+          return {
+            ...(state ?? { schemaVersion: 1 as const, workflowId: "CONTRACT_ANALYSIS_V1" as const, caseId, revision: 9, history: [], createdAt: now, updatedAt: now }),
+            mode: "DRAFT" as const,
+            stage: "FINALIZATION" as const,
+            closedCheckpoints: closed as never
+          };
+        });
+      const body = {
+        ...sessionBody(caseId),
+        query: "Użytkownik: Przygotuj projekt umowy najmu.\n\nAsystent: UMOWA NAJMU ...\n\nUżytkownik: Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta.",
+        format: "docx",
+        documentType: "contract",
+        styleProfile: "lex-classic-clean-v1",
+        attachments: []
+      };
+      try {
+        // AU-STRIP (verification markers out of the document) still open: no file.
+        await request(current.app).post(`/api/cases/${caseId}/artifacts/generate`).set("Authorization", authorization).send(body).expect(409);
+        expect(current.generate).not.toHaveBeenCalled();
+        closed = [...closed, "AU-STRIP"];
+        const exported = await request(current.app).post(`/api/cases/${caseId}/artifacts/generate`).set("Authorization", authorization).send(body);
+        expect(exported.status).not.toBe(409);
+        expect(current.generate).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+        current.auth.close();
+      }
+    });
+
     it(
       "advances exactly AU-F0 after a fully passing semantic node",
       async () => {
