@@ -235,7 +235,8 @@ import {
   threadUserText
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
-import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn } from "./case-content-grounding.js";
+import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments } from "./case-content-grounding.js";
+import { SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -3172,52 +3173,109 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     }
 
-    // What the answer says a judgment is about must be in the text read from the source
-    // (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling). One correcting
-    // round; what remains is shown to the user next to the answer.
+    // What the answer says a judgment or interpretation is about must come from the text read
+    // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
+    // 1) Lexical: the user's topic words and quotations given to it are in its text.
+    // 2) Semantic: the connected model, in a separate context with only the question, the
+    //    answer's claim and the document, judges topic and claim; each verdict quotes the
+    //    document and the application checks the quote. One correcting round per check;
+    //    what remains is shown to the user next to the answer.
     if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
       const topic = threadUserText(protectedQuery).split("\n").slice(-3).join("\n");
-      const grounding = caseContentFindings(modelOutput, caseSourceTexts, topic);
-      if (grounding.length) {
-        step("MODEL", `kontrola treści orzeczeń: ${grounding.map((item) => item.signature).join(", ")}`);
-        let remaining = grounding;
+      const correctionPrompt = [
+        ...(placeholderKey ? [placeholderKey] : []),
+        identityPrompt,
+        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+        ...pathSections
+      ].join("\n\n");
+      const correct = async (instruction: string): Promise<string> => {
         try {
           const corrected = await this.providers.stream(request.provider, {
             model: request.model,
-            systemPrompt: [
-              ...(placeholderKey ? [placeholderKey] : []),
-              identityPrompt,
-              ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-              ...pathSections
-            ].join("\n\n"),
+            systemPrompt: correctionPrompt,
             messages: [
               { role: "user", content: protectedQuery },
               { role: "assistant", content: modelOutput },
-              { role: "user", content: caseContentCorrectionPrompt(grounding) }
+              { role: "user", content: instruction }
             ],
             accountContinuity: "none",
             reasoning: "none"
           });
-          const text = corrected.fullText.trim();
-          const after = text ? caseContentFindings(text, caseSourceTexts, topic) : grounding;
-          if (text && after.flatMap((item) => item.missing).length < grounding.flatMap((item) => item.missing).length) {
-            modelOutput = text;
-            remaining = after;
-          }
+          return corrected.fullText.trim();
         } catch {
-          remaining = grounding;
+          return "";
         }
-        if (remaining.length) {
-          // Before the model's closing disclaimer, which stays the last element.
-          const parts = splitTrailingDisclaimer(modelOutput);
-          modelOutput = parts.disclaimer
-            ? `${parts.body.trimEnd()}\n\n${caseContentWarning(remaining)}\n\n${parts.disclaimer}`
-            : `${modelOutput.trimEnd()}\n\n${caseContentWarning(remaining)}`;
+      };
+      const missingCount = (findings: ReturnType<typeof caseContentFindings>) => findings.flatMap((item) => item.missing).length;
+
+      let lexical = caseContentFindings(modelOutput, caseSourceTexts, topic);
+      const lexicalFirst = lexical;
+      if (lexical.length) {
+        step("MODEL", `kontrola treści orzeczeń: ${lexical.map((item) => item.signature).join(", ")}`);
+        const text = await correct(caseContentCorrectionPrompt(lexical));
+        const after = text ? caseContentFindings(text, caseSourceTexts, topic) : lexical;
+        if (text && missingCount(after) < missingCount(lexical)) {
+          modelOutput = text;
+          lexical = after;
         }
-        audit.record("gate", "CASE_CONTENT_GROUNDING", remaining.length ? "DEGRADED" : "OK", {
-          findings: grounding.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
-          remaining: remaining.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
+        audit.record("gate", "CASE_CONTENT_GROUNDING", lexical.length ? "DEGRADED" : "OK", {
+          findings: lexicalFirst.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+          remaining: lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
         });
+      }
+
+      let semantic: SemanticVerdict[] = [];
+      const judge = async (answer: string) => {
+        const documents = citedDocuments(answer, caseSourceTexts);
+        if (!documents.length || request.model.startsWith("local/")) return null;
+        try {
+          const verdict = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: SEMANTIC_JUDGE_SYSTEM,
+            messages: [{ role: "user", content: semanticJudgePrompt(topic, documents) }],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          return parseSemanticVerdicts(verdict.fullText, documents);
+        } catch {
+          return null;
+        }
+      };
+      const firstCheck = await judge(modelOutput);
+      if (firstCheck) {
+        semantic = semanticProblems(firstCheck);
+        const semanticFirst = semantic;
+        if (semantic.length) {
+          step("MODEL", `kontrola zgodności z pytaniem: ${semantic.map((item) => item.signature).join(", ")}`);
+          const text = await correct(semanticCorrectionPrompt(semantic));
+          if (text) {
+            const secondCheck = await judge(text);
+            const after = secondCheck ? semanticProblems(secondCheck) : semantic;
+            if (after.length < semantic.length) {
+              modelOutput = text;
+              semantic = after;
+              lexical = caseContentFindings(text, caseSourceTexts, topic);
+            }
+          }
+        }
+        audit.record("gate", "CASE_SEMANTIC_CHECK", semantic.length ? "DEGRADED" : "OK", {
+          verdicts: firstCheck.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+          ...(firstCheck.rejected.length ? { rejectedQuotes: firstCheck.rejected } : {}),
+          corrected: semanticFirst.map((item) => item.signature),
+          remaining: semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
+        });
+      }
+
+      const warnings = [
+        ...(lexical.length ? [caseContentWarning(lexical)] : []),
+        ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : [])
+      ].filter(Boolean);
+      if (warnings.length) {
+        // Before the model's closing disclaimer, which stays the last element.
+        const parts = splitTrailingDisclaimer(modelOutput);
+        modelOutput = parts.disclaimer
+          ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
+          : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
       }
     }
 

@@ -1,3 +1,6 @@
+import { detectLegalReferences } from "./finalization-gate.js";
+import { canonicalInterpretationSignature, interpretationSignaturesInLine } from "./interpretation-verifier.js";
+
 // What the answer says a judgment is about must be in that judgment's text read in the
 // turn. Version 0.1.27: a real signature (II SAB/Po 175/26, access to public information)
 // was presented as a ruling on lawyers' AI hallucinations; the fetched CBOSA text never
@@ -94,6 +97,78 @@ function sourceTextFor(key: string, sources: string[]): string | null {
     const others = new Set([...source.matchAll(SIGNATURE)].map((match) => signatureKey(match[0])));
     texts.push(others.size >= 3 ? source.slice(Math.max(0, at - 1500), at + 3000) : source);
   }
+  return texts.length ? texts.join("\n") : null;
+}
+
+// Other legal texts with a signature: TK (K 3/21, SK 12/20), KIO 1234/24, TSUE and General
+// Court (C-123/22, T-45/21), UODO decisions (DKN.5130.123.2024), ETPC applications (nr 12345/19).
+const OTHER_SIGNATURE =
+  /(?<![\p{L}\d-])(?:(?:Kpt|Kp|SK|Pp|Ts|K|P|U|S)\s+\d{1,4}\/\d{2}|KIO\s+\d{1,5}\/\d{2}|[CT]-\d{1,4}\/\d{2}|DKN\.\d{4}\.\d{1,5}\.\d{4}|(?<=(?:skarg[aięi]|application)\s+(?:nr|no\.?)\s*)\d{3,6}\/\d{2})(?![\d\p{L}])/gu;
+
+const comparableClaim = (value: string): string =>
+  value.normalize("NFKC").toLocaleLowerCase("pl").replace(/[.,;:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
+
+// Provisions verified in ELI in this turn: claim -> the wording read from the source.
+function verifiedWordings(sources: string[]): Map<string, string> {
+  const wordings = new Map<string, string>();
+  for (const source of sources) {
+    let value: unknown;
+    try {
+      value = JSON.parse(source);
+    } catch {
+      continue;
+    }
+    const record = value as { claim?: unknown; evidence?: unknown; status?: unknown };
+    if (typeof record.claim === "string" && typeof record.evidence === "string" && record.evidence.trim()) {
+      wordings.set(comparableClaim(record.claim), record.evidence);
+    }
+  }
+  return wordings;
+}
+
+export type CitedDocument = {
+  signature: string;
+  kind: "case" | "interpretation" | "other" | "statute";
+  // What the answer says about it: its paragraph and the ones after it.
+  claim: string;
+  // The text the source tools returned for it in this turn.
+  text: string;
+};
+
+/** Judgments and tax interpretations the answer cites whose text a source returned in the turn. */
+export function citedDocuments(answer: string, sources: string[]): CitedDocument[] {
+  const paragraphs = answer.split(/\n\s*\n/u);
+  const cited = new Map<string, CitedDocument>();
+  paragraphs.forEach((paragraph, index) => {
+    const found: Array<{ signature: string; key: string; kind: CitedDocument["kind"] }> = [
+      ...[...paragraph.matchAll(SIGNATURE)].map((match) => ({ signature: match[0].replace(/\s+/g, " "), key: signatureKey(match[0]), kind: "case" as const })),
+      ...interpretationSignaturesInLine(paragraph).map((signature) => ({ signature, key: signature, kind: "interpretation" as const })),
+      ...[...paragraph.matchAll(OTHER_SIGNATURE)].map((match) => ({ signature: match[0].replace(/\s+/g, " "), key: signatureKey(match[0]), kind: "other" as const }))
+    ];
+    for (const item of found) {
+      if (cited.has(item.key)) continue;
+      const text = item.kind === "interpretation" ? interpretationTextFor(item.key, sources) : sourceTextFor(item.key, sources);
+      if (text) cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
+    }
+  });
+  // Provisions: what the answer says about a verified article against its wording.
+  const wordings = verifiedWordings(sources);
+  if (wordings.size) {
+    for (const reference of detectLegalReferences(answer)) {
+      if (reference.kind !== "statute") continue;
+      const claim = comparableClaim(reference.claim);
+      const wording = wordings.get(claim) ?? [...wordings.entries()].find(([key]) => key.startsWith(`${claim} `))?.[1];
+      const key = `statute:${claim}`;
+      if (!wording || cited.has(key)) continue;
+      const index = paragraphs.findIndex((paragraph) => paragraph.includes(reference.lineText.trim().slice(0, 40)));
+      cited.set(key, { signature: reference.claim, kind: "statute", claim: index >= 0 ? claimWindow(paragraphs, index) : reference.lineText, text: wording });
+    }
+  }
+  return [...cited.values()];
+}
+
+function interpretationTextFor(signature: string, sources: string[]): string | null {
+  const texts = sources.filter((source) => canonicalInterpretationSignature(source).includes(signature));
   return texts.length ? texts.join("\n") : null;
 }
 
