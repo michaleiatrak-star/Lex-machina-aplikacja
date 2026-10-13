@@ -1,3 +1,4 @@
+import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
 import { configureCaseLawStore } from "../case-law-store.js";
 import { LocalOcrCorrector } from "../ocr-correction.js";
@@ -690,7 +691,8 @@ export async function startLocalServer(options?: {
       new LocalOcrCorrector(
         () => privacyNamedEntities.localModel(),
         (words) => personMorphology.knownWords(words)
-      )
+      ),
+      registryEnrichmentFor(legalFederationTools)
     );
 
   const coreApp = createLexHttpApp({

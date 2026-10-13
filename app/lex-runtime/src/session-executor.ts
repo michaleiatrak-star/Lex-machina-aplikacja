@@ -17,6 +17,7 @@ import {
 import { genericWords } from "./privacy/generic-words.js";
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
+import { registryEnrichmentFor, type RegistryEnrichment } from "./privacy/registry-enrichment.js";
 import type { EvidenceImage } from "./document-evidence.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
 import {
@@ -1446,7 +1447,7 @@ export class SafeSessionExecutor implements SessionExecutor {
    */
   async summarizeThread(request: ThreadSummaryRequest): Promise<string> {
     const vault = new PseudonymizationVault(request.privacySeed);
-    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
+    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
     const transcript = [
       ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
       "[WIADOMOŚCI DO STRESZCZENIA]",
@@ -1473,6 +1474,13 @@ export class SafeSessionExecutor implements SessionExecutor {
 
   // A local primary model keeps the text on this machine, so the chat does
   // not also wait for local-model PII detection before answering.
+  // One register cache per executor: a NIP/KRS is looked up once, not per message.
+  private registryEnrichment: RegistryEnrichment | undefined | null = null;
+  private registryForms(): RegistryEnrichment | undefined {
+    if (this.registryEnrichment === null) this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
+    return this.registryEnrichment;
+  }
+
   private chatRecognizerFor(
     model: string
   ): NamedEntityRecognizer | undefined {
@@ -1496,7 +1504,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         this.chatRecognizerFor(
           request.model
         ),
-        this.personMorphology
+        this.personMorphology,
+        this.registryForms()
       );
     let protectedQuery: string;
     try {
@@ -1586,7 +1595,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         this.chatRecognizerFor(
           request.model
         ),
-        this.personMorphology
+        this.personMorphology,
+        this.registryForms()
       );
     let protectedQuery:
       string;
