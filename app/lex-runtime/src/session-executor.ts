@@ -229,11 +229,14 @@ import {
   privacyRecognizerFor
 } from "./privacy/local-llm-ner.js";
 import {
+  earlierUserTurns,
   parseSkillSelectionEnvelope,
   SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments } from "./case-content-grounding.js";
+import { SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -369,6 +372,8 @@ export type SessionExecutionRequest = {
   };
 };
 
+// A follow-up this short ("ok, robisz to.") carries no task of its own.
+const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
@@ -1814,6 +1819,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       PublicAuxiliarySourceItem[] =
       [];
     let snVerificationRequired = false;
+    // Texts the source tools returned in this turn (judgments, hit lists): what the
+    // answer may say a judgment is about (case-content-grounding).
+    const caseSourceTexts: string[] = [];
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -2288,6 +2296,20 @@ export class SafeSessionExecutor implements SessionExecutor {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       });
+      // A short follow-up with no task of its own ("ok, robisz to.", "tak, szukaj dalej")
+      // continues the thread's last routed request instead of dropping its executive skill.
+      if (!taskRoute && !materials.length && pathFacts.query.trim().length <= FOLLOW_UP_MAX_CHARS) {
+        for (const earlier of earlierUserTurns(request.query).slice(0, 3)) {
+          const inherited = decideTask(this.taskRoutes(), this.activationMatrix(), withoutOutputContract(earlier), [], this.redactionTest(), {
+            skill: "pisma-proste-v2",
+            entries: schemaCatalog(this.registry, "pisma-proste-v2")
+          });
+          if (inherited) {
+            taskRoute = { ...inherited, reason: `kontynuacja wątku (${inherited.reason})` };
+            break;
+          }
+        }
+      }
       const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
         const skill = record.name;
@@ -2728,6 +2750,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
         }
+        for (const result of federationResults) caseSourceTexts.push(result.content);
         for (
           const result
           of federationResults
@@ -2776,6 +2799,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
           snVerificationRequired = true;
         }
+        for (const result of verificationResults) caseSourceTexts.push(result.content);
 
         const byId = new Map(
           [
@@ -3094,7 +3118,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const domainSkillRead = audit.events.some(
       (event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2"
     );
-    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0);
+    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
     const missingGates =
       mandatoryModel &&
       legalTurn &&
@@ -3146,6 +3170,114 @@ export class SafeSessionExecutor implements SessionExecutor {
           missing: missingGates.map((item) => item.block),
           error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
         });
+      }
+    }
+
+    // What the answer says a judgment or interpretation is about must come from the text read
+    // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
+    // 1) Semantic: the connected model, in a separate context with only the question, the
+    //    answer's claim and the document, judges topic and claim; each verdict quotes the
+    //    document and the application checks the quote.
+    // 2) Lexical, for documents without a valid verdict: the user's topic words and quotations
+    //    given to it are in its text.
+    // One correcting round for both; what remains is shown to the user next to the answer.
+    if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
+      const topic = threadUserText(protectedQuery).split("\n").slice(-3).join("\n");
+      const correctionPrompt = [
+        ...(placeholderKey ? [placeholderKey] : []),
+        identityPrompt,
+        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+        ...pathSections
+      ].join("\n\n");
+      const correct = async (instruction: string): Promise<string> => {
+        try {
+          const corrected = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: correctionPrompt,
+            messages: [
+              { role: "user", content: protectedQuery },
+              { role: "assistant", content: modelOutput },
+              { role: "user", content: instruction }
+            ],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          return corrected.fullText.trim();
+        } catch {
+          return "";
+        }
+      };
+      const judge = async (answer: string) => {
+        const documents = citedDocuments(answer, caseSourceTexts);
+        if (!documents.length || request.model.startsWith("local/")) return null;
+        try {
+          const verdict = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: SEMANTIC_JUDGE_SYSTEM,
+            messages: [{ role: "user", content: semanticJudgePrompt(topic, documents) }],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          return parseSemanticVerdicts(verdict.fullText, documents);
+        } catch {
+          return null;
+        }
+      };
+      // The semantic verdict decides where there is one; the lexical check covers the documents
+      // without a valid verdict (local model, judge failure, a quote not in the document). Lexically
+      // a correct paraphrase can look like a missing word, so it does not override a verdict.
+      const review = async (answer: string) => {
+        const check = await judge(answer);
+        const judged = new Set((check?.verdicts ?? []).map((item) => item.signature.replace(/\s+/g, " ")));
+        return {
+          check,
+          semantic: check ? semanticProblems(check) : [],
+          lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature))
+        };
+      };
+      const size = (state: Awaited<ReturnType<typeof review>>) => state.semantic.length + state.lexical.flatMap((item) => item.missing).length;
+      const first = await review(modelOutput);
+      let final = first;
+      if (size(first)) {
+        step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic.map((item) => item.signature), ...first.lexical.map((item) => item.signature)].join(", ")}`);
+        const text = await correct(
+          [...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []), ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : [])].join("\n\n")
+        );
+        if (text) {
+          const second = await review(text);
+          if (size(second) < size(first)) {
+            modelOutput = text;
+            final = second;
+          }
+        }
+      }
+      if (first.check) {
+        audit.record("gate", "CASE_SEMANTIC_CHECK", final.semantic.length ? "DEGRADED" : "OK", {
+          verdicts: first.check.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+          ...(first.check.rejected.length ? { rejectedQuotes: first.check.rejected } : {}),
+          corrected: first.semantic.map((item) => item.signature),
+          remaining: final.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
+        });
+      }
+      if (first.lexical.length) {
+        audit.record("gate", "CASE_CONTENT_GROUNDING", final.lexical.length ? "DEGRADED" : "OK", {
+          findings: first.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+          remaining: final.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
+        });
+      }
+      const lexical = final.lexical;
+      const semantic: SemanticVerdict[] = final.semantic;
+
+      const warnings = [
+        ...(lexical.length ? [caseContentWarning(lexical)] : []),
+        ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : [])
+      ].filter(Boolean);
+      if (warnings.length) {
+        // Before the model's closing disclaimer, which stays the last element.
+        const parts = splitTrailingDisclaimer(modelOutput);
+        modelOutput = parts.disclaimer
+          ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
+          : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
       }
     }
 
@@ -3955,7 +4087,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
     const freeText = !request.documentAstOutput && !reportBlueprint;
     const disclaimerTexts =
-      legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+      // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
+      (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
       : modelDisclaimer.disclaimer

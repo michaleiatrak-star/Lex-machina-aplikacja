@@ -268,7 +268,7 @@ const IMPLIED_ROWS: Array<{ pattern: RegExp; primary: string; row: string }> = [
 // Case law asked for ("orzecznictwo do art. 233 KK", "jak sądy interpretują",
 // "linia orzecznicza", "podaj wyroki SN", "sprawdź sygnaturę").
 const CASE_LAW =
-  /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecznicz\p{L}*|precedens\p{L}*|sygnatur\p{L}*|(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*|orzecze\p{L}*|orzeczeń)\s+(?:SN|NSA|WSA|TK|TSUE|ETPC\p{L}*|SA|sąd\p{L}*|Trybunał\p{L}*|Sąd\p{L}*)|(?:podaj|znajdź|wskaż|przytocz|wyszukaj)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|uchwał\p{L}*)|jak\s+(?:to\s+)?(?:sądy|SN|NSA)\s+(?:interpretuj\p{L}*|rozumi\p{L}*|stosuj\p{L}*|orzekaj\p{L}*|wykładaj\p{L}*|ocenia\p{L}*))(?![\p{L}])/iu;
+  /(?<![\p{L}])(?:orzecznictw\p{L}*|orzecznicz\p{L}*|precedens\p{L}*|sygnatur\p{L}*|(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*|orzecze\p{L}*|orzeczeń)\s+(?:SN|NSA|WSA|TK|TSUE|ETPC\p{L}*|SA|sąd\p{L}*|Trybunał\p{L}*|Sąd\p{L}*)|(?:podaj|znajdź|wskaż|przytocz|wyszukaj|szukaj|poszukaj|szukam)\s+(?:\p{L}+,?\s+){0,4}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|(?:inn\p{L}*|kolejn\p{L}*|podobn\p{L}*)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|jak\s+(?:to\s+)?(?:sądy|SN|NSA)\s+(?:interpretuj\p{L}*|rozumi\p{L}*|stosuj\p{L}*|orzekaj\p{L}*|wykładaj\p{L}*|ocenia\p{L}*))(?![\p{L}])/iu;
 // Substantive defences of a letter (sprzeciw, zarzuty). pisma-proste-v2, "Kiedy eskalować do
 // pisma-procesowe-v3 (obowiązkowo)": more than one legal basis to analyse; router v3 [4]:
 // not for more than one thread. One defence (przedawnienie alone) stays a simple letter.
@@ -296,7 +296,7 @@ const PASSING_DOCUMENT_ROWS = new Set(["analizator-umow-v1", "pisma-procesowe-v3
 const QUESTION_ONLY = /\?\s*$|(?:^|[.!?]\s+)(?:chcę|chciał\p{L}*)\s+(?:zrozumieć|wiedzieć|się\s+dowiedzieć)(?![\p{L}])/iu;
 const REVIEW_REQUEST = /(?<![\p{L}])(?:przeanalizuj|przejrzyj|oceń|sprawdź|zweryfikuj|przeczytaj|popraw|zbadaj|zapis\p{L}*|klauzul\p{L}*|co\s+(?:oznacza\p{L}*|znacz\p{L}*)|m(?:ój|oja|oje|ojej|ojego)\s+(?:umow|polis|regulamin|aneks)\p{L}*)(?![\p{L}])/iu;
 const CASE_LAW_LOOKUP =
-  /(?<![\p{L}])(?:(?:szukam|poszukaj|potrzebuj\p{L}*|chc\p{L}*|znajdź|wyszukaj|podaj|wskaż|przytocz)\s+(?:\p{L}+\s+){0,2}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*|sygnatur\p{L}*)|sygnatur\p{L}*[^.?!]{0,60}?(?:istnieje|potwierdź|czego dotyczy)|(?:sprawdź|zweryfikuj|potwierdź)\p{L}*[^.?!]{0,40}?sygnatur\p{L}*)/iu;
+  /(?<![\p{L}])(?:(?:szukam|szukaj|poszukaj|potrzebuj\p{L}*|chc\p{L}*|prosił\p{L}*|znajdź|wyszukaj|podaj|wskaż|przytocz)\s+(?:\p{L}+,?\s+){0,4}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*|sygnatur\p{L}*)|(?:inn\p{L}*|kolejn\p{L}*|podobn\p{L}*)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|sygnatur\p{L}*[^.?!]{0,60}?(?:istnieje|potwierdź|czego dotyczy)|(?:sprawdź|zweryfikuj|potwierdź)\p{L}*[^.?!]{0,40}?sygnatur\p{L}*)/iu;
 // An analysis of the provision itself, besides the case law.
 const PROVISION_ANALYSIS =
   /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porównaj|wykaż|przesłank\p{L}*|znamion\p{L}*|wykładni\p{L}*|omów|wyjaśnij|przeanalizuj|analiz\p{L}*|co\s+mówi)(?![\p{L}])/iu;

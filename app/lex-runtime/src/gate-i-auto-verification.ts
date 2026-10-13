@@ -1,6 +1,7 @@
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { POLISH_DATE_SOURCE, polishDateToIso } from "./event-date-check.js";
 import {
+  caseSignatureRecord,
   detectLegalReferences,
   type DetectedLegalReference
 } from "./finalization-gate.js";
@@ -246,7 +247,8 @@ export function planAutomaticLegalVerification(
         ledger,
         reference.claim,
         referenceAsOf
-      )
+      ) ||
+      caseSignatureRecord(ledger, reference)
     ) {
       skipped.push({
         claim:
@@ -445,7 +447,7 @@ export function applyAutomaticVerificationMarkers(
         ledger,
         reference.claim,
         referenceAsOf
-      );
+      ) ?? caseSignatureRecord(ledger, reference);
     if (!record) {
       continue;
     }
