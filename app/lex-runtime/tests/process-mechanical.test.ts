@@ -140,3 +140,59 @@ describe("court analysis and chronology: the checkpoint names the skill's part",
     }
   });
 });
+
+describe("client report: the report the model wrote without its blueprint", () => {
+  it("one repair call with only submit_report_blueprint turns it into a presentable report", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "report",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream(received) {
+        calls.push(received);
+        const repair = String(received.messages.at(-1)?.content ?? "").includes("submit_report_blueprint");
+        if (repair && received.tools?.some((tool) => tool.function.name === "submit_report_blueprint")) {
+          await received.runTools?.([
+            {
+              id: "b1",
+              name: "submit_report_blueprint",
+              input: {
+                reportType: "CLIENT_REPORT_V1",
+                blueprint: {
+                  profile: "IND",
+                  tryb: "standard",
+                  kancelaria: null,
+                  klient: "Klient A",
+                  prawnik: null,
+                  sprawa: "Spór o zapłatę za roboty budowlane.",
+                  etap: "I instancja",
+                  kontekst: "Brak nowych zdarzeń.",
+                  ocena: { opis: "Pozycja stabilna.", podstawa: "Dostarczone dokumenty." },
+                  assessment: { level: "neutral" },
+                  potwierdzenie_odbioru: null
+                }
+              }
+            }
+          ]);
+          return { fullText: "Raport zapisany." };
+        }
+        return { fullText: "Raport dla klienta: sprawa w I instancji, pozycja stabilna." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    const result = await executor.execute({
+      query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: ["raport-klienta-v1"], caseType: ["raport-klienta-v1"] })}\nPrzygotuj raport dla klienta o stanie sprawy budowlanej.`,
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      mode: "PRAWNIK"
+    } as never);
+    const repair = calls.find((call) => call.tools?.length === 1);
+    expect(repair?.tools?.[0]?.function.name).toBe("submit_report_blueprint");
+    expect(repair?.systemPrompt).toContain("raport-klienta-v1/references/BLUEPRINT-SCHEMA.md");
+    expect(result.workflow?.id).toBe("CLIENT_REPORT_V1");
+    expect(result.reportBlueprint?.kind).toBe("CLIENT_REPORT_V1");
+    expect(result.status).toBe("DRAFT_PRESENTABLE");
+  }, 120_000);
+});

@@ -114,6 +114,7 @@ import {
   type AcceptedReportBlueprint,
   type ReportBlueprintKind
 } from "./report-blueprint-tool-runtime.js";
+import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import {
   evaluateDeterministicWorkflowOutput,
   evaluateDeterministicWorkflowReads,
@@ -2787,6 +2788,42 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
 
     transferExecutionEvents(execution.events, audit);
+
+    // A client or situation report without its blueprint would end as a technical block
+    // although the model wrote the report: one repair call with only the report tool.
+    const blueprintKind: ReportBlueprintKind | null =
+      execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
+        ? execution.workflowPlan.id
+        : null;
+    if (blueprintKind && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
+      step("MODEL", "zapis raportu w formacie aplikacji");
+      try {
+        await this.providers.stream(request.provider, {
+          model: request.model,
+          systemPrompt: [reportTools.systemPromptAppendix(), blueprintRepairSchema(this.registry, blueprintKind)].filter(Boolean).join("\n\n"),
+          messages: [
+            ...(documentContext
+              ? [{ role: "user" as const, content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]" }]
+              : []),
+            { role: "user", content: protectedQuery },
+            { role: "assistant", content: execution.output },
+            { role: "user", content: BLUEPRINT_REPAIR_REQUEST }
+          ],
+          tools: reportTools.schemas(),
+          runTools: async (calls) => [
+            ...(await reportTools.runTools(calls.filter((call) => reportTools.handles(call.name)))),
+            ...calls
+              .filter((call) => !reportTools.handles(call.name))
+              .map((call) => ({ tool_use_id: call.id, content: JSON.stringify({ status: "BLOCKED", error: "ONLY_SUBMIT_REPORT_BLUEPRINT" }) }))
+          ],
+          maxIterations: 3,
+          reasoning: "none"
+        });
+      } catch {
+        // The block below names the missing blueprint.
+      }
+      audit.record("gate", "REPORT_BLUEPRINT_REPAIR", reportTools.acceptedFor(blueprintKind) ? "OK" : "BLOCKED", { kind: blueprintKind });
+    }
 
     const modelSelectedSkills =
       execution.events.some(
