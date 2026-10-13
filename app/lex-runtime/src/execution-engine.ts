@@ -2,6 +2,8 @@ import { draftPrompt } from "./process-pleading-draft.js";
 import { CHRONOLOGY_CHECKPOINT_SECTIONS, COURT_CHECKPOINT_SECTIONS } from "./checkpoint-skill-sections.js";
 import { compactForModel, markdownSection } from "./skill-sections.js";
 import { WAITING_FOR_USER_RULE, waitsForUser } from "./workflow-wait.js";
+import { reductionOffer } from "./skill-switch.js";
+import { defenceCount } from "./task-routing.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -1311,6 +1313,13 @@ export class LexExecutionEngine {
         }
       }
     }
+    // pisma-proste-v2 pinned by the user: the same check the AUTO router makes (several
+    // substantive defences = more than one legal basis, M7-eskalacja) is given to the model,
+    // which writes the escalation offer instead of a letter.
+    if (workflowPlan.id === "SIMPLE_LETTER_V1" && !args.documentAstOutput && defenceCount(moduleTriggerText) >= 2) {
+      emit("gate", "SIMPLE_LETTER_ESCALATION_CHECK", "OK", `defences=${defenceCount(moduleTriggerText)}`);
+      contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# KONTROLA ESKALACJI (aplikacja)\nW wiadomościach użytkownika jest kilka zarzutów merytorycznych (${defenceCount(moduleTriggerText)}). Wykonaj kontrolę z pisma-proste-v2/references/M7-eskalacja.md: gdy sprawa wymaga więcej niż jednej podstawy prawnej, nie pisz pisma — przedstaw komunikat ESKALACJA DO pisma-procesowe-v3 z przyczyną i zapytaj o przełączenie.`;
+    }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
     // (CP-REJESTR) and what its report must show, with the case's register, and the
     // pleading's current draft; at the end of the prompt like the AU checkpoint.
@@ -2171,7 +2180,7 @@ export class LexExecutionEngine {
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpoint = args.processWorkflowContext.checkpoint;
       const first = evaluateCheckpointOutput(checkpoint, output);
-      if (waitsForUser(output)) {
+      if (waitsForUser(output) || (checkpoint === "CP-1a" && reductionOffer(output))) {
         emit("gate", "PROCESS_CHECKPOINT_WAITING_FOR_USER", "OK", `checkpoint=${checkpoint}`);
       } else if (first.result === "BLOCKED") {
         let remaining = first.missing;

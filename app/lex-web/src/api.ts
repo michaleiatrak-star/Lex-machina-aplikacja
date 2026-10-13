@@ -1126,6 +1126,8 @@ export type SessionExecutionResponse = {
   orderedCaseWorkflow?: { status: "ACTIVE" | "COMPLETE"; nextCheckpoint: string | null };
   // The answer ends a checkpoint with a question to the user.
   waitingForUser?: boolean;
+  // The letter skill hands the matter to the other one; the chat offers the switch.
+  skillSwitch?: import("./skill-switch-offer.js").SkillSwitchOffer;
 };
 
 export type ProcessPleadingCheckpoint =

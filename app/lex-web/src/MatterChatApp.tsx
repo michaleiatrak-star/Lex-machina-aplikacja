@@ -209,6 +209,7 @@ import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
 import { AUTO_ADVANCE_MESSAGE, autoAdvanceDecision, autoAdvanceNote, autoAdvanceStopNote } from "./workflow-auto-advance.js";
+import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 
 type TabId =
   | "home"
@@ -520,10 +521,12 @@ type DirectDocumentRequest = {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch"
   >
 ): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
+  // Questions to the user or an offer to switch the letter skill: no letter yet.
+  if (result.waitingForUser || result.skillSwitch) return null;
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
     if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
     return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
@@ -1273,7 +1276,7 @@ export default function MatterChatApp({
     caseId: string; text: string; messageId: string; suggested: ContractAnalysisMode;
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
-  const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string; switchTo?: { action: DeterministicActionId; label: string } } | null>(null);
   // Export refused for unverified references only: the user may save a draft naming them.
   const [unverifiedDraftRequest, setUnverifiedDraftRequest] = useState<{
     caseId: string; text: string; messageId: string;
@@ -1285,8 +1288,13 @@ export default function MatterChatApp({
   const [autoAdvanceRequest, setAutoAdvanceRequest] = useState<{ caseId: string; label: string } | null>(null);
   const autoAdvanceChain = useRef<{ count: number; next: string | null; paused: boolean }>({ count: 0, next: null, paused: false });
   const [, setAutoAdvanceTick] = useState(0);
+  // Escalation / reduction between the letter skills offered by the runtime, and a switch being sent.
+  const [skillSwitchOffer, setSkillSwitchOffer] = useState<{ caseId: string; offer: SkillSwitchOffer } | null>(null);
+  const [pendingSkillSwitch, setPendingSkillSwitch] = useState<{ caseId: string; action: DeterministicActionId; text: string; label: string } | null>(null);
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
     caseId: string; text: string; messageId: string; recovery: WorkflowRecovery;
+    // The failed message switched the thread's letter skill: the retry switches again.
+    switchTo?: { action: DeterministicActionId; label: string };
   } | null>(null);
   const [workflowRecoveryBusy, setWorkflowRecoveryBusy] = useState(false);
   const [executionDiagnostic, setExecutionDiagnostic] =
@@ -1616,17 +1624,14 @@ export default function MatterChatApp({
     if (threadLoading) {
       return;
     }
-    const firstUser =
-      messages.find(
-        (message) =>
-          message.role === "user"
-      );
-    if (!firstUser) {
+    const actionMessage =
+      actionMetaMessage(messages);
+    if (!actionMessage) {
       return;
     }
     const restored =
       deterministicActionFromMeta(
-        firstUser.meta
+        actionMessage.meta
       );
     setDeterministicAction(
       restored
@@ -2185,6 +2190,36 @@ export default function MatterChatApp({
     if (request.caseId !== caseId || autoAdvanceChain.current.paused) return;
     void executeMessage(AUTO_ADVANCE_MESSAGE, { autoStep: request.label });
   }, [autoAdvanceRequest, caseId, threadLoading, executing]);
+
+  // The switch is sent once the thread's action shows the new skill (fresh routing state).
+  useEffect(() => {
+    if (!pendingSkillSwitch || executing || threadLoading || deterministicAction !== pendingSkillSwitch.action) return;
+    const pending = pendingSkillSwitch;
+    setPendingSkillSwitch(null);
+    if (pending.caseId !== caseId) return;
+    void executeMessage(pending.text, { switchTo: { action: pending.action, label: pending.label } });
+  }, [pendingSkillSwitch, deterministicAction, caseId, threadLoading, executing]);
+
+  async function acceptSkillSwitch(): Promise<void> {
+    const current = skillSwitchOffer;
+    if (!current || current.caseId !== caseId) return;
+    setSkillSwitchOffer(null);
+    const action = switchAction(current.offer);
+    // Reduction at the start of the pleading pipeline: its state (per case) would be
+    // resumed by the next pleading thread, so it starts again.
+    if (current.offer.direction === "REDUCTION") {
+      try {
+        await resetCaseWorkflow(current.caseId, { kind: "process-pleading" });
+        setProcessWorkflowRefresh((value) => value + 1);
+      } catch (error) {
+        setExecutionError("Nie udało się zamknąć pipeline'u pisma procesowego: " + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
+        return;
+      }
+    }
+    const label = DETERMINISTIC_ACTIONS.find((item) => item.id === action)?.label ?? action;
+    selectDeterministicAction(action);
+    setPendingSkillSwitch({ caseId: current.caseId, action, text: switchMessage(current.offer), label });
+  }
 
   function switchToCase(
     nextCaseId: string
@@ -3094,7 +3129,7 @@ export default function MatterChatApp({
       setExecutionError("");
       setExecutionDiagnostic(null);
       setMessages((current) => current.filter((message) => message.id !== pending.messageId));
-      setContractRetry({ text: pending.text, messageId: pending.messageId });
+      setContractRetry({ text: pending.text, messageId: pending.messageId, ...(pending.switchTo ? { switchTo: pending.switchTo } : {}) });
     } catch (error) {
       setExecutionError(
         "Nie udało się przygotować etapu sprawy: " +
@@ -3108,8 +3143,14 @@ export default function MatterChatApp({
   useEffect(() => {
     if (!contractRetry || executing) return;
     if (messages.some((message) => message.id === contractRetry.messageId)) return;
-    const { text } = contractRetry;
+    const { text, switchTo } = contractRetry;
     setContractRetry(null);
+    // A retried switch: the removal restored the previous action; select the new one again.
+    if (switchTo && caseId) {
+      selectDeterministicAction(switchTo.action);
+      setPendingSkillSwitch({ caseId, action: switchTo.action, text, label: switchTo.label });
+      return;
+    }
     void executeMessage(text);
     // executeMessage reads the current thread state; the effect waits for the removal above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3134,7 +3175,7 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
-  async function executeMessage(plain: string, options: { acceptUnverified?: boolean; autoStep?: string } = {}): Promise<void> {
+  async function executeMessage(plain: string, options: { acceptUnverified?: boolean; autoStep?: string; switchTo?: { action: DeterministicActionId; label: string } } = {}): Promise<void> {
     const trimmed =
       plain.trim();
     if (
@@ -3192,9 +3233,11 @@ export default function MatterChatApp({
                   deterministicAction
                 )
             }
-          : options.autoStep
-            ? { meta: `Automatyczne przejście · ${options.autoStep}` }
-            : {})
+          : options.switchTo
+            ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
+            : options.autoStep
+              ? { meta: `Automatyczne przejście · ${options.autoStep}` }
+              : {})
       };
 
     // Optimistic UI: move the message into the thread immediately. Provider
@@ -3507,6 +3550,7 @@ export default function MatterChatApp({
           ...current,
           answerMessage
         ]);
+        setSkillSwitchOffer(result.skillSwitch ? { caseId: executionCaseId, offer: result.skillSwitch } : null);
         const chain = autoAdvanceChain.current;
         const decision = autoAdvanceDecision(result, chain.count, chain.next);
         if (decision.advance && !chain.paused) {
@@ -3681,7 +3725,8 @@ export default function MatterChatApp({
           caseId: executionCaseId,
           text: trimmed,
           messageId: userMessage.id,
-          recovery
+          recovery,
+          ...(options.switchTo ? { switchTo: options.switchTo } : {})
         });
       }
       if (
@@ -5967,6 +6012,25 @@ export default function MatterChatApp({
                     </button>
                   </div>
                   <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą tych powołań; decyzja trafia do audytu sesji. Wiadomość zostanie wysłana ponownie.</small>
+                </div>
+              ) : null}
+              {skillSwitchOffer && skillSwitchOffer.caseId === caseId && !executing ? (
+                <div className="chat-contract-mode" role="group" aria-label="Zmiana rodzaju pisma">
+                  <strong>{switchTitle(skillSwitchOffer.offer)}</strong>
+                  {skillSwitchOffer.offer.reason ? <small>{skillSwitchOffer.offer.reason}</small> : null}
+                  <div className="chat-contract-mode-options">
+                    <button type="button" className="chat-primary-action" onClick={() => void acceptSkillSwitch()}>
+                      {skillSwitchOffer.offer.direction === "ESCALATION" ? "Przełącz na pismo procesowe" : "Przełącz na pismo proste"}
+                    </button>
+                    <button type="button" className="chat-secondary-action" onClick={() => setSkillSwitchOffer(null)}>
+                      Zostań przy obecnym
+                    </button>
+                  </div>
+                  <small>
+                    {skillSwitchOffer.offer.direction === "ESCALATION"
+                      ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
+                      : "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."}
+                  </small>
                 </div>
               ) : null}
               {(autoAdvanceRequest?.caseId === caseId || (executing && autoAdvanceChain.current.count > 0 && !autoAdvanceChain.current.paused)) ? (

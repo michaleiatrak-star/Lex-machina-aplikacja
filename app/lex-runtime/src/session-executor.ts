@@ -1,5 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { waitsForUser, withoutWaitingMarker } from "./workflow-wait.js";
+import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -948,6 +949,8 @@ export type SessionExecutionResponse = {
   };
   // The answer ends a checkpoint with a question to the user (workflow-wait.ts).
   waitingForUser?: boolean;
+  // The letter skill hands the matter to the other one (skill-switch.ts); the chat offers the switch.
+  skillSwitch?: SkillSwitchOffer;
   processAuto?: {
     maxSteps: number;
     stopped:
@@ -4077,7 +4080,14 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
         : null;
     // A checkpoint that asks the user (WAITING_FOR_USER_MARKER): flagged, the marker line removed.
-    const waitingForUser = waitsForUser(restoredAnswer.text);
+    // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
+    const skillSwitch =
+      workflowOutput.mode === "ESCALATION_REQUIRED"
+        ? escalationOffer(restoredAnswer.text)
+        : workflowOutput.mode === "REDUCTION_OFFERED"
+          ? reductionOffer(restoredAnswer.text)
+          : null;
+    const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
@@ -4104,6 +4114,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             answer:
               waitingForUser ? withoutWaitingMarker(restoredAnswer.text) : restoredAnswer.text,
             ...(waitingForUser ? { waitingForUser: true } : {}),
+            ...(skillSwitch ? { skillSwitch } : {}),
             ...(restoredAnswer.restorations.length > 0
               ? { restorations: restoredAnswer.restorations }
               : {}),
