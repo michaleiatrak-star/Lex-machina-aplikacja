@@ -451,6 +451,7 @@ export class LegalDocumentAstGenerator {
             request.attachments
               ?.length
           ),
+        ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
         verificationRecords:
           internal
             .verificationRecords

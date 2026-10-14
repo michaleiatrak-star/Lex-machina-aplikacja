@@ -163,4 +163,20 @@ export class VerificationLedger {
   all(): VerificationRecord[] {
     return [...this.records.values()].flatMap((records) => records);
   }
+
+  // Signatures of the user's own proceeding (header of the case's documents, the user's
+  // messages): the case file number, not a judgment cited as authority.
+  private readonly caseFiles = new Set<string>();
+
+  addCaseFileNumber(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) this.caseFiles.add(key);
+  }
+
+  caseFileNumbers(): string[] {
+    return [...this.caseFiles];
+  }
 }
+
+export const caseFileKey = (value: string): string =>
+  value.replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "").replace(/\./g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pl");

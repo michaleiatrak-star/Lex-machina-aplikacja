@@ -11,7 +11,8 @@ import {
 import { compactForModel } from "./skill-sections.js";
 import { reductionOffer } from "./skill-switch.js";
 import { ANNOUNCED_ACTION_PROMPT, onlyAnnouncesWork } from "./announced-action.js";
-import { defenceCount } from "./task-routing.js";
+import { defenceCount, opponentPleadingTrigger } from "./task-routing.js";
+import { classifyDocument } from "./document-kind.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -1240,7 +1241,14 @@ export class LexExecutionEngine {
         // change with the stage, so they go to the end of the prompt with the checkpoint;
         // they keep the budget's priority.
         const triggered = skillModules(this.registry, contract.skill, {
-          text: [moduleTriggerText, documentTriggerText(args.documentContext, 20_000)].join("\n"),
+          text: [
+            moduleTriggerText,
+            documentTriggerText(args.documentContext, 20_000),
+            opponentPleadingTrigger(
+              moduleTriggerText,
+              (args.documentContext ?? "").split(/\n\n---\n\n/u).map((block) => classifyDocument({ text: documentTriggerText(block, 6_000) }))
+            )
+          ].join("\n"),
           stage: args.processWorkflowContext?.stage ?? null
         });
         const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);

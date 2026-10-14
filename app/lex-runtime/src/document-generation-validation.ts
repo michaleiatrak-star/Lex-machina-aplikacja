@@ -12,6 +12,8 @@ export type DocumentGenerationValidationContext = {
   model: string;
   usedDocumentContext: boolean;
   verificationRecords: VerificationRecord[];
+  // The proceeding's own case numbers: G8 does not treat them as case law in the file.
+  caseFileNumbers?: string[];
   auditEvents: AuditEvent[];
 };
 
@@ -72,6 +74,7 @@ export function rebuildGenerationExportState(
   for (const record of context.verificationRecords) {
     ledger.add({ ...record });
   }
+  for (const signature of context.caseFileNumbers ?? []) ledger.addCaseFileNumber(signature);
 
   const audit = new AuditTrail(
     context.sourceSessionId + ":document-export"

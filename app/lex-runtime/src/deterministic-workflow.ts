@@ -226,6 +226,18 @@ const COURT_ANALYSIS_FINAL_MARKERS = [
   "§11."
 ] as const;
 
+// Each marker searched after the previous one: a heading's word used earlier in the prose
+// ("WALIDACJA: brak sprzeczności" before the "SPRZECZNOŚCI" section) does not break the order.
+function sequentialPositions(text: string, markers: readonly string[]): number[] {
+  let from = 0;
+  return markers.map((marker) => {
+    const position = text.indexOf(marker, from);
+    if (position < 0) return text.indexOf(marker) >= 0 ? -2 : -1;
+    from = position + marker.length;
+    return position;
+  });
+}
+
 const EVIDENCE_ANALYSIS_FINAL_MARKERS = [
   "RAPORT DOWODOWY",
   "POZYCJA PROCESOWA",
@@ -685,12 +697,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      PROCESS_PLEADING_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, PROCESS_PLEADING_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -757,12 +764,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      COURT_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, COURT_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -866,12 +868,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      EVIDENCE_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, EVIDENCE_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -949,12 +946,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
       );
     const positions =
-      markers.map(
-        (marker) =>
-          normalized.indexOf(
-            marker
-          )
-      );
+      sequentialPositions(normalized, markers);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1026,12 +1018,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      STATUTE_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, STATUTE_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1144,12 +1131,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      WITNESS_W3_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, WITNESS_W3_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1219,12 +1201,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      CHRONOLOGY_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, CHRONOLOGY_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1294,12 +1271,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      CASE_LAW_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, CASE_LAW_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1467,12 +1439,7 @@ export function evaluateDeterministicWorkflowOutput(
       );
 
   const positions =
-    SIMPLE_LETTER_READY_MARKERS
-      .map((marker) =>
-        normalizedSimple.indexOf(
-          marker
-        )
-      );
+      sequentialPositions(normalizedSimple, SIMPLE_LETTER_READY_MARKERS);
   const orderValid =
     missing.length === 0 &&
     positions.every(
