@@ -169,7 +169,7 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
-import { signaturesIn } from "./court-of-signature.js";
+import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
 import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -1880,6 +1880,9 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Texts the source tools returned in this turn (judgments, hit lists): what the
     // answer may say a judgment is about (case-content-grounding).
     const caseSourceTexts: string[] = [];
+    // Tool results of an official case-law database, and of a lead (SAOS, web search, a portal).
+    const officialCaseLawTexts: string[] = [];
+    const leadCaseLawTexts: string[] = [];
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -2853,7 +2856,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
         }
-        for (const result of federationResults) caseSourceTexts.push(result.content);
+        for (const result of federationResults) {
+          caseSourceTexts.push(result.content);
+          const call = federationCalls.find((item) => item.id === result.tool_use_id);
+          (call && officialCaseLawCall(call) ? officialCaseLawTexts : leadCaseLawTexts).push(result.content);
+        }
         for (
           const result
           of federationResults
@@ -2902,7 +2909,10 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
           snVerificationRequired = true;
         }
-        for (const result of verificationResults) caseSourceTexts.push(result.content);
+        for (const result of verificationResults) {
+          caseSourceTexts.push(result.content);
+          officialCaseLawTexts.push(result.content);
+        }
 
         const byId = new Map(
           [
@@ -3487,9 +3497,12 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     // HARD GATE: an unverified statute or Dz.U. reference is shown only with
     // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
-    // Signatures an official database returned in this turn (CBOSA, SAOS, the courts' portal,
-    // TK, SN): real, though not verified in full; a signature from nowhere stays blocking.
-    for (const { signature } of signaturesIn(caseSourceTexts.join("\n"))) ledger.addRetrievedCase(signature);
+    // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
+    // TK, KIO, CURIA, ETPCz): real, though not verified in full; from nowhere stays blocking.
+    for (const { signature } of signaturesIn(officialCaseLawTexts.join("\n"))) ledger.addRetrievedCase(signature);
+    // Found only in SAOS, a web search or a legal portal (LEX, Legalis, a law firm, a blog): a
+    // lead, shown ⚠️ until verified in the court's own database.
+    for (const { signature } of signaturesIn(leadCaseLawTexts.join("\n"))) ledger.addCaseReference(signature);
     const preFinalization =
       new FinalizationGate().evaluate(
         citedAnswer.text,

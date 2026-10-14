@@ -751,8 +751,9 @@ export function markUnverifiedReferences(
   // Signatures of proceedings the case's materials or the user name: marked like an
   // unverified statute. Any other unverified case signature stays blocking (HARD GATE).
   caseReferences: ReadonlySet<string> = new Set(),
-  // Signatures an official database returned in this turn (CBOSA, SAOS, portal, TK, SN): an
-  // official anchor without the full verification, 🟨 (NSA/WSA snapshot, no promotion).
+  // Signatures an official case-law database returned in this turn (sn.pl, CBOSA, the courts'
+  // portal, TK, KIO, CURIA, ETPCz): an official anchor without full verification, 🟨 (NSA/WSA
+  // snapshot, no promotion). SAOS, LEX, Legalis and other portals are leads (⚠️).
   retrievedCases: ReadonlySet<string> = new Set()
 ): string {
   const markable = new Set<FinalizationFinding["status"]>([
