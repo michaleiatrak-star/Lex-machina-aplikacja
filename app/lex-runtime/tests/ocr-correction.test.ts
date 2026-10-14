@@ -117,3 +117,21 @@ describe("OCR correction with the local model", () => {
     await expect(none.correct(scan([["urnowa", 0.5]]))).rejects.toThrow("LOCAL_PRIVACY_MODEL_NOT_READY");
   });
 });
+
+describe("OCR correction with register data (VAT white list, KRS)", () => {
+  it("register words are not marked unknown, are given as spelling and are valid fixes", async () => {
+    const asked: string[] = [];
+    const page = scan([["Umowa najmu z Lorica luris w Warszawie", 0.6]]);
+    const fixed = await corrector([{ line: 1, from: "luris", to: "Iuris" }], asked).correct(page, undefined, ["Lorica Iuris"]);
+    expect(asked[0]).toContain("[REJESTR]");
+    expect(asked[0]).toContain("Lorica Iuris");
+    expect(asked[0]).not.toContain("⟦Lorica⟧");
+    expect(fixed.text).toContain("Lorica Iuris");
+  });
+
+  it("without register data the same fix is refused (not a dictionary word)", async () => {
+    const page = scan([["Umowa najmu z Lorica luris w Warszawie", 0.6]]);
+    const fixed = await corrector([{ line: 1, from: "luris", to: "Iuris" }]).correct(page);
+    expect(fixed.text).toContain("luris");
+  });
+});

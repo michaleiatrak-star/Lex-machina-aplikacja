@@ -851,11 +851,22 @@ implements DocumentService {
     if (!this.ocrCorrector || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
       return source;
     }
+    // A NIP/KRS read from the document gives the register's spelling of the firm, its
+    // address and its people: the OCR corrector takes them as known words.
+    let registered: string[] = [];
+    try {
+      registered = this.registryForms
+        ? (await this.registryForms.forms(source.pages.map((page) => page.text).join("\n"))).map((form) => form.text)
+        : [];
+    } catch (error) {
+      process.stderr.write(`OCR_REGISTRY_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+    }
     const pages: IngestedPage[] = [];
     for (const page of source.pages) {
       pages.push(
         await this.ocrCorrector.correct(page, (item, done, total) =>
-          onProgress?.({ stage: "AI_CHECK", done, total, item: `korekta OCR s. ${page.page}: ${item}`.slice(0, 160) })
+          onProgress?.({ stage: "AI_CHECK", done, total, item: `korekta OCR s. ${page.page}: ${item}`.slice(0, 160) }),
+          registered
         )
       );
     }

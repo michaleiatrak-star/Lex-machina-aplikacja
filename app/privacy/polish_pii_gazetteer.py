@@ -36,6 +36,7 @@ from pathlib import Path
 import morfeusz2
 
 import address_base
+import given_name_base
 import surname_base
 
 UPPER = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÁÍÚÝČŠŽŘ"
@@ -139,6 +140,10 @@ def word_class(word: str) -> tuple[bool, bool, bool, bool, bool, frozenset[str]]
                 geographic = True
             if not (types & {"imię", "nazwisko", "nazwa_geograficzna"}) and pos not in {"brev", "interp"}:
                 common = True
+    # A given name SGJP lacks (Oleksandr, Tetiana, Juneyoung): the PESEL register. Not a
+    # common word, place or SGJP surname ("Rada", "Park" and "Wola" stay what they are).
+    if not given and (unknown or not (common or geographic or surname)) and not is_generic(word):
+        given = given_name_base.is_given_name(word.capitalize() if word.isupper() else word)
     return given, surname, unknown, common, geographic, frozenset(lemmas)
 
 

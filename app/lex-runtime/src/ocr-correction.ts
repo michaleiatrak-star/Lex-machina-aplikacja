@@ -142,6 +142,21 @@ function negations(value: string): number {
  * capitalization, same negations, and a small edit once spaces are ignored
  * (so splitting or merging words is free).
  */
+/**
+ * A name as the register writes it, one letter away in any case ("Lorica luris" ->
+ * "Iuris": OCR reads I as l). Allowed only for register words, never invented.
+ */
+function registerSpellingFix(lines: OcrLine[], index: number, from: string, to: string, spelling: ReadonlySet<string>): Fix | null {
+  const fromWords = words(from);
+  const toWords = words(to);
+  if (!toWords.length || fromWords.length !== toWords.length || !toWords.every((word) => spelling.has(word))) return null;
+  if (!fragmentPattern(from).test(lines[index]!.text)) return null;
+  const close = fromWords.every((word, position) =>
+    editDistance(word.toLocaleLowerCase("pl"), toWords[position]!.toLocaleLowerCase("pl")) <= 1
+  );
+  return close && from !== to ? { line: index, from, to } : null;
+}
+
 export function acceptableFix(rawFrom: string, to: string): boolean {
   // Stray symbols may only be dropped; what remains follows the word rules.
   const from = withoutArtifacts(rawFrom);
@@ -214,7 +229,12 @@ export class LocalOcrCorrector {
   ) {}
 
   /** The page with fixes applied (original words in page.corrections); unchanged when nothing to fix. */
-  async correct(page: IngestedPage, onCheck?: OcrFixCheck): Promise<IngestedPage> {
+  /**
+   * `registered`: names, addresses and persons the VAT white list and KRS give for a NIP/KRS
+   * in the document. Their words are known (not marked as errors, valid as fixes) and the
+   * model sees them as the right spelling ("Lorica Iuris" read as "Lorica luris").
+   */
+  async correct(page: IngestedPage, onCheck?: OcrFixCheck, registered: readonly string[] = []): Promise<IngestedPage> {
     const original = page.lines;
     if (page.source !== "OCR" || !original?.length) return page;
     const ask = this.model();
@@ -229,8 +249,11 @@ export class LocalOcrCorrector {
 
     const vocabulary = [...new Set(lines.flatMap((line) => words(line.text)).filter(candidateWord))];
     const knownFlags = await this.knownWords(vocabulary);
-    const known = new Set(vocabulary.filter((_, index) => knownFlags[index]));
-    const unknown = new Set(vocabulary.filter((_, index) => !knownFlags[index]));
+    const spelling = new Set(registered.flatMap((form) => words(form)));
+    const registeredWords = new Set([...spelling].map((word) => word.toLocaleLowerCase("pl")));
+    const inRegister = (word: string) => registeredWords.has(word.toLocaleLowerCase("pl"));
+    const known = new Set(vocabulary.filter((word, index) => knownFlags[index] || inRegister(word)));
+    const unknown = new Set(vocabulary.filter((word, index) => !knownFlags[index] && !inRegister(word)));
 
     const lowScore = (index: number) => {
       const score = lines[index]!.score;
@@ -271,7 +294,10 @@ export class LocalOcrCorrector {
         done,
         total
       );
-      const content = batch
+      const hint = registered.length
+        ? `[REJESTR] Pisownia z białej listy VAT/KRS dla NIP/KRS z dokumentu: ${[...new Set(registered)].slice(0, 40).join("; ")}\n---\n`
+        : "";
+      const content = hint + batch
         .map((group) =>
           group
             .map((index) => {
@@ -285,7 +311,9 @@ export class LocalOcrCorrector {
       for (const fix of parseFixes(await ask(PROMPT, content))) {
         const index = fix.line - 1;
         if (!sent.has(index) || !suspicious.has(index)) continue;
-        const proposal = this.validate(lines, index, fix.from, fix.to, known, unknown, lowScore(index));
+        const proposal =
+          this.validate(lines, index, fix.from, fix.to, known, unknown, lowScore(index)) ??
+          registerSpellingFix(lines, index, fix.from, fix.to, spelling);
         if (proposal) proposals.push(proposal);
       }
       done += batch.flat().length;
@@ -294,7 +322,7 @@ export class LocalOcrCorrector {
 
     const targets = [...new Set(proposals.flatMap((fix) => words(fix.to)))];
     const validFlags = await this.knownWords(targets);
-    const valid = new Set(targets.filter((_, index) => validFlags[index]));
+    const valid = new Set(targets.filter((word, index) => validFlags[index] || inRegister(word)));
     // Every word of the result is a dictionary word, or was already there.
     const accepted = proposals.filter((fix) =>
       words(fix.to).every((word) => valid.has(word) || words(fix.from).includes(word))

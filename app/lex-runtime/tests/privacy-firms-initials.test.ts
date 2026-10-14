@@ -113,6 +113,13 @@ describe.skipIf(!python)("gazetteer: register gaps found by the comparison corpu
     expect(await found("SĄD OKRĘGOWY W ŁODZI")).toEqual([]);
   });
 
+  it("given names of the PESEL register SGJP lacks; common words that are also names stay", async () => {
+    expect(await found("Umowę zawarto z Oleksandrem Kovalenko.")).toContain("Oleksandrem Kovalenko");
+    expect(await found("Świadkiem była Tetiana Shevchuk.")).toContain("Tetiana Shevchuk");
+    expect(await found("Juneyoung Park podpisał porozumienie.")).toContain("Juneyoung Park");
+    expect(await found("Rada Gminy zebrała się. Wola stron była jasna. Young Poland to nazwa projektu.")).toEqual([]);
+  });
+
   it("a name after a foreign title and a street with the house number glued by OCR", async () => {
     expect(await found("Prezes Zarządu\nMr. Juneyoung Park")).toContain("Juneyoung Park");
     expect(await found("ul. Pukowca15, 40-847 Katowice")).toEqual(["ul. Pukowca15, 40-847 Katowice"]);
