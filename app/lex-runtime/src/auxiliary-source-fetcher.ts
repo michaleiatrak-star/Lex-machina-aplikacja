@@ -61,6 +61,9 @@ export type AuxiliaryResolvedTarget = {
   family:
     | 4
     | 6;
+  // Further public addresses of the host, tried when a connection fails
+  // (an IPv6 answer first on a machine without IPv6).
+  fallbacks?: AuxiliaryDnsAddress[];
 };
 
 export type AuxiliaryTransportResponse = {
@@ -451,7 +454,10 @@ export async function resolveAuxiliarySourceTarget(
     address:
       selected.address,
     family:
-      selected.family
+      selected.family,
+    ...(addresses.length > 1
+      ? { fallbacks: addresses.slice(1) }
+      : {})
   };
 }
 
@@ -942,6 +948,37 @@ export class SafeAuxiliarySourceFetcher {
     }
   ) {}
 
+  // A refused or unreachable address moves to the host's next one; HTTP
+  // statuses, limits and timeouts are answers and end the attempt.
+  private async connect(
+    target: AuxiliaryResolvedTarget
+  ): Promise<AuxiliaryTransportResponse> {
+    const { fallbacks = [], ...first } = target;
+    const candidates = [first, ...fallbacks.map((entry) => ({ ...first, ...entry }))];
+    for (let index = 0; ; index += 1) {
+      try {
+        return await this.transport(
+          candidates[index]!,
+          {
+            timeoutMs:
+              this.limits
+                .timeoutMs,
+            maxBytes:
+              this.limits
+                .maxBytes
+          }
+        );
+      } catch (error) {
+        const connectionFailed =
+          error instanceof AuxiliarySourceFetchError &&
+          error.code === "AUX_SOURCE_HTTP_FAILED";
+        if (!connectionFailed || index + 1 >= candidates.length) {
+          throw error;
+        }
+      }
+    }
+  }
+
   async fetch(
     rawUrl: string
   ): Promise<
@@ -964,16 +1001,8 @@ export class SafeAuxiliarySourceFetcher {
           this.resolver
         );
       const response =
-        await this.transport(
-          target,
-          {
-            timeoutMs:
-              this.limits
-                .timeoutMs,
-            maxBytes:
-              this.limits
-                .maxBytes
-          }
+        await this.connect(
+          target
         );
 
       if (

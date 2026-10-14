@@ -60,6 +60,29 @@ describe("auxiliary source: a PDF research page", () => {
   });
 });
 
+describe("auxiliary source: an unreachable first address", () => {
+  it("connects to the host's next public address; an HTTP answer ends the attempt", async () => {
+    const { AuxiliarySourceFetchError, SafeAuxiliarySourceFetcher } = await import("../src/auxiliary-source-fetcher.js");
+    const seen: string[] = [];
+    const resolver = async () => [{ address: "2606:4700:4700::1111", family: 6 as const }, { address: "93.184.216.34", family: 4 as const }];
+    const fetcher = new SafeAuxiliarySourceFetcher(resolver, async (target) => {
+      seen.push(`${target.family}:${target.address}`);
+      if (target.family === 6) throw new AuxiliarySourceFetchError("Auxiliary source HTTPS request failed.", "AUX_SOURCE_HTTP_FAILED");
+      return { statusCode: 200, contentType: "text/plain", body: Buffer.from("Glosa do wyroku.") };
+    });
+    expect((await fetcher.fetch("https://source.example/a")).text).toContain("Glosa");
+    expect(seen).toEqual(["6:2606:4700:4700::1111", "4:93.184.216.34"]);
+
+    seen.length = 0;
+    const timedOut = new SafeAuxiliarySourceFetcher(resolver, async (target) => {
+      seen.push(target.address);
+      throw new AuxiliarySourceFetchError("Auxiliary source request timed out.", "AUX_SOURCE_TIMEOUT");
+    });
+    await expect(timedOut.fetch("https://source.example/a")).rejects.toMatchObject({ code: "AUX_SOURCE_TIMEOUT" });
+    expect(seen).toHaveLength(1);
+  });
+});
+
 describe("CBOSA: an unreadable document and a busy server", () => {
   it("keeps the readable hits and retries a 503", async () => {
     const { CaseLawSearchService } = await import("../src/case-law-search.js");

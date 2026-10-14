@@ -343,6 +343,9 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
   {
     skill: "analizator-dowodow-v3",
     patterns: [
+      // "Oceń moje dowody" chose the evidence skill only through the AUTO router,
+      // so the turn ran LEGAL_QUERY_V1 while "Oceń moje faktury" ran EVIDENCE_ANALYSIS_V1.
+      /\bdowod[a-z]*\b(?! osobist)/,
       /\bmail[a-z]*\b/,
       /\bsms[a-z]*\b/,
       /\bnagran[a-z]*\b/,

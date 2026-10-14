@@ -11,6 +11,7 @@ import { schemaCatalog, skillModules } from "../src/skill-module-map.js";
 import { decideTask, opponentPleadingTrigger } from "../src/task-routing.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 import { amountKeysIn } from "../src/amount-references.js";
+import { resolveAdditionalSkills } from "../src/skill-selection.js";
 
 // Replies to a delivered document (pozew, nakaz, apelacja, wezwanie or zarządzenie sądu) and
 // documents used as evidence: what the application decides before the model writes anything.
@@ -21,6 +22,7 @@ const executor = new SafeSessionExecutor(registry, new ProviderGateway(new Provi
   taskRoutes(): Parameters<typeof decideTask>[0];
   activationMatrix(): Parameters<typeof decideTask>[1];
   redactionTest(): Parameters<typeof decideTask>[4];
+  statefulNextStage(question: string, materials: ReturnType<typeof classifyDocument>[], workflowSkill: string): string | null;
 };
 
 const DOCS = {
@@ -110,6 +112,28 @@ describe("the task with a delivered document", () => {
       }).map((entry) => entry.resource);
     expect(modules("Przygotuj odpowiedź na pozew.", "pozew")).toContain("pisma-procesowe-v3/references/engines/opponent-pleading-attack-engine-v9.md");
     expect(modules("Napisz pozew o zapłatę.", "faktura")).not.toContain("pisma-procesowe-v3/references/engines/opponent-pleading-attack-engine-v9.md");
+  });
+});
+
+describe("evidence workflow", () => {
+  const workflow = (question: string) =>
+    createDeterministicWorkflowPlan(registry, resolveAdditionalSkills(registry, question, "AUTO", true, []).workflowExecutionSkill).id;
+
+  it.each([
+    ["Oceń moje dowody.", "EVIDENCE_ANALYSIS_V1"],
+    ["Przeanalizuj materiał dowodowy.", "EVIDENCE_ANALYSIS_V1"],
+    ["Oceń moje faktury.", "EVIDENCE_ANALYSIS_V1"],
+    ["Zgubiłem dowód osobisty, co robić?", "LEGAL_QUERY_V1"],
+    ["Dostałem wyrok, czy sąd dobrze ocenił dowody?", "COURT_ANALYSIS_V1"]
+  ])("%s → %s", (question, id) => {
+    expect(workflow(question)).toBe(id);
+  });
+
+  it("keeps the pleading the request names as the stage after the evidence report", () => {
+    const documents = (["faktura", "umowa"] as const).map((doc) => classifyDocument({ text: DOCS[doc] }));
+    expect(executor.statefulNextStage("Wykorzystaj te dokumenty jako dowody w pozwie o zapłatę.", documents, "analizator-dowodow-v3")).toBe("pisma-procesowe-v3");
+    expect(executor.statefulNextStage("Oceń moje dowody.", documents, "analizator-dowodow-v3")).toBeNull();
+    expect(executor.statefulNextStage("Wykorzystaj te dokumenty jako dowody w pozwie o zapłatę.", documents, "analiza-sadowa-v6")).toBeNull();
   });
 });
 

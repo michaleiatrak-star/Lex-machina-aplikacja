@@ -181,6 +181,7 @@ import {
   ANALYSIS_INTENT,
   classifyTask,
   decideTask,
+  type DeliveredMaterial,
   parseActivationMatrix,
   parseCombinations,
   parseRedactionTest,
@@ -1396,6 +1397,15 @@ export class SafeSessionExecutor implements SessionExecutor {
    * przeciwnika", "pismo procesowe + dostarczone akta"): the entry skill and its next stage.
    * Empty when the table names no task.
    */
+  /** Stage the request names after a stateful workflow's own skill (router `then`). */
+  statefulNextStage(question: string, materials: readonly DeliveredMaterial[], workflowSkill: string): string | null {
+    const routed = decideTask(this.taskRoutes(), this.activationMatrix(), question, [...materials], this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return routed?.primary === workflowSkill ? routed.then ?? null : null;
+  }
+
   executiveSkillsWithMaterials(
     message: string,
     attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>
@@ -4309,10 +4319,13 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
     const nextContext = { question: pathFacts.query, materials: routingMaterials };
+    // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
+    // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
+    const workflowSkill = execution.workflowPlan.executionSkill;
     const next = taskRoute
       ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
-      : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
+      : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
+        ? pipelineNext(workflowSkill, this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill), this.skillCombinations(), nextContext)
         : null;
     // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
     // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
