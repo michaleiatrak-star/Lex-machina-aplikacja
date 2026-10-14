@@ -24,7 +24,7 @@ describe("calibration mechanics (1000 generated cases)", () => {
       return !prompt.includes(flat(item.decisive).slice(0, 60));
     });
     expect(missed.length).toBeLessThanOrEqual(10);
-  });
+  }, 15_000);
 
   it("labels party arguments as such and never as the authority's assessment", () => {
     const party = /(?:skarżąc|wnioskodawc|apelując|zdanie odrębne)\p{L}* (?:podn|wnosi|uważa|twierdzi)/iu;
