@@ -4,7 +4,8 @@ import type { IngestedPage, OcrCorrection } from "./document-ingestion.js";
  * Spaces PaddleOCR drops (measured on two real 152 dpi scans: "ul.Pukowca15", "art.270",
  * "i8", "ipodlega", "siedzibąw", "wKatowicach"). Model-free and run on every OCR page:
  * a split is made only when its parts are words the dictionary knows (SGJP, PESEL names,
- * TERYT) and the glued token is not. Identifiers (KRS0001, ABC123456, PL61...) stay.
+ * TERYT) and the glued token is not. Identifiers (KRS0001, ABC123456, PL61...) stay. An amount
+ * with a letter o for a zero ("20.ooo,00") gets its zeros back, a common word one lost diacritic.
  */
 
 export type KnownWords = (words: string[]) => Promise<boolean[]>;
@@ -17,7 +18,23 @@ const FUNCTION_WORDS = new Set([
 const ABBREVIATION = /^(art|ust|pkt|poz|nr|par|lit|ul|al|pl|os|tel|kom|tj|zł)([.:])(\d)/iu;
 const LETTERS_THEN_NUMBER = /^(\p{L}+)(\d{1,4}[A-Za-z]?(?:\/\d{1,4}[A-Za-z]?)?)$/u;
 const NUMBER_THEN_WORD = /^(\d{1,4})(\p{Ll}{3,})$/u;
+// An amount with a letter o read for a zero: "20.ooo,00", "60.0o0,00".
+const AMOUNT_WITH_O = /^\d{1,3}(?:\.[\doO]{3})*,[\doO]{2}$/u;
 const EDGE = /^([("„»]*)(.*?)([)"”«.,;:!?]*)$/su;
+// Letters OCR reads for one another: a lost diacritic ("prosze") or a close shape ("pracowniezych").
+const CONFUSABLE: Record<string, string> = {
+  a: "ą", ą: "a", c: "će", ć: "c", e: "ęc", ę: "e", l: "łi", ł: "l", n: "ń", ń: "n", o: "ó", ó: "o",
+  s: "ś", ś: "s", z: "żź", ż: "z", ź: "z", i: "l"
+};
+
+/** The token with one letter read differently: "prosze" -> "proszę", "pracowniezych" -> "pracowniczych". */
+function misreadings(core: string): string[] {
+  const found: string[] = [];
+  [...core].forEach((letter, index) => {
+    for (const other of CONFUSABLE[letter] ?? "") found.push(core.slice(0, index) + other + core.slice(index + 1));
+  });
+  return found;
+}
 
 type Proposal = { token: string; replacement: string; needs: string[]; functionWord?: boolean };
 
@@ -35,6 +52,10 @@ function candidates(token: string): Proposal[] {
   const wrap = (inner: string) => lead + inner + trail;
   const found: Proposal[] = [];
 
+  if (AMOUNT_WITH_O.test(core) && /[oO]/u.test(core)) {
+    found.push({ token, replacement: wrap(core.replace(/[oO]/gu, "0")), needs: [] });
+    return found;
+  }
   const abbreviation = ABBREVIATION.exec(core);
   if (abbreviation) {
     const [, word, mark] = abbreviation;
@@ -81,6 +102,43 @@ function candidates(token: string): Proposal[] {
   return found;
 }
 
+const DIACRITIC: Record<string, string> = {
+  a: "ą", c: "ć", e: "ę", l: "ł", n: "ń", o: "ó", s: "ś", z: "żź",
+  A: "Ą", C: "Ć", E: "Ę", L: "Ł", N: "Ń", O: "Ó", S: "Ś", Z: "ŻŹ"
+};
+const PLAIN_WORD = /^\p{L}{5,}$/u;
+
+function withDiacritic(core: string): string[] {
+  const found: string[] = [];
+  [...core].forEach((letter, index) => {
+    for (const other of DIACRITIC[letter] ?? "") found.push(core.slice(0, index) + other + core.slice(index + 1));
+  });
+  return found;
+}
+
+/**
+ * A word with one diacritic lost ("Spólka", "Zarzadu", "PELNOMOCNICTWO"): the token is unknown and
+ * exactly one reading with the diacritic is a common word. Asked in lowercase, so a name written
+ * without diacritics ("Czaplowski", "Grazyne") stays as written.
+ */
+async function diacriticFixes(tokens: string[], knownWords: KnownWords): Promise<Map<string, string>> {
+  const lower = (word: string) => word.toLocaleLowerCase("pl");
+  const plain = tokens.filter((token) => PLAIN_WORD.test(EDGE.exec(token)?.[2] ?? ""));
+  const cores = [...new Set(plain.map((token) => EDGE.exec(token)![2]!))];
+  const words = [...new Set(cores.flatMap((core) => [core, lower(core), ...withDiacritic(core).map(lower)]))];
+  if (!words.length) return new Map();
+  const flags = await knownWords(words);
+  const known = new Set(words.filter((_, index) => flags[index]));
+  const chosen = new Map<string, string>();
+  for (const token of plain) {
+    const [, lead, core, trail] = EDGE.exec(token)! as unknown as [string, string, string, string];
+    if (known.has(core) || known.has(lower(core))) continue;
+    const readings = withDiacritic(core).filter((word) => known.has(lower(word)));
+    if (readings.length === 1) chosen.set(token, lead + readings[0] + trail);
+  }
+  return chosen;
+}
+
 /** The fixes for a set of lines: [line index, from, to]. */
 export async function spacingFixes(lines: string[], knownWords: KnownWords): Promise<OcrCorrection[]> {
   const tokens = [...new Set(lines.flatMap((line) => line.split(/\s+/u)).filter(Boolean))];
@@ -89,23 +147,27 @@ export async function spacingFixes(lines: string[], knownWords: KnownWords): Pro
     const found = candidates(token);
     if (found.length) proposals.set(token, found);
   }
-  if (!proposals.size) return [];
-  // A glued token the dictionary already knows is a word, not a glue ("odpowiedzialność").
   const cores = [...proposals.keys()].map((token) => EDGE.exec(token)?.[2] ?? token);
-  const words = [...new Set([...cores, ...[...proposals.values()].flat().flatMap((item) => item.needs)])];
-  const flags = await knownWords(words);
+  const glued = cores.filter((core) => !/\d/u.test(core));
+  const words = [
+    ...new Set([...cores, ...glued.flatMap(misreadings), ...[...proposals.values()].flat().flatMap((item) => item.needs)])
+  ];
+  const flags = words.length ? await knownWords(words) : [];
   const known = new Set(words.filter((_, index) => flags[index]));
   const chosen = new Map<string, string>();
   for (const [token, items] of proposals) {
     const core = EDGE.exec(token)?.[2] ?? token;
-    const glued = !/\d/u.test(core);
-    if (glued && known.has(core)) continue;
+    // A glued token the dictionary knows, or knows with one letter read differently, is a
+    // (misread) word: "prosze" is "proszę", not "pros ze".
+    if (!/\d/u.test(core) && (known.has(core) || misreadings(core).some((word) => known.has(word)))) continue;
     const valid = items.filter((item) => item.needs.every((word) => known.has(word)));
     if (!valid.length) continue;
     // Several two-word readings: the one with a short function word, and only if it is the only one.
     const preferred = valid.length === 1 ? valid : valid.filter((item) => item.functionWord);
     if (preferred.length === 1) chosen.set(token, preferred[0]!.replacement);
   }
+  const misread = await diacriticFixes(tokens.filter((token) => !chosen.has(token)), knownWords);
+  for (const [token, to] of misread) chosen.set(token, to);
   const fixes: OcrCorrection[] = [];
   lines.forEach((line, index) => {
     for (const token of line.split(/\s+/u)) {

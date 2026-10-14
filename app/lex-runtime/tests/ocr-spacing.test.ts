@@ -3,7 +3,8 @@ import { restoreOcrSpacing, spacingFixes } from "../src/ocr-spacing.js";
 
 const DICTIONARY = new Set([
   "Pukowca", "podlega", "siedzibą", "Katowicach", "przedsiębiorstwem", "dnia", "zostaje", "ramach", "wykonywania",
-  "pracodawcę", "zupełne", "opin", "rozpowszechniać", "października", "odpowiedzialność", "art"
+  "pracodawcę", "zupełne", "opin", "rozpowszechniać", "października", "odpowiedzialność", "art",
+  "pros", "proszę", "pracownie", "pracowniczych", "spółka", "zarządu", "pełnomocnictwo", "mając", "Czapłowski"
 ]);
 const known = async (words: string[]) => words.map((word) => DICTIONARY.has(word));
 const fixes = async (line: string) => (await spacingFixes([line], known)).map((fix) => `${fix.from}→${fix.to}`);
@@ -28,6 +29,24 @@ describe("spaces dropped by OCR", () => {
     expect(await fixes("odpowiedzialność")).toEqual([]);
     expect(await fixes("w opini publicznej")).toEqual([]);
     expect(await fixes("nierozpowszechniać")).toEqual([]);
+  });
+
+  it("a misread word is not glue: one letter read differently gives a known word", async () => {
+    expect(await fixes("Tym samym prosze regulować")).toEqual(["prosze→proszę"]);
+    expect(await fixes("obowiązków pracowniezych")).toEqual([]);
+  });
+
+  it("an amount with a letter o for a zero", async () => {
+    expect(await fixes("kara w wysokości 20.ooo,00 zł")).toEqual(["20.ooo,00→20.000,00"]);
+    expect(await fixes("kwoty 60.0o0,00 zł")).toEqual(["60.0o0,00→60.000,00"]);
+    expect(await fixes("kwoty 60.000,00 zł i 1o osób")).toEqual([]);
+  });
+
+  it("a common word with one lost diacritic, not a name written without them", async () => {
+    expect(await fixes("Spólka Human Park, Członkach Zarzadu")).toEqual(["Spólka→Spółka", "Zarzadu→Zarządu"]);
+    expect(await fixes("PELNOMOCNICTWO")).toEqual(["PELNOMOCNICTWO→PEŁNOMOCNICTWO"]);
+    expect(await fixes("- pelnomocnictwo.")).toEqual(["pelnomocnictwo.→pełnomocnictwo."]);
+    expect(await fixes("Jan Czaplowski, jan.czaplowski@firma.pl, tel")).toEqual([]);
   });
 
   it("rebuilds the page text and keeps the original tokens", async () => {

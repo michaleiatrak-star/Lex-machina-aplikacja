@@ -650,10 +650,13 @@ class PersonMorphology:
 
 
 def known_word(word: str, engine: "PersonMorphology", address_engine) -> bool:
-    if any(interp[2][2] != "ign" for interp in engine.engine.analyse(word)):
-        return True
+    readings = [interp for interp in engine.engine.analyse(word) if interp[2][2] != "ign"]
     if not word[:1].isupper():
-        return False
+        # A lowercase word is known only as a common word: Morfeusz also reads "zych"
+        # as the surname Zych and "mand" as the name Manda, which made OCR glue look like words.
+        return any(not interp[2][1][:1].isupper() for interp in readings)
+    if readings:
+        return True
     import address_base
     import given_name_base
 
