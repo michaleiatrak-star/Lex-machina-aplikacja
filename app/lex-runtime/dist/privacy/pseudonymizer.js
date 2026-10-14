@@ -1,3 +1,4 @@
+import { detectFirmNames } from "./firm-names.js";
 import { personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
 import { PERSON_CASES } from "./person-morphology.js";
@@ -135,6 +136,24 @@ function normalizeDirectives(text, directives) {
     }
     return normalized;
 }
+// SGJP gives some surnames two declensions (Stępień: Stępnia and Stępienia) and the
+// nominative alone does not tell which one a person uses. A later mention written in
+// the other one ("Wojciecha Stępnia") is the document's evidence: its forms replace the
+// generated ones in the dependent cases; the nominative stays as written.
+function documentVariant(current, incoming, surface) {
+    if (current.type === "organization" || incoming.type === "organization" || isShouting(surface))
+        return null;
+    const same = (a, b) => a.toLocaleLowerCase("pl") === b.toLocaleLowerCase("pl");
+    if ((current.number ?? "") !== (incoming.number ?? "") || current.gender !== incoming.gender)
+        return null;
+    if (!same(current.forms.NOM.text, incoming.forms.NOM.text))
+        return null;
+    if (Object.values(current.forms).some((form) => same(form.text, surface)))
+        return null;
+    if (!Object.values(incoming.forms).some((form) => same(form.text, surface)))
+        return null;
+    return { ...current, forms: { ...incoming.forms, NOM: current.forms.NOM } };
+}
 export class PseudonymizationVault {
     tokenToValue = new Map();
     keyToToken = new Map();
@@ -225,6 +244,11 @@ export class PseudonymizationVault {
             const calmer = entity && current && isShouting(current.canonical) && !isShouting(entity.canonical);
             if (entity && (nominative || clearer || calmer)) {
                 this.tokenEntities.set(sameEntity, calmEntity(entity));
+            }
+            else if (entity && current) {
+                const variant = documentVariant(current, entity, value);
+                if (variant)
+                    this.tokenEntities.set(sameEntity, variant);
             }
             return sameEntity;
         }
@@ -488,10 +512,14 @@ export class LocalPolishPseudonymizer {
     vault;
     namedEntities;
     morphology;
-    constructor(vault, namedEntities, morphology) {
+    registry;
+    constructor(vault, namedEntities, morphology, 
+    // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the text.
+    registry) {
         this.vault = vault;
         this.namedEntities = namedEntities;
         this.morphology = morphology;
+        this.registry = registry;
     }
     async pseudonymize(text, directives = []) {
         const manual = normalizeDirectives(text, directives);
@@ -513,6 +541,28 @@ export class LocalPolishPseudonymizer {
             ...(item.label ? { label: item.label } : {})
         }));
         const autoSpans = detectIdentifiers(text);
+        // Private firms ([FIRMA]): a name before a legal form or after a business prefix,
+        // and its later mentions; one organization token per name.
+        const firms = detectFirmNames(text);
+        autoSpans.push(...firms);
+        // Register data of firms named by NIP/KRS: their names, addresses and people are
+        // protected even where no legal form or prefix marks them ("umowę z Transkomem").
+        const registryFirms = new Map();
+        let registered = [];
+        try {
+            registered = this.registry ? await this.registry.forms(text) : [];
+        }
+        catch (error) {
+            process.stderr.write(`REGISTRY_ENRICHMENT_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+        }
+        for (const form of registered) {
+            const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
+                autoSpans.push({ start: match.index, end: match.index + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO" });
+                if (form.organization)
+                    registryFirms.set(match[0], form.organization.legalForm);
+            }
+        }
         // A person found once is protected everywhere: mentions the recognizer
         // missed (another page, another case form) are matched by known forms.
         const propagatedEntities = new Map();
@@ -538,7 +588,23 @@ export class LocalPolishPseudonymizer {
         }
         if (this.namedEntities) {
             const named = await this.namedEntities.recognize(text);
-            for (const found of named) {
+            for (const recognized of named) {
+                // A name never runs over a line: "Paweł Kania⏎os. Kosmonautów 86/9" (a heading
+                // and the address under it) is the name; the address is found on its own.
+                const lineEnd = recognized.kind === "PERSON" ? recognized.value.indexOf("\n") : -1;
+                const found = lineEnd > 0
+                    ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
+                    : recognized;
+                if (lineEnd > 0)
+                    found.end = found.start + found.value.length;
+                // A double surname the recognizer cut at the hyphen ("Nicole Brzezińska" of "Nicole Brzezińska-Król").
+                if (found.kind === "PERSON") {
+                    const rest = /^-\p{Lu}\p{Ll}+/u.exec(text.slice(found.end, found.end + 40));
+                    if (rest) {
+                        found.end += rest[0].length;
+                        found.value = text.slice(found.start, found.end);
+                    }
+                }
                 // "Bank", "Rada Gminy": an institution; "Najemca Jan Kowalski": the name only.
                 const span = found.kind === "PERSON" ? personPart(text, found) : found;
                 if (span &&
@@ -548,6 +614,31 @@ export class LocalPolishPseudonymizer {
                         source: "AUTO"
                     });
                 }
+            }
+        }
+        // The bare surname of a person recognized in this text, written with a capital inside a
+        // sentence ("spotkał się z Lis", "Lis" also being a common noun the recognizer skips).
+        const surnames = new Set(autoSpans
+            .filter((span) => span.kind === "PERSON" && /\s/u.test(span.value) && !isShouting(span.value))
+            .map((span) => span.value.split(/\s+/u).at(-1))
+            .filter((surname) => /^\p{Lu}\p{Ll}{2,}(?:-\p{Lu}\p{Ll}+)?$/u.test(surname)));
+        for (const surname of surnames) {
+            for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}.-])${surname}(?![\\p{L}\\p{N}-])`, "gu"))) {
+                const before = text.slice(Math.max(0, match.index - 3), match.index);
+                if (/(?:^|[.!?]\s*|\n\s*)$/u.test(before) && !/\p{L}\s$/u.test(before))
+                    continue;
+                autoSpans.push({ start: match.index, end: match.index + match[0].length, kind: "PERSON", value: match[0], confidence: 0.9, source: "AUTO" });
+            }
+        }
+        // A name recognized in the text also protects its all-caps spelling in the same text
+        // ("NICOLE BARAN" in a heading above "Nicole Baran"): NER misses names in capitals.
+        for (const found of [...autoSpans]) {
+            if (found.kind !== "PERSON" || !/\s/u.test(found.value) || isShouting(found.value))
+                continue;
+            const shouted = found.value.toLocaleUpperCase("pl");
+            const escaped = shouted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
+                autoSpans.push({ start: match.index, end: match.index + match[0].length, kind: "PERSON", value: match[0], confidence: 1, source: "AUTO" });
             }
         }
         const autoAllowed = autoSpans.filter((span) => !keep.some((item) => overlaps(span, item)) &&
@@ -565,6 +656,12 @@ export class LocalPolishPseudonymizer {
         // keyed by kind and surface. Without the morphology engine tokens fall back
         // to exact-surface identity.
         const entities = new Map(propagatedEntities);
+        for (const firm of firms)
+            entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.value, firm.legalForm));
+        for (const [value, legalForm] of registryFirms) {
+            if (!entities.has(`PERSON\u0000${value}`))
+                entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
+        }
         // Surfaces written after "państwo", "małżonkowie", a plural role...: a family.
         const plural = new Set(findings
             .filter((finding) => finding.kind === "PERSON")

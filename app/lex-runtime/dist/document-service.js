@@ -154,6 +154,7 @@ export class LocalPrivateDocumentService {
     personMorphology;
     pageMasker;
     ocrCorrector;
+    registryForms;
     documents = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
     // One token per person and inflected restore ([PII:PERSON:0001|GEN]).
@@ -161,7 +162,9 @@ export class LocalPrivateDocumentService {
     // Masks personal data on scanned pages sent to a model as evidence.
     pageMasker, 
     // "z lokalnym AI": fixes OCR errors before anonymization.
-    ocrCorrector) {
+    ocrCorrector, 
+    // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
+    registryForms) {
         this.pdfIngestor = pdfIngestor;
         this.namedEntities = namedEntities;
         this.maxChunkChars = maxChunkChars;
@@ -173,6 +176,7 @@ export class LocalPrivateDocumentService {
         this.personMorphology = personMorphology;
         this.pageMasker = pageMasker;
         this.ocrCorrector = ocrCorrector;
+        this.registryForms = registryForms;
     }
     digitalTextResult(data, text) {
         if (data.byteLength >
@@ -302,7 +306,7 @@ export class LocalPrivateDocumentService {
                 ? {
                     onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
                 }
-                : undefined), this.documents.get(documentId)?.aiFindings), this.personMorphology).pseudonymize(page.text);
+                : undefined), this.documents.get(documentId)?.aiFindings), this.personMorphology, this.registryForms).pseudonymize(page.text);
             for (const finding of preview.findings) {
                 suggestions.push({
                     page: page.page,
@@ -379,7 +383,7 @@ export class LocalPrivateDocumentService {
             });
         }
         record.source = source;
-        const preview = await new LocalPolishPseudonymizer(new PseudonymizationVault(), withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), this.personMorphology).pseudonymize(clean);
+        const preview = await new LocalPolishPseudonymizer(new PseudonymizationVault(), withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), this.personMorphology, this.registryForms).pseudonymize(clean);
         return {
             page: {
                 page: page.page,
@@ -448,7 +452,7 @@ export class LocalPrivateDocumentService {
             ? {
                 onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
             }
-            : undefined), record.aiFindings), pageMemory[pageIndex]), this.personMorphology).pseudonymize(page.text, pageDirectives);
+            : undefined), record.aiFindings), pageMemory[pageIndex]), this.personMorphology, this.registryForms).pseudonymize(page.text, pageDirectives);
         const directivesFor = (page) => directives
             .filter((directive) => directive.page === page.page)
             .map(({ page: _page, ...directive }) => directive);

@@ -67,6 +67,8 @@ const R2B_HOSTS = new Set([
     "przepisy.gofin.pl",
     "standardyprawa.pl",
     "www.standardyprawa.pl",
+    "openlex.pl",
+    "www.openlex.pl",
     "biznes.gov.pl",
     "www.biznes.gov.pl"
 ]);

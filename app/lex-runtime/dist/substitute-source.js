@@ -34,9 +34,19 @@ function normalize(value) {
         .toLocaleLowerCase("pl")
         .trim();
 }
-/** Number of the article in a claim ("art. 233 § 1 KK" -> "233"). */
+// "art. 11¹", "art. 11^1" and "Art. 11<sup>1</sup>" are one unit (never Art. 11 or Art. 111).
+const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+function superscriptsAsCaret(value) {
+    return value
+        .replace(/<sup\b[^>]*>\s*(\d{1,3})\s*<\/sup>/giu, "^$1")
+        .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => `^${[...digits].map((digit) => SUPERSCRIPT_DIGITS[digit]).join("")}`)
+        // The PDF text extractor writes a superscript as " [1] " ("Art. 449 [1] .").
+        .replace(/(\d)\s*\[(\d{1,3})\](?=\s|[.,;§)]|$)/gu, "$1^$2")
+        .replace(/(\d)\s+\^(\d)/gu, "$1^$2");
+}
+/** Number of the article in a claim ("art. 233 § 1 KK" -> "233", "art. 11¹ KC" -> "11^1"). */
 export function claimArticle(claim) {
-    return /\bart\.?\s*(\d+[a-z]{0,4})/iu.exec(claim)?.[1]?.toLocaleLowerCase("pl") ?? null;
+    return /\bart\.?\s*(\d+(?:\^\d+)?[a-z]{0,4})/iu.exec(superscriptsAsCaret(claim))?.[1]?.toLocaleLowerCase("pl") ?? null;
 }
 /** Fragment of the source text from the article heading, or null. */
 export function articleEvidence(text, article) {
@@ -71,7 +81,7 @@ async function fetchText(url, fetcher) {
     const raw = await response.text();
     if (raw.length > MAX_BYTES)
         throw new SubstituteSourceError("SUBSTITUTE_TOO_LARGE");
-    return type.includes("text/plain") ? raw : htmlToText(raw);
+    return superscriptsAsCaret(type.includes("text/plain") ? raw : htmlToText(superscriptsAsCaret(raw)));
 }
 function checkedUrl(value) {
     let url;

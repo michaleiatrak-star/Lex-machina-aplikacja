@@ -86,7 +86,9 @@ export function matchSchema(entries, text) {
     }
     return best ? { ...best.entry, why: `schemat ${best.entry.code}: ${best.entry.label} (${best.words.join(", ")})` } : null;
 }
-const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz|zrób|wyślij|złóż|wnieś|projekt\p{L}*|wzór|wzoru|szablon\p{L}*)(?![\p{L}])/iu;
+// "Chcę złożyć sprzeciw", "potrzebuję odpowiedzi na pozew", "proszę o pozew": the letter
+// itself is wanted, even after "dostałem …" (REVIEW), not an explanation of it.
+const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz|zrób|wyślij|złóż|wnieś|projekt\p{L}*|wzór|wzoru|szablon\p{L}*|(?:potrzebuj\p{L}*|chcę|chcemy|chciał\p{L}*\s+bym|prosz\p{L}*)\s+(?:o\s+)?(?:złożyć|wnieść|napisać|przygotować|sporządzić|przygotowanie|napisanie|odpowied\p{L}*|pozew|pozwu|pism[oa]|sprzeciw\p{L}*|apelacj\p{L}*|replik\p{L}*|wnios\p{L}*|skarg\p{L}*|zażaleni\p{L}*|zarzut\p{L}*))(?![\p{L}])/iu;
 const REVIEW = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|mogę|można|jest|są|należy|powinien\p{L}*|trzeba)|policz|oblicz|wylicz|do\s+kiedy|kiedy\s+(?:mija|upływa)|jakie\s+mam\s+prawa|co\s+(?:mam\s+)?(?:zrobić|robić)|ile\s+(?:mam\s+)?(?:czasu|dni|kosztuj\p{L}*|wynosi|trwa|zapłac\p{L}*|płac\p{L}*)|jaki\s+(?:mam\s+|jest\s+)?termin|termin\s+na|jak\s+długo|czy\s+potrzebuj\p{L}*)(?![\p{L}])/iu;
 // "Jak napisać apelację?", "Jak złożyć skargę na lekarza?", "Co w niej napisać?": how
 // to do it, asked as a question; the user has not asked for the letter itself.

@@ -62,4 +62,26 @@ export class VerificationLedger {
     all() {
         return [...this.records.values()].flatMap((records) => records);
     }
+    // Signatures of the user's own proceeding (header of the case's documents, the user's
+    // messages): the case file number, not a judgment cited as authority.
+    caseFiles = new Set();
+    addCaseFileNumber(signature) {
+        const key = caseFileKey(signature);
+        if (key)
+            this.caseFiles.add(key);
+    }
+    caseFileNumbers() {
+        return [...this.caseFiles];
+    }
+    // Values the case itself states (the user's messages, the case's documents): a fact of the
+    // matter ("pozew o 48 000 zł"), not a statutory rate or term to verify.
+    factAmounts = new Set();
+    addFactAmount(key) {
+        if (key)
+            this.factAmounts.add(key);
+    }
+    factAmountKeys() {
+        return [...this.factAmounts];
+    }
 }
+export const caseFileKey = (value) => value.replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "").replace(/\./g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pl");

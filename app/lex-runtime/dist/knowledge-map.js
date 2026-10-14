@@ -115,7 +115,7 @@ export function knowledgeMapPrompt(args) {
         ["weryfikacja przepisów i orzeczeń", ["verify_legal_reference", "verify_interpretation", "verify_case_reference", "verify_case_quote", "verify_case_proposition"]],
         ["orzecznictwo (SAOS, CBOSA, SN)", ["search_case_law", "search_case_law_library"]],
         ["źródła federacyjne MCP (ISAP, EUR-Lex, KRS i inne)", ["list_federated_legal_sources", "search_federated_legal_sources", "get_federated_legal_document", "call_federated_legal_source"]],
-        ["wyszukiwanie w internecie", ["web_search"]]
+        ["wyszukiwanie w internecie i odczyt stron (tropy do sprawdzenia w źródle urzędowym)", ["web_search", "fetch_auxiliary_legal_source"]]
     ];
     const available = groups.filter(([, names]) => names.some((name) => args.toolNames.has(name)));
     if (available.length) {

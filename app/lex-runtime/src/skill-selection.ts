@@ -345,7 +345,10 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
     patterns: [
       // "Oceń moje dowody" chose the evidence skill only through the AUTO router,
       // so the turn ran LEGAL_QUERY_V1 while "Oceń moje faktury" ran EVIDENCE_ANALYSIS_V1.
-      /\bdowod[a-z]*\b(?! osobist)/,
+      // Only an assessment of evidence: "dowód z orzeczenia" in a citation request is a quote.
+      /\b(?:ocen|analiz|przeanaliz|sprawdz|przejrz|zbadaj|zweryfikuj)[a-z]*(?: [a-z]+){0,2} dowod(?:y|ow|ami)?\b/,
+      /\bmaterial[a-z]* dowodow[a-z]*\b/,
+      /\bsil[a-z]* dowodow[a-z]*\b/,
       /\bmail[a-z]*\b/,
       /\bsms[a-z]*\b/,
       /\bnagran[a-z]*\b/,
