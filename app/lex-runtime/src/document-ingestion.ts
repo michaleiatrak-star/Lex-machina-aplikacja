@@ -11,6 +11,9 @@ export type ExtractedDigitalPage = {
   text: string;
   // false: the page draws no image, so OCR has nothing to read.
   hasImages?: boolean;
+  // A scan with another program's invisible OCR text over it (iLovePDF, scanner
+  // software): its quality is unknown, so the local OCR reads the page again.
+  ocrTextLayer?: boolean;
 };
 
 export type DocumentSourceExtraction = {
@@ -268,9 +271,11 @@ export class CompleteDocumentIngestor {
     const ocrCandidates = extracted.pages
       .filter(
         (page) =>
-          page.text.trim().length <
+          (page.text.trim().length <
             this.limits.minDigitalCharsPerPage &&
-          page.hasImages !== false
+          page.hasImages !== false) ||
+          // Re-read only when an engine exists; without one the foreign layer is kept.
+          (page.ocrTextLayer === true && this.ocr !== undefined)
       )
       .map((page) => page.page);
 
@@ -318,7 +323,10 @@ export class CompleteDocumentIngestor {
       const ocr = ocrByPage.get(page.page);
       const ocrText = ocr?.text.trim() ?? "";
 
-      if (ocr && ocrText.length > digital.length) {
+      // A foreign OCR layer gives way to the local engine's reading (line scores, boxes for
+      // masking the page image); a real digital layer gives way only to a longer OCR text.
+      const preferOcr = page.ocrTextLayer === true && ocrText.length > 0;
+      if (ocr && (preferOcr || ocrText.length > digital.length)) {
         return {
           page: page.page,
           text: ocrText,

@@ -216,7 +216,8 @@ RESIDENCE_CUE_RE = re.compile(
 LOCALITY_LINKS = ("nad", "pod", "za", "na", "od", "przy", "koło", "k.", "w", "we")
 LOCALITY_WORD_RE = re.compile(rf"(?:[{UPPER}][\w’'\-]*|(?:{'|'.join(re.escape(w) for w in LOCALITY_LINKS)})(?=\s+[{UPPER}]))")
 HOUSE_AFTER_RE = re.compile(rf"\s+(?:nr\s*)?\d{{1,4}}[A-Za-z]?(?:\s*/\s*\d{{1,4}}[A-Za-z]?)?(?![\w/.,]\d)(?!\s*(?:r\.|lat|roku|zł))")
-AFTER_STREET_RE = re.compile(r"(?:\s*,\s*|\s+(?:w|we)\s+)")
+# "ul. Długa 5 w Pcimiu" and, in a heading, "UL. DŁUGA 5 W PCIMIU".
+AFTER_STREET_RE = re.compile(r"(?:\s*,\s*|\s+(?:w|we)\s+)", re.IGNORECASE)
 
 # Villages share these names; after "pochodzi z" they are the country.
 COUNTRIES = frozenset("""Polska Niemcy Ukraina Białoruś Litwa Łotwa Estonia Rosja Czechy Słowacja Węgry
@@ -257,7 +258,8 @@ def locality_at(text: str, start: int, country: bool = False) -> tuple[int, int]
         name = text[start:end].rstrip("-")
         if not name[-1:].isalpha() or name.split(" ")[-1] in LOCALITY_LINKS:
             continue
-        readings = morphology.locality_readings(name)
+        # The register holds normal spelling: "ŁODZI" is read as "Łodzi".
+        readings = morphology.locality_readings(name.title() if name.isupper() else name)
         if readings:
             if readings[0]["name"] in COUNTRIES and not country and not HOUSE_AFTER_RE.match(text, start + len(name)):
                 # "pochodzi z Ukrainy": the country; "ul. Długa 5, Włochy",

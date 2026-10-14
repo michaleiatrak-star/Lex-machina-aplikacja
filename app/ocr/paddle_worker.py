@@ -240,6 +240,14 @@ def main() -> None:
         choices=("pdf", "image"),
         default="pdf",
     )
+    # UVDoc straightens a photographed, bent page. On a flat scan it bends the
+    # text and merges neighbouring lines (a whole "KRS ... NIP ... ul." line was
+    # lost on a real scan), so by default it runs for photographs only.
+    parser.add_argument(
+        "--unwarp",
+        choices=("auto", "on", "off"),
+        default=os.environ.get("LEX_OCR_UNWARP", "auto"),
+    )
     args = parser.parse_args()
 
     pages = parse_pages(args.pages)
@@ -275,7 +283,7 @@ def main() -> None:
         lang=args.lang,
         ocr_version="PP-OCRv6",
         use_doc_orientation_classify=True,
-        use_doc_unwarping=True,
+        use_doc_unwarping=(args.unwarp == "on" or (args.unwarp == "auto" and args.mode == "image")),
         use_textline_orientation=True,
         # PaddlePaddle 3.3.x CPU oneDNN has a released PIR attribute-conversion
         # regression on Windows. Keep deterministic CPU inference on the

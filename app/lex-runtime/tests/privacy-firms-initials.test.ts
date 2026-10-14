@@ -11,7 +11,9 @@ describe("firm names ([FIRMA], REGULY-ANONIMIZACJI)", () => {
   it("a name before a legal form or after a business prefix, and its later mentions", () => {
     const text = "Pozwana: Transkom sp. z o.o. z siedzibą w Legionowie. Powódka zawarła ze spółką Transkom umowę. Firma P.H.U. Marex Marek Nowak.";
     const found = detectFirmNames(text).map((span) => span.value);
-    expect(found).toEqual(["Transkom", "Transkom", "Marex"]);
+    // Read after a prefix the name may run into the owner's name; the pseudonymizer cuts it
+    // where a recognized person starts (test below).
+    expect(found).toEqual(["Transkom", "Transkom", "Marex Marek Nowak"]);
     expect(detectFirmNames("Kowalski i Wspólnicy sp.k. oraz Inter-Trans S.A.").map((span) => span.value)).toEqual(["Kowalski i Wspólnicy", "Inter-Trans"]);
   });
 
@@ -27,6 +29,62 @@ describe("firm names ([FIRMA], REGULY-ANONIMIZACJI)", () => {
     const tokens = new Set(result.findings.map((finding) => finding.token));
     expect(tokens.size).toBe(1);
     expect(placeholderGrammar(result.text, vault)[0]).toMatchObject({ entity: "organization", legalForm: "sp. z o.o." });
+  });
+});
+
+describe("firm names: gaps found by the 5000-mention comparison corpus", () => {
+  const values = (text: string) => detectFirmNames(text).map((span) => span.value);
+
+  it("legal form in capitals (headings, KRS extracts)", () => {
+    expect(values("POZWANY: TERMEX SP. Z O.O. z siedzibą w Krakowie")).toEqual(["TERMEX"]);
+    expect(values("BUD-REM SPÓŁKA AKCYJNA")).toEqual(["BUD-REM"]);
+  });
+
+  it("several name words after a prefix, \"spółce\" included", () => {
+    expect(values("Roszczenie dotyczy spółce Nordic Trade Group.")).toEqual(["Nordic Trade Group"]);
+    expect(values("Zarząd P.H.U. Złota Rączka podjął uchwałę.")).toEqual(["Złota Rączka"]);
+  });
+
+  it("a trade adjective after the prefix is not the name; a trade noun needs one", () => {
+    expect(values("Firma Handlowa Budex wystawiła fakturę.")).toEqual(["Budex"]);
+    expect(values("Faktury wystawiał Zakład Usługowy Mar-Pol.")).toEqual(["Mar-Pol"]);
+    expect(values("Biuro Rachunkowe Bilans prowadzi księgi.")).toEqual(["Bilans"]);
+    expect(values("Zakład Ubezpieczeń Społecznych Oddział w Łodzi. Biuro Rzecznika Praw Obywatelskich.")).toEqual([]);
+  });
+
+  it("an inflected later mention", () => {
+    expect(values("Umowę zawarto z Transkom sp. z o.o. Rozliczono się z Transkomem. Budex S.A. i Budeksowi.")).toEqual([
+      "Transkom", "Transkomem", "Budex", "Budeksowi"
+    ]);
+  });
+
+  it("a name in capitals and later in normal spelling; generic words inside a name after P.H.U.", () => {
+    expect(values("Pozwaną jest DOMBUD SP. Z O.O. Przedstawiciel Dombud nie stawił się.")).toEqual(["DOMBUD", "Dombud"]);
+    expect(values("Faktury wystawiała P.H.U. Mazowieckie Centrum Logistyki.")).toEqual(["Mazowieckie Centrum Logistyki"]);
+    expect(values("Faktury wystawiała F.H.U. Biuro Rachunkowe Bilans.")).toEqual(["Biuro Rachunkowe Bilans"]);
+  });
+
+  it("public bodies and sentence ends stay", () => {
+    expect(values("Odpowiada spółka Skarbu Państwa.")).toEqual([]);
+    expect(values("Magazyn jest w Gdyni. Spółka akcyjna zawarła umowę.")).toEqual([]);
+  });
+
+  it("one token per firm across its case forms; the owner keeps a person token", async () => {
+    const text = "Umowę zawarto z Transkom sp. z o.o. Rozliczono się z Transkomem. Firma P.H.U. Marex Marek Nowak.";
+    const owner = text.indexOf("Marek Nowak");
+    const recognizer = { recognize: async () => [{ start: owner, end: owner + 11, kind: "PERSON" as const, value: "Marek Nowak", confidence: 0.9 }] };
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), recognizer).pseudonymize(text);
+    expect(result.text).not.toMatch(/Transkom|Marex|Marek|Nowak/);
+    const byValue = new Map(result.findings.map((finding) => [text.slice(finding.start, finding.end), finding.token]));
+    expect(byValue.get("Transkomem")).toBe(byValue.get("Transkom"));
+    expect(byValue.get("Marex")).not.toBe(byValue.get("Marek Nowak"));
+  });
+});
+
+describe("maiden names", () => {
+  it("the word after \"z d.\" or \"z domu\" is a surname", async () => {
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault()).pseudonymize("Edyta Dudek z d. Kot oraz Anna Lis z domu Wróbel-Nowak.");
+    expect(result.text).not.toMatch(/Kot|Wróbel-Nowak/);
   });
 });
 
@@ -48,6 +106,11 @@ describe.skipIf(!python)("gazetteer: register gaps found by the comparison corpu
     expect(await found("Roboty wykonywano przy ulicy Chopina 159/9 w Toruniu.")).toContain("Toruniu");
     expect(await found("zamieszkała w Poznaniu przy ul. Długiej 5")).toContain("Poznaniu");
     expect(await found("Sąd Okręgowy w Poznaniu oddalił powództwo.")).toEqual([]);
+  });
+
+  it("the town of an address written in capitals (\"UL. MONIUSZKI 167/26 W ŁODZI\")", async () => {
+    expect(await found("Adres do doręczeń: UL. MONIUSZKI 167/26 W ŁODZI.")).toContain("ŁODZI");
+    expect(await found("SĄD OKRĘGOWY W ŁODZI")).toEqual([]);
   });
 
   it("a surname that is also a village before a given name; not the inside of P.H.U.", async () => {

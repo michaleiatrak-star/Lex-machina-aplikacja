@@ -45,8 +45,8 @@ const GROUP_WORDS = new Set([
 // "PHU Jan Kowalski", "pod firmą Jan Nowak", "Kancelaria Adwokacka Jan Kowalski".
 const FIRM_BEFORE = /(?:\b(?:P\.?P\.?H\.?U\.?|P\.?H\.?U\.?|F\.?H\.?U\.?|F\.?P\.?H\.?U\.?|Firma|Przedsiębiorstwo|Zakład|Kancelaria|Biuro|Studio|Sklep|Warsztat|Hurtownia|Gabinet|Pracownia|Agencja)(?:\s+(?:\p{Lu}[\p{L}-]*|[\p{L}]+\.)){0,2}|\bpod\s+(?:firmą|nazwą))\s*[„"»]?\s*$/u;
 // "Nowak sp. z o.o.", "Kowalski i Wspólnicy sp.k.", "Jan Nowak Transport".
-const LEGAL_FORM = /(sp\.\s?z\s?o\.\s?o\.|spółk[aiąę]\s+z\s+ograniczoną\s+odpowiedzialnością|spółk[aiąę]\s+(?:akcyjn|komandytow|jawn|partnersk|cywiln)\p{L}*|S\.\s?A\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.|S\.K\.A\.|P\.S\.A\.)/u;
-const FIRM_AFTER = /^\s*(?:i\s+(?:Wspólnicy|Partnerzy|Syn|Synowie|S-ka)\b|&|(?:Usługi|Transport|Handel|Budownictwo|Consulting|Group|Trade|Service|Serwis|Invest|Development|Logistics|Holding|Media|Design|Auto|Bud|Tech|Soft|Med|Eko)\b|,?\s*(?:sp\.|spółk|S\.\s?A\.|s\.\s?c\.|S\.K\.A\.|P\.S\.A\.))/u;
+const LEGAL_FORM = /(sp\.\s?z\s?o\.\s?o\.|spółk[aiąę]\s+z\s+ograniczoną\s+odpowiedzialnością|spółk[aiąę]\s+(?:akcyjn|komandytow|jawn|partnersk|cywiln)\p{L}*|S\.\s?A\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.|S\.K\.A\.|P\.S\.A\.)/iu;
+const FIRM_AFTER = /^\s*(?:i\s+(?:Wspólnicy|Partnerzy|Syn|Synowie|S-ka)\b|&|(?:Usługi|Transport|Handel|Budownictwo|Consulting|Group|Trade|Service|Serwis|Invest|Development|Logistics|Holding|Media|Design|Auto|Bud|Tech|Soft|Med|Eko)\b|,?\s*(?:[Ss][Pp]\.|[Ss][Pp][Óó][Łł][Kk]|S\.\s?A\.|[Ss]\.\s?[Cc]\.|S\.K\.A\.|P\.S\.A\.))/u;
 /** The firm around a person-name mention, if the name is part of a firm name. */
 export function firmContext(text, start, end) {
     const before = text.slice(Math.max(0, start - 60), start).split(/[\n.;:!?](?=\s)/).pop() ?? "";
@@ -616,6 +616,28 @@ export class LocalPolishPseudonymizer {
                 }
             }
         }
+        // A maiden name after "z d." / "z domu" ("Anna Nowak z d. Kot"): a person, whatever the word.
+        for (const match of text.matchAll(/(?<![\p{L}])z\s*(?:d\.|domu)\s+(\p{Lu}[\p{L}'’]+(?:-\p{Lu}[\p{L}'’]+)?)/gu)) {
+            const start = match.index + match[0].length - match[1].length;
+            autoSpans.push({ start, end: start + match[1].length, kind: "PERSON", value: match[1], confidence: 0.95, source: "AUTO" });
+        }
+        // A firm name read after a prefix may run into its owner's name ("P.H.U. Marex Marek
+        // Nowak"): the firm ends where a recognized person starts; the person keeps its own token.
+        for (const firm of firms) {
+            const owner = autoSpans
+                .filter((span) => span.kind === "PERSON" && !firms.includes(span) && span.start > firm.start && span.start < firm.end && span.end >= firm.end)
+                .sort((a, b) => a.start - b.start)[0];
+            if (!owner)
+                continue;
+            const value = text.slice(firm.start, owner.start).trimEnd();
+            firm.end = firm.start + value.length;
+            firm.value = value;
+        }
+        for (let index = autoSpans.length - 1; index >= 0; index -= 1) {
+            const span = autoSpans[index];
+            if (firms.includes(span) && !/\p{L}{2}/u.test(span.value))
+                autoSpans.splice(index, 1);
+        }
         // The bare surname of a person recognized in this text, written with a capital inside a
         // sentence ("spotkał się z Lis", "Lis" also being a common noun the recognizer skips).
         const surnames = new Set(autoSpans
@@ -656,8 +678,9 @@ export class LocalPolishPseudonymizer {
         // keyed by kind and surface. Without the morphology engine tokens fall back
         // to exact-surface identity.
         const entities = new Map(propagatedEntities);
+        // An inflected mention ("z Transkomem") shares the firm's canonical name and so its token.
         for (const firm of firms)
-            entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.value, firm.legalForm));
+            entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.canonical ?? firm.value, firm.legalForm));
         for (const [value, legalForm] of registryFirms) {
             if (!entities.has(`PERSON\u0000${value}`))
                 entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
@@ -710,7 +733,7 @@ export class LocalPolishPseudonymizer {
                 continue;
             const firm = firmContext(text, finding.start, finding.end);
             if (firm)
-                byFinding.set(finding, organizationEntity(finding.value, firm.legalForm));
+                byFinding.set(finding, organizationEntity(finding.canonical ?? finding.value, firm.legalForm));
         }
         if (this.morphology) {
             const morphology = this.morphology;

@@ -23,7 +23,8 @@ export class LocalPaddleOcrEngine {
             options.workerPath ??
                 process.env.LEX_OCR_WORKER ??
                 defaultWorkerPath();
-        this.dpi = options.dpi ?? 220;
+        // 300 dpi: on a 152 dpi scan 220 dpi lost "o.o." and joined words (measured on a real agreement).
+        this.dpi = options.dpi ?? 300;
         this.device =
             (options.device ??
                 process.env.LEX_OCR_DEVICE?.trim()) || undefined;
