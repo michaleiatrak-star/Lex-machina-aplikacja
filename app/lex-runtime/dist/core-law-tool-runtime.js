@@ -1,7 +1,9 @@
 import { articleUnits, searchStems } from "./core-law-search.js";
 import { coreLawEliCaution, normalizeForSearch } from "./core-law-index.js";
 import { CoreLawActLookupError, lookupCoreLawAct, parseLegalActReference } from "./core-law-act-lookup.js";
-import { anchoredUrl } from "./source-anchor.js";
+import { articleWording } from "./core-law-footnotes.js";
+import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
+import { todayWarsaw } from "./warsaw-date.js";
 const LIST_TOOL = "list_core_law_acts";
 const SEARCH_TOOL = "search_core_law";
 const READ_TOOL = "read_core_law_article";
@@ -68,7 +70,7 @@ const SCHEMAS = [
                     },
                     article: {
                         type: "string",
-                        description: "Article number, e.g. 148, 991, 17a."
+                        description: "Article number, e.g. 148, 991, 17a, 11¹ (superscript as ¹ or [1])."
                     }
                 }
             }
@@ -261,10 +263,7 @@ export class CoreLawToolRuntime {
             return JSON.stringify({ status: "OK", acts });
         }
         if (call.name === READ_TOOL) {
-            const article = String(call.input.article ?? "")
-                .replace(/^art\.?\s*/i, "")
-                .trim()
-                .toLowerCase();
+            const article = normalizeArticleId(String(call.input.article ?? "").trim());
             if (!article)
                 throw new Error("CORE_LAW_ARTICLE_REQUIRED");
             const resolved = await this.resolveAct(call.input.act);
@@ -276,9 +275,13 @@ export class CoreLawToolRuntime {
             const record = this.index.currentRecord(ref.eli);
             if (!record)
                 throw new Error("CORE_LAW_TEXT_NOT_YET_DOWNLOADED");
-            const text = record.articles[article];
-            if (text === undefined)
+            if (record.articles[article] === undefined)
                 throw new Error("CORE_LAW_ARTICLE_NOT_FOUND");
+            // Jednostka drukowana w dwóch brzmieniach: podawane jest obowiązujące dziś (data z odnośnika).
+            const wording = record.footnotes && record.markedArticles?.[article]
+                ? articleWording(record.markedArticles[article], record.footnotes, todayWarsaw(Date.now()))
+                : null;
+            const text = wording && !wording.unresolved ? wording.text : record.articles[article];
             const summary = this.index.summary(ref.eli);
             const amendmentsAfter = summary?.amendmentsAfter ?? [];
             const pendingUpdate = Boolean(summary?.pendingConsolidated || (summary?.pendingAmendments.length ?? 0) > 0);
@@ -316,6 +319,31 @@ export class CoreLawToolRuntime {
                 article,
                 text: text.slice(0, MAX_ARTICLE_CHARS),
                 truncated: text.length > MAX_ARTICLE_CHARS,
+                // Skąd tekst: urzędowy HTML ELI albo nieurzędowy odczyt urzędowego PDF (suma pliku, odczyt).
+                provenance: {
+                    textSource: record.textSource,
+                    official: record.textSource === "html",
+                    ...(record.pdfSha256 ? { pdfSha256: record.pdfSha256, extractor: record.extractor } : {}),
+                    ...(record.htmlCheck
+                        ? {
+                            officialHtmlCheck: record.htmlCheck.confirmed.includes(article)
+                                ? `Brzmienie identyczne co do słowa z urzędowym HTML starszego t.j. ${record.htmlCheck.eli}.`
+                                : `Brak potwierdzenia w urzędowym HTML starszego t.j. ${record.htmlCheck.eli} (artykuł zmieniony później albo różnica odczytu PDF).`
+                        }
+                        : {}),
+                    ...(record.textSource === "pdf" || record.textSource === "ocr"
+                        ? { notice: "Nieurzędowy odczyt urzędowego PDF tekstu jednolitego (ELI nie publikuje HTML); przy cytowaniu wskazuj Dz.U. i link do PDF." }
+                        : {})
+                },
+                ...(record.articleNotes?.[article]?.length && record.footnotes
+                    ? { footnotes: record.articleNotes[article].map((number) => ({ number, text: record.footnotes[number] ?? "" })) }
+                    : {}),
+                ...(wording?.pending.length
+                    ? { pendingWordings: wording.pending, wordingNotice: "Tekst jednolity drukuje także brzmienie wchodzące w życie później (pendingWordings); podane jest brzmienie obowiązujące dziś." }
+                    : {}),
+                ...(wording?.unresolved
+                    ? { wordingNotice: "Tekst jednolity drukuje kilka brzmień jednostki, a daty wejścia w życie nie da się odczytać z odnośnika: podany tekst zawiera wszystkie brzmienia, nie przedstawiaj go jako jednego obowiązującego." }
+                    : {}),
                 mapNotes: ref.notes,
                 ...(pendingUpdate
                     ? {

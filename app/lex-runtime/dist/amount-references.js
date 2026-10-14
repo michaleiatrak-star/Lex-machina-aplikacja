@@ -22,9 +22,12 @@ function keyOf(text) {
     const number = years ? years[1] : (/\d+(?:[  ]\d{3})*(?:,\d+)?/u.exec(text)?.[0] ?? "");
     return `${number.replace(/[  ]/g, "")}${unitOf(text)}`;
 }
+// Własne żądanie strony ("Wzywam do zapłaty ... w terminie 7 dni", "wnoszę o zasądzenie kwoty
+// 12 000 zł wraz z odsetkami", "wyznaczam termin 14 dni"): wartość ustala strona, nie przepis.
+const OWN_DEMAND = /(?<![\p{L}])(?:wzywam\p{L}*|wzywamy|wyznaczam\p{L}*|żądam\p{L}*|domagam\s+się|domagamy\s+się|proponuj\p{L}*|oferuj\p{L}*|zobowiązuję\s+się|wnosz\p{L}*\s+o\s+(?:zasądzenie|zapłatę|nakazanie|orzeczenie\s+nakazem)|wnosimy\s+o\s+(?:zasądzenie|zapłatę)|wnosi\s+o\s+(?:zasądzenie|zapłatę)|domaga\s+się|żąda\s+(?:zapłaty|zasądzenia|kwoty))(?![\p{L}])/iu;
 /** Wartości liczbowe norm w wierszu; pusty wynik, gdy wiersz nie mówi o normie. */
 export function amountMatches(lineText) {
-    if (!NORMATIVE_CONTEXT.test(lineText))
+    if (!NORMATIVE_CONTEXT.test(lineText) || OWN_DEMAND.test(lineText))
         return [];
     AMOUNT.lastIndex = 0;
     return [...lineText.matchAll(AMOUNT)].map((match) => ({
@@ -85,4 +88,19 @@ export function markerSpansAfter(lineText, ends) {
 /** Znacznik ⚠️ wstawiony tuż za wartością należy do niej, nie do przepisu w wierszu. */
 export function amountMarkerSpans(lineText) {
     return markerSpansAfter(lineText, amountMatches(lineText).map((amount) => amount.end));
+}
+/**
+ * Klucze wartości podanych jako fakty sprawy (wiadomości użytkownika, akta). Pytanie o normę
+ * ("czy termin na sprzeciw to 14 dni?") nie jest faktem: tę wartość weryfikuje się w przepisie.
+ */
+export function amountKeysIn(text) {
+    const keys = new Set();
+    for (const sentence of text.split(/(?<=[.?!])\s+|\n+/u)) {
+        if (/\?\s*$/u.test(sentence) && NORMATIVE_CONTEXT.test(sentence))
+            continue;
+        AMOUNT.lastIndex = 0;
+        for (const match of sentence.matchAll(AMOUNT))
+            keys.add(keyOf(match[0]));
+    }
+    return [...keys];
 }

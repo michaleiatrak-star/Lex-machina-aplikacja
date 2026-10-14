@@ -1083,6 +1083,24 @@ function sdkMessages(messages, images) {
         }
         : { role: message.role, content: message.content });
 }
+// Anthropic API: the workflow's unchanged part and the checkpoint's part as two system
+// blocks, a cache breakpoint after the first (ProviderStreamParams.systemPromptCachePrefix).
+// The text the model reads is the same as one block.
+export function anthropicSystem(model, params) {
+    const split = params.systemPromptCachePrefix ?? 0;
+    if (!isAnthropicModel(model) || split < 4_096 || split >= params.systemPrompt.length)
+        return params.systemPrompt;
+    return [
+        {
+            role: "system",
+            content: params.systemPrompt.slice(0, split),
+            providerOptions: {
+                anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" } : {}) } }
+            }
+        },
+        { role: "system", content: params.systemPrompt.slice(split) }
+    ];
+}
 /** A model served by the Anthropic API provider (not an account CLI or a local server). */
 export function isAnthropicModel(model) {
     return typeof model === "object" && model !== null && String(model.provider ?? "").startsWith("anthropic");
@@ -1092,14 +1110,20 @@ async function streamModelOnce(sdk, model, params, label, tools, reasoning, imag
 extra = { messages: [] }) {
     const result = sdk.streamText({
         model,
-        system: params.systemPrompt,
+        system: anthropicSystem(model, params),
         // Anthropic API: automatic prompt caching (a top-level cache breakpoint that
         // moves with the conversation), so each tool round of a turn reads the
         // unchanged system prompt and history from the cache instead of re-processing
         // ~30k tokens. The prompt itself is unchanged. OpenAI and Gemini cache a
         // repeated prefix on their own.
         ...(isAnthropicModel(model)
-            ? { providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } } }
+            ? {
+                providerOptions: {
+                    anthropic: {
+                        cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" } : {}) }
+                    }
+                }
+            }
             : {}),
         messages: [...sdkMessages(params.messages, images), ...extra.messages],
         ...(tools ? { tools } : {}),

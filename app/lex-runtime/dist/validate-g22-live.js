@@ -135,11 +135,24 @@ const pass = result?.status === "FOUND" &&
     result.judgment?.contentScope ===
         "FULL_TEXT" &&
     sourceHost === "sn.pl";
+// sn.pl (konektor SN 1.7.0) wymaga weryfikacji przez człowieka w przeglądarce: runner CI bez
+// sesji dostaje 403 z HTML na każde żądanie. To blokada źródła, nie wynik weryfikacji, więc
+// sonda jest nierozstrzygnięta (ostrzeżenie), a nie czerwona. Każda inna odpowiedź (200 ze
+// złym wynikiem, błąd JSON, przekierowanie) nadal blokuje. G22_REQUIRE_LIVE=1: tryb ścisły.
+const sourceBlocked = !pass &&
+    transportTrace.length > 0 &&
+    transportTrace.every((entry) => entry.status === 403 &&
+        String(entry.contentType)
+            .toLowerCase()
+            .includes("text/html"));
+const strict = /^(1|true|yes)$/iu.test(process.env.G22_REQUIRE_LIVE?.trim() ?? "");
 process.stdout.write(JSON.stringify({
     gate: "G22_LIVE_SN_CASE_LAW_PROBE",
     result: pass
         ? "PASS"
-        : "BLOCKED",
+        : sourceBlocked
+            ? "SOURCE_BLOCKED"
+            : "BLOCKED",
     attempts,
     signature,
     verificationStatus: result?.status ?? null,
@@ -161,6 +174,9 @@ process.stdout.write(JSON.stringify({
     transportTrace,
     modelProviderCallExecuted: false
 }, null, 2) + "\n");
-if (!pass) {
+if (!pass && sourceBlocked && !strict) {
+    process.stdout.write("::warning title=G22 live SN::sn.pl odrzuca runner CI (HTTP 403, wymagana weryfikacja człowieka) — sonda nierozstrzygnięta, nie błąd weryfikacji\n");
+}
+else if (!pass) {
     process.exitCode = 1;
 }

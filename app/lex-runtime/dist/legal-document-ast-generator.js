@@ -207,6 +207,7 @@ function generationInstruction(request) {
         "Generate the actual finished legal document, not a chat answer about the document.",
         "Do not add meta-sections such as DANE DO UZUPEŁNIENIA, UWAGI PRAKTYCZNE, CO DALEJ, HYBRID-VALIDATION, disclaimers, routing notes or explanations outside the document itself.",
         "Use a professional Polish legal-office layout: concise title, date/party/address blocks where appropriate, clear subject or heading, logically separated body paragraphs, numbered or bulleted demands only when useful, and a signature block.",
+        "Letter or pleading header (the renderer lays it out from these blocks): place and date as their own first paragraph (\"Kraków, dnia 13 października 2026 r.\"), the sender's and the parties' blocks as paragraphs, the court or authority as one paragraph starting with its name (\"Sąd Rejonowy ...\", \"Do ...\"), lines of one address separated by \\n inside the text node, the title of the letter as a level-1 heading, the signer in a signature block; for a contract the title as a level-1 heading and each \"§ N\" as a level-2 heading.",
         "For reusable templates, place missing user data directly in neutral square-bracket fields such as [Miejscowość, data], [Kwota] or [Termin zapłaty]; never use the marker [UZUPEŁNIJ].",
         "Avoid Markdown markers such as **, # or backticks inside text nodes. Structure belongs in AST block types.",
         "For a demand for payment, include at minimum: parties, title WEZWANIE DO ZAPŁATY, basis/description of the debt, amount, due date, an additional payment deadline, payment method/account placeholder, consequence of non-payment stated proportionately, and signature.",
@@ -344,6 +345,8 @@ export class LegalDocumentAstGenerator {
                 model: request.model,
                 usedDocumentContext: Boolean(request.attachments
                     ?.length),
+                ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+                ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
                 verificationRecords: internal
                     .verificationRecords
                     .map((record) => ({

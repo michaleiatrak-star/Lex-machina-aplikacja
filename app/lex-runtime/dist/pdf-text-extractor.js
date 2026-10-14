@@ -12,6 +12,103 @@ export class PdfTextExtractionError extends Error {
         this.name = "PdfTextExtractionError";
     }
 }
+// Odstęp węższy niż ten ułamek wysokości czcionki to rozstrzelenie liter przy justowaniu,
+// nie spacja: pdf.js dzieli wtedy wyraz na dwa elementy („ubezwłas” + „nowolnione”).
+const GLUE_GAP_EM = 0.12;
+// Znacznik wiersza złożonego mniejszą czcionką niż treść strony (przypisy Dz.U.: 9 pt wobec
+// 9,96 pt). Ustawiany tylko z opcją markSmallLines; czytelnik musi go usunąć.
+export const SMALL_LINE_MARK = "\u2063";
+const SMALL_LINE_RATIO = 0.93;
+/**
+ * Elementy tekstu strony w wiersze; wyraz rozbity na dwa elementy bez odstępu wraca w całości.
+ * markSmall: wiersze, których największa czcionka jest wyraźnie mniejsza od czcionki treści
+ * strony, dostają na początku SMALL_LINE_MARK.
+ */
+export function joinLineItems(items, markSmall = false) {
+    if (markSmall) {
+        // Czcionka treści: rozmiar o największej liczbie znaków na stronie.
+        const weight = new Map();
+        for (const raw of items) {
+            const item = raw;
+            if (typeof item.str !== "string" || !Array.isArray(item.transform))
+                continue;
+            const size = Math.round(Math.hypot(item.transform[2] ?? 0, item.transform[3] ?? 0) * 10) / 10;
+            weight.set(size, (weight.get(size) ?? 0) + item.str.trim().length);
+        }
+        const body = [...weight.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+        // Największa czcionka każdego wiersza; wiersze dzieli hasEOL, jak przy składaniu tekstu.
+        const lines = [0];
+        for (const raw of items) {
+            const item = raw;
+            if (typeof item.str !== "string")
+                continue;
+            if (item.str.trim() && Array.isArray(item.transform)) {
+                const size = Math.hypot(item.transform[2] ?? 0, item.transform[3] ?? 0);
+                lines[lines.length - 1] = Math.max(lines[lines.length - 1], size);
+            }
+            if (item.hasEOL)
+                lines.push(0);
+        }
+        // Złożenie wierszy jak bez znacznika, potem znacznik na początku małych wierszy.
+        const joined = joinLineItems(items).split("\n");
+        return joined
+            .map((text, index) => {
+            const size = lines[index] ?? 0;
+            return body > 0 && size > 0 && size < body * SMALL_LINE_RATIO && text.trim() ? SMALL_LINE_MARK + text : text;
+        })
+            .join("\n");
+    }
+    let out = "";
+    let previous = null;
+    for (const raw of items) {
+        const item = raw;
+        if (typeof item.str !== "string")
+            continue;
+        const transform = Array.isArray(item.transform) ? item.transform : null;
+        const x = transform?.[4] ?? 0;
+        const y = transform?.[5] ?? 0;
+        const size = transform ? Math.hypot(transform[2] ?? 0, transform[3] ?? 0) : 0;
+        if (previous) {
+            if (previous.eol) {
+                out += "\n";
+            }
+            else {
+                const em = Math.max(previous.size, size);
+                const gap = x - previous.end;
+                const glue = transform !== null &&
+                    em > 0 &&
+                    Math.abs(y - previous.y) < em * 0.5 &&
+                    gap < em * GLUE_GAP_EM &&
+                    gap > -em * 0.5 &&
+                    /\p{L}$/u.test(previous.str) &&
+                    // Dywiz przeniesienia bywa osobnym elementem innym fontem („przedsię” + „-”).
+                    /^(?:\p{L}|-$)/u.test(item.str);
+                // pdf.js 4.x tnie wyraz na stykające się elementy tej samej czcionki („Art” + „.”,
+                // „4” + „3a.”): odstęp zerowy na tej samej linii bazowej to ciąg dalszy, nie spacja.
+                // Indeks górny ma inny rozmiar i wysokość, więc nie jest doklejany („Art. 6 1 .”).
+                const touching = transform !== null &&
+                    em > 0 &&
+                    Math.abs(y - previous.y) < em * 0.1 &&
+                    Math.abs(size - previous.size) < em * 0.05 &&
+                    Math.abs(gap) < em * 0.05 &&
+                    /[\p{L}\d]$/u.test(previous.str) &&
+                    // Bez nawiasu: znacznik odnośnika „25 )” musi zostać rozdzielony.
+                    /^[\p{L}\d.]/u.test(item.str);
+                out += glue || touching ? "" : " ";
+            }
+        }
+        out += item.str;
+        previous = {
+            str: item.str,
+            x,
+            y,
+            end: x + (typeof item.width === "number" ? item.width : 0),
+            size,
+            eol: Boolean(item.hasEOL)
+        };
+    }
+    return out;
+}
 export class LocalPdfTextExtractor {
     limits;
     options;
@@ -20,6 +117,7 @@ export class LocalPdfTextExtractor {
     // się po nagłówkach wierszy (Art. N. w kopii ELI); domyślnie strona to jeden wiersz,
     // jak dotąd (hasze i cytaty dokumentów sprawy się nie zmieniają).
     // allowEmpty: strony bez warstwy tekstowej nie są błędem (wywołujący robi OCR tych stron).
+    // markSmallLines: wiersze mniejszą czcionką (przypisy) z SMALL_LINE_MARK na początku.
     options = {}) {
         this.limits = limits;
         this.options = options;
@@ -50,12 +148,7 @@ export class LocalPdfTextExtractor {
                 const page = await document.getPage(pageNumber);
                 const content = await page.getTextContent();
                 const pageText = this.options.lines
-                    ? content.items
-                        .map((item) => "str" in item &&
-                        typeof item.str === "string"
-                        ? item.str + (item.hasEOL ? "\n" : " ")
-                        : "")
-                        .join("")
+                    ? joinLineItems(content.items, this.options.markSmallLines === true)
                         .replace(/[ \t]+/g, " ")
                         .replace(/ *\n */g, "\n")
                         .trim()

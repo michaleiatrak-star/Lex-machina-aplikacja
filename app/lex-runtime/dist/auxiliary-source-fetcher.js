@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
 import https from "node:https";
+import { decodeBody } from "./source-preview.js";
 import { isIP } from "node:net";
 import { checkServerIdentity } from "node:tls";
 const DEFAULT_TIMEOUT_MS = 12_000;
@@ -13,7 +14,9 @@ const ALLOWED_CONTENT_TYPES = [
     "text/plain",
     "application/json",
     "application/xml",
-    "text/xml"
+    "text/xml",
+    // An opinion, a commentary or a court's PDF on a research page: text read locally.
+    "application/pdf"
 ];
 const REDIRECT_STATUSES = new Set([
     301,
@@ -189,7 +192,10 @@ export async function resolveAuxiliarySourceTarget(raw, resolver = defaultResolv
     return {
         url,
         address: selected.address,
-        family: selected.family
+        family: selected.family,
+        ...(addresses.length > 1
+            ? { fallbacks: addresses.slice(1) }
+            : {})
     };
 }
 function headerString(value) {
@@ -280,6 +286,14 @@ const defaultTransport = async (target, options) => await new Promise((resolve, 
         request.destroy();
         fail(new AuxiliarySourceFetchError("Auxiliary source request timed out.", "AUX_SOURCE_TIMEOUT"));
     });
+    // setTimeout above fires only on an idle socket: a server dripping bytes slowly kept
+    // the turn waiting. The whole response gets the same deadline.
+    const deadline = setTimeout(() => {
+        request.destroy();
+        fail(new AuxiliarySourceFetchError("Auxiliary source request exceeded its deadline.", "AUX_SOURCE_TIMEOUT"));
+    }, options.timeoutMs);
+    deadline.unref?.();
+    request.on("close", () => clearTimeout(deadline));
     request.on("error", (error) => {
         if (settled) {
             return;
@@ -310,7 +324,7 @@ function decodeEntities(value) {
         .replace(/&#39;|&apos;/giu, "'");
 }
 function textFromBody(body, contentType, maxChars) {
-    const raw = Buffer.from(body).toString("utf8");
+    const raw = decodeBody(Buffer.from(body), contentType);
     if (contentType
         .toLocaleLowerCase("en")
         .includes("html")) {
@@ -360,8 +374,7 @@ export function extractAuxiliarySourceDates(body, contentType) {
         .includes("html")) {
         return {};
     }
-    const html = Buffer.from(body)
-        .toString("utf8")
+    const html = decodeBody(Buffer.from(body), contentType)
         .slice(0, 500_000);
     const publishedAt = normalizedDate(firstMatch(html, [
         /<meta[^>]+(?:property|name)=["']article:published_time["'][^>]+content=["']([^"']+)["'][^>]*>/iu,
@@ -386,6 +399,18 @@ export function extractAuxiliarySourceDates(body, contentType) {
             : {})
     };
 }
+// A PDF research source as text, extracted locally (never sent anywhere); a scan without a
+// text layer gives no text (AUX_SOURCE_EMPTY).
+async function pdfText(body, maxChars) {
+    try {
+        const { LocalPdfTextExtractor } = await import("./pdf-text-extractor.js");
+        const extracted = await new LocalPdfTextExtractor().extract(new Uint8Array(body));
+        return extracted.text.normalize("NFKC").replace(/[ \t]+/g, " ").trim().slice(0, maxChars);
+    }
+    catch {
+        return "";
+    }
+}
 export class SafeAuxiliarySourceFetcher {
     resolver;
     transport;
@@ -403,6 +428,29 @@ export class SafeAuxiliarySourceFetcher {
         this.now = now;
         this.limits = limits;
     }
+    // A refused or unreachable address moves to the host's next one; HTTP
+    // statuses, limits and timeouts are answers and end the attempt.
+    async connect(target) {
+        const { fallbacks = [], ...first } = target;
+        const candidates = [first, ...fallbacks.map((entry) => ({ ...first, ...entry }))];
+        for (let index = 0;; index += 1) {
+            try {
+                return await this.transport(candidates[index], {
+                    timeoutMs: this.limits
+                        .timeoutMs,
+                    maxBytes: this.limits
+                        .maxBytes
+                });
+            }
+            catch (error) {
+                const connectionFailed = error instanceof AuxiliarySourceFetchError &&
+                    error.code === "AUX_SOURCE_HTTP_FAILED";
+                if (!connectionFailed || index + 1 >= candidates.length) {
+                    throw error;
+                }
+            }
+        }
+    }
     async fetch(rawUrl) {
         const requested = parseAuxiliarySourceUrl(rawUrl)
             .toString();
@@ -410,12 +458,7 @@ export class SafeAuxiliarySourceFetcher {
         let redirectCount = 0;
         while (true) {
             const target = await resolveAuxiliarySourceTarget(current, this.resolver);
-            const response = await this.transport(target, {
-                timeoutMs: this.limits
-                    .timeoutMs,
-                maxBytes: this.limits
-                    .maxBytes
-            });
+            const response = await this.connect(target);
             if (REDIRECT_STATUSES.has(response.statusCode)) {
                 if (!response.location) {
                     throw new AuxiliarySourceFetchError("Auxiliary source redirect is missing Location.", "AUX_SOURCE_REDIRECT_INVALID");
@@ -461,8 +504,10 @@ export class SafeAuxiliarySourceFetcher {
                 !supportedContentType(contentType)) {
                 throw new AuxiliarySourceFetchError("Auxiliary source content type is not allowed for research retrieval.", "AUX_SOURCE_CONTENT_TYPE_UNSUPPORTED");
             }
-            const text = textFromBody(response.body, contentType, this.limits
-                .maxTextChars);
+            const text = /application\/pdf/iu.test(contentType)
+                ? await pdfText(response.body, this.limits.maxTextChars)
+                : textFromBody(response.body, contentType, this.limits
+                    .maxTextChars);
             if (!text) {
                 throw new AuxiliarySourceFetchError("Auxiliary source returned no readable text.", "AUX_SOURCE_EMPTY");
             }

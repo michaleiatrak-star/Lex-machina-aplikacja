@@ -1,13 +1,16 @@
 import { searchStems } from "./core-law-search.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
-import { anchoredUrl } from "./source-anchor.js";
+import { articleWording, futureDate, hasPendingWording } from "./core-law-footnotes.js";
+import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
+import { todayWarsaw } from "./warsaw-date.js";
 import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
 function articleToken(claim) {
-    return new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*)`, "iu")
-        .exec(claim)?.[1]
-        ?.toLocaleLowerCase("pl") ?? null;
+    // „art. 11¹”, „art. 11[1]”, „art. 151⁹a” -> klucz kopii „11¹”, „151⁹a”.
+    const token = new RegExp(`${ARTICLE_LEAD}(\\d+[a-ząćęłńóśźż]*(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+[a-z]*|\\[\\d+[a-z]*\\]|\\^\\d+[a-z]*)?)`, "iu")
+        .exec(claim)?.[1];
+    return token ? normalizeArticleId(token) : null;
 }
 function journalMatches(claim, elis) {
     const year = /\b(19\d{2}|20\d{2})\b/u.exec(claim)?.[1];
@@ -97,11 +100,26 @@ export function verifyFromCoreLaw(args) {
         !record.status.toLocaleLowerCase("pl").includes("obowiązując")) {
         return { decision: "DENY", reason: "TEMPORAL_ACT_NOT_IN_FORCE" };
     }
-    // T.j. zawiera zmiany w vacatio legis (KP t.j. 2026/1245 ze zmianą od 5.11.2026): bez
-    // tekstu noweli nie wiadomo, czy dotyka artykułu, więc brzmienie z kopii nie jest
-    // pewnym brzmieniem obowiązującym dziś. Numer Dz.U. t.j. pozostaje prawidłowy.
+    // T.j. zawiera zmiany w vacatio legis (KP t.j. 2026/1245 ze zmianą od 5.11.2026). Zmiana
+    // objęta t.j., a jeszcze nieobowiązująca, ma przy jednostce odnośnik z datą („wejdzie w życie
+    // z dniem …”, dwa brzmienia): odmowa dotyczy tylko takich artykułów. Bez odnośników w kopii
+    // (HTML, starsza kopia) albo gdy żaden odnośnik nie zapowiada zmiany — odmowa dla całego aktu.
     if (args.kind === "statute" && summary.notYetInForce.length > 0) {
-        return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+        const today = todayWarsaw(args.now ?? Date.now());
+        const article = articleToken(args.claim);
+        const notes = record.footnotes;
+        const announced = notes !== undefined &&
+            Object.values(notes).some((note) => {
+                const from = futureDate(note);
+                return from !== null && from > today;
+            });
+        if (!notes ||
+            !announced ||
+            !article ||
+            record.articles[article] === undefined ||
+            hasPendingWording(record.markedArticles?.[article] ?? record.articles[article], notes, today)) {
+            return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+        }
     }
     let evidence;
     let anchor;
@@ -110,6 +128,12 @@ export function verifyFromCoreLaw(args) {
         const article = articleToken(args.claim);
         anchor = article ? record.articleAnchors?.[article] : undefined;
         evidence = article ? record.articles[article] : undefined;
+        // Artykuł z kilkoma brzmieniami: dowodem jest brzmienie obowiązujące w dniu weryfikacji.
+        if (article && record.footnotes && record.markedArticles?.[article]) {
+            const wording = articleWording(record.markedArticles[article], record.footnotes, todayWarsaw(args.now ?? Date.now()));
+            if (!wording.unresolved)
+                evidence = wording.text;
+        }
         // Zgubiony nagłówek przy wyciąganiu z PDF: ten artykuł może zawierać tekst następnego.
         if (article && record.extractionCheck?.suspectArticles.includes(article)) {
             return { decision: "DENY", reason: "CORE_LAW_EXTRACTION_SUSPECT" };

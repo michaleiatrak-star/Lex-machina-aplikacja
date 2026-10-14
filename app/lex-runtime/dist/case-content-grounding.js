@@ -1,0 +1,347 @@
+import { detectLegalReferences } from "./finalization-gate.js";
+import { canonicalInterpretationSignature, interpretationSignaturesInLine } from "./interpretation-verifier.js";
+// I KZP 3/24, III CZP 25/11, II SAB/Po 175/26, II SA/Wa 123/24, I OSK 12/24, XXV C 123/20.
+// Common courts write the repertory in mixed case: II Ca 990/26, I ACa 12/25, IV Ka 3/26, III Ns 5/24.
+const SIGNATURE = /(?<![\p{L}\d])[IVXL]{1,5}\s+[A-ZĄĆĘŁŃÓŚŹŻ][A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż]{0,5}(?:\/[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{0,2})?(?:-[A-Z]{1,3})?\s+\d{1,5}\/\d{2,4}(?!\d)/gu;
+// Tool results arrive as JSON with the document nested as a string (escaped line breaks,
+// quotes, sometimes \u escapes of a Python server, sometimes JSON inside JSON): the plain text.
+export function readableSource(source) {
+    const strings = [];
+    const collect = (value, depth) => {
+        if (typeof value === "string") {
+            const nested = depth < 3 && /^\s*[[{]/u.test(value) ? tryParse(value) : undefined;
+            if (nested !== undefined)
+                collect(nested, depth + 1);
+            else
+                strings.push(value);
+        }
+        else if (Array.isArray(value)) {
+            for (const item of value)
+                collect(item, depth);
+        }
+        else if (value && typeof value === "object") {
+            for (const item of Object.values(value))
+                collect(item, depth);
+        }
+        else if (typeof value === "number") {
+            strings.push(String(value));
+        }
+    };
+    const parsed = tryParse(source);
+    if (parsed === undefined) {
+        return source
+            .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+            .replace(/\\[nrt]/g, "\n")
+            .replace(/\\(["\\/])/g, "$1");
+    }
+    collect(parsed, 0);
+    return strings.join("\n");
+}
+function tryParse(value) {
+    try {
+        return JSON.parse(value);
+    }
+    catch {
+        return undefined;
+    }
+}
+export function caseSignaturesIn(text) {
+    return [...text.matchAll(SIGNATURE)].map((match) => match[0].replace(/\s+/g, " "));
+}
+const fold = (value) => value.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l").replace(/Ł/g, "L").toLocaleLowerCase("pl");
+const signatureKey = (value) => value.replace(/\./g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pl");
+// Words of the request, the court and the search itself, not of the topic.
+const NON_TOPIC = [
+    "znajd", "wyszu", "szuka", "poszu", "wyrok", "orzec", "uchwa", "posta", "sadu", "sadow", "sadzi", "najwy", "admin", "dotyc",
+    "prosz", "prosi", "polsk", "inneg", "innym", "innyc", "takim", "razie", "wydan", "kogos", "ktory", "ktore", "ktora", "teraz",
+    "wskaz", "podaj", "sygna", "spraw", "jakis", "jakie", "jakim", "takze", "rowni", "ponie", "wlasn", "trzeb", "chcia", "chcem",
+    "mozes", "mozna", "robis", "dalej", "kontyn", "dobrz", "zgodn", "dotyk", "przyk", "bazie", "bazy", "portal", "inter", "stron",
+    "ktos", "kiedy", "gdzie", "dlacz", "potwi", "zwery", "weryf", "rejon", "okreg", "apela", "najno", "aktua", "ostat"
+];
+const COURT_ACRONYMS = new Set(["SN", "NSA", "WSA", "TK", "SA", "SR", "SO", "TSUE", "ETPC", "ETPCZ", "KIO", "UODO", "KC", "KPC", "KK", "KPK", "KPA", "PPSA", "RP", "UE", "OK"]);
+const NEGATION = /(?<![\p{L}])(?:nie|brak\p{L}*|żadn\p{L}*|zadn\p{L}*|bez)(?![\p{L}])/iu;
+function topicTerms(topicText) {
+    const terms = new Map();
+    for (const match of topicText.matchAll(/[\p{L}]+/gu)) {
+        const word = match[0];
+        if (/^[A-ZĄĆĘŁŃÓŚŹŻ]{2,5}$/u.test(word) && !COURT_ACRONYMS.has(word)) {
+            const stem = fold(word);
+            if (!terms.has(stem))
+                terms.set(stem, { stem, word, acronym: true });
+            continue;
+        }
+        const folded = fold(word);
+        if (folded.length < 6)
+            continue;
+        const stem = folded.slice(0, 6);
+        if (NON_TOPIC.some((prefix) => stem.startsWith(prefix)))
+            continue;
+        if (!terms.has(stem))
+            terms.set(stem, { stem, word: word.toLocaleLowerCase("pl"), acronym: false });
+    }
+    return [...terms.values()];
+}
+function contains(foldedText, term) {
+    return term.acronym
+        ? new RegExp(`(?<![a-z0-9])${term.stem}(?![a-z0-9])`, "u").test(foldedText)
+        : new RegExp(`(?<![a-z0-9])${term.stem}`, "u").test(foldedText);
+}
+// The paragraph with the signature and the paragraphs after it, up to the next signature.
+function claimWindow(paragraphs, index) {
+    const parts = [paragraphs[index]];
+    for (let next = index + 1; next < paragraphs.length && parts.length < 3; next += 1) {
+        if (new RegExp(SIGNATURE.source, "u").test(paragraphs[next]))
+            break;
+        parts.push(paragraphs[next]);
+    }
+    return parts.join("\n");
+}
+const assertedSentences = (window) => window
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .filter((sentence) => !NEGATION.test(sentence))
+    .join(" ");
+const squeeze = (value) => value.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// Quotations of at least six words: „...”, "...", «...».
+function quotesIn(window) {
+    return [...window.matchAll(/[„"«]([^„”"«»]{30,})[”"»]/gu)]
+        .map((match) => match[1].trim())
+        .filter((quote) => quote.split(/\s+/u).length >= 6);
+}
+// The document's text for one signature: a full document whole; a hit list only around it.
+// In a hit list (an array of entries), the one entry that carries the signature: the other
+// hits' subjects must not be read as this judgment's.
+function hitListEntry(key, source) {
+    const parsed = tryParse(source);
+    let found = null;
+    const visit = (value) => {
+        if (found || !value || typeof value !== "object")
+            return;
+        if (Array.isArray(value)) {
+            if (value.length > 1) {
+                for (const item of value) {
+                    if (item && typeof item === "object" && signatureKey(readableSource(JSON.stringify(item))).includes(key)) {
+                        found = readableSource(JSON.stringify(item));
+                        return;
+                    }
+                }
+            }
+            for (const item of value)
+                visit(item);
+            return;
+        }
+        for (const item of Object.values(value))
+            visit(item);
+    };
+    visit(parsed);
+    return found;
+}
+function sourceTextFor(key, raw) {
+    // The document itself, fetched in the turn, comes before its line on a hit list: the list
+    // has only the title, the judge needs the reasoning.
+    const whole = raw.filter((source) => !hitListEntry(key, source) && signatureKey(readableSource(source)).includes(key));
+    const texts = [];
+    for (const entry of whole.length ? [] : raw.map((source) => hitListEntry(key, source)))
+        if (entry)
+            texts.push(entry);
+    if (texts.length)
+        return texts.join("\n");
+    raw = whole.length ? whole : raw;
+    for (const source of raw.map(readableSource)) {
+        const normalized = signatureKey(source);
+        const at = normalized.indexOf(key);
+        if (at < 0)
+            continue;
+        const others = new Set([...source.matchAll(SIGNATURE)].map((match) => signatureKey(match[0])));
+        // A result naming many cases is cut around the signature; the document itself (its
+        // signature in the heading) stays whole, though its reasoning cites other judgments.
+        const itself = at < 800;
+        texts.push(!itself && others.size >= 3 ? source.slice(Math.max(0, at - 1500), at + 3000) : source);
+    }
+    return texts.length ? texts.join("\n") : null;
+}
+// Other legal texts with a signature: TK (K 3/21, SK 12/20), KIO 1234/24, TSUE and General
+// Court (C-123/22, T-45/21), UODO decisions (DKN.5130.123.2024, DKE.523.18.2021, ZSOŚS.440.58.2018,
+// ZSPR.421.2.2019), ETPC applications (nr 12345/19), SN chambers without a Roman division
+// (SNO 11/16 disciplinary, WZ 5/16 military, I DSI 3/24 is caught by SIGNATURE).
+const OTHER_SIGNATURE = /(?<![\p{L}\d-])(?:(?:Kpt|Kp|SK|Pp|Ts|K|P|U|S)\s+\d{1,4}\/\d{2}|KIO\s+\d{1,5}\/\d{2}|[CT]-\d{1,4}\/\d{2}|(?:DKN|DKE|DKUE|DOL|DS|DIS|ZSOŚS|ZSZZS|ZSPR|ZSPU|ZKE|ZSZ|ZWAD)\.\d{3,4}\.\d{1,5}\.\d{4}|(?:SNO|SDI|SDU|WZ|WO|WK)\s+\d{1,4}\/\d{2}|(?<=(?:skarg[aięi]|application)\s+(?:nr|no\.?)\s*)\d{3,6}\/\d{2})(?![\d\p{L}])/gu;
+const comparableClaim = (value) => value.normalize("NFKC").toLocaleLowerCase("pl").replace(/[.,;:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
+// Provisions verified in ELI in this turn: claim -> the wording read from the source.
+function verifiedWordings(sources) {
+    const wordings = new Map();
+    for (const source of sources) {
+        let value;
+        try {
+            value = JSON.parse(source);
+        }
+        catch {
+            continue;
+        }
+        const record = value;
+        if (typeof record.claim === "string" && typeof record.evidence === "string" && record.evidence.trim()) {
+            wordings.set(comparableClaim(record.claim), record.evidence);
+        }
+    }
+    return wordings;
+}
+/** Judgments and tax interpretations the answer cites whose text a source returned in the turn. */
+export function citedDocuments(answer, sources) {
+    const paragraphs = answer.split(/\n\s*\n/u);
+    const cited = new Map();
+    paragraphs.forEach((paragraph, index) => {
+        const found = [
+            ...[...paragraph.matchAll(SIGNATURE)].map((match) => ({ signature: match[0].replace(/\s+/g, " "), key: signatureKey(match[0]), kind: "case" })),
+            ...interpretationSignaturesInLine(paragraph).map((signature) => ({ signature, key: signature, kind: "interpretation" })),
+            ...[...paragraph.matchAll(OTHER_SIGNATURE)].map((match) => ({ signature: match[0].replace(/\s+/g, " "), key: signatureKey(match[0]), kind: "other" }))
+        ];
+        for (const item of found) {
+            if (cited.has(item.key))
+                continue;
+            const text = item.kind === "interpretation" ? interpretationTextFor(item.key, sources) : sourceTextFor(item.key, sources);
+            if (text)
+                cited.set(item.key, { signature: item.signature, kind: item.kind, claim: claimWindow(paragraphs, index), text });
+        }
+    });
+    // Provisions: what the answer says about a verified article against its wording.
+    const wordings = verifiedWordings(sources);
+    if (wordings.size) {
+        for (const reference of detectLegalReferences(answer)) {
+            if (reference.kind !== "statute")
+                continue;
+            const claim = comparableClaim(reference.claim);
+            const wording = wordings.get(claim) ?? [...wordings.entries()].find(([key]) => key.startsWith(`${claim} `))?.[1];
+            const key = `statute:${claim}`;
+            if (!wording || cited.has(key))
+                continue;
+            const index = paragraphs.findIndex((paragraph) => paragraph.includes(reference.lineText.trim().slice(0, 40)));
+            cited.set(key, { signature: reference.claim, kind: "statute", claim: index >= 0 ? claimWindow(paragraphs, index) : reference.lineText, text: wording });
+        }
+    }
+    return [...cited.values()];
+}
+function interpretationTextFor(signature, raw) {
+    // As for judgments: the interpretation itself before its line on a hit list, and from a
+    // list only its own entry (another hit's subject is not this interpretation's).
+    const key = signatureKey(signature);
+    const whole = raw.filter((source) => !hitListEntry(key, source) && canonicalInterpretationSignature(readableSource(source)).includes(signature));
+    if (whole.length)
+        return whole.map(readableSource).join("\n");
+    const entries = raw.map((source) => hitListEntry(key, source)).filter((entry) => Boolean(entry));
+    if (entries.length)
+        return entries.join("\n");
+    const texts = raw.map(readableSource).filter((source) => canonicalInterpretationSignature(source).includes(signature));
+    return texts.length ? texts.join("\n") : null;
+}
+const NSA_REPERTORIES = new Set(["OSK", "FSK", "GSK", "OZ", "FZ", "GZ", "OPS", "FPS", "GPS", "OW", "FW", "GW", "OPK", "FPK", "GPK"]);
+const SN_GROUP = new Set(["CSK", "CSKP", "CZP", "CNP", "CNPP", "KK", "KZP", "KO", "KS", "KZ", "KA", "PK", "PSK", "PSKP", "PZP", "PZ", "UK", "USK", "UZP", "NSNZP", "NSNK", "NSNP", "NSK", "NO", "NZP", "NSP", "IZP", "SNO", "ZO", "CO"]);
+function courtOfDocument(signature) {
+    if (/^KIO\s/u.test(signature))
+        return "KIO";
+    const match = /^(?:[IVXL]{1,5}\s+)?([A-ZĄĆĘŁŃÓŚŹŻ][A-Za-ząćęłńóśźż]{0,5})(\/[A-Z][a-z]{1,2})?\s+\d/u.exec(signature);
+    if (!match)
+        return null;
+    const [, repertory, seat] = match;
+    if (seat)
+        return "WSA";
+    if (NSA_REPERTORIES.has(repertory))
+        return "NSA";
+    if (SN_GROUP.has(repertory))
+        return "SN";
+    if (/^A[A-Z][a-z]$/u.test(repertory))
+        return "SA";
+    if (/^(?:K|SK|P|U|Kp|Kpt|Pp|Ts)$/u.test(repertory) && !/^[IVXL]/u.test(signature))
+        return "TK";
+    return null;
+}
+const COURT_NAMES = [
+    ["NSA", /(?<![\p{L}])(?:NSA|Naczeln\p{L}*\s+Sąd\p{L}*\s+Administracyjn\p{L}*)(?![\p{L}])/u],
+    ["WSA", /(?<![\p{L}])(?:WSA|Wojewódzk\p{L}*\s+Sąd\p{L}*\s+Administracyjn\p{L}*)(?![\p{L}])/u],
+    ["SN", /(?<![\p{L}])(?:SN|Sąd\p{L}*\s+Najwyższ\p{L}*)(?![\p{L}])/u],
+    ["SA", /(?<![\p{L}])Sąd\p{L}*\s+Apelacyjn\p{L}*(?![\p{L}])/u],
+    ["TK", /(?<![\p{L}])(?:TK|Trybunał\p{L}*\s+Konstytucyjn\p{L}*)(?![\p{L}])/u],
+    ["KIO", /(?<![\p{L}])(?:KIO|Krajow\p{L}*\s+Izb\p{L}*\s+Odwoławcz\p{L}*)(?![\p{L}])/u]
+];
+// "to nie jest orzeczenie NSA", "nie NSA, lecz WSA": a named court that is denied.
+const DENIED_COURT = /(?<![\p{L}])nie(?:\s+jest)?(?:\s+(?:to|orzeczenie|wyrok|uchwała|postanowienie))*\s+(?:\p{L}+\s+){0,2}$/iu;
+export function courtAttributionFindings(answer) {
+    const findings = [];
+    const paragraphs = answer.split(/\n\s*\n/u);
+    paragraphs.forEach((paragraph, index) => {
+        for (const match of paragraph.matchAll(SIGNATURE)) {
+            const signature = match[0].replace(/\s+/g, " ");
+            const actual = courtOfDocument(signature);
+            if (!actual || findings.some((item) => item.signature === signature))
+                continue;
+            // The sentence that carries the signature, where the court is named for it.
+            const window = claimWindow(paragraphs, index);
+            // From the previous signature (or 200 characters back) to the end of this clause.
+            const at = window.indexOf(match[0]);
+            const before = [...window.slice(0, at).matchAll(SIGNATURE)].at(-1);
+            const start = Math.max(before ? before.index + before[0].length : 0, at - 200);
+            const tail = window.slice(at + match[0].length, at + match[0].length + 60);
+            const sentence = window.slice(start, at + match[0].length) + tail.split(/[;.\n]/u)[0];
+            const named = COURT_NAMES.filter(([group, pattern]) => {
+                const found = pattern.exec(sentence);
+                return found && !DENIED_COURT.test(sentence.slice(0, found.index)) && group !== undefined;
+            }).map(([group]) => group);
+            if (!named.length || named.includes(actual))
+                continue;
+            findings.push({ signature, named: named[0], actual });
+        }
+    });
+    return findings;
+}
+const COURT_LABEL = { SN: "Sąd Najwyższy", NSA: "Naczelny Sąd Administracyjny", WSA: "wojewódzki sąd administracyjny", SA: "sąd apelacyjny", TK: "Trybunał Konstytucyjny", KIO: "Krajowa Izba Odwoławcza" };
+export function courtCorrectionPrompt(findings) {
+    return [
+        "KONTROLA SĄDU (aplikacja, według sygnatury):",
+        ...findings.map((item) => `- sygn. ${item.signature} to orzeczenie: ${COURT_LABEL[item.actual]}, a odpowiedź przypisuje je: ${COURT_LABEL[item.named]}.`),
+        "Popraw nazwę sądu; gdy pytanie dotyczyło innego sądu, napisz wprost, że to orzeczenie innego sądu niż pytany."
+    ].join("\n");
+}
+export function courtWarning(findings) {
+    return findings.map((item) => `⚠️ Kontrola aplikacji: sygn. ${item.signature} to orzeczenie — ${COURT_LABEL[item.actual]}, nie ${COURT_LABEL[item.named]}.`).join("\n");
+}
+export function caseContentFindings(answer, sources, topicText) {
+    const terms = topicTerms(topicText);
+    if (!terms.length || !sources.length)
+        return [];
+    const paragraphs = answer.split(/\n\s*\n/u);
+    const findings = new Map();
+    paragraphs.forEach((paragraph, index) => {
+        for (const match of paragraph.matchAll(SIGNATURE)) {
+            const signature = match[0].replace(/\s+/g, " ");
+            const key = signatureKey(signature);
+            const text = sourceTextFor(key, sources);
+            if (!text)
+                continue;
+            const window = fold(assertedSentences(claimWindow(paragraphs, index)));
+            const foldedText = fold(text);
+            const missing = [
+                ...terms.filter((term) => contains(window, term) && !contains(foldedText, term)).map((term) => term.word),
+                // A thesis quoted as the judgment's own words must be in its text, word for word.
+                ...quotesIn(claimWindow(paragraphs, index))
+                    .filter((quote) => !squeeze(foldedText).includes(squeeze(fold(quote))))
+                    .map((quote) => `cytat „${quote.length > 80 ? `${quote.slice(0, 77)}...` : quote}”`)
+            ];
+            if (!missing.length)
+                continue;
+            const current = findings.get(key);
+            findings.set(key, { signature, missing: [...new Set([...(current?.missing ?? []), ...missing])] });
+        }
+    });
+    return [...findings.values()];
+}
+export function caseContentCorrectionPrompt(findings) {
+    return [
+        "KONTROLA TREŚCI ORZECZEŃ (aplikacja): odpowiedź przypisuje orzeczeniom treść, której nie ma w tekście pobranym w tej turze ze źródła:",
+        ...findings.map((finding) => `- sygn. ${finding.signature}: w pobranym tekście nie ma: ${finding.missing.join(", ")}`),
+        "Popraw odpowiedź: każde orzeczenie opisuj wyłącznie tym, co jest w jego pobranym tekście (sąd, sygnatura, data, przedmiot sprawy). Orzeczenia, które nie dotyczą pytania, nie przedstawiaj jako trafienia.",
+        "Gdy żadne pobrane orzeczenie nie spełnia kryteriów, napisz wprost, że nie znaleziono orzeczenia spełniającego te kryteria (brak trafień = OUT_OF_SCOPE, nie dowód braku orzeczenia), i wskaż, co sprawdzono.",
+        "Podaj pełną poprawioną odpowiedź."
+    ].join("\n");
+}
+export function caseContentWarning(findings) {
+    return findings
+        .map((finding) => `⚠️ Kontrola aplikacji: w tekście orzeczenia sygn. ${finding.signature} pobranym w tej turze nie ma pojęć, które odpowiedź mu przypisuje (${finding.missing.join(", ")}). Nie powołuj go jako orzeczenia w tej sprawie bez sprawdzenia treści w źródle.`)
+        .join("\n");
+}

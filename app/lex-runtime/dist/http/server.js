@@ -1,3 +1,4 @@
+import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
 import { configureCaseLawStore } from "../case-law-store.js";
 import { LocalOcrCorrector } from "../ocr-correction.js";
@@ -332,7 +333,7 @@ export async function startLocalServer(options) {
     // as the SN connector of the case-law search does.
     new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
-    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)));
+    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)), registryEnrichmentFor(legalFederationTools));
     const coreApp = createLexHttpApp({
         registry,
         // Off until a Google OAuth client is configured (see google/config.ts).

@@ -88,11 +88,14 @@ function bags(label) {
 function phrases(label) {
     const result = [];
     const single = [];
-    const parts = label
+    const tail = [];
+    const segments = label
         .replace(/\([^)]*\)/g, " ")
         .replace(/\bart\.?\s*\d+[a-z]*(?:\s*[–-]\s*\d+[a-z]*)?/giu, " ")
-        .split(/\s+—\s+|\s*\/\s*|\s*\+\s*|,|;/u);
-    for (const part of parts) {
+        .split(/\s+—\s+/u);
+    // Parts after the head ("KP — praca zdalna"): only with a head, i.e. a label with " — ".
+    const parts = segments.flatMap((segment, index) => segment.split(/\s*\/\s*|\s*\+\s*|,|;/u).map((part) => ({ part, tail: segments.length > 1 && index > 0 })));
+    for (const { part, tail: inTail } of parts) {
         const words = (part.match(/\p{L}{3,}/gu) ?? []).filter((word) => !CODE_TOKEN.test(word) && (CODE_TOKEN.lastIndex = 0, true));
         const significant = words.filter((word) => !GENERIC.has(word.toLocaleLowerCase("pl")));
         if (!significant.length)
@@ -117,10 +120,10 @@ function phrases(label) {
             single.push(new RegExp(`(?<![a-z])(?:${stems.map(escape).join("|")})[a-z]{0,3}(?![a-z])`, "u"));
         }
         else {
-            result.push(pattern);
+            (inTail ? tail : result).push(pattern);
         }
     }
-    return { multi: result, single };
+    return { multi: result, single, tail };
 }
 // "KC — zachowek / dział": the part before " — ". An abbreviation ("KC", "VAT", "PrUp") is
 // matched as written, words by their stems.
@@ -141,6 +144,8 @@ function headOf(label) {
 // też unieważnia indeks), pliki czytane tylko po zmianie.
 const cache = new Map();
 const RARE_IN_MODULES = 10;
+const GENERAL_MODULES = 30;
+const GENERAL_DOMAINS = 8;
 function actRows(registry) {
     const skills = [...registry.skills.values()].filter((skill) => /^dr-\d{2}-/.test(skill.name)).sort((a, b) => a.name.localeCompare(b.name));
     const files = skills.map((skill) => path.join(skill.directory, "MAPA-AKTOW.md"));
@@ -201,8 +206,9 @@ function actRows(registry) {
                 index: /indeks|current-state|moduł\s+główny/iu.test(label) || resources.some((resource) => /current-state-COV/.test(resource)),
                 ...(() => {
                     const found = phrases(label);
-                    return { phrases: found.multi, singles: found.single };
+                    return { phrases: found.multi, singles: found.single, tailPhrases: found.tail };
                 })(),
+                rareSingles: [],
                 bags: bags(label),
                 unique: [],
                 head: headOf(label)
@@ -221,6 +227,29 @@ function actRows(registry) {
             return [];
         }
     });
+    // General vocabulary of the whole corpus (many modules across many domains):
+    // „działalność gospodarcza” 75 modules in 13 domains, „wynagrodzenie” 116 in 15;
+    // a domain's own phrase stays specific („czas pracy” 15 in 4).
+    const domainOf = skills.flatMap((skill) => {
+        try {
+            return fs.readdirSync(path.join(skill.directory, "modules")).filter((name) => name.endsWith(".md")).map(() => skill.name);
+        }
+        catch {
+            return [];
+        }
+    });
+    const rare = (pattern) => {
+        const hits = moduleTexts.flatMap((text, index) => (pattern.test(text) ? [domainOf[index]] : []));
+        return hits.length < GENERAL_MODULES || new Set(hits).size < GENERAL_DOMAINS;
+    };
+    for (const row of rows) {
+        // A tail phrase rare in the corpus names the act on its own ("szkody łowieckie");
+        // a common one ("działalność gospodarcza", 14 cases of contracts) needs the head.
+        const standalone = row.tailPhrases.filter(rare);
+        row.phrases = [...row.phrases, ...standalone];
+        row.tailPhrases = row.tailPhrases.filter((pattern) => !standalone.includes(pattern));
+        row.rareSingles = row.singles.filter(rare);
+    }
     for (const [position, row] of rows.entries()) {
         row.unique = row.singles.filter((pattern) => labels.every((label, other) => other === position || !pattern.test(label)) &&
             moduleTexts.filter((text) => pattern.test(text)).length <= RARE_IN_MODULES);
@@ -317,9 +346,12 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
     for (const row of rows) {
         const singles = row.singles.filter((pattern) => pattern.test(folded));
         const headed = row.head ? (row.head.flags.includes("u") && /\\p\{L\}/u.test(row.head.source) ? row.head.test(text) : row.head.test(folded)) : false;
+        // Two common words of one row („wynagrodzenie”, „świadczenie” in any contract) are not the act.
+        const rareTwo = singles.length >= 2 && singles.some((pattern) => row.rareSingles.includes(pattern));
         const phrase = row.phrases.find((pattern) => pattern.test(folded)) ??
+            (headed ? row.tailPhrases.find((pattern) => pattern.test(folded)) : undefined) ??
             row.bags.find((bag) => sentences.some((sentence) => bag.every((stem) => stem.test(sentence))))?.[0] ??
-            (singles.length && (headed || singles.length >= 2) ? singles[0] : undefined) ??
+            (singles.length && (headed || rareTwo) ? singles[0] : undefined) ??
             row.unique.find((pattern) => pattern.test(folded));
         if (phrase)
             add(row, "NAZWA", `„${row.label}” w treści sprawy`, distinctive(row.label) ?? undefined);

@@ -4312,8 +4312,20 @@ export function createLexHttpApp(options) {
             let pleadingSource;
             // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
             // names no pleading keyword; its document type does.
-            if (documentType === "pleading" ||
-                previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1") {
+            // pisma-procesowe-v3 Test A (MOD-REDAKCJA): the user's own pleading corrected in the
+            // chat. Its file renders that corrected text without the W1–W3 pipeline (the redaction
+            // ran its own HYBRID-VALIDATION, G3); the user's earlier messages must still be Test A.
+            const earlierUserTurns = parseSkillSelectionEnvelope(sessionRequest.query)
+                .query.split(/\n\n(?=Użytkownik: |Asystent: )/u)
+                .filter((part) => part.startsWith("Użytkownik: "))
+                .slice(0, -1)
+                .map((part) => part.replace(/^Użytkownik: /u, ""));
+            const redactionFile = req.body?.source === "REDACTION" &&
+                earlierUserTurns.length > 0 &&
+                options.sessionExecutor?.pleadingRedactionFor?.(earlierUserTurns.join("\n")) === true;
+            if (!redactionFile &&
+                (documentType === "pleading" ||
+                    previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1")) {
                 const store = options.processWorkflowStore;
                 const stored = store
                     ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => ({
@@ -4341,7 +4353,16 @@ export function createLexHttpApp(options) {
                 // in the chat, after the mode is chosen; a one-shot file has no such state, and the
                 // engine refused it with HTTP 422 ("Persisted contract-analysis context is required").
                 const statefulWorkflow = previewSessionWorkflow(options.registry, sessionRequest).id;
-                if (CHAT_PIPELINE_WORKFLOWS.has(statefulWorkflow)) {
+                // analizator-umow-v1: a contract drafted, corrected or supplemented in its pipeline is
+                // exported once AU-HYBRID (HYBRID-VALIDATION) and AU-STRIP (markers removed) are closed.
+                // Before, such a contract could never become a file.
+                const contractExportReady = statefulWorkflow === "CONTRACT_ANALYSIS_V1" && options.contractWorkflowStore
+                    ? await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => {
+                        const state = await options.contractWorkflowStore.getContractAnalysisState({ caseId, caseDataKey, keyVersion: caseView.keyVersion });
+                        return Boolean(state && state.mode !== "ANALYSIS" && state.closedCheckpoints.includes("AU-HYBRID") && state.closedCheckpoints.includes("AU-STRIP"));
+                    })
+                    : false;
+                if (CHAT_PIPELINE_WORKFLOWS.has(statefulWorkflow) && !contractExportReady) {
                     res.status(409).json({ error: "WORKFLOW_PIPELINE_REQUIRED", workflow: statefulWorkflow });
                     return;
                 }
@@ -5789,12 +5810,24 @@ export function createLexHttpApp(options) {
                 : undefined;
             // pisma-procesowe-v3 Test A: editing the form of a pleading the user pasted is
             // MOD-REDAKCJA (the executor preloads it), not a new pipeline W1–W3 with its state.
-            const pleadingRedaction = routerExecutive === "pisma-procesowe-v3" &&
-                keywordPlan.id === "PROCESS_PLEADING_V1" &&
-                options.sessionExecutor?.pleadingRedactionFor?.(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query)) === true;
+            // With a file attached the router is not asked (routerExecutive), so Test A is checked
+            // on the message and the attached document itself.
+            const pleadingRedaction = keywordPlan.id === "PROCESS_PLEADING_V1" &&
+                (routerExecutive === "pisma-procesowe-v3" || (request.modelSelectsSkills && sessionAttachments.length > 0)) &&
+                options.sessionExecutor?.pleadingRedactionFor?.(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query), sessionAttachments) === true;
+            // With delivered files the router decides from the message and the files' kinds: a
+            // question about a delivered pleading ("dostałem pozew, co mam zrobić?") is not the
+            // pleading pipeline that one word ("pozew") would start (409 *_STATE_REQUIRED).
+            const materialSkills = request.modelSelectsSkills &&
+                sessionAttachments.length > 0 &&
+                keywordPlan.executionSkill &&
+                options.sessionExecutor?.executiveSkillsWithMaterials
+                ? options.sessionExecutor.executiveSkillsWithMaterials(request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query), sessionAttachments)
+                : [];
             const previewPlan = pleadingRedaction ||
                 (routerExecutive !== undefined &&
-                    routerExecutive !== keywordPlan.executionSkill)
+                    routerExecutive !== keywordPlan.executionSkill) ||
+                (materialSkills.length > 0 && !materialSkills.includes(keywordPlan.executionSkill))
                 ? createDeterministicWorkflowPlan(options.registry, null)
                 : keywordPlan;
             let processContext = null;
@@ -6305,6 +6338,7 @@ export function createLexHttpApp(options) {
                         return {
                             result: nodeResult,
                             commit,
+                            waitingForUser: nodeResult.waitingForUser === true,
                             notApplicable: commit ? evaluateCheckpointOutput(permit.checkpoint, nodeResult.answer ?? "").notApplicable : null
                         };
                     },
@@ -6343,6 +6377,7 @@ export function createLexHttpApp(options) {
                 const lastSuccessful = auto.steps.at(-1)
                     ?.result;
                 const response = auto.blockedResult ??
+                    auto.waitingResult ??
                     lastSuccessful;
                 if (!response) {
                     throw new Error("PROCESS_PLEADING_AUTO_RESULT_MISSING");
@@ -6358,6 +6393,10 @@ export function createLexHttpApp(options) {
                     step.result.answer
                         .trim()
                 ].join("\n\n"));
+                // The checkpoint that asked the user closes the answer: its questions are last.
+                if (auto.waitingResult?.answer?.trim() && successfulAnswers.length > 0) {
+                    successfulAnswers.push(`## ${auto.state.pendingCheckpoint ?? "PYTANIA"}\n\n${auto.waitingResult.answer.trim()}`);
+                }
                 if (response.status ===
                     "DRAFT_PRESENTABLE" &&
                     successfulAnswers.length > 0) {
@@ -6451,7 +6490,9 @@ export function createLexHttpApp(options) {
                         orderedCaseContext
                             .permit.workflowId &&
                     result.workflow.result ===
-                        "PASS") {
+                        "PASS" &&
+                    // A checkpoint that asked the user stays open until the reply.
+                    result.waitingForUser !== true) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6561,7 +6602,9 @@ export function createLexHttpApp(options) {
                     result.workflow?.id ===
                         "CONTRACT_ANALYSIS_V1" &&
                     result.workflow.result ===
-                        "PASS") {
+                        "PASS" &&
+                    // A checkpoint that asked the user stays open until the reply.
+                    result.waitingForUser !== true) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6663,7 +6706,9 @@ export function createLexHttpApp(options) {
                     result.workflow?.id ===
                         "CHRONOLOGY_V1" &&
                     result.workflow.result ===
-                        "PASS") {
+                        "PASS" &&
+                    // A checkpoint that asked the user stays open until the reply.
+                    result.waitingForUser !== true) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6766,7 +6811,9 @@ export function createLexHttpApp(options) {
                     result.workflow?.id ===
                         "COURT_ANALYSIS_V1" &&
                     result.workflow.result ===
-                        "PASS") {
+                        "PASS" &&
+                    // A checkpoint that asked the user stays open until the reply.
+                    result.waitingForUser !== true) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6860,7 +6907,9 @@ export function createLexHttpApp(options) {
                     result.workflow?.id ===
                         "PROCESS_PLEADING_V1" &&
                     result.workflow.result ===
-                        "PASS") {
+                        "PASS" &&
+                    // A checkpoint that asked the user stays open until the reply.
+                    result.waitingForUser !== true) {
                     state =
                         await options
                             .caseAccessService

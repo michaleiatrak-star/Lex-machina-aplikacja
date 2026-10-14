@@ -124,6 +124,8 @@ describe("evidence workflow", () => {
     ["Przeanalizuj materiał dowodowy.", "EVIDENCE_ANALYSIS_V1"],
     ["Oceń moje faktury.", "EVIDENCE_ANALYSIS_V1"],
     ["Zgubiłem dowód osobisty, co robić?", "LEGAL_QUERY_V1"],
+    ["Powiąż parafrazę z dokładnym dowodem z orzeczenia SN III CZP 25/11.", "CASE_LAW_V1"],
+    ["Jaka jest siła dowodowa tych SMS-ów?", "EVIDENCE_ANALYSIS_V1"],
     ["Dostałem wyrok, czy sąd dobrze ocenił dowody?", "COURT_ANALYSIS_V1"]
   ])("%s → %s", (question, id) => {
     expect(workflow(question)).toBe(id);
