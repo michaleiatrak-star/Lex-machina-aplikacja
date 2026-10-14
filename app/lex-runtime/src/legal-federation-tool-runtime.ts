@@ -65,15 +65,42 @@ type SearchInput = {
   limit?: number;
 };
 
+function eliOfPublication(query: string): string | null {
+  const text = query.trim();
+  const eli = /^(DU|MP)\/(\d{4})\/(\d{1,5})$/iu.exec(text);
+  if (eli) return `${eli[1]!.toUpperCase()}/${eli[2]}/${eli[3]}`;
+  const publication = /^(Dz\.?\s*U\.?|M\.?\s*P\.?)\s*(?:z\s*)?(\d{4})\s*(?:r\.?)?\s*,?\s*(?:nr\s*\d{1,4}\s*,?\s*)?poz\.?\s*(\d{1,5})$/iu.exec(text);
+  return publication ? `${/^M/iu.test(publication[1]!) ? "MP" : "DU"}/${publication[2]}/${publication[3]}` : null;
+}
+
 // Ujednolicone search/get → natywne narzędzie serwera lex-*. Źródło bez odpowiednika
 // (np. get w SAOS) mapuje się na najbliższe narzędzie odczytu; resztę daje call_federated_legal_source.
-const NATIVE_SEARCH: Record<
+export const NATIVE_SEARCH: Record<
   SourceId,
   (input: SearchInput) => NativeRequest
 > = {
-  isap: (input) => ({ tool: "isap_lookup", args: { query: input.query } }),
-  eurlex: (input) => ({ tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } }),
-  saos: (input) => ({ tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } }),
+  // "Dz.U. 1964 nr 16 poz. 93", "Dz. U. z 2023 r. poz. 1610", "DU/1964/93": the ELI read; else a title.
+  isap: (input) => {
+    const eli = eliOfPublication(input.query ?? "");
+    return eli ? { tool: "isap_lookup", args: { eli } } : { tool: "isap_lookup", args: { query: input.query } };
+  },
+  // A CELEX of an act (32016R0679) is looked up in Cellar; a CJEU case number, ECLI or case-law
+  // CELEX (6…) goes to the case-law tool by that key; anything else is a title phrase. Before,
+  // every query went to eurlex_tsue as a phrase and an act's CELEX came back NOT_FOUND.
+  eurlex: (input) => {
+    const query = input.query?.trim() ?? "";
+    if (/^[0-9CE]\d{4}[A-Z]{1,2}[0-9A-Z()_.-]{1,20}$/u.test(query) && !query.startsWith("6")) return { tool: "eurlex_lookup", args: { celex: query } };
+    if (/^6\d{4}[A-Z]{2}\d{4}$/u.test(query)) return { tool: "eurlex_tsue", args: { celex: query, limit: input.limit } };
+    if (/^ECLI:EU:/iu.test(query)) return { tool: "eurlex_tsue", args: { ecli: query.toUpperCase(), limit: input.limit } };
+    const caseNumber = /^(?:sprawa\s+)?([CTF])\s*-\s*(\d{1,4})\s*\/\s*(\d{2})$/iu.exec(query);
+    if (caseNumber) return { tool: "eurlex_tsue", args: { sygnatura: `${caseNumber[1]!.toUpperCase()}-${caseNumber[2]}/${caseNumber[3]}`, limit: input.limit } };
+    return { tool: "eurlex_tsue", args: { fraza: input.query, dataOd: input.dateFrom, limit: input.limit } };
+  },
+  // A case number is checked as such; as a phrase it matched unrelated rulings.
+  saos: (input) =>
+    input.query && courtOfSignature(input.query)
+      ? { tool: "saos_search", args: { sygnatura: input.query.trim().replace(/\s+/gu, " "), pageSize: input.limit } }
+      : { tool: "saos_search", args: { fraza: input.query, dataOd: input.dateFrom, dataDo: input.dateTo, pageSize: input.limit } },
   cbosa: (input) => ({ tool: "cbosa_szukaj", args: { fraza: input.query, odDaty: input.dateFrom, doDaty: input.dateTo, strona: input.page } }),
   // A signature goes to the signature check; anything else to the sn.pl search form (text of the decision).
   sn: (input) =>
@@ -105,7 +132,7 @@ const NATIVE_SEARCH: Record<
 const PORTIONED_SOURCES = new Set<string>(["isap", "kio", "eureka", "uodo"]);
 const PORTION_CHARS = 20_000;
 
-const NATIVE_GET: Record<
+export const NATIVE_GET: Record<
   SourceId,
   (documentId: string) => NativeRequest
 > = {
@@ -117,7 +144,8 @@ const NATIVE_GET: Record<
   sp: (id) => ({ tool: "sp_pobierz", args: { url_lub_id: id } }),
   tk: (id) => ({ tool: "tk_pobierz", args: { url: id } }),
   etpcz: (id) => ({ tool: "etpcz_pobierz", args: { url_lub_id: id } }),
-  kio: (id) => ({ tool: "kio_pobierz", args: { id } }),
+  // kio_pobierz takes the numeric id from kio_szukaj; a signature ("KIO 1000/23") is checked instead.
+  kio: (id) => (/^\d{1,9}$/u.test(id.trim()) ? { tool: "kio_pobierz", args: { id: id.trim() } } : { tool: "kio_sprawdz_sygnature", args: { sygnatura: id.trim() } }),
   krs: (id) => ({ tool: "krs_lookup", args: { numerKrs: id } }),
   wl: (id) => ({ tool: "wl_sprawdz_nip", args: { nip: id } }),
   ceidg: (id) => ({ tool: "ceidg_szukaj_firmy", args: { nip: id } }),

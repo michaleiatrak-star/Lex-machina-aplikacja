@@ -81,7 +81,7 @@ const INTENTS: Intent[] = [
     primary: "przesluchanie-swiadkow-v2-min90",
     reason: "pytania do świadka lub biegłego (router [8])",
     pattern:
-      /(?<![a-z])(?:pyta\w*(?: [^.?!]{0,40}?)? (?:do|dla) (?:swiad\w*|bieglego|biegl\w*|tych |tego |tej |niego|niej|nich|sasiad\w*|kolegi|policjant\w*|funkcjonariusz\w*|pana |pani )|pyta\w*,? (?:ktore|jakie) (?:powinien\w*|powinnam|mam|moge|musze) (?:mu|jej|im)|(?:do|na|przed) przesluchani\w*|przesluchac (?:swiadk|bieglego)|(?:przygotuj|przygotowa\w*|uloz|ulozy\w*|napisz|sporzadz)\w*(?: [^.?!]{0,20}?)? pyta\w* (?:do |dla |glown|kontroln|otwart|krzyzow|zadawan|ktore (?:pokaz|wykaz|ujawni|podwaz)))/u
+      /(?<![a-z])(?:pyta\w*(?: [^.?!]{0,40}?)? (?:do|dla) (?:swiad\w*|bieglego|biegl\w*|tych |tego |tej |niego|niej|nich|sasiad\w*|kolegi|policjant\w*|funkcjonariusz\w*|pana |pani )|pyta\w*,? (?:ktore|jakie) (?:powinien\w*|powinnam|mam|moge|musze) (?:mu|jej|im)|(?:do|na|przed) przesluchani\w*|(?:przygotuj|przygotowa\w*|zaplanuj|rozpisz|poprowadz)\w*(?: [a-z]+){0,2} przesluchani\w*|przesluchac (?:swiadk|bieglego)|(?:przygotuj|przygotowa\w*|uloz|ulozy\w*|napisz|sporzadz)\w*(?: [^.?!]{0,20}?)? pyta\w* (?:do |dla |glown|kontroln|otwart|krzyzow|zadawan|ktore (?:pokaz|wykaz|ujawni|podwaz)))/u
   },
   {
     primary: "chronologia-sprawy-v1",

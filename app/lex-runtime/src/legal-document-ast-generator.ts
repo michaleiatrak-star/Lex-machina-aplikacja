@@ -356,11 +356,150 @@ function blockedSessionDiagnostic(
   return new DocumentAstSessionBlockedError(reason, details.join("\n"));
 }
 
+// The model writes chat habits into the AST text: Markdown emphasis and headings, a Markdown
+// table or list inside one paragraph, its own numbers in a numbered list, blank lines, a code
+// fence, a literal "\n". The file renders text as written, so "**Powód:**", "## Uzasadnienie"
+// and "1. 1. zasądzenie" reached the DOCX/ODT. The structure is rebuilt here, before validation.
+// A run of underscores is a blank to fill in ("Data: __________"), not emphasis.
+const EMPHASIS = /(?<!\*)\*\*(?=[^\s*])([\s\S]*?[^\s*])\*\*(?!\*)|(?<!_)__(?=[^\s_])([\s\S]*?[^\s_])__(?!_)|`([^`\n]+)`/gu;
+const HEADING_LINE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u;
+const FENCE_LINE = /^\s*```[\w-]*\s*$/u;
+// Decimal numbers only: a lettered enumeration ("a) ... b) ...") is cited as "lit. a" and keeps its letters.
+const ORDERED_ITEM = /^\s*\d{1,3}[.)]\s+/u;
+const BULLET_ITEM = /^\s*[-•*–]\s+/u;
+const TABLE_ROW = /^\s*\|.*\|\s*$/u;
+const TABLE_RULE = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/u;
+
+function cleanText(text: string): string {
+  return text
+    .replace(/\\n/gu, "\n")
+    .replace(EMPHASIS, (_match, bold, underline, code) => bold ?? underline ?? code)
+    .split("\n")
+    .filter((line) => !FENCE_LINE.test(line))
+    .join("\n");
+}
+
+function cleanInlines(content: unknown): unknown {
+  if (!Array.isArray(content)) return content;
+  return content.map((node) =>
+    isRecord(node) && node.type === "text" && typeof node.text === "string" ? { ...node, text: cleanText(node.text) } : node
+  );
+}
+
+const onlyText = (content: unknown): string | null =>
+  Array.isArray(content) && content.every((node) => isRecord(node) && node.type === "text" && typeof node.text === "string")
+    ? content.map((node) => (node as { text: string }).text).join("")
+    : null;
+
+const textNode = (text: string) => [{ type: "text", text }];
+const blank = (content: unknown) => (onlyText(content) ?? "x").trim() === "";
+
+// One paragraph of plain text split by its own structure: blank lines, a heading line, a
+// Markdown table, list lines. Text with references to aliases (pii_ref, xref) keeps its shape.
+function splitParagraph(text: string): AstRecord[] {
+  const out: AstRecord[] = [];
+  const chunks = text.split(/\n[ \t]*\n+/u);
+  for (const chunk of chunks) {
+    const lines = chunk.split("\n");
+    let prose: string[] = [];
+    const flush = () => {
+      const body = prose.join("\n").trim();
+      if (body) out.push({ type: "paragraph", content: textNode(body) });
+      prose = [];
+    };
+    for (let index = 0; index < lines.length; ) {
+      const line = lines[index]!;
+      const heading = HEADING_LINE.exec(line);
+      if (heading) {
+        flush();
+        out.push({ type: "heading", level: Math.min(3, heading[1]!.length), content: textNode(heading[2]!) });
+        index += 1;
+        continue;
+      }
+      if (TABLE_ROW.test(line) && index + 1 < lines.length && TABLE_RULE.test(lines[index + 1]!)) {
+        flush();
+        const rows: string[][] = [];
+        for (; index < lines.length && TABLE_ROW.test(lines[index]!); index += 1) {
+          if (TABLE_RULE.test(lines[index]!)) continue;
+          rows.push(lines[index]!.trim().replace(/^\||\|$/gu, "").split("|").map((cell) => cell.trim()));
+        }
+        out.push({ type: "table", rows: rows.map((row) => row.map((cell) => ({ blocks: [{ type: "paragraph", content: textNode(cell || " ") }] }))) });
+        continue;
+      }
+      const ordered = ORDERED_ITEM.test(line);
+      if ((ordered || BULLET_ITEM.test(line)) && (index + 1 < lines.length ? ORDERED_ITEM.test(lines[index + 1]!) || BULLET_ITEM.test(lines[index + 1]!) : prose.length > 0)) {
+        flush();
+        const items: unknown[] = [];
+        for (; index < lines.length && (ORDERED_ITEM.test(lines[index]!) || BULLET_ITEM.test(lines[index]!)); index += 1) {
+          const item = lines[index]!.replace(ORDERED_ITEM, "").replace(BULLET_ITEM, "").trim();
+          if (item) items.push(textNode(item));
+        }
+        if (items.length) out.push({ type: "list", ordered, items });
+        continue;
+      }
+      prose.push(line);
+      index += 1;
+    }
+    flush();
+  }
+  return out;
+}
+
+function cleanBlock(block: unknown): unknown[] {
+  if (!isRecord(block)) return [block];
+  if (block.type === "heading" || block.type === "quote" || block.type === "signature") {
+    const content = cleanInlines(block.content);
+    const text = onlyText(content);
+    if (block.type === "heading" && text !== null) {
+      const plain = text.replace(/^\s*#{1,6}\s+/u, "").replace(/\s+/gu, " ").trim();
+      return plain ? [{ ...block, content: textNode(plain) }] : [];
+    }
+    return blank(content) ? [] : [{ ...block, content }];
+  }
+  if (block.type === "paragraph") {
+    const content = cleanInlines(block.content);
+    const text = onlyText(content);
+    if (text === null) return [{ ...block, content }];
+    return splitParagraph(text);
+  }
+  if (block.type === "list" && Array.isArray(block.items)) {
+    const marker = block.ordered ? ORDERED_ITEM : BULLET_ITEM;
+    const items = block.items
+      .map((item) => {
+        const content = cleanInlines(item);
+        const text = onlyText(content);
+        return text === null ? content : textNode(text.replace(marker, "").replace(BULLET_ITEM, "").trim());
+      })
+      .filter((item) => !blank(item));
+    return items.length ? [{ ...block, items }] : [];
+  }
+  if (block.type === "table" && Array.isArray(block.rows)) {
+    return [{
+      ...block,
+      rows: block.rows.map((row) =>
+        Array.isArray(row)
+          ? row.map((cell) => (isRecord(cell) && Array.isArray(cell.blocks) ? { ...cell, blocks: cell.blocks.flatMap((child) => cleanBlock(child)) } : cell))
+          : row
+      )
+    }];
+  }
+  return [block];
+}
+
+export function cleanAstMarkup(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value.blocks)) return value;
+  return {
+    ...value,
+    ...(value.title !== undefined ? { title: cleanInlines(value.title) } : {}),
+    blocks: value.blocks.flatMap((block) => cleanBlock(block))
+  };
+}
+
 const AST_GENERATION_ATTEMPTS = 2;
 const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+)$/u;
 
 function parseValidatedAst(answer: string, request: LegalDocumentAstGenerationRequest): ReturnType<typeof validateLegalDocumentAst> {
-  const parsed = normalizeAstBlocks(normalizeAstHeader(extractJson(answer), request));
+  const parsed = cleanAstMarkup(normalizeAstBlocks(normalizeAstHeader(extractJson(answer), request)));
   let validated: ReturnType<typeof validateLegalDocumentAst>;
   try {
     validated = validateLegalDocumentAst(parsed, request.aliases.entries);
