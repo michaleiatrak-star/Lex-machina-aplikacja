@@ -28,7 +28,9 @@ const ALLOWED_CONTENT_TYPES = [
   "text/plain",
   "application/json",
   "application/xml",
-  "text/xml"
+  "text/xml",
+  // An opinion, a commentary or a court's PDF on a research page: text read locally.
+  "application/pdf"
 ] as const;
 
 const REDIRECT_STATUSES =
@@ -640,6 +642,14 @@ const defaultTransport:
               );
             }
           );
+          // setTimeout above fires only on an idle socket: a server dripping bytes slowly kept
+          // the turn waiting. The whole response gets the same deadline.
+          const deadline = setTimeout(() => {
+            request.destroy();
+            fail(new AuxiliarySourceFetchError("Auxiliary source request exceeded its deadline.", "AUX_SOURCE_TIMEOUT"));
+          }, options.timeoutMs);
+          deadline.unref?.();
+          request.on("close", () => clearTimeout(deadline));
 
           request.on(
             "error",
@@ -890,6 +900,18 @@ export function extractAuxiliarySourceDates(
   };
 }
 
+// A PDF research source as text, extracted locally (never sent anywhere); a scan without a
+// text layer gives no text (AUX_SOURCE_EMPTY).
+async function pdfText(body: Uint8Array, maxChars: number): Promise<string> {
+  try {
+    const { LocalPdfTextExtractor } = await import("./pdf-text-extractor.js");
+    const extracted = await new LocalPdfTextExtractor().extract(new Uint8Array(body));
+    return extracted.text.normalize("NFKC").replace(/[ \t]+/g, " ").trim().slice(0, maxChars);
+  } catch {
+    return "";
+  }
+}
+
 export class SafeAuxiliarySourceFetcher {
   constructor(
     private readonly resolver:
@@ -1045,13 +1067,14 @@ export class SafeAuxiliarySourceFetcher {
         );
       }
 
-      const text =
-        textFromBody(
-          response.body,
-          contentType,
-          this.limits
-            .maxTextChars
-        );
+      const text = /application\/pdf/iu.test(contentType)
+        ? await pdfText(response.body, this.limits.maxTextChars)
+        : textFromBody(
+            response.body,
+            contentType,
+            this.limits
+              .maxTextChars
+          );
       if (!text) {
         throw new AuxiliarySourceFetchError(
           "Auxiliary source returned no readable text.",

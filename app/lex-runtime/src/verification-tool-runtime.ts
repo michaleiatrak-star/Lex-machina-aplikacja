@@ -1635,7 +1635,12 @@ export class LegalVerificationToolRuntime {
       const content = ran.get(call.id) ?? "";
       now.set(key(call), content);
       // A failure (source down, timeout, refusal) is not remembered: a retry asks again.
-      if (!/"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content)) this.answered.set(key(call), content);
+      // OUT_OF_SCOPE from a source that did not answer (sn.pl 403 before the session is set,
+      // CBOSA 503, a transport error) is an outage too, not an answer about the signature.
+      const outage =
+        /"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content) ||
+        /"reason"\s*:\s*"[^"]*(?:HTTP_(?:403|429|5\d\d)|TRANSPORT|BOT_PROTECTION|TIMEOUT|FETCH_FAILED)/.test(content);
+      if (!outage) this.answered.set(key(call), content);
     }
     return calls.map((call) => ({ tool_use_id: call.id, content: now.get(key(call)) ?? this.answered.get(key(call)) ?? "" }));
   }

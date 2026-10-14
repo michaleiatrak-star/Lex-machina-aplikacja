@@ -43,3 +43,47 @@ describe("fetched text", () => {
     expect(articleEvidence(page, "11")).toMatch(/^Art\. 11\. Pierwszy/u);
   });
 });
+
+describe("auxiliary source: a PDF research page", () => {
+  it("reads the text of a PDF locally", async () => {
+    const { PdfDocument } = await import("../src/pdf-writer.js");
+    const { SafeAuxiliarySourceFetcher } = await import("../src/auxiliary-source-fetcher.js");
+    const doc = new PdfDocument({ title: "Opinia", created: new Date("2026-10-14T00:00:00Z") });
+    doc.addPage().text(50, 50, "Glosa do wyroku dotyczy przedawnienia roszczen.");
+    const pdf = new Uint8Array(doc.toBuffer());
+    const fetcher = new SafeAuxiliarySourceFetcher(
+      async () => [{ address: "93.184.216.34", family: 4 }],
+      async () => ({ statusCode: 200, contentType: "application/pdf", body: pdf })
+    );
+    const result = await fetcher.fetch("https://source.example/glosa.pdf");
+    expect(result.text).toContain("przedawnienia");
+  });
+});
+
+describe("CBOSA: an unreadable document and a busy server", () => {
+  it("keeps the readable hits and retries a 503", async () => {
+    const { CaseLawSearchService } = await import("../src/case-law-search.js");
+    let searches = 0;
+    const doc = (signature: string) =>
+      new Response(
+        `<html><head><title>${signature} - Wyrok WSA</title></head><body><table><tr><td class="lista-label">Sąd</td><td class="info-list-value">Wojewódzki Sąd Administracyjny w Warszawie</td></tr></table></body></html>`,
+        { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }
+      );
+    const fetcher = async (input: string | URL) => {
+      const url = String(input);
+      if (url.endsWith("/cbo/query")) return new Response("<html>Formularz</html>", { status: 200, headers: { "set-cookie": "S=1; Path=/" } });
+      if (url.endsWith("/cbo/search")) {
+        searches += 1;
+        if (searches === 1) return new Response("busy", { status: 503 });
+        return new Response('<html>Znaleziono 2 orzeczenia <a href="/doc/AAAAAAAAAA">a</a><a href="/doc/BBBBBBBBBB">b</a></html>', { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+      if (url.endsWith("/doc/AAAAAAAAAA")) return new Response("error", { status: 500 });
+      if (url.endsWith("/doc/BBBBBBBBBB")) return doc("II SAB/Wa 7/26");
+      throw new Error(url);
+    };
+    const result = await new CaseLawSearchService(fetcher as typeof fetch).search({ source: "CBOSA", query: "bezczynność", limit: 2 });
+    expect(searches).toBe(2);
+    expect(result.status).toBe("FOUND");
+    expect(result.candidates.map((candidate) => candidate.caseNumbers)).toEqual([["II SAB/Wa 7/26"]]);
+  }, 20_000);
+});
