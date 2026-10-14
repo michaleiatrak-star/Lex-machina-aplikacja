@@ -86,6 +86,7 @@ const PRIORITY = {
     PERSON: 60,
     BIRTH_DATE: 54,
     VEHICLE_PLATE: 53,
+    BAR_NUMBER: 53,
     KRS: 52,
     CUSTOM: 50
 };

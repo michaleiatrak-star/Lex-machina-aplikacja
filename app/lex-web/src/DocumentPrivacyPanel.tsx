@@ -41,6 +41,7 @@ const PII_KINDS: Array<{
   { value: "LAND_REGISTRY", label: "Księga wieczysta" },
   { value: "KRS", label: "KRS" },
   { value: "VEHICLE_PLATE", label: "Nr rejestracyjny" },
+  { value: "BAR_NUMBER", label: "Nr wpisu adwokata/radcy" },
   { value: "PAYMENT_CARD", label: "Karta płatnicza" },
   { value: "CUSTOM", label: "Inne" }
 ];

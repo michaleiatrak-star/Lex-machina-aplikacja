@@ -392,6 +392,7 @@ const PRIVACY_KINDS = new Set([
   "LAND_REGISTRY",
   "BIRTH_DATE",
   "VEHICLE_PLATE",
+  "BAR_NUMBER",
   "PAYMENT_CARD",
   "CUSTOM"
 ] as const);
@@ -5200,7 +5201,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
   const EDITABLE_PII_KINDS = new Set<string>([
     "PERSON", "ADDRESS", "PESEL", "NIP", "REGON", "IBAN", "EMAIL", "PHONE", "ID_CARD",
-    "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "PAYMENT_CARD", "CUSTOM"
+    "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "BAR_NUMBER", "PAYMENT_CARD", "CUSTOM"
   ]);
 
   app.get("/api/cases/:caseId/documents/:documentId/anonymized", (req, res) =>

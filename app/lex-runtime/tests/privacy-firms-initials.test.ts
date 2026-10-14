@@ -35,6 +35,13 @@ describe("firm names ([FIRMA], REGULY-ANONIMIZACJI)", () => {
 describe("firm names: gaps found by the 5000-mention comparison corpus", () => {
   const values = (text: string) => detectFirmNames(text).map((span) => span.value);
 
+  it("a letterhead firm, a firm after a place, a capitalized legal form (third scan)", () => {
+    expect(values("w Katowicach i Human Park sp. z o.o. z siedzibą")).toEqual(["Human Park"]);
+    expect(values("Kancelaria Adwokatów i Radców Prawnych\nCiecierski Rak Spółka Komandytowa")).toEqual(["Ciecierski Rak"]);
+    expect(values("Radców Prawnych\nCiecierski Rak Sp. k. Oddział Katowice")).toEqual(["Ciecierski Rak"]);
+    expect(values("umowa z Nordic Trade\nGroup sp. z o.o.")).toEqual(["Nordic Trade\nGroup"]);
+  });
+
   it("legal form in capitals (headings, KRS extracts)", () => {
     expect(values("POZWANY: TERMEX SP. Z O.O. z siedzibą w Krakowie")).toEqual(["TERMEX"]);
     expect(values("BUD-REM SPÓŁKA AKCYJNA")).toEqual(["BUD-REM"]);

@@ -131,6 +131,7 @@ const PRIVACY_KINDS = new Set([
     "LAND_REGISTRY",
     "BIRTH_DATE",
     "VEHICLE_PLATE",
+    "BAR_NUMBER",
     "PAYMENT_CARD",
     "CUSTOM"
 ]);
@@ -2951,7 +2952,7 @@ export function createLexHttpApp(options) {
     }
     const EDITABLE_PII_KINDS = new Set([
         "PERSON", "ADDRESS", "PESEL", "NIP", "REGON", "IBAN", "EMAIL", "PHONE", "ID_CARD",
-        "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "PAYMENT_CARD", "CUSTOM"
+        "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "BAR_NUMBER", "PAYMENT_CARD", "CUSTOM"
     ]);
     app.get("/api/cases/:caseId/documents/:documentId/anonymized", (req, res) => withRestoredDocument(req, res, "ANALYZE", async ({ documentId }) => options.documentService.anonymizedVersion(documentId)));
     app.post("/api/cases/:caseId/documents/:documentId/anonymized/protect", (req, res) => withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {

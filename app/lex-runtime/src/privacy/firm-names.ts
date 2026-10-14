@@ -30,7 +30,10 @@ const NOT_A_NAME = new Set([
   "wnioskodawca", "w", "z", "ze", "i", "oraz", "a", "przez", "od", "do", "na", "dla", "przeciwko", "umowa", "umowę", "umowy",
   "zgodnie", "według", "strona", "strony", "skarb", "sąd", "sądu", "urząd", "urzędu", "gmina", "gminy", "miasto", "powiat",
   "województwo", "zakład", "prokuratura", "ministerstwo", "minister", "prezes", "rzecznik", "agencja", "instytut", "narodowy",
-  "państwowy", "państwowe", "polski", "polska", "rzeczypospolitej", "pozwanym", "pozwaną", "spółkom", "krs", "nip", "regon"
+  "państwowy", "państwowe", "polski", "polska", "rzeczypospolitej", "pozwanym", "pozwaną", "spółkom", "krs", "nip", "regon",
+  // The legal form itself, written with capitals ("Ciecierski Rak Spółka Komandytowa").
+  "komandytowa", "komandytowej", "komandytową", "akcyjna", "akcyjnej", "akcyjną", "jawna", "jawnej", "jawną",
+  "partnerska", "partnerskiej", "partnerską", "cywilna", "cywilnej", "cywilną"
 ]);
 
 const NAME_WORD = /^(?:[„"»]?\p{Lu}[\p{L}\d&'’.-]*[”"«]?|\d[\p{L}\d-]*|i|&)$/u;
@@ -49,6 +52,14 @@ function nameBefore(text: string, end: number): { start: number; value: string }
     if (index < words.length - 1 && /[.;:!?]$/u.test(word) && !/^\p{Lu}\.$/u.test(word)) break;
     picked.unshift(words[index]!);
   }
+  // "w Katowicach i Human Park sp. z o.o.": a place after "w" is not the first firm's name.
+  const before = words[words.length - picked.length - 1]?.[0];
+  const joinerAt = picked.findIndex((word) => /^(?:i|&)$/u.test(word[0]));
+  if (joinerAt > 0 && before && /^(?:w|we)$/iu.test(before)) picked.splice(0, joinerAt + 1);
+  // A name of two words or more on its own line does not take words from the line above
+  // ("Kancelaria Adwokatów i Radców Prawnych\nCiecierski Rak Spółka Komandytowa").
+  const breakAt = picked.findIndex((word, index) => index > 0 && /\n/u.test(line.slice(picked[index - 1]!.index!, word.index!)));
+  if (breakAt > 0 && picked.length - breakAt >= 2) picked.splice(0, breakAt);
   while (picked.length && /^(?:i|&)$/u.test(picked[0]![0])) picked.shift();
   if (!picked.length) return null;
   const startInLine = picked[0]!.index!;

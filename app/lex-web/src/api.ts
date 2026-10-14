@@ -128,6 +128,7 @@ export type PiiKind =
   | "LAND_REGISTRY"
   | "BIRTH_DATE"
   | "VEHICLE_PLATE"
+  | "BAR_NUMBER"
   | "PAYMENT_CARD"
   | "CUSTOM";
 

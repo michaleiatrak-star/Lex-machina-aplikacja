@@ -137,7 +137,8 @@ const DETECTORS = [
     { kind: "EMAIL", regex: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi },
     {
         kind: "PHONE",
-        regex: /(?<![\w+])(?:\+48[\s-]?)?(?:\d{3}[\s-]\d{3}[\s-]\d{3}|\(\d{2}\)\s?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\d{2}\s\d{3}\s\d{2}\s\d{2})(?!\d)/g
+        // "(032) 250 56 13" (trunk zero), "32 250-56-13" (mixed separators).
+        regex: /(?<![\w+])(?:\+48[\s-]?)?(?:\d{3}[\s-]\d{3}[\s-]\d{3}|\(0?\d{2}\)\s?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\d{2}[\s-]\d{3}[\s-]\d{2}[\s-]\d{2})(?!\d)/g
     },
     {
         kind: "PHONE",
@@ -148,7 +149,16 @@ const DETECTORS = [
     { kind: "ID_CARD", regex: /(?<![\w])[A-Z]{3}\s?\d{6}(?![\w])/g, validate: validIdCard },
     { kind: "PASSPORT", regex: /(?<![\w])[A-Z]{2}\s?\d{7}(?![\w])/g, validate: validPassport },
     { kind: "LAND_REGISTRY", regex: /(?<![\w])[A-Z]{2}\d[A-Z]\/\d{8}\/\d(?![\w])/g, validate: validLandRegistry },
-    { kind: "KRS", regex: /\bKRS\s*(?:nr\.?|numer)?\s*:?\s*(\d{10})(?!\d)/g, group: 1 },
+    // "KRS 0000 297714": the number is also written split after the leading zeros.
+    { kind: "KRS", regex: /\bKRS\s*(?:nr\.?|numer)?\s*:?\s*(\d{10}|\d{4}\s\d{6})(?!\d)/g, group: 1 },
+    // Bar and chamber register numbers identify an advocate or legal adviser: "KAT/ADW/544",
+    // "WAW/Adw/8925", "KR/RP/1234"; a bare "KAT 2575" only after the chamber (ORA, OIRP).
+    { kind: "BAR_NUMBER", regex: /(?<![\w/])[A-Z]{2,4}\/(?:ADW|Adw|adw|RP|Rp|rp|R|AP)\/\d{1,6}(?![\w/])/g },
+    {
+        kind: "BAR_NUMBER",
+        regex: /\b(?:ORA|OIRP|ORA\s+w\s+\p{L}+|OIRP\s+w\s+\p{L}+)(?:\s+\p{Lu}\p{L}+)?\s*,?\s*(?:nr\.?|numer)?\s*:?\s*([A-Z]{2,4}[\s/-]?\d{1,6})(?![\w/])/gu,
+        group: 1
+    },
     {
         kind: "BIRTH_DATE",
         regex: new RegExp(`(?:ur\\.|urodzon[aey]j?|urodzin|data\\s+urodzenia|dat[ąy]\\s+urodzenia)\\s*(?:się\\s*)?(?:dnia\\s*|w\\s+dniu\\s*)?:?\\s*(${DATE})`, "giu"),

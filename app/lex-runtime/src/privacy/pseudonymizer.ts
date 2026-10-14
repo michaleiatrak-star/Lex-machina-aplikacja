@@ -24,6 +24,7 @@ export type PiiKind =
   | "LAND_REGISTRY"
   | "BIRTH_DATE"
   | "VEHICLE_PLATE"
+  | "BAR_NUMBER"
   | "PAYMENT_CARD"
   | "CUSTOM";
 
@@ -211,6 +212,7 @@ const PRIORITY: Record<PiiKind, number> = {
   PERSON: 60,
   BIRTH_DATE: 54,
   VEHICLE_PLATE: 53,
+  BAR_NUMBER: 53,
   KRS: 52,
   CUSTOM: 50
 };
