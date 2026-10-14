@@ -67,3 +67,33 @@ describe("the text the judge reads", () => {
     expect(excerpt.length).toBeLessThanOrEqual(8_000);
   });
 });
+
+describe("the thesis and the question's criteria are defined before the verdict", async () => {
+  const { parseSemanticVerdicts, semanticCorrectionPrompt, SEMANTIC_JUDGE_SYSTEM } = await import("../src/case-semantic-check.js");
+  const { judgedQuestion } = await import("../src/session-executor.js");
+  const document = { signature: "I ACa 12/25", kind: "case" as const, claim: "", text: "Sąd Apelacyjny zważył, że klauzula przeliczeniowa jest abuzywna i nie wiąże konsumenta." };
+
+  it("the judge is told to state criteria and thesis; the verdict keeps them and the correction names them", () => {
+    expect(SEMANTIC_JUDGE_SYSTEM).toMatch(/criteria/u);
+    expect(SEMANTIC_JUDGE_SYSTEM).toMatch(/thesis/u);
+    const output = JSON.stringify({ verdicts: [{ signature: "I ACa 12/25", criteria: "klauzule w kredycie CHF; sąd apelacyjny", thesis: "Sąd uznał klauzulę za wiążącą konsumenta.", topic: "MATCH", claim: "UNSUPPORTED", reason: "Sąd orzekł odwrotnie.", quote: "klauzula przeliczeniowa jest abuzywna" }] });
+    const check = parseSemanticVerdicts(output, [document]);
+    expect(check.verdicts[0]).toMatchObject({ thesis: "Sąd uznał klauzulę za wiążącą konsumenta.", criteria: "klauzule w kredycie CHF; sąd apelacyjny" });
+    expect(semanticCorrectionPrompt(check.verdicts)).toContain("Oceniona teza odpowiedzi: „Sąd uznał klauzulę za wiążącą konsumenta.”");
+  });
+
+  it("a verdict without them (older judge output) still counts", () => {
+    const output = JSON.stringify({ verdicts: [{ signature: "I ACa 12/25", topic: "MATCH", claim: "SUPPORTED", reason: "Zgodne.", quote: "klauzula przeliczeniowa jest abuzywna" }] });
+    expect(parseSemanticVerdicts(output, [document]).verdicts).toHaveLength(1);
+  });
+
+  it("a short follow-up keeps the criteria of the earlier messages; a long message is taken whole", () => {
+    const thread = "Użytkownik: Znajdź wyrok sądu apelacyjnego z 2025 r. o klauzulach przeliczeniowych w kredytach CHF\n\nAsystent: Znalazłem I ACa 12/25.\n\nUżytkownik: a inny?";
+    const question = judgedQuestion(thread);
+    expect(question.startsWith("a inny?")).toBe(true);
+    expect(question).toContain("sądu apelacyjnego z 2025 r. o klauzulach przeliczeniowych");
+    const long = `Użytkownik: ${"Opis stanu faktycznego sprawy kredytowej. ".repeat(10)}Czy sąd apelacyjny uznał klauzulę za abuzywną?`;
+    expect(judgedQuestion(long)).toContain("Opis stanu faktycznego sprawy kredytowej.");
+    expect(judgedQuestion(long)).toContain("Czy sąd apelacyjny uznał klauzulę za abuzywną?");
+  });
+});

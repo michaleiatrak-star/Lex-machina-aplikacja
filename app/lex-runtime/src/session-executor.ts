@@ -240,6 +240,22 @@ import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdic
 
 // The judge: the competent authority's decision only, on passages labelled by role
 // (calibration on 1000 cases, 2026-10-13).
+// The question the cited documents are judged against: the latest user message whole, and for a
+// short follow-up ("a inny wyrok?") the two earlier ones that carry its criteria (court, period,
+// legal problem). Three trailing lines of the thread lost both.
+export function judgedQuestion(query: string): string {
+  const users = query
+    .split(/\n\n(?=Użytkownik: |Asystent: )/u)
+    .filter((part, index) => (index === 0 ? !part.startsWith("Asystent: ") : part.startsWith("Użytkownik: ")))
+    .map((part) => part.replace(/^Użytkownik: /u, "").trim())
+    .filter(Boolean);
+  const latest = users.at(-1) ?? query.trim();
+  const earlier = users.slice(0, -1).reverse().slice(0, 2);
+  return latest.length < 300 && earlier.length
+    ? `${latest}\n\n[Wcześniej w wątku, od najnowszego:]\n${earlier.map((turn) => turn.slice(0, 600)).join("\n")}`
+    : latest.slice(0, 2_000);
+}
+
 const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 
 export type SessionDocumentAttachment = {
@@ -3186,7 +3202,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     //    given to it are in its text.
     // One correcting round for both; what remains is shown to the user next to the answer.
     if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
-      const topic = threadUserText(protectedQuery).split("\n").slice(-3).join("\n");
+      const topic = judgedQuestion(protectedQuery);
       const correctionPrompt = [
         ...(placeholderKey ? [placeholderKey] : []),
         identityPrompt,

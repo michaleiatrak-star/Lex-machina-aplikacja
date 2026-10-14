@@ -12,6 +12,10 @@ export type SemanticVerdict = {
   claim: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED";
   reason: string;
   quote: string;
+  // What the judge read as the thesis attributed to the document and as the question's
+  // criteria: the verdict is about exactly these, and the correction names them.
+  thesis?: string;
+  criteria?: string;
 };
 
 export type SemanticCheck = {
@@ -158,39 +162,58 @@ export function caseSubject(text: string): string | null {
   return null;
 }
 
-/** Passages labelled by role: the decision always, then the closest reasoning and other passages. */
+/** Passages labelled by role, chosen as relevantExcerpt chooses them: the heading, the
+ * decision, the start of the authority's own assessment, then the passages whose rare words
+ * the question and the claim share, within the same budget, without the portal's chrome. */
 export function roleExcerpt(text: string, question: string, claim: string): string {
-  const passages: Array<{ role: PassageRole; text: string; at: number }> = [];
-  passageRoles(text).forEach((sentence, at) => {
+  const passages: Array<{ role: PassageRole; text: string; index: number }> = [];
+  for (const sentence of passageRoles(cleanText(text).replace(/(?<=[.;!?])\s+/gu, "\n"))) {
     const last = passages.at(-1);
-    if (last && last.role === sentence.role && last.text.length + sentence.text.length < CHUNK_CHARS) last.text += ` ${sentence.text}`;
-    else passages.push({ ...sentence, at });
-  });
-  const total = passages.reduce((sum, passage) => sum + passage.text.length, 0);
+    if (last && last.role === sentence.role && last.text.length + sentence.text.length < PASSAGE_CHARS) last.text += ` ${sentence.text}`;
+    else passages.push({ ...sentence, index: passages.length });
+  }
   const label = (passage: { role: PassageRole; text: string }) => `[${passage.role}] ${passage.text}`;
   const subject = caseSubject(text);
   const pinned = subject ? `[OKREŚLENIE SPRAWY] ${subject}\n` : "";
-  if (total <= HEAD_CHARS + CHUNK_CHARS * MAX_CHUNKS) return pinned + passages.map(label).join("\n");
-  const wanted = new Set([...words(question), ...words(claim)]);
-  const score = (value: string) => [...words(value)].filter((word) => wanted.has(word)).length;
-  const head: typeof passages = [];
-  let headChars = 0;
+  if (passages.reduce((sum, passage) => sum + passage.text.length, 0) <= BUDGET_CHARS) return pinned + passages.map(label).join("\n");
+  const chosen = new Set<number>();
+  let used = 0;
+  const take = (index: number): void => {
+    const passage = passages[index];
+    if (!passage || chosen.has(index) || used + passage.text.length > BUDGET_CHARS) return;
+    chosen.add(index);
+    used += passage.text.length;
+  };
   for (const passage of passages) {
-    if (headChars >= HEAD_CHARS / 2) break;
-    head.push(passage);
-    headChars += passage.text.length;
+    if (used >= HEAD_CHARS) break;
+    take(passage.index);
   }
-  const rest = passages.filter((passage) => !head.includes(passage));
-  const decisive = rest.filter((passage) => DECISIVE.includes(passage.role));
-  const others = rest
-    .filter((passage) => !DECISIVE.includes(passage.role))
-    .map((passage) => ({ passage, score: score(passage.text) + (passage.role === "OCENA ORGANU ORZEKAJĄCEGO" ? 1 : 0) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_CHUNKS + 1)
-    .map((item) => item.passage);
-  const chosen = [...head, ...decisive.slice(0, 3), ...others].sort((a, b) => a.at - b.at);
-  return pinned + chosen.map(label).join("\n[…]\n");
+  for (const passage of passages.filter((item) => DECISIVE.includes(item.role)).slice(0, 3)) take(passage.index);
+  const assessment = passages.find((item) => !chosen.has(item.index) && (item.role === "OCENA ORGANU ORZEKAJĄCEGO" || ASSESSMENT.test(item.text)));
+  if (assessment) {
+    take(assessment.index);
+    take(assessment.index + 1);
+  }
+  const passageStems = passages.map((passage) => new Set(stems(passage.text)));
+  const df = new Map<string, number>();
+  for (const set of passageStems) for (const stem of set) df.set(stem, (df.get(stem) ?? 0) + 1);
+  const wanted = new Set([...stems(question), ...stems(claim)]);
+  const scored = passages
+    .map((passage) => {
+      let score = 0;
+      for (const stem of passageStems[passage.index]!) if (wanted.has(stem)) score += Math.log(1 + passages.length / (df.get(stem) ?? 1));
+      return { index: passage.index, score: score + (passage.role === "OCENA ORGANU ORZEKAJĄCEGO" ? 0.5 : 0) };
+    })
+    .filter((item) => item.score > 0.5)
+    .sort((a, b) => b.score - a.score);
+  for (const item of scored) take(item.index);
+  const parts: string[] = [];
+  let previous = -2;
+  for (const index of [...chosen].sort((a, b) => a - b)) {
+    parts.push(index === previous + 1 ? label(passages[index]!) : `[…]\n${label(passages[index]!)}`);
+    previous = index;
+  }
+  return pinned + parts.join("\n").replace(/^\[…\]\n/u, "");
 }
 
 // The competent authority's decision, not a party's claim.
@@ -210,14 +233,15 @@ export const SEMANTIC_JUDGE_SYSTEM =
   "(MATCH: tak; PARTIAL: dotyczy tylko części kryteriów pytania, np. innego podmiotu lub innego sądu niż pytany; NO_MATCH: innego problemu); " +
   "(2) claim — czy to, co odpowiedź mówi o dokumencie, wynika z jego tekstu (SUPPORTED: sens się zgadza, także przy parafrazie lub innych słowach; " +
   "PARTIAL: część twierdzenia nie wynika z tekstu albo pominięto istotne zastrzeżenie; UNSUPPORTED: tekst mówi co innego lub odwrotnie). " +
-  "Różnica słów przy tym samym sensie to nie PARTIAL. " +
-  "Odróżniaj stanowisko sądu lub organu od stanowiska strony, które dokument tylko relacjonuje (żądanie lub zarzuty powoda, apelującego, skarżącego, odwołującego, " +
-  "wnioskodawcy interpretacji, organu w odpowiedzi na skargę, prokuratora): gdy odpowiedź przypisuje sądowi lub organowi to, co w tekście jest argumentem strony, " +
-  "którego sąd lub organ nie podzielił albo nie rozstrzygał, claim = UNSUPPORTED, a quote wskaż z fragmentu z oceną sądu lub organu, jeśli jest. Oceniaj to, co odpowiedź mówi o treści i rozstrzygnięciu; dane identyfikacyjne " +
+  "Różnica słów przy tym samym sensie to nie PARTIAL. Oceniaj to, co odpowiedź mówi o treści i rozstrzygnięciu; dane identyfikacyjne " +
   "(sąd wynikający z sygnatury, data, rodzaj orzeczenia) sprawdza osobno aplikacja — ich brak w podanym fragmencie nie jest powodem do PARTIAL. " +
+  "Zanim ocenisz, zdefiniuj przedmiot oceny: criteria — kryteria, które pytanie rzeczywiście stawia (problem prawny; jeżeli pytanie je wskazuje: sąd lub organ, " +
+  "rodzaj dokumentu, okres, podmiot), bez dopisywania własnych; thesis — jedno zdanie: co dokładnie odpowiedź twierdzi o tym dokumencie (jego rozstrzygnięcie lub " +
+  "stanowisko, które mu przypisuje), wiernie, bez dodawania i pomijania zastrzeżeń; gdy odpowiedź przypisuje dokumentowi kilka twierdzeń, ujmij wszystkie. " +
+  "topic oceniaj względem criteria, claim względem thesis. " +
   "Pole quote: dosłowny fragment tekstu dokumentu (10–300 znaków), który najlepiej uzasadnia ocenę; kopiuj znak w znak, bez skracania w środku. " +
   "Nie korzystaj z wiedzy spoza podanego tekstu. Zwróć wyłącznie JSON: " +
-  '{"verdicts":[{"signature":"…","topic":"MATCH|PARTIAL|NO_MATCH","claim":"SUPPORTED|PARTIAL|UNSUPPORTED","reason":"jedno zdanie po polsku","quote":"…"}]}';
+  '{"verdicts":[{"signature":"…","criteria":"…","thesis":"…","topic":"MATCH|PARTIAL|NO_MATCH","claim":"SUPPORTED|PARTIAL|UNSUPPORTED","reason":"jedno zdanie po polsku","quote":"…"}]}';
 
 const KIND_LABEL: Record<CitedDocument["kind"], string> = { case: "orzeczenie", interpretation: "interpretacja", other: "orzeczenie lub decyzja", statute: "przepis (brzmienie z ELI)" };
 
@@ -267,7 +291,9 @@ export function parseSemanticVerdicts(output: string, documents: CitedDocument[]
       topic: value.topic as SemanticVerdict["topic"],
       claim: value.claim as SemanticVerdict["claim"],
       reason: String(value.reason ?? "").trim().slice(0, 400),
-      quote: quote.slice(0, 300)
+      quote: quote.slice(0, 300),
+      ...(typeof value.thesis === "string" && value.thesis.trim() ? { thesis: value.thesis.trim().slice(0, 500) } : {}),
+      ...(typeof value.criteria === "string" && value.criteria.trim() ? { criteria: value.criteria.trim().slice(0, 300) } : {})
     });
   }
   return { verdicts, rejected };
@@ -284,7 +310,7 @@ export function semanticCorrectionPrompt(problems: SemanticVerdict[]): string {
     "KONTROLA ZGODNOŚCI Z PYTANIEM (aplikacja, na podstawie pobranego tekstu dokumentów):",
     ...problems.map(
       (problem) =>
-        `- ${problem.signature}: temat ${problem.topic}, twierdzenie ${problem.claim}. ${problem.reason} Tekst dokumentu: „${problem.quote}”`
+        `- ${problem.signature}: temat ${problem.topic}, twierdzenie ${problem.claim}.${problem.criteria ? ` Kryteria pytania: ${problem.criteria}.` : ""}${problem.thesis ? ` Oceniona teza odpowiedzi: „${problem.thesis}”.` : ""} ${problem.reason} Tekst dokumentu: „${problem.quote}”`
     ),
     "Popraw odpowiedź: dokument, który nie dotyczy pytania (NO_MATCH), nie jest trafieniem — nie przedstawiaj go jako odpowiedzi na pytanie. Dokument częściowo zgodny (PARTIAL) opisz z nazwaniem brakującego kryterium. Twierdzenie niepoparte (UNSUPPORTED) usuń albo zastąp tym, co rzeczywiście jest w tekście.",
     "Gdy po poprawce żaden dokument nie odpowiada na pytanie, napisz wprost, że nie znaleziono orzeczenia ani interpretacji spełniającej kryteria, i co sprawdzono. Podaj pełną poprawioną odpowiedź."
@@ -296,7 +322,7 @@ export function semanticWarning(problems: SemanticVerdict[]): string {
   return problems
     .map(
       (problem) =>
-        `⚠️ Kontrola aplikacji: ${problem.signature} ${label[problem.topic]}${problem.claim === "SUPPORTED" ? "" : "; opis w odpowiedzi nie w pełni wynika z jego tekstu"}. ${problem.reason} Tekst dokumentu: „${problem.quote}”`
+        `⚠️ Kontrola aplikacji: ${problem.signature} ${label[problem.topic]}${problem.claim === "SUPPORTED" ? "" : "; opis w odpowiedzi nie w pełni wynika z jego tekstu"}.${problem.claim !== "SUPPORTED" && problem.thesis ? ` Sprawdzana teza: „${problem.thesis}”.` : ""} ${problem.reason} Tekst dokumentu: „${problem.quote}”`
     )
     .join("\n");
 }
