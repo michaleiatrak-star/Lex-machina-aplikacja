@@ -265,6 +265,12 @@ const PASSING_DOCUMENT_ROWS = new Set(["analizator-umow-v1", "pisma-procesowe-v3
 const QUESTION_ONLY = /\?\s*$|(?:^|[.!?]\s+)(?:chcę|chciał\p{L}*)\s+(?:zrozumieć|wiedzieć|się\s+dowiedzieć)(?![\p{L}])/iu;
 const REVIEW_REQUEST = /(?<![\p{L}])(?:przeanalizuj|przejrzyj|oceń|sprawdź|zweryfikuj|przeczytaj|popraw|zbadaj|zapis\p{L}*|klauzul\p{L}*|co\s+(?:oznacza\p{L}*|znacz\p{L}*)|m(?:ój|oja|oje|ojej|ojego)\s+(?:umow|polis|regulamin|aneks)\p{L}*)(?![\p{L}])/iu;
 const CASE_LAW_LOOKUP = /(?<![\p{L}])(?:(?:szukam|szukaj|poszukaj|potrzebuj\p{L}*|chc\p{L}*|prosił\p{L}*|znajdź|wyszukaj|podaj|wskaż|przytocz)\s+(?:\p{L}+,?\s+){0,4}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*|sygnatur\p{L}*)|(?:inn\p{L}*|kolejn\p{L}*|podobn\p{L}*)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|sygnatur\p{L}*[^.?!]{0,60}?(?:istnieje|potwierdź|czego dotyczy)|(?:sprawdź|zweryfikuj|potwierdź)\p{L}*[^.?!]{0,40}?sygnatur\p{L}*)/iu;
+// "Wyrok ETPCz w sprawie Xero Flor przeciwko Polsce, co orzekł?": what a named court said in
+// someone else's case, with no judgment delivered, is looked up (router [5]), not analysed.
+const NAMED_JUDGMENT = /(?<![\p{L}])(?:co\s+(?:\p{L}+\s+){0,3}(?:orzekł\p{L}*|orzekła|rozstrzygnął|rozstrzygnęł\p{L}*|stwierdził\p{L}*|uznał\p{L}*)|o\s+czym\s+(?:jest|był)|czego\s+dotyczy(?:ł)?|przeciwko\s+Polsce|C-\d+\/\d{2})(?![\p{L}])/iu;
+// A Supreme Court or NSA case number in the question ("co orzekł SN w III CZP 25/22?"); the
+// repertories of common courts ("I C 900/26") are the user's own proceedings.
+const TOP_COURT_SIGNATURE = /(?<![\p{L}])[IVX]{1,4}\s+(?:CZP|CSK|CSKP|CNP|CNPP|CZ|CO|KZP|KK|KO|KS|KZ|PK|UK|UZP|PZP|PSK|PSKP|USK|USKP|NSNc|NSNk|NSNp|OSK|FSK|GSK|OPS|OPK|FPS|GPS)\s+\d+\/\d{2}(?![\p{L}\d])/u;
 // An analysis of the provision itself, besides the case law.
 const PROVISION_ANALYSIS = /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porównaj|wykaż|przesłank\p{L}*|znamion\p{L}*|wykładni\p{L}*|omów|wyjaśnij|przeanalizuj|analiz\p{L}*|co\s+mówi)(?![\p{L}])/iu;
 /**
@@ -273,15 +279,23 @@ const PROVISION_ANALYSIS = /(?<![\p{L}])(?:różnic\p{L}*|porówna\p{L}*|porówn
  * the provision as well, analizator-przepisow-v2 is the entry point and the case
  * law its next step ("kombinacja PRIMARY+SECONDARY zawsze dopuszczalna").
  */
+const NAMED_OUTPUTS = new Set([
+    "raport-sytuacyjny-v2",
+    "raport-klienta-v1",
+    "chronologia-sprawy-v1",
+    "przesluchanie-swiadkow-v2-min90"
+]);
 export function decideTask(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
     // A full case description: the closing request decides, without pasted routing markers.
     let intent = null;
     if (!explicitHandoff(rawQuestion, () => true)) {
         rawQuestion = requestOf(withoutRoutingMarkers(rawQuestion));
-        if (!materials.length) {
-            const known = (skill) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill);
-            intent = requestIntent(rawQuestion, known);
-        }
+        const known = (skill) => routes.some((route) => route.primary === skill) || matrix.some((rule) => rule.primary === skill);
+        const named = requestIntent(rawQuestion, known);
+        // With delivered files the matrix row of the material decides, except for an output the
+        // user names ("raport sytuacyjny tej sprawy" + akta is the report, not the court analysis).
+        if (!materials.length || (named && NAMED_OUTPUTS.has(named.primary)))
+            intent = named;
     }
     const matrixDecision = decideTaskByMatrix(routes, matrix, rawQuestion, materials, redaction, simpleLetters);
     // The table's own decision when it names the same skill (it carries the letter's schema).
@@ -299,10 +313,10 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
     const caseLaw = "orzeczenia-sadowe-v2";
     const known = routes.some((route) => route.primary === caseLaw) || matrix.some((rule) => rule.primary === caseLaw);
     const question = provisionsForDetection(rawQuestion);
-    if (!known || !CASE_LAW.test(question) || explicitHandoff(rawQuestion, () => true))
+    if (!known || !(CASE_LAW.test(question) || (!materials.length && TOP_COURT_SIGNATURE.test(question))) || explicitHandoff(rawQuestion, () => true))
         return decision;
     // "Szukam wyroków NSA o...", "Sprawdź, czy sygnatura I CSK 123/18 istnieje": a lookup, not the analysis of a judgment the user has.
-    if (decision?.primary === "analiza-sadowa-v6" && CASE_LAW_LOOKUP.test(question)) {
+    if (decision?.primary === "analiza-sadowa-v6" && (CASE_LAW_LOOKUP.test(question) || (!materials.length && (NAMED_JUDGMENT.test(question) || TOP_COURT_SIGNATURE.test(question))))) {
         return { source: "MATRIX", primary: caseLaw, then: null, reason: "macierz aktywacji: cel — znaleźć / zweryfikować orzeczenie (wyszukanie, nie analiza posiadanego)" };
     }
     if (!decision) {

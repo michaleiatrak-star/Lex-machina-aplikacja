@@ -177,6 +177,31 @@ export class VerificationLedger {
     return [...this.caseFiles];
   }
 
+  // Signatures the case's materials or the user's messages name (a related or another
+  // proceeding, often absent from the judgment databases): shown marked, never blocking.
+  private readonly caseReferenceKeys = new Set<string>();
+
+  addCaseReference(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) this.caseReferenceKeys.add(key);
+  }
+
+  caseReferences(): string[] {
+    return [...this.caseReferenceKeys];
+  }
+
+  // Signatures an official database returned in this turn (search hits, fetched documents).
+  private readonly retrievedCaseKeys = new Set<string>();
+
+  addRetrievedCase(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) this.retrievedCaseKeys.add(key);
+  }
+
+  retrievedCases(): string[] {
+    return [...this.retrievedCaseKeys];
+  }
+
   // Values the case itself states (the user's messages, the case's documents): a fact of the
   // matter ("pozew o 48 000 zł"), not a statutory rate or term to verify.
   private readonly factAmounts = new Set<string>();

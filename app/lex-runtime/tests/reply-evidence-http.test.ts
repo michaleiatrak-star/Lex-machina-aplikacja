@@ -26,12 +26,21 @@ const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 // answered (no 409 *_STATE_REQUIRED from the word "pozew"); a request for the pleading still
 // waits for the pipeline the chat offers to start; the case's own number does not block.
 const ANSWER = "W sprawie o sygn. akt I C 900/26 należy złożyć odpowiedź na pozew w terminie dwóch tygodni od doręczenia (art. 205^3 § 2 KPC ⚠️ [NIEWERYFIKOWANE]).";
-const SCEN: Array<[string, string[], number]> = [
+const SCEN: Array<[string, string[], number, { error?: string; workflow?: string; domain?: string; task?: string }?]> = [
   ["Dostałem pozew, co mam zrobić?", ["pozew"], 200],
   ["Mam pozew, wyjaśnij mi o co chodzi.", ["pozew"], 200],
-  ["Przygotuj odpowiedź na pozew.", ["pozew"], 409],
+  ["Przygotuj odpowiedź na pozew.", ["pozew"], 409, { error: "PROCESS_PLEADING_STATE_REQUIRED" }],
   ["Napisz zarzuty od nakazu zapłaty.", ["nakaz"], 200],
-  ["Co wynika z tego zarządzenia?", ["zarzadzenie"], 200]
+  ["Co wynika z tego zarządzenia?", ["zarzadzenie"], 200],
+  // A statement about the delivered pozew: the analysis first, the pleading is its next stage.
+  ["Pozew przeciwko mnie jest bezpodstawny, przedawnienie minęło.", ["pozew"], 200],
+  // A question about a kind of clause, no contract: not the contract pipeline.
+  ["Czy klauzula o karze umownej 50% wartości jest ważna?", [], 200],
+  ["Napisz umowę zlecenia dla programisty.", [], 409, { error: "CONTRACT_STATE_REQUIRED" }],
+  // A stateful workflow gets the matter's domain, not the AUTO placeholder (dr-01).
+  ["Ułóż chronologię zdarzeń z tych dokumentów.", ["pozew", "nakaz"], 200, { workflow: "CHRONOLOGY_V1", domain: "dr-02-" }],
+  // The report the user names, not the court analysis the delivered file alone would start.
+  ["Zrób raport sytuacyjny tej sprawy.", ["pozew"], 200, { task: "raport-sytuacyjny-v2" }]
 ];
 it("replies to delivered documents over HTTP", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-reply-http-"));
@@ -54,7 +63,7 @@ it("replies to delivered documents over HTTP", async () => {
     contractWorkflowStore: workspace, processWorkflowStore: workspace, chronologyWorkflowStore: workspace, courtAnalysisWorkflowStore: workspace, orderedCaseWorkflowStore: workspace, secureCaseArtifactStore: new SecureCaseArtifactStore({ rootDir: root }), sessionExecutor: executor, documentService } as never));
   const boot = await request(app).post("/api/auth/bootstrap").send({ loginName: "reply-http", displayName: "Reply", password: "Reply over HTTP strong password 2026" });
   const authorization = `Bearer ${boot.body.sessionToken}`;
-  for (const [q, docs, expected] of SCEN) {
+  for (const [q, docs, expected, want] of SCEN) {
     const caseId = (await request(app).post("/api/cases").set("Authorization", authorization).send({ displayName: q.slice(0, 20) })).body.caseId;
     const attachments = docs.map((d) => ({ documentId: `doc_${Object.keys(D).indexOf(d).toString(16).padStart(24, "0")}`, chunkIndices: [1], caseId }));
     const res = await request(app).post("/api/sessions/execute").set("Authorization", authorization).send({
@@ -62,8 +71,11 @@ it("replies to delivered documents over HTTP", async () => {
       knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }, ...(attachments.length ? { attachments } : {}) });
     const b = res.body ?? {};
     expect(res.status, q).toBe(expected);
-    if (expected === 409) expect(b.error).toBe("PROCESS_PLEADING_STATE_REQUIRED");
+    if (expected === 409) expect(b.error, q).toBe(want?.error);
     else expect(b.status, q).toBe("DRAFT_PRESENTABLE");
+    if (want?.workflow) expect(b.workflow?.id, q).toBe(want.workflow);
+    if (want?.task) expect(b.taskSkill, q).toBe(want.task);
+    if (want?.domain) expect((b.domainSkills ?? [])[0], q).toMatch(new RegExp(`^${want.domain}`));
     // The court's letter names the case: its number is the case's own, not a judgment to verify.
     if (docs.includes("zarzadzenie")) expect((b.blockedReferences ?? []).filter((item: { kind: string }) => item.kind === "case")).toEqual([]);
   }

@@ -1,6 +1,7 @@
 import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
+import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
 import {
   PERSON_CASES,
   type NameFormCorrection,
@@ -9646,11 +9647,28 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               sessionAttachments
             )
           : [];
+      const turnMessage =
+        request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query);
+      // A question about a kind of clause ("czy kara umowna 50% jest ważna?") with no contract
+      // delivered or in the case is a legal question, not the contract pipeline (409).
+      const contractQuestion =
+        keywordPlan.id === "CONTRACT_ANALYSIS_V1" &&
+        sessionAttachments.length === 0 &&
+        !(knowledge.caseId && knowledge.includeCase) &&
+        !asksToDraft(turnMessage) &&
+        (/\?\s*$/u.test(turnMessage.trim()) || asksAbout(turnMessage));
       const previewPlan =
+        contractQuestion ||
         pleadingRedaction ||
         (routerExecutive !== undefined &&
           routerExecutive !== keywordPlan.executionSkill) ||
-        (materialSkills.length > 0 && !materialSkills.includes(keywordPlan.executionSkill!))
+        (materialSkills.length > 0 &&
+          (!materialSkills.includes(keywordPlan.executionSkill!) ||
+            // The keyword's skill is only the router's next stage ("pozew przeciwko mnie jest
+            // bezpodstawny" + the delivered pozew: analysis, then a pleading): without a request
+            // to draft, the turn is the analysis, not the pleading pipeline (409).
+            (materialSkills[0] !== keywordPlan.executionSkill &&
+              !asksToDraft(turnMessage))))
           ? createDeterministicWorkflowPlan(options.registry, null)
           : keywordPlan;
       let processContext:

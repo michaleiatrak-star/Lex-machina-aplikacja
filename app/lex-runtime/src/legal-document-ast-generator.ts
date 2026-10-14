@@ -356,6 +356,27 @@ function blockedSessionDiagnostic(
   return new DocumentAstSessionBlockedError(reason, details.join("\n"));
 }
 
+const AST_GENERATION_ATTEMPTS = 2;
+const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+)$/u;
+
+function parseValidatedAst(answer: string, request: LegalDocumentAstGenerationRequest): ReturnType<typeof validateLegalDocumentAst> {
+  const parsed = normalizeAstBlocks(normalizeAstHeader(extractJson(answer), request));
+  let validated: ReturnType<typeof validateLegalDocumentAst>;
+  try {
+    validated = validateLegalDocumentAst(parsed, request.aliases.entries);
+  } catch (error) {
+    // Any AST shape error: header fields and block shapes (never document text).
+    if (error instanceof Error && /^AST_[A-Z_]+$/.test(error.message)) {
+      throw astDiagnostic(parsed, error.message);
+    }
+    throw error;
+  }
+  if (validated.ast.documentType !== request.documentType || validated.ast.styleProfile !== request.styleProfile) {
+    throw new Error("DOCUMENT_AST_CONTRACT_MISMATCH");
+  }
+  return validated;
+}
+
 export class LegalDocumentAstGenerator {
   constructor(
     private readonly sessions: Pick<SessionExecutor, "execute">
@@ -370,54 +391,47 @@ export class LegalDocumentAstGenerator {
     validationContext:
       DocumentGenerationValidationContext;
   }> {
-    const result = await this.sessions.execute({
-      query: generationInstruction(request),
-      provider: request.provider,
-      model: request.model,
-      primarySkill: request.primarySkill,
-      mode: request.mode,
-      documentAstOutput: true,
-      // The instruction carries the whole conversation; a resumed account thread
-      // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
-      accountContinuity: "none",
-      ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
-      ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
-      ...(request.attachments?.length
-        ? { documentAttachments: request.attachments }
-        : {})
-    });
+    // A malformed AST (no JSON, a block shape, the wrong type) gets one repair round with the
+    // validation error; a session the gates blocked is a policy decision and is not retried.
+    let repair: string | null = null;
+    let result!: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>;
+    let validated!: ReturnType<typeof validateLegalDocumentAst>;
+    for (let attempt = 1; ; attempt += 1) {
+      result = await this.sessions.execute({
+        query: generationInstruction(request) + (repair ? `\n\n${repair}` : ""),
+        provider: request.provider,
+        model: request.model,
+        primarySkill: request.primarySkill,
+        mode: request.mode,
+        documentAstOutput: true,
+        // The instruction carries the whole conversation; a resumed account thread
+        // (ChatGPT via Codex) made the model copy earlier router JSON instead of the AST.
+        accountContinuity: "none",
+        ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+        ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+        ...(request.attachments?.length
+          ? { documentAttachments: request.attachments }
+          : {})
+      });
 
-    if (
-      result.status !== "DRAFT_PRESENTABLE" ||
-      result.finalization !== "PASS" ||
-      result.audit.result !== "PASS" ||
-      !result.answer
-    ) {
-      throw blockedSessionDiagnostic(result);
-    }
-
-    const parsed = normalizeAstBlocks(
-      normalizeAstHeader(extractJson(result.answer), request)
-    );
-    let validated: ReturnType<typeof validateLegalDocumentAst>;
-    try {
-      validated = validateLegalDocumentAst(
-        parsed,
-        request.aliases.entries
-      );
-    } catch (error) {
-      // Any AST shape error: header fields and block shapes (never document text).
-      if (error instanceof Error && /^AST_[A-Z_]+$/.test(error.message)) {
-        throw astDiagnostic(parsed, error.message);
+      if (
+        result.status !== "DRAFT_PRESENTABLE" ||
+        result.finalization !== "PASS" ||
+        result.audit.result !== "PASS" ||
+        !result.answer
+      ) {
+        throw blockedSessionDiagnostic(result);
       }
-      throw error;
-    }
 
-    if (
-      validated.ast.documentType !== request.documentType ||
-      validated.ast.styleProfile !== request.styleProfile
-    ) {
-      throw new Error("DOCUMENT_AST_CONTRACT_MISMATCH");
+      try {
+        validated = parseValidatedAst(result.answer, request);
+        break;
+      } catch (error) {
+        const code = error instanceof Error ? error.message : String(error);
+        if (attempt >= AST_GENERATION_ATTEMPTS || !REPAIRABLE_AST_ERROR.test(code)) throw error;
+        const detail = error instanceof DocumentAstSessionBlockedError ? `${error.reason}` : "";
+        repair = `BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: ${code}${detail ? ` (${detail})` : ""}. Zwróć ponownie cały dokument jako jeden obiekt JSON zgodny z kontraktem AST powyżej: bez Markdown, bez komentarzy, documentType "${request.documentType}", styleProfile "${request.styleProfile}".`;
+      }
     }
 
     const internal =
