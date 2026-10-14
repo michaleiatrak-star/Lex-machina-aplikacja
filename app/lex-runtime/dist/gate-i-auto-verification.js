@@ -1,3 +1,4 @@
+import { courtOfSignature } from "./court-of-signature.js";
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { POLISH_DATE_SOURCE, polishDateToIso } from "./event-date-check.js";
 import { caseSignatureRecord, detectLegalReferences } from "./finalization-gate.js";
@@ -67,13 +68,15 @@ function uniqueActAlias(reference) {
         : null;
 }
 function caseSignature(reference) {
+    const bare = reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, "").trim();
     if (reference.kind !== "case" ||
-        !SUPREME_COURT.test(reference.lineText)) {
+        (!SUPREME_COURT.test(reference.lineText) && courtOfSignature(bare) !== "SN")) {
         return null;
     }
+    // "sygn. III CZP 25/11" or the bare "III CZP 25/11" (the repertory names the court).
     return reference.claim
         .match(CASE_SIGNATURE)?.[1]
-        ?.trim() ?? null;
+        ?.trim() ?? (courtOfSignature(bare) ? bare : null);
 }
 /**
  * A ⚠️ [NIEWERYFIKOWANE] the model wrote at a statute is its own guess, not a
@@ -158,7 +161,9 @@ export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
         }
         if (reference.kind ===
             "case") {
-            if (!SUPREME_COURT.test(reference.lineText)) {
+            if (!SUPREME_COURT.test(reference.lineText) &&
+                // "III CZP 12/21" without the court's name: the repertory names SN.
+                courtOfSignature(reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, "")) !== "SN") {
                 skipped.push({
                     claim: reference.claim,
                     reason: "COURT_FAMILY_AMBIGUOUS"

@@ -130,3 +130,23 @@ export function caseLinkProblem(value) {
     const recovered = signature ? `${signature[1]} ${signature[2]}/${signature[3]}` : undefined;
     return { kind: "SN_LEGACY_PDF", ...(recovered && courtOfSignature(recovered) === "SN" ? { signature: recovered } : {}) };
 }
+// Official case-law databases: the court's or the authority's own (sn.pl, CBOSA, the courts'
+// portal, TK, KIO, CURIA/EUR-Lex, the MS database of ECHR judgments, UODO). SAOS (an
+// aggregator), LEX, Legalis and other legal portals, law firms' pages and blogs are leads.
+const OFFICIAL_CASE_LAW_SOURCES = new Set(["sn", "cbosa", "sp", "tk", "kio", "eurlex", "etpcz", "uodo"]);
+const OFFICIAL_CASE_LAW_HOSTS = /(?:^|\.)(?:sn\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
+/** A tool call that reads an official case-law database (its signatures are an official anchor). */
+export function officialCaseLawCall(call) {
+    const input = (call.input ?? {});
+    if (typeof input.source === "string")
+        return OFFICIAL_CASE_LAW_SOURCES.has(input.source);
+    if (typeof input.url === "string") {
+        try {
+            return OFFICIAL_CASE_LAW_HOSTS.test(new URL(input.url).hostname);
+        }
+        catch {
+            return false;
+        }
+    }
+    return false;
+}

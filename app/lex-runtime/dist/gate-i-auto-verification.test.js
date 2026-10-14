@@ -93,11 +93,17 @@ describe("Gate I automatic statutory verification", () => {
             courtFamily: "SN"
         });
     });
-    it("does not guess a court family for a bare signature", () => {
+    it("reads the court family from a Supreme Court repertory without the court's name", () => {
         const plan = planAutomaticLegalVerification("Zob. sygn. III CZP 25/11.", new VerificationLedger());
-        expect(plan.calls)
-            .toHaveLength(0);
-        expect(plan.skipped[0]?.reason).toBe("COURT_FAMILY_AMBIGUOUS");
+        expect(plan.calls[0]?.name)
+            .toBe("verify_case_reference");
+        expect(plan.calls[0]?.input)
+            .toMatchObject({
+            signature: "III CZP 25/11",
+            courtFamily: "SN"
+        });
+        // A bare SN signature, no "sygn.": the same lookup.
+        expect(planAutomaticLegalVerification("Uchwała z 2011 r., III CZP 25/11.", new VerificationLedger()).calls[0]?.input).toMatchObject({ signature: "III CZP 25/11", courtFamily: "SN" });
     });
     it("inserts an unverified marker when runtime verification failed", () => {
         const ledger = new VerificationLedger();
@@ -123,8 +129,8 @@ describe("Gate I automatic statutory verification", () => {
         expect(plan.calls[0]?.input
             .courtFamily).toBe("SN");
     });
-    it("does not guess the court family for a bare signature", () => {
-        const plan = planAutomaticLegalVerification("Por. sygn. III CZP 25/11.", new VerificationLedger());
+    it("does not guess the court family for a common-court signature", () => {
+        const plan = planAutomaticLegalVerification("Por. sygn. I C 900/26.", new VerificationLedger());
         expect(plan.calls)
             .toHaveLength(0);
         expect(plan.skipped[0]

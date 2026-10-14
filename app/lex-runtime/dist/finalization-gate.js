@@ -4,6 +4,7 @@ import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 import { caseFileKey } from "./verification-ledger.js";
+import { signaturesIn } from "./court-of-signature.js";
 const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN = /✅\s*\[VER:[^\]\r\n]+\]/giu;
 // 🟨 KOTWICA URZĘDOWA (kanon PRAWO-HARDGATE-BLOKADA) nie jest ✅: liczy się jak oznaczony ⚠️.
@@ -76,12 +77,24 @@ function resolveActs(references, text) {
         return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;
     });
 }
+const APP_CONTROL_NOTE = /^\s*⚠️?\uFE0F?\s*Kontrola aplikacji:/u;
 export function detectLegalReferences(text) {
     const references = [];
     const lines = text.split(/\r?\n/);
     lines.forEach((lineText, index) => {
         const line = index + 1;
+        // The application's own control note names the judgment it checked; it is no claim.
+        if (APP_CONTROL_NOTE.test(lineText))
+            return;
         references.push(...collectMatches(lineText, line, "statute", ARTICLE_PATTERN), ...collectMatches(lineText, line, "journal", DZU_PATTERN), ...collectMatches(lineText, line, "case", CASE_PATTERN), ...interpretationSignaturesInLine(lineText).map((claim) => ({ claim, kind: "interpretation", line, lineText })));
+        // A signature without "sygn." ("uchwała SN z 2021 r., III CZP 12/21") is case law as well;
+        // it used to pass the hard gate unchecked. Only repertories of a known court count.
+        const written = references.filter((reference) => reference.line === line && (reference.kind === "case" || reference.kind === "interpretation"));
+        for (const { signature } of signaturesIn(lineText)) {
+            if (written.some((reference) => caseFileKey(reference.claim) === caseFileKey(signature) || reference.claim.includes(signature)))
+                continue;
+            references.push({ claim: signature, kind: "case", line, lineText });
+        }
     });
     return resolveActs(references, text);
 }
@@ -132,8 +145,14 @@ export function ownCaseFileNumbers(documents, userText) {
         const head = document.slice(0, 1_200);
         if (/Sąd\s+Najwyższy|Naczelny\s+Sąd\s+Administracyjny|Trybunał\s+(?:Konstytucyjny|Sprawiedliwości)/iu.test(head))
             continue;
-        for (const match of head.matchAll(SIGNATURE))
-            own.add(caseFileKey(match[1]));
+        // A header line ("Sygn. akt I C 900/26", "Sygn. akt I Nc 1234/26 — nakaz"), not a sentence
+        // naming another proceeding ("skazany wyrokiem …, sygn. akt II K 345/24, za czyn …").
+        for (const line of head.split(/\r?\n/u)) {
+            if (line.trim().length > 80)
+                continue;
+            for (const match of line.matchAll(SIGNATURE))
+                own.add(caseFileKey(match[1]));
+        }
     }
     // The user's own case ("w mojej sprawie sygn. akt …"), never a judgment the user asks about.
     for (const match of userText.matchAll(SIGNATURE)) {
@@ -143,6 +162,16 @@ export function ownCaseFileNumbers(documents, userText) {
         }
     }
     return [...own];
+}
+/** Case signatures the case's documents (whole text) or the user's messages name. */
+export function mentionedCaseNumbers(texts) {
+    // Written with "sygn." or bare ("w sprawie II K 345/24"), when its repertory names a court.
+    return [
+        ...new Set(texts.flatMap((text) => [
+            ...detectLegalReferences(text).filter((reference) => reference.kind === "case").map((reference) => caseFileKey(reference.claim)),
+            ...signaturesIn(text).map((item) => caseFileKey(item.signature))
+        ]))
+    ].filter(Boolean);
 }
 // Rekord orzeczenia nosi brzmienie podane przez model ("uchwała SN, sygn. I KZP 3/24"),
 // a odpowiedź pisze "sygn. I KZP 3/24": rozstrzyga sygnatura znormalizowana przy weryfikacji.
@@ -453,12 +482,20 @@ export class FinalizationGate {
     }
 }
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
+export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
 /**
  * Inserts the HARD GATE marker after every statute or Dz.U. reference that
  * has no VERIFIED record and no marker yet, so an unverified claim is never
  * shown unmarked. Case-law findings are not marked here: they block.
  */
-export function markUnverifiedReferences(text, report) {
+export function markUnverifiedReferences(text, report, 
+// Signatures of proceedings the case's materials or the user name: marked like an
+// unverified statute. Any other unverified case signature stays blocking (HARD GATE).
+caseReferences = new Set(), 
+// Signatures an official case-law database returned in this turn (sn.pl, CBOSA, the courts'
+// portal, TK, KIO, CURIA, ETPCz): an official anchor without full verification, 🟨 (NSA/WSA
+// snapshot, no promotion). SAOS, LEX, Legalis and other portals are leads (⚠️).
+retrievedCases = new Set()) {
     const markable = new Set([
         "MISSING_LEDGER_RECORD",
         "UNVERIFIED_NOT_MARKED"
@@ -467,11 +504,14 @@ export function markUnverifiedReferences(text, report) {
     for (const finding of report.findings) {
         if (!markable.has(finding.status))
             continue;
-        if (finding.reference.kind === "case")
+        const key = finding.reference.kind === "case" ? caseFileKey(finding.reference.claim) : "";
+        if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key))
             continue;
+        // An official database's hit outranks the same number in the user's words or the files.
+        const marker = finding.reference.kind === "case" && retrievedCases.has(key) ? OFFICIAL_ANCHOR_MARKER_TEXT : UNVERIFIED_MARKER_TEXT;
         byLine.set(finding.reference.line, [
             ...(byLine.get(finding.reference.line) ?? []),
-            finding.reference.span ?? finding.reference.claim
+            { claim: finding.reference.span ?? finding.reference.claim, marker }
         ]);
     }
     if (byLine.size === 0)
@@ -479,12 +519,16 @@ export function markUnverifiedReferences(text, report) {
     const lines = text.split(/\r?\n/u);
     for (const [line, claims] of byLine) {
         let lineText = lines[line - 1] ?? "";
-        for (const claim of [...new Set(claims)]) {
+        const done = new Set();
+        for (const { claim, marker } of claims) {
+            if (done.has(claim))
+                continue;
+            done.add(claim);
             const at = lineText.indexOf(claim);
             if (at < 0)
                 continue;
             const end = at + claim.length;
-            lineText = `${lineText.slice(0, end)} ${UNVERIFIED_MARKER_TEXT}${lineText.slice(end)}`;
+            lineText = `${lineText.slice(0, end)} ${marker}${lineText.slice(end)}`;
         }
         lines[line - 1] = lineText;
     }

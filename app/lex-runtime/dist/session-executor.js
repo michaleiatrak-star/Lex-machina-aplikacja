@@ -39,7 +39,8 @@ import { evaluateGuideOutput } from "./guide-session-state.js";
 import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
-import { detectLegalReferences, ownCaseFileNumbers } from "./finalization-gate.js";
+import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
+import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -773,7 +774,7 @@ export class SafeSessionExecutor {
         });
         let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
         const gate = new FinalizationGate().evaluate(text, ledger);
-        text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate), gate), ledger).text;
+        text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate), ledger).text;
         return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
     }
     // A local primary model keeps the text on this machine, so the chat does
@@ -989,6 +990,9 @@ export class SafeSessionExecutor {
         // Texts the source tools returned in this turn (judgments, hit lists): what the
         // answer may say a judgment is about (case-content-grounding).
         const caseSourceTexts = [];
+        // Tool results of an official case-law database, and of a lead (SAOS, web search, a portal).
+        const officialCaseLawTexts = [];
+        const leadCaseLawTexts = [];
         // References in the message are checked by the Gate I runtime prelude
         // (ELI); no model is asked to extract them.
         const modelTaskOwnership = evaluateModelTaskOwnershipGate(resolveReferencePreflightOwnership(detectLegalReferences(protectedAuxiliaryText ??
@@ -1040,6 +1044,12 @@ export class SafeSessionExecutor {
         // words) is not case law: G8 does not ask to verify it as a judgment.
         for (const signature of ownCaseFileNumbers(attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n")), threadUserText(request.query))) {
             ledger.addCaseFileNumber(signature);
+        }
+        for (const signature of mentionedCaseNumbers([
+            threadUserText(request.query),
+            ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+        ])) {
+            ledger.addCaseReference(signature);
         }
         for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
             ledger.addFactAmount(key);
@@ -1204,6 +1214,33 @@ export class SafeSessionExecutor {
             ...recognisedDocuments.map((document) => document.label)
         ].join("\n");
         corpusTools.setCaseText(caseText);
+        // AUTO with a model choosing the skills: primarySkill is a placeholder (the first DR by
+        // name, dr-01). A stateful workflow does not take the model-selected path, so the engine
+        // read that placeholder as the matter's domain (constitutional law for an SMS evidence
+        // report). The workflow gets the domain the routing phrases name, else DR-16.
+        const workflowPrimarySkill = () => {
+            const workflowContext = request.guideContext || request.processWorkflowContext || request.courtWorkflowContext ||
+                request.chronologyWorkflowContext || request.contractWorkflowContext || request.orderedCaseWorkflowContext;
+            if (!request.modelSelectsSkills || !workflowContext)
+                return request.primarySkill;
+            // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
+            // the matter or of its thread; two shared words of an act-map row ("wyrok", "apelacja")
+            // do not name the domain of a whole workflow.
+            const documentText = attachments
+                .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+                .join("\n")
+                .slice(0, 30_000);
+            const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
+                .modules.map((item) => item.skill)
+                .find((skill) => skill.startsWith("dr-"));
+            const phrased = (text) => {
+                const ranked = rankDomains(this.registry, this.flashRoutes(), text);
+                return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
+            };
+            const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+            return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
+        };
         // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
         // named): those modules are loaded and required; the hint below covers the rest.
         if (mandatoryModel && legalTurn) {
@@ -1630,7 +1667,7 @@ export class SafeSessionExecutor {
                 : {}),
             route: {
                 jurisdiction: "PL",
-                primarySkill: request.primarySkill,
+                primarySkill: workflowPrimarySkill(),
                 mode: request.mode
             },
             ...(request.guideContext
@@ -1781,8 +1818,11 @@ export class SafeSessionExecutor {
                 if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
                     snVerificationRequired = true;
                 }
-                for (const result of federationResults)
+                for (const result of federationResults) {
                     caseSourceTexts.push(result.content);
+                    const call = federationCalls.find((item) => item.id === result.tool_use_id);
+                    (call && officialCaseLawCall(call) ? officialCaseLawTexts : leadCaseLawTexts).push(result.content);
+                }
                 for (const result of federationResults) {
                     const source = publicAuxiliarySourceFromToolResult(result);
                     if (!source) {
@@ -1813,8 +1853,10 @@ export class SafeSessionExecutor {
                 if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
                     snVerificationRequired = true;
                 }
-                for (const result of verificationResults)
+                for (const result of verificationResults) {
                     caseSourceTexts.push(result.content);
+                    officialCaseLawTexts.push(result.content);
+                }
                 const byId = new Map([
                     ...corpusResults,
                     ...coreLawResults,
@@ -2262,13 +2304,21 @@ export class SafeSessionExecutor {
         const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources);
         // HARD GATE: an unverified statute or Dz.U. reference is shown only with
         // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
+        // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
+        // TK, KIO, CURIA, ETPCz): real, though not verified in full; from nowhere stays blocking.
+        for (const { signature } of signaturesIn(officialCaseLawTexts.join("\n")))
+            ledger.addRetrievedCase(signature);
+        // Found only in SAOS, a web search or a legal portal (LEX, Legalis, a law firm, a blog): a
+        // lead, shown ⚠️ until verified in the court's own database.
+        for (const { signature } of signaturesIn(leadCaseLawTexts.join("\n")))
+            ledger.addCaseReference(signature);
         const preFinalization = new FinalizationGate().evaluate(citedAnswer.text, ledger);
         const markedAnswer = preFinalization.result === "BLOCKED"
             ? {
                 ...citedAnswer,
                 // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
                 // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
-                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization), preFinalization)
+                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), preFinalization)
             }
             : citedAnswer;
         // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
