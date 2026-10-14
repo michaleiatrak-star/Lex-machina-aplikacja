@@ -23,8 +23,9 @@ export class LocalPaddleOcrEngine {
             options.workerPath ??
                 process.env.LEX_OCR_WORKER ??
                 defaultWorkerPath();
-        // 300 dpi: on a 152 dpi scan 220 dpi lost "o.o." and joined words (measured on a real agreement).
-        this.dpi = options.dpi ?? 300;
+        // 220 dpi: on two real 152 dpi scans 300 dpi dropped spaces ("ul.Pukowca15", "art.270");
+        // word accuracy 96.1% at 220 vs 95.9% at 300 (both without UVDoc).
+        this.dpi = options.dpi ?? 220;
         this.device =
             (options.device ??
                 process.env.LEX_OCR_DEVICE?.trim()) || undefined;

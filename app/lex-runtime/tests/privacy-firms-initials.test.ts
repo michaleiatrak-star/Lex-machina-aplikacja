@@ -113,6 +113,11 @@ describe.skipIf(!python)("gazetteer: register gaps found by the comparison corpu
     expect(await found("SĄD OKRĘGOWY W ŁODZI")).toEqual([]);
   });
 
+  it("a name after a foreign title and a street with the house number glued by OCR", async () => {
+    expect(await found("Prezes Zarządu\nMr. Juneyoung Park")).toContain("Juneyoung Park");
+    expect(await found("ul. Pukowca15, 40-847 Katowice")).toEqual(["ul. Pukowca15, 40-847 Katowice"]);
+  });
+
   it("a surname that is also a village before a given name; not the inside of P.H.U.", async () => {
     expect(await found("/-/ NOWAK Beata\n")).toEqual(["NOWAK Beata"]);
     expect(await found("firma P.H.U. Marex Marek Nowak.")).toEqual(["Marek Nowak"]);
