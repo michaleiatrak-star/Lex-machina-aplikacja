@@ -170,6 +170,7 @@ import {
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
 import { detectLegalReferences, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
+import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
@@ -851,6 +852,7 @@ export type SessionExecutionInternalState = {
   verificationRecords: VerificationRecord[];
   // The proceeding's own case numbers (not case law), for the file generated from this turn.
   caseFileNumbers?: string[];
+  factAmounts?: string[];
   auditEvents: AuditEvent[];
   documentAliasDocumentIds?: string[];
 };
@@ -1969,6 +1971,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       threadUserText(request.query)
     )) {
       ledger.addCaseFileNumber(signature);
+    }
+    for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
+      ledger.addFactAmount(key);
     }
     // Chunks read by the case file tools are added after the model turn.
     const citationSources =
@@ -4432,6 +4437,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         value: {
           verificationRecords: verificationRecords.map((record) => ({ ...record })),
           caseFileNumbers: ledger.caseFileNumbers(),
+          factAmounts: ledger.factAmountKeys(),
           auditEvents: audit.events.map((event) => ({
             ...event,
             ...(event.detail ? { detail: { ...event.detail } } : {})

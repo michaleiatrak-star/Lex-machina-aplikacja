@@ -176,6 +176,18 @@ export class VerificationLedger {
   caseFileNumbers(): string[] {
     return [...this.caseFiles];
   }
+
+  // Values the case itself states (the user's messages, the case's documents): a fact of the
+  // matter ("pozew o 48 000 zł"), not a statutory rate or term to verify.
+  private readonly factAmounts = new Set<string>();
+
+  addFactAmount(key: string): void {
+    if (key) this.factAmounts.add(key);
+  }
+
+  factAmountKeys(): string[] {
+    return [...this.factAmounts];
+  }
 }
 
 export const caseFileKey = (value: string): string =>

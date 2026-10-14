@@ -466,7 +466,9 @@ export class FinalizationGate {
         .map((claim) => ledger.latest(claim))
         .filter((record): record is VerificationRecord => record?.status === "VERIFIED" && Boolean(record.evidence));
       const marked = amountMarkerSpans(lineText);
+      const facts = new Set(ledger.factAmountKeys());
       for (const amount of amounts) {
+        if (facts.has(amount.key)) continue;
         const reference: DetectedLegalReference = { claim: amount.text, kind: "amount", line: index + 1, lineText };
         const record = lineRecords.find((candidate) => evidenceHasAmount(candidate.evidence!, amount.key));
         if (record) {

@@ -452,6 +452,7 @@ export class LegalDocumentAstGenerator {
               ?.length
           ),
         ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+        ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
         verificationRecords:
           internal
             .verificationRecords

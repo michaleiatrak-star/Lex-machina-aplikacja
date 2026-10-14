@@ -10,6 +10,7 @@ import { SafeSessionExecutor } from "../src/session-executor.js";
 import { schemaCatalog, skillModules } from "../src/skill-module-map.js";
 import { decideTask, opponentPleadingTrigger } from "../src/task-routing.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
+import { amountKeysIn } from "../src/amount-references.js";
 
 // Replies to a delivered document (pozew, nakaz, apelacja, wezwanie or zarządzenie sądu) and
 // documents used as evidence: what the application decides before the model writes anything.
@@ -157,5 +158,22 @@ describe("mechanical output checks", () => {
     expect(evaluateCheckpointOutput("CP-1d", "[CP-1d] Anomalia podmiotowa nie zachodzi — strony zgodne z KRS.").missing).not.toContain("CP-1d_NA_NIEDOZWOLONE");
     expect(evaluateCheckpointOutput("CP-1c-skan", "[CP-1c-skan] Dowód nr 3 nie dotyczy przesłanki wymagalności.").notApplicable).toBeNull();
     expect(evaluateCheckpointOutput("CP-1c-skan", "[CP-1c-skan] — nie dotyczy (brak dowodów w aktach)").notApplicable).toMatch(/brak dowodów/u);
+  });
+});
+
+describe("amounts: the party's own demand and the case's facts are not statutory values", () => {
+  const gate = new FinalizationGate();
+  it("a creditor's term and the claimed sum pass; a statutory term still needs its source", () => {
+    expect(gate.evaluate("Wzywam do zapłaty kwoty 5 000 zł w terminie 7 dni od doręczenia.", new VerificationLedger()).result).toBe("PASS");
+    expect(gate.evaluate("Wnoszę o zasądzenie kwoty 12 000 zł wraz z odsetkami ustawowymi za opóźnienie.", new VerificationLedger()).result).toBe("PASS");
+    expect(gate.evaluate("Sprzeciw wnosi się w terminie 14 dni od doręczenia nakazu.", new VerificationLedger()).result).not.toBe("PASS");
+  });
+
+  it("a sum the user states is a fact; a term the user asks about is not", () => {
+    const ledger = new VerificationLedger();
+    for (const key of amountKeysIn("Mam pozew o zapłatę 48 000 zł. Czy termin na odpowiedź to 14 dni?")) ledger.addFactAmount(key);
+    expect(gate.evaluate("Sporna kwota 48 000 zł obejmuje odsetki.", ledger).result).toBe("PASS");
+    expect(gate.evaluate("Sporna kwota 48 000 zł obejmuje odsetki.", new VerificationLedger()).result).not.toBe("PASS");
+    expect(gate.evaluate("Odpowiedź na pozew składa się w terminie 14 dni.", ledger).result).not.toBe("PASS");
   });
 });
