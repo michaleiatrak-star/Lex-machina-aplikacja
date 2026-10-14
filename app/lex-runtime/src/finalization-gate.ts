@@ -4,6 +4,7 @@ import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
 import { caseFileKey } from "./verification-ledger.js";
+import { signaturesIn } from "./court-of-signature.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -250,6 +251,19 @@ export function ownCaseFileNumbers(documents: string[], userText: string): strin
     }
   }
   return [...own];
+}
+
+/** Case signatures the case's documents (whole text) or the user's messages name. */
+export function mentionedCaseNumbers(texts: string[]): string[] {
+  // Written with "sygn." or bare ("w sprawie II K 345/24"), when its repertory names a court.
+  return [
+    ...new Set(
+      texts.flatMap((text) => [
+        ...detectLegalReferences(text).filter((reference) => reference.kind === "case").map((reference) => caseFileKey(reference.claim)),
+        ...signaturesIn(text).map((item) => caseFileKey(item.signature))
+      ])
+    )
+  ].filter(Boolean);
 }
 
 // Rekord orzeczenia nosi brzmienie podane przez model ("uchwała SN, sygn. I KZP 3/24"),
@@ -716,7 +730,10 @@ export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
  */
 export function markUnverifiedReferences(
   text: string,
-  report: FinalizationReport
+  report: FinalizationReport,
+  // Signatures of proceedings the case's materials or the user name: marked like an
+  // unverified statute. Any other unverified case signature stays blocking (HARD GATE).
+  caseReferences: ReadonlySet<string> = new Set()
 ): string {
   const markable = new Set<FinalizationFinding["status"]>([
     "MISSING_LEDGER_RECORD",
@@ -725,7 +742,7 @@ export function markUnverifiedReferences(
   const byLine = new Map<number, string[]>();
   for (const finding of report.findings) {
     if (!markable.has(finding.status)) continue;
-    if (finding.reference.kind === "case") continue;
+    if (finding.reference.kind === "case" && !caseReferences.has(caseFileKey(finding.reference.claim))) continue;
     byLine.set(finding.reference.line, [
       ...(byLine.get(finding.reference.line) ?? []),
       finding.reference.span ?? finding.reference.claim

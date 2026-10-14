@@ -169,7 +169,7 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
-import { detectLegalReferences, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
+import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -1546,7 +1546,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
     let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
     const gate = new FinalizationGate().evaluate(text, ledger);
-    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate), gate), ledger).text;
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences())), gate), ledger).text;
     return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
@@ -1982,6 +1982,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     )) {
       ledger.addCaseFileNumber(signature);
     }
+    for (const signature of mentionedCaseNumbers([
+      threadUserText(request.query),
+      ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+    ])) {
+      ledger.addCaseReference(signature);
+    }
     for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
       ledger.addFactAmount(key);
     }
@@ -2186,6 +2192,33 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...recognisedDocuments.map((document) => document.label)
     ].join("\n");
     corpusTools.setCaseText(caseText);
+    // AUTO with a model choosing the skills: primarySkill is a placeholder (the first DR by
+    // name, dr-01). A stateful workflow does not take the model-selected path, so the engine
+    // read that placeholder as the matter's domain (constitutional law for an SMS evidence
+    // report). The workflow gets the domain the routing phrases name, else DR-16.
+    const workflowPrimarySkill = (): string => {
+      const workflowContext =
+        request.guideContext || request.processWorkflowContext || request.courtWorkflowContext ||
+        request.chronologyWorkflowContext || request.contractWorkflowContext || request.orderedCaseWorkflowContext;
+      if (!request.modelSelectsSkills || !workflowContext) return request.primarySkill;
+      // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
+      // the matter or of its thread; two shared words of an act-map row ("wyrok", "apelacja")
+      // do not name the domain of a whole workflow.
+      const documentText = attachments
+        .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+        .map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))
+        .join("\n")
+        .slice(0, 30_000);
+      const cited = resolveActModulesWithChecks(this.registry, [caseText, documentText].join("\n"))
+        .modules.map((item) => item.skill)
+        .find((skill) => skill.startsWith("dr-"));
+      const phrased = (text: string) => {
+        const ranked = rankDomains(this.registry, this.flashRoutes(), text);
+        return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
+      };
+      const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+      return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
+    };
     // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
     // named): those modules are loaded and required; the hint below covers the rest.
     if (mandatoryModel && legalTurn) {
@@ -2634,7 +2667,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       route: {
         jurisdiction: "PL",
-        primarySkill: request.primarySkill,
+        primarySkill: workflowPrimarySkill(),
         mode: request.mode
       },
       ...(request.guideContext
@@ -3467,7 +3500,8 @@ export class SafeSessionExecutor implements SessionExecutor {
             text: addMissingVerificationMarkers(
               markUnverifiedReferences(
                 citedAnswer.text,
-                preFinalization
+                preFinalization,
+                new Set(ledger.caseReferences())
               ),
               preFinalization
             )

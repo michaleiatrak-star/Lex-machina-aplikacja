@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { evaluateCheckpointOutput } from "../src/process-checkpoint-contract.js";
 import { createDeterministicWorkflowPlan, evaluateDeterministicWorkflowOutput } from "../src/deterministic-workflow.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { FinalizationGate, ownCaseFileNumbers } from "../src/finalization-gate.js";
+import { FinalizationGate, markUnverifiedReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "../src/finalization-gate.js";
 import { ProviderGateway, ProviderRegistry } from "../src/providers/gateway.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
@@ -92,7 +92,14 @@ describe("the task with a delivered document", () => {
     ["Jak odpowiedzieć na to wezwanie do zapłaty?", ["wezwanieZaplaty"], ["analizator-dowodow-v3", "pisma-proste-v2"]],
     // One's own simple letter delivered and checked.
     ["Sprawdź mój sprzeciw od nakazu.", ["sprzeciw"], ["pisma-proste-v2"]],
-    ["Dostałem nakaz zapłaty, chcę złożyć sprzeciw.", [], ["pisma-proste-v2"]]
+    ["Dostałem nakaz zapłaty, chcę złożyć sprzeciw.", [], ["pisma-proste-v2"]],
+    // An output the user names wins over the delivered file's own row.
+    ["Zrób raport sytuacyjny tej sprawy.", ["pozew"], ["raport-sytuacyjny-v2"]],
+    // Someone else's judgment named, nothing delivered: looked up, not analysed.
+    ["Wyrok ETPCz w sprawie Xero Flor przeciwko Polsce, co orzekł?", [], ["orzeczenia-sadowe-v2"]],
+    ["Czy wyrok II CSKP 123/22 dotyczy przedawnienia?", [], ["orzeczenia-sadowe-v2"]],
+    ["Co orzekł SN w uchwale III CZP 25/22?", [], ["orzeczenia-sadowe-v2"]],
+    ["Przeanalizuj wyrok i oceń czy warto apelować.", ["apelacja"], ["analiza-sadowa-v6"]]
   ])("%s %j → %j", (question, docs, skills) => {
     const decision = decide(question, docs);
     expect(decision?.skills).toEqual(skills);
@@ -153,6 +160,23 @@ describe("G8: the proceeding's own case number is not case law", () => {
     for (const signature of ownCaseFileNumbers([DOCS.zarzadzenie], "W mojej sprawie sygn. akt I C 900/26")) ledger.addCaseFileNumber(signature);
     expect(gate.evaluate("Zgodnie z wyrokiem SN z dnia 1 marca 2020 r., sygn. akt III CZP 12/21, roszczenie wygasa.", ledger).result).toBe("BLOCKED");
     expect(gate.evaluate("W sprawie o sygn. akt I C 900/26 należy złożyć odpowiedź.", new VerificationLedger()).result).toBe("BLOCKED");
+  });
+
+  it("marks the signature of a related proceeding from the materials instead of blocking", () => {
+    const pleading = `${DOCS.pozew}\n${"Uzasadnienie. ".repeat(120)}\nPozwany został skazany prawomocnym wyrokiem w sprawie II K 345/24 Sądu Rejonowego w Krakowie.`;
+    const ledger = new VerificationLedger();
+    for (const signature of mentionedCaseNumbers([pleading, "Toczy się też postępowanie I Ns 77/25 o zasiedzenie."])) ledger.addCaseReference(signature);
+    const answer = "Skazanie w sprawie sygn. akt II K 345/24 wiąże sąd cywilny co do popełnienia przestępstwa.\nPostępowanie o sygn. I Ns 77/25 może być prejudycjalne.";
+    const before = gate.evaluate(answer, ledger);
+    expect(before.result).toBe("BLOCKED");
+    const marked = markUnverifiedReferences(answer, before, new Set(ledger.caseReferences()));
+    expect(marked).toContain("II K 345/24 ⚠️");
+    expect(marked).toContain("Postępowanie o sygn. I Ns 77/25 może");
+    expect(gate.evaluate(marked, ledger).result).toBe("DEGRADED");
+    // A signature named nowhere in the case's materials or messages stays blocking.
+    const invented = "Zgodnie z wyrokiem SN, sygn. akt III CZP 12/21, roszczenie wygasa.";
+    const inventedReport = gate.evaluate(invented, ledger);
+    expect(gate.evaluate(markUnverifiedReferences(invented, inventedReport, new Set(ledger.caseReferences())), ledger).result).toBe("BLOCKED");
   });
 
   it("does not take a judgment the user asks about or a top court's judgment as the user's case", () => {
