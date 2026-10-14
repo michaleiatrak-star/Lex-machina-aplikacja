@@ -22,7 +22,8 @@ const STATUS_CODE: Record<string, string> = {
 // IPPP1/4512-123/15-2/AW, ILPP1/4512-1-1/16-2/JSK (izby skarbowe do 2017);
 // DD10.8201.1.2020, PT8.8101.1.2023 (interpretacje ogólne MF).
 const SIGNATURE_PATTERNS = [
-  /\b\d{4}-[A-Z]{2,7}\d?(?:-\d{1,2})?\.\d{3,4}\.\d{1,6}\.\d{4}(?:\.\d{1,3})?(?:\.[A-Z]{1,4})?\b/gu,
+  // Officer's initials may be Polish letters (…2026.2.JŁ): a word boundary of \b would cut them.
+  /\b\d{4}-[A-Z]{2,7}\d?(?:-\d{1,2})?\.\d{3,4}\.\d{1,6}\.\d{4}(?:\.\d{1,3})?(?:\.[A-ZĄĆĘŁŃÓŚŹŻ]{1,4})?(?![\p{L}\p{N}])/gu,
   /\b(?:IPP|IBP|ITP|ILP|IPT|IPTP|IBPB|IPPB|ITPB|ILPB)[A-Z]?\d?\/[0-9A-Z]{3,5}-[0-9-]{1,12}\/\d{2}(?:-\d{1,3})?\/[A-Z]{2,4}\b/gu,
   /\b(?:DD|PT|DT|DOP|DPP|DCT|DAS)\d{1,2}\.\d{4}\.\d{1,5}\.\d{4}\b/gu
 ];

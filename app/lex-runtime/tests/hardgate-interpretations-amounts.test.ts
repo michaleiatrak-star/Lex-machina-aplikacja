@@ -49,6 +49,8 @@ describe("HARD GATE: tax interpretations", () => {
       "IPPP1/4512-123/15-2/AW",
       "DD10.8201.1.2020"
     ]);
+    // Polish initials after the case number (found on a live EUREKA hit).
+    expect(interpretationSignaturesInLine("Interpretacja 0115-KDWT.4011.329.2026.2.JŁ z 3 lipca 2026 r.")).toEqual(["0115-KDWT.4011.329.2026.2.JŁ"]);
     expect(interpretationSignaturesInLine("art. 86 ust. 1 ustawy o VAT, Dz.U. 2025 poz. 775, sygn. I FSK 12/20")).toEqual([]);
     expect(detectLegalReferences(`Zob. ${SIGNATURE}.`).map((reference) => reference.kind)).toEqual(["interpretation"]);
   });
