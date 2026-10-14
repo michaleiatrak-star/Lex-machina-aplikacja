@@ -3,6 +3,7 @@ import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter }
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
 import { statuteClaimsInLine } from "./status-consistency-gate.js";
+import { caseFileKey } from "./verification-ledger.js";
 import {
   VerificationLedger,
   type VerificationRecord
@@ -219,6 +220,38 @@ function coveringVerifiedRecord(
   return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
 }
 
+// A pleading's header line holding only the case number ("Sygn. akt I C 900/26"): the
+// number of the proceeding the letter is filed in, wherever else the text repeats it.
+const CASE_FILE_HEADER = /^\s*(?:\*\*)?(?:sygn\.?\s*(?:akt)?|sygnatura\s+akt)\s*:?\s*((?:[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}\s+){1,4}\d+\/\d{2,4})\s*(?:\*\*)?\s*$/iu;
+
+export function headerCaseFileNumbers(text: string): string[] {
+  return text.split(/\r?\n/u).flatMap((line) => {
+    const signature = CASE_FILE_HEADER.exec(line)?.[1];
+    return signature ? [caseFileKey(signature)] : [];
+  });
+}
+
+/** Case numbers of the user's own proceeding: header lines of the case's documents and signatures the user writes. */
+export function ownCaseFileNumbers(documents: string[], userText: string): string[] {
+  const own = new Set<string>();
+  const SIGNATURE = /\bsygn\.?\s*(?:akt\s*)?:?\s*((?:[A-ZĄĆĘŁŃÓŚŹŻa-ząćęłńóśźż0-9]{1,8}\s+){1,4}\d+\/\d{2,4})\b/giu;
+  for (const document of documents) {
+    // The header of a court letter, pleading or decision names its own case first; a
+    // judgment of a top court attached as authority is not the user's proceeding.
+    const head = document.slice(0, 1_200);
+    if (/Sąd\s+Najwyższy|Naczelny\s+Sąd\s+Administracyjny|Trybunał\s+(?:Konstytucyjny|Sprawiedliwości)/iu.test(head)) continue;
+    for (const match of head.matchAll(SIGNATURE)) own.add(caseFileKey(match[1]!));
+  }
+  // The user's own case ("w mojej sprawie sygn. akt …"), never a judgment the user asks about.
+  for (const match of userText.matchAll(SIGNATURE)) {
+    const before = userText.slice(Math.max(0, match.index! - 60), match.index!);
+    if (/(?<![\p{L}])spraw\p{L}*/iu.test(before) && !/wyrok|uchwał|orzecz|postanowieni|(?<![\p{L}])(?:SN|NSA|WSA|TK|SA)(?![\p{L}])|Sąd\p{L}*\s+Najwyższ/iu.test(before)) {
+      own.add(caseFileKey(match[1]!));
+    }
+  }
+  return [...own];
+}
+
 // Rekord orzeczenia nosi brzmienie podane przez model ("uchwała SN, sygn. I KZP 3/24"),
 // a odpowiedź pisze "sygn. I KZP 3/24": rozstrzyga sygnatura znormalizowana przy weryfikacji.
 const caseSignatureKey = (value: string): string =>
@@ -272,7 +305,9 @@ function soleCoveringVerifiedRecord(
 
 export class FinalizationGate {
   evaluate(text: string, ledger: VerificationLedger, options: { markers?: FinalizationMarkers | undefined } = {}): FinalizationReport {
-    const references = detectLegalReferences(text);
+    // The proceeding's own case number (pleading header, the case's documents) is not case law.
+    const caseFiles = new Set([...ledger.caseFileNumbers(), ...headerCaseFileNumbers(text)]);
+    const references = detectLegalReferences(text).filter((reference) => !(reference.kind === "case" && caseFiles.has(caseFileKey(reference.claim))));
     const findings: FinalizationFinding[] = [];
     const caseQuoteFindings: CaseQuoteFinding[] = [];
     const caseSupportFindings: CaseSupportFinding[] = [];
@@ -431,7 +466,9 @@ export class FinalizationGate {
         .map((claim) => ledger.latest(claim))
         .filter((record): record is VerificationRecord => record?.status === "VERIFIED" && Boolean(record.evidence));
       const marked = amountMarkerSpans(lineText);
+      const facts = new Set(ledger.factAmountKeys());
       for (const amount of amounts) {
+        if (facts.has(amount.key)) continue;
         const reference: DetectedLegalReference = { claim: amount.text, kind: "amount", line: index + 1, lineText };
         const record = lineRecords.find((candidate) => evidenceHasAmount(candidate.evidence!, amount.key));
         if (record) {

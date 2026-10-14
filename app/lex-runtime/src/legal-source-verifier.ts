@@ -92,9 +92,22 @@ function decodeHtmlEntities(
   );
 }
 
+// "Art. 11<sup>1</sup>", "art. 11¹" and "art. 11^1" are one unit, never Art. 11 or Art. 111.
+const SUPERSCRIPT_DIGITS: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+function superscriptsAsCaret(value: string): string {
+  return value
+    .replace(/<sup\b[^>]*>\s*(\d{1,3})\s*<\/sup>/giu, "^$1")
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => `^${[...digits].map((digit) => SUPERSCRIPT_DIGITS[digit]).join("")}`)
+    // The PDF text extractor writes a superscript as " [1] " ("Art. 449 [1] .").
+    .replace(/(\d)\s*\[(\d{1,3})\](?=\s|[.,;§)]|$)/gu, "$1^$2")
+    .replace(/(\d)\s+\^(\d)/gu, "$1^$2");
+}
+
+const SOURCE_FETCH_TIMEOUT_MS = 60_000;
+
 function readableText(value: string): string {
   return decodeHtmlEntities(
-    value
+    superscriptsAsCaret(value)
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, " ")
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/giu, " ")
       .replace(/<\s*(?:br\b[^>]*|\/?(?:body|main|section|article|header|footer|title|p|div|li|tr|td|th|h[1-6])\b[^>]*)>/giu, "\n")
@@ -144,7 +157,7 @@ function articleSection(
     (match[0].startsWith("\n") ? 1 : 0);
   const afterHeading =
     match.index + match[0].length;
-  const nextHeading = /\n\s*Art\.?\s+\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?=\s*(?:\.|§|$))/u.exec(
+  const nextHeading = /\n\s*Art\.?\s+\d+(?:\^\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?=\s*(?:\.|§|$))/u.exec(
     readable.slice(afterHeading)
   );
   const end = nextHeading
@@ -170,8 +183,8 @@ function normalize(value: string): string {
 }
 
 function articleToken(claim: string): string | null {
-  const match = claim.match(
-    /\bart\.?\s+(\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)/iu
+  const match = superscriptsAsCaret(claim).match(
+    /\bart\.?\s+(\d+(?:\^\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)/iu
   );
   return match?.[1]?.toLocaleLowerCase("pl") ?? null;
 }
@@ -351,6 +364,9 @@ export class OfficialLegalSourceVerifier {
       response = await this.fetcher(url, {
         method: "GET",
         redirect: "error",
+        // A hung official server is an outage (ELI fallback), not a turn waiting forever;
+        // the same signal bounds reading the body (a large consolidated act as PDF).
+        signal: AbortSignal.timeout(SOURCE_FETCH_TIMEOUT_MS),
         headers: {
           Accept:
             "text/html,application/xhtml+xml,application/json,text/plain,application/pdf;q=0.9,*/*;q=0.1"

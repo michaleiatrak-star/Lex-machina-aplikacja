@@ -1581,12 +1581,15 @@ export class LegalVerificationToolRuntime {
         ...(outcome.eurekaStatus ? { interpretationStatus: outcome.eurekaStatus } : {})
       });
       return JSON.stringify({
-        status: outcome.status === "SOURCE_UNAVAILABLE" ? "UNVERIFIED" : outcome.status,
+        // An outage stays an outage: not remembered for the turn, so a retry asks EUREKA again.
+        status: outcome.status,
         error: outcome.reason ?? null,
         marker: "⚠️ [NIEWERYFIKOWANE]",
         instruction:
           outcome.status === "NOT_FOUND"
             ? "EUREKA has no document under exactly this signature (EUREKA does not hold every ruling; no hit is not proof it does not exist). Do not cite it as verified."
+            : outcome.status === "SOURCE_UNAVAILABLE"
+            ? "EUREKA is temporarily unavailable: you may retry once; otherwise put ⚠️ [NIEWERYFIKOWANE] next to the signature and say the source could not be read now (not that the interpretation does not exist)."
             : "Do not present this interpretation as verified; if it must be mentioned, put ⚠️ [NIEWERYFIKOWANE] next to the signature."
       });
     }
@@ -1632,7 +1635,12 @@ export class LegalVerificationToolRuntime {
       const content = ran.get(call.id) ?? "";
       now.set(key(call), content);
       // A failure (source down, timeout, refusal) is not remembered: a retry asks again.
-      if (!/"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content)) this.answered.set(key(call), content);
+      // OUT_OF_SCOPE from a source that did not answer (sn.pl 403 before the session is set,
+      // CBOSA 503, a transport error) is an outage too, not an answer about the signature.
+      const outage =
+        /"status"\s*:\s*"(?:ERROR|DENIED|BLOCKED|TIMEOUT|UNAVAILABLE|SOURCE_UNAVAILABLE)"/.test(content) ||
+        /"reason"\s*:\s*"[^"]*(?:HTTP_(?:403|429|5\d\d)|TRANSPORT|BOT_PROTECTION|TIMEOUT|FETCH_FAILED)/.test(content);
+      if (!outage) this.answered.set(key(call), content);
     }
     return calls.map((call) => ({ tool_use_id: call.id, content: now.get(key(call)) ?? this.answered.get(key(call)) ?? "" }));
   }

@@ -92,6 +92,11 @@ function charsetOf(contentType: string, head: Buffer): string {
   return /<meta[^>]+charset=["']?([\w-]+)/i.exec(sniff)?.[1] ?? "utf-8";
 }
 
+/** A fetched body decoded by its declared charset (header, then <meta charset>), else UTF-8. */
+export function decodeBody(data: Buffer, contentType: string): string {
+  return decode(data, charsetOf(contentType, data));
+}
+
 function decode(data: Buffer, charset: string): string {
   try {
     return new TextDecoder(charset.toLowerCase()).decode(data);

@@ -1,6 +1,7 @@
 import { asksAbout, asksToDraft, draftingSchema, matchSchema, repliesToDemand, type SchemaEntry } from "./skill-schema-catalog.js";
 import { provisionsForDetection } from "./legal-act-abbreviations.js";
 import { requestIntent, requestOf, withoutRoutingMarkers } from "./request-intent.js";
+import { COURT_FORMAL, COURT_POSITION } from "./document-kind.js";
 
 // Router KROK 2 — ROUTING [1]–[11], read from prawny-router-v3/SKILL.md: each row
 // has its trigger phrases and the PRIMARY executive skill. The application uses it
@@ -243,6 +244,37 @@ const OWN_DOCUMENT =
 const OWN_CONTRACT =
   /(?<![\p{L}])(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|t[eę]j|t[aą]|ten|tego)(?:\s+\p{L}+){0,2}?\s+(?:umow\p{L}*|aneks\p{L}*|regulamin\p{L}*|porozumieni\p{L}*|polis\p{L}*|kontrakt\p{L}*)(?![\p{L}])/iu;
 
+// A reply to another party's or the court's document ("odpowiedź na pozew", "odpowiedz na
+// pismo przygotowawcze", "replika", "ustosunkuj się do apelacji"): a new letter, not an edit.
+export const REPLY_REQUEST =
+  /(?<![\p{L}])(?:(?:odpowied\p{L}*|replik\p{L}*|ripost\p{L}*|duplik\p{L}*)\s+(?:na|do)\s+(?:\p{L}+\s+){0,3}?(?:pozew|pozw\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|pism\p{L}*|akt\p{L}*\s+oskarżenia|wezwani\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*|odpowied\p{L}*|zarządzeni\p{L}*|odwołani\p{L}*|wnios\p{L}*|kasacj\p{L}*)|ustosunkuj\p{L}*\s+się\s+do|replik\p{L}*|ripost\p{L}*)(?![\p{L}])/iu;
+// The reply is the user's own text already ("popraw moją odpowiedź", "odpowiedź, którą napisałem").
+const OWN_REPLY =
+  /(?<![\p{L}])(?:(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|własn\p{L}*)\s+(?:\p{L}+\s+){0,2}?(?:odpowied|replik|ripost|projekt|pism|sprzeciw|wersj|draft|tekst)\p{L}*|któr\p{L}*\s+(?:już\s+)?(?:napisał|przygotował|sporządził|zredagował)\p{L}*|to\s+pismo|ten\s+projekt|tę\s+odpowiedź|tej\s+odpowiedzi)(?![\p{L}])/iu;
+// A delivered reply or preparatory letter is the user's own draft of that kind.
+const REPLY_KINDS = new Set(["ODPOWIEDZ_NA_POZEW", "ODPOWIEDZ_NA_SRODEK", "PISMO_PRZYGOTOWAWCZE", "SPRZECIW"]);
+// A court's summons or order named in the message ("wezwanie sądu", "zarządzenie przewodniczącego").
+const COURT_SUMMONS_TEXT =
+  /(?<![\p{L}])(?:(?:wezwani\p{L}*|zarządzeni\p{L}*|zobowiązani\p{L}*)\s+(?:\p{L}+\s+){0,2}?(?:sądu|sąd\p{L}*|przewodnicząc\p{L}*|referendarz\p{L}*)|(?:sąd|przewodnicząc\p{L}*|referendarz\p{L}*)\s+(?:mnie\s+|nas\s+)?(?:wezwał|zobowiązał|zarządził)\p{L}*)(?![\p{L}])/iu;
+const ANSWER_WANTED =
+  /(?<![\p{L}])(?:odpowied\p{L}*|odpis\p{L}*|co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:napisać|złożyć|zrobić))(?![\p{L}])/iu;
+// A pleading named as what to produce, and "use these documents in the claim".
+const PLEADING_NOUN =
+  /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od)(?![\p{L}])/iu;
+const USE_IN_PLEADING =
+  /(?<![\p{L}])(?:wykorzystaj|użyj|powołaj|dołącz|załącz)\p{L}*\s+(?:\p{L}+\s+){0,4}?(?:w|do)\s+(?:\p{L}+\s+)?(?:pozw|odpowiedzi|apelacj|pism|zażaleni|skarg)\p{L}*/iu;
+
+/**
+ * pisma-procesowe-v3 MODUŁY-MAPA "opponent-attack-v9 — aktywny gdy: mamy pismo przeciwnika DO
+ * OBALENIA": a reply to a delivered pleading names that condition in the words of the skill's
+ * module map, so the engine and its checklist are loaded with the stage's modules.
+ */
+export function opponentPleadingTrigger(question: string, materials: DeliveredMaterial[]): string {
+  return REPLY_REQUEST.test(question) && !OWN_REPLY.test(question) && materials.some((material) => material.category === "PISMO_PROCESOWE")
+    ? "analiza pisma przeciwnika: pismo przeciwnika do obalenia (odpowiedź na nie)"
+    : "";
+}
+
 /**
  * Entry point for the task: the activation matrix first (phrases of the question
  * and the materials delivered), then the router table on the question and the
@@ -371,7 +403,8 @@ function decideTaskByMatrix(
   // One's own simple letter to check or improve ("sprawdź mój sprzeciw od nakazu"):
   // pisma-proste-v2 with that letter's schema, not the pleading redaction of Test A.
   const ownSimple = simpleLetters && OWN_DOCUMENT.test(question) ? matchSchema(simpleLetters.entries, question) : null;
-  if (ownSimple && simpleLetters && !materials.some((material) => material.category === "PISMO_PROCESOWE")) {
+  // The delivered letter may be that simple letter itself ("sprawdź mój sprzeciw" + the sprzeciw).
+  if (ownSimple && simpleLetters && !materials.some((material) => material.category === "PISMO_PROCESOWE" && material.kind !== "SPRZECIW")) {
     return {
       source: "SKILL",
       primary: simpleLetters.skill,
@@ -379,6 +412,34 @@ function decideTaskByMatrix(
       reason: `sprawdzenie własnego pisma prostego (${ownSimple.why}; M8 lista kontrolna)`,
       modules: ownSimple.resources
     };
+  }
+  // A court summons or order (router R-3.54-b): the letter follows from what it demands.
+  const summons =
+    materials.find((material) => material.kind?.startsWith("WEZWANIE_SADU"))?.kind ??
+    (COURT_SUMMONS_TEXT.test(question)
+      ? COURT_POSITION.test(question)
+        ? "WEZWANIE_SADU_STANOWISKO"
+        : COURT_FORMAL.test(question)
+          ? "WEZWANIE_SADU_BRAKI"
+          : "WEZWANIE_SADU"
+      : null);
+  if (summons && simpleLetters && (asksToDraft(question) || REPLY_REQUEST.test(question) || ANSWER_WANTED.test(question))) {
+    return summons === "WEZWANIE_SADU_STANOWISKO"
+      ? {
+          source: "SKILL",
+          primary: "pisma-procesowe-v3",
+          then: null,
+          reason: "odpowiedź na wezwanie / zarządzenie sądu żądające stanowiska, twierdzeń lub wniosków dowodowych (router R-3.54-b)"
+        }
+      : {
+          source: "SKILL",
+          primary: simpleLetters.skill,
+          then: null,
+          reason:
+            summons === "WEZWANIE_SADU_BRAKI"
+              ? "odpowiedź na wezwanie sądu do uzupełnienia braku formalnego lub złożenia dokumentu (router R-3.54-b)"
+              : "odpowiedź na wezwanie sądu: odczytaj jego treść — żądanie stanowiska, twierdzeń lub dowodów to pisma-procesowe-v3 (router R-3.54-b)"
+        };
   }
   // A reply to a payment demand: the demand is assessed first, then the reply drafted.
   if (simpleLetters && repliesToDemand(question)) {
@@ -393,7 +454,10 @@ function decideTaskByMatrix(
     };
   }
   // Test A: a finished pleading delivered (or "my letter") and a request about its form.
-  if (redaction && !NEW_SUBSTANCE.test(question)) {
+  // A new reply to the delivered pleading ("zredaguj odpowiedź na ten pozew") is not one.
+  const newReply =
+    REPLY_REQUEST.test(question) && !OWN_REPLY.test(question) && !materials.some((material) => REPLY_KINDS.has(material.kind ?? ""));
+  if (redaction && !NEW_SUBSTANCE.test(question) && !newReply) {
     // "Popraw zapisy w mojej umowie": the user's own contract is redacted by analizator-umow-v1
     // (REDACTION mode), not by the pleading redaction of Test A.
     const ownContract = OWN_CONTRACT.test(question) && !materials.some((material) => material.category === "PISMO_PROCESOWE");
@@ -450,7 +514,8 @@ function decideTaskByMatrix(
     // ACTIVATION-MATRIX, nakładania: "pismo + dowody + »co zrobić dalej«" -> analiza-sadowa-v6, not the guide.
     if (pleadingDelivered && rule.primary === "przewodnik-prawny-v2" && NEXT_STEP.test(question)) continue;
     // "pismo procesowe + dostarczone akta": a pleading task with case files.
-    if (/pismo\s+procesowe\s*\+/iu.test(rule.signal) && !(pleadingTask && deliveredHits.length)) continue;
+    // A question about the delivered pleading ("wyjaśnij mi ten pozew") is not drafting one.
+    if (/pismo\s+procesowe\s*\+/iu.test(rule.signal) && (!(pleadingTask && deliveredHits.length) || asksAbout(question))) continue;
     if (!phrases.length && !deliveredHits.length) continue;
     // What the user asks for (a phrase of the question) outranks what was delivered;
     // a single generic word ("świadek") weighs less than a phrase, and a request to
@@ -478,7 +543,22 @@ function decideTaskByMatrix(
         reason: `macierz aktywacji: ${first.signal} → ${best.rule.signal} (${best.why.join(", ")})`
       };
     }
-    return { source: "MATRIX", primary: best.rule.primary, then: best.rule.then, reason: `macierz aktywacji: ${best.rule.signal} (${best.why.join(", ")})` };
+    // The material's row comes first, but the user asked for a pleading too ("przeanalizuj
+    // pozew i przygotuj odpowiedź", "przygotuj pozew na podstawie faktur"): the letter is the
+    // next stage, as in "pismo procesowe + dostarczone akta".
+    const letter =
+      !best.rule.then && ["analiza-sadowa-v6", "analizator-dowodow-v3"].includes(best.rule.primary) && PLEADING_NOUN.test(question) && !asksAbout(question) &&
+      (asksToDraft(question) || DRAFT_NOUN.test(question) || REPLY_REQUEST.test(question) || USE_IN_PLEADING.test(question))
+        ? simpleLetters && draftingSchema(simpleLetters.entries, question) && defenceCount(question) < 2
+          ? simpleLetters.skill
+          : "pisma-procesowe-v3"
+        : null;
+    return {
+      source: "MATRIX",
+      primary: best.rule.primary,
+      then: best.rule.then ?? letter,
+      reason: `macierz aktywacji: ${best.rule.signal} (${best.why.join(", ")})${letter ? `; pismo jako następny etap (${letter})` : ""}`
+    };
   }
   // Matrix rows the question names in other words.
   const implied = IMPLIED_ROWS.find((row) => row.pattern.test(question) && known.has(row.primary));

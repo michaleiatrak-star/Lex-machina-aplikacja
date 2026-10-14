@@ -451,6 +451,8 @@ export class LegalDocumentAstGenerator {
             request.attachments
               ?.length
           ),
+        ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+        ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
         verificationRecords:
           internal
             .verificationRecords

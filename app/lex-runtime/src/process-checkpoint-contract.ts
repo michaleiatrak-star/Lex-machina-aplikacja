@@ -136,6 +136,10 @@ const DZU = /\bDz\.\s?U\.\s*(?:z\s*)?\d{4}\b/u;
 const JUDGMENT_SIGNATURE =
   /(?<![\p{L}])(?:wyrok\p{L}*|uchwał\p{L}*|postanowieni\p{L}*)\b[^\n]{0,120}?\b(?:SN|NSA|WSA|TK|SA|Sądu\s+Najwyższego|Naczelnego\s+Sądu|Trybunału)\b[^\n]{0,120}?\b[IVX]{1,4}\s+[A-Z][A-Za-z]{0,4}\s+\d{1,5}\/\d{2,4}\b/u;
 const NOT_APPLICABLE = /\bN\/A\b|nie\s+dotyczy|nie\s+ma\s+zastosowania|nieaktywn\p{L}*|nie\s+zachodzi/iu;
+// The checkpoint's own status: "[CP-1c-skan] — N/A (…)", "CP-PD: nie dotyczy", "CHECKPOINT … status: nieaktywny".
+// A finding inside the report ("dowód nr 3 nie dotyczy przesłanki", "anomalia nie zachodzi") is not.
+const STATUS_NOT_APPLICABLE =
+  /^[\s\]\)*:—–-]{0,8}(?:status\s*[:=]?\s*)?(?:⏭️?\s*)?(?:N\/A\b|nie\s+dotyczy(?![\p{L}])\s*(?:$|[(—–:-])|nie\s+ma\s+zastosowania|nieaktywn\p{L}*|nie\s+zachodzi(?![\p{L}])\s*(?:$|[(—–:-]))/iu;
 const DRAFT_STATUS = /STATUS\s+PISMA\s*[:=]?\s*⚠️?\s*DRAFT/iu;
 const FINAL_STATUS = /STATUS\s+PISMA\s*[:=]?\s*(?:✅\s*)?(?:FINAL|GOTOWE)/iu;
 
@@ -153,7 +157,13 @@ export function evaluateCheckpointOutput(checkpoint: ProcessPleadingCheckpoint, 
   const lines = text.split("\n").filter((line) => mention.test(line) || (/CHECKPOINT/iu.test(line) && CHECKPOINT_NAMES[checkpoint].test(line)));
   // The report: the checkpoint by its id, or a "CHECKPOINT <name>" header (AUTOMAT-STANOW format).
   if (!lines.length) missing.push(`RAPORT_${checkpoint}`);
-  const naLine = lines.find((line) => NOT_APPLICABLE.test(line));
+  const naLine = lines.find((line) => {
+    if (!NOT_APPLICABLE.test(line)) return false;
+    if (/\bN\/A\b/u.test(line)) return true;
+    const at = mention.exec(line);
+    const after = at ? line.slice(at.index + at[0].length) : line.replace(/^.*?CHECKPOINT[^:—–-]*/iu, "");
+    return STATUS_NOT_APPLICABLE.test(after);
+  });
   const notApplicable = naLine && CONDITIONAL_CHECKPOINTS.has(checkpoint) ? naLine.replace(/\s+/g, " ").trim().slice(0, 300) : null;
   if (naLine && !CONDITIONAL_CHECKPOINTS.has(checkpoint)) missing.push(`${checkpoint}_NA_NIEDOZWOLONE`);
   if (checkpoint === "CP-PRE-W2") {

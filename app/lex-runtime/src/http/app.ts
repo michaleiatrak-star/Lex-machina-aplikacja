@@ -9633,10 +9633,24 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query),
           sessionAttachments
         ) === true;
+      // With delivered files the router decides from the message and the files' kinds: a
+      // question about a delivered pleading ("dostałem pozew, co mam zrobić?") is not the
+      // pleading pipeline that one word ("pozew") would start (409 *_STATE_REQUIRED).
+      const materialSkills =
+        request.modelSelectsSkills &&
+        sessionAttachments.length > 0 &&
+        keywordPlan.executionSkill &&
+        options.sessionExecutor?.executiveSkillsWithMaterials
+          ? options.sessionExecutor.executiveSkillsWithMaterials(
+              request.auxiliaryText ?? latestUserTurn(parseSkillSelectionEnvelope(request.query).query),
+              sessionAttachments
+            )
+          : [];
       const previewPlan =
         pleadingRedaction ||
         (routerExecutive !== undefined &&
-          routerExecutive !== keywordPlan.executionSkill)
+          routerExecutive !== keywordPlan.executionSkill) ||
+        (materialSkills.length > 0 && !materialSkills.includes(keywordPlan.executionSkill!))
           ? createDeterministicWorkflowPlan(options.registry, null)
           : keywordPlan;
       let processContext:

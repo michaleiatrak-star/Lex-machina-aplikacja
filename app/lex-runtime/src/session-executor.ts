@@ -169,7 +169,8 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
-import { detectLegalReferences, type LegalReferenceKind } from "./finalization-gate.js";
+import { detectLegalReferences, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
+import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
@@ -180,6 +181,7 @@ import {
   ANALYSIS_INTENT,
   classifyTask,
   decideTask,
+  type DeliveredMaterial,
   parseActivationMatrix,
   parseCombinations,
   parseRedactionTest,
@@ -189,7 +191,8 @@ import {
   type RedactionTest,
   type SkillCombination,
   type TaskDecision,
-  type TaskRoute
+  type TaskRoute,
+  opponentPleadingTrigger
 } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
@@ -848,6 +851,9 @@ export function publicEvidenceBundle(
 
 export type SessionExecutionInternalState = {
   verificationRecords: VerificationRecord[];
+  // The proceeding's own case numbers (not case law), for the file generated from this turn.
+  caseFileNumbers?: string[];
+  factAmounts?: string[];
   auditEvents: AuditEvent[];
   documentAliasDocumentIds?: string[];
 };
@@ -1313,6 +1319,8 @@ export interface SessionExecutor {
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
   // The router's executive skill for a message without delivered material (AUTO).
   executiveSkillFor?(message: string): string | null;
+  // The skills the task needs with the delivered files (entry and next stage of the matrix).
+  executiveSkillsWithMaterials?(message: string, attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): string[];
   pleadingRedactionFor?(message: string, attachments?: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): boolean;
 }
 
@@ -1382,6 +1390,35 @@ export class SafeSessionExecutor implements SessionExecutor {
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       })?.primary ?? null
     );
+  }
+
+  /**
+   * The router's task with the delivered files (ACTIVATION-MATRIX: "dostarcza akta / pismo
+   * przeciwnika", "pismo procesowe + dostarczone akta"): the entry skill and its next stage.
+   * Empty when the table names no task.
+   */
+  /** Stage the request names after a stateful workflow's own skill (router `then`). */
+  statefulNextStage(question: string, materials: readonly DeliveredMaterial[], workflowSkill: string): string | null {
+    const routed = decideTask(this.taskRoutes(), this.activationMatrix(), question, [...materials], this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return routed?.primary === workflowSkill ? routed.then ?? null : null;
+  }
+
+  executiveSkillsWithMaterials(
+    message: string,
+    attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>
+  ): string[] {
+    const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+    const materials = attachments
+      .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+      .map((attachment) => classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n"), images: attachment.images?.length ?? 0 }));
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, materials, this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return decision ? [decision.primary, ...(decision.then ? [decision.then] : [])] : [];
   }
 
   /**
@@ -1937,6 +1974,17 @@ export class SafeSessionExecutor implements SessionExecutor {
         contextSelection.attachments,
         aliasRegistry
       );
+    // The proceeding's own case number (header of the case's documents, the user's own
+    // words) is not case law: G8 does not ask to verify it as a judgment.
+    for (const signature of ownCaseFileNumbers(
+      attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n")),
+      threadUserText(request.query)
+    )) {
+      ledger.addCaseFileNumber(signature);
+    }
+    for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
+      ledger.addFactAmount(key);
+    }
     // Chunks read by the case file tools are added after the model turn.
     const citationSources =
       [...contextSelection.citationSources];
@@ -2403,7 +2451,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               recognisedDocuments.some((document) => document.evidence) ? "materiał zawiera dowody do oceny (dokumenty)" : "",
               recognisedDocuments.some((document) => document.category === "PISMO_PROCESOWE" || document.category === "ORZECZENIE")
                 ? "materiał zawiera pisma procesowe, akta"
-                : ""
+                : "",
+              opponentPleadingTrigger(pathFacts.query, recognisedDocuments)
             ].join("\n")
           }),
           contextResources
@@ -4270,10 +4319,13 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
     const nextContext = { question: pathFacts.query, materials: routingMaterials };
+    // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
+    // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
+    const workflowSkill = execution.workflowPlan.executionSkill;
     const next = taskRoute
       ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
-      : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
+      : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
+        ? pipelineNext(workflowSkill, this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill), this.skillCombinations(), nextContext)
         : null;
     // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
     // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
@@ -4397,6 +4449,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       {
         value: {
           verificationRecords: verificationRecords.map((record) => ({ ...record })),
+          caseFileNumbers: ledger.caseFileNumbers(),
+          factAmounts: ledger.factAmountKeys(),
           auditEvents: audit.events.map((event) => ({
             ...event,
             ...(event.detail ? { detail: { ...event.detail } } : {})
