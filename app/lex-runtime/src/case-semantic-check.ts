@@ -265,6 +265,22 @@ export function semanticJudgePrompt(question: string, documents: CitedDocument[]
 const TOPICS = new Set(["MATCH", "PARTIAL", "NO_MATCH"]);
 const CLAIMS = new Set(["SUPPORTED", "PARTIAL", "UNSUPPORTED"]);
 
+/**
+ * The document a verdict names: the same signature, or the judge's longer form of it
+ * ("art. 16 UDIP" for the cited "art. 16"); a form two documents share names neither.
+ */
+function verdictDocument(signature: string, documents: CitedDocument[]): CitedDocument | undefined {
+  const named = squeeze(signature);
+  if (!named) return undefined;
+  const exact = documents.find((candidate) => squeeze(candidate.signature) === named);
+  if (exact) return exact;
+  const longer = documents.filter((candidate) => {
+    const own = squeeze(candidate.signature);
+    return own.length > 0 && named.startsWith(`${own} `);
+  });
+  return longer.length === 1 ? longer[0] : undefined;
+}
+
 /** The judge's JSON, each verdict kept only when its quote is in that document's text. */
 export function parseSemanticVerdicts(output: string, documents: CitedDocument[]): SemanticCheck {
   const json = /\{[\s\S]*\}/u.exec(output)?.[0];
@@ -279,7 +295,7 @@ export function parseSemanticVerdicts(output: string, documents: CitedDocument[]
   const rejected: string[] = [];
   for (const item of items) {
     const value = item as Partial<SemanticVerdict>;
-    const document = documents.find((candidate) => squeeze(candidate.signature) === squeeze(String(value.signature ?? "")));
+    const document = verdictDocument(String(value.signature ?? ""), documents);
     if (!document || !TOPICS.has(String(value.topic)) || !CLAIMS.has(String(value.claim))) continue;
     const quote = String(value.quote ?? "").trim();
     if (quote.length < 10 || !squeeze(document.text).includes(squeeze(quote))) {

@@ -87,6 +87,16 @@ describe("the thesis and the question's criteria are defined before the verdict"
     expect(parseSemanticVerdicts(output, [document]).verdicts).toHaveLength(1);
   });
 
+  it("a statute verdict under the judge's longer signature (\"art. 16 UDIP\") names the cited \"art. 16\"; a shared prefix names neither", () => {
+    const statute = { signature: "art. 16", kind: "statute" as const, claim: "", text: "Art. 16. 1. Odmowa udostępnienia informacji publicznej następuje w drodze decyzji." };
+    const verdict = (signature: string) => JSON.stringify({ verdicts: [{ signature, topic: "MATCH", claim: "SUPPORTED", reason: "Zgodne.", quote: "Odmowa udostępnienia informacji publicznej" }] });
+    expect(parseSemanticVerdicts(verdict("art. 16 UDIP"), [statute]).verdicts[0]?.signature).toBe("art. 16");
+    expect(parseSemanticVerdicts(verdict("art. 16a UDIP"), [statute]).verdicts).toHaveLength(0);
+    expect(parseSemanticVerdicts(verdict("art. 16 UDIP"), [statute, { ...statute, signature: "art. 16 ust. 1" }]).verdicts[0]?.signature).toBe("art. 16");
+    const twins = [statute, { ...statute, signature: "Art. 16" }];
+    expect(parseSemanticVerdicts(verdict("art. 16 KPA"), twins).verdicts).toHaveLength(0);
+  });
+
   it("a short follow-up keeps the criteria of the earlier messages; a long message is taken whole", () => {
     const thread = "Użytkownik: Znajdź wyrok sądu apelacyjnego z 2025 r. o klauzulach przeliczeniowych w kredytach CHF\n\nAsystent: Znalazłem I ACa 12/25.\n\nUżytkownik: a inny?";
     const question = judgedQuestion(thread);
