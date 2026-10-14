@@ -5,6 +5,7 @@ import {
   lookup as dnsLookup
 } from "node:dns/promises";
 import https from "node:https";
+import { decodeBody } from "./source-preview.js";
 import {
   isIP
 } from "node:net";
@@ -717,11 +718,7 @@ function textFromBody(
   maxChars: number
 ): string {
   const raw =
-    Buffer.from(
-      body
-    ).toString(
-      "utf8"
-    );
+    decodeBody(Buffer.from(body), contentType);
 
   if (
     contentType
@@ -849,12 +846,7 @@ export function extractAuxiliarySourceDates(
   }
 
   const html =
-    Buffer.from(
-      body
-    )
-      .toString(
-        "utf8"
-      )
+    decodeBody(Buffer.from(body), contentType)
       .slice(
         0,
         500_000

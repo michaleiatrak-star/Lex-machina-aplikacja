@@ -1303,8 +1303,16 @@ export class LegalFederationToolRuntime {
               instruction:
                 dataForbidden
                   ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
+                  : call.name === WEB_SEARCH_TOOL && policyBlocked
+                  ? /DISABLED/.test(message)
+                    ? "Wyszukiwarka jest wyłączona w ustawieniach aplikacji: brak tropów z sieci. Rejestry urzędowe (verify_case_reference, search_case_law, verify_legal_reference) działają dalej; nie podawaj sygnatur bez weryfikacji."
+                    : "Zapytanie do wyszukiwarki odrzucone (puste albo dłuższe niż 300 znaków): podaj krótkie zapytanie ogólne, bez danych sprawy."
+                  : call.name === FETCH_AUXILIARY_SOURCE_TOOL && message === "AUX_SOURCE_REQUIRES_R2B_R3"
+                  ? "To źródło urzędowe (R1/R2A): nie czytaj go przez fetch_auxiliary_legal_source. Przepis sprawdź verify_legal_reference (ELI), orzeczenie SN verify_case_reference, interpretację verify_interpretation, NSA/WSA search_case_law source=CBOSA."
                   : policyBlocked
                   ? "Source assessment was rejected by Lex source policy. Correct the URL/cross-check evidence; do not treat this as a source outage."
+                  : call.name === WEB_SEARCH_TOOL
+                  ? "Wyszukiwarka nie zwróciła wyników albo jest chwilowo niedostępna (to nie dowód braku orzeczeń ani przepisów). Zmień zapytanie (krótsze, inne słowa, operator site:) albo użyj rejestrów urzędowych: verify_case_reference, search_case_law, verify_legal_reference."
                   : "Do not infer absence of law from this failure. Use another verified source path or report the source as temporarily unavailable."
             })
         });

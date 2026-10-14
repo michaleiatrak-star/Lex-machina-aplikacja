@@ -321,10 +321,14 @@ export class PublicWebSearch implements WebSearchProvider {
     if (!response.ok) {
       throw new Error(`HTTP_${response.status}`);
     }
-    return parseDuckDuckGoHtml(
-      await readLimitedText(response),
-      maxResults
-    );
+    const html = await readLimitedText(response);
+    const hits = parseDuckDuckGoHtml(html, maxResults);
+    // A bot check (HTTP 202, an "anomaly" page) is not "no results": the model is told the
+    // search was refused, not that nothing exists.
+    if (!hits.length && (response.status === 202 || /anomaly|captcha|unusual traffic|bots? (?:use|detected)/iu.test(html))) {
+      throw new Error("BOT_CHECK");
+    }
+    return hits;
   }
 }
 
@@ -337,7 +341,8 @@ export type WebSearchLeads = {
   entryIntoForce?: string[];
 };
 
-const JOURNAL = /Dz\.\s?U\.\s*(?:z\s*)?(\d{4})\s*(?:r\.)?\s*(?:,?\s*Nr\s*\d+\s*)?,?\s*poz\.\s*(\d{1,5})/gu;
+// "Dz. U. z 2024 r. poz. 1061", "Dz.U. 2024 poz. 1061", LEX style "Dz.U.2024.1061".
+const JOURNAL = /Dz\.\s?U\.\s*(?:z\s*)?(\d{4})(?:\s*(?:r\.)?\s*(?:,?\s*Nr\s*\d+\s*)?,?\s*poz\.\s*|\.)(\d{1,5})/gu;
 const IN_FORCE = /(?:wchodzi|wejdzie|wesz[łl]\p{L}*|wejści\p{L}*)\s+w\s+życi\p{L}*[^.;\n]{0,80}|obowiązuj\p{L}*\s+od\s+[^.;\n]{0,60}/giu;
 
 export function webSearchLeads(text: string): WebSearchLeads {

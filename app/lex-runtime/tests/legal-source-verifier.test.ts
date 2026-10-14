@@ -331,3 +331,63 @@ describe("OfficialLegalSourceVerifier", () => {
     } satisfies Partial<LegalSourceVerificationError>);
   });
 });
+describe("OfficialLegalSourceVerifier: superscript units and a hung source", () => {
+  const html =
+    "<html><head><title>Kodeks cywilny</title></head><body>" +
+    "<p>Art. 11.</p><p>Treść artykułu jedenastego.</p>" +
+    "<p>Art. 11<sup>1</sup>.</p><p>Treść artykułu jedenaście z indeksem.</p>" +
+    "<p>Art. 12.</p><p>Treść dwunastego.</p></body></html>";
+  const verifier = new OfficialLegalSourceVerifier(
+    async () => new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }),
+    () => "2026-10-14T08:00:00.000Z"
+  );
+  const verify = (claim: string) =>
+    verifier.verify({ claim, kind: "statute", url: "https://api.sejm.gov.pl/eli/acts/DU/1964/93/text.html", expectedTitle: "Kodeks cywilny", toolCallId: "tool-sup" });
+
+  it("verifies art. 11¹ against its own text, never against Art. 11", async () => {
+    for (const claim of ["art. 11¹ KC", "art. 11^1 KC"]) {
+      const result = await verify(claim);
+      expect(result.matched, claim).toBe(true);
+      expect(result.record.evidence, claim).toContain("jedenaście z indeksem");
+      expect(result.record.evidence, claim).not.toContain("jedenastego");
+    }
+    const plain = await verify("art. 11 KC");
+    expect(plain.record.evidence).toContain("jedenastego");
+    expect(plain.record.evidence).not.toContain("z indeksem");
+  });
+
+  it("reads a PDF superscript (\"Art. 449 [1] .\") as its own unit", async () => {
+    const pdf = new OfficialLegalSourceVerifier(
+      async () => new Response(new Uint8Array([37, 80, 68, 70]), { status: 200, headers: { "content-type": "application/pdf" } }),
+      () => "2026-10-14T08:00:00.000Z",
+      {
+        async extract(data) {
+          return {
+            text: "Kodeks cywilny\nArt. 449. Roszczenia nie mogą być zbyte.\nArt. 449 [1] . § 1. Kto wytwarza produkt niebezpieczny, odpowiada za szkodę.\nArt. 449 [2] . Producent odpowiada.",
+            pages: 1,
+            bytes: data.byteLength
+          };
+        }
+      }
+    );
+    const result = await pdf.verify({ claim: "art. 449¹ KC", kind: "statute", url: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf", expectedTitle: "Kodeks cywilny", toolCallId: "tool-pdf-sup" });
+    expect(result.matched).toBe(true);
+    expect(result.record.evidence).toContain("produkt niebezpieczny");
+    expect(result.record.evidence).not.toContain("nie mogą być zbyte");
+  });
+
+  it("bounds the official fetch with a timeout signal", async () => {
+    const fetcher = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    });
+    await new OfficialLegalSourceVerifier(fetcher, () => "2026-10-14T08:00:00.000Z").verify({
+      claim: "art. 12 KC",
+      kind: "statute",
+      url: "https://api.sejm.gov.pl/eli/acts/DU/1964/93/text.html",
+      expectedTitle: "Kodeks cywilny",
+      toolCallId: "tool-timeout"
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+});

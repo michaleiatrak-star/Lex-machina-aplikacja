@@ -1581,12 +1581,15 @@ export class LegalVerificationToolRuntime {
         ...(outcome.eurekaStatus ? { interpretationStatus: outcome.eurekaStatus } : {})
       });
       return JSON.stringify({
-        status: outcome.status === "SOURCE_UNAVAILABLE" ? "UNVERIFIED" : outcome.status,
+        // An outage stays an outage: not remembered for the turn, so a retry asks EUREKA again.
+        status: outcome.status,
         error: outcome.reason ?? null,
         marker: "⚠️ [NIEWERYFIKOWANE]",
         instruction:
           outcome.status === "NOT_FOUND"
             ? "EUREKA has no document under exactly this signature (EUREKA does not hold every ruling; no hit is not proof it does not exist). Do not cite it as verified."
+            : outcome.status === "SOURCE_UNAVAILABLE"
+            ? "EUREKA is temporarily unavailable: you may retry once; otherwise put ⚠️ [NIEWERYFIKOWANE] next to the signature and say the source could not be read now (not that the interpretation does not exist)."
             : "Do not present this interpretation as verified; if it must be mentioned, put ⚠️ [NIEWERYFIKOWANE] next to the signature."
       });
     }
