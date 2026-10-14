@@ -1024,9 +1024,8 @@ export class SupremeCourtCaseVerifier {
       !officialText.includes(
         normalizedSignature
       ) ||
-      !officialText.includes(
-        "SĄD NAJWYŻSZY"
-      )
+      // The heading may be letter-spaced ("S Ą D   N A J W Y Ż S Z Y") or in lower case.
+      !/S\s*Ą\s*D\s+N\s*A\s*J\s*W\s*Y\s*Ż\s*S\s*Z\s*Y/iu.test(officialText)
     ) {
       return {
         status: "OUT_OF_SCOPE",

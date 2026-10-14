@@ -1,4 +1,6 @@
 import { evaluateCheckpointOutput } from "./process-checkpoint-contract.js";
+import { waitsForUser } from "./workflow-wait.js";
+import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import fs from "node:fs";
 import type { LegalCorpusAuditEvent } from "./legal-corpus-tool-runtime.js";
 import type { LexSkillRegistry } from "./registry.js";
@@ -63,7 +65,12 @@ export type DeterministicWorkflowOutputReport = {
     | "CASE_LAW_FINAL"
     | "CHRONOLOGY_FINAL"
     | "WITNESS_CHECKPOINT"
-    | "WITNESS_W3_FINAL";
+    | "WITNESS_W3_FINAL"
+    // A checkpoint answer that asks the user (workflow-wait.ts): presented, not committed.
+    | "WAITING_FOR_USER"
+    // The letter skill hands the matter to the other one (skill-switch.ts): an offer, not a letter.
+    | "ESCALATION_REQUIRED"
+    | "REDUCTION_OFFERED";
   required: string[];
   observed: string[];
   missing: string[];
@@ -218,6 +225,18 @@ const COURT_ANALYSIS_FINAL_MARKERS = [
   "§10.",
   "§11."
 ] as const;
+
+// Each marker searched after the previous one: a heading's word used earlier in the prose
+// ("WALIDACJA: brak sprzeczności" before the "SPRZECZNOŚCI" section) does not break the order.
+function sequentialPositions(text: string, markers: readonly string[]): number[] {
+  let from = 0;
+  return markers.map((marker) => {
+    const position = text.indexOf(marker, from);
+    if (position < 0) return text.indexOf(marker) >= 0 ? -2 : -1;
+    from = position + marker.length;
+    return position;
+  });
+}
 
 const EVIDENCE_ANALYSIS_FINAL_MARKERS = [
   "RAPORT DOWODOWY",
@@ -520,6 +539,7 @@ export function deterministicWorkflowPrompt(
       : plan.id === "SIMPLE_LETTER_V1"
       ? [
           "SIMPLE_LETTER_V1 output contract is runtime-enforced.",
+          "If M7-eskalacja requires pisma-procesowe-v3, write no letter: present the escalation message (ESKALACJA DO pisma-procesowe-v3, Przyczyna: …) and ask whether to switch; this thread cannot load the other pipeline, the application offers the switch.",
           "If critical intake data are missing, present an explicit DANE DO UZUPEŁNIENIA section and do not pretend a complete letter is ready.",
           "Otherwise present the required sections in this order: TREŚĆ PISMA → UWAGI PRAKTYCZNE → CO DALEJ → HYBRID-VALIDATION.",
           "The HYBRID-VALIDATION section must include the final count statement 'Pismo zawiera ... pól do uzupełnienia.'."
@@ -528,6 +548,7 @@ export function deterministicWorkflowPrompt(
     ...(plan.id === "PROCESS_PLEADING_V1"
       ? [
           "PROCESS_PLEADING_V1 output state is runtime-enforced.",
+          "If KROK 0 Test B finds a simple letter, write no pleading: present REDUKCJA DO pisma-proste-v2 with Przyczyna: … and ask the user whether to switch; the application offers the switch.",
           "Do not claim STATUS PISMA: GOTOWE before the final CP-PEER checkpoint.",
           "At CP-PEER the finalization package must expose RAPORT W3 → STATUS PISMA → UWAGI REDAKCYJNE PRZED ZŁOŻENIEM → REJESTR KROKÓW."
         ]
@@ -595,8 +616,23 @@ export function evaluateDeterministicWorkflowOutput(
     courtCheckpoint?:
       CourtAnalysisCheckpoint;
     orderedCheckpoint?: string;
+    // Any checkpoint workflow of this turn (contract and chronology included).
+    checkpointTurn?: boolean;
   }
 ): DeterministicWorkflowOutputReport {
+  // A checkpoint that asks the user for missing facts or a decision is not its report:
+  // the questions are presented, the checkpoint stays open and runs again after the reply.
+  // Test B (KROK 0, before W1): a simple letter belongs to pisma-proste-v2.
+  if (plan.id === "PROCESS_PLEADING_V1" && (!context?.processCheckpoint || context.processCheckpoint === "CP-1a") && reductionOffer(text)) {
+    return { workflow: plan.id, mode: "REDUCTION_OFFERED", required: [], observed: [], missing: [], orderValid: true, result: "PASS" };
+  }
+  // M7-eskalacja: the matter needs pisma-procesowe-v3; no letter sections are expected.
+  if (plan.id === "SIMPLE_LETTER_V1" && !plan.documentAstOutput && escalationOffer(text)) {
+    return { workflow: plan.id, mode: "ESCALATION_REQUIRED", required: [], observed: [], missing: [], orderValid: true, result: "PASS" };
+  }
+  if (context?.checkpointTurn && waitsForUser(text)) {
+    return { workflow: plan.id, mode: "WAITING_FOR_USER", required: [], observed: [], missing: [], orderValid: true, result: "PASS" };
+  }
   const normalized =
     text
       .normalize("NFC")
@@ -661,12 +697,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      PROCESS_PLEADING_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, PROCESS_PLEADING_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -733,12 +764,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      COURT_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, COURT_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -842,12 +868,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      EVIDENCE_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, EVIDENCE_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -925,12 +946,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
       );
     const positions =
-      markers.map(
-        (marker) =>
-          normalized.indexOf(
-            marker
-          )
-      );
+      sequentialPositions(normalized, markers);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1002,12 +1018,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      STATUTE_ANALYSIS_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, STATUTE_ANALYSIS_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1120,12 +1131,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      WITNESS_W3_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, WITNESS_W3_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1195,12 +1201,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      CHRONOLOGY_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, CHRONOLOGY_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1270,12 +1271,7 @@ export function evaluateDeterministicWorkflowOutput(
           )
         );
     const positions =
-      CASE_LAW_FINAL_MARKERS
-        .map((marker) =>
-          normalized.indexOf(
-            marker
-          )
-        );
+      sequentialPositions(normalized, CASE_LAW_FINAL_MARKERS);
     const orderValid =
       missing.length === 0 &&
       positions.every(
@@ -1443,12 +1439,7 @@ export function evaluateDeterministicWorkflowOutput(
       );
 
   const positions =
-    SIMPLE_LETTER_READY_MARKERS
-      .map((marker) =>
-        normalizedSimple.indexOf(
-          marker
-        )
-      );
+      sequentialPositions(normalizedSimple, SIMPLE_LETTER_READY_MARKERS);
   const orderValid =
     missing.length === 0 &&
     positions.every(

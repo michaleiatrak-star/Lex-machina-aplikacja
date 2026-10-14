@@ -370,6 +370,11 @@ async function fetchCbosa(
                 )
             }
           );
+        // CBOSA answers 503 under load: one more attempt after a pause, like a transport error.
+        if (response.status === 503 && attempt < MAX_CBOSA_TRANSPORT_ATTEMPTS) {
+          await sleep(500 * 2 ** (attempt - 1));
+          continue;
+        }
         break;
       } catch (error) {
         lastError = error;
@@ -1146,6 +1151,7 @@ export class CaseLawSearchService {
 
     const candidates:
       CaseLawSearchCandidate[] = [];
+    const skipped: string[] = [];
 
     for (
       const id
@@ -1171,32 +1177,14 @@ export class CaseLawSearchService {
             first.cookies
           );
       } catch {
-        return {
-          source:
-            "CBOSA",
-          status:
-            "OUT_OF_SCOPE",
-          query,
-          candidates: [],
-          total,
-          reason:
-            "CBOSA_DOCUMENT_TRANSPORT_FAILED"
-        };
+        // One document that cannot be read drops that document, not the whole search.
+        skipped.push("CBOSA_DOCUMENT_TRANSPORT_FAILED");
+        continue;
       }
 
       if (!document.response.ok) {
-        return {
-          source:
-            "CBOSA",
-          status:
-            "OUT_OF_SCOPE",
-          query,
-          candidates: [],
-          total,
-          reason:
-            "CBOSA_DOCUMENT_HTTP_" +
-            document.response.status
-        };
+        skipped.push("CBOSA_DOCUMENT_HTTP_" + document.response.status);
+        continue;
       }
 
       const html =
@@ -1204,17 +1192,8 @@ export class CaseLawSearchService {
       const caseNumbers =
         cbosaCaseNumber(html);
       if (!caseNumbers.length) {
-        return {
-          source:
-            "CBOSA",
-          status:
-            "OUT_OF_SCOPE",
-          query,
-          candidates: [],
-          total,
-          reason:
-            "CBOSA_DOCUMENT_SCHEMA_DRIFT"
-        };
+        skipped.push("CBOSA_DOCUMENT_SCHEMA_DRIFT");
+        continue;
       }
 
       candidates.push(
@@ -1238,7 +1217,7 @@ export class CaseLawSearchService {
         ? {}
         : {
             reason:
-              "CBOSA_NO_HITS"
+              skipped[0] ?? "CBOSA_NO_HITS"
           })
     };
   }

@@ -180,6 +180,11 @@ async function fetchCbosa(fetcher, input, init, cookies) {
                         ...requestInit,
                         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
                     });
+                // CBOSA answers 503 under load: one more attempt after a pause, like a transport error.
+                if (response.status === 503 && attempt < MAX_CBOSA_TRANSPORT_ATTEMPTS) {
+                    await sleep(500 * 2 ** (attempt - 1));
+                    continue;
+                }
                 break;
             }
             catch (error) {
@@ -638,6 +643,7 @@ export class CaseLawSearchService {
             };
         }
         const candidates = [];
+        const skipped = [];
         for (const id of ids.slice(0, needed)) {
             let document;
             try {
@@ -647,37 +653,19 @@ export class CaseLawSearchService {
                     }, first.cookies);
             }
             catch {
-                return {
-                    source: "CBOSA",
-                    status: "OUT_OF_SCOPE",
-                    query,
-                    candidates: [],
-                    total,
-                    reason: "CBOSA_DOCUMENT_TRANSPORT_FAILED"
-                };
+                // One document that cannot be read drops that document, not the whole search.
+                skipped.push("CBOSA_DOCUMENT_TRANSPORT_FAILED");
+                continue;
             }
             if (!document.response.ok) {
-                return {
-                    source: "CBOSA",
-                    status: "OUT_OF_SCOPE",
-                    query,
-                    candidates: [],
-                    total,
-                    reason: "CBOSA_DOCUMENT_HTTP_" +
-                        document.response.status
-                };
+                skipped.push("CBOSA_DOCUMENT_HTTP_" + document.response.status);
+                continue;
             }
             const html = await document.response.text();
             const caseNumbers = cbosaCaseNumber(html);
             if (!caseNumbers.length) {
-                return {
-                    source: "CBOSA",
-                    status: "OUT_OF_SCOPE",
-                    query,
-                    candidates: [],
-                    total,
-                    reason: "CBOSA_DOCUMENT_SCHEMA_DRIFT"
-                };
+                skipped.push("CBOSA_DOCUMENT_SCHEMA_DRIFT");
+                continue;
             }
             candidates.push(cbosaCandidate(id, html));
         }
@@ -692,7 +680,7 @@ export class CaseLawSearchService {
             ...(candidates.length
                 ? {}
                 : {
-                    reason: "CBOSA_NO_HITS"
+                    reason: skipped[0] ?? "CBOSA_NO_HITS"
                 })
         };
     }

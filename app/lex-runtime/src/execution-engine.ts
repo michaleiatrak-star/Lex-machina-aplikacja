@@ -1,13 +1,18 @@
 import { draftPrompt } from "./process-pleading-draft.js";
-import { WAIT_FOR_USER_INSTRUCTION } from "./workflow-wait.js";
+import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
   CHRONOLOGY_CHECKPOINT_SECTIONS,
   CONTRACT_CHECKPOINT_EXCERPTS,
   CONTRACT_CHECKPOINT_SECTIONS,
   COURT_CHECKPOINT_SECTIONS,
+  ORDERED_CHECKPOINT_SECTIONS,
   markdownSection
 } from "./checkpoint-skill-sections.js";
 import { compactForModel } from "./skill-sections.js";
+import { reductionOffer } from "./skill-switch.js";
+import { ANNOUNCED_ACTION_PROMPT, onlyAnnouncesWork } from "./announced-action.js";
+import { defenceCount, opponentPleadingTrigger } from "./task-routing.js";
+import { classifyDocument } from "./document-kind.js";
 import { encodePromptBudget, promptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import fs from "node:fs";
@@ -177,6 +182,7 @@ export const CASE_LAW_DISCOVERY_RULE =
   "Orzecznictwo: znana sygnatura - od razu rejestr urzędowy według repertorium (verify_case_reference, CBOSA, portal sądu), bez web_search i bez SAOS. " +
   "Nowsze orzeczenia (SN po 2016, TK po 2015, KIO po 2018 albo z ostatnich 2-3 lat): web_search z abstrakcyjną frazą prawną (nigdy dane sprawy) w celu znalezienia sygnatur w źródłach wtórnych, równolegle z urzędowym wyszukiwaniem pełnotekstowym (search_case_law source=SN / CBOSA); SAOS ich nie zawiera. " +
   "Starsze orzeczenia i sądy powszechne: SAOS + web_search; SAOS także jako cytator. " +
+  "Wyniki wyszukiwarki, LEX, Legalis, portali prawniczych i prasy są tropami (sygnatura i data orzeczenia, Dz.U. nowelizacji, data wejścia w życie): sprawdź każdy w źródle urzędowym według gradacji (R1 ELI/Dz.U. > R2A rejestry sądów > R2B > R3), zanim go powołasz; tropu niepotwierdzonego nie powołuj jako ustalonego. " +
   "Źródło wtórne daje tylko sygnaturę; teza i cytat wyłącznie ze zweryfikowanego tekstu urzędowego.";
 
 const TRIVIAL_PART =
@@ -1220,6 +1226,8 @@ export class LexExecutionEngine {
           if (skillText) {
             inContext.add(skillResource);
             emit("resource_read", skillResource, "OK", "runtime-preload;executive-skill");
+            // The register of the mandatory path counts the file as read.
+            args.onCorpusPreloaded?.(`${path.basename(skillRecord.directory)}/SKILL.md`);
           }
         }
         executiveContractText = [
@@ -1233,7 +1241,14 @@ export class LexExecutionEngine {
         // change with the stage, so they go to the end of the prompt with the checkpoint;
         // they keep the budget's priority.
         const triggered = skillModules(this.registry, contract.skill, {
-          text: [moduleTriggerText, documentTriggerText(args.documentContext, 20_000)].join("\n"),
+          text: [
+            moduleTriggerText,
+            documentTriggerText(args.documentContext, 20_000),
+            opponentPleadingTrigger(
+              moduleTriggerText,
+              (args.documentContext ?? "").split(/\n\n---\n\n/u).map((block) => classifyDocument({ text: documentTriggerText(block, 6_000) }))
+            )
+          ].join("\n"),
           stage: args.processWorkflowContext?.stage ?? null
         });
         const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
@@ -1301,6 +1316,13 @@ export class LexExecutionEngine {
         emit("resource_read", excerpt.resource, "OK", `runtime-preload;contract-checkpoint;${checkpoint}${excerpt.heading ? `;${excerpt.heading.slice(3)}` : ""}`);
         contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# ZASÓB PUNKTU ${checkpoint}: ${excerpt.resource}${excerpt.heading ? ` (${excerpt.heading.slice(3)})` : ""}\n\n${content}`;
       }
+    }
+    // pisma-proste-v2 pinned by the user: the same check the AUTO router makes (several
+    // substantive defences = more than one legal basis, M7-eskalacja) is given to the model,
+    // which writes the escalation offer instead of a letter.
+    if (workflowPlan.id === "SIMPLE_LETTER_V1" && !args.documentAstOutput && defenceCount(moduleTriggerText) >= 2) {
+      emit("gate", "SIMPLE_LETTER_ESCALATION_CHECK", "OK", `defences=${defenceCount(moduleTriggerText)}`);
+      contractCheckpointText += `${contractCheckpointText ? "\n\n" : ""}# KONTROLA ESKALACJI (aplikacja)\nW wiadomościach użytkownika jest kilka zarzutów merytorycznych (${defenceCount(moduleTriggerText)}). Wykonaj kontrolę z pisma-proste-v2/references/M7-eskalacja.md: gdy sprawa wymaga więcej niż jednej podstawy prawnej, nie pisz pisma — przedstaw komunikat ESKALACJA DO pisma-procesowe-v3 z przyczyną i zapytaj o przełączenie.`;
     }
     // pisma-procesowe-v3, one checkpoint per turn: the files of that checkpoint
     // (CP-REJESTR) and what its report must show, with the case's register, and the
@@ -1918,7 +1940,7 @@ export class LexExecutionEngine {
               "Do not continue to a later checkpoint or later stage.",
               "In CHECKPOINT mode, end the substantive work for this turn with the checkpoint report required by the skill; the runtime will wait for explicit user confirmation before any later checkpoint.",
               "Conditional checkpoint still requires an explicit applicability assessment. If it is not applicable, state that conclusion and the reason; do not silently skip it.",
-              ...(args.processWorkflowContext.mode === "AUTO" ? [WAIT_FOR_USER_INSTRUCTION] : [])
+              args.processWorkflowContext.mode === "AUTO" ? WAIT_FOR_USER_INSTRUCTION : WAIT_FOR_USER_CHECKPOINT_INSTRUCTION
             ].join("\n")
           ]
         : []),
@@ -1957,6 +1979,9 @@ export class LexExecutionEngine {
               "# ACTIVE ORDERED LEGAL WORKFLOW — RUNTIME ENFORCED",
               `Workflow: ${args.orderedCaseWorkflowContext.workflowId}.`,
               `Active checkpoint: ${args.orderedCaseWorkflowContext.checkpoint}.`,
+              ...(ORDERED_CHECKPOINT_SECTIONS[args.orderedCaseWorkflowContext.workflowId]?.[args.orderedCaseWorkflowContext.checkpoint]
+                ? [`Część skilla ${workflowPlan.executionSkill ?? ""} dla tego punktu: ${ORDERED_CHECKPOINT_SECTIONS[args.orderedCaseWorkflowContext.workflowId]![args.orderedCaseWorkflowContext.checkpoint]}`]
+                : []),
               `Revision: ${args.orderedCaseWorkflowContext.revision}.`,
               "Execute only this checkpoint in this turn.",
               "Do not claim completion of any later checkpoint.",
@@ -2080,6 +2105,11 @@ export class LexExecutionEngine {
     }
     // Everything before the checkpoint's own part is the same between checkpoints of one
     // matter: the provider caches it as a separate block (systemPromptCachePrefix).
+    // Checkpoint states carry WAIT_FOR_USER_INSTRUCTION; a mechanical turn without checkpoints
+    // (simple letter, statute, case law, reports) gets the same signal for its questions.
+    if (!workflowStateParts.length && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
+      workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\nGdy potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}.`);
+    }
     const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
     const stablePromptLength = promptParts.join("\n\n").length + 2;
     promptParts.push(...turnTail);
@@ -2165,7 +2195,9 @@ export class LexExecutionEngine {
     if (args.processWorkflowContext && workflowPlan.id === "PROCESS_PLEADING_V1") {
       const checkpoint = args.processWorkflowContext.checkpoint;
       const first = evaluateCheckpointOutput(checkpoint, output);
-      if (first.result === "BLOCKED") {
+      if (waitsForUser(output) || (checkpoint === "CP-1a" && reductionOffer(output))) {
+        emit("gate", "PROCESS_CHECKPOINT_WAITING_FOR_USER", "OK", `checkpoint=${checkpoint}`);
+      } else if (first.result === "BLOCKED") {
         let remaining = first.missing;
         try {
           const corrected = await this.providers.stream(args.provider, {
@@ -2333,7 +2365,8 @@ export class LexExecutionEngine {
       ["weryfikacja sygnatury interpretacji podatkowej (EUREKA)", "verify_interpretation"],
       ["weryfikacja sygnatury, cytatu i tezy orzeczenia", "verify_case_reference, verify_case_quote, verify_case_proposition"],
       ["źródła prawne przez MCP (ISAP, EUR-Lex, KRS i inne)", "list_federated_legal_sources, search_federated_legal_sources, get_federated_legal_document, call_federated_legal_source"],
-      ["web_search / wyszukiwanie w internecie", "web_search"]
+      ["web_search / wyszukiwanie w internecie (także site:sn.pl, site:orzeczenia.nsa.gov.pl)", "web_search"],
+      ["web_fetch / odczyt strony spoza źródeł urzędowych (URL z R1/R2A sprawdzaj narzędziami verify_*)", "fetch_auxiliary_legal_source"]
     ]
       .filter(([, tools]) =>
         tools!.split(/[ ,()]+/).some((name) => toolNames.has(name))
@@ -2509,6 +2542,27 @@ export class LexExecutionEngine {
           [...events]
         );
       }
+    }
+    // "Szukam teraz..." with nothing found: one more round runs the announced search.
+    if (onlyAnnouncesWork(response.fullText)) {
+      const followed = await this.providers.stream(args.provider, {
+        model: args.model,
+        systemPrompt: promptParts.join("\n\n"),
+        ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
+        ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
+        messages: [
+          { role: "user", content: effectiveQuery },
+          { role: "assistant", content: response.fullText },
+          { role: "user", content: ANNOUNCED_ACTION_PROMPT }
+        ],
+        tools: args.tools,
+        runTools: args.runTools,
+        ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
+        reasoning: "none"
+      }).catch(() => null);
+      const text = followed?.fullText.trim() ?? "";
+      emit("gate", "ANNOUNCED_ACTION_FOLLOW_UP", "OK", text && !onlyAnnouncesWork(text) ? "result" : "still-announced");
+      if (text) response.fullText = text;
     }
     emit("provider_end", args.provider, "OK", args.model);
     emit(

@@ -209,6 +209,7 @@ import "./workspace.css";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { SnVerification } from "./SnVerification.js";
 import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
+import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
 
 type TabId =
   | "home"
@@ -520,10 +521,28 @@ type DirectDocumentRequest = {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow"
   >
-): { documentType: "letter" | "pleading"; stage: "DRAFT" | "FINAL" } | null {
+): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
+  // Questions to the user or an offer to switch the letter skill: no letter yet.
+  if (result.waitingForUser || result.skillSwitch) return null;
+  // analizator-umow-v1: the contract drafted or corrected in its pipeline becomes a file in the
+  // turn that closed AU-STRIP (after AU-HYBRID); the server checks the same state.
+  const contract = result.contractWorkflow;
+  if (contract && contract.mode && contract.mode !== "ANALYSIS" && contract.closedCheckpoints?.includes("AU-HYBRID") && contract.closedCheckpoints.includes("AU-STRIP") && contract.nextCheckpoint === "AU-POST") {
+    return { documentType: "contract", stage: "FINAL" };
+  }
+  // MOD-REDAKCJA: the corrected pleading as a file ("jako artefakt/plik"); a draft while
+  // fields are missing (⬛) or suggestions wait for a decision.
+  if (result.taskMode === "REDACTION") {
+    const ready =
+      result.finalization === "PASS" &&
+      result.gateI?.result !== "BLOCKED" &&
+      result.verification.unverified === 0 &&
+      !/⬛|WYMAGA DECYZJI/u.test(result.answer);
+    return { documentType: "pleading", stage: ready ? "FINAL" : "DRAFT", source: "REDACTION" };
+  }
   if (result.processWorkflow || result.workflow?.id === "PROCESS_PLEADING_V1") {
     if (result.processWorkflow?.documentStatus === "FINAL") return { documentType: "pleading", stage: "FINAL" };
     return result.processWorkflow?.draftWritten?.checkpoint === "CP-ATAK"
@@ -546,9 +565,10 @@ export function letterDocumentPlan(
 
 /** AUTO chose the process pleading skill, but its pipeline (and its file) has not started. */
 export function pleadingPipelineNeeded(
-  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow">
+  result: Pick<ExtendedExecution, "status" | "taskSkill" | "processWorkflow" | "taskMode">
 ): boolean {
-  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow;
+  // A corrected pleading (Test A, MOD-REDAKCJA) needs no W1–W3 pipeline.
+  return result.status === "DRAFT_PRESENTABLE" && result.taskSkill === "pisma-procesowe-v3" && !result.processWorkflow && result.taskMode !== "REDACTION";
 }
 
 // Word boundaries for Polish text: JavaScript's \b sees only ASCII letters, so
@@ -1273,7 +1293,7 @@ export default function MatterChatApp({
     caseId: string; text: string; messageId: string; suggested: ContractAnalysisMode;
   } | null>(null);
   const [contractModeBusy, setContractModeBusy] = useState(false);
-  const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string } | null>(null);
+  const [contractRetry, setContractRetry] = useState<{ text: string; messageId: string; switchTo?: { action: DeterministicActionId; label: string } } | null>(null);
   // Checkpoint workflows: the next step the chat sends by itself, the closed steps per
   // case (progress check) and the user's "Zatrzymaj".
   const [autoNext, setAutoNext] = useState<{ caseId: string; text: string; meta: string; step: number } | null>(null);
@@ -1286,8 +1306,13 @@ export default function MatterChatApp({
   const [unverifiedDraftRetry, setUnverifiedDraftRetry] = useState<{ text: string; messageId: string } | null>(null);
   // A case workflow stopped the message (pleading pipeline not started, workflow finished):
   // the message waits for the user's choice and is resent through contractRetry.
+  // Escalation / reduction between the letter skills offered by the runtime, and a switch being sent.
+  const [skillSwitchOffer, setSkillSwitchOffer] = useState<{ caseId: string; offer: SkillSwitchOffer } | null>(null);
+  const [pendingSkillSwitch, setPendingSkillSwitch] = useState<{ caseId: string; action: DeterministicActionId; text: string; label: string } | null>(null);
   const [workflowRecoveryRequest, setWorkflowRecoveryRequest] = useState<{
     caseId: string; text: string; messageId: string; recovery: WorkflowRecovery;
+    // The failed message switched the thread's letter skill: the retry switches again.
+    switchTo?: { action: DeterministicActionId; label: string };
   } | null>(null);
   const [workflowRecoveryBusy, setWorkflowRecoveryBusy] = useState(false);
   const [executionDiagnostic, setExecutionDiagnostic] =
@@ -1617,17 +1642,14 @@ export default function MatterChatApp({
     if (threadLoading) {
       return;
     }
-    const firstUser =
-      messages.find(
-        (message) =>
-          message.role === "user"
-      );
-    if (!firstUser) {
+    const actionMessage =
+      actionMetaMessage(messages);
+    if (!actionMessage) {
       return;
     }
     const restored =
       deterministicActionFromMeta(
-        firstUser.meta
+        actionMessage.meta
       );
     setDeterministicAction(
       restored
@@ -2177,6 +2199,36 @@ export default function MatterChatApp({
       void executeMessage(pending);
     }
   }, [pendingFirstMessage, caseId, threadLoading, executing]);
+
+  // The switch is sent once the thread's action shows the new skill (fresh routing state).
+  useEffect(() => {
+    if (!pendingSkillSwitch || executing || threadLoading || deterministicAction !== pendingSkillSwitch.action) return;
+    const pending = pendingSkillSwitch;
+    setPendingSkillSwitch(null);
+    if (pending.caseId !== caseId) return;
+    void executeMessage(pending.text, { switchTo: { action: pending.action, label: pending.label } });
+  }, [pendingSkillSwitch, deterministicAction, caseId, threadLoading, executing]);
+
+  async function acceptSkillSwitch(): Promise<void> {
+    const current = skillSwitchOffer;
+    if (!current || current.caseId !== caseId) return;
+    setSkillSwitchOffer(null);
+    const action = switchAction(current.offer);
+    // Reduction at the start of the pleading pipeline: its state (per case) would be
+    // resumed by the next pleading thread, so it starts again.
+    if (current.offer.direction === "REDUCTION") {
+      try {
+        await resetCaseWorkflow(current.caseId, { kind: "process-pleading" });
+        setProcessWorkflowRefresh((value) => value + 1);
+      } catch (error) {
+        setExecutionError("Nie udało się zamknąć pipeline'u pisma procesowego: " + (error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error)));
+        return;
+      }
+    }
+    const label = DETERMINISTIC_ACTIONS.find((item) => item.id === action)?.label ?? action;
+    selectDeterministicAction(action);
+    setPendingSkillSwitch({ caseId: current.caseId, action, text: switchMessage(current.offer), label });
+  }
 
   function switchToCase(
     nextCaseId: string
@@ -3086,7 +3138,7 @@ export default function MatterChatApp({
       setExecutionError("");
       setExecutionDiagnostic(null);
       setMessages((current) => current.filter((message) => message.id !== pending.messageId));
-      setContractRetry({ text: pending.text, messageId: pending.messageId });
+      setContractRetry({ text: pending.text, messageId: pending.messageId, ...(pending.switchTo ? { switchTo: pending.switchTo } : {}) });
     } catch (error) {
       setExecutionError(
         "Nie udało się przygotować etapu sprawy: " +
@@ -3113,8 +3165,14 @@ export default function MatterChatApp({
   useEffect(() => {
     if (!contractRetry || executing) return;
     if (messages.some((message) => message.id === contractRetry.messageId)) return;
-    const { text } = contractRetry;
+    const { text, switchTo } = contractRetry;
     setContractRetry(null);
+    // A retried switch: the removal restored the previous action; select the new one again.
+    if (switchTo && caseId) {
+      selectDeterministicAction(switchTo.action);
+      setPendingSkillSwitch({ caseId, action: switchTo.action, text, label: switchTo.label });
+      return;
+    }
     void executeMessage(text);
     // executeMessage reads the current thread state; the effect waits for the removal above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3141,7 +3199,7 @@ export default function MatterChatApp({
 
   async function executeMessage(
     plain: string,
-    options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string } = {}
+    options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string; switchTo?: { action: DeterministicActionId; label: string } } = {}
   ): Promise<void> {
     const trimmed =
       plain.trim();
@@ -3200,7 +3258,9 @@ export default function MatterChatApp({
                     deterministicAction
                   )
               }
-            : {})
+            : options.switchTo
+              ? { meta: `${deterministicActionMeta(options.switchTo.action)} | Przełączono na: ${options.switchTo.label}` }
+              : {})
       };
     // A message the user sends starts a new chain of automatic steps.
     if (options.autoStep === undefined) autoStopRef.current = false;
@@ -3515,6 +3575,7 @@ export default function MatterChatApp({
           ...current,
           answerMessage
         ]);
+        setSkillSwitchOffer(result.skillSwitch ? { caseId: executionCaseId, offer: result.skillSwitch } : null);
       }
 
       // Checkpoint workflows go on by themselves; the thread names the next step.
@@ -3571,7 +3632,9 @@ export default function MatterChatApp({
                         { id: messageId(), role: "user", content: trimmed },
                         answerMessage
                       ],
-                      "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, uwagi dla prawnika).",
+                      letterWorkflow === "contract"
+                        ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
+                        : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
                       conversationChars
                     ),
                     automaticSkills,
@@ -3591,8 +3654,13 @@ export default function MatterChatApp({
                 ...(firmTemplateIds.length > 0
                   ? { firmTemplates: firmTemplateIds }
                   : {}),
+                ...(letterPlan.source ? { source: letterPlan.source } : {}),
                 filename:
-                  (letterWorkflow === "pleading"
+                  (letterPlan.source === "REDACTION"
+                    ? "LexMachina-pismo-poprawione"
+                    : letterWorkflow === "contract"
+                    ? "LexMachina-umowa"
+                    : letterWorkflow === "pleading"
                     ? "LexMachina-pismo-procesowe"
                     : "LexMachina-pismo") +
                   (stage === "DRAFT" ? "-szkic" : "") +
@@ -3695,7 +3763,8 @@ export default function MatterChatApp({
           caseId: executionCaseId,
           text: trimmed,
           messageId: userMessage.id,
-          recovery
+          recovery,
+          ...(options.switchTo ? { switchTo: options.switchTo } : {})
         });
       }
       if (
@@ -5994,6 +6063,25 @@ export default function MatterChatApp({
                     </button>
                   </div>
                   <small>Plik dostanie nagłówek „PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI” z listą tych powołań; decyzja trafia do audytu sesji. Wiadomość zostanie wysłana ponownie.</small>
+                </div>
+              ) : null}
+              {skillSwitchOffer && skillSwitchOffer.caseId === caseId && !executing ? (
+                <div className="chat-contract-mode" role="group" aria-label="Zmiana rodzaju pisma">
+                  <strong>{switchTitle(skillSwitchOffer.offer)}</strong>
+                  {skillSwitchOffer.offer.reason ? <small>{skillSwitchOffer.offer.reason}</small> : null}
+                  <div className="chat-contract-mode-options">
+                    <button type="button" className="chat-primary-action" onClick={() => void acceptSkillSwitch()}>
+                      {skillSwitchOffer.offer.direction === "ESCALATION" ? "Przełącz na pismo procesowe" : "Przełącz na pismo proste"}
+                    </button>
+                    <button type="button" className="chat-secondary-action" onClick={() => setSkillSwitchOffer(null)}>
+                      Zostań przy obecnym
+                    </button>
+                  </div>
+                  <small>
+                    {skillSwitchOffer.offer.direction === "ESCALATION"
+                      ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
+                      : "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."}
+                  </small>
                 </div>
               ) : null}
               {workflowRecoveryRequest && workflowRecoveryRequest.caseId === caseId ? (

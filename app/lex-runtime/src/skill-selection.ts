@@ -82,6 +82,14 @@ export function threadUserText(
     .join("\n");
 }
 
+// The user's earlier turns, newest first (without the latest one): the request a short
+// follow-up ("ok, robisz to.") continues.
+export function earlierUserTurns(query: string): string[] {
+  const parts = query.split(/\n\n(?=Użytkownik: |Asystent: )/u);
+  const users = parts.filter((part, index) => index === 0 ? !part.startsWith("Asystent: ") : part.startsWith("Użytkownik: ")).map((part) => part.replace(/^Użytkownik: /u, ""));
+  return users.slice(0, -1).reverse();
+}
+
 function normalize(value: string): string {
   return value
     .normalize("NFKD")
@@ -335,6 +343,12 @@ const EXPLICIT_EXECUTION_RULES: readonly ExplicitExecutionRule[] = [
   {
     skill: "analizator-dowodow-v3",
     patterns: [
+      // "Oceń moje dowody" chose the evidence skill only through the AUTO router,
+      // so the turn ran LEGAL_QUERY_V1 while "Oceń moje faktury" ran EVIDENCE_ANALYSIS_V1.
+      // Only an assessment of evidence: "dowód z orzeczenia" in a citation request is a quote.
+      /\b(?:ocen|analiz|przeanaliz|sprawdz|przejrz|zbadaj|zweryfikuj)[a-z]*(?: [a-z]+){0,2} dowod(?:y|ow|ami)?\b/,
+      /\bmaterial[a-z]* dowodow[a-z]*\b/,
+      /\bsil[a-z]* dowodow[a-z]*\b/,
       /\bmail[a-z]*\b/,
       /\bsms[a-z]*\b/,
       /\bnagran[a-z]*\b/,

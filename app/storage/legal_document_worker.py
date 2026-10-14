@@ -33,6 +33,7 @@ DOCX_CT = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
 <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
 <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
 <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
 <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
 </Types>"""
@@ -52,6 +53,7 @@ DOCX_DOC_RELS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
 <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>
 <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
 </Relationships>"""
 
 DOCX_CORE = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -60,15 +62,23 @@ DOCX_CORE = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 DOCX_APP = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Lex Machina</Application></Properties>"""
 
+# Every style is based on Normal (one font in the whole document) and pPr precedes rPr
+# (CT_Style order); docDefaults give the font also to parts Word styles itself.
 DOCX_STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="23"/></w:rPr><w:pPr><w:spacing w:after="120" w:line="300" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr></w:style>
-<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:jc w:val="center"/><w:spacing w:after="240"/></w:pPr></w:style>
-<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:rPr><w:b/><w:sz w:val="25"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:rPr><w:b/><w:sz w:val="23"/></w:rPr></w:style>
-<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:pPr><w:ind w:left="720" w:right="720"/><w:spacing w:after="120"/></w:pPr><w:rPr><w:i/></w:rPr></w:style>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="23"/><w:lang w:val="pl-PL"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="120" w:line="300" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="23"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:after="240"/><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:jc w:val="left"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="100"/><w:jc w:val="left"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="25"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="160" w:after="80"/><w:jc w:val="left"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:sz w:val="23"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="120"/><w:ind w:left="720" w:right="720"/></w:pPr><w:rPr><w:i/></w:rPr></w:style>
 </w:styles>"""
+
+# Page number centred in the footer ("1", "2", ...): a field, so text extraction of
+# word/document.xml (the validator's comparison with the AST) is unchanged.
+DOCX_FOOTER = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>1</w:t></w:r><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>"""
 
 DOCX_SETTINGS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:zoom w:percent="100"/></w:settings>"""
 DOCX_FONT = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:font w:name="Arial"/></w:fonts>"""
@@ -84,9 +94,28 @@ ODT_MANIFEST = """<?xml version="1.0" encoding="UTF-8"?>
 <manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>
 </manifest:manifest>"""
 
+# The same layout as the DOCX: A4, 2.5 cm margins, justified body, centred page number,
+# numbered lists, right-aligned signature. Before, the styles named in content.xml were not
+# defined (signature not aligned, ordered lists as bullets, default margins and font).
 ODT_STYLES = """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3">
-<office:styles><style:default-style style:family="paragraph"><style:text-properties style:font-name="Arial" fo:font-size="11.5pt"/></style:default-style></office:styles>
+<office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.3">
+<office:font-face-decls><style:font-face style:name="Arial" svg:font-family="Arial"/></office:font-face-decls>
+<office:styles>
+<style:default-style style:family="paragraph"><style:paragraph-properties fo:margin-bottom="0.21cm" fo:line-height="125%" fo:text-align="justify"/><style:text-properties style:font-name="Arial" fo:font-size="11.5pt" fo:language="pl" fo:country="PL"/></style:default-style>
+<style:style style:name="Standard" style:family="paragraph"/>
+<style:style style:name="Title" style:family="paragraph"><style:paragraph-properties fo:text-align="center" fo:margin-bottom="0.42cm"/><style:text-properties fo:font-size="16pt" fo:font-weight="bold"/></style:style>
+<style:style style:name="Heading_20_1" style:display-name="Heading 1" style:family="paragraph" style:default-outline-level="1"><style:paragraph-properties fo:margin-top="0.42cm" fo:margin-bottom="0.21cm" fo:keep-with-next="always" fo:text-align="start"/><style:text-properties fo:font-size="14pt" fo:font-weight="bold"/></style:style>
+<style:style style:name="Heading_20_2" style:display-name="Heading 2" style:family="paragraph" style:default-outline-level="2"><style:paragraph-properties fo:margin-top="0.35cm" fo:margin-bottom="0.18cm" fo:keep-with-next="always" fo:text-align="start"/><style:text-properties fo:font-size="12.5pt" fo:font-weight="bold"/></style:style>
+<style:style style:name="Heading_20_3" style:display-name="Heading 3" style:family="paragraph" style:default-outline-level="3"><style:paragraph-properties fo:margin-top="0.28cm" fo:margin-bottom="0.14cm" fo:keep-with-next="always" fo:text-align="start"/><style:text-properties fo:font-size="11.5pt" fo:font-weight="bold"/></style:style>
+<style:style style:name="Quote" style:family="paragraph"><style:paragraph-properties fo:margin-left="1.27cm" fo:margin-right="1.27cm"/><style:text-properties fo:font-style="italic"/></style:style>
+<style:style style:name="Signature" style:family="paragraph"><style:paragraph-properties fo:text-align="end" fo:margin-top="0.85cm"/></style:style>
+<style:style style:name="PageBreak" style:family="paragraph"><style:paragraph-properties fo:break-before="page"/></style:style>
+<style:style style:name="Footer" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:font-size="9pt"/></style:style>
+<text:list-style style:name="Numbered"><text:list-level-style-number text:level="1" style:num-suffix="." style:num-format="1"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.27cm" fo:text-indent="-0.635cm" fo:margin-left="1.27cm"/></style:list-level-properties></text:list-level-style-number></text:list-style>
+<text:list-style style:name="Bulleted"><text:list-level-style-bullet text:level="1" text:bullet-char="•"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.27cm" fo:text-indent="-0.635cm" fo:margin-left="1.27cm"/></style:list-level-properties></text:list-level-style-bullet></text:list-style>
+</office:styles>
+<office:automatic-styles><style:page-layout style:name="pm1"><style:page-layout-properties fo:page-width="21cm" fo:page-height="29.7cm" fo:margin-top="2.5cm" fo:margin-bottom="2cm" fo:margin-left="2.5cm" fo:margin-right="2.5cm"/><style:footer-style><style:header-footer-properties fo:min-height="0.6cm" fo:margin-top="0.3cm"/></style:footer-style></style:page-layout></office:automatic-styles>
+<office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1"><style:footer><text:p text:style-name="Footer"><text:page-number text:select-page="current">1</text:page-number></text:p></style:footer></style:master-page></office:master-styles>
 </office:document-styles>"""
 ODT_META = """<?xml version="1.0" encoding="UTF-8"?><office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.3"><office:meta/></office:document-meta>"""
 ODT_SETTINGS = """<?xml version="1.0" encoding="UTF-8"?><office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.3"><office:settings/></office:document-settings>"""
@@ -103,6 +132,9 @@ DOCX_ALLOWED = {
     "word/numbering.xml",
     "word/_rels/document.xml.rels",
 }
+# Documents rendered before the footer existed stay valid (deanonymized and checked later).
+DOCX_REQUIRED = set(DOCX_ALLOWED)
+DOCX_ALLOWED = DOCX_ALLOWED | {"word/footer1.xml"}
 ODT_ALLOWED = {
     "mimetype",
     "content.xml",
@@ -139,30 +171,102 @@ def inline_text(nodes):
             raise ValueError("AST_INLINE_TYPE_UNSUPPORTED")
     return "".join(parts)
 
-def docx_runs(nodes):
+def docx_text_run(text, rpr=""):
+    xml_space = ' xml:space="preserve"' if text[:1].isspace() or text[-1:].isspace() else ""
+    return "<w:r>%s<w:t%s>%s</w:t></w:r>" % (rpr, xml_space, escape(text))
+
+def docx_runs(nodes, rpr=""):
     runs = []
     for node in nodes or []:
         t = node.get("type")
         text = node.get("text", "") if t == "text" else pii_ref_text(node) if t == "pii_ref" else node.get("label", "")
-        xml_space = ' xml:space="preserve"' if text[:1].isspace() or text[-1:].isspace() else ""
-        runs.append("<w:r><w:t%s>%s</w:t></w:r>" % (xml_space, escape(text)))
+        # A line break inside a text node (court address, parties) is a line break in the
+        # document, not a space; each line is its own w:t (text extraction joins them with "\n").
+        lines = text.split("\n")
+        for index, line in enumerate(lines):
+            if index:
+                runs.append("<w:r>%s<w:br/></w:r>" % rpr)
+            if line or len(lines) == 1:
+                runs.append(docx_text_run(line, rpr))
     return "".join(runs)
 
-def docx_paragraph(nodes, style=None, extra_ppr=""):
+def docx_paragraph(nodes, style=None, extra_ppr="", rpr=""):
     style_xml = '<w:pStyle w:val="%s"/>' % style if style else ""
     ppr = "<w:pPr>%s%s</w:pPr>" % (style_xml, extra_ppr) if style_xml or extra_ppr else ""
-    return "<w:p>%s%s</w:p>" % (ppr, docx_runs(nodes))
+    return "<w:p>%s%s</w:p>" % (ppr, docx_runs(nodes, rpr))
 
-def docx_block(block):
+# Text width of an A4 page with 2.5 cm margins, in twentieths of a point.
+DOCX_TEXT_WIDTH = 11906 - 2 * 1417
+
+# Layout of a letter or pleading (pisma-proste-v2 M4-struktura): place and date on the right,
+# the court or authority in the right half, the title centred in capitals, signature on the
+# right. The AST has no alignment, so the header (blocks before the first level-1 heading)
+# is recognised by its text; the text itself never changes (the validator compares it).
+PLACE_DATE_RE = re.compile(r"^\s*(?:\[Miejscowo\w*,? data\]|[A-ZĄĆĘŁŃÓŚŹŻ][\w .ąćęłńóśźżĄĆĘŁŃÓŚŹŻ-]{1,40},?\s+(?:dnia\s+)?(?:\d{1,2}[ .]|\[))", re.UNICODE)
+ADDRESSEE_RE = re.compile(
+    r"^\s*(?:Do\s|Sąd|Wojewódzki Sąd|Naczelny Sąd|Trybunał|Prokurat|Komornik|Urząd|Naczelnik|Zakład Ubezpieczeń|"
+    r"Kasa Rolniczego|Krajowa Izba|Samorządowe Kolegium|Dyrektor|Prezes|Rzecznik|Wójt|Burmistrz|Prezydent|Starosta|Wojewoda|"
+    r"Inspektor|Państwowa Inspekcja|Krajowa Informacja|Izba Administracji|Komendant|Sz\.\s*P\.|Szanown)", re.UNICODE)
+LETTER_TYPES = {"pleading", "letter"}
+
+def inline_plain(nodes):
+    return "".join(node.get("text", "") if node.get("type") == "text" else node.get("label", "") for node in nodes or [])
+
+def block_layout(ast):
+    """Per block index: None, "right", "half" (right half of the page) or "center"."""
+    layout = {}
+    blocks = ast.get("blocks") or []
+    kind = ast.get("documentType")
+    if kind in LETTER_TYPES:
+        title_seen = bool(ast.get("title"))
+        for index, block in enumerate(blocks):
+            t = block.get("type")
+            if t == "heading" and int(block.get("level", 1)) == 1:
+                layout[index] = "center"
+                title_seen = True
+                continue
+            if title_seen or t != "paragraph":
+                continue
+            text = inline_plain(block.get("content"))
+            if PLACE_DATE_RE.match(text) and len(text) < 90:
+                layout[index] = "right"
+            elif ADDRESSEE_RE.match(text):
+                layout[index] = "half"
+    elif kind == "contract":
+        for index, block in enumerate(blocks):
+            if block.get("type") != "heading":
+                continue
+            level = int(block.get("level", 1))
+            text = inline_plain(block.get("content")).strip()
+            if level == 1 or text.startswith("§"):
+                layout[index] = "center"
+    return layout
+
+def has_line_break(nodes):
+    return any("\n" in (node.get("text", "") or "") for node in nodes or [] if node.get("type") == "text")
+
+DOCX_ALIGN = {
+    "right": '<w:jc w:val="right"/>',
+    "half": '<w:ind w:left="%d"/><w:jc w:val="left"/>' % ((11906 - 2 * 1417) // 2),
+    "center": '<w:jc w:val="center"/>'
+}
+
+def docx_block(block, align=None):
     t = block.get("type")
+    extra = DOCX_ALIGN.get(align, "")
     if t == "heading":
-        return docx_paragraph(block.get("content"), "Heading%d" % int(block.get("level", 1)))
+        level = int(block.get("level", 1))
+        # The title of a letter: centred, in capitals (formatting, the text is unchanged).
+        return docx_paragraph(block.get("content"), "Heading%d" % level, extra, "<w:rPr><w:caps/></w:rPr>" if align == "center" and level == 1 else "")
     if t == "paragraph":
-        return docx_paragraph(block.get("content"))
+        # A justified line that ends with a manual break is stretched across the page.
+        if not extra and has_line_break(block.get("content")):
+            extra = '<w:jc w:val="left"/>'
+        return docx_paragraph(block.get("content"), None, extra)
     if t == "quote":
         return docx_paragraph(block.get("content"), "Quote")
     if t == "signature":
-        return docx_paragraph(block.get("content"), None, '<w:jc w:val="right"/>')
+        return docx_paragraph(block.get("content"), None, '<w:keepLines/><w:spacing w:before="480"/><w:jc w:val="right"/>')
     if t == "page_break":
         return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
     if t == "list":
@@ -174,39 +278,50 @@ def docx_block(block):
             out.append(docx_paragraph(nodes, None, '<w:ind w:left="720" w:hanging="360"/>'))
         return "".join(out)
     if t == "table":
+        # Declared columns of equal width within the margins: without w:tblGrid and cell
+        # widths LibreOffice dropped all but the first column and the table left the page.
+        source_rows = block.get("rows") or []
+        columns = max([len(row) for row in source_rows] or [1]) or 1
+        width = DOCX_TEXT_WIDTH // columns
         rows = []
-        for row in block.get("rows") or []:
+        for row in source_rows:
             cells = []
-            for cell in row:
-                body = "".join(docx_block(child) for child in cell.get("blocks") or [])
-                cells.append('<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>%s</w:tc>' % body)
-            rows.append("<w:tr>%s</w:tr>" % "".join(cells))
-        return '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>%s</w:tbl>' % "".join(rows)
+            for index in range(columns):
+                cell = row[index] if index < len(row) else {"blocks": []}
+                body = "".join(docx_block(child) for child in cell.get("blocks") or []) or "<w:p/>"
+                cells.append('<w:tc><w:tcPr><w:tcW w:w="%d" w:type="dxa"/></w:tcPr>%s</w:tc>' % (width, body))
+            rows.append("<w:tr><w:trPr><w:cantSplit/></w:trPr>%s</w:tr>" % "".join(cells))
+        grid = "".join('<w:gridCol w:w="%d"/>' % width for _ in range(columns))
+        return ('<w:tbl><w:tblPr><w:tblW w:w="%d" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
+                '<w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders>'
+                '<w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+                '<w:tblGrid>%s</w:tblGrid>%s</w:tbl><w:p/>') % (width * columns, grid, "".join(rows))
     raise ValueError("AST_BLOCK_TYPE_UNSUPPORTED")
 
 def docx_styles_for(profile):
     if profile == "lex-classic-tnr-v1":
-        return DOCX_STYLES.replace("Arial", "Times New Roman").replace('w:sz w:val="23"', 'w:sz w:val="24"')
+        return DOCX_STYLES.replace("Arial", "Times New Roman").replace('<w:sz w:val="23"/><w:lang', '<w:sz w:val="24"/><w:lang').replace('w:cs="Times New Roman"/><w:sz w:val="23"/>', 'w:cs="Times New Roman"/><w:sz w:val="24"/>')
     if profile == "lex-light-legal-design-v1":
-        return DOCX_STYLES.replace(
-            '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>',
-            '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="240" w:after="120"/><w:pBdr><w:bottom w:val="single" w:sz="4"/></w:pBdr></w:pPr></w:style>'
-        )
+        heading = '<w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:jc w:val="left"/><w:outlineLvl w:val="0"/></w:pPr>'
+        assert heading in DOCX_STYLES
+        # analizator-umow-v1 legal design: section titles with a grey bottom rule.
+        return DOCX_STYLES.replace(heading, '<w:pPr><w:keepNext/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1" w:color="808080"/></w:pBdr><w:spacing w:before="240" w:after="120"/><w:jc w:val="left"/><w:outlineLvl w:val="0"/></w:pPr>', 1)
     return DOCX_STYLES
 
 def odt_styles_for(profile):
     if profile == "lex-classic-tnr-v1":
-        return ODT_STYLES.replace("Arial", "Times New Roman").replace('fo:font-size="11.5pt"', 'fo:font-size="12pt"')
+        return ODT_STYLES.replace("Arial", "Times New Roman").replace('style:font-name="Times New Roman" fo:font-size="11.5pt"', 'style:font-name="Times New Roman" fo:font-size="12pt"')
     return ODT_STYLES
 
 def render_docx(ast):
     body = []
     if ast.get("title"):
         body.append(docx_paragraph(ast.get("title"), "Title"))
-    body.extend(docx_block(block) for block in ast.get("blocks") or [])
-    sect = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    layout = block_layout(ast)
+    body.extend(docx_block(block, layout.get(index)) for index, block in enumerate(ast.get("blocks") or []))
+    sect = '<w:sectPr><w:footerReference w:type="default" r:id="rId5"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="720" w:footer="567" w:gutter="0"/></w:sectPr>'
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>%s%s</w:body></w:document>') % ("".join(body), sect)
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>%s%s</w:body></w:document>') % ("".join(body), sect)
     entries = [
         ("[Content_Types].xml", DOCX_CT),
         ("_rels/.rels", DOCX_ROOT_RELS),
@@ -217,19 +332,30 @@ def render_docx(ast):
         ("word/settings.xml", DOCX_SETTINGS),
         ("word/fontTable.xml", DOCX_FONT),
         ("word/numbering.xml", DOCX_NUMBERING),
+        ("word/footer1.xml", DOCX_FOOTER),
         ("word/_rels/document.xml.rels", DOCX_DOC_RELS),
     ]
     return zip_bytes([(n, d.encode("utf-8") if isinstance(d, str) else d) for n, d in entries])
 
 def odt_inline(nodes):
-    return escape(inline_text(nodes))
+    # Lines of a text node with a line break each go into a span: deanonymization replaces
+    # aliases in p/h/span text, and a tail after <text:line-break/> would be left as is.
+    lines = inline_text(nodes).split("\n")
+    if len(lines) == 1:
+        return escape(lines[0])
+    return "<text:line-break/>".join("<text:span>%s</text:span>" % escape(line) for line in lines)
 
-def odt_block(block):
+ODT_ALIGN = {"right": "P_right", "half": "P_half", "center": "P_center"}
+
+def odt_block(block, align=None):
     t = block.get("type")
     if t == "heading":
-        return '<text:h text:outline-level="%d">%s</text:h>' % (int(block.get("level", 1)), odt_inline(block.get("content")))
+        level = int(block.get("level", 1))
+        style = "H%d_center" % level if align == "center" else "Heading_20_%d" % level
+        return '<text:h text:style-name="%s" text:outline-level="%d">%s</text:h>' % (style, level, odt_inline(block.get("content")))
     if t == "paragraph":
-        return "<text:p>%s</text:p>" % odt_inline(block.get("content"))
+        style = ODT_ALIGN.get(align) or ("P_left" if has_line_break(block.get("content")) else None)
+        return ('<text:p text:style-name="%s">%s</text:p>' % (style, odt_inline(block.get("content")))) if style else "<text:p>%s</text:p>" % odt_inline(block.get("content"))
     if t == "quote":
         return '<text:p text:style-name="Quote">%s</text:p>' % odt_inline(block.get("content"))
     if t == "signature":
@@ -238,24 +364,29 @@ def odt_block(block):
         return '<text:p text:style-name="PageBreak"/>'
     if t == "list":
         items = "".join("<text:list-item><text:p>%s</text:p></text:list-item>" % odt_inline(item) for item in block.get("items") or [])
-        return "<text:list>%s</text:list>" % items
+        return '<text:list text:style-name="%s">%s</text:list>' % ("Numbered" if block.get("ordered") else "Bulleted", items)
     if t == "table":
+        source_rows = block.get("rows") or []
+        columns = max([len(row) for row in source_rows] or [1]) or 1
         rows = []
-        for row in block.get("rows") or []:
+        for row in source_rows:
             cells = []
-            for cell in row:
-                cells.append("<table:table-cell>%s</table:table-cell>" % "".join(odt_block(child) for child in cell.get("blocks") or []))
+            for index in range(columns):
+                cell = row[index] if index < len(row) else {"blocks": []}
+                body = "".join(odt_block(child) for child in cell.get("blocks") or []) or "<text:p/>"
+                cells.append('<table:table-cell table:style-name="Cell" office:value-type="string">%s</table:table-cell>' % body)
             rows.append("<table:table-row>%s</table:table-row>" % "".join(cells))
-        return '<table:table table:name="Tabela">%s</table:table>' % "".join(rows)
+        return '<table:table table:name="Tabela" table:style-name="Table"><table:table-column table:number-columns-repeated="%d"/>%s</table:table>' % (columns, "".join(rows))
     raise ValueError("AST_BLOCK_TYPE_UNSUPPORTED")
 
 def render_odt(ast):
     body = []
     if ast.get("title"):
-        body.append('<text:h text:outline-level="1">%s</text:h>' % odt_inline(ast.get("title")))
-    body.extend(odt_block(block) for block in ast.get("blocks") or [])
+        body.append('<text:p text:style-name="Title">%s</text:p>' % odt_inline(ast.get("title")))
+    layout = block_layout(ast)
+    body.extend(odt_block(block, layout.get(index)) for index, block in enumerate(ast.get("blocks") or []))
     content = """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.3"><office:body><office:text>%s</office:text></office:body></office:document-content>""" % "".join(body)
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3"><office:automatic-styles><style:style style:name="Table" style:family="table"><style:table-properties style:width="16cm" table:align="margins"/></style:style><style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #000000"/></style:style><style:style style:name="P_right" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="end"/></style:style><style:style style:name="P_half" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:margin-left="8cm" fo:text-align="start"/></style:style><style:style style:name="P_left" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="start"/></style:style><style:style style:name="P_center" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H1_center" style:family="paragraph" style:parent-style-name="Heading_20_1"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:text-transform="uppercase"/></style:style><style:style style:name="H2_center" style:family="paragraph" style:parent-style-name="Heading_20_2"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H3_center" style:family="paragraph" style:parent-style-name="Heading_20_3"><style:paragraph-properties fo:text-align="center"/></style:style></office:automatic-styles><office:body><office:text>%s</office:text></office:body></office:document-content>""" % "".join(body)
     entries = [
         ("mimetype", ODT_MIMETYPE),
         ("content.xml", content.encode("utf-8")),
@@ -309,10 +440,17 @@ def extract_odt_text(entries):
     root = ET.fromstring(entries["content.xml"])
     text_ns = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
     tags = {"{%s}p" % text_ns, "{%s}h" % text_ns}
-    return "\n".join("".join(node.itertext()) for node in root.iter() if node.tag in tags)
+    breaks = {"{%s}line-break" % text_ns, "{%s}tab" % text_ns, "{%s}s" % text_ns}
+    def text_of(node):
+        parts = [node.text or ""]
+        for child in node:
+            parts.append(" " if child.tag in breaks else text_of(child))
+            parts.append(child.tail or "")
+        return "".join(parts)
+    return "\n".join(text_of(node) for node in root.iter() if node.tag in tags)
 
 def validate_docx(data):
-    names, entries = read_zip(data, DOCX_ALLOWED, DOCX_ALLOWED)
+    names, entries = read_zip(data, DOCX_ALLOWED, DOCX_REQUIRED)
     assert_no_external_relationships(entries)
     for name, raw in entries.items():
         if name.endswith(".xml") or name.endswith(".rels"):
@@ -354,6 +492,13 @@ def replace_text_nodes(root, tags, replacements):
         def repl(match):
             nonlocal replaced
             alias = match.group(0)
+            # A grammatical case on an alias without inflected forms (a firm, a court, a
+            # number): the base value, not a failed export.
+            if alias not in replacements and "|" in alias:
+                base = alias.split("|", 1)[0] + "]"
+                if base in replacements:
+                    replaced += 1
+                    return replacements[base]
             if alias not in replacements:
                 raise ValueError("DOCUMENT_ALIAS_UNKNOWN")
             replaced += 1
@@ -361,13 +506,31 @@ def replace_text_nodes(root, tags, replacements):
         node.text = ALIAS_RE.sub(repl, original)
     return replaced
 
+def read_template_part(data, name):
+    """One part of a firm's own template. A Word or LibreOffice template carries theme,
+    header, media and other parts the generated package does not, so the strict package
+    check (validate_docx) refused every real template and the firm's default template
+    failed every generation. Only the styles part is read; size limits stay."""
+    if len(data) > MAX_PACKAGE_BYTES:
+        raise ValueError("DOCUMENT_PACKAGE_TOO_LARGE")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data), "r")
+    except zipfile.BadZipFile:
+        raise ValueError("DOCUMENT_PACKAGE_INVALID")
+    with zf:
+        try:
+            info = zf.getinfo(name)
+        except KeyError:
+            return ""
+        if info.file_size > MAX_PACKAGE_BYTES:
+            raise ValueError("DOCUMENT_PACKAGE_EXPANSION_LIMIT")
+        return zf.read(name).decode("utf-8", errors="ignore")
+
 def extract_style_profile(fmt, data):
     if fmt == "docx":
-        _, entries, _ = validate_docx(data)
-        styles = entries["word/styles.xml"].decode("utf-8", errors="ignore").lower()
+        styles = read_template_part(data, "word/styles.xml").lower()
     elif fmt == "odt":
-        _, entries, _ = validate_odt(data)
-        styles = entries["styles.xml"].decode("utf-8", errors="ignore").lower()
+        styles = read_template_part(data, "styles.xml").lower()
     else:
         raise ValueError("DOCUMENT_FORMAT_UNSUPPORTED")
 

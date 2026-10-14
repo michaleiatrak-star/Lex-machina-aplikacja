@@ -9,6 +9,46 @@ const UNIT_KIND = {
     "pkt": "pint",
     "lit": "lett"
 };
+// Numer artykułu z indeksem górnym: PDF Dz.U. zapisuje „Art. 11¹.” jako „Art. 11[1].”
+// (pdf.js: „Art. 11 [1] .”), HTML jako <sup>; klucz kopii to zapis z cytatu: „11¹”, „151⁹a”.
+const TO_SUPERSCRIPT = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+/**
+ * Nagłówek artykułu. Indeks górny w PDF Dz.U.: „Art. 11[1].” / „Art. 11 [1] .” (pdf.js),
+ * „Art. 6 1 .” (cyfry indeksu oddzielone spacją, kropka po spacji — inne PDF), w HTML
+ * „Art. 300[71]a.” (litera za indeksem). Zakres „Art. 133–142. (pominięte)”. „Artykuł 5” w umowach.
+ */
+export function articleHeadingPattern() {
+    return /(?:^|\n)\s*(?:Art\.\s*(?<num>\d+[a-z]{0,4})(?:\s*\[\s*(?<sup>\d+)\s*(?<supIn>[a-z]{0,4})\s*\]\s*(?<supAfter>[a-z]{0,4})|\s+(?<supSpaced>\d{1,3})(?<supSpacedLetters>[a-z]{0,4})(?=\s+\.))?\s*\.|Artykuł\s+(?<treaty>\d+[a-z]{0,4})\.?|Art\.\s*(?<from>\d+)\s*[–—-]\s*(?<to>\d+)\s*\.)(?=\s)/gu;
+}
+// Zakres dłuższy niż to jest raczej błędem odczytu niż jednym wpisem t.j.
+const MAX_RANGE = 500;
+/** Numery artykułów z nagłówka; zakres „Art. 133–142.” daje każdy numer z zakresu. */
+export function articleIdsFromHeading(match) {
+    const group = match.groups ?? {};
+    if (group.from && group.to) {
+        const from = Number(group.from);
+        const to = Number(group.to);
+        if (to <= from || to - from > MAX_RANGE)
+            return [`${group.from}–${group.to}`];
+        return Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+    }
+    if (group.treaty)
+        return [group.treaty];
+    const digits = group.sup ?? group.supSpaced ?? "";
+    const sup = [...digits].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("");
+    // Litera w nawiasie („[71a]”, PDF) albo za nim („<sup>71</sup>a”, HTML).
+    return [`${group.num}${sup}${group.supIn || group.supAfter || group.supSpacedLetters || ""}`];
+}
+/** „11^1”, „11[1]”, „11 [1a]”, „art. 11¹” -> „11¹” / „11¹a”; inny zapis bez zmian (małe litery). */
+export function normalizeArticleId(raw) {
+    const value = raw.replace(/^art\.?\s*/iu, "").replace(/\s+/gu, "").toLocaleLowerCase("pl");
+    const marked = /^(\d+[a-z]{0,4})(?:\[(\d+)([a-z]{0,4})\]|\^(\d+)([a-z]{0,4}))$/u.exec(value);
+    if (!marked)
+        return value;
+    const digits = marked[2] ?? marked[4];
+    const letters = marked[3] ?? marked[5] ?? "";
+    return `${marked[1]}${[...digits].map((digit) => TO_SUPERSCRIPT[Number(digit)]).join("")}${letters}`;
+}
 const SUPERSCRIPT = {
     "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
     "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"
@@ -127,12 +167,11 @@ export function htmlArticleAnchors(html, articles) {
 }
 /** Kotwice stron PDF artykułów (numer -> "page=N"): strona pierwszego nagłówka, jak w splitArticles. */
 export function pdfArticleAnchors(pageTexts) {
-    const heading = /(?:^|\n)\s*(?:Art\.\s*(\d+[a-z]{0,4})\.|Artykuł\s+(\d+[a-z]{0,4})\.?)(?=\s)/gu;
     const anchors = {};
     pageTexts.forEach((page, index) => {
-        for (const match of page.matchAll(heading)) {
-            const article = (match[1] ?? match[2]);
-            anchors[article] ??= `page=${index + 1}`;
+        for (const match of page.matchAll(articleHeadingPattern())) {
+            for (const article of articleIdsFromHeading(match))
+                anchors[article] ??= `page=${index + 1}`;
         }
     });
     return anchors;

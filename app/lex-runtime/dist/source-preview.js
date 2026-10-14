@@ -78,6 +78,10 @@ function charsetOf(contentType, head) {
     const sniff = head.subarray(0, 4096).toString("latin1");
     return /<meta[^>]+charset=["']?([\w-]+)/i.exec(sniff)?.[1] ?? "utf-8";
 }
+/** A fetched body decoded by its declared charset (header, then <meta charset>), else UTF-8. */
+export function decodeBody(data, contentType) {
+    return decode(data, charsetOf(contentType, data));
+}
 function decode(data, charset) {
     try {
         return new TextDecoder(charset.toLowerCase()).decode(data);

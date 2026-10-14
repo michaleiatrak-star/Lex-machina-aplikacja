@@ -1,6 +1,6 @@
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { POLISH_DATE_SOURCE, polishDateToIso } from "./event-date-check.js";
-import { detectLegalReferences } from "./finalization-gate.js";
+import { caseSignatureRecord, detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACT_ALIAS = /\b(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)\b/giu;
 const SUPREME_COURT = /\b(?:SN|SĄD\s+NAJWYŻSZY|SĄDU\s+NAJWYŻSZEGO)\b/iu;
@@ -120,7 +120,8 @@ export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
             });
             continue;
         }
-        if (ledgerRecordForScope(ledger, reference.claim, referenceAsOf)) {
+        if (ledgerRecordForScope(ledger, reference.claim, referenceAsOf) ||
+            caseSignatureRecord(ledger, reference)) {
             skipped.push({
                 claim: reference.claim,
                 reason: "ALREADY_IN_LEDGER"
@@ -236,7 +237,7 @@ export function applyAutomaticVerificationMarkers(text, ledger, requestedAsOf) {
         }
         const referenceAsOf = detectHistoricalAsOf(reference.lineText) ??
             globalAsOf;
-        const record = ledgerRecordForScope(ledger, reference.claim, referenceAsOf);
+        const record = ledgerRecordForScope(ledger, reference.claim, referenceAsOf) ?? caseSignatureRecord(ledger, reference);
         if (!record) {
             continue;
         }

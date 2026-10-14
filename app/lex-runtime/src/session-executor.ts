@@ -1,4 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { waitsForUser } from "./workflow-wait.js";
+import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
@@ -17,6 +19,7 @@ import {
 import { genericWords } from "./privacy/generic-words.js";
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
+import { registryEnrichmentFor, type RegistryEnrichment } from "./privacy/registry-enrichment.js";
 import type { EvidenceImage } from "./document-evidence.js";
 import type { PseudonymizationVaultSnapshot } from "./privacy/pseudonymizer.js";
 import {
@@ -166,7 +169,8 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
-import { detectLegalReferences, type LegalReferenceKind } from "./finalization-gate.js";
+import { detectLegalReferences, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
+import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
@@ -177,6 +181,7 @@ import {
   ANALYSIS_INTENT,
   classifyTask,
   decideTask,
+  type DeliveredMaterial,
   parseActivationMatrix,
   parseCombinations,
   parseRedactionTest,
@@ -186,7 +191,8 @@ import {
   type RedactionTest,
   type SkillCombination,
   type TaskDecision,
-  type TaskRoute
+  type TaskRoute,
+  opponentPleadingTrigger
 } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
@@ -226,11 +232,34 @@ import {
   privacyRecognizerFor
 } from "./privacy/local-llm-ner.js";
 import {
+  earlierUserTurns,
   parseSkillSelectionEnvelope,
   SKILL_SELECTION_ENVELOPE_PREFIX,
   threadUserText
 } from "./skill-selection.js";
 import { withoutOutputContract } from "./document-output-contract.js";
+import { caseContentCorrectionPrompt, caseContentFindings, caseContentWarning, caseSignaturesIn, citedDocuments, courtAttributionFindings, courtCorrectionPrompt, courtWarning } from "./case-content-grounding.js";
+import { AUTHORITY_RULE, ROLE_LEGEND, SEMANTIC_JUDGE_SYSTEM, type SemanticVerdict, parseSemanticVerdicts, semanticCorrectionPrompt, semanticJudgePrompt, semanticProblems, semanticWarning } from "./case-semantic-check.js";
+
+// The judge: the competent authority's decision only, on passages labelled by role
+// (calibration on 1000 cases, 2026-10-13).
+// The question the cited documents are judged against: the latest user message whole, and for a
+// short follow-up ("a inny wyrok?") the two earlier ones that carry its criteria (court, period,
+// legal problem). Three trailing lines of the thread lost both.
+export function judgedQuestion(query: string): string {
+  const users = query
+    .split(/\n\n(?=Użytkownik: |Asystent: )/u)
+    .filter((part, index) => (index === 0 ? !part.startsWith("Asystent: ") : part.startsWith("Użytkownik: ")))
+    .map((part) => part.replace(/^Użytkownik: /u, "").trim())
+    .filter(Boolean);
+  const latest = users.at(-1) ?? query.trim();
+  const earlier = users.slice(0, -1).reverse().slice(0, 2);
+  return latest.length < 300 && earlier.length
+    ? `${latest}\n\n[Wcześniej w wątku, od najnowszego:]\n${earlier.map((turn) => turn.slice(0, 600)).join("\n")}`
+    : latest.slice(0, 2_000);
+}
+
+const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 
 export type SessionDocumentAttachment = {
   documentId: string;
@@ -366,6 +395,8 @@ export type SessionExecutionRequest = {
   };
 };
 
+// A follow-up this short ("ok, robisz to.") carries no task of its own.
+const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
 
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
@@ -820,6 +851,9 @@ export function publicEvidenceBundle(
 
 export type SessionExecutionInternalState = {
   verificationRecords: VerificationRecord[];
+  // The proceeding's own case numbers (not case law), for the file generated from this turn.
+  caseFileNumbers?: string[];
+  factAmounts?: string[];
   auditEvents: AuditEvent[];
   documentAliasDocumentIds?: string[];
 };
@@ -844,6 +878,8 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
+  taskMode?: "REDACTION";
   // The firm's default template the application used (none picked by the user).
   firmTemplateApplied?: { templateId: string; filename: string; kind: string };
   modeDecision?: QueryModeDecision;
@@ -945,6 +981,10 @@ export type SessionExecutionResponse = {
     closedCheckpoints:
       string[];
   };
+  // The answer ends a checkpoint with a question to the user (workflow-wait.ts).
+  waitingForUser?: boolean;
+  // The letter skill hands the matter to the other one (skill-switch.ts); the chat offers the switch.
+  skillSwitch?: SkillSwitchOffer;
   processAuto?: {
     maxSteps: number;
     stopped:
@@ -1279,7 +1319,9 @@ export interface SessionExecutor {
   summarizeThread?(request: ThreadSummaryRequest): Promise<string>;
   // The router's executive skill for a message without delivered material (AUTO).
   executiveSkillFor?(message: string): string | null;
-  pleadingRedactionFor?(message: string): boolean;
+  // The skills the task needs with the delivered files (entry and next stage of the matrix).
+  executiveSkillsWithMaterials?(message: string, attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): string[];
+  pleadingRedactionFor?(message: string, attachments?: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>): boolean;
 }
 
 /**
@@ -1351,12 +1393,49 @@ export class SafeSessionExecutor implements SessionExecutor {
   }
 
   /**
+   * The router's task with the delivered files (ACTIVATION-MATRIX: "dostarcza akta / pismo
+   * przeciwnika", "pismo procesowe + dostarczone akta"): the entry skill and its next stage.
+   * Empty when the table names no task.
+   */
+  /** Stage the request names after a stateful workflow's own skill (router `then`). */
+  statefulNextStage(question: string, materials: readonly DeliveredMaterial[], workflowSkill: string): string | null {
+    const routed = decideTask(this.taskRoutes(), this.activationMatrix(), question, [...materials], this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return routed?.primary === workflowSkill ? routed.then ?? null : null;
+  }
+
+  executiveSkillsWithMaterials(
+    message: string,
+    attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }>
+  ): string[] {
+    const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
+    const materials = attachments
+      .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+      .map((attachment) => classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n"), images: attachment.images?.length ?? 0 }));
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, materials, this.redactionTest(), {
+      skill: "pisma-proste-v2",
+      entries: schemaCatalog(this.registry, "pisma-proste-v2")
+    });
+    return decision ? [decision.primary, ...(decision.then ? [decision.then] : [])] : [];
+  }
+
+  /**
    * pisma-procesowe-v3 KROK 0 Test A: the message delivers a finished pleading and asks for
    * its form (shorter, firmer, smoother), handled by MOD-REDAKCJA without W1–W3.
    */
-  pleadingRedactionFor(message: string): boolean {
+  pleadingRedactionFor(
+    message: string,
+    // Files delivered with the message: an attached pleading ("popraw ten pozew" + file)
+    // is Test A as well; before, only text pasted into the chat was.
+    attachments: ReadonlyArray<{ chunks: ReadonlyArray<{ text: string }>; images?: readonly unknown[]; sourceScope?: string }> = []
+  ): boolean {
     const query = /[ąćęłńóśźż]/iu.test(message) ? message : restoreAccents(message, this.accentMap());
-    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, [], this.redactionTest(), {
+    const materials = attachments
+      .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+      .map((attachment) => classifyDocument({ text: attachment.chunks.map((chunk) => chunk.text).join("\n"), images: attachment.images?.length ?? 0 }));
+    const decision = decideTask(this.taskRoutes(), this.activationMatrix(), query, materials, this.redactionTest(), {
       skill: "pisma-proste-v2",
       entries: schemaCatalog(this.registry, "pisma-proste-v2")
     });
@@ -1446,7 +1525,7 @@ export class SafeSessionExecutor implements SessionExecutor {
    */
   async summarizeThread(request: ThreadSummaryRequest): Promise<string> {
     const vault = new PseudonymizationVault(request.privacySeed);
-    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology);
+    const pseudonymizer = new LocalPolishPseudonymizer(vault, this.chatRecognizerFor(request.model), this.personMorphology, this.registryForms());
     const transcript = [
       ...(request.previousSummary ? [`[DOTYCHCZASOWE STRESZCZENIE]\n${request.previousSummary}\n[KONIEC STRESZCZENIA]`] : []),
       "[WIADOMOŚCI DO STRESZCZENIA]",
@@ -1473,6 +1552,13 @@ export class SafeSessionExecutor implements SessionExecutor {
 
   // A local primary model keeps the text on this machine, so the chat does
   // not also wait for local-model PII detection before answering.
+  // One register cache per executor: a NIP/KRS is looked up once, not per message.
+  private registryEnrichment: RegistryEnrichment | undefined | null = null;
+  private registryForms(): RegistryEnrichment | undefined {
+    if (this.registryEnrichment === null) this.registryEnrichment = registryEnrichmentFor(this.legalFederationTools);
+    return this.registryEnrichment;
+  }
+
   private chatRecognizerFor(
     model: string
   ): NamedEntityRecognizer | undefined {
@@ -1496,7 +1582,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         this.chatRecognizerFor(
           request.model
         ),
-        this.personMorphology
+        this.personMorphology,
+        this.registryForms()
       );
     let protectedQuery: string;
     try {
@@ -1586,7 +1673,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         this.chatRecognizerFor(
           request.model
         ),
-        this.personMorphology
+        this.personMorphology,
+        this.registryForms()
       );
     let protectedQuery:
       string;
@@ -1788,6 +1876,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       PublicAuxiliarySourceItem[] =
       [];
     let snVerificationRequired = false;
+    // Texts the source tools returned in this turn (judgments, hit lists): what the
+    // answer may say a judgment is about (case-content-grounding).
+    const caseSourceTexts: string[] = [];
 
     // References in the message are checked by the Gate I runtime prelude
     // (ELI); no model is asked to extract them.
@@ -1883,6 +1974,17 @@ export class SafeSessionExecutor implements SessionExecutor {
         contextSelection.attachments,
         aliasRegistry
       );
+    // The proceeding's own case number (header of the case's documents, the user's own
+    // words) is not case law: G8 does not ask to verify it as a judgment.
+    for (const signature of ownCaseFileNumbers(
+      attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n")),
+      threadUserText(request.query)
+    )) {
+      ledger.addCaseFileNumber(signature);
+    }
+    for (const key of amountKeysIn([threadUserText(request.query), ...attachments.map((attachment) => attachment.chunks.map((chunk) => chunk.text).join("\n"))].join("\n"))) {
+      ledger.addFactAmount(key);
+    }
     // Chunks read by the case file tools are added after the model turn.
     const citationSources =
       [...contextSelection.citationSources];
@@ -2262,6 +2364,20 @@ export class SafeSessionExecutor implements SessionExecutor {
         skill: "pisma-proste-v2",
         entries: schemaCatalog(this.registry, "pisma-proste-v2")
       });
+      // A short follow-up with no task of its own ("ok, robisz to.", "tak, szukaj dalej")
+      // continues the thread's last routed request instead of dropping its executive skill.
+      if (!taskRoute && !materials.length && pathFacts.query.trim().length <= FOLLOW_UP_MAX_CHARS) {
+        for (const earlier of earlierUserTurns(request.query).slice(0, 3)) {
+          const inherited = decideTask(this.taskRoutes(), this.activationMatrix(), withoutOutputContract(earlier), [], this.redactionTest(), {
+            skill: "pisma-proste-v2",
+            entries: schemaCatalog(this.registry, "pisma-proste-v2")
+          });
+          if (inherited) {
+            taskRoute = { ...inherited, reason: `kontynuacja wątku (${inherited.reason})` };
+            break;
+          }
+        }
+      }
       const record = taskRoute ? this.registry.get(taskRoute.primary) : undefined;
       if (taskRoute && record) {
         const skill = record.name;
@@ -2335,7 +2451,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               recognisedDocuments.some((document) => document.evidence) ? "materiał zawiera dowody do oceny (dokumenty)" : "",
               recognisedDocuments.some((document) => document.category === "PISMO_PROCESOWE" || document.category === "ORZECZENIE")
                 ? "materiał zawiera pisma procesowe, akta"
-                : ""
+                : "",
+              opponentPleadingTrigger(pathFacts.query, recognisedDocuments)
             ].join("\n")
           }),
           contextResources
@@ -2702,6 +2819,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (federationResults.some((result) => result.content.includes("SN_WERYFIKACJA_WYMAGANA"))) {
           snVerificationRequired = true;
         }
+        for (const result of federationResults) caseSourceTexts.push(result.content);
         for (
           const result
           of federationResults
@@ -2750,6 +2868,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         if (verificationResults.some((result) => /SN_WERYFIKACJA_WYMAGANA/.test(result.content))) {
           snVerificationRequired = true;
         }
+        for (const result of verificationResults) caseSourceTexts.push(result.content);
 
         const byId = new Map(
           [
@@ -2797,7 +2916,11 @@ export class SafeSessionExecutor implements SessionExecutor {
       execution.workflowPlan.id === "CLIENT_REPORT_V1" || execution.workflowPlan.id === "SITUATION_REPORT_V1"
         ? execution.workflowPlan.id
         : null;
-    if (blueprintKind && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
+    // raport-klienta-v1 / raport-sytuacyjny-v2: "jeśli niejasne z kontekstu — zapytaj prawnika
+    // jednym pytaniem". A question to the user is the answer of this turn, not a report without
+    // its blueprint: no repair call and no block.
+    const reportQuestion = Boolean(blueprintKind) && waitsForUser(execution.output);
+    if (blueprintKind && !reportQuestion && !reportTools.acceptedFor(blueprintKind) && execution.output.trim() && !request.model.startsWith("local/")) {
       step("MODEL", "zapis raportu w formacie aplikacji");
       try {
         await this.providers.stream(request.provider, {
@@ -3064,7 +3187,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const domainSkillRead = audit.events.some(
       (event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2"
     );
-    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0);
+    const legalAnswer = (text: string) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
     const missingGates =
       mandatoryModel &&
       legalTurn &&
@@ -3077,6 +3200,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       !request.chronologyWorkflowContext &&
       !request.contractWorkflowContext &&
       !request.orderedCaseWorkflowContext &&
+      // Questions to the user (missing facts) are not the legal answer the gates belong to.
+      !waitsForUser(modelOutput) &&
       legalAnswer(modelOutput)
         ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
         : [];
@@ -3114,6 +3239,127 @@ export class SafeSessionExecutor implements SessionExecutor {
           missing: missingGates.map((item) => item.block),
           error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
         });
+      }
+    }
+
+    // What the answer says a judgment or interpretation is about must come from the text read
+    // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
+    // 1) Semantic: the connected model, in a separate context with only the question, the
+    //    answer's claim and the document, judges topic and claim; each verdict quotes the
+    //    document and the application checks the quote.
+    // 2) Lexical, for documents without a valid verdict: the user's topic words and quotations
+    //    given to it are in its text.
+    // One correcting round for both; what remains is shown to the user next to the answer.
+    if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
+      const topic = judgedQuestion(protectedQuery);
+      const correctionPrompt = [
+        ...(placeholderKey ? [placeholderKey] : []),
+        identityPrompt,
+        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+        ...pathSections
+      ].join("\n\n");
+      const correct = async (instruction: string): Promise<string> => {
+        try {
+          const corrected = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: correctionPrompt,
+            messages: [
+              { role: "user", content: protectedQuery },
+              { role: "assistant", content: modelOutput },
+              { role: "user", content: instruction }
+            ],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          return corrected.fullText.trim();
+        } catch {
+          return "";
+        }
+      };
+      const judge = async (answer: string) => {
+        const documents = citedDocuments(answer, caseSourceTexts);
+        if (!documents.length || request.model.startsWith("local/")) return null;
+        try {
+          const verdict = await this.providers.stream(request.provider, {
+            model: request.model,
+            systemPrompt: JUDGE_SYSTEM,
+            messages: [{ role: "user", content: semanticJudgePrompt(topic, documents, { roles: true }) }],
+            accountContinuity: "none",
+            reasoning: "none"
+          });
+          return parseSemanticVerdicts(verdict.fullText, documents);
+        } catch {
+          return null;
+        }
+      };
+      // The semantic verdict decides where there is one; the lexical check covers the documents
+      // without a valid verdict (local model, judge failure, a quote not in the document). Lexically
+      // a correct paraphrase can look like a missing word, so it does not override a verdict.
+      const review = async (answer: string) => {
+        const check = await judge(answer);
+        const judged = new Set((check?.verdicts ?? []).map((item) => item.signature.replace(/\s+/g, " ")));
+        return {
+          check,
+          semantic: check ? semanticProblems(check) : [],
+          lexical: caseContentFindings(answer, caseSourceTexts, topic).filter((item) => !judged.has(item.signature)),
+          courts: courtAttributionFindings(answer)
+        };
+      };
+      const size = (state: Awaited<ReturnType<typeof review>>) =>
+        state.semantic.length + state.lexical.flatMap((item) => item.missing).length + state.courts.length;
+      const first = await review(modelOutput);
+      let final = first;
+      if (size(first)) {
+        step("MODEL", `kontrola zgodności powołanych tekstów: ${[...first.semantic, ...first.lexical, ...first.courts].map((item) => item.signature).join(", ")}`);
+        const text = await correct(
+          [
+            ...(first.semantic.length ? [semanticCorrectionPrompt(first.semantic)] : []),
+            ...(first.lexical.length ? [caseContentCorrectionPrompt(first.lexical)] : []),
+            ...(first.courts.length ? [courtCorrectionPrompt(first.courts)] : [])
+          ].join("\n\n")
+        );
+        if (text) {
+          const second = await review(text);
+          if (size(second) < size(first)) {
+            modelOutput = text;
+            final = second;
+          }
+        }
+      }
+      if (first.check) {
+        audit.record("gate", "CASE_SEMANTIC_CHECK", final.semantic.length ? "DEGRADED" : "OK", {
+          verdicts: first.check.verdicts.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+          ...(first.check.rejected.length ? { rejectedQuotes: first.check.rejected } : {}),
+          corrected: first.semantic.map((item) => item.signature),
+          remaining: final.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`)
+        });
+      }
+      if (first.lexical.length) {
+        audit.record("gate", "CASE_CONTENT_GROUNDING", final.lexical.length ? "DEGRADED" : "OK", {
+          findings: first.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`),
+          remaining: final.lexical.map((item) => `${item.signature}: ${item.missing.join(", ")}`)
+        });
+      }
+      if (first.courts.length) {
+        audit.record("gate", "CASE_COURT_ATTRIBUTION", final.courts.length ? "DEGRADED" : "OK", {
+          findings: first.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`),
+          remaining: final.courts.map((item) => `${item.signature}: ${item.named}≠${item.actual}`)
+        });
+      }
+      const lexical = final.lexical;
+      const semantic: SemanticVerdict[] = final.semantic;
+
+      const warnings = [
+        ...(lexical.length ? [caseContentWarning(lexical)] : []),
+        ...(semantic.length ? [semanticWarning(semantic.filter((item) => !lexical.some((finding) => finding.signature === item.signature)))] : []),
+        ...(final.courts.length ? [courtWarning(final.courts)] : [])
+      ].filter(Boolean);
+      if (warnings.length) {
+        // Before the model's closing disclaimer, which stays the last element.
+        const parts = splitTrailingDisclaimer(modelOutput);
+        modelOutput = parts.disclaimer
+          ? `${parts.body.trimEnd()}\n\n${warnings.join("\n")}\n\n${parts.disclaimer}`
+          : `${modelOutput.trimEnd()}\n\n${warnings.join("\n")}`;
       }
     }
 
@@ -3286,8 +3532,12 @@ export class SafeSessionExecutor implements SessionExecutor {
         processedDocumentCitations.text,
         request.processWorkflowContext ||
         request.courtWorkflowContext ||
-        request.orderedCaseWorkflowContext
+        request.orderedCaseWorkflowContext ||
+        request.contractWorkflowContext ||
+        request.chronologyWorkflowContext ||
+        execution.workflowPlan.executionSkill
           ? {
+              checkpointTurn: true,
               ...(request.processWorkflowContext
                 ? {
                     processCheckpoint:
@@ -3394,7 +3644,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         : null;
     const reportBlueprintBlocked =
       requiredReportKind !== null &&
-      reportBlueprint === null;
+      reportBlueprint === null &&
+      !reportQuestion;
 
     audit.record(
       "gate",
@@ -3408,6 +3659,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         accepted:
           reportBlueprint?.kind ??
           null,
+        ...(reportQuestion ? { waitingForUser: true } : {}),
         toolEvents:
           reportAudit.length
       }
@@ -3917,7 +4169,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Structured output (document AST, report blueprint) is parsed by the app: no text around it.
     const freeText = !request.documentAstOutput && !reportBlueprint;
     const disclaimerTexts =
-      legalAnswer(processedDocumentCitations.text) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
+      // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
+      (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
       ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
       : modelDisclaimer.disclaimer
@@ -4066,16 +4319,29 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
     const nextContext = { question: pathFacts.query, materials: routingMaterials };
+    // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
+    // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
+    const workflowSkill = execution.workflowPlan.executionSkill;
     const next = taskRoute
       ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
-      : execution.workflowPlan.executionSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(execution.workflowPlan.executionSkill, null, this.skillCombinations(), nextContext)
+      : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
+        ? pipelineNext(workflowSkill, this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill), this.skillCombinations(), nextContext)
         : null;
+    // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
+    // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
+    const skillSwitch =
+      workflowOutput.mode === "ESCALATION_REQUIRED"
+        ? escalationOffer(restoredAnswer.text)
+        : workflowOutput.mode === "REDUCTION_OFFERED"
+          ? reductionOffer(restoredAnswer.text)
+          : null;
+    const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
       ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
+      ...(taskRoute?.modules?.some((module) => /MOD-REDAKCJA/u.test(module)) ? { taskMode: "REDACTION" as const } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),
       provider: request.provider,
@@ -4096,6 +4362,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? {
             answer:
               restoredAnswer.text,
+            ...(waitingForUser ? { waitingForUser: true } : {}),
+            ...(skillSwitch ? { skillSwitch } : {}),
             ...(restoredAnswer.restorations.length > 0
               ? { restorations: restoredAnswer.restorations }
               : {}),
@@ -4181,6 +4449,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       {
         value: {
           verificationRecords: verificationRecords.map((record) => ({ ...record })),
+          caseFileNumbers: ledger.caseFileNumbers(),
+          factAmounts: ledger.factAmountKeys(),
           auditEvents: audit.events.map((event) => ({
             ...event,
             ...(event.detail ? { detail: { ...event.detail } } : {})

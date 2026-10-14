@@ -1124,6 +1124,12 @@ export type SessionExecutionResponse = {
   contractWorkflow?: { caseId: string; revision: number; mode: string; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
   chronologyWorkflow?: { caseId: string; revision: number; stage: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
   orderedCaseWorkflow?: { workflowId: string; caseId: string; revision: number; status: string; nextCheckpoint: string | null; closedCheckpoints: string[] };
+  // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA).
+  taskMode?: "REDACTION";
+  // The answer ends a checkpoint with a question to the user.
+  waitingForUser?: boolean;
+  // The letter skill hands the matter to the other one; the chat offers the switch.
+  skillSwitch?: import("./skill-switch-offer.js").SkillSwitchOffer;
 };
 
 export type ProcessPleadingCheckpoint =
@@ -2341,6 +2347,8 @@ export function generateLegalDocument(
     filename?: string;
     // Save a draft naming its unverified references (user's decision).
     acceptUnverified?: boolean;
+    // The user's own pleading corrected in the chat (MOD-REDAKCJA), not the W1–W3 pipeline.
+    source?: "REDACTION";
   }
 ): Promise<
   GeneratedDocumentResponse

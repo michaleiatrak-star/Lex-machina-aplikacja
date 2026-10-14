@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import type { LexSkillRegistry } from "./registry.js";
+import { markdownSection } from "./skill-sections.js";
 import type { ReportBlueprintKind } from "./report-blueprint-tool-runtime.js";
 
 // A client or situation report without submit_report_blueprint ended as a technical
@@ -11,16 +12,9 @@ const SCHEMA_SOURCES: Readonly<Record<ReportBlueprintKind, { skill: string; reso
   SITUATION_REPORT_V1: {
     skill: "raport-sytuacyjny-v2",
     resource: "raport-sytuacyjny-v2/SKILL.md",
-    sections: [/^## BLUEPRINT JSON/mu, /^## WALIDACJA KOMPLETNOŚCI BLUEPRINTU/mu]
+    sections: [/^## BLUEPRINT JSON/u, /^## WALIDACJA KOMPLETNOŚCI BLUEPRINTU/u]
   }
 };
-
-function section(body: string, heading: RegExp): string {
-  const start = body.search(heading);
-  if (start < 0) return "";
-  const next = body.slice(start + 3).search(/^## /mu);
-  return body.slice(start, next < 0 ? undefined : start + 3 + next).trim();
-}
 
 export function blueprintRepairSchema(registry: LexSkillRegistry, kind: ReportBlueprintKind): string {
   const source = SCHEMA_SOURCES[kind];
@@ -31,7 +25,7 @@ export function blueprintRepairSchema(registry: LexSkillRegistry, kind: ReportBl
   } catch {
     body = "";
   }
-  const text = source.sections ? source.sections.map((heading) => section(body, heading)).filter(Boolean).join("\n\n") : body;
+  const text = source.sections ? source.sections.map((heading) => markdownSection(body, heading)).filter(Boolean).join("\n\n") : body;
   return text ? `# SCHEMAT BLUEPRINTU (${source.resource})\n\n${text}` : "";
 }
 

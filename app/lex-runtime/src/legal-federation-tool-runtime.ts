@@ -32,6 +32,7 @@ import {
   WebSearchError,
   assertPublicWebSearchQuery,
   classifyWebSearchHits,
+  webSearchLeads,
   type WebSearchProvider
 } from "./web-search.js";
 
@@ -495,9 +496,9 @@ const WEB_SEARCH_SCHEMA:
         WEB_SEARCH_TOOL,
       description:
         "General internet search (DuckDuckGo, or Brave when BRAVE_SEARCH_API_KEY is set). " +
-        "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3. Snippets are never evidence: " +
-        "for case law, use it with an abstract legal phrase to find signatures of recent rulings (not in SAOS), then verify them in the official registry; " +
-        "verify R1/R2A hits with the native verifiers and read R2B/R3 hits with fetch_auxiliary_legal_source.",
+        "Returns titles, URLs and snippets, each classified R1/R2A/R2B/R3, with leads extracted from them (case signatures with the tool that verifies them, Dz.U. references with ELI, dates of entry into force). Snippets are never evidence, but every result is worth a look: " +
+        "for case law, search with an abstract legal phrase (also site:sn.pl, site:orzeczenia.nsa.gov.pl, site:orzeczenia.ms.gov.pl) to find signatures of recent rulings (not in SAOS); results from LEX, Legalis, law portals and news sites are leads to signatures, amendments and dates of entry into force; " +
+        "verify every lead at its official source (gradation of sources: R1 > R2A > R2B > R3) before citing; read R2B/R3 pages with fetch_auxiliary_legal_source when needed.",
       parameters: {
         type: "object",
         additionalProperties:
@@ -1302,8 +1303,16 @@ export class LegalFederationToolRuntime {
               instruction:
                 dataForbidden
                   ? "Lex nie wysyła danych sprawy ani danych osobowych (PESEL, dowód, paszport, e-mail, telefon, symbole [PII:…]) do źródeł zewnętrznych. Zadaj zapytanie ogólne o przepis, orzeczenie lub instytucję, bez danych stron. Numery NIP, REGON i KRS kontrahenta możesz przekazać tylko do rejestru (krs, wl, ceidg, sudop)."
+                  : call.name === WEB_SEARCH_TOOL && policyBlocked
+                  ? /DISABLED/.test(message)
+                    ? "Wyszukiwarka jest wyłączona w ustawieniach aplikacji: brak tropów z sieci. Rejestry urzędowe (verify_case_reference, search_case_law, verify_legal_reference) działają dalej; nie podawaj sygnatur bez weryfikacji."
+                    : "Zapytanie do wyszukiwarki odrzucone (puste albo dłuższe niż 300 znaków): podaj krótkie zapytanie ogólne, bez danych sprawy."
+                  : call.name === FETCH_AUXILIARY_SOURCE_TOOL && message === "AUX_SOURCE_REQUIRES_R2B_R3"
+                  ? "To źródło urzędowe (R1/R2A): nie czytaj go przez fetch_auxiliary_legal_source. Przepis sprawdź verify_legal_reference (ELI), orzeczenie SN verify_case_reference, interpretację verify_interpretation, NSA/WSA search_case_law source=CBOSA."
                   : policyBlocked
                   ? "Source assessment was rejected by Lex source policy. Correct the URL/cross-check evidence; do not treat this as a source outage."
+                  : call.name === WEB_SEARCH_TOOL
+                  ? "Wyszukiwarka nie zwróciła wyników albo jest chwilowo niedostępna (to nie dowód braku orzeczeń ani przepisów). Zmień zapytanie (krótsze, inne słowa, operator site:) albo użyj rejestrów urzędowych: verify_case_reference, search_case_law, verify_legal_reference."
                   : "Do not infer absence of law from this failure. Use another verified source path or report the source as temporarily unavailable."
             })
         });
@@ -1636,9 +1645,17 @@ export class LegalFederationToolRuntime {
       };
       const textLimit =
         80_000;
+      // LEX/Legalis and other paid services answer with a login or offer page: its text is
+      // not the document, only what the search snippet showed can serve as a lead.
+      const loginWall =
+        fetched.text.length < 6_000 &&
+        /zaloguj|logowani|wykup|dostęp\s+(?:płatny|tylko)|subskrypc|abonament|zarejestruj/iu.test(fetched.text.slice(0, 6_000));
+      const leads = webSearchLeads(fetched.text.slice(0, textLimit));
       return JSON.stringify({
         status:
           "OK",
+        ...(loginWall ? { access: "LOGIN_OR_PAYWALL" } : {}),
+        ...(leads.signatures || leads.journals || leads.entryIntoForce ? { leads } : {}),
         classification:
           finalKnownTier
             ? "KNOWN_DOMAIN"
@@ -1692,7 +1709,10 @@ export class LegalFederationToolRuntime {
             textLimit
         },
         instruction:
-          "This is auxiliary R2B/R3 research material. Do not create VERIFIED/SUPPORTED from it and do not use it as the sole legal basis. For a legal proposition, obtain a real R1/R2A verification record for the same claim."
+          (loginWall
+            ? "This is a login or paywall page, not the document: do not quote it; use only the leads the search result showed. "
+            : "") +
+          "This is auxiliary R2B/R3 research material, a lead: verify every signature, Dz.U. reference and date it gives at the official source (leads[].verifyWith, verify_legal_reference / ELI) before citing. Do not create VERIFIED/SUPPORTED from it and do not use it as the sole legal basis. For a legal proposition, obtain a real R1/R2A verification record for the same claim."
       });
     }
 

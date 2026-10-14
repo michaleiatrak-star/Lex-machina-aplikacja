@@ -1,5 +1,11 @@
 # CHANGELOG — orzeczenia-sadowe-v2
 
+- 2.32 (2026-10-13e, AUDYT-2026-10-13e): Faza 1-Z pkt 7–8 — teza tylko ze stanowiska właściwego organu (nie zarzut, wniosek, stanowisko wnioskodawcy, zdanie odrębne); określenie sprawy z metryki porównywane z pytaniem przed lekturą tekstu, przy liście kandydatów odsiew po przedmiocie. Opis kontroli aplikacji: role fragmentów, przypięte określenie sprawy, korekta tylko przy NO_MATCH lub twierdzeniu nie w pełni wspartym, CASE_COURT_ATTRIBUTION. Kalibracja 1000 przypadków: trafność decyzji o korekcie 0,993, pominięte korekty 0.
+
+- 2.31 (2026-10-13d, AUDYT-2026-10-13d): Faza 1-Z — kontrola zgodności trafienia z pytaniem przed prezentacją: tożsamość i przedmiot sprawy z pobranego tekstu, treść orzeczenia tylko z dokumentu, każde kryterium pytania osobno, brak trafień = wprost (bez dopasowania zastępczego przy dopytaniu), zakaz zapowiedzi zamiast wyniku, analiza błędu z rejestru aplikacji; opis kontroli aplikacji: leksykalnej (CASE_CONTENT_GROUNDING) i znaczeniowej (CASE_SEMANTIC_CHECK — orzeczenia, interpretacje, TK/KIO/TSUE/UODO/ETPC, przepisy z ELI). ⛔ Klasa błędu z aplikacji 0.1.27: II SAB/Po 175/26 (informacja publiczna) podany jako orzeczenie o halucynacjach AI pełnomocnika.
+
+- 2.30 (2026-10-13c, AUDYT-2026-10-13c): ⛔ „Jedno trafienie w portalach 1–6 = zweryfikowane” obejmowało NSA/WSA wbrew regule snapshotu — teraz portale 1–2 i 4–6; CBOSA = 🟨 snapshot bez awansu, brak trafienia = OUT_OF_SCOPE. F-3: wyniki z LEX, Legalis i serwisów wtórnych nie są lekceważone — tropy (sygnatura i data, Dz.U. nowelizacji, data wejścia w życie) sprawdzane według gradacji źródeł. F-1: brak web_search to brak tropów z sieci, rejestry urzędowe działają dalej. Google `site:` → `web_search` z operatorem `site:` (wyszukiwarka hosta).
+
 - 2.29 (2026-10-11b, AUDYT-2026-10-11b): `tests/test_cbosa_parser.py` — ⛔ nie importował się od dodania (moduł w `tools/`, brak ścieżki) i wymagał pytesta spoza środowiska; nic go nie uruchamiało, więc błąd był niewidoczny. Przepisany na stdlib (unittest, te same asercje): 24/24; uruchamiany przez T48 zestawu audytu.
 
 - 2.28 (2026-10-10b, AUDYT-2026-10-10b): Faza 1-0: kolejność odkrywania (A znana sygnatura → rejestr; B nowsze → web_search + sn.pl/CBOSA; C starsze i SP → SAOS + web_search, SAOS jako cytator; D blokada sn.pl → SAOS tylko sprzed 2017); ze źródła wtórnego tylko sygnatura.

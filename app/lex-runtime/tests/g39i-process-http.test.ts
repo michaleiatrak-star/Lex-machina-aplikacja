@@ -196,6 +196,8 @@ function fixture() {
       rootDir: root
     });
 
+  // Test A stand-in: the synthetic corpus of this fixture has no router table.
+  const pleadingRedactionFor = vi.fn((message: string) => /popraw mój pozew/iu.test(message));
   const execute =
     vi.fn<
       SessionExecutor["execute"]
@@ -336,7 +338,8 @@ function fixture() {
       },
       reauthorizationManager,
       sessionExecutor: {
-        execute
+        execute,
+        pleadingRedactionFor
       },
       documentAstGenerator: { generate } as never,
       documentAuthoringService: { createReady } as never,
@@ -407,6 +410,7 @@ function fixture() {
     execute,
     generate,
     createReady,
+    pleadingRedactionFor,
     artifactId,
     readState,
     createIntent
@@ -739,6 +743,46 @@ describe(
         current.auth.close();
       }
     );
+
+    it("AUTO stops at a checkpoint that asks the user and leaves it open", async () => {
+      const current = fixture();
+      const base = current.execute.getMockImplementation()!;
+      current.execute.mockImplementation(async (input) => {
+        const result = await base(input);
+        return input.processWorkflowContext?.checkpoint === "CP-1b"
+          ? { ...result, answer: "Podaj datę doręczenia nakazu.", waitingForUser: true }
+          : result;
+      });
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner-wait", displayName: "Owner Wait", password: "G39I wait strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const createdCase = await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "AUTO wait" }).expect(201);
+      const caseId = String(createdCase.body.caseId);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/initialize`).set("Authorization", authorization).send({ mode: "AUTO" }).expect(201);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`).set("Authorization", authorization).send({}).expect(200);
+      const response = await request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({
+          query: "Przygotuj pismo procesowe w trybie automatycznym.",
+          provider: "openai",
+          model: "gpt-test",
+          primarySkill: DR,
+          mode: "PRAWNIK",
+          knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+        })
+        .expect(200);
+      expect(current.execute.mock.calls.map((call) => call[0].processWorkflowContext?.checkpoint)).toEqual(["CP-1a", "CP-1b"]);
+      expect(response.body.processAuto.stopped).toBe("WAITING_FOR_USER");
+      expect(response.body.processAuto.steps).toHaveLength(1);
+      expect(response.body.waitingForUser).toBe(true);
+      expect(response.body.processWorkflow.checkpoints["CP-1a"]).toBe("CLOSED");
+      expect(response.body.processWorkflow.checkpoints["CP-1b"]).not.toBe("CLOSED");
+      expect(String(response.body.answer)).toContain("## CP-1a");
+      expect(String(response.body.answer)).toContain("Podaj datę doręczenia nakazu.");
+    });
 
     it(
       "runs at most four AUTO semantic checkpoints while preserving deterministic applicability and encrypted state",
@@ -1135,6 +1179,42 @@ describe(
         .send(body);
       expect(rendered.status).toBe(201);
       expect(current.generate.mock.calls[0]?.[0]?.processRenderOnly).toEqual({ stage: expect.any(String) });
+      current.auth.close();
+    });
+    it("renders the user's own corrected pleading (MOD-REDAKCJA) without the pipeline, only for a Test A conversation", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner", displayName: "Owner", password: "G39I redaction strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const caseId = String((await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Redakcja" }).expect(201)).body.caseId);
+      const conversation = (first: string) =>
+        `Użytkownik: ${first}\n\nAsystent: RAPORT REDAKCJI\nPOZEW O ZAPŁATĘ ...\n\nUżytkownik: Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta.`;
+      const body = (first: string, source?: string) => ({
+        query: conversation(first),
+        provider: "openai",
+        model: "gpt-test",
+        primarySkill: DR,
+        mode: "PRAWNIK",
+        format: "docx",
+        documentType: "pleading",
+        styleProfile: "lex-classic-clean-v1",
+        attachments: [],
+        ...(source ? { source } : {})
+      });
+      const generate = (payload: Record<string, unknown>) =>
+        request(current.app).post(`/api/cases/${caseId}/artifacts/generate`).set("Authorization", authorization).send(payload);
+
+      await generate(body("Popraw mój pozew, żeby był bardziej stanowczy.")).expect(409, { error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
+      await generate(body("Napisz pozew o zapłatę 30 000 zł.", "REDACTION")).expect(409, { error: "PROCESS_PLEADING_PIPELINE_REQUIRED" });
+      expect(current.generate).not.toHaveBeenCalled();
+
+      const rendered = await generate(body("Popraw mój pozew, żeby był bardziej stanowczy.", "REDACTION"));
+      expect(rendered.status).toBe(201);
+      expect(current.generate.mock.calls[0]?.[0]?.processRenderOnly).toBeUndefined();
+      // Test A is checked on the earlier messages, not on the file request itself.
+      expect(current.pleadingRedactionFor).toHaveBeenLastCalledWith("Popraw mój pozew, żeby był bardziej stanowczy.");
       current.auth.close();
     });
     it("keeps the pleading text between stages, passes it to the next step and takes the user's versions", async () => {

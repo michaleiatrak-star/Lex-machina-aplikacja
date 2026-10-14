@@ -9,6 +9,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { SKILL_SELECTION_ENVELOPE_PREFIX } from "../src/skill-selection.js";
+import { markdownSection as fenceAwareSection } from "../src/skill-sections.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const registry = new LexSkillRegistry(CORPUS);
@@ -86,6 +87,10 @@ describe("mechanical mode: analizator-umow-v1 per AU checkpoint", () => {
     expect(prompt.trimEnd()).toMatch(/# ACTIVE CONTRACT ANALYSIS STATE — RUNTIME ENFORCED[\s\S]*Active AU checkpoint: AU-F0[\s\S]*$/u);
     expect(prompt.slice(prompt.indexOf("# ACTIVE CONTRACT ANALYSIS STATE"))).not.toContain("\n# MANDATORY PATH RESOURCE");
     expect(call.promptCacheTtl).toBe("1h");
+    // The executive skill's SKILL.md in full (not only its semantic contract), once, in the cached part.
+    expect(count(prompt, "# SKILL WYKONAWCZY: analizator-umow-v1")).toBe(1);
+    expect(count(prompt, "ST-INIT: zainicjuj podzbiór REJESTRU")).toBe(1);
+    expect(prompt.indexOf("# SKILL WYKONAWCZY: analizator-umow-v1")).toBeLessThan(call.systemPromptCachePrefix ?? 0);
   }, 120_000);
 
   it("AU-HYBRID loads HYBRID-VALIDATION in full (not a mention) at the end, with the state", async () => {
@@ -115,6 +120,21 @@ describe("mechanical mode: analizator-umow-v1 per AU checkpoint", () => {
     expect(first.systemPrompt).toContain("mod-kaucja-najem-lokalu");
     expect(later.systemPrompt).toContain("mod-kaucja-najem-lokalu");
   }, 120_000);
+
+});
+
+describe("fence-aware markdown section (skill-sections)", () => {
+  it("a heading inside a code block does not end the section", () => {
+    const text = ["# T", "## A", "a1", "```", "## 1. W BLOKU", "```", "a2", "### A.1", "a3", "## B", "b"].join("\n");
+    expect(fenceAwareSection(text, /^## A\b/u)).toBe(["## A", "a1", "```", "## 1. W BLOKU", "```", "a2", "### A.1", "a3"].join("\n"));
+    expect(fenceAwareSection(text, /^## B\b/u)).toBe("## B\nb");
+    expect(fenceAwareSection(text, /^## C\b/u)).toBe("");
+  });
+
+  it("a matching line inside a code block is not the section's heading", () => {
+    const text = ["```", "## A", "```", "## A", "real", "## B"].join("\n");
+    expect(fenceAwareSection(text, /^## A\b/u)).toBe("## A\nreal");
+  });
 });
 
 describe("AU checkpoints name and carry their part of the skill", () => {

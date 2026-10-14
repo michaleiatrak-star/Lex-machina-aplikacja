@@ -46,6 +46,10 @@ export function personPart(text, span) {
     const previous = before?.[before.length - 1]?.toLowerCase();
     if (previous && words.personOnlyTriggers.has(previous))
         return span;
+    // "M. Kozłowska", "S. Nowak": a capital with a dot before a name is an initial, not
+    // "m." (miasto) or a role abbreviation.
+    if (/^\p{Lu}\.\s*\p{Lu}/u.test(span.value))
+        return span;
     if (words.institutions.has(first))
         return null;
     let index = 0;

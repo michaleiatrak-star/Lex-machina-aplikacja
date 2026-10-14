@@ -9,3 +9,8 @@ export const WAIT_FOR_USER_INSTRUCTION =
 export function waitsForUser(answer: string | undefined | null): boolean {
   return typeof answer === "string" && answer.includes(WAIT_FOR_USER_MARKER);
 }
+
+// Process pleading in CHECKPOINT mode: the user confirms every step, but a step that cannot
+// be done without missing data is not closed (the runtime keeps the checkpoint open).
+export const WAIT_FOR_USER_CHECKPOINT_INSTRUCTION =
+  `Jeśli do wykonania tego punktu potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}; punkt pozostanie otwarty do odpowiedzi.`;

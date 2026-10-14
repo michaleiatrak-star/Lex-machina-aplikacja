@@ -5,6 +5,7 @@ import {
   lookup as dnsLookup
 } from "node:dns/promises";
 import https from "node:https";
+import { decodeBody } from "./source-preview.js";
 import {
   isIP
 } from "node:net";
@@ -27,7 +28,9 @@ const ALLOWED_CONTENT_TYPES = [
   "text/plain",
   "application/json",
   "application/xml",
-  "text/xml"
+  "text/xml",
+  // An opinion, a commentary or a court's PDF on a research page: text read locally.
+  "application/pdf"
 ] as const;
 
 const REDIRECT_STATUSES =
@@ -58,6 +61,9 @@ export type AuxiliaryResolvedTarget = {
   family:
     | 4
     | 6;
+  // Further public addresses of the host, tried when a connection fails
+  // (an IPv6 answer first on a machine without IPv6).
+  fallbacks?: AuxiliaryDnsAddress[];
 };
 
 export type AuxiliaryTransportResponse = {
@@ -448,7 +454,10 @@ export async function resolveAuxiliarySourceTarget(
     address:
       selected.address,
     family:
-      selected.family
+      selected.family,
+    ...(addresses.length > 1
+      ? { fallbacks: addresses.slice(1) }
+      : {})
   };
 }
 
@@ -639,6 +648,14 @@ const defaultTransport:
               );
             }
           );
+          // setTimeout above fires only on an idle socket: a server dripping bytes slowly kept
+          // the turn waiting. The whole response gets the same deadline.
+          const deadline = setTimeout(() => {
+            request.destroy();
+            fail(new AuxiliarySourceFetchError("Auxiliary source request exceeded its deadline.", "AUX_SOURCE_TIMEOUT"));
+          }, options.timeoutMs);
+          deadline.unref?.();
+          request.on("close", () => clearTimeout(deadline));
 
           request.on(
             "error",
@@ -717,11 +734,7 @@ function textFromBody(
   maxChars: number
 ): string {
   const raw =
-    Buffer.from(
-      body
-    ).toString(
-      "utf8"
-    );
+    decodeBody(Buffer.from(body), contentType);
 
   if (
     contentType
@@ -849,12 +862,7 @@ export function extractAuxiliarySourceDates(
   }
 
   const html =
-    Buffer.from(
-      body
-    )
-      .toString(
-        "utf8"
-      )
+    decodeBody(Buffer.from(body), contentType)
       .slice(
         0,
         500_000
@@ -898,6 +906,18 @@ export function extractAuxiliarySourceDates(
   };
 }
 
+// A PDF research source as text, extracted locally (never sent anywhere); a scan without a
+// text layer gives no text (AUX_SOURCE_EMPTY).
+async function pdfText(body: Uint8Array, maxChars: number): Promise<string> {
+  try {
+    const { LocalPdfTextExtractor } = await import("./pdf-text-extractor.js");
+    const extracted = await new LocalPdfTextExtractor().extract(new Uint8Array(body));
+    return extracted.text.normalize("NFKC").replace(/[ \t]+/g, " ").trim().slice(0, maxChars);
+  } catch {
+    return "";
+  }
+}
+
 export class SafeAuxiliarySourceFetcher {
   constructor(
     private readonly resolver:
@@ -928,6 +948,37 @@ export class SafeAuxiliarySourceFetcher {
     }
   ) {}
 
+  // A refused or unreachable address moves to the host's next one; HTTP
+  // statuses, limits and timeouts are answers and end the attempt.
+  private async connect(
+    target: AuxiliaryResolvedTarget
+  ): Promise<AuxiliaryTransportResponse> {
+    const { fallbacks = [], ...first } = target;
+    const candidates = [first, ...fallbacks.map((entry) => ({ ...first, ...entry }))];
+    for (let index = 0; ; index += 1) {
+      try {
+        return await this.transport(
+          candidates[index]!,
+          {
+            timeoutMs:
+              this.limits
+                .timeoutMs,
+            maxBytes:
+              this.limits
+                .maxBytes
+          }
+        );
+      } catch (error) {
+        const connectionFailed =
+          error instanceof AuxiliarySourceFetchError &&
+          error.code === "AUX_SOURCE_HTTP_FAILED";
+        if (!connectionFailed || index + 1 >= candidates.length) {
+          throw error;
+        }
+      }
+    }
+  }
+
   async fetch(
     rawUrl: string
   ): Promise<
@@ -950,16 +1001,8 @@ export class SafeAuxiliarySourceFetcher {
           this.resolver
         );
       const response =
-        await this.transport(
-          target,
-          {
-            timeoutMs:
-              this.limits
-                .timeoutMs,
-            maxBytes:
-              this.limits
-                .maxBytes
-          }
+        await this.connect(
+          target
         );
 
       if (
@@ -1053,13 +1096,14 @@ export class SafeAuxiliarySourceFetcher {
         );
       }
 
-      const text =
-        textFromBody(
-          response.body,
-          contentType,
-          this.limits
-            .maxTextChars
-        );
+      const text = /application\/pdf/iu.test(contentType)
+        ? await pdfText(response.body, this.limits.maxTextChars)
+        : textFromBody(
+            response.body,
+            contentType,
+            this.limits
+              .maxTextChars
+          );
       if (!text) {
         throw new AuxiliarySourceFetchError(
           "Auxiliary source returned no readable text.",

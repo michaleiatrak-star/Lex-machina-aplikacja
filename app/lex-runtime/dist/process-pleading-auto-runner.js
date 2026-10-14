@@ -45,6 +45,15 @@ export async function runBoundedProcessAutoSequence(args) {
             throw new Error("PROCESS_PLEADING_AUTO_MODE_REQUIRED");
         }
         const node = await args.execute(permit, state);
+        if (node.commit && node.waitingForUser) {
+            return {
+                state,
+                steps,
+                stopped: "WAITING_FOR_USER",
+                limitReached: false,
+                waitingResult: node.result
+            };
+        }
         if (!node.commit) {
             return {
                 state,

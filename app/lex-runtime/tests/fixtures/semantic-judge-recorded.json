@@ -1,0 +1,200 @@
+{
+ "haikuC": [
+  {
+   "id": "S1",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Po 175/26\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Dokument dotyczy bezczynności organu w udostępnieniu informacji publicznej, bez wzmianki o AI i halucynacjach.\",\"quote\":\"zobowiązuje organ do rozpoznania wniosku z dnia 3 marca 2026 r. w terminie 14 dni.\"}]}"
+  },
+  {
+   "id": "S2",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Uchwała wskazuje, że udział neosędziego nie powoduje automatycznie nieważności orzeczenia i wymaga oceny okoliczności sprawy, zgodnie z odpowiedzią.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy, w tym przebiegu procedury nominacyjnej.\"}]}"
+  },
+  {
+   "id": "S3",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Tekst stwierdza, że udział neosędziego nie powoduje automatycznie nieważności orzeczenia, a odpowiedź twierdzi odwrotnie.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy, w tym przebiegu procedury nominacyjnej.\"}]}"
+  },
+  {
+   "id": "S4",
+   "output": "{\"verdicts\":[{\"signature\":\"III SA/Wa 812/26\",\"topic\":\"MATCH\",\"claim\":\"PARTIAL\",\"reason\":\"Tekst mówi, że wyroków NSA nie ma w CBOSA oraz że sąd postanowił zawiadomić izbę; nie stwierdza ich nieistnienia ani dokonanego zawiadomienia.\",\"quote\":\"pełnomocnik skarżącej powołał w skardze cztery wyroki Naczelnego Sądu Administracyjnego, których nie ma w Centralnej Bazie Orzeczeń Sądów Administracyjnych.\"}]}"
+  },
+  {
+   "id": "S5",
+   "output": "{\"verdicts\":[{\"signature\":\"II FSK 1450/25\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"NSA oddalił zarzut bezskuteczności awizo i uznał, że pobyt adresata za granicą nie wyłącza skuteczności doręczenia zastępczego.\",\"quote\":\"Zarzut ten nie jest zasadny. Pobyt adresata za granicą nie wyłącza skuteczności doręczenia zastępczego dokonanego pod adresem wskazanym przez stronę\"}]}"
+  },
+  {
+   "id": "S6",
+   "output": "{\"verdicts\":[{\"signature\":\"0114-KDIP1-3.4012.455.2025.2.KP\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja uznaje stanowisko o pełnym odliczeniu za nieprawidłowe i przyznaje prawo do odliczenia 50% podatku naliczonego.\",\"quote\":\"W takim przypadku przysługuje prawo do odliczenia 50% kwoty podatku naliczonego, zgodnie z art. 86a ust. 1 ustawy o VAT.\"}]}"
+  },
+  {
+   "id": "S7",
+   "output": "{\"verdicts\":[{\"signature\":\"0111-KDIB1-3.4010.77.2025.1.JKU\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja dotyczy IP Box przy tworzeniu oprogramowania i wprost wyłącza ulgę badawczo-rozwojową z przedmiotu.\",\"quote\":\"Przedmiotem interpretacji nie jest ulga badawczo-rozwojowa.\"}]}"
+  },
+  {
+   "id": "S8",
+   "output": "{\"verdicts\":[{\"signature\":\"K 7/21\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Teza TK zgodnie z odpowiedzią uznaje art. 6 ust. 1 EKPC za niezgodny z Konstytucją w zakresie, w jakim sądy mogą oceniać zgodność przepisów o ustroju sądownictwa i wyborze członków KRS.\",\"quote\":\"w zakresie, w jakim pozwala krajowym lub międzynarodowym sądom na dokonywanie oceny zgodności z Konstytucją i z ustawami przepisów dotyczących ustroju sądownictwa\"}]}"
+  },
+  {
+   "id": "S9",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 415 KC\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Przepis opiera odpowiedzialność na winie (z winy swej), a nie na zasadzie ryzyka.\",\"quote\":\"Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia.\"}]}"
+  },
+  {
+   "id": "S10",
+   "output": "{\"verdicts\":[{\"signature\":\"KIO 2210/25\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Wyrok dotyczy wykluczenia wykonawcy za wprowadzenie w błąd (art. 109 ust. 1 pkt 8 Pzp), a zarzut ceny nie był przedmiotem odwołania.\",\"quote\":\"Zarzut dotyczący ceny oferty nie był przedmiotem odwołania.\"}]}"
+  },
+  {
+   "id": "S11",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Gd 40/26\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Dokument dotyczy skargi na bezczynność w udostępnieniu informacji publicznej, zgodnie z odpowiedzią.\",\"quote\":\"Skarga na bezczynność Wójta Gminy w przedmiocie udostępnienia informacji publicznej\"}]}"
+  },
+  {
+   "id": "S12",
+   "output": "{\"verdicts\":[{\"signature\":\"II Ca 990/26\",\"topic\":\"PARTIAL\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Pismo sporządziła strona działająca bez profesjonalnego pełnomocnika, a tekst nie zawiera krytyki profesjonalnego pełnomocnika.\",\"quote\":\"Powódka, działająca bez profesjonalnego pełnomocnika, wniosła apelację\"}]}"
+  },
+  {
+   "id": "S13",
+   "output": "{\"verdicts\":[{\"signature\":\"I SA/Kr 301/25\",\"topic\":\"PARTIAL\",\"claim\":\"SUPPORTED\",\"reason\":\"Tekst potwierdza zwrot kosztów przy umorzeniu, bo organ uwzględnił skargę w całości, jednak sąd jest WSA, a nie NSA.\",\"quote\":\"Organ w trybie art. 54 § 3 p.p.s.a. uwzględnił skargę w całości, co czyni postępowanie bezprzedmiotowym.\"}]}"
+  },
+  {
+   "id": "S14",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 118 KC\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Odpowiedź trafnie streszcza terminy sześcioletni i trzyletni oraz zasadę końca roku kalendarzowego.\",\"quote\":\"Jednakże koniec terminu przedawnienia przypada na ostatni dzień roku kalendarzowego, chyba że termin przedawnienia jest krótszy niż dwa lata.\"}]}"
+  },
+  {
+   "id": "S15",
+   "output": "{\"verdicts\":[{\"signature\":\"II CSKP 512/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Przytoczone stanowisko jest zdaniem odrębnym; większość SN nie podziela takiego poglądu.\",\"quote\":\"Sąd Najwyższy w tym składzie nie podziela poglądu, że art. 320 k.p.c. pozwala na rozłożenie na raty świadczenia z tytułu zachowku w każdej sytuacji\"}]}"
+  },
+  {
+   "id": "S16",
+   "output": "{\"verdicts\":[{\"signature\":\"43447/19\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"ETPC stwierdził naruszenie art. 6 ust. 1 z powodu udziału sędziów powołanych na wniosek KRS bez gwarancji niezależności, zgodnie z odpowiedzią.\",\"quote\":\"Trybunał stwierdza naruszenie art. 6 ust. 1 Konwencji w zakresie prawa do sądu ustanowionego ustawą.\"}]}"
+  }
+ ],
+ "haikuD": [
+  {
+   "id": "S1",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Po 175/26\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Dokument dotyczy bezczynności organu w informacji publicznej, a nie użycia AI przez pełnomocnika; tekst nie wspomina o AI ani halucynacjach.\",\"quote\":\"zobowiązuje organ do rozpoznania wniosku z dnia 3 marca 2026 r. w terminie 14 dni.\"}]}"
+  },
+  {
+   "id": "S2",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Tekst potwierdza, że udział neosędziego w składzie nie powoduje automatycznie nieważności, a ocena zależy od okoliczności sprawy.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy, w tym przebiegu procedury nominacyjnej.\"}]}"
+  },
+  {
+   "id": "S3",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Tekst mówi, że udział neosędziego nie powoduje automatycznie nieważności orzeczenia, a nie że każde orzeczenie z ich udziałem jest nieważne z mocy prawa.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy, w tym przebiegu procedury nominacyjnej.\"}]}"
+  },
+  {
+   "id": "S4",
+   "output": "{\"verdicts\":[{\"signature\":\"III SA/Wa 812/26\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"W uwadze na marginesie pełnomocnik przyznał użycie AI i brak weryfikacji sygnatur, a sąd postanowił zawiadomić izbę radców prawnych; sens zgodny z odpowiedzią.\",\"quote\":\"Pełnomocnik przyznał na rozprawie, że treść skargi przygotował przy użyciu narzędzia sztucznej inteligencji i nie zweryfikował sygnatur.\"}]}"
+  },
+  {
+   "id": "S5",
+   "output": "{\"verdicts\":[{\"signature\":\"II FSK 1450/25\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"NSA uznał zarzut za niezasadny i stwierdził, że pobyt za granicą nie wyłącza skuteczności doręczenia zastępczego; odpowiedź przypisuje sądowi stanowisko przeciwne.\",\"quote\":\"Pobyt adresata za granicą nie wyłącza skuteczności doręczenia zastępczego dokonanego pod adresem wskazanym przez stronę\"}]}"
+  },
+  {
+   "id": "S6",
+   "output": "{\"verdicts\":[{\"signature\":\"0114-KDIP1-3.4012.455.2025.2.KP\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja uznała stanowisko wnioskodawcy za nieprawidłowe i wskazała odliczenie 50% podatku naliczonego, a nie pełne odliczenie.\",\"quote\":\"W takim przypadku przysługuje prawo do odliczenia 50% kwoty podatku naliczonego, zgodnie z art. 86a ust. 1 ustawy o VAT.\"}]}"
+  },
+  {
+   "id": "S7",
+   "output": "{\"verdicts\":[{\"signature\":\"0111-KDIB1-3.4010.77.2025.1.JKU\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja dotyczy preferencyjnej stawki IP Box dla dochodu z oprogramowania, a wprost stwierdza, że nie dotyczy ulgi badawczo-rozwojowej.\",\"quote\":\"Przedmiotem interpretacji nie jest ulga badawczo-rozwojowa.\"}]}"
+  },
+  {
+   "id": "S8",
+   "output": "{\"verdicts\":[{\"signature\":\"K 7/21\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Wyrok TK uznał art. 6 ust. 1 EKPC za niezgodny z Konstytucją w zakresie, w jakim pozwala sądom oceniać zgodność przepisów ustroju sądownictwa, co odpowiada streszczeniu.\",\"quote\":\"w zakresie, w jakim pozwala krajowym lub międzynarodowym sądom na dokonywanie oceny zgodności z Konstytucją i z ustawami przepisów dotyczących ustroju sądownictwa\"}]}"
+  },
+  {
+   "id": "S9",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 415 KC\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Przepis opiera odpowiedzialność na winie („z winy swej”), a nie na zasadzie ryzyka niezależnie od winy.\",\"quote\":\"Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia.\"}]}"
+  },
+  {
+   "id": "S10",
+   "output": "{\"verdicts\":[{\"signature\":\"KIO 2210/25\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Wyrok dotyczy nakazu wykluczenia wykonawcy za wprowadzenie w błąd, a zarzut dotyczący ceny nie był przedmiotem odwołania; nie chodzi o rażąco niską cenę ani odrzucenie oferty.\",\"quote\":\"Zarzut dotyczący ceny oferty nie był przedmiotem odwołania.\"}]}"
+  },
+  {
+   "id": "S11",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Gd 40/26\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Dokument dotyczy skargi na bezczynność organu w udostępnieniu informacji publicznej, zgodnie z odpowiedzią.\",\"quote\":\"Skarga na bezczynność Wójta Gminy w przedmiocie udostępnienia informacji publicznej\"}]}"
+  },
+  {
+   "id": "S12",
+   "output": "{\"verdicts\":[{\"signature\":\"II Ca 990/26\",\"topic\":\"PARTIAL\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Dotyczy pisma wyglądającego na wygenerowane przez AI, ale autorką była strona działająca bez profesjonalnego pełnomocnika; odpowiedź przypisuje krytykę profesjonalnemu pełnomocnikowi.\",\"quote\":\"Powódka, działająca bez profesjonalnego pełnomocnika, wniosła apelację\"}]}"
+  },
+  {
+   "id": "S13",
+   "output": "{\"verdicts\":[{\"signature\":\"I SA/Kr 301/25\",\"topic\":\"PARTIAL\",\"claim\":\"SUPPORTED\",\"reason\":\"Dotyczy zwrotu kosztów przy umorzeniu, ale wydał go WSA, a nie NSA; tekst potwierdza zasądzenie zwrotu kosztów, gdy organ uwzględnił skargę.\",\"quote\":\"Skoro organ uwzględnił skargę, skarżącemu przysługuje zwrot kosztów (art. 201 § 1 p.p.s.a.).\"}]}"
+  },
+  {
+   "id": "S14",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 118 KC\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Przepis wskazuje sześć lat jako ogólny termin, trzy lata dla świadczeń okresowych i działalności gospodarczej oraz koniec terminu na koniec roku; zgodne z odpowiedzią.\",\"quote\":\"Jeżeli przepis szczególny nie stanowi inaczej, termin przedawnienia wynosi sześć lat, a dla roszczeń o świadczenia okresowe oraz roszczeń związanych z prowadzeniem działalności gospodarczej - trzy lata.\"}]}"
+  },
+  {
+   "id": "S15",
+   "output": "{\"verdicts\":[{\"signature\":\"II CSKP 512/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Większość SN nie podziela poglądu, że art. 320 k.p.c. pozwala rozłożyć zachowek na raty w każdej sytuacji; stanowisko o ratach bez zgody uprawnionego pochodzi ze zdania odrębnego, a nie z rozstrzygnięcia.\",\"quote\":\"Sąd Najwyższy w tym składzie nie podziela poglądu, że art. 320 k.p.c. pozwala na rozłożenie na raty świadczenia z tytułu zachowku w każdej sytuacji\"}]}"
+  },
+  {
+   "id": "S16",
+   "output": "{\"verdicts\":[{\"signature\":\"43447/19\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"ETPC stwierdził naruszenie art. 6 ust. 1 z powodu sędziów powołanych na wniosek KRS ukształtowanej bez zapewnienia niezależności; zgodne z odpowiedzią.\",\"quote\":\"Powołanie sędziów Izby, która rozpoznała sprawę skarżącego, nastąpiło na wniosek Krajowej Rady Sądownictwa ukształtowanej w sposób niezapewniający jej niezależności\"}]}"
+  }
+ ],
+ "sonnet3": [
+  {
+   "id": "S1",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Po 175/26\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Dokument dotyczy bezczynności organu w udostępnieniu informacji publicznej i nie zawiera żadnej wzmianki o AI ani halucynacjach.\",\"quote\":\"po rozpoznaniu sprawy ze skargi na bezczynność Burmistrza Miasta i Gminy w przedmiocie udostępnienia informacji publicznej\"}]}"
+  },
+  {
+   "id": "S2",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Teza uchwały mówi, że udział neosędziów nie powoduje automatycznie nieważności i wymaga oceny okoliczności sprawy.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy\"}]}"
+  },
+  {
+   "id": "S3",
+   "output": "{\"verdicts\":[{\"signature\":\"I KZP 3/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Tekst mówi wprost, że udział neosędziów nie powoduje automatycznie nieważności, a odpowiedź twierdzi odwrotnie.\",\"quote\":\"nie powoduje automatycznie nieważności orzeczenia; konieczna jest ocena okoliczności konkretnej sprawy\"}]}"
+  },
+  {
+   "id": "S4",
+   "output": "{\"verdicts\":[{\"signature\":\"III SA/Wa 812/26\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Sąd stwierdził, że pełnomocnik powołał nieistniejące w bazie wyroki NSA, przyznał użycie AI, a sąd zawiadomił izbę radców prawnych.\",\"quote\":\"Pełnomocnik przyznał na rozprawie, że treść skargi przygotował przy użyciu narzędzia sztucznej inteligencji i nie zweryfikował sygnatur.\"}]}"
+  },
+  {
+   "id": "S5",
+   "output": "{\"verdicts\":[{\"signature\":\"II FSK 1450/25\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"NSA uznał zarzut za niezasadny i przyjął, że pobyt za granicą nie wyłącza skuteczności doręczenia zastępczego, czyli odwrotnie niż w odpowiedzi.\",\"quote\":\"Pobyt adresata za granicą nie wyłącza skuteczności doręczenia zastępczego dokonanego pod adresem wskazanym przez stronę\"}]}"
+  },
+  {
+   "id": "S6",
+   "output": "{\"verdicts\":[{\"signature\":\"0114-KDIP1-3.4012.455.2025.2.KP\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja uznaje stanowisko za nieprawidłowe i przyznaje odliczenie tylko w wysokości 50%, a nie pełne.\",\"quote\":\"W takim przypadku przysługuje prawo do odliczenia 50% kwoty podatku naliczonego, zgodnie z art. 86a ust. 1 ustawy o VAT.\"}]}"
+  },
+  {
+   "id": "S7",
+   "output": "{\"verdicts\":[{\"signature\":\"0111-KDIB1-3.4010.77.2025.1.JKU\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Interpretacja dotyczy IP Box, a tekst wprost wyklucza ulgę badawczo-rozwojową jako przedmiot interpretacji.\",\"quote\":\"Przedmiotem interpretacji nie jest ulga badawczo-rozwojowa.\"}]}"
+  },
+  {
+   "id": "S8",
+   "output": "{\"verdicts\":[{\"signature\":\"K 7/21\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Wyrok TK uznał art. 6 ust. 1 EKPC za niezgodny z Konstytucją w zakresie, w jakim pozwala sądom oceniać przepisy o ustroju sądownictwa i KRS.\",\"quote\":\"w zakresie, w jakim pozwala krajowym lub międzynarodowym sądom na dokonywanie oceny zgodności z Konstytucją i z ustawami przepisów dotyczących ustroju sądownictwa\"}]}"
+  },
+  {
+   "id": "S9",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 415 KC\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Przepis przewiduje odpowiedzialność na zasadzie winy, a nie ryzyka niezależnego od winy.\",\"quote\":\"Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia.\"}]}"
+  },
+  {
+   "id": "S10",
+   "output": "{\"verdicts\":[{\"signature\":\"KIO 2210/25\",\"topic\":\"NO_MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Wyrok dotyczy wykluczenia wykonawcy za wprowadzenie w błąd, a zarzut cenowy nie był przedmiotem odwołania; nie nakazano odrzucenia oferty z powodu ceny.\",\"quote\":\"Zarzut dotyczący ceny oferty nie był przedmiotem odwołania.\"}]}"
+  },
+  {
+   "id": "S11",
+   "output": "{\"verdicts\":[{\"signature\":\"II SAB/Gd 40/26\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Wyrok WSA dotyczy skargi na bezczynność wójta w udostępnieniu informacji publicznej.\",\"quote\":\"Skarga na bezczynność Wójta Gminy w przedmiocie udostępnienia informacji publicznej\"}]}"
+  },
+  {
+   "id": "S12",
+   "output": "{\"verdicts\":[{\"signature\":\"II Ca 990/26\",\"topic\":\"PARTIAL\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Sprawa dotyczy użycia AI przez powódkę działającą bez profesjonalnego pełnomocnika, a nie krytyki profesjonalnego pełnomocnika.\",\"quote\":\"Powódka, działająca bez profesjonalnego pełnomocnika, wniosła apelację, w której powołała orzeczenia Sądu Najwyższego, których nie udało się odnaleźć.\"}]}"
+  },
+  {
+   "id": "S13",
+   "output": "{\"verdicts\":[{\"signature\":\"I SA/Kr 301/25\",\"topic\":\"PARTIAL\",\"claim\":\"SUPPORTED\",\"reason\":\"Dokument dotyczy zwrotu kosztów przy umorzeniu, lecz to postanowienie WSA, a nie NSA, co odpowiedź trafnie zaznacza; uzasadnienie zgadza się z tekstem.\",\"quote\":\"Skoro organ uwzględnił skargę, skarżącemu przysługuje zwrot kosztów (art. 201 § 1 p.p.s.a.).\"}]}"
+  },
+  {
+   "id": "S14",
+   "output": "{\"verdicts\":[{\"signature\":\"Art. 118 KC\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Odpowiedź wiernie oddaje terminy sześciu i trzech lat oraz zasadę końca terminu na koniec roku kalendarzowego.\",\"quote\":\"termin przedawnienia wynosi sześć lat, a dla roszczeń o świadczenia okresowe oraz roszczeń związanych z prowadzeniem działalności gospodarczej - trzy lata.\"}]}"
+  },
+  {
+   "id": "S15",
+   "output": "{\"verdicts\":[{\"signature\":\"II CSKP 512/24\",\"topic\":\"MATCH\",\"claim\":\"UNSUPPORTED\",\"reason\":\"Pogląd o rozłożeniu zachowku na raty bez zgody uprawnionego występuje tylko w zdaniu odrębnym, a skład większości go nie podzielił.\",\"quote\":\"przepis ten ma zastosowanie wyjątkowo i wymaga wykazania szczególnie uzasadnionego wypadku, którego w sprawie nie wykazano.\"}]}"
+  },
+  {
+   "id": "S16",
+   "output": "{\"verdicts\":[{\"signature\":\"43447/19\",\"topic\":\"MATCH\",\"claim\":\"SUPPORTED\",\"reason\":\"Trybunał stwierdził naruszenie art. 6 ust. 1 Konwencji z powodu powołania sędziów na wniosek KRS niezapewniającej niezależności.\",\"quote\":\"Powołanie sędziów Izby, która rozpoznała sprawę skarżącego, nastąpiło na wniosek Krajowej Rady Sądownictwa ukształtowanej w sposób niezapewniający jej niezależności\"}]}"
+  }
+ ]
+}

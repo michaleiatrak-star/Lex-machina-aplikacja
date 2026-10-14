@@ -9,8 +9,16 @@ export type SignatureCourt = "SN" | "NSA_WSA" | "POWSZECHNY" | "KIO" | "TK";
 /** Repertories of Sąd Najwyższy (the sn.pl database). */
 export const SN_REPERTORIES: ReadonlySet<string> = new Set([
   "CSK", "CSKP", "KK", "NKK", "UK", "NSNC", "NSNU", "NKN", "CNP", "CNPP", "SDI", "ZK", "CZP", "KZP",
-  "UZP", "PZP", "NSNZP", "SNO", "DSI", "DSP", "CZ", "KO", "KSP", "NSW"
+  "UZP", "PZP", "NSNZP", "SNO", "DSI", "DSP", "CZ", "KO", "KSP", "NSW",
+  // Izba Pracy i Ubezpieczeń Społecznych (II PSKP 12/23, III USK 5/22, I PZ 3/21, II PK 1/18).
+  "PSK", "PSKP", "PZ", "PK", "PO", "USK", "USKP", "UZ", "UO",
+  // Izba Kontroli Nadzwyczajnej i Spraw Publicznych (I NSNc 5/21, I NSNk 2/22, II NSNp 3/23, I NO 1/20).
+  "NSNK", "NSNP", "NSK", "NO", "NW", "NWW", "NZP",
+  // Izba Karna, Wojskowa, Odpowiedzialności Zawodowej (II KZ 1/22, III KS 2/21, WZ 1/20, ZO 5/22).
+  "KZ", "KS", "WZ", "WK", "ZO", "ZZ", "ZP"
 ]);
+// Izba Kontroli Nadzwyczajnej writes its repertories in mixed case ("I NSNc 5/21").
+const SN_MIXED_CASE = /^NSN(?:c|k|p|u|zp)$/u;
 const NSA = new Set(["OSK", "FSK", "GSK", "OZ", "FZ", "GZ", "OPS", "FPS", "GPS", "OW", "FW", "GW", "OPK", "FPK", "GPK"]);
 const COMMON = new Set([
   "C", "Ca", "ACa", "ACz", "Cz", "Ns", "Nc", "Co", "Cps", "Nkd", "Nsm", "RC", "RCa", "RCz",
@@ -31,7 +39,7 @@ export function courtOfSignature(value: string): SignatureCourt | null {
   if (repertory === "KIO") return "KIO";
   if (seat) return /^SAB?$/.test(repertory) ? "NSA_WSA" : null;
   if (NSA.has(repertory)) return "NSA_WSA";
-  if (repertory === repertory.toUpperCase() && SN_REPERTORIES.has(repertory)) return "SN";
+  if ((repertory === repertory.toUpperCase() || SN_MIXED_CASE.test(repertory)) && SN_REPERTORIES.has(repertory.toUpperCase())) return "SN";
   if (roman && COMMON.has(repertory)) return "POWSZECHNY";
   if (!roman && TK.has(repertory)) return "TK";
   return null;
