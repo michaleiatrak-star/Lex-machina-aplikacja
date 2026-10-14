@@ -262,6 +262,11 @@ export function WorkspaceManager({
     mode: DocumentProcessingMode;
     fixes: Array<{ page: number; from: string; to: string }>;
   } | null>(null);
+  // OCR lines of the last processed file to check against the scan (handwriting, stamps).
+  const [ocrReview, setOcrReview] = useState<{
+    item: WorkspaceItem;
+    lines: Array<{ page: number; text: string }>;
+  } | null>(null);
   const localAiReady = Boolean(localRuntime?.configured && localRuntime.state === "READY");
   useEffect(() => {
     let cancelled = false;
@@ -504,6 +509,8 @@ export function WorkspaceManager({
         (page.corrections ?? []).map((fix) => ({ page: page.page, from: fix.from, to: fix.to }))
       );
       setOcrFixes(fixes.length ? { item, mode, fixes } : null);
+      const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, text: line.text })));
+      setOcrReview(doubtful.length ? { item, lines: doubtful } : null);
       // OCR only: every page kept as written, no anonymization key.
       const result =
         await finalizeDocument(
@@ -1507,7 +1514,7 @@ export function WorkspaceManager({
       {notice ? <p className="workspace-notice">{notice}</p> : null}
       {ocrFixes ? (
         <div className="workspace-notice" role="status">
-          <strong>Korekty OCR (model lokalny) w „{ocrFixes.item.filename}”: {ocrFixes.fixes.length}</strong>
+          <strong>Korekty OCR (odstępy i model lokalny) w „{ocrFixes.item.filename}”: {ocrFixes.fixes.length}</strong>
           <ul>
             {ocrFixes.fixes.slice(0, 50).map((fix, index) => (
               <li key={index}>s. {fix.page}: „{fix.from}” → „{fix.to}”</li>
@@ -1521,6 +1528,18 @@ export function WorkspaceManager({
             Cofnij korekty (przetwórz ponownie bez nich)
           </button>{" "}
           <button type="button" onClick={() => setOcrFixes(null)}>Zamknij</button>
+        </div>
+      ) : null}
+      {ocrReview ? (
+        <div className="workspace-notice" role="status">
+          <strong>Do sprawdzenia w skanie „{ocrReview.item.filename}”: {ocrReview.lines.length} linii</strong>
+          <p>Pismo odręczne, pieczątki lub niepewny odczyt. W tekście dla modelu są oznaczone, a na obrazie strony zakryte; treść (np. data doręczenia, dopisek) sprawdź ręcznie.</p>
+          <ul>
+            {ocrReview.lines.slice(0, 50).map((line, index) => (
+              <li key={index}>s. {line.page}: „{line.text}”</li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => setOcrReview(null)}>Zamknij</button>
         </div>
       ) : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}

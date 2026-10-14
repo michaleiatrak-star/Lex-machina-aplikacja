@@ -1,3 +1,5 @@
+import { restoreOcrSpacing } from "./ocr-spacing.js";
+import { markOcrReview } from "./ocr-review.js";
 import { maskBoxes, protectedValues, wantsImage } from "./document-evidence.js";
 import { createHash } from "node:crypto";
 import { chunkDocumentPages } from "./document-ingestion.js";
@@ -262,9 +264,11 @@ export class LocalPrivateDocumentService {
         const onProgress = security?.onProgress;
         onProgress?.({ stage: "READING" });
         const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
-        const source = shouldCorrectOcr(security)
-            ? await this.correctOcr(extracted, onProgress)
-            : extracted;
+        const spaced = await this.restoreSpacing(extracted);
+        // Lines to check against the scan, marked after the corrections (which rebuild the text).
+        const source = await this.markReview(shouldCorrectOcr(security)
+            ? await this.correctOcr(spaced, onProgress)
+            : spaced);
         const documentId = `doc_${source.sha256.slice(0, 24)}`;
         const persistentDocument = Boolean(this.secureDocumentStore &&
             security?.caseId);
@@ -333,6 +337,9 @@ export class LocalPrivateDocumentService {
                     : {}),
                 ...(page.corrections?.length
                     ? { corrections: page.corrections }
+                    : {}),
+                ...(page.review?.length
+                    ? { review: page.review }
                     : {})
             })),
             suggestions
@@ -397,6 +404,54 @@ export class LocalPrivateDocumentService {
         };
     }
     /** OCR pages through the local model's correction (original words kept). */
+    /** Spaces PaddleOCR dropped ("ul.Pukowca15", "ipodlega"), without a model, on every OCR page. */
+    async restoreSpacing(source) {
+        const morphology = this.personMorphology;
+        if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
+            return source;
+        }
+        const known = (words) => morphology.knownWords(words);
+        let pages;
+        try {
+            pages = await Promise.all(source.pages.map((page) => restoreOcrSpacing(page, known)));
+        }
+        catch (error) {
+            process.stderr.write(`OCR_SPACING_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+            return source;
+        }
+        if (pages.every((page, index) => page === source.pages[index]))
+            return source;
+        return {
+            ...source,
+            pages,
+            sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+        };
+    }
+    /** Lines to check against the scan (handwriting, stamps): marked in the text and listed. */
+    async markReview(source) {
+        const morphology = this.personMorphology;
+        if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
+            return source;
+        }
+        const known = (words) => morphology.knownWords(words);
+        let pages;
+        try {
+            pages = await Promise.all(source.pages.map((page) => markOcrReview(page, known)));
+        }
+        catch (error) {
+            process.stderr.write(`OCR_REVIEW_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+            return source;
+        }
+        if (pages.every((page, index) => page === source.pages[index]))
+            return source;
+        return {
+            ...source,
+            pages,
+            sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+        };
+    }
     async correctOcr(source, onProgress) {
         if (!this.ocrCorrector || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
             return source;

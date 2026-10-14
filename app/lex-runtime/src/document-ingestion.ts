@@ -74,6 +74,15 @@ export type IngestedPage = {
   corrections?: OcrCorrection[];
   // Text corrected by the user by hand (a poor scan); OCR lines no longer match it.
   editedByUser?: boolean;
+  // Lines to check against the scan (handwriting, stamps, doubtful reading).
+  review?: OcrReviewLine[];
+};
+
+export type OcrReviewLine = {
+  line: number;
+  text: string;
+  score?: number;
+  reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS";
 };
 
 export type OcrCorrection = {

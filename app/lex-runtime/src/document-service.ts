@@ -2,6 +2,8 @@ import type {
   PersonMorphology
 } from "./privacy/person-morphology.js";
 import type { LocalOcrCorrector } from "./ocr-correction.js";
+import { restoreOcrSpacing } from "./ocr-spacing.js";
+import { markOcrReview } from "./ocr-review.js";
 import {
   maskBoxes,
   protectedValues,
@@ -17,7 +19,8 @@ import type {
   CompleteDocumentIngestor,
   DocumentIngestionResult,
   IngestedPage,
-  OcrCorrection
+  OcrCorrection,
+  OcrReviewLine
 } from "./document-ingestion.js";
 import {
   chunkDocumentPages
@@ -311,8 +314,10 @@ export type PublicDocumentReview = {
     source: IngestedPage["source"];
     confidence?: number;
     engine?: string;
-    // Words the local model fixed after OCR (from → to).
+    // OCR words fixed: spaces restored, and by the local model (from → to).
     corrections?: OcrCorrection[];
+    // Lines to check against the scan (handwriting, stamps, doubtful reading).
+    review?: OcrReviewLine[];
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
@@ -666,10 +671,13 @@ implements DocumentService {
       mediaType,
       onProgress
     ));
-    const source =
+    const spaced = await this.restoreSpacing(extracted);
+    // Lines to check against the scan, marked after the corrections (which rebuild the text).
+    const source = await this.markReview(
       shouldCorrectOcr(security)
-        ? await this.correctOcr(extracted, onProgress)
-        : extracted;
+        ? await this.correctOcr(spaced, onProgress)
+        : spaced
+    );
     const documentId =
       `doc_${source.sha256.slice(0, 24)}`;
 
@@ -771,6 +779,9 @@ implements DocumentService {
           : {}),
         ...(page.corrections?.length
           ? { corrections: page.corrections }
+          : {}),
+        ...(page.review?.length
+          ? { review: page.review }
           : {})
       })),
       suggestions
@@ -844,6 +855,52 @@ implements DocumentService {
   }
 
   /** OCR pages through the local model's correction (original words kept). */
+  /** Spaces PaddleOCR dropped ("ul.Pukowca15", "ipodlega"), without a model, on every OCR page. */
+  private async restoreSpacing(source: DocumentIngestionResult): Promise<DocumentIngestionResult> {
+    const morphology = this.personMorphology;
+    if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
+      return source;
+    }
+    const known = (words: string[]) => morphology.knownWords!(words);
+    let pages: IngestedPage[];
+    try {
+      pages = await Promise.all(source.pages.map((page) => restoreOcrSpacing(page, known)));
+    } catch (error) {
+      process.stderr.write(`OCR_SPACING_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+      return source;
+    }
+    if (pages.every((page, index) => page === source.pages[index])) return source;
+    return {
+      ...source,
+      pages,
+      sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+      chunks: chunkDocumentPages(pages, this.maxChunkChars)
+    };
+  }
+
+  /** Lines to check against the scan (handwriting, stamps): marked in the text and listed. */
+  private async markReview(source: DocumentIngestionResult): Promise<DocumentIngestionResult> {
+    const morphology = this.personMorphology;
+    if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
+      return source;
+    }
+    const known = (words: string[]) => morphology.knownWords!(words);
+    let pages: IngestedPage[];
+    try {
+      pages = await Promise.all(source.pages.map((page) => markOcrReview(page, known)));
+    } catch (error) {
+      process.stderr.write(`OCR_REVIEW_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+      return source;
+    }
+    if (pages.every((page, index) => page === source.pages[index])) return source;
+    return {
+      ...source,
+      pages,
+      sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+      chunks: chunkDocumentPages(pages, this.maxChunkChars)
+    };
+  }
+
   private async correctOcr(
     source: DocumentIngestionResult,
     onProgress?: ProgressReporter

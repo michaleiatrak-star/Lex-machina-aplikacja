@@ -581,8 +581,10 @@ export type DocumentReviewResponse = {
     source: "DIGITAL" | "OCR" | "BLANK";
     confidence?: number;
     engine?: string;
-    // Words the local model fixed after OCR.
+    // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
+    // Lines to check against the scan (handwriting, stamps, doubtful reading).
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
