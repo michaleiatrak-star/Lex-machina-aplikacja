@@ -171,12 +171,31 @@ describe("G8: the proceeding's own case number is not case law", () => {
     expect(before.result).toBe("BLOCKED");
     const marked = markUnverifiedReferences(answer, before, new Set(ledger.caseReferences()));
     expect(marked).toContain("II K 345/24 ⚠️");
-    expect(marked).toContain("Postępowanie o sygn. I Ns 77/25 może");
+    expect(marked).toContain("I Ns 77/25 ⚠️");
     expect(gate.evaluate(marked, ledger).result).toBe("DEGRADED");
     // A signature named nowhere in the case's materials or messages stays blocking.
     const invented = "Zgodnie z wyrokiem SN, sygn. akt III CZP 12/21, roszczenie wygasa.";
     const inventedReport = gate.evaluate(invented, ledger);
     expect(gate.evaluate(markUnverifiedReferences(invented, inventedReport, new Set(ledger.caseReferences())), ledger).result).toBe("BLOCKED");
+  });
+
+  it("checks a signature written without \"sygn.\": an official database's hit 🟨, the materials ⚠️, nowhere blocks", () => {
+    const answer = "Uchwała SN z 2021 r., III CZP 12/21, rozstrzyga zagadnienie.\nWyrok WSA II SAB/Po 175/26 dotyczy bezczynności.\nSkazanie w sprawie II K 345/24 wiąże sąd cywilny.";
+    expect(gate.evaluate(answer, new VerificationLedger()).result).toBe("BLOCKED");
+    const ledger = new VerificationLedger();
+    ledger.addRetrievedCase("II SAB/Po 175/26");
+    ledger.addCaseReference("II K 345/24");
+    const marked = markUnverifiedReferences(answer, gate.evaluate(answer, ledger), new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()));
+    expect(marked).toContain("II SAB/Po 175/26 🟨 [KOTWICA-URZĘDOWA]");
+    expect(marked).toContain("II K 345/24 ⚠️ [NIEWERYFIKOWANE]");
+    // The SN resolution came from no tool and no material: still blocking.
+    expect(marked).not.toContain("III CZP 12/21 🟨");
+    expect(gate.evaluate(marked, ledger).result).toBe("BLOCKED");
+    ledger.addRetrievedCase("III CZP 12/21");
+    const all = markUnverifiedReferences(answer, gate.evaluate(answer, ledger), new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()));
+    expect(gate.evaluate(all, ledger).result).toBe("DEGRADED");
+    // The application's own control note names a judgment; it is no claim.
+    expect(gate.evaluate("⚠️ Kontrola aplikacji: I KZP 3/24 dotyczy pytania.", new VerificationLedger()).result).toBe("PASS");
   });
 
   it("does not take a judgment the user asks about or a top court's judgment as the user's case", () => {

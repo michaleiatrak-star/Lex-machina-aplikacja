@@ -68,6 +68,54 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     expect(`${diagnostic.reason} ${diagnostic.description}`).not.toContain("TAJNE");
   });
 
+  it("niepoprawny AST: jedna runda naprawcza z błędem walidacji; blokada bramek bez ponowienia", async () => {
+    const queries: string[] = [];
+    const session = (answer: string, finalization = "PASS") => ({
+      sessionId: "session_test",
+      status: finalization === "PASS" ? "DRAFT_PRESENTABLE" : "BLOCKED",
+      provider: "openai",
+      model: "test",
+      primarySkill: "dr-01-prawo-cywilne",
+      answer,
+      finalization,
+      blockedReferences: [],
+      verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+      evidence: [],
+      audit: { result: "PASS", eventCount: 1, closed: true },
+      [SESSION_EXECUTION_INTERNAL]: { verificationRecords: [], auditEvents: [] }
+    });
+    const valid = JSON.stringify({ schemaVersion: "1", locale: "pl-PL", documentType: "letter", styleProfile: "lex-classic-clean-v1", blocks: [{ type: "paragraph", content: [{ type: "text", text: "ok" }] }] });
+    const request = {
+      query: "Wygeneruj pismo.",
+      provider: "openai",
+      model: "test",
+      primarySkill: "dr-01-prawo-cywilne",
+      mode: "PRAWNIK",
+      documentType: "letter",
+      styleProfile: "lex-classic-clean-v1",
+      aliases: { schemaVersion: 1, entries: [] }
+    } as const;
+    const repaired = await new LegalDocumentAstGenerator({
+      execute: async (input: { query: string }) => {
+        queries.push(input.query);
+        return session(queries.length === 1 ? "Oto pismo: Szanowni Państwo, ..." : valid);
+      }
+    } as unknown as Pick<SessionExecutor, "execute">).generate(request as never);
+    expect(repaired.ast.blocks).toHaveLength(1);
+    expect(queries).toHaveLength(2);
+    expect(queries[1]).toContain("BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: DOCUMENT_AST_JSON_MISSING");
+
+    let calls = 0;
+    const blocked = await new LegalDocumentAstGenerator({
+      execute: async () => {
+        calls += 1;
+        return session(valid, "BLOCKED");
+      }
+    } as unknown as Pick<SessionExecutor, "execute">).generate(request as never).catch((error: unknown) => error);
+    expect(blocked).toBeInstanceOf(DocumentAstSessionBlockedError);
+    expect(calls).toBe(1);
+  });
+
   it("ujednolica kształt bloków (AST_INLINE_ARRAY_INVALID) bez zmiany treści", () => {
     const variants = [
       [{ type: "paragraph", content: "ok" }],

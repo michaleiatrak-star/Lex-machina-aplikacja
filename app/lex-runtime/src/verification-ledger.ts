@@ -190,6 +190,18 @@ export class VerificationLedger {
     return [...this.caseReferenceKeys];
   }
 
+  // Signatures an official database returned in this turn (search hits, fetched documents).
+  private readonly retrievedCaseKeys = new Set<string>();
+
+  addRetrievedCase(signature: string): void {
+    const key = caseFileKey(signature);
+    if (key) this.retrievedCaseKeys.add(key);
+  }
+
+  retrievedCases(): string[] {
+    return [...this.retrievedCaseKeys];
+  }
+
   // Values the case itself states (the user's messages, the case's documents): a fact of the
   // matter ("pozew o 48 000 zł"), not a statutory rate or term to verify.
   private readonly factAmounts = new Set<string>();

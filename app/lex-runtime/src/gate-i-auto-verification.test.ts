@@ -234,7 +234,7 @@ describe(
     );
 
     it(
-      "does not guess a court family for a bare signature",
+      "reads the court family from a Supreme Court repertory without the court's name",
       () => {
         const plan =
           planAutomaticLegalVerification(
@@ -242,13 +242,17 @@ describe(
             new VerificationLedger()
           );
 
-        expect(plan.calls)
-          .toHaveLength(0);
+        expect(plan.calls[0]?.name)
+          .toBe("verify_case_reference");
+        expect(plan.calls[0]?.input)
+          .toMatchObject({
+            signature: "III CZP 25/11",
+            courtFamily: "SN"
+          });
+        // A bare SN signature, no "sygn.": the same lookup.
         expect(
-          plan.skipped[0]?.reason
-        ).toBe(
-          "COURT_FAMILY_AMBIGUOUS"
-        );
+          planAutomaticLegalVerification("Uchwała z 2011 r., III CZP 25/11.", new VerificationLedger()).calls[0]?.input
+        ).toMatchObject({ signature: "III CZP 25/11", courtFamily: "SN" });
       }
     );
 
@@ -312,11 +316,11 @@ describe(
     );
 
     it(
-      "does not guess the court family for a bare signature",
+      "does not guess the court family for a common-court signature",
       () => {
         const plan =
           planAutomaticLegalVerification(
-            "Por. sygn. III CZP 25/11.",
+            "Por. sygn. I C 900/26.",
             new VerificationLedger()
           );
 

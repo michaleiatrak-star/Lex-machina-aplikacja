@@ -169,6 +169,7 @@ import {
   evaluateModelTaskOwnershipGate,
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
+import { signaturesIn } from "./court-of-signature.js";
 import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
@@ -1546,7 +1547,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
     let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
     const gate = new FinalizationGate().evaluate(text, ledger);
-    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences())), gate), ledger).text;
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate), ledger).text;
     return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
@@ -3486,6 +3487,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       );
     // HARD GATE: an unverified statute or Dz.U. reference is shown only with
     // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
+    // Signatures an official database returned in this turn (CBOSA, SAOS, the courts' portal,
+    // TK, SN): real, though not verified in full; a signature from nowhere stays blocking.
+    for (const { signature } of signaturesIn(caseSourceTexts.join("\n"))) ledger.addRetrievedCase(signature);
     const preFinalization =
       new FinalizationGate().evaluate(
         citedAnswer.text,
@@ -3501,7 +3505,8 @@ export class SafeSessionExecutor implements SessionExecutor {
               markUnverifiedReferences(
                 citedAnswer.text,
                 preFinalization,
-                new Set(ledger.caseReferences())
+                new Set(ledger.caseReferences()),
+                new Set(ledger.retrievedCases())
               ),
               preFinalization
             )
