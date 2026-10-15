@@ -40,6 +40,7 @@ describe("firm names: gaps found by the 5000-mention comparison corpus", () => {
     expect(values("Kancelaria Adwokatów i Radców Prawnych\nCiecierski Rak Spółka Komandytowa")).toEqual(["Ciecierski Rak"]);
     expect(values("Radców Prawnych\nCiecierski Rak Sp. k. Oddział Katowice")).toEqual(["Ciecierski Rak"]);
     expect(values("umowa z Nordic Trade\nGroup sp. z o.o.")).toEqual(["Nordic Trade\nGroup"]);
+    expect(values("PEŁNOMOCNICTWO\n\nZarząd Sanbud S.A. podjął uchwałę.")).toEqual(["Sanbud"]);
   });
 
   it("legal form in capitals (headings, KRS extracts)", () => {

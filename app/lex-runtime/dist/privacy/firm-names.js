@@ -25,7 +25,8 @@ const NOT_A_NAME = new Set([
     "państwowy", "państwowe", "polski", "polska", "rzeczypospolitej", "pozwanym", "pozwaną", "spółkom", "krs", "nip", "regon",
     // The legal form itself, written with capitals ("Ciecierski Rak Spółka Komandytowa").
     "komandytowa", "komandytowej", "komandytową", "akcyjna", "akcyjnej", "akcyjną", "jawna", "jawnej", "jawną",
-    "partnerska", "partnerskiej", "partnerską", "cywilna", "cywilnej", "cywilną"
+    "partnerska", "partnerskiej", "partnerską", "cywilna", "cywilnej", "cywilną",
+    "zarząd", "zarządu", "zarządem", "zarządzie"
 ]);
 const NAME_WORD = /^(?:[„"»]?\p{Lu}[\p{L}\d&'’.-]*[”"«]?|\d[\p{L}\d-]*|i|&)$/u;
 /** The firm name right before a legal form: up to four name words, back to a role word. */
