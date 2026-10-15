@@ -3,6 +3,7 @@ import {
   ApiError,
   deanonymizeUpload,
   finalizeDocument,
+  getVisionOcrStatus,
   type PagePrivacyDirective,
   getProcessingProgress,
   joinSharedKey,
@@ -20,7 +21,6 @@ import {
   type StoredUploadResponse,
   type LocalModelsResponse,
   getLocalModels,
-  startLocalModel
 } from "./api.js";
 import {
   filterWorkspaceItems,
@@ -63,6 +63,7 @@ import {
   processingModeLabel,
   processingModeOptions,
   processingModeUsesLocalAi,
+  processingModeUsesVision,
   type DocumentProcessingMode
 } from "./document-processing-mode.js";
 
@@ -256,7 +257,6 @@ export function WorkspaceManager({
   const modeFor = (item: WorkspaceItem): DocumentProcessingMode =>
     modeByItem[item.itemId] ?? DEFAULT_DOCUMENT_PROCESSING_MODE;
   const [localRuntime, setLocalRuntime] = useState<LocalModelsResponse["runtime"] | null>(null);
-  const [localAiStarting, setLocalAiStarting] = useState(false);
   const [localAiMessage, setLocalAiMessage] = useState("");
   // The processed file waiting for the user's confirmation in its preview.
   const [privacyPreview, setPrivacyPreview] = useState<{
@@ -279,38 +279,6 @@ export function WorkspaceManager({
     };
   }, [refreshToken]);
 
-  // Ticking "z lokalnym AI" with the model stopped offers to start it; the
-  // option works as soon as the model reports READY.
-  async function startLocalAi(): Promise<void> {
-    const modelId = localRuntime?.selectedModelId;
-    if (!modelId) {
-      setLocalAiMessage("Nie wybrano modelu lokalnego - zainstaluj go w Ustawienia → Modele.");
-      return;
-    }
-    setLocalAiStarting(true);
-    setLocalAiMessage("Uruchamiam model lokalny…");
-    try {
-      const started = await startLocalModel(modelId);
-      setLocalRuntime(started.runtime);
-      const deadline = Date.now() + 10 * 60 * 1000;
-      let runtime = started.runtime;
-      while (!(runtime.configured && runtime.state === "READY") && Date.now() < deadline) {
-        setLocalAiMessage(
-          runtime.state === "PROVISIONING" ? "Przygotowuję model lokalny…" : "Uruchamiam model lokalny…"
-        );
-        await new Promise((resolve) => window.setTimeout(resolve, 2000));
-        runtime = (await getLocalModels()).runtime;
-        setLocalRuntime(runtime);
-      }
-      setLocalAiMessage(
-        runtime.state === "READY" ? "" : "Model lokalny nie uruchomił się w 10 minut - sprawdź Ustawienia → Modele."
-      );
-    } catch (failure) {
-      setLocalAiMessage(`Nie udało się uruchomić modelu lokalnego: ${failure instanceof Error ? failure.message : String(failure)}`);
-    } finally {
-      setLocalAiStarting(false);
-    }
-  }
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [artifacts, setArtifacts] = useState<CaseArtifact[]>([]);
@@ -447,11 +415,21 @@ export function WorkspaceManager({
     // false = run the same mode again without the AI's OCR corrections
     ocrFix = true
   ): Promise<void> {
-    if (processingModeUsesLocalAi(mode) && !localAiReady) {
+    // The text model is started by the runtime right before the anonymization; it only has to be installed.
+    if (processingModeUsesLocalAi(mode) && !localRuntime?.configured) {
       setLocalAiMessage(
-        `„${processingModeLabel(mode)}” wymaga uruchomionego modelu lokalnego - użyj „Uruchom model lokalny”.`
+        `„${processingModeLabel(mode)}” wymaga zainstalowanego modelu lokalnego (panel lokalnej AI).`
       );
       return;
+    }
+    if (processingModeUsesVision(mode) && ocrFix) {
+      const vision = await getVisionOcrStatus().catch(() => null);
+      if (!vision?.installed || !vision.engineInstalled) {
+        setLocalAiMessage(
+          `„${processingModeLabel(mode)}” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”.`
+        );
+        return;
+      }
     }
     const progressId = newProgressId();
     setProgressByItem((current) => ({ ...current, [item.itemId]: { stage: "READING" } }));
@@ -966,20 +944,10 @@ export function WorkspaceManager({
             <span className="workspace-local-ai-group">
               <small
                 className="workspace-local-ai-state"
-                title="Model lokalny (np. Bielik) pomaga tylko przy plikach: w trybach „z AI” wyszukuje dane osobowe (rozstrzyga z całego zdania) i poprawia błędy OCR w skanach; nie zmienia liczb, identyfikatorów, przeczeń ani stylu autora, a poprawki są wypisane i można je cofnąć."
+                title="Model tekstowy (np. Bielik) w „anonimizacji z AI” podpowiada przy danych osobowych; uruchamia się sam przed anonimizacją, a na czas OCR jest zatrzymywany, żeby pamięć miał model wizyjny."
               >
-                Model lokalny dla plików: {localAiReady ? "gotowy" : "nie działa"}
+                Model tekstowy dla plików: {localAiReady ? "działa" : localRuntime?.configured ? "uruchomi się przed anonimizacją" : "nie zainstalowany"}
               </small>
-              {!localAiReady ? (
-                <button
-                  type="button"
-                  className="chat-secondary-action workspace-local-ai-start"
-                  disabled={localAiStarting}
-                  onClick={() => void startLocalAi()}
-                >
-                  {localAiStarting ? "Uruchamiam…" : "Uruchom model lokalny"}
-                </button>
-              ) : null}
               {localAiMessage ? <small className="workspace-local-ai-state" role="status">{localAiMessage}</small> : null}
             </span>
           ) : null}

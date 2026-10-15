@@ -1045,6 +1045,7 @@ export default function ChatApp({
             <DocumentPrivacyPanel
               caseId={caseId}
               incomingFile={documentDropQueue.files[0] ?? null}
+              queuedFiles={documentDropQueue.files}
               onIncomingFileConsumed={() =>
                 setDocumentDropQueue((current) =>
                   consumeDocumentDropFile(current)

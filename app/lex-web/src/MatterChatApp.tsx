@@ -74,6 +74,7 @@ import {
   getRoutes,
   isDesktopShell,
   finalizeDocument as finalizeCaseDocument,
+  getVisionOcrStatus,
   keepAllDirectives,
   listCaseArtifacts,
   listCaseFiles,
@@ -146,7 +147,6 @@ import {
   DOCUMENT_PROCESSING_MODES,
   processingModeKeepsClearText,
   processingModeOptions,
-  processingModeUsesLocalAi,
   type DocumentProcessingMode
 } from "./document-processing-mode.js";
 import {
@@ -2340,61 +2340,80 @@ export default function MatterChatApp({
         enqueueDocumentDropFiles(current, taken.files)
       );
     }
-    for (const item of clear) void processStagedClearText(item.id, item.file, item.mode);
+    void processStagedClearTexts(clear);
   }
 
-  // OCR only (optionally with the local model's OCR correction): stored in
-  // the case, processed without anonymization and attached to the message.
-  async function processStagedClearText(
+  // OCR only, several files: all read one after another (the vision model needs the memory
+  // and one at a time), then the preview of each.
+  async function processStagedClearTexts(items: Array<{ id: string; file: File; mode: DocumentProcessingMode }>): Promise<void> {
+    if (items.some((item) => processingModeOptions(item.mode)?.ocrFix)) {
+      const vision = await getVisionOcrStatus().catch(() => null);
+      if (!vision?.installed || !vision.engineInstalled) {
+        setExecutionError("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”.");
+        return;
+      }
+    }
+    const reads: Array<{ id: string; file: File; mode: DocumentProcessingMode; read: Promise<Awaited<ReturnType<typeof processStoredCaseFile>> | null> }> = [];
+    let chain: Promise<unknown> = Promise.resolve();
+    for (const item of items) {
+      const read = chain.then(() => readStagedClearText(item.id, item.file, item.mode));
+      reads.push({ ...item, read });
+      chain = read;
+    }
+    for (const item of reads) {
+      const review = await item.read;
+      if (review) await confirmStagedClearText(item.id, item.file, review);
+    }
+  }
+
+  // OCR only (optionally with the vision model's OCR correction): stored in the case and read;
+  // null when it failed (the staged item shows why).
+  async function readStagedClearText(
     id: string,
     file: File,
     mode: DocumentProcessingMode
-  ): Promise<void> {
+  ): Promise<Awaited<ReturnType<typeof processStoredCaseFile>> | null> {
     const targetCase = caseId;
     setDocumentStaging((current) =>
       updateStagedDocument(current, id, { status: "SAVING" })
     );
     try {
       const stored = await uploadCaseFile(targetCase, file);
-      const result = await withDocumentProgress(id, targetCase, async (progressId) => {
-        const review = await processStoredCaseFile(
-          targetCase,
-          stored.uploadId,
-          undefined,
-          progressId,
-          processingModeOptions(mode)
-        );
-        return review;
-      });
-      const finalized = await previewThenFinalize(targetCase, result, file.name, true);
-      if (!finalized) {
-        setDocumentStaging((current) => updateStagedDocument(current, id, { status: "PENDING" }));
-        return;
-      }
-      pickFiles(
-        [{ kind: "document", documentId: finalized.documentId, chunkIndices: finalized.chunks.map((chunk) => chunk.index) }],
-        true,
-        targetCase
+      return await withDocumentProgress(id, targetCase, (progressId) =>
+        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, processingModeOptions(mode))
       );
-      setDocumentStaging((current) =>
-        takeStagedDocuments(
-          updateStagedDocument(current, id, { status: "PENDING" }),
-          [id]
-        ).state
-      );
-      setWorkspaceRefresh((value) => value + 1);
     } catch (error) {
-      const code = error instanceof Error ? error.message : String(error);
       setDocumentStaging((current) =>
-        updateStagedDocument(current, id, {
-          status: "FAILED",
-          error:
-            processingModeUsesLocalAi(mode) && /LOCAL_PRIVACY_MODEL/.test(code)
-              ? "tryb z AI wymaga uruchomionego modelu lokalnego (zakładka Sprawa → Uruchom model lokalny)"
-              : documentFailure(error).message
-        })
+        updateStagedDocument(current, id, { status: "FAILED", error: documentFailure(error).message })
       );
+      return null;
     }
+  }
+
+  // The preview of a read file, then finalized without anonymization and attached to the message.
+  async function confirmStagedClearText(
+    id: string,
+    file: File,
+    review: Awaited<ReturnType<typeof processStoredCaseFile>>
+  ): Promise<void> {
+    const targetCase = caseId;
+    const finalized = await previewThenFinalize(targetCase, review, file.name, true);
+    if (!finalized) {
+      setDocumentStaging((current) => updateStagedDocument(current, id, { status: "PENDING" }));
+      return;
+    }
+    pickFiles(
+      [{ kind: "document", documentId: finalized.documentId, chunkIndices: finalized.chunks.map((chunk) => chunk.index) }],
+      true,
+      targetCase
+    );
+    setDocumentStaging((current) =>
+      takeStagedDocuments(
+        updateStagedDocument(current, id, { status: "PENDING" }),
+        [id]
+      ).state
+    );
+    setWorkspaceRefresh((value) => value + 1);
   }
 
   // A decision from its official card saved in the case's files (local RAG).
@@ -5060,6 +5079,7 @@ export default function MatterChatApp({
             <DocumentPrivacyPanel
               caseId={caseId}
               incomingFile={documentDropQueue.files[0] ?? null}
+              queuedFiles={documentDropQueue.files}
               processingOptionsFor={(file) => {
                 const mode = reviewModes.current.get(file);
                 return mode ? processingModeOptions(mode) : undefined;

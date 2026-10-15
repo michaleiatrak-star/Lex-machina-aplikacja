@@ -3337,13 +3337,15 @@ export async function uploadCaseFile(
 export async function reviewDocument(
   file: File,
   caseId: string,
-  // localAi: the local model also checks personal data; ocrFix: it corrects OCR.
-  options?: { localAi?: boolean; ocrFix?: boolean },
+  // localAi: the local model also checks personal data; ocrFix: the vision model corrects OCR;
+  // detect false: only read now (OCR), personal data later by detectDocument.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean },
   progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
     ...(options?.localAi ? ["local-ai"] : []),
-    ...(options?.ocrFix ? ["ocr-fix"] : [])
+    ...(options?.ocrFix ? ["ocr-fix"] : []),
+    ...(options?.detect === false ? ["ocr-only"] : [])
   ].join(",");
   const response = await fetch(
     `${apiBase()}/api/documents/review`,
@@ -3384,6 +3386,27 @@ export async function reviewDocument(
 }
 
 /**
+ * Personal data of a document read with detect: false. Several files: all are read first
+ * (vision model, text models stopped), then detected (the text model starts once).
+ */
+export function detectDocument(
+  caseId: string,
+  documentId: string,
+  options?: { localAi?: boolean },
+  progressId?: string
+): Promise<DocumentReviewResponse> {
+  return json<DocumentReviewResponse>(`/api/documents/${documentId}/detect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.localAi ? { "X-Lex-Processing": "local-ai" } : {}),
+      ...(progressId ? { "X-Lex-Progress": progressId } : {})
+    },
+    body: JSON.stringify({ caseId })
+  });
+}
+
+/**
  * Re-run OCR and the local pseudonymizer over a file that is already stored in
  * the case files. Until now this endpoint existed but nothing called it, so the
  * privacy pipeline could only ever run at upload time and a document that
@@ -3394,8 +3417,8 @@ export async function processStoredCaseFile(
   uploadId: string,
   fileId?: string,
   progressId?: string,
-  // "z lokalnym AI": the running local model also checks the document.
-  options?: { localAi?: boolean; ocrFix?: boolean }
+  // "z lokalnym AI": the local model also checks the document; detect false: OCR only now.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean }
 ): Promise<DocumentReviewResponse> {
   const path = fileId
     ? `/api/cases/${caseId}/files/${uploadId}/members/${fileId}/process`
@@ -3405,7 +3428,7 @@ export async function processStoredCaseFile(
     {
       method: "POST",
       ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
-      ...(options?.localAi || typeof options?.ocrFix === "boolean"
+      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false
         ? {
             headers: {
               ...(progressId ? { "X-Lex-Progress": progressId } : {}),
@@ -3413,7 +3436,8 @@ export async function processStoredCaseFile(
             },
             body: JSON.stringify({
               ...(options.localAi ? { localAi: true } : {}),
-              ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {})
+              ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {}),
+              ...(options.detect === false ? { detect: false } : {})
             })
           }
         : {})
@@ -3441,6 +3465,20 @@ export function finalizeDocument(
       })
     }
   );
+}
+
+export type VisionOcrStatus = {
+  label: string;
+  bytes: number;
+  installed: boolean;
+  engineInstalled: boolean;
+  state: "IDLE" | "DOWNLOADING" | "FAILED";
+  received?: number;
+  error?: string;
+};
+
+export function getVisionOcrStatus(): Promise<VisionOcrStatus> {
+  return json<VisionOcrStatus>("/api/local-models/vision-ocr");
 }
 
 /** The user's confirmation of an anonymized version after its preview. */

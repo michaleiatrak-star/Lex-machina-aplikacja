@@ -30,11 +30,19 @@ const overlaps = (a: { start: number; end: number }, b: { start: number; end: nu
 
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
   busy?: boolean;
-  onConfirm: (directives: PagePrivacyDirective[]) => void;
+  // Decisions made earlier (back to a file in the batch preview).
+  initialDirectives?: PagePrivacyDirective[];
+  confirmLabel?: string;
+  // The review is passed back: the user may have corrected page texts.
+  onConfirm: (directives: PagePrivacyDirective[], review: DocumentReviewResponse) => void;
   onCancel: () => void;
+  // The whole file in clear text, without anonymization (the user's explicit choice).
+  onKeepClear?: (review: DocumentReviewResponse) => void;
 }) {
   const [review, setReview] = useState(props.review);
-  const [directives, setDirectives] = useState<PagePrivacyDirective[]>([]);
+  const [directives, setDirectives] = useState<PagePrivacyDirective[]>(props.initialDirectives ?? []);
+  const [markAction, setMarkAction] = useState<"PSEUDONYMIZE" | "LABEL">("PSEUDONYMIZE");
+  const [markLabel, setMarkLabel] = useState("");
   const [editing, setEditing] = useState<{ page: number; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [selection, setSelection] = useState<{ page: number; start: number; end: number } | null>(null);
@@ -50,7 +58,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const masked = props.keepClear
     ? 0
     : review.suggestions.filter((item) => !kept(item.page, item)).length +
-      directives.filter((item) => item.action === "PSEUDONYMIZE").length;
+      directives.filter((item) => item.action !== "KEEP").length;
   const clear = directives.filter((item) => item.action === "KEEP").length;
 
   function toggleKeep(suggestion: Suggestion): void {
@@ -77,8 +85,20 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
 
   function maskSelection(): void {
     if (!selection) return;
-    setDirectives((current) => [...current, { ...selection, action: "PSEUDONYMIZE", kind }]);
+    const label = markLabel.trim();
+    if (markAction === "LABEL" && !label) {
+      setError("Wpisz etykietę, którą zastąpić zaznaczony fragment.");
+      return;
+    }
+    setError("");
+    setDirectives((current) => [
+      ...current,
+      markAction === "LABEL"
+        ? { ...selection, action: "LABEL", label }
+        : { ...selection, action: "PSEUDONYMIZE", kind, ...(label ? { label } : {}) }
+    ]);
     setSelection(null);
+    setMarkLabel("");
     window.getSelection()?.removeAllRanges();
   }
 
@@ -111,8 +131,14 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         const marks = [
           ...review.suggestions.filter((item) => item.page === page.page).map((item) => ({ ...item, user: false })),
           ...directives
-            .filter((item) => item.page === page.page && item.action === "PSEUDONYMIZE")
-            .map((item) => ({ page: item.page, start: item.start, end: item.end, kind: item.kind ?? "CUSTOM", user: true }))
+            .filter((item) => item.page === page.page && item.action !== "KEEP")
+            .map((item) => ({
+              page: item.page,
+              start: item.start,
+              end: item.end,
+              kind: item.action === "LABEL" ? `Etykieta: ${item.label ?? ""}` : item.kind ?? "CUSTOM",
+              user: true
+            }))
         ].sort((a, b) => a.start - b.start || b.end - a.end);
         const parts: ReactNode[] = [];
         let at = 0;
@@ -127,7 +153,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${"aiNotPerson" in mark && mark.aiNotPerson ? " is-ai-hint" : ""}`}
               title={
                 mark.user
-                  ? "Zakryte przez Ciebie - kliknij, aby cofnąć"
+                  ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
                   : open
                     ? "Zostanie jawne - kliknij, aby zakryć"
                     : `${KIND_LABEL[mark.kind] ?? mark.kind} - zostanie zakryte; kliknij, aby zostawić jawne`
@@ -135,7 +161,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               onClick={() =>
                 mark.user
                   ? setDirectives((current) =>
-                      current.filter((item) => !(item.page === mark.page && item.start === mark.start && item.end === mark.end && item.action === "PSEUDONYMIZE"))
+                      current.filter((item) => !(item.page === mark.page && item.start === mark.start && item.end === mark.end && item.action !== "KEEP"))
                     )
                   : toggleKeep(mark as Suggestion)
               }
@@ -165,16 +191,41 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           </small>
         </div>
         <div className="privacy-preview-actions">
+          {review.pages.length > 1 ? (
+            <select
+              id="privacy-preview-page-jump"
+              aria-label="Przejdź do strony"
+              value=""
+              onChange={(event) =>
+                pageRefs.current.get(Number(event.target.value))?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            >
+              <option value="">Przejdź do strony…</option>
+              {review.pages.map((page) => (
+                <option key={page.page} value={page.page}>s. {page.page}</option>
+              ))}
+            </select>
+          ) : null}
           <button type="button" onClick={props.onCancel} disabled={props.busy}>
             Anuluj
           </button>
+          {props.onKeepClear && !props.keepClear ? (
+            <button
+              type="button"
+              disabled={props.busy || saving || editing !== null}
+              title="Cały plik bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi"
+              onClick={() => props.onKeepClear!(review)}
+            >
+              Bez anonimizacji
+            </button>
+          ) : null}
           <button
             type="button"
             className="primary-button"
             disabled={props.busy || saving || editing !== null}
-            onClick={() => props.onConfirm(props.keepClear ? keepAllDirectives(review) : directives)}
+            onClick={() => props.onConfirm(props.keepClear ? keepAllDirectives(review) : directives, review)}
           >
-            {props.busy ? "Zatwierdzam…" : "Zatwierdź"}
+            {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}
           </button>
         </div>
       </header>
@@ -261,13 +312,31 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       {!props.keepClear && selection ? (
         <div className="privacy-preview-selection">
           <span>„{review.pages.find((page) => page.page === selection.page)?.text.slice(selection.start, selection.end)}”</span>
-          <select id="privacy-preview-kind" aria-label="Rodzaj danych" value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
-            {Object.entries(KIND_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
+          <select
+            id="privacy-preview-action"
+            aria-label="Co zrobić z zaznaczeniem"
+            value={markAction}
+            onChange={(event) => setMarkAction(event.target.value as "PSEUDONYMIZE" | "LABEL")}
+          >
+            <option value="PSEUDONYMIZE">Zakryj symbolem</option>
+            <option value="LABEL">Zastąp etykietą</option>
           </select>
+          {markAction === "PSEUDONYMIZE" ? (
+            <select id="privacy-preview-kind" aria-label="Rodzaj danych" value={kind} onChange={(event) => setKind(event.target.value as PiiKind)}>
+              {Object.entries(KIND_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          ) : null}
+          <input
+            id="privacy-preview-label"
+            aria-label="Etykieta"
+            placeholder={markAction === "LABEL" ? "np. POWÓD" : "Własna etykieta (opcjonalnie)"}
+            value={markLabel}
+            onChange={(event) => setMarkLabel(event.target.value)}
+          />
           <button type="button" onClick={maskSelection}>
-            Zakryj zaznaczenie
+            {markAction === "LABEL" ? "Zastąp etykietą" : "Zakryj zaznaczenie"}
           </button>
         </div>
       ) : null}

@@ -22,6 +22,8 @@ describe("document processing modes", () => {
     expect(processingModeKeepsClearText("OCR_AI")).toBe(true);
     expect(processingModeKeepsClearText("ANONYMIZE_AI")).toBe(false);
     expect(processingModeUsesLocalAi("OCR")).toBe(false);
+    expect(processingModeUsesLocalAi("OCR_AI")).toBe(false);
+    expect(processingModeUsesLocalAi("ANONYMIZE_AI")).toBe(true);
   });
 
   it("keeps a mode per staged file, anonymization by default", () => {

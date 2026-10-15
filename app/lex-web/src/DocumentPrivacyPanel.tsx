@@ -1,50 +1,26 @@
 import {
   useEffect,
-  useMemo,
   useRef,
   useState
 } from "react";
 import {
   ApiError,
-  editDocumentPage,
+  detectDocument,
   finalizeDocument,
+  keepAllDirectives,
   reviewDocument,
   uploadCaseFile,
   type DocumentAttachmentSelection,
   type DocumentIngestionResponse,
   type DocumentReviewResponse,
   type PagePrivacyDirective,
-  type PiiKind,
-  type PrivacyAction,
   type ProcessingProgress,
   type StoredUploadResponse
 } from "./api.js";
 import { progressLabel, progressPercent, trackProgress } from "./processing-progress.js";
 import { documentFailure, type DocumentFailure } from "./document-errors.js";
 import type { DocumentDropOutcome } from "./document-drop-queue.js";
-
-const PII_KINDS: Array<{
-  value: PiiKind;
-  label: string;
-}> = [
-  { value: "PERSON", label: "Osoba" },
-  { value: "ADDRESS", label: "Adres" },
-  { value: "PESEL", label: "PESEL" },
-  { value: "NIP", label: "NIP" },
-  { value: "REGON", label: "REGON" },
-  { value: "IBAN", label: "Rachunek / IBAN" },
-  { value: "EMAIL", label: "E-mail" },
-  { value: "PHONE", label: "Telefon" },
-  { value: "ID_CARD", label: "Dowód osobisty" },
-  { value: "PASSPORT", label: "Paszport" },
-  { value: "BIRTH_DATE", label: "Data urodzenia" },
-  { value: "LAND_REGISTRY", label: "Księga wieczysta" },
-  { value: "KRS", label: "KRS" },
-  { value: "VEHICLE_PLATE", label: "Nr rejestracyjny" },
-  { value: "BAR_NUMBER", label: "Nr wpisu adwokata/radcy" },
-  { value: "PAYMENT_CARD", label: "Karta płatnicza" },
-  { value: "CUSTOM", label: "Inne" }
-];
+import { PrivacyPreview } from "./PrivacyPreview.js";
 
 export type PrivacyDecisionMode =
   | "AUTO_PSEUDONYMIZE"
@@ -75,9 +51,6 @@ export type DocumentProcessingEvent = {
   privacyMode?: PrivacyDecisionMode;
 };
 
-type PrivacyMode =
-  | "ASK"
-  | "MANUAL";
 
 type FinalizedBatchItem = {
   fileName: string;
@@ -90,37 +63,6 @@ function rangesOverlap(
   b: { start: number; end: number }
 ): boolean {
   return a.start < b.end && a.end > b.start;
-}
-
-function keepAllAutomaticFindings(
-  review: DocumentReviewResponse
-): PagePrivacyDirective[] {
-  const accepted: PagePrivacyDirective[] = [];
-  const suggestions = [...review.suggestions].sort(
-    (a, b) =>
-      a.page - b.page ||
-      a.start - b.start ||
-      (b.end - b.start) - (a.end - a.start)
-  );
-
-  for (const suggestion of suggestions) {
-    if (
-      accepted.some(
-        (item) =>
-          item.page === suggestion.page &&
-          rangesOverlap(item, suggestion)
-      )
-    ) {
-      continue;
-    }
-    accepted.push({
-      page: suggestion.page,
-      start: suggestion.start,
-      end: suggestion.end,
-      action: "KEEP"
-    });
-  }
-  return accepted;
 }
 
 function sourceText(
@@ -138,9 +80,9 @@ function decisionModeLabel(mode: PrivacyDecisionMode): string {
     return "Automatyczna anonimizacja / pseudonimizacja";
   }
   if (mode === "KEEP_CLEAR") {
-    return "Pozostaw wykryte elementy jawne";
+    return "Bez anonimizacji (tekst jawny)";
   }
-  return "Ręczna korekta + automatyczne wykrywanie";
+  return "Wykrywanie automatyczne + Twoje decyzje w podglądzie";
 }
 
 function decisionLabel(directive: PagePrivacyDirective): string {
@@ -173,6 +115,7 @@ function finalDecisionForSuggestion(
 export function DocumentPrivacyPanel({
   caseId,
   incomingFile,
+  queuedFiles,
   onIncomingFileConsumed,
   onAttachmentSelectionChange,
   onCaseFilesChange,
@@ -181,6 +124,8 @@ export function DocumentPrivacyPanel({
 }: {
   caseId: string;
   incomingFile?: File | null;
+  // The whole queue (incomingFile first): read before the first preview.
+  queuedFiles?: File[];
   // Per-file processing chosen before upload (AI personal-data check, AI OCR fix).
   processingOptionsFor?: (file: File) => { localAi?: boolean; ocrFix?: boolean } | undefined;
   onIncomingFileConsumed?: (outcome: DocumentDropOutcome) => void;
@@ -192,8 +137,6 @@ export function DocumentPrivacyPanel({
     event: DocumentProcessingEvent
   ) => void;
 }) {
-  const textRef =
-    useRef<HTMLTextAreaElement>(null);
   const autoStartedFiles =
     useRef<WeakSet<File>>(new WeakSet());
   const activeFileRef =
@@ -204,18 +147,6 @@ export function DocumentPrivacyPanel({
     useState<DocumentReviewResponse | null>(
       null
     );
-  const [privacyMode, setPrivacyMode] =
-    useState<PrivacyMode>("ASK");
-  const [page, setPage] = useState(1);
-  const [selection, setSelection] =
-    useState<{ start: number; end: number } | null>(
-      null
-    );
-  const [action, setAction] =
-    useState<PrivacyAction>("PSEUDONYMIZE");
-  const [kind, setKind] =
-    useState<PiiKind>("PERSON");
-  const [label, setLabel] = useState("");
   const [directives, setDirectives] =
     useState<PagePrivacyDirective[]>([]);
   const [loading, setLoading] =
@@ -235,13 +166,12 @@ export function DocumentPrivacyPanel({
     useState<FinalizedBatchItem[]>([]);
   const [archiveUpload, setArchiveUpload] =
     useState<StoredUploadResponse | null>(null);
-  // Hand correction of the current page's text (a poor scan).
-  const [pageEdit, setPageEdit] =
-    useState<{ page: number; text: string } | null>(null);
-  const [pageEditSaving, setPageEditSaving] =
-    useState(false);
-  const [pageEditNotice, setPageEditNotice] =
-    useState("");
+  // Several files: all are read first (OCR, vision model, text models stopped), then their
+  // personal data detected (the text model starts once), then the preview of each.
+  const prepared =
+    useRef(new Map<File, Promise<DocumentReviewResponse>>());
+  const preparing =
+    useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
     if (!incomingFile) return;
@@ -258,51 +188,52 @@ export function DocumentPrivacyPanel({
     activeFileRef.current = null;
   }, [caseId]);
 
+  const isArchive = (file: File) =>
+    file.type === "application/zip" || file.name.toLowerCase().endsWith(".zip");
+
+  /**
+   * Reads the files not read yet: the OCR of all of them first, then the detection of
+   * personal data of each. With the local AI the text model is stopped for the OCR (the
+   * vision model gets its memory) and started once, before the first detection.
+   */
+  function prepare(files: File[]): Map<File, Promise<DocumentReviewResponse>> {
+    const fresh = files.filter((file) => !isArchive(file) && !prepared.current.has(file));
+    if (fresh.length && caseId) {
+      const reads = new Map<File, Promise<DocumentReviewResponse>>();
+      let chain = preparing.current.catch(() => undefined);
+      for (const file of fresh) {
+        const read = chain.then(() => {
+          const tracker = trackProgress(caseId, setProgress);
+          return reviewDocument(file, caseId, { ...processingOptionsFor?.(file), detect: false }, tracker.progressId).finally(() => {
+            tracker.stop();
+            setProgress(null);
+          });
+        });
+        reads.set(file, read);
+        chain = read.catch(() => undefined);
+      }
+      for (const file of fresh) {
+        const detected = chain.then(async () => {
+          const read = await reads.get(file)!;
+          const tracker = trackProgress(caseId, setProgress);
+          return detectDocument(caseId, read.documentId, { localAi: processingOptionsFor?.(file)?.localAi === true }, tracker.progressId).finally(() => {
+            tracker.stop();
+            setProgress(null);
+          });
+        });
+        prepared.current.set(file, detected);
+        chain = detected.catch(() => undefined);
+      }
+      preparing.current = chain;
+    }
+    return prepared.current;
+  }
+
+  // The whole queue is read before the first preview.
   useEffect(() => {
-    setPageEdit(null);
-    setPageEditNotice("");
-  }, [review?.documentId]);
-
-  const currentPage = useMemo(
-    () =>
-      review?.pages.find(
-        (item) => item.page === page
-      ) ?? null,
-    [review, page]
-  );
-
-  const pageSuggestions = useMemo(
-    () =>
-      review?.suggestions.filter(
-        (item) => item.page === page
-      ) ?? [],
-    [review, page]
-  );
-
-  const reviewStats = useMemo(() => {
-    if (!review) return null;
-    const ocrPages = review.pages.filter(
-      (item) => item.source === "OCR"
-    ).length;
-    const digitalPages = review.pages.filter(
-      (item) => item.source === "DIGITAL"
-    ).length;
-    return {
-      ocrPages,
-      digitalPages,
-      scannedPdf:
-        review.mediaType === "application/pdf" &&
-        ocrPages > 0
-    };
-  }, [review]);
-
-  const selectedText =
-    selection && currentPage
-      ? currentPage.text.slice(
-          selection.start,
-          selection.end
-        )
-      : "";
+    if (queuedFiles?.length) prepare(queuedFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedFiles, caseId]);
 
   async function openFile(
     file: File | undefined
@@ -315,9 +246,7 @@ export function DocumentPrivacyPanel({
     activeFileRef.current = file;
     setReview(null);
     setArchiveUpload(null);
-    setPrivacyMode("ASK");
     setDirectives([]);
-    setSelection(null);
     if (batchDrafts.length === 0) {
       setFinalizedBatch([]);
     }
@@ -331,11 +260,7 @@ export function DocumentPrivacyPanel({
         throw new Error("CASE_STORAGE_NOT_READY");
       }
 
-      const isZip =
-        file.type === "application/zip" ||
-        file.name.toLowerCase().endsWith(".zip");
-
-      if (isZip) {
+      if (isArchive(file)) {
         const stored =
           await uploadCaseFile(
             caseId,
@@ -353,22 +278,11 @@ export function DocumentPrivacyPanel({
         return;
       }
 
-      const tracker = trackProgress(caseId, setProgress);
-      const result =
-        await reviewDocument(
-          file,
-          caseId,
-          processingOptionsFor?.(file),
-          tracker.progressId
-        ).finally(() => {
-          tracker.stop();
-          setProgress(null);
-        });
+      // The next files of the queue are already read; their failures show when they come up.
+      // Forgotten either way: a retry reads the file again.
+      const result = await prepare([file]).get(file)!.finally(() => prepared.current.delete(file));
       setReview(result);
       onCaseFilesChange?.();
-      setPage(
-        result.pages[0]?.page ?? 1
-      );
       const ocrPages = result.pages.filter(
         (item) => item.source === "OCR"
       ).length;
@@ -398,157 +312,25 @@ export function DocumentPrivacyPanel({
     }
   }
 
+  // Back to one file of the batch: its preview with the decisions made so far.
   function editDraft(
     draft: DocumentPrivacyDraft
   ): void {
     activeFileRef.current = draft.file;
     setActiveFileName(draft.fileName);
-    setReview(draft.review);
-    setPage(draft.review.pages[0]?.page ?? 1);
     setDirectives(draft.directives);
-    setPrivacyMode(
-      draft.privacyMode === "MANUAL"
-        ? "MANUAL"
-        : "ASK"
-    );
-    setSelection(null);
-    setLabel("");
+    setReview(draft.review);
     setError("");
     setArchiveUpload(null);
   }
 
-  async function savePageEdit(): Promise<void> {
-    if (!review || !pageEdit) return;
-    const edited = pageEdit;
-    setPageEditSaving(true);
-    setError("");
-    try {
-      const result = await editDocumentPage(
-        caseId,
-        review.documentId,
-        edited.page,
-        edited.text
-      );
-      const next: DocumentReviewResponse = {
-        ...review,
-        pages: review.pages.map((item) =>
-          item.page === edited.page ? result.page : item
-        ),
-        suggestions: [
-          ...review.suggestions.filter((item) => item.page !== edited.page),
-          ...result.suggestions
-        ]
-      };
-      const dropped = directives.filter((item) => item.page === edited.page).length;
-      const kept = directives.filter((item) => item.page !== edited.page);
-      setReview(next);
-      setDirectives(kept);
-      setBatchDrafts((current) =>
-        current.map((draft) =>
-          draft.review.documentId === next.documentId
-            ? {
-                ...draft,
-                review: next,
-                directives: draft.directives.filter((item) => item.page !== edited.page)
-              }
-            : draft
-        )
-      );
-      setSelection(null);
-      setPageEdit(null);
-      setPageEditNotice(
-        `Zapisano poprawiony tekst strony ${edited.page}. Dane osobowe na tej stronie wykryto ponownie` +
-          (dropped ? `; ${dropped} wcześniejszych oznaczeń tej strony usunięto - oznacz je ponownie.` : ".")
-      );
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? `Nie udało się zapisać poprawionego tekstu: ${caught.message}`
-          : "Nie udało się zapisać poprawionego tekstu."
-      );
-    } finally {
-      setPageEditSaving(false);
-    }
-  }
-
-  function captureSelection(): void {
-    const target = textRef.current;
-    if (!target) return;
-    const start = target.selectionStart;
-    const end = target.selectionEnd;
-    setSelection(
-      end > start
-        ? { start, end }
-        : null
-    );
-  }
-
-  function addDirective(
-    candidate?: PagePrivacyDirective
-  ): void {
-    if (!currentPage) return;
-
-    const next =
-      candidate ??
-      (
-        selection
-          ? {
-              page: currentPage.page,
-              start: selection.start,
-              end: selection.end,
-              action,
-              ...(action === "PSEUDONYMIZE"
-                ? { kind }
-                : {}),
-              ...(
-                (action === "LABEL" ||
-                  action === "PSEUDONYMIZE") &&
-                label.trim()
-                  ? { label: label.trim() }
-                  : {}
-              )
-            }
-          : null
-      );
-
-    if (!next) return;
-    if (
-      next.action === "LABEL" &&
-      !next.label?.trim()
-    ) {
-      setError(
-        "Podaj etykietę dla oznaczenia."
-      );
-      return;
-    }
-
-    if (
-      directives.some(
-        (item) =>
-          item.page === next.page &&
-          rangesOverlap(item, next)
-      )
-    ) {
-      setError(
-        "To zaznaczenie nachodzi na wcześniejszą decyzję. Usuń konfliktujące zaznaczenie."
-      );
-      return;
-    }
-
-    setDirectives((items) => [
-      ...items,
-      next
-    ]);
-    setSelection(null);
-    setLabel("");
-    setError("");
-  }
 
   function stageWith(
+    review: DocumentReviewResponse,
     decisions: PagePrivacyDirective[],
     mode: PrivacyDecisionMode
   ): void {
-    if (!review || !activeFileRef.current) return;
+    if (!activeFileRef.current) return;
     const draft: DocumentPrivacyDraft = {
       file: activeFileRef.current,
       fileName:
@@ -583,8 +365,6 @@ export function DocumentPrivacyPanel({
     });
     setReview(null);
     setDirectives([]);
-    setSelection(null);
-    setPrivacyMode("ASK");
     activeFileRef.current = null;
     setActiveFileName("");
     onIncomingFileConsumed?.("READY");
@@ -723,15 +503,14 @@ export function DocumentPrivacyPanel({
           <p>
             Zdjęcia są od razu kierowane do lokalnego OCR. PDF jest analizowany strona po stronie:
             jeśli ma użyteczną warstwę tekstową, OCR nie jest potrzebny, a strony skanowane są OCR-owane
-            automatycznie. Gdy lokalny model AI jest skonfigurowany, analizuje wydobyty tekst i uzupełnia
-            wykrywanie danych do anonimizacji — m.in. odmienionych imion i nazwisk, adresów oraz innych
-            identyfikatorów. Do anonimizacji trafiają wyłącznie dokładne fragmenty obecne w tekście źródłowym.
+            automatycznie. Kilka plików: najpierw OCR wszystkich (w trybie z AI pracuje wtedy tylko model
+            wizyjny), potem wykrywanie danych osobowych (model tekstowy uruchamia się raz), potem podgląd
+            każdego pliku: niepewne linie OCR, wskazania AI i zaczernienia do sprawdzenia i poprawy.
           </p>
           <p>
             Każdy plik otrzymuje osobny documentId i osobną zaszyfrowaną mapę reidentyfikacji. Model AI
-            nie modyfikuje OCR, offsetów ani vaultu: proponuje wykrycia, a tokenizacja i odwracalne
-            mapowanie pozostają deterministyczne i lokalne. Dla wielu plików przed zastosowaniem zmian
-            zobaczysz zbiorczy podgląd wykryć automatycznych, ręcznych zaznaczeń i końcowego efektu.
+            niczego nie odkrywa sam: jego wskazania są podpowiedziami w podglądzie. Przed zastosowaniem
+            zobaczysz jeszcze zbiorczy podgląd wszystkich plików i Twoich decyzji.
           </p>
           {activeFileName ? (
             <small>
@@ -814,7 +593,6 @@ export function DocumentPrivacyPanel({
                   onClick={() => {
                     setReview(null);
                     setDirectives([]);
-                    setSelection(null);
                     setArchiveUpload(null);
                     activeFileRef.current = null;
                     setActiveFileName("");
@@ -853,391 +631,37 @@ export function DocumentPrivacyPanel({
         </div>
       )}
 
-      {review && privacyMode === "ASK" ? (
-        <div className="privacy-decisions">
-          <div className="privacy-decision-head">
-            <div>
-              <strong>
-                Decyzja prywatności dla „{activeFileName || review.documentId}”
-              </strong>
-              <p>
-                {reviewStats?.ocrPages
-                  ? `OCR wykonano automatycznie na ${reviewStats.ocrPages} z ${review.totalPages} stron${reviewStats.scannedPdf ? " skanowanego PDF" : ""}.`
-                  : "Dokument ma użyteczną warstwę tekstową; OCR nie był potrzebny."}
-                {" "}Wykryto {review.suggestions.length} lokalnych sugestii danych wrażliwych.
-                {review.suggestions.some((item) => item.aiNotPerson)
-                  ? ` Lokalne AI uznało ${review.suggestions.filter((item) => item.aiNotPerson).length} z nich za nie-osoby; zostają zamaskowane, dopóki nie odkryjesz ich w przeglądzie ręcznym.`
-                  : ""}
-                {review.pages.some((page) => page.review?.length)
-                  ? ` Odczyt niepewny w ${review.pages.reduce((sum, page) => sum + (page.review?.length ?? 0), 0)} liniach (pismo odręczne, pieczątki) - sprawdź je w przeglądzie ręcznym.`
-                  : ""}
-              </p>
-              <p>
-                Ta decyzja jest na razie wersją roboczą dla tego pliku. Zostanie zastosowana dopiero po
-                przejściu wszystkich plików i zatwierdzeniu zbiorczego podglądu.
-              </p>
-            </div>
-          </div>
-          <div className="attachment-actions">
-            <button
-              type="button"
-              className="primary-button"
-              disabled={loading || batchFinalizing}
-              onClick={() =>
-                stageWith(
-                  [],
-                  "AUTO_PSEUDONYMIZE"
-                )
-              }
-            >
-              Anonimizuj / pseudonimizuj automatycznie
-            </button>
-            <button
-              type="button"
-              disabled={loading || batchFinalizing}
-              onClick={() => setPrivacyMode("MANUAL")}
-            >
-              Przejrzyj ręcznie
-            </button>
-            <button
-              type="button"
-              disabled={loading || batchFinalizing}
-              onClick={() =>
-                stageWith(
-                  keepAllAutomaticFindings(review),
-                  "KEEP_CLEAR"
-                )
-              }
-            >
-              Pozostaw ten plik bez anonimizacji
-            </button>
-          </div>
-        </div>
+      {review ? (
+        <PrivacyPreview
+          key={review.documentId}
+          caseId={caseId}
+          review={review}
+          fileName={activeFileName || review.documentId}
+          keepClear={false}
+          initialDirectives={directives}
+          confirmLabel="Zatwierdź plik"
+          busy={loading || batchFinalizing}
+          onConfirm={(decisions, current) =>
+            stageWith(current, decisions, decisions.length ? "MANUAL" : "AUTO_PSEUDONYMIZE")
+          }
+          onKeepClear={(current) => {
+            if (
+              window.confirm(
+                `„${activeFileName || current.documentId}” bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi. Kontynuować?`
+              )
+            ) {
+              stageWith(current, keepAllDirectives(current), "KEEP_CLEAR");
+            }
+          }}
+          onCancel={() => {
+            setReview(null);
+            setDirectives([]);
+            activeFileRef.current = null;
+            setActiveFileName("");
+            onIncomingFileConsumed?.("SKIPPED");
+          }}
+        />
       ) : null}
-
-      {review && currentPage && privacyMode === "MANUAL" && (
-        <div className="privacy-review-grid">
-          <div className="privacy-document">
-            <div className="privacy-toolbar">
-              <label>
-                Strona
-                <select
-                  value={page}
-                  onChange={(event) => {
-                    setPage(
-                      Number(event.target.value)
-                    );
-                    setSelection(null);
-                    setPageEdit(null);
-                    setPageEditNotice("");
-                  }}
-                >
-                  {review.pages.map(
-                    (item) => (
-                      <option
-                        key={item.page}
-                        value={item.page}
-                      >
-                        {item.page} · {item.source}
-                      </option>
-                    )
-                  )}
-                </select>
-              </label>
-              <span>
-                {review.mediaType}
-                {currentPage.confidence !== undefined
-                  ? ` · OCR ${Math.round(
-                      currentPage.confidence * 100
-                    )}%`
-                  : ""}
-              </span>
-            </div>
-
-            {pageEdit && pageEdit.page === currentPage.page ? (
-              <>
-                <textarea
-                  className="privacy-text privacy-text-editing"
-                  value={pageEdit.text}
-                  onChange={(event) =>
-                    setPageEdit({ page: pageEdit.page, text: event.target.value })
-                  }
-                  aria-label="Edycja tekstu strony"
-                  autoFocus
-                />
-                <div className="privacy-edit-actions">
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={pageEditSaving}
-                    onClick={() => void savePageEdit()}
-                  >
-                    {pageEditSaving ? "Zapisywanie…" : "Zapisz poprawki"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pageEditSaving}
-                    onClick={() => setPageEdit(null)}
-                  >
-                    Anuluj
-                  </button>
-                </div>
-                <p className="field-help">
-                  Popraw błędnie odczytane znaki. Po zapisaniu dane osobowe na tej
-                  stronie zostaną wykryte ponownie, a wcześniejsze oznaczenia tej
-                  strony usunięte.
-                </p>
-              </>
-            ) : (
-              <>
-                <textarea
-                  ref={textRef}
-                  className="privacy-text"
-                  readOnly
-                  value={currentPage.text}
-                  onSelect={captureSelection}
-                  aria-label="Tekst dokumentu do ręcznego oznaczania"
-                />
-                <div className="privacy-edit-actions">
-                  <button
-                    type="button"
-                    disabled={loading || batchFinalizing}
-                    onClick={() => {
-                      setPageEdit({ page: currentPage.page, text: currentPage.text });
-                      setPageEditNotice("");
-                      setSelection(null);
-                    }}
-                  >
-                    Edytuj tekst
-                  </button>
-                  {currentPage.editedByUser ? (
-                    <span className="privacy-edited-badge">Tekst poprawiony ręcznie</span>
-                  ) : null}
-                </div>
-                {pageEditNotice ? (
-                  <p className="field-help" role="status">{pageEditNotice}</p>
-                ) : null}
-                <p className="field-help">
-                  Zaznacz fragment tekstu powyżej,
-                  następnie wybierz akcję. Jeśli skan
-                  odczytano błędnie, użyj „Edytuj tekst”.
-                </p>
-              </>
-            )}
-          </div>
-
-          <aside className="privacy-controls">
-            <h4>Decyzja użytkownika</h4>
-
-            <div className="selection-preview">
-              {selectedText
-                ? `„${selectedText}”`
-                : "Brak zaznaczenia"}
-            </div>
-
-            <label>
-              Akcja
-              <select
-                value={action}
-                onChange={(event) =>
-                  setAction(
-                    event.target
-                      .value as PrivacyAction
-                  )
-                }
-              >
-                <option value="PSEUDONYMIZE">
-                  Anonimizuj / pseudonimizuj
-                </option>
-                <option value="KEEP">
-                  Pozostaw bez anonimizacji
-                </option>
-                <option value="LABEL">
-                  Oznacz, co ten fragment znaczy
-                </option>
-              </select>
-            </label>
-
-            {action === "PSEUDONYMIZE" && (
-              <label>
-                Typ
-                <select
-                  value={kind}
-                  onChange={(event) =>
-                    setKind(
-                      event.target
-                        .value as PiiKind
-                    )
-                  }
-                >
-                  {PII_KINDS.map((item) => (
-                    <option
-                      key={item.value}
-                      value={item.value}
-                    >
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {(action === "LABEL" ||
-              action === "PSEUDONYMIZE") && (
-              <label>
-                Etykieta
-                <input
-                  value={label}
-                  maxLength={120}
-                  placeholder={
-                    action === "LABEL"
-                      ? "np. świadek, pełnomocnik, adres korespondencyjny"
-                      : "opcjonalnie: np. klient"
-                  }
-                  onChange={(event) =>
-                    setLabel(
-                      event.target.value
-                    )
-                  }
-                />
-              </label>
-            )}
-
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!selection}
-              onClick={() => addDirective()}
-            >
-              Dodaj decyzję
-            </button>
-
-            {pageSuggestions.length > 0 && (
-              <div className="privacy-suggestions">
-                <strong>
-                  Sugestie automatyczne
-                </strong>
-                {pageSuggestions.map(
-                  (suggestion, index) => {
-                    const preview =
-                      currentPage.text.slice(
-                        suggestion.start,
-                        suggestion.end
-                      );
-                    const exists =
-                      directives.some(
-                        (item) =>
-                          item.page === page &&
-                          rangesOverlap(
-                            item,
-                            suggestion
-                          )
-                      );
-                    const key =
-                      suggestion.kind +
-                      "-" +
-                      suggestion.start +
-                      "-" +
-                      index;
-                    const mask = (
-                      <button
-                        type="button"
-                        key={key}
-                        disabled={exists}
-                        onClick={() =>
-                          addDirective({
-                            page,
-                            start:
-                              suggestion.start,
-                            end:
-                              suggestion.end,
-                            action:
-                              "PSEUDONYMIZE",
-                            kind:
-                              suggestion.kind
-                          })
-                        }
-                      >
-                        {suggestion.kind}:{" "}
-                        {preview}
-                      </button>
-                    );
-                    if (!suggestion.aiNotPerson || exists) return mask;
-                    // The local model read it as no person; it stays masked until unmasked here.
-                    return (
-                      <span key={key} className="privacy-ai-hint">
-                        {mask}
-                        <button
-                          type="button"
-                          title="Lokalne AI uznało, że to nie osoba. Sprawdź zdanie i zostaw jawne jednym kliknięciem."
-                          onClick={() =>
-                            addDirective({ page, start: suggestion.start, end: suggestion.end, action: "KEEP" })
-                          }
-                        >
-                          Odkryj · AI: {suggestion.aiNotPerson}
-                        </button>
-                      </span>
-                    );
-                  }
-                )}
-              </div>
-            )}
-          </aside>
-        </div>
-      )}
-
-      {review && privacyMode === "MANUAL" && (
-        <div className="privacy-decisions">
-          <div className="privacy-decision-head">
-            <strong>
-              Ręczne decyzje dla tego pliku: {directives.length}
-            </strong>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={loading || batchFinalizing}
-              onClick={() =>
-                stageWith(
-                  directives,
-                  "MANUAL"
-                )
-              }
-            >
-              Dodaj plik do zbiorczego podglądu
-            </button>
-          </div>
-
-          {directives.length > 0 && (
-            <ul>
-              {directives.map(
-                (directive, index) => (
-                  <li key={index}>
-                    <span>
-                      s. {directive.page} ·{" "}
-                      {decisionLabel(directive)} ·{" "}
-                      {sourceText(review, directive)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDirectives(
-                          (items) =>
-                            items.filter(
-                              (_, itemIndex) =>
-                                itemIndex !== index
-                            )
-                        )
-                      }
-                    >
-                      Usuń
-                    </button>
-                  </li>
-                )
-              )}
-            </ul>
-          )}
-        </div>
-      )}
 
       {batchDrafts.length > 0 && !review && !incomingFile && !loading ? (
         <div className="privacy-decisions privacy-batch-preview">
@@ -1284,13 +708,13 @@ export function DocumentPrivacyPanel({
                   <strong>{draft.fileName}</strong>
                   {" · "}{decisionModeLabel(draft.privacyMode)}
                   {" · "}{draft.review.suggestions.length} wykryć
-                  {" · "}{draft.directives.length} ręcznych decyzji
+                  {" · "}{draft.directives.length} decyzji w podglądzie
                 </summary>
 
                 {draft.review.pages.some((page) => page.review?.length) ? (
                   <div className="privacy-preview-todo">
                     <strong>Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem</strong>
-                    <small>Pismo odręczne, pieczątki lub rozmazany druk. Popraw tekst strony: „Wróć do edycji tego pliku”, potem „Edytuj tekst”.</small>
+                    <small>Pismo odręczne, pieczątki lub rozmazany druk. Popraw tekst strony: „Wróć do podglądu tego pliku”, potem „Popraw tekst strony”.</small>
                     <ul>
                       {draft.review.pages.flatMap((page) =>
                         (page.review ?? []).map((line, index) => (
@@ -1353,12 +777,12 @@ export function DocumentPrivacyPanel({
                   </section>
 
                   <aside className="privacy-controls">
-                    <h4>Moje ręczne zaznaczenia</h4>
+                    <h4>Moje decyzje w podglądzie</h4>
                     {draft.privacyMode !== "MANUAL" || draft.directives.length === 0 ? (
                       <p className="field-help">
                         {draft.privacyMode === "MANUAL"
-                          ? "Brak dodatkowych ręcznych zaznaczeń; niezmienione wykrycia automatyczne zostaną pseudonimizowane."
-                          : "Ten plik korzysta z decyzji zbiorczej bez pojedynczych ręcznych zaznaczeń."}
+                          ? "Brak zmian w podglądzie; wykrycia automatyczne zostaną pseudonimizowane."
+                          : "Bez zmian w podglądzie."}
                       </p>
                     ) : (
                       <ul>
@@ -1397,7 +821,7 @@ export function DocumentPrivacyPanel({
                       disabled={batchFinalizing}
                       onClick={() => editDraft(draft)}
                     >
-                      Wróć do edycji tego pliku
+                      Wróć do podglądu tego pliku
                     </button>
                   </aside>
                 </div>
