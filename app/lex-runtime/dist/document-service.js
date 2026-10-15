@@ -516,14 +516,14 @@ export class LocalPrivateDocumentService {
                 process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
             }
         }
-        if (!enoughMemoryForVision()) {
+        const session = this.visionReader();
+        if (!session)
+            return source;
+        if (!enoughMemoryForVision(session.modelBytes)) {
             process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
             onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
             return source;
         }
-        const session = this.visionReader();
-        if (!session)
-            return source;
         let pages;
         try {
             pages = await correctWithVision(source.pages, session.readLine, (words) => morphology.knownWords(words), (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" }));

@@ -274,12 +274,15 @@ function backendLabel(
 }
 
 type VisionOcrStatus = {
+  available: boolean;
+  modelId: string | null;
   label: string;
+  license: string | null;
   bytes: number;
   installed: boolean;
   engineInstalled: boolean;
   state: "IDLE" | "DOWNLOADING" | "FAILED";
-  received?: number;
+  progress: LocalRuntimeStatus["progress"];
   error?: string;
 };
 
@@ -319,15 +322,42 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   }
 
   if (!status) return null;
+  if (!status.available) {
+    return (
+      <div className="local-ai-facts">
+        <strong>Odczyt wątpliwych linii skanu</strong>
+        <small>Ta wersja aplikacji nie zawiera modelu wizyjnego w manifeście.</small>
+      </div>
+    );
+  }
+  const progress = status.progress;
   return (
     <div className="local-ai-facts">
       <strong>Odczyt wątpliwych linii skanu</strong>
       <small>
-        {status.label}, {formatBytes(status.bytes)}. Działa w trybie z korektą AI: czyta ponownie tylko linie odczytane
-        niepewnie, a zmianę przyjmuje słownik (bez dopisywania dat, nazwisk i liczb).
+        {status.label}, {formatBytes(status.bytes)}{status.license ? `, licencja ${status.license}` : ""}. Działa w
+        trybie z korektą AI: czyta ponownie tylko linie odczytane niepewnie, a zmianę przyjmuje słownik (bez dopisywania
+        dat, nazwisk i liczb). Pliki są pobierane i weryfikowane (SHA-256) tak jak modele lokalnej AI.
       </small>
       {status.state === "DOWNLOADING" ? (
-        <small>Pobieranie: {formatBytes(status.received ?? 0)} z {formatBytes(status.bytes)}</small>
+        <div className="local-ai-progress">
+          <div>
+            <strong>{progress ? progressLabel(progress.phase) : "Przygotowanie"}</strong>
+            {progress ? <small>{progress.label}</small> : null}
+          </div>
+          {progress?.percent !== null && progress?.percent !== undefined ? (
+            <progress max={100} value={progress.percent} />
+          ) : (
+            <progress />
+          )}
+          {progress ? (
+            <small>
+              {formatBytes(progress.bytesDownloaded)}
+              {progress.bytesTotal !== null ? ` / ${formatBytes(progress.bytesTotal)}` : ""}
+              {progress.percent !== null ? ` · ${progress.percent}%` : ""}
+            </small>
+          ) : null}
+        </div>
       ) : status.installed ? (
         <small>Zainstalowany{status.engineInstalled ? "." : ", ale brak silnika lokalnej AI: najpierw zainstaluj lokalną AI."}</small>
       ) : (

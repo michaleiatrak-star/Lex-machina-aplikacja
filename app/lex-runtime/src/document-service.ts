@@ -568,7 +568,7 @@ implements DocumentService {
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
     private readonly registryForms?: RegistryFormsProvider,
     // The local vision model for doubtful OCR lines, when installed (null otherwise).
-    private readonly visionReader?: () => { readLine: ReadLine; stop(): void } | null,
+    private readonly visionReader?: () => { readLine: ReadLine; stop(): void; modelBytes: number } | null,
     // The vision step: text models (Bielik) are stopped so the vision model has the memory.
     private readonly stopTextModels?: () => Promise<void>,
     // "z lokalnym AI": the text model is started right before the detection of personal data.
@@ -987,13 +987,13 @@ implements DocumentService {
         process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
       }
     }
-    if (!enoughMemoryForVision()) {
+    const session = this.visionReader();
+    if (!session) return source;
+    if (!enoughMemoryForVision(session.modelBytes)) {
       process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
       onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
       return source;
     }
-    const session = this.visionReader();
-    if (!session) return source;
     let pages: IngestedPage[];
     try {
       pages = await correctWithVision(

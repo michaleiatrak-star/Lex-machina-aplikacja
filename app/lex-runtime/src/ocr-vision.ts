@@ -209,57 +209,109 @@ export function withoutLineCrops(page: IngestedPage): IngestedPage {
 
 // --- the model files and the llama.cpp server ---
 
-export const VISION_MODEL_FILES = [
-  {
-    name: "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf?download=true",
-    sha256: "d02fe9b69ad8cadbbd228e387667af66612c44bed29ffc8eb1e7caf9ac486c12",
-    bytes: 1929901056
-  },
-  {
-    name: "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
-    url: "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf?download=true",
-    sha256: "980c9b2f78c04e6cff93d277ada09e768394f112d75db3b4e9dea8a69f9fb904",
-    bytes: 844757728
-  }
-] as const;
+/** One entry of models.localVision in the release manifest: the model and its projector (mmproj). */
+export type VisionModelFile = { filename: string; url: string; sha256: string; bytes: number };
+export type VisionModelSpec = VisionModelFile & { id: string; displayName: string; license?: string; projector: VisionModelFile };
 
-export const VISION_MODEL_LABEL = "Qwen2.5-VL 3B (odczyt wątpliwych linii OCR)";
+/** The installed model, as recorded in <local-ai>/vision/vision.json by the installer. */
+export type InstalledVisionModel = { id: string; model: string; projector: string; bytes: number };
 
-// The model needs about 3.3 GB while it runs. Started only for the document and only with this
-// much free memory: next to a running Bielik (about 7 GB) and the OCR worker (about 3.6 GB)
-// a 16 GB machine runs out, and the system kills processes.
-const MIN_FREE_BYTES = Number(process.env.LEX_OCR_VISION_MIN_FREE_MB ?? 4096) * 1024 * 1024;
-
-export function enoughMemoryForVision(free: number = os.freemem()): boolean {
-  return free >= MIN_FREE_BYTES;
+function validFile(value: unknown): value is VisionModelFile {
+  const record = value as Record<string, unknown> | null;
+  return Boolean(
+    record &&
+      typeof record.filename === "string" &&
+      /^[A-Za-z0-9._-]+\.gguf$/.test(record.filename) &&
+      typeof record.url === "string" &&
+      record.url.startsWith("https://") &&
+      typeof record.sha256 === "string" &&
+      /^[0-9a-fA-F]{64}$/.test(record.sha256) &&
+      typeof record.bytes === "number" &&
+      Number.isSafeInteger(record.bytes) &&
+      record.bytes > 0
+  );
 }
 
-export function visionModelInstalled(dir: string): boolean {
-  return VISION_MODEL_FILES.every((file) => {
-    try {
-      return fs.statSync(path.join(dir, file.name)).size === file.bytes;
-    } catch {
-      return false;
-    }
-  });
+/** The first valid models.localVision entry of a release manifest, or null. */
+export function visionModelFromManifest(manifest: unknown): VisionModelSpec | null {
+  const models = (manifest as { models?: { localVision?: unknown } } | null)?.models?.localVision;
+  for (const entry of Array.isArray(models) ? models : []) {
+    const record = entry as Record<string, unknown>;
+    const projector = record.projector;
+    if (typeof record.id !== "string" || !validFile(entry) || !validFile(projector)) continue;
+    return {
+      id: record.id,
+      displayName: typeof record.displayName === "string" ? record.displayName : record.id,
+      filename: entry.filename,
+      url: entry.url,
+      sha256: entry.sha256.toLowerCase(),
+      bytes: entry.bytes,
+      ...(typeof record.license === "string" ? { license: record.license } : {}),
+      projector: { filename: projector.filename, url: projector.url, sha256: projector.sha256.toLowerCase(), bytes: projector.bytes }
+    };
+  }
+  return null;
+}
+
+function sizeOf(file: string): number | null {
+  try {
+    return fs.statSync(file).size;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The model recorded in vision.json, when both files are still there with the sizes the manifest
+ * gives (a model from another manifest entry or a half-copied file does not count).
+ */
+export function installedVisionModel(dir: string, spec: VisionModelSpec | null): InstalledVisionModel | null {
+  let config: { model?: { id?: unknown; path?: unknown; sha256?: unknown }; projector?: { path?: unknown; sha256?: unknown } };
+  try {
+    config = JSON.parse(fs.readFileSync(path.join(dir, "vision.json"), "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+  const model = config.model;
+  const projector = config.projector;
+  if (!spec || !model || !projector || model.id !== spec.id) return null;
+  if (typeof model.path !== "string" || typeof projector.path !== "string") return null;
+  if (String(model.sha256).toLowerCase() !== spec.sha256 || String(projector.sha256).toLowerCase() !== spec.projector.sha256) return null;
+  if (sizeOf(model.path) !== spec.bytes || sizeOf(projector.path) !== spec.projector.bytes) return null;
+  return { id: spec.id, model: model.path, projector: projector.path, bytes: spec.bytes + spec.projector.bytes };
+}
+
+// While it runs the model takes about its file sizes plus the context and image buffers. Started
+// only for the document and only with this much free memory: next to a running text model and
+// the OCR worker a 16 GB machine runs out, and the system kills processes.
+const RUNTIME_OVERHEAD_BYTES = Number(process.env.LEX_OCR_VISION_OVERHEAD_MB ?? 1024) * 1024 * 1024;
+
+export function enoughMemoryForVision(modelBytes: number, free: number = os.freemem()): boolean {
+  return free >= modelBytes + RUNTIME_OVERHEAD_BYTES;
 }
 
 export type VisionInstallProgress = { file: string; received: number; total: number };
 
-/** Downloads the two model files into `dir`, each checked against its SHA-256. */
-export async function installVisionModel(dir: string, onProgress?: (progress: VisionInstallProgress) => void): Promise<void> {
+/**
+ * Outside Windows (development, macOS): downloads both files into `dir`, each checked against its
+ * SHA-256, and writes vision.json the way install-local-vision.ps1 does.
+ */
+export async function installVisionModel(
+  dir: string,
+  spec: VisionModelSpec,
+  onProgress?: (progress: VisionInstallProgress) => void
+): Promise<void> {
   fs.mkdirSync(dir, { recursive: true });
-  for (const file of VISION_MODEL_FILES) {
-    const target = path.join(dir, file.name);
-    try {
-      if (fs.statSync(target).size === file.bytes) continue;
-    } catch {
-      // Not there yet.
-    }
+  const config = path.join(dir, "vision.json");
+  fs.rmSync(config, { force: true });
+  const paths: string[] = [];
+  for (const file of [spec, spec.projector]) {
+    const target = path.join(dir, file.filename);
+    paths.push(target);
+    if (sizeOf(target) === file.bytes) continue;
     const partial = `${target}.part`;
     const response = await fetch(file.url);
-    if (!response.ok || !response.body) throw new Error(`VISION_MODEL_DOWNLOAD_FAILED:${file.name}:${response.status}`);
+    if (!response.ok || !response.body) throw new Error(`VISION_MODEL_DOWNLOAD_FAILED:${file.filename}:${response.status}`);
     const hash = createHash("sha256");
     const out = fs.createWriteStream(partial);
     let received = 0;
@@ -268,17 +320,25 @@ export async function installVisionModel(dir: string, onProgress?: (progress: Vi
         hash.update(chunk);
         received += chunk.length;
         if (!out.write(chunk)) await new Promise<void>((resolve) => out.once("drain", () => resolve()));
-        onProgress?.({ file: file.name, received, total: file.bytes });
+        onProgress?.({ file: file.filename, received, total: file.bytes });
       }
     } finally {
       await new Promise<void>((resolve) => out.end(() => resolve()));
     }
     if (hash.digest("hex") !== file.sha256 || received !== file.bytes) {
       fs.rmSync(partial, { force: true });
-      throw new Error(`VISION_MODEL_CHECKSUM_MISMATCH:${file.name}`);
+      throw new Error(`VISION_MODEL_CHECKSUM_MISMATCH:${file.filename}`);
     }
     fs.renameSync(partial, target);
   }
+  const record = {
+    schemaVersion: 1,
+    installedAt: new Date().toISOString(),
+    model: { id: spec.id, displayName: spec.displayName, filename: spec.filename, path: paths[0], sha256: spec.sha256 },
+    projector: { filename: spec.projector.filename, path: paths[1], sha256: spec.projector.sha256 }
+  };
+  fs.writeFileSync(`${config}.tmp`, `${JSON.stringify(record, null, 2)}\n`);
+  fs.renameSync(`${config}.tmp`, config);
 }
 
 async function freePort(): Promise<number> {
@@ -309,16 +369,21 @@ export class LocalVisionLineReader {
 
   constructor(
     private readonly executable: string,
-    private readonly dir: string,
+    private readonly model: InstalledVisionModel,
     private readonly options: { gpuOffload?: boolean; threads?: number; startTimeoutMs?: number } = {}
   ) {}
+
+  /** Bytes of both model files: the memory the server takes beyond its buffers. */
+  get modelBytes(): number {
+    return this.model.bytes;
+  }
 
   async start(): Promise<void> {
     if (this.child) return;
     this.port = await freePort();
     const args = [
-      "--model", path.join(this.dir, VISION_MODEL_FILES[0].name),
-      "--mmproj", path.join(this.dir, VISION_MODEL_FILES[1].name),
+      "--model", this.model.model,
+      "--mmproj", this.model.projector,
       "--host", "127.0.0.1",
       "--port", String(this.port),
       "--ctx-size", "4096",

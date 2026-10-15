@@ -691,7 +691,7 @@ export async function startLocalServer(options?: {
       registryEnrichmentFor(legalFederationTools),
       () => {
         const vision = localModels.visionOcr();
-        return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+        return vision ? new LocalVisionLineReader(vision.executable, vision.model, { gpuOffload: vision.gpuOffload }) : null;
       },
       // The vision step: a running text model gives its memory to the vision model.
       async () => {

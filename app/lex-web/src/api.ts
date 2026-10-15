@@ -3468,12 +3468,15 @@ export function finalizeDocument(
 }
 
 export type VisionOcrStatus = {
+  available: boolean;
+  modelId: string | null;
   label: string;
+  license: string | null;
   bytes: number;
   installed: boolean;
   engineInstalled: boolean;
   state: "IDLE" | "DOWNLOADING" | "FAILED";
-  received?: number;
+  progress: { phase: string; label: string; bytesDownloaded: number; bytesTotal: number | null; percent: number | null } | null;
   error?: string;
 };
 

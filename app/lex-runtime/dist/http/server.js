@@ -335,7 +335,7 @@ export async function startLocalServer(options) {
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
     const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), registryEnrichmentFor(legalFederationTools), () => {
         const vision = localModels.visionOcr();
-        return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+        return vision ? new LocalVisionLineReader(vision.executable, vision.model, { gpuOffload: vision.gpuOffload }) : null;
     }, 
     // The vision step: a running text model gives its memory to the vision model.
     async () => {
