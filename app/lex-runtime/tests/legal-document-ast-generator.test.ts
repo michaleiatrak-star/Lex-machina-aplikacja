@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DocumentAstSessionBlockedError,
   LegalDocumentAstGenerator,
+  cleanAstMarkup,
   normalizeAstBlocks,
   normalizeAstHeader
 } from "../src/legal-document-ast-generator.js";
@@ -393,5 +394,33 @@ describe("LegalDocumentAstGenerator", () => {
         }]
       }
     })).rejects.toThrow("AST_UNKNOWN_PII_ALIAS");
+  });
+});
+
+describe("czat w tekście AST (Markdown) przebudowany przed walidacją", () => {
+  const para = (text: string) => ({ blocks: [{ type: "paragraph", content: [{ type: "text", text }] }] });
+  const blocks = (text: string) => (cleanAstMarkup(para(text)) as { blocks: unknown[] }).blocks;
+
+  it("zdejmuje wyróżnienia i nagłówki Markdown, zostawia pola do wypełnienia", () => {
+    expect(blocks("**Powód:** Jan Kowalski")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "Powód: Jan Kowalski" }] }]);
+    expect(blocks("## Uzasadnienie")).toEqual([{ type: "heading", level: 2, content: [{ type: "text", text: "Uzasadnienie" }] }]);
+    expect(blocks("Data: __________")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "Data: __________" }] }]);
+    expect(blocks("art. 5 *k.c.*")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "art. 5 *k.c.*" }] }]);
+  });
+
+  it("listę, tabelę i akapity z jednego akapitu rozbija na bloki", () => {
+    expect(blocks("Wnoszę o:\n1. zasądzenie\n2. koszty")).toEqual([
+      { type: "paragraph", content: [{ type: "text", text: "Wnoszę o:" }] },
+      { type: "list", ordered: true, items: [[{ type: "text", text: "zasądzenie" }], [{ type: "text", text: "koszty" }]] }
+    ]);
+    expect(blocks("| Kwota | Data |\n|---|---|\n| 100 zł | 1.10.2026 |")[0]).toMatchObject({ type: "table" });
+    expect(blocks("Pierwszy.\n\nDrugi.")).toHaveLength(2);
+    expect(blocks("```\nTekst\n```")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "Tekst" }] }]);
+  });
+
+  it("wyliczenie literowe zostaje literowe (lit. a), numeracja modelu w liście znika", () => {
+    expect(blocks("a) pierwszy\nb) drugi")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "a) pierwszy\nb) drugi" }] }]);
+    const list = cleanAstMarkup({ blocks: [{ type: "list", ordered: true, items: [[{ type: "text", text: "1. zasądzenie" }], [{ type: "text", text: "" }]] }] });
+    expect(list).toEqual({ blocks: [{ type: "list", ordered: true, items: [[{ type: "text", text: "zasądzenie" }]] }] });
   });
 });

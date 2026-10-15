@@ -582,3 +582,26 @@ describe("portions of long documents", () => {
     expect(JSON.parse(annotateFederatedLegalContent("isap", JSON.stringify(middle)))._lexPorcja).toContain("offset=40000");
   });
 });
+
+describe("search and get keys reach the native tool that takes them", () => {
+  it("routes identifiers to lookups and phrases to search", async () => {
+    const { NATIVE_SEARCH, NATIVE_GET } = await import("../src/legal-federation-tool-runtime.js");
+    // Live 2026-10-14: an act's CELEX went to eurlex_tsue as a phrase (NOT_FOUND "[object Object]").
+    expect(NATIVE_SEARCH.eurlex({ query: "32016R0679" })).toEqual({ tool: "eurlex_lookup", args: { celex: "32016R0679" } });
+    expect(NATIVE_SEARCH.eurlex({ query: "C-131/12" }).args).toMatchObject({ sygnatura: "C-131/12" });
+    expect(NATIVE_SEARCH.eurlex({ query: "ECLI:EU:C:2014:317" }).args).toMatchObject({ ecli: "ECLI:EU:C:2014:317" });
+    expect(NATIVE_SEARCH.eurlex({ query: "62012CJ0131" }).args).toMatchObject({ celex: "62012CJ0131" });
+    expect(NATIVE_SEARCH.eurlex({ query: "ochrona danych" }).args).toMatchObject({ fraza: "ochrona danych" });
+    // A journal citation is an ELI read, not a title search (NOT_FOUND before).
+    expect(NATIVE_SEARCH.isap({ query: "Dz.U. 1964 nr 16 poz. 93" }).args).toEqual({ eli: "DU/1964/93" });
+    expect(NATIVE_SEARCH.isap({ query: "Dz. U. z 2023 r. poz. 1610" }).args).toEqual({ eli: "DU/2023/1610" });
+    expect(NATIVE_SEARCH.isap({ query: "M.P. 2020 poz. 12" }).args).toEqual({ eli: "MP/2020/12" });
+    expect(NATIVE_SEARCH.isap({ query: "kodeks cywilny" }).args).toEqual({ query: "kodeks cywilny" });
+    // A case number in SAOS is checked as a signature (as a phrase it matched unrelated rulings).
+    expect(NATIVE_SEARCH.saos({ query: "II PK 291/09" }).args).toMatchObject({ sygnatura: "II PK 291/09" });
+    expect(NATIVE_SEARCH.saos({ query: "przedawnienie roszczeń" }).args).toMatchObject({ fraza: "przedawnienie roszczeń" });
+    // kio_pobierz takes only the numeric id; a signature is checked (input validation error before).
+    expect(NATIVE_GET.kio("KIO 1000/23")).toEqual({ tool: "kio_sprawdz_sygnature", args: { sygnatura: "KIO 1000/23" } });
+    expect(NATIVE_GET.kio("12345")).toEqual({ tool: "kio_pobierz", args: { id: "12345" } });
+  });
+});
