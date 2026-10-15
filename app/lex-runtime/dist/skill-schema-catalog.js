@@ -92,8 +92,11 @@ const DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stw
 const REVIEW = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|ocen\p{L}*|sprawdź|zweryfikuj|zbadaj|wyjaśnij|zasadn\p{L}*|dostałe?m|dostałam|otrzymałe?m|otrzymałam|przyszł\p{L}*|czy\s+(?:muszę|mam|mogę|można|jest|są|należy|powinien\p{L}*|trzeba)|policz|oblicz|wylicz|do\s+kiedy|kiedy\s+(?:mija|upływa)|jakie\s+mam\s+prawa|co\s+(?:mam\s+)?(?:zrobić|robić)|ile\s+(?:mam\s+)?(?:czasu|dni|kosztuj\p{L}*|wynosi|trwa|zapłac\p{L}*|płac\p{L}*)|jaki\s+(?:mam\s+|jest\s+)?termin|termin\s+na|jak\s+długo|czy\s+potrzebuj\p{L}*)(?![\p{L}])/iu;
 // "Jak napisać apelację?", "Jak złożyć skargę na lekarza?", "Co w niej napisać?": how
 // to do it, asked as a question; the user has not asked for the letter itself.
-const HOW_TO = /(?:^|[.!?]\s+|,\s*)(?:a\s+)?(?:jak|co\s+(?:w\s+(?:niej|nim)\s+)?)\s*(?:mam\s+|można\s+|się\s+)?(?:napisać|złożyć|wnieść|przygotować|sporządzić|zaskarżyć|odwołać)(?![\p{L}])[^.!]*\?\s*$/iu;
+const HOW_TO = /(?:^|[.!?]\s+|,\s*)(?:a\s+)?(?:jak|co\s+(?:w\s+(?:niej|nim)\s+)?)\s*(?:mam\s+|można\s+|się\s+)?(?:napisać|złożyć|wnieść|przygotować|sporządzić|zaskarżyć|odwołać|wypowiedzieć|rozwiązać|odstąpić)(?![\p{L}])[^.!]*\?\s*$/iu;
 const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu;
+// "Napisz umowę sprzedaży z prawem odstąpienia": the contract itself is drafted (analizator-umow-v1),
+// not a letter about it, though its words name a letter's row.
+const CONTRACT_DRAFT = /(?<![\p{L}])(?:napisz|przygotuj|sporządź|zredaguj|wygeneruj|stwórz|opracuj|utwórz)\s+(?:(?:mi|nam|projekt|wzór|nową|nowa|tę|ta)\s+)?umow\p{L}*(?![\p{L}])/iu;
 /**
  * The schema to draft with, only when the user asks to draft that letter: a
  * question about a received letter ("przeanalizuj to wezwanie", "dostałem
@@ -102,7 +105,7 @@ const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu
  */
 export function draftingSchema(entries, text, delivered = {}) {
     const schema = matchSchema(entries, text);
-    if (!schema)
+    if (!schema || CONTRACT_DRAFT.test(text))
         return null;
     const demand = schema.code === "SPE" || schema.code === "SPE-O";
     if (demand && REPLY_TO_DEMAND.test(text))
