@@ -1,6 +1,8 @@
 import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
+import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
+import { validCaseWork, type CaseWorkItem } from "./case-work.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -77,6 +79,9 @@ export type WorkspaceThreadMessage = {
   evidence?: Record<string, unknown>[];
   auxiliarySources?: Record<string, unknown>[];
   mandatoryPath?: Record<string, unknown>;
+  // Pages of the case's documents read for this answer (document-coverage.ts).
+  documentCoverage?: Array<{ documentId: string; title?: string; totalPages: number; pages: Array<[number, number]>; status: "FULL" | "PARTIAL" }>;
+  documentAnalysis?: boolean;
   pipelineNext?: { skill: string; reason: string; choices?: Array<{
     skill: string;
     kind: "DOCUMENT" | "ANALYSIS";
@@ -122,6 +127,10 @@ export type WorkspaceRestoration = {
 export type CaseMemory = {
   evidence?: ThreadEvidence;
   summary?: ThreadSummary;
+  // The case's timeline from its last chronology (case-chronology.ts).
+  chronology?: CaseChronology;
+  // Work done and open in the case (case-work.ts).
+  work?: CaseWorkItem[];
 };
 
 export type CaseWorkspaceIndex = {
@@ -360,6 +369,28 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
 
+  const coverage = input.documentCoverage;
+  if (
+    coverage !== undefined &&
+    (!Array.isArray(coverage) ||
+      coverage.length > 50 ||
+      !coverage.every(
+        (entry) =>
+          typeof entry === "object" && entry !== null &&
+          /^doc_[a-f0-9]{24}$/.test(String(entry.documentId)) &&
+          (entry.title === undefined || (typeof entry.title === "string" && entry.title.length <= 300)) &&
+          Number.isInteger(entry.totalPages) && entry.totalPages >= 1 && entry.totalPages <= 100_000 &&
+          (entry.status === "FULL" || entry.status === "PARTIAL") &&
+          Array.isArray(entry.pages) && entry.pages.length <= 500 &&
+          entry.pages.every((range) => Array.isArray(range) && range.length === 2 && range.every((page) => Number.isInteger(page) && page >= 1))
+      ))
+  ) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
+  if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
+
   const {
     restorations: _dropped,
     generatedDocument: _generated,
@@ -367,10 +398,24 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     auxiliarySources: _auxiliary,
     mandatoryPath: _path,
     pipelineNext: _next,
+    documentCoverage: _coverage,
+    documentAnalysis: _analysis,
     ...rest
   } = input;
   return {
     ...rest,
+    ...(coverage?.length
+      ? {
+          documentCoverage: coverage.map((entry) => ({
+            documentId: entry.documentId,
+            ...(entry.title ? { title: entry.title } : {}),
+            totalPages: entry.totalPages,
+            pages: entry.pages.map(([start, end]) => [start, end] as [number, number]),
+            status: entry.status
+          }))
+        }
+      : {}),
+    ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
     ...(evidence?.length ? { evidence } : {}),
     ...(auxiliarySources?.length ? { auxiliarySources } : {}),
     ...(mandatoryPath ? { mandatoryPath } : {}),
@@ -884,7 +929,9 @@ export class EncryptedCaseWorkspaceStore {
       ...(item.evidence ? { evidence: structuredClone(item.evidence) } : {}),
       ...(item.auxiliarySources ? { auxiliarySources: structuredClone(item.auxiliarySources) } : {}),
       ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
-      ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {})
+      ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
+      ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
+      ...(item.documentAnalysis ? { documentAnalysis: true } : {})
     }));
   }
 
@@ -1165,9 +1212,13 @@ export class EncryptedCaseWorkspaceStore {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const evidence = validThreadEvidence(index.memory?.evidence);
     const summary = validThreadSummary(index.memory?.summary);
+    const chronology = validCaseChronology(index.memory?.chronology);
+    const work = validCaseWork(index.memory?.work);
     return {
+      ...(work?.length ? { work } : {}),
       ...(evidence ? { evidence } : {}),
       ...(summary ? { summary } : {}),
+      ...(chronology ? { chronology } : {}),
       threadMessages: index.thread.messages.map((message) => ({ ...message }))
     };
   }
@@ -1179,6 +1230,8 @@ export class EncryptedCaseWorkspaceStore {
     keyVersion: number;
     evidence?: ThreadEvidence | null;
     summary?: ThreadSummary | null;
+    chronology?: CaseChronology | null;
+    work?: CaseWorkItem[] | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
@@ -1193,6 +1246,18 @@ export class EncryptedCaseWorkspaceStore {
       if (args.summary !== null && !summary) throw new Error("CASE_MEMORY_SUMMARY_INVALID");
       if (summary) memory.summary = summary;
       else delete memory.summary;
+    }
+    if (args.chronology !== undefined) {
+      const chronology = args.chronology === null ? null : validCaseChronology(args.chronology);
+      if (args.chronology !== null && !chronology) throw new Error("CASE_MEMORY_CHRONOLOGY_INVALID");
+      if (chronology) memory.chronology = chronology;
+      else delete memory.chronology;
+    }
+    if (args.work !== undefined) {
+      const work = args.work === null ? null : validCaseWork(args.work);
+      if (args.work !== null && !work) throw new Error("CASE_MEMORY_WORK_INVALID");
+      if (work?.length) memory.work = work;
+      else delete memory.work;
     }
     index.memory = memory;
     await this.write(index, args.caseDataKey, args.keyVersion);

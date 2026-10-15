@@ -48,6 +48,8 @@ export function CaseMemoryCard({
 
   const provisions = memory?.evidence?.provisions ?? [];
   const summary = memory?.summary ?? null;
+  const chronology = memory?.chronology ?? null;
+  const work = memory?.work ?? [];
 
   const run = async (work: () => Promise<void>, done: string) => {
     setBusy(true);
@@ -69,6 +71,8 @@ export function CaseMemoryCard({
           <span className="eyebrow">Pamięć sprawy</span>{" "}
           {provisions.length ? `${provisions.length} przepisów` : "bez przepisów"}
           {summary ? `, streszczenie ${summary.coveredMessages} wiadomości` : ""}
+          {chronology ? ", oś czasu" : ""}
+          {work.length ? `, prace: ${work.filter((item) => item.status === "DONE").length} zamkniętych, ${work.filter((item) => item.status === "OPEN").length} otwartych` : ""}
         </summary>
         <p className="field-help">
           Kolejne odpowiedzi w tej sprawie zaczynają od tych ustaleń. Przepis zweryfikowany wcześniej jest użyty bez ponownej weryfikacji tylko wtedy, gdy Sejm ELI ma ten sam tekst jednolity i nie ma nowelizacji po nim.
@@ -119,6 +123,32 @@ export function CaseMemoryCard({
           <p className="field-help">Brak: cała rozmowa mieści się w oknie modelu.</p>
         )}
 
+        <h3>Prace w sprawie</h3>
+        {work.length ? (
+          <>
+            <p className="field-help">Kolejne odpowiedzi korzystają z wyników zamkniętych prac zamiast wykonywać je od nowa; otwarte dokańczają.</p>
+            <ul className="case-memory-list">
+              {work.map((item) => (
+                <li key={item.key}>{item.line}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="field-help">Brak zapisanych prac.</p>
+        )}
+
+        <h3>Oś czasu sprawy</h3>
+        {chronology ? (
+          <>
+            <p className="field-help">
+              Z chronologii z {date(chronology.updatedAt)}; kolejne prace w tej sprawie (także w nowym wątku) dostają ją jako materiał. Nowa chronologia ją zastępuje.
+            </p>
+            <pre className="case-memory-summary">{chronology.text}</pre>
+          </>
+        ) : (
+          <p className="field-help">Brak: zapisuje się po chronologii sprawy (oś czasu zdarzeń).</p>
+        )}
+
         <h3>Przepisy ustalone wcześniej</h3>
         {provisions.length ? (
           <ul className="case-memory-list">
@@ -143,7 +173,7 @@ export function CaseMemoryCard({
           <p className="field-help">Skille użyte w sprawie: {memory.evidence.skills.join(", ")}</p>
         ) : null}
 
-        {canWrite && (summary || provisions.length) ? (
+        {canWrite && (summary || provisions.length || chronology || work.length) ? (
           <button
             type="button"
             className="chat-secondary-action"
@@ -151,7 +181,7 @@ export function CaseMemoryCard({
             onClick={() =>
               void run(async () => {
                 await clearCaseMemory(caseId);
-                setMemory({ summary: null, evidence: null });
+                setMemory({ summary: null, evidence: null, chronology: null, work: [] });
                 setDraft("");
               }, "Pamięć sprawy wyczyszczona.")
             }

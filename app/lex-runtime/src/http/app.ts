@@ -243,6 +243,8 @@ import {
   registerGoogleAuthenticatedRoutes,
   registerGooglePublicRoutes
 } from "../google/http-routes.js";
+import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
+import { caseWorkBlock, caseWorkLine, recordCaseWork, type CaseWorkItem } from "../case-work.js";
 import {
   buildWorkflowAuditArtifact,
   isStatefulWorkflowAuditId,
@@ -3699,6 +3701,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       );
       res.json({
         summary: memory.summary ?? null,
+        chronology: memory.chronology ? { text: memory.chronology.text, updatedAt: memory.chronology.updatedAt, source: memory.chronology.source } : null,
+        work: (memory.work ?? []).map((item) => ({ ...item, line: caseWorkLine(item) })),
         evidence: memory.evidence
           ? {
               updatedAt: memory.evidence.updatedAt,
@@ -3755,7 +3759,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
     try {
       await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) =>
-        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null })
+        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null })
       );
       res.json({ cleared: true });
     } catch (error) {
@@ -9615,6 +9619,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
       // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
       let threadEvidence: ThreadEvidence | null = null;
+      let caseWork: CaseWorkItem[] = [];
       if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
         try {
           const actor = responseAuthContext(res);
@@ -9624,6 +9629,18 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           );
           threadEvidence = memory.evidence ?? null;
           if (threadEvidence) request.threadEvidence = threadEvidence;
+          caseWork = memory.work ?? [];
+          // What the case already has: the register of work done and open, and the timeline
+          // of its chronology (a part of the larger work). Later turns use them, not redo them.
+          const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
+          const register = caseWorkBlock(caseWork);
+          if (timeline || register) {
+            request.query = queryWithChronology(request.query, [register, timeline].filter(Boolean).join("\n\n"));
+            request.onStep?.(
+              "PREPARE",
+              [register ? `rejestr prac sprawy (${caseWork.length})` : "", timeline ? `oś czasu z ${memory.chronology!.updatedAt.slice(0, 10)}` : ""].filter(Boolean).join(", ")
+            );
+          }
           // Messages the client left out for the window: replaced with their summary.
           const dropped = droppedMessageCount(request.query);
           if (dropped && options.sessionExecutor.summarizeThread) {
@@ -11775,6 +11792,60 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         options.documentService
       );
       if (appliedTemplate) result.firmTemplateApplied = appliedTemplate;
+      // A chronology result is kept as the case's timeline (case memory) for the later work.
+      const timelineToKeep =
+        knowledge.caseId && options.caseMemoryStore && options.caseAccessService
+          ? chronologyFromAnswer({
+              answer: result.answer,
+              status: result.status,
+              ...(result.taskSkill ? { taskSkill: result.taskSkill } : {}),
+              reportClosed:
+                chronologyContext?.permit.checkpoint === "CHRONOLOGY_REPORT_COMPLETE" &&
+                result.chronologyWorkflow?.closedCheckpoints.includes("CHRONOLOGY_REPORT_COMPLETE") === true,
+              sessionId: result.sessionId
+            })
+          : null;
+      // The register of the case's work: documents analysed (pages), the chronology, workflows done.
+      const completedWorkflows = [
+        result.courtWorkflow?.stage === "COMPLETE" ? "COURT_ANALYSIS_V1" : null,
+        result.contractWorkflow?.stage === "COMPLETE" ? "CONTRACT_ANALYSIS_V1" : null,
+        result.chronologyWorkflow?.stage === "COMPLETE" ? "CHRONOLOGY_V1" : null,
+        result.orderedCaseWorkflow?.status === "COMPLETE" ? result.orderedCaseWorkflow.workflowId : null,
+        result.processWorkflow?.documentStatus === "FINAL" ? "PROCESS_PLEADING_V1" : null
+      ].filter((id): id is string => Boolean(id));
+      const workChanged =
+        result.status === "DRAFT_PRESENTABLE" &&
+        ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length);
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || workChanged)) {
+        try {
+          const actor = responseAuthContext(res);
+          const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+          const now = new Date().toISOString();
+          await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", async (caseDataKey) => {
+            const key = { caseId: knowledge.caseId!, caseDataKey, keyVersion: caseView.keyVersion };
+            const current = await options.caseMemoryStore!.getCaseMemory(key);
+            await options.caseMemoryStore!.saveCaseMemory({
+              ...key,
+              ...(timelineToKeep ? { chronology: timelineToKeep } : {}),
+              ...(workChanged
+                ? {
+                    work: recordCaseWork(current.work ?? caseWork, {
+                      now,
+                      ...(result.taskSkill ? { skill: result.taskSkill } : {}),
+                      ...(result.documentAnalysis ? { documentAnalysis: true } : {}),
+                      ...(result.documentCoverage ? { coverage: result.documentCoverage } : {}),
+                      chronologySaved: Boolean(timelineToKeep),
+                      completedWorkflows
+                    })
+                  }
+                : {})
+            });
+          });
+          if (timelineToKeep) result.chronologySaved = { updatedAt: timelineToKeep.updatedAt };
+        } catch (error) {
+          console.error("CASE_MEMORY_WORK_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+        }
+      }
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
         await rememberThreadEvidence({
           store: options.caseMemoryStore,

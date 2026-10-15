@@ -123,6 +123,7 @@ import {
   type ContractAnalysisMode
 } from "./api.js";
 import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
+import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
 
@@ -959,6 +960,10 @@ function executionMessage(
       verificationDegraded
         ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
         : "";
+    // The chronology was kept as the case's timeline: said under the answer.
+    const timelineNote = execution.chronologySaved
+      ? "\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._"
+      : "";
     // The step passed but a tool call was refused on the way: its checkpoint stays open.
     const heldNotice = execution.checkpointHeld
       ? `${checkpointHeldNotice(execution.checkpointHeld.steps)}\n\n`
@@ -970,10 +975,14 @@ function executionMessage(
       content:
         verificationWarning +
         heldNotice +
-        execution.answer,
+        execution.answer +
+        timelineNote,
       evidence: execution.evidence,
       ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
       ...(execution.pipelineNext ? { pipelineNext: execution.pipelineNext } : {}),
+      ...(execution.documentCoverage?.length
+        ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
+        : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -5537,6 +5546,9 @@ export default function MatterChatApp({
                     </details>
                   ) : null}
                   {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
+                  {message.documentCoverage?.length ? (
+                    <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
+                  ) : null}
                   {message.pipelineNext ? (
                     <PipelineChoices
                       next={message.pipelineNext}
@@ -5761,6 +5773,12 @@ export default function MatterChatApp({
                   <span className="chat-clear-text-warning">Uwaga: część załączników to tekst jawny</span>
                 ) : null}
               </div>
+              <UnfinishedAnalysis
+                items={unfinishedDocuments(messages)}
+                label={(item) => fileLabel(item.documentId, item.title)}
+                disabled={executing || Boolean(selectedCase?.archivedAt)}
+                onFinish={(text) => void executeMessage(text)}
+              />
               {lastDelivery ? (
                 <div className="chat-delivery" role="status">
                   <strong>

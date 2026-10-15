@@ -1026,8 +1026,22 @@ export type QueryModeDecisionView = {
   signals: { laik: string[]; prawnik: string[]; direct: string[] };
 };
 
+/** Pages of a case document read for an answer; PARTIAL in an analysis = unfinished work. */
+export type DocumentCoverageEntry = {
+  documentId: string;
+  title?: string;
+  totalPages: number;
+  pages: Array<[number, number]>;
+  status: "FULL" | "PARTIAL";
+};
+
 export type SessionExecutionResponse = {
   sessionId: string;
+  // The answer was kept as the case's timeline (case memory).
+  chronologySaved?: { updatedAt: string };
+  // Pages of the case's documents read this turn; documentAnalysis: the turn analysed them.
+  documentCoverage?: DocumentCoverageEntry[];
+  documentAnalysis?: boolean;
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
   pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
@@ -1859,6 +1873,10 @@ export type CaseThreadSummary = {
 
 export type CaseMemory = {
   summary: CaseThreadSummary | null;
+  // The case's timeline from its last chronology; later answers in the case start from it.
+  chronology?: { text: string; updatedAt: string; source: "CHRONOLOGY_V1" | "AUTO" } | null;
+  // Work done and open in the case (the application's register): later answers use it.
+  work?: Array<{ key: string; kind: string; label: string; status: "DONE" | "OPEN"; at: string; line: string }>;
   evidence: {
     updatedAt: string;
     provisions: Array<{

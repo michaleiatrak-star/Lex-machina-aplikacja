@@ -113,7 +113,7 @@ function snippet(text: string, query: string): string {
 
 export class CaseFileToolRuntime {
   private readonly events: CaseFileAuditEvent[] = [];
-  private readonly read: Array<{ documentId: string; chunks: CaseFileChunk[] }> = [];
+  private readonly read: Array<{ documentId: string; totalPages?: number; chunks: CaseFileChunk[] }> = [];
   private usedChars = 0;
 
   constructor(
@@ -154,8 +154,12 @@ export class CaseFileToolRuntime {
   }
 
   /** Chunks read in this turn, as stored (for citation checks). */
-  readChunks(): Array<{ documentId: string; chunks: CaseFileChunk[] }> {
-    return this.read.map((item) => ({ documentId: item.documentId, chunks: item.chunks.map((chunk) => ({ ...chunk })) }));
+  readChunks(): Array<{ documentId: string; totalPages?: number; chunks: CaseFileChunk[] }> {
+    return this.read.map((item) => ({
+      documentId: item.documentId,
+      ...(item.totalPages ? { totalPages: item.totalPages } : {}),
+      chunks: item.chunks.map((chunk) => ({ ...chunk }))
+    }));
   }
 
   private alias(documentId: string, text: string): string {
@@ -241,6 +245,7 @@ export class CaseFileToolRuntime {
       stored = { documentId, chunks: [] };
       this.read.push(stored);
     }
+    if (document.totalPages) stored.totalPages = document.totalPages;
     for (const chunk of document.chunks) {
       if (!stored.chunks.some((item) => item.index === chunk.index)) stored.chunks.push({ ...chunk });
     }

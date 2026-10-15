@@ -3196,3 +3196,38 @@ mark.restored {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.chat-coverage-line {
+  display: block;
+  margin-top: 6px;
+  color: #5b6a5d;
+  overflow-wrap: anywhere;
+}
+
+/* An analysis that read a document only in part: open work until the rest is read. */
+.chat-unfinished-analysis {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px dashed #c9a24a;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.chat-unfinished-analysis ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-unfinished-analysis li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}

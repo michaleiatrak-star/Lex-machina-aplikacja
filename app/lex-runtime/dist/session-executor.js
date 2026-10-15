@@ -25,6 +25,18 @@ import { WidgetToolRuntime } from "./widget-runtime.js";
 import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
+import { documentCoverage } from "./document-coverage.js";
+// Skills whose result rests on reading the documents through (a partial read is unfinished).
+const COVERAGE_SKILLS = new Set([
+    "analiza-sadowa-v6",
+    "analizator-dowodow-v3",
+    "analizator-umow-v1",
+    "chronologia-sprawy-v1",
+    "raport-sytuacyjny-v2",
+    "raport-klienta-v1",
+    "przesluchanie-swiadkow-v2-min90",
+    "pisma-procesowe-v3"
+]);
 import fs from "node:fs";
 import path from "node:path";
 import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
@@ -86,6 +98,10 @@ const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 // A follow-up this short ("ok, robisz to.") carries no task of its own.
 const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
+// Cause and effect in the user's own case (establish or exclude a causal link): the causal
+// graph method (link evidence, csqn, post hoc, interruption, MET-ACH exclusion).
+const CAUSAL_RESOURCE = "shared/MOD-GRAF-PRZYCZYNOWY.md";
+export const CAUSAL_QUESTION = /(?<![\p{L}])(?:związ\p{L}*\s+przyczynow\p{L}*|przyczynowo[-\s]skutkow\p{L}*|co\s+z\s+czego\s+wynika|post\s+hoc|csqn|conditio\s+sine\s+qua\s+non|(?:czy|co)\s+(?:\p{L}+\s+){0,6}(?:spowodował\p{L}*|doprowadził\p{L}*|wywołał\p{L}*)|przerw\p{L}*\s+(?:\p{L}+\s+){0,2}związ\p{L}*|wyklucz\p{L}*\s+(?:\p{L}+\s+){0,3}(?:związ\p{L}*|przyczyn\p{L}*)|łańcuch\p{L}*\s+przyczyn\p{L}*)(?![\p{L}])/iu;
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
 // Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
 export function resumeHostThread(env = process.env) {
@@ -1199,6 +1215,17 @@ export class SafeSessionExecutor {
                 contextResources.add(CRIMINAL_QUALIFIER_RESOURCE);
                 audit.record("resource_read", CRIMINAL_QUALIFIER_RESOURCE, "OK", { detail: "runtime-preload;mandatory-path;criminal-question" });
                 pathSections.push(`# MANDATORY PATH RESOURCE: ${CRIMINAL_QUALIFIER_RESOURCE}\n\n${qualifier}`);
+            }
+        }
+        // A causal question about the case: the causal graph method up front, so the link is
+        // examined (mechanism, evidence of each link), not read off the order of the dates.
+        if (mandatoryModel && legalTurn && CAUSAL_QUESTION.test(pathFacts.query)) {
+            const causal = this.readCorpus(CAUSAL_RESOURCE);
+            if (causal) {
+                contextResources.add(CAUSAL_RESOURCE);
+                audit.record("resource_read", CAUSAL_RESOURCE, "OK", { detail: "runtime-preload;causal-question" });
+                pathSections.push(`# MANDATORY PATH RESOURCE: ${CAUSAL_RESOURCE}\n\n${causal}`);
+                step("SKILLS", "pytanie o związek przyczynowy: metoda grafu przyczynowego (MOD-GRAF-PRZYCZYNOWY)");
             }
         }
         // AUTO: the domain (prawo-polskie-v2 flash routing) and its act modules
@@ -2962,6 +2989,26 @@ export class SafeSessionExecutor {
             ...(widgetTools && widgetTools.widgets().length > 0
                 ? { widgets: widgetTools.widgets() }
                 : {}),
+            ...(() => {
+                // Pages of the case's documents the model read this turn (sent chunks in full, and
+                // read_case_file): a document read in part is reported as unfinished work.
+                const coverage = documentCoverage([
+                    ...attachments
+                        .filter((attachment) => attachment.sourceScope !== "FIRM_TEMPLATE" && attachment.sourceScope !== "FIRM_KNOWLEDGE")
+                        .map((attachment) => ({
+                        documentId: attachment.documentId,
+                        ...(attachment.title ? { title: attachment.title } : {}),
+                        ...(attachment.totalPages ? { totalPages: attachment.totalPages } : {}),
+                        chunks: attachment.chunks.filter((chunk) => chunk.representation !== "EXTRACTIVE_DIGEST")
+                    })),
+                    ...(caseFileTools?.readChunks() ?? [])
+                ]);
+                // An analysis of the documents (asked for, or by an analysing skill) is unfinished while
+                // pages are unread; a lookup ("jaki termin w umowie?") reads what it needs.
+                const analysing = ANALYSIS_INTENT.test(pathFacts.query) ||
+                    COVERAGE_SKILLS.has(taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "");
+                return coverage.length ? { documentCoverage: coverage, ...(analysing ? { documentAnalysis: true } : {}) } : {};
+            })(),
             context: {
                 ...contextSelection.report,
                 ...(() => {
