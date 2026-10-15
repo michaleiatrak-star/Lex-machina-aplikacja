@@ -27,6 +27,7 @@ const PERSONAL_KINDS = new Set([
     "PAYMENT_CARD",
     "LAND_REGISTRY",
     "VEHICLE_PLATE",
+    "BAR_NUMBER",
     "BIRTH_DATE"
 ]);
 const TOKEN = /\[PII:([A-Z_]+):(\d{4})\]/gu;

@@ -31,6 +31,7 @@ export type CaseBlobPurpose =
   | "extracted-manifest"
   | "extracted-payload"
   | "document-source"
+  | "document-page-image"
   | "protected-document"
   | "artifact"
   | "artifact-manifest"

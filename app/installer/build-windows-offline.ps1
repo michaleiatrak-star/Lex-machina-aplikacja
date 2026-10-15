@@ -66,6 +66,7 @@ foreach ($file in @(
   "app-update-transaction.ps1",
   "app-update-verification.ps1",
   "install-local-llm.ps1",
+  "install-local-vision.ps1",
   "configure-llama-native-web.ps1",
   "llama-web-mcp.py",
   "llama-legal-skills-mcp.py",

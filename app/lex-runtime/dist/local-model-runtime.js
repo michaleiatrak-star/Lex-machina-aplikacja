@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { compareVersions } from "./update-discovery.js";
+import { installedVisionModel, installVisionModel, visionModelFromManifest } from "./ocr-vision.js";
 const PROGRESS_PREFIX = "LEX_LOCAL_AI_PROGRESS:";
 export function parseLocalAiProgressLine(line) {
     const trimmed = line.trim();
@@ -261,6 +262,161 @@ export class LocalModelRuntime {
         }
         this.recoverInterruptedProvision();
         this.recoverInterruptedInactiveModelUpdate();
+    }
+    visionInstall = {
+        state: "IDLE",
+        progress: null
+    };
+    /** Folder of the vision model that reads doubtful OCR lines (model, projector, vision.json). */
+    visionModelDir() {
+        return path.join(this.rootDir, "vision");
+    }
+    /** models.localVision of the release manifest, the source of the files and their SHA-256. */
+    visionModelSpec() {
+        return visionModelFromManifest(readJson(this.manifestPath()));
+    }
+    /** The llama.cpp engine and the vision model, when both are installed. */
+    visionOcr() {
+        const config = this.readConfig();
+        if (!config || !fs.existsSync(config.engine.executable))
+            return null;
+        const model = installedVisionModel(this.visionModelDir(), this.visionModelSpec());
+        return model ? { executable: config.engine.executable, model, gpuOffload: config.engine.gpuOffload === true } : null;
+    }
+    visionOcrStatus() {
+        const config = this.readConfig();
+        const spec = this.visionModelSpec();
+        return {
+            available: spec !== null,
+            modelId: spec?.id ?? null,
+            label: spec?.displayName ?? "Model wizyjny OCR",
+            license: spec?.license ?? null,
+            bytes: spec ? spec.bytes + spec.projector.bytes : 0,
+            installed: installedVisionModel(this.visionModelDir(), spec) !== null,
+            engineInstalled: Boolean(config && fs.existsSync(config.engine.executable)),
+            state: this.visionInstall.state,
+            progress: this.visionInstall.progress ? { ...this.visionInstall.progress } : null,
+            ...(this.visionInstall.error ? { error: this.visionInstall.error } : {})
+        };
+    }
+    /**
+     * Starts the installation; the status reports the progress. On Windows the packaged
+     * install-local-vision.ps1 downloads and verifies the files like install-local-llm.ps1
+     * (same verified cache); elsewhere the runtime downloads them itself.
+     */
+    installVisionOcr() {
+        if (this.visionInstall.state === "DOWNLOADING")
+            throw new Error("VISION_MODEL_INSTALL_IN_PROGRESS");
+        const spec = this.visionModelSpec();
+        if (!spec)
+            throw new Error("VISION_MODEL_NOT_IN_MANIFEST");
+        const progress = (phase, label, done = 0, total = null) => ({
+            phase,
+            label,
+            bytesDownloaded: done,
+            bytesTotal: total,
+            percent: total ? Math.min(100, Math.floor((done / total) * 100)) : null,
+            updatedAt: new Date().toISOString()
+        });
+        this.visionInstall = { state: "DOWNLOADING", progress: progress("STARTING", spec.displayName) };
+        const task = process.platform === "win32"
+            ? this.runVisionInstaller(spec)
+            : installVisionModel(this.visionModelDir(), spec, (file) => {
+                this.visionInstall.progress = progress(file.received === file.total ? "VERIFIED" : "DOWNLOAD", `vision:${file.file}`, file.received, file.total);
+            });
+        void task.then(() => {
+            this.visionInstall = { state: "IDLE", progress: null };
+        }, (error) => {
+            this.visionInstall = {
+                state: "FAILED",
+                progress: null,
+                error: (error instanceof Error ? error.message : String(error)).slice(0, 2000)
+            };
+        });
+    }
+    visionInstallerPath() {
+        return path.join(this.runtimeRoot, "bootstrap", "install-local-vision.ps1");
+    }
+    async runVisionInstaller(spec) {
+        const script = this.visionInstallerPath();
+        if (!fs.existsSync(script))
+            throw new Error("LOCAL_VISION_INSTALLER_MISSING");
+        const powershell = process.env.SystemRoot
+            ? path.join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+            : "powershell.exe";
+        const args = [
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            script,
+            "-RuntimeRoot",
+            this.runtimeRoot,
+            "-ManifestPath",
+            this.manifestPath(),
+            "-ModelId",
+            spec.id,
+            "-LocalAiRoot",
+            this.rootDir
+        ];
+        await new Promise((resolve, reject) => {
+            const child = spawn(powershell, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+            let output = "";
+            let buffer = "";
+            const consume = (line) => {
+                const progress = parseLocalAiProgressLine(line);
+                if (progress)
+                    this.visionInstall.progress = progress;
+            };
+            const timeout = setTimeout(() => {
+                child.kill();
+                reject(new Error("LOCAL_VISION_INSTALL_TIMEOUT"));
+            }, 2 * 60 * 60_000);
+            child.stdout?.setEncoding("utf8");
+            child.stderr?.setEncoding("utf8");
+            child.stdout?.on("data", (chunk) => {
+                output = `${output}${chunk}`.slice(-16_000);
+                buffer += chunk;
+                let newline = buffer.indexOf("\n");
+                while (newline >= 0) {
+                    consume(buffer.slice(0, newline).replace(/\r$/, ""));
+                    buffer = buffer.slice(newline + 1);
+                    newline = buffer.indexOf("\n");
+                }
+            });
+            child.stderr?.on("data", (chunk) => {
+                output = `${output}${chunk}`.slice(-16_000);
+            });
+            child.once("error", (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+            child.once("exit", (code) => {
+                clearTimeout(timeout);
+                if (buffer.trim())
+                    consume(buffer);
+                if (code === 0)
+                    resolve();
+                else
+                    reject(new Error(`LOCAL_VISION_INSTALL_FAILED:${code ?? "signal"}:${output}`));
+            });
+        });
+    }
+    /** Removes the model and its verified download copies. */
+    removeVisionOcr() {
+        if (this.visionInstall.state === "DOWNLOADING")
+            throw new Error("VISION_MODEL_INSTALL_IN_PROGRESS");
+        const spec = this.visionModelSpec();
+        fs.rmSync(this.visionModelDir(), { recursive: true, force: true });
+        const cache = localModelDownloadCache();
+        if (cache && spec) {
+            for (const file of [spec.filename, spec.projector.filename]) {
+                fs.rmSync(path.join(cache, file), { force: true });
+                fs.rmSync(path.join(cache, `${file}.part`), { force: true });
+            }
+        }
+        this.visionInstall = { state: "IDLE", progress: null };
     }
     listModels() {
         const configured = this.readConfig();

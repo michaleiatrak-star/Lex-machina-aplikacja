@@ -14,7 +14,7 @@
 
 ## DLACZEGO TEN MODUŁ ISTNIEJE
 
-**Problem (sprawa VII P 94/25, 2026-06-24):**
+**Problem (sprawa [SYGN-SPRAWY], 2026-06-24):**
 Model wygenerował pismo procesowe bez wykonania obowiązkowych kroków:
 - Pominięto KROK 1 (detekcja trybu PRAWNIK/LAIK)
 - Pominięto W1 CLAIM-VALIDATION [CP-1-claim]
@@ -274,7 +274,7 @@ Przyczyna: Moduł był OSIEROCONY — istniał w shared/ i był wpięty tylko w
   pisma-procesowe-v3, ale prawny-router-v3 NIE wywoływał go w żadnym kroku
   (0 wzmianek STEP-TRACKER w routerze i jego SELF-CHECK). Skutek: gdy model
   wygenerował pismo bez wczytania PRIMARY-skilla pisma-procesowe-v3 (sprawa
-  VII P 94/25, po poleceniu „kontynuuj"), nic nie wymusiło ST-INIT/ST-FINAL —
+  [SYGN-SPRAWY], po poleceniu „kontynuuj"), nic nie wymusiło ST-INIT/ST-FINAL —
   pismo .docx dostarczono bez REJESTRU KROKÓW i bez raportu pominięć.
 Naprawa (prawny-router-v3/SKILL.md):
   + KROK 0-ST (ST-INIT zaraz po HG-ACTIVE)
@@ -286,7 +286,7 @@ Zasada: router (jedyny punkt wejścia) musi sam wymuszać STEP-TRACKER —
   ominąć całą siatkę bezpieczeństwa.
 
 1.0.0 (2026-06-24)
-Przyczyna: Analiza błędów sprawa VII P 94/25 (2026-06-24):
+Przyczyna: Analiza błędów sprawa [SYGN-SPRAWY] (2026-06-24):
   Model pominął 10+ obowiązkowych kroków bez informowania użytkownika.
   Pismo dostarczone bez CLAIM-VALIDATION, STRATEGIA-WYBOR, MACIERZ,
   PODMIOT-GATE, LEGAL-QUALITY-GATE, AUDYT-KOŃCOWY, PEER-REVIEW.

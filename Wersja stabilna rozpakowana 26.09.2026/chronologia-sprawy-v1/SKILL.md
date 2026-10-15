@@ -74,7 +74,7 @@ dokumentu" w FAZA EKSTRAKCJI ZDARZEŃ. Przyczyna: skill ekstrahuje chronologię
 bezpośrednio z dokumentów, ale nie miał NIGDZIE (grep 0 wyników na "SD-VER"/
 "SD-GATE"/"SKAN-DOWODOW") mechanizmu weryfikacji kompletności odczytu —
 dokładnie ten sam mechanizm luki, co udokumentowany incydent w
-przesluchanie-swiadkow-v2-min90 (sprawa XI P 27/26, AUDYT-2026-07-14b): częściowo
+przesluchanie-swiadkow-v2-min90 (sprawa [SYGN-SPRAWY-2], AUDYT-2026-07-14b): częściowo
 odczytany dokument generuje chronologię z cichą luką, nieodróżnialną od
 "w dokumencie po prostu nic więcej nie było". Pełny opis: audyt-systemu-v4/
 AUDIT-JOURNAL.md, AUDYT-2026-07-15e.
@@ -281,7 +281,7 @@ WSZYSTKICH dokumentów wgranych do sesji.
 
 Przyczyna dodania: ten skill ekstrahuje chronologię BEZPOŚREDNIO z
 dokumentów — bez tej bramki ryzyko jest analogiczne do udokumentowanego
-incydentu (sprawa XI P 27/26, AUDYT-2026-07-14b): częściowo odczytany
+incydentu (sprawa [SYGN-SPRAWY-2], AUDYT-2026-07-14b): częściowo odczytany
 dokument (obcięty przez `view` lub odczytany fragmentarycznie bez
 adnotacji) generuje chronologię z LUKĄ, którą trudno wykryć później — brak
 zdarzenia nie wygląda jak błąd, wygląda jak "w dokumencie po prostu nic
@@ -704,7 +704,7 @@ TYP: IDENT
   Wykrywanie: porównaj zapisy imion/nazwisk/nazw dla osób w tej samej roli procesowej
              (strona, świadek, podpisujący) między dokumentem dowodowym a pismami
   Przykłady:
-    • Strona w pozwie: "Michał Wiatrak"; pokwitowanie z 9.10.2024: podpis "Michał Wiatr"
+    • Strona w pozwie: "Jan Nowakowski"; pokwitowanie z 9.10.2024: podpis "Michał Nowak"
     • Świadek w piśmie: "Bishal Poudel"; pokwitowanie z 5.12.2024: "Bishal Paudel"
   Nie zakładaj automatycznie zgodności ani niezgodności — oznacz [SPORNE] i wymagaj
   wyjaśnienia. Jeśli żadna ze stron nigdy nie odniosła się do rozbieżności, podnieś

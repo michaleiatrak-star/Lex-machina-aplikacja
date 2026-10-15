@@ -2,7 +2,7 @@
 
 > **Plik:** `shared/PRE-W2-VERIFICATION-GATE.md`
 > **Wersja:** 1.0.0 (2026-06-21)
-> **Status:** PRODUKCJA — naprawa błędów krytycznych sesji VII P 94/25
+> **Status:** PRODUKCJA — naprawa błędów krytycznych sesji [SYGN-SPRAWY]
 > **Pozycja w pipeline:** między W1 (checkpoint) a W2 (redakcja) — BLOKUJE W2
 > **Wywołanie:** obowiązkowe z pisma-procesowe-v3, krok PRE-W2 (przed W2.1)
 
@@ -14,10 +14,10 @@
 
 Poprzednia architektura: PODMIOT-GATE był w W3.0 (PO wygenerowaniu tekstu W2).
 Skutek: pismo generowane z danymi z pamięci, weryfikacja następowała na gotowym tekście.
-Konkretne błędy w VII P 94/25:
+Konkretne błędy w [SYGN-SPRAWY]:
 - Adres sądu: ul. Lompy 14 (Katowice-Wschód) zamiast ul. Warszawska 45 (Katowice-Zachód)
-- KRS pozwanego: argument "ten sam KRS" bez sprawdzenia w rejestrze, że KRS 0000796445
-  należy do HP sp. z o.o., a nie do HP Global sp. z o.o. (która ma KRS 0001025052)
+- KRS pozwanego: argument "ten sam KRS" bez sprawdzenia w rejestrze, że KRS [KRS-A]
+  należy do [SPÓŁKA-A] sp. z o.o., a nie do [SPÓŁKA-B] sp. z o.o. (która ma KRS [KRS-B])
 
 ### Zasada naprawy
 
@@ -166,8 +166,8 @@ DANE Z AKT, UMÓW, PROTOKOŁÓW, SUDOP = NIEZWERYFIKOWANE.
 Nawet gdy KRS/NIP pozwanego jest wpisany w umowie — to jest deklaracja strony, nie
 weryfikacja rejestru. Model MUSI wywołać web_search/web_fetch niezależnie od tego
 co widzi w aktach. "Umowa mówi KRS X" ≠ "KRS X = ten podmiot". Błąd pracodawcy
-w umowie (zły KRS) = klasyczna pułapka (VII P 94/25: KRS 0000796445 w umowie HPG,
-ale HPG ma KRS 0001025052).
+w umowie (zły KRS) = klasyczna pułapka ([SYGN-SPRAWY]: KRS [KRS-A] w umowie [SPÓŁKA-B],
+ale [SPÓŁKA-B] ma KRS [KRS-B]).
 
 Gdy pozwany to spółka prawa handlowego:
 
@@ -205,11 +205,11 @@ KROK 2 — Scalenie pracodawców / kontrahentów (gdy KAT-II — seria z różny
 ⛔ ZAKAZ-R1: nie buduj argumentu "ten sam KRS = jeden podmiot" gdy KRS z umów jest błędny
    (niezgodny z rejestrem) — to argument obalany przez "literówkę"; ISU KROK 1 go zastępuje
 
-PRZYKŁAD z VII P 94/25 (błąd v1.1.0, naprawiony v1.3.0 + ISU + MOD-PR-RZECZ v2.2.0):
-  Umowy 1-2: "Human Park sp. z o.o." KRS 0000796445 — wszystkie elementy ✓
-  Umowy 3-5: "Human Park Global sp. z o.o." KRS 0000796445 — KRS błędny (6/7 elem. = HPG)
-  → ISU: strona umów 3-5 = HPG (NIP 6343021499, KRS błędny = błąd pisarski)
-  → MOD-PR-RZECZ: HP i HPG = jeden pracodawca rzeczywisty (warstwy W1–W4)
+PRZYKŁAD z [SYGN-SPRAWY] (błąd v1.1.0, naprawiony v1.3.0 + ISU + MOD-PR-RZECZ v2.2.0):
+  Umowy 1-2: "[SPÓŁKA-A] sp. z o.o." KRS [KRS-A] — wszystkie elementy ✓
+  Umowy 3-5: "[SPÓŁKA-B] sp. z o.o." KRS [KRS-A] — KRS błędny (6/7 elem. = [SPÓŁKA-B])
+  → ISU: strona umów 3-5 = [SPÓŁKA-B] (NIP [NIP-B], KRS błędny = błąd pisarski)
+  → MOD-PR-RZECZ: [SPÓŁKA-A] i [SPÓŁKA-B] = jeden pracodawca rzeczywisty (warstwy W1–W4)
   → ⛔ BŁĄD (poprzedni): "ten sam KRS → jeden podmiot" → obalony przez "literówkę"
   → ✅ POPRAWNIE: ISU (strona każdej umowy) → MOD-PR-RZECZ (scalenie)
 ```
@@ -223,7 +223,7 @@ PRZYKŁAD z VII P 94/25 (błąd v1.1.0, naprawiony v1.3.0 + ISU + MOD-PR-RZECZ v
 Gdy widzisz ≥2 różne numery KRS lub NIP przy zbliżonej nazwie podmiotu w aktach
 → NATYCHMIAST uruchom ten krok. Nie czekaj na jawną sprzeczność.
 Sama różnorodność numerów = trigger PRE-W2.D.
-Przykład: "Human Park sp. z o.o. KRS 796445" w umowie 1 i "Human Park Global KRS 796445"
+Przykład: "[SPÓŁKA-A] sp. z o.o. KRS [KRS-A]" w umowie 1 i "[SPÓŁKA-B] KRS [KRS-A]"
 w umowie 3 → trigger (ta sama liczba przy innej nazwie = anomalia wymagająca weryfikacji).
 
 ⛔ [MOD-IDENTYFIKACJA-TRIGGER] — PO WERYFIKACJI NUMERÓW:
@@ -244,9 +244,9 @@ Gdy w materiale dowodowym pojawiają się numery KRS, NIP, REGON:
    - Jeśli TAK → ✅ dane spójne
    - Jeśli NIE → ⚠️ ROZBIEŻNOŚĆ — zapisz jako fakt procesowy, nie jako błąd analizy
 
-PRZYKŁAD z VII P 94/25:
-  Dokument: "Human Park Global sp. z o.o. KRS 0000796445"
-  Weryfikacja: KRS 0000796445 → Human Park sp. z o.o. (inna spółka)
+PRZYKŁAD z [SYGN-SPRAWY]:
+  Dokument: "[SPÓŁKA-B] sp. z o.o. KRS [KRS-A]"
+  Weryfikacja: KRS [KRS-A] → [SPÓŁKA-A] sp. z o.o. (inna spółka)
   Wniosek: ROZBIEŻNOŚĆ = błąd pracodawcy w dokumencie
   Efekt procesowy: w piśmie buduj argument "błąd pracodawcy nie może szkodzić
                    pracownikowi" — NIE argument "ten sam podmiot, ten sam KRS"
@@ -351,11 +351,11 @@ ZAKAZ BEZWZGLĘDNY:
 1.4.0 (2026-06-27) — ISU-first: MOD-IDENTYFIKACJA-STRONY-UMOWY wywołany przed MOD-PRACODAWCA-RZECZYWISTY:
   Root cause nowej naprawy: PRE-W2.C/D wykrywały rozbieżność podmiotową i
   zatrzymywały pipeline (GATE-STOP), ale NIE wywoływały modułu budującego
-  argument prawny. Skutek: pismo VII P 94/25 v3 opierało tezę 1 na argumencie
+  argument prawny. Skutek: pismo [SYGN-SPRAWY] v3 opierało tezę 1 na argumencie
   "ten sam KRS we wszystkich umowach" — obalonym przez "literówkę".
   Naprawy:
   (1) PRE-W2.C §SZCZEGÓLNA REGUŁA: dodano ⛔ TRIGGER MOD-PRACODAWCA-RZECZYWISTY
-      z ZAKAZEM-R1 (zakaz argumentu "ten sam KRS" gdy KRS błędny) i przykładem VII P 94/25.
+      z ZAKAZEM-R1 (zakaz argumentu "ten sam KRS" gdy KRS błędny) i przykładem [SYGN-SPRAWY].
   (2) PRE-W2.D §POV-D-TRIGGER: dodano [MOD-PRACODAWCA-TRIGGER] — po wykryciu
       rozbieżności NATYCHMIAST view MOD-PRACODAWCA-RZECZYWISTY + R1→R5.
   (3) Historia wersji zaktualizowana.
@@ -369,10 +369,10 @@ ZAKAZ BEZWZGLĘDNY:
   Wpływ na router: KROK 0D, SELF-CHECK blok STATUS PODMIOTÓW, R0D w STEP-TRACKER.
   Wpływ na pisma-procesowe: SELF-CHECK-PISMA — blok STATUS PODMIOTÓW.
 
-1.1.0 (2026-06-26) — Naprawa root cause sesji VII P 94/25 (2026-06-26):
+1.1.0 (2026-06-26) — Naprawa root cause sesji [SYGN-SPRAWY] (2026-06-26):
   Problem: model traktował dane KRS/NIP z akt sprawy (umów) jako zweryfikowane.
-  Skutek: w piśmie wpisano KRS 0000796445 przy Human Park Global sp. z o.o.,
-          podczas gdy HPG ma KRS 0001025052 — błąd z umów pracodawcy skopiowany
+  Skutek: w piśmie wpisano KRS [KRS-A] przy [SPÓŁKA-B] sp. z o.o.,
+          podczas gdy [SPÓŁKA-B] ma KRS [KRS-B] — błąd z umów pracodawcy skopiowany
           do pisma procesowego powoda.
   Naprawy:
   (1) PRE-W2.C: dodano explicite zasadę "dane z akt ≠ zweryfikowane"
@@ -383,12 +383,12 @@ ZAKAZ BEZWZGLĘDNY:
                    i reguła nadrzędna 18 zaktualizowane.
 
 1.0.0 (2026-06-21) — Pierwsza wersja.
-  Przyczyna: błędy krytyczne w piśmie procesowym VII P 94/25:
+  Przyczyna: błędy krytyczne w piśmie procesowym [SYGN-SPRAWY]:
   (1) Adres sądu z pamięci modelu (ul. Lompy 14 / SR Katowice-Wschód zamiast
       ul. Warszawska 45 / SR Katowice-Zachód VII Wydział Pracy).
   (2) Argument prawny "ten sam KRS" zbudowany bez sprawdzenia rejestru;
-      KRS 0000796445 należy do HP sp. z o.o., nie do HP Global sp. z o.o.
-      (KRS 0001025052) — co było widoczne z NIP-ów w aktach.
+      KRS [KRS-A] należy do [SPÓŁKA-A] sp. z o.o., nie do [SPÓŁKA-B] sp. z o.o.
+      (KRS [KRS-B]) — co było widoczne z NIP-ów w aktach.
   Naprawa: przeniesienie weryfikacji podmiotów PRZED generowanie W2,
   jako oddzielny moduł z twardą bramką blokującą.
   Wpływ na SKILL.md: dodano wywołanie PRE-W2-GATE po checkpoincie W1→W2.

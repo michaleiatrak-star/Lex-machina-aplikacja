@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   deanonymizeUpload,
+  detectDocument,
   finalizeDocument,
+  getVisionOcrStatus,
+  type DocumentReviewResponse,
+  type PagePrivacyDirective,
   getProcessingProgress,
   joinSharedKey,
   keepAllDirectives,
@@ -19,7 +23,6 @@ import {
   type StoredUploadResponse,
   type LocalModelsResponse,
   getLocalModels,
-  startLocalModel
 } from "./api.js";
 import {
   filterWorkspaceItems,
@@ -51,6 +54,7 @@ import { SheetEditor } from "./SheetEditor.js";
 import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
 import { AnonymizedDocumentView } from "./AnonymizedDocumentView.js";
+import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
 import { ArtifactRenameForm } from "./ArtifactRenameForm.js";
 import { decodeTextFile } from "./text-editing.js";
@@ -61,6 +65,7 @@ import {
   processingModeLabel,
   processingModeOptions,
   processingModeUsesLocalAi,
+  processingModeUsesVision,
   type DocumentProcessingMode
 } from "./document-processing-mode.js";
 
@@ -205,6 +210,12 @@ function folderDepth(folder: WorkspaceFolder, all: WorkspaceFolder[]): number {
   return depth;
 }
 
+type PrivacyPreviewQueueItem = {
+  item: WorkspaceItem;
+  mode: DocumentProcessingMode;
+  request: PrivacyPreviewRequest;
+};
+
 export function WorkspaceManager({
   caseId,
   title,
@@ -254,14 +265,12 @@ export function WorkspaceManager({
   const modeFor = (item: WorkspaceItem): DocumentProcessingMode =>
     modeByItem[item.itemId] ?? DEFAULT_DOCUMENT_PROCESSING_MODE;
   const [localRuntime, setLocalRuntime] = useState<LocalModelsResponse["runtime"] | null>(null);
-  const [localAiStarting, setLocalAiStarting] = useState(false);
   const [localAiMessage, setLocalAiMessage] = useState("");
-  // OCR words the local model fixed in the last processed file (undo by reprocessing).
-  const [ocrFixes, setOcrFixes] = useState<{
-    item: WorkspaceItem;
-    mode: DocumentProcessingMode;
-    fixes: Array<{ page: number; from: string; to: string }>;
-  } | null>(null);
+  // The processed file waiting for the user's confirmation in its preview; the next ones of
+  // "Przetwórz wszystkie" wait in the queue.
+  const [privacyPreview, setPrivacyPreview] = useState<PrivacyPreviewQueueItem | null>(null);
+  const queuedPreviews = useRef<PrivacyPreviewQueueItem[]>([]);
+  const nextPreview = () => setPrivacyPreview(queuedPreviews.current.shift() ?? null);
   const localAiReady = Boolean(localRuntime?.configured && localRuntime.state === "READY");
   useEffect(() => {
     let cancelled = false;
@@ -277,38 +286,6 @@ export function WorkspaceManager({
     };
   }, [refreshToken]);
 
-  // Ticking "z lokalnym AI" with the model stopped offers to start it; the
-  // option works as soon as the model reports READY.
-  async function startLocalAi(): Promise<void> {
-    const modelId = localRuntime?.selectedModelId;
-    if (!modelId) {
-      setLocalAiMessage("Nie wybrano modelu lokalnego - zainstaluj go w Ustawienia → Modele.");
-      return;
-    }
-    setLocalAiStarting(true);
-    setLocalAiMessage("Uruchamiam model lokalny…");
-    try {
-      const started = await startLocalModel(modelId);
-      setLocalRuntime(started.runtime);
-      const deadline = Date.now() + 10 * 60 * 1000;
-      let runtime = started.runtime;
-      while (!(runtime.configured && runtime.state === "READY") && Date.now() < deadline) {
-        setLocalAiMessage(
-          runtime.state === "PROVISIONING" ? "Przygotowuję model lokalny…" : "Uruchamiam model lokalny…"
-        );
-        await new Promise((resolve) => window.setTimeout(resolve, 2000));
-        runtime = (await getLocalModels()).runtime;
-        setLocalRuntime(runtime);
-      }
-      setLocalAiMessage(
-        runtime.state === "READY" ? "" : "Model lokalny nie uruchomił się w 10 minut - sprawdź Ustawienia → Modele."
-      );
-    } catch (failure) {
-      setLocalAiMessage(`Nie udało się uruchomić modelu lokalnego: ${failure instanceof Error ? failure.message : String(failure)}`);
-    } finally {
-      setLocalAiStarting(false);
-    }
-  }
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [artifacts, setArtifacts] = useState<CaseArtifact[]>([]);
@@ -439,21 +416,31 @@ export function WorkspaceManager({
     });
   }
 
-  async function runAutomaticPrivacy(
-    item: WorkspaceItem,
-    mode: DocumentProcessingMode,
-    // false = run the same mode again without the AI's OCR corrections
-    ocrFix = true
-  ): Promise<void> {
-    if (processingModeUsesLocalAi(mode) && !localAiReady) {
+  // The models a mode needs: the vision model (OCR with AI) and an installed text model (anonymization with AI).
+  async function modeReady(mode: DocumentProcessingMode, ocrFix = true): Promise<boolean> {
+    // The text model is started by the runtime right before the anonymization; it only has to be installed.
+    if (processingModeUsesLocalAi(mode) && !localRuntime?.configured) {
       setLocalAiMessage(
-        `„${processingModeLabel(mode)}” wymaga uruchomionego modelu lokalnego - użyj „Uruchom model lokalny”.`
+        `„${processingModeLabel(mode)}” wymaga zainstalowanego modelu lokalnego (panel lokalnej AI).`
       );
-      return;
+      return false;
     }
+    if (processingModeUsesVision(mode) && ocrFix) {
+      const vision = await getVisionOcrStatus().catch(() => null);
+      if (!vision?.installed || !vision.engineInstalled) {
+        setLocalAiMessage(
+          `„${processingModeLabel(mode)}” wymaga modelu wizyjnego: zainstaluj go w panelu lokalnej AI.`
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Stage and page counts of one file while its request runs; text never leaves the runtime.
+  async function withItemProgress<T>(item: WorkspaceItem, action: (progressId: string) => Promise<T>): Promise<T> {
     const progressId = newProgressId();
     setProgressByItem((current) => ({ ...current, [item.itemId]: { stage: "READING" } }));
-    // Stage and page counts while the request runs; text never leaves the runtime.
     const timer = window.setInterval(() => {
       void getProcessingProgress(caseId, progressId)
         .then((progress) => {
@@ -466,13 +453,82 @@ export function WorkspaceManager({
         .catch(() => undefined);
     }, 500);
     try {
-      await runAutomaticPrivacySteps(item, progressId, mode, ocrFix);
+      return await action(progressId);
     } finally {
       window.clearInterval(timer);
       setProgressByItem((current) => {
         const { [item.itemId]: _done, ...rest } = current;
         return rest;
       });
+    }
+  }
+
+  async function runAutomaticPrivacy(
+    item: WorkspaceItem,
+    mode: DocumentProcessingMode,
+    // false = run the same mode again without the AI's OCR corrections
+    ocrFix = true
+  ): Promise<void> {
+    if (!(await modeReady(mode, ocrFix))) return;
+    await withItemProgress(item, (progressId) => runAutomaticPrivacySteps(item, progressId, mode, ocrFix));
+  }
+
+  /**
+   * Every unprocessed file shown: the OCR of all of them first (with the AI, only the vision
+   * model works), then their personal data (the text model starts once), then the preview
+   * of each, one after another.
+   */
+  async function processAll(items: WorkspaceItem[]): Promise<void> {
+    const modes = [...new Set(items.map(modeFor))];
+    for (const mode of modes) if (!(await modeReady(mode))) return;
+    const clear = items.filter((item) => processingModeKeepsClearText(modeFor(item)));
+    if (
+      clear.length &&
+      !window.confirm(
+        `${clear.map((item) => `„${item.filename}”`).join(", ")}: bez anonimizacji - tekst jawny trafi do modelu. Kontynuować?`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const reads: Array<{ item: WorkspaceItem; review: DocumentReviewResponse }> = [];
+    const failed: string[] = [];
+    try {
+      for (const item of items) {
+        const mode = modeFor(item);
+        try {
+          const review = await withItemProgress(item, (progressId) =>
+            processStoredCaseFile(caseId, item.itemId, undefined, progressId, { ...processingModeOptions(mode), detect: false })
+          );
+          reads.push({ item, review });
+        } catch (failure) {
+          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
+        }
+      }
+      const ready: PrivacyPreviewQueueItem[] = [];
+      for (const { item, review } of reads) {
+        const mode = modeFor(item);
+        const keepClear = processingModeKeepsClearText(mode);
+        try {
+          const detected = keepClear
+            ? review
+            : await withItemProgress(item, (progressId) =>
+                detectDocument(caseId, review.documentId, { localAi: processingModeOptions(mode)?.localAi === true }, progressId)
+              );
+          ready.push({ item, mode, request: { caseId, review: detected, fileName: item.filename, keepClear } });
+        } catch (failure) {
+          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
+        }
+      }
+      queuedPreviews.current = ready.slice(1);
+      setPrivacyPreview(ready[0] ?? null);
+      if (failed.length) setError(failed.join(" · "));
+      else if (ready.length) setNotice(`Przetworzono ${ready.length} plików - sprawdź i zatwierdź podgląd każdego z nich.`);
+      await refresh();
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -500,20 +556,31 @@ export function WorkspaceManager({
           progressId,
           options ? { ...options, ...(ocrFix ? {} : { ocrFix: false }) } : undefined
         );
-      const fixes = review.pages.flatMap((page) =>
-        (page.corrections ?? []).map((fix) => ({ page: page.page, from: fix.from, to: fix.to }))
-      );
-      setOcrFixes(fixes.length ? { item, mode, fixes } : null);
-      // OCR only: every page kept as written, no anonymization key.
-      const result =
-        await finalizeDocument(
+      // Finalized only after the preview (doubtful OCR lines, local AI hints, masks) is confirmed.
+      setPrivacyPreview({
+        item,
+        mode,
+        request: {
           caseId,
-          review.documentId,
-          keepClear ? keepAllDirectives(review) : [],
-          progressId
-        );
+          review,
+          fileName: item.filename,
+          keepClear,
+          ...(review.pages.some((page) => page.corrections?.length) && ocrFix
+            ? { onUndoOcrFixes: () => { setPrivacyPreview(null); void runAutomaticPrivacy(item, mode, false); } }
+            : {})
+        }
+      });
+    });
+  }
+
+  async function confirmPrivacyPreview(directives: PagePrivacyDirective[]): Promise<void> {
+    const pending = privacyPreview;
+    if (!pending) return;
+    await run(async () => {
+      const result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      nextPreview();
       setNotice(
-        `„${item.filename}”: OCR/pseudonimizacja zakończona · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
+        `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
       );
     });
   }
@@ -662,6 +729,8 @@ export function WorkspaceManager({
       caseFiles,
       knowledgeHits
     ]);
+  // Shown files never processed: "Przetwórz wszystkie", each in its chosen mode.
+  const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item));
 
   function knowledgeHitFor(
     item: WorkspaceItem
@@ -953,20 +1022,10 @@ export function WorkspaceManager({
             <span className="workspace-local-ai-group">
               <small
                 className="workspace-local-ai-state"
-                title="Model lokalny (np. Bielik) pomaga tylko przy plikach: w trybach „z AI” wyszukuje dane osobowe (rozstrzyga z całego zdania) i poprawia błędy OCR w skanach; nie zmienia liczb, identyfikatorów, przeczeń ani stylu autora, a poprawki są wypisane i można je cofnąć."
+                title="Model tekstowy (np. Bielik) w „anonimizacji z AI” podpowiada przy danych osobowych; uruchamia się sam przed anonimizacją, a na czas OCR jest zatrzymywany, żeby pamięć miał model wizyjny."
               >
-                Model lokalny dla plików: {localAiReady ? "gotowy" : "nie działa"}
+                Model tekstowy dla plików: {localAiReady ? "działa" : localRuntime?.configured ? "uruchomi się przed anonimizacją" : "nie zainstalowany"}
               </small>
-              {!localAiReady ? (
-                <button
-                  type="button"
-                  className="chat-secondary-action workspace-local-ai-start"
-                  disabled={localAiStarting}
-                  onClick={() => void startLocalAi()}
-                >
-                  {localAiStarting ? "Uruchamiam…" : "Uruchom model lokalny"}
-                </button>
-              ) : null}
               {localAiMessage ? <small className="workspace-local-ai-state" role="status">{localAiMessage}</small> : null}
             </span>
           ) : null}
@@ -986,6 +1045,17 @@ export function WorkspaceManager({
                 }}
               />
             </label>
+          ) : null}
+          {canWrite && unprocessed.length > 1 ? (
+            <button
+              type="button"
+              className="chat-secondary-action"
+              disabled={busy}
+              title="Najpierw OCR wszystkich plików, potem anonimizacja (model tekstowy uruchamia się raz), potem podgląd każdego pliku do zatwierdzenia"
+              onClick={() => void processAll(unprocessed)}
+            >
+              Przetwórz wszystkie ({unprocessed.length})
+            </button>
           ) : null}
           <button
             type="button"
@@ -1130,6 +1200,11 @@ export function WorkspaceManager({
                             </span>
                           )
                         ) : null}
+                        {processingFor(item)?.reviewed === false ? (
+                          <span className="anonymized-badge clear-text-badge" title="Nie trafi do modelu spoza komputera, dopóki nie zatwierdzisz podglądu">
+                            Niezatwierdzony
+                          </span>
+                        ) : null}
                         <span>
                           {processingFor(item)
                             ? processingFor(item)!.ocrPages > 0
@@ -1163,6 +1238,17 @@ export function WorkspaceManager({
                         ? `Podgląd s. ${knowledgeHitFor(item)!.pageStart}`
                         : "Podgląd"}
                     </button>
+                    {processingFor(item)?.reviewed === false ? (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={busy}
+                        title="Dokument nie został jeszcze zatwierdzony po podglądzie i nie trafi do modelu spoza komputera"
+                        onClick={() => showAnonymized(item, "marked")}
+                      >
+                        Podgląd i zatwierdzenie
+                      </button>
+                    ) : null}
                     {processingFor(item) && processingFor(item)!.anonymized !== false ? (
                       <>
                         <button
@@ -1505,23 +1591,13 @@ export function WorkspaceManager({
         </p>
       ) : null}
       {notice ? <p className="workspace-notice">{notice}</p> : null}
-      {ocrFixes ? (
-        <div className="workspace-notice" role="status">
-          <strong>Korekty OCR (model lokalny) w „{ocrFixes.item.filename}”: {ocrFixes.fixes.length}</strong>
-          <ul>
-            {ocrFixes.fixes.slice(0, 50).map((fix, index) => (
-              <li key={index}>s. {fix.page}: „{fix.from}” → „{fix.to}”</li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void runAutomaticPrivacy(ocrFixes.item, ocrFixes.mode, false)}
-          >
-            Cofnij korekty (przetwórz ponownie bez nich)
-          </button>{" "}
-          <button type="button" onClick={() => setOcrFixes(null)}>Zamknij</button>
-        </div>
+      {privacyPreview ? (
+        <PrivacyPreview
+          {...privacyPreview.request}
+          busy={busy}
+          onConfirm={(directives) => void confirmPrivacyPreview(directives)}
+          onCancel={nextPreview}
+        />
       ) : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}
     </article>

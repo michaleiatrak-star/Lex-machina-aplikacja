@@ -145,6 +145,40 @@ export function registerMaintenanceRoutes(
     }
   );
 
+  // Vision model for OCR: reads doubtful lines of scans again (see ocr-vision.ts).
+  app.get("/api/local-models/vision-ocr", (req, res) => {
+    try {
+      authenticated(req, authService);
+      res.json(localModels.visionOcrStatus());
+    } catch (error) {
+      if (error instanceof AuthError) {
+        res.status(error.httpStatus).json({ error: error.code });
+        return;
+      }
+      throw error;
+    }
+  });
+
+  app.post("/api/local-models/vision-ocr/install", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    try {
+      localModels.installVisionOcr();
+      res.status(202).json(localModels.visionOcrStatus());
+    } catch (error) {
+      sendMaintenanceError(res, error);
+    }
+  });
+
+  app.post("/api/local-models/vision-ocr/remove", (req, res) => {
+    if (!requireAdmin(req, res, authService)) return;
+    try {
+      localModels.removeVisionOcr();
+      res.json(localModels.visionOcrStatus());
+    } catch (error) {
+      sendMaintenanceError(res, error);
+    }
+  });
+
   app.post(
     "/api/local-models/provision",
     async (req, res) => {

@@ -91,14 +91,16 @@ const required = [
   "Dodaj wiedzę / dokument",
   "OCR automatyczny i anonimizacja per plik",
   "Zdjęcia są od razu kierowane do lokalnego OCR",
-  "Decyzja prywatności dla",
-  "Anonimizuj / pseudonimizuj automatycznie",
-  "Przejrzyj ręcznie",
-  "Pozostaw ten plik bez anonimizacji",
-  "Ta decyzja jest na razie wersją roboczą dla tego pliku",
+  // Jeden przepływ (propozycja automatyczna, podgląd z decyzjami, zatwierdzenie pliku)
+  // zamiast trybów "Przejrzyj ręcznie" / "Anonimizuj automatycznie" / "Pozostaw bez anonimizacji".
+  "Przed zatwierdzeniem",
+  "Automatyczna anonimizacja / pseudonimizacja",
+  "Wykrywanie automatyczne + Twoje decyzje w podglądzie",
+  "Bez anonimizacji (tekst jawny)",
+  "Zatwierdź plik",
   "Zbiorczy podgląd anonimizacji",
   "Wykryte automatycznie",
-  "Moje ręczne zaznaczenia",
+  "Moje decyzje w podglądzie",
   "Końcowa decyzja dla pliku",
   "Zatwierdź decyzje dla",
   "Mapy reidentyfikacji pozostają odrębne dla każdego documentId",
@@ -165,13 +167,13 @@ process.stdout.write(JSON.stringify({
     content.includes("+ Folder"),
   automaticOcrPerFilePrivacyPresent:
     content.includes("OCR automatyczny i anonimizacja per plik") &&
-    content.includes("Ta decyzja jest na razie wersją roboczą dla tego pliku") &&
-    content.includes("Anonimizuj / pseudonimizuj automatycznie") &&
+    content.includes("Zatwierdź plik") &&
+    content.includes("Automatyczna anonimizacja / pseudonimizacja") &&
     content.includes("Mapy reidentyfikacji pozostają odrębne dla każdego documentId"),
   multiFilePrivacyBatchPreviewPresent:
     content.includes("Zbiorczy podgląd anonimizacji") &&
     content.includes("Wykryte automatycznie") &&
-    content.includes("Moje ręczne zaznaczenia") &&
+    content.includes("Moje decyzje w podglądzie") &&
     content.includes("Końcowa decyzja dla pliku") &&
     content.includes("Zatwierdź decyzje dla"),
   documentDeepLinksPresent:

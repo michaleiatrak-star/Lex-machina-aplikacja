@@ -24,6 +24,22 @@ function kinds(text: string) {
 }
 
 describe("identifier detectors", () => {
+  it("KRS split after the zeros, phones with a trunk zero or mixed separators, bar numbers", () => {
+    expect(kinds("REGON x, KRS 0000 297714")).toEqual([["KRS", "0000 297714"]]);
+    const unique = (text: string) => [...new Map(kinds(text).map((item) => [item.join("|"), item])).values()];
+    expect(unique("tel. (032) 250 56 13, tel: 32 250-56-13")).toEqual([
+      ["PHONE", "(032) 250 56 13"],
+      ["PHONE", "32 250-56-13"]
+    ]);
+    expect(kinds("(ORA Katowice nr KAT/ADW/544), (OIRP Katowice nr KAT 2575), WAW/Adw/8925")).toEqual([
+      ["BAR_NUMBER", "KAT/ADW/544"],
+      ["BAR_NUMBER", "WAW/Adw/8925"],
+      ["BAR_NUMBER", "KAT 2575"]
+    ]);
+    expect(kinds("tel: 32250-56-13, e-mail")).toEqual([["PHONE", "32250-56-13"]]);
+    expect(kinds("sygn. akt I C 123/24, art. 187 ust. 1 pkt 3, Dz.U. 2024 poz. 1061")).toEqual([]);
+  });
+
   it("validates check digits", () => {
     expect(validPesel(PESEL)).toBe(true);
     expect(validPesel("44051401358")).toBe(false);

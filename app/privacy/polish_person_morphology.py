@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import foreign_surnames
+import given_name_base
 import surname_base
 
 CASES = ("nom", "gen", "dat", "acc", "inst", "loc", "voc")
@@ -478,7 +479,12 @@ class PersonMorphology:
             # (A register surname reading, "Sarah" in PESEL, does not make it known.)
             if name_words and not [c for c in name_words[0].candidates if not c.lemma_id.startswith("pesel:")]:
                 first = name_words[0].surface.lower()
-                looks_female = first.endswith(("a", "ah")) or first in FOREIGN_FEMALE_GIVEN
+                # The PESEL register says which sex bears the name (Nikita, Luca: men).
+                men, women = given_name_base.counts(name_words[0].surface)
+                if men or women:
+                    looks_female = women > men
+                else:
+                    looks_female = first.endswith(("a", "ah")) or first in FOREIGN_FEMALE_GIVEN
                 if (gender == "f") != looks_female:
                     score += 0.3
             # Nominative is the most frequent reading of an ambiguous mention.
@@ -643,6 +649,28 @@ class PersonMorphology:
 # --- addresses: polish_address_morphology.AddressMorphology -----------------
 
 
+def known_word(word: str, engine: "PersonMorphology", address_engine) -> bool:
+    readings = [interp for interp in engine.engine.analyse(word) if interp[2][2] != "ign"]
+    if not word[:1].isupper():
+        # A lowercase word is known only as a common word: Morfeusz also reads "zych"
+        # as the surname Zych and "mand" as the name Manda, which made OCR glue look like words.
+        return any(not interp[2][1][:1].isupper() for interp in readings)
+    if readings:
+        return True
+    import address_base
+    import given_name_base
+
+    name = word.capitalize() if word.isupper() else word
+    if max(given_name_base.counts(name)) >= 2:
+        return True
+    if any(surname_base.nominatives(name, gender) for gender in ("m1", "f")):
+        return True
+    base = address_base.default_base()
+    if base.available and (base.street(name) or address_engine.locality_readings(name)):
+        return True
+    return False
+
+
 def main() -> None:
     import argparse
     import os
@@ -663,11 +691,9 @@ def main() -> None:
     address_engine = AddressMorphology(engine.engine)
     surfaces = tuple(item["surface"] for item in requests.get("addresses", []))
     addresses = [address_engine.analyze(surface, surfaces) for surface in surfaces]
-    # OCR correction: is the word a form known to the SGJP dictionary?
-    known = [
-        any(interp[2][2] != "ign" for interp in engine.engine.analyse(word))
-        for word in requests.get("words", [])
-    ]
+    # OCR correction: is the word a form known to SGJP or, for a capitalized word, a given
+    # name or surname of the PESEL register or a TERYT locality or street, in any case form?
+    known = [known_word(word, engine, address_engine) for word in requests.get("words", [])]
     Path(args.output).write_text(
         json.dumps({"persons": results, "addresses": addresses, "known": known}, ensure_ascii=False),
         encoding="utf-8",

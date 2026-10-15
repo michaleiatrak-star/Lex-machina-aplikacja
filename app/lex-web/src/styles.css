@@ -786,6 +786,19 @@ textarea:focus {
   color: #304435;
 }
 
+/* A match the local model read as no person: masked, with a one-click unmask next to it. */
+.privacy-ai-hint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.privacy-ai-hint > button:last-child {
+  border-style: dashed;
+  background: #fffaf0;
+  color: #6b4e16;
+}
+
 .privacy-decisions {
   margin-top: 18px;
 }
@@ -2281,4 +2294,232 @@ textarea:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Preview before a document is finalized: decisions first, then the text with masks. */
+.privacy-preview {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid #d7ddd5;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.privacy-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.privacy-preview-head > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.privacy-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.privacy-preview-todo {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed #c9a24a;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.privacy-preview-todo ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.privacy-preview-todo li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.privacy-preview-edit,
+.privacy-preview-selection {
+  display: grid;
+  gap: 8px;
+}
+
+.privacy-preview-selection {
+  grid-template-columns: repeat(auto-fit, minmax(140px, auto));
+  align-items: center;
+}
+
+.privacy-preview-edit textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.privacy-preview-pages {
+  display: grid;
+  gap: 12px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.privacy-preview-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.privacy-preview-mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #1f3527;
+  color: #f4f7f2;
+  cursor: pointer;
+}
+
+.privacy-preview-mark.is-clear {
+  background: transparent;
+  color: inherit;
+  outline: 1px dashed #9aa79a;
+}
+
+.privacy-preview-mark.is-user {
+  background: #3d2f12;
+}
+
+.privacy-preview-mark.is-ai-hint:not(.is-clear) {
+  outline: 2px solid #c9a24a;
+}
+
+.privacy-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: auto;
+  padding-block: max(24px, env(safe-area-inset-top, 0px)) 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: rgba(20, 30, 24, 0.45);
+}
+
+.privacy-preview-overlay > .privacy-preview {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.privacy-preview-overlay > .privacy-preview.is-split {
+  max-width: 1480px;
+}
+
+.privacy-preview-body,
+.privacy-preview-work {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Original scan on the left, the text being checked on the right. */
+.privacy-preview-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.privacy-preview-split .privacy-preview-pages,
+.privacy-preview-split .page-scan-viewport {
+  height: 68vh;
+  max-height: none;
+}
+
+.privacy-preview-split .privacy-preview-edit textarea {
+  min-height: 60vh;
+}
+
+.privacy-preview-todo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.page-scan {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.page-scan-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-scan-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.page-scan-zoom button[aria-pressed="true"] {
+  border-color: #1f3527;
+  background: #e8efe6;
+}
+
+.page-scan-viewport {
+  overflow: auto;
+  border: 1px solid #d7ddd5;
+  border-radius: 8px;
+  background: #f3f5f2;
+}
+
+.page-scan-sheet {
+  position: relative;
+  min-width: 100%;
+}
+
+.page-scan-sheet img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.page-scan-focus {
+  position: absolute;
+  border: 2px solid #c9a24a;
+  border-radius: 3px;
+  background: rgba(201, 162, 74, 0.18);
+  box-shadow: 0 0 0 9999px rgba(20, 30, 24, 0.12);
+  pointer-events: none;
+}
+
+.page-scan-empty,
+.page-scan-note {
+  margin: 0;
+  padding: 12px;
+  color: #5b6a5d;
+}
+
+@media (max-width: 900px) {
+  .privacy-preview-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .privacy-preview-split .privacy-preview-pages,
+  .privacy-preview-split .page-scan-viewport {
+    height: 45vh;
+  }
 }

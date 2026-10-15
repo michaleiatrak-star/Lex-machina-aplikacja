@@ -27,7 +27,7 @@
 
 ## DLACZEGO TEN MODUŁ ISTNIEJE
 
-**Problem pierwotny (sprawa VII P 94/25, 2026-06-22):**
+**Problem pierwotny (sprawa [SYGN-SPRAWY], 2026-06-22):**
 Model przystąpił do generowania pisma procesowego na podstawie częściowej analizy dowodów:
 - ZIP z 35 plikami — odczytano wybrane, pominięto inne
 - ODT z obrazami — próbowano ekstrakcji tekstu (puste), nie dokonano rasteryzacji obrazów
@@ -440,8 +440,8 @@ REGUŁA-PFRON-SUDOP:
   → Zsumuj PER PODMIOT (NIP), nie łącznie.
   → Porównaj z okresem spornym: które miesiące pokrywa, które nie.
 
-REGUŁA-TRUNCATION-VIEW (dodana 2026-07-14, sprawa XI P 27/26 — świadek Maria
-Koroleva, protokół rozprawy 08.07.2026):
+REGUŁA-TRUNCATION-VIEW (dodana 2026-07-14, sprawa [SYGN-SPRAWY-2] — świadek Maria
+[ŚWIADEK-K], protokół rozprawy 08.07.2026):
   Narzędzie `view` wywołane BEZ `view_range` automatycznie obcina środek pliku,
   gdy treść przekracza próg znakowy — niezależnie od tego, czy plik "wygląda"
   na krótki (mało linii, mały rozmiar w KB). Sam plik protokołu rozprawy
@@ -537,7 +537,7 @@ Naprawa: (1) dodano KROK SD-READ.1b — nową uniwersalną bramkę SD-GATE-PORCJ
 
 1.5.0 (2026-07-14)
 Przyczyna: sprawa świadka Marii Korolevej, protokół rozprawy z 08.07.2026
-  (XI P 27/26). Model odczytał plik tekstowy protokołu narzędziem `view` bez
+  ([SYGN-SPRAWY-2]). Model odczytał plik tekstowy protokołu narzędziem `view` bez
   `view_range` — narzędzie zwróciło adnotację `< truncated lines 174-230 >`,
   obcinając środek pliku mimo jego niewielkiego rozmiaru (394-403 linii,
   ~14 KB). Model kontynuował analizę i budował tezy/pytania na podstawie
@@ -577,7 +577,7 @@ Naprawa:
     z innymi, fizycznie obecnymi dokumentami o zbliżonej funkcji.
 
 1.3.0 (2026-06-27)
-Przyczyna: analiza błędów sprawa VII P 94/25 (sesja 2026-06-27):
+Przyczyna: analiza błędów sprawa [SYGN-SPRAWY] (sesja 2026-06-27):
   SD-VER = KOMPLET ale macierz D×T budowana z pamięci — nie z per-teza
   przeszukania SD-FAKTY. Pliki o mylących nazwach (Szef.odt, Zatrudnienie.odt)
   pomijane w skanowaniu tez bo „intuicyjnie nie pasowały".
@@ -590,7 +590,7 @@ Naprawa:
   + Zmieniono pointer: SD-FAKTY → MOD-FSL-DOKUMENTY → FSL-D-MACIERZ → W1.3
 
 1.2.0 (2026-06-26)
-Przyczyna: analiza błędów sprawa VII P 94/25 (sesja 2026-06-26):
+Przyczyna: analiza błędów sprawa [SYGN-SPRAWY] (sesja 2026-06-26):
   (1) Pismo procesowe zawierało tylko 5 z 18+ kategorii dowodowych.
   (2) Pisma procesowe powoda (riposta, pismo 12.05.2026) zawierają
       co najmniej 6 wątków prawnych (mobbing, zakaz konkurencji,
@@ -610,7 +610,7 @@ Naprawy:
 ...
 
 1.0.0 (2026-06-22)
-Przyczyna: analiza błędów krytycznych w sprawie VII P 94/25:
+Przyczyna: analiza błędów krytycznych w sprawie [SYGN-SPRAWY]:
   (1) Pominięto odczyt obrazów z plików ODT (3 pliki × ~2-3 obrazy)
   (2) Nie wyekstrahowano zeznań Nawrota o premii PFRON z protokołu rozprawy
       → pismo wygenerowano z błędną kwotą roszczenia

@@ -192,8 +192,8 @@ export const ANALYSIS_INTENT = /(?<![\p{L}])(?:przeanalizuj|analiz\p{L}*|oceń|o
 const NEXT_STEP = /co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:zrobić|robić)|co\s+dalej|od\s+czego\s+zacząć/iu;
 const NEW_SUBSTANCE = /(?<![\p{L}])(?:dodaj|dopisz|nowy\s+zarzut|nowe\s+zarzuty|nowe\s+przepisy|orzeczni\p{L}*|argument\p{L}*)(?![\p{L}])/iu;
 // "mój sprzeciw", "moje pismo", "naszą odpowiedź na pozew" — not "moje dane osobowe".
-const OWN_DOCUMENT = /(?<![\p{L}])(?:(?:m[oó]j|moj\p{L}*|nasz\p{L}*|własn\p{L}*)(?:\s+\p{L}+){0,2}?\s+(?:pism\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*|pozew|pozw\p{L}*|wezwani\p{L}*|odwołani\p{L}*|zażaleni\p{L}*|apelacj\p{L}*|projekt\p{L}*|odpowied\p{L}*|zarzut\p{L}*|dokument\p{L}*|tekst\p{L}*|wersj\p{L}*|draft\p{L}*|oświadczeni\p{L}*|umow\p{L}*)|to\s+pismo|ten\s+(?:pozew|projekt))(?![\p{L}])/iu;
-const OWN_CONTRACT = /(?<![\p{L}])(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|t[eę]j|t[aą]|ten|tego)(?:\s+\p{L}+){0,2}?\s+(?:umow\p{L}*|aneks\p{L}*|regulamin\p{L}*|porozumieni\p{L}*|polis\p{L}*|kontrakt\p{L}*)(?![\p{L}])/iu;
+const OWN_DOCUMENT = /(?<![\p{L}])(?:(?:m[oó]j|moj\p{L}*|nasz\p{L}*|własn\p{L}*)(?:\s+\p{L}+){0,2}?\s+(?:pism\p{L}*|sprzeciw\p{L}*|skarg\p{L}*|wnios\p{L}*|pozew|pozw\p{L}*|wezwani\p{L}*|odwołani\p{L}*|zażaleni\p{L}*|apelacj\p{L}*|projekt\p{L}*|odpowied\p{L}*|zarzut\p{L}*|dokument\p{L}*|tekst\p{L}*|wersj\p{L}*|draft\p{L}*|oświadczeni\p{L}*|umow\p{L}*)|to\s+pismo|ten\s+(?:pozew|projekt)|(?:ten|nasz|m[oó]j)\s+wzór)(?![\p{L}])/iu;
+const OWN_CONTRACT = /(?<![\p{L}])(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|t[eę]j|t[aąę]|ten|tego)(?:\s+\p{L}+){0,2}?\s+(?:umow\p{L}*|aneks\p{L}*|regulamin\p{L}*|porozumieni\p{L}*|polis\p{L}*|kontrakt\p{L}*)(?![\p{L}])/iu;
 // A reply to another party's or the court's document ("odpowiedź na pozew", "odpowiedz na
 // pismo przygotowawcze", "replika", "ustosunkuj się do apelacji"): a new letter, not an edit.
 export const REPLY_REQUEST = /(?<![\p{L}])(?:(?:odpowied\p{L}*|replik\p{L}*|ripost\p{L}*|duplik\p{L}*)\s+(?:na|do)\s+(?:\p{L}+\s+){0,3}?(?:pozew|pozw\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|pism\p{L}*|akt\p{L}*\s+oskarżenia|wezwani\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*|odpowied\p{L}*|zarządzeni\p{L}*|odwołani\p{L}*|wnios\p{L}*|kasacj\p{L}*)|ustosunkuj\p{L}*\s+się\s+do|replik\p{L}*|ripost\p{L}*)(?![\p{L}])/iu;
@@ -205,7 +205,7 @@ const REPLY_KINDS = new Set(["ODPOWIEDZ_NA_POZEW", "ODPOWIEDZ_NA_SRODEK", "PISMO
 const COURT_SUMMONS_TEXT = /(?<![\p{L}])(?:(?:wezwani\p{L}*|zarządzeni\p{L}*|zobowiązani\p{L}*)\s+(?:\p{L}+\s+){0,2}?(?:sądu|sąd\p{L}*|przewodnicząc\p{L}*|referendarz\p{L}*)|(?:sąd|przewodnicząc\p{L}*|referendarz\p{L}*)\s+(?:mnie\s+|nas\s+)?(?:wezwał|zobowiązał|zarządził)\p{L}*)(?![\p{L}])/iu;
 const ANSWER_WANTED = /(?<![\p{L}])(?:odpowied\p{L}*|odpis\p{L}*|co\s+(?:mam\s+|powinien\p{L}*\s+)?(?:napisać|złożyć|zrobić))(?![\p{L}])/iu;
 // A pleading named as what to produce, and "use these documents in the claim".
-const PLEADING_NOUN = /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od)(?![\p{L}])/iu;
+const PLEADING_NOUN = /(?<![\p{L}])(?:pozew|pozw\p{L}*|odpowied\p{L}*\s+na|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|replik\p{L}*|pism\p{L}*\s+(?:procesow|przygotowawcz)\p{L}*|wnios\p{L}*\s+dowodow\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*\s+od|odwołani\p{L}*|kasacj\p{L}*|skarg\p{L}*\s+kasacyjn\p{L}*)(?![\p{L}])/iu;
 const USE_IN_PLEADING = /(?<![\p{L}])(?:wykorzystaj|użyj|powołaj|dołącz|załącz)\p{L}*\s+(?:\p{L}+\s+){0,4}?(?:w|do)\s+(?:\p{L}+\s+)?(?:pozw|odpowiedzi|apelacj|pism|zażaleni|skarg)\p{L}*/iu;
 /**
  * pisma-procesowe-v3 MODUŁY-MAPA "opponent-attack-v9 — aktywny gdy: mamy pismo przeciwnika DO
@@ -256,6 +256,8 @@ const DEFENCES = [
     /rekojm|wad\w* (?:towar|rzecz|uslug|robot)/u,
     /uchyl\w* sie od skutkow/u
 ];
+// Terminating a contract: "wypowiedz", "napisz wypowiedzenie", "chcę wypowiedzieć".
+const TERMINATION = /(?<![\p{L}])(?:wypowiedz|wypowiedzenie|wypowiedzieć|wypowiadam|wypowiedzi\p{L}*)(?![\p{L}])/iu;
 const DRAFT_NOUN = /(?<![\p{L}])(?:przygotowani\p{L}*|napisani\p{L}*|sporządzeni\p{L}*|zredagowani\p{L}*)(?![\p{L}])/iu;
 export function defenceCount(question) {
     const text = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/gu, "l");
@@ -264,7 +266,7 @@ export function defenceCount(question) {
 const PASSING_DOCUMENT_ROWS = new Set(["analizator-umow-v1", "pisma-procesowe-v3", "pisma-proste-v2"]);
 const QUESTION_ONLY = /\?\s*$|(?:^|[.!?]\s+)(?:chcę|chciał\p{L}*)\s+(?:zrozumieć|wiedzieć|się\s+dowiedzieć)(?![\p{L}])/iu;
 const REVIEW_REQUEST = /(?<![\p{L}])(?:przeanalizuj|przejrzyj|oceń|sprawdź|zweryfikuj|przeczytaj|popraw|zbadaj|zapis\p{L}*|klauzul\p{L}*|co\s+(?:oznacza\p{L}*|znacz\p{L}*)|m(?:ój|oja|oje|ojej|ojego)\s+(?:umow|polis|regulamin|aneks)\p{L}*)(?![\p{L}])/iu;
-const CASE_LAW_LOOKUP = /(?<![\p{L}])(?:(?:szukam|szukaj|poszukaj|potrzebuj\p{L}*|chc\p{L}*|prosił\p{L}*|znajdź|wyszukaj|podaj|wskaż|przytocz)\s+(?:\p{L}+,?\s+){0,4}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*|sygnatur\p{L}*)|(?:inn\p{L}*|kolejn\p{L}*|podobn\p{L}*)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|sygnatur\p{L}*[^.?!]{0,60}?(?:istnieje|potwierdź|czego dotyczy)|(?:sprawdź|zweryfikuj|potwierdź)\p{L}*[^.?!]{0,40}?sygnatur\p{L}*)/iu;
+const CASE_LAW_LOOKUP = /(?<![\p{L}])(?:(?:szukam|szukaj|poszukaj|potrzebuj\p{L}*|chc\p{L}*|prosił\p{L}*|znajdź|wyszukaj|podaj|wskaż|przytocz)\s+(?:\p{L}+,?\s+){0,4}(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|orzecznictw\p{L}*|uchwał\p{L}*|sygnatur\p{L}*)|(?:inn\p{L}*|kolejn\p{L}*|podobn\p{L}*)\s+(?:\p{L}+\s+)?(?:wyrok\p{L}*|orzecze\p{L}*|orzeczeń|uchwał\p{L}*)|sygnatur\p{L}*[^.?!]{0,60}?(?:istnieje|potwierdź|czego dotyczy)|(?:sprawdź|zweryfikuj|potwierdź)\p{L}*[^.?!]{0,40}?sygnatur\p{L}*)/iu;
 // "Wyrok ETPCz w sprawie Xero Flor przeciwko Polsce, co orzekł?": what a named court said in
 // someone else's case, with no judgment delivered, is looked up (router [5]), not analysed.
 const NAMED_JUDGMENT = /(?<![\p{L}])(?:co\s+(?:\p{L}+\s+){0,3}(?:orzekł\p{L}*|orzekła|rozstrzygnął|rozstrzygnęł\p{L}*|stwierdził\p{L}*|uznał\p{L}*)|o\s+czym\s+(?:jest|był)|czego\s+dotyczy(?:ł)?|przeciwko\s+Polsce|C-\d+\/\d{2})(?![\p{L}])/iu;
@@ -328,6 +330,18 @@ export function decideTask(routes, matrix, rawQuestion, materials = [], redactio
         ? { ...decision, then: caseLaw, reason: `${decision.reason}; orzecznictwo do przepisu → ${caseLaw}` }
         : { ...decision, primary: caseLaw, reason: `macierz aktywacji: cel — orzecznictwo do przepisu (${decision.reason})` };
 }
+// Test A, "Użytkownik dostarczył treść GOTOWEGO pisma": an editing verb of the skill's signals
+// aimed at the delivered letter ("popraw styl tego sprzeciwu", "przeredaguj wezwanie na bardziej
+// stanowcze"). "zredaguj" also drafts anew, so it needs a pointer to the delivered text;
+// "sprawdź" alone is a review, not an edit.
+const DELIVERED_REF = /(?<![\p{L}])(?:ten|tego|tej|tę|to|tym|tą|powyższ\p{L}*|załączon\p{L}*|dołączon\p{L}*)(?![\p{L}])/iu;
+function editsDelivered(question, materials, redaction) {
+    if (!redaction || !materials.length)
+        return undefined;
+    const verbs = [...new Set(redaction.signals.map((phrase) => phrase.split(/\s+/u)[0]))].filter((verb) => !/^sprawd/u.test(verb));
+    const verb = verbs.find((candidate) => stemPhrase(candidate)?.test(question));
+    return verb && (!/^zredag/u.test(verb) || DELIVERED_REF.test(question)) ? verb : undefined;
+}
 function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redaction = null, simpleLetters = null) {
     // The user pressed "continue" on a pipeline step: that skill, explicitly.
     const known = new Set([...routes.map((route) => route.primary), ...matrix.flatMap((rule) => [rule.primary, rule.then ?? ""])]);
@@ -337,7 +351,8 @@ function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redacti
     const question = provisionsForDetection(rawQuestion);
     // One's own simple letter to check or improve ("sprawdź mój sprzeciw od nakazu"):
     // pisma-proste-v2 with that letter's schema, not the pleading redaction of Test A.
-    const ownSimple = simpleLetters && OWN_DOCUMENT.test(question) ? matchSchema(simpleLetters.entries, question) : null;
+    const editVerb = editsDelivered(question, materials, redaction);
+    const ownSimple = simpleLetters && (OWN_DOCUMENT.test(question) || editVerb) ? matchSchema(simpleLetters.entries, question) : null;
     // The delivered letter may be that simple letter itself ("sprawdź mój sprzeciw" + the sprzeciw).
     if (ownSimple && simpleLetters && !materials.some((material) => material.category === "PISMO_PROCESOWE" && material.kind !== "SPRZECIW")) {
         return {
@@ -397,7 +412,7 @@ function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redacti
         // The skill's signals, and their verbs ("popraw", "zredaguj", "skróć"...) for the user's own letter.
         const verbs = [...new Set(redaction.signals.map((phrase) => phrase.split(/\s+/u)[0]))];
         const signal = redaction.signals.find((phrase) => stemPhrase(phrase)?.test(question)) ??
-            (OWN_DOCUMENT.test(question) ? verbs.find((verb) => stemPhrase(verb)?.test(question)) : undefined);
+            (OWN_DOCUMENT.test(question) ? verbs.find((verb) => stemPhrase(verb)?.test(question)) : editVerb);
         if (signal && ownPleading) {
             return {
                 source: "SKILL",
@@ -414,6 +429,20 @@ function decideTaskByMatrix(routes, matrix, rawQuestion, materials = [], redacti
     if (simpleLetters) {
         const schema = draftingSchema(simpleLetters.entries, question, { demand: materials.some((material) => material.kind === "WEZWANIE") });
         const fullPleading = matrix.some((rule) => rule.primary === "pisma-procesowe-v3" && rule.phrases.some((phrase) => stemPhrase(phrase)?.test(question)));
+        // "Napisz wypowiedzenie tej umowy" with the contract delivered: the kind of contract is in the
+        // file, not the message; the catalogue's notice-of-termination row (pisma-proste-v2 SPN) drafts it.
+        const termination = !schema && materials.some((material) => material.category === "UMOWA") && TERMINATION.test(question) && !asksAbout(question)
+            ? simpleLetters.entries.find((entry) => /^wypowiedz/iu.test(entry.label))
+            : undefined;
+        if (termination) {
+            return {
+                source: "SKILL",
+                primary: simpleLetters.skill,
+                then: null,
+                reason: `wypowiedzenie dostarczonej umowy (schemat ${termination.code}: rodzaj umowy z dokumentu)`,
+                modules: termination.resources
+            };
+        }
         if (schema && !fullPleading) {
             const decisionDelivered = materials.some((material) => material.category === "ORZECZENIE");
             if (decisionDelivered && ANALYSIS_INTENT.test(question)) {

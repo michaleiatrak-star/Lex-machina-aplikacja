@@ -82,9 +82,13 @@ export function maskBoxes(page, values) {
             y1 + 3
         ];
     };
+    // Whole lines hidden: badly read ones, and lines to check against the scan (handwriting,
+    // stamps): a handwritten "Wiatrak Michał" read as "Wire mats Mithet" matches no key value.
+    const review = new Set((page.review ?? []).map((item) => item.line));
     lines.forEach((line, index) => {
-        if (typeof line.score === "number" && line.score < LOW_SCORE_LINE)
+        if ((typeof line.score === "number" && line.score < LOW_SCORE_LINE) || review.has(index)) {
             boxes.push(lineBox(index, 0, line.text.length));
+        }
     });
     for (const value of values) {
         // Case-insensitive: "JAN KOWALSKI" on a photo, "Jan Kowalski" in the key.

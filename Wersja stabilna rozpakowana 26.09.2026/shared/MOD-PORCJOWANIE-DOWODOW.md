@@ -444,7 +444,7 @@ Istniejący MOD-KONTEKST-SESJI działa między sesjami (export/import stanu),
 nie wewnątrz sesji. Ten moduł wypełnia tę lukę przez profilaktyczne
 szacowanie rozmiaru materiału przed analizą i podział na partie z protokołem
 checkpointów i wznawiania.
-Przykład triggera: ZIP z 35 plikami (9.5 MB) — sesja VII P 94/25 —
+Przykład triggera: ZIP z 35 plikami (9.5 MB) — sesja [SYGN-SPRAWY] —
 model przeanalizował go bez podziału, ryzykując utratę wyników.
 Przy STATUS KRYTYCZNE (≥30 plików) moduł wymusiłby podział na ~9 partii
 po 4 pliki, z 8 checkpointami między partiami.
