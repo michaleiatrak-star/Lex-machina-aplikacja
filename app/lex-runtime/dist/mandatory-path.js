@@ -518,6 +518,18 @@ export function evaluateMandatoryPath(model, facts) {
                 : "na końcu odpowiedzi modelu; aplikacja podstawia tekst kanoniczny po bramkach (akty zweryfikowane w pliku)"
         });
     }
+    // SKILL: what the answer must contain, checked by the application in its text.
+    for (const check of legal ? facts.supervised ?? [] : []) {
+        steps.push({
+            layer: "SKILL",
+            id: check.id,
+            label: check.label,
+            requirement: "CONDITIONAL",
+            status: check.status,
+            by: "MODEL",
+            evidence: check.evidence
+        });
+    }
     // HARD GATE: finalization and claims of running a source.
     steps.push({
         layer: "HARD_GATE",

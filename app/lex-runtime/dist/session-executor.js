@@ -26,6 +26,8 @@ import { CaseFileToolRuntime } from "./case-file-tool-runtime.js";
 import { revalidateThreadEvidence, threadEvidencePrompt } from "./thread-evidence.js";
 import { MAX_SUMMARY_CHARS } from "./thread-summary.js";
 import { documentCoverage } from "./document-coverage.js";
+import { CAUSAL_QUESTION, CAUSAL_RESOURCE, supervisedChecks } from "./supervised-content.js";
+export { CAUSAL_QUESTION } from "./supervised-content.js";
 // Skills whose result rests on reading the documents through (a partial read is unfinished).
 const COVERAGE_SKILLS = new Set([
     "analiza-sadowa-v6",
@@ -98,10 +100,7 @@ const JUDGE_SYSTEM = `${SEMANTIC_JUDGE_SYSTEM} ${AUTHORITY_RULE}${ROLE_LEGEND}`;
 // A follow-up this short ("ok, robisz to.") carries no task of its own.
 const FOLLOW_UP_MAX_CHARS = 160;
 const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/modules/mod-KK-kwalifikator-karnomaterialny.md";
-// Cause and effect in the user's own case (establish or exclude a causal link): the causal
-// graph method (link evidence, csqn, post hoc, interruption, MET-ACH exclusion).
-const CAUSAL_RESOURCE = "shared/MOD-GRAF-PRZYCZYNOWY.md";
-export const CAUSAL_QUESTION = /(?<![\p{L}])(?:związ\p{L}*\s+przyczynow\p{L}*|przyczynowo[-\s]skutkow\p{L}*|co\s+z\s+czego\s+wynika|post\s+hoc|csqn|conditio\s+sine\s+qua\s+non|(?:czy|co)\s+(?:\p{L}+\s+){0,6}(?:spowodował\p{L}*|doprowadził\p{L}*|wywołał\p{L}*)|przerw\p{L}*\s+(?:\p{L}+\s+){0,2}związ\p{L}*|wyklucz\p{L}*\s+(?:\p{L}+\s+){0,3}(?:związ\p{L}*|przyczyn\p{L}*)|łańcuch\p{L}*\s+przyczyn\p{L}*)(?![\p{L}])/iu;
+/(?<![\p{L}])(?:związ\p{L}*\s+przyczynow\p{L}*|przyczynowo[-\s]skutkow\p{L}*|co\s+z\s+czego\s+wynika|post\s+hoc|csqn|conditio\s+sine\s+qua\s+non|(?:czy|co)\s+(?:\p{L}+\s+){0,6}(?:spowodował\p{L}*|doprowadził\p{L}*|wywołał\p{L}*)|przerw\p{L}*\s+(?:\p{L}+\s+){0,2}związ\p{L}*|wyklucz\p{L}*\s+(?:\p{L}+\s+){0,3}(?:związ\p{L}*|przyczyn\p{L}*)|łańcuch\p{L}*\s+przyczyn\p{L}*)(?![\p{L}])/iu;
 // Skills in the corpus under one base name in several versions ("x-v1", "x-v2").
 // Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
 export function resumeHostThread(env = process.env) {
@@ -2112,7 +2111,7 @@ export class SafeSessionExecutor {
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
         const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
         const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
-        const missingGates = mandatoryModel &&
+        const correctionEligible = Boolean(mandatoryModel &&
             legalTurn &&
             !request.model.startsWith("local/") &&
             // Plain legal chat only: structured outputs and workflow checkpoints have their own contracts.
@@ -2125,11 +2124,20 @@ export class SafeSessionExecutor {
             !request.orderedCaseWorkflowContext &&
             // Questions to the user (missing facts) are not the legal answer the gates belong to.
             !waitsForUser(modelOutput) &&
-            legalAnswer(modelOutput)
-            ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput)
-            : [];
-        if (missingGates.length) {
-            step("MODEL", `ścieżka obowiązkowa: uzupełnienie bramek ${missingGates.map((item) => item.block).join(", ")}`);
+            legalAnswer(modelOutput));
+        const missingGates = correctionEligible ? missingGateBlocks(mandatoryModel, effectiveProfile, modelOutput) : [];
+        // Supervised content (supervised-content.ts): the causal method on a causal question, the
+        // case's timeline when the request concerns the course of events.
+        const readResources = () => new Set([...contextResources, ...audit.events.filter((event) => event.type === "resource_read" && event.status === "OK").map((event) => event.target)]);
+        const supervisedFor = (text) => supervisedChecks({
+            query: pathFacts.query,
+            answer: text,
+            readResources: readResources(),
+            ...(request.caseTimelineDates?.length ? { timelineDates: request.caseTimelineDates } : {})
+        });
+        const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
+        if (missingGates.length || supervisedMissing.length) {
+            step("MODEL", `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`);
             try {
                 const corrected = await this.providers.stream(request.provider, {
                     model: request.model,
@@ -2142,26 +2150,41 @@ export class SafeSessionExecutor {
                     messages: [
                         { role: "user", content: protectedQuery },
                         { role: "assistant", content: modelOutput },
-                        { role: "user", content: gateCorrectionPrompt(missingGates) }
+                        {
+                            role: "user",
+                            content: [
+                                ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
+                                ...(supervisedMissing.length
+                                    ? [
+                                        "Nadzór aplikacji nad treścią odpowiedzi — uzupełnij i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian):",
+                                        ...supervisedMissing.map((check) => `- ${check.correction}`),
+                                        ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
+                                    ]
+                                    : [])
+                            ].join("\n")
+                        }
                     ],
                     accountContinuity: "none",
                     reasoning: "none"
                 });
                 const text = corrected.fullText.trim();
                 const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
-                const accepted = Boolean(text) && remaining.length < missingGates.length;
+                const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
+                const accepted = Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;
                 if (accepted)
                     modelOutput = text;
-                audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
-                    missing: missingGates.map((item) => item.block),
-                    remaining: (accepted ? remaining : missingGates).map((item) => item.block),
+                audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length + remainingSupervised.length === 0 ? "OK" : "DEGRADED", {
+                    missing: [...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)],
+                    remaining: accepted
+                        ? [...remaining.map((item) => item.block), ...remainingSupervised.map((check) => check.id)]
+                        : [...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)],
                     // The correction's own cost, apart from the turn's total.
                     ...(corrected.usage ? { inputTokens: corrected.usage.inputTokens, outputTokens: corrected.usage.outputTokens } : {})
                 });
             }
             catch (error) {
                 audit.record("gate", "MANDATORY_PATH_CORRECTION", "DEGRADED", {
-                    missing: missingGates.map((item) => item.block),
+                    missing: [...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)],
                     error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED"
                 });
             }
@@ -2795,7 +2818,8 @@ export class SafeSessionExecutor {
                 primarySkill: execution.primarySkill,
                 finalization: finalization.result,
                 federationTools: Boolean(federationTools),
-                ...(eventDateCheck ? { eventDateCheck } : {})
+                ...(eventDateCheck ? { eventDateCheck } : {}),
+                supervised: supervisedFor(processedDocumentCitations.text)
             })
             : undefined;
         // KROK 3A written by the application from the audit.

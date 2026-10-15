@@ -55,6 +55,7 @@ import { completeContractExecution, requireContractExecutionPermit } from "../co
 import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork } from "../case-work.js";
+import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 const PROVIDERS = new Set([
@@ -5833,6 +5834,10 @@ export function createLexHttpApp(options) {
                     // What the case already has: the register of work done and open, and the timeline
                     // of its chronology (a part of the larger work). Later turns use them, not redo them.
                     const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
+                    // The dates the model got with the timeline: the executor checks the answer uses them
+                    // (an API model keeps nothing between calls; the application gives and supervises it).
+                    if (memory.chronology)
+                        request.caseTimelineDates = [...isoDates(memory.chronology.text)].slice(0, 500);
                     const register = caseWorkBlock(caseWork);
                     if (timeline || register) {
                         request.query = queryWithChronology(request.query, [register, timeline].filter(Boolean).join("\n\n"));
