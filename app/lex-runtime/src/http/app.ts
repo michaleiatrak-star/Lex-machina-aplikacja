@@ -6914,8 +6914,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             error
           )
         ) {
+          // The coded cause only (e.g. OVERLAPPING_PRIVACY_DIRECTIVES), never document text.
+          const reason = error instanceof Error ? /^[A-Z][A-Z0-9_]{2,80}(?=$|:)/.exec(error.message)?.[0] : undefined;
           res.status(422).json({
-            error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED"
+            error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED",
+            ...(reason ? { reason } : {})
           });
         }
       }

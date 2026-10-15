@@ -79,3 +79,21 @@ export function documentFailure(cause: unknown): DocumentFailure {
     retryable: true
   };
 }
+
+const CONFIRM_REASONS: Record<string, string> = {
+  OVERLAPPING_PRIVACY_DIRECTIVES: "dwa Twoje zaznaczenia nachodzą na siebie. Cofnij jedno z nich (kliknij je) i zatwierdź ponownie.",
+  INVALID_PRIVACY_DIRECTIVE_RANGE: "zaznaczenie wychodzi poza tekst strony (tekst mógł się zmienić). Zaznacz fragment jeszcze raz.",
+  INVALID_PRIVACY_DIRECTIVE_LABEL: "etykieta zaznaczenia jest pusta albo za długa (do 120 znaków).",
+  INVALID_PRIVACY_DIRECTIVE_PAGE: "zaznaczenie wskazuje stronę, której nie ma w dokumencie. Zaznacz fragment jeszcze raz."
+};
+
+/** Why confirming a privacy preview failed, in plain Polish (the preview stays open). */
+export function privacyConfirmFailure(cause: unknown): string {
+  const reason = cause instanceof ApiError ? cause.reason ?? "" : "";
+  const code = cause instanceof ApiError ? cause.code : cause instanceof Error ? cause.message : String(cause);
+  const known = CONFIRM_REASONS[reason] ?? CONFIRM_REASONS[code];
+  if (known) return `Nie zatwierdzono: ${known}`;
+  if (code.startsWith("DESKTOP_RUNTIME_PROXY_FAILED")) return "Nie zatwierdzono: zapis trwał zbyt długo. Spróbuj ponownie.";
+  return `Nie zatwierdzono pliku. Spróbuj ponownie. Kod: ${reason || code}`;
+}
+

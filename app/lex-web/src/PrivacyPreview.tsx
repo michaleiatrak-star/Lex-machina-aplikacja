@@ -8,6 +8,7 @@ import {
 } from "./api.js";
 import { PageScanView } from "./PageScanView.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
+import { addMark, visibleSuggestions } from "./privacy-marks.js";
 
 /**
  * The preview every processed document passes before it is finalized: what to decide first
@@ -34,6 +35,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   // Decisions made earlier (back to a file in the batch preview).
   initialDirectives?: PagePrivacyDirective[];
   confirmLabel?: string;
+  // Why the last confirmation failed (shown here, next to the button that was clicked).
+  confirmError?: string;
   // The review is passed back: the user may have corrected page texts.
   onConfirm: (directives: PagePrivacyDirective[], review: DocumentReviewResponse) => void;
   onCancel: () => void;
@@ -130,24 +133,48 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     if (end > start) setSelection({ page, start, end });
   }
 
-  function maskSelection(): void {
-    if (!selection) return;
+  // The selection as a decision, joined with the decisions it touches; null when it cannot be one.
+  function withSelection(current: PagePrivacyDirective[]): PagePrivacyDirective[] | null {
+    if (!selection) return current;
     const label = markLabel.trim();
     if (markAction === "LABEL" && !label) {
       setError("Wpisz etykietę, którą zastąpić zaznaczony fragment.");
-      return;
+      return null;
     }
     setError("");
-    setDirectives((current) => [
-      ...current,
+    return addMark(
+      current,
       markAction === "LABEL"
         ? { ...selection, action: "LABEL", label }
         : { ...selection, action: "PSEUDONYMIZE", kind, ...(label ? { label } : {}) }
-    ]);
+    );
+  }
+
+  function maskSelection(): void {
+    const next = withSelection(directives);
+    if (!next) return;
+    setDirectives(next);
     setSelection(null);
     setMarkLabel("");
     window.getSelection()?.removeAllRanges();
   }
+
+  // A fragment selected but not yet masked is masked too: confirming never drops it.
+  function confirm(): void {
+    if (props.keepClear) {
+      props.onConfirm(keepAllDirectives(review), review);
+      return;
+    }
+    const next = withSelection(directives);
+    if (!next) return;
+    if (selection) {
+      setDirectives(next);
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+    }
+    props.onConfirm(next, review);
+  }
+
 
   async function savePage(): Promise<void> {
     if (!editing) return;
@@ -177,8 +204,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       review.pages.map((page) => {
         // OCR only: the text as it will be sent, nothing masked.
         if (props.keepClear) return { page: page.page, parts: [page.text] as ReactNode[] };
+        const userMarks = directives.filter((item) => item.page === page.page && item.action !== "KEEP");
         const marks = [
-          ...review.suggestions.filter((item) => item.page === page.page).map((item) => ({ ...item, user: false })),
+          ...visibleSuggestions(review.suggestions.filter((item) => item.page === page.page), userMarks).map((item) => ({ ...item, user: false })),
           ...directives
             .filter((item) => item.page === page.page && item.action !== "KEEP")
             .map((item) => ({
@@ -272,11 +300,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             type="button"
             className="primary-button"
             disabled={props.busy || saving || editing !== null}
-            onClick={() => props.onConfirm(props.keepClear ? keepAllDirectives(review) : directives, review)}
+            onClick={confirm}
           >
             {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}
           </button>
         </div>
+        {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
 
       {aiHints.length || doubtful.length || fixes.length ? (
@@ -441,7 +470,6 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           )}
         </div>
       </div>
-      {error ? <p className="field-error">{error}</p> : null}
     </section>
   );
 }

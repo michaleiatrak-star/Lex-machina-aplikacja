@@ -53,7 +53,7 @@ import { DocumentEditor } from "./DocumentEditor.js";
 import { SheetEditor } from "./SheetEditor.js";
 import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
-import { OCR_MODELS_INCOMPLETE } from "./document-errors.js";
+import { OCR_MODELS_INCOMPLETE, privacyConfirmFailure } from "./document-errors.js";
 import {
   clearFinished,
   enqueueFiles,
@@ -286,7 +286,10 @@ export function WorkspaceManager({
   const [privacyPreview, setPrivacyPreview] = useState<PrivacyPreviewQueueItem | null>(null);
   const queuedPreviews = useRef<PrivacyPreviewQueueItem[]>([]);
   const privacyPreviewRef = useRef<PrivacyPreviewQueueItem | null>(null);
+  // Why confirming the open preview failed, shown in the preview itself.
+  const [previewError, setPreviewError] = useState("");
   const showPrivacyPreview = (next: PrivacyPreviewQueueItem | null) => {
+    setPreviewError("");
     privacyPreviewRef.current = next;
     setPrivacyPreview(next);
   };
@@ -668,8 +671,15 @@ export function WorkspaceManager({
   async function confirmPrivacyPreview(directives: PagePrivacyDirective[]): Promise<void> {
     const pending = privacyPreview;
     if (!pending) return;
+    setPreviewError("");
     await run(async () => {
-      const result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      let result: Awaited<ReturnType<typeof finalizeDocument>>;
+      try {
+        result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      } catch (failure) {
+        setPreviewError(privacyConfirmFailure(failure));
+        return;
+      }
       nextPreview();
       setNotice(
         `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
@@ -1747,6 +1757,7 @@ export function WorkspaceManager({
         <PrivacyPreview
           {...privacyPreview.request}
           busy={busy}
+          confirmError={previewError}
           onConfirm={(directives) => void confirmPrivacyPreview(directives)}
           onCancel={nextPreview}
         />

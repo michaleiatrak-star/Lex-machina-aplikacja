@@ -39,7 +39,7 @@ import {
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
-import { documentFailure } from "./document-errors.js";
+import { documentFailure, privacyConfirmFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
@@ -1162,6 +1162,8 @@ export default function MatterChatApp({
     resolve: (result: Awaited<ReturnType<typeof finalizeCaseDocument>> | null) => void;
   } | null>(null);
   const [privacyPreviewBusy, setPrivacyPreviewBusy] = useState(false);
+  // A failed confirmation keeps the preview open with the user's marks and says why.
+  const [privacyPreviewError, setPrivacyPreviewError] = useState("");
   // Every document is finalized after its preview; null when the user cancels it.
   function previewThenFinalize(
     targetCase: string,
@@ -4292,22 +4294,22 @@ export default function MatterChatApp({
           <PrivacyPreview
             {...privacyPreview.request}
             busy={privacyPreviewBusy}
+            confirmError={privacyPreviewError}
             onCancel={() => {
               privacyPreview.resolve(null);
+              setPrivacyPreviewError("");
               setPrivacyPreview(null);
             }}
             onConfirm={(directives) => {
               setPrivacyPreviewBusy(true);
+              setPrivacyPreviewError("");
               void finalizeCaseDocument(privacyPreview.request.caseId, privacyPreview.request.review.documentId, directives, undefined, true)
-                .then((result) => privacyPreview.resolve(result))
-                .catch((failure) => {
-                  setCaseFilePickerError(failure instanceof Error ? failure.message : String(failure));
-                  privacyPreview.resolve(null);
-                })
-                .finally(() => {
-                  setPrivacyPreviewBusy(false);
+                .then((result) => {
+                  privacyPreview.resolve(result);
                   setPrivacyPreview(null);
-                });
+                })
+                .catch((failure) => setPrivacyPreviewError(privacyConfirmFailure(failure)))
+                .finally(() => setPrivacyPreviewBusy(false));
             }}
           />
         </div>
