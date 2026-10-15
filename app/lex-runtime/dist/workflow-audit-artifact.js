@@ -1,4 +1,15 @@
 import { SESSION_EXECUTION_INTERNAL } from "./session-executor.js";
+const STATEFUL_WORKFLOW_AUDIT_IDS = new Set([
+    "COURT_ANALYSIS_V1",
+    "CHRONOLOGY_V1",
+    "CONTRACT_ANALYSIS_V1",
+    "EVIDENCE_ANALYSIS_V1",
+    "WITNESS_QUESTIONING_V1"
+]);
+/** A workflow whose checkpoints are closed with an audit artifact. */
+export function isStatefulWorkflowAuditId(id) {
+    return id !== undefined && STATEFUL_WORKFLOW_AUDIT_IDS.has(id);
+}
 const CASE_ID = /^case_[a-f0-9]{32}$/;
 const SAFE_CHECKPOINT = /^[A-Za-z0-9._:-]{1,120}$/;
 const SAFE_TARGET_MAX = 500;

@@ -3117,6 +3117,20 @@ mark.restored {
   margin-top: 6px;
 }
 
+.chat-pipeline-next[role="group"] {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #d7ddd5;
+  border-radius: 10px;
+}
+
+.chat-pipeline-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .workspace-template-role {
   display: flex;
   flex-wrap: wrap;

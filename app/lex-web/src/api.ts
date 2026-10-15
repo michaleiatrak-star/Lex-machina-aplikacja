@@ -1030,7 +1030,7 @@ export type SessionExecutionResponse = {
   sessionId: string;
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string }> };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
   // The firm's default template the application used (none picked).
@@ -1139,6 +1139,8 @@ export type SessionExecutionResponse = {
   taskMode?: "REDACTION";
   // The answer ends a checkpoint with a question to the user.
   waitingForUser?: boolean;
+  // A workflow checkpoint left open: a step was refused during the turn.
+  checkpointHeld?: { reason: "BLOCKED_STEP"; steps: string[] };
   // The letter skill hands the matter to the other one; the chat offers the switch.
   skillSwitch?: import("./skill-switch-offer.js").SkillSwitchOffer;
 };

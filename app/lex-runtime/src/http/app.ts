@@ -245,6 +245,7 @@ import {
 } from "../google/http-routes.js";
 import {
   buildWorkflowAuditArtifact,
+  isStatefulWorkflowAuditId,
   parseWorkflowAuditArtifact,
   type StatefulWorkflowAuditId
 } from "../workflow-audit-artifact.js";
@@ -683,6 +684,14 @@ export type LexHttpAppOptions = {
     | "deleteCaseContact"
   >;
 };
+
+/** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+export function blockedAuditSteps(result: SessionExecutionResponse): string[] {
+  return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+    .filter((event) => event.status === "BLOCKED")
+    .map((event) => String(event.target).slice(0, 120))
+    .slice(0, 8);
+}
 
 async function persistWorkflowAuditArtifact(
   args: {
@@ -11020,7 +11029,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow.result ===
             "PASS" &&
           // A checkpoint that asked the user stays open until the reply.
-          result.waitingForUser !== true
+          result.waitingForUser !== true &&
+          // A step refused during the turn: the audit of the checkpoint cannot be closed
+          // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+          blockedAuditSteps(result).length === 0
         ) {
           if (
             !options
@@ -11190,7 +11202,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow.result ===
             "PASS" &&
           // A checkpoint that asked the user stays open until the reply.
-          result.waitingForUser !== true
+          result.waitingForUser !== true &&
+          // A step refused during the turn: the audit of the checkpoint cannot be closed
+          // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+          blockedAuditSteps(result).length === 0
         ) {
           if (
             !options
@@ -11350,7 +11365,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow.result ===
             "PASS" &&
           // A checkpoint that asked the user stays open until the reply.
-          result.waitingForUser !== true
+          result.waitingForUser !== true &&
+          // A step refused during the turn: the audit of the checkpoint cannot be closed
+          // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+          blockedAuditSteps(result).length === 0
         ) {
           if (
             !options
@@ -11511,7 +11529,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow.result ===
             "PASS" &&
           // A checkpoint that asked the user stays open until the reply.
-          result.waitingForUser !== true
+          result.waitingForUser !== true &&
+          // A step refused during the turn: the audit of the checkpoint cannot be closed
+          // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+          blockedAuditSteps(result).length === 0
         ) {
           if (
             !options
@@ -11766,6 +11787,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
         });
       }
+      // A workflow step that passed but had a refused step on the way: its checkpoint was
+      // not closed (no audit artifact over a BLOCKED event); the user sees why and repeats it.
+      const held =
+        result.status === "DRAFT_PRESENTABLE" &&
+        result.workflow?.result === "PASS" &&
+        isStatefulWorkflowAuditId(result.workflow.id) &&
+        result.waitingForUser !== true
+          ? blockedAuditSteps(result)
+          : [];
+      if (held.length) result.checkpointHeld = { reason: "BLOCKED_STEP", steps: held };
       res.json(result);
     } catch (error) {
       if (

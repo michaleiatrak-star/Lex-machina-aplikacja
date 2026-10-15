@@ -88,11 +88,17 @@ describe("drafting a letter vs analysing one", () => {
 
   it.each([
     ["Napisz wezwanie do zapłaty", [], "pisma-proste-v2 | SPC-SPD-SPE.md"],
-    ["Przeanalizuj to wezwanie do zapłaty", [demand], "analizator-dowodow-v3"],
-    ["Oceń, czy to wezwanie do zapłaty jest zasadne", [demand], "analizator-dowodow-v3"],
+    ["Przeanalizuj to wezwanie do zapłaty", [demand], "analizator-umow-v1"],
+    ["Oceń, czy to wezwanie do zapłaty jest zasadne", [demand], "analizator-umow-v1"],
     ["Dostałem wezwanie do zapłaty, co mam zrobić?", [demand], "przewodnik-prawny-v2"],
     ["Czy muszę zapłacić? Dostałem wezwanie do zapłaty", [], "przewodnik-prawny-v2"],
-    ["Odpowiedz na to wezwanie do zapłaty", [demand], "analizator-dowodow-v3 | pisma-proste-v2"],
+    ["Odpowiedz na to wezwanie do zapłaty", [demand], "analizator-umow-v1 | pisma-proste-v2"],
+    // ACTIVATION-MATRIX "Dokument + wezwanie": the demand between the parties in any words.
+    ["Odpowiedz na ten dokument.", [demand], "analizator-umow-v1 | pisma-proste-v2"],
+    ["Przygotuj odpowiedź na to pismo.", [demand], "analizator-umow-v1 | pisma-proste-v2"],
+    ["Wygeneruj dokument.", [demand], "analizator-umow-v1 | pisma-proste-v2"],
+    ["Przeanalizuj to wezwanie i przygotuj odpowiedź.", [demand], "analizator-umow-v1 | pisma-proste-v2"],
+    ["Czy kara umowna z tego wezwania jest zasadna?", [demand], "analizator-umow-v1"],
     ["Przeanalizuj nakaz zapłaty", [order], "analiza-sadowa-v6"],
     ["Napisz sprzeciw od nakazu zapłaty", [order], "pisma-proste-v2 | SPA-sprzeciw.md"],
     ["Sprawdź mój sprzeciw od nakazu zapłaty", [], "pisma-proste-v2 | SPA-sprzeciw.md"],

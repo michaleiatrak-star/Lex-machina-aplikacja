@@ -48,7 +48,7 @@ import { criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
-import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, opponentPleadingTrigger } from "./task-routing.js";
+import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, opponentPleadingTrigger } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules } from "./domain-module-map.js";
@@ -2861,11 +2861,18 @@ export class SafeSessionExecutor {
         // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
         // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
         const workflowSkill = execution.workflowPlan.executionSkill;
-        const next = taskRoute
-            ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
+        // The options after the result (generate the document / a further analysis): the user
+        // chooses; the first one is kept as the single "next stage" of older clients.
+        const nextFrom = taskRoute
+            ? { skill: taskRoute.primary, then: taskRoute.then }
             : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
-                ? pipelineNext(workflowSkill, this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill), this.skillCombinations(), nextContext)
+                ? { skill: workflowSkill, then: this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill) }
                 : null;
+        const choices = nextFrom ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : [];
+        const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
+        const next = choices.length
+            ? { skill: choices[0].skill, reason: choices[0].reason, choices }
+            : legacyNext;
         // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
         // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
         const skillSwitch = workflowOutput.mode === "ESCALATION_REQUIRED"

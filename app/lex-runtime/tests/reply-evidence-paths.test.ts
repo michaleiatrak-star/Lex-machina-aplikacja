@@ -89,7 +89,7 @@ describe("the task with a delivered document", () => {
     ["Sąd wezwał mnie do złożenia odpowiedzi na pozew w terminie 14 dni. Co mam napisać?", [], ["pisma-procesowe-v3"]],
     ["Sąd wezwał mnie do uzupełnienia braków formalnych pozwu. Jak odpowiedzieć?", [], ["pisma-proste-v2"]],
     // A payment demand stays the demand path.
-    ["Jak odpowiedzieć na to wezwanie do zapłaty?", ["wezwanieZaplaty"], ["analizator-dowodow-v3", "pisma-proste-v2"]],
+    ["Jak odpowiedzieć na to wezwanie do zapłaty?", ["wezwanieZaplaty"], ["analizator-umow-v1", "pisma-proste-v2"]],
     // One's own simple letter delivered and checked.
     ["Sprawdź mój sprzeciw od nakazu.", ["sprzeciw"], ["pisma-proste-v2"]],
     ["Dostałem nakaz zapłaty, chcę złożyć sprzeciw.", [], ["pisma-proste-v2"]],

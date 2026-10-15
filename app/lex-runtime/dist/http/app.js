@@ -53,7 +53,7 @@ import { chronologyTemporalGateRequired } from "../chronology-date-trigger.js";
 import { nextContractCheckpoint } from "../contract-analysis-state.js";
 import { completeContractExecution, requireContractExecutionPermit } from "../contract-analysis-execution-gate.js";
 import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes } from "../google/http-routes.js";
-import { buildWorkflowAuditArtifact, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
+import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 const PROVIDERS = new Set([
     "openai",
@@ -133,7 +133,9 @@ const PRIVACY_KINDS = new Set([
     "VEHICLE_PLATE",
     "BAR_NUMBER",
     "PAYMENT_CARD",
-    "CUSTOM"
+    "CUSTOM",
+    // The user's mark of a firm name (a firm token, see ManualPrivacyDirective).
+    "FIRM"
 ]);
 function parsePrivacyDirectives(value) {
     if (!Array.isArray(value))
@@ -199,6 +201,13 @@ function loopbackOriginGuard(req, res, next) {
     res.status(403).json({
         error: "ORIGIN_NOT_ALLOWED"
     });
+}
+/** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+export function blockedAuditSteps(result) {
+    return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+        .filter((event) => event.status === "BLOCKED")
+        .map((event) => String(event.target).slice(0, 120))
+        .slice(0, 8);
 }
 async function persistWorkflowAuditArtifact(args) {
     const payload = buildWorkflowAuditArtifact({
@@ -4144,8 +4153,11 @@ export function createLexHttpApp(options) {
         }
         catch (error) {
             if (!sendCaseAccessError(res, error)) {
+                // The coded cause only (e.g. OVERLAPPING_PRIVACY_DIRECTIVES), never document text.
+                const reason = error instanceof Error ? /^[A-Z][A-Z0-9_]{2,80}(?=$|:)/.exec(error.message)?.[0] : undefined;
                 res.status(422).json({
-                    error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED"
+                    error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED",
+                    ...(reason ? { reason } : {})
                 });
             }
         }
@@ -6618,7 +6630,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6730,7 +6745,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6834,7 +6852,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6939,7 +6960,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -7101,6 +7125,16 @@ export function createLexHttpApp(options) {
                     realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
                 });
             }
+            // A workflow step that passed but had a refused step on the way: its checkpoint was
+            // not closed (no audit artifact over a BLOCKED event); the user sees why and repeats it.
+            const held = result.status === "DRAFT_PRESENTABLE" &&
+                result.workflow?.result === "PASS" &&
+                isStatefulWorkflowAuditId(result.workflow.id) &&
+                result.waitingForUser !== true
+                ? blockedAuditSteps(result)
+                : [];
+            if (held.length)
+                result.checkpointHeld = { reason: "BLOCKED_STEP", steps: held };
             res.json(result);
         }
         catch (error) {

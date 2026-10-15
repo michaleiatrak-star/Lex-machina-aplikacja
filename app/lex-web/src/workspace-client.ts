@@ -62,7 +62,7 @@ export type WorkspaceThreadMessage = {
   evidence?: EvidenceItem[];
   auxiliarySources?: AuxiliarySourceItem[];
   mandatoryPath?: MandatoryPathView;
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string }> };
 };
 
 // Widget shown with show_widget (skill corpus file or model code), rendered in an isolated frame.

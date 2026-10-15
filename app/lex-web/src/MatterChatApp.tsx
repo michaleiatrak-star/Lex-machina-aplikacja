@@ -959,12 +959,17 @@ function executionMessage(
       verificationDegraded
         ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
         : "";
+    // The step passed but a tool call was refused on the way: its checkpoint stays open.
+    const heldNotice = execution.checkpointHeld
+      ? `${checkpointHeldNotice(execution.checkpointHeld.steps)}\n\n`
+      : "";
 
     return {
       id: messageId(),
       role: "assistant",
       content:
         verificationWarning +
+        heldNotice +
         execution.answer,
       evidence: execution.evidence,
       ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
@@ -983,7 +988,7 @@ function executionMessage(
             restorations:
               shiftMarks(
                 execution.restorations,
-                verificationWarning.length
+                verificationWarning.length + heldNotice.length
               )
           }
         : {}),
@@ -1073,8 +1078,83 @@ export function documentWarningsText(warnings: string[] | undefined): string {
   return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
 }
 
+type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
+
+/** The message the app sends for a chosen option: the stage alone, without a new analysis. */
+export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" }): string {
+  return choice.kind === "DOCUMENT"
+    ? `${PIPELINE_HANDOFF} ${choice.skill}. Wynik powyżej jest zadowalający: przygotuj dokument na jego podstawie, bez ponownej analizy i bez nowych wątków.`
+    : `${PIPELINE_HANDOFF} ${choice.skill}. Kontynuuj na podstawie powyższego wyniku, tylko w zakresie tego etapu.`;
+}
+
+/**
+ * After a result: generate the document when it is satisfactory, or one further stage of
+ * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
+ */
+export function PipelineChoices({ next, auto, disabled, onChoose }: { next: PipelineNext; auto: boolean; disabled: boolean; onChoose: (text: string) => void }) {
+  const choices = next.choices?.length ? next.choices : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? ("DOCUMENT" as const) : ("ANALYSIS" as const), reason: next.reason }];
+  if (!auto) {
+    return (
+      <div className="chat-pipeline-next" role="note">
+        <span>
+          Dalej możliwe: {choices.map((choice) => choice.skill).join(", ")}.
+        </span>
+        <span className="field-help">
+          Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="chat-pipeline-next" role="group" aria-label="Co dalej">
+      <span>Co dalej? Wybierz jedną opcję; nic nie uruchomi się bez Twojej decyzji.</span>
+      <div className="chat-pipeline-choices">
+        {choices.map((choice) => (
+          <button
+            key={`${choice.kind}-${choice.skill}`}
+            type="button"
+            className={choice.kind === "DOCUMENT" ? "primary-button" : "chat-secondary-action"}
+            disabled={disabled}
+            title={`${choice.skill} (${choice.reason})`}
+            onClick={() => onChoose(pipelineChoiceMessage(choice))}
+          >
+            {choice.kind === "DOCUMENT" ? "Generuj dokument" : `Dalsza analiza: ${choice.skill}`}
+          </button>
+        ))}
+      </div>
+      {choices.some((choice) => choice.kind === "DOCUMENT") ? (
+        <small className="field-help">
+          „Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL ({choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
+/** A workflow step whose checkpoint was not closed: which refused steps, and what to do. */
+export function checkpointHeldNotice(steps: string[]): string {
+  return `Etap nie został zamknięty: w tej turze odmówiono kroku (${steps.join("; ")}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.`;
+}
+
+// HYBRID-VAL (document-generation-validation.ts) before the .docx, in words.
+const HYBRID_REASON: Record<string, string> = {
+  EMPTY_DOCUMENT: "dokument jest pusty",
+  OPEN_PLACEHOLDER: "zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)",
+  DRAFT_UNVERIFIED: "dokument ma oznaczenie DRAFT — NIEWERYFIKOWANY",
+  PRIVACY_TOKEN_REMAINS: "zostały symbole anonimizacji",
+  CONTROL_CHARACTER: "tekst zawiera znaki sterujące",
+  SOURCE_SESSION_BLOCKED_EVENT: "w rozmowie, z której powstaje dokument, był zablokowany krok",
+  SOURCE_DOCUMENT_AUDIT_MISSING: "brak śladu odczytu dokumentu źródłowego sprawy"
+};
+
 /** A refused export in words: which provisions or judgments stopped the file. */
 export function exportBlockedMessage(error: unknown): string | null {
+  if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
+    const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
+    return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
+      .map((reason) => HYBRID_REASON[reason] ?? reason)
+      .join("; ")}. Popraw treść w rozmowie i wygeneruj dokument ponownie.`;
+  }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
   const listed = references
@@ -5409,29 +5489,12 @@ export default function MatterChatApp({
                   ) : null}
                   {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
                   {message.pipelineNext ? (
-                    <div className="chat-pipeline-next" role="note">
-                      <span>
-                        Następny etap: <strong>{message.pipelineNext.skill}</strong> ({message.pipelineNext.reason}).
-                      </span>
-                      {workMode === "AUTO" ? (
-                        <button
-                          type="button"
-                          className="chat-secondary-action"
-                          disabled={executing}
-                          onClick={() => {
-                            void executeMessage(
-                              `${PIPELINE_HANDOFF} ${message.pipelineNext!.skill}. Kontynuuj na podstawie powyższego wyniku.`
-                            );
-                          }}
-                        >
-                          Kontynuuj
-                        </button>
-                      ) : (
-                        <span className="field-help">
-                          Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
-                        </span>
-                      )}
-                    </div>
+                    <PipelineChoices
+                      next={message.pipelineNext}
+                      auto={workMode === "AUTO"}
+                      disabled={executing}
+                      onChoose={(text) => void executeMessage(text)}
+                    />
                   ) : null}
                   {message.sourceVerification ? (
                     <SnVerification

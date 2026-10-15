@@ -150,7 +150,9 @@ function registry():
 }
 
 function fixture(
-  blocked = false
+  blocked = false,
+  // A tool call refused on the way, the step itself passing (it ended in HTTP 500 before).
+  refusedStep = false
 ) {
   const root =
     fs.mkdtempSync(
@@ -251,7 +253,9 @@ function fixture(
             eventCount:
               blocked
                 ? 1
-                : 3,
+                : refusedStep
+                  ? 4
+                  : 3,
             closed: true
           },
           workflow: {
@@ -293,8 +297,19 @@ function fixture(
                       "G39H_WORKFLOW_FINALIZATION",
                     status: "OK"
                   },
+                  ...(refusedStep
+                    ? [
+                        {
+                          sequence: 3,
+                          timestamp: "2026-09-18T07:00:01.500Z",
+                          type: "tool_decision",
+                          target: "read_legal_resource:analizator-umow-v1/references/brak.md",
+                          status: "BLOCKED"
+                        }
+                      ]
+                    : []),
                   {
-                    sequence: 3,
+                    sequence: refusedStep ? 4 : 3,
                     timestamp:
                       "2026-09-18T07:00:02.000Z",
                     type:
@@ -831,5 +846,28 @@ describe(
         current.auth.close();
       }
     );
+
+    it("keeps the checkpoint open with the refused step named instead of HTTP 500", async () => {
+      const current = fixture(false, true);
+      const { authorization, caseId } = await bootstrapCase(current, "refused");
+      await request(current.app)
+        .post(`/api/cases/${caseId}/workflow/contract-analysis/initialize`)
+        .set("Authorization", authorization)
+        .send({ mode: "ANALYSIS" })
+        .expect(201);
+      const response = await request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send(sessionBody(caseId))
+        .expect(200);
+      expect(response.body.status).toBe("DRAFT_PRESENTABLE");
+      expect(response.body.answer).toBe("contract-step-result");
+      expect(response.body.checkpointHeld).toEqual({
+        reason: "BLOCKED_STEP",
+        steps: ["read_legal_resource:analizator-umow-v1/references/brak.md"]
+      });
+      expect(response.body.contractWorkflow).toMatchObject({ revision: 1, nextCheckpoint: "AU-F0", closedCheckpoints: [] });
+      current.auth.close();
+    });
   }
 );

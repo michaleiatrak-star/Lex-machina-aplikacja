@@ -152,10 +152,18 @@ function safeMessage(input) {
     const auxiliarySources = plainRecords(input.auxiliarySources, 100, 300_000);
     const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
     const next = input.pipelineNext;
+    const validChoice = (choice) => {
+        const item = choice;
+        return (typeof item === "object" && item !== null &&
+            typeof item.skill === "string" && item.skill.length <= 200 &&
+            (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+            typeof item.reason === "string" && item.reason.length <= 2_000);
+    };
     if (next !== undefined &&
         (typeof next !== "object" || next === null ||
             typeof next.skill !== "string" || next.skill.length > 200 ||
-            typeof next.reason !== "string" || next.reason.length > 2_000)) {
+            typeof next.reason !== "string" || next.reason.length > 2_000 ||
+            (next.choices !== undefined && (!Array.isArray(next.choices) || next.choices.length > 5 || !next.choices.every(validChoice))))) {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
     const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, ...rest } = input;
@@ -164,7 +172,17 @@ function safeMessage(input) {
         ...(evidence?.length ? { evidence } : {}),
         ...(auxiliarySources?.length ? { auxiliarySources } : {}),
         ...(mandatoryPath ? { mandatoryPath } : {}),
-        ...(next ? { pipelineNext: { skill: next.skill, reason: next.reason } } : {}),
+        ...(next
+            ? {
+                pipelineNext: {
+                    skill: next.skill,
+                    reason: next.reason,
+                    ...(next.choices?.length
+                        ? { choices: next.choices.map((choice) => ({ skill: choice.skill, kind: choice.kind, reason: choice.reason })) }
+                        : {})
+                }
+            }
+            : {}),
         ...(generated
             ? {
                 generatedDocument: {
@@ -522,7 +540,7 @@ export class EncryptedCaseWorkspaceStore {
             ...(item.evidence ? { evidence: structuredClone(item.evidence) } : {}),
             ...(item.auxiliarySources ? { auxiliarySources: structuredClone(item.auxiliarySources) } : {}),
             ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
-            ...(item.pipelineNext ? { pipelineNext: { ...item.pipelineNext } } : {})
+            ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {})
         }));
     }
     async appendThreadMessage(args) {

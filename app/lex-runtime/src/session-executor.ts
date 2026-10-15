@@ -187,7 +187,9 @@ import {
   parseCombinations,
   parseRedactionTest,
   parseRoutingTable,
+  nextChoices,
   pipelineNext,
+  type NextChoice,
   type MatrixRule,
   type RedactionTest,
   type SkillCombination,
@@ -876,7 +878,7 @@ export type SessionExecutionResponse = {
   // Mandatory path of the turn (router, skills, verification, hard gate) from the audit.
   mandatoryPath?: MandatoryPathReport;
   // ACTIVATION-MATRIX: the next skill of the pipeline after this one (entry -> next).
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: NextChoice[] };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
   // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
@@ -984,6 +986,8 @@ export type SessionExecutionResponse = {
   };
   // The answer ends a checkpoint with a question to the user (workflow-wait.ts).
   waitingForUser?: boolean;
+  // A workflow checkpoint left open: a step was refused during the turn (http/app.ts).
+  checkpointHeld?: { reason: "BLOCKED_STEP"; steps: string[] };
   // The letter skill hands the matter to the other one (skill-switch.ts); the chat offers the switch.
   skillSwitch?: SkillSwitchOffer;
   processAuto?: {
@@ -4374,11 +4378,19 @@ export class SafeSessionExecutor implements SessionExecutor {
     // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
     // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
     const workflowSkill = execution.workflowPlan.executionSkill;
-    const next = taskRoute
-      ? pipelineNext(taskRoute.primary, taskRoute.then, this.skillCombinations(), nextContext)
-      : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
-        ? pipelineNext(workflowSkill, this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill), this.skillCombinations(), nextContext)
-        : null;
+    // The options after the result (generate the document / a further analysis): the user
+    // chooses; the first one is kept as the single "next stage" of older clients.
+    const nextFrom =
+      taskRoute
+        ? { skill: taskRoute.primary, then: taskRoute.then }
+        : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
+          ? { skill: workflowSkill, then: this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill) }
+          : null;
+    const choices = nextFrom ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : [];
+    const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
+    const next = choices.length
+      ? { skill: choices[0]!.skill, reason: choices[0]!.reason, choices }
+      : legacyNext;
     // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
     // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
     const skillSwitch =
