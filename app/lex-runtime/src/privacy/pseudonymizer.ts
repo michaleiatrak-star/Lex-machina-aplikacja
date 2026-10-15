@@ -52,7 +52,9 @@ export type ManualPrivacyDirective = {
   start: number;
   end: number;
   action: PrivacyDirectiveAction;
-  kind?: PiiKind;
+  // "FIRM": the user's mark of a firm name - a PERSON token with the firm's identity
+  // (declined as a name, its legal form left in the text), as found firms get.
+  kind?: PiiKind | "FIRM";
   label?: string;
 };
 
@@ -63,6 +65,9 @@ export interface NamedEntityRecognizer {
 export type PseudonymizationFinding = {
   token: string;
   kind: PiiKind;
+  // A firm's name: from a public register (VAT white list, KRS, CEIDG) or from the text
+  // (legal form, business prefix, the user's "Firma" mark).
+  firm?: "REGISTRY" | "TEXT";
   start: number;
   end: number;
   source: "AUTO" | "USER";
@@ -889,7 +894,7 @@ export class LocalPolishPseudonymizer {
       .map((item) => ({
         start: item.start,
         end: item.end,
-        kind: item.kind ?? "CUSTOM",
+        kind: item.kind === "FIRM" ? "PERSON" as const : item.kind ?? "CUSTOM",
         value: text.slice(item.start, item.end),
         source: "USER" as const,
         ...(item.label ? { label: item.label } : {})
@@ -911,8 +916,13 @@ export class LocalPolishPseudonymizer {
       process.stderr.write(`REGISTRY_ENRICHMENT_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
     }
     for (const form of registered) {
-      const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
+      // Any letter case and spacing ("UL. DŁUGA 5", "Długa  5", "DŁUGA 5"): the same letters with
+      // the register's house number do not appear by chance. A firm's name in any case too,
+      // but not written all in small letters (a common phrase, not the name).
+      const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
+      const anyCase = form.kind === "ADDRESS" || Boolean(form.organization);
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, anyCase ? "giu" : "gu"))) {
+        if (form.organization && match[0] !== form.text && match[0] === match[0].toLocaleLowerCase("pl")) continue;
         autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO" });
         if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
       }
@@ -1066,6 +1076,12 @@ export class LocalPolishPseudonymizer {
     for (const [value, legalForm] of registryFirms) {
       if (!entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
     }
+    // The user's "Firma" marks: the firm's identity, with the legal form written next to it.
+    for (const item of manual) {
+      if (item.action !== "PSEUDONYMIZE" || item.kind !== "FIRM") continue;
+      const value = text.slice(item.start, item.end);
+      entities.set(`PERSON\u0000${value}`, organizationEntity(value, firmContext(text, item.start, item.end)?.legalForm));
+    }
     // Surfaces written after "państwo", "małżonkowie", a plural role...: a family.
     const plural = new Set(
       findings
@@ -1208,9 +1224,11 @@ export class LocalPolishPseudonymizer {
         output.slice(0, finding.start) +
         token +
         output.slice(finding.end);
+      const entity = byFinding.get(finding) ?? entities.get(`${finding.kind}\u0000${finding.value}`);
       publicFindings.push({
         token,
         kind: finding.kind,
+        ...(entity?.type === "organization" ? { firm: registryFirms.has(finding.value) ? "REGISTRY" as const : "TEXT" as const } : {}),
         start: finding.start,
         end: finding.end,
         source: finding.source ?? "AUTO",

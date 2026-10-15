@@ -30,6 +30,13 @@ type Suggestion = DocumentReviewResponse["suggestions"][number];
 
 const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end && a.end > b.start;
 
+// A firm found in the VAT white list or KRS says so: the register match is visible.
+function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
+  if (mark.firm === "REGISTRY") return "Firma (biała lista VAT / KRS)";
+  if (mark.firm === "TEXT") return "Firma";
+  return KIND_LABEL[mark.kind] ?? mark.kind;
+}
+
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
   busy?: boolean;
   // Decisions made earlier (back to a file in the batch preview).
@@ -233,7 +240,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                   ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
                   : open
                     ? "Zostanie jawne - kliknij, aby zakryć"
-                    : `${KIND_LABEL[mark.kind] ?? mark.kind} - zostanie zakryte; kliknij, aby zostawić jawne`
+                    : `${suggestionLabel(mark)} - zostanie zakryte; kliknij, aby zostawić jawne`
               }
               onClick={() =>
                 mark.user

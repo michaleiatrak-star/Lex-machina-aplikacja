@@ -4,6 +4,7 @@ import { caseLabel } from "./restoration-review.js";
 
 export const KIND_LABEL: Record<string, string> = {
   PERSON: "Osoba",
+  FIRM: "Firma",
   ADDRESS: "Adres",
   PESEL: "PESEL",
   NIP: "NIP",

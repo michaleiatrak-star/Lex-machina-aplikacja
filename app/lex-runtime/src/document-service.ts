@@ -327,6 +327,8 @@ export type PublicPrivacySuggestion = {
   start: number;
   end: number;
   kind: PiiKind;
+  // A firm's name, found in a public register (VAT white list, KRS) or in the text.
+  firm?: "REGISTRY" | "TEXT";
   // The local model's answer that this is no person ("słowo pospolite"); masked until the user unmasks it.
   aiNotPerson?: string;
 };
@@ -525,9 +527,20 @@ function collectingAiHints(inner: NamedEntityRecognizer, text: string, hints: Pi
   };
 }
 
-function suggestionOf(page: number, finding: { start: number; end: number; kind: PiiKind }, hints: PiiSpan[]): PublicPrivacySuggestion {
+function suggestionOf(
+  page: number,
+  finding: { start: number; end: number; kind: PiiKind; firm?: "REGISTRY" | "TEXT" },
+  hints: PiiSpan[]
+): PublicPrivacySuggestion {
   const hint = hints.find((span) => span.start < finding.end && span.end > finding.start);
-  return { page, start: finding.start, end: finding.end, kind: finding.kind, ...(hint ? { aiNotPerson: hint.aiNotPerson } : {}) };
+  return {
+    page,
+    start: finding.start,
+    end: finding.end,
+    kind: finding.kind,
+    ...(finding.firm ? { firm: finding.firm } : {}),
+    ...(hint ? { aiNotPerson: hint.aiNotPerson } : {})
+  };
 }
 
 /** Reuses the local-AI findings of a page already checked during the review. */

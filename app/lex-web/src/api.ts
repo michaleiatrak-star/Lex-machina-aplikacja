@@ -130,7 +130,9 @@ export type PiiKind =
   | "VEHICLE_PLATE"
   | "BAR_NUMBER"
   | "PAYMENT_CARD"
-  | "CUSTOM";
+  | "CUSTOM"
+  // The user's mark of a firm name (a firm token on the runtime side).
+  | "FIRM";
 
 export type PrivacyAction =
   | "PSEUDONYMIZE"
@@ -596,6 +598,8 @@ export type DocumentReviewResponse = {
     start: number;
     end: number;
     kind: PiiKind;
+    // A firm's name, from a public register (VAT white list, KRS) or from the text.
+    firm?: "REGISTRY" | "TEXT";
     // The local model read it as no person ("słowo pospolite"); masked until the user unmasks it.
     aiNotPerson?: string;
   }>;

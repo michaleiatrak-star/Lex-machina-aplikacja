@@ -394,7 +394,9 @@ const PRIVACY_KINDS = new Set([
   "VEHICLE_PLATE",
   "BAR_NUMBER",
   "PAYMENT_CARD",
-  "CUSTOM"
+  "CUSTOM",
+  // The user's mark of a firm name (a firm token, see ManualPrivacyDirective).
+  "FIRM"
 ] as const);
 
 function parsePrivacyDirectives(
