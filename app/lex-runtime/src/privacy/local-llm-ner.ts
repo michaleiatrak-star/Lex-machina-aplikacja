@@ -152,7 +152,48 @@ function parsePayload(
     }
   }
 
-  return [];
+  return looseItems(trimmed);
+}
+
+/**
+ * Bielik 11B rarely returns the array asked for. It writes one object per line
+ * ("1. {"id":1,"person":false}"), an object of lists ({"PERSON":["Paweł Rak"]}) or an
+ * object with repeated keys ({"PERSON":"A","PERSON":"B"}). Each is read as items.
+ */
+function looseItems(text: string): unknown[] {
+  const perLine = text
+    .split("\n")
+    .map((line) => line.trim().replace(/^(?:\d+[.)]|[-*])\s*/u, "").replace(/,$/u, ""))
+    .filter((line) => line.startsWith("{") && line.endsWith("}"))
+    .flatMap((line) => {
+      try {
+        const item = JSON.parse(line) as unknown;
+        return item && typeof item === "object" && ("id" in item || "kind" in item) ? [item] : [];
+      } catch {
+        return [];
+      }
+    });
+  if (perLine.length) return perLine;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const items: unknown[] = [];
+  // Keys repeat in such objects and JSON.parse keeps only the last: read the pairs from the text.
+  for (const pair of text.matchAll(/"([A-Z_]{3,})"\s*:\s*"((?:[^"\\]|\\.)*)"/gu)) {
+    items.push({ kind: pair[1], value: JSON.parse(`"${pair[2]}"`) as string });
+  }
+  for (const [kind, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!/^[A-Z_]{3,}$/u.test(kind) || !Array.isArray(value)) continue;
+    for (const entry of value) {
+      if (typeof entry === "string") items.push({ kind, value: entry });
+      else if (entry && typeof entry === "object") items.push({ kind, ...(entry as object) });
+    }
+  }
+  return items;
 }
 
 function chunks(
@@ -595,6 +636,13 @@ implements NamedEntityRecognizer {
       batch.forEach(([key], offset) => {
         if (verdicts.get(offset + 1) === false) notPerson.add(key);
       });
+    }
+    // In a batch Bielik 11B sometimes calls every sentence an institution ("Zając odmówił
+    // składania wyjaśnień"): a "not a person" stands only when the sentence asked alone gets it too.
+    for (const [key, question] of entries) {
+      if (!notPerson.has(key)) continue;
+      const alone = parseVerdicts(await this.ask(modelId, VERIFY_PROMPT, `1. ${question.sentence}`));
+      if (alone.get(1) !== false) notPerson.delete(key);
     }
     if (entries.length) onCheck?.("", entries.length, entries.length);
     return merged.filter((span) => {
