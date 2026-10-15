@@ -1485,6 +1485,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/update/status"
         | "/api/local-models"
         | "/api/local-models/update/status"
+        | "/api/local-models/vision-ocr"
         | "/api/skills/update/status"
         | "/api/guide/state"
         | "/api/schedule/upcoming" => {
@@ -1500,6 +1501,8 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/start"
         | "/api/local-models/stop"
         | "/api/local-models/update/apply"
+        | "/api/local-models/vision-ocr/install"
+        | "/api/local-models/vision-ocr/remove"
         | "/api/skills/update/apply"
         | "/api/guide/initialize"
         | "/api/guide/transition" => method == "POST",
@@ -2223,6 +2226,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/local-models/remove"));
         assert!(route_allowed("POST", "/api/local-models/start"));
         assert!(route_allowed("POST", "/api/local-models/stop"));
+        assert!(route_allowed("GET", "/api/local-models/vision-ocr"));
+        assert!(!route_allowed("POST", "/api/local-models/vision-ocr"));
+        assert!(route_allowed("POST", "/api/local-models/vision-ocr/install"));
+        assert!(route_allowed("POST", "/api/local-models/vision-ocr/remove"));
+        assert!(!route_allowed("GET", "/api/local-models/vision-ocr/install"));
         assert!(route_allowed("GET", "/api/skills"));
         assert!(route_allowed("GET", "/api/skills/update/status"));
         // The auxiliary model role was removed: no routing preferences route.
