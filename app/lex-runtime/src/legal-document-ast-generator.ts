@@ -19,6 +19,8 @@ import type {
   DocumentGenerationValidationContext
 } from "./document-generation-validation.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
+import { ExportGateBlockedError } from "./document-authoring-service.js";
+import { verificationOnlyBlock } from "./document-generation-validation.js";
 
 export type LegalDocumentAstGenerationRequest = {
   query: string;
@@ -36,6 +38,8 @@ export type LegalDocumentAstGenerationRequest = {
   processRenderOnly?: { stage: ProcessPleadingStage };
   // The stored text the file renders (pipeline draft): carried over as written.
   sourceText?: { label: string; text: string };
+  // The user chose a draft with the unverified references named (ZAKAZ-14, decision "a").
+  acceptUnverified?: boolean;
 };
 
 function extractJson(value: string): unknown {
@@ -316,6 +320,30 @@ function astDiagnostic(value: unknown, code: string): DocumentAstSessionBlockedE
   );
 }
 
+const UNVERIFIED_STATUSES = new Set(["UNVERIFIED_MARKED", "UNVERIFIED_NOT_MARKED"]);
+
+type SessionResult = Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>;
+
+/**
+ * A session the chat may present as a draft (DRAFT_PRESENTABLE, DEGRADED) whose only blockers
+ * are unverified legal references: the file can be a draft with them named, on the user's
+ * decision. A fabricated or mismatched reference, a missing step or resource still blocks.
+ */
+export function unverifiedOnlySession(result: SessionResult): boolean {
+  const events = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+  return (
+    result.status === "DRAFT_PRESENTABLE" &&
+    result.finalization === "DEGRADED" &&
+    Boolean(result.answer) &&
+    !(result.audit.missing?.length) &&
+    (result.audit.violations ?? []).every((violation) => violation === "blocked_event_present") &&
+    !(result.workflow?.missingResources.length) &&
+    result.blockedReferences.length > 0 &&
+    result.blockedReferences.every((reference) => UNVERIFIED_STATUSES.has(reference.status)) &&
+    events.every((event) => event.status !== "BLOCKED" || verificationOnlyBlock(event))
+  );
+}
+
 function blockedSessionDiagnostic(
   result: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>
 ): DocumentAstSessionBlockedError {
@@ -533,6 +561,7 @@ export class LegalDocumentAstGenerator {
     // A malformed AST (no JSON, a block shape, the wrong type) gets one repair round with the
     // validation error; a session the gates blocked is a policy decision and is not retried.
     let repair: string | null = null;
+    let acceptedUnverified: string[] | null = null;
     let result!: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>;
     let validated!: ReturnType<typeof validateLegalDocumentAst>;
     for (let attempt = 1; ; attempt += 1) {
@@ -559,11 +588,23 @@ export class LegalDocumentAstGenerator {
         result.audit.result !== "PASS" ||
         !result.answer
       ) {
-        throw blockedSessionDiagnostic(result);
+        if (!unverifiedOnlySession(result)) throw blockedSessionDiagnostic(result);
+        if (!request.acceptUnverified) {
+          // The same decision as at the export gate: a draft with these references named.
+          throw new ExportGateBlockedError(
+            "READY_DOCUMENT_EXPORT_GATE_BLOCKED",
+            ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"],
+            result.blockedReferences
+              .filter((reference, index, all) => all.findIndex((other) => other.claim === reference.claim) === index)
+              .map((reference) => ({ claim: reference.claim, status: reference.status, line: reference.line })),
+            true
+          );
+        }
+        acceptedUnverified = [...new Set(result.blockedReferences.map((reference) => reference.claim))];
       }
 
       try {
-        validated = parseValidatedAst(result.answer, request);
+        validated = parseValidatedAst(result.answer ?? "", request);
         break;
       } catch (error) {
         const code = error instanceof Error ? error.message : String(error);
@@ -591,6 +632,7 @@ export class LegalDocumentAstGenerator {
         result.sessionId,
       validationContext: {
         schemaVersion: 1,
+        ...(acceptedUnverified ? { acceptedUnverifiedSource: { claims: acceptedUnverified } } : {}),
         sourceSessionId:
           result.sessionId,
         primarySkill:

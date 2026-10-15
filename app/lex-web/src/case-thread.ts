@@ -1,4 +1,4 @@
-import type { DocumentCoverageEntry } from "./api.js";
+import type { AnswerCorrection, DocumentCoverageEntry } from "./api.js";
 import {
   useCallback,
   useEffect,
@@ -31,6 +31,7 @@ export type CaseChatMessage = {
   pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
   documentCoverage?: DocumentCoverageEntry[];
   documentAnalysis?: boolean;
+  corrections?: AnswerCorrection[];
   auxiliarySources?:
     AuxiliarySourceItem[];
   meta?: string;
@@ -73,7 +74,8 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
-    ...(message.documentAnalysis ? { documentAnalysis: true } : {})
+    ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(message.corrections?.length ? { corrections: message.corrections } : {})
   };
 }
 
@@ -99,7 +101,8 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
-    ...(message.documentAnalysis ? { documentAnalysis: true } : {})
+    ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(message.corrections?.length ? { corrections: message.corrections } : {})
   };
 }
 

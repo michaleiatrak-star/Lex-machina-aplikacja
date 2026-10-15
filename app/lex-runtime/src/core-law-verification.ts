@@ -4,6 +4,7 @@ import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { articleWording, futureDate, hasPendingWording } from "./core-law-footnotes.js";
 import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
+import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
 import {
   FRESHNESS_MAX_AGE_MS,
   type VerificationKind,
@@ -26,6 +27,8 @@ export type CoreLawVerificationIndex = Pick<
   CoreLawIndex,
   "resolve" | "summary" | "summaries" | "currentRecord"
 > &
+  // Amendments after the t.j. are documents of the copy: their text decides per provision.
+  Partial<Pick<CoreLawIndex, "record">> &
   // Sprawdzenie w ELI przy użyciu kopii (CoreLawIndex); bez niego kopia bez kontroli na żywo.
   Partial<Pick<CoreLawIndex, "confirmCurrent">>;
 
@@ -43,6 +46,8 @@ export type CoreLawVerificationOutcome =
         title: string;
         resolvedBy: "REFERENCE" | "TITLE";
         relationsCheckedAt: string | null;
+        // Amendments after the t.j. read and found not to touch the provision.
+        amendmentsChecked: string[];
       };
     };
 
@@ -121,6 +126,39 @@ export function resolveActByTitle(
   return best.eli;
 }
 
+/**
+ * Whether the amendments published after the t.j. touch the article: their text in the copy is
+ * searched for the article ("w art. 484 § 2", "art. 480–485"). OCR text, a missing amendment
+ * text or an article the search cannot read leave the impact unknown.
+ */
+export function postConsolidationImpact(
+  index: Pick<CoreLawVerificationIndex, "record">,
+  amendments: string[],
+  article: string | null,
+  actTitle?: string
+):
+  | { status: "UNAFFECTED"; checked: string[] }
+  | { status: "AFFECTED" | "UNKNOWN"; reason: string; amendments: string[] } {
+  if (!article || !index.record) {
+    return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENTS", amendments };
+  }
+  const affected: string[] = [];
+  const unknown: string[] = [];
+  for (const eli of amendments) {
+    const record = index.record(eli);
+    const body =
+      record && record.textSource !== "ocr" && record.textSource !== "none"
+        ? record.text ?? record.articleOrder.map((unit) => `Art. ${unit}. ${record.articles[unit] ?? ""}`).join("\n")
+        : "";
+    const touches = body.trim() ? amendmentMentionsArticle(amendmentPartFor(body, actTitle), article) : null;
+    if (touches === true) affected.push(eli);
+    else if (touches === null) unknown.push(eli);
+  }
+  if (affected.length) return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected };
+  if (unknown.length) return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN", amendments: unknown };
+  return { status: "UNAFFECTED", checked: amendments };
+}
+
 export function verifyFromCoreLaw(args: {
   index: CoreLawVerificationIndex;
   claim: string;
@@ -143,8 +181,14 @@ export function verifyFromCoreLaw(args: {
   if (!record || record.articleOrder.length === 0) {
     return { decision: "DENY", reason: "CORE_LAW_TEXT_UNAVAILABLE" };
   }
+  // Amendments after the t.j.: the copy's wording stands for a provision none of them touches
+  // (the same rule as in ELI, temporal-source-freshness.ts); a touched provision, or one whose
+  // amendment cannot be read with certainty, is not verified from the copy.
+  let amendmentsChecked: string[] = [];
   if (summary.amendmentsAfter.length > 0) {
-    return { decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" };
+    const impact = postConsolidationImpact(args.index, summary.amendmentsAfter.map((item) => item.eli), args.kind === "statute" ? articleToken(args.claim) : null, summary.title ?? undefined);
+    if (impact.status !== "UNAFFECTED") return { decision: "DENY", reason: impact.reason };
+    amendmentsChecked = impact.checked;
   }
   // Tekst z OCR skanu może mieć błędy odczytu: nie jest podstawą VERIFIED.
   if (record.textSource === "ocr") {
@@ -272,7 +316,8 @@ export function verifyFromCoreLaw(args: {
       currentEli: record.eli,
       title: record.title,
       resolvedBy: byReference ? "REFERENCE" : "TITLE",
-      relationsCheckedAt: summary.relationsCheckedAt
+      relationsCheckedAt: summary.relationsCheckedAt,
+      amendmentsChecked
     }
   };
 }

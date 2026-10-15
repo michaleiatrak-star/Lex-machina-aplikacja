@@ -124,6 +124,7 @@ import {
 } from "./api.js";
 import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
+import { CorrectionsDetails } from "./answer-corrections-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
 
@@ -983,6 +984,7 @@ function executionMessage(
       ...(execution.documentCoverage?.length
         ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
         : {}),
+      ...(execution.corrections?.length ? { corrections: execution.corrections } : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -5546,6 +5548,7 @@ export default function MatterChatApp({
                     </details>
                   ) : null}
                   {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
+                  {message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
                   ) : null}

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   TemporalSourceFreshnessChecker,
   amendmentHasEntryIntoForceExceptions,
-  amendmentMentionsArticle
+  amendmentMentionsArticle,
+  amendmentPartFor,
+  actCitationKey
 } from "../src/temporal-source-freshness.js";
 import {
   DeterministicLegalActResolver
@@ -692,5 +694,48 @@ describe("TemporalSourceFreshnessChecker", () => {
       sourceUrl:
         "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf"
     });
+  });
+});
+
+describe("zmiana objęta t.j., a jeszcze nieobowiązująca (DU/2026/507 w t.j. KC 2026/795)", () => {
+  // Excerpt of DU/2026/507: art. 2 amends KC from 1.11.2028, art. 6 the VAT act.
+  const omnibus =
+    "<html><body>Art. 1. W ustawie z dnia 6 marca 2018 r. o Centralnej Ewidencji i Informacji o Działalności Gospodarczej w art. 3 ust. 1a otrzymuje brzmienie: „1a. …”." +
+    " Art. 2. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cywilny (Dz. U. z 2025 r. poz. 1071) w art. 860 dodaje się § 3 i 4 w brzmieniu: „§ 3. …”." +
+    " Art. 6. W ustawie z dnia 11 marca 2004 r. o podatku od towarów i usług w art. 96 po ust. 3d dodaje się ust. 3e." +
+    " Art. 31. Ustawa wchodzi w życie po upływie 6 miesięcy od dnia ogłoszenia.</body></html>";
+  const fetcher = () =>
+    fixtureFetcher({
+      amendments: [{ eli: "DU/2026/507", relationDate: "2028-11-01", promulgation: "2026-04-13", entryIntoForce: "2028-11-01" }],
+      amendmentTexts: { "DU/2026/507": omnibus }
+    });
+  const today = () => "2026-10-15T10:00:00.000Z";
+
+  it("artykuł zmieniony w części noweli dotyczącej KC: bez VER, t.j. może mieć przyszłe brzmienie", async () => {
+    const result = await new TemporalSourceFreshnessChecker(fetcher(), today).check(kc, { claim: "art. 860 § 3 KC" });
+    expect(result).toMatchObject({
+      status: "PENDING_WORDING_IN_CONSOLIDATED_TEXT",
+      reason: "CONSOLIDATED_TEXT_HOLDS_ARTICLE_CHANGE_NOT_IN_FORCE:DU/2026/507"
+    });
+  });
+
+  it("numer artykułu z części zmieniającej inną ustawę (VAT art. 96) nie blokuje art. 96 KC", async () => {
+    const result = await new TemporalSourceFreshnessChecker(fetcher(), today).check(kc, { claim: "art. 96 KC" });
+    expect(result.status).toBe("CURRENT");
+  });
+});
+
+describe("część noweli zmieniająca dany akt", () => {
+  it("wycina jednostkę „W ustawie … – Kodeks cywilny”, bez innych ustaw", () => {
+    const body = [
+      "Art. 1. W ustawie z dnia 6 marca 2018 r. o Centralnej Ewidencji w art. 860 wyrazy …",
+      "Art. 2. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cy-\nwilny w art. 860 dodaje się § 3.",
+      "Art. 3. W ustawie z dnia 11 marca 2004 r. o podatku od towarów i usług w art. 96 …"
+    ].join("\n");
+    expect(amendmentPartFor(body, "Kodeks cywilny")).toBe("Art. 2. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cy-\nwilny w art. 860 dodaje się § 3.\n");
+    expect(amendmentPartFor(body, "Obwieszczenie Marszałka Sejmu w sprawie ogłoszenia jednolitego tekstu ustawy o podatku od towarów i usług")).toContain("art. 96");
+    // A single-act amendment or an unknown act: the whole text.
+    expect(amendmentPartFor(body, "ustawa o czymś innym zupełnie")).toBe(body);
+    expect(actCitationKey("Obwieszczenie … w sprawie ogłoszenia jednolitego tekstu ustawy – Prawo wodne")).toBe("prawo wodne");
   });
 });

@@ -1,6 +1,8 @@
 import { SESSION_EXECUTION_INTERNAL } from "./session-executor.js";
 import { DOCUMENT_TYPES, STYLE_PROFILES, validateLegalDocumentAst } from "./legal-document-ast.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
+import { ExportGateBlockedError } from "./document-authoring-service.js";
+import { verificationOnlyBlock } from "./document-generation-validation.js";
 function extractJson(value) {
     const trimmed = value.trim();
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
@@ -248,6 +250,24 @@ function astDiagnostic(value, code) {
         .join("; ") +
         `; blocks=${Array.isArray(record.blocks) ? `${record.blocks.length} bloków` : "brak"}`, `klucze odpowiedzi: ${Object.keys(record).slice(0, 20).join(", ") || "(nie obiekt JSON)"}\n${astShape(record)}`, code, "DOCUMENT_AST_VALIDATION");
 }
+const UNVERIFIED_STATUSES = new Set(["UNVERIFIED_MARKED", "UNVERIFIED_NOT_MARKED"]);
+/**
+ * A session the chat may present as a draft (DRAFT_PRESENTABLE, DEGRADED) whose only blockers
+ * are unverified legal references: the file can be a draft with them named, on the user's
+ * decision. A fabricated or mismatched reference, a missing step or resource still blocks.
+ */
+export function unverifiedOnlySession(result) {
+    const events = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    return (result.status === "DRAFT_PRESENTABLE" &&
+        result.finalization === "DEGRADED" &&
+        Boolean(result.answer) &&
+        !(result.audit.missing?.length) &&
+        (result.audit.violations ?? []).every((violation) => violation === "blocked_event_present") &&
+        !(result.workflow?.missingResources.length) &&
+        result.blockedReferences.length > 0 &&
+        result.blockedReferences.every((reference) => UNVERIFIED_STATUSES.has(reference.status)) &&
+        events.every((event) => event.status !== "BLOCKED" || verificationOnlyBlock(event)));
+}
 function blockedSessionDiagnostic(result) {
     const reason = [
         `status=${result.status}`,
@@ -448,6 +468,7 @@ export class LegalDocumentAstGenerator {
         // A malformed AST (no JSON, a block shape, the wrong type) gets one repair round with the
         // validation error; a session the gates blocked is a policy decision and is not retried.
         let repair = null;
+        let acceptedUnverified = null;
         let result;
         let validated;
         for (let attempt = 1;; attempt += 1) {
@@ -471,10 +492,18 @@ export class LegalDocumentAstGenerator {
                 result.finalization !== "PASS" ||
                 result.audit.result !== "PASS" ||
                 !result.answer) {
-                throw blockedSessionDiagnostic(result);
+                if (!unverifiedOnlySession(result))
+                    throw blockedSessionDiagnostic(result);
+                if (!request.acceptUnverified) {
+                    // The same decision as at the export gate: a draft with these references named.
+                    throw new ExportGateBlockedError("READY_DOCUMENT_EXPORT_GATE_BLOCKED", ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"], result.blockedReferences
+                        .filter((reference, index, all) => all.findIndex((other) => other.claim === reference.claim) === index)
+                        .map((reference) => ({ claim: reference.claim, status: reference.status, line: reference.line })), true);
+                }
+                acceptedUnverified = [...new Set(result.blockedReferences.map((reference) => reference.claim))];
             }
             try {
-                validated = parseValidatedAst(result.answer, request);
+                validated = parseValidatedAst(result.answer ?? "", request);
                 break;
             }
             catch (error) {
@@ -495,6 +524,7 @@ export class LegalDocumentAstGenerator {
             sessionId: result.sessionId,
             validationContext: {
                 schemaVersion: 1,
+                ...(acceptedUnverified ? { acceptedUnverifiedSource: { claims: acceptedUnverified } } : {}),
                 sourceSessionId: result.sessionId,
                 primarySkill: request.primarySkill,
                 provider: request.provider,

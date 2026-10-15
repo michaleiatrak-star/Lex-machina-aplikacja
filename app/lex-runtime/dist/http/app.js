@@ -4506,6 +4506,7 @@ export function createLexHttpApp(options) {
                 ...(sharedGeneration && sharedGeneration.members.size > 0
                     ? { privacySeed: sharedGeneration.snapshot }
                     : {}),
+                ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
                 query: sessionRequest
                     .query,
                 provider: sessionRequest

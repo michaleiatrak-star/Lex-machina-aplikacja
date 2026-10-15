@@ -1,4 +1,5 @@
 import { validateProcessPleadingDraft } from "./process-pleading-draft.js";
+import { validAnswerCorrections } from "./answer-corrections.js";
 import { validThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary } from "./thread-summary.js";
 import { validCaseChronology } from "./case-chronology.js";
@@ -193,7 +194,10 @@ function safeMessage(input) {
     if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
-    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentAnalysis: _analysis, ...rest } = input;
+    if (input.corrections !== undefined && !validAnswerCorrections(input.corrections)) {
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
+    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentAnalysis: _analysis, corrections: _corrections, ...rest } = input;
     return {
         ...rest,
         ...(coverage?.length
@@ -208,6 +212,9 @@ function safeMessage(input) {
             }
             : {}),
         ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
+        ...(input.corrections?.length
+            ? { corrections: input.corrections.map((item) => ({ round: item.round, findings: [...item.findings], removed: [...item.removed] })) }
+            : {}),
         ...(evidence?.length ? { evidence } : {}),
         ...(auxiliarySources?.length ? { auxiliarySources } : {}),
         ...(mandatoryPath ? { mandatoryPath } : {}),
@@ -589,7 +596,8 @@ export class EncryptedCaseWorkspaceStore {
             ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
             ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
             ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
-            ...(item.documentAnalysis ? { documentAnalysis: true } : {})
+            ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
+            ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})
         }));
     }
     async appendThreadMessage(args) {

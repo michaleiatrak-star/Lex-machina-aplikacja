@@ -7,6 +7,8 @@ import {
   normalizeAstHeader
 } from "../src/legal-document-ast-generator.js";
 import { validateLegalDocumentAst } from "../src/legal-document-ast.js";
+import { ExportGateBlockedError } from "../src/document-authoring-service.js";
+import { rebuildGenerationExportState, validateLocalHybridDocument } from "../src/document-generation-validation.js";
 import {
   SESSION_EXECUTION_INTERNAL,
   type SessionExecutor
@@ -422,5 +424,83 @@ describe("czat w tekście AST (Markdown) przebudowany przed walidacją", () => {
     expect(blocks("a) pierwszy\nb) drugi")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "a) pierwszy\nb) drugi" }] }]);
     const list = cleanAstMarkup({ blocks: [{ type: "list", ordered: true, items: [[{ type: "text", text: "1. zasądzenie" }], [{ type: "text", text: "" }]] }] });
     expect(list).toEqual({ blocks: [{ type: "list", ordered: true, items: [[{ type: "text", text: "zasądzenie" }]] }] });
+  });
+});
+
+describe("pismo z niezweryfikowanym przepisem: projekt po decyzji użytkownika (ZAKAZ-14)", () => {
+  const ast = JSON.stringify({
+    schemaVersion: "1",
+    documentType: "letter",
+    locale: "pl-PL",
+    styleProfile: "lex-classic-clean-v1",
+    blocks: [{ type: "paragraph", content: [{ type: "text", text: "Wnoszę o zmniejszenie kary na podstawie art. 484 § 2 KC." }] }]
+  });
+  // The session of the report: ELI unavailable, the local copy has amendments after the t.j.
+  const degraded = (extra: { type: string; target: string }[] = []) => ({
+    sessionId: "session_draft",
+    status: "DRAFT_PRESENTABLE",
+    provider: "openai",
+    model: "test",
+    primarySkill: "pisma-proste-v2",
+    answer: ast,
+    finalization: "DEGRADED",
+    workflow: { id: "SIMPLE_LETTER_V1", result: "BLOCKED", missingResources: [] },
+    blockedReferences: [
+      { claim: "art. 484 § 2", kind: "statute", line: 1, status: "UNVERIFIED_MARKED" },
+      { claim: "art. 484 § 2", kind: "statute", line: 3, status: "UNVERIFIED_MARKED" }
+    ],
+    verification: { records: 8, verified: 7, supported: 0, unverified: 1 },
+    evidence: [],
+    audit: { result: "BLOCKED", eventCount: 9, closed: true, violations: ["blocked_event_present"] },
+    [SESSION_EXECUTION_INTERNAL]: {
+      verificationRecords: [],
+      auditEvents: [
+        { sequence: 1, timestamp: "", type: "tool_decision", target: "verify_legal_reference", status: "BLOCKED", detail: { reason: "TEMPORAL_POST_TJ_AMENDMENTS" } },
+        { sequence: 2, timestamp: "", type: "gate", target: "G39I_WORKFLOW_CONTRACT", status: "BLOCKED" },
+        { sequence: 3, timestamp: "", type: "gate", target: "G39I_TURN_STATE", status: "BLOCKED" },
+        { sequence: 4, timestamp: "", type: "gate", target: "G39I_COMMON_LEGAL_INVARIANTS", status: "BLOCKED" },
+        { sequence: 5, timestamp: "", type: "gate", target: "G39H_WORKFLOW_FINALIZATION", status: "BLOCKED" },
+        ...extra.map((event, index) => ({ sequence: 6 + index, timestamp: "", ...event, status: "BLOCKED" }))
+      ]
+    }
+  });
+  const request: Parameters<LegalDocumentAstGenerator["generate"]>[0] = {
+    query: "ok, wygeneruj dokument",
+    provider: "openai",
+    model: "test",
+    primarySkill: "pisma-proste-v2",
+    mode: "LAIK",
+    documentType: "letter",
+    styleProfile: "lex-classic-clean-v1",
+    aliases: { schemaVersion: 1, entries: [] }
+  };
+  const generator = (extra?: { type: string; target: string }[]) =>
+    new LegalDocumentAstGenerator({ execute: async () => degraded(extra) } as unknown as Pick<SessionExecutor, "execute">);
+
+  it("bez decyzji: pytanie o projekt z listą powołań, nie blokada sesji", async () => {
+    const failure = await generator().generate(request).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ExportGateBlockedError);
+    const blocked = failure as ExportGateBlockedError;
+    expect(blocked.message).toBe("READY_DOCUMENT_EXPORT_GATE_BLOCKED:UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION");
+    expect(blocked.draftAvailable).toBe(true);
+    expect(blocked.references).toEqual([{ claim: "art. 484 § 2", status: "UNVERIFIED_MARKED", line: 1 }]);
+  });
+
+  it("po decyzji: AST i kontekst projektu; HYBRID-VAL i audyt eksportu nie blokują już weryfikacji", async () => {
+    const generated = await generator().generate({ ...request, acceptUnverified: true });
+    expect(generated.validationContext.acceptedUnverifiedSource).toEqual({ claims: ["art. 484 § 2"] });
+    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", generated.validationContext)).toEqual({ result: "PASS", reasons: [] });
+    const { audit } = rebuildGenerationExportState(generated.validationContext);
+    expect(audit.validateCompletion({ requireVerification: false }).violations).not.toContain("blocked_event_present");
+    // Without the decision the same source still blocks the file.
+    const { acceptedUnverifiedSource: _accepted, ...plain } = generated.validationContext;
+    expect(validateLocalHybridDocument("Wnoszę o zmniejszenie kary.", plain).reasons).toContain("SOURCE_SESSION_BLOCKED_EVENT");
+  });
+
+  it("inna blokada (brak zasobu) nadal blokuje, także po decyzji", async () => {
+    const failure = await generator([{ type: "resource_read", target: "shared/NIEISTNIEJE.md" }])
+      .generate({ ...request, acceptUnverified: true })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(DocumentAstSessionBlockedError);
   });
 });

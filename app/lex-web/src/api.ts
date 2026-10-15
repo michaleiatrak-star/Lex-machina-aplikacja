@@ -1037,6 +1037,8 @@ export type DocumentCoverageEntry = {
   status: "FULL" | "PARTIAL";
 };
 
+export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING"; findings: string[]; removed: string[] };
+
 export type SessionExecutionResponse = {
   sessionId: string;
   // The answer was kept as the case's timeline (case memory).
@@ -1044,6 +1046,8 @@ export type SessionExecutionResponse = {
   // Pages of the case's documents read this turn; documentAnalysis: the turn analysed them.
   documentCoverage?: DocumentCoverageEntry[];
   documentAnalysis?: boolean;
+  // What the application's correcting rounds removed from the answer, and why.
+  corrections?: AnswerCorrection[];
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
   pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };

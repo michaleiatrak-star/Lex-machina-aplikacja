@@ -1,4 +1,5 @@
 import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
+import { type AnswerCorrection, validAnswerCorrections } from "./answer-corrections.js";
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
@@ -82,6 +83,8 @@ export type WorkspaceThreadMessage = {
   // Pages of the case's documents read for this answer (document-coverage.ts).
   documentCoverage?: Array<{ documentId: string; title?: string; totalPages: number; pages: Array<[number, number]>; status: "FULL" | "PARTIAL" }>;
   documentAnalysis?: boolean;
+  // What the application's correcting rounds removed from the answer (answer-corrections.ts).
+  corrections?: AnswerCorrection[];
   pipelineNext?: { skill: string; reason: string; choices?: Array<{
     skill: string;
     kind: "DOCUMENT" | "ANALYSIS";
@@ -390,6 +393,9 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
+  if (input.corrections !== undefined && !validAnswerCorrections(input.corrections)) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
 
   const {
     restorations: _dropped,
@@ -400,6 +406,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     pipelineNext: _next,
     documentCoverage: _coverage,
     documentAnalysis: _analysis,
+    corrections: _corrections,
     ...rest
   } = input;
   return {
@@ -416,6 +423,9 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
         }
       : {}),
     ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(input.corrections?.length
+      ? { corrections: input.corrections.map((item) => ({ round: item.round, findings: [...item.findings], removed: [...item.removed] })) }
+      : {}),
     ...(evidence?.length ? { evidence } : {}),
     ...(auxiliarySources?.length ? { auxiliarySources } : {}),
     ...(mandatoryPath ? { mandatoryPath } : {}),
@@ -931,7 +941,8 @@ export class EncryptedCaseWorkspaceStore {
       ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
       ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
       ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
-      ...(item.documentAnalysis ? { documentAnalysis: true } : {})
+      ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
+      ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})
     }));
   }
 

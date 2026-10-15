@@ -1129,7 +1129,8 @@ export class LegalVerificationToolRuntime {
             freshness: {
                 textFetchedAt: record.fetchedAt,
                 relationsCheckedAt: act.relationsCheckedAt,
-                amendmentsAfter: 0,
+                amendmentsAfter: act.amendmentsChecked.length,
+                ...(act.amendmentsChecked.length ? { amendmentsNotTouchingProvision: act.amendmentsChecked } : {}),
                 ...(liveCheck ? { liveCheck: liveCheck.state } : {})
             },
             sourceUrl: record.sourceUrl ?? null,
@@ -1552,7 +1553,9 @@ export class LegalVerificationToolRuntime {
                         tool: TOOL_NAME,
                         capability: "network",
                         decision: "DENY",
-                        reason
+                        // The precise cause in the trail (an amendment touches the article, its impact
+                        // is unknown, a newer t.j.), so a blocked file says which.
+                        reason: freshness.reason ? `${reason}:${freshness.reason}` : reason
                     });
                     results.push({
                         tool_use_id: call.id,
