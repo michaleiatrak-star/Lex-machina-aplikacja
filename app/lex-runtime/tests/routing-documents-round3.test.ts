@@ -74,6 +74,13 @@ describe("wypowiedzenie umowy is a simple letter (pisma-proste-v2 SPN)", () => {
     // Before: no schema covered it and the delivered lease sent it to the contract pipeline (409).
     expect(executor.executiveSkillsWithMaterials("Napisz wypowiedzenie tej umowy najmu.", LEASE)).toEqual(["pisma-proste-v2"]);
     expect(executor.executiveSkillsWithMaterials("Przygotuj wypowiedzenie umowy zlecenia.", [])).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Napisz wypowiedzenie umowy o świadczenie usług księgowych.", [])).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Napisz wypowiedzenie umowy agencyjnej.", [])).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Wypowiedz abonament telefoniczny.", [])).toEqual(["pisma-proste-v2"]);
     expect(executor.executiveSkillsWithMaterials("Przeanalizuj zapisy o wypowiedzeniu w tej umowie najmu.", LEASE)).toEqual(["analizator-umow-v1"]);
+    // The kind of contract only in the delivered file.
+    const SERVICES = [{ chunks: [{ text: "UMOWA O ŚWIADCZENIE USŁUG\nzawarta w dniu 1 marca 2026 r.\n§ 1. Wykonawca świadczy usługi księgowe. § 2. Strony postanawiają, że umowa zostaje zawarta na czas nieokreślony." }] }];
+    expect(executor.executiveSkillsWithMaterials("Napisz wypowiedzenie tej umowy.", SERVICES)).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Czy mogę wypowiedzieć tę umowę?", SERVICES)).toEqual(["analizator-umow-v1"]);
   });
 });

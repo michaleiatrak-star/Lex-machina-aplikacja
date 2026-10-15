@@ -17,6 +17,23 @@ describe("SPN: wypowiedzenie umowy", () => {
     expect(code("Napisz wypowiedzenie umowy o świadczenie usług księgowych.")).toBe("SPN");
   });
 
+  it("other contracts: agency, loan, bank account, insurance, licence, partnership, energy, telecom, cooperation", () => {
+    for (const text of [
+      "Napisz wypowiedzenie umowy agencyjnej.",
+      "Wypowiedz umowę pożyczki, termin zwrotu nie był ustalony.",
+      "Napisz wypowiedzenie umowy rachunku bankowego.",
+      "Wypowiedz umowę ubezpieczenia na życie.",
+      "Przygotuj wypowiedzenie umowy licencyjnej.",
+      "Napisz wypowiedzenie udziału w spółce cywilnej.",
+      "Przygotuj wypowiedzenie umowy sprzedaży energii elektrycznej.",
+      "Wypowiedz abonament telefoniczny.",
+      "Przygotuj wypowiedzenie umowy o współpracy B2B."
+    ]) expect(code(text), text).toBe("SPN");
+    expect(code("Napisz umowę o świadczenie usług.")).toBeNull();
+    expect(code("Napisz umowę pożyczki.")).toBeNull();
+    expect(code("Jak wypowiedzieć abonament?")).toBeNull();
+  });
+
   it("not the contract itself, an employment contract or a how-to question", () => {
     expect(code("Napisz umowę najmu.")).toBeNull();
     expect(code("Napisz wypowiedzenie umowy o pracę.")).toBeNull();

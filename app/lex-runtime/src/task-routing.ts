@@ -317,6 +317,9 @@ const DEFENCES = [
   /uchyl\w* sie od skutkow/u
 ];
 
+// Terminating a contract: "wypowiedz", "napisz wypowiedzenie", "chcę wypowiedzieć".
+const TERMINATION = /(?<![\p{L}])(?:wypowiedz|wypowiedzenie|wypowiedzieć|wypowiadam|wypowiedzi\p{L}*)(?![\p{L}])/iu;
+
 const DRAFT_NOUN = /(?<![\p{L}])(?:przygotowani\p{L}*|napisani\p{L}*|sporządzeni\p{L}*|zredagowani\p{L}*)(?![\p{L}])/iu;
 
 export function defenceCount(question: string): number {
@@ -516,6 +519,21 @@ function decideTaskByMatrix(
     const fullPleading = matrix.some(
       (rule) => rule.primary === "pisma-procesowe-v3" && rule.phrases.some((phrase) => stemPhrase(phrase)?.test(question))
     );
+    // "Napisz wypowiedzenie tej umowy" with the contract delivered: the kind of contract is in the
+    // file, not the message; the catalogue's notice-of-termination row (pisma-proste-v2 SPN) drafts it.
+    const termination =
+      !schema && materials.some((material) => material.category === "UMOWA") && TERMINATION.test(question) && !asksAbout(question)
+        ? simpleLetters.entries.find((entry) => /^wypowiedz/iu.test(entry.label))
+        : undefined;
+    if (termination) {
+      return {
+        source: "SKILL",
+        primary: simpleLetters.skill,
+        then: null,
+        reason: `wypowiedzenie dostarczonej umowy (schemat ${termination.code}: rodzaj umowy z dokumentu)`,
+        modules: termination.resources
+      };
+    }
     if (schema && !fullPleading) {
       const decisionDelivered = materials.some((material) => material.category === "ORZECZENIE");
       if (decisionDelivered && ANALYSIS_INTENT.test(question)) {
