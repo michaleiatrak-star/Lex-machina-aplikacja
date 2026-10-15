@@ -1,3 +1,4 @@
+import { surnameMentions } from "./surname-propagation.js";
 import { detectFirmNames } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
@@ -750,6 +751,35 @@ export class LocalPolishPseudonymizer {
                 ? (surfaces) => morphology.analyzeAddresses(surfaces)
                 : undefined);
         }
+        // A known person by surname alone or surname first ("Nowakowi", "Pan Wilk", "WILK JAN"):
+        // the full name's token, so the model sees one person (surname-propagation.ts).
+        {
+            const known = [...new Set(entities.values())];
+            const singleWordPerson = (item) => item.kind === "PERSON" && !/\s/u.test(item.value.trim());
+            const blocked = (start, end) => [...keep, ...labelDirectives, ...findings.filter((item) => !singleWordPerson(item))].some((item) => overlaps({ start, end }, item));
+            for (const mention of surnameMentions(text, known, blocked)) {
+                const same = findings.find((item) => item.kind === "PERSON" && item.start === mention.start && item.end === mention.end);
+                // A longer mention ("Nowak Piotr") takes the place of a lone surname found inside it,
+                // which would leave the given name in clear text under another token.
+                const inside = findings.filter((item) => item !== same && singleWordPerson(item) && item.source !== "USER" && item.start >= mention.start && item.end <= mention.end);
+                for (const item of inside)
+                    findings.splice(findings.indexOf(item), 1);
+                if (!same && findings.some((item) => overlaps(mention, item)))
+                    continue;
+                if (!same) {
+                    findings.push({
+                        start: mention.start,
+                        end: mention.end,
+                        kind: "PERSON",
+                        value: mention.value,
+                        confidence: 0.9,
+                        source: "AUTO",
+                        ...(mention.ambiguous ? { ambiguous: true } : {})
+                    });
+                }
+                entities.set(`PERSON\u0000${mention.value}`, mention.entity);
+            }
+        }
         // Per mention: a firm named after a person, a family the recognizer
         // missed ("małżonkowie Kowalscy") and given names that share the next
         // person's surname ("Piotrowi i Marii Nowakom"). New mentions are added
@@ -852,6 +882,9 @@ export class LocalPolishPseudonymizer {
                 source: finding.source ?? "AUTO",
                 ...(finding.label
                     ? { label: finding.label }
+                    : {}),
+                ...(finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
+                    ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
                     : {})
             });
         }

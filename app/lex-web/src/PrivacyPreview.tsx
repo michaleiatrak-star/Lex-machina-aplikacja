@@ -107,7 +107,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
 
   const kept = (page: number, range: { start: number; end: number }) =>
     directives.some((item) => item.page === page && item.action === "KEEP" && overlaps(item, range));
-  const aiHints = review.suggestions.filter((item) => item.aiNotPerson && !props.keepClear);
+  const aiHints = review.suggestions.filter((item) => (item.aiNotPerson || item.uncertain) && !props.keepClear);
   const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
@@ -234,7 +234,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           parts.push(
             <mark
               key={`${mark.start}-${mark.end}`}
-              className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${"aiNotPerson" in mark && mark.aiNotPerson ? " is-ai-hint" : ""}`}
+              className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${("aiNotPerson" in mark && mark.aiNotPerson) || ("uncertain" in mark && mark.uncertain) ? " is-ai-hint" : ""}`}
               title={
                 mark.user
                   ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
@@ -320,12 +320,16 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           <strong>Do decyzji</strong>
           {aiHints.length ? (
             <div>
-              <small>Lokalne AI uznało te wykrycia za nie-osoby. Bez Twojej decyzji zostaną zakryte.</small>
+              <small>
+                {aiHints.some((item) => item.aiNotPerson) ? "Lokalne AI uznało część wykryć za nie-osoby. " : ""}
+                {aiHints.some((item) => item.uncertain) ? "Nazwisko znanej osoby w miejscu, gdzie może to być zwykłe słowo. " : ""}
+                Bez Twojej decyzji zostaną zakryte.
+              </small>
               <ul>
                 {aiHints.map((item) => (
                   <li key={`ai-${item.page}-${item.start}`}>
                     <span>
-                      s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · AI: {item.aiNotPerson}
+                      s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · {item.aiNotPerson ? `AI: ${item.aiNotPerson}` : item.uncertain}
                     </span>
                     <button type="button" onClick={() => toggleKeep(item)}>
                       {kept(item.page, item) ? "Zakryj z powrotem" : "Odkryj"}

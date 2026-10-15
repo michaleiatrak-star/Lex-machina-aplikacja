@@ -167,7 +167,8 @@ function suggestionOf(page, finding, hints) {
         end: finding.end,
         kind: finding.kind,
         ...(finding.firm ? { firm: finding.firm } : {}),
-        ...(hint ? { aiNotPerson: hint.aiNotPerson } : {})
+        ...(hint ? { aiNotPerson: hint.aiNotPerson } : {}),
+        ...(finding.uncertain && !hint ? { uncertain: finding.uncertain } : {})
     };
 }
 /** Reuses the local-AI findings of a page already checked during the review. */

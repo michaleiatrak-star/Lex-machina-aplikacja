@@ -602,6 +602,8 @@ export type DocumentReviewResponse = {
     firm?: "REGISTRY" | "TEXT";
     // The local model read it as no person ("słowo pospolite"); masked until the user unmasks it.
     aiNotPerson?: string;
+    // Masked as a known person's surname, but the word may be a common noun: the user decides.
+    uncertain?: string;
   }>;
 };
 

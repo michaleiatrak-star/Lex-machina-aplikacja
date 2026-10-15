@@ -331,6 +331,8 @@ export type PublicPrivacySuggestion = {
   firm?: "REGISTRY" | "TEXT";
   // The local model's answer that this is no person ("słowo pospolite"); masked until the user unmasks it.
   aiNotPerson?: string;
+  // Masked as a known person's surname, but the word may be a common noun: the user decides.
+  uncertain?: string;
 };
 
 export type PublicPrivacyAnnotation = {
@@ -529,7 +531,7 @@ function collectingAiHints(inner: NamedEntityRecognizer, text: string, hints: Pi
 
 function suggestionOf(
   page: number,
-  finding: { start: number; end: number; kind: PiiKind; firm?: "REGISTRY" | "TEXT" },
+  finding: { start: number; end: number; kind: PiiKind; firm?: "REGISTRY" | "TEXT"; uncertain?: string },
   hints: PiiSpan[]
 ): PublicPrivacySuggestion {
   const hint = hints.find((span) => span.start < finding.end && span.end > finding.start);
@@ -539,7 +541,8 @@ function suggestionOf(
     end: finding.end,
     kind: finding.kind,
     ...(finding.firm ? { firm: finding.firm } : {}),
-    ...(hint ? { aiNotPerson: hint.aiNotPerson } : {})
+    ...(hint ? { aiNotPerson: hint.aiNotPerson } : {}),
+    ...(finding.uncertain && !hint ? { uncertain: finding.uncertain } : {})
   };
 }
 
