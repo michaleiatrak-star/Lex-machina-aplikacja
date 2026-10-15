@@ -23,7 +23,7 @@ nie kończy tury w milczeniu na temat plików, których nie sprawdził.
 
 ## DLACZEGO TEN MODUŁ ISTNIEJE
 
-**Incydent źródłowy (sprawa XI P 27/26, 2026-07-12):**
+**Incydent źródłowy (sprawa [SYGN-SPRAWY-2], 2026-07-12):**
 Model przeanalizował ZIP z ~30 plikami, ale w pierwszej odpowiedzi oparł
 tezy tylko na części z nich (protokoły, .odt, xlsx), pomijając bez
 zaznaczenia: 3 duże skany PDF (130 stron), maile poboczne, recepty,
@@ -158,7 +158,7 @@ jako kompletnych.
 
 ```
 1.0.0 (2026-07-12, aktualizacja integracji 2026-07-14)
-Przyczyna: sprawa XI P 27/26, świadek Maria Koroleva — moduł istniał od
+Przyczyna: sprawa [SYGN-SPRAWY-2], świadek [ŚWIADEK-K] — moduł istniał od
   utworzenia (poniżej), ale w przesluchanie-swiadkow-v2-min90 nie był
   deklarowaną zależnością required, więc uruchamiał się wyłącznie
   reaktywnie (na wprost zadane pytanie użytkownika), a nie proaktywnie
@@ -174,7 +174,7 @@ Naprawa (2026-07-14): przesluchanie-swiadkow-v2-min90 — dodano ten
   merytoryczna samego modułu. Zob. changelog przesluchanie-swiadkow-v2-min90.
 
 1.0.0 (2026-07-12)
-Przyczyna: sprawa XI P 27/26 — model sprawdził materiał wybiórczo
+Przyczyna: sprawa [SYGN-SPRAWY-2] — model sprawdził materiał wybiórczo
   i nie zasygnalizował tego użytkownikowi; braki (w tym 2 kluczowe
   zrzuty WhatsApp) wyszły na jaw dopiero po pytaniu kontrolnym
   użytkownika. Utworzono na wyraźne polecenie użytkownika.

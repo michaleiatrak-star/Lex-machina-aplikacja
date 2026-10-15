@@ -357,8 +357,8 @@ STOP PO PK7:
 ```
 1.0.0 (2026-06-23) — Pierwsza wersja. Moduł uniwersalny.
 Przyczyna: analiza porównawcza pisma generowanego (AI) vs pisma poprawionego
-przez użytkownika w sprawie VII P 94/25 — wersja poprawiona zawierała:
-(1) tabele graniczne HP→HPG z konkretnymi datami i kandydatami,
+przez użytkownika w sprawie [SYGN-SPRAWY] — wersja poprawiona zawierała:
+(1) tabele graniczne [SPÓŁKA-A]→[SPÓŁKA-B] z konkretnymi datami i kandydatami,
 (2) walory procesowe 1/2/3 dla osobistego aktu Prezesa,
 (3) antycypację zarzutów w 4 miejscach uzasadnienia,
 (4) ścieżkę alternatywną art. 23¹ KP + art. 25¹ §3 KP,

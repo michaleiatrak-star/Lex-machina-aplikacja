@@ -454,7 +454,7 @@ Weryfikacja online (24.06.2026): art. 248 ✅ · 261 ✅ · 266 ✅ · 271 ✅ �
   art. 258 ❌ UCHYLONY · art. 233 KK ✅ · art. 235² §1 KPC ✅
 
 1.0.0 (2026-06-24)
-Przyczyna: Sprawa VII P 94/25 — pismo procesowe rozszerzające pozew
+Przyczyna: Sprawa [SYGN-SPRAWY] — pismo procesowe rozszerzające pozew
 zawierało zeznania świadka Nawrota jako ogniwo BASE dla premii PFRON
 (1.000 zł/m-c), ale pismo nie zawierało:
   (1) antycypacji ataków na wiarygodność świadka

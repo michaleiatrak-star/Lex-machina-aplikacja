@@ -900,7 +900,7 @@ const persons=[
    status_proc:'Osoba uprawniona do reprezentacji ALPHA; wnioskowana do przesłuchania z tłumaczem',
    umocowanie:'Prezes Zarządu ALPHA',
    dane:'Wymaga tłumacza j. koreańskiego (wg D02)',
-   uwagi:'Adresat wezwania D04 ("Prezes Spółek Pan Min-jun Lee") — co sugeruje że D04 dotyczy obu spółek (ALPHA i HP).'}
+   uwagi:'Adresat wezwania D04 ("Prezes Spółek Pan Min-jun Lee") — co sugeruje że D04 dotyczy obu spółek (ALPHA i [SPÓŁKA-A]).'}
 ];
 
 /* ═══ NAZEWNICTWO PROCESOWE ═══ */
@@ -914,9 +914,9 @@ const nazewnictwo=[
   {id:'NZ-2',status:'err',
    title:'[LA-RODZAJ] D04 treść: "Alpha Solutions i Alpha Solutions" — dwie razy ta sama spółka',
    cytat:'"Działając w imieniu Spółek Alpha Solutions sp. z o.o. i Alpha Solutions sp. z o.o." (D04, treść)',
-   problem:'Nagłówek: ALPHA + HP (dwie różne spółki). Treść: ALPHA + ALPHA (ta sama dwukrotnie). Wzorzec: LA-PODMIOT-POWTORZONY.',
+   problem:'Nagłówek: ALPHA + [SPÓŁKA-A] (dwie różne spółki). Treść: ALPHA + ALPHA (ta sama dwukrotnie). Wzorzec: LA-PODMIOT-POWTORZONY.',
    skutek:'Wezwanie formalnie pochodzi tylko od ALPHA. Alpha Solutions sp. z o.o. nie jest objęta treścią wezwania.',
-   rek:'Wskazać rozbieżność — wezwanie D04 nie wywołuje skutków wobec HP sp. z o.o.'},
+   rek:'Wskazać rozbieżność — wezwanie D04 nie wywołuje skutków wobec [SPÓŁKA-A] sp. z o.o.'},
   {id:'NZ-3',status:'err',
    title:'[LA-RODZAJ] D03: "Pozwany oświadcza" — ALPHA to spółka (r. żeński = Pozwana)',
    cytat:'"Pozwany oświadcza, że nigdy nie otrzymał od powoda jakichkolwiek wpłat" (D03)',
