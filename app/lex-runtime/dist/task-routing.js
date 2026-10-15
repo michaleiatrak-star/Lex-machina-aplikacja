@@ -624,6 +624,17 @@ export function pipelineNext(skill, then, combinations, context) {
         (!context || combinationApplies(row.matter, provisionsForDetection(context.question), context.materials)));
     return combination ? { skill: combination.next[0], reason: `kombinacja skilli: ${combination.matter}` } : null;
 }
+/** The register of a pipeline's checkpoints, summed up for the user before a file. */
+export function stepSummary(register) {
+    return {
+        done: register.filter((entry) => entry.status === "CLOSED").length,
+        total: register.length,
+        skipped: register
+            .filter((entry) => entry.status === "NA")
+            .map((entry) => ({ checkpoint: entry.checkpoint, ...(entry.reason?.trim() ? { reason: entry.reason.trim().slice(0, 300) } : {}) })),
+        open: register.filter((entry) => entry.status === "OPEN" || entry.status === "PENDING_CONFIRMATION").map((entry) => entry.checkpoint)
+    };
+}
 const DRAFTING_SKILL = /^pisma-/u;
 /**
  * What the user may do after this skill's result, never started on its own: generate the
@@ -632,7 +643,9 @@ const DRAFTING_SKILL = /^pisma-/u;
  * in the case. A reply to a demand between the parties is a simple letter (pisma-proste-v2).
  */
 export function nextChoices(skill, then, combinations, context, options = {}) {
-    const own = options.ownDocument ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true }] : [];
+    const own = options.ownDocument
+        ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true, ...(options.steps ? { steps: options.steps } : {}) }]
+        : [];
     const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
     const found = [];
     const add = (candidate, reason) => {

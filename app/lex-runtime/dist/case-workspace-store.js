@@ -154,10 +154,18 @@ function safeMessage(input) {
     const next = input.pipelineNext;
     const validChoice = (choice) => {
         const item = choice;
+        const steps = item?.steps;
+        const validSteps = steps === undefined ||
+            (typeof steps === "object" && steps !== null &&
+                Number.isInteger(steps.done) && Number.isInteger(steps.total) && steps.total <= 100 &&
+                Array.isArray(steps.open) && steps.open.length <= 100 && steps.open.every((value) => typeof value === "string" && value.length <= 100) &&
+                Array.isArray(steps.skipped) && steps.skipped.length <= 100 &&
+                steps.skipped.every((entry) => typeof entry?.checkpoint === "string" && entry.checkpoint.length <= 100 && (entry.reason === undefined || (typeof entry.reason === "string" && entry.reason.length <= 300))));
         return (typeof item === "object" && item !== null &&
             typeof item.skill === "string" && item.skill.length <= 200 &&
             (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
             (item.own === undefined || item.own === true) &&
+            validSteps &&
             typeof item.reason === "string" && item.reason.length <= 2_000);
     };
     if (next !== undefined &&
@@ -184,7 +192,8 @@ function safeMessage(input) {
                                 skill: choice.skill,
                                 kind: choice.kind,
                                 reason: choice.reason,
-                                ...(choice.own ? { own: true } : {})
+                                ...(choice.own ? { own: true } : {}),
+                                ...(choice.steps ? { steps: structuredClone(choice.steps) } : {})
                             }))
                         }
                         : {})

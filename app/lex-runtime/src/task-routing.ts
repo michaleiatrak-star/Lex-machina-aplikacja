@@ -739,7 +739,29 @@ export type NextChoice = {
   // The file of this very result (a pleading of pisma-procesowe-v3, a contract redacted or
   // drafted by analizator-umow-v1), made by that skill's own pipeline and its HYBRID-VAL.
   own?: true;
+  // The pipeline's step register at this point (pleading checkpoints): done, skipped with
+  // the reason, still open. A file with an open or unexplained step is a draft.
+  steps?: StepSummary;
 };
+
+export type StepSummary = {
+  done: number;
+  total: number;
+  skipped: Array<{ checkpoint: string; reason?: string }>;
+  open: string[];
+};
+
+/** The register of a pipeline's checkpoints, summed up for the user before a file. */
+export function stepSummary(register: ReadonlyArray<{ checkpoint: string; status: string; reason?: string }>): StepSummary {
+  return {
+    done: register.filter((entry) => entry.status === "CLOSED").length,
+    total: register.length,
+    skipped: register
+      .filter((entry) => entry.status === "NA")
+      .map((entry) => ({ checkpoint: entry.checkpoint, ...(entry.reason?.trim() ? { reason: entry.reason.trim().slice(0, 300) } : {}) })),
+    open: register.filter((entry) => entry.status === "OPEN" || entry.status === "PENDING_CONFIRMATION").map((entry) => entry.checkpoint)
+  };
+}
 
 const DRAFTING_SKILL = /^pisma-/u;
 
@@ -754,9 +776,11 @@ export function nextChoices(
   then: string | null,
   combinations: SkillCombination[],
   context?: { question: string; materials: DeliveredMaterial[] },
-  options: { ownDocument?: boolean } = {}
+  options: { ownDocument?: boolean; steps?: StepSummary } = {}
 ): NextChoice[] {
-  const own: NextChoice[] = options.ownDocument ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true }] : [];
+  const own: NextChoice[] = options.ownDocument
+    ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true, ...(options.steps ? { steps: options.steps } : {}) }]
+    : [];
   const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
   const found: NextChoice[] = [];
   const add = (candidate: string, reason: string) => {

@@ -77,7 +77,13 @@ export type WorkspaceThreadMessage = {
   evidence?: Record<string, unknown>[];
   auxiliarySources?: Record<string, unknown>[];
   mandatoryPath?: Record<string, unknown>;
-  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true }> };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{
+    skill: string;
+    kind: "DOCUMENT" | "ANALYSIS";
+    reason: string;
+    own?: true;
+    steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] };
+  }> };
 };
 
 export type WorkspaceWidget = {
@@ -325,12 +331,22 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
   const next = input.pipelineNext;
   const validChoice = (choice: unknown) => {
-    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown } | null;
+    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown; steps?: unknown } | null;
+    const steps = item?.steps as { done?: unknown; total?: unknown; skipped?: unknown; open?: unknown } | undefined;
+    const validSteps =
+      steps === undefined ||
+      (typeof steps === "object" && steps !== null &&
+        Number.isInteger(steps.done) && Number.isInteger(steps.total) && (steps.total as number) <= 100 &&
+        Array.isArray(steps.open) && steps.open.length <= 100 && steps.open.every((value) => typeof value === "string" && value.length <= 100) &&
+        Array.isArray(steps.skipped) && steps.skipped.length <= 100 &&
+        steps.skipped.every((entry: { checkpoint?: unknown; reason?: unknown }) =>
+          typeof entry?.checkpoint === "string" && entry.checkpoint.length <= 100 && (entry.reason === undefined || (typeof entry.reason === "string" && entry.reason.length <= 300))));
     return (
       typeof item === "object" && item !== null &&
       typeof item.skill === "string" && item.skill.length <= 200 &&
       (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
       (item.own === undefined || item.own === true) &&
+      validSteps &&
       typeof item.reason === "string" && item.reason.length <= 2_000
     );
   };
@@ -369,7 +385,8 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
                     skill: choice.skill,
                     kind: choice.kind,
                     reason: choice.reason,
-                    ...(choice.own ? { own: true as const } : {})
+                    ...(choice.own ? { own: true as const } : {}),
+                    ...(choice.steps ? { steps: structuredClone(choice.steps) } : {})
                   }))
                 }
               : {})

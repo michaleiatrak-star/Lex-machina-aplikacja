@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PipelineChoices, directDocumentRequest, pipelineChoiceMessage } from "./MatterChatApp.js";
+import { PipelineChoices, directDocumentRequest, documentChoiceLabel, pipelineChoiceMessage, stepSummaryText } from "./MatterChatApp.js";
 
 const next = {
   skill: "pisma-proste-v2",
@@ -47,5 +47,29 @@ describe("co dalej po wyniku: wybór użytkownika", () => {
     const html = renderToStaticMarkup(<PipelineChoices next={own} auto={false} disabled={false} onChoose={() => undefined} />);
     expect(html).toContain("Generuj dokument");
     expect(html).not.toContain("Wątek mechaniczny jest przypięty");
+  });
+
+  it("pismo procesowe: przed plikiem stan kroków; otwarte lub pominięte bez powodu dają projekt", () => {
+    const steps = {
+      done: 13,
+      total: 16,
+      skipped: [{ checkpoint: "CP-FSL-D", reason: "brak dokumentów finansowych w sprawie" }, { checkpoint: "CP-PD" }],
+      open: ["CP-PEER"]
+    };
+    expect(stepSummaryText(steps)).toBe(
+      "Kroki pisma: wykonane 13 z 16 · pominięte: CP-FSL-D (brak dokumentów finansowych w sprawie); CP-PD (bez podanego powodu) · otwarte: CP-PEER"
+    );
+    expect(documentChoiceLabel(steps)).toBe("Generuj projekt (DRAFT)");
+    expect(documentChoiceLabel({ done: 15, total: 16, skipped: [{ checkpoint: "CP-FSL-D", reason: "nie dotyczy" }], open: [] })).toBe("Generuj dokument");
+    const html = renderToStaticMarkup(
+      <PipelineChoices
+        next={{ skill: "pisma-procesowe-v3", reason: "plik z tego wyniku", choices: [{ skill: "pisma-procesowe-v3", kind: "DOCUMENT", reason: "plik z tego wyniku", own: true, steps }] }}
+        auto
+        disabled={false}
+        onChoose={() => undefined}
+      />
+    );
+    expect(html).toContain("Generuj projekt (DRAFT)");
+    expect(html).toContain("CP-PD (bez podanego powodu)");
   });
 });

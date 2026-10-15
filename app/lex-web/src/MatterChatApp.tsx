@@ -1099,6 +1099,25 @@ export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" 
     : `${PIPELINE_HANDOFF} ${choice.skill}. Kontynuuj na podstawie powyższego wyniku, tylko w zakresie tego etapu.`;
 }
 
+type StepSummary = NonNullable<NonNullable<PipelineNext["choices"]>[number]["steps"]>;
+
+/** The pipeline's steps before a file: done, skipped and why, still open (in words). */
+export function stepSummaryText(steps: StepSummary): string {
+  const skipped = steps.skipped.map((entry) => `${entry.checkpoint} (${entry.reason ?? "bez podanego powodu"})`);
+  return [
+    `Kroki pisma: wykonane ${steps.done} z ${steps.total}`,
+    skipped.length ? `pominięte: ${skipped.join("; ")}` : "",
+    steps.open.length ? `otwarte: ${steps.open.join(", ")}` : ""
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** A file over open or unexplained steps is only a draft (ZAKAZ-14: DRAFT — NIEWERYFIKOWANY). */
+export function documentChoiceLabel(steps: StepSummary | undefined): string {
+  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : "Generuj dokument";
+}
+
 /**
  * After a result: generate the document when it is satisfactory, or one further stage of
  * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
@@ -1115,9 +1134,10 @@ export function PipelineChoices({ next, auto, disabled, onChoose }: { next: Pipe
       <div className="chat-pipeline-next" role="note">
         {ownDocument ? (
           <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(ownDocument))}>
-            Generuj dokument
+            {documentChoiceLabel(ownDocument.steps)}
           </button>
         ) : null}
+        {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
         {others.length ? (
           <span>
             Dalej możliwe: {others.map((choice) => choice.skill).join(", ")}.
@@ -1144,10 +1164,11 @@ export function PipelineChoices({ next, auto, disabled, onChoose }: { next: Pipe
             title={`${choice.skill} (${choice.reason})`}
             onClick={() => onChoose(pipelineChoiceMessage(choice))}
           >
-            {choice.kind === "DOCUMENT" ? "Generuj dokument" : `Dalsza analiza: ${choice.skill}`}
+            {choice.kind === "DOCUMENT" ? documentChoiceLabel(choice.steps) : `Dalsza analiza: ${choice.skill}`}
           </button>
         ))}
       </div>
+      {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
       {choices.some((choice) => choice.kind === "DOCUMENT") ? (
         <small className="field-help">
           {ownDocument

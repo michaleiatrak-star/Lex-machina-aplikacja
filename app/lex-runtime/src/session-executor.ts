@@ -189,6 +189,7 @@ import {
   parseRoutingTable,
   nextChoices,
   pipelineNext,
+  stepSummary,
   type NextChoice,
   type MatrixRule,
   type RedactionTest,
@@ -4382,9 +4383,19 @@ export class SafeSessionExecutor implements SessionExecutor {
     // chooses; the first one is kept as the single "next stage" of older clients.
     // The result is itself a document of its skill (a pleading; a contract redacted, drafted
     // or supplemented): "Generuj dokument" makes its file at any step, through that pipeline.
+    // Only inside the running pipeline: before it starts the server refuses the file, the
+    // request came back to the chat and the same button followed every answer (a loop); the
+    // chat offers the pipeline start instead (pleadingPipelineNeeded).
+    // A pleading: once its pipeline keeps a draft (the file renders that draft). A contract:
+    // once its text is complete (AU-GENSHARED, then AU-HYBRID); each checkpoint is one turn,
+    // so an earlier button would only move one step and come back with every answer. After
+    // AU-STRIP the file is made on its own.
     const ownDocumentSkill = (skill: string | null | undefined) =>
-      skill === "pisma-procesowe-v3" ||
-      (skill === "analizator-umow-v1" && request.contractWorkflowContext !== undefined && request.contractWorkflowContext.mode !== "ANALYSIS");
+      (skill === "pisma-procesowe-v3" && request.processWorkflowContext?.draft !== undefined) ||
+      (skill === "analizator-umow-v1" &&
+        request.contractWorkflowContext !== undefined &&
+        request.contractWorkflowContext.mode !== "ANALYSIS" &&
+        (request.contractWorkflowContext.checkpoint === "AU-GENSHARED" || request.contractWorkflowContext.checkpoint === "AU-HYBRID"));
     const nextFrom =
       taskRoute
         ? { skill: taskRoute.primary, then: taskRoute.then }
@@ -4392,7 +4403,13 @@ export class SafeSessionExecutor implements SessionExecutor {
           ? { skill: workflowSkill, then: workflowOutput.mode.endsWith("_FINAL") ? this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill) : null }
           : null;
     const choices = nextFrom
-      ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext, { ownDocument: ownDocumentSkill(nextFrom.skill) })
+      ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext, {
+          ownDocument: ownDocumentSkill(nextFrom.skill),
+          // The pleading's step register: what the file rests on (done, skipped and why, open).
+          ...(nextFrom.skill === "pisma-procesowe-v3" && request.processWorkflowContext?.register
+            ? { steps: stepSummary(request.processWorkflowContext.register) }
+            : {})
+        })
       : [];
     const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
     const next = choices.length
