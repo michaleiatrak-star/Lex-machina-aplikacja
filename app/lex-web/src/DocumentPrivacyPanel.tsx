@@ -862,6 +862,9 @@ export function DocumentPrivacyPanel({
                   ? `OCR wykonano automatycznie na ${reviewStats.ocrPages} z ${review.totalPages} stron${reviewStats.scannedPdf ? " skanowanego PDF" : ""}.`
                   : "Dokument ma użyteczną warstwę tekstową; OCR nie był potrzebny."}
                 {" "}Wykryto {review.suggestions.length} lokalnych sugestii danych wrażliwych.
+                {review.suggestions.some((item) => item.aiNotPerson)
+                  ? ` Lokalne AI uznało ${review.suggestions.filter((item) => item.aiNotPerson).length} z nich za nie-osoby; zostają zamaskowane, dopóki nie odkryjesz ich w przeglądzie ręcznym.`
+                  : ""}
               </p>
               <p>
                 Ta decyzja jest na razie wersją roboczą dla tego pliku. Zostanie zastosowana dopiero po
@@ -1124,16 +1127,16 @@ export function DocumentPrivacyPanel({
                             suggestion
                           )
                       );
-                    return (
+                    const key =
+                      suggestion.kind +
+                      "-" +
+                      suggestion.start +
+                      "-" +
+                      index;
+                    const mask = (
                       <button
                         type="button"
-                        key={
-                          suggestion.kind +
-                          "-" +
-                          suggestion.start +
-                          "-" +
-                          index
-                        }
+                        key={key}
                         disabled={exists}
                         onClick={() =>
                           addDirective({
@@ -1152,6 +1155,22 @@ export function DocumentPrivacyPanel({
                         {suggestion.kind}:{" "}
                         {preview}
                       </button>
+                    );
+                    if (!suggestion.aiNotPerson || exists) return mask;
+                    // The local model read it as no person; it stays masked until unmasked here.
+                    return (
+                      <span key={key} className="privacy-ai-hint">
+                        {mask}
+                        <button
+                          type="button"
+                          title="Lokalne AI uznało, że to nie osoba. Sprawdź zdanie i zostaw jawne jednym kliknięciem."
+                          onClick={() =>
+                            addDirective({ page, start: suggestion.start, end: suggestion.end, action: "KEEP" })
+                          }
+                        >
+                          Odkryj · AI: {suggestion.aiNotPerson}
+                        </button>
+                      </span>
                     );
                   }
                 )}
@@ -1280,6 +1299,33 @@ export function DocumentPrivacyPanel({
                             <strong>
                               {finalDecisionForSuggestion(draft, suggestion)}
                             </strong>
+                            {suggestion.aiNotPerson &&
+                            !draft.directives.some(
+                              (directive) => directive.page === suggestion.page && rangesOverlap(directive, suggestion)
+                            ) ? (
+                              <button
+                                type="button"
+                                title="Lokalne AI uznało, że to nie osoba. Bez kliknięcia zostaje zamaskowane."
+                                onClick={() =>
+                                  setBatchDrafts((current) =>
+                                    current.map((item) =>
+                                      item.review.documentId === draft.review.documentId
+                                        ? {
+                                            ...item,
+                                            privacyMode: "MANUAL",
+                                            directives: [
+                                              ...item.directives,
+                                              { page: suggestion.page, start: suggestion.start, end: suggestion.end, action: "KEEP" }
+                                            ]
+                                          }
+                                        : item
+                                    )
+                                  )
+                                }
+                              >
+                                Odkryj · AI: {suggestion.aiNotPerson}
+                              </button>
+                            ) : null}
                           </li>
                         ))}
                       </ul>

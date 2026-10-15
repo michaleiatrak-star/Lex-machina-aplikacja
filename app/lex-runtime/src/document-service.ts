@@ -4,7 +4,7 @@ import type {
 import type { LocalOcrCorrector } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
-import { correctWithVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
+import { correctWithVision, enoughMemoryForVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
 import {
   maskBoxes,
   protectedValues,
@@ -300,6 +300,8 @@ export type PublicPrivacySuggestion = {
   start: number;
   end: number;
   kind: PiiKind;
+  // The local model's answer that this is no person ("słowo pospolite"); masked until the user unmasks it.
+  aiNotPerson?: string;
 };
 
 export type PublicPrivacyAnnotation = {
@@ -475,6 +477,22 @@ function withAiMemory(
   memory: Map<string, PiiSpan[]> | undefined
 ): NamedEntityRecognizer {
   return memory ? rememberingRecognizer(recognizer, memory) : recognizer;
+}
+
+/** The recognizer, also collecting the matches the local model read as no person in `text`. */
+function collectingAiHints(inner: NamedEntityRecognizer, text: string, hints: PiiSpan[]): NamedEntityRecognizer {
+  return {
+    recognize: async (input: string) => {
+      const found = await inner.recognize(input);
+      if (input === text) hints.push(...found.filter((span) => span.aiNotPerson));
+      return found;
+    }
+  };
+}
+
+function suggestionOf(page: number, finding: { start: number; end: number; kind: PiiKind }, hints: PiiSpan[]): PublicPrivacySuggestion {
+  const hint = hints.find((span) => span.start < finding.end && span.end > finding.start);
+  return { page, start: finding.start, end: finding.end, kind: finding.kind, ...(hint ? { aiNotPerson: hint.aiNotPerson } : {}) };
 }
 
 /** Reuses the local-AI findings of a page already checked during the review. */
@@ -746,10 +764,11 @@ implements DocumentService {
 
     for (const [index, page] of source.pages.entries()) {
       onProgress?.({ stage: "DETECTING", done: index, total: source.pages.length, page: page.page });
+      const hints: PiiSpan[] = [];
       const preview =
         await new LocalPolishPseudonymizer(
           suggestionVault,
-          withAiMemory(privacyRecognizerFor(
+          collectingAiHints(withAiMemory(privacyRecognizerFor(
             this.namedEntities,
             page.source === "OCR",
             security?.localAi
@@ -758,19 +777,14 @@ implements DocumentService {
                     onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
                 }
               : undefined
-          ), this.documents.get(documentId)?.aiFindings),
+          ), this.documents.get(documentId)?.aiFindings), page.text, hints),
           this.personMorphology,
           this.registryForms
         ).pseudonymize(
           page.text
         );
       for (const finding of preview.findings) {
-        suggestions.push({
-          page: page.page,
-          start: finding.start,
-          end: finding.end,
-          kind: finding.kind
-        });
+        suggestions.push(suggestionOf(page.page, finding, hints));
       }
     }
 
@@ -847,9 +861,10 @@ implements DocumentService {
       });
     }
     record.source = source;
+    const hints: PiiSpan[] = [];
     const preview = await new LocalPolishPseudonymizer(
       new PseudonymizationVault(),
-      withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings),
+      collectingAiHints(withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), clean, hints),
       this.personMorphology,
       this.registryForms
     ).pseudonymize(clean);
@@ -862,7 +877,7 @@ implements DocumentService {
         ...(page.engine ? { engine: page.engine } : {}),
         editedByUser: true
       },
-      suggestions: preview.findings.map((finding) => ({ page: page.page, start: finding.start, end: finding.end, kind: finding.kind }))
+      suggestions: preview.findings.map((finding) => suggestionOf(page.page, finding, hints))
     };
   }
 
@@ -899,7 +914,13 @@ implements DocumentService {
     if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop))) {
       return source;
     }
-    const session = this.visionReader?.();
+    if (!this.visionReader) return source;
+    if (!enoughMemoryForVision()) {
+      process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
+      onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
+      return source;
+    }
+    const session = this.visionReader();
     if (!session) return source;
     let pages: IngestedPage[];
     try {

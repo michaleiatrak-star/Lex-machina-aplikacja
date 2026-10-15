@@ -786,6 +786,19 @@ textarea:focus {
   color: #304435;
 }
 
+/* A match the local model read as no person: masked, with a one-click unmask next to it. */
+.privacy-ai-hint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.privacy-ai-hint > button:last-child {
+  border-style: dashed;
+  background: #fffaf0;
+  color: #6b4e16;
+}
+
 .privacy-decisions {
   margin-top: 18px;
 }

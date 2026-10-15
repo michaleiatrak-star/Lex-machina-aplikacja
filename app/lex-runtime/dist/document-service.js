@@ -1,6 +1,6 @@
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
-import { correctWithVision, withoutLineCrops } from "./ocr-vision.js";
+import { correctWithVision, enoughMemoryForVision, withoutLineCrops } from "./ocr-vision.js";
 import { maskBoxes, protectedValues, wantsImage } from "./document-evidence.js";
 import { createHash } from "node:crypto";
 import { chunkDocumentPages } from "./document-ingestion.js";
@@ -135,6 +135,21 @@ export function nfcIngestion(source) {
 }
 function withAiMemory(recognizer, memory) {
     return memory ? rememberingRecognizer(recognizer, memory) : recognizer;
+}
+/** The recognizer, also collecting the matches the local model read as no person in `text`. */
+function collectingAiHints(inner, text, hints) {
+    return {
+        recognize: async (input) => {
+            const found = await inner.recognize(input);
+            if (input === text)
+                hints.push(...found.filter((span) => span.aiNotPerson));
+            return found;
+        }
+    };
+}
+function suggestionOf(page, finding, hints) {
+    const hint = hints.find((span) => span.start < finding.end && span.end > finding.start);
+    return { page, start: finding.start, end: finding.end, kind: finding.kind, ...(hint ? { aiNotPerson: hint.aiNotPerson } : {}) };
 }
 /** Reuses the local-AI findings of a page already checked during the review. */
 function rememberingRecognizer(inner, memory) {
@@ -317,18 +332,14 @@ export class LocalPrivateDocumentService {
         const suggestions = [];
         for (const [index, page] of source.pages.entries()) {
             onProgress?.({ stage: "DETECTING", done: index, total: source.pages.length, page: page.page });
-            const preview = await new LocalPolishPseudonymizer(suggestionVault, withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR", security?.localAi
+            const hints = [];
+            const preview = await new LocalPolishPseudonymizer(suggestionVault, collectingAiHints(withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR", security?.localAi
                 ? {
                     onCheck: (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `s. ${page.page}: ${item}`.slice(0, 160) })
                 }
-                : undefined), this.documents.get(documentId)?.aiFindings), this.personMorphology, this.registryForms).pseudonymize(page.text);
+                : undefined), this.documents.get(documentId)?.aiFindings), page.text, hints), this.personMorphology, this.registryForms).pseudonymize(page.text);
             for (const finding of preview.findings) {
-                suggestions.push({
-                    page: page.page,
-                    start: finding.start,
-                    end: finding.end,
-                    kind: finding.kind
-                });
+                suggestions.push(suggestionOf(page.page, finding, hints));
             }
         }
         return {
@@ -401,7 +412,8 @@ export class LocalPrivateDocumentService {
             });
         }
         record.source = source;
-        const preview = await new LocalPolishPseudonymizer(new PseudonymizationVault(), withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), this.personMorphology, this.registryForms).pseudonymize(clean);
+        const hints = [];
+        const preview = await new LocalPolishPseudonymizer(new PseudonymizationVault(), collectingAiHints(withAiMemory(privacyRecognizerFor(this.namedEntities, page.source === "OCR"), record.aiFindings), clean, hints), this.personMorphology, this.registryForms).pseudonymize(clean);
         return {
             page: {
                 page: page.page,
@@ -411,7 +423,7 @@ export class LocalPrivateDocumentService {
                 ...(page.engine ? { engine: page.engine } : {}),
                 editedByUser: true
             },
-            suggestions: preview.findings.map((finding) => ({ page: page.page, start: finding.start, end: finding.end, kind: finding.kind }))
+            suggestions: preview.findings.map((finding) => suggestionOf(page.page, finding, hints))
         };
     }
     /** OCR pages through the local model's correction (original words kept). */
@@ -445,7 +457,14 @@ export class LocalPrivateDocumentService {
         if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop))) {
             return source;
         }
-        const session = this.visionReader?.();
+        if (!this.visionReader)
+            return source;
+        if (!enoughMemoryForVision()) {
+            process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
+            onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
+            return source;
+        }
+        const session = this.visionReader();
         if (!session)
             return source;
         let pages;

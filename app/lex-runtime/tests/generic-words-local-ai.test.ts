@@ -40,7 +40,7 @@ describe("anonymization with local AI", () => {
     status: () => ({ configured: true, state: "READY" })
   } as never;
 
-  it("drops an ambiguous match only when the model says it is not a person", async () => {
+  it("marks an ambiguous match the model reads as no person, and keeps it masked", async () => {
     const text = "Bank naliczył odsetki. Pani Bank zeznała jako świadek.";
     const fallback = {
       recognize: async () => [
@@ -63,7 +63,7 @@ describe("anonymization with local AI", () => {
       { onCheck: (item, done, total) => checks.push([item, done, total]) }
     );
     const found = await recognizer.recognize(text);
-    expect(found.map((item) => item.start)).toEqual([text.indexOf("Bank", 25)]);
+    expect(found.map((item) => [item.start, item.aiNotPerson])).toEqual([[0, "instytucja"], [text.indexOf("Bank", 25), undefined]]);
     expect(questions[0]).toContain("1. ⟦Bank⟧ naliczył odsetki.");
     expect(questions[0]).toContain("2. Pani ⟦Bank⟧ zeznała jako świadek.");
     expect(checks[0]).toEqual(["Bank, Bank", 0, 2]);
@@ -116,17 +116,17 @@ describe("anonymization with local AI: Bielik's answer formats and unstable batc
         ? '1. {"id": 1, "person": false, "type": "słowo pospolite"}\n2. {"id": 2, "person": true, "type": "osoba"}'
         : '{"id":1,"person":false,"type":"słowo pospolite"}'
     ).recognize(text);
-    expect(found.map((item) => item.value)).toEqual(["Sowa"]);
+    expect(found.map((item) => [item.value, item.aiNotPerson])).toEqual([["Wilk", "słowo pospolite"], ["Sowa", undefined]]);
   });
 
-  it("keeps a person when the sentence asked alone contradicts the batch", async () => {
+  it("marks no person when the sentence asked alone contradicts the batch", async () => {
     const text = "Zając odmówił składania wyjaśnień. Kot wchodził przez balkon.";
     const found = await recognizerWith(text, ["Zając", "Kot"], (content, verify) =>
       !verify ? "[]" : content.includes("2.")
         ? '[{"id":1,"person":false,"type":"instytucja"},{"id":2,"person":false,"type":"instytucja"}]'
         : content.includes("Zając") ? '[{"id":1,"person":true,"type":"osoba"}]' : '[{"id":1,"person":false,"type":"słowo pospolite"}]'
     ).recognize(text);
-    expect(found.map((item) => item.value)).toEqual(["Zając"]);
+    expect(found.map((item) => [item.value, item.aiNotPerson])).toEqual([["Zając", undefined], ["Kot", "słowo pospolite"]]);
   });
 
   it("reads found data given as an object of lists or with repeated keys", async () => {

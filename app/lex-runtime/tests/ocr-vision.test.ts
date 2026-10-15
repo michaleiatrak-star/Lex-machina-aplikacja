@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IngestedPage } from "../src/document-ingestion.js";
-import { arbitrateLine, correctWithVision, doubtfulLines, withoutLineCrops } from "../src/ocr-vision.js";
+import { arbitrateLine, correctWithVision, doubtfulLines, enoughMemoryForVision, withoutLineCrops } from "../src/ocr-vision.js";
 
 const DICTIONARY = new Set([
   "lub", "innego", "stosunku", "prawnego", "do", "niewykonania", "radcy", "Pawła", "Raka",
@@ -63,6 +63,11 @@ describe("vision step on a page", () => {
     expect(asked).toEqual(["img1"]);
     expect(fixed!.text).toBe("radcy prawnego Pawła Raka\nlub innego stosunku");
     expect(fixed!.corrections).toEqual([{ line: 0, from: "Pawla", to: "Pawła" }]);
+  });
+
+  it("starts only with 4 GB of free memory", () => {
+    expect(enoughMemoryForVision(3 * 1024 ** 3)).toBe(false);
+    expect(enoughMemoryForVision(5 * 1024 ** 3)).toBe(true);
   });
 
   it("drops the line images before the document is kept", () => {

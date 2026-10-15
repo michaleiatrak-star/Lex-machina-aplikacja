@@ -38,6 +38,9 @@ export type PiiSpan = {
   label?: string;
   // A person match a local model should confirm from its sentence.
   ambiguous?: boolean;
+  // The local model read it as no person (its answer, e.g. "słowo pospolite"). Still masked:
+  // the user unmasks it with one click.
+  aiNotPerson?: string;
 };
 
 export type PrivacyDirectiveAction =

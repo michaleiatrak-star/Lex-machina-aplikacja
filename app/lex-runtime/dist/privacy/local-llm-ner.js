@@ -8,13 +8,16 @@ const VERIFY_PROMPT = [
     "Zwróć wyłącznie JSON: tablicę {\"id\":numer,\"person\":true|false,\"type\":\"osoba|instytucja|rola|słowo pospolite|nazwa\"} dla każdego zdania."
 ].join(" ");
 function parseVerdicts(raw) {
+    return new Map([...parseVerdictTypes(raw)].map(([id, verdict]) => [id, verdict.person]));
+}
+function parseVerdictTypes(raw) {
     const verdicts = new Map();
     for (const item of parsePayload(raw)) {
         if (!item || typeof item !== "object")
             continue;
         const record = item;
         if (Number.isInteger(record.id) && typeof record.person === "boolean") {
-            verdicts.set(Number(record.id), record.person);
+            verdicts.set(Number(record.id), { person: record.person, type: typeof record.type === "string" ? record.type : "" });
         }
     }
     return verdicts;
@@ -339,9 +342,9 @@ export class LocalLlmPrivacyNamedEntityRecognizer {
     }
     /**
      * Opt-in local AI ("z lokalnym AI"): the local model must be running; it
-     * adds what the dictionaries miss and decides, from the whole sentence,
+     * adds what the dictionaries miss and judges, from the whole sentence,
      * whether an ambiguous match ("Bank", "Rada", a lone surname) is a person.
-     * A match is dropped only on an explicit "not a person"; no answer keeps it.
+     * Its "not a person" never unmasks: the match is marked (aiNotPerson) for the user.
      */
     withLocalAi(onCheck) {
         return { recognize: (text) => this.recognizeWithLocalAi(text, onCheck) };
@@ -414,18 +417,22 @@ export class LocalLlmPrivacyNamedEntityRecognizer {
         }
         // In a batch Bielik 11B sometimes calls every sentence an institution ("Zając odmówił
         // składania wyjaśnień"): a "not a person" stands only when the sentence asked alone gets it too.
+        // Even then the mask stays (on test sentences it unmasked "Kot przelał na rachunek
+        // wierzyciela kwotę"): the match is marked and the user unmasks it with one click.
+        const answer = new Map();
         for (const [key, question] of entries) {
             if (!notPerson.has(key))
                 continue;
-            const alone = parseVerdicts(await this.ask(modelId, VERIFY_PROMPT, `1. ${question.sentence}`));
-            if (alone.get(1) !== false)
-                notPerson.delete(key);
+            const alone = parseVerdictTypes(await this.ask(modelId, VERIFY_PROMPT, `1. ${question.sentence}`)).get(1);
+            if (alone?.person === false)
+                answer.set(key, alone.type || "nie osoba");
         }
         if (entries.length)
             onCheck?.("", entries.length, entries.length);
-        return merged.filter((span) => {
+        return merged.map((span) => {
             const key = keyOf.get(span);
-            return !(key && notPerson.has(key));
+            const type = key ? answer.get(key) : undefined;
+            return type ? { ...span, aiNotPerson: type } : span;
         });
     }
 }

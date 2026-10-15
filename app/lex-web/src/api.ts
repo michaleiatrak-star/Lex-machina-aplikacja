@@ -594,6 +594,8 @@ export type DocumentReviewResponse = {
     start: number;
     end: number;
     kind: PiiKind;
+    // The local model read it as no person ("słowo pospolite"); masked until the user unmasks it.
+    aiNotPerson?: string;
   }>;
 };
 

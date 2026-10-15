@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 // Handwriting, stamps and signatures: manual review, never the model.
 const HANDWRITING_SCORE = 0.85;
@@ -195,6 +196,13 @@ export const VISION_MODEL_FILES = [
     }
 ];
 export const VISION_MODEL_LABEL = "Qwen2.5-VL 3B (odczyt wątpliwych linii OCR)";
+// The model needs about 3.3 GB while it runs. Started only for the document and only with this
+// much free memory: next to a running Bielik (about 7 GB) and the OCR worker (about 3.6 GB)
+// a 16 GB machine runs out, and the system kills processes.
+const MIN_FREE_BYTES = Number(process.env.LEX_OCR_VISION_MIN_FREE_MB ?? 4096) * 1024 * 1024;
+export function enoughMemoryForVision(free = os.freemem()) {
+    return free >= MIN_FREE_BYTES;
+}
 export function visionModelInstalled(dir) {
     return VISION_MODEL_FILES.every((file) => {
         try {
