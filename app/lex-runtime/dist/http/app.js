@@ -982,9 +982,9 @@ function createCaseFileAccess(args) {
     };
     return {
         caseId: args.caseId,
-        listDocuments: () => withKey((caseDataKey, keyVersion) => args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion })),
+        listDocuments: () => withKey((caseDataKey, keyVersion) => args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion, reviewedOnly: true })),
         search: (query, limit) => withKey(async (caseDataKey, keyVersion) => {
-            const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit });
+            const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit, reviewedOnly: true });
             // Snippets carry the documents' symbols too.
             for (const documentId of new Set(hits.map((hit) => hit.documentId))) {
                 await restore(documentId, caseDataKey, keyVersion);
@@ -993,7 +993,7 @@ function createCaseFileAccess(args) {
         }),
         readChunks: async (documentId, chunkIndices) => {
             await withKey((caseDataKey, keyVersion) => restore(documentId, caseDataKey, keyVersion));
-            const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices });
+            const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices }, { remote: true });
             return {
                 totalPages: resolved.totalPages ?? 0,
                 chunks: resolved.chunks.map((chunk) => ({
@@ -2963,6 +2963,12 @@ export function createLexHttpApp(options) {
         return await options.documentService
             .addProtection(documentId, text, kind, security);
     }));
+    // The user's confirmation after the preview of the anonymized version.
+    app.post("/api/cases/:caseId/documents/:documentId/anonymized/approve", (req, res) => withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {
+        if (!options.documentService.markReviewed)
+            throw new Error("ANONYMIZED_VERSION_UNAVAILABLE");
+        return await options.documentService.markReviewed(documentId, security);
+    }));
     app.post("/api/cases/:caseId/documents/:documentId/join-shared-key", (req, res) => withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {
         if (!options.documentService.joinSharedKey)
             throw new Error("SHARED_KEY_UNAVAILABLE");
@@ -3993,6 +3999,8 @@ export function createLexHttpApp(options) {
             ? req.body.caseId.trim()
             : "";
         const directives = parsePrivacyDirectives(req.body?.directives);
+        // Confirmed in the preview; a document without it never goes to a model outside the computer.
+        const reviewed = req.body?.reviewed === true;
         if (!/^doc_[a-f0-9]{24}$/.test(documentId) ||
             (requestedCaseId &&
                 !/^case_[a-f0-9]{32}$/.test(requestedCaseId)) ||
@@ -4027,13 +4035,13 @@ export function createLexHttpApp(options) {
                                 onProgress: processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")))
                             }
                             : {})
-                    }));
+                    }, reviewed));
             }
             else {
                 result =
                     await options
                         .documentService
-                        .finalizeReview(documentId, directives);
+                        .finalizeReview(documentId, directives, undefined, reviewed);
             }
             res.json(result);
         }
@@ -4228,7 +4236,7 @@ export function createLexHttpApp(options) {
                         .documentId,
                     chunkIndices: selection
                         .chunkIndices
-                });
+                }, { remote: true });
                 resolvedAttachments.push({
                     caseId,
                     documentId: resolved
@@ -5123,7 +5131,9 @@ export function createLexHttpApp(options) {
     // templates), resolved with access checks. Used to send them and to
     // estimate whether they fit the model before sending. Null: response sent.
     const templateTextCache = new Map();
-    const resolveSelectedAttachments = async (res, attachments, firmTemplates, firmCaseId, evidence) => {
+    const resolveSelectedAttachments = async (res, attachments, firmTemplates, firmCaseId, evidence, 
+    // A model outside the computer: documents the user has not reviewed are refused.
+    remote = true) => {
         const picked = [];
         if (attachments.length > 0) {
             if (!options.documentService) {
@@ -5167,7 +5177,7 @@ export function createLexHttpApp(options) {
                             .documentId,
                         chunkIndices: selection
                             .chunkIndices
-                    }, evidence ? { images: evidence } : {});
+                    }, { remote, ...(evidence ? { images: evidence } : {}) });
                     picked.push({
                         caseId,
                         documentId: resolved.documentId,
@@ -5196,7 +5206,7 @@ export function createLexHttpApp(options) {
                         .documentId,
                     chunkIndices: selection
                         .chunkIndices
-                }, evidence ? { images: evidence } : {})));
+                }, { remote, ...(evidence ? { images: evidence } : {}) })));
                 picked.push(...resolved.map((attachment) => ({
                     documentId: attachment.documentId,
                     sourceScope: "MANUAL",
@@ -5358,7 +5368,8 @@ export function createLexHttpApp(options) {
             const firmCaseId = options.caseAccessService
                 ?.getFirmKnowledgeWorkspace(responseAuthContext(res))
                 ?.caseId;
-            const picked = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId);
+            // Only an estimate of the context: nothing is sent.
+            const picked = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId, undefined, false);
             if (!picked)
                 return;
             const charsPerToken = localWindow !== undefined
@@ -5563,7 +5574,7 @@ export function createLexHttpApp(options) {
                     ?.getFirmKnowledgeWorkspace(responseAuthContext(res))
                     ?.caseId
                 : undefined;
-            const selectedAttachments = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId, evidencePolicyFor(req.body?.evidenceImages, request.model));
+            const selectedAttachments = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId, evidencePolicyFor(req.body?.evidenceImages, request.model), !localModel);
             if (!selectedAttachments)
                 return;
             sessionAttachments.push(...selectedAttachments);
@@ -5610,7 +5621,8 @@ export function createLexHttpApp(options) {
                         keyVersion: caseView
                             .keyVersion,
                         query: request.query,
-                        limit: knowledge.limit
+                        limit: knowledge.limit,
+                        reviewedOnly: !localModel
                     }));
                     ranked.push(...hits.map((hit) => ({
                         ...hit,
@@ -7036,6 +7048,11 @@ export function createLexHttpApp(options) {
                     error: error.message,
                     ...error.details
                 });
+                return;
+            }
+            if (error instanceof Error && error.message === "DOCUMENT_NOT_REVIEWED") {
+                // Shown to the user: open the document's preview and confirm it first.
+                res.status(422).json({ error: "DOCUMENT_NOT_REVIEWED" });
                 return;
             }
             if (error instanceof Error &&

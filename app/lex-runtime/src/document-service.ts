@@ -165,6 +165,8 @@ export type AnonymizedVersion = {
   entries: PrivacyKeyEntry[];
   // Legend and key for an external model (kinds, gender, parties - no values).
   modelKey: string | null;
+  // See PublicDocumentIngestion.privacy.reviewed.
+  reviewed?: boolean;
 };
 
 /**
@@ -350,6 +352,10 @@ export type PublicDocumentIngestion = {
     keptRanges: number;
     annotations: PublicPrivacyAnnotation[];
     reversibleLocally: true;
+    // The user saw the preview (doubtful OCR lines, local AI hints) and confirmed it. false: not
+    // yet, and the document never reaches a model outside the computer. Absent: processed
+    // before the preview was required.
+    reviewed?: boolean;
   };
 };
 
@@ -371,8 +377,10 @@ export interface DocumentService {
   finalizeReview(
     documentId: string,
     directives: PagePrivacyDirective[],
-    security?: DocumentSecurityContext
+    security?: DocumentSecurityContext,
+    reviewed?: boolean
   ): Promise<PublicDocumentIngestion>;
+  markReviewed?(documentId: string, security: DocumentSecurityContext): Promise<AnonymizedVersion>;
   editPage?(
     documentId: string,
     pageNumber: number,
@@ -381,7 +389,7 @@ export interface DocumentService {
   ): Promise<{ page: PublicDocumentReview["pages"][number]; suggestions: PublicPrivacySuggestion[] }>;
   resolveProtectedChunks(
     selection: DocumentChunkSelection,
-    options?: { images?: EvidencePolicy }
+    options?: { images?: EvidencePolicy; remote?: boolean }
   ): Promise<ResolvedDocumentAttachment>;
   restoreDocument?(args: {
     caseId: string;
@@ -1006,7 +1014,9 @@ implements DocumentService {
   async finalizeReview(
     documentId: string,
     directives: PagePrivacyDirective[],
-    security?: DocumentSecurityContext
+    security?: DocumentSecurityContext,
+    // Confirmed by the user in the preview (see privacy.reviewed).
+    reviewed = false
   ): Promise<PublicDocumentIngestion> {
     const record = this.documents.get(documentId);
     if (!record) {
@@ -1227,7 +1237,8 @@ implements DocumentService {
           manualPseudonymizations,
           keptRanges,
           annotations,
-          reversibleLocally: true
+          reversibleLocally: true,
+          reviewed
         }
       };
 
@@ -1304,7 +1315,8 @@ implements DocumentService {
 
   async resolveProtectedChunks(
     selection: DocumentChunkSelection,
-    options: { images?: EvidencePolicy } = {}
+    // remote: for a model outside the computer, which never gets a document the user has not reviewed.
+    options: { images?: EvidencePolicy; remote?: boolean } = {}
   ): Promise<ResolvedDocumentAttachment> {
     const record =
       this.documents.get(selection.documentId);
@@ -1313,6 +1325,9 @@ implements DocumentService {
     }
     if (!record.protectedChunks) {
       throw new Error("DOCUMENT_NOT_FINALIZED");
+    }
+    if (options.remote && record.protectedIngestion?.privacy.reviewed === false) {
+      throw new Error("DOCUMENT_NOT_REVIEWED");
     }
 
     const unique = [
@@ -1621,8 +1636,20 @@ implements DocumentService {
         };
       }),
       entries: this.privacyKey(documentId),
-      modelKey: modelKeyFor(chunks.map((chunk) => chunk.text), vault)
+      modelKey: modelKeyFor(chunks.map((chunk) => chunk.text), vault),
+      ...(record.protectedIngestion.privacy.reviewed !== undefined ? { reviewed: record.protectedIngestion.privacy.reviewed } : {})
     };
+  }
+
+  /** The user's confirmation of the anonymized version after its preview. */
+  async markReviewed(documentId: string, security: DocumentSecurityContext): Promise<AnonymizedVersion> {
+    const record = this.editableRecord(documentId);
+    record.protectedIngestion = {
+      ...record.protectedIngestion,
+      privacy: { ...record.protectedIngestion.privacy, reviewed: true }
+    };
+    await this.persistEdit(documentId, record, security, false);
+    return this.anonymizedVersion(documentId);
   }
 
   /**

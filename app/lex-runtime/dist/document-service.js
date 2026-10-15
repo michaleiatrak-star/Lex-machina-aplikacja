@@ -539,7 +539,9 @@ export class LocalPrivateDocumentService {
             chunks: chunkDocumentPages(pages, this.maxChunkChars)
         };
     }
-    async finalizeReview(documentId, directives, security) {
+    async finalizeReview(documentId, directives, security, 
+    // Confirmed by the user in the preview (see privacy.reviewed).
+    reviewed = false) {
         const record = this.documents.get(documentId);
         if (!record) {
             throw new Error("UNKNOWN_LOCAL_DOCUMENT");
@@ -686,7 +688,8 @@ export class LocalPrivateDocumentService {
                 manualPseudonymizations,
                 keptRanges,
                 annotations,
-                reversibleLocally: true
+                reversibleLocally: true,
+                reviewed
             }
         };
         record.protectedIngestion = result;
@@ -721,13 +724,18 @@ export class LocalPrivateDocumentService {
         const review = await this.review(data, mediaType, security);
         return this.finalizeReview(review.documentId, [], security);
     }
-    async resolveProtectedChunks(selection, options = {}) {
+    async resolveProtectedChunks(selection, 
+    // remote: for a model outside the computer, which never gets a document the user has not reviewed.
+    options = {}) {
         const record = this.documents.get(selection.documentId);
         if (!record) {
             throw new Error("UNKNOWN_LOCAL_DOCUMENT");
         }
         if (!record.protectedChunks) {
             throw new Error("DOCUMENT_NOT_FINALIZED");
+        }
+        if (options.remote && record.protectedIngestion?.privacy.reviewed === false) {
+            throw new Error("DOCUMENT_NOT_REVIEWED");
         }
         const unique = [
             ...new Set(selection.chunkIndices)
@@ -948,8 +956,19 @@ export class LocalPrivateDocumentService {
                 };
             }),
             entries: this.privacyKey(documentId),
-            modelKey: modelKeyFor(chunks.map((chunk) => chunk.text), vault)
+            modelKey: modelKeyFor(chunks.map((chunk) => chunk.text), vault),
+            ...(record.protectedIngestion.privacy.reviewed !== undefined ? { reviewed: record.protectedIngestion.privacy.reviewed } : {})
         };
+    }
+    /** The user's confirmation of the anonymized version after its preview. */
+    async markReviewed(documentId, security) {
+        const record = this.editableRecord(documentId);
+        record.protectedIngestion = {
+            ...record.protectedIngestion,
+            privacy: { ...record.protectedIngestion.privacy, reviewed: true }
+        };
+        await this.persistEdit(documentId, record, security, false);
+        return this.anonymizedVersion(documentId);
     }
     /**
      * Anonymizes one more value everywhere in the anonymized version: a person

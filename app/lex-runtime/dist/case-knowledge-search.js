@@ -80,7 +80,9 @@ export class LocalCaseKnowledgeSearch {
         }
         const result = [];
         for (const documentId of documentIds) {
-            const document = await this.documents.loadProtected({ ...args, documentId });
+            const document = await this.documents.loadProtected({ caseId: args.caseId, caseDataKey: args.caseDataKey, keyVersion: args.keyVersion, documentId });
+            if (args.reviewedOnly && document.privacy?.reviewed === false)
+                continue;
             result.push({ documentId, totalPages: document.totalPages, chunks: document.chunks.length });
         }
         return result;
@@ -119,6 +121,8 @@ export class LocalCaseKnowledgeSearch {
                 caseDataKey: args.caseDataKey,
                 keyVersion: args.keyVersion
             });
+            if (args.reviewedOnly && protectedDocument.privacy?.reviewed === false)
+                continue;
             chunkCount +=
                 protectedDocument
                     .chunks.length;
