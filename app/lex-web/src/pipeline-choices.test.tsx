@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PipelineChoices, pipelineChoiceMessage } from "./MatterChatApp.js";
+import { PipelineChoices, directDocumentRequest, pipelineChoiceMessage } from "./MatterChatApp.js";
 
 const next = {
   skill: "pisma-proste-v2",
@@ -33,5 +33,19 @@ describe("co dalej po wyniku: wybór użytkownika", () => {
       "Następny etap pipeline'u: pisma-proste-v2. Wynik powyżej jest zadowalający: przygotuj dokument na jego podstawie, bez ponownej analizy i bez nowych wątków."
     );
     expect(pipelineChoiceMessage({ skill: "analiza-sadowa-v6", kind: "ANALYSIS" })).toContain("tylko w zakresie tego etapu");
+  });
+
+  it("plik z wyniku pisma procesowego i z redakcji umowy: prośba o plik tego rodzaju", () => {
+    const pleading = pipelineChoiceMessage({ skill: "pisma-procesowe-v3", kind: "DOCUMENT", own: true });
+    expect(directDocumentRequest(pleading)).toMatchObject({ format: "docx", documentType: "pleading" });
+    const contract = pipelineChoiceMessage({ skill: "analizator-umow-v1", kind: "DOCUMENT", own: true });
+    expect(directDocumentRequest(contract)).toMatchObject({ format: "docx", documentType: "contract" });
+  });
+
+  it("wątek mechaniczny: „Generuj dokument” dla własnego wyniku, bez zmiany skilla", () => {
+    const own = { skill: "pisma-procesowe-v3", reason: "plik z tego wyniku", choices: [{ skill: "pisma-procesowe-v3", kind: "DOCUMENT" as const, reason: "plik z tego wyniku", own: true as const }] };
+    const html = renderToStaticMarkup(<PipelineChoices next={own} auto={false} disabled={false} onChoose={() => undefined} />);
+    expect(html).toContain("Generuj dokument");
+    expect(html).not.toContain("Wątek mechaniczny jest przypięty");
   });
 });

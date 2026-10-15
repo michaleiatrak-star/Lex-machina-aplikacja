@@ -157,6 +157,7 @@ function safeMessage(input) {
         return (typeof item === "object" && item !== null &&
             typeof item.skill === "string" && item.skill.length <= 200 &&
             (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+            (item.own === undefined || item.own === true) &&
             typeof item.reason === "string" && item.reason.length <= 2_000);
     };
     if (next !== undefined &&
@@ -178,7 +179,14 @@ function safeMessage(input) {
                     skill: next.skill,
                     reason: next.reason,
                     ...(next.choices?.length
-                        ? { choices: next.choices.map((choice) => ({ skill: choice.skill, kind: choice.kind, reason: choice.reason })) }
+                        ? {
+                            choices: next.choices.map((choice) => ({
+                                skill: choice.skill,
+                                kind: choice.kind,
+                                reason: choice.reason,
+                                ...(choice.own ? { own: true } : {})
+                            }))
+                        }
                         : {})
                 }
             }

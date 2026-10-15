@@ -1081,7 +1081,19 @@ export function documentWarningsText(warnings: string[] | undefined): string {
 type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
 
 /** The message the app sends for a chosen option: the stage alone, without a new analysis. */
-export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" }): string {
+// The file of the result itself, by its kind: directDocumentRequest reads the kind from these
+// words, and the server makes it through that skill's pipeline (pleading: W1–W3; contract:
+// AU-HYBRID and AU-STRIP), with HYBRID-VAL before the file.
+const OWN_DOCUMENT_NOUN: Record<string, string> = {
+  "pisma-procesowe-v3": "pismo procesowe",
+  "analizator-umow-v1": "umowę",
+  "pisma-proste-v2": "pismo"
+};
+
+export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS"; own?: true }): string {
+  if (choice.own) {
+    return `Wygeneruj ${OWN_DOCUMENT_NOUN[choice.skill] ?? "dokument"} w pliku .docx z powyższego wyniku, bez zmian merytorycznych.`;
+  }
   return choice.kind === "DOCUMENT"
     ? `${PIPELINE_HANDOFF} ${choice.skill}. Wynik powyżej jest zadowalający: przygotuj dokument na jego podstawie, bez ponownej analizy i bez nowych wątków.`
     : `${PIPELINE_HANDOFF} ${choice.skill}. Kontynuuj na podstawie powyższego wyniku, tylko w zakresie tego etapu.`;
@@ -1092,16 +1104,30 @@ export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" 
  * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
  */
 export function PipelineChoices({ next, auto, disabled, onChoose }: { next: PipelineNext; auto: boolean; disabled: boolean; onChoose: (text: string) => void }) {
-  const choices = next.choices?.length ? next.choices : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? ("DOCUMENT" as const) : ("ANALYSIS" as const), reason: next.reason }];
+  const choices: NonNullable<PipelineNext["choices"]> = next.choices?.length
+    ? next.choices
+    : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? "DOCUMENT" : "ANALYSIS", reason: next.reason }];
+  const ownDocument = choices.find((choice) => choice.own);
   if (!auto) {
+    // A mechanical thread stays with its skill; the file of its own result is still at hand.
+    const others = choices.filter((choice) => !choice.own);
     return (
       <div className="chat-pipeline-next" role="note">
-        <span>
-          Dalej możliwe: {choices.map((choice) => choice.skill).join(", ")}.
-        </span>
-        <span className="field-help">
-          Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
-        </span>
+        {ownDocument ? (
+          <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(ownDocument))}>
+            Generuj dokument
+          </button>
+        ) : null}
+        {others.length ? (
+          <span>
+            Dalej możliwe: {others.map((choice) => choice.skill).join(", ")}.
+          </span>
+        ) : null}
+        {others.length ? (
+          <span className="field-help">
+            Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -1124,7 +1150,9 @@ export function PipelineChoices({ next, auto, disabled, onChoose }: { next: Pipe
       </div>
       {choices.some((choice) => choice.kind === "DOCUMENT") ? (
         <small className="field-help">
-          „Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL ({choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).
+          {ownDocument
+            ? "„Generuj dokument”, gdy wynik jest zadowalający: plik z tego wyniku, po walidacji HYBRID-VAL w pipeline tego dokumentu."
+            : `„Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
         </small>
       ) : null}
     </div>

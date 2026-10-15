@@ -77,7 +77,7 @@ export type WorkspaceThreadMessage = {
   evidence?: Record<string, unknown>[];
   auxiliarySources?: Record<string, unknown>[];
   mandatoryPath?: Record<string, unknown>;
-  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string }> };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true }> };
 };
 
 export type WorkspaceWidget = {
@@ -325,11 +325,12 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
   const next = input.pipelineNext;
   const validChoice = (choice: unknown) => {
-    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown } | null;
+    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown } | null;
     return (
       typeof item === "object" && item !== null &&
       typeof item.skill === "string" && item.skill.length <= 200 &&
       (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+      (item.own === undefined || item.own === true) &&
       typeof item.reason === "string" && item.reason.length <= 2_000
     );
   };
@@ -363,7 +364,14 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
             skill: next.skill,
             reason: next.reason,
             ...(next.choices?.length
-              ? { choices: next.choices.map((choice) => ({ skill: choice.skill, kind: choice.kind, reason: choice.reason })) }
+              ? {
+                  choices: next.choices.map((choice) => ({
+                    skill: choice.skill,
+                    kind: choice.kind,
+                    reason: choice.reason,
+                    ...(choice.own ? { own: true as const } : {})
+                  }))
+                }
               : {})
           }
         }

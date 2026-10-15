@@ -2863,12 +2863,18 @@ export class SafeSessionExecutor {
         const workflowSkill = execution.workflowPlan.executionSkill;
         // The options after the result (generate the document / a further analysis): the user
         // chooses; the first one is kept as the single "next stage" of older clients.
+        // The result is itself a document of its skill (a pleading; a contract redacted, drafted
+        // or supplemented): "Generuj dokument" makes its file at any step, through that pipeline.
+        const ownDocumentSkill = (skill) => skill === "pisma-procesowe-v3" ||
+            (skill === "analizator-umow-v1" && request.contractWorkflowContext !== undefined && request.contractWorkflowContext.mode !== "ANALYSIS");
         const nextFrom = taskRoute
             ? { skill: taskRoute.primary, then: taskRoute.then }
-            : workflowSkill && workflowOutput.mode.endsWith("_FINAL")
-                ? { skill: workflowSkill, then: this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill) }
+            : workflowSkill && (workflowOutput.mode.endsWith("_FINAL") || ownDocumentSkill(workflowSkill))
+                ? { skill: workflowSkill, then: workflowOutput.mode.endsWith("_FINAL") ? this.statefulNextStage(pathFacts.query, recognisedDocuments, workflowSkill) : null }
                 : null;
-        const choices = nextFrom ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : [];
+        const choices = nextFrom
+            ? nextChoices(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext, { ownDocument: ownDocumentSkill(nextFrom.skill) })
+            : [];
         const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
         const next = choices.length
             ? { skill: choices[0].skill, reason: choices[0].reason, choices }

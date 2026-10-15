@@ -732,7 +732,14 @@ export function pipelineNext(
 }
 
 /** One option offered after a result: draft the document, or one more stage of analysis. */
-export type NextChoice = { skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string };
+export type NextChoice = {
+  skill: string;
+  kind: "DOCUMENT" | "ANALYSIS";
+  reason: string;
+  // The file of this very result (a pleading of pisma-procesowe-v3, a contract redacted or
+  // drafted by analizator-umow-v1), made by that skill's own pipeline and its HYBRID-VAL.
+  own?: true;
+};
 
 const DRAFTING_SKILL = /^pisma-/u;
 
@@ -746,8 +753,10 @@ export function nextChoices(
   skill: string,
   then: string | null,
   combinations: SkillCombination[],
-  context?: { question: string; materials: DeliveredMaterial[] }
+  context?: { question: string; materials: DeliveredMaterial[] },
+  options: { ownDocument?: boolean } = {}
 ): NextChoice[] {
+  const own: NextChoice[] = options.ownDocument ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true }] : [];
   const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
   const found: NextChoice[] = [];
   const add = (candidate: string, reason: string) => {
@@ -762,7 +771,7 @@ export function nextChoices(
     for (const next of row.next) add(next, `kombinacja skilli: ${row.matter}`);
   }
   // One document to generate (the first drafting skill), and the analyses after it.
-  const document = found.find((choice) => choice.kind === "DOCUMENT");
+  const document = own[0] ?? found.find((choice) => choice.kind === "DOCUMENT");
   return [...(document ? [document] : []), ...found.filter((choice) => choice.kind === "ANALYSIS").slice(0, 2)];
 }
 

@@ -280,6 +280,16 @@ describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
     });
   });
 
+  it("offers the file of the result itself for a pleading and a redacted contract", () => {
+    const pleading = nextChoices("pisma-procesowe-v3", null, combinations, { question: "Napisz pozew o zapłatę.", materials: [] }, { ownDocument: true });
+    expect(pleading[0]).toEqual({ skill: "pisma-procesowe-v3", kind: "DOCUMENT", reason: "plik z tego wyniku", own: true });
+    expect(pleading.filter((choice) => choice.kind === "DOCUMENT")).toHaveLength(1);
+    const contract = nextChoices("analizator-umow-v1", null, combinations, { question: "Popraw zapisy o karach umownych w mojej umowie.", materials: [] }, { ownDocument: true });
+    expect(contract[0]).toMatchObject({ skill: "analizator-umow-v1", own: true });
+    // An analysis is not a document of its own.
+    expect(nextChoices("analizator-umow-v1", null, combinations, { question: "Przeanalizuj umowę.", materials: [] }).some((choice) => choice.own)).toBe(false);
+  });
+
   it("does not offer analiza-sadowa-v6 after every evidence analysis (Dowody + terminy + koszty)", () => {
     expect(nextChoices("analizator-dowodow-v3", null, combinations, { question: "Oceń moje dowody.", materials: [] })).toEqual([]);
     expect(

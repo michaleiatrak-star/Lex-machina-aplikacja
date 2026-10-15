@@ -631,7 +631,8 @@ const DRAFTING_SKILL = /^pisma-/u;
  * of analysis. The matrix's "→" first, then the combinations this skill enters whose parts are
  * in the case. A reply to a demand between the parties is a simple letter (pisma-proste-v2).
  */
-export function nextChoices(skill, then, combinations, context) {
+export function nextChoices(skill, then, combinations, context, options = {}) {
+    const own = options.ownDocument ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true }] : [];
     const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
     const found = [];
     const add = (candidate, reason) => {
@@ -651,7 +652,7 @@ export function nextChoices(skill, then, combinations, context) {
             add(next, `kombinacja skilli: ${row.matter}`);
     }
     // One document to generate (the first drafting skill), and the analyses after it.
-    const document = found.find((choice) => choice.kind === "DOCUMENT");
+    const document = own[0] ?? found.find((choice) => choice.kind === "DOCUMENT");
     return [...(document ? [document] : []), ...found.filter((choice) => choice.kind === "ANALYSIS").slice(0, 2)];
 }
 /** "Następny etap pipeline'u: <skill>" sent by the app's own continue button. */
