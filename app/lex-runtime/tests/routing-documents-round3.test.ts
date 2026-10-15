@@ -67,3 +67,13 @@ describe("firm templates", () => {
     ])).toEqual(["analizator-umow-v1"]);
   });
 });
+
+describe("wypowiedzenie umowy is a simple letter (pisma-proste-v2 SPN)", () => {
+  it("notice of termination goes to SPN, the contract itself stays with analizator-umow-v1", () => {
+    const LEASE = [{ chunks: [{ text: "UMOWA NAJMU LOKALU\n§ 1. Wynajmujący oddaje Najemcy w najem lokal. § 2. Czynsz wynosi 3 000 zł miesięcznie. § 3. Umowa zawarta na czas nieokreślony." }] }];
+    // Before: no schema covered it and the delivered lease sent it to the contract pipeline (409).
+    expect(executor.executiveSkillsWithMaterials("Napisz wypowiedzenie tej umowy najmu.", LEASE)).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Przygotuj wypowiedzenie umowy zlecenia.", [])).toEqual(["pisma-proste-v2"]);
+    expect(executor.executiveSkillsWithMaterials("Przeanalizuj zapisy o wypowiedzeniu w tej umowie najmu.", LEASE)).toEqual(["analizator-umow-v1"]);
+  });
+});

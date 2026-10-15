@@ -99,7 +99,7 @@ const REVIEW =
 // "Jak napisać apelację?", "Jak złożyć skargę na lekarza?", "Co w niej napisać?": how
 // to do it, asked as a question; the user has not asked for the letter itself.
 const HOW_TO =
-  /(?:^|[.!?]\s+|,\s*)(?:a\s+)?(?:jak|co\s+(?:w\s+(?:niej|nim)\s+)?)\s*(?:mam\s+|można\s+|się\s+)?(?:napisać|złożyć|wnieść|przygotować|sporządzić|zaskarżyć|odwołać)(?![\p{L}])[^.!]*\?\s*$/iu;
+  /(?:^|[.!?]\s+|,\s*)(?:a\s+)?(?:jak|co\s+(?:w\s+(?:niej|nim)\s+)?)\s*(?:mam\s+|można\s+|się\s+)?(?:napisać|złożyć|wnieść|przygotować|sporządzić|zaskarżyć|odwołać|wypowiedzieć|rozwiązać|odstąpić)(?![\p{L}])[^.!]*\?\s*$/iu;
 
 const REPLY_TO_DEMAND = /(?<![\p{L}])odpow\p{L}*\s+na\s+(?:\p{L}+\s+)?wezwani/iu;
 
