@@ -1,3 +1,4 @@
+import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
 import { normalizeOcrPage } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
@@ -403,7 +404,8 @@ export class LocalPrivateDocumentService {
                     suggestions.push(suggestionOf(page.page, finding, hints));
                 }
             }
-        return this.publicReview(documentId, mediaType, source, suggestions);
+        const down = degradedRecognizers();
+        return { ...this.publicReview(documentId, mediaType, source, suggestions), ...(down.length ? { recognizerWarnings: down } : {}) };
     }
     publicReview(documentId, mediaType, source, suggestions) {
         return {

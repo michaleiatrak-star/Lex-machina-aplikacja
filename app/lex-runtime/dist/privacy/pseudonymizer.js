@@ -1,4 +1,5 @@
 import { surnameMentions } from "./surname-propagation.js";
+import { detectStreetAddresses } from "./street-addresses.js";
 import { detectFirmNames } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
@@ -549,6 +550,8 @@ export class LocalPolishPseudonymizer {
             ...(item.label ? { label: item.label } : {})
         }));
         const autoSpans = detectIdentifiers(text);
+        // Street addresses by structure, also when the local gazetteer worker is unavailable.
+        autoSpans.push(...detectStreetAddresses(text));
         // Private firms ([FIRMA]): a name before a legal form or after a business prefix,
         // and its later mentions; one organization token per name.
         const firms = detectFirmNames(text);

@@ -60,6 +60,14 @@ describe("preview before a document is finalized", () => {
     expect(html.match(/Pokaż na skanie/g)).toHaveLength(2);
   });
 
+  it("says which local recognizer is down: addresses and surnames may be missing", () => {
+    const down = { ...review, recognizerWarnings: [{ name: "Morfeusz (słownik imion, nazwisk i adresów)", reason: "GAZETTEER_FAILED:1" }] };
+    const html = renderToStaticMarkup(
+      <PrivacyPreview caseId="case_1" review={down} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />
+    );
+    expect(html).toContain("Nie działa: Morfeusz (słownik imion, nazwisk i adresów)");
+  });
+
   it("a document with a text layer only: no scan pane", () => {
     const digital = { ...review, pages: review.pages.map((page) => ({ ...page, source: "DIGITAL" as const, corrections: [], review: [] })) };
     const html = renderToStaticMarkup(

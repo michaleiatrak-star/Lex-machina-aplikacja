@@ -129,6 +129,17 @@ export class LocalGazetteerRecognizer {
  * ("wyszukaj wyrok SN dotyczący grupy przestępczej") goes on with the deterministic
  * identifiers masked, so a broken NER runtime does not stop every question.
  */
+// Which local recognizer is down now (its last call failed): the preview says so, since
+// what it finds (addresses, surnames in every case) is then missing from the suggestions.
+const RECOGNIZER_LABEL = {
+    LocalGazetteerRecognizer: "Morfeusz (słownik imion, nazwisk i adresów)",
+    LocalStanzaNamedEntityRecognizer: "Stanza (rozpoznawanie nazw w zdaniu)"
+};
+const recognizerDown = new Map();
+/** Local recognizers whose last call failed, with the reason (empty when all work). */
+export function degradedRecognizers() {
+    return [...recognizerDown].map(([name, reason]) => ({ name, reason }));
+}
 export class CompositeRecognizer {
     recognizers;
     constructor(recognizers) {
@@ -136,12 +147,19 @@ export class CompositeRecognizer {
     }
     async recognize(text) {
         const reasons = [];
-        const results = await Promise.all(this.recognizers.map((recognizer) => recognizer.recognize(text).catch((error) => {
-            const reason = error instanceof Error ? error.message : String(error);
-            reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
-            process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
-            return [];
-        })));
+        const results = await Promise.all(this.recognizers.map((recognizer) => {
+            const name = RECOGNIZER_LABEL[recognizer.constructor.name] ?? recognizer.constructor.name;
+            return recognizer.recognize(text).then((spans) => {
+                recognizerDown.delete(name);
+                return spans;
+            }, (error) => {
+                const reason = error instanceof Error ? error.message : String(error);
+                reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
+                recognizerDown.set(name, reason.replace(/\s+/g, " ").slice(0, 200));
+                process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
+                return [];
+            });
+        }));
         if (this.recognizers.length > 0 && reasons.length === this.recognizers.length && text.trim()) {
             if (mayContainPersonalNames(text))
                 throw new Error(`PRIVACY_RECOGNIZER_UNAVAILABLE:${reasons.join(" | ")}`);

@@ -1,6 +1,7 @@
 import type {
   PersonMorphology
 } from "./privacy/person-morphology.js";
+import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
 import { normalizeOcrPage } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
@@ -361,6 +362,8 @@ export type PublicDocumentReview = {
     editedByUser?: boolean;
   }>;
   suggestions: PublicPrivacySuggestion[];
+  // Local recognizers down during the detection: what they find may be missing above.
+  recognizerWarnings?: Array<{ name: string; reason: string }>;
 };
 
 export type PublicDocumentIngestion = {
@@ -879,7 +882,8 @@ implements DocumentService {
       }
     }
 
-    return this.publicReview(documentId, mediaType, source, suggestions);
+    const down = degradedRecognizers();
+    return { ...this.publicReview(documentId, mediaType, source, suggestions), ...(down.length ? { recognizerWarnings: down } : {}) };
   }
 
   private publicReview(

@@ -329,6 +329,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
 
+      {!props.keepClear && review.recognizerWarnings?.length ? (
+        <p className="field-error" role="alert">
+          Nie działa: {review.recognizerWarnings.map((item) => item.name).join(", ")}. Adresy i część nazwisk mogły nie
+          zostać wykryte - zaznacz je ręcznie albo uruchom aplikację ponownie i wczytaj plik jeszcze raz.
+        </p>
+      ) : null}
       {aiHints.length || doubtful.length || fixes.length ? (
         <div className="privacy-preview-todo">
           <strong>Do decyzji</strong>
