@@ -16,4 +16,13 @@ describe("document failures in plain Polish", () => {
     expect(unknown.message).toMatch(/^Nie udało się odczytać pliku\./u);
     expect(unknown.code).toBe("SOMETHING_NEW");
   });
+
+  it("OCR models left incomplete by an installation cut short: finish the installation, no retry", () => {
+    const description = "Error: OCR_MODELS_INCOMPLETE: PP-OCRv6_medium_det, PP-OCRv6_medium_rec";
+    const failure = documentFailure(new ApiError("DOCUMENT_REVIEW_FAILED", 422, undefined, undefined, description));
+    expect(failure.message).toMatch(/^Instalacja programu nie została dokończona/u);
+    expect(failure.message).toContain("Uruchom instalator");
+    expect(failure.retryable).toBe(false);
+  });
 });
+

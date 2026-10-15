@@ -44,6 +44,9 @@ const MESSAGES: Record<string, { message: string; retryable: boolean }> = {
   }
 };
 
+export const OCR_MODELS_INCOMPLETE =
+  "Instalacja programu nie została dokończona: brakuje części modeli OCR. Uruchom instalator Lex Machina ponownie i poczekaj, aż się zakończy (pobierze tylko brakujące modele).";
+
 export function documentFailure(cause: unknown): DocumentFailure {
   const code =
     cause instanceof ApiError
@@ -62,6 +65,12 @@ export function documentFailure(cause: unknown): DocumentFailure {
   }
   if (code.startsWith("DOCUMENT_") && /LIMIT|TOO_LARGE|PAGES/u.test(code)) {
     return { code, message: "Dokument przekracza limity odczytu (rozmiar lub liczba stron).", retryable: false };
+  }
+  // An installation cut short while downloading the OCR models: retrying cannot help,
+  // running the installer again downloads only what is missing.
+  const description = cause instanceof ApiError ? cause.description ?? "" : "";
+  if (code === "OCR_MODELS_INCOMPLETE" || description.includes("OCR_MODELS_INCOMPLETE")) {
+    return { code, message: OCR_MODELS_INCOMPLETE, retryable: false };
   }
   const detail = cause instanceof ApiError && cause.description ? ` ${cause.description}` : "";
   return {

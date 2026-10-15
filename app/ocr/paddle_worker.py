@@ -75,6 +75,18 @@ def paddle_native_path(path: Path) -> str:
         f"{resolved}:winerr={ctypes.get_last_error()}"
     )
 
+MODEL_FILES = ("inference.pdiparams", "inference.yml")
+
+
+def model_complete(path: Path) -> bool:
+    """A model directory with its weights, config and graph (json or pdmodel)."""
+    return (
+        path.is_dir()
+        and all((path / name).is_file() and (path / name).stat().st_size > 0 for name in MODEL_FILES)
+        and any((path / name).is_file() for name in ("inference.json", "inference.pdmodel"))
+    )
+
+
 def parse_pages(raw: str) -> list[int]:
     pages = sorted({int(value) for value in raw.split(",") if value.strip()})
     if not pages or any(page < 1 for page in pages):
@@ -327,16 +339,21 @@ def main() -> None:
         "text_recognition_model_dir":
             native_model_root / "PP-OCRv6_medium_rec",
     }
+    # A download cut short (installer closed, network lost) leaves some model
+    # directories missing or without weights: the runtime tells the user to
+    # finish the installation instead of showing a traceback.
     missing = [
-        str(path)
+        path.name
         for path in required_models.values()
-        if not path.is_dir()
+        if not model_complete(path)
     ]
     if missing:
-        raise RuntimeError(
-            "Local PaddleOCR models are incomplete: " +
-            ", ".join(missing)
+        print(
+            "LEX_OCR_MODELS_INCOMPLETE:" + ",".join(missing),
+            file=sys.stderr,
+            flush=True,
         )
+        raise SystemExit(3)
 
     ocr_kwargs = dict(
         lang=args.lang,

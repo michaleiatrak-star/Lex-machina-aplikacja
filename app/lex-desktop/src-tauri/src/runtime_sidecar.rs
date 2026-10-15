@@ -7,6 +7,15 @@ use std::{
     process::{Command, ExitCode, Stdio},
 };
 
+// The models app/ocr/paddle_worker.py requires (same list as the installers).
+const PADDLE_MODELS: [&str; 5] = [
+    "PP-LCNet_x1_0_doc_ori",
+    "UVDoc",
+    "PP-LCNet_x1_0_textline_ori",
+    "PP-OCRv6_medium_det",
+    "PP-OCRv6_medium_rec",
+];
+
 fn required_file(path: PathBuf, code: &str) -> Result<PathBuf, String> {
     if path.is_file() { Ok(path) } else { Err(format!("{code}:{}", path.display())) }
 }
@@ -183,7 +192,14 @@ fn self_test(root: &Path) -> Result<(), String> {
     required_file(uvx_executable(&components), "SIDECAR_UVX_MISSING")?;
     required_file(root.join(SIDECAR_FILE), "SIDECAR_EXECUTABLE_MISSING")?;
     required_dir(root.join("corpus"), "SIDECAR_CORPUS_MISSING")?;
-    required_dir(components.join("models").join("paddle").join("official_models"), "SIDECAR_PADDLE_MODELS_MISSING")?;
+    let paddle_official = required_dir(components.join("models").join("paddle").join("official_models"), "SIDECAR_PADDLE_MODELS_MISSING")?;
+    // Every model the OCR worker loads, with its weights: a download cut short leaves
+    // some directories missing or empty, and OCR would fail only when a file is read.
+    for name in PADDLE_MODELS {
+        let model = required_dir(paddle_official.join(name), "SIDECAR_PADDLE_MODEL_MISSING")?;
+        required_file(model.join("inference.pdiparams"), "SIDECAR_PADDLE_MODEL_INCOMPLETE")?;
+        required_file(model.join("inference.yml"), "SIDECAR_PADDLE_MODEL_INCOMPLETE")?;
+    }
     required_dir(components.join("models").join("stanza").join("pl"), "SIDECAR_STANZA_MODELS_MISSING")?;
 
     let verified_files = validate_component_lock(root, &components)?;

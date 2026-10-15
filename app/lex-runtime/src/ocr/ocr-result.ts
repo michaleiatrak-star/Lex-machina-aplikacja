@@ -84,3 +84,15 @@ export async function readOcrPages(
   }
   return pages;
 }
+
+/**
+ * The error of a failed PaddleOCR worker. Models left incomplete by an installation cut
+ * short get their own code (the UI asks to finish the installation); a missing Python
+ * package is OCR_ENGINE_MISSING; anything else OCR_ENGINE_FAILED with the worker's stderr.
+ */
+export function ocrWorkerFailure(stderr: string, code: number | null, worker: string): Error {
+  const incomplete = /LEX_OCR_MODELS_INCOMPLETE:([\w.,-]+)/u.exec(stderr);
+  if (incomplete) return new Error(`OCR_MODELS_INCOMPLETE: ${incomplete[1]!.split(",").join(", ")}`);
+  const kind = /ModuleNotFoundError|No module named/.test(stderr) ? "OCR_ENGINE_MISSING" : "OCR_ENGINE_FAILED";
+  return new Error(`${kind}: Local PaddleOCR ${worker} failed with exit code ${code}: ${stderr.trim()}`);
+}

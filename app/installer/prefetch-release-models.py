@@ -159,7 +159,11 @@ required = [
     "PP-OCRv6_medium_det",
     "PP-OCRv6_medium_rec",
 ]
-missing = [name for name in required if not (official / name).is_dir()]
+missing = [
+    name
+    for name in required
+    if not all((official / name / file).is_file() for file in ("inference.pdiparams", "inference.yml"))
+]
 if missing:
     print("MODEL_PREFETCH_INCOMPLETE:" + ",".join(missing), file=sys.stderr)
     raise SystemExit(1)

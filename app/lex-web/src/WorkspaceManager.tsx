@@ -53,6 +53,7 @@ import { DocumentEditor } from "./DocumentEditor.js";
 import { SheetEditor } from "./SheetEditor.js";
 import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
+import { OCR_MODELS_INCOMPLETE } from "./document-errors.js";
 import { AnonymizedDocumentView } from "./AnonymizedDocumentView.js";
 import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
@@ -127,6 +128,7 @@ export function documentProcessingFailureMessage(
   if (reason === "LOCAL_PRIVACY_MODEL_FAILED") {
     return "Nie udało się przetworzyć dokumentu: lokalny model nie odpowiedział podczas sprawdzania pliku. Spróbuj ponownie albo wybierz tryb bez AI.";
   }
+  if (reason === "OCR_MODELS_INCOMPLETE") return OCR_MODELS_INCOMPLETE;
   const cause =
     reason === "OCR_REQUIRED" || reason === "OCR_ENGINE_MISSING"
       ? "dokument wymaga OCR, ale lokalny silnik OCR nie jest zainstalowany lub jest niekompletny"
