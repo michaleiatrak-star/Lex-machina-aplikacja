@@ -1,4 +1,4 @@
-import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
@@ -87,8 +87,9 @@ export function expectedVerificationMarker(
   return verificationMarker(record);
 }
 
+// "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
 const ARTICLE_PATTERN = new RegExp(
-  `${ARTICLE_LEAD}\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
   "giu"
 );
 
@@ -197,7 +198,7 @@ export function detectLegalReferences(text: string): DetectedLegalReference[] {
 }
 
 function comparableClaim(value: string): string {
-  return value
+  return compactActAbbreviations(value)
     .normalize("NFKC")
     .toLocaleLowerCase("pl")
     .replace(/[.,;:()[\]{}]/g, " ")
@@ -230,6 +231,34 @@ function coveringVerifiedRecord(
   // "art. 233 KK" and "art. 233 § 1 KK" with one marker on the line: one source.
   const markers = new Set(covering.map((record) => expectedVerificationMarker(record)));
   return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
+}
+
+// Words of an act's title that tell no act from another (dates, "ustawy").
+const ACT_TITLE_NOISE = new Set([
+  "ustawy", "ustawa", "ustawą", "ustawie", "dnia", "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
+  "sierpnia", "września", "października", "listopada", "grudnia"
+]);
+
+/**
+ * "art. 11 ustawy o zwalczaniu nieuczciwej konkurencji": an act named in words. The
+ * session's verified record of that very article, whose title words all stand on the
+ * line, is that provision (it is not marked unverified again). Only one such record.
+ */
+function namedActRecord(ledger: VerificationLedger, reference: DetectedLegalReference): VerificationRecord | undefined {
+  if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim) || !OTHER_ACT.test(reference.lineText)) return undefined;
+  const prefix = comparableClaim(reference.claim) + " ";
+  const line = comparableClaim(reference.lineText);
+  const matching = ledger.all().filter((record) => {
+    if (record.status !== "VERIFIED" || record.kind !== "statute") return false;
+    const claim = comparableClaim(record.claim);
+    if (!claim.startsWith(prefix)) return false;
+    const tail = claim.slice(prefix.length);
+    // The same unit only: "art. 11 ust. 2 ustawy …" is not the article mentioned as a whole.
+    if (!/^(?:ustaw|kodeks|rozporządz|konstytucj)/u.test(tail)) return false;
+    const words = tail.split(" ").filter((word) => word.length >= 5 && !/\d/u.test(word) && !ACT_TITLE_NOISE.has(word));
+    return words.length > 0 && words.every((word) => line.includes(word));
+  });
+  return new Set(matching.map((record) => comparableClaim(record.claim))).size === 1 ? matching.at(-1) : undefined;
 }
 
 // A pleading's header line holding only the case number ("Sygn. akt I C 900/26"): the
@@ -375,7 +404,8 @@ export class FinalizationGate {
                   candidate,
                   lineMarkers
                 ) ??
-                caseSignatureRecord(ledger, candidate)
+                caseSignatureRecord(ledger, candidate) ??
+                namedActRecord(ledger, candidate)
             )
             .filter(
               (
@@ -414,7 +444,8 @@ export class FinalizationGate {
       const record =
         ledger.latest(reference.claim) ??
         coveringVerifiedRecord(ledger, reference, lineMarkers) ??
-        caseSignatureRecord(ledger, reference);
+        caseSignatureRecord(ledger, reference) ??
+        namedActRecord(ledger, reference);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
