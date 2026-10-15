@@ -226,7 +226,9 @@ function fixture() {
           primarySkill:
             input.primarySkill,
           answer:
-            "chronology-step-result",
+            input.chronologyWorkflowContext?.checkpoint === "CHRONOLOGY_REPORT_COMPLETE"
+              ? "## Oś czasu\n- 9.10.2024: porozumienie\n- 3.12.2024: wezwanie do zapłaty"
+              : "chronology-step-result",
           finalization:
             "PASS",
           blockedReferences: [],
@@ -315,6 +317,8 @@ function fixture() {
       caseAccessService:
         cases,
       chronologyWorkflowStore:
+        workspace,
+      caseMemoryStore:
         workspace,
       sessionExecutor: {
         execute
@@ -607,5 +611,37 @@ describe(
         current.auth.close();
       }
     );
+
+    it("keeps the closed chronology report as the case's timeline in the case memory", async () => {
+      const current = fixture();
+      const { authorization, caseId } = await bootstrapCase(current);
+      const send = () =>
+        request(current.app)
+          .post("/api/sessions/execute")
+          .set("Authorization", authorization)
+          .send({
+            query: "Zbuduj chronologię sprawy i oś czasu zdarzeń.",
+            provider: "openai",
+            model: "gpt-test",
+            primarySkill: DR,
+            mode: "PRAWNIK",
+            knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+          })
+          .expect(200);
+      let last = await send();
+      for (let step = 0; step < 6 && last.body.chronologyWorkflow?.stage !== "COMPLETE"; step += 1) {
+        expect(last.body.chronologySaved).toBeUndefined();
+        last = await send();
+      }
+      expect(last.body.chronologyWorkflow.stage).toBe("COMPLETE");
+      expect(last.body.chronologySaved?.updatedAt).toEqual(expect.any(String));
+      const memory = await request(current.app).get(`/api/cases/${caseId}/memory`).set("Authorization", authorization).expect(200);
+      expect(memory.body.chronology).toMatchObject({ source: "CHRONOLOGY_V1", text: expect.stringContaining("3.12.2024: wezwanie do zapłaty") });
+      // The register says the chronology is done: later work uses it instead of redoing it.
+      expect(memory.body.work.map((item: { kind: string; status: string }) => `${item.kind}:${item.status}`)).toEqual(
+        expect.arrayContaining(["CHRONOLOGY:DONE", "WORKFLOW:DONE"])
+      );
+      current.auth.close();
+    });
   }
 );

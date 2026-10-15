@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { readOcrPages } from "./ocr-result.js";
+import { ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 function defaultWorkerPath() {
     const here = path.dirname(fileURLToPath(import.meta.url));
@@ -91,7 +91,7 @@ export class LocalPaddleImageOcrEngine {
                     if (code === 0)
                         resolve();
                     else {
-                        reject(new Error(`${/ModuleNotFoundError|No module named/.test(stderr) ? "OCR_ENGINE_MISSING" : "OCR_ENGINE_FAILED"}: Local PaddleOCR image worker failed with exit code ${code}: ${stderr.trim()}`));
+                        reject(ocrWorkerFailure(stderr, code, "image worker"));
                     }
                 });
             });

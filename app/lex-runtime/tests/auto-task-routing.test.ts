@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext } from "../src/task-routing.js";
+import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, nextChoices } from "../src/task-routing.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const routes = parseRoutingTable(fs.readFileSync(path.join(CORPUS, "prawny-router-v3/SKILL.md"), "utf8"));
@@ -264,6 +264,37 @@ describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
     expect(pipelineNext("analizator-przepisow-v2", null, combinations, plain)).toBeNull();
     const letter = { question: "Co mówi art. 238 KK? Napisz zawiadomienie.", materials: [] };
     expect(pipelineNext("analizator-przepisow-v2", null, combinations, letter)?.reason).toContain("Przepis + pismo");
+  });
+
+  it("after a result offers the user a choice: generate the document or a further analysis", () => {
+    const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kary umownej 20 000 zł." });
+    const choices = nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, { question: "Odpowiedz na ten dokument.", materials: [demand] });
+    expect(choices.map((choice) => [choice.kind, choice.skill])).toEqual([
+      ["DOCUMENT", "pisma-proste-v2"],
+      ["ANALYSIS", "analiza-sadowa-v6"]
+    ]);
+    // A reply to a demand between the parties is a simple letter, not a court pleading.
+    expect(nextChoices("analizator-umow-v1", null, combinations, { question: "Przeanalizuj to wezwanie.", materials: [demand] })[0]).toMatchObject({
+      kind: "DOCUMENT",
+      skill: "pisma-proste-v2"
+    });
+  });
+
+  it("offers the file of the result itself for a pleading and a redacted contract", () => {
+    const pleading = nextChoices("pisma-procesowe-v3", null, combinations, { question: "Napisz pozew o zapłatę.", materials: [] }, { ownDocument: true });
+    expect(pleading[0]).toEqual({ skill: "pisma-procesowe-v3", kind: "DOCUMENT", reason: "plik z tego wyniku", own: true });
+    expect(pleading.filter((choice) => choice.kind === "DOCUMENT")).toHaveLength(1);
+    const contract = nextChoices("analizator-umow-v1", null, combinations, { question: "Popraw zapisy o karach umownych w mojej umowie.", materials: [] }, { ownDocument: true });
+    expect(contract[0]).toMatchObject({ skill: "analizator-umow-v1", own: true });
+    // An analysis is not a document of its own.
+    expect(nextChoices("analizator-umow-v1", null, combinations, { question: "Przeanalizuj umowę.", materials: [] }).some((choice) => choice.own)).toBe(false);
+  });
+
+  it("does not offer analiza-sadowa-v6 after every evidence analysis (Dowody + terminy + koszty)", () => {
+    expect(nextChoices("analizator-dowodow-v3", null, combinations, { question: "Oceń moje dowody.", materials: [] })).toEqual([]);
+    expect(
+      nextChoices("analizator-dowodow-v3", null, combinations, { question: "Oceń dowody, terminy i koszty procesu.", materials: [] }).map((choice) => choice.skill)
+    ).toEqual(["analiza-sadowa-v6"]);
   });
 });
 

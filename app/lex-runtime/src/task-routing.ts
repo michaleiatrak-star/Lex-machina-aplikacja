@@ -248,6 +248,16 @@ const OWN_CONTRACT =
 // pismo przygotowawcze", "replika", "ustosunkuj się do apelacji"): a new letter, not an edit.
 export const REPLY_REQUEST =
   /(?<![\p{L}])(?:(?:odpowied\p{L}*|replik\p{L}*|ripost\p{L}*|duplik\p{L}*)\s+(?:na|do)\s+(?:\p{L}+\s+){0,3}?(?:pozew|pozw\p{L}*|apelacj\p{L}*|zażaleni\p{L}*|skarg\p{L}*|pism\p{L}*|akt\p{L}*\s+oskarżenia|wezwani\p{L}*|sprzeciw\p{L}*|zarzut\p{L}*|odpowied\p{L}*|zarządzeni\p{L}*|odwołani\p{L}*|wnios\p{L}*|kasacj\p{L}*)|ustosunkuj\p{L}*\s+się\s+do|replik\p{L}*|ripost\p{L}*)(?![\p{L}])/iu;
+// Documents between the parties (contracts, agreements, demands and the letters about them)
+// are analysed by the contract skill (ACTIVATION-MATRIX "Dokument + wezwanie").
+const DOCUMENT_ANALYSIS = "analizator-umow-v1";
+// "Odpowiedz na ten dokument", "przygotuj odpowiedź", "odpisz im" with a demand delivered.
+const DEMAND_REPLY = /(?<![\p{L}])(?:odpowiedz|odpowiedź|odpowiedzi|odpowiedzieć|odpisz|odpisać)(?![\p{L}])/iu;
+// "Wygeneruj dokument", "generuj pismo", "przygotuj dokument" (the reply to the delivered demand).
+const GENERATE_DOCUMENT =
+  /(?<![\p{L}])(?:(?:wy)?generuj\p{L}*|przygotuj|napisz|sporządź|zredaguj)\s+(?:\p{L}+\s+){0,2}?(?:dokument\p{L}*|pism\p{L}*|odpowied\p{L}*)(?![\p{L}])/iu;
+// "ten dokument", "to wezwanie", "tego pisma": the delivered file named.
+const DOCUMENT_REF = /(?<![\p{L}])(?:ten|to|tego|tym|tej|tę|załączon\p{L}*|dołączon\p{L}*)\s+(?:dokument\p{L}*|wezwani\p{L}*|pism\p{L}*)(?![\p{L}])/iu;
 // The reply is the user's own text already ("popraw moją odpowiedź", "odpowiedź, którą napisałem").
 const OWN_REPLY =
   /(?<![\p{L}])(?:(?:m[oó]j\p{L}*|moj\p{L}*|nasz\p{L}*|własn\p{L}*)\s+(?:\p{L}+\s+){0,2}?(?:odpowied|replik|ripost|projekt|pism|sprzeciw|wersj|draft|tekst)\p{L}*|któr\p{L}*\s+(?:już\s+)?(?:napisał|przygotował|sporządził|zredagował)\p{L}*|to\s+pismo|ten\s+projekt|tę\s+odpowiedź|tej\s+odpowiedzi)(?![\p{L}])/iu;
@@ -474,16 +484,41 @@ function decideTaskByMatrix(
               : "odpowiedź na wezwanie sądu: odczytaj jego treść — żądanie stanowiska, twierdzeń lub dowodów to pisma-procesowe-v3 (router R-3.54-b)"
         };
   }
-  // A reply to a payment demand: the demand is assessed first, then the reply drafted.
-  if (simpleLetters && repliesToDemand(question)) {
-    const demand = materials.some((material) => material.kind === "WEZWANIE");
+  // A demand between the parties delivered (przedsądowe wezwanie do zapłaty): ACTIVATION-MATRIX
+  // "Dokument + wezwanie" -> analizator-umow-v1 assesses the document and what it rests on
+  // (umowa, porozumienie, kara umowna); a reply asked for in any words ("odpowiedz na ten
+  // dokument", "wygeneruj dokument") is its next stage, the letter of pisma-proste-v2.
+  const demand = materials.some((material) => material.kind === "WEZWANIE");
+  const documentSkill = known.has(DOCUMENT_ANALYSIS) ? DOCUMENT_ANALYSIS : "analizator-dowodow-v3";
+  const replyWanted =
+    repliesToDemand(question) ||
+    // "Odpowiedź na to pismo" names the delivered demand; "popraw to pismo" is one's own text.
+    (demand && (REPLY_REQUEST.test(question) || (!OWN_REPLY.test(question) && (DEMAND_REPLY.test(question) || GENERATE_DOCUMENT.test(question)))));
+  if (simpleLetters && replyWanted) {
     return {
       source: "SKILL",
-      primary: demand ? "analizator-dowodow-v3" : simpleLetters.skill,
+      primary: demand ? documentSkill : simpleLetters.skill,
       then: demand ? simpleLetters.skill : null,
       reason: demand
-        ? "odpowiedź na otrzymane wezwanie do zapłaty: najpierw ocena wezwania, potem pismo (bez schematu wezwania wierzyciela SPE)"
+        ? "odpowiedź na otrzymane wezwanie (dokument między stronami): najpierw analiza wezwania i jego podstawy (macierz: Dokument + wezwanie), potem pismo (bez schematu wezwania wierzyciela SPE)"
         : "odpowiedź na wezwanie do zapłaty (pismo proste, bez schematu wezwania wierzyciela SPE)"
+    };
+  }
+  // The demand itself assessed ("przeanalizuj ten dokument", "czy ta kara umowna jest zasadna"):
+  // a document between the parties, not evidence without a letter. "Co mam zrobić" stays the guide.
+  if (
+    demand &&
+    !NEXT_STEP.test(question) &&
+    // One's own letter ("popraw to pismo", "sprawdź moje wezwanie") stays with the letter skills.
+    !OWN_DOCUMENT.test(question) &&
+    materials.every((material) => material.kind === "WEZWANIE" || material.category === "UMOWA") &&
+    (ANALYSIS_INTENT.test(question) || REVIEW_REQUEST.test(question) || asksAbout(question) || DOCUMENT_REF.test(question))
+  ) {
+    return {
+      source: "MATRIX",
+      primary: documentSkill,
+      then: null,
+      reason: "macierz aktywacji: Dokument + wezwanie (analiza dokumentu między stronami i jego podstawy)"
     };
   }
   // Test A: a finished pleading delivered (or "my letter") and a request about its form.
@@ -663,7 +698,10 @@ const COMBINATION_PARTS: Array<{ part: RegExp; present: (question: string, mater
   },
   { part: /^orzecznictw/iu, present: (question) => CASE_LAW.test(question) },
   { part: /^wezwani/iu, present: (question, materials) => /(?<![\p{L}])wezwani\p{L}*/iu.test(question) || materials.some((material) => material.kind === "WEZWANIE") },
-  { part: /^ripost/iu, present: (question) => /(?<![\p{L}])(?:ripost\p{L}*|odpowied\p{L}*\s+na)(?![\p{L}])/iu.test(question) }
+  { part: /^ripost/iu, present: (question) => /(?<![\p{L}])(?:ripost\p{L}*|odpowied\p{L}*\s+na)(?![\p{L}])/iu.test(question) },
+  // "Dowody + terminy + koszty": deadlines and costs are a subject of the case only when named.
+  { part: /^termin/iu, present: (question) => /(?<![\p{L}])(?:termin\p{L}*|do\s+kiedy|przedawni\p{L}*)/iu.test(question) },
+  { part: /^koszt/iu, present: (question) => /(?<![\p{L}])(?:koszt\p{L}*|opłat\p{L}*|ile\s+(?:to\s+)?kosztuj\p{L}*)/iu.test(question) }
 ];
 
 export function combinationApplies(matter: string, question: string, materials: DeliveredMaterial[]): boolean {
@@ -691,6 +729,74 @@ export function pipelineNext(
       (!context || combinationApplies(row.matter, provisionsForDetection(context.question), context.materials))
   );
   return combination ? { skill: combination.next[0]!, reason: `kombinacja skilli: ${combination.matter}` } : null;
+}
+
+/** One option offered after a result: draft the document, or one more stage of analysis. */
+export type NextChoice = {
+  skill: string;
+  kind: "DOCUMENT" | "ANALYSIS";
+  reason: string;
+  // The file of this very result (a pleading of pisma-procesowe-v3, a contract redacted or
+  // drafted by analizator-umow-v1), made by that skill's own pipeline and its HYBRID-VAL.
+  own?: true;
+  // The pipeline's step register at this point (pleading checkpoints): done, skipped with
+  // the reason, still open. A file with an open or unexplained step is a draft.
+  steps?: StepSummary;
+};
+
+export type StepSummary = {
+  done: number;
+  total: number;
+  skipped: Array<{ checkpoint: string; reason?: string }>;
+  open: string[];
+};
+
+/** The register of a pipeline's checkpoints, summed up for the user before a file. */
+export function stepSummary(register: ReadonlyArray<{ checkpoint: string; status: string; reason?: string }>): StepSummary {
+  return {
+    done: register.filter((entry) => entry.status === "CLOSED").length,
+    total: register.length,
+    skipped: register
+      .filter((entry) => entry.status === "NA")
+      .map((entry) => ({ checkpoint: entry.checkpoint, ...(entry.reason?.trim() ? { reason: entry.reason.trim().slice(0, 300) } : {}) })),
+    open: register.filter((entry) => entry.status === "OPEN" || entry.status === "PENDING_CONFIRMATION").map((entry) => entry.checkpoint)
+  };
+}
+
+const DRAFTING_SKILL = /^pisma-/u;
+
+/**
+ * What the user may do after this skill's result, never started on its own: generate the
+ * document when the result is satisfactory (one drafting skill), or go on with a further stage
+ * of analysis. The matrix's "→" first, then the combinations this skill enters whose parts are
+ * in the case. A reply to a demand between the parties is a simple letter (pisma-proste-v2).
+ */
+export function nextChoices(
+  skill: string,
+  then: string | null,
+  combinations: SkillCombination[],
+  context?: { question: string; materials: DeliveredMaterial[] },
+  options: { ownDocument?: boolean; steps?: StepSummary } = {}
+): NextChoice[] {
+  const own: NextChoice[] = options.ownDocument
+    ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true, ...(options.steps ? { steps: options.steps } : {}) }]
+    : [];
+  const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
+  const found: NextChoice[] = [];
+  const add = (candidate: string, reason: string) => {
+    const next = demand && candidate === "pisma-procesowe-v3" ? "pisma-proste-v2" : candidate;
+    if (next === skill || found.some((choice) => choice.skill === next)) return;
+    found.push({ skill: next, kind: DRAFTING_SKILL.test(next) ? "DOCUMENT" : "ANALYSIS", reason });
+  };
+  if (then) add(then, "macierz aktywacji (wejście → następny etap)");
+  for (const row of combinations) {
+    if (row.entry !== skill || !row.next.length) continue;
+    if (context && !combinationApplies(row.matter, provisionsForDetection(context.question), context.materials)) continue;
+    for (const next of row.next) add(next, `kombinacja skilli: ${row.matter}`);
+  }
+  // One document to generate (the first drafting skill), and the analyses after it.
+  const document = own[0] ?? found.find((choice) => choice.kind === "DOCUMENT");
+  return [...(document ? [document] : []), ...found.filter((choice) => choice.kind === "ANALYSIS").slice(0, 2)];
 }
 
 /** "Następny etap pipeline'u: <skill>" sent by the app's own continue button. */

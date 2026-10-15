@@ -8,10 +8,14 @@ import { genericWords } from "./generic-words.js";
 // Public bodies stay visible.
 
 // Legal forms in any letter case: headings and KRS extracts are written in capitals.
-const LEGAL_FORM_AFTER =
-  /^\s*,?\s*(?:sp\.\s?z\s?o\.\s?o\.|spółk[aiąę]\s+z\s+ograniczoną\s+odpowiedzialnością|spółk[aiąę]\s+(?:akcyjn|komandytow|jawn|partnersk)\p{L}*|s\.\s?a\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.|s\.k\.a\.|p\.s\.a\.)/iu;
+// OCR spellings count too: "Spólka", "Sp6łka", "sp. z 0.o.", "sp. zo.o.".
+const SPOLK = "sp[óo60][łl1]k";
+const LEGAL_FORM_AFTER = new RegExp(
+  String.raw`^\s*,?\s*(?:sp\.\s?z\s?[o0]\.\s?[o0]\.|${SPOLK}[aiąę]\s+z\s+ograniczoną\s+odpowiedzialnością|${SPOLK}[aiąę]\s+(?:akcyjn|komandytow|jawn|partnersk)\p{L}*|s\.\s?a\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.|s\.k\.a\.|p\.s\.a\.)`,
+  "iu"
+);
 const PREFIX_BEFORE =
-  /(?:\b(?:P\.?\s?P\.?\s?H\.?\s?U\.?|P\.?\s?H\.?\s?U\.?|F\.?\s?H\.?\s?U\.?|F\.?\s?P\.?\s?H\.?\s?U\.?)|(?<![\p{L}])(?:[Ff]irm(?:a|y|ie|ę|ą)|[Ss]półk(?:a|i|ę|ą)|[Ss]półce|Przedsiębiorstw(?:o|a|u|em)))\s+[„"»]?$/u;
+  /(?:\b(?:P\.?\s?P\.?\s?H\.?\s?U\.?|P\.?\s?H\.?\s?U\.?|F\.?\s?H\.?\s?U\.?|F\.?\s?P\.?\s?H\.?\s?U\.?)|(?<![\p{L}])(?:[Ff]irm(?:a|y|ie|ę|ą)|[Ss]p[óo60][łl1]k(?:a|i|ę|ą)|[Ss]p[óo60][łl1]ce|Przedsiębiorstw(?:o|a|u|em)))\s+[„"»]?$/u;
 // Adjectives of a trade between a prefix and the name ("Firma Handlowa Budex",
 // "Zakład Usługowy Mar-Pol", "Biuro Rachunkowe Bilans").
 const TRADE_ADJECTIVE =
@@ -34,8 +38,17 @@ const NOT_A_NAME = new Set([
   // The legal form itself, written with capitals ("Ciecierski Rak Spółka Komandytowa").
   "komandytowa", "komandytowej", "komandytową", "akcyjna", "akcyjnej", "akcyjną", "jawna", "jawnej", "jawną",
   "partnerska", "partnerskiej", "partnerską", "cywilna", "cywilnej", "cywilną",
-  "zarząd", "zarządu", "zarządem", "zarządzie"
+  "zarząd", "zarządu", "zarządem", "zarządzie",
+  // A profession or an office before a partnership's name ("Kancelaria Adwokatów i Radców
+  // Prawnych Nowak Lis sp.k."): the name is the partners', not the profession's.
+  "kancelaria", "kancelarii", "kancelarią", "adwokatów", "adwokata", "radców", "radcy", "prawnych", "prawnego",
+  "notariusza", "notarialna", "notarialnej", "komorniczej", "doradców", "podatkowych"
 ]);
+
+// A role word as OCR spells it ("Spólka" for "Spółka") is still a role word.
+function notAName(lower: string): boolean {
+  return NOT_A_NAME.has(lower) || NOT_A_NAME.has(lower.replace(/^sp[óo60][łl1]k/u, "spółk").replace(/^sp[óo60][łl1]c/u, "spółc"));
+}
 
 const NAME_WORD = /^(?:[„"»]?\p{Lu}[\p{L}\d&'’.-]*[”"«]?|\d[\p{L}\d-]*|i|&)$/u;
 
@@ -48,7 +61,7 @@ function nameBefore(text: string, end: number): { start: number; value: string }
     const word = words[index]![0];
     const clean = word.replace(/^[„"»(]+|[”"«),:;]+$/gu, "");
     const joiner = clean === "i" || clean === "&";
-    if (!clean || !NAME_WORD.test(clean) || (!joiner && NOT_A_NAME.has(clean.toLocaleLowerCase("pl")))) break;
+    if (!clean || !NAME_WORD.test(clean) || (!joiner && notAName(clean.toLocaleLowerCase("pl")))) break;
     // A word ending a sentence is not part of the name ("…zapłaty. Budex S.A.").
     if (index < words.length - 1 && /[.;:!?]$/u.test(word) && !/^\p{Lu}\.$/u.test(word)) break;
     picked.unshift(words[index]!);
@@ -102,7 +115,7 @@ function nameAfter(text: string, start: number, requireTrade = false, abbreviati
     // After "P.H.U." every word is the firm's ("P.H.U. Mazowieckie Centrum Logistyki"); after
     // "spółka"/"firma" an institution word opens no name ("spółka Skarbu Państwa").
     const institution = !abbreviation && picked.length === 0 && institutions.has(lower);
-    if (!joiner && (NOT_A_NAME.has(lower) || institution)) {
+    if (!joiner && (notAName(lower) || institution)) {
       if (picked.length === 0) return null;
       break;
     }
@@ -138,7 +151,7 @@ export type FirmSpan = PiiSpan & { legalForm?: string; canonical?: string };
 export function detectFirmNames(text: string): FirmSpan[] {
   const names = new Map<string, string | undefined>();
   const spans: FirmSpan[] = [];
-  for (const match of text.matchAll(/\s*,?\s*(?:sp\.|spółk|s\.\s?a\.|s\.\s?c\.|s\.k\.a\.|p\.s\.a\.)/giu)) {
+  for (const match of text.matchAll(/\s*,?\s*(?:sp\.|sp[óo60][łl1]k|s\.\s?a\.|s\.\s?c\.|s\.k\.a\.|p\.s\.a\.)/giu)) {
     const legal = LEGAL_FORM_AFTER.exec(text.slice(match.index!, match.index! + 60));
     if (!legal) continue;
     // A sentence ends before the form: "magazyn w Gdyni. Spółka akcyjna zawarła..." names no firm.
@@ -156,7 +169,7 @@ export function detectFirmNames(text: string): FirmSpan[] {
     names.set(name.value, undefined);
     spans.push({ start: name.start, end: name.start + name.value.length, kind: "PERSON", value: name.value, confidence: 0.9, source: "AUTO" });
   };
-  for (const match of text.matchAll(/(?:P\.?\s?P\.?\s?H\.?\s?U\.?|P\.?\s?H\.?\s?U\.?|F\.?\s?H\.?\s?U\.?|[Ff]irm(?:a|y|ie|ę|ą)|[Ss]półk(?:a|i|ę|ą)|[Ss]półce|Przedsiębiorstw(?:o|a|u|em))\s+/gu)) {
+  for (const match of text.matchAll(/(?:P\.?\s?P\.?\s?H\.?\s?U\.?|P\.?\s?H\.?\s?U\.?|F\.?\s?H\.?\s?U\.?|[Ff]irm(?:a|y|ie|ę|ą)|[Ss]p[óo60][łl1]k(?:a|i|ę|ą)|[Ss]p[óo60][łl1]ce|Przedsiębiorstw(?:o|a|u|em))\s+/gu)) {
     const end = match.index! + match[0].length;
     if (!PREFIX_BEFORE.test(text.slice(match.index!, end))) continue;
     after(end, false, /^[PF]\.?\s?/u.test(match[0]) && !/^[Ff]irm|^Przeds/u.test(match[0]));

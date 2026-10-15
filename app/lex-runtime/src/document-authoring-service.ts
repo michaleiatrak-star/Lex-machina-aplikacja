@@ -365,6 +365,23 @@ export class LocalDocumentAuthoringService {
         );
       }
 
+      // HYBRID-VAL before the .docx, as for a ready document; the privacy tokens are this
+      // file's purpose (they are replaced and checked again on deanonymization).
+      const hybridReasons =
+        validateLocalHybridDocument(
+          validation.text,
+          args.validationContext
+        ).reasons.filter(
+          (reason) =>
+            reason !== "PRIVACY_TOKEN_REMAINS"
+        );
+      if (hybridReasons.length) {
+        throw new Error(
+          "TOKENIZED_DOCUMENT_HYBRID_BLOCKED:" +
+          hybridReasons.join(",")
+        );
+      }
+
       const tokenizedSha256 =
         createHash("sha256")
           .update(

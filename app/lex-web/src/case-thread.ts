@@ -1,3 +1,4 @@
+import type { DocumentCoverageEntry } from "./api.js";
 import {
   useCallback,
   useEffect,
@@ -27,7 +28,9 @@ export type CaseChatMessage = {
   content: string;
   evidence?: EvidenceItem[];
   mandatoryPath?: MandatoryPathView;
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
+  documentCoverage?: DocumentCoverageEntry[];
+  documentAnalysis?: boolean;
   auxiliarySources?:
     AuxiliarySourceItem[];
   meta?: string;
@@ -68,7 +71,9 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
     ...(message.evidence?.length ? { evidence: message.evidence } : {}),
     ...(message.auxiliarySources?.length ? { auxiliarySources: message.auxiliarySources } : {}),
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
-    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {})
+    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
+    ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
+    ...(message.documentAnalysis ? { documentAnalysis: true } : {})
   };
 }
 
@@ -92,7 +97,9 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
     ...(message.evidence?.length ? { evidence: message.evidence } : {}),
     ...(message.auxiliarySources?.length ? { auxiliarySources: message.auxiliarySources } : {}),
     ...(message.mandatoryPath ? { mandatoryPath: message.mandatoryPath } : {}),
-    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {})
+    ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
+    ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
+    ...(message.documentAnalysis ? { documentAnalysis: true } : {})
   };
 }
 

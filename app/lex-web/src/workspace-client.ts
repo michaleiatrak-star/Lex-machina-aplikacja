@@ -4,6 +4,7 @@ import {
   isDesktopShell,
   type AuxiliarySourceItem,
   type EvidenceItem,
+  type DocumentCoverageEntry,
   type MandatoryPathView
 } from "./api.js";
 
@@ -62,7 +63,9 @@ export type WorkspaceThreadMessage = {
   evidence?: EvidenceItem[];
   auxiliarySources?: AuxiliarySourceItem[];
   mandatoryPath?: MandatoryPathView;
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
+  documentCoverage?: DocumentCoverageEntry[];
+  documentAnalysis?: boolean;
 };
 
 // Widget shown with show_widget (skill corpus file or model code), rendered in an isolated frame.

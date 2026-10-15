@@ -2180,6 +2180,8 @@ export function registerWorkspaceRoutes(
         ...(raw.auxiliarySources !== undefined ? { auxiliarySources: raw.auxiliarySources } : {}),
         ...(raw.mandatoryPath !== undefined ? { mandatoryPath: raw.mandatoryPath } : {}),
         ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
+        ...(raw.documentCoverage !== undefined ? { documentCoverage: raw.documentCoverage } : {}),
+        ...(raw.documentAnalysis !== undefined ? { documentAnalysis: raw.documentAnalysis } : {}),
         ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
           ? {
               generatedDocument:

@@ -20,8 +20,38 @@ const DOTTED = [
     new RegExp(`(?<![\\p{L}.])${dotted.replace(/\./g, "\\.\\s?").replace(/\\s\?$/, "")}(?![\\p{L}])`, "giu"),
     compact
 ]);
+// Codes named in words, in any case ("Kodeksu cywilnego", "kodeksem pracy"): the same
+// provision as "KC"/"KP" for the verification registry, so a provision verified in the
+// session is not marked unverified because the answer names its code in full. Longest first.
+const CODE = "kodeks(?:u|owi|em|ie)?\\s+";
+const SPELLED_SOURCES = [
+    ["postępowania\\s+cywilnego", "KPC"],
+    ["postępowania\\s+karnego", "KPK"],
+    ["postępowania\\s+administracyjnego", "KPA"],
+    ["postępowania\\s+w\\s+sprawach\\s+o\\s+wykroczenia", "KPW"],
+    ["karn\\p{L}*\\s+wykonawcz\\p{L}*", "KKW"],
+    ["karn\\p{L}*\\s+skarbow\\p{L}*", "KKS"],
+    ["rodzinn\\p{L}*\\s+i\\s+opiekuńcz\\p{L}*", "KRO"],
+    ["spółek\\s+handlowych", "KSH"],
+    ["cywiln\\p{L}*", "KC"],
+    ["karn\\p{L}*", "KK"],
+    ["pracy", "KP"],
+    ["wykroczeń", "KW"]
+];
+const SPELLED = SPELLED_SOURCES.map(([name, compact]) => [
+    new RegExp(`(?<![\\p{L}])${CODE}${name}(?![\\p{L}])`, "giu"),
+    compact
+]);
+// For a provision pattern: the codes named in words, longest first.
+export const SPELLED_ACT_ALTERNATIVES = SPELLED_SOURCES.map(([name]) => `${CODE}${name}`).join("|");
+const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+/** "art. 101² KP" -> "art. 101^2 KP": one unit, never art. 101 or (after NFKC) art. 1012. */
+export function caretSuperscripts(text) {
+    return text.replace(/(\d)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/gu, (_match, digit, sup) => `${digit}^${[...sup].map((char) => SUPERSCRIPT_DIGITS[char]).join("")}`);
+}
 export function compactActAbbreviations(text) {
-    return DOTTED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), text);
+    const dotted = DOTTED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), caretSuperscripts(text));
+    return SPELLED.reduce((value, [pattern, compact]) => value.replace(pattern, compact), dotted);
 }
 // Początek powołania artykułu we wszystkich modułach: "art. 415", "art.415", "art 415",
 // "artykuł 415", "artykułem 415" (wymaga flag "iu").

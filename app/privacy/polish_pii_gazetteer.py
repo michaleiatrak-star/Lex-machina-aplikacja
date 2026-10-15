@@ -98,8 +98,11 @@ HOUSE_NUMBER = (
 TOWN = rf"[{UPPER}][\w\-]+(?:[ \-][{UPPER}][\w\-]+){{0,2}}"
 POSTAL = rf"\d{{2}}-\d{{3}}\s+{TOWN}"
 
+# A contact label after the house number starts the next field, not the street name:
+# "ul. Lipowa 7⏎Tel. 32-111 22 33" (the phone is not a house number).
+CONTACT = r"(?i:tel|fax|kom|e-?mail|www)\b"
 STREET_ADDRESS_RE = re.compile(
-    rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+(?:{NAME_LINK}\s+)?{NAME_TOKEN}){{0,6}}\s+{HOUSE_NUMBER}(?![\w/])"
+    rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+(?!{CONTACT})(?:{NAME_LINK}\s+)?{NAME_TOKEN}){{0,6}}\s+{HOUSE_NUMBER}(?![\w/])"
     rf"(?:\s*,?\s*{POSTAL})?"
 )
 # OCR drops the space before the house number: "ul. Pukowca15, 40-847 Katowice".

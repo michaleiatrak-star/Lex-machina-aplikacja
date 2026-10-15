@@ -1,3 +1,4 @@
+import { fixOcrAmounts } from "./ocr-amounts.js";
 /**
  * Model-free cleanup of OCR lines: Unicode composition, ligatures, invisible characters, odd
  * spaces, Cyrillic/Greek look-alike letters inside Latin words. Run in "OCR z korektą AI"
@@ -21,8 +22,8 @@ const ODD_SPACE = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 const HAS_INVISIBLE = new RegExp(INVISIBLE.source, "u");
 /**
  * Model-free cleanup of one line: Unicode composition, ligatures, invisible
- * characters, odd spaces, and look-alike letters inside Latin words. Returns
- * the visible changes.
+ * characters, odd spaces, look-alike letters inside Latin words and misread
+ * amounts. Returns the visible changes.
  */
 export function normalizeOcrLine(text) {
     const fixes = [];
@@ -48,7 +49,10 @@ export function normalizeOcrLine(text) {
         fixes.push({ from: word, to: fixed });
         return fixed;
     });
-    return { text: result, fixes };
+    // Amounts: letters read in place of digits, misplaced separators ("20.ooo,00 zł").
+    const amounts = fixOcrAmounts(result);
+    fixes.push(...amounts.fixes);
+    return { text: amounts.text, fixes };
 }
 /** The OCR page with its lines cleaned (changes kept in page.corrections). */
 export function normalizeOcrPage(page) {

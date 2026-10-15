@@ -53,6 +53,20 @@ import { DocumentEditor } from "./DocumentEditor.js";
 import { SheetEditor } from "./SheetEditor.js";
 import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
+import { OCR_MODELS_INCOMPLETE, privacyConfirmFailure } from "./document-errors.js";
+import {
+  clearFinished,
+  enqueueFiles,
+  isActiveEntry,
+  nextToRead,
+  queueStatusLabel,
+  queueSummary,
+  readEntries,
+  removeQueued,
+  stopQueued,
+  updateEntry,
+  type ProcessingQueueEntry
+} from "./processing-queue.js";
 import { AnonymizedDocumentView } from "./AnonymizedDocumentView.js";
 import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
@@ -127,6 +141,7 @@ export function documentProcessingFailureMessage(
   if (reason === "LOCAL_PRIVACY_MODEL_FAILED") {
     return "Nie udało się przetworzyć dokumentu: lokalny model nie odpowiedział podczas sprawdzania pliku. Spróbuj ponownie albo wybierz tryb bez AI.";
   }
+  if (reason === "OCR_MODELS_INCOMPLETE") return OCR_MODELS_INCOMPLETE;
   const cause =
     reason === "OCR_REQUIRED" || reason === "OCR_ENGINE_MISSING"
       ? "dokument wymaga OCR, ale lokalny silnik OCR nie jest zainstalowany lub jest niekompletny"
@@ -270,7 +285,47 @@ export function WorkspaceManager({
   // "Przetwórz wszystkie" wait in the queue.
   const [privacyPreview, setPrivacyPreview] = useState<PrivacyPreviewQueueItem | null>(null);
   const queuedPreviews = useRef<PrivacyPreviewQueueItem[]>([]);
-  const nextPreview = () => setPrivacyPreview(queuedPreviews.current.shift() ?? null);
+  const privacyPreviewRef = useRef<PrivacyPreviewQueueItem | null>(null);
+  // Why confirming the open preview failed, shown in the preview itself.
+  const [previewError, setPreviewError] = useState("");
+  const showPrivacyPreview = (next: PrivacyPreviewQueueItem | null) => {
+    setPreviewError("");
+    privacyPreviewRef.current = next;
+    setPrivacyPreview(next);
+  };
+  const nextPreview = () => {
+    const done = privacyPreviewRef.current;
+    // A file of the queue leaves its list once its preview is confirmed or skipped.
+    if (done) setQueue((current) => current.filter((entry) => !(entry.itemId === done.item.itemId && entry.status === "READY")));
+    showPrivacyPreview(queuedPreviews.current.shift() ?? null);
+  };
+  // A file read by the queue while another preview is open waits for its turn.
+  const offerPreview = (next: PrivacyPreviewQueueItem) => {
+    if (privacyPreviewRef.current) queuedPreviews.current.push(next);
+    else showPrivacyPreview(next);
+  };
+  // Files waiting for OCR and anonymization, processed one at a time in the order added;
+  // the panel stays usable and more files can join while it runs.
+  const [queue, setQueueState] = useState<ProcessingQueueEntry[]>([]);
+  const queueRef = useRef<ProcessingQueueEntry[]>([]);
+  const setQueue = (change: (current: ProcessingQueueEntry[]) => ProcessingQueueEntry[]) => {
+    queueRef.current = change(queueRef.current);
+    setQueueState(queueRef.current);
+  };
+  const queueRunning = useRef(false);
+  const queuedItems = useRef(new Map<string, WorkspaceItem>());
+  const caseRef = useRef(caseId);
+  caseRef.current = caseId;
+  const inQueue = (item: WorkspaceItem) => queue.some((entry) => entry.itemId === item.itemId && isActiveEntry(entry));
+  const queueActive = queue.some(isActiveEntry);
+  useEffect(() => {
+    // Another case: its files are not this queue's; the file being read finishes and is dropped.
+    queueRef.current = [];
+    setQueueState([]);
+    queuedItems.current.clear();
+    queuedPreviews.current = [];
+    showPrivacyPreview(null);
+  }, [caseId]);
   const localAiReady = Boolean(localRuntime?.configured && localRuntime.state === "READY");
   useEffect(() => {
     let cancelled = false;
@@ -383,6 +438,17 @@ export function WorkspaceManager({
     )?.processing;
   }
 
+  // "Od razu do kolejki": files added in a group are read one after another without a click.
+  const [autoQueue, setAutoQueue] = useState(false);
+  const pendingAutoQueue = useRef(new Set<string>());
+  useEffect(() => {
+    if (!workspace || !pendingAutoQueue.current.size) return;
+    const items = workspace.items.filter((item) => pendingAutoQueue.current.has(item.itemId));
+    if (!items.length) return;
+    for (const item of items) pendingAutoQueue.current.delete(item.itemId);
+    void processAll(items.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item)));
+  }, [workspace]);
+
   async function addFiles(
     files: FileList | null
   ): Promise<void> {
@@ -402,6 +468,7 @@ export function WorkspaceManager({
             caseId,
             file
           );
+        if (autoQueue) pendingAutoQueue.current.add(stored.uploadId);
         if (selectedFolder) {
           await moveWorkspaceItem(
             caseId,
@@ -411,7 +478,9 @@ export function WorkspaceManager({
         }
       }
       setNotice(
-        `Dodano ${files.length} plik(ów) do akt sprawy.`
+        autoQueue
+          ? `Dodano ${files.length} plik(ów) do akt sprawy i do kolejki przetwarzania.`
+          : `Dodano ${files.length} plik(ów) do akt sprawy.`
       );
     });
   }
@@ -438,7 +507,7 @@ export function WorkspaceManager({
   }
 
   // Stage and page counts of one file while its request runs; text never leaves the runtime.
-  async function withItemProgress<T>(item: WorkspaceItem, action: (progressId: string) => Promise<T>): Promise<T> {
+  async function withItemProgress<T>(item: Pick<WorkspaceItem, "itemId">, action: (progressId: string) => Promise<T>): Promise<T> {
     const progressId = newProgressId();
     setProgressByItem((current) => ({ ...current, [item.itemId]: { stage: "READING" } }));
     const timer = window.setInterval(() => {
@@ -474,61 +543,87 @@ export function WorkspaceManager({
   }
 
   /**
-   * Every unprocessed file shown: the OCR of all of them first (with the AI, only the vision
-   * model works), then their personal data (the text model starts once), then the preview
-   * of each, one after another.
+   * Files join the queue of the case; it reads them one at a time in the order added: the OCR
+   * of every queued file first (with the AI, only the vision model works), then their personal
+   * data (the text model starts once), then the preview of each, one after another.
    */
-  async function processAll(items: WorkspaceItem[]): Promise<void> {
-    const modes = [...new Set(items.map(modeFor))];
+  async function processAll(items: WorkspaceItem[], clearConfirmed = false): Promise<void> {
+    const fresh = items.filter((item) => !inQueue(item));
+    if (!fresh.length) return;
+    const modes = [...new Set(fresh.map(modeFor))];
     for (const mode of modes) if (!(await modeReady(mode))) return;
-    const clear = items.filter((item) => processingModeKeepsClearText(modeFor(item)));
+    const clear = fresh.filter((item) => processingModeKeepsClearText(modeFor(item)));
     if (
       clear.length &&
+      !clearConfirmed &&
       !window.confirm(
         `${clear.map((item) => `„${item.filename}”`).join(", ")}: bez anonimizacji - tekst jawny trafi do modelu. Kontynuować?`
       )
     ) {
       return;
     }
-    setBusy(true);
     setError("");
-    setNotice("");
-    const reads: Array<{ item: WorkspaceItem; review: DocumentReviewResponse }> = [];
-    const failed: string[] = [];
+    for (const item of fresh) queuedItems.current.set(item.itemId, item);
+    setQueue((current) =>
+      enqueueFiles(current, fresh.map((item) => ({ itemId: item.itemId, filename: item.filename, mode: modeFor(item) })))
+    );
+    void runQueue();
+  }
+
+  async function runQueue(): Promise<void> {
+    if (queueRunning.current) return;
+    queueRunning.current = true;
+    const runCase = caseId;
+    const reviews = new Map<string, DocumentReviewResponse>();
     try {
-      for (const item of items) {
-        const mode = modeFor(item);
-        try {
-          const review = await withItemProgress(item, (progressId) =>
-            processStoredCaseFile(caseId, item.itemId, undefined, progressId, { ...processingModeOptions(mode), detect: false })
-          );
-          reads.push({ item, review });
-        } catch (failure) {
-          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
+      while (caseRef.current === runCase) {
+        const next = nextToRead(queueRef.current);
+        if (next) {
+          setQueue((current) => updateEntry(current, next.itemId, { status: "READING" }));
+          try {
+            const review = await withItemProgress(next, (progressId) =>
+              processStoredCaseFile(runCase, next.itemId, undefined, progressId, { ...processingModeOptions(next.mode), detect: false })
+            );
+            reviews.set(next.itemId, review);
+            setQueue((current) => updateEntry(current, next.itemId, { status: "READ" }));
+          } catch (failure) {
+            setQueue((current) => updateEntry(current, next.itemId, { status: "FAILED", error: documentProcessingFailureMessage(failure) }));
+          }
+          continue;
+        }
+        const read = readEntries(queueRef.current);
+        if (!read.length) break;
+        for (const entry of read) {
+          if (caseRef.current !== runCase) break;
+          const review = reviews.get(entry.itemId);
+          const item = queuedItems.current.get(entry.itemId);
+          if (!review || !item) {
+            setQueue((current) => updateEntry(current, entry.itemId, { status: "FAILED", error: "Brak wyniku odczytu - dodaj plik ponownie." }));
+            continue;
+          }
+          const keepClear = processingModeKeepsClearText(entry.mode);
+          setQueue((current) => updateEntry(current, entry.itemId, { status: "DETECTING" }));
+          try {
+            const detected = keepClear
+              ? review
+              : await withItemProgress(entry, (progressId) =>
+                  detectDocument(runCase, review.documentId, { localAi: processingModeOptions(entry.mode)?.localAi === true }, progressId)
+                );
+            reviews.delete(entry.itemId);
+            setQueue((current) => updateEntry(current, entry.itemId, { status: "READY" }));
+            offerPreview({ item, mode: entry.mode, request: { caseId: runCase, review: detected, fileName: entry.filename, keepClear } });
+          } catch (failure) {
+            setQueue((current) => updateEntry(current, entry.itemId, { status: "FAILED", error: documentProcessingFailureMessage(failure) }));
+          }
         }
       }
-      const ready: PrivacyPreviewQueueItem[] = [];
-      for (const { item, review } of reads) {
-        const mode = modeFor(item);
-        const keepClear = processingModeKeepsClearText(mode);
-        try {
-          const detected = keepClear
-            ? review
-            : await withItemProgress(item, (progressId) =>
-                detectDocument(caseId, review.documentId, { localAi: processingModeOptions(mode)?.localAi === true }, progressId)
-              );
-          ready.push({ item, mode, request: { caseId, review: detected, fileName: item.filename, keepClear } });
-        } catch (failure) {
-          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
-        }
-      }
-      queuedPreviews.current = ready.slice(1);
-      setPrivacyPreview(ready[0] ?? null);
-      if (failed.length) setError(failed.join(" · "));
-      else if (ready.length) setNotice(`Przetworzono ${ready.length} plików - sprawdź i zatwierdź podgląd każdego z nich.`);
-      await refresh();
     } finally {
-      setBusy(false);
+      queueRunning.current = false;
+      if (caseRef.current === runCase) {
+        const summary = queueSummary(queueRef.current);
+        if (summary.ready) setNotice(`Kolejka zakończona: ${summary.ready} plików czeka na podgląd i zatwierdzenie${summary.failed ? `, ${summary.failed} z błędem` : ""}.`);
+        await refresh().catch(() => undefined);
+      }
     }
   }
 
@@ -557,7 +652,7 @@ export function WorkspaceManager({
           options ? { ...options, ...(ocrFix ? {} : { ocrFix: false }) } : undefined
         );
       // Finalized only after the preview (doubtful OCR lines, local AI hints, masks) is confirmed.
-      setPrivacyPreview({
+      offerPreview({
         item,
         mode,
         request: {
@@ -566,7 +661,7 @@ export function WorkspaceManager({
           fileName: item.filename,
           keepClear,
           ...(review.pages.some((page) => page.corrections?.length) && ocrFix
-            ? { onUndoOcrFixes: () => { setPrivacyPreview(null); void runAutomaticPrivacy(item, mode, false); } }
+            ? { onUndoOcrFixes: () => { showPrivacyPreview(null); void runAutomaticPrivacy(item, mode, false); } }
             : {})
         }
       });
@@ -576,8 +671,15 @@ export function WorkspaceManager({
   async function confirmPrivacyPreview(directives: PagePrivacyDirective[]): Promise<void> {
     const pending = privacyPreview;
     if (!pending) return;
+    setPreviewError("");
     await run(async () => {
-      const result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      let result: Awaited<ReturnType<typeof finalizeDocument>>;
+      try {
+        result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      } catch (failure) {
+        setPreviewError(privacyConfirmFailure(failure));
+        return;
+      }
       nextPreview();
       setNotice(
         `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
@@ -730,7 +832,7 @@ export function WorkspaceManager({
       knowledgeHits
     ]);
   // Shown files never processed: "Przetwórz wszystkie", each in its chosen mode.
-  const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item));
+  const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item) && !inQueue(item));
 
   function knowledgeHitFor(
     item: WorkspaceItem
@@ -1030,6 +1132,12 @@ export function WorkspaceManager({
             </span>
           ) : null}
           {canWrite ? (
+            <label className="workspace-auto-queue" title="Dodane pliki trafiają od razu do kolejki: OCR i anonimizacja po kolei, w wybranym domyślnie sposobie">
+              <input type="checkbox" checked={autoQueue} onChange={(event) => setAutoQueue(event.target.checked)} />
+              Od razu do kolejki
+            </label>
+          ) : null}
+          {canWrite ? (
             <label className="chat-secondary-action workspace-file-upload">
               + Dodaj pliki
               <input
@@ -1046,15 +1154,15 @@ export function WorkspaceManager({
               />
             </label>
           ) : null}
-          {canWrite && unprocessed.length > 1 ? (
+          {canWrite && (unprocessed.length > 1 || (queueActive && unprocessed.length > 0)) ? (
             <button
               type="button"
               className="chat-secondary-action"
               disabled={busy}
-              title="Najpierw OCR wszystkich plików, potem anonimizacja (model tekstowy uruchamia się raz), potem podgląd każdego pliku do zatwierdzenia"
+              title="Kolejka: pliki po kolei - najpierw OCR wszystkich, potem anonimizacja (model tekstowy uruchamia się raz), potem podgląd każdego do zatwierdzenia. W trakcie można dodawać kolejne pliki."
               onClick={() => void processAll(unprocessed)}
             >
-              Przetwórz wszystkie ({unprocessed.length})
+              {queueActive ? `Dodaj do kolejki (${unprocessed.length})` : `Przetwórz wszystkie (${unprocessed.length})`}
             </button>
           ) : null}
           <button
@@ -1291,7 +1399,16 @@ export function WorkspaceManager({
                       </button>
                     ) : null}
 
-                    {canWrite && canRunPrivacyPipeline(item) ? (
+                    {canWrite && inQueue(item) ? (
+                      <span className="workspace-process" role="status">
+                        <small>Kolejka: {queueStatusLabel(queue.find((entry) => entry.itemId === item.itemId)!, queue)}</small>
+                        {queue.some((entry) => entry.itemId === item.itemId && entry.status === "QUEUED") ? (
+                          <button type="button" onClick={() => setQueue((current) => removeQueued(current, item.itemId))}>
+                            Usuń z kolejki
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : canWrite && canRunPrivacyPipeline(item) ? (
                       <span className="workspace-process">
                         <select
                           aria-label={`Sposób przetwarzania: ${item.filename}`}
@@ -1324,10 +1441,12 @@ export function WorkspaceManager({
                             ) {
                               return;
                             }
-                            void runAutomaticPrivacy(item, mode);
+                            // One file at a time: while the queue runs, the file joins it.
+                            if (queueActive) void processAll([item], true);
+                            else void runAutomaticPrivacy(item, mode);
                           }}
                         >
-                          Przetwórz
+                          {queueActive ? "Do kolejki" : "Przetwórz"}
                         </button>
                       </span>
                     ) : null}
@@ -1590,11 +1709,55 @@ export function WorkspaceManager({
           Wyszukiwanie po nazwie działa. Indeks treści dokumentów jest chwilowo niedostępny: {knowledgeSearchError}
         </p>
       ) : null}
+      {queue.length ? (
+        <section className="workspace-queue" aria-label="Kolejka przetwarzania">
+          <header>
+            <strong>
+              Kolejka przetwarzania · {(() => {
+                const summary = queueSummary(queue);
+                return `w toku ${summary.running} · czeka ${summary.waiting} · do podglądu ${summary.ready}${summary.failed ? ` · błędy ${summary.failed}` : ""}`;
+              })()}
+            </strong>
+            {queue.some((entry) => entry.status === "QUEUED") ? (
+              <button type="button" onClick={() => setQueue(stopQueued)} title="Pliki czekające na OCR wypadają z kolejki; bieżący plik kończy się normalnie">
+                Zatrzymaj kolejkę
+              </button>
+            ) : null}
+            {queue.some((entry) => !isActiveEntry(entry)) ? (
+              <button type="button" onClick={() => setQueue(clearFinished)}>
+                Wyczyść zakończone
+              </button>
+            ) : null}
+          </header>
+          <ol>
+            {queue.map((entry) => (
+              <li key={entry.itemId} className={`workspace-queue-${entry.status.toLowerCase()}`}>
+                <span>{entry.filename}</span>
+                <small>{queueStatusLabel(entry, queue)}</small>
+                {progressByItem[entry.itemId] ? (
+                  <progress max={100} value={progressPercent(progressByItem[entry.itemId]!)} />
+                ) : null}
+                {entry.status === "FAILED" ? (
+                  <>
+                    <small className="chat-inline-error">{entry.error}</small>
+                    {queuedItems.current.get(entry.itemId) ? (
+                      <button type="button" disabled={busy} onClick={() => void processAll([queuedItems.current.get(entry.itemId)!])}>
+                        Ponów
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
       {notice ? <p className="workspace-notice">{notice}</p> : null}
       {privacyPreview ? (
         <PrivacyPreview
           {...privacyPreview.request}
           busy={busy}
+          confirmError={previewError}
           onConfirm={(directives) => void confirmPrivacyPreview(directives)}
           onCancel={nextPreview}
         />

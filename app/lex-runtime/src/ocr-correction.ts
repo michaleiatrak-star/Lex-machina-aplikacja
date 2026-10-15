@@ -1,4 +1,5 @@
 import type { IngestedPage, OcrCorrection } from "./document-ingestion.js";
+import { fixOcrAmounts } from "./ocr-amounts.js";
 
 /**
  * Model-free cleanup of OCR lines: Unicode composition, ligatures, invisible characters, odd
@@ -25,8 +26,8 @@ const HAS_INVISIBLE = new RegExp(INVISIBLE.source, "u");
 
 /**
  * Model-free cleanup of one line: Unicode composition, ligatures, invisible
- * characters, odd spaces, and look-alike letters inside Latin words. Returns
- * the visible changes.
+ * characters, odd spaces, look-alike letters inside Latin words and misread
+ * amounts. Returns the visible changes.
  */
 export function normalizeOcrLine(text: string): { text: string; fixes: Array<{ from: string; to: string }> } {
   const fixes: Array<{ from: string; to: string }> = [];
@@ -50,7 +51,10 @@ export function normalizeOcrLine(text: string): { text: string; fixes: Array<{ f
     fixes.push({ from: word, to: fixed });
     return fixed;
   });
-  return { text: result, fixes };
+  // Amounts: letters read in place of digits, misplaced separators ("20.ooo,00 zł").
+  const amounts = fixOcrAmounts(result);
+  fixes.push(...amounts.fixes);
+  return { text: amounts.text, fixes };
 }
 
 /** The OCR page with its lines cleaned (changes kept in page.corrections). */

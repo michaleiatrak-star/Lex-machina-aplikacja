@@ -76,7 +76,8 @@ export type VerificationRecord = {
 };
 
 function normalizeClaim(value: string): string {
-  return compactActAbbreviations(value.normalize("NFKC"))
+  // Superscripts first: NFKC would turn "101²" into "1012".
+  return compactActAbbreviations(value).normalize("NFKC")
     .toLocaleLowerCase("pl")
     .replace(/[.,;:()[\]{}]/g, " ")
     .replace(/\s+/g, " ")

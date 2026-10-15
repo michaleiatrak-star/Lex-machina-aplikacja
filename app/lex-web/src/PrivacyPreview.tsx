@@ -8,6 +8,7 @@ import {
 } from "./api.js";
 import { PageScanView } from "./PageScanView.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
+import { addMark, visibleSuggestions } from "./privacy-marks.js";
 
 /**
  * The preview every processed document passes before it is finalized: what to decide first
@@ -29,11 +30,20 @@ type Suggestion = DocumentReviewResponse["suggestions"][number];
 
 const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end && a.end > b.start;
 
+// A firm found in the VAT white list or KRS says so: the register match is visible.
+function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
+  if (mark.firm === "REGISTRY") return "Firma (biała lista VAT / KRS)";
+  if (mark.firm === "TEXT") return "Firma";
+  return KIND_LABEL[mark.kind] ?? mark.kind;
+}
+
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
   busy?: boolean;
   // Decisions made earlier (back to a file in the batch preview).
   initialDirectives?: PagePrivacyDirective[];
   confirmLabel?: string;
+  // Why the last confirmation failed (shown here, next to the button that was clicked).
+  confirmError?: string;
   // The review is passed back: the user may have corrected page texts.
   onConfirm: (directives: PagePrivacyDirective[], review: DocumentReviewResponse) => void;
   onCancel: () => void;
@@ -97,7 +107,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
 
   const kept = (page: number, range: { start: number; end: number }) =>
     directives.some((item) => item.page === page && item.action === "KEEP" && overlaps(item, range));
-  const aiHints = review.suggestions.filter((item) => item.aiNotPerson && !props.keepClear);
+  const aiHints = review.suggestions.filter((item) => (item.aiNotPerson || item.uncertain) && !props.keepClear);
   const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
@@ -130,24 +140,48 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     if (end > start) setSelection({ page, start, end });
   }
 
-  function maskSelection(): void {
-    if (!selection) return;
+  // The selection as a decision, joined with the decisions it touches; null when it cannot be one.
+  function withSelection(current: PagePrivacyDirective[]): PagePrivacyDirective[] | null {
+    if (!selection) return current;
     const label = markLabel.trim();
     if (markAction === "LABEL" && !label) {
       setError("Wpisz etykietę, którą zastąpić zaznaczony fragment.");
-      return;
+      return null;
     }
     setError("");
-    setDirectives((current) => [
-      ...current,
+    return addMark(
+      current,
       markAction === "LABEL"
         ? { ...selection, action: "LABEL", label }
         : { ...selection, action: "PSEUDONYMIZE", kind, ...(label ? { label } : {}) }
-    ]);
+    );
+  }
+
+  function maskSelection(): void {
+    const next = withSelection(directives);
+    if (!next) return;
+    setDirectives(next);
     setSelection(null);
     setMarkLabel("");
     window.getSelection()?.removeAllRanges();
   }
+
+  // A fragment selected but not yet masked is masked too: confirming never drops it.
+  function confirm(): void {
+    if (props.keepClear) {
+      props.onConfirm(keepAllDirectives(review), review);
+      return;
+    }
+    const next = withSelection(directives);
+    if (!next) return;
+    if (selection) {
+      setDirectives(next);
+      setSelection(null);
+      window.getSelection()?.removeAllRanges();
+    }
+    props.onConfirm(next, review);
+  }
+
 
   async function savePage(): Promise<void> {
     if (!editing) return;
@@ -177,8 +211,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       review.pages.map((page) => {
         // OCR only: the text as it will be sent, nothing masked.
         if (props.keepClear) return { page: page.page, parts: [page.text] as ReactNode[] };
+        const userMarks = directives.filter((item) => item.page === page.page && item.action !== "KEEP");
         const marks = [
-          ...review.suggestions.filter((item) => item.page === page.page).map((item) => ({ ...item, user: false })),
+          ...visibleSuggestions(review.suggestions.filter((item) => item.page === page.page), userMarks).map((item) => ({ ...item, user: false })),
           ...directives
             .filter((item) => item.page === page.page && item.action !== "KEEP")
             .map((item) => ({
@@ -199,13 +234,13 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           parts.push(
             <mark
               key={`${mark.start}-${mark.end}`}
-              className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${"aiNotPerson" in mark && mark.aiNotPerson ? " is-ai-hint" : ""}`}
+              className={`privacy-preview-mark${open ? " is-clear" : ""}${mark.user ? " is-user" : ""}${("aiNotPerson" in mark && mark.aiNotPerson) || ("uncertain" in mark && mark.uncertain) ? " is-ai-hint" : ""}`}
               title={
                 mark.user
                   ? `${KIND_LABEL[mark.kind] ?? mark.kind} - Twoje zaznaczenie; kliknij, aby cofnąć`
                   : open
                     ? "Zostanie jawne - kliknij, aby zakryć"
-                    : `${KIND_LABEL[mark.kind] ?? mark.kind} - zostanie zakryte; kliknij, aby zostawić jawne`
+                    : `${suggestionLabel(mark)} - zostanie zakryte; kliknij, aby zostawić jawne`
               }
               onClick={() =>
                 mark.user
@@ -272,11 +307,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             type="button"
             className="primary-button"
             disabled={props.busy || saving || editing !== null}
-            onClick={() => props.onConfirm(props.keepClear ? keepAllDirectives(review) : directives, review)}
+            onClick={confirm}
           >
             {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}
           </button>
         </div>
+        {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
 
       {aiHints.length || doubtful.length || fixes.length ? (
@@ -284,12 +320,16 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           <strong>Do decyzji</strong>
           {aiHints.length ? (
             <div>
-              <small>Lokalne AI uznało te wykrycia za nie-osoby. Bez Twojej decyzji zostaną zakryte.</small>
+              <small>
+                {aiHints.some((item) => item.aiNotPerson) ? "Lokalne AI uznało część wykryć za nie-osoby. " : ""}
+                {aiHints.some((item) => item.uncertain) ? "Nazwisko znanej osoby w miejscu, gdzie może to być zwykłe słowo. " : ""}
+                Bez Twojej decyzji zostaną zakryte.
+              </small>
               <ul>
                 {aiHints.map((item) => (
                   <li key={`ai-${item.page}-${item.start}`}>
                     <span>
-                      s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · AI: {item.aiNotPerson}
+                      s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}” · {item.aiNotPerson ? `AI: ${item.aiNotPerson}` : item.uncertain}
                     </span>
                     <button type="button" onClick={() => toggleKeep(item)}>
                       {kept(item.page, item) ? "Zakryj z powrotem" : "Odkryj"}
@@ -441,7 +481,6 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           )}
         </div>
       </div>
-      {error ? <p className="field-error">{error}</p> : null}
     </section>
   );
 }

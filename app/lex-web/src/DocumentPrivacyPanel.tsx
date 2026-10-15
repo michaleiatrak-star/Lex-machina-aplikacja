@@ -120,7 +120,8 @@ export function DocumentPrivacyPanel({
   onAttachmentSelectionChange,
   onCaseFilesChange,
   onProcessingEvent,
-  processingOptionsFor
+  processingOptionsFor,
+  onFilesChosen
 }: {
   caseId: string;
   incomingFile?: File | null;
@@ -136,11 +137,18 @@ export function DocumentPrivacyPanel({
   onProcessingEvent?: (
     event: DocumentProcessingEvent
   ) => void;
+  // Several files chosen at once go to the parent's queue (read one after another).
+  onFilesChosen?: (files: File[]) => void;
 }) {
   const autoStartedFiles =
     useRef<WeakSet<File>>(new WeakSet());
   const activeFileRef =
     useRef<File | null>(null);
+  // The file each preview belongs to: "Zatwierdź plik" stages that file, whatever else
+  // started in the meantime (the next file of the queue, a new case).
+  const reviewFiles = useRef(new Map<string, File>());
+  // Each read gets a number; a read overtaken by a newer one (or by a case change) is dropped.
+  const openCall = useRef(0);
   const [activeFileName, setActiveFileName] =
     useState("");
   const [review, setReview] =
@@ -173,20 +181,26 @@ export function DocumentPrivacyPanel({
   const preparing =
     useRef<Promise<unknown>>(Promise.resolve());
 
+  // Before the effect below: a case change drops what was read for the previous case, and
+  // the file at the head of the queue is read again for the new one (it no longer hangs).
+  useEffect(() => {
+    openCall.current += 1;
+    setBatchDrafts([]);
+    setFinalizedBatch([]);
+    setReview(null);
+    setDirectives([]);
+    activeFileRef.current = null;
+    reviewFiles.current.clear();
+    prepared.current.clear();
+    autoStartedFiles.current = new WeakSet();
+  }, [caseId]);
+
   useEffect(() => {
     if (!incomingFile) return;
     if (autoStartedFiles.current.has(incomingFile)) return;
     autoStartedFiles.current.add(incomingFile);
     void openFile(incomingFile);
   }, [incomingFile, caseId]);
-
-  useEffect(() => {
-    setBatchDrafts([]);
-    setFinalizedBatch([]);
-    setReview(null);
-    setDirectives([]);
-    activeFileRef.current = null;
-  }, [caseId]);
 
   const isArchive = (file: File) =>
     file.type === "application/zip" || file.name.toLowerCase().endsWith(".zip");
@@ -239,6 +253,7 @@ export function DocumentPrivacyPanel({
     file: File | undefined
   ): Promise<void> {
     if (!file) return;
+    const call = ++openCall.current;
     setLoading(true);
     setError("");
     setFailure(null);
@@ -281,6 +296,8 @@ export function DocumentPrivacyPanel({
       // The next files of the queue are already read; their failures show when they come up.
       // Forgotten either way: a retry reads the file again.
       const result = await prepare([file]).get(file)!.finally(() => prepared.current.delete(file));
+      if (call !== openCall.current) return;
+      reviewFiles.current.set(result.documentId, file);
       setReview(result);
       onCaseFilesChange?.();
       const ocrPages = result.pages.filter(
@@ -304,11 +321,12 @@ export function DocumentPrivacyPanel({
         suggestions: result.suggestions.length
       });
     } catch (cause) {
+      if (call !== openCall.current) return;
       const failed = documentFailure(cause);
       setFailure(failed);
       setError(failed.message);
     } finally {
-      setLoading(false);
+      if (call === openCall.current) setLoading(false);
     }
   }
 
@@ -317,6 +335,7 @@ export function DocumentPrivacyPanel({
     draft: DocumentPrivacyDraft
   ): void {
     activeFileRef.current = draft.file;
+    reviewFiles.current.set(draft.review.documentId, draft.file);
     setActiveFileName(draft.fileName);
     setDirectives(draft.directives);
     setReview(draft.review);
@@ -330,12 +349,17 @@ export function DocumentPrivacyPanel({
     decisions: PagePrivacyDirective[],
     mode: PrivacyDecisionMode
   ): void {
-    if (!activeFileRef.current) return;
+    const file = reviewFiles.current.get(review.documentId) ?? activeFileRef.current;
+    if (!file) {
+      // Never a silent click: the preview stays and says what to do.
+      setError("Nie udało się zatwierdzić: ten podgląd nie jest już powiązany z plikiem. Wybierz plik ponownie.");
+      return;
+    }
     const draft: DocumentPrivacyDraft = {
-      file: activeFileRef.current,
+      file,
       fileName:
+        file.name ||
         activeFileName ||
-        activeFileRef.current.name ||
         review.documentId,
       review,
       directives: decisions,
@@ -524,14 +548,23 @@ export function DocumentPrivacyPanel({
             ? progress
               ? progressLabel(progress)
               : "Przetwarzanie…"
-            : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
+            : onFilesChosen
+              ? "Wybierz pliki: PDF, dokumenty, arkusze, zdjęcia lub ZIP (także kilka naraz)"
+              : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
           <input
             type="file"
             accept=".pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
+            multiple={Boolean(onFilesChosen)}
             disabled={loading || batchFinalizing || !caseId}
             onChange={(event) => {
+              const chosen = Array.from(event.target.files ?? []);
+              if (onFilesChosen && chosen.length > 1) {
+                event.target.value = "";
+                onFilesChosen(chosen);
+                return;
+              }
               void openFile(
-                event.target.files?.[0]
+                chosen[0]
               );
               event.currentTarget.value = "";
             }}
@@ -640,6 +673,7 @@ export function DocumentPrivacyPanel({
           keepClear={false}
           initialDirectives={directives}
           confirmLabel="Zatwierdź plik"
+          confirmError={error || undefined}
           busy={loading || batchFinalizing}
           onConfirm={(decisions, current) =>
             stageWith(current, decisions, decisions.length ? "MANUAL" : "AUTO_PSEUDONYMIZE")

@@ -107,6 +107,13 @@ export function addressForms(address: string | undefined): RegistryForm[] {
     // A street name before the house number ("Kolorowa 12", "Długa 5/3", "Polna 7A"), not a bare number.
     if (bare.replace(/\s*\d+\p{L}?(?:\s*\/\s*\d+\p{L}?)?$/u, "").trim().length < 3) continue;
     forms.push(street, bare, part, part.replace(STREET_PREFIX, ""), part.toLocaleUpperCase("pl"), part.toLocaleUpperCase("pl").replace(STREET_PREFIX, ""));
+    // A street named after a person, written in a letter by the surname only: the register
+    // has "JÓZEFA NOWAKOWSKIEGO 15", the letter "ul. Nowakowskiego 15".
+    const named = /^((?:\p{L}+[\s.-]+)+)(\p{L}{4,})\s+(\d+\p{L}?(?:\s*\/\s*\d+\p{L}?)?)$/u.exec(bare);
+    if (named && !ROMAN.test(named[2]!.toLocaleUpperCase("pl"))) {
+      const short = `${named[2]} ${named[3]}`;
+      forms.push(short, short.toLocaleUpperCase("pl"));
+    }
   }
   return [...new Set(forms)].map((form) => ({ text: form, kind: "ADDRESS" }));
 }

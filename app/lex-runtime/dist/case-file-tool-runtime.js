@@ -100,7 +100,11 @@ export class CaseFileToolRuntime {
     }
     /** Chunks read in this turn, as stored (for citation checks). */
     readChunks() {
-        return this.read.map((item) => ({ documentId: item.documentId, chunks: item.chunks.map((chunk) => ({ ...chunk })) }));
+        return this.read.map((item) => ({
+            documentId: item.documentId,
+            ...(item.totalPages ? { totalPages: item.totalPages } : {}),
+            chunks: item.chunks.map((chunk) => ({ ...chunk }))
+        }));
     }
     alias(documentId, text) {
         return this.access.sharedKey(documentId) ? text : this.options.namespace(text, this.options.prefixFor(documentId));
@@ -180,6 +184,8 @@ export class CaseFileToolRuntime {
             stored = { documentId, chunks: [] };
             this.read.push(stored);
         }
+        if (document.totalPages)
+            stored.totalPages = document.totalPages;
         for (const chunk of document.chunks) {
             if (!stored.chunks.some((item) => item.index === chunk.index))
                 stored.chunks.push({ ...chunk });

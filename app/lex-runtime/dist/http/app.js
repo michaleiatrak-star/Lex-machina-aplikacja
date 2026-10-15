@@ -53,7 +53,10 @@ import { chronologyTemporalGateRequired } from "../chronology-date-trigger.js";
 import { nextContractCheckpoint } from "../contract-analysis-state.js";
 import { completeContractExecution, requireContractExecutionPermit } from "../contract-analysis-execution-gate.js";
 import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes } from "../google/http-routes.js";
-import { buildWorkflowAuditArtifact, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
+import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
+import { caseWorkBlock, caseWorkLine, recordCaseWork } from "../case-work.js";
+import { isoDates } from "../supervised-content.js";
+import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
 import { completeOrderedCaseExecution, createOrderedCaseWorkflowState, nextOrderedCaseCheckpoint, requireOrderedCaseExecutionPermit } from "../ordered-case-workflow-state.js";
 const PROVIDERS = new Set([
     "openai",
@@ -133,7 +136,9 @@ const PRIVACY_KINDS = new Set([
     "VEHICLE_PLATE",
     "BAR_NUMBER",
     "PAYMENT_CARD",
-    "CUSTOM"
+    "CUSTOM",
+    // The user's mark of a firm name (a firm token, see ManualPrivacyDirective).
+    "FIRM"
 ]);
 function parsePrivacyDirectives(value) {
     if (!Array.isArray(value))
@@ -199,6 +204,13 @@ function loopbackOriginGuard(req, res, next) {
     res.status(403).json({
         error: "ORIGIN_NOT_ALLOWED"
     });
+}
+/** Steps the session audit recorded as BLOCKED (the targets, shortened). */
+export function blockedAuditSteps(result) {
+    return (result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [])
+        .filter((event) => event.status === "BLOCKED")
+        .map((event) => String(event.target).slice(0, 120))
+        .slice(0, 8);
 }
 async function persistWorkflowAuditArtifact(args) {
     const payload = buildWorkflowAuditArtifact({
@@ -2061,6 +2073,8 @@ export function createLexHttpApp(options) {
             const memory = await withCaseMemory(res, String(req.params.caseId ?? ""), "ANALYZE", (key) => options.caseMemoryStore.getCaseMemory(key));
             res.json({
                 summary: memory.summary ?? null,
+                chronology: memory.chronology ? { text: memory.chronology.text, updatedAt: memory.chronology.updatedAt, source: memory.chronology.source } : null,
+                work: (memory.work ?? []).map((item) => ({ ...item, line: caseWorkLine(item) })),
                 evidence: memory.evidence
                     ? {
                         updatedAt: memory.evidence.updatedAt,
@@ -2119,7 +2133,7 @@ export function createLexHttpApp(options) {
             return;
         }
         try {
-            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null }));
+            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null }));
             res.json({ cleared: true });
         }
         catch (error) {
@@ -4144,8 +4158,11 @@ export function createLexHttpApp(options) {
         }
         catch (error) {
             if (!sendCaseAccessError(res, error)) {
+                // The coded cause only (e.g. OVERLAPPING_PRIVACY_DIRECTIVES), never document text.
+                const reason = error instanceof Error ? /^[A-Z][A-Z0-9_]{2,80}(?=$|:)/.exec(error.message)?.[0] : undefined;
                 res.status(422).json({
-                    error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED"
+                    error: "DOCUMENT_PRIVACY_FINALIZATION_FAILED",
+                    ...(reason ? { reason } : {})
                 });
             }
         }
@@ -5804,6 +5821,7 @@ export function createLexHttpApp(options) {
             }
             // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
             let threadEvidence = null;
+            let caseWork = [];
             if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
                 try {
                     const actor = responseAuthContext(res);
@@ -5812,6 +5830,19 @@ export function createLexHttpApp(options) {
                     threadEvidence = memory.evidence ?? null;
                     if (threadEvidence)
                         request.threadEvidence = threadEvidence;
+                    caseWork = memory.work ?? [];
+                    // What the case already has: the register of work done and open, and the timeline
+                    // of its chronology (a part of the larger work). Later turns use them, not redo them.
+                    const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
+                    // The dates the model got with the timeline: the executor checks the answer uses them
+                    // (an API model keeps nothing between calls; the application gives and supervises it).
+                    if (memory.chronology)
+                        request.caseTimelineDates = [...isoDates(memory.chronology.text)].slice(0, 500);
+                    const register = caseWorkBlock(caseWork);
+                    if (timeline || register) {
+                        request.query = queryWithChronology(request.query, [register, timeline].filter(Boolean).join("\n\n"));
+                        request.onStep?.("PREPARE", [register ? `rejestr prac sprawy (${caseWork.length})` : "", timeline ? `oś czasu z ${memory.chronology.updatedAt.slice(0, 10)}` : ""].filter(Boolean).join(", "));
+                    }
                     // Messages the client left out for the window: replaced with their summary.
                     const dropped = droppedMessageCount(request.query);
                     if (dropped && options.sessionExecutor.summarizeThread) {
@@ -6618,7 +6649,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6730,7 +6764,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6834,7 +6871,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -6939,7 +6979,10 @@ export function createLexHttpApp(options) {
                     result.workflow.result ===
                         "PASS" &&
                     // A checkpoint that asked the user stays open until the reply.
-                    result.waitingForUser !== true) {
+                    result.waitingForUser !== true &&
+                    // A step refused during the turn: the audit of the checkpoint cannot be closed
+                    // over it; the answer is shown and the checkpoint stays open (checkpointHeld).
+                    blockedAuditSteps(result).length === 0) {
                     if (!options
                         .secureCaseArtifactStore) {
                         throw new Error("WORKFLOW_AUDIT_STORE_UNAVAILABLE");
@@ -7089,6 +7132,59 @@ export function createLexHttpApp(options) {
             const restoredFromDocuments = restoreSessionDocumentAliases(result, options.documentService);
             if (appliedTemplate)
                 result.firmTemplateApplied = appliedTemplate;
+            // A chronology result is kept as the case's timeline (case memory) for the later work.
+            const timelineToKeep = knowledge.caseId && options.caseMemoryStore && options.caseAccessService
+                ? chronologyFromAnswer({
+                    answer: result.answer,
+                    status: result.status,
+                    ...(result.taskSkill ? { taskSkill: result.taskSkill } : {}),
+                    reportClosed: chronologyContext?.permit.checkpoint === "CHRONOLOGY_REPORT_COMPLETE" &&
+                        result.chronologyWorkflow?.closedCheckpoints.includes("CHRONOLOGY_REPORT_COMPLETE") === true,
+                    sessionId: result.sessionId
+                })
+                : null;
+            // The register of the case's work: documents analysed (pages), the chronology, workflows done.
+            const completedWorkflows = [
+                result.courtWorkflow?.stage === "COMPLETE" ? "COURT_ANALYSIS_V1" : null,
+                result.contractWorkflow?.stage === "COMPLETE" ? "CONTRACT_ANALYSIS_V1" : null,
+                result.chronologyWorkflow?.stage === "COMPLETE" ? "CHRONOLOGY_V1" : null,
+                result.orderedCaseWorkflow?.status === "COMPLETE" ? result.orderedCaseWorkflow.workflowId : null,
+                result.processWorkflow?.documentStatus === "FINAL" ? "PROCESS_PLEADING_V1" : null
+            ].filter((id) => Boolean(id));
+            const workChanged = result.status === "DRAFT_PRESENTABLE" &&
+                ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length);
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || workChanged)) {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    const now = new Date().toISOString();
+                    await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", async (caseDataKey) => {
+                        const key = { caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion };
+                        const current = await options.caseMemoryStore.getCaseMemory(key);
+                        await options.caseMemoryStore.saveCaseMemory({
+                            ...key,
+                            ...(timelineToKeep ? { chronology: timelineToKeep } : {}),
+                            ...(workChanged
+                                ? {
+                                    work: recordCaseWork(current.work ?? caseWork, {
+                                        now,
+                                        ...(result.taskSkill ? { skill: result.taskSkill } : {}),
+                                        ...(result.documentAnalysis ? { documentAnalysis: true } : {}),
+                                        ...(result.documentCoverage ? { coverage: result.documentCoverage } : {}),
+                                        chronologySaved: Boolean(timelineToKeep),
+                                        completedWorkflows
+                                    })
+                                }
+                                : {})
+                        });
+                    });
+                    if (timelineToKeep)
+                        result.chronologySaved = { updatedAt: timelineToKeep.updatedAt };
+                }
+                catch (error) {
+                    console.error("CASE_MEMORY_WORK_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+                }
+            }
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
                 await rememberThreadEvidence({
                     store: options.caseMemoryStore,
@@ -7101,6 +7197,16 @@ export function createLexHttpApp(options) {
                     realValues: [...(result.restorations ?? []).map((item) => item.text), ...restoredFromDocuments]
                 });
             }
+            // A workflow step that passed but had a refused step on the way: its checkpoint was
+            // not closed (no audit artifact over a BLOCKED event); the user sees why and repeats it.
+            const held = result.status === "DRAFT_PRESENTABLE" &&
+                result.workflow?.result === "PASS" &&
+                isStatefulWorkflowAuditId(result.workflow.id) &&
+                result.waitingForUser !== true
+                ? blockedAuditSteps(result)
+                : [];
+            if (held.length)
+                result.checkpointHeld = { reason: "BLOCKED_STEP", steps: held };
             res.json(result);
         }
         catch (error) {

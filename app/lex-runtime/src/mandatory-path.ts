@@ -197,6 +197,8 @@ export type TurnFacts = {
   eventDateCheck?: EventDateCheck;
   // KROK 7: kto dał disclaimer na końcu odpowiedzi (aplikacja dokłada brakujący).
   disclaimerBy?: "MODEL" | "APLIKACJA";
+  // Nadzór treści (supervised-content.ts): związek przyczynowy, oś czasu sprawy.
+  supervised?: Array<{ id: string; label: string; status: "MET" | "MISSING" | "NOT_TRIGGERED"; evidence: string }>;
 };
 
 // UP-5 (foreign jurisdiction): another state's law or an international treaty
@@ -635,6 +637,19 @@ export function evaluateMandatoryPath(model: MandatoryPathModel, facts: TurnFact
         facts.disclaimerBy === "APLIKACJA"
           ? "model go nie dał; dołożyła aplikacja (wariant trybu)"
           : "na końcu odpowiedzi modelu; aplikacja podstawia tekst kanoniczny po bramkach (akty zweryfikowane w pliku)"
+    });
+  }
+
+  // SKILL: what the answer must contain, checked by the application in its text.
+  for (const check of legal ? facts.supervised ?? [] : []) {
+    steps.push({
+      layer: "SKILL",
+      id: check.id,
+      label: check.label,
+      requirement: "CONDITIONAL",
+      status: check.status,
+      by: "MODEL",
+      evidence: check.evidence
     });
   }
 

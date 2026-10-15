@@ -17,6 +17,37 @@ describe("firm names ([FIRMA], REGULY-ANONIMIZACJI)", () => {
     expect(detectFirmNames("Kowalski i Wspólnicy sp.k. oraz Inter-Trans S.A.").map((span) => span.value)).toEqual(["Kowalski i Wspólnicy", "Inter-Trans"]);
   });
 
+  it("a legal form misread by OCR still marks a firm", () => {
+    const values = (text: string) => detectFirmNames(text).map((span) => span.value);
+    expect(values("Kancelaria Radców Prawnych\nNowak Lis Spólka Komandytowa")).toEqual(["Nowak Lis"]);
+    expect(values("Budex Sp6łka Akcyjna oraz Transkom sp. z 0.o. i Marbud sp. zo.o.")).toEqual(["Budex", "Transkom", "Marbud"]);
+    // "Spólka" opening a line is the role word, not part of the name.
+    expect(values("Spólka Transkom sp. z o.o.")).toEqual(["Transkom"]);
+    // A profession before a partnership's name on the same line is not part of the name.
+    expect(values("z Kancelarii Adwokatów i Radców Prawnych Nowak Lis Spółka Komandytowa")).toEqual(["Nowak Lis"]);
+  });
+
+  it("a firm found on a later page is protected on earlier pages in the second pass", async () => {
+    const vault = new PseudonymizationVault();
+    const service = new LocalPolishPseudonymizer(vault);
+    const pages = ["Stopka: Nowak Lis Spólka Komandytowa", "Pełnomocnicy z Nowak Lis Spółka Komandytowa"];
+    for (const page of pages) await service.pseudonymize(page);
+    const first = await service.pseudonymize(pages[0]!);
+    expect(first.text).not.toContain("Nowak Lis");
+  });
+
+  it("a role heading above a name is not the name", async () => {
+    const vault = new PseudonymizationVault();
+    const value = "Radców Prawnych\nNowak Lis";
+    const ner = { recognize: async (text: string) => {
+      const start = text.indexOf(value);
+      return start < 0 ? [] : [{ start, end: start + value.length, kind: "PERSON" as const, value, confidence: 0.9 }];
+    } };
+    const result = await new LocalPolishPseudonymizer(vault, ner).pseudonymize(`Kancelaria Adwokatów i ${value} sp.k.`);
+    expect(result.text).toContain("Radców Prawnych");
+    expect(result.text).not.toContain("Nowak Lis");
+  });
+
   it("public bodies and roles stay", () => {
     expect(detectFirmNames("Skarb Państwa reprezentowany przez Starostę. Zakład Ubezpieczeń Społecznych odmówił.")).toEqual([]);
   });

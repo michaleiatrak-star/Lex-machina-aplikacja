@@ -1,5 +1,6 @@
+import { surnameMentions } from "./surname-propagation.js";
 import { detectFirmNames, type FirmSpan } from "./firm-names.js";
-import { personPart } from "./generic-words.js";
+import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
 import type { RegistryFormsProvider } from "./registry-enrichment.js";
 import {
@@ -52,7 +53,9 @@ export type ManualPrivacyDirective = {
   start: number;
   end: number;
   action: PrivacyDirectiveAction;
-  kind?: PiiKind;
+  // "FIRM": the user's mark of a firm name - a PERSON token with the firm's identity
+  // (declined as a name, its legal form left in the text), as found firms get.
+  kind?: PiiKind | "FIRM";
   label?: string;
 };
 
@@ -63,10 +66,16 @@ export interface NamedEntityRecognizer {
 export type PseudonymizationFinding = {
   token: string;
   kind: PiiKind;
+  // A firm's name: from a public register (VAT white list, KRS, CEIDG) or from the text
+  // (legal form, business prefix, the user's "Firma" mark).
+  firm?: "REGISTRY" | "TEXT";
   start: number;
   end: number;
   source: "AUTO" | "USER";
   label?: string;
+  // A known person's surname where the word may also be a common noun (sentence start,
+  // capitals): masked, for the user to confirm (surname-propagation.ts).
+  uncertain?: string;
 };
 
 export type PrivacyAnnotation = {
@@ -848,6 +857,13 @@ export class PseudonymizationVault {
   }
 }
 
+/** A line naming a role or an office ("Radców Prawnych", "Kancelaria Adwokatów"), not a person. */
+function roleHeading(line: string): boolean {
+  const first = /\p{L}+/u.exec(line)?.[0]?.toLowerCase();
+  const words = genericWords();
+  return Boolean(first && (words.personOnlyTriggers.has(first) || words.institutions.has(first)));
+}
+
 export class LocalPolishPseudonymizer {
   constructor(
     private readonly vault: PseudonymizationVault,
@@ -882,7 +898,7 @@ export class LocalPolishPseudonymizer {
       .map((item) => ({
         start: item.start,
         end: item.end,
-        kind: item.kind ?? "CUSTOM",
+        kind: item.kind === "FIRM" ? "PERSON" as const : item.kind ?? "CUSTOM",
         value: text.slice(item.start, item.end),
         source: "USER" as const,
         ...(item.label ? { label: item.label } : {})
@@ -904,8 +920,13 @@ export class LocalPolishPseudonymizer {
       process.stderr.write(`REGISTRY_ENRICHMENT_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
     }
     for (const form of registered) {
-      const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu"))) {
+      // Any letter case and spacing ("UL. DŁUGA 5", "Długa  5", "DŁUGA 5"): the same letters with
+      // the register's house number do not appear by chance. A firm's name in any case too,
+      // but not written all in small letters (a common phrase, not the name).
+      const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
+      const anyCase = form.kind === "ADDRESS" || Boolean(form.organization);
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, anyCase ? "giu" : "gu"))) {
+        if (form.organization && match[0] !== form.text && match[0] === match[0].toLocaleLowerCase("pl")) continue;
         autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO" });
         if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
       }
@@ -944,11 +965,17 @@ export class LocalPolishPseudonymizer {
         // A name never runs over a line: "Paweł Kania⏎os. Kosmonautów 86/9" (a heading
         // and the address under it) is the name; the address is found on its own.
         const lineEnd = recognized.kind === "PERSON" ? recognized.value.indexOf("\n") : -1;
+        // A role heading on the first line ("Radców Prawnych⏎Nowak Lis"): the name is below.
+        const heading = lineEnd > 0 && roleHeading(recognized.value.slice(0, lineEnd));
+        const below = heading ? recognized.value.slice(lineEnd + 1).split("\n")[0]!.trim() : "";
         const found =
-          lineEnd > 0
-            ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
-            : recognized;
+          heading
+            ? { ...recognized, start: recognized.start + recognized.value.indexOf(below, lineEnd + 1), value: below }
+            : lineEnd > 0
+              ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
+              : recognized;
         if (lineEnd > 0) found.end = found.start + found.value.length;
+        if (!found.value) continue;
         // A double surname the recognizer cut at the hyphen ("Nicole Brzezińska" of "Nicole Brzezińska-Król").
         if (found.kind === "PERSON") {
           const rest = /^-\p{Lu}\p{Ll}+/u.exec(text.slice(found.end, found.end + 40));
@@ -1053,6 +1080,12 @@ export class LocalPolishPseudonymizer {
     for (const [value, legalForm] of registryFirms) {
       if (!entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
     }
+    // The user's "Firma" marks: the firm's identity, with the legal form written next to it.
+    for (const item of manual) {
+      if (item.action !== "PSEUDONYMIZE" || item.kind !== "FIRM") continue;
+      const value = text.slice(item.start, item.end);
+      entities.set(`PERSON\u0000${value}`, organizationEntity(value, firmContext(text, item.start, item.end)?.legalForm));
+    }
     // Surfaces written after "państwo", "małżonkowie", a plural role...: a family.
     const plural = new Set(
       findings
@@ -1100,6 +1133,37 @@ export class LocalPolishPseudonymizer {
           ? (surfaces) => morphology.analyzeAddresses!(surfaces)
           : undefined
       );
+    }
+
+    // A known person by surname alone or surname first ("Nowakowi", "Pan Wilk", "WILK JAN"):
+    // the full name's token, so the model sees one person (surname-propagation.ts).
+    {
+      const known = [...new Set(entities.values())];
+      const singleWordPerson = (item: PiiSpan) => item.kind === "PERSON" && !/\s/u.test(item.value.trim());
+      const blocked = (start: number, end: number) =>
+        [...keep, ...labelDirectives, ...findings.filter((item) => !singleWordPerson(item))].some((item) => overlaps({ start, end }, item));
+      for (const mention of surnameMentions(text, known, blocked)) {
+        const same = findings.find((item) => item.kind === "PERSON" && item.start === mention.start && item.end === mention.end);
+        // A longer mention ("Nowak Piotr") takes the place of a lone surname found inside it,
+        // which would leave the given name in clear text under another token.
+        const inside = findings.filter(
+          (item) => item !== same && singleWordPerson(item) && item.source !== "USER" && item.start >= mention.start && item.end <= mention.end
+        );
+        for (const item of inside) findings.splice(findings.indexOf(item), 1);
+        if (!same && findings.some((item) => overlaps(mention, item))) continue;
+        if (!same) {
+          findings.push({
+            start: mention.start,
+            end: mention.end,
+            kind: "PERSON",
+            value: mention.value,
+            confidence: 0.9,
+            source: "AUTO",
+            ...(mention.ambiguous ? { ambiguous: true } : {})
+          });
+        }
+        entities.set(`PERSON\u0000${mention.value}`, mention.entity);
+      }
     }
 
     // Per mention: a firm named after a person, a family the recognizer
@@ -1195,14 +1259,19 @@ export class LocalPolishPseudonymizer {
         output.slice(0, finding.start) +
         token +
         output.slice(finding.end);
+      const entity = byFinding.get(finding) ?? entities.get(`${finding.kind}\u0000${finding.value}`);
       publicFindings.push({
         token,
         kind: finding.kind,
+        ...(entity?.type === "organization" ? { firm: registryFirms.has(finding.value) ? "REGISTRY" as const : "TEXT" as const } : {}),
         start: finding.start,
         end: finding.end,
         source: finding.source ?? "AUTO",
         ...(finding.label
           ? { label: finding.label }
+          : {}),
+        ...(finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
+          ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
           : {})
       });
     }

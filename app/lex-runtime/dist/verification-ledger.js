@@ -4,7 +4,8 @@ import { assertVerificationTierPolicy } from "./legal-source-policy.js";
 // obowiązujące (relacje ELI są odświeżane raz dziennie).
 export const FRESHNESS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 function normalizeClaim(value) {
-    return compactActAbbreviations(value.normalize("NFKC"))
+    // Superscripts first: NFKC would turn "101²" into "1012".
+    return compactActAbbreviations(value).normalize("NFKC")
         .toLocaleLowerCase("pl")
         .replace(/[.,;:()[\]{}]/g, " ")
         .replace(/\s+/g, " ")

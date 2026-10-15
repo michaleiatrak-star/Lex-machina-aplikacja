@@ -95,6 +95,15 @@ describe("identifier detectors", () => {
     expect(found.some(([, value]) => String(value).includes("1234/25"))).toBe(false);
   });
 
+  it("a birth date in a form heading, also with the place of birth", () => {
+    const dates = (text: string) => detectIdentifiers(text).filter((span) => span.kind === "BIRTH_DATE").map((span) => span.value);
+    expect(dates("Data i miejsce urodzenia 02.11.1975 GDAŃSK")).toEqual(["02.11.1975"]);
+    expect(dates("data i miejsce ur.: 14.05.1944 r. Kraków")).toEqual(["14.05.1944 r."]);
+    expect(dates("Data urodzenia02.11.1975")).toEqual(["02.11.1975"]);
+    // "od urodzenia" with no date after it is not a birth date.
+    expect(dates("Niepełnosprawność istnieje od - urodzenia. Ustalony stopień datuje się od - 01.06.2010 r.")).toEqual([]);
+  });
+
   it("detects a PESEL whose digits are split by spaces or hyphens", () => {
     for (const written of ["440 514 01359", "44 05 14 01359", "4 4 0 5 1 4 0 1 3 5 9", "440514-01359"]) {
       const found = detectIdentifiers(`PESEL: ${written}, adres jak wyżej.`);

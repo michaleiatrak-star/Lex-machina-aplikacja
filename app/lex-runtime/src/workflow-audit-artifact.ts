@@ -10,6 +10,19 @@ export type StatefulWorkflowAuditId =
   | "EVIDENCE_ANALYSIS_V1"
   | "WITNESS_QUESTIONING_V1";
 
+const STATEFUL_WORKFLOW_AUDIT_IDS: ReadonlySet<string> = new Set<StatefulWorkflowAuditId>([
+  "COURT_ANALYSIS_V1",
+  "CHRONOLOGY_V1",
+  "CONTRACT_ANALYSIS_V1",
+  "EVIDENCE_ANALYSIS_V1",
+  "WITNESS_QUESTIONING_V1"
+]);
+
+/** A workflow whose checkpoints are closed with an audit artifact. */
+export function isStatefulWorkflowAuditId(id: string | undefined): id is StatefulWorkflowAuditId {
+  return id !== undefined && STATEFUL_WORKFLOW_AUDIT_IDS.has(id);
+}
+
 export type WorkflowAuditCitationAnchor = {
   caseId?: string;
   documentId: string;

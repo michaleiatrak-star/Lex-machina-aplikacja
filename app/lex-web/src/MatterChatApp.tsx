@@ -39,7 +39,7 @@ import {
 import { CaseCollaborationPanel } from "./CaseCollaborationPanel.js";
 import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
-import { documentFailure } from "./document-errors.js";
+import { documentFailure, privacyConfirmFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
 import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
@@ -123,6 +123,7 @@ import {
   type ContractAnalysisMode
 } from "./api.js";
 import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
+import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
 
 
@@ -959,16 +960,29 @@ function executionMessage(
       verificationDegraded
         ? "⚠️ Weryfikacja źródeł lub śladu Gate I nie jest kompletna. Odpowiedź jest prezentowana roboczo i może wymagać potwierdzenia w źródłach.\n\n"
         : "";
+    // The chronology was kept as the case's timeline: said under the answer.
+    const timelineNote = execution.chronologySaved
+      ? "\n\n_Oś czasu zapisana w pamięci sprawy: kolejne prace w tej sprawie (także w nowym wątku) z niej korzystają._"
+      : "";
+    // The step passed but a tool call was refused on the way: its checkpoint stays open.
+    const heldNotice = execution.checkpointHeld
+      ? `${checkpointHeldNotice(execution.checkpointHeld.steps)}\n\n`
+      : "";
 
     return {
       id: messageId(),
       role: "assistant",
       content:
         verificationWarning +
-        execution.answer,
+        heldNotice +
+        execution.answer +
+        timelineNote,
       evidence: execution.evidence,
       ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
       ...(execution.pipelineNext ? { pipelineNext: execution.pipelineNext } : {}),
+      ...(execution.documentCoverage?.length
+        ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
+        : {}),
       ...(execution.auxiliarySources?.length
         ? {
             auxiliarySources:
@@ -983,7 +997,7 @@ function executionMessage(
             restorations:
               shiftMarks(
                 execution.restorations,
-                verificationWarning.length
+                verificationWarning.length + heldNotice.length
               )
           }
         : {}),
@@ -1073,8 +1087,132 @@ export function documentWarningsText(warnings: string[] | undefined): string {
   return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
 }
 
+type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
+
+/** The message the app sends for a chosen option: the stage alone, without a new analysis. */
+// The file of the result itself, by its kind: directDocumentRequest reads the kind from these
+// words, and the server makes it through that skill's pipeline (pleading: W1–W3; contract:
+// AU-HYBRID and AU-STRIP), with HYBRID-VAL before the file.
+const OWN_DOCUMENT_NOUN: Record<string, string> = {
+  "pisma-procesowe-v3": "pismo procesowe",
+  "analizator-umow-v1": "umowę",
+  "pisma-proste-v2": "pismo"
+};
+
+export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS"; own?: true }): string {
+  if (choice.own) {
+    return `Wygeneruj ${OWN_DOCUMENT_NOUN[choice.skill] ?? "dokument"} w pliku .docx z powyższego wyniku, bez zmian merytorycznych.`;
+  }
+  return choice.kind === "DOCUMENT"
+    ? `${PIPELINE_HANDOFF} ${choice.skill}. Wynik powyżej jest zadowalający: przygotuj dokument na jego podstawie, bez ponownej analizy i bez nowych wątków.`
+    : `${PIPELINE_HANDOFF} ${choice.skill}. Kontynuuj na podstawie powyższego wyniku, tylko w zakresie tego etapu.`;
+}
+
+type StepSummary = NonNullable<NonNullable<PipelineNext["choices"]>[number]["steps"]>;
+
+/** The pipeline's steps before a file: done, skipped and why, still open (in words). */
+export function stepSummaryText(steps: StepSummary): string {
+  const skipped = steps.skipped.map((entry) => `${entry.checkpoint} (${entry.reason ?? "bez podanego powodu"})`);
+  return [
+    `Kroki pisma: wykonane ${steps.done} z ${steps.total}`,
+    skipped.length ? `pominięte: ${skipped.join("; ")}` : "",
+    steps.open.length ? `otwarte: ${steps.open.join(", ")}` : ""
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** A file over open or unexplained steps is only a draft (ZAKAZ-14: DRAFT — NIEWERYFIKOWANY). */
+export function documentChoiceLabel(steps: StepSummary | undefined): string {
+  return steps && (steps.open.length || steps.skipped.some((entry) => !entry.reason)) ? "Generuj projekt (DRAFT)" : "Generuj dokument";
+}
+
+/**
+ * After a result: generate the document when it is satisfactory, or one further stage of
+ * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
+ */
+export function PipelineChoices({ next, auto, disabled, onChoose }: { next: PipelineNext; auto: boolean; disabled: boolean; onChoose: (text: string) => void }) {
+  const choices: NonNullable<PipelineNext["choices"]> = next.choices?.length
+    ? next.choices
+    : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? "DOCUMENT" : "ANALYSIS", reason: next.reason }];
+  const ownDocument = choices.find((choice) => choice.own);
+  if (!auto) {
+    // A mechanical thread stays with its skill; the file of its own result is still at hand.
+    const others = choices.filter((choice) => !choice.own);
+    return (
+      <div className="chat-pipeline-next" role="note">
+        {ownDocument ? (
+          <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(ownDocument))}>
+            {documentChoiceLabel(ownDocument.steps)}
+          </button>
+        ) : null}
+        {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
+        {others.length ? (
+          <span>
+            Dalej możliwe: {others.map((choice) => choice.skill).join(", ")}.
+          </span>
+        ) : null}
+        {others.length ? (
+          <span className="field-help">
+            Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div className="chat-pipeline-next" role="group" aria-label="Co dalej">
+      <span>Co dalej? Wybierz jedną opcję; nic nie uruchomi się bez Twojej decyzji.</span>
+      <div className="chat-pipeline-choices">
+        {choices.map((choice) => (
+          <button
+            key={`${choice.kind}-${choice.skill}`}
+            type="button"
+            className={choice.kind === "DOCUMENT" ? "primary-button" : "chat-secondary-action"}
+            disabled={disabled}
+            title={`${choice.skill} (${choice.reason})`}
+            onClick={() => onChoose(pipelineChoiceMessage(choice))}
+          >
+            {choice.kind === "DOCUMENT" ? documentChoiceLabel(choice.steps) : `Dalsza analiza: ${choice.skill}`}
+          </button>
+        ))}
+      </div>
+      {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
+      {choices.some((choice) => choice.kind === "DOCUMENT") ? (
+        <small className="field-help">
+          {ownDocument
+            ? "„Generuj dokument”, gdy wynik jest zadowalający: plik z tego wyniku, po walidacji HYBRID-VAL w pipeline tego dokumentu."
+            : `„Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
+        </small>
+      ) : null}
+    </div>
+  );
+}
+
+/** A workflow step whose checkpoint was not closed: which refused steps, and what to do. */
+export function checkpointHeldNotice(steps: string[]): string {
+  return `Etap nie został zamknięty: w tej turze odmówiono kroku (${steps.join("; ")}). Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu.`;
+}
+
+// HYBRID-VAL (document-generation-validation.ts) before the .docx, in words.
+const HYBRID_REASON: Record<string, string> = {
+  EMPTY_DOCUMENT: "dokument jest pusty",
+  OPEN_PLACEHOLDER: "zostały niewypełnione pola ([UZUPEŁNIJ] lub ⬛)",
+  DRAFT_UNVERIFIED: "dokument ma oznaczenie DRAFT — NIEWERYFIKOWANY",
+  PRIVACY_TOKEN_REMAINS: "zostały symbole anonimizacji",
+  CONTROL_CHARACTER: "tekst zawiera znaki sterujące",
+  SOURCE_SESSION_BLOCKED_EVENT: "w rozmowie, z której powstaje dokument, był zablokowany krok",
+  SOURCE_DOCUMENT_AUDIT_MISSING: "brak śladu odczytu dokumentu źródłowego sprawy"
+};
+
 /** A refused export in words: which provisions or judgments stopped the file. */
 export function exportBlockedMessage(error: unknown): string | null {
+  if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
+    const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
+    return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
+      .map((reason) => HYBRID_REASON[reason] ?? reason)
+      .join("; ")}. Popraw treść w rozmowie i wygeneruj dokument ponownie.`;
+  }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
   const listed = references
@@ -1162,6 +1300,8 @@ export default function MatterChatApp({
     resolve: (result: Awaited<ReturnType<typeof finalizeCaseDocument>> | null) => void;
   } | null>(null);
   const [privacyPreviewBusy, setPrivacyPreviewBusy] = useState(false);
+  // A failed confirmation keeps the preview open with the user's marks and says why.
+  const [privacyPreviewError, setPrivacyPreviewError] = useState("");
   // Every document is finalized after its preview; null when the user cancels it.
   function previewThenFinalize(
     targetCase: string,
@@ -4292,22 +4432,22 @@ export default function MatterChatApp({
           <PrivacyPreview
             {...privacyPreview.request}
             busy={privacyPreviewBusy}
+            confirmError={privacyPreviewError}
             onCancel={() => {
               privacyPreview.resolve(null);
+              setPrivacyPreviewError("");
               setPrivacyPreview(null);
             }}
             onConfirm={(directives) => {
               setPrivacyPreviewBusy(true);
+              setPrivacyPreviewError("");
               void finalizeCaseDocument(privacyPreview.request.caseId, privacyPreview.request.review.documentId, directives, undefined, true)
-                .then((result) => privacyPreview.resolve(result))
-                .catch((failure) => {
-                  setCaseFilePickerError(failure instanceof Error ? failure.message : String(failure));
-                  privacyPreview.resolve(null);
-                })
-                .finally(() => {
-                  setPrivacyPreviewBusy(false);
+                .then((result) => {
+                  privacyPreview.resolve(result);
                   setPrivacyPreview(null);
-                });
+                })
+                .catch((failure) => setPrivacyPreviewError(privacyConfirmFailure(failure)))
+                .finally(() => setPrivacyPreviewBusy(false));
             }}
           />
         </div>
@@ -5406,30 +5546,16 @@ export default function MatterChatApp({
                     </details>
                   ) : null}
                   {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
+                  {message.documentCoverage?.length ? (
+                    <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
+                  ) : null}
                   {message.pipelineNext ? (
-                    <div className="chat-pipeline-next" role="note">
-                      <span>
-                        Następny etap: <strong>{message.pipelineNext.skill}</strong> ({message.pipelineNext.reason}).
-                      </span>
-                      {workMode === "AUTO" ? (
-                        <button
-                          type="button"
-                          className="chat-secondary-action"
-                          disabled={executing}
-                          onClick={() => {
-                            void executeMessage(
-                              `${PIPELINE_HANDOFF} ${message.pipelineNext!.skill}. Kontynuuj na podstawie powyższego wyniku.`
-                            );
-                          }}
-                        >
-                          Kontynuuj
-                        </button>
-                      ) : (
-                        <span className="field-help">
-                          Wątek mechaniczny jest przypięty do swojego skilla: otwórz nowy wątek w tej sprawie i wybierz ten skill w trybie mechanicznym (pamięć sprawy przechodzi do nowego wątku).
-                        </span>
-                      )}
-                    </div>
+                    <PipelineChoices
+                      next={message.pipelineNext}
+                      auto={workMode === "AUTO"}
+                      disabled={executing}
+                      onChoose={(text) => void executeMessage(text)}
+                    />
                   ) : null}
                   {message.sourceVerification ? (
                     <SnVerification
@@ -5647,6 +5773,12 @@ export default function MatterChatApp({
                   <span className="chat-clear-text-warning">Uwaga: część załączników to tekst jawny</span>
                 ) : null}
               </div>
+              <UnfinishedAnalysis
+                items={unfinishedDocuments(messages)}
+                label={(item) => fileLabel(item.documentId, item.title)}
+                disabled={executing || Boolean(selectedCase?.archivedAt)}
+                onFinish={(text) => void executeMessage(text)}
+              />
               {lastDelivery ? (
                 <div className="chat-delivery" role="status">
                   <strong>

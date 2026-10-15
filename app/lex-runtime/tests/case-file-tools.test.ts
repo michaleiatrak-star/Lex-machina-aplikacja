@@ -143,7 +143,7 @@ describe("case file tools", () => {
     const body = parse(result!.content);
     expect(body.chunks[0].text).toContain("=== STRONA 2/3 ===");
     expect(body.chunks[0].text).toContain("[LMPII:D01:PERSON:0001] nie zapłacił");
-    expect(tools.readChunks()).toEqual([{ documentId: OUTSIDE, chunks: [STORED[OUTSIDE]![1]] }]);
+    expect(tools.readChunks()).toEqual([{ documentId: OUTSIDE, totalPages: 3, chunks: [STORED[OUTSIDE]![1]] }]);
     expect(tools.auditEvents()[0]).toMatchObject({ tool: "read_case_file", target: OUTSIDE, decision: "ALLOW" });
   });
 

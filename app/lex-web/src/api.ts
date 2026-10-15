@@ -130,7 +130,9 @@ export type PiiKind =
   | "VEHICLE_PLATE"
   | "BAR_NUMBER"
   | "PAYMENT_CARD"
-  | "CUSTOM";
+  | "CUSTOM"
+  // The user's mark of a firm name (a firm token on the runtime side).
+  | "FIRM";
 
 export type PrivacyAction =
   | "PSEUDONYMIZE"
@@ -596,8 +598,12 @@ export type DocumentReviewResponse = {
     start: number;
     end: number;
     kind: PiiKind;
+    // A firm's name, from a public register (VAT white list, KRS) or from the text.
+    firm?: "REGISTRY" | "TEXT";
     // The local model read it as no person ("słowo pospolite"); masked until the user unmasks it.
     aiNotPerson?: string;
+    // Masked as a known person's surname, but the word may be a common noun: the user decides.
+    uncertain?: string;
   }>;
 };
 
@@ -1022,11 +1028,25 @@ export type QueryModeDecisionView = {
   signals: { laik: string[]; prawnik: string[]; direct: string[] };
 };
 
+/** Pages of a case document read for an answer; PARTIAL in an analysis = unfinished work. */
+export type DocumentCoverageEntry = {
+  documentId: string;
+  title?: string;
+  totalPages: number;
+  pages: Array<[number, number]>;
+  status: "FULL" | "PARTIAL";
+};
+
 export type SessionExecutionResponse = {
   sessionId: string;
+  // The answer was kept as the case's timeline (case memory).
+  chronologySaved?: { updatedAt: string };
+  // Pages of the case's documents read this turn; documentAnalysis: the turn analysed them.
+  documentCoverage?: DocumentCoverageEntry[];
+  documentAnalysis?: boolean;
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
-  pipelineNext?: { skill: string; reason: string };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
   // The firm's default template the application used (none picked).
@@ -1135,6 +1155,8 @@ export type SessionExecutionResponse = {
   taskMode?: "REDACTION";
   // The answer ends a checkpoint with a question to the user.
   waitingForUser?: boolean;
+  // A workflow checkpoint left open: a step was refused during the turn.
+  checkpointHeld?: { reason: "BLOCKED_STEP"; steps: string[] };
   // The letter skill hands the matter to the other one; the chat offers the switch.
   skillSwitch?: import("./skill-switch-offer.js").SkillSwitchOffer;
 };
@@ -1853,6 +1875,10 @@ export type CaseThreadSummary = {
 
 export type CaseMemory = {
   summary: CaseThreadSummary | null;
+  // The case's timeline from its last chronology; later answers in the case start from it.
+  chronology?: { text: string; updatedAt: string; source: "CHRONOLOGY_V1" | "AUTO" } | null;
+  // Work done and open in the case (the application's register): later answers use it.
+  work?: Array<{ key: string; kind: string; label: string; status: "DONE" | "OPEN"; at: string; line: string }>;
   evidence: {
     updatedAt: string;
     provisions: Array<{

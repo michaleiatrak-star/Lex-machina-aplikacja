@@ -171,7 +171,7 @@ const DETECTORS = [
     },
     {
         kind: "BIRTH_DATE",
-        regex: new RegExp(`(?:ur\\.|urodzon[aey]j?|urodzin|data\\s+urodzenia|dat[ąy]\\s+urodzenia)\\s*(?:się\\s*)?(?:dnia\\s*|w\\s+dniu\\s*)?:?\\s*(${DATE})`, "giu"),
+        regex: new RegExp(`(?:ur\\.|urodzon[aey]j?|urodzin|(?:data|dat[ąy])(?:\\s+i\\s+miejsc[ae])?\\s+(?:urodzenia|ur\\.))\\s*(?:się\\s*)?(?:dnia\\s*|w\\s+dniu\\s*)?:?\\s*(${DATE})`, "giu"),
         group: 1
     },
     {

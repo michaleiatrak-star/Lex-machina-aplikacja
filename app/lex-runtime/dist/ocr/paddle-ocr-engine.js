@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { evidenceBudget, readOcrPages } from "./ocr-result.js";
+import { evidenceBudget, ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 // Pages per worker pass (one pass = one process, one timeout).
 export const OCR_BATCH_PAGES = 30;
@@ -139,7 +139,7 @@ export class LocalPaddleOcrEngine {
                 if (code === 0)
                     resolve();
                 else {
-                    reject(new Error(`${/ModuleNotFoundError|No module named/.test(stderr) ? "OCR_ENGINE_MISSING" : "OCR_ENGINE_FAILED"}: Local PaddleOCR worker failed with exit code ${code}: ${stderr.trim()}`));
+                    reject(ocrWorkerFailure(stderr, code, "worker"));
                 }
             });
         });

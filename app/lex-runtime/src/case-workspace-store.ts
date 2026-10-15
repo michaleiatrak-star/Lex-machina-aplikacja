@@ -1,6 +1,8 @@
 import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
+import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
+import { validCaseWork, type CaseWorkItem } from "./case-work.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -77,7 +79,16 @@ export type WorkspaceThreadMessage = {
   evidence?: Record<string, unknown>[];
   auxiliarySources?: Record<string, unknown>[];
   mandatoryPath?: Record<string, unknown>;
-  pipelineNext?: { skill: string; reason: string };
+  // Pages of the case's documents read for this answer (document-coverage.ts).
+  documentCoverage?: Array<{ documentId: string; title?: string; totalPages: number; pages: Array<[number, number]>; status: "FULL" | "PARTIAL" }>;
+  documentAnalysis?: boolean;
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{
+    skill: string;
+    kind: "DOCUMENT" | "ANALYSIS";
+    reason: string;
+    own?: true;
+    steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] };
+  }> };
 };
 
 export type WorkspaceWidget = {
@@ -116,6 +127,10 @@ export type WorkspaceRestoration = {
 export type CaseMemory = {
   evidence?: ThreadEvidence;
   summary?: ThreadSummary;
+  // The case's timeline from its last chronology (case-chronology.ts).
+  chronology?: CaseChronology;
+  // Work done and open in the case (case-work.ts).
+  work?: CaseWorkItem[];
 };
 
 export type CaseWorkspaceIndex = {
@@ -324,12 +339,55 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   const auxiliarySources = plainRecords(input.auxiliarySources, 100, 300_000);
   const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
   const next = input.pipelineNext;
+  const validChoice = (choice: unknown) => {
+    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown; steps?: unknown } | null;
+    const steps = item?.steps as { done?: unknown; total?: unknown; skipped?: unknown; open?: unknown } | undefined;
+    const validSteps =
+      steps === undefined ||
+      (typeof steps === "object" && steps !== null &&
+        Number.isInteger(steps.done) && Number.isInteger(steps.total) && (steps.total as number) <= 100 &&
+        Array.isArray(steps.open) && steps.open.length <= 100 && steps.open.every((value) => typeof value === "string" && value.length <= 100) &&
+        Array.isArray(steps.skipped) && steps.skipped.length <= 100 &&
+        steps.skipped.every((entry: { checkpoint?: unknown; reason?: unknown }) =>
+          typeof entry?.checkpoint === "string" && entry.checkpoint.length <= 100 && (entry.reason === undefined || (typeof entry.reason === "string" && entry.reason.length <= 300))));
+    return (
+      typeof item === "object" && item !== null &&
+      typeof item.skill === "string" && item.skill.length <= 200 &&
+      (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+      (item.own === undefined || item.own === true) &&
+      validSteps &&
+      typeof item.reason === "string" && item.reason.length <= 2_000
+    );
+  };
   if (
     next !== undefined &&
     (typeof next !== "object" || next === null ||
       typeof next.skill !== "string" || next.skill.length > 200 ||
-      typeof next.reason !== "string" || next.reason.length > 2_000)
+      typeof next.reason !== "string" || next.reason.length > 2_000 ||
+      (next.choices !== undefined && (!Array.isArray(next.choices) || next.choices.length > 5 || !next.choices.every(validChoice))))
   ) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
+
+  const coverage = input.documentCoverage;
+  if (
+    coverage !== undefined &&
+    (!Array.isArray(coverage) ||
+      coverage.length > 50 ||
+      !coverage.every(
+        (entry) =>
+          typeof entry === "object" && entry !== null &&
+          /^doc_[a-f0-9]{24}$/.test(String(entry.documentId)) &&
+          (entry.title === undefined || (typeof entry.title === "string" && entry.title.length <= 300)) &&
+          Number.isInteger(entry.totalPages) && entry.totalPages >= 1 && entry.totalPages <= 100_000 &&
+          (entry.status === "FULL" || entry.status === "PARTIAL") &&
+          Array.isArray(entry.pages) && entry.pages.length <= 500 &&
+          entry.pages.every((range) => Array.isArray(range) && range.length === 2 && range.every((page) => Number.isInteger(page) && page >= 1))
+      ))
+  ) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
+  if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
 
@@ -340,14 +398,46 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     auxiliarySources: _auxiliary,
     mandatoryPath: _path,
     pipelineNext: _next,
+    documentCoverage: _coverage,
+    documentAnalysis: _analysis,
     ...rest
   } = input;
   return {
     ...rest,
+    ...(coverage?.length
+      ? {
+          documentCoverage: coverage.map((entry) => ({
+            documentId: entry.documentId,
+            ...(entry.title ? { title: entry.title } : {}),
+            totalPages: entry.totalPages,
+            pages: entry.pages.map(([start, end]) => [start, end] as [number, number]),
+            status: entry.status
+          }))
+        }
+      : {}),
+    ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
     ...(evidence?.length ? { evidence } : {}),
     ...(auxiliarySources?.length ? { auxiliarySources } : {}),
     ...(mandatoryPath ? { mandatoryPath } : {}),
-    ...(next ? { pipelineNext: { skill: next.skill, reason: next.reason } } : {}),
+    ...(next
+      ? {
+          pipelineNext: {
+            skill: next.skill,
+            reason: next.reason,
+            ...(next.choices?.length
+              ? {
+                  choices: next.choices.map((choice) => ({
+                    skill: choice.skill,
+                    kind: choice.kind,
+                    reason: choice.reason,
+                    ...(choice.own ? { own: true as const } : {}),
+                    ...(choice.steps ? { steps: structuredClone(choice.steps) } : {})
+                  }))
+                }
+              : {})
+          }
+        }
+      : {}),
     ...(generated
       ? {
           generatedDocument: {
@@ -839,7 +929,9 @@ export class EncryptedCaseWorkspaceStore {
       ...(item.evidence ? { evidence: structuredClone(item.evidence) } : {}),
       ...(item.auxiliarySources ? { auxiliarySources: structuredClone(item.auxiliarySources) } : {}),
       ...(item.mandatoryPath ? { mandatoryPath: structuredClone(item.mandatoryPath) } : {}),
-      ...(item.pipelineNext ? { pipelineNext: { ...item.pipelineNext } } : {})
+      ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
+      ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
+      ...(item.documentAnalysis ? { documentAnalysis: true } : {})
     }));
   }
 
@@ -1120,9 +1212,13 @@ export class EncryptedCaseWorkspaceStore {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const evidence = validThreadEvidence(index.memory?.evidence);
     const summary = validThreadSummary(index.memory?.summary);
+    const chronology = validCaseChronology(index.memory?.chronology);
+    const work = validCaseWork(index.memory?.work);
     return {
+      ...(work?.length ? { work } : {}),
       ...(evidence ? { evidence } : {}),
       ...(summary ? { summary } : {}),
+      ...(chronology ? { chronology } : {}),
       threadMessages: index.thread.messages.map((message) => ({ ...message }))
     };
   }
@@ -1134,6 +1230,8 @@ export class EncryptedCaseWorkspaceStore {
     keyVersion: number;
     evidence?: ThreadEvidence | null;
     summary?: ThreadSummary | null;
+    chronology?: CaseChronology | null;
+    work?: CaseWorkItem[] | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
@@ -1148,6 +1246,18 @@ export class EncryptedCaseWorkspaceStore {
       if (args.summary !== null && !summary) throw new Error("CASE_MEMORY_SUMMARY_INVALID");
       if (summary) memory.summary = summary;
       else delete memory.summary;
+    }
+    if (args.chronology !== undefined) {
+      const chronology = args.chronology === null ? null : validCaseChronology(args.chronology);
+      if (args.chronology !== null && !chronology) throw new Error("CASE_MEMORY_CHRONOLOGY_INVALID");
+      if (chronology) memory.chronology = chronology;
+      else delete memory.chronology;
+    }
+    if (args.work !== undefined) {
+      const work = args.work === null ? null : validCaseWork(args.work);
+      if (args.work !== null && !work) throw new Error("CASE_MEMORY_WORK_INVALID");
+      if (work?.length) memory.work = work;
+      else delete memory.work;
     }
     index.memory = memory;
     await this.write(index, args.caseDataKey, args.keyVersion);

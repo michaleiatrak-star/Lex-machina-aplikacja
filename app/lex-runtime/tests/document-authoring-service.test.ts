@@ -631,4 +631,37 @@ describe("ready document with an unverified provision", () => {
     expect(final.text).toContain("Jan Kowalski");
     expect(final.text).not.toContain("NIEWERYFIKOWANE]");
   });
+
+  it("runs HYBRID-VAL before the tokenized .docx: an open placeholder stops the file", async () => {
+    const current = fixture();
+    const vault = new PseudonymizationVault();
+    vault.getOrCreate("PERSON", "Jan Kowalski");
+    await current.vaultStore.saveDocumentVault({
+      caseId: current.caseId,
+      documentId: current.documentId,
+      vault,
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1
+    });
+    const common = {
+      caseId: current.caseId,
+      createdByUserId: current.userId,
+      format: "docx" as const,
+      sourceDocumentIds: [current.documentId],
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1,
+      validationContext: validationContext(current.documentId)
+    };
+    const paragraph = (text: string) => ({
+      ...ast,
+      blocks: [{ type: "paragraph", content: [{ type: "pii_ref", alias: "[LMPII:D01:PERSON:0001]" }, { type: "text", text }] }]
+    });
+    await expect(current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty [UZUPEŁNIJ: kwota].") })).rejects.toThrow(
+      "TOKENIZED_DOCUMENT_HYBRID_BLOCKED:OPEN_PLACEHOLDER"
+    );
+    // The privacy tokens are what this file is for: not a HYBRID-VAL failure.
+    const ok = await current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty 100 zł.") });
+    expect(ok.aliasesUsed).toContain("[LMPII:D01:PERSON:0001]");
+  });
 });
+
