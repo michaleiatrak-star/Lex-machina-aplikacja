@@ -292,6 +292,13 @@ export async function startLocalServer(options) {
         stanzaRecognizer,
         gazetteerRecognizer
     ]);
+    // Start check of the local recognizers (Stanza, Morfeusz): a failure and its reason are
+    // logged now and shown in the first document preview, not found out on a leaked name.
+    void stanzaNamedEntities.selfTest().then((statuses) => {
+        for (const status of statuses) {
+            process.stderr.write(`PRIVACY_RECOGNIZER_SELF_TEST:${status.name}:${status.ok ? "OK" : status.reason ?? "FAILED"}\n`);
+        }
+    });
     const privacyNamedEntities = new LocalLlmPrivacyNamedEntityRecognizer(providerGateway, localModels, stanzaNamedEntities);
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
     const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor());

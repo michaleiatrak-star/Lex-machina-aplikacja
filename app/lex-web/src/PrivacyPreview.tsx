@@ -37,6 +37,18 @@ function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): st
   return KIND_LABEL[mark.kind] ?? mark.kind;
 }
 
+// Why a local recognizer is down, in words (the raw reason stays in the tooltip).
+export function recognizerReason(reason: string): string {
+  if (/No module named '?morfeusz2/iu.test(reason)) return "brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji";
+  if (/No module named '?stanza/iu.test(reason)) return "brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji";
+  if (/No module named/iu.test(reason)) return "brak składnika Pythona - uruchom naprawę instalacji";
+  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return "nie znaleziono Pythona - uruchom naprawę instalacji";
+  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return "nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie";
+  if (/SELF_TEST_NO_PERSON/u.test(reason)) return "uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji";
+  if (/MemoryError|out of memory/iu.test(reason)) return "za mało pamięci";
+  return "błąd uruchomienia";
+}
+
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
   busy?: boolean;
   // Decisions made earlier (back to a file in the batch preview).
@@ -331,8 +343,13 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
 
       {!props.keepClear && review.recognizerWarnings?.length ? (
         <p className="field-error" role="alert">
-          Nie działa: {review.recognizerWarnings.map((item) => item.name).join(", ")}. Adresy i część nazwisk mogły nie
-          zostać wykryte - zaznacz je ręcznie albo uruchom aplikację ponownie i wczytaj plik jeszcze raz.
+          {review.recognizerWarnings.map((item) => (
+            <span key={item.name} title={item.reason}>
+              Nie działa {item.name}: {recognizerReason(item.reason)}.{" "}
+            </span>
+          ))}
+          Aplikacja wykryła adresy i pary imię-nazwisko z bazy PESEL, ale mogła pominąć pojedyncze nazwiska - sprawdź tekst
+          i zaznacz je ręcznie. Po naprawie wczytaj plik jeszcze raz.
         </p>
       ) : null}
       {aiHints.length || doubtful.length || fixes.length ? (

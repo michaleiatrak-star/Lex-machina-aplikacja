@@ -73,3 +73,28 @@ describe("a local recognizer that does not start is reported, not silent", () =>
     expect(degradedRecognizers()).toEqual([]);
   });
 });
+
+describe("start check of the local recognizers", () => {
+  it("reports a recognizer that fails or finds no person, with the reason; a working one is OK", async () => {
+    class LocalGazetteerRecognizer {
+      async recognize(): Promise<never> {
+        throw new Error("GAZETTEER_FAILED:1:No module named morfeusz2");
+      }
+    }
+    class LocalStanzaNamedEntityRecognizer {
+      async recognize() {
+        return [];
+      }
+    }
+    const statuses = await new CompositeRecognizer([new LocalGazetteerRecognizer(), new LocalStanzaNamedEntityRecognizer()]).selfTest();
+    expect(statuses).toEqual([
+      { name: "Morfeusz (słownik imion, nazwisk i adresów)", ok: false, reason: "GAZETTEER_FAILED:1:No module named morfeusz2" },
+      { name: "Stanza (rozpoznawanie nazw w zdaniu)", ok: false, reason: "SELF_TEST_NO_PERSON" }
+    ]);
+    expect(degradedRecognizers().map((item) => item.name)).toHaveLength(2);
+    const working = { recognize: async (text: string) => [{ start: 8, end: 20, kind: "PERSON" as const, value: text.slice(8, 20) }] };
+    Object.defineProperty(working, "constructor", { value: LocalStanzaNamedEntityRecognizer });
+    await new CompositeRecognizer([working]).selfTest();
+    expect(degradedRecognizers().map((item) => item.name)).toEqual(["Morfeusz (słownik imion, nazwisk i adresów)"]);
+  });
+});

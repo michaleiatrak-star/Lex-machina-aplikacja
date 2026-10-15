@@ -1,4 +1,6 @@
 import { surnameMentions } from "./surname-propagation.js";
+import { degradedRecognizers } from "./gazetteer-ner.js";
+import { detectPeselNames } from "./pesel-names.js";
 import { detectStreetAddresses } from "./street-addresses.js";
 import { detectFirmNames } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
@@ -638,6 +640,14 @@ export class LocalPolishPseudonymizer {
                         source: "AUTO"
                     });
                 }
+            }
+        }
+        // The gazetteer is down (Morfeusz not started): names from the PESEL registers instead,
+        // so a given name with a surname is not left in clear (pesel-names.ts).
+        if (degradedRecognizers().some((item) => item.name.startsWith("Morfeusz"))) {
+            for (const span of detectPeselNames(text)) {
+                if (!autoSpans.some((other) => other.kind === "PERSON" && other.start < span.end && span.start < other.end))
+                    autoSpans.push(span);
             }
         }
         // A maiden name after "z d." / "z domu" ("Anna Nowak z d. Kot"): a person, whatever the word.
