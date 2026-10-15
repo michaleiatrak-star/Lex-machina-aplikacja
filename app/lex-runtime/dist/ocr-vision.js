@@ -54,6 +54,19 @@ const bare = (text) => text.replace(/\s+/gu, "");
 const plain = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").replace(/[łŁ]/gu, "l");
 const marks = (text) => [...text].filter((letter) => plain(letter) !== letter).length;
 const digits = (text) => text.replace(/\D/gu, "");
+const EDGES = /^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/su;
+const core = (text) => EDGES.exec(text)[2];
+/**
+ * Punctuation at the edges stays as the OCR read it ("pracodawey," -> "pracodawcy,", not
+ * "pracodawcy."); the model may only add a closing mark where the OCR read none
+ * ("nięuprawnipn" -> "nieuprawnione.").
+ */
+function keepEdges(was, read) {
+    const [, leadWas, , trailWas] = EDGES.exec(was);
+    const [, , core, trailRead] = EDGES.exec(read);
+    const trail = trailWas || (/^[.,;:]$/u.test(trailRead) ? trailRead : "");
+    return `${leadWas}${core}${trail}`;
+}
 /**
  * The line with the changes the arbiter takes from the model's reading. `known` holds the
  * dictionary words among the words of both readings.
@@ -79,10 +92,10 @@ export function arbitrateLine(ocrText, visionText, known) {
         if (/\d/u.test(was + read)) {
             take = digits(was) === digits(read) && (bare(was) === bare(read) || /^\d{1,2}\.\d{1,2}\.\d{4}$/u.test(read));
         }
-        else if (bare(was) === bare(read)) {
+        else if (bare(core(was)) === bare(core(read))) {
             take = allKnown(read);
         }
-        else if (plain(was) === plain(read)) {
+        else if (plain(core(was)) === plain(core(read))) {
             take = marks(read) > marks(was) && allKnown(read);
         }
         else {
@@ -93,9 +106,13 @@ export function arbitrateLine(ocrText, visionText, known) {
         }
         if (!take)
             continue;
-        result.splice(i0 + shift, i1 - i0, ...to.slice(j0, j1));
-        shift += j1 - j0 - (i1 - i0);
-        fixes.push({ from: was, to: read });
+        const taken = keepEdges(was, read);
+        if (taken === was)
+            continue;
+        const words = taken.split(" ");
+        result.splice(i0 + shift, i1 - i0, ...words);
+        shift += words.length - (i1 - i0);
+        fixes.push({ from: was, to: taken });
     }
     return fixes.length ? { text: result.join(" "), fixes } : { text: ocrText, fixes: [] };
 }
@@ -320,7 +337,8 @@ export class LocalVisionLineReader {
             throw new Error(`VISION_MODEL_FAILED:${response.status}`);
         const body = (await response.json());
         const text = body.choices?.[0]?.message?.content ?? "";
-        return text.replace(/^```\w*\s*|\s*```$/gu, "").trim();
+        // Without the quotes the prompt puts around the OCR reading.
+        return text.replace(/^```\w*\s*|\s*```$/gu, "").trim().replace(/^[«»"„”]+|[«»"„”]+$/gu, "").trim();
     };
     stop() {
         this.child?.kill();

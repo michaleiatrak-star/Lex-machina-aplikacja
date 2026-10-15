@@ -17,6 +17,10 @@ describe("arbiter between the OCR line and the vision model", () => {
     expect(arbitrateLine("radcy prawnego Pawla Raka", "radcy prawnego Pawła Raka", known).text).toBe("radcy prawnego Pawła Raka");
     expect(arbitrateLine("wszelkie Pana zadania dotyczące", "wszelkie Pana żądania dotyczące", known).text).toBe("wszelkie Pana żądania dotyczące");
     expect(arbitrateLine("dnia 810.2024", "dnia 8.10.2024", known).text).toBe("dnia 8.10.2024");
+    // Edge punctuation stays as read; a missing closing mark may be added.
+    expect(arbitrateLine("wszelkie Pana zadania, dotyczące", "wszelkie Pana żądania. dotyczące", known).text).toBe("wszelkie Pana żądania, dotyczące");
+    expect(arbitrateLine("lub prewnego", "lub prawnego.", known).text).toBe("lub prawnego.");
+    expect(arbitrateLine("b) prewnego", "«b) prawnego", known).text).toBe("b) prawnego");
   });
 
   it("refuses made-up words and dates, changed digits, dropped diacritics and another line", () => {
