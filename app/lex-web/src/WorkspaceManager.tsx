@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   deanonymizeUpload,
+  detectDocument,
   finalizeDocument,
   getVisionOcrStatus,
+  type DocumentReviewResponse,
   type PagePrivacyDirective,
   getProcessingProgress,
   joinSharedKey,
@@ -208,6 +210,12 @@ function folderDepth(folder: WorkspaceFolder, all: WorkspaceFolder[]): number {
   return depth;
 }
 
+type PrivacyPreviewQueueItem = {
+  item: WorkspaceItem;
+  mode: DocumentProcessingMode;
+  request: PrivacyPreviewRequest;
+};
+
 export function WorkspaceManager({
   caseId,
   title,
@@ -258,12 +266,11 @@ export function WorkspaceManager({
     modeByItem[item.itemId] ?? DEFAULT_DOCUMENT_PROCESSING_MODE;
   const [localRuntime, setLocalRuntime] = useState<LocalModelsResponse["runtime"] | null>(null);
   const [localAiMessage, setLocalAiMessage] = useState("");
-  // The processed file waiting for the user's confirmation in its preview.
-  const [privacyPreview, setPrivacyPreview] = useState<{
-    item: WorkspaceItem;
-    mode: DocumentProcessingMode;
-    request: PrivacyPreviewRequest;
-  } | null>(null);
+  // The processed file waiting for the user's confirmation in its preview; the next ones of
+  // "Przetwórz wszystkie" wait in the queue.
+  const [privacyPreview, setPrivacyPreview] = useState<PrivacyPreviewQueueItem | null>(null);
+  const queuedPreviews = useRef<PrivacyPreviewQueueItem[]>([]);
+  const nextPreview = () => setPrivacyPreview(queuedPreviews.current.shift() ?? null);
   const localAiReady = Boolean(localRuntime?.configured && localRuntime.state === "READY");
   useEffect(() => {
     let cancelled = false;
@@ -409,31 +416,31 @@ export function WorkspaceManager({
     });
   }
 
-  async function runAutomaticPrivacy(
-    item: WorkspaceItem,
-    mode: DocumentProcessingMode,
-    // false = run the same mode again without the AI's OCR corrections
-    ocrFix = true
-  ): Promise<void> {
+  // The models a mode needs: the vision model (OCR with AI) and an installed text model (anonymization with AI).
+  async function modeReady(mode: DocumentProcessingMode, ocrFix = true): Promise<boolean> {
     // The text model is started by the runtime right before the anonymization; it only has to be installed.
     if (processingModeUsesLocalAi(mode) && !localRuntime?.configured) {
       setLocalAiMessage(
         `„${processingModeLabel(mode)}” wymaga zainstalowanego modelu lokalnego (panel lokalnej AI).`
       );
-      return;
+      return false;
     }
     if (processingModeUsesVision(mode) && ocrFix) {
       const vision = await getVisionOcrStatus().catch(() => null);
       if (!vision?.installed || !vision.engineInstalled) {
         setLocalAiMessage(
-          `„${processingModeLabel(mode)}” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”.`
+          `„${processingModeLabel(mode)}” wymaga modelu wizyjnego: zainstaluj go w panelu lokalnej AI.`
         );
-        return;
+        return false;
       }
     }
+    return true;
+  }
+
+  // Stage and page counts of one file while its request runs; text never leaves the runtime.
+  async function withItemProgress<T>(item: WorkspaceItem, action: (progressId: string) => Promise<T>): Promise<T> {
     const progressId = newProgressId();
     setProgressByItem((current) => ({ ...current, [item.itemId]: { stage: "READING" } }));
-    // Stage and page counts while the request runs; text never leaves the runtime.
     const timer = window.setInterval(() => {
       void getProcessingProgress(caseId, progressId)
         .then((progress) => {
@@ -446,13 +453,82 @@ export function WorkspaceManager({
         .catch(() => undefined);
     }, 500);
     try {
-      await runAutomaticPrivacySteps(item, progressId, mode, ocrFix);
+      return await action(progressId);
     } finally {
       window.clearInterval(timer);
       setProgressByItem((current) => {
         const { [item.itemId]: _done, ...rest } = current;
         return rest;
       });
+    }
+  }
+
+  async function runAutomaticPrivacy(
+    item: WorkspaceItem,
+    mode: DocumentProcessingMode,
+    // false = run the same mode again without the AI's OCR corrections
+    ocrFix = true
+  ): Promise<void> {
+    if (!(await modeReady(mode, ocrFix))) return;
+    await withItemProgress(item, (progressId) => runAutomaticPrivacySteps(item, progressId, mode, ocrFix));
+  }
+
+  /**
+   * Every unprocessed file shown: the OCR of all of them first (with the AI, only the vision
+   * model works), then their personal data (the text model starts once), then the preview
+   * of each, one after another.
+   */
+  async function processAll(items: WorkspaceItem[]): Promise<void> {
+    const modes = [...new Set(items.map(modeFor))];
+    for (const mode of modes) if (!(await modeReady(mode))) return;
+    const clear = items.filter((item) => processingModeKeepsClearText(modeFor(item)));
+    if (
+      clear.length &&
+      !window.confirm(
+        `${clear.map((item) => `„${item.filename}”`).join(", ")}: bez anonimizacji - tekst jawny trafi do modelu. Kontynuować?`
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const reads: Array<{ item: WorkspaceItem; review: DocumentReviewResponse }> = [];
+    const failed: string[] = [];
+    try {
+      for (const item of items) {
+        const mode = modeFor(item);
+        try {
+          const review = await withItemProgress(item, (progressId) =>
+            processStoredCaseFile(caseId, item.itemId, undefined, progressId, { ...processingModeOptions(mode), detect: false })
+          );
+          reads.push({ item, review });
+        } catch (failure) {
+          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
+        }
+      }
+      const ready: PrivacyPreviewQueueItem[] = [];
+      for (const { item, review } of reads) {
+        const mode = modeFor(item);
+        const keepClear = processingModeKeepsClearText(mode);
+        try {
+          const detected = keepClear
+            ? review
+            : await withItemProgress(item, (progressId) =>
+                detectDocument(caseId, review.documentId, { localAi: processingModeOptions(mode)?.localAi === true }, progressId)
+              );
+          ready.push({ item, mode, request: { caseId, review: detected, fileName: item.filename, keepClear } });
+        } catch (failure) {
+          failed.push(`„${item.filename}”: ${documentProcessingFailureMessage(failure)}`);
+        }
+      }
+      queuedPreviews.current = ready.slice(1);
+      setPrivacyPreview(ready[0] ?? null);
+      if (failed.length) setError(failed.join(" · "));
+      else if (ready.length) setNotice(`Przetworzono ${ready.length} plików - sprawdź i zatwierdź podgląd każdego z nich.`);
+      await refresh();
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -502,7 +578,7 @@ export function WorkspaceManager({
     if (!pending) return;
     await run(async () => {
       const result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
-      setPrivacyPreview(null);
+      nextPreview();
       setNotice(
         `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
       );
@@ -653,6 +729,8 @@ export function WorkspaceManager({
       caseFiles,
       knowledgeHits
     ]);
+  // Shown files never processed: "Przetwórz wszystkie", each in its chosen mode.
+  const unprocessed = visibleItems.filter((item) => canRunPrivacyPipeline(item) && !processingFor(item));
 
   function knowledgeHitFor(
     item: WorkspaceItem
@@ -967,6 +1045,17 @@ export function WorkspaceManager({
                 }}
               />
             </label>
+          ) : null}
+          {canWrite && unprocessed.length > 1 ? (
+            <button
+              type="button"
+              className="chat-secondary-action"
+              disabled={busy}
+              title="Najpierw OCR wszystkich plików, potem anonimizacja (model tekstowy uruchamia się raz), potem podgląd każdego pliku do zatwierdzenia"
+              onClick={() => void processAll(unprocessed)}
+            >
+              Przetwórz wszystkie ({unprocessed.length})
+            </button>
           ) : null}
           <button
             type="button"
@@ -1507,7 +1596,7 @@ export function WorkspaceManager({
           {...privacyPreview.request}
           busy={busy}
           onConfirm={(directives) => void confirmPrivacyPreview(directives)}
-          onCancel={() => setPrivacyPreview(null)}
+          onCancel={nextPreview}
         />
       ) : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}

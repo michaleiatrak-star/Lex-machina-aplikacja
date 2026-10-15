@@ -216,7 +216,6 @@ type TabId =
   | "home"
   | "calendar"
   | "chat"
-  | "skills"
   | "case"
   | "firm"
   | "search"
@@ -229,6 +228,7 @@ export type SettingsSection =
   | "security"
   | "mcp"
   | "invoices"
+  | "skills"
   | "maintenance";
 
 export type SettingsRequest = {
@@ -4436,7 +4436,6 @@ export default function MatterChatApp({
             ["home", "Start"],
             ["calendar", "Kalendarz"],
             ["chat", "Czat"],
-            ["skills", "Skille"],
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
             ["search", "Wyszukiwanie"],
@@ -4731,9 +4730,7 @@ export default function MatterChatApp({
                 ? "Kalendarz spraw"
                 : activeTab === "chat"
                 ? "Czat sprawy"
-                : activeTab === "skills"
-                  ? "Routing i skille"
-                  : activeTab === "case"
+                : activeTab === "case"
                     ? "Sprawa i dokumenty"
                     : activeTab === "firm"
                       ? "Know-how i wzory kancelarii"
@@ -5735,7 +5732,10 @@ export default function MatterChatApp({
                 <button
                   type="button"
                   className="chat-secondary-action"
-                  onClick={() => setActiveTab("skills")}
+                  onClick={() => {
+                    setSettingsSection("skills");
+                    setActiveTab("settings");
+                  }}
                 >
                   ⚙ Skille
                 </button>
@@ -6323,216 +6323,6 @@ export default function MatterChatApp({
           </section>
         ) : null}
 
-        {activeTab === "skills" ? (
-          <section className="chat-card-stack">
-            <article className="chat-card">
-              <p className="eyebrow">Sterowanie wykonaniem</p>
-              <h2>
-                {selectedDeterministicAction
-                  ? selectedDeterministicAction.label
-                  : "AUTO · prawny-router-v3"}
-              </h2>
-              <p>
-                Tryb pracy (automatyczny lub mechaniczny) wybiera się wyłącznie nad polem pierwszej wiadomości.
-                Brak wyboru oznacza pełne AUTO: prawny-router-v3 sam dobiera dziedziny
-                DR i skille wykonawcze. Po pierwszej wiadomości tryb jest przypięty do
-                wątku i selektor w czacie znika.
-              </p>
-              <div className="chat-model-select-row">
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  disabled={
-                    domainSelection.length === routes.length &&
-                    manualSkillSelection.length ===
-                      selectableExecutionSkills.length
-                  }
-                  onClick={
-                    selectAllSkills
-                  }
-                >
-                  Zaznacz wszystkie skille
-                </button>
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  disabled={
-                    domainSelection.length === 0 &&
-                    manualSkillSelection.length === 0
-                  }
-                  onClick={
-                    clearAllSkills
-                  }
-                >
-                  Odznacz wszystkie opcjonalne
-                </button>
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <p className="eyebrow">Obowiązkowy rdzeń</p>
-              <div className="chat-mandatory-grid">
-                <div>
-                  <strong>✓ prawny-router-v3</strong>
-                  <small>zawsze aktywny</small>
-                </div>
-                <div>
-                  <strong>✓ shared</strong>
-                  <small>zawsze aktywny</small>
-                </div>
-                <div>
-                  <strong>✓ prawo-polskie-v2</strong>
-                  <small>zawsze aktywny dla zapytań prawnych PL</small>
-                </div>
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <div className="chat-card-heading">
-                <div>
-                  <p className="eyebrow">Dziedziny prawa</p>
-                  <h2>
-                    {domainSelection.length === routes.length
-                      ? `Wszystkie moduły DR (${routes.length})`
-                      : `${domainSelection.length} z ${routes.length} modułów DR`}
-                  </h2>
-                  <p>
-                    Wszystkie moduły DR są zaznaczone na start. Odznaczenie
-                    ogranicza dziedziny, z których router może korzystać w tej
-                    rozmowie; pełny zestaw nie nakłada żadnego ograniczenia.
-                  </p>
-                </div>
-                <div className="chat-model-select-row">
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      domainSelection.length ===
-                      routes.length
-                    }
-                    onClick={
-                      selectAllDomainSkills
-                    }
-                  >
-                    Zaznacz wszystkie
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      domainSelection.length === 0
-                    }
-                    onClick={
-                      clearDomainSkills
-                    }
-                  >
-                    Odznacz wszystkie
-                  </button>
-                </div>
-              </div>
-              <div className="chat-skill-grid">
-                {routes.map((name) => {
-                  const checked =
-                    domainSelection.includes(name);
-                  return (
-                    <label
-                      key={name}
-                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleDomainSkill(name)}
-                      />
-                      <span>
-                        <strong>{labelForSkill(name)}</strong>
-                        <small>dziedzina prawa</small>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <div className="chat-card-heading">
-                <div>
-                  <p className="eyebrow">Skille wykonawcze</p>
-                  <h2>
-                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
-                  </h2>
-                  <p>
-                    Wszystkie dostępne skille wykonawcze są zaznaczone domyślnie.
-                    Ta lista nie zawiera modułów DR; dziedziny prawa są kontrolowane
-                    w sekcji powyżej.
-                  </p>
-                </div>
-                <div className="chat-model-select-row">
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      manualSkillSelection.length ===
-                      selectableExecutionSkills.length
-                    }
-                    onClick={
-                      selectAllManualSkills
-                    }
-                  >
-                    Zaznacz wszystkie
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      manualSkillSelection.length === 0
-                    }
-                    onClick={
-                      clearManualSkills
-                    }
-                  >
-                    Odznacz wszystkie
-                  </button>
-                  <input
-                    className="chat-search"
-                    value={skillFilter}
-                    placeholder="Filtruj skille…"
-                    onChange={(event) =>
-                      setSkillFilter(
-                        event.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              <div className="chat-skill-grid">
-                {filteredSkills.map((skill) => {
-                  const checked =
-                    manualSkillSelection.includes(
-                      skill.name
-                    );
-                  return (
-                    <label
-                      key={skill.name}
-                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleManualSkill(skill.name)}
-                      />
-                      <span>
-                        <strong>{labelForSkill(skill.name)}</strong>
-                        <small>{skill.description || skill.type || "skill"}</small>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </article>
-          </section>
-        ) : null}
-
         {activeTab === "home" ? (
           <HomeDashboard
             user={user}
@@ -6978,6 +6768,7 @@ export default function MatterChatApp({
                 ["security", "Hasło i bezpieczeństwo"],
                 ["mcp", "Konektory MCP"],
                 ["invoices", "Faktury i KSeF"],
+                ["skills", "Skille i routing"],
                 ["maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
                 [SettingsSection, string]
@@ -7558,6 +7349,214 @@ export default function MatterChatApp({
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.invoices}
                 </div>
+              ) : settingsSection === "skills" ? (
+                <section className="chat-card-stack">
+            <article className="chat-card">
+              <p className="eyebrow">Sterowanie wykonaniem</p>
+              <h2>
+                {selectedDeterministicAction
+                  ? selectedDeterministicAction.label
+                  : "AUTO · prawny-router-v3"}
+              </h2>
+              <p>
+                Tryb pracy (automatyczny lub mechaniczny) wybiera się wyłącznie nad polem pierwszej wiadomości.
+                Brak wyboru oznacza pełne AUTO: prawny-router-v3 sam dobiera dziedziny
+                DR i skille wykonawcze. Po pierwszej wiadomości tryb jest przypięty do
+                wątku i selektor w czacie znika.
+              </p>
+              <div className="chat-model-select-row">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === routes.length &&
+                    manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                  }
+                  onClick={
+                    selectAllSkills
+                  }
+                >
+                  Zaznacz wszystkie skille
+                </button>
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === 0 &&
+                    manualSkillSelection.length === 0
+                  }
+                  onClick={
+                    clearAllSkills
+                  }
+                >
+                  Odznacz wszystkie opcjonalne
+                </button>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <p className="eyebrow">Obowiązkowy rdzeń</p>
+              <div className="chat-mandatory-grid">
+                <div>
+                  <strong>✓ prawny-router-v3</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ shared</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ prawo-polskie-v2</strong>
+                  <small>zawsze aktywny dla zapytań prawnych PL</small>
+                </div>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Dziedziny prawa</p>
+                  <h2>
+                    {domainSelection.length === routes.length
+                      ? `Wszystkie moduły DR (${routes.length})`
+                      : `${domainSelection.length} z ${routes.length} modułów DR`}
+                  </h2>
+                  <p>
+                    Wszystkie moduły DR są zaznaczone na start. Odznaczenie
+                    ogranicza dziedziny, z których router może korzystać w tej
+                    rozmowie; pełny zestaw nie nakłada żadnego ograniczenia.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length ===
+                      routes.length
+                    }
+                    onClick={
+                      selectAllDomainSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length === 0
+                    }
+                    onClick={
+                      clearDomainSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {routes.map((name) => {
+                  const checked =
+                    domainSelection.includes(name);
+                  return (
+                    <label
+                      key={name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleDomainSkill(name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(name)}</strong>
+                        <small>dziedzina prawa</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Skille wykonawcze</p>
+                  <h2>
+                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
+                  </h2>
+                  <p>
+                    Wszystkie dostępne skille wykonawcze są zaznaczone domyślnie.
+                    Ta lista nie zawiera modułów DR; dziedziny prawa są kontrolowane
+                    w sekcji powyżej.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                    }
+                    onClick={
+                      selectAllManualSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length === 0
+                    }
+                    onClick={
+                      clearManualSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                  <input
+                    className="chat-search"
+                    value={skillFilter}
+                    placeholder="Filtruj skille…"
+                    onChange={(event) =>
+                      setSkillFilter(
+                        event.target.value
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {filteredSkills.map((skill) => {
+                  const checked =
+                    manualSkillSelection.includes(
+                      skill.name
+                    );
+                  return (
+                    <label
+                      key={skill.name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleManualSkill(skill.name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(skill.name)}</strong>
+                        <small>{skill.description || skill.type || "skill"}</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
               ) : (
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.maintenance}
