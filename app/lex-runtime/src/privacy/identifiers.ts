@@ -156,6 +156,16 @@ const DETECTORS: Detector[] = [
     regex: /(?:tel\.?|telefon\w*|kom\.?|komórk\w*|fax)\s*(?:nr\.?\s*)?:?\s*((?:\+48\s?)?\d{9})(?!\d)/gi,
     group: 1
   },
+  // After "tel"/"fax" any grouping OCR leaves ("tel: 32250-56-13"): 9 digits, or 10 with a trunk zero.
+  {
+    kind: "PHONE",
+    regex: /(?:tel\.?|telefon\w*|kom\.?|komórk\w*|fax)\s*(?:nr\.?\s*)?:?\s*((?:\+48[\s-]?)?\(?\d[\d\s()-]{7,16}\d)(?![\d-])/gi,
+    group: 1,
+    validate: (value) => {
+      const digits = value.replace(/^\+48/u, "").replace(/\D/gu, "");
+      return digits.length === 9 || (digits.length === 10 && digits.startsWith("0"));
+    }
+  },
   { kind: "PHONE", regex: /\+\d{2,3}[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3,4}(?!\d)/g },
   { kind: "ID_CARD", regex: /(?<![\w])[A-Z]{3}\s?\d{6}(?![\w])/g, validate: validIdCard },
   { kind: "PASSPORT", regex: /(?<![\w])[A-Z]{2}\s?\d{7}(?![\w])/g, validate: validPassport },
