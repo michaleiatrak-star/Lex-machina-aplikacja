@@ -120,7 +120,8 @@ export function DocumentPrivacyPanel({
   onAttachmentSelectionChange,
   onCaseFilesChange,
   onProcessingEvent,
-  processingOptionsFor
+  processingOptionsFor,
+  onFilesChosen
 }: {
   caseId: string;
   incomingFile?: File | null;
@@ -136,6 +137,8 @@ export function DocumentPrivacyPanel({
   onProcessingEvent?: (
     event: DocumentProcessingEvent
   ) => void;
+  // Several files chosen at once go to the parent's queue (read one after another).
+  onFilesChosen?: (files: File[]) => void;
 }) {
   const autoStartedFiles =
     useRef<WeakSet<File>>(new WeakSet());
@@ -524,14 +527,23 @@ export function DocumentPrivacyPanel({
             ? progress
               ? progressLabel(progress)
               : "Przetwarzanie…"
-            : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
+            : onFilesChosen
+              ? "Wybierz pliki: PDF, dokumenty, arkusze, zdjęcia lub ZIP (także kilka naraz)"
+              : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
           <input
             type="file"
             accept=".pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
+            multiple={Boolean(onFilesChosen)}
             disabled={loading || batchFinalizing || !caseId}
             onChange={(event) => {
+              const chosen = Array.from(event.target.files ?? []);
+              if (onFilesChosen && chosen.length > 1) {
+                event.target.value = "";
+                onFilesChosen(chosen);
+                return;
+              }
               void openFile(
-                event.target.files?.[0]
+                chosen[0]
               );
               event.currentTarget.value = "";
             }}

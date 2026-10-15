@@ -800,6 +800,71 @@
   color: #4d574f;
 }
 
+/* Processing queue of a case: files read one at a time, in the order added. */
+.workspace-auto-queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+  color: #4d574f;
+}
+
+.workspace-queue {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #c9d3cb;
+  border-radius: 10px;
+  background: #f7f9f7;
+}
+
+.workspace-queue header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-queue header strong {
+  flex: 1;
+  min-width: 200px;
+}
+
+.workspace-queue ol {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.workspace-queue li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.workspace-queue li > span {
+  overflow-wrap: anywhere;
+}
+
+.workspace-queue li small {
+  color: #4d574f;
+}
+
+.workspace-queue li progress {
+  width: 140px;
+  height: 8px;
+  accent-color: #5f8a4c;
+}
+
+.workspace-queue-reading > span,
+.workspace-queue-detecting > span {
+  font-weight: 600;
+}
+
+.workspace-queue-failed > span {
+  color: #8a2d2d;
+}
+
 .privacy-key-wrap {
   max-height: 520px;
   overflow: auto;

@@ -1054,6 +1054,7 @@ export default function ChatApp({
               onCaseFilesChange={() =>
                 setWorkspaceRefresh((value) => value + 1)
               }
+              onFilesChosen={(files) => void acceptFiles(files)}
               onAttachmentSelectionChange={(selection) => {
                 if (!selection) return;
                 setDocumentAttachments((current) =>
