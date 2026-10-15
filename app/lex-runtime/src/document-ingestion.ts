@@ -30,6 +30,9 @@ export type OcrLine = {
   text: string;
   score?: number | null;
   box?: [number, number, number, number];
+  // Straightened image of the line (base64 JPEG) for the local vision model; dropped
+  // right after that step, never stored.
+  crop?: string;
 };
 
 // The page as the OCR saw it (JPEG, base64) with the boxes of regions the

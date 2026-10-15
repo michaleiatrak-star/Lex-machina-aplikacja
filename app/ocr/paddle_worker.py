@@ -120,11 +120,56 @@ def _field(item, payload: dict, key: str):
     return payload.get(key)
 
 
+def _line_crop(image: np.ndarray, poly) -> str | None:
+    """The line cut out along its polygon and straightened, as base64 JPEG.
+
+    For the local vision model, which reads doubtful lines: on a photographed page a
+    line is slanted and its bounding box takes in the lines above and below.
+    """
+    import base64
+    import io
+
+    import cv2
+
+    points = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
+    if len(points) != 4:
+        if len(points) < 3:
+            return None
+        points = cv2.boxPoints(cv2.minAreaRect(points)).astype(np.float32)
+        # Order: top-left, top-right, bottom-right, bottom-left.
+        total = points.sum(axis=1)
+        diff = np.diff(points, axis=1).ravel()
+        points = np.array([points[np.argmin(total)], points[np.argmin(diff)], points[np.argmax(total)], points[np.argmax(diff)]], dtype=np.float32)
+    top_left, top_right, bottom_right, bottom_left = points
+    width = max(np.linalg.norm(top_right - top_left), np.linalg.norm(bottom_right - bottom_left))
+    height = max(np.linalg.norm(bottom_left - top_left), np.linalg.norm(bottom_right - top_right))
+    if width < 4 or height < 4:
+        return None
+    pad_x, pad_y = height * 0.3, height * 0.15
+    target = np.array(
+        [[pad_x, pad_y], [pad_x + width, pad_y], [pad_x + width, pad_y + height], [pad_x, pad_y + height]],
+        dtype=np.float32,
+    )
+    size = (int(round(width + 2 * pad_x)), int(round(height + 2 * pad_y)))
+    matrix = cv2.getPerspectiveTransform(points, target)
+    crop = cv2.warpPerspective(
+        image[:, :, :3].astype(np.uint8), matrix, size, flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+    )
+    picture = Image.fromarray(crop).convert("L")
+    # Line height of about 64 px: enough for the model, small enough to keep in memory.
+    if picture.height > 64:
+        picture = picture.resize((max(1, round(picture.width * 64 / picture.height)), 64), Image.LANCZOS)
+    buffer = io.BytesIO()
+    picture.save(buffer, format="JPEG", quality=85)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
 def predict_image(
     ocr: PaddleOCR,
     image: np.ndarray,
     page_number: int,
     evidence_dir: Path | None = None,
+    line_crops: bool = False,
 ) -> dict:
     prediction = list(ocr.predict(image))
     texts: list[str] = []
@@ -175,9 +220,10 @@ def predict_image(
             if score is not None:
                 scores.append(score)
             box = _box(geometry[index]) if geometry[index] is not None else None
+            poly = rec_polys[index] if rec_polys is not None and len(rec_polys) == len(rec_texts) else None
             if isinstance(text, str) and text.strip():
                 texts.append(text.strip())
-                lines.append({"text": text.strip(), "score": score, "box": box})
+                lines.append({"text": text.strip(), "score": score, "box": box, "poly": poly})
                 if box:
                     read_boxes.append(box)
             elif box:
@@ -204,6 +250,17 @@ def predict_image(
             for line in lines
         ],
     }
+
+    if line_crops and boxes_known:
+        for index, line in enumerate(lines):
+            if line["poly"] is None:
+                continue
+            try:
+                crop = _line_crop(evidence_image, line["poly"])
+            except Exception:
+                crop = None
+            if crop:
+                result["lines"][index]["crop"] = crop
 
     if evidence_dir is not None and boxes_known and all(line["box"] for line in lines):
         height, width = evidence_image.shape[:2]
@@ -235,6 +292,8 @@ def main() -> None:
     parser.add_argument("--dpi", type=int, default=220)
     parser.add_argument("--device", default=None)
     parser.add_argument("--evidence-dir", default=None)
+    # Straightened image of every line (base64 JPEG) for the local vision model.
+    parser.add_argument("--line-crops", action="store_true")
     parser.add_argument(
         "--mode",
         choices=("pdf", "image"),
@@ -309,7 +368,7 @@ def main() -> None:
         with Image.open(args.input) as source:
             image = np.array(source.convert("RGB"))
         results.append(
-            predict_image(ocr, image, 1, evidence_dir)
+            predict_image(ocr, image, 1, evidence_dir, args.line_crops)
         )
     else:
         doc = fitz.open(args.input)
@@ -343,6 +402,7 @@ def main() -> None:
                         image,
                         page_number,
                         evidence_dir,
+                        args.line_crops,
                     )
                 )
                 # Progress for the runtime (page number only, no content).

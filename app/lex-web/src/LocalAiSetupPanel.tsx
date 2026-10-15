@@ -273,6 +273,91 @@ function backendLabel(
   }
 }
 
+type VisionOcrStatus = {
+  label: string;
+  bytes: number;
+  installed: boolean;
+  engineInstalled: boolean;
+  state: "IDLE" | "DOWNLOADING" | "FAILED";
+  received?: number;
+  error?: string;
+};
+
+/**
+ * Vision model for OCR: reads doubtful lines of scans again in "korekta AI" mode; a
+ * dictionary check decides what is taken, so it never adds dates or names on its own.
+ */
+function VisionOcrSection({ admin }: { admin: boolean }) {
+  const [status, setStatus] = useState<VisionOcrStatus | null>(null);
+  const [error, setError] = useState("");
+
+  async function refresh(): Promise<void> {
+    try {
+      setStatus(await request<VisionOcrStatus>("/api/local-models/vision-ocr"));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  useEffect(() => {
+    if (status?.state !== "DOWNLOADING") return;
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => window.clearInterval(timer);
+  }, [status?.state]);
+
+  async function act(action: "install" | "remove"): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<VisionOcrStatus>(`/api/local-models/vision-ocr/${action}`, { method: "POST" }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  if (!status) return null;
+  return (
+    <div className="local-ai-facts">
+      <strong>Odczyt wątpliwych linii skanu</strong>
+      <small>
+        {status.label}, {formatBytes(status.bytes)}. Działa w trybie z korektą AI: czyta ponownie tylko linie odczytane
+        niepewnie, a zmianę przyjmuje słownik (bez dopisywania dat, nazwisk i liczb).
+      </small>
+      {status.state === "DOWNLOADING" ? (
+        <small>Pobieranie: {formatBytes(status.received ?? 0)} z {formatBytes(status.bytes)}</small>
+      ) : status.installed ? (
+        <small>Zainstalowany{status.engineInstalled ? "." : ", ale brak silnika lokalnej AI: najpierw zainstaluj lokalną AI."}</small>
+      ) : (
+        <small>Nie zainstalowany.</small>
+      )}
+      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
+      {admin ? (
+        <div className="local-ai-actions">
+          <button
+            type="button"
+            disabled={status.installed || status.state === "DOWNLOADING"}
+            onClick={() => void act("install")}
+          >
+            Pobierz model wizyjny
+          </button>
+          <button
+            type="button"
+            className="local-ai-danger"
+            disabled={!status.installed || status.state === "DOWNLOADING"}
+            onClick={() => void act("remove")}
+          >
+            Usuń model wizyjny
+          </button>
+        </div>
+      ) : null}
+      {error ? <small className="local-ai-error">{error}</small> : null}
+    </div>
+  );
+}
+
 export function LocalAiSetupPanel({
   user,
   embedded = false
@@ -1095,6 +1180,8 @@ export function LocalAiSetupPanel({
             )}
           </>
         ) : null}
+
+        {data ? <VisionOcrSection admin={user.appRole === "ADMIN"} /> : null}
 
         {message ? <p className="local-ai-message">{message}</p> : null}
 

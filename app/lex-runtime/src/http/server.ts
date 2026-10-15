@@ -82,6 +82,7 @@ import {
 } from "../privacy/gazetteer-ner.js";
 import { LocalLlmPrivacyNamedEntityRecognizer } from "../privacy/local-llm-ner.js";
 import { LocalPrivateDocumentService } from "../document-service.js";
+import { LocalVisionLineReader } from "../ocr-vision.js";
 import { LocalCaseFileStore } from "../case-file-store.js";
 import { LocalAuthStore } from "../auth/store.js";
 import { LocalAuthService } from "../auth/service.js";
@@ -675,12 +676,12 @@ export async function startLocalServer(options?: {
     new LocalPrivateDocumentService(
       new CompleteDocumentIngestor(
         new PdfJsDocumentPageSource(),
-        new LocalPaddleOcrEngine()
+        new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })
       ),
       privacyNamedEntities,
       24_000,
       new CompleteImageIngestor(
-        new LocalPaddleImageOcrEngine()
+        new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })
       ),
       privacyVaultStore,
       secureCaseDocumentStore,
@@ -692,7 +693,11 @@ export async function startLocalServer(options?: {
         () => privacyNamedEntities.localModel(),
         (words) => personMorphology.knownWords(words)
       ),
-      registryEnrichmentFor(legalFederationTools)
+      registryEnrichmentFor(legalFederationTools),
+      () => {
+        const vision = localModels.visionOcr();
+        return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+      }
     );
 
   const coreApp = createLexHttpApp({

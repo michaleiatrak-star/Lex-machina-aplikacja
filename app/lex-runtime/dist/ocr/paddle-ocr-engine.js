@@ -14,6 +14,7 @@ export class LocalPaddleOcrEngine {
     dpi;
     device;
     timeoutMs;
+    lineCrops;
     constructor(options = {}) {
         this.python =
             options.python ??
@@ -31,6 +32,7 @@ export class LocalPaddleOcrEngine {
                 process.env.LEX_OCR_DEVICE?.trim()) || undefined;
         this.timeoutMs =
             options.timeoutMs ?? 30 * 60 * 1000;
+        this.lineCrops = options.lineCrops ?? (() => false);
     }
     async recognizePages(data, pages, onPage) {
         if (pages.length === 0)
@@ -57,6 +59,9 @@ export class LocalPaddleOcrEngine {
             ];
             if (this.device) {
                 args.push("--device", this.device);
+            }
+            if (this.lineCrops()) {
+                args.push("--line-crops");
             }
             await new Promise((resolve, reject) => {
                 const child = spawn(this.python, args, {

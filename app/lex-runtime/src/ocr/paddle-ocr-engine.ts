@@ -15,6 +15,8 @@ export type LocalPaddleOcrOptions = {
   dpi?: number;
   device?: string;
   timeoutMs?: number;
+  // Line images for the local vision model; asked for only when the model is installed.
+  lineCrops?: () => boolean;
 };
 
 function defaultWorkerPath(): string {
@@ -32,6 +34,7 @@ implements OcrEngine {
   private readonly dpi: number;
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
+  private readonly lineCrops: () => boolean;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -52,6 +55,7 @@ implements OcrEngine {
       ) || undefined;
     this.timeoutMs =
       options.timeoutMs ?? 30 * 60 * 1000;
+    this.lineCrops = options.lineCrops ?? (() => false);
   }
 
   async recognizePages(
@@ -86,6 +90,9 @@ implements OcrEngine {
       ];
       if (this.device) {
         args.push("--device", this.device);
+      }
+      if (this.lineCrops()) {
+        args.push("--line-crops");
       }
 
       await new Promise<void>((resolve, reject) => {

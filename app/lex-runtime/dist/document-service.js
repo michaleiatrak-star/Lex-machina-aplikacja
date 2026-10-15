@@ -1,5 +1,6 @@
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
+import { correctWithVision, withoutLineCrops } from "./ocr-vision.js";
 import { maskBoxes, protectedValues, wantsImage } from "./document-evidence.js";
 import { createHash } from "node:crypto";
 import { chunkDocumentPages } from "./document-ingestion.js";
@@ -18,6 +19,10 @@ import { XLSX_MEDIA_TYPE, XLSM_MEDIA_TYPE, CSV_MEDIA_TYPE, TSV_MEDIA_TYPE } from
 export function shouldCorrectOcr(security) {
     return (security?.ocrFix === true ||
         (security?.localAi === true && security.ocrFix !== false));
+}
+function withoutCrops(source) {
+    const pages = source.pages.map(withoutLineCrops);
+    return pages.every((page, index) => page === source.pages[index]) ? source : { ...source, pages };
 }
 /** UTF-8 (BOM stripped), else Windows-1250 as used by older Polish files. */
 export function decodePlainText(data) {
@@ -157,6 +162,7 @@ export class LocalPrivateDocumentService {
     pageMasker;
     ocrCorrector;
     registryForms;
+    visionReader;
     documents = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
     // One token per person and inflected restore ([PII:PERSON:0001|GEN]).
@@ -166,7 +172,9 @@ export class LocalPrivateDocumentService {
     // "z lokalnym AI": fixes OCR errors before anonymization.
     ocrCorrector, 
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
-    registryForms) {
+    registryForms, 
+    // The local vision model for doubtful OCR lines, when installed (null otherwise).
+    visionReader) {
         this.pdfIngestor = pdfIngestor;
         this.namedEntities = namedEntities;
         this.maxChunkChars = maxChunkChars;
@@ -179,6 +187,7 @@ export class LocalPrivateDocumentService {
         this.pageMasker = pageMasker;
         this.ocrCorrector = ocrCorrector;
         this.registryForms = registryForms;
+        this.visionReader = visionReader;
     }
     digitalTextResult(data, text) {
         if (data.byteLength >
@@ -265,10 +274,12 @@ export class LocalPrivateDocumentService {
         onProgress?.({ stage: "READING" });
         const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
         const spaced = await this.restoreSpacing(extracted);
+        // Line images live only for the vision step; never kept with the document.
+        const read = withoutCrops(shouldCorrectOcr(security) ? await this.readWithVision(spaced, onProgress) : spaced);
         // Lines to check against the scan, marked after the corrections (which rebuild the text).
         const source = await this.markReview(shouldCorrectOcr(security)
-            ? await this.correctOcr(spaced, onProgress)
-            : spaced);
+            ? await this.correctOcr(read, onProgress)
+            : read);
         const documentId = `doc_${source.sha256.slice(0, 24)}`;
         const persistentDocument = Boolean(this.secureDocumentStore &&
             security?.caseId);
@@ -418,6 +429,35 @@ export class LocalPrivateDocumentService {
         catch (error) {
             process.stderr.write(`OCR_SPACING_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
             return source;
+        }
+        if (pages.every((page, index) => page === source.pages[index]))
+            return source;
+        return {
+            ...source,
+            pages,
+            sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+        };
+    }
+    /** Doubtful OCR lines read again by the local vision model, through the arbiter (ocr-vision.ts). */
+    async readWithVision(source, onProgress) {
+        const morphology = this.personMorphology;
+        if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop))) {
+            return source;
+        }
+        const session = this.visionReader?.();
+        if (!session)
+            return source;
+        let pages;
+        try {
+            pages = await correctWithVision(source.pages, session.readLine, (words) => morphology.knownWords(words), (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" }));
+        }
+        catch (error) {
+            process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+            return source;
+        }
+        finally {
+            session.stop();
         }
         if (pages.every((page, index) => page === source.pages[index]))
             return source;

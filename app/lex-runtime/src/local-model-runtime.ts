@@ -8,6 +8,23 @@ import type {
 import {
   compareVersions
 } from "./update-discovery.js";
+import {
+  installVisionModel,
+  VISION_MODEL_FILES,
+  VISION_MODEL_LABEL,
+  visionModelInstalled
+} from "./ocr-vision.js";
+
+export type VisionOcrStatus = {
+  label: string;
+  bytes: number;
+  installed: boolean;
+  // The llama.cpp engine comes with the local AI; without it the model cannot run.
+  engineInstalled: boolean;
+  state: "IDLE" | "DOWNLOADING" | "FAILED";
+  received?: number;
+  error?: string;
+};
 
 export type LocalModelId = string;
 
@@ -633,6 +650,62 @@ export class LocalModelRuntime {
     }
     this.recoverInterruptedProvision();
     this.recoverInterruptedInactiveModelUpdate();
+  }
+
+  private visionInstall: { state: "IDLE" | "DOWNLOADING" | "FAILED"; received: number; error?: string } = {
+    state: "IDLE",
+    received: 0
+  };
+
+  /** Folder of the vision model that reads doubtful OCR lines (two GGUF files). */
+  visionModelDir(): string {
+    return path.join(this.rootDir, "vision");
+  }
+
+  /** The llama.cpp engine and the vision model, when both are installed. */
+  visionOcr(): { executable: string; dir: string; gpuOffload: boolean } | null {
+    const config = this.readConfig();
+    const dir = this.visionModelDir();
+    if (!config || !fs.existsSync(config.engine.executable) || !visionModelInstalled(dir)) return null;
+    return { executable: config.engine.executable, dir, gpuOffload: config.engine.gpuOffload === true };
+  }
+
+  visionOcrStatus(): VisionOcrStatus {
+    const config = this.readConfig();
+    const bytes = VISION_MODEL_FILES.reduce((sum, file) => sum + file.bytes, 0);
+    return {
+      label: VISION_MODEL_LABEL,
+      bytes,
+      installed: visionModelInstalled(this.visionModelDir()),
+      engineInstalled: Boolean(config && fs.existsSync(config.engine.executable)),
+      state: this.visionInstall.state,
+      ...(this.visionInstall.state === "DOWNLOADING" ? { received: this.visionInstall.received } : {}),
+      ...(this.visionInstall.error ? { error: this.visionInstall.error } : {})
+    };
+  }
+
+  /** Starts the download (SHA-256 checked); the status reports the progress. */
+  installVisionOcr(): void {
+    if (this.visionInstall.state === "DOWNLOADING") throw new Error("VISION_MODEL_INSTALL_IN_PROGRESS");
+    this.visionInstall = { state: "DOWNLOADING", received: 0 };
+    const done = new Map<string, number>();
+    void installVisionModel(this.visionModelDir(), (progress) => {
+      done.set(progress.file, progress.received);
+      this.visionInstall.received = [...done.values()].reduce((sum, value) => sum + value, 0);
+    }).then(
+      () => {
+        this.visionInstall = { state: "IDLE", received: 0 };
+      },
+      (error: unknown) => {
+        this.visionInstall = { state: "FAILED", received: 0, error: error instanceof Error ? error.message : String(error) };
+      }
+    );
+  }
+
+  removeVisionOcr(): void {
+    if (this.visionInstall.state === "DOWNLOADING") throw new Error("VISION_MODEL_INSTALL_IN_PROGRESS");
+    fs.rmSync(this.visionModelDir(), { recursive: true, force: true });
+    this.visionInstall = { state: "IDLE", received: 0 };
   }
 
   listModels(): LocalModelDescriptor[] {

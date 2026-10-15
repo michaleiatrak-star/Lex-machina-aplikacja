@@ -4,6 +4,7 @@ import type {
 import type { LocalOcrCorrector } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
+import { correctWithVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
 import {
   maskBoxes,
   protectedValues,
@@ -104,6 +105,11 @@ export function shouldCorrectOcr(
     security?.ocrFix === true ||
     (security?.localAi === true && security.ocrFix !== false)
   );
+}
+
+function withoutCrops(source: DocumentIngestionResult): DocumentIngestionResult {
+  const pages = source.pages.map(withoutLineCrops);
+  return pages.every((page, index) => page === source.pages[index]) ? source : { ...source, pages };
 }
 
 /** UTF-8 (BOM stripped), else Windows-1250 as used by older Polish files. */
@@ -522,7 +528,9 @@ implements DocumentService {
     // "z lokalnym AI": fixes OCR errors before anonymization.
     private readonly ocrCorrector?: Pick<LocalOcrCorrector, "correct">,
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
-    private readonly registryForms?: RegistryFormsProvider
+    private readonly registryForms?: RegistryFormsProvider,
+    // The local vision model for doubtful OCR lines, when installed (null otherwise).
+    private readonly visionReader?: () => { readLine: ReadLine; stop(): void } | null
   ) {}
 
   private digitalTextResult(
@@ -672,11 +680,15 @@ implements DocumentService {
       onProgress
     ));
     const spaced = await this.restoreSpacing(extracted);
+    // Line images live only for the vision step; never kept with the document.
+    const read = withoutCrops(
+      shouldCorrectOcr(security) ? await this.readWithVision(spaced, onProgress) : spaced
+    );
     // Lines to check against the scan, marked after the corrections (which rebuild the text).
     const source = await this.markReview(
       shouldCorrectOcr(security)
-        ? await this.correctOcr(spaced, onProgress)
-        : spaced
+        ? await this.correctOcr(read, onProgress)
+        : read
     );
     const documentId =
       `doc_${source.sha256.slice(0, 24)}`;
@@ -868,6 +880,40 @@ implements DocumentService {
     } catch (error) {
       process.stderr.write(`OCR_SPACING_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
       return source;
+    }
+    if (pages.every((page, index) => page === source.pages[index])) return source;
+    return {
+      ...source,
+      pages,
+      sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+      chunks: chunkDocumentPages(pages, this.maxChunkChars)
+    };
+  }
+
+  /** Doubtful OCR lines read again by the local vision model, through the arbiter (ocr-vision.ts). */
+  private async readWithVision(
+    source: DocumentIngestionResult,
+    onProgress?: ProgressReporter
+  ): Promise<DocumentIngestionResult> {
+    const morphology = this.personMorphology;
+    if (!morphology?.knownWords || !source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop))) {
+      return source;
+    }
+    const session = this.visionReader?.();
+    if (!session) return source;
+    let pages: IngestedPage[];
+    try {
+      pages = await correctWithVision(
+        source.pages,
+        session.readLine,
+        (words) => morphology.knownWords!(words),
+        (done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: "odczyt wątpliwych linii OCR (model wizyjny)" })
+      );
+    } catch (error) {
+      process.stderr.write(`VISION_OCR_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
+      return source;
+    } finally {
+      session.stop();
     }
     if (pages.every((page, index) => page === source.pages[index])) return source;
     return {

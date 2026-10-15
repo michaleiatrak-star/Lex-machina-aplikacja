@@ -55,6 +55,7 @@ import { LocalStanzaNamedEntityRecognizer } from "../privacy/stanza-ner.js";
 import { CompositeRecognizer, LocalGazetteerRecognizer } from "../privacy/gazetteer-ner.js";
 import { LocalLlmPrivacyNamedEntityRecognizer } from "../privacy/local-llm-ner.js";
 import { LocalPrivateDocumentService } from "../document-service.js";
+import { LocalVisionLineReader } from "../ocr-vision.js";
 import { LocalCaseFileStore } from "../case-file-store.js";
 import { LocalAuthStore } from "../auth/store.js";
 import { LocalAuthService } from "../auth/service.js";
@@ -333,7 +334,10 @@ export async function startLocalServer(options) {
     // as the SN connector of the case-law search does.
     new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
-    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine()), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine()), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)), registryEnrichmentFor(legalFederationTools));
+    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)), registryEnrichmentFor(legalFederationTools), () => {
+        const vision = localModels.visionOcr();
+        return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+    });
     const coreApp = createLexHttpApp({
         registry,
         // Off until a Google OAuth client is configured (see google/config.ts).

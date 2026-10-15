@@ -17,6 +17,8 @@ export type LocalPaddleImageOcrOptions = {
   workerPath?: string;
   device?: string;
   timeoutMs?: number;
+  // Line images for the local vision model; asked for only when the model is installed.
+  lineCrops?: () => boolean;
 };
 
 function defaultWorkerPath(): string {
@@ -43,6 +45,7 @@ implements ImageOcrEngine {
   private readonly workerPath: string;
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
+  private readonly lineCrops: () => boolean;
 
   constructor(
     options: LocalPaddleImageOcrOptions = {}
@@ -62,6 +65,7 @@ implements ImageOcrEngine {
       ) || undefined;
     this.timeoutMs =
       options.timeoutMs ?? 10 * 60 * 1000;
+    this.lineCrops = options.lineCrops ?? (() => false);
   }
 
   async recognizeImage(
@@ -99,6 +103,9 @@ implements ImageOcrEngine {
       ];
       if (this.device) {
         args.push("--device", this.device);
+      }
+      if (this.lineCrops()) {
+        args.push("--line-crops");
       }
 
       await new Promise<void>((resolve, reject) => {
