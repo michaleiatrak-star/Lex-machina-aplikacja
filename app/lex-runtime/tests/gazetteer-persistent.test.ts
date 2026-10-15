@@ -36,3 +36,13 @@ describe.skipIf(!python)("gazetteer: a worker kept alive", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe.skipIf(!python)("gazetteer: addresses", () => {
+  it("a phone on the next line is not part of the street address", async () => {
+    const gazetteer = new LocalGazetteerRecognizer({ persistent: false });
+    const text = "43-100 Tychy, ul. Lipowa 7\nTel. 32-111 22 33; fax 32-444 55 66";
+    const addresses = (await gazetteer.recognize(text)).filter((span) => span.kind === "ADDRESS").map((span) => span.value);
+    expect(addresses).toContain("ul. Lipowa 7");
+    expect(addresses.some((value) => /Tel|32-111/u.test(value))).toBe(false);
+  });
+});

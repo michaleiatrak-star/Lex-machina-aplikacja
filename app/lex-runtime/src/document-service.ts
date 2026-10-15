@@ -735,12 +735,14 @@ implements DocumentService {
       onProgress
     ));
     const spaced = await this.restoreSpacing(extracted);
-    // OCR correction: model-free cleanup, then the vision model on the doubtful lines. Line
-    // images live only for that step; never kept with the document.
+    // Model-free cleanup on every OCR page (ligatures, look-alike letters, misread amounts;
+    // each change kept in page.corrections), then, when asked for, the vision model on the
+    // doubtful lines. Line images live only for that step; never kept with the document.
+    const cleaned = normalizedOcr(spaced, this.maxChunkChars);
     const read = withoutCrops(
       shouldCorrectOcr(security)
-        ? await this.readWithVision(normalizedOcr(spaced, this.maxChunkChars), onProgress)
-        : spaced
+        ? await this.readWithVision(cleaned, onProgress)
+        : cleaned
     );
     // Lines to check against the scan, marked after the corrections (which rebuild the text).
     const source = await this.markReview(read);
@@ -830,6 +832,10 @@ implements DocumentService {
       new PseudonymizationVault();
     const suggestions: PublicPrivacySuggestion[] = [];
 
+    // Jak przy zatwierdzeniu: przy kilku stronach pierwszy przebieg zbiera osoby i firmy
+    // ze wszystkich stron, żeby propozycja na s. 1 obejmowała też nazwę znalezioną na s. 3.
+    const passes = source.pages.length > 1 ? 2 : 1;
+    for (let pass = 1; pass <= passes; pass += 1)
     for (const [index, page] of source.pages.entries()) {
       onProgress?.({ stage: "DETECTING", done: index, total: source.pages.length, page: page.page });
       const hints: PiiSpan[] = [];
@@ -851,6 +857,7 @@ implements DocumentService {
         ).pseudonymize(
           page.text
         );
+      if (pass < passes) continue;
       for (const finding of preview.findings) {
         suggestions.push(suggestionOf(page.page, finding, hints));
       }

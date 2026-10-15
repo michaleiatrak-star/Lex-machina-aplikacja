@@ -1,5 +1,5 @@
 import { detectFirmNames, type FirmSpan } from "./firm-names.js";
-import { personPart } from "./generic-words.js";
+import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
 import type { RegistryFormsProvider } from "./registry-enrichment.js";
 import {
@@ -848,6 +848,13 @@ export class PseudonymizationVault {
   }
 }
 
+/** A line naming a role or an office ("Radców Prawnych", "Kancelaria Adwokatów"), not a person. */
+function roleHeading(line: string): boolean {
+  const first = /\p{L}+/u.exec(line)?.[0]?.toLowerCase();
+  const words = genericWords();
+  return Boolean(first && (words.personOnlyTriggers.has(first) || words.institutions.has(first)));
+}
+
 export class LocalPolishPseudonymizer {
   constructor(
     private readonly vault: PseudonymizationVault,
@@ -944,11 +951,17 @@ export class LocalPolishPseudonymizer {
         // A name never runs over a line: "Paweł Kania⏎os. Kosmonautów 86/9" (a heading
         // and the address under it) is the name; the address is found on its own.
         const lineEnd = recognized.kind === "PERSON" ? recognized.value.indexOf("\n") : -1;
+        // A role heading on the first line ("Radców Prawnych⏎Nowak Lis"): the name is below.
+        const heading = lineEnd > 0 && roleHeading(recognized.value.slice(0, lineEnd));
+        const below = heading ? recognized.value.slice(lineEnd + 1).split("\n")[0]!.trim() : "";
         const found =
-          lineEnd > 0
-            ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
-            : recognized;
+          heading
+            ? { ...recognized, start: recognized.start + recognized.value.indexOf(below, lineEnd + 1), value: below }
+            : lineEnd > 0
+              ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
+              : recognized;
         if (lineEnd > 0) found.end = found.start + found.value.length;
+        if (!found.value) continue;
         // A double surname the recognizer cut at the hyphen ("Nicole Brzezińska" of "Nicole Brzezińska-Król").
         if (found.kind === "PERSON") {
           const rest = /^-\p{Lu}\p{Ll}+/u.exec(text.slice(found.end, found.end + 40));
