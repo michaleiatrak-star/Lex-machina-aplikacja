@@ -40,3 +40,25 @@ describe("SPN: wypowiedzenie umowy", () => {
     expect(code("Jak wypowiedzieć najem?")).toBeNull();
   });
 });
+
+describe("SPO / SPR: reklamacja, rękojmia, odstąpienie od umowy", () => {
+  it("complaint, warranty and non-conformity letters", () => {
+    expect(code("Napisz reklamację wadliwego telefonu.")).toBe("SPO");
+    expect(code("Napisz odpowiedź na reklamację klienta.")).toBe("SPO");
+    expect(code("Napisz pismo z rękojmi do sprzedawcy samochodu.")).toBe("SPO-R");
+    expect(code("Przygotuj żądanie obniżenia ceny, towar niezgodny z umową.")).toBe("SPO-N");
+  });
+
+  it("withdrawal, including \"zerwanie umowy\"", () => {
+    expect(code("Przygotuj pismo o odstąpieniu od umowy zawartej przez internet.")).toBe("SPR");
+    expect(code("Chcę odstąpić od umowy, wykonawca się spóźnia.")).toBe("SPR");
+    expect(code("Napisz zerwanie umowy z firmą remontową.")).toBe("SPR");
+  });
+
+  it("not a contract to draft, a received refusal or a how-to question", () => {
+    expect(code("Napisz umowę sprzedaży z prawem odstąpienia.")).toBeNull();
+    expect(code("Przygotuj projekt umowy najmu z prawem wypowiedzenia.")).toBeNull();
+    expect(code("Dostałem odmowę reklamacji, co dalej?")).toBeNull();
+    expect(code("Jak odstąpić od umowy?")).toBeNull();
+  });
+});
