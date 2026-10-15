@@ -1,7 +1,6 @@
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
 import { configureCaseLawStore } from "../case-law-store.js";
-import { LocalOcrCorrector } from "../ocr-correction.js";
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
 import helmet from "helmet";
@@ -334,9 +333,20 @@ export async function startLocalServer(options) {
     // as the SN connector of the case-law search does.
     new SupremeCourtCaseVerifier(snFetch), new CaseLawSearchService(snFetch), coreLawIndex, undefined, (act) => coreLawIndex.adopt(act), context?.localModel === true), privacyNamedEntities, legalFederationTools, coreLawIndex, personMorphology, (act) => actFreshness.check(act)), anomalyJournal);
     const documentAstGenerator = new LegalDocumentAstGenerator(sessionExecutor);
-    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), new LocalOcrCorrector(() => privacyNamedEntities.localModel(), (words) => personMorphology.knownWords(words)), registryEnrichmentFor(legalFederationTools), () => {
+    const documentService = new LocalPrivateDocumentService(new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyNamedEntities, 24_000, new CompleteImageIngestor(new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })), privacyVaultStore, secureCaseDocumentStore, new LocalOfficeDocumentTextExtractor(), new LocalSpreadsheetTextExtractor(), personMorphology, new LocalPageImageMasker(), registryEnrichmentFor(legalFederationTools), () => {
         const vision = localModels.visionOcr();
         return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+    }, 
+    // The vision step: a running text model gives its memory to the vision model.
+    async () => {
+        if (localModels.status().state !== "STOPPED")
+            await localModels.stop();
+    }, 
+    // "z lokalnym AI": the text model starts right before the detection of personal data.
+    async () => {
+        const modelId = localModels.configuredModelId();
+        if (modelId && localModels.status().state !== "READY")
+            await localModels.ensureRunning(modelId);
     });
     const coreApp = createLexHttpApp({
         registry,

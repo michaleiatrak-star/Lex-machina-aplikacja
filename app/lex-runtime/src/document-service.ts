@@ -1,7 +1,7 @@
 import type {
   PersonMorphology
 } from "./privacy/person-morphology.js";
-import type { LocalOcrCorrector } from "./ocr-correction.js";
+import { normalizeOcrPage } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
 import { correctWithVision, enoughMemoryForVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
@@ -89,14 +89,16 @@ export type DocumentSecurityContext = {
   // "z lokalnym AI": the running local model checks every page for
   // personal data.
   localAi?: boolean;
-  // OCR correction by the local model: true = on (also without localAi, for
-  // "Tylko OCR z korektą AI"), false = off; unset = on with localAi.
+  // OCR correction (model-free cleanup and the local vision model): true = on (also without
+  // localAi, for "Tylko OCR z korektą AI"), false = off; unset = on with localAi.
   ocrFix?: boolean;
+  // false: only read the document (OCR); personal data is detected later by detect().
+  detect?: boolean;
 };
 
 /**
- * OCR correction by the local model: on for "z AI" anonymization unless
- * switched off (undo), and on its own for "Tylko OCR z korektą AI".
+ * OCR correction (vision model): on for "z AI" anonymization unless switched off (undo),
+ * and on its own for "Tylko OCR z korektą AI".
  */
 export function shouldCorrectOcr(
   security?: Pick<DocumentSecurityContext, "localAi" | "ocrFix">
@@ -105,6 +107,17 @@ export function shouldCorrectOcr(
     security?.ocrFix === true ||
     (security?.localAi === true && security.ocrFix !== false)
   );
+}
+
+function normalizedOcr(source: DocumentIngestionResult, maxChunkChars: number): DocumentIngestionResult {
+  const pages = source.pages.map(normalizeOcrPage);
+  if (pages.every((page, index) => page === source.pages[index])) return source;
+  return {
+    ...source,
+    pages,
+    sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+    chunks: chunkDocumentPages(pages, maxChunkChars)
+  };
 }
 
 function withoutCrops(source: DocumentIngestionResult): DocumentIngestionResult {
@@ -381,6 +394,7 @@ export interface DocumentService {
     reviewed?: boolean
   ): Promise<PublicDocumentIngestion>;
   markReviewed?(documentId: string, security: DocumentSecurityContext): Promise<AnonymizedVersion>;
+  detect?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
   editPage?(
     documentId: string,
     pageNumber: number,
@@ -551,12 +565,14 @@ implements DocumentService {
       PersonMorphology,
     // Masks personal data on scanned pages sent to a model as evidence.
     private readonly pageMasker?: PageImageMasker,
-    // "z lokalnym AI": fixes OCR errors before anonymization.
-    private readonly ocrCorrector?: Pick<LocalOcrCorrector, "correct">,
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
     private readonly registryForms?: RegistryFormsProvider,
     // The local vision model for doubtful OCR lines, when installed (null otherwise).
-    private readonly visionReader?: () => { readLine: ReadLine; stop(): void } | null
+    private readonly visionReader?: () => { readLine: ReadLine; stop(): void } | null,
+    // The vision step: text models (Bielik) are stopped so the vision model has the memory.
+    private readonly stopTextModels?: () => Promise<void>,
+    // "z lokalnym AI": the text model is started right before the detection of personal data.
+    private readonly startTextModels?: () => Promise<void>
   ) {}
 
   private digitalTextResult(
@@ -706,16 +722,15 @@ implements DocumentService {
       onProgress
     ));
     const spaced = await this.restoreSpacing(extracted);
-    // Line images live only for the vision step; never kept with the document.
+    // OCR correction: model-free cleanup, then the vision model on the doubtful lines. Line
+    // images live only for that step; never kept with the document.
     const read = withoutCrops(
-      shouldCorrectOcr(security) ? await this.readWithVision(spaced, onProgress) : spaced
+      shouldCorrectOcr(security)
+        ? await this.readWithVision(normalizedOcr(spaced, this.maxChunkChars), onProgress)
+        : spaced
     );
     // Lines to check against the scan, marked after the corrections (which rebuild the text).
-    const source = await this.markReview(
-      shouldCorrectOcr(security)
-        ? await this.correctOcr(read, onProgress)
-        : read
-    );
+    const source = await this.markReview(read);
     const documentId =
       `doc_${source.sha256.slice(0, 24)}`;
 
@@ -766,6 +781,38 @@ implements DocumentService {
       source
     });
 
+    // Several files: the OCR of all of them first (text models stopped for the vision
+    // model), then the detection of personal data (text model started once).
+    if (security?.detect === false) return this.publicReview(documentId, mediaType, source, []);
+    return this.detectSuggestions(documentId, mediaType, source, security);
+  }
+
+  /**
+   * Personal data in a document already read (review with detect: false). With "z lokalnym
+   * AI" the text model is started first.
+   */
+  async detect(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview> {
+    const record = this.documents.get(documentId);
+    if (!record) throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+    if (record.caseId && security?.caseId !== record.caseId) throw new Error("DOCUMENT_CASE_MISMATCH");
+    if (security?.localAi && !record.aiFindings) {
+      record.localAi = true;
+      record.aiFindings = new Map<string, PiiSpan[]>();
+    }
+    return this.detectSuggestions(documentId, record.mediaType, record.source, security);
+  }
+
+  private async detectSuggestions(
+    documentId: string,
+    mediaType: SupportedDocumentMediaType,
+    source: DocumentIngestionResult,
+    security?: DocumentSecurityContext
+  ): Promise<PublicDocumentReview> {
+    const onProgress = security?.onProgress;
+    if (security?.localAi && this.startTextModels) {
+      onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "uruchamianie modelu lokalnego do anonimizacji" });
+      await this.startTextModels();
+    }
     const suggestionVault =
       new PseudonymizationVault();
     const suggestions: PublicPrivacySuggestion[] = [];
@@ -796,6 +843,15 @@ implements DocumentService {
       }
     }
 
+    return this.publicReview(documentId, mediaType, source, suggestions);
+  }
+
+  private publicReview(
+    documentId: string,
+    mediaType: SupportedDocumentMediaType,
+    source: DocumentIngestionResult,
+    suggestions: PublicPrivacySuggestion[]
+  ): PublicDocumentReview {
     return {
       documentId,
       mediaType,
@@ -923,6 +979,14 @@ implements DocumentService {
       return source;
     }
     if (!this.visionReader) return source;
+    // The text model is started again only for the detection of personal data.
+    if (this.stopTextModels) {
+      try {
+        await this.stopTextModels();
+      } catch (error) {
+        process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+      }
+    }
     if (!enoughMemoryForVision()) {
       process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
       onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
@@ -968,41 +1032,6 @@ implements DocumentService {
       return source;
     }
     if (pages.every((page, index) => page === source.pages[index])) return source;
-    return {
-      ...source,
-      pages,
-      sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
-      chunks: chunkDocumentPages(pages, this.maxChunkChars)
-    };
-  }
-
-  private async correctOcr(
-    source: DocumentIngestionResult,
-    onProgress?: ProgressReporter
-  ): Promise<DocumentIngestionResult> {
-    if (!this.ocrCorrector || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
-      return source;
-    }
-    // A NIP/KRS read from the document gives the register's spelling of the firm, its
-    // address and its people: the OCR corrector takes them as known words.
-    let registered: string[] = [];
-    try {
-      registered = this.registryForms
-        ? (await this.registryForms.forms(source.pages.map((page) => page.text).join("\n"))).map((form) => form.text)
-        : [];
-    } catch (error) {
-      process.stderr.write(`OCR_REGISTRY_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
-    }
-    const pages: IngestedPage[] = [];
-    for (const page of source.pages) {
-      pages.push(
-        await this.ocrCorrector.correct(page, (item, done, total) =>
-          onProgress?.({ stage: "AI_CHECK", done, total, item: `korekta OCR s. ${page.page}: ${item}`.slice(0, 160) }),
-          registered
-        )
-      );
-    }
-    if (!pages.some((page) => page.corrections?.length)) return source;
     return {
       ...source,
       pages,

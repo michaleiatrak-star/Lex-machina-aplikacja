@@ -731,7 +731,9 @@ export function documentProcessingOptions(header) {
         .filter(Boolean));
     return {
         ...(flags.has("local-ai") ? { localAi: true } : {}),
-        ...(flags.has("ocr-fix") ? { ocrFix: true } : {})
+        ...(flags.has("ocr-fix") ? { ocrFix: true } : {}),
+        // "ocr-only": read the document now, detect personal data later (POST .../detect).
+        ...(flags.has("ocr-only") ? { detect: false } : {})
     };
 }
 // Workflows the engine runs only with their persisted state (G39I state binding).
@@ -2816,7 +2818,9 @@ export function createLexHttpApp(options) {
                         keyVersion: caseView.keyVersion,
                         ...(onProgress ? { onProgress } : {}),
                         ...(req.body?.localAi === true ? { localAi: true } : {}),
-                        ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {})
+                        ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
+                        // OCR only now; personal data later (POST /api/documents/:id/detect).
+                        ...(req.body?.detect === false ? { detect: false } : {})
                     });
                 }
                 finally {
@@ -3984,6 +3988,49 @@ export function createLexHttpApp(options) {
                         : "DOCUMENT_PAGE_EDIT_FAILED"
                 });
             }
+        }
+    });
+    // The second step after "ocr-only": personal data of a document already read (the text model,
+    // with "local-ai", is started only now, after the OCR of every file).
+    app.post("/api/documents/:documentId/detect", async (req, res) => {
+        const documentId = String(req.params.documentId ?? "").trim();
+        const caseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+        const service = options.documentService;
+        if (!service?.detect || !options.caseAccessService) {
+            res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+            return;
+        }
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !/^case_[a-f0-9]{32}$/.test(caseId)) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PRIVACY_REQUEST" });
+            return;
+        }
+        try {
+            const context = responseAuthContext(res);
+            const caseView = options.caseAccessService.openCase(context, caseId);
+            const progressId = progressIdFrom(req.get("x-lex-progress"));
+            const result = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => service.detect(documentId, {
+                caseId,
+                caseDataKey,
+                keyVersion: caseView.keyVersion,
+                ...documentProcessingOptions(req.get("x-lex-processing")),
+                ...(progressId ? { onProgress: processingProgress.reporter(caseId, progressId) } : {})
+            }));
+            res.json(result);
+        }
+        catch (error) {
+            if (sendCaseAccessError(res, error))
+                return;
+            const code = error instanceof Error ? error.message : "";
+            if (code === "UNKNOWN_LOCAL_DOCUMENT") {
+                res.status(404).json({ error: code });
+                return;
+            }
+            if (code.startsWith("LOCAL_PRIVACY_MODEL") || code.startsWith("PRIVACY_RECOGNIZER")) {
+                res.status(503).json({ error: code.split(":", 1)[0] });
+                return;
+            }
+            console.error(`DOCUMENT_DETECT_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+            res.status(500).json({ error: "DOCUMENT_DETECT_FAILED" });
         }
     });
     app.post("/api/documents/:documentId/finalize", async (req, res) => {

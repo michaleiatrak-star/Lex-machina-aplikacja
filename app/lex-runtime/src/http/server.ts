@@ -1,7 +1,6 @@
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
 import { configureCaseLawStore } from "../case-law-store.js";
-import { LocalOcrCorrector } from "../ocr-correction.js";
 import { timingSafeEqual } from "node:crypto";
 import express, {
   type NextFunction,
@@ -689,14 +688,19 @@ export async function startLocalServer(options?: {
       new LocalSpreadsheetTextExtractor(),
       personMorphology,
       new LocalPageImageMasker(),
-      new LocalOcrCorrector(
-        () => privacyNamedEntities.localModel(),
-        (words) => personMorphology.knownWords(words)
-      ),
       registryEnrichmentFor(legalFederationTools),
       () => {
         const vision = localModels.visionOcr();
         return vision ? new LocalVisionLineReader(vision.executable, vision.dir, { gpuOffload: vision.gpuOffload }) : null;
+      },
+      // The vision step: a running text model gives its memory to the vision model.
+      async () => {
+        if (localModels.status().state !== "STOPPED") await localModels.stop();
+      },
+      // "z lokalnym AI": the text model starts right before the detection of personal data.
+      async () => {
+        const modelId = localModels.configuredModelId();
+        if (modelId && localModels.status().state !== "READY") await localModels.ensureRunning(modelId);
       }
     );
 

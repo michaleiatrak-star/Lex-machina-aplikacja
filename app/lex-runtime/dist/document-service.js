@@ -1,3 +1,4 @@
+import { normalizeOcrPage } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
 import { correctWithVision, enoughMemoryForVision, withoutLineCrops } from "./ocr-vision.js";
@@ -13,12 +14,23 @@ import { PERSON_CASES } from "./privacy/person-morphology.js";
 import { DOCX_MEDIA_TYPE, ODT_MEDIA_TYPE } from "./office-document-extractor.js";
 import { XLSX_MEDIA_TYPE, XLSM_MEDIA_TYPE, CSV_MEDIA_TYPE, TSV_MEDIA_TYPE } from "./spreadsheet-extractor.js";
 /**
- * OCR correction by the local model: on for "z AI" anonymization unless
- * switched off (undo), and on its own for "Tylko OCR z korektą AI".
+ * OCR correction (vision model): on for "z AI" anonymization unless switched off (undo),
+ * and on its own for "Tylko OCR z korektą AI".
  */
 export function shouldCorrectOcr(security) {
     return (security?.ocrFix === true ||
         (security?.localAi === true && security.ocrFix !== false));
+}
+function normalizedOcr(source, maxChunkChars) {
+    const pages = source.pages.map(normalizeOcrPage);
+    if (pages.every((page, index) => page === source.pages[index]))
+        return source;
+    return {
+        ...source,
+        pages,
+        sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+        chunks: chunkDocumentPages(pages, maxChunkChars)
+    };
 }
 function withoutCrops(source) {
     const pages = source.pages.map(withoutLineCrops);
@@ -175,21 +187,24 @@ export class LocalPrivateDocumentService {
     spreadsheetExtractor;
     personMorphology;
     pageMasker;
-    ocrCorrector;
     registryForms;
     visionReader;
+    stopTextModels;
+    startTextModels;
     documents = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
     // One token per person and inflected restore ([PII:PERSON:0001|GEN]).
     personMorphology, 
     // Masks personal data on scanned pages sent to a model as evidence.
     pageMasker, 
-    // "z lokalnym AI": fixes OCR errors before anonymization.
-    ocrCorrector, 
     // Firm name, address and representatives from the VAT white list and KRS for a NIP/KRS in the document.
     registryForms, 
     // The local vision model for doubtful OCR lines, when installed (null otherwise).
-    visionReader) {
+    visionReader, 
+    // The vision step: text models (Bielik) are stopped so the vision model has the memory.
+    stopTextModels, 
+    // "z lokalnym AI": the text model is started right before the detection of personal data.
+    startTextModels) {
         this.pdfIngestor = pdfIngestor;
         this.namedEntities = namedEntities;
         this.maxChunkChars = maxChunkChars;
@@ -200,9 +215,10 @@ export class LocalPrivateDocumentService {
         this.spreadsheetExtractor = spreadsheetExtractor;
         this.personMorphology = personMorphology;
         this.pageMasker = pageMasker;
-        this.ocrCorrector = ocrCorrector;
         this.registryForms = registryForms;
         this.visionReader = visionReader;
+        this.stopTextModels = stopTextModels;
+        this.startTextModels = startTextModels;
     }
     digitalTextResult(data, text) {
         if (data.byteLength >
@@ -289,12 +305,13 @@ export class LocalPrivateDocumentService {
         onProgress?.({ stage: "READING" });
         const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
         const spaced = await this.restoreSpacing(extracted);
-        // Line images live only for the vision step; never kept with the document.
-        const read = withoutCrops(shouldCorrectOcr(security) ? await this.readWithVision(spaced, onProgress) : spaced);
+        // OCR correction: model-free cleanup, then the vision model on the doubtful lines. Line
+        // images live only for that step; never kept with the document.
+        const read = withoutCrops(shouldCorrectOcr(security)
+            ? await this.readWithVision(normalizedOcr(spaced, this.maxChunkChars), onProgress)
+            : spaced);
         // Lines to check against the scan, marked after the corrections (which rebuild the text).
-        const source = await this.markReview(shouldCorrectOcr(security)
-            ? await this.correctOcr(read, onProgress)
-            : read);
+        const source = await this.markReview(read);
         const documentId = `doc_${source.sha256.slice(0, 24)}`;
         const persistentDocument = Boolean(this.secureDocumentStore &&
             security?.caseId);
@@ -328,6 +345,34 @@ export class LocalPrivateDocumentService {
             vault,
             source
         });
+        // Several files: the OCR of all of them first (text models stopped for the vision
+        // model), then the detection of personal data (text model started once).
+        if (security?.detect === false)
+            return this.publicReview(documentId, mediaType, source, []);
+        return this.detectSuggestions(documentId, mediaType, source, security);
+    }
+    /**
+     * Personal data in a document already read (review with detect: false). With "z lokalnym
+     * AI" the text model is started first.
+     */
+    async detect(documentId, security) {
+        const record = this.documents.get(documentId);
+        if (!record)
+            throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+        if (record.caseId && security?.caseId !== record.caseId)
+            throw new Error("DOCUMENT_CASE_MISMATCH");
+        if (security?.localAi && !record.aiFindings) {
+            record.localAi = true;
+            record.aiFindings = new Map();
+        }
+        return this.detectSuggestions(documentId, record.mediaType, record.source, security);
+    }
+    async detectSuggestions(documentId, mediaType, source, security) {
+        const onProgress = security?.onProgress;
+        if (security?.localAi && this.startTextModels) {
+            onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "uruchamianie modelu lokalnego do anonimizacji" });
+            await this.startTextModels();
+        }
         const suggestionVault = new PseudonymizationVault();
         const suggestions = [];
         for (const [index, page] of source.pages.entries()) {
@@ -342,6 +387,9 @@ export class LocalPrivateDocumentService {
                 suggestions.push(suggestionOf(page.page, finding, hints));
             }
         }
+        return this.publicReview(documentId, mediaType, source, suggestions);
+    }
+    publicReview(documentId, mediaType, source, suggestions) {
         return {
             documentId,
             mediaType,
@@ -459,6 +507,15 @@ export class LocalPrivateDocumentService {
         }
         if (!this.visionReader)
             return source;
+        // The text model is started again only for the detection of personal data.
+        if (this.stopTextModels) {
+            try {
+                await this.stopTextModels();
+            }
+            catch (error) {
+                process.stderr.write(`TEXT_MODEL_STOP_FAILED:${error instanceof Error ? error.message : String(error)}\n`);
+            }
+        }
         if (!enoughMemoryForVision()) {
             process.stderr.write("VISION_OCR_SKIPPED:LOW_MEMORY\n");
             onProgress?.({ stage: "AI_CHECK", done: 0, total: 0, item: "model wizyjny pominięty: za mało wolnej pamięci" });
@@ -503,34 +560,6 @@ export class LocalPrivateDocumentService {
             return source;
         }
         if (pages.every((page, index) => page === source.pages[index]))
-            return source;
-        return {
-            ...source,
-            pages,
-            sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
-            chunks: chunkDocumentPages(pages, this.maxChunkChars)
-        };
-    }
-    async correctOcr(source, onProgress) {
-        if (!this.ocrCorrector || !source.pages.some((page) => page.source === "OCR" && page.lines?.length)) {
-            return source;
-        }
-        // A NIP/KRS read from the document gives the register's spelling of the firm, its
-        // address and its people: the OCR corrector takes them as known words.
-        let registered = [];
-        try {
-            registered = this.registryForms
-                ? (await this.registryForms.forms(source.pages.map((page) => page.text).join("\n"))).map((form) => form.text)
-                : [];
-        }
-        catch (error) {
-            process.stderr.write(`OCR_REGISTRY_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
-        }
-        const pages = [];
-        for (const page of source.pages) {
-            pages.push(await this.ocrCorrector.correct(page, (item, done, total) => onProgress?.({ stage: "AI_CHECK", done, total, item: `korekta OCR s. ${page.page}: ${item}`.slice(0, 160) }), registered));
-        }
-        if (!pages.some((page) => page.corrections?.length))
             return source;
         return {
             ...source,
