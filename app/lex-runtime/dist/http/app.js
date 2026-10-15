@@ -3942,6 +3942,55 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    // The scan of a page next to its text in the preview: the user's own file, local only.
+    app.get("/api/documents/:documentId/pages/:page/scan", async (req, res) => {
+        const documentService = options.documentService;
+        if (!documentService?.pageScan) {
+            res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+            return;
+        }
+        const documentId = String(req.params.documentId ?? "").trim();
+        const page = Number(req.params.page);
+        const requestedCaseId = typeof req.query.caseId === "string" ? req.query.caseId.trim() : "";
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) ||
+            !Number.isInteger(page) ||
+            page < 1 ||
+            (requestedCaseId && !/^case_[a-f0-9]{32}$/.test(requestedCaseId))) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PAGE_SCAN" });
+            return;
+        }
+        try {
+            let scan;
+            if (options.caseAccessService) {
+                const caseId = requestedCaseId || documentCaseIds.get(documentId);
+                if (!caseId)
+                    throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+                const context = responseAuthContext(res);
+                options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+                const caseView = options.caseAccessService.openCase(context, caseId);
+                scan = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => await documentService.pageScan(documentId, page, { caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+            }
+            else {
+                scan = await documentService.pageScan(documentId, page);
+            }
+            res.setHeader("Cache-Control", "no-store");
+            if (!scan) {
+                res.status(404).json({ error: "DOCUMENT_PAGE_SCAN_UNAVAILABLE" });
+                return;
+            }
+            res.json(scan);
+        }
+        catch (error) {
+            if (!sendCaseAccessError(res, error)) {
+                const code = error instanceof Error ? error.message : "";
+                if (/^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|ENOENT)$/.test(code)) {
+                    res.status(404).json({ error: code === "ENOENT" ? "DOCUMENT_NOT_FOUND" : code });
+                    return;
+                }
+                res.status(422).json({ error: code === "DOCUMENT_VAULT_CONTEXT_REQUIRED" ? code : "DOCUMENT_PAGE_SCAN_FAILED" });
+            }
+        }
+    });
     app.post("/api/documents/:documentId/pages/:page/text", async (req, res) => {
         const documentService = options.documentService;
         if (!documentService?.editPage) {

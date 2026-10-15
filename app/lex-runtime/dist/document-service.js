@@ -420,6 +420,47 @@ export class LocalPrivateDocumentService {
      * text of the document is replaced (also in the case's encrypted store) and personal
      * data on that page detected again; the review's earlier offsets for it no longer hold.
      */
+    /**
+     * The page as scanned, for the user's own view next to the text (local only, nothing goes
+     * to a model). A case document not open in this session is read from the case store.
+     */
+    async pageScan(documentId, pageNumber, security) {
+        const record = this.documents.get(documentId);
+        let pages;
+        if (record) {
+            if (record.caseId && security?.caseId !== record.caseId)
+                throw new Error("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+            pages = record.source.pages;
+        }
+        else {
+            if (!this.secureDocumentStore || !security?.caseDataKey || !Number.isInteger(security.keyVersion)) {
+                throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+            }
+            const stored = await this.secureDocumentStore.loadSource({
+                caseId: security.caseId,
+                documentId,
+                caseDataKey: security.caseDataKey,
+                keyVersion: security.keyVersion
+            });
+            pages = stored.source.pages;
+        }
+        const page = pages.find((item) => item.page === pageNumber);
+        if (!page)
+            throw new Error("INVALID_DOCUMENT_PAGE");
+        const image = page.image ?? page.scan;
+        if (!image)
+            return null;
+        return {
+            page: page.page,
+            mediaType: "image/jpeg",
+            data: image.jpeg,
+            width: image.width,
+            height: image.height,
+            lines: page.editedByUser
+                ? []
+                : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null }))
+        };
+    }
     async editPage(documentId, pageNumber, text, security) {
         const record = this.documents.get(documentId);
         if (!record)
@@ -437,8 +478,9 @@ export class LocalPrivateDocumentService {
             throw new Error("DOCUMENT_PAGE_TEXT_TOO_LONG");
         // The page image goes with the OCR lines: masking needs the line boxes, and a hand-edited
         // text no longer matches the image, so the image could only be sent unmasked.
-        const { lines: _lines, corrections: _corrections, image: _image, ...previous } = record.source.pages[index];
-        const page = { ...previous, text: clean, editedByUser: true };
+        const { lines: _lines, corrections: _corrections, image, ...previous } = record.source.pages[index];
+        const scan = image ?? previous.scan;
+        const page = { ...previous, text: clean, editedByUser: true, ...(scan ? { scan } : {}) };
         const pages = record.source.pages.map((item, at) => (at === index ? page : item));
         const source = {
             ...record.source,

@@ -3490,6 +3490,26 @@ export function approveAnonymizedVersion(caseId: string, documentId: string): Pr
 }
 
 /** The user's own correction of one page's text (a poor scan); personal data on it is detected again. */
+/** The scan of a page, with the box of every OCR line (null: no box for that line). */
+export type DocumentPageScan = {
+  page: number;
+  mediaType: "image/jpeg";
+  data: string;
+  width: number;
+  height: number;
+  lines: Array<{ text: string; box: [number, number, number, number] | null }>;
+};
+
+/** Null when the page has no scan (text layer of a PDF, a page past the image limit). */
+export async function getDocumentPageScan(caseId: string, documentId: string, page: number): Promise<DocumentPageScan | null> {
+  try {
+    return await json<DocumentPageScan>(`/api/documents/${documentId}/pages/${page}/scan?caseId=${encodeURIComponent(caseId)}`);
+  } catch (failure) {
+    if (failure instanceof ApiError && failure.status === 404) return null;
+    throw failure;
+  }
+}
+
 export function editDocumentPage(
   caseId: string,
   documentId: string,

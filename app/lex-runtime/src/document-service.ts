@@ -80,6 +80,18 @@ import {
   type SpreadsheetMediaType
 } from "./spreadsheet-extractor.js";
 
+/** The scan of a page for the preview next to its text, with the box of every OCR line. */
+export type PageScan = {
+  page: number;
+  mediaType: "image/jpeg";
+  data: string;
+  width: number;
+  height: number;
+  // Empty after a hand correction: the lines no longer match the text.
+  // Indexed like the OCR lines (review and correction entries point at them).
+  lines: Array<{ text: string; box: [number, number, number, number] | null }>;
+};
+
 export type DocumentSecurityContext = {
   caseId: string;
   caseDataKey?: Buffer;
@@ -395,6 +407,7 @@ export interface DocumentService {
   ): Promise<PublicDocumentIngestion>;
   markReviewed?(documentId: string, security: DocumentSecurityContext): Promise<AnonymizedVersion>;
   detect?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
+  pageScan?(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<PageScan | null>;
   editPage?(
     documentId: string,
     pageNumber: number,
@@ -883,6 +896,44 @@ implements DocumentService {
    * text of the document is replaced (also in the case's encrypted store) and personal
    * data on that page detected again; the review's earlier offsets for it no longer hold.
    */
+  /**
+   * The page as scanned, for the user's own view next to the text (local only, nothing goes
+   * to a model). A case document not open in this session is read from the case store.
+   */
+  async pageScan(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<PageScan | null> {
+    const record = this.documents.get(documentId);
+    let pages: IngestedPage[];
+    if (record) {
+      if (record.caseId && security?.caseId !== record.caseId) throw new Error("DOCUMENT_VAULT_CONTEXT_REQUIRED");
+      pages = record.source.pages;
+    } else {
+      if (!this.secureDocumentStore || !security?.caseDataKey || !Number.isInteger(security.keyVersion)) {
+        throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+      }
+      const stored = await this.secureDocumentStore.loadSource({
+        caseId: security.caseId,
+        documentId,
+        caseDataKey: security.caseDataKey,
+        keyVersion: security.keyVersion!
+      });
+      pages = stored.source.pages;
+    }
+    const page = pages.find((item) => item.page === pageNumber);
+    if (!page) throw new Error("INVALID_DOCUMENT_PAGE");
+    const image = page.image ?? page.scan;
+    if (!image) return null;
+    return {
+      page: page.page,
+      mediaType: "image/jpeg",
+      data: image.jpeg,
+      width: image.width,
+      height: image.height,
+      lines: page.editedByUser
+        ? []
+        : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null }))
+    };
+  }
+
   async editPage(
     documentId: string,
     pageNumber: number,
@@ -902,8 +953,9 @@ implements DocumentService {
     if (clean.length > MAX_EDITED_PAGE_CHARS) throw new Error("DOCUMENT_PAGE_TEXT_TOO_LONG");
     // The page image goes with the OCR lines: masking needs the line boxes, and a hand-edited
     // text no longer matches the image, so the image could only be sent unmasked.
-    const { lines: _lines, corrections: _corrections, image: _image, ...previous } = record.source.pages[index]!;
-    const page: IngestedPage = { ...previous, text: clean, editedByUser: true };
+    const { lines: _lines, corrections: _corrections, image, ...previous } = record.source.pages[index]!;
+    const scan = image ?? previous.scan;
+    const page: IngestedPage = { ...previous, text: clean, editedByUser: true, ...(scan ? { scan } : {}) };
     const pages = record.source.pages.map((item, at) => (at === index ? page : item));
     const source: DocumentIngestionResult = {
       ...record.source,

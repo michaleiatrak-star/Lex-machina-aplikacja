@@ -2418,3 +2418,108 @@ textarea:focus {
   max-width: 980px;
   margin: 0 auto;
 }
+
+.privacy-preview-overlay > .privacy-preview.is-split {
+  max-width: 1480px;
+}
+
+.privacy-preview-body,
+.privacy-preview-work {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Original scan on the left, the text being checked on the right. */
+.privacy-preview-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.privacy-preview-split .privacy-preview-pages,
+.privacy-preview-split .page-scan-viewport {
+  height: 68vh;
+  max-height: none;
+}
+
+.privacy-preview-split .privacy-preview-edit textarea {
+  min-height: 60vh;
+}
+
+.privacy-preview-todo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.page-scan {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.page-scan-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-scan-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.page-scan-zoom button[aria-pressed="true"] {
+  border-color: #1f3527;
+  background: #e8efe6;
+}
+
+.page-scan-viewport {
+  overflow: auto;
+  border: 1px solid #d7ddd5;
+  border-radius: 8px;
+  background: #f3f5f2;
+}
+
+.page-scan-sheet {
+  position: relative;
+  min-width: 100%;
+}
+
+.page-scan-sheet img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.page-scan-focus {
+  position: absolute;
+  border: 2px solid #c9a24a;
+  border-radius: 3px;
+  background: rgba(201, 162, 74, 0.18);
+  box-shadow: 0 0 0 9999px rgba(20, 30, 24, 0.12);
+  pointer-events: none;
+}
+
+.page-scan-empty,
+.page-scan-note {
+  margin: 0;
+  padding: 12px;
+  color: #5b6a5d;
+}
+
+@media (max-width: 900px) {
+  .privacy-preview-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .privacy-preview-split .privacy-preview-pages,
+  .privacy-preview-split .page-scan-viewport {
+    height: 45vh;
+  }
+}

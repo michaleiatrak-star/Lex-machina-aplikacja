@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   editDocumentPage,
   keepAllDirectives,
@@ -6,6 +6,7 @@ import {
   type PagePrivacyDirective,
   type PiiKind
 } from "./api.js";
+import { PageScanView } from "./PageScanView.js";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 
 /**
@@ -49,11 +50,55 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [error, setError] = useState("");
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
+  // Scanned pages: the original is shown next to the text, the page in view follows the text.
+  const scanned = review.pages.some((page) => page.source === "OCR");
+  const [scanPage, setScanPage] = useState(() => (review.pages.find((page) => page.source === "OCR") ?? review.pages[0])?.page ?? 1);
+  const [scanFocus, setScanFocus] = useState<{ line: number } | { offset: number } | null>(null);
+  const [scanRevision, setScanRevision] = useState(0);
+
+  // The doubtful line selected in the page text when its correction opens.
+  const [editLine, setEditLine] = useState<string | null>(null);
+  const editRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const area = editRef.current;
+    if (!area || !editLine) return;
+    const at = area.value.indexOf(editLine);
+    setEditLine(null);
+    if (at < 0) return;
+    area.focus();
+    area.setSelectionRange(at, at + editLine.length);
+    // Brings the selection into view: the share of the text before it, of the full height.
+    area.scrollTop = Math.max(0, (at / Math.max(1, area.value.length)) * area.scrollHeight - area.clientHeight / 3);
+  }, [editLine]);
+
+  // While the text pane scrolls to a page on request, its scrolling does not move the scan.
+  const jumpUntil = useRef(0);
+
+  function showOnScan(page: number, focus: { line: number } | { offset: number } | null, scrollText = false): void {
+    setScanPage(page);
+    setScanFocus(focus);
+    if (scrollText) {
+      jumpUntil.current = Date.now() + 1200;
+      pageRefs.current.get(page)?.closest("article")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // The page whose top is closest above the top of the text pane is the one being read.
+  function followScroll(container: HTMLElement): void {
+    if (editing || Date.now() < jumpUntil.current) return;
+    const top = container.getBoundingClientRect().top + 40;
+    let current = review.pages[0]?.page;
+    for (const page of review.pages) {
+      const element = pageRefs.current.get(page.page);
+      if (element && element.getBoundingClientRect().top <= top) current = page.page;
+    }
+    if (current !== undefined && current !== scanPage) showOnScan(current, null);
+  }
 
   const kept = (page: number, range: { start: number; end: number }) =>
     directives.some((item) => item.page === page && item.action === "KEEP" && overlaps(item, range));
   const aiHints = review.suggestions.filter((item) => item.aiNotPerson && !props.keepClear);
-  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, text: line.text })));
+  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
     ? 0
@@ -72,7 +117,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   function captureSelection(page: number): void {
     const container = pageRefs.current.get(page);
     const selected = window.getSelection();
-    if (!container || !selected || selected.rangeCount === 0 || selected.isCollapsed) return;
+    if (!container || !selected || selected.rangeCount === 0) return;
     const range = selected.getRangeAt(0);
     if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return;
     const before = document.createRange();
@@ -80,6 +125,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
     before.setEnd(range.startContainer, range.startOffset);
     const start = before.toString().length;
     const end = start + range.toString().length;
+    // A click or a selection shows its line on the scan.
+    if (scanned) showOnScan(page, { offset: start });
     if (end > start) setSelection({ page, start, end });
   }
 
@@ -116,6 +163,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
       // Offsets of the old text no longer apply.
       setDirectives((current) => current.filter((item) => item.page !== editing.page));
       setEditing(null);
+      setScanFocus(null);
+      setScanRevision((value) => value + 1);
     } catch (failure) {
       setError(`Nie udało się zapisać tekstu strony: ${failure instanceof Error ? failure.message : String(failure)}`);
     } finally {
@@ -180,7 +229,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   );
 
   return (
-    <section className="privacy-preview" aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
+    <section className={scanned ? "privacy-preview is-split" : "privacy-preview"} aria-label={`Podgląd przed zatwierdzeniem: ${props.fileName}`}>
       <header className="privacy-preview-head">
         <div>
           <strong>Podgląd przed zatwierdzeniem: {props.fileName}</strong>
@@ -196,9 +245,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               id="privacy-preview-page-jump"
               aria-label="Przejdź do strony"
               value=""
-              onChange={(event) =>
-                pageRefs.current.get(Number(event.target.value))?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
+              onChange={(event) => {
+                showOnScan(Number(event.target.value), null, true);
+              }}
             >
               <option value="">Przejdź do strony…</option>
               {review.pages.map((page) => (
@@ -252,17 +301,28 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           {doubtful.length ? (
             <div>
-              <small>Odczyt niepewny (pismo odręczne, pieczątki, rozmazany druk): porównaj ze skanem i popraw tekst strony.</small>
+              <small>Odczyt niepewny (pismo odręczne, pieczątki, rozmazany druk): porównaj z oryginałem obok i popraw tekst strony.</small>
               <ul>
                 {doubtful.map((line, index) => (
                   <li key={`ocr-${line.page}-${index}`}>
                     <span>s. {line.page} · „{line.text}”</span>
-                    <button
-                      type="button"
-                      onClick={() => setEditing({ page: line.page, text: review.pages.find((page) => page.page === line.page)?.text ?? "" })}
-                    >
-                      Popraw tekst strony
-                    </button>
+                    <span className="privacy-preview-todo-actions">
+                      {scanned ? (
+                        <button type="button" onClick={() => showOnScan(line.page, { line: line.line }, true)}>
+                          Pokaż na skanie
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (scanned) showOnScan(line.page, { line: line.line });
+                          setEditing({ page: line.page, text: review.pages.find((page) => page.page === line.page)?.text ?? "" });
+                          setEditLine(line.text);
+                        }}
+                      >
+                        Popraw tekst strony
+                      </button>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -275,6 +335,11 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                 {fixes.slice(0, 50).map((fix, index) => (
                   <li key={`fix-${fix.page}-${index}`}>
                     <span>s. {fix.page} · „{fix.from}” → „{fix.to}”</span>
+                    {scanned ? (
+                      <button type="button" onClick={() => showOnScan(fix.page, { line: fix.line }, true)}>
+                        Pokaż na skanie
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -285,27 +350,6 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               ) : null}
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {editing ? (
-        <div className="privacy-preview-edit">
-          <strong>Tekst strony {editing.page}</strong>
-          <textarea
-            id="privacy-preview-page-text"
-            aria-label={`Tekst strony ${editing.page}`}
-            value={editing.text}
-            onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-            rows={14}
-          />
-          <div className="privacy-preview-actions">
-            <button type="button" onClick={() => setEditing(null)} disabled={saving}>
-              Anuluj poprawkę
-            </button>
-            <button type="button" className="primary-button" onClick={() => void savePage()} disabled={saving}>
-              {saving ? "Zapisuję…" : "Zapisz tekst strony"}
-            </button>
-          </div>
         </div>
       ) : null}
 
@@ -341,21 +385,60 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         </div>
       ) : null}
 
-      <div className="privacy-preview-pages">
-        {pages.map((page) => (
-          <article key={page.page}>
-            <small>s. {page.page}</small>
-            <div
-              className="privacy-preview-text"
-              ref={(element) => {
-                if (element) pageRefs.current.set(page.page, element);
-              }}
-              onMouseUp={() => captureSelection(page.page)}
-            >
-              {page.parts}
+      <div className={scanned ? "privacy-preview-split" : "privacy-preview-body"}>
+        {scanned ? (
+          <PageScanView
+            caseId={props.caseId}
+            documentId={review.documentId}
+            page={editing?.page ?? scanPage}
+            focus={scanFocus}
+            text={review.pages.find((page) => page.page === (editing?.page ?? scanPage))?.text ?? ""}
+            revision={scanRevision}
+          />
+        ) : null}
+        <div className="privacy-preview-work">
+          {editing ? (
+            <div className="privacy-preview-edit">
+              <strong>Tekst strony {editing.page}</strong>
+              <textarea
+                id="privacy-preview-page-text"
+                ref={editRef}
+                lang="pl"
+                onSelect={scanned ? (event) => setScanFocus({ offset: event.currentTarget.selectionStart }) : undefined}
+                aria-label={`Tekst strony ${editing.page}`}
+                value={editing.text}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                rows={scanned ? 26 : 14}
+              />
+              <div className="privacy-preview-actions">
+                <button type="button" onClick={() => setEditing(null)} disabled={saving}>
+                  Anuluj poprawkę
+                </button>
+                <button type="button" className="primary-button" onClick={() => void savePage()} disabled={saving}>
+                  {saving ? "Zapisuję…" : "Zapisz tekst strony"}
+                </button>
+              </div>
             </div>
-          </article>
-        ))}
+          ) : null}
+          {editing && scanned ? null : (
+            <div className="privacy-preview-pages" onScroll={scanned ? (event) => followScroll(event.currentTarget) : undefined}>
+              {pages.map((page) => (
+                <article key={page.page}>
+                  <small>s. {page.page}</small>
+                  <div
+                    className="privacy-preview-text"
+                    ref={(element) => {
+                      if (element) pageRefs.current.set(page.page, element);
+                    }}
+                    onMouseUp={() => captureSelection(page.page)}
+                  >
+                    {page.parts}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {error ? <p className="field-error">{error}</p> : null}
     </section>

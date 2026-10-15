@@ -79,6 +79,9 @@ export type IngestedPage = {
   editedByUser?: boolean;
   // Lines to check against the scan (handwriting, stamps, doubtful reading).
   review?: OcrReviewLine[];
+  // The scan of a page whose text the user corrected by hand: shown next to the text in the
+  // preview, never sent (it no longer matches the text, so it cannot be masked).
+  scan?: OcrPageImage;
 };
 
 export type OcrReviewLine = {
