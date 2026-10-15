@@ -392,6 +392,7 @@ const PRIVACY_KINDS = new Set([
   "LAND_REGISTRY",
   "BIRTH_DATE",
   "VEHICLE_PLATE",
+  "BAR_NUMBER",
   "PAYMENT_CARD",
   "CUSTOM"
 ] as const);
@@ -1483,7 +1484,7 @@ export function applyNonLegalChatGate(
  */
 export function documentProcessingOptions(
   header: string | undefined
-): { localAi?: true; ocrFix?: true } {
+): { localAi?: true; ocrFix?: true; detect?: false } {
   const flags = new Set(
     (header ?? "")
       .split(",")
@@ -1492,7 +1493,9 @@ export function documentProcessingOptions(
   );
   return {
     ...(flags.has("local-ai") ? { localAi: true as const } : {}),
-    ...(flags.has("ocr-fix") ? { ocrFix: true as const } : {})
+    ...(flags.has("ocr-fix") ? { ocrFix: true as const } : {}),
+    // "ocr-only": read the document now, detect personal data later (POST .../detect).
+    ...(flags.has("ocr-only") ? { detect: false as const } : {})
   };
 }
 
@@ -1924,11 +1927,11 @@ function createCaseFileAccess(args: {
     caseId: args.caseId,
     listDocuments: () =>
       withKey((caseDataKey, keyVersion) =>
-        args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion })
+        args.caseKnowledgeSearch.listDocuments({ caseId: args.caseId, caseDataKey, keyVersion, reviewedOnly: true })
       ),
     search: (query, limit) =>
       withKey(async (caseDataKey, keyVersion) => {
-        const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit });
+        const hits = await args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion, query, limit, reviewedOnly: true });
         // Snippets carry the documents' symbols too.
         for (const documentId of new Set(hits.map((hit) => hit.documentId))) {
           await restore(documentId, caseDataKey, keyVersion);
@@ -1937,7 +1940,7 @@ function createCaseFileAccess(args: {
       }),
     readChunks: async (documentId, chunkIndices) => {
       await withKey((caseDataKey, keyVersion) => restore(documentId, caseDataKey, keyVersion));
-      const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices });
+      const resolved = await args.documentService.resolveProtectedChunks({ documentId, chunkIndices }, { remote: true });
       return {
         totalPages: resolved.totalPages ?? 0,
         chunks: resolved.chunks.map((chunk) => ({
@@ -4674,6 +4677,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 anonymized: boolean;
                 // On the case's shared key (one symbol per entity in the case).
                 sharedKey: boolean;
+                // false: not confirmed after a preview; never sent to a model outside the computer.
+                reviewed?: boolean;
               };
             }
           > =
@@ -4772,7 +4777,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                               anonymized:
                                 restored.privacy.findings > 0,
                               sharedKey:
-                                options.documentService!.usesSharedKey?.(restored.documentId) ?? false
+                                options.documentService!.usesSharedKey?.(restored.documentId) ?? false,
+                              ...(restored.privacy.reviewed === false ? { reviewed: false } : {})
                             }
                           };
                         } catch {
@@ -5022,7 +5028,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                         caseView.keyVersion,
                       ...(onProgress ? { onProgress } : {}),
                       ...(req.body?.localAi === true ? { localAi: true } : {}),
-                      ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {})
+                      ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
+                      // OCR only now; personal data later (POST /api/documents/:id/detect).
+                      ...(req.body?.detect === false ? { detect: false } : {})
                     }
                   );
               } finally {
@@ -5200,7 +5208,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
   const EDITABLE_PII_KINDS = new Set<string>([
     "PERSON", "ADDRESS", "PESEL", "NIP", "REGON", "IBAN", "EMAIL", "PHONE", "ID_CARD",
-    "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "PAYMENT_CARD", "CUSTOM"
+    "PASSPORT", "BIRTH_DATE", "LAND_REGISTRY", "KRS", "VEHICLE_PLATE", "BAR_NUMBER", "PAYMENT_CARD", "CUSTOM"
   ]);
 
   app.get("/api/cases/:caseId/documents/:documentId/anonymized", (req, res) =>
@@ -5216,6 +5224,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       if (!EDITABLE_PII_KINDS.has(kind)) throw new Error("PRIVACY_EDIT_KIND_INVALID");
       return await options.documentService!
         .addProtection!(documentId, text, kind as PiiKind, security);
+    })
+  );
+
+  // The user's confirmation after the preview of the anonymized version.
+  app.post("/api/cases/:caseId/documents/:documentId/anonymized/approve", (req, res) =>
+    withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {
+      if (!options.documentService!.markReviewed) throw new Error("ANONYMIZED_VERSION_UNAVAILABLE");
+      return await options.documentService!.markReviewed(documentId, security);
     })
   );
 
@@ -6627,6 +6643,57 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   );
 
+  // The scan of a page next to its text in the preview: the user's own file, local only.
+  app.get("/api/documents/:documentId/pages/:page/scan", async (req, res) => {
+    const documentService = options.documentService;
+    if (!documentService?.pageScan) {
+      res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+      return;
+    }
+    const documentId = String(req.params.documentId ?? "").trim();
+    const page = Number(req.params.page);
+    const requestedCaseId = typeof req.query.caseId === "string" ? req.query.caseId.trim() : "";
+    if (
+      !/^doc_[a-f0-9]{24}$/.test(documentId) ||
+      !Number.isInteger(page) ||
+      page < 1 ||
+      (requestedCaseId && !/^case_[a-f0-9]{32}$/.test(requestedCaseId))
+    ) {
+      res.status(400).json({ error: "INVALID_DOCUMENT_PAGE_SCAN" });
+      return;
+    }
+    try {
+      let scan;
+      if (options.caseAccessService) {
+        const caseId = requestedCaseId || documentCaseIds.get(documentId);
+        if (!caseId) throw new CaseAccessError("CASE_ACCESS_DENIED", 403);
+        const context = responseAuthContext(res);
+        options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+        const caseView = options.caseAccessService.openCase(context, caseId);
+        scan = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) =>
+          await documentService.pageScan!(documentId, page, { caseId, caseDataKey, keyVersion: caseView.keyVersion })
+        );
+      } else {
+        scan = await documentService.pageScan(documentId, page);
+      }
+      res.setHeader("Cache-Control", "no-store");
+      if (!scan) {
+        res.status(404).json({ error: "DOCUMENT_PAGE_SCAN_UNAVAILABLE" });
+        return;
+      }
+      res.json(scan);
+    } catch (error) {
+      if (!sendCaseAccessError(res, error)) {
+        const code = error instanceof Error ? error.message : "";
+        if (/^(UNKNOWN_LOCAL_DOCUMENT|INVALID_DOCUMENT_PAGE|ENOENT)$/.test(code)) {
+          res.status(404).json({ error: code === "ENOENT" ? "DOCUMENT_NOT_FOUND" : code });
+          return;
+        }
+        res.status(422).json({ error: code === "DOCUMENT_VAULT_CONTEXT_REQUIRED" ? code : "DOCUMENT_PAGE_SCAN_FAILED" });
+      }
+    }
+  });
+
   app.post(
     "/api/documents/:documentId/pages/:page/text",
     async (req, res) => {
@@ -6684,6 +6751,50 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
   );
 
+  // The second step after "ocr-only": personal data of a document already read (the text model,
+  // with "local-ai", is started only now, after the OCR of every file).
+  app.post("/api/documents/:documentId/detect", async (req, res) => {
+    const documentId = String(req.params.documentId ?? "").trim();
+    const caseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+    const service = options.documentService;
+    if (!service?.detect || !options.caseAccessService) {
+      res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+      return;
+    }
+    if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !/^case_[a-f0-9]{32}$/.test(caseId)) {
+      res.status(400).json({ error: "INVALID_DOCUMENT_PRIVACY_REQUEST" });
+      return;
+    }
+    try {
+      const context = responseAuthContext(res);
+      const caseView = options.caseAccessService.openCase(context, caseId);
+      const progressId = progressIdFrom(req.get("x-lex-progress"));
+      const result = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) =>
+        service.detect!(documentId, {
+          caseId,
+          caseDataKey,
+          keyVersion: caseView.keyVersion,
+          ...documentProcessingOptions(req.get("x-lex-processing")),
+          ...(progressId ? { onProgress: processingProgress.reporter(caseId, progressId)! } : {})
+        })
+      );
+      res.json(result);
+    } catch (error) {
+      if (sendCaseAccessError(res, error)) return;
+      const code = error instanceof Error ? error.message : "";
+      if (code === "UNKNOWN_LOCAL_DOCUMENT") {
+        res.status(404).json({ error: code });
+        return;
+      }
+      if (code.startsWith("LOCAL_PRIVACY_MODEL") || code.startsWith("PRIVACY_RECOGNIZER")) {
+        res.status(503).json({ error: code.split(":", 1)[0] });
+        return;
+      }
+      console.error(`DOCUMENT_DETECT_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+      res.status(500).json({ error: "DOCUMENT_DETECT_FAILED" });
+    }
+  });
+
   app.post(
     "/api/documents/:documentId/finalize",
     async (req, res) => {
@@ -6706,6 +6817,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         parsePrivacyDirectives(
           req.body?.directives
         );
+      // Confirmed in the preview; a document without it never goes to a model outside the computer.
+      const reviewed = req.body?.reviewed === true;
       if (
         !/^doc_[a-f0-9]{24}$/.test(
           documentId
@@ -6778,7 +6891,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                               )!
                             }
                           : {})
-                      }
+                      },
+                      reviewed
                     )
               );
         } else {
@@ -6787,7 +6901,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               .documentService
               .finalizeReview(
                 documentId,
-                directives
+                directives,
+                undefined,
+                reviewed
               );
         }
         res.json(result);
@@ -7135,7 +7251,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 chunkIndices:
                   selection
                     .chunkIndices
-              });
+              }, { remote: true });
           resolvedAttachments.push({
             caseId,
             documentId:
@@ -8593,7 +8709,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     attachments: Array<DocumentChunkSelection & { caseId?: string }>,
     firmTemplates: string[],
     firmCaseId: string | undefined,
-    evidence?: EvidencePolicy
+    evidence?: EvidencePolicy,
+    // A model outside the computer: documents the user has not reviewed are refused.
+    remote = true
   ): Promise<SessionDocumentAttachment[] | null> => {
     const picked: SessionDocumentAttachment[] = [];
     if (attachments.length > 0) {
@@ -8677,7 +8795,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 chunkIndices:
                   selection
                     .chunkIndices
-              }, evidence ? { images: evidence } : {});
+              }, { remote, ...(evidence ? { images: evidence } : {}) });
           picked.push({
             caseId,
             documentId:
@@ -8716,7 +8834,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     chunkIndices:
                       selection
                         .chunkIndices
-                  }, evidence ? { images: evidence } : {})
+                  }, { remote, ...(evidence ? { images: evidence } : {}) })
             )
           );
         picked.push(
@@ -8915,7 +9033,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       const firmCaseId = options.caseAccessService
         ?.getFirmKnowledgeWorkspace(responseAuthContext(res))
         ?.caseId;
-      const picked = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId);
+      // Only an estimate of the context: nothing is sent.
+      const picked = await resolveSelectedAttachments(res, attachments, firmTemplates, firmCaseId, undefined, false);
       if (!picked) return;
       const charsPerToken = localWindow !== undefined
         ? options.modelCatalog.localTokenCharsPerToken?.(model)
@@ -9223,7 +9342,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           attachments,
           firmTemplates,
           firmCaseId,
-          evidencePolicyFor(req.body?.evidenceImages, request.model)
+          evidencePolicyFor(req.body?.evidenceImages, request.model),
+          !localModel
         );
       if (!selectedAttachments) return;
       sessionAttachments.push(...selectedAttachments);
@@ -9333,7 +9453,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       query:
                         request.query,
                       limit:
-                        knowledge.limit
+                        knowledge.limit,
+                      reviewedOnly: !localModel
                     })
               );
           ranked.push(
@@ -11718,6 +11839,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error: error.message,
           ...error.details
         });
+        return;
+      }
+
+      if (error instanceof Error && error.message === "DOCUMENT_NOT_REVIEWED") {
+        // Shown to the user: open the document's preview and confirm it first.
+        res.status(422).json({ error: "DOCUMENT_NOT_REVIEWED" });
         return;
       }
 

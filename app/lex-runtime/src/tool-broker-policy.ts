@@ -32,6 +32,7 @@ const PERSONAL_KINDS: ReadonlySet<PiiKind> = new Set([
   "PAYMENT_CARD",
   "LAND_REGISTRY",
   "VEHICLE_PLATE",
+  "BAR_NUMBER",
   "BIRTH_DATE"
 ]);
 

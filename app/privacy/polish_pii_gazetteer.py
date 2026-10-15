@@ -36,6 +36,7 @@ from pathlib import Path
 import morfeusz2
 
 import address_base
+import given_name_base
 import surname_base
 
 UPPER = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÁÍÚÝČŠŽŘ"
@@ -56,6 +57,10 @@ TRIGGERS = {
     "prokuratora", "notariusz", "notariusza", "komornik", "komornika", "dr", "prof", "mgr", "inż",
     "syn", "córka", "żona", "mąż", "ojciec", "matka", "brat", "siostra",
 }
+# Foreign titles ("Mr. Juneyoung Park" under a signature): every capitalized word after
+# them is the name, whatever SGJP says about it ("Park" is also a noun).
+FOREIGN_TITLES = frozenset({"mr", "mrs", "ms", "miss", "sir", "herr", "frau", "monsieur", "madame"})
+TRIGGERS |= FOREIGN_TITLES
 
 # Nouns that head an institution name or name a party role, in every case form
 # (generate_generic_words.py). Several are also SGJP surnames ("Bank", "Rada",
@@ -97,6 +102,11 @@ STREET_ADDRESS_RE = re.compile(
     rf"(?<![\w.@/-]){STREET_MARKER}\s+{NAME_TOKEN}(?:\s+(?:{NAME_LINK}\s+)?{NAME_TOKEN}){{0,6}}\s+{HOUSE_NUMBER}(?![\w/])"
     rf"(?:\s*,?\s*{POSTAL})?"
 )
+# OCR drops the space before the house number: "ul. Pukowca15, 40-847 Katowice".
+GLUED_STREET_ADDRESS_RE = re.compile(
+    rf"(?<![\w.@/-]){STREET_MARKER}\s*(?:[{UPPER}][a-ząćęłńóśźż]+\s+){{0,3}}[{UPPER}][a-ząćęłńóśźż]+\d{{1,4}}[A-Za-z]?(?:/\d{{1,4}}[A-Za-z]?)?(?![\w/])"
+    rf"(?:\s*,?\s*{POSTAL})?"
+)
 VILLAGE_ADDRESS_RE = re.compile(
     rf"\b[{UPPER}][\w\-]+(?:\s+[{UPPER}][\w\-]+)?\s+\d{{1,4}}[A-Za-z]?(?:/\d{{1,4}})?,\s*{POSTAL}"
 )
@@ -130,6 +140,10 @@ def word_class(word: str) -> tuple[bool, bool, bool, bool, bool, frozenset[str]]
                 geographic = True
             if not (types & {"imię", "nazwisko", "nazwa_geograficzna"}) and pos not in {"brev", "interp"}:
                 common = True
+    # A given name SGJP lacks (Oleksandr, Tetiana, Juneyoung): the PESEL register. Not a
+    # common word, place or SGJP surname ("Rada", "Park" and "Wola" stay what they are).
+    if not given and (unknown or not (common or geographic or surname)) and not is_generic(word):
+        given = given_name_base.is_given_name(word.capitalize() if word.isupper() else word)
     return given, surname, unknown, common, geographic, frozenset(lemmas)
 
 
@@ -216,7 +230,8 @@ RESIDENCE_CUE_RE = re.compile(
 LOCALITY_LINKS = ("nad", "pod", "za", "na", "od", "przy", "koło", "k.", "w", "we")
 LOCALITY_WORD_RE = re.compile(rf"(?:[{UPPER}][\w’'\-]*|(?:{'|'.join(re.escape(w) for w in LOCALITY_LINKS)})(?=\s+[{UPPER}]))")
 HOUSE_AFTER_RE = re.compile(rf"\s+(?:nr\s*)?\d{{1,4}}[A-Za-z]?(?:\s*/\s*\d{{1,4}}[A-Za-z]?)?(?![\w/.,]\d)(?!\s*(?:r\.|lat|roku|zł))")
-AFTER_STREET_RE = re.compile(r"(?:\s*,\s*|\s+(?:w|we)\s+)")
+# "ul. Długa 5 w Pcimiu" and, in a heading, "UL. DŁUGA 5 W PCIMIU".
+AFTER_STREET_RE = re.compile(r"(?:\s*,\s*|\s+(?:w|we)\s+)", re.IGNORECASE)
 
 # Villages share these names; after "pochodzi z" they are the country.
 COUNTRIES = frozenset("""Polska Niemcy Ukraina Białoruś Litwa Łotwa Estonia Rosja Czechy Słowacja Węgry
@@ -257,7 +272,8 @@ def locality_at(text: str, start: int, country: bool = False) -> tuple[int, int]
         name = text[start:end].rstrip("-")
         if not name[-1:].isalpha() or name.split(" ")[-1] in LOCALITY_LINKS:
             continue
-        readings = morphology.locality_readings(name)
+        # The register holds normal spelling: "ŁODZI" is read as "Łodzi".
+        readings = morphology.locality_readings(name.title() if name.isupper() else name)
         if readings:
             if readings[0]["name"] in COUNTRIES and not country and not HOUSE_AFTER_RE.match(text, start + len(name)):
                 # "pochodzi z Ukrainy": the country; "ul. Długa 5, Włochy",
@@ -353,7 +369,7 @@ def find_named_streets(text: str, taken: list[tuple[int, int]]) -> list[tuple[in
 
 def find_addresses(text: str) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
-    for regex in (STREET_ADDRESS_RE, VILLAGE_ADDRESS_RE, POSTAL_RE):
+    for regex in (STREET_ADDRESS_RE, GLUED_STREET_ADDRESS_RE, VILLAGE_ADDRESS_RE, POSTAL_RE):
         for match in regex.finditer(text):
             start, end = match.start(), match.end()
             if any(start < e and s < end for s, e in spans):
@@ -480,13 +496,14 @@ def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, i
         if is_generic(words[first][2]) and trigger not in PERSON_ONLY_TRIGGERS:
             continue
         last = first
+        foreign = trigger in FOREIGN_TITLES
         while last - first < 2 and cap(last + 1) and linked(last, last + 1):
             g, s, u, c, geo, _ = cls(last + 1)
-            if not (g or s or u):
+            if not (g or s or u or foreign):
                 break
             last += 1
         g, s, u, c, geo, _ = cls(first)
-        if (s or u or g) and not (c and not s and not g):
+        if foreign or ((s or u or g) and not (c and not s and not g)):
             take(first, last)
 
     # 5. The surname alone after the full name was found.

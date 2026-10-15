@@ -1,7 +1,7 @@
 /**
- * How one file is processed; the user picks it per file. Nothing runs on
- * upload. The local model (e.g. Bielik) only helps with OCR correction and
- * personal-data detection - never with the legal answer.
+ * How one file is processed; the user picks it per file. Nothing runs on upload. The local
+ * vision model re-reads doubtful OCR lines; the local text model (e.g. Bielik) only helps
+ * with personal-data detection - never with the legal answer.
  */
 export type DocumentProcessingMode =
   | "OCR"
@@ -22,7 +22,7 @@ export const DOCUMENT_PROCESSING_MODES: ReadonlyArray<{
   {
     mode: "ANONYMIZE_AI",
     label: "OCR + anonimizacja z AI",
-    title: "Jak wyżej, a model lokalny dodatkowo wyszukuje dane osobowe (rozstrzyga z całego zdania) i poprawia błędy OCR w skanach. Wymaga uruchomionego modelu lokalnego."
+    title: "Jak wyżej, a model wizyjny ponownie czyta niepewne linie skanu, potem model tekstowy (uruchamiany sam przed anonimizacją) podpowiada przy danych osobowych. Wymaga zainstalowanych modeli lokalnych."
   },
   {
     mode: "OCR",
@@ -32,13 +32,19 @@ export const DOCUMENT_PROCESSING_MODES: ReadonlyArray<{
   {
     mode: "OCR_AI",
     label: "Tylko OCR z korektą AI",
-    title: "Tekst i OCR, a model lokalny poprawia błędy OCR w skanach (ogonki, sklejone słowa, przeniesienia); bez anonimizacji - tekst jawny. Wymaga uruchomionego modelu lokalnego."
+    title: "Tekst i OCR, a model wizyjny ponownie czyta niepewne linie skanu; modele tekstowe są na ten czas zatrzymywane. Bez anonimizacji - tekst jawny. Wymaga zainstalowanego modelu wizyjnego."
   }
 ];
 
 export const DEFAULT_DOCUMENT_PROCESSING_MODE: DocumentProcessingMode = "ANONYMIZE";
 
+/** The local text model (detection of personal data); started by the runtime when needed. */
 export function processingModeUsesLocalAi(mode: DocumentProcessingMode): boolean {
+  return mode === "ANONYMIZE_AI";
+}
+
+/** The local vision model (doubtful OCR lines). */
+export function processingModeUsesVision(mode: DocumentProcessingMode): boolean {
   return mode === "ANONYMIZE_AI" || mode === "OCR_AI";
 }
 

@@ -647,6 +647,8 @@ export default function ChatApp({
           ? "Brak lokalnego klucza API dla wybranego dostawcy."
           : code === "PROVIDER_EXECUTION_FAILED"
             ? "Provider odrzucił lub przerwał wykonanie."
+            : code === "DOCUMENT_NOT_REVIEWED"
+              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
               ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
               : `Nie udało się wykonać sesji: ${code}`;
@@ -1043,6 +1045,7 @@ export default function ChatApp({
             <DocumentPrivacyPanel
               caseId={caseId}
               incomingFile={documentDropQueue.files[0] ?? null}
+              queuedFiles={documentDropQueue.files}
               onIncomingFileConsumed={() =>
                 setDocumentDropQueue((current) =>
                   consumeDocumentDropFile(current)

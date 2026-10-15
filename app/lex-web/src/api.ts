@@ -128,6 +128,7 @@ export type PiiKind =
   | "LAND_REGISTRY"
   | "BIRTH_DATE"
   | "VEHICLE_PLATE"
+  | "BAR_NUMBER"
   | "PAYMENT_CARD"
   | "CUSTOM";
 
@@ -303,6 +304,8 @@ export type StoredUploadResponse = {
     anonymized?: boolean;
     // On the case's shared key (one symbol per person across the case).
     sharedKey?: boolean;
+    // false: not confirmed after a preview; never sent to a model outside the computer.
+    reviewed?: boolean;
   };
 };
 
@@ -581,8 +584,10 @@ export type DocumentReviewResponse = {
     source: "DIGITAL" | "OCR" | "BLANK";
     confidence?: number;
     engine?: string;
-    // Words the local model fixed after OCR.
+    // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
+    // Lines to check against the scan (handwriting, stamps, doubtful reading).
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
@@ -591,6 +596,8 @@ export type DocumentReviewResponse = {
     start: number;
     end: number;
     kind: PiiKind;
+    // The local model read it as no person ("słowo pospolite"); masked until the user unmasks it.
+    aiNotPerson?: string;
   }>;
 };
 
@@ -3330,13 +3337,15 @@ export async function uploadCaseFile(
 export async function reviewDocument(
   file: File,
   caseId: string,
-  // localAi: the local model also checks personal data; ocrFix: it corrects OCR.
-  options?: { localAi?: boolean; ocrFix?: boolean },
+  // localAi: the local model also checks personal data; ocrFix: the vision model corrects OCR;
+  // detect false: only read now (OCR), personal data later by detectDocument.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean },
   progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
     ...(options?.localAi ? ["local-ai"] : []),
-    ...(options?.ocrFix ? ["ocr-fix"] : [])
+    ...(options?.ocrFix ? ["ocr-fix"] : []),
+    ...(options?.detect === false ? ["ocr-only"] : [])
   ].join(",");
   const response = await fetch(
     `${apiBase()}/api/documents/review`,
@@ -3377,6 +3386,27 @@ export async function reviewDocument(
 }
 
 /**
+ * Personal data of a document read with detect: false. Several files: all are read first
+ * (vision model, text models stopped), then detected (the text model starts once).
+ */
+export function detectDocument(
+  caseId: string,
+  documentId: string,
+  options?: { localAi?: boolean },
+  progressId?: string
+): Promise<DocumentReviewResponse> {
+  return json<DocumentReviewResponse>(`/api/documents/${documentId}/detect`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.localAi ? { "X-Lex-Processing": "local-ai" } : {}),
+      ...(progressId ? { "X-Lex-Progress": progressId } : {})
+    },
+    body: JSON.stringify({ caseId })
+  });
+}
+
+/**
  * Re-run OCR and the local pseudonymizer over a file that is already stored in
  * the case files. Until now this endpoint existed but nothing called it, so the
  * privacy pipeline could only ever run at upload time and a document that
@@ -3387,8 +3417,8 @@ export async function processStoredCaseFile(
   uploadId: string,
   fileId?: string,
   progressId?: string,
-  // "z lokalnym AI": the running local model also checks the document.
-  options?: { localAi?: boolean; ocrFix?: boolean }
+  // "z lokalnym AI": the local model also checks the document; detect false: OCR only now.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean }
 ): Promise<DocumentReviewResponse> {
   const path = fileId
     ? `/api/cases/${caseId}/files/${uploadId}/members/${fileId}/process`
@@ -3398,7 +3428,7 @@ export async function processStoredCaseFile(
     {
       method: "POST",
       ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
-      ...(options?.localAi || typeof options?.ocrFix === "boolean"
+      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false
         ? {
             headers: {
               ...(progressId ? { "X-Lex-Progress": progressId } : {}),
@@ -3406,7 +3436,8 @@ export async function processStoredCaseFile(
             },
             body: JSON.stringify({
               ...(options.localAi ? { localAi: true } : {}),
-              ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {})
+              ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {}),
+              ...(options.detect === false ? { detect: false } : {})
             })
           }
         : {})
@@ -3418,7 +3449,9 @@ export function finalizeDocument(
   caseId: string,
   documentId: string,
   directives: PagePrivacyDirective[],
-  progressId?: string
+  progressId?: string,
+  // Confirmed by the user in the preview; without it the document never reaches a model outside the computer.
+  reviewed = false
 ): Promise<DocumentIngestionResponse> {
   return json<DocumentIngestionResponse>(
     `/api/documents/${documentId}/finalize`,
@@ -3427,13 +3460,56 @@ export function finalizeDocument(
       ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
       body: JSON.stringify({
         caseId,
-        directives
+        directives,
+        ...(reviewed ? { reviewed: true } : {})
       })
     }
   );
 }
 
+export type VisionOcrStatus = {
+  available: boolean;
+  modelId: string | null;
+  label: string;
+  license: string | null;
+  bytes: number;
+  installed: boolean;
+  engineInstalled: boolean;
+  state: "IDLE" | "DOWNLOADING" | "FAILED";
+  progress: { phase: string; label: string; bytesDownloaded: number; bytesTotal: number | null; percent: number | null } | null;
+  error?: string;
+};
+
+export function getVisionOcrStatus(): Promise<VisionOcrStatus> {
+  return json<VisionOcrStatus>("/api/local-models/vision-ocr");
+}
+
+/** The user's confirmation of an anonymized version after its preview. */
+export function approveAnonymizedVersion(caseId: string, documentId: string): Promise<AnonymizedVersion> {
+  return json<AnonymizedVersion>(anonymizedPath(caseId, documentId, "approve"), { method: "POST" });
+}
+
 /** The user's own correction of one page's text (a poor scan); personal data on it is detected again. */
+/** The scan of a page, with the box of every OCR line (null: no box for that line). */
+export type DocumentPageScan = {
+  page: number;
+  mediaType: "image/jpeg";
+  data: string;
+  width: number;
+  height: number;
+  lines: Array<{ text: string; box: [number, number, number, number] | null }>;
+};
+
+/** Null when the page has no scan (text layer of a PDF, a page past the image limit). */
+export async function getDocumentPageScan(caseId: string, documentId: string, page: number): Promise<DocumentPageScan | null> {
+  try {
+    return await json<DocumentPageScan>(`/api/documents/${documentId}/pages/${page}/scan?caseId=${encodeURIComponent(caseId)}`);
+  } catch (failure) {
+    if (failure instanceof ApiError && failure.status === 404) return null;
+    throw failure;
+  }
+}
+
 export function editDocumentPage(
   caseId: string,
   documentId: string,
@@ -3504,6 +3580,8 @@ export type AnonymizedVersion = {
   entries: PrivacyKeyEntry[];
   // Legend and key for a model (no values); null without person/address symbols.
   modelKey?: string | null;
+  // false: not confirmed after a preview, so never sent to a model outside the computer.
+  reviewed?: boolean;
 };
 
 export type CaseArtifact = {

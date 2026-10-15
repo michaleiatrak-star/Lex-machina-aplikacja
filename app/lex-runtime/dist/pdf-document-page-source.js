@@ -13,6 +13,45 @@ const IMAGE_OPERATORS = [
     "paintSolidColorImageMask",
     "paintJpegXObject"
 ];
+/**
+ * A scanned page whose text is all drawn invisible (render mode 3) over an image: the text
+ * layer of another program's OCR, not the document's own digital text.
+ */
+async function pageHasForeignOcrLayer(page, ops) {
+    const images = new Set(IMAGE_OPERATORS.map((name) => ops[name]).filter((value) => typeof value === "number"));
+    const shows = new Set(["showText", "showSpacedText", "nextLineShowText", "nextLineSetSpacingShowText"]
+        .map((name) => ops[name])
+        .filter((value) => typeof value === "number"));
+    try {
+        const list = await page.getOperatorList();
+        // The render mode belongs to the graphics state: q/Q save and restore it.
+        let mode = 0;
+        const saved = [];
+        let image = false;
+        let invisible = 0;
+        let visible = 0;
+        list.fnArray.forEach((fn, index) => {
+            if (fn === ops.setTextRenderingMode)
+                mode = Number(list.argsArray[index]?.[0] ?? 0);
+            else if (fn === ops.save)
+                saved.push(mode);
+            else if (fn === ops.restore)
+                mode = saved.pop() ?? 0;
+            else if (images.has(fn))
+                image = true;
+            else if (shows.has(fn)) {
+                if (mode === 3)
+                    invisible += 1;
+                else
+                    visible += 1;
+            }
+        });
+        return image && invisible > 0 && visible === 0;
+    }
+    catch {
+        return false;
+    }
+}
 async function pageHasImages(page, ops) {
     const wanted = new Set(IMAGE_OPERATORS.map((name) => ops[name]).filter((value) => typeof value === "number"));
     try {
@@ -68,10 +107,14 @@ export class PdfJsDocumentPageSource {
                 const hasImages = text.length < this.minTextForImageCheck
                     ? await pageHasImages(page, pdfjs.OPS)
                     : undefined;
+                const ocrTextLayer = text.length >= this.minTextForImageCheck
+                    ? await pageHasForeignOcrLayer(page, pdfjs.OPS)
+                    : false;
                 pages.push({
                     page: pageNumber,
                     text,
-                    ...(hasImages !== undefined ? { hasImages } : {})
+                    ...(hasImages !== undefined ? { hasImages } : {}),
+                    ...(ocrTextLayer ? { ocrTextLayer } : {})
                 });
                 page.cleanup();
             }

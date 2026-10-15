@@ -17,6 +17,7 @@ export const KIND_LABEL: Record<string, string> = {
   LAND_REGISTRY: "Księga wieczysta",
   KRS: "KRS",
   VEHICLE_PLATE: "Nr rejestracyjny",
+  BAR_NUMBER: "Nr wpisu adwokata/radcy",
   PAYMENT_CARD: "Karta płatnicza",
   CUSTOM: "Inne"
 };

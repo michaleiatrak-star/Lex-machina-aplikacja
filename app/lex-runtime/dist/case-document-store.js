@@ -29,6 +29,8 @@ function storageObjectId(documentId) {
 // of the image, written once: a page text edit rewrites only the small source.
 const IMAGES_DIR = "images";
 const MAX_PAGE_IMAGE_BYTES = 32 * 1024 * 1024;
+// Page fields holding an image: the OCR evidence and the scan kept after a hand edit.
+const PAGE_IMAGE_FIELDS = ["image", "scan"];
 const imageHashes = new WeakMap();
 function imageHash(image) {
     let hash = imageHashes.get(image);
@@ -136,35 +138,38 @@ export class SecureCaseDocumentStore {
         const referenced = new Set();
         const pages = [];
         for (const page of args.source.pages) {
-            if (!page.image?.jpeg) {
-                pages.push(page);
-                continue;
-            }
-            const { jpeg, ...meta } = page.image;
-            const hash = imageHash(page.image);
-            const targetFile = path.join(imagesDir, `${hash}.lme`);
-            if (!referenced.has(hash)) {
-                referenced.add(hash);
-                try {
-                    await access(targetFile);
-                }
-                catch {
-                    const data = Buffer.from(jpeg, "utf8");
+            let stored = page;
+            for (const field of PAGE_IMAGE_FIELDS) {
+                const image = page[field];
+                if (!image?.jpeg)
+                    continue;
+                const { jpeg, ...meta } = image;
+                const hash = imageHash(image);
+                const targetFile = path.join(imagesDir, `${hash}.lme`);
+                if (!referenced.has(hash)) {
+                    referenced.add(hash);
                     try {
-                        await writeCaseBlob({
-                            targetFile,
-                            identity: pageImageIdentity(args.caseId, args.documentId, hash, args.keyVersion),
-                            caseDataKey: args.caseDataKey,
-                            data
-                        });
+                        await access(targetFile);
                     }
-                    finally {
-                        data.fill(0);
+                    catch {
+                        const data = Buffer.from(jpeg, "utf8");
+                        try {
+                            await writeCaseBlob({
+                                targetFile,
+                                identity: pageImageIdentity(args.caseId, args.documentId, hash, args.keyVersion),
+                                caseDataKey: args.caseDataKey,
+                                data
+                            });
+                        }
+                        finally {
+                            data.fill(0);
+                        }
                     }
                 }
+                const blob = { ...meta, blob: hash };
+                stored = { ...stored, [field]: blob };
             }
-            const stored = { ...meta, blob: hash };
-            pages.push({ ...page, image: stored });
+            pages.push(stored);
         }
         const payload = {
             schemaVersion: 1,
@@ -214,32 +219,33 @@ export class SecureCaseDocumentStore {
         const imagesDir = path.join(this.documentDir(args.caseId, args.documentId), IMAGES_DIR);
         const pages = [];
         for (const page of args.pages) {
-            const stored = page.image;
-            if (!stored || typeof stored.blob !== "string") {
-                pages.push(page);
-                continue;
+            let restored = page;
+            for (const field of PAGE_IMAGE_FIELDS) {
+                const stored = page[field];
+                if (!stored || typeof stored.blob !== "string")
+                    continue;
+                const { [field]: _image, ...rest } = restored;
+                restored = rest;
+                const { blob, ...meta } = stored;
+                if (!/^[a-f0-9]{64}$/.test(blob))
+                    continue;
+                try {
+                    const bytes = await readCaseBlob({
+                        targetFile: path.join(imagesDir, `${blob}.lme`),
+                        identity: pageImageIdentity(args.caseId, args.documentId, blob, args.keyVersion),
+                        caseDataKey: args.caseDataKey,
+                        maxBytes: MAX_PAGE_IMAGE_BYTES
+                    });
+                    const image = { ...meta, jpeg: bytes.toString("utf8") };
+                    bytes.fill(0);
+                    imageHashes.set(image, blob);
+                    restored = { ...restored, [field]: image };
+                }
+                catch {
+                    // Missing or unreadable blob: the page stays text-only.
+                }
             }
-            const { image: _image, ...rest } = page;
-            const { blob, ...meta } = stored;
-            if (!/^[a-f0-9]{64}$/.test(blob)) {
-                pages.push(rest);
-                continue;
-            }
-            try {
-                const bytes = await readCaseBlob({
-                    targetFile: path.join(imagesDir, `${blob}.lme`),
-                    identity: pageImageIdentity(args.caseId, args.documentId, blob, args.keyVersion),
-                    caseDataKey: args.caseDataKey,
-                    maxBytes: MAX_PAGE_IMAGE_BYTES
-                });
-                const image = { ...meta, jpeg: bytes.toString("utf8") };
-                bytes.fill(0);
-                imageHashes.set(image, blob);
-                pages.push({ ...rest, image });
-            }
-            catch {
-                pages.push(rest);
-            }
+            pages.push(restored);
         }
         return pages;
     }

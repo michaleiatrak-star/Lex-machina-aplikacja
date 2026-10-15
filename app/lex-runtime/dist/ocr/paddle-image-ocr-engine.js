@@ -19,6 +19,7 @@ export class LocalPaddleImageOcrEngine {
     workerPath;
     device;
     timeoutMs;
+    lineCrops;
     constructor(options = {}) {
         this.python =
             options.python ??
@@ -33,6 +34,7 @@ export class LocalPaddleImageOcrEngine {
                 process.env.LEX_OCR_DEVICE?.trim()) || undefined;
         this.timeoutMs =
             options.timeoutMs ?? 10 * 60 * 1000;
+        this.lineCrops = options.lineCrops ?? (() => false);
     }
     async recognizeImage(data, mediaType) {
         const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lex-paddle-image-"));
@@ -57,6 +59,9 @@ export class LocalPaddleImageOcrEngine {
             ];
             if (this.device) {
                 args.push("--device", this.device);
+            }
+            if (this.lineCrops()) {
+                args.push("--line-crops");
             }
             await new Promise((resolve, reject) => {
                 const child = spawn(this.python, args, {

@@ -57,17 +57,26 @@ describe("SecureCaseDocumentStore: page images outside source.lme", () => {
     expect(fs.statSync(sourceFile).size).toBeLessThan(100_000);
     const imageTimes = fs.readdirSync(path.join(docDir, "images")).map((name) => fs.statSync(path.join(docDir, "images", name)).mtimeMs);
 
-    // Text edit of page 3: the page loses its image (as in editPage); other blobs stay untouched.
-    const { image: _dropped, lines: _lines, ...edited } = original.pages[2]!;
-    const next = { ...original, pages: original.pages.map((page, index) => (index === 2 ? { ...edited, text: "poprawione", editedByUser: true } : page)) };
+    // Text edit of page 3 (as in editPage): the image moves to `scan` (preview only); no blob is rewritten.
+    const { image: maybeImage, lines: _lines, ...edited } = original.pages[2]!;
+    const image = maybeImage!;
+    const next = { ...original, pages: original.pages.map((page, index) => (index === 2 ? { ...edited, text: "poprawione", editedByUser: true, scan: image } : page)) };
     await store.saveSource({ caseId, documentId, mediaType: "application/pdf", source: next, caseDataKey: key, keyVersion: 1 });
-    const names = fs.readdirSync(path.join(docDir, "images"));
-    expect(names).toHaveLength(39);
+    expect(fs.statSync(sourceFile).size).toBeLessThan(100_000);
+    let names = fs.readdirSync(path.join(docDir, "images"));
+    expect(names).toHaveLength(40);
     expect(names.map((name) => fs.statSync(path.join(docDir, "images", name)).mtimeMs).every((time) => imageTimes.includes(time))).toBe(true);
 
     const loaded = await store.loadSource({ caseId, documentId, caseDataKey: key, keyVersion: 1 });
     expect(loaded.source.pages[2]!.image).toBeUndefined();
+    expect(loaded.source.pages[2]!.scan).toEqual(image);
     expect(loaded.source.pages[2]!.text).toBe("poprawione");
+
+    // A page without any image any more: its blob is removed.
+    const { scan: _scan, ...bare } = next.pages[2]!;
+    await store.saveSource({ caseId, documentId, mediaType: "application/pdf", source: { ...next, pages: next.pages.map((page, index) => (index === 2 ? bare : page)) }, caseDataKey: key, keyVersion: 1 });
+    names = fs.readdirSync(path.join(docDir, "images"));
+    expect(names).toHaveLength(39);
     expect(loaded.source.pages[0]!.image).toEqual(original.pages[0]!.image);
     expect(loaded.source.pages[39]!.image?.jpeg).toBe(original.pages[39]!.image!.jpeg);
   });

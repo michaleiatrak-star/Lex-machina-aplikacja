@@ -41,6 +41,7 @@ import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
 import { documentFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
+import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
 import { pickKey, type FilePick } from "./file-pick-tree.js";
@@ -73,6 +74,7 @@ import {
   getRoutes,
   isDesktopShell,
   finalizeDocument as finalizeCaseDocument,
+  getVisionOcrStatus,
   keepAllDirectives,
   listCaseArtifacts,
   listCaseFiles,
@@ -145,7 +147,6 @@ import {
   DOCUMENT_PROCESSING_MODES,
   processingModeKeepsClearText,
   processingModeOptions,
-  processingModeUsesLocalAi,
   type DocumentProcessingMode
 } from "./document-processing-mode.js";
 import {
@@ -215,7 +216,6 @@ type TabId =
   | "home"
   | "calendar"
   | "chat"
-  | "skills"
   | "case"
   | "firm"
   | "search"
@@ -228,6 +228,7 @@ export type SettingsSection =
   | "security"
   | "mcp"
   | "invoices"
+  | "skills"
   | "maintenance";
 
 export type SettingsRequest = {
@@ -1155,6 +1156,23 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // A processed document waiting for the user's confirmation in its preview.
+  const [privacyPreview, setPrivacyPreview] = useState<{
+    request: PrivacyPreviewRequest;
+    resolve: (result: Awaited<ReturnType<typeof finalizeCaseDocument>> | null) => void;
+  } | null>(null);
+  const [privacyPreviewBusy, setPrivacyPreviewBusy] = useState(false);
+  // Every document is finalized after its preview; null when the user cancels it.
+  function previewThenFinalize(
+    targetCase: string,
+    review: Awaited<ReturnType<typeof processStoredCaseFile>>,
+    fileName: string,
+    keepClear: boolean
+  ): Promise<Awaited<ReturnType<typeof finalizeCaseDocument>> | null> {
+    return new Promise((resolve) =>
+      setPrivacyPreview({ request: { caseId: targetCase, review, fileName, keepClear }, resolve })
+    );
+  }
   // Stage and page of documents processed from the chat (staged file id or upload id).
   const [documentProgress, setDocumentProgress] = useState<Record<string, ProcessingProgress>>({});
   // Runs one document request with its progress shown under `key`.
@@ -2322,60 +2340,80 @@ export default function MatterChatApp({
         enqueueDocumentDropFiles(current, taken.files)
       );
     }
-    for (const item of clear) void processStagedClearText(item.id, item.file, item.mode);
+    void processStagedClearTexts(clear);
   }
 
-  // OCR only (optionally with the local model's OCR correction): stored in
-  // the case, processed without anonymization and attached to the message.
-  async function processStagedClearText(
+  // OCR only, several files: all read one after another (the vision model needs the memory
+  // and one at a time), then the preview of each.
+  async function processStagedClearTexts(items: Array<{ id: string; file: File; mode: DocumentProcessingMode }>): Promise<void> {
+    if (items.some((item) => processingModeOptions(item.mode)?.ocrFix)) {
+      const vision = await getVisionOcrStatus().catch(() => null);
+      if (!vision?.installed || !vision.engineInstalled) {
+        setExecutionError("„Tylko OCR z korektą AI” wymaga modelu wizyjnego: w panelu lokalnej AI użyj „Pobierz model wizyjny”.");
+        return;
+      }
+    }
+    const reads: Array<{ id: string; file: File; mode: DocumentProcessingMode; read: Promise<Awaited<ReturnType<typeof processStoredCaseFile>> | null> }> = [];
+    let chain: Promise<unknown> = Promise.resolve();
+    for (const item of items) {
+      const read = chain.then(() => readStagedClearText(item.id, item.file, item.mode));
+      reads.push({ ...item, read });
+      chain = read;
+    }
+    for (const item of reads) {
+      const review = await item.read;
+      if (review) await confirmStagedClearText(item.id, item.file, review);
+    }
+  }
+
+  // OCR only (optionally with the vision model's OCR correction): stored in the case and read;
+  // null when it failed (the staged item shows why).
+  async function readStagedClearText(
     id: string,
     file: File,
     mode: DocumentProcessingMode
-  ): Promise<void> {
+  ): Promise<Awaited<ReturnType<typeof processStoredCaseFile>> | null> {
     const targetCase = caseId;
     setDocumentStaging((current) =>
       updateStagedDocument(current, id, { status: "SAVING" })
     );
     try {
       const stored = await uploadCaseFile(targetCase, file);
-      const result = await withDocumentProgress(id, targetCase, async (progressId) => {
-        const review = await processStoredCaseFile(
-          targetCase,
-          stored.uploadId,
-          undefined,
-          progressId,
-          processingModeOptions(mode)
-        );
-        return finalizeCaseDocument(
-          targetCase,
-          review.documentId,
-          keepAllDirectives(review)
-        );
-      });
-      pickFiles(
-        [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
-        true,
-        targetCase
+      return await withDocumentProgress(id, targetCase, (progressId) =>
+        processStoredCaseFile(targetCase, stored.uploadId, undefined, progressId, processingModeOptions(mode))
       );
-      setDocumentStaging((current) =>
-        takeStagedDocuments(
-          updateStagedDocument(current, id, { status: "PENDING" }),
-          [id]
-        ).state
-      );
-      setWorkspaceRefresh((value) => value + 1);
     } catch (error) {
-      const code = error instanceof Error ? error.message : String(error);
       setDocumentStaging((current) =>
-        updateStagedDocument(current, id, {
-          status: "FAILED",
-          error:
-            processingModeUsesLocalAi(mode) && /LOCAL_PRIVACY_MODEL/.test(code)
-              ? "tryb z AI wymaga uruchomionego modelu lokalnego (zakładka Sprawa → Uruchom model lokalny)"
-              : documentFailure(error).message
-        })
+        updateStagedDocument(current, id, { status: "FAILED", error: documentFailure(error).message })
       );
+      return null;
     }
+  }
+
+  // The preview of a read file, then finalized without anonymization and attached to the message.
+  async function confirmStagedClearText(
+    id: string,
+    file: File,
+    review: Awaited<ReturnType<typeof processStoredCaseFile>>
+  ): Promise<void> {
+    const targetCase = caseId;
+    const finalized = await previewThenFinalize(targetCase, review, file.name, true);
+    if (!finalized) {
+      setDocumentStaging((current) => updateStagedDocument(current, id, { status: "PENDING" }));
+      return;
+    }
+    pickFiles(
+      [{ kind: "document", documentId: finalized.documentId, chunkIndices: finalized.chunks.map((chunk) => chunk.index) }],
+      true,
+      targetCase
+    );
+    setDocumentStaging((current) =>
+      takeStagedDocuments(
+        updateStagedDocument(current, id, { status: "PENDING" }),
+        [id]
+      ).state
+    );
+    setWorkspaceRefresh((value) => value + 1);
   }
 
   // A decision from its official card saved in the case's files (local RAG).
@@ -2388,7 +2426,8 @@ export default function MatterChatApp({
     }
     const stored = await uploadCaseFile(targetCase, file);
     const review = await processStoredCaseFile(targetCase, stored.uploadId);
-    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    // A published, court-anonymized decision from the official database: confirmed without a preview.
+    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review), undefined, true);
     setWorkspaceRefresh((value) => value + 1);
     return { caseId: targetCase, documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) };
   }
@@ -3821,6 +3860,8 @@ export default function MatterChatApp({
                   ? ` na etapie: ${reason}`
                   : ""
               }.`
+            : code === "DOCUMENT_NOT_REVIEWED"
+              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
               ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
               : code === "CONTRACT_STATE_REQUIRED"
@@ -4246,6 +4287,31 @@ export default function MatterChatApp({
 
   return (
     <div className="chat-app-shell matter-chat-app">
+      {privacyPreview ? (
+        <div className="privacy-preview-overlay" role="dialog" aria-modal="true">
+          <PrivacyPreview
+            {...privacyPreview.request}
+            busy={privacyPreviewBusy}
+            onCancel={() => {
+              privacyPreview.resolve(null);
+              setPrivacyPreview(null);
+            }}
+            onConfirm={(directives) => {
+              setPrivacyPreviewBusy(true);
+              void finalizeCaseDocument(privacyPreview.request.caseId, privacyPreview.request.review.documentId, directives, undefined, true)
+                .then((result) => privacyPreview.resolve(result))
+                .catch((failure) => {
+                  setCaseFilePickerError(failure instanceof Error ? failure.message : String(failure));
+                  privacyPreview.resolve(null);
+                })
+                .finally(() => {
+                  setPrivacyPreviewBusy(false);
+                  setPrivacyPreview(null);
+                });
+            }}
+          />
+        </div>
+      ) : null}
       <aside className="chat-sidebar">
         <div className="chat-brand">
           <span className="chat-brand-mark">LM</span>
@@ -4370,7 +4436,6 @@ export default function MatterChatApp({
             ["home", "Start"],
             ["calendar", "Kalendarz"],
             ["chat", "Czat"],
-            ["skills", "Skille"],
             ["case", "Sprawa"],
             ["firm", "Kancelaria"],
             ["search", "Wyszukiwanie"],
@@ -4665,9 +4730,7 @@ export default function MatterChatApp({
                 ? "Kalendarz spraw"
                 : activeTab === "chat"
                 ? "Czat sprawy"
-                : activeTab === "skills"
-                  ? "Routing i skille"
-                  : activeTab === "case"
+                : activeTab === "case"
                     ? "Sprawa i dokumenty"
                     : activeTab === "firm"
                       ? "Know-how i wzory kancelarii"
@@ -5013,6 +5076,7 @@ export default function MatterChatApp({
             <DocumentPrivacyPanel
               caseId={caseId}
               incomingFile={documentDropQueue.files[0] ?? null}
+              queuedFiles={documentDropQueue.files}
               processingOptionsFor={(file) => {
                 const mode = reviewModes.current.get(file);
                 return mode ? processingModeOptions(mode) : undefined;
@@ -5668,7 +5732,10 @@ export default function MatterChatApp({
                 <button
                   type="button"
                   className="chat-secondary-action"
-                  onClick={() => setActiveTab("skills")}
+                  onClick={() => {
+                    setSettingsSection("skills");
+                    setActiveTab("settings");
+                  }}
                 >
                   ⚙ Skille
                 </button>
@@ -5842,8 +5909,9 @@ export default function MatterChatApp({
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
                                       processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
                                     )
-                                      .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
+                                      .then((review) => previewThenFinalize(caseId, review, item.filename, false))
                                       .then((result) => {
+                                        if (!result) return;
                                         pickFiles(
                                           [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
                                           true,
@@ -5881,10 +5949,9 @@ export default function MatterChatApp({
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
                                       processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
                                     )
-                                      .then((review) =>
-                                        finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
-                                      )
+                                      .then((review) => previewThenFinalize(caseId, review, item.filename, true))
                                       .then((result) => {
+                                        if (!result) return;
                                         pickFiles(
                                           [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
                                           true,
@@ -6253,216 +6320,6 @@ export default function MatterChatApp({
                 </div>
               ) : null}
             </div>
-          </section>
-        ) : null}
-
-        {activeTab === "skills" ? (
-          <section className="chat-card-stack">
-            <article className="chat-card">
-              <p className="eyebrow">Sterowanie wykonaniem</p>
-              <h2>
-                {selectedDeterministicAction
-                  ? selectedDeterministicAction.label
-                  : "AUTO · prawny-router-v3"}
-              </h2>
-              <p>
-                Tryb pracy (automatyczny lub mechaniczny) wybiera się wyłącznie nad polem pierwszej wiadomości.
-                Brak wyboru oznacza pełne AUTO: prawny-router-v3 sam dobiera dziedziny
-                DR i skille wykonawcze. Po pierwszej wiadomości tryb jest przypięty do
-                wątku i selektor w czacie znika.
-              </p>
-              <div className="chat-model-select-row">
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  disabled={
-                    domainSelection.length === routes.length &&
-                    manualSkillSelection.length ===
-                      selectableExecutionSkills.length
-                  }
-                  onClick={
-                    selectAllSkills
-                  }
-                >
-                  Zaznacz wszystkie skille
-                </button>
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  disabled={
-                    domainSelection.length === 0 &&
-                    manualSkillSelection.length === 0
-                  }
-                  onClick={
-                    clearAllSkills
-                  }
-                >
-                  Odznacz wszystkie opcjonalne
-                </button>
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <p className="eyebrow">Obowiązkowy rdzeń</p>
-              <div className="chat-mandatory-grid">
-                <div>
-                  <strong>✓ prawny-router-v3</strong>
-                  <small>zawsze aktywny</small>
-                </div>
-                <div>
-                  <strong>✓ shared</strong>
-                  <small>zawsze aktywny</small>
-                </div>
-                <div>
-                  <strong>✓ prawo-polskie-v2</strong>
-                  <small>zawsze aktywny dla zapytań prawnych PL</small>
-                </div>
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <div className="chat-card-heading">
-                <div>
-                  <p className="eyebrow">Dziedziny prawa</p>
-                  <h2>
-                    {domainSelection.length === routes.length
-                      ? `Wszystkie moduły DR (${routes.length})`
-                      : `${domainSelection.length} z ${routes.length} modułów DR`}
-                  </h2>
-                  <p>
-                    Wszystkie moduły DR są zaznaczone na start. Odznaczenie
-                    ogranicza dziedziny, z których router może korzystać w tej
-                    rozmowie; pełny zestaw nie nakłada żadnego ograniczenia.
-                  </p>
-                </div>
-                <div className="chat-model-select-row">
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      domainSelection.length ===
-                      routes.length
-                    }
-                    onClick={
-                      selectAllDomainSkills
-                    }
-                  >
-                    Zaznacz wszystkie
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      domainSelection.length === 0
-                    }
-                    onClick={
-                      clearDomainSkills
-                    }
-                  >
-                    Odznacz wszystkie
-                  </button>
-                </div>
-              </div>
-              <div className="chat-skill-grid">
-                {routes.map((name) => {
-                  const checked =
-                    domainSelection.includes(name);
-                  return (
-                    <label
-                      key={name}
-                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleDomainSkill(name)}
-                      />
-                      <span>
-                        <strong>{labelForSkill(name)}</strong>
-                        <small>dziedzina prawa</small>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </article>
-
-            <article className="chat-card">
-              <div className="chat-card-heading">
-                <div>
-                  <p className="eyebrow">Skille wykonawcze</p>
-                  <h2>
-                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
-                  </h2>
-                  <p>
-                    Wszystkie dostępne skille wykonawcze są zaznaczone domyślnie.
-                    Ta lista nie zawiera modułów DR; dziedziny prawa są kontrolowane
-                    w sekcji powyżej.
-                  </p>
-                </div>
-                <div className="chat-model-select-row">
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      manualSkillSelection.length ===
-                      selectableExecutionSkills.length
-                    }
-                    onClick={
-                      selectAllManualSkills
-                    }
-                  >
-                    Zaznacz wszystkie
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-secondary-action"
-                    disabled={
-                      manualSkillSelection.length === 0
-                    }
-                    onClick={
-                      clearManualSkills
-                    }
-                  >
-                    Odznacz wszystkie
-                  </button>
-                  <input
-                    className="chat-search"
-                    value={skillFilter}
-                    placeholder="Filtruj skille…"
-                    onChange={(event) =>
-                      setSkillFilter(
-                        event.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              <div className="chat-skill-grid">
-                {filteredSkills.map((skill) => {
-                  const checked =
-                    manualSkillSelection.includes(
-                      skill.name
-                    );
-                  return (
-                    <label
-                      key={skill.name}
-                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleManualSkill(skill.name)}
-                      />
-                      <span>
-                        <strong>{labelForSkill(skill.name)}</strong>
-                        <small>{skill.description || skill.type || "skill"}</small>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </article>
           </section>
         ) : null}
 
@@ -6911,6 +6768,7 @@ export default function MatterChatApp({
                 ["security", "Hasło i bezpieczeństwo"],
                 ["mcp", "Konektory MCP"],
                 ["invoices", "Faktury i KSeF"],
+                ["skills", "Skille i routing"],
                 ["maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
                 [SettingsSection, string]
@@ -7491,6 +7349,214 @@ export default function MatterChatApp({
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.invoices}
                 </div>
+              ) : settingsSection === "skills" ? (
+                <section className="chat-card-stack">
+            <article className="chat-card">
+              <p className="eyebrow">Sterowanie wykonaniem</p>
+              <h2>
+                {selectedDeterministicAction
+                  ? selectedDeterministicAction.label
+                  : "AUTO · prawny-router-v3"}
+              </h2>
+              <p>
+                Tryb pracy (automatyczny lub mechaniczny) wybiera się wyłącznie nad polem pierwszej wiadomości.
+                Brak wyboru oznacza pełne AUTO: prawny-router-v3 sam dobiera dziedziny
+                DR i skille wykonawcze. Po pierwszej wiadomości tryb jest przypięty do
+                wątku i selektor w czacie znika.
+              </p>
+              <div className="chat-model-select-row">
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === routes.length &&
+                    manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                  }
+                  onClick={
+                    selectAllSkills
+                  }
+                >
+                  Zaznacz wszystkie skille
+                </button>
+                <button
+                  type="button"
+                  className="chat-secondary-action"
+                  disabled={
+                    domainSelection.length === 0 &&
+                    manualSkillSelection.length === 0
+                  }
+                  onClick={
+                    clearAllSkills
+                  }
+                >
+                  Odznacz wszystkie opcjonalne
+                </button>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <p className="eyebrow">Obowiązkowy rdzeń</p>
+              <div className="chat-mandatory-grid">
+                <div>
+                  <strong>✓ prawny-router-v3</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ shared</strong>
+                  <small>zawsze aktywny</small>
+                </div>
+                <div>
+                  <strong>✓ prawo-polskie-v2</strong>
+                  <small>zawsze aktywny dla zapytań prawnych PL</small>
+                </div>
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Dziedziny prawa</p>
+                  <h2>
+                    {domainSelection.length === routes.length
+                      ? `Wszystkie moduły DR (${routes.length})`
+                      : `${domainSelection.length} z ${routes.length} modułów DR`}
+                  </h2>
+                  <p>
+                    Wszystkie moduły DR są zaznaczone na start. Odznaczenie
+                    ogranicza dziedziny, z których router może korzystać w tej
+                    rozmowie; pełny zestaw nie nakłada żadnego ograniczenia.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length ===
+                      routes.length
+                    }
+                    onClick={
+                      selectAllDomainSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      domainSelection.length === 0
+                    }
+                    onClick={
+                      clearDomainSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {routes.map((name) => {
+                  const checked =
+                    domainSelection.includes(name);
+                  return (
+                    <label
+                      key={name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleDomainSkill(name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(name)}</strong>
+                        <small>dziedzina prawa</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+
+            <article className="chat-card">
+              <div className="chat-card-heading">
+                <div>
+                  <p className="eyebrow">Skille wykonawcze</p>
+                  <h2>
+                    Dodatkowe skille wykonawcze · {manualSkillSelection.length} z {selectableExecutionSkills.length} zaznaczonych
+                  </h2>
+                  <p>
+                    Wszystkie dostępne skille wykonawcze są zaznaczone domyślnie.
+                    Ta lista nie zawiera modułów DR; dziedziny prawa są kontrolowane
+                    w sekcji powyżej.
+                  </p>
+                </div>
+                <div className="chat-model-select-row">
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length ===
+                      selectableExecutionSkills.length
+                    }
+                    onClick={
+                      selectAllManualSkills
+                    }
+                  >
+                    Zaznacz wszystkie
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    disabled={
+                      manualSkillSelection.length === 0
+                    }
+                    onClick={
+                      clearManualSkills
+                    }
+                  >
+                    Odznacz wszystkie
+                  </button>
+                  <input
+                    className="chat-search"
+                    value={skillFilter}
+                    placeholder="Filtruj skille…"
+                    onChange={(event) =>
+                      setSkillFilter(
+                        event.target.value
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div className="chat-skill-grid">
+                {filteredSkills.map((skill) => {
+                  const checked =
+                    manualSkillSelection.includes(
+                      skill.name
+                    );
+                  return (
+                    <label
+                      key={skill.name}
+                      className={checked ? "chat-skill-card selected" : "chat-skill-card"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleManualSkill(skill.name)}
+                      />
+                      <span>
+                        <strong>{labelForSkill(skill.name)}</strong>
+                        <small>{skill.description || skill.type || "skill"}</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
               ) : (
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.maintenance}

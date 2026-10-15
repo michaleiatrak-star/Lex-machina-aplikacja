@@ -16,6 +16,7 @@ export class LocalPaddleOcrEngine {
     dpi;
     device;
     timeoutMs;
+    lineCrops;
     constructor(options = {}) {
         this.python =
             options.python ??
@@ -25,12 +26,15 @@ export class LocalPaddleOcrEngine {
             options.workerPath ??
                 process.env.LEX_OCR_WORKER ??
                 defaultWorkerPath();
+        // 220 dpi: on two real 152 dpi scans 300 dpi dropped spaces ("ul.Pukowca15", "art.270");
+        // word accuracy 96.1% at 220 vs 95.9% at 300 (both without UVDoc).
         this.dpi = options.dpi ?? 220;
         this.device =
             (options.device ??
                 process.env.LEX_OCR_DEVICE?.trim()) || undefined;
         this.timeoutMs =
             options.timeoutMs ?? 30 * 60 * 1000;
+        this.lineCrops = options.lineCrops ?? (() => false);
     }
     async recognizePages(data, pages, onPage) {
         if (pages.length === 0)
@@ -96,6 +100,9 @@ export class LocalPaddleOcrEngine {
         ];
         if (this.device) {
             args.push("--device", this.device);
+        }
+        if (this.lineCrops()) {
+            args.push("--line-crops");
         }
         await new Promise((resolve, reject) => {
             const child = spawn(this.python, args, {

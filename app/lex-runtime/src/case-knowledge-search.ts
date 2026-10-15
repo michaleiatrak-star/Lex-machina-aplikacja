@@ -126,6 +126,8 @@ export class LocalCaseKnowledgeSearch {
     caseId: string;
     caseDataKey: Buffer;
     keyVersion: number;
+    // For a model outside the computer: documents the user has not reviewed are left out.
+    reviewedOnly?: boolean;
   }): Promise<Array<{ documentId: string; totalPages: number; chunks: number }>> {
     const documentIds = await this.documents.listDocumentIds(args.caseId);
     if (documentIds.length > this.maxDocuments) {
@@ -133,7 +135,8 @@ export class LocalCaseKnowledgeSearch {
     }
     const result: Array<{ documentId: string; totalPages: number; chunks: number }> = [];
     for (const documentId of documentIds) {
-      const document = await this.documents.loadProtected({ ...args, documentId });
+      const document = await this.documents.loadProtected({ caseId: args.caseId, caseDataKey: args.caseDataKey, keyVersion: args.keyVersion, documentId });
+      if (args.reviewedOnly && document.privacy?.reviewed === false) continue;
       result.push({ documentId, totalPages: document.totalPages, chunks: document.chunks.length });
     }
     return result;
@@ -145,6 +148,8 @@ export class LocalCaseKnowledgeSearch {
     keyVersion: number;
     query: string;
     limit?: number;
+    // For a model outside the computer: documents the user has not reviewed are left out.
+    reviewedOnly?: boolean;
   }): Promise<
     CaseKnowledgeHit[]
   > {
@@ -221,6 +226,7 @@ export class LocalCaseKnowledgeSearch {
             keyVersion:
               args.keyVersion
           });
+      if (args.reviewedOnly && protectedDocument.privacy?.reviewed === false) continue;
 
       chunkCount +=
         protectedDocument

@@ -20,6 +20,13 @@ Address registers (rebuild: `build_address_base.py`, sources in its docstring):
 - `localities_teryt.tsv`: GUS TERYT SIMC localities with the official genitive (GUGiK PRNG);
 - `streets_teryt.tsv`: GUS TERYT ULIC street names with their kind (ul., al., pl. ...).
 
+Name registers (rebuild: `build_surname_base.py`, `build_given_name_base.py`, dane.gov.pl):
+
+- `surnames_pesel.tsv`: PESEL surnames, men/women counts;
+- `given_names_pesel.tsv`: PESEL first names (22.01.2025), men/women counts. SGJP knows ~10% of them (not Oleksandr, Tetiana, Juneyoung).
+
+Both registers and TERYT are also the OCR corrector's known words; a NIP/KRS in the document adds the VAT white list / KRS spelling.
+
 A locality is masked only where a person lives, lived or comes from ("zamieszkały w Ponikwi 15") or after a street address; "Sąd Rejonowy w Krakowie" stays.
 
 ## User-directed privacy review

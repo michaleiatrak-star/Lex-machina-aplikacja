@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   addToAnonymization,
+  approveAnonymizedVersion,
   getAnonymizedVersion,
   removeFromAnonymization,
   updateAnonymizationForms,
@@ -256,6 +257,32 @@ export function AnonymizedDocumentView(props: {
         </div>
       </div>
 
+      {version?.reviewed === false ? (
+        <div className="privacy-preview-todo" role="status">
+          <strong>Dokument nie jest zatwierdzony</strong>
+          <small>
+            Przetworzono go bez podglądu. Sprawdź zaznaczenia i klucz poniżej; dopóki nie zatwierdzisz, nie trafi do
+            modelu spoza tego komputera.
+          </small>
+          {props.readOnly ? null : (
+            <div>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy}
+                onClick={() =>
+                  void apply(
+                    () => approveAnonymizedVersion(props.caseId, props.documentId),
+                    () => "Zatwierdzono. Dokument może trafić do wybranego modelu."
+                  )
+                }
+              >
+                Zatwierdzam po sprawdzeniu
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
       {!version ? (
         <p className="privacy-key-empty">{status || "Wczytywanie…"}</p>
       ) : tab !== "key" ? (

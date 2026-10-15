@@ -106,6 +106,9 @@ function storageObjectId(
 const IMAGES_DIR = "images";
 const MAX_PAGE_IMAGE_BYTES = 32 * 1024 * 1024;
 
+// Page fields holding an image: the OCR evidence and the scan kept after a hand edit.
+const PAGE_IMAGE_FIELDS = ["image", "scan"] as const;
+
 type StoredPageImage = Omit<OcrPageImage, "jpeg"> & { blob: string };
 
 const imageHashes = new WeakMap<OcrPageImage, string>();
@@ -353,40 +356,42 @@ export class SecureCaseDocumentStore {
     const referenced = new Set<string>();
     const pages: IngestedPage[] = [];
     for (const page of args.source.pages) {
-      if (!page.image?.jpeg) {
-        pages.push(page);
-        continue;
-      }
-      const { jpeg, ...meta } = page.image;
-      const hash = imageHash(page.image);
-      const targetFile = path.join(imagesDir, `${hash}.lme`);
-      if (!referenced.has(hash)) {
-        referenced.add(hash);
-        try {
-          await access(targetFile);
-        } catch {
-          const data = Buffer.from(jpeg, "utf8");
+      let stored: IngestedPage = page;
+      for (const field of PAGE_IMAGE_FIELDS) {
+        const image = page[field];
+        if (!image?.jpeg) continue;
+        const { jpeg, ...meta } = image;
+        const hash = imageHash(image);
+        const targetFile = path.join(imagesDir, `${hash}.lme`);
+        if (!referenced.has(hash)) {
+          referenced.add(hash);
           try {
-            await writeCaseBlob({
-              targetFile,
-              identity:
-                pageImageIdentity(
-                  args.caseId,
-                  args.documentId,
-                  hash,
-                  args.keyVersion
-                ),
-              caseDataKey:
-                args.caseDataKey,
-              data
-            });
-          } finally {
-            data.fill(0);
+            await access(targetFile);
+          } catch {
+            const data = Buffer.from(jpeg, "utf8");
+            try {
+              await writeCaseBlob({
+                targetFile,
+                identity:
+                  pageImageIdentity(
+                    args.caseId,
+                    args.documentId,
+                    hash,
+                    args.keyVersion
+                  ),
+                caseDataKey:
+                  args.caseDataKey,
+                data
+              });
+            } finally {
+              data.fill(0);
+            }
           }
         }
+        const blob: StoredPageImage = { ...meta, blob: hash };
+        stored = { ...stored, [field]: blob as unknown as OcrPageImage };
       }
-      const stored: StoredPageImage = { ...meta, blob: hash };
-      pages.push({ ...page, image: stored as unknown as OcrPageImage });
+      pages.push(stored);
     }
     const payload:
       StoredDocumentSourceV1 = {
@@ -473,39 +478,38 @@ export class SecureCaseDocumentStore {
       path.join(this.documentDir(args.caseId, args.documentId), IMAGES_DIR);
     const pages: IngestedPage[] = [];
     for (const page of args.pages) {
-      const stored = page.image as unknown as Partial<StoredPageImage> | undefined;
-      if (!stored || typeof stored.blob !== "string") {
-        pages.push(page);
-        continue;
+      let restored: IngestedPage = page;
+      for (const field of PAGE_IMAGE_FIELDS) {
+        const stored = page[field] as unknown as Partial<StoredPageImage> | undefined;
+        if (!stored || typeof stored.blob !== "string") continue;
+        const { [field]: _image, ...rest } = restored;
+        restored = rest;
+        const { blob, ...meta } = stored;
+        if (!/^[a-f0-9]{64}$/.test(blob)) continue;
+        try {
+          const bytes = await readCaseBlob({
+            targetFile: path.join(imagesDir, `${blob}.lme`),
+            identity:
+              pageImageIdentity(
+                args.caseId,
+                args.documentId,
+                blob,
+                args.keyVersion
+              ),
+            caseDataKey:
+              args.caseDataKey,
+            maxBytes:
+              MAX_PAGE_IMAGE_BYTES
+          });
+          const image = { ...(meta as Omit<OcrPageImage, "jpeg">), jpeg: bytes.toString("utf8") };
+          bytes.fill(0);
+          imageHashes.set(image, blob);
+          restored = { ...restored, [field]: image };
+        } catch {
+          // Missing or unreadable blob: the page stays text-only.
+        }
       }
-      const { image: _image, ...rest } = page;
-      const { blob, ...meta } = stored;
-      if (!/^[a-f0-9]{64}$/.test(blob)) {
-        pages.push(rest);
-        continue;
-      }
-      try {
-        const bytes = await readCaseBlob({
-          targetFile: path.join(imagesDir, `${blob}.lme`),
-          identity:
-            pageImageIdentity(
-              args.caseId,
-              args.documentId,
-              blob,
-              args.keyVersion
-            ),
-          caseDataKey:
-            args.caseDataKey,
-          maxBytes:
-            MAX_PAGE_IMAGE_BYTES
-        });
-        const image = { ...(meta as Omit<OcrPageImage, "jpeg">), jpeg: bytes.toString("utf8") };
-        bytes.fill(0);
-        imageHashes.set(image, blob);
-        pages.push({ ...rest, image });
-      } catch {
-        pages.push(rest);
-      }
+      pages.push(restored);
     }
     return pages;
   }

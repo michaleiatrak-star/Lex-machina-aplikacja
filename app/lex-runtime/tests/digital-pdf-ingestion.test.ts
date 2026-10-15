@@ -114,3 +114,35 @@ describe("OCR candidates", () => {
     expect(result.pages.map((page) => page.source)).toEqual(["OCR", "BLANK", "OCR", "DIGITAL"]);
   });
 });
+
+// A scanned page with another program's invisible OCR text (render mode 3) over the image,
+// as iLovePDF leaves it; that layer read "sp. z o.o." as "sp. z 0.0.".
+const FOREIGN_OCR_LAYER_PDF = "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";
+
+describe("scan with a foreign OCR text layer", () => {
+  const data = () => Uint8Array.from(Buffer.from(FOREIGN_OCR_LAYER_PDF, "base64"));
+
+  it("is read again by the local OCR, whose text replaces the foreign layer", async () => {
+    let ocrPages: number[] = [];
+    const ocr: OcrEngine = {
+      async recognizePages(_bytes, pages) {
+        ocrPages = pages;
+        return pages.map((page) => ({ page, text: "Human Park Global sp. z o.o.", confidence: 0.98, engine: "fake" }));
+      }
+    };
+    const result = await new CompleteDocumentIngestor(new PdfJsDocumentPageSource(), ocr).ingest(data());
+    expect(ocrPages).toEqual([1]);
+    expect(result.pages[0]).toMatchObject({ source: "OCR", text: "Human Park Global sp. z o.o." });
+  });
+
+  it("keeps the foreign layer when no local OCR is configured", async () => {
+    const result = await new CompleteDocumentIngestor(new PdfJsDocumentPageSource()).ingest(data());
+    expect(result.pages[0]).toMatchObject({ source: "DIGITAL" });
+    expect(result.pages[0]?.text).toContain("sp. z 0.0.");
+  });
+
+  it("a digital PDF is not taken for a scan", async () => {
+    const extracted = await new PdfJsDocumentPageSource().extract(Uint8Array.from(Buffer.from(DIGITAL_PDF, "base64")));
+    expect(extracted.pages[0]).not.toHaveProperty("ocrTextLayer");
+  });
+});

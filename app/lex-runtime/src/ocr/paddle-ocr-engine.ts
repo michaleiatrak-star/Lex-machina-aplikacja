@@ -15,6 +15,8 @@ export type LocalPaddleOcrOptions = {
   dpi?: number;
   device?: string;
   timeoutMs?: number;
+  // Line images for the local vision model; asked for only when the model is installed.
+  lineCrops?: () => boolean;
 };
 
 // Pages per worker pass (one pass = one process, one timeout).
@@ -35,6 +37,7 @@ implements OcrEngine {
   private readonly dpi: number;
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
+  private readonly lineCrops: () => boolean;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -45,6 +48,8 @@ implements OcrEngine {
       options.workerPath ??
       process.env.LEX_OCR_WORKER ??
       defaultWorkerPath();
+    // 220 dpi: on two real 152 dpi scans 300 dpi dropped spaces ("ul.Pukowca15", "art.270");
+    // word accuracy 96.1% at 220 vs 95.9% at 300 (both without UVDoc).
     this.dpi = options.dpi ?? 220;
     this.device =
       (
@@ -53,6 +58,7 @@ implements OcrEngine {
       ) || undefined;
     this.timeoutMs =
       options.timeoutMs ?? 30 * 60 * 1000;
+    this.lineCrops = options.lineCrops ?? (() => false);
   }
 
   async recognizePages(
@@ -147,6 +153,9 @@ implements OcrEngine {
     ];
     if (this.device) {
       args.push("--device", this.device);
+    }
+    if (this.lineCrops()) {
+      args.push("--line-crops");
     }
 
     await new Promise<void>((resolve, reject) => {

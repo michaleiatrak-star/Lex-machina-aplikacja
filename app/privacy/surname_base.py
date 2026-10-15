@@ -22,8 +22,8 @@ DEFAULT_PATH = Path(__file__).with_name("surnames_pesel.tsv")
 
 
 class SurnameBase:
-    def __init__(self, path: Path | None = None) -> None:
-        override = os.environ.get("LEX_SURNAME_BASE", "").strip()
+    def __init__(self, path: Path | None = None, env: str = "LEX_SURNAME_BASE") -> None:
+        override = os.environ.get(env, "").strip()
         self.path = Path(override) if override else (path or DEFAULT_PATH)
         self._map: mmap.mmap | None = None
         if self.path.is_file() and self.path.stat().st_size:
