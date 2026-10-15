@@ -135,3 +135,16 @@ describe("OCR correction with register data (VAT white list, KRS)", () => {
     expect(fixed.text).toContain("luris");
   });
 });
+
+describe("OCR correction: a model that copies the lines back (Bielik)", () => {
+  it("takes the fixes from the copied lines, through the same checks", async () => {
+    const page = scan([["Umowa najmu lokalu zawarta dnia w Warszawie", 0.97], ["sad rejonowy oddalił powództwo strona nie wykonała zobowiązania", 0.6]]);
+    const copy = new LocalOcrCorrector(
+      () => async () => "[L2]? ⟦sąd⟧ rejonowy oddalił powództwo strona wykonała zobowiązania",
+      known
+    );
+    const fixed = await copy.correct(page);
+    // "sad" -> "sąd" passes; dropping "nie" is refused.
+    expect(fixed.lines![1]!.text).toBe("sąd rejonowy oddalił powództwo strona nie wykonała zobowiązania");
+  });
+});

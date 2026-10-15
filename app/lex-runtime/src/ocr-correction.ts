@@ -176,7 +176,56 @@ export function acceptableFix(rawFrom: string, to: string): boolean {
   return fromWords.some(isCapital) ? distance <= 1 : distance <= 2 && Math.abs(a.length - b.length) <= 1;
 }
 
-function parseFixes(raw: string): Array<{ line: number; from: string; to: string }> {
+/** Differing runs of 1-3 words between a line and the model's copy of it. */
+function lineDiff(line: number, original: string, copy: string): Array<{ line: number; from: string; to: string }> {
+  const a = original.split(/\s+/u).filter(Boolean);
+  const b = copy.split(/\s+/u).filter(Boolean);
+  const common = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i -= 1)
+    for (let j = b.length - 1; j >= 0; j -= 1)
+      common[i]![j] = a[i] === b[j] ? common[i + 1]![j + 1]! + 1 : Math.max(common[i + 1]![j]!, common[i]![j + 1]!);
+  const fixes: Array<{ line: number; from: string; to: string }> = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    const [i0, j0] = [i, j];
+    while ((i < a.length || j < b.length) && !(i < a.length && j < b.length && a[i] === b[j])) {
+      if (j < b.length && (i >= a.length || common[i]![j + 1]! >= common[i + 1]![j]!)) j += 1;
+      else i += 1;
+    }
+    const from = a.slice(i0, i);
+    const to = b.slice(j0, j);
+    if (from.length && to.length && from.length <= MAX_FIX_WORDS && to.length <= MAX_FIX_WORDS) {
+      fixes.push({ line, from: from.join(" "), to: to.join(" ") });
+    }
+  }
+  return fixes;
+}
+
+/**
+ * The model's fixes: the JSON list asked for, or, when the model copies the lines back with
+ * the errors fixed in place ("[L5] lub innego stosunku prawnego", as Bielik does), the
+ * differences between each copied line and the line sent.
+ */
+function parseFixes(raw: string, lines: readonly OcrLine[] = []): Array<{ line: number; from: string; to: string }> {
+  const listed = parseFixList(raw);
+  if (listed.length) return listed;
+  return raw.split("\n").flatMap((row) => {
+    const copied = /^\s*\[L(\d+)\]\??\s?(.*)$/u.exec(row);
+    if (!copied) return [];
+    const line = Number(copied[1]);
+    const original = lines[line - 1]?.text;
+    if (original === undefined) return [];
+    return lineDiff(line, original, copied[2]!.replace(/[⟦⟧]/gu, ""));
+  });
+}
+
+function parseFixList(raw: string): Array<{ line: number; from: string; to: string }> {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const start = text.indexOf("[");
   const end = text.lastIndexOf("]");
@@ -308,7 +357,7 @@ export class LocalOcrCorrector {
         )
         .join("\n---\n");
       const sent = new Set(batch.flat());
-      for (const fix of parseFixes(await ask(PROMPT, content))) {
+      for (const fix of parseFixes(await ask(PROMPT, content), lines)) {
         const index = fix.line - 1;
         if (!sent.has(index) || !suspicious.has(index)) continue;
         const proposal =
