@@ -304,6 +304,8 @@ export type StoredUploadResponse = {
     anonymized?: boolean;
     // On the case's shared key (one symbol per person across the case).
     sharedKey?: boolean;
+    // false: not confirmed after a preview; never sent to a model outside the computer.
+    reviewed?: boolean;
   };
 };
 
@@ -3423,7 +3425,9 @@ export function finalizeDocument(
   caseId: string,
   documentId: string,
   directives: PagePrivacyDirective[],
-  progressId?: string
+  progressId?: string,
+  // Confirmed by the user in the preview; without it the document never reaches a model outside the computer.
+  reviewed = false
 ): Promise<DocumentIngestionResponse> {
   return json<DocumentIngestionResponse>(
     `/api/documents/${documentId}/finalize`,
@@ -3432,10 +3436,16 @@ export function finalizeDocument(
       ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
       body: JSON.stringify({
         caseId,
-        directives
+        directives,
+        ...(reviewed ? { reviewed: true } : {})
       })
     }
   );
+}
+
+/** The user's confirmation of an anonymized version after its preview. */
+export function approveAnonymizedVersion(caseId: string, documentId: string): Promise<AnonymizedVersion> {
+  return json<AnonymizedVersion>(anonymizedPath(caseId, documentId, "approve"), { method: "POST" });
 }
 
 /** The user's own correction of one page's text (a poor scan); personal data on it is detected again. */
@@ -3509,6 +3519,8 @@ export type AnonymizedVersion = {
   entries: PrivacyKeyEntry[];
   // Legend and key for a model (no values); null without person/address symbols.
   modelKey?: string | null;
+  // false: not confirmed after a preview, so never sent to a model outside the computer.
+  reviewed?: boolean;
 };
 
 export type CaseArtifact = {

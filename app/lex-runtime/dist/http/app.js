@@ -2664,7 +2664,8 @@ export function createLexHttpApp(options) {
                                         .slice(0, 32)
                                         .map((chunk) => chunk.index),
                                     anonymized: restored.privacy.findings > 0,
-                                    sharedKey: options.documentService.usesSharedKey?.(restored.documentId) ?? false
+                                    sharedKey: options.documentService.usesSharedKey?.(restored.documentId) ?? false,
+                                    ...(restored.privacy.reviewed === false ? { reviewed: false } : {})
                                 }
                             };
                         }

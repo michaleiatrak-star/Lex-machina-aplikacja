@@ -3,6 +3,7 @@ import {
   ApiError,
   deanonymizeUpload,
   finalizeDocument,
+  type PagePrivacyDirective,
   getProcessingProgress,
   joinSharedKey,
   keepAllDirectives,
@@ -51,6 +52,7 @@ import { SheetEditor } from "./SheetEditor.js";
 import { documentFormatFor, sheetFormatFor } from "./office-editing.js";
 import { progressLabel, progressPercent } from "./processing-progress.js";
 import { AnonymizedDocumentView } from "./AnonymizedDocumentView.js";
+import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { ArtifactDeanonymize } from "./ArtifactDeanonymize.js";
 import { ArtifactRenameForm } from "./ArtifactRenameForm.js";
 import { decodeTextFile } from "./text-editing.js";
@@ -256,16 +258,11 @@ export function WorkspaceManager({
   const [localRuntime, setLocalRuntime] = useState<LocalModelsResponse["runtime"] | null>(null);
   const [localAiStarting, setLocalAiStarting] = useState(false);
   const [localAiMessage, setLocalAiMessage] = useState("");
-  // OCR words the local model fixed in the last processed file (undo by reprocessing).
-  const [ocrFixes, setOcrFixes] = useState<{
+  // The processed file waiting for the user's confirmation in its preview.
+  const [privacyPreview, setPrivacyPreview] = useState<{
     item: WorkspaceItem;
     mode: DocumentProcessingMode;
-    fixes: Array<{ page: number; from: string; to: string }>;
-  } | null>(null);
-  // OCR lines of the last processed file to check against the scan (handwriting, stamps).
-  const [ocrReview, setOcrReview] = useState<{
-    item: WorkspaceItem;
-    lines: Array<{ page: number; text: string }>;
+    request: PrivacyPreviewRequest;
   } | null>(null);
   const localAiReady = Boolean(localRuntime?.configured && localRuntime.state === "READY");
   useEffect(() => {
@@ -505,22 +502,31 @@ export function WorkspaceManager({
           progressId,
           options ? { ...options, ...(ocrFix ? {} : { ocrFix: false }) } : undefined
         );
-      const fixes = review.pages.flatMap((page) =>
-        (page.corrections ?? []).map((fix) => ({ page: page.page, from: fix.from, to: fix.to }))
-      );
-      setOcrFixes(fixes.length ? { item, mode, fixes } : null);
-      const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, text: line.text })));
-      setOcrReview(doubtful.length ? { item, lines: doubtful } : null);
-      // OCR only: every page kept as written, no anonymization key.
-      const result =
-        await finalizeDocument(
+      // Finalized only after the preview (doubtful OCR lines, local AI hints, masks) is confirmed.
+      setPrivacyPreview({
+        item,
+        mode,
+        request: {
           caseId,
-          review.documentId,
-          keepClear ? keepAllDirectives(review) : [],
-          progressId
-        );
+          review,
+          fileName: item.filename,
+          keepClear,
+          ...(review.pages.some((page) => page.corrections?.length) && ocrFix
+            ? { onUndoOcrFixes: () => { setPrivacyPreview(null); void runAutomaticPrivacy(item, mode, false); } }
+            : {})
+        }
+      });
+    });
+  }
+
+  async function confirmPrivacyPreview(directives: PagePrivacyDirective[]): Promise<void> {
+    const pending = privacyPreview;
+    if (!pending) return;
+    await run(async () => {
+      const result = await finalizeDocument(caseId, pending.request.review.documentId, directives, undefined, true);
+      setPrivacyPreview(null);
       setNotice(
-        `„${item.filename}”: OCR/pseudonimizacja zakończona · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
+        `„${pending.item.filename}”: zatwierdzono po podglądzie · ${result.ocrPages} stron OCR · ${result.privacy.findings} anonimizacji · osobny vault/deanonimizator zapisany dla ${result.documentId}.`
       );
     });
   }
@@ -1137,6 +1143,11 @@ export function WorkspaceManager({
                             </span>
                           )
                         ) : null}
+                        {processingFor(item)?.reviewed === false ? (
+                          <span className="anonymized-badge clear-text-badge" title="Nie trafi do modelu spoza komputera, dopóki nie zatwierdzisz podglądu">
+                            Niezatwierdzony
+                          </span>
+                        ) : null}
                         <span>
                           {processingFor(item)
                             ? processingFor(item)!.ocrPages > 0
@@ -1170,6 +1181,17 @@ export function WorkspaceManager({
                         ? `Podgląd s. ${knowledgeHitFor(item)!.pageStart}`
                         : "Podgląd"}
                     </button>
+                    {processingFor(item)?.reviewed === false ? (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={busy}
+                        title="Dokument nie został jeszcze zatwierdzony po podglądzie i nie trafi do modelu spoza komputera"
+                        onClick={() => showAnonymized(item, "marked")}
+                      >
+                        Podgląd i zatwierdzenie
+                      </button>
+                    ) : null}
                     {processingFor(item) && processingFor(item)!.anonymized !== false ? (
                       <>
                         <button
@@ -1512,35 +1534,13 @@ export function WorkspaceManager({
         </p>
       ) : null}
       {notice ? <p className="workspace-notice">{notice}</p> : null}
-      {ocrFixes ? (
-        <div className="workspace-notice" role="status">
-          <strong>Korekty OCR (odstępy i model lokalny) w „{ocrFixes.item.filename}”: {ocrFixes.fixes.length}</strong>
-          <ul>
-            {ocrFixes.fixes.slice(0, 50).map((fix, index) => (
-              <li key={index}>s. {fix.page}: „{fix.from}” → „{fix.to}”</li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void runAutomaticPrivacy(ocrFixes.item, ocrFixes.mode, false)}
-          >
-            Cofnij korekty (przetwórz ponownie bez nich)
-          </button>{" "}
-          <button type="button" onClick={() => setOcrFixes(null)}>Zamknij</button>
-        </div>
-      ) : null}
-      {ocrReview ? (
-        <div className="workspace-notice" role="status">
-          <strong>Do sprawdzenia w skanie „{ocrReview.item.filename}”: {ocrReview.lines.length} linii</strong>
-          <p>Pismo odręczne, pieczątki lub niepewny odczyt. W tekście dla modelu są oznaczone, a na obrazie strony zakryte; treść (np. data doręczenia, dopisek) sprawdź ręcznie.</p>
-          <ul>
-            {ocrReview.lines.slice(0, 50).map((line, index) => (
-              <li key={index}>s. {line.page}: „{line.text}”</li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => setOcrReview(null)}>Zamknij</button>
-        </div>
+      {privacyPreview ? (
+        <PrivacyPreview
+          {...privacyPreview.request}
+          busy={busy}
+          onConfirm={(directives) => void confirmPrivacyPreview(directives)}
+          onCancel={() => setPrivacyPreview(null)}
+        />
       ) : null}
       {error ? <p className="chat-inline-error">{error}</p> : null}
     </article>

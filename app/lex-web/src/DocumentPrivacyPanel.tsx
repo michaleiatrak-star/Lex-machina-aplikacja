@@ -605,10 +605,13 @@ export function DocumentPrivacyPanel({
 
     for (const draft of batchDrafts) {
       try {
+        // The batch preview (detections, local AI hints, doubtful OCR lines) was confirmed.
         const result = await finalizeDocument(
           caseId,
           draft.review.documentId,
-          draft.directives
+          draft.directives,
+          undefined,
+          true
         );
         const selectedChunkIndices = result.chunks
           .slice(0, 32)
@@ -864,6 +867,9 @@ export function DocumentPrivacyPanel({
                 {" "}Wykryto {review.suggestions.length} lokalnych sugestii danych wrażliwych.
                 {review.suggestions.some((item) => item.aiNotPerson)
                   ? ` Lokalne AI uznało ${review.suggestions.filter((item) => item.aiNotPerson).length} z nich za nie-osoby; zostają zamaskowane, dopóki nie odkryjesz ich w przeglądzie ręcznym.`
+                  : ""}
+                {review.pages.some((page) => page.review?.length)
+                  ? ` Odczyt niepewny w ${review.pages.reduce((sum, page) => sum + (page.review?.length ?? 0), 0)} liniach (pismo odręczne, pieczątki) - sprawdź je w przeglądzie ręcznym.`
                   : ""}
               </p>
               <p>
@@ -1280,6 +1286,20 @@ export function DocumentPrivacyPanel({
                   {" · "}{draft.review.suggestions.length} wykryć
                   {" · "}{draft.directives.length} ręcznych decyzji
                 </summary>
+
+                {draft.review.pages.some((page) => page.review?.length) ? (
+                  <div className="privacy-preview-todo">
+                    <strong>Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem</strong>
+                    <small>Pismo odręczne, pieczątki lub rozmazany druk. Popraw tekst strony: „Wróć do edycji tego pliku”, potem „Edytuj tekst”.</small>
+                    <ul>
+                      {draft.review.pages.flatMap((page) =>
+                        (page.review ?? []).map((line, index) => (
+                          <li key={`${page.page}-${index}`}>s. {page.page} · „{line.text}”</li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
 
                 <div className="privacy-review-grid">
                   <section className="privacy-document">

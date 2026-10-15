@@ -4675,6 +4675,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 anonymized: boolean;
                 // On the case's shared key (one symbol per entity in the case).
                 sharedKey: boolean;
+                // false: not confirmed after a preview; never sent to a model outside the computer.
+                reviewed?: boolean;
               };
             }
           > =
@@ -4773,7 +4775,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                               anonymized:
                                 restored.privacy.findings > 0,
                               sharedKey:
-                                options.documentService!.usesSharedKey?.(restored.documentId) ?? false
+                                options.documentService!.usesSharedKey?.(restored.documentId) ?? false,
+                              ...(restored.privacy.reviewed === false ? { reviewed: false } : {})
                             }
                           };
                         } catch {

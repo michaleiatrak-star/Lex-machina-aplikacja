@@ -41,6 +41,7 @@ import { DocumentCitationContent } from "./DocumentCitationContent.js";
 import type { SourceClaim } from "./SourceLinkedText.js";
 import { documentFailure } from "./document-errors.js";
 import { DocumentPrivacyPanel } from "./DocumentPrivacyPanel.js";
+import { PrivacyPreview, type PrivacyPreviewRequest } from "./PrivacyPreview.js";
 import { FirmKnowledgePanel } from "./FirmKnowledgePanel.js";
 import { FirmFilePicker } from "./FirmFilePicker.js";
 import { pickKey, type FilePick } from "./file-pick-tree.js";
@@ -1155,6 +1156,23 @@ export default function MatterChatApp({
   const [caseFiles, setCaseFiles] =
     useState<StoredUploadResponse[]>([]);
   const [pickerAnonymizing, setPickerAnonymizing] = useState<string | null>(null);
+  // A processed document waiting for the user's confirmation in its preview.
+  const [privacyPreview, setPrivacyPreview] = useState<{
+    request: PrivacyPreviewRequest;
+    resolve: (result: Awaited<ReturnType<typeof finalizeCaseDocument>> | null) => void;
+  } | null>(null);
+  const [privacyPreviewBusy, setPrivacyPreviewBusy] = useState(false);
+  // Every document is finalized after its preview; null when the user cancels it.
+  function previewThenFinalize(
+    targetCase: string,
+    review: Awaited<ReturnType<typeof processStoredCaseFile>>,
+    fileName: string,
+    keepClear: boolean
+  ): Promise<Awaited<ReturnType<typeof finalizeCaseDocument>> | null> {
+    return new Promise((resolve) =>
+      setPrivacyPreview({ request: { caseId: targetCase, review, fileName, keepClear }, resolve })
+    );
+  }
   // Stage and page of documents processed from the chat (staged file id or upload id).
   const [documentProgress, setDocumentProgress] = useState<Record<string, ProcessingProgress>>({});
   // Runs one document request with its progress shown under `key`.
@@ -2346,14 +2364,15 @@ export default function MatterChatApp({
           progressId,
           processingModeOptions(mode)
         );
-        return finalizeCaseDocument(
-          targetCase,
-          review.documentId,
-          keepAllDirectives(review)
-        );
+        return review;
       });
+      const finalized = await previewThenFinalize(targetCase, result, file.name, true);
+      if (!finalized) {
+        setDocumentStaging((current) => updateStagedDocument(current, id, { status: "PENDING" }));
+        return;
+      }
       pickFiles(
-        [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
+        [{ kind: "document", documentId: finalized.documentId, chunkIndices: finalized.chunks.map((chunk) => chunk.index) }],
         true,
         targetCase
       );
@@ -2388,7 +2407,8 @@ export default function MatterChatApp({
     }
     const stored = await uploadCaseFile(targetCase, file);
     const review = await processStoredCaseFile(targetCase, stored.uploadId);
-    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review));
+    // A published, court-anonymized decision from the official database: confirmed without a preview.
+    const result = await finalizeCaseDocument(targetCase, review.documentId, keepAllDirectives(review), undefined, true);
     setWorkspaceRefresh((value) => value + 1);
     return { caseId: targetCase, documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) };
   }
@@ -3821,6 +3841,8 @@ export default function MatterChatApp({
                   ? ` na etapie: ${reason}`
                   : ""
               }.`
+            : code === "DOCUMENT_NOT_REVIEWED"
+              ? "Dokument nie jest zatwierdzony po podglądzie. Otwórz go w aktach sprawy („Podgląd i zatwierdzenie”), sprawdź i zatwierdź - wtedy trafi do modelu."
             : code === "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
               ? "Nie udało się bezpiecznie dołączyć wybranych fragmentów dokumentu."
               : code === "CONTRACT_STATE_REQUIRED"
@@ -4246,6 +4268,31 @@ export default function MatterChatApp({
 
   return (
     <div className="chat-app-shell matter-chat-app">
+      {privacyPreview ? (
+        <div className="privacy-preview-overlay" role="dialog" aria-modal="true">
+          <PrivacyPreview
+            {...privacyPreview.request}
+            busy={privacyPreviewBusy}
+            onCancel={() => {
+              privacyPreview.resolve(null);
+              setPrivacyPreview(null);
+            }}
+            onConfirm={(directives) => {
+              setPrivacyPreviewBusy(true);
+              void finalizeCaseDocument(privacyPreview.request.caseId, privacyPreview.request.review.documentId, directives, undefined, true)
+                .then((result) => privacyPreview.resolve(result))
+                .catch((failure) => {
+                  setCaseFilePickerError(failure instanceof Error ? failure.message : String(failure));
+                  privacyPreview.resolve(null);
+                })
+                .finally(() => {
+                  setPrivacyPreviewBusy(false);
+                  setPrivacyPreview(null);
+                });
+            }}
+          />
+        </div>
+      ) : null}
       <aside className="chat-sidebar">
         <div className="chat-brand">
           <span className="chat-brand-mark">LM</span>
@@ -5842,8 +5889,9 @@ export default function MatterChatApp({
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
                                       processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
                                     )
-                                      .then((review) => finalizeCaseDocument(caseId, review.documentId, []))
+                                      .then((review) => previewThenFinalize(caseId, review, item.filename, false))
                                       .then((result) => {
+                                        if (!result) return;
                                         pickFiles(
                                           [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
                                           true,
@@ -5881,10 +5929,9 @@ export default function MatterChatApp({
                                     void withDocumentProgress(item.uploadId, caseId, (progressId) =>
                                       processStoredCaseFile(caseId, item.uploadId, undefined, progressId)
                                     )
-                                      .then((review) =>
-                                        finalizeCaseDocument(caseId, review.documentId, keepAllDirectives(review))
-                                      )
+                                      .then((review) => previewThenFinalize(caseId, review, item.filename, true))
                                       .then((result) => {
+                                        if (!result) return;
                                         pickFiles(
                                           [{ kind: "document", documentId: result.documentId, chunkIndices: result.chunks.map((chunk) => chunk.index) }],
                                           true,

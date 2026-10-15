@@ -2295,3 +2295,126 @@ textarea:focus {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Preview before a document is finalized: decisions first, then the text with masks. */
+.privacy-preview {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid #d7ddd5;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.privacy-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.privacy-preview-head > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.privacy-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.privacy-preview-todo {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed #c9a24a;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.privacy-preview-todo ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.privacy-preview-todo li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.privacy-preview-edit,
+.privacy-preview-selection {
+  display: grid;
+  gap: 8px;
+}
+
+.privacy-preview-selection {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+.privacy-preview-edit textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.privacy-preview-pages {
+  display: grid;
+  gap: 12px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.privacy-preview-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.privacy-preview-mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #1f3527;
+  color: #f4f7f2;
+  cursor: pointer;
+}
+
+.privacy-preview-mark.is-clear {
+  background: transparent;
+  color: inherit;
+  outline: 1px dashed #9aa79a;
+}
+
+.privacy-preview-mark.is-user {
+  background: #3d2f12;
+}
+
+.privacy-preview-mark.is-ai-hint:not(.is-clear) {
+  outline: 2px solid #c9a24a;
+}
+
+.privacy-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: auto;
+  padding-block: max(24px, env(safe-area-inset-top, 0px)) 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: rgba(20, 30, 24, 0.45);
+}
+
+.privacy-preview-overlay > .privacy-preview {
+  max-width: 980px;
+  margin: 0 auto;
+}
