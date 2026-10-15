@@ -1,7 +1,8 @@
 import {
   access,
   readFile,
-  readdir
+  readdir,
+  rm
 } from "node:fs/promises";
 import type {
   Dirent
@@ -11,7 +12,9 @@ import {
 } from "node:crypto";
 import path from "node:path";
 import type {
-  DocumentIngestionResult
+  DocumentIngestionResult,
+  IngestedPage,
+  OcrPageImage
 } from "./document-ingestion.js";
 import type {
   PublicDocumentIngestion,
@@ -96,6 +99,44 @@ function storageObjectId(
       .digest("hex")
       .slice(0, 32)
   );
+}
+
+// Page images live next to source.lme as separate blobs named by the SHA-256
+// of the image, written once: a page text edit rewrites only the small source.
+const IMAGES_DIR = "images";
+const MAX_PAGE_IMAGE_BYTES = 32 * 1024 * 1024;
+
+type StoredPageImage = Omit<OcrPageImage, "jpeg"> & { blob: string };
+
+const imageHashes = new WeakMap<OcrPageImage, string>();
+
+function imageHash(image: OcrPageImage): string {
+  let hash = imageHashes.get(image);
+  if (!hash) {
+    hash = createHash("sha256").update(image.jpeg, "utf8").digest("hex");
+    imageHashes.set(image, hash);
+  }
+  return hash;
+}
+
+function pageImageIdentity(
+  caseId: string,
+  documentId: string,
+  hash: string,
+  keyVersion: number
+): CaseBlobIdentity {
+  return {
+    caseId,
+    objectId:
+      "pageimg_" +
+      createHash("sha256")
+        .update(`${documentId}:${hash}`, "utf8")
+        .digest("hex")
+        .slice(0, 32),
+    purpose:
+      "document-page-image",
+    keyVersion
+  };
 }
 
 function sourceIdentity(
@@ -302,6 +343,51 @@ export class SecureCaseDocumentStore {
         args.caseId,
         args.keyVersion
       );
+    const documentDir =
+      this.documentDir(
+        args.caseId,
+        args.documentId
+      );
+    const imagesDir =
+      path.join(documentDir, IMAGES_DIR);
+    const referenced = new Set<string>();
+    const pages: IngestedPage[] = [];
+    for (const page of args.source.pages) {
+      if (!page.image?.jpeg) {
+        pages.push(page);
+        continue;
+      }
+      const { jpeg, ...meta } = page.image;
+      const hash = imageHash(page.image);
+      const targetFile = path.join(imagesDir, `${hash}.lme`);
+      if (!referenced.has(hash)) {
+        referenced.add(hash);
+        try {
+          await access(targetFile);
+        } catch {
+          const data = Buffer.from(jpeg, "utf8");
+          try {
+            await writeCaseBlob({
+              targetFile,
+              identity:
+                pageImageIdentity(
+                  args.caseId,
+                  args.documentId,
+                  hash,
+                  args.keyVersion
+                ),
+              caseDataKey:
+                args.caseDataKey,
+              data
+            });
+          } finally {
+            data.fill(0);
+          }
+        }
+      }
+      const stored: StoredPageImage = { ...meta, blob: hash };
+      pages.push({ ...page, image: stored as unknown as OcrPageImage });
+    }
     const payload:
       StoredDocumentSourceV1 = {
         schemaVersion: 1,
@@ -311,8 +397,10 @@ export class SecureCaseDocumentStore {
           args.documentId,
         mediaType:
           args.mediaType,
-        source:
-          args.source
+        source: {
+          ...args.source,
+          pages
+        }
       };
     const bytes =
       Buffer.from(
@@ -352,6 +440,74 @@ export class SecureCaseDocumentStore {
     } finally {
       bytes.fill(0);
     }
+    await this.removeUnreferencedImages(imagesDir, referenced);
+  }
+
+  private async removeUnreferencedImages(
+    imagesDir: string,
+    referenced: Set<string>
+  ): Promise<void> {
+    let names: string[];
+    try {
+      names = await readdir(imagesDir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const match = /^([a-f0-9]{64})\.lme$/.exec(name);
+      if (match && !referenced.has(match[1]!)) {
+        await rm(path.join(imagesDir, name), { force: true });
+      }
+    }
+  }
+
+  /** Puts the image blobs back into pages; a missing one leaves the page text-only. */
+  private async attachImages(args: {
+    caseId: string;
+    documentId: string;
+    caseDataKey: Buffer;
+    keyVersion: number;
+    pages: IngestedPage[];
+  }): Promise<IngestedPage[]> {
+    const imagesDir =
+      path.join(this.documentDir(args.caseId, args.documentId), IMAGES_DIR);
+    const pages: IngestedPage[] = [];
+    for (const page of args.pages) {
+      const stored = page.image as unknown as Partial<StoredPageImage> | undefined;
+      if (!stored || typeof stored.blob !== "string") {
+        pages.push(page);
+        continue;
+      }
+      const { image: _image, ...rest } = page;
+      const { blob, ...meta } = stored;
+      if (!/^[a-f0-9]{64}$/.test(blob)) {
+        pages.push(rest);
+        continue;
+      }
+      try {
+        const bytes = await readCaseBlob({
+          targetFile: path.join(imagesDir, `${blob}.lme`),
+          identity:
+            pageImageIdentity(
+              args.caseId,
+              args.documentId,
+              blob,
+              args.keyVersion
+            ),
+          caseDataKey:
+            args.caseDataKey,
+          maxBytes:
+            MAX_PAGE_IMAGE_BYTES
+        });
+        const image = { ...(meta as Omit<OcrPageImage, "jpeg">), jpeg: bytes.toString("utf8") };
+        bytes.fill(0);
+        imageHashes.set(image, blob);
+        pages.push({ ...rest, image });
+      } catch {
+        pages.push(rest);
+      }
+    }
+    return pages;
   }
 
   async saveProtected(args: {
@@ -529,8 +685,17 @@ export class SecureCaseDocumentStore {
       return {
         mediaType:
           parsed.mediaType,
-        source:
-          parsed.source
+        source: {
+          ...parsed.source,
+          pages:
+            await this.attachImages({
+              caseId: args.caseId,
+              documentId: args.documentId,
+              caseDataKey: args.caseDataKey,
+              keyVersion: args.keyVersion,
+              pages: parsed.source.pages
+            })
+        }
       };
     } finally {
       bytes.fill(0);
@@ -797,6 +962,21 @@ export class SecureCaseDocumentStore {
                   entry.name,
                   args.newKeyVersion
                 )
+        });
+      }
+      let images: string[] = [];
+      try {
+        images = await readdir(path.join(dir, IMAGES_DIR));
+      } catch {
+        images = [];
+      }
+      for (const name of images.sort()) {
+        const match = /^([a-f0-9]{64})\.lme$/.exec(name);
+        if (!match) continue;
+        descriptors.push({
+          targetFile: path.join(dir, IMAGES_DIR, name),
+          oldIdentity: pageImageIdentity(args.caseId, entry.name, match[1]!, args.oldKeyVersion),
+          newIdentity: pageImageIdentity(args.caseId, entry.name, match[1]!, args.newKeyVersion)
         });
       }
     }

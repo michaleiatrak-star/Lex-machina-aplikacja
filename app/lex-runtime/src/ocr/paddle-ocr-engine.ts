@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { readOcrPages } from "./ocr-result.js";
+import { evidenceBudget, readOcrPages, type EvidenceBudget } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 import type {
   OcrEngine,
@@ -16,6 +16,9 @@ export type LocalPaddleOcrOptions = {
   device?: string;
   timeoutMs?: number;
 };
+
+// Pages per worker pass (one pass = one process, one timeout).
+export const OCR_BATCH_PAGES = 30;
 
 function defaultWorkerPath(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -63,93 +66,34 @@ implements OcrEngine {
       path.join(os.tmpdir(), "lex-paddle-ocr-")
     );
     const input = path.join(tempRoot, "document.pdf");
-    const output = path.join(tempRoot, "result.json");
 
     try {
       await writeFile(input, data);
-      const args = [
-        this.workerPath,
-        "--input",
-        input,
-        "--output",
-        output,
-        "--pages",
-        pages.join(","),
-        "--lang",
-        "pl",
-        "--dpi",
-        String(this.dpi),
-        "--evidence-dir",
-        path.join(tempRoot, "evidence")
-      ];
-      if (this.device) {
-        args.push("--device", this.device);
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          this.python,
-          args,
-          {
-            stdio: ["ignore", "ignore", "pipe"],
-            env: {
-              ...process.env,
-              PYTHONUNBUFFERED: "1"
-            }
-          }
+      // Long scans run as consecutive worker passes of OCR_BATCH_PAGES pages:
+      // each pass has its own timeout and evidence directory, and page images
+      // share one byte budget for the whole document.
+      const budget = evidenceBudget();
+      const results: OcrPageResult[] = [];
+      for (let start = 0; start < pages.length; start += OCR_BATCH_PAGES) {
+        const batch = pages.slice(start, start + OCR_BATCH_PAGES);
+        const parsed = await this.recognizeBatch(
+          input,
+          path.join(tempRoot, `batch-${start / OCR_BATCH_PAGES + 1}`),
+          batch,
+          budget,
+          onPage ? (done) => onPage(start + done) : undefined
         );
-        let stderr = "";
-        const timer = setTimeout(() => {
-          child.kill("SIGKILL");
-          reject(
-            new Error(
-              "OCR_ENGINE_TIMEOUT: Local PaddleOCR worker exceeded the configured timeout."
-            )
-          );
-        }, this.timeoutMs);
-
-        let pagesDone = 0;
-        child.stderr.on("data", (chunk: Buffer) => {
-          const text = chunk.toString("utf8");
-          const finished = text.match(/^LEX_OCR_PAGE \d+$/gm)?.length ?? 0;
-          if (finished && onPage) {
-            pagesDone += finished;
-            onPage(Math.min(pagesDone, pages.length));
-          }
-          stderr += text;
-          if (stderr.length > 32_000) {
-            stderr = stderr.slice(-32_000);
-          }
+        results.push(...parsed);
+        // Evidence files are read into the result; free the disk as we go.
+        await rm(path.join(tempRoot, `batch-${start / OCR_BATCH_PAGES + 1}`), {
+          recursive: true,
+          force: true
         });
-        child.once("error", (error) => {
-          clearTimeout(timer);
-          reject(
-            new Error(
-              `OCR_ENGINE_START_FAILED: ${error.message}`
-            )
-          );
-        });
-        child.once("exit", (code) => {
-          clearTimeout(timer);
-          if (code === 0) resolve();
-          else {
-            reject(
-              new Error(
-                `${/ModuleNotFoundError|No module named/.test(stderr) ? "OCR_ENGINE_MISSING" : "OCR_ENGINE_FAILED"}: Local PaddleOCR worker failed with exit code ${code}: ${stderr.trim()}`
-              )
-            );
-          }
-        });
-      });
-
-      const parsed = await readOcrPages(
-        JSON.parse(await readFile(output, "utf8")) as unknown[],
-        path.join(tempRoot, "evidence")
-      );
+      }
 
       const requested = new Set(pages);
       const seen = new Set<number>();
-      for (const result of parsed) {
+      for (const result of results) {
         if (
           !Number.isInteger(result.page) ||
           !requested.has(result.page) ||
@@ -168,12 +112,103 @@ implements OcrEngine {
         );
       }
 
-      return parsed.sort((a, b) => a.page - b.page);
+      return results.sort((a, b) => a.page - b.page);
     } finally {
       await rm(tempRoot, {
         recursive: true,
         force: true
       });
     }
+  }
+
+  private async recognizeBatch(
+    input: string,
+    batchDir: string,
+    pages: number[],
+    budget: EvidenceBudget,
+    onPage?: (done: number) => void
+  ): Promise<OcrPageResult[]> {
+    await mkdir(batchDir, { recursive: true });
+    const output = path.join(batchDir, "result.json");
+    const args = [
+      this.workerPath,
+      "--input",
+      input,
+      "--output",
+      output,
+      "--pages",
+      pages.join(","),
+      "--lang",
+      "pl",
+      "--dpi",
+      String(this.dpi),
+      "--evidence-dir",
+      path.join(batchDir, "evidence")
+    ];
+    if (this.device) {
+      args.push("--device", this.device);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        this.python,
+        args,
+        {
+          stdio: ["ignore", "ignore", "pipe"],
+          env: {
+            ...process.env,
+            PYTHONUNBUFFERED: "1"
+          }
+        }
+      );
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(
+          new Error(
+            `OCR_ENGINE_TIMEOUT: Local PaddleOCR worker exceeded the configured timeout (pages ${pages[0]}-${pages.at(-1)}).`
+          )
+        );
+      }, this.timeoutMs);
+
+      let pagesDone = 0;
+      child.stderr.on("data", (chunk: Buffer) => {
+        const text = chunk.toString("utf8");
+        const finished = text.match(/^LEX_OCR_PAGE \d+$/gm)?.length ?? 0;
+        if (finished && onPage) {
+          pagesDone += finished;
+          onPage(Math.min(pagesDone, pages.length));
+        }
+        stderr += text;
+        if (stderr.length > 32_000) {
+          stderr = stderr.slice(-32_000);
+        }
+      });
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        reject(
+          new Error(
+            `OCR_ENGINE_START_FAILED: ${error.message}`
+          )
+        );
+      });
+      child.once("exit", (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else {
+          reject(
+            new Error(
+              `${/ModuleNotFoundError|No module named/.test(stderr) ? "OCR_ENGINE_MISSING" : "OCR_ENGINE_FAILED"}: Local PaddleOCR worker failed with exit code ${code}: ${stderr.trim()}`
+            )
+          );
+        }
+      });
+    });
+
+    return readOcrPages(
+      JSON.parse(await readFile(output, "utf8")) as unknown[],
+      path.join(batchDir, "evidence"),
+      budget
+    );
   }
 }
