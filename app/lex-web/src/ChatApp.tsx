@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useEffect,
   useMemo,
@@ -992,11 +993,10 @@ export default function ChatApp({
             >
               <div>
                 <p className="eyebrow">Dodawanie plików</p>
-                <h2>Kliknij lub przeciągnij</h2>
-                <p>
-                  Przycisk otwiera systemowy eksplorator plików. Przeciągnięte
-                  pliki trafiają do tej samej lokalnej kolejki prywatności.
-                </p>
+                <h2>
+                  Kliknij lub przeciągnij
+                  <InfoTip>Pliki z eksploratora i przeciągnięte trafiają do tej samej lokalnej kolejki prywatności.</InfoTip>
+                </h2>
               </div>
               <button
                 type="button"
@@ -1077,11 +1077,10 @@ export default function ChatApp({
               <div className="chat-card-heading">
                 <div>
                   <p className="eyebrow">Routing</p>
-                  <h2>Automatyczny dobór skilli</h2>
-                  <p>
-                    System dobiera moduły do treści każdej wiadomości.
-                    Ręczny wybór jest dodatkiem do obowiązkowego rdzenia.
-                  </p>
+                  <h2>
+                    Automatyczny dobór skilli
+                    <InfoTip>Moduły są dobierane do treści każdej wiadomości. Ręczny wybór dodaje skille do obowiązkowego rdzenia.</InfoTip>
+                  </h2>
                 </div>
                 <label className="chat-switch">
                   <input
@@ -1188,9 +1187,12 @@ export default function ChatApp({
             </article>
 
             <article className="chat-card">
-              <p className="eyebrow">Wiedza w sesji</p>
+              <p className="eyebrow">
+                Wiedza w sesji
+                <InfoTip>Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam czytać całe akta sprawy (tekst spseudonimizowany).</InfoTip>
+              </p>
               <div className="chat-check-row">
-                <label title="Fragmenty pasujące do pytania trafiają do kontekstu; model w chmurze może też sam przeszukiwać i czytać całe akta sprawy (tekst spseudonimizowany).">
+                <label>
                   <input
                     type="checkbox"
                     checked={includeCaseKnowledge}

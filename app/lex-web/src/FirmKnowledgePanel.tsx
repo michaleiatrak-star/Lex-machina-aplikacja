@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useEffect,
   useMemo,
@@ -314,10 +315,8 @@ export function FirmKnowledgePanel({
           </p>
           <h3>
             Prywatna baza wiedzy
+            <InfoTip>Dokumenty są chronione jak akta sprawy: szyfrowanie, uprawnienia i rotacja klucza. Wyszukiwanie działa lokalnie.</InfoTip>
           </h3>
-          <p className="field-help">
-            Dokumenty są przechowywane jak akta sprawy: zaszyfrowane, z ACL i rotacją klucza. Wyszukiwanie odbywa się lokalnie po chronionych chunkach.
-          </p>
         </div>
         <span className="security-pill">
           ENCRYPTED + ACL
@@ -552,7 +551,7 @@ export function FirmKnowledgePanel({
 
         {refreshToken > 0 && (
           <p className="field-help">
-            Baza wiedzy została zmieniona. Nowo sfinalizowane dokumenty są dostępne w wyszukiwaniu bez zewnętrznego indeksowania.
+            Baza wiedzy została zmieniona; nowe dokumenty są już w wyszukiwaniu.
           </p>
         )}
       </div>

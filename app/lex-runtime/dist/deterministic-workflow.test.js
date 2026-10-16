@@ -160,7 +160,8 @@ describe("deterministic legal workflow", () => {
             result: "PASS"
         });
         const prompt = deterministicWorkflowPrompt(generation);
-        expect(prompt).toContain("LEGAL DOCUMENT AST");
+        // The form is the document output contract (JSON AST or, for a letter, the letter markup).
+        expect(prompt).toContain("DOCUMENT OUTPUT CONTRACT");
         expect(prompt).not.toContain("TREŚĆ PISMA → UWAGI PRAKTYCZNE");
         expect(deterministicWorkflowPrompt(plan)).toContain("TREŚĆ PISMA → UWAGI PRAKTYCZNE");
     });

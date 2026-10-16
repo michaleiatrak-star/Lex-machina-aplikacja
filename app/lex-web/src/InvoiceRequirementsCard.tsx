@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -55,7 +56,10 @@ export function InvoiceRequirementsCard() {
   return (
     <section className="invoice-requirements">
       <div className="chat-form-row">
-        <strong>Wymagane elementy faktury (art. 106e ust. 1 ustawy o VAT)</strong>
+        <strong>
+          Wymagane elementy faktury (art. 106e ust. 1 ustawy o VAT)
+          <InfoTip>„Zweryfikuj przez ELI” porównuje listę z aktualnym brzmieniem ustawy.</InfoTip>
+        </strong>
         <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => void verify()}>
           {busy ? "Sprawdzam w ELI…" : "Zweryfikuj przez ELI"}
         </button>
@@ -88,7 +92,7 @@ export function InvoiceRequirementsCard() {
               {")"}
             </>
           ) : null}
-          . Kliknij „Zweryfikuj przez ELI”, aby porównać ją z aktualnym brzmieniem.
+          .
         </p>
       )}
       <ul>

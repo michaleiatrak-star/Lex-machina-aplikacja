@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useState } from "react";
 import { columnLabel, normalizeRows, trimRows, withExtension } from "./office-editing.js";
 import { editedFilename } from "./text-editing.js";
@@ -120,10 +121,9 @@ export function SheetEditor(props: {
         </p>
       ) : editable ? (
         <p className="office-editor-note">
-          Zapis tworzy nowy plik z wartościami i formułami komórek (formuła zaczyna się od „=”).
           Formatowanie, scalenia, wykresy{props.macros ? " i makra" : ""} nie są przenoszone.
           {format !== "xlsx" && sheets.length > 1 ? " CSV/TSV zapisuje tylko bieżący arkusz." : ""}
-          {" "}Oryginał pozostaje bez zmian.
+          <InfoTip>Zapis tworzy nowy plik z wartościami i formułami (od „=”). Oryginał pozostaje bez zmian.</InfoTip>
         </p>
       ) : null}
       <div className="sheet-grid-wrap">

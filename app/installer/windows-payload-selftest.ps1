@@ -36,6 +36,8 @@ $llamaMistralTemplate = Require-File "bootstrap\mistral-nemo-web-grounded.jinja"
 $llamaBielikTemplate = Require-File "bootstrap\bielik-web-grounded.jinja"
 $ocrWorker = Require-File "ocr\paddle_worker.py"
 $nerWorker = Require-File "privacy\stanza_ner_worker.py"
+# Morfeusz with the PESEL and TERYT registers: the anonymizer's gazetteer, run as the runtime runs it.
+$gazetteerWorker = Require-File "privacy\polish_pii_gazetteer.py"
 $documentWorker = Require-File "storage\legal_document_worker.py"
 $corpus = Require-Dir "corpus"
 $paddle = Require-Dir "models\paddle\official_models"
@@ -236,6 +238,23 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "SELFTEST_NER_INFERENCE_FAILED" }
   $nerJson = Get-Content -Raw $nerOut | ConvertFrom-Json
   if ($null -eq $nerJson) { throw "SELFTEST_NER_OUTPUT_INVALID" }
+
+  Write-Host "Self-test: Morfeusz gazetteer (names, surnames, addresses)"
+  $gazInput = Join-Path $temp "gazetteer.txt"
+  $gazOut = Join-Path $temp "gazetteer.json"
+  $gazErr = Join-Path $temp "gazetteer.err"
+  [IO.File]::WriteAllText($gazInput, "Pozwany Jan Kowalski, zamieszkały przy ul. Długiej 5 w Krakowie, nie stawił się.", [Text.UTF8Encoding]::new($false))
+  & $python -X utf8 $gazetteerWorker --input $gazInput --output $gazOut 2> $gazErr
+  if ($LASTEXITCODE -ne 0) {
+    # The Python error itself (a missing module, a DLL that does not load): what the app would show.
+    $detail = if (Test-Path -LiteralPath $gazErr) { (Get-Content -Raw -LiteralPath $gazErr).Trim() } else { "" }
+    if ($detail.Length -gt 1500) { $detail = $detail.Substring($detail.Length - 1500) }
+    Write-Host $detail
+    throw "SELFTEST_GAZETTEER_FAILED:$($detail -replace '\s+', ' ')"
+  }
+  $gazJson = Get-Content -Raw -Encoding UTF8 $gazOut | ConvertFrom-Json
+  if (-not (@($gazJson) | Where-Object { $_.kind -eq "PERSON" })) { throw "SELFTEST_GAZETTEER_NO_PERSON" }
+  if (-not (@($gazJson) | Where-Object { $_.kind -eq "ADDRESS" })) { throw "SELFTEST_GAZETTEER_NO_ADDRESS" }
 
   Write-Host "Self-test: deterministic local DOCX renderer"
   $renderRequest = Join-Path $temp "render.json"

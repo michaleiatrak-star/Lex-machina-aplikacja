@@ -27,6 +27,7 @@ import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
 import { QualityBenchmarkSection } from "./QualityBenchmarkSection.js";
 import "./maintenance.css";
+import { InfoTip } from "./InfoTip";
 
 const CHANNEL_LABEL: Record<SkillChannel, string> = {
   stable: "stabilna",
@@ -438,9 +439,6 @@ export function MaintenancePanel({
         ) : null}
         <span className="maintenance-title">
           <strong>Utrzymanie</strong>
-          <small>
-            program · skille · bezpieczne aktualizacje
-          </small>
         </span>
         <span
           className={
@@ -472,7 +470,12 @@ export function MaintenancePanel({
         <section>
           <div className="maintenance-heading">
             <div>
-              <strong>Program</strong>
+              <strong>
+                Program
+                {!/Mac OS X|Macintosh/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? (
+                  <InfoTip>Aktualizacja jest instalowana tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.</InfoTip>
+                ) : null}
+              </strong>
               <small>
                 {appStatus
                   ? `${appStatus.currentVersion} → ${appStatus.latestVersion ?? "—"}`
@@ -481,12 +484,6 @@ export function MaintenancePanel({
             </div>
             <span>{appStatusLabel(appStatus?.status)}</span>
           </div>
-
-          {!/Mac OS X|Macintosh/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? (
-            <small className="maintenance-trust-warning">
-              Program instaluje aktualizację tylko po sprawdzeniu sumy kontrolnej, wersji i podpisu wydawcy.
-            </small>
-          ) : null}
 
           {user.appRole === "ADMIN" ? (
             <div className="maintenance-actions">
@@ -553,7 +550,8 @@ export function MaintenancePanel({
 
           {user.appRole === "ADMIN" ? (
             <label className="maintenance-channel">
-              Kanał skilli (repozytorium Lex Machina)
+              Kanał skilli
+              <InfoTip>Skille są pobierane z repozytorium Lex Machina.</InfoTip>
               <select
                 value={channel}
                 disabled={Boolean(busy)}

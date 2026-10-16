@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useEffect,
   useState
@@ -434,10 +435,8 @@ export function CaseCollaborationPanel({
           </p>
           <h3>
             Uczestnicy i dostęp do akt
+            <InfoTip>Każdy uczestnik ma własną kopię klucza sprawy. Odebranie dostępu zmienia klucz i odcina osobę od zaszyfrowanych dokumentów.</InfoTip>
           </h3>
-          <p className="field-help">
-            Każdy uczestnik otrzymuje własną kopertę klucza sprawy. Odebranie dostępu obraca klucz i odcina użytkownika od zaszyfrowanych dokumentów.
-          </p>
         </div>
         <span className="security-pill">
           OWNER MANAGES ACL
@@ -572,7 +571,7 @@ export function CaseCollaborationPanel({
           Przekaż własność sprawy
         </summary>
         <p className="field-help">
-          Transfer wymaga ponownego podania hasła. Nowy właściciel przejmuje zarządzanie uczestnikami, a obecny właściciel pozostaje jako EDITOR.
+          Wymaga hasła. Nowy właściciel zarządza uczestnikami, a Ty zostajesz z rolą EDITOR.
         </p>
         <div className="case-owner-transfer-grid">
           <label>

@@ -676,7 +676,7 @@ export type LexHttpAppOptions = {
     | "rotateCaseKey"
     | "withCaseDataKey"
   > &
-    Partial<Pick<LocalCaseAccessService, "listAccessOverview">>;
+    Partial<Pick<LocalCaseAccessService, "listAccessOverview" | "withCaseDataKeyForRead">>;
   caseScheduleService?: Pick<
     LocalCaseAccessService,
     | "listCaseSchedule"
@@ -4652,15 +4652,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 context,
                 caseId
               );
+          // Not behind the case's operation lock: the list answers while a file is processed.
+          const service = options.caseAccessService;
+          const withKey = <T,>(callback: (caseDataKey: Buffer) => Promise<T>) =>
+            service.withCaseDataKeyForRead
+              ? service.withCaseDataKeyForRead(context, caseId, callback)
+              : service.withCaseDataKey(context, caseId, "READ", callback);
           uploads =
-            await options
-              .caseAccessService
-              .withCaseDataKey(
-                context,
-                caseId,
-                "READ",
+            await withKey(
                 async (
-                  caseDataKey
+                  caseDataKey: Buffer
                 ) =>
                   await options
                     .secureCaseUploadStore!
@@ -4721,15 +4722,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 caseId
               );
 
+          const readService = options.caseAccessService;
           enrichedUploads =
-            await options
-              .caseAccessService
-              .withCaseDataKey(
+            await (readService.withCaseDataKeyForRead
+              ? readService.withCaseDataKeyForRead.bind(readService)
+              : (ctx: AuthenticatedContext, id: string, callback: (caseDataKey: Buffer) => Promise<typeof uploads>) =>
+                  readService.withCaseDataKey(ctx, id, "READ", callback))(
                 context,
                 caseId,
-                "READ",
                 async (
-                  caseDataKey
+                  caseDataKey: Buffer
                 ) =>
                   await Promise.all(
                     uploads.map(

@@ -21,6 +21,7 @@ import {
   type SharedTemplateManifest
 } from "./api.js";
 import { downloadBlob } from "./download-file.js";
+import { InfoTip } from "./InfoTip";
 
 export function DocumentAuthoringPanel({
   currentCase,
@@ -337,10 +338,11 @@ export function DocumentAuthoringPanel({
           </p>
           <h3>
             DOCX / ODT z kluczową deanonimizacją
+            <InfoTip>
+              Model pracuje tylko na aliasach. Plik powstaje lokalnie, a dane jawne są wstawiane z zaszyfrowanego klucza po
+              reautoryzacji - model ich nie otrzymuje.
+            </InfoTip>
           </h3>
-          <p>
-            Model pracuje wyłącznie na aliasach PII. Pakiet Office powstaje lokalnie, a oryginalne dane są wstawiane mechanicznie z zaszyfrowanego klucza anonimizacja↔deanonimizacja po reautoryzacji. Model nie otrzymuje ani nie odtwarza danych jawnych.
-          </p>
         </div>
         <span className="security-pill">
           G31 + G34F
@@ -502,14 +504,16 @@ export function DocumentAuthoringPanel({
           Wybrano wzór: {
             selectedTemplate
               .filename
-          }. Backend użyje wyłącznie lokalnie wyekstrahowanego, zatwierdzonego profilu stylu; treść i XML wzoru nie są wysyłane do providera.
+          }.
+          <InfoTip>Używany jest tylko lokalny, zatwierdzony profil stylu; treść wzoru nie trafia do providera.</InfoTip>
         </p>
       )}
 
       <p className="field-help">
         Źródła: {
           attachments.length
-        } dokument(ów), maksymalnie 32 wybrane chunki na dokument. Generowanie używa aktualnego providera, modelu i zweryfikowanego routingu.
+        } dokument(ów).
+        <InfoTip>Do 32 wybranych chunków na dokument. Generuje aktualny provider i model.</InfoTip>
       </p>
 
       <button
@@ -534,7 +538,7 @@ export function DocumentAuthoringPanel({
             Wewnętrzna wersja chroniona {
               generated.format
                 .toUpperCase()
-            } jest gotowy. Hash: {
+            } jest gotowa. Hash: {
               (
                 generated.tokenizedSha256 ??
                 generated.sha256 ??
@@ -547,7 +551,8 @@ export function DocumentAuthoringPanel({
             <>
               {isDesktopShell() ? (
                 <p className="auth-copy">
-                  Jednorazowa reautoryzacja zostanie wykonana natywnie przez systemowy magazyn poświadczeń (Windows: Menedżer poświadczeń, macOS: pęk kluczy). Hasło nie trafia do Reacta.
+                  Reautoryzacja przez systemowy magazyn poświadczeń.
+                  <InfoTip>Windows: Menedżer poświadczeń, macOS: pęk kluczy. Hasło nie trafia do aplikacji.</InfoTip>
                 </p>
               ) : (
                 <label>

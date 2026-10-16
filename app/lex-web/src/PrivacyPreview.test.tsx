@@ -65,9 +65,12 @@ describe("preview before a document is finalized", () => {
     const html = renderToStaticMarkup(
       <PrivacyPreview caseId="case_1" review={down} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />
     );
-    expect(html).toContain("Nie działa Morfeusz (słownik imion, nazwisk i adresów): błąd uruchomienia.");
+    expect(html).toContain("Nie działa Morfeusz (słownik imion, nazwisk i adresów): błąd uruchomienia - zgłoś szczegóły techniczne.");
     expect(recognizerReason("GAZETTEER_FAILED:1:ModuleNotFoundError: No module named 'morfeusz2'")).toContain("brak biblioteki Morfeusz");
     expect(recognizerReason("SELF_TEST_NO_PERSON")).toContain("nie rozpoznaje nazwisk");
+    expect(recognizerReason("GAZETTEER_FAILED:1:ImportError: DLL load failed while importing morfeusz2: Nie można odnaleźć określonego modułu.")).toContain("Visual C++");
+    expect(recognizerReason("Gazetteer worker exited with code 1: FileNotFoundError: [Errno 2] No such file or directory: 'surnames_pesel.tsv'")).toContain("brak pliku słownika");
+    expect(recognizerReason("PermissionError: [WinError 5] Odmowa dostępu")).toContain("uprawnień");
   });
 
   it("a document with a text layer only: no scan pane", () => {

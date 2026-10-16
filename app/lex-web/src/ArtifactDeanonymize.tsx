@@ -11,6 +11,7 @@ import {
 } from "./api.js";
 import { DeanonymizationReview, applyAliasCorrection } from "./DeanonymizationReview.js";
 import { downloadBlob } from "./download-file.js";
+import { InfoTip } from "./InfoTip";
 
 function finalName(filename: string): string {
   const dot = filename.lastIndexOf(".");
@@ -140,8 +141,8 @@ export function ArtifactDeanonymize(props: {
   return (
     <div className="artifact-deanonymize">
       <p>
-        Dane wrócą z klucza tej sprawy automatycznie, w przypadkach podanych przez model. Hasło potwierdza
-        odtworzenie danych osobowych; plik z symbolami zostaje bez zmian.
+        Potwierdź hasłem przywrócenie danych osobowych.
+        <InfoTip>Dane wrócą z klucza tej sprawy w przypadkach podanych przez model. Plik z symbolami zostaje bez zmian.</InfoTip>
       </p>
       <div className="chat-form-row compact">
         <input

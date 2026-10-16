@@ -27,6 +27,7 @@ import {
   type SearchPage,
   type SourcePreviewTarget
 } from "./mcp-search-results.js";
+import { InfoTip } from "./InfoTip";
 
 // SUDOP przyjmuje zlecenie do kolejki (około minuty); każde odebranie czeka do 50 s po stronie
 // źródła. Najwyżej tyle prób, zanim użytkownik dostanie przycisk ponownego odbioru.
@@ -429,10 +430,11 @@ export function McpSearchPanel() {
         </p>
         <h2>
           Wyszukiwanie w źródłach
+          <InfoTip>
+            Wynik pochodzi wprost z publicznego API źródła, bez modelu. Służy do odnalezienia źródła, nie jest weryfikacją: przepisy
+            potwierdza ELI, sygnatury SN weryfikator SN.
+          </InfoTip>
         </h2>
-        <p>
-          Wynik pochodzi wprost z publicznego API źródła, bez modelu. To materiał do odnalezienia źródła, nie weryfikacja: przepisy potwierdza ścieżka ELI, sygnatury SN weryfikator SN.
-        </p>
         <p className="field-help">
           Nie wpisuj faktów sprawy ani danych klienta — zapytania trafiają do publicznych API.
         </p>
@@ -479,6 +481,9 @@ export function McpSearchPanel() {
             {tools.length ? (
               <label>
                 Narzędzie
+                {tool && toolLabel(tool.name, tool.description).help ? (
+                  <InfoTip>{toolLabel(tool.name, tool.description).help}</InfoTip>
+                ) : null}
                 <select
                   value={toolName}
                   disabled={busy}
@@ -491,10 +496,6 @@ export function McpSearchPanel() {
                   ))}
                 </select>
               </label>
-            ) : null}
-
-            {tool && toolLabel(tool.name, tool.description).help ? (
-              <p className="field-help">{toolLabel(tool.name, tool.description).help}</p>
             ) : null}
 
             {properties.map(([name, property]) => {
@@ -519,9 +520,7 @@ export function McpSearchPanel() {
                   <span>
                     {field.label}
                     {required.has(name) ? " *" : ""}
-                    {field.help ? (
-                      <small className="field-help"> — {field.help}</small>
-                    ) : null}
+                    {field.help ? <InfoTip>{field.help}</InfoTip> : null}
                   </span>
                   {options ? (
                     <select
@@ -597,7 +596,7 @@ export function McpSearchPanel() {
           ) : null}
           {view.source === "cbosa" ? (
             <p className="field-help">
-              NSA/WSA z CBOSA to snapshot bez awansu do statusu zweryfikowanego; brak trafień = OUT_OF_SCOPE, nie dowód braku orzeczenia.
+              Wyniki CBOSA nie są weryfikowane; brak trafień nie dowodzi braku orzeczenia.
             </p>
           ) : null}
           {view.notice ? <div className="alert">{view.notice}</div> : null}

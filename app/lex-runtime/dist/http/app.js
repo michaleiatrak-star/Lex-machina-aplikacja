@@ -2613,10 +2613,13 @@ export function createLexHttpApp(options) {
                 const context = responseAuthContext(res);
                 const caseView = options.caseAccessService
                     .openCase(context, caseId);
+                // Not behind the case's operation lock: the list answers while a file is processed.
+                const service = options.caseAccessService;
+                const withKey = (callback) => service.withCaseDataKeyForRead
+                    ? service.withCaseDataKeyForRead(context, caseId, callback)
+                    : service.withCaseDataKey(context, caseId, "READ", callback);
                 uploads =
-                    await options
-                        .caseAccessService
-                        .withCaseDataKey(context, caseId, "READ", async (caseDataKey) => await options
+                    await withKey(async (caseDataKey) => await options
                         .secureCaseUploadStore
                         .listUploads({
                         caseId,
@@ -2639,10 +2642,11 @@ export function createLexHttpApp(options) {
                 const context = responseAuthContext(res);
                 const caseView = options.caseAccessService
                     .openCase(context, caseId);
+                const readService = options.caseAccessService;
                 enrichedUploads =
-                    await options
-                        .caseAccessService
-                        .withCaseDataKey(context, caseId, "READ", async (caseDataKey) => await Promise.all(uploads.map(async (item) => {
+                    await (readService.withCaseDataKeyForRead
+                        ? readService.withCaseDataKeyForRead.bind(readService)
+                        : (ctx, id, callback) => readService.withCaseDataKey(ctx, id, "READ", callback))(context, caseId, async (caseDataKey) => await Promise.all(uploads.map(async (item) => {
                         if (item.archive) {
                             return {
                                 ...item

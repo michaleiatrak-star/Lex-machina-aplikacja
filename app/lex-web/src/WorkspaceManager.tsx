@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
@@ -1022,11 +1023,12 @@ export function WorkspaceManager({
       <div className="chat-card-heading workspace-manager-heading">
         <div>
           <p className="eyebrow">Struktura katalogów</p>
-          <h2>{title}</h2>
-          <p>
-            Foldery są logiczną, szyfrowaną strukturą workspace. „Główny katalog” jest
-            wyświetlany pod nazwą sprawy: <strong>{rootFolderName}</strong>.
-          </p>
+          <h2>
+            {title}
+            <InfoTip>
+              Foldery to szyfrowana struktura sprawy. „Główny katalog” jest wyświetlany pod nazwą sprawy: <strong>{rootFolderName}</strong>.
+            </InfoTip>
+          </h2>
         </div>
         <div className="workspace-header-actions">
           <label className="workspace-search">
@@ -1122,20 +1124,21 @@ export function WorkspaceManager({
           ) : null}
           {canWrite ? (
             <span className="workspace-local-ai-group">
-              <small
-                className="workspace-local-ai-state"
-                title="Model tekstowy (np. Bielik) w „anonimizacji z AI” podpowiada przy danych osobowych; uruchamia się sam przed anonimizacją, a na czas OCR jest zatrzymywany, żeby pamięć miał model wizyjny."
-              >
+              <small className="workspace-local-ai-state">
                 Model tekstowy dla plików: {localAiReady ? "działa" : localRuntime?.configured ? "uruchomi się przed anonimizacją" : "nie zainstalowany"}
               </small>
+              <InfoTip>Model tekstowy (np. Bielik) wskazuje dane osobowe w „anonimizacji z AI”. Uruchamia się sam, a na czas OCR jest wstrzymywany.</InfoTip>
               {localAiMessage ? <small className="workspace-local-ai-state" role="status">{localAiMessage}</small> : null}
             </span>
           ) : null}
           {canWrite ? (
-            <label className="workspace-auto-queue" title="Dodane pliki trafiają od razu do kolejki: OCR i anonimizacja po kolei, w wybranym domyślnie sposobie">
-              <input type="checkbox" checked={autoQueue} onChange={(event) => setAutoQueue(event.target.checked)} />
-              Od razu do kolejki
-            </label>
+            <span className="workspace-auto-queue-group">
+              <label className="workspace-auto-queue">
+                <input type="checkbox" checked={autoQueue} onChange={(event) => setAutoQueue(event.target.checked)} />
+                Od razu do kolejki
+              </label>
+              <InfoTip>Dodane pliki od razu przechodzą OCR i anonimizację w domyślnym sposobie.</InfoTip>
+            </span>
           ) : null}
           {canWrite ? (
             <label className="chat-secondary-action workspace-file-upload">
@@ -1155,15 +1158,17 @@ export function WorkspaceManager({
             </label>
           ) : null}
           {canWrite && (unprocessed.length > 1 || (queueActive && unprocessed.length > 0)) ? (
-            <button
-              type="button"
-              className="chat-secondary-action"
-              disabled={busy}
-              title="Kolejka: pliki po kolei - najpierw OCR wszystkich, potem anonimizacja (model tekstowy uruchamia się raz), potem podgląd każdego do zatwierdzenia. W trakcie można dodawać kolejne pliki."
-              onClick={() => void processAll(unprocessed)}
-            >
-              {queueActive ? `Dodaj do kolejki (${unprocessed.length})` : `Przetwórz wszystkie (${unprocessed.length})`}
-            </button>
+            <span>
+              <button
+                type="button"
+                className="chat-secondary-action"
+                disabled={busy}
+                onClick={() => void processAll(unprocessed)}
+              >
+                {queueActive ? `Dodaj do kolejki (${unprocessed.length})` : `Przetwórz wszystkie (${unprocessed.length})`}
+              </button>
+              <InfoTip>Najpierw OCR wszystkich plików, potem anonimizacja, potem podgląd każdego do zatwierdzenia. W trakcie można dodawać pliki.</InfoTip>
+            </span>
           ) : null}
           <button
             type="button"
@@ -1696,8 +1701,7 @@ export function WorkspaceManager({
             <img src={preview.url} alt={`Podgląd ${preview.item.filename}`} />
           ) : (
             <p>
-              Ten format nie ma bezpiecznego podglądu w webview. Użyj „Otwórz w systemie”,
-              aby uruchomić go w domyślnej aplikacji systemu.
+              Brak bezpiecznego podglądu tego formatu. Użyj „Otwórz w systemie”.
             </p>
           )}
         </section>

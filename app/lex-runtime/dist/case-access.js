@@ -1181,6 +1181,14 @@ export class LocalCaseAccessService {
             .withCaseOperationLock(caseId, async () => await this
             .withCaseDataKeyUnlocked(context, caseId, capability, callback));
     }
+    /**
+     * The case key for a read that must not wait for a running operation of the case (the list
+     * of its files while a document is read by OCR and anonymized for minutes): no operation
+     * lock. A key rotated in the meantime fails the read, which the client asks again.
+     */
+    async withCaseDataKeyForRead(context, caseId, callback) {
+        return await this.withCaseDataKeyUnlocked(context, caseId, "READ", callback);
+    }
     async withCaseDataKeyUnlocked(context, caseId, capability, callback) {
         const access = this.assertAccess(context, caseId, capability);
         const record = this.store.getCase(caseId);

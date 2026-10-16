@@ -74,8 +74,8 @@ export function PageScanView(props: {
         ) : scan === null ? (
           <p className="page-scan-empty">
             {props.ocr
-              ? "Obraz tej strony nie został zachowany (limit rozmiaru obrazów dokumentu). Porównaj tekst z oryginałem pliku."
-              : "Ta strona nie ma skanu: tekst pochodzi z warstwy tekstowej pliku i jest odczytany dokładnie."}
+              ? "Obraz strony nie został zachowany (limit rozmiaru). Porównaj tekst z oryginałem pliku."
+              : "Ta strona nie ma skanu: tekst z warstwy tekstowej pliku jest dokładny."}
           </p>
         ) : (
           <div className="page-scan-sheet" style={{ width: `${zoom * 100}%` }}>
@@ -97,7 +97,7 @@ export function PageScanView(props: {
       </div>
       {scan && props.focus && "line" in props.focus && !box ? (
         <small className="page-scan-note">
-          {scan.lines.length ? "Ta linia nie ma ramki na skanie." : "Tekst strony poprawiony ręcznie: linie nie są już zaznaczane na skanie."}
+          {scan.lines.length ? "Ta linia nie ma ramki na skanie." : "Tekst poprawiony ręcznie: linie nie są już zaznaczane na skanie."}
         </small>
       ) : null}
     </div>

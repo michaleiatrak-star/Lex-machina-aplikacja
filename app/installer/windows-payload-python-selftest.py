@@ -21,10 +21,13 @@ def ocr_import() -> int:
 
 
 def ner_import() -> int:
+    import morfeusz2
     import stanza  # noqa: F401
     import torch
 
-    print("PYTHON_NER_IMPORT_PASS", torch.__version__)
+    # The anonymizer's dictionary loads (the native module and its DLLs), not only imports.
+    morfeusz2.Morfeusz(generate=False).analyse("Kowalski")
+    print("PYTHON_NER_IMPORT_PASS", torch.__version__, "morfeusz2", morfeusz2.__version__)
     return 0
 
 

@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useEffect,
   useState
@@ -121,10 +122,10 @@ export function CaseWorkspacePanel({
         <p className="eyebrow">
           Akta wybranej sprawy
         </p>
-        <h3>Dokumenty sprawy</h3>
-        <p className="field-help">
-          Lista pochodzi wyłącznie z katalogu aktualnie wybranej sprawy.
-        </p>
+        <h3>
+          Dokumenty sprawy
+          <InfoTip>Tylko pliki z katalogu wybranej sprawy.</InfoTip>
+        </h3>
 
         {!caseId ? (
           <p className="workspace-empty">
@@ -179,10 +180,10 @@ export function CaseWorkspacePanel({
         <p className="eyebrow">
           Katalog wspólny
         </p>
-        <h3>Wzory kancelarii</h3>
-        <p className="field-help">
-          Jeden wzór jest przechowywany raz i może być referencjonowany z każdej sprawy, do której użytkownik ma dostęp. Wzór domyślny dla rodzaju (np. umowa, regulamin, pozew) jest używany automatycznie, gdy użytkownik zleca sporządzenie takiego dokumentu bez wybrania wzoru.
-        </p>
+        <h3>
+          Wzory kancelarii
+          <InfoTip>Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego.</InfoTip>
+        </h3>
 
         {isAdmin && caseId && (
           <label className="file-button workspace-template-upload">

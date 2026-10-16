@@ -2523,3 +2523,63 @@ textarea:focus {
     height: 45vh;
   }
 }
+
+/* InfoTip: explanations in a bubble next to a heading or control (InfoTip.tsx). */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.info-tip-button {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #b9c2b8;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #4f5a51;
+  font: italic 600 11px/16px Georgia, "Times New Roman", serif;
+  cursor: help;
+}
+
+.info-tip-button:hover,
+.info-tip-button:focus-visible {
+  border-color: #33553d;
+  color: #33553d;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(51, 85, 61, 0.18);
+}
+
+.info-tip-bubble {
+  position: absolute;
+  z-index: 50;
+  left: 50%;
+  top: calc(100% + 8px);
+  width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid #d5dbd3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #2f3a31;
+  box-shadow: 0 6px 18px rgba(31, 42, 34, 0.14);
+  font: 400 12px/1.5 inherit;
+  font-style: normal;
+  text-align: left;
+  white-space: normal;
+  transform: translateX(-50%);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+.info-tip:hover .info-tip-bubble,
+.info-tip:focus-within .info-tip-bubble,
+.info-tip.open .info-tip-bubble {
+  visibility: visible;
+  opacity: 1;
+}
