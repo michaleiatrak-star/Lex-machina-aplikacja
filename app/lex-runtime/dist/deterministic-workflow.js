@@ -365,8 +365,8 @@ export function deterministicWorkflowPrompt(plan) {
         "Only resources explicitly injected under RUNTIME-PRELOADED SEMANTIC CONTEXT should be treated as semantic reading material. The remaining required resources are mechanical policy enforced by code.",
         ...(plan.id === "SIMPLE_LETTER_V1" && plan.documentAstOutput
             ? [
-                "SIMPLE_LETTER_V1 in document generation: the output is the LEGAL DOCUMENT AST defined below, not text sections.",
-                "Put the finished letter into AST blocks; missing user data go into neutral square-bracket fields such as [Kwota].",
+                "SIMPLE_LETTER_V1 in document generation: the output is the finished letter in the form the DOCUMENT OUTPUT CONTRACT below defines, not text sections.",
+                "Missing user data go into neutral square-bracket fields such as [Kwota].",
                 "The runtime renders the document and runs HYBRID-VALIDATION and the export gate on it before the file is created."
             ]
             : plan.id === "SIMPLE_LETTER_V1"

@@ -490,6 +490,9 @@ export function DocumentAuthoringPanel({
             <option value="lex-classic-tnr-v1">
               Lex Classic TNR
             </option>
+            <option value="lex-office-tnr-v1">
+              Pismo kancelaryjne (TNR 12)
+            </option>
           </select>
         </label>
       </div>

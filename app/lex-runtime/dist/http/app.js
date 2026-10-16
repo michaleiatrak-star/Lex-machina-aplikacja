@@ -4264,7 +4264,8 @@ export function createLexHttpApp(options) {
         const requestedStyleValid = [
             "lex-classic-clean-v1",
             "lex-light-legal-design-v1",
-            "lex-classic-tnr-v1"
+            "lex-classic-tnr-v1",
+            "lex-office-tnr-v1"
         ].includes(String(styleProfile));
         if (!sessionRequest ||
             attachments === null ||

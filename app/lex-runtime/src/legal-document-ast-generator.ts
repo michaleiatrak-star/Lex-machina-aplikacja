@@ -19,6 +19,7 @@ import type {
   DocumentGenerationValidationContext
 } from "./document-generation-validation.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
+import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupError } from "./letter-markup.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
 
@@ -260,27 +261,36 @@ function generationInstruction(
         ]
       : []),
     DOCUMENT_OUTPUT_CONTRACT_HEADING,
-    "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
-    "schemaVersion must equal \"1\".",
-    "documentType must equal \"" + request.documentType + "\".",
-    "locale must equal \"pl-PL\".",
-    "styleProfile must equal \"" + request.styleProfile + "\".",
-    "The object MUST contain a non-empty \"blocks\" array with the full text of the document. Never output routing keys (legal, primarySkill, domainSkills, executionSkills, workflowExecutionSkill).",
-    "If the user refers to text from earlier in the conversation (e.g. \"wygeneruj to\"), put that text into the blocks.",
-    "Allowed block types: heading(level 1-3), paragraph, quote, list, table, signature, page_break.",
-    "Allowed inline types: text, pii_ref, xref.",
-    "Generate the actual finished legal document, not a chat answer about the document.",
-    "Do not add meta-sections such as DANE DO UZUPEŁNIENIA, UWAGI PRAKTYCZNE, CO DALEJ, HYBRID-VALIDATION, disclaimers, routing notes or explanations outside the document itself.",
-    "Use a professional Polish legal-office layout: concise title, date/party/address blocks where appropriate, clear subject or heading, logically separated body paragraphs, numbered or bulleted demands only when useful, and a signature block.",
-    "Letter or pleading header (the renderer lays it out from these blocks): place and date as their own first paragraph (\"Kraków, dnia 13 października 2026 r.\"), the sender's and the parties' blocks as paragraphs, the court or authority as one paragraph starting with its name (\"Sąd Rejonowy ...\", \"Do ...\"), lines of one address separated by \\n inside the text node, the title of the letter as a level-1 heading, the signer in a signature block; for a contract the title as a level-1 heading and each \"§ N\" as a level-2 heading.",
-    "For reusable templates, place missing user data directly in neutral square-bracket fields such as [Miejscowość, data], [Kwota] or [Termin zapłaty]; never use the marker [UZUPEŁNIJ].",
-    "Avoid Markdown markers such as **, # or backticks inside text nodes. Structure belongs in AST block types.",
-    "For a demand for payment, include at minimum: parties, title WEZWANIE DO ZAPŁATY, basis/description of the debt, amount, due date, an additional payment deadline, payment method/account placeholder, consequence of non-payment stated proportionately, and signature.",
-    "Never emit raw OOXML, ODF, HTML, scripts, macros, URLs as package relationships, or executable content.",
-    "Never place token-looking syntax inside a text node.",
-    "When protected source context contains a source PII token listed below, use its generation alias only as a typed pii_ref node.",
-    "HARD GATE: every PERSON or ADDRESS pii_ref MUST carry the grammatical case of that occurrence as \"case\" (a pii_ref without it is an error): NOM, GEN, DAT, ACC, INS, LOC or VOC, e.g. {\"type\":\"pii_ref\",\"alias\":\"[LMPII:D01:PERSON:0001]\",\"case\":\"GEN\"} after \"wobec\" or \"od\", or \"LOC\" for an ADDRESS after \"przy\". The value is inflected locally; never write the name or address yourself.",
-    "Agree verbs, adjectives and participles with the gender and number given for a PERSON alias in the map below (e.g. \"wniosła\"/\"wniósł\", \"pozwana\"/\"pozwany\", several persons: \"wnieśli\"/\"wniosły\"); for an undetermined gender use neutral wording. Several persons on one side of a case: name all of them and state expressly whether the demand or award is joint and several (solidarnie) or in shares; never assume it without a factual basis.",
+    ...(letterMarkupMode(request)
+      ? [
+          LETTER_MARKUP_CONTRACT,
+          "Use a professional Polish legal-office layout: concise title, the parties' blocks, a clear subject, logically separated body paragraphs, numbered demands only when useful, and the signature.",
+          "For a demand for payment, include at minimum: parties, title WEZWANIE DO ZAPŁATY, basis/description of the debt, amount, due date, an additional payment deadline, payment method/account placeholder, consequence of non-payment stated proportionately, and signature.",
+          "Agree verbs, adjectives and participles with the gender and number given for a PERSON alias in the map below (e.g. \"wniosła\"/\"wniósł\"); for an undetermined gender use neutral wording."
+        ]
+      : [
+        "Return ONLY one JSON object. No Markdown fence, explanation, commentary or prose outside JSON.",
+        "schemaVersion must equal \"1\".",
+        "documentType must equal \"" + request.documentType + "\".",
+        "locale must equal \"pl-PL\".",
+        "styleProfile must equal \"" + request.styleProfile + "\".",
+        "The object MUST contain a non-empty \"blocks\" array with the full text of the document. Never output routing keys (legal, primarySkill, domainSkills, executionSkills, workflowExecutionSkill).",
+        "If the user refers to text from earlier in the conversation (e.g. \"wygeneruj to\"), put that text into the blocks.",
+        "Allowed block types: heading(level 1-3), paragraph, quote, list, table, signature, page_break.",
+        "Allowed inline types: text, pii_ref, xref.",
+        "Generate the actual finished legal document, not a chat answer about the document.",
+        "Do not add meta-sections such as DANE DO UZUPEŁNIENIA, UWAGI PRAKTYCZNE, CO DALEJ, HYBRID-VALIDATION, disclaimers, routing notes or explanations outside the document itself.",
+        "Use a professional Polish legal-office layout: concise title, date/party/address blocks where appropriate, clear subject or heading, logically separated body paragraphs, numbered or bulleted demands only when useful, and a signature block.",
+        "Letter or pleading header (the renderer lays it out from these blocks): place and date as their own first paragraph (\"Kraków, dnia 13 października 2026 r.\"), the sender's and the parties' blocks as paragraphs, the court or authority as one paragraph starting with its name (\"Sąd Rejonowy ...\", \"Do ...\"), lines of one address separated by \\n inside the text node, the title of the letter as a level-1 heading, the signer in a signature block; for a contract the title as a level-1 heading and each \"§ N\" as a level-2 heading.",
+        "For reusable templates, place missing user data directly in neutral square-bracket fields such as [Miejscowość, data], [Kwota] or [Termin zapłaty]; never use the marker [UZUPEŁNIJ].",
+        "Avoid Markdown markers such as **, # or backticks inside text nodes. Structure belongs in AST block types.",
+        "For a demand for payment, include at minimum: parties, title WEZWANIE DO ZAPŁATY, basis/description of the debt, amount, due date, an additional payment deadline, payment method/account placeholder, consequence of non-payment stated proportionately, and signature.",
+        "Never emit raw OOXML, ODF, HTML, scripts, macros, URLs as package relationships, or executable content.",
+        "Never place token-looking syntax inside a text node.",
+        "When protected source context contains a source PII token listed below, use its generation alias only as a typed pii_ref node.",
+        "HARD GATE: every PERSON or ADDRESS pii_ref MUST carry the grammatical case of that occurrence as \"case\" (a pii_ref without it is an error): NOM, GEN, DAT, ACC, INS, LOC or VOC, e.g. {\"type\":\"pii_ref\",\"alias\":\"[LMPII:D01:PERSON:0001]\",\"case\":\"GEN\"} after \"wobec\" or \"od\", or \"LOC\" for an ADDRESS after \"przy\". The value is inflected locally; never write the name or address yourself.",
+        "Agree verbs, adjectives and participles with the gender and number given for a PERSON alias in the map below (e.g. \"wniosła\"/\"wniósł\", \"pozwana\"/\"pozwany\", several persons: \"wnieśli\"/\"wniosły\"); for an undetermined gender use neutral wording. Several persons on one side of a case: name all of them and state expressly whether the demand or award is joint and several (solidarnie) or in shares; never assume it without a factual basis.",
+        ]),
     "Do not invent aliases. Do not attempt to infer the underlying clear value.",
     "",
     "# PROVIDER-SAFE PII ALIAS MAP",
@@ -524,9 +534,23 @@ export function cleanAstMarkup(value: unknown): unknown {
 }
 
 const AST_GENERATION_ATTEMPTS = 2;
-const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+)$/u;
+const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+|LETTER_MARKUP_[A-Z_]+(?::[A-Z_]+)?)$/u;
+
+/**
+ * A letter or a pleading outside the process pipeline: the model writes the text in the
+ * letter markup (letter-markup.ts) and the application lays it out, in the office's style.
+ */
+export function letterMarkupMode(request: Pick<LegalDocumentAstGenerationRequest, "documentType" | "processRenderOnly">): boolean {
+  return (request.documentType === "letter" || request.documentType === "pleading") && !request.processRenderOnly;
+}
 
 function parseValidatedAst(answer: string, request: LegalDocumentAstGenerationRequest): ReturnType<typeof validateLegalDocumentAst> {
+  // The letter markup: the AST is made here, its text as the model wrote it (no normalization).
+  if (letterMarkupMode(request) && isLetterMarkup(answer)) {
+    return validateLegalDocumentAst(letterMarkupAst(answer, request), request.aliases.entries);
+  }
+  // Neither the markup nor JSON (prose about the letter): the repair round asks for the markup.
+  if (letterMarkupMode(request) && !answer.includes("{")) throw new LetterMarkupError("LETTER_MARKUP_MISSING");
   const parsed = cleanAstMarkup(normalizeAstBlocks(normalizeAstHeader(extractJson(answer), request)));
   let validated: ReturnType<typeof validateLegalDocumentAst>;
   try {
@@ -610,7 +634,9 @@ export class LegalDocumentAstGenerator {
         const code = error instanceof Error ? error.message : String(error);
         if (attempt >= AST_GENERATION_ATTEMPTS || !REPAIRABLE_AST_ERROR.test(code)) throw error;
         const detail = error instanceof DocumentAstSessionBlockedError ? `${error.reason}` : "";
-        repair = `BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: ${code}${detail ? ` (${detail})` : ""}. Zwróć ponownie cały dokument jako jeden obiekt JSON zgodny z kontraktem AST powyżej: bez Markdown, bez komentarzy, documentType "${request.documentType}", styleProfile "${request.styleProfile}".`;
+        repair = letterMarkupMode(request)
+          ? `BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: ${code}${detail ? ` (${detail})` : ""}. Zwróć ponownie całe pismo w LETTER MARKUP opisanym powyżej (znaczniki @… na początku linii, wymagany @TYTUL:, tylko tekst pisma).`
+          : `BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: ${code}${detail ? ` (${detail})` : ""}. Zwróć ponownie cały dokument jako jeden obiekt JSON zgodny z kontraktem AST powyżej: bez Markdown, bez komentarzy, documentType "${request.documentType}", styleProfile "${request.styleProfile}".`;
       }
     }
 

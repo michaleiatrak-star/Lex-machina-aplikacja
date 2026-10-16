@@ -3475,7 +3475,8 @@ export default function MatterChatApp({
             mode: "PRAWNIK",
             format: "docx",
             documentType: letterWorkflow,
-            styleProfile: "lex-classic-clean-v1",
+            // A letter or pleading in the office's style (Times New Roman 12, party names in bold).
+            styleProfile: letterWorkflow === "contract" ? "lex-classic-clean-v1" : "lex-office-tnr-v1",
             attachments,
             ...(firmTemplateIds.length > 0
               ? { firmTemplates: firmTemplateIds }

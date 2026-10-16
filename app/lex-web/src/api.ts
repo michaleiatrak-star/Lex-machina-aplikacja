@@ -393,7 +393,8 @@ export type LegalDocumentType =
 export type LegalStyleProfile =
   | "lex-classic-clean-v1"
   | "lex-light-legal-design-v1"
-  | "lex-classic-tnr-v1";
+  | "lex-classic-tnr-v1"
+  | "lex-office-tnr-v1";
 
 export type StoredCaseArtifact = {
   schemaVersion: 1;

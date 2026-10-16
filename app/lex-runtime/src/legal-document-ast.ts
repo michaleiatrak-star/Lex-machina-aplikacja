@@ -14,12 +14,23 @@ export type LegalDocumentType =
 export type LegalStyleProfile =
   | "lex-classic-clean-v1"
   | "lex-light-legal-design-v1"
-  | "lex-classic-tnr-v1";
+  | "lex-classic-tnr-v1"
+  // A law office's letter: Times New Roman 12 throughout, title and sections in the text
+  // size, margins 2.5/2/2/2 cm, party names and labels in bold (the office's templates).
+  | "lex-office-tnr-v1";
+
+// What a paragraph of a letter's header or closing is, for its layout: place and date on
+// the right, a party's block, the addressee's block in the right half, the "Dotyczy:" line,
+// the legal basis under the title.
+export type LegalParagraphRole = "place_date" | "party" | "addressee" | "subject" | "basis";
+export const PARAGRAPH_ROLES = new Set<LegalParagraphRole>(["place_date", "party", "addressee", "subject", "basis"]);
 
 export type LegalInlineNode =
   | {
       type: "text";
       text: string;
+      // Emphasis only (a party's name, a label such as "Dotyczy:"); the text is unchanged.
+      bold?: true;
     }
   | {
       type: "pii_ref";
@@ -47,6 +58,7 @@ export type LegalBlockNode =
   | {
       id?: string;
       type: "paragraph";
+      role?: LegalParagraphRole;
       content: LegalInlineNode[];
     }
   | {
@@ -116,7 +128,8 @@ export const STYLE_PROFILES =
   new Set<LegalStyleProfile>([
     "lex-classic-clean-v1",
     "lex-light-legal-design-v1",
-    "lex-classic-tnr-v1"
+    "lex-classic-tnr-v1",
+    "lex-office-tnr-v1"
   ]);
 
 const SOURCE_TOKEN_RE =
@@ -185,7 +198,8 @@ function parseInline(
         record.text,
         100_000,
         "AST_TEXT_INVALID"
-      )
+      ),
+      ...(record.bold === true ? { bold: true as const } : {})
     };
   }
   if (
@@ -364,16 +378,21 @@ function parseBlock(
     record.type ===
       "signature"
   ) {
+    const role =
+      record.type === "paragraph" && PARAGRAPH_ROLES.has(record.role as LegalParagraphRole)
+        ? (record.role as LegalParagraphRole)
+        : undefined;
     return {
       ...(id ? { id } : {}),
       type: record.type,
+      ...(role ? { role } : {}),
       content:
         parseInlineArray(
           record.content,
           aliases,
           used
         )
-    };
+    } as LegalBlockNode;
   }
 
   if (

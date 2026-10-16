@@ -1,3 +1,4 @@
+import type { LegalStyleProfile } from "../legal-document-ast.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
@@ -7109,7 +7110,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         [
           "lex-classic-clean-v1",
           "lex-light-legal-design-v1",
-          "lex-classic-tnr-v1"
+          "lex-classic-tnr-v1",
+          "lex-office-tnr-v1"
         ].includes(
           String(
             styleProfile
@@ -7362,10 +7364,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         }
 
         let effectiveStyleProfile =
-          styleProfile as
-            | "lex-classic-clean-v1"
-            | "lex-light-legal-design-v1"
-            | "lex-classic-tnr-v1";
+          styleProfile as LegalStyleProfile;
         let templateProfile:
           | Awaited<
               ReturnType<
