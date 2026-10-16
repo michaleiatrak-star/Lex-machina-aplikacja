@@ -397,6 +397,25 @@ function kind(value) {
         ? value
         : null;
 }
+// The amendments after the consolidated text by name and date, so the model can cite them
+// (a count told it nothing): entered into force, or still pending with the date.
+function amendmentList(freshness) {
+    const decisions = new Map((freshness.amendmentApplicability ?? []).map((decision) => [decision.eli, decision]));
+    return freshness.amendmentsAfter.slice(0, 12).map((amendment) => {
+        const decision = decisions.get(amendment.eli);
+        return {
+            eli: amendment.eli,
+            dzU: amendment.displayAddress,
+            ...(decision?.effectiveFrom ?? amendment.relationDate ? { from: (decision?.effectiveFrom ?? amendment.relationDate) } : {}),
+            status: decision?.status === "FUTURE" || freshness.notYetForArticle?.includes(amendment.eli)
+                ? "OCZEKUJE"
+                : decision?.status === "EFFECTIVE"
+                    ? "WESZLA_W_ZYCIE"
+                    : "DATA_NIEUSTALONA",
+            ...(decision?.stages?.length ? { stages: decision.stages.map((stage) => `${stage.date}: ${stage.units}`.slice(0, 200)).join("; ") } : {})
+        };
+    });
+}
 function publicToolResult(record, act, freshness) {
     const marker = record.status === "VERIFIED"
         ? verificationMarker({
@@ -422,13 +441,23 @@ function publicToolResult(record, act, freshness) {
                 checkedAt: freshness.checkedAt,
                 requestedAsOf: freshness.requestedAsOf ?? null,
                 currentEli: freshness.currentEli ?? null,
-                amendmentsAfter: freshness.amendmentsAfter.length
+                amendmentsAfter: freshness.amendmentsAfter.length,
+                amendments: amendmentList(freshness),
+                ...(freshness.pendingWordingAmendments?.length ? { pendingWordingAmendments: freshness.pendingWordingAmendments } : {}),
+                ...(freshness.transitionalProvisions?.length ? { transitionalProvisions: freshness.transitionalProvisions } : {})
             }
             : null,
         sourceUrl: record.sourceUrl ?? null,
         sourceLink: verificationSourceLink(record) ?? null,
         sourceFormat: record.sourceFormat ?? null,
         evidence: record.evidence ?? null,
+        ...(record.pendingWording?.length
+            ? {
+                // Printed in the consolidated text, not yet in force: told to the user with its date.
+                pendingWording: record.pendingWording.map((item) => ({ from: item.from, text: item.text.slice(0, 1_500) })),
+                pendingInstruction: "The evidence is the wording in force today. pendingWording enters into force later: when it matters (deadlines, contracts, a later event), state its date and new wording separately; never present it as in force."
+            }
+            : {}),
         fetchedAt: record.fetchedAt,
         marker,
         instruction: record.status === "VERIFIED"
@@ -445,6 +474,7 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
     "- Pass only claim + kind + legal act identity/alias. Never invent or supply an official-source URL.", "- The runtime resolves the canonical official source and checks temporal freshness before reading the citation.",
     "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
     "- If the user explicitly asks for a past legal state, or the matter turns on an event in the past (PRAWO-HARDGATE KROK 4: the wording in force on the event date), pass asOf=YYYY-MM-DD for the provisions that decide it. The application also re-checks provisions verified in their current wording on event dates found in the question and reports a different wording in the mandatory-path register. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
+    "- Amendments, vacatio legis, staged entry into force: freshness.amendments lists the amending acts after the consolidated text (Dz.U., date, WESZLA_W_ZYCIE / OCZEKUJE / DATA_NIEUSTALONA, staged dates); cite them by Dz.U. and date, never as a bare count. The evidence is the wording in force on the checked date (chosen by the consolidated text's footnotes); pendingWording is a wording printed for later: state its entry date and do not present it as in force. transitionalProvisions are the amending act's own transitional rules (matters begun before the change): apply them from that text, not from memory.",
     "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
     "- " + STATUS_CONSISTENCY_INSTRUCTION,
     "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
@@ -846,7 +876,9 @@ export class LegalVerificationToolRuntime {
                     kind: verificationKind,
                     url,
                     expectedTitle,
-                    toolCallId
+                    toolCallId,
+                    ...(freshness?.pendingWordingAmendments?.length ? { requireFootnoteWording: true } : {}),
+                    ...(temporalMode === "HISTORICAL" && asOf ? { asOf } : {})
                 });
                 if (result.record.status ===
                     "SUPPORTED") {
@@ -911,6 +943,9 @@ export class LegalVerificationToolRuntime {
                         ? {
                             evidence: statutoryRecord.evidence
                         }
+                        : {}),
+                    ...(statutoryRecord.pendingWording?.length
+                        ? { pendingWording: statutoryRecord.pendingWording }
                         : {})
                 }, act, freshness);
             }
@@ -1570,6 +1605,14 @@ export class LegalVerificationToolRuntime {
                                     null,
                                 amendmentsAfter: freshness.amendmentsAfter
                                     .length,
+                                amendments: amendmentList(freshness),
+                                ...(freshness.transitionalProvisions?.length
+                                    ? {
+                                        // From the amending act itself (normalized to lower case): the rule for
+                                        // matters begun before the change, to apply instead of a memory of it.
+                                        transitionalProvisions: freshness.transitionalProvisions
+                                    }
+                                    : {}),
                                 reason: freshness.reason ?? null
                             }
                         })

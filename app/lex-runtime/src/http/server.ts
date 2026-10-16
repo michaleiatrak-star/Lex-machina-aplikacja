@@ -583,7 +583,7 @@ export async function startLocalServer(options?: {
     new OfficialLegalSourceVerifier(
       undefined,
       undefined,
-      new LocalPdfTextExtractor()
+      new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true })
     );
   // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
   const mcpConnectors =

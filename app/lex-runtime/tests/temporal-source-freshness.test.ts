@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { entryStages, partEntryDates } from "../src/amendment-applicability.js";
 import {
   TemporalSourceFreshnessChecker,
   amendmentHasEntryIntoForceExceptions,
   amendmentMentionsArticle,
   amendmentPartFor,
-  actCitationKey
+  actCitationKey,
+  transitionalProvisions
 } from "../src/temporal-source-freshness.js";
 import {
   DeterministicLegalActResolver
@@ -33,6 +35,7 @@ function fixtureFetcher(options?: {
     relationDate: string;
     promulgation?: string;
     entryIntoForce?: string;
+    comments?: string;
   }>;
   amendmentTexts?: Record<string, string>;
   amendmentTextHTML?: boolean;
@@ -158,7 +161,8 @@ function fixtureFetcher(options?: {
               entryIntoForce:
                 amendment.entryIntoForce
             }
-          : {})
+          : {}),
+        ...(amendment.comments ? { comments: amendment.comments } : {})
       });
     }
 
@@ -176,6 +180,7 @@ function fixtureFetcher(options?: {
 
 function historicalFetcher(options?: {
   amendmentDate?: string;
+  amendmentText?: string;
 }) {
   return async (input: string | URL): Promise<Response> => {
     const url = String(input);
@@ -246,6 +251,10 @@ function historicalFetcher(options?: {
       });
     }
 
+    if (options?.amendmentText && url.endsWith("/DU/2020/1000/text.html")) {
+      return new Response(options.amendmentText, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+
     if (
       options?.amendmentDate &&
       url.endsWith("/DU/2020/1000")
@@ -254,7 +263,8 @@ function historicalFetcher(options?: {
         ELI: "DU/2020/1000",
         promulgation: "2020-01-10",
         entryIntoForce:
-          options.amendmentDate
+          options.amendmentDate,
+        ...(options.amendmentText ? { textHTML: true } : {})
       });
     }
 
@@ -665,6 +675,19 @@ describe("TemporalSourceFreshnessChecker", () => {
     });
   });
 
+  it("historical t.j.: an amendment before asOf that leaves the cited article untouched does not block it", async () => {
+    const amendmentText = "<html><body>Art. 1. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cywilny w art. 20 § 1 otrzymuje brzmienie: „§ 1. …”.</body></html>";
+    const checker = new TemporalSourceFreshnessChecker(historicalFetcher({ amendmentDate: "2020-01-15", amendmentText }), () => "2026-09-15T20:00:00.000Z");
+    expect(await checker.check(kc, { asOf: "2020-06-01", claim: "art. 10 KC" })).toMatchObject({
+      status: "HISTORICAL",
+      reason: "HISTORICAL_POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
+    });
+    expect(await checker.check(kc, { asOf: "2020-06-01", claim: "art. 20 KC" })).toMatchObject({
+      status: "HISTORICAL_POST_TJ_AMENDMENTS",
+      reason: "HISTORICAL_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"
+    });
+  });
+
   it("rejects current/future dates from the historical exception", async () => {
     const result = await new TemporalSourceFreshnessChecker(
       historicalFetcher(),
@@ -711,12 +734,10 @@ describe("zmiana objęta t.j., a jeszcze nieobowiązująca (DU/2026/507 w t.j. K
     });
   const today = () => "2026-10-15T10:00:00.000Z";
 
-  it("artykuł zmieniony w części noweli dotyczącej KC: bez VER, t.j. może mieć przyszłe brzmienie", async () => {
+  it("artykuł zmieniony w części noweli dotyczącej KC: weryfikacja tylko brzmienia z odnośników t.j.", async () => {
     const result = await new TemporalSourceFreshnessChecker(fetcher(), today).check(kc, { claim: "art. 860 § 3 KC" });
-    expect(result).toMatchObject({
-      status: "PENDING_WORDING_IN_CONSOLIDATED_TEXT",
-      reason: "CONSOLIDATED_TEXT_HOLDS_ARTICLE_CHANGE_NOT_IN_FORCE:DU/2026/507"
-    });
+    // The verifier then requires the footnotes to give today's wording (legal-source-wording tests).
+    expect(result).toMatchObject({ status: "CURRENT", pendingWordingAmendments: ["DU/2026/507"] });
   });
 
   it("numer artykułu z części zmieniającej inną ustawę (VAT art. 96) nie blokuje art. 96 KC", async () => {
@@ -737,5 +758,65 @@ describe("część noweli zmieniająca dany akt", () => {
     // A single-act amendment or an unknown act: the whole text.
     expect(amendmentPartFor(body, "ustawa o czymś innym zupełnie")).toBe(body);
     expect(actCitationKey("Obwieszczenie … w sprawie ogłoszenia jednolitego tekstu ustawy – Prawo wodne")).toBe("prawo wodne");
+  });
+});
+
+describe("wejście w życie etapami (pole comments w ELI)", () => {
+  // DU/2026/507 in force since 14.10.2026, art. 2 (the KC part) only from 1.11.2028.
+  const comments = [
+    "1) art. 1 pkt 2 lit. a, pkt 46 i 53 w zakresie art. 64 ust. 2 wchodzą w życie z dniem 21 kwietnia 2026 r.;",
+    "2) art. 1 pkt 4 lit. a tiret pierwsze, pkt 43 lit. a, art. 8, art. 22 i art. 29 wchodzą w życie z dniem 1 listopada 2026 r.;",
+    "3) art. 3 pkt 1 lit. a oraz pkt 2 wchodzą w życie z dniem 18 grudnia 2026 r.;",
+    "4) art. 1 pkt 1, pkt 2 lit. c, art. 2, art. 3 pkt 1 lit. b, art. 4-6, art. 9, art. 26-28 i art. 30 wchodzą w życie z dniem 1 listopada 2028 r."
+  ].join("\n");
+  const omnibus =
+    "<html><body>Art. 1. W ustawie z dnia 6 marca 2018 r. o Centralnej Ewidencji i Informacji o Działalności Gospodarczej w art. 3 ust. 1a otrzymuje brzmienie: „1a. …”." +
+    " Art. 2. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cywilny (Dz. U. z 2025 r. poz. 1071) w art. 860 dodaje się § 3 i 4 w brzmieniu: „§ 3. …”." +
+    " Art. 31. Ustawa wchodzi w życie po upływie 6 miesięcy od dnia ogłoszenia, z wyjątkiem: 1) art. 1 pkt 2…</body></html>";
+  const today = () => "2026-10-16T10:00:00.000Z";
+
+  it("terminy z comments; daty części noweli dla jej artykułu", () => {
+    const stages = entryStages(comments);
+    expect(stages.map((stage) => stage.date)).toEqual(["2026-04-21", "2026-11-01", "2026-12-18", "2028-11-01"]);
+    expect(partEntryDates(stages, "2026-10-14", "2")).toEqual(["2028-11-01"]);
+    expect(partEntryDates(stages, "2026-10-14", "5")).toEqual(["2028-11-01"]);
+    expect(partEntryDates(stages, "2026-10-14", "1")).toEqual(["2026-04-21", "2026-10-14", "2026-11-01", "2028-11-01"]);
+    expect(partEntryDates(stages, "2026-10-14", "64")).toEqual(["2026-10-14"]);
+    expect(partEntryDates(stages, "2026-10-14", "7")).toEqual(["2026-10-14"]);
+  });
+
+  it("nowela w mocy, jej zmiana art. 860 KC dopiero od 2028 (ogłoszona po t.j.): brzmienie z t.j. jest aktualne", async () => {
+    const result = await new TemporalSourceFreshnessChecker(
+      fixtureFetcher({
+        amendments: [{ eli: "DU/2026/507", relationDate: "2026-10-14", promulgation: "2026-07-13", entryIntoForce: "2026-10-14", comments }],
+        amendmentTexts: { "DU/2026/507": omnibus }
+      }),
+      today
+    ).check(kc, { claim: "art. 860 § 3 KC" });
+    expect(result).toMatchObject({ status: "CURRENT", notYetForArticle: ["DU/2026/507"] });
+    expect(result.pendingWordingAmendments).toBeUndefined();
+  });
+
+  it("bez terminów w comments ta sama nowela blokuje artykuł jak dotąd, z jej przepisami przejściowymi", async () => {
+    const withTransitional = omnibus.replace(
+      " Art. 31.",
+      " Art. 25. Do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe. Art. 31."
+    );
+    const result = await new TemporalSourceFreshnessChecker(
+      fixtureFetcher({
+        amendments: [{ eli: "DU/2026/507", relationDate: "2026-10-14", promulgation: "2026-07-13", entryIntoForce: "2026-10-14" }],
+        amendmentTexts: { "DU/2026/507": withTransitional }
+      }),
+      today
+    ).check(kc, { claim: "art. 860 § 3 KC" });
+    expect(result.status).toBe("POST_TJ_AMENDMENTS");
+    expect(result.transitionalProvisions).toEqual([
+      { eli: "DU/2026/507", text: "art. 25. do umów zawartych przed dniem wejścia w życie niniejszej ustawy stosuje się przepisy dotychczasowe." }
+    ]);
+  });
+
+  it("przepisy przejściowe: tylko jednostki z formułą intertemporalną, bez części zmieniających", () => {
+    const body = "art. 1. w ustawie z dnia … w art. 5 stosuje się przepisy dotychczasowe. art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych. art. 8. minister wyda rozporządzenie.";
+    expect(transitionalProvisions(body)).toEqual(["art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych."]);
   });
 });

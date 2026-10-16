@@ -4,6 +4,8 @@ import {
   PdfTextExtractionError,
   type PdfTextExtractor
 } from "./pdf-text-extractor.js";
+import { articleWording, extractPageFootnotes } from "./core-law-footnotes.js";
+import { todayWarsaw } from "./warsaw-date.js";
 import {
   anchoredUrl,
   htmlUnitFragment,
@@ -26,6 +28,11 @@ export type LegalSourceVerificationRequest = {
   url: string;
   toolCallId: string;
   expectedTitle?: string;
+  // The consolidated text prints a change of this article not yet in force (ELI relations):
+  // verified only when its footnotes say which wording is in force today.
+  requireFootnoteWording?: boolean;
+  // The date the wording is chosen for (historical mode); today by default.
+  asOf?: string;
 };
 
 export type LegalSourceVerificationResult = {
@@ -312,6 +319,59 @@ export class LegalSourceVerificationError extends Error {
   }
 }
 
+
+// ELI HTML puts each footnote into a tooltip at its marker ("<a class=\"gloss-link\"><sup>25)</sup>
+// <span class=\"tooltip-text\">W brzmieniu ustalonym przez…</span></a>"); readable text had the
+// footnote inside the provision. The marker stays as "25 )" (the form the PDF reading gives) and
+// the footnote text goes to the map the wording choice reads.
+const GLOSS_LINK =
+  /<a\b[^>]*class="[^"]*gloss-link[^"]*"[^>]*>\s*<sup>\s*(\d{1,3})\s*\)\s*<\/sup>\s*<span class="tooltip-text">([\s\S]*?)<\/span>\s*<\/a>/giu;
+
+export function htmlFootnotes(html: string): { html: string; footnotes: Record<string, string> } {
+  const footnotes: Record<string, string> = {};
+  const marked = html.replace(GLOSS_LINK, (_match, number: string, note: string) => {
+    footnotes[number] ??= readableText(note).replace(/\s+/gu, " ").trim();
+    return ` ${number} )`;
+  });
+  return { html: marked, footnotes };
+}
+
+const REPEALED_ARTICLE = /^Art\.?\s*[^\s.]+\s*\.?\s*\((?:uchylony|uchylona|uchylone|skreślony|pominięty)\)/iu;
+
+export type StatuteWording = {
+  evidence: string;
+  pending: Array<{ from: string | null; text: string }>;
+  unresolved: boolean;
+  repealed: boolean;
+  footnotes: boolean;
+};
+
+/**
+ * The article as in force on `today`: of two wordings the consolidated text prints (the current
+ * one and one entering into force later, told apart by the footnotes) the current one, a unit
+ * added with a future date left out; the later wording comes back as `pending`.
+ */
+export function statuteWording(
+  section: string,
+  footnotes: Record<string, string>,
+  today: string
+): StatuteWording {
+  const marked = Object.keys(footnotes).length > 0 && /\d{1,3} \)/u.test(section);
+  const wording = marked ? articleWording(section, footnotes, today) : null;
+  // A page header of the Journal ("Dziennik Ustaw – 46 – Poz. 1245") is not provision text.
+  const evidence = (wording?.text ?? section)
+    .replace(/^\s*Dziennik Ustaw\s*[–-]\s*\d+\s*[–-]\s*Poz\.\s*\d+\s*$/gmu, "")
+    .replace(/\n{2,}/gu, "\n")
+    .trim();
+  return {
+    evidence,
+    pending: (wording?.pending ?? []).map((item) => ({ from: item.from, text: item.text.slice(0, 2_000) })),
+    unresolved: wording?.unresolved ?? false,
+    repealed: REPEALED_ARTICLE.test(evidence),
+    footnotes: marked
+  };
+}
+
 export class OfficialLegalSourceVerifier {
   constructor(
     private readonly fetcher: LegalSourceFetch =
@@ -320,7 +380,9 @@ export class OfficialLegalSourceVerifier {
       () => new Date().toISOString(),
     private readonly pdfTextExtractor:
       PdfTextExtractor =
-      new LocalPdfTextExtractor()
+      // Lines and small print kept: "Art. N." starts a line and the footnotes (small print at
+      // the page bottom) say which wording of a unit is in force.
+      new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true })
   ) {}
 
   supportsPdf(): boolean {
@@ -396,6 +458,7 @@ export class OfficialLegalSourceVerifier {
 
     let body: string;
     let pageTexts: string[] | undefined;
+    let footnotes: Record<string, string> = {};
     if (pdfSource) {
       if (!this.pdfTextExtractor) {
         throw new LegalSourceVerificationError(
@@ -426,11 +489,18 @@ export class OfficialLegalSourceVerifier {
           await this.pdfTextExtractor.extract(
             bytes
           );
-        body = extracted.text.slice(
-          0,
-          MAX_SOURCE_CHARS
-        );
         pageTexts = extracted.pageTexts;
+        if (pageTexts?.length) {
+          // Footnotes off the page bottoms, kept for the wording choice (not in the provision).
+          const split = extractPageFootnotes(pageTexts);
+          footnotes = split.footnotes;
+          body = split.pages.filter(Boolean).join("\n").slice(0, MAX_SOURCE_CHARS);
+        } else {
+          body = extracted.text.slice(
+            0,
+            MAX_SOURCE_CHARS
+          );
+        }
       } catch (error) {
         if (
           error instanceof
@@ -466,6 +536,11 @@ export class OfficialLegalSourceVerifier {
         0,
         MAX_SOURCE_CHARS
       );
+      if (request.kind === "statute" && body.includes("gloss-link")) {
+        const split = htmlFootnotes(body);
+        body = split.html;
+        footnotes = split.footnotes;
+      }
     }
 
     const titleMatched = titleMatches(
@@ -484,11 +559,27 @@ export class OfficialLegalSourceVerifier {
     const fetchedAt = this.now();
     const sourceUrl = url.toString();
 
-    const evidence = evidenceSnippet(
+    const snippet = evidenceSnippet(
       request.claim,
       request.kind,
       body
     );
+    const wording =
+      request.kind === "statute" && snippet
+        ? statuteWording(snippet, footnotes, request.asOf ?? todayWarsaw(Date.parse(fetchedAt) || Date.now()))
+        : null;
+    const evidence = wording?.evidence ?? snippet;
+    // Not verified: two wordings without a readable date, a repealed article, or a change not
+    // in force printed in the text that its footnotes do not settle.
+    const wordingProblem = !wording
+      ? null
+      : wording.unresolved
+        ? "Tekst jednolity drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś."
+        : wording.repealed
+          ? "Przepis jest w aktualnym tekście jednolitym uchylony."
+          : request.requireFootnoteWording && !wording.pending.length
+            ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
+            : null;
 
     const snapshotOnly =
       NSA_WSA_SNAPSHOT_HOSTS.has(host);
@@ -503,7 +594,7 @@ export class OfficialLegalSourceVerifier {
               : htmlUnitFragment(body, request.claim)
           )
         : undefined;
-    const record: VerificationRecord = matched && !snapshotOnly
+    const record: VerificationRecord = matched && !snapshotOnly && !wordingProblem
       ? {
           claim: request.claim,
           kind: request.kind,
@@ -519,7 +610,8 @@ export class OfficialLegalSourceVerifier {
               : "web_fetch",
           sourceFormat:
             pdfSource ? "PDF" : "TEXT",
-          ...(evidence ? { evidence } : {})
+          ...(evidence ? { evidence } : {}),
+          ...(wording?.pending.length ? { pendingWording: wording.pending } : {})
         }
       : {
           claim: request.claim,
@@ -542,7 +634,9 @@ export class OfficialLegalSourceVerifier {
               }
             : {}),
           evidence:
-            snapshotOnly && matched
+            matched && wordingProblem && !snapshotOnly
+              ? `${wordingProblem}${evidence ? `\n${evidence}` : ""}`.slice(0, MAX_EVIDENCE_CHARS)
+              : snapshotOnly && matched
               ? `NSA/WSA SNAPSHOT (not promoted to VERIFIED): ${evidence ?? "reference found in the fetched CBOSA text"}`
               : !titleMatched
                 ? "Official source was fetched, but the expected act title was not found."

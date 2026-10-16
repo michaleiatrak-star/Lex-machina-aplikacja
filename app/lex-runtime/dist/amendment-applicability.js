@@ -40,6 +40,57 @@ function earliest(values) {
         .filter(Boolean)
         .sort()[0];
 }
+const MONTHS = {
+    stycznia: "01", lutego: "02", marca: "03", kwietnia: "04", maja: "05", czerwca: "06",
+    lipca: "07", sierpnia: "08", września: "09", października: "10", listopada: "11", grudnia: "12"
+};
+/**
+ * The staged entry into force ELI writes in an act's comments: one item per date, the units
+ * it names ("1) art. 1 pkt 2 lit. a, pkt 46 i 53 … wchodzą w życie z dniem 21 kwietnia 2026 r.;").
+ */
+export function entryStages(comments) {
+    const value = text(comments);
+    if (!value)
+        return [];
+    const stages = [];
+    const item = /(?:^|\n|;)\s*(?:\d{1,2}\)\s*)?([^;\n]*?)\s+wchodz\p{L}*\s+w\s+życie\s+z\s+dniem\s+(\d{1,2})\s+(\p{L}+)\s+(\d{4})/gu;
+    for (const match of value.matchAll(item)) {
+        const month = MONTHS[match[3].toLocaleLowerCase("pl")];
+        if (!month || !/\bart\./u.test(match[1]))
+            continue;
+        stages.push({ date: `${match[4]}-${month}-${match[2].padStart(2, "0")}`, units: match[1].trim() });
+    }
+    return stages;
+}
+/**
+ * The dates the part of an amending act in its article `article` enters into force: the dates
+ * of the stages naming that article (whole or in part) and, unless a stage names it whole, the
+ * act's general date. `null` when the act has no stages or the general date is unknown.
+ */
+export function partEntryDates(stages, entryIntoForce, article) {
+    if (!stages.length || !entryIntoForce)
+        return null;
+    const wanted = Number.parseInt(article, 10);
+    const suffix = article.replace(/^\d+/u, "");
+    const dates = new Set();
+    let whole = false;
+    for (const stage of stages) {
+        // "art. 8", "art. 4-6", "art. 1 pkt 2 lit. a": the article numbers after each "art.".
+        for (const match of stage.units.matchAll(/(?<!w zakresie\s)\bart\.\s*(\d+)([a-z]*)(?:\s*[-–]\s*(\d+)([a-z]*))?(\s+(?:pkt|ust\.|lit\.|§|w zakresie))?/gu)) {
+            const from = Number(match[1]);
+            const to = match[3] ? Number(match[3]) : from;
+            const hit = match[3] ? wanted >= from && wanted <= to && !suffix : from === wanted && match[2] === suffix;
+            if (!hit)
+                continue;
+            dates.add(stage.date);
+            if (!match[5])
+                whole = true;
+        }
+    }
+    if (!whole)
+        dates.add(entryIntoForce);
+    return [...dates].sort();
+}
 export class AmendmentApplicabilityResolver {
     fetcher;
     constructor(fetcher = globalThis.fetch.bind(globalThis)) {
@@ -141,9 +192,11 @@ export class AmendmentApplicabilityResolver {
                 reason: "AMENDMENT_EFFECT_DATE_UNKNOWN"
             };
         }
+        const stages = entryStages(act.comments);
         const common = {
             eli: amendment.eli,
             targetDate,
+            ...(stages.length ? { stages } : {}),
             ...(relationDate
                 ? { relationDate }
                 : {}),
