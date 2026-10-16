@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OfficialLegalSourceVerifier, htmlFootnotes, statuteWording } from "../src/legal-source-verifier.js";
+import { OfficialLegalSourceVerifier, claimedUnitState, htmlFootnotes, statuteWording } from "../src/legal-source-verifier.js";
 
 // Like legal-cite-pl: of two wordings the consolidated text prints, the one in force today goes
 // to the evidence and the later one to pendingWording; an unreadable date, a repealed article or
@@ -61,5 +61,24 @@ describe("brzmienie przepisu z odnośników tekstu jednolitego", () => {
     const required = await verifier.verify({ ...request, requireFootnoteWording: true });
     expect(required.record.status).toBe("UNVERIFIED");
     expect(required.record.evidence).toMatch(/jeszcze nie obowiązuje/u);
+  });
+});
+
+describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
+  const wording = statuteWording(ARTICLE, NOTES, "2099-06-30");
+  it.each([
+    ["art. 94 pkt 2a KP", "IN_FORCE"],
+    ["art. 94 pkt 2c KP", "PENDING"],
+    ["art. 94 pkt 3 KP", "REPEALED"],
+    ["art. 94 pkt 9 KP", "MISSING"],
+    ["art. 94 KP", "NOT_CHECKED"]
+  ])("%s -> %s", (claim, state) => {
+    expect(claimedUnitState(claim, wording.evidence, wording.pending).state).toBe(state);
+  });
+
+  it("§ w artykule bez paragrafów i § z indeksem górnym", () => {
+    expect(claimedUnitState("art. 5 § 2 KC", "Art. 5. Nie można czynić ze swego prawa użytku…", []).state).toBe("MISSING");
+    expect(claimedUnitState("art. 22 § 1¹ KP", "Art. 22. § 1. Przez nawiązanie…\n§ 1^1. Zatrudnienie…", []).state).toBe("IN_FORCE");
+    expect(claimedUnitState("art. 860 § 3 KC", "Art. 860. § 1. Przez umowę spółki…\n§ 2. Umowa…", [{ from: "2028-11-01", text: "§ 3. Jeżeli przepis ustawy tak stanowi…" }])).toEqual({ state: "PENDING", from: "2028-11-01" });
   });
 });

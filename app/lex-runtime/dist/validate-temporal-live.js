@@ -45,6 +45,12 @@ const CASES = [
             ? "nowelizacje bez Dz.U. lub statusu"
             : null
     },
+    // Units below the article: in force, printed only for later, repealed, absent.
+    { claim: "art. 860 § 3 KC", act: "KC", expect: (p) => (p.status === "UNVERIFIED" && /z dniem 2028-11-01/u.test(p.evidence ?? "") ? null : `status ${p.status}: ${String(p.evidence ?? "").slice(0, 120)}`) },
+    { claim: "art. 94 pkt 2c KP", act: "KP", expect: (p) => (p.status === "UNVERIFIED" && /z dniem 2026-11-05/u.test(p.evidence ?? "") ? null : `status ${p.status}: ${String(p.evidence ?? "").slice(0, 120)}`) },
+    { claim: "art. 94 pkt 3 KP", act: "KP", expect: (p) => (p.status === "UNVERIFIED" && /uchylona/u.test(p.evidence ?? "") ? null : `status ${p.status}: ${String(p.evidence ?? "").slice(0, 120)}`) },
+    { claim: "art. 148 § 1 KK", act: "KK", expect: (p) => (p.status === "VERIFIED" ? null : `status ${p.status}: ${String(p.evidence ?? "").slice(0, 120)}`) },
+    { claim: "art. 5 § 2 KC", act: "KC", expect: (p) => (p.status === "UNVERIFIED" && /nie ma tej jednostki/u.test(p.evidence ?? "") ? null : `status ${p.status}: ${String(p.evidence ?? "").slice(0, 120)}`) },
     { claim: "art. 385^1 KC", act: "KC", expect: (p) => (p.status === "VERIFIED" ? null : `status ${p.status} ${p.error ?? ""} ${p.freshness?.reason ?? ""}`) },
     { claim: "art. 5 KC", act: "KC", asOf: "2021-06-01", expect: (p) => (p.status === "VERIFIED" || p.status === "DENIED" ? null : `status ${p.status}`) }
 ];

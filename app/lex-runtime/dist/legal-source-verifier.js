@@ -234,6 +234,41 @@ export function statuteWording(section, footnotes, today) {
         footnotes: marked
     };
 }
+const escapeUnit = (value) => value.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+/**
+ * The unit the claim names below the article (§ 3, ust. 2, or pkt 2c when neither): in force,
+ * repealed, printed only for later (pendingWording), or absent from an article that has units
+ * of that kind. Not checked when the article shows no such units (a layout we do not read).
+ */
+export function claimedUnitState(claim, evidence, pending) {
+    const text = superscriptsAsCaret(claim).replace(/\s+/gu, " ");
+    const unit = "(\\d+(?:\\^\\d+)?[a-z]{0,2})(?![a-z\\d])";
+    const para = new RegExp(`§\\s*${unit}`, "u").exec(text)?.[1];
+    const ust = para ? undefined : new RegExp(`\\bust\\.?\\s*${unit}`, "u").exec(text)?.[1];
+    const pkt = para || ust ? undefined : new RegExp(`\\bpkt\\s*${unit}`, "u").exec(text)?.[1];
+    const label = para ?? ust ?? pkt;
+    if (!label)
+        return { state: "NOT_CHECKED" };
+    const at = (value) => para
+        ? new RegExp(`(?:^|\\n|\\.\\s)§\\s*${escapeUnit(value)}\\s*\\.`, "u")
+        : ust
+            ? new RegExp(`(?:^|\\n)${escapeUnit(value)}\\s*\\.\\s`, "u")
+            : new RegExp(`(?:^|\\n)${escapeUnit(value)}\\)\\s`, "u");
+    const anyOfKind = para ? /(?:^|\n|\.\s)§\s*\d/u : ust ? /\n\d+[a-z]*\.\s/u : /\n\d+[a-z]*\)\s/u;
+    const found = at(label).exec(evidence);
+    if (found) {
+        const after = evidence.slice(found.index + found[0].length, found.index + found[0].length + 40);
+        return /^\s*\((?:uchylon|skreślon|pominięt)/u.test(after) ? { state: "REPEALED" } : { state: "IN_FORCE" };
+    }
+    const later = pending.find((item) => at(label).test(`\n${item.text}`));
+    if (later)
+        return { state: "PENDING", from: later.from };
+    // A cut evidence (a very long article) may hold the unit past its end. "§ N." is unmistakable,
+    // so a § the article does not have is missing; a "2." or "2)" only when the article shows such units.
+    if (evidence.length >= MAX_EVIDENCE_CHARS - 500)
+        return { state: "NOT_CHECKED" };
+    return para || anyOfKind.test(evidence) ? { state: "MISSING" } : { state: "NOT_CHECKED" };
+}
 export class OfficialLegalSourceVerifier {
     fetcher;
     now;
@@ -352,15 +387,22 @@ export class OfficialLegalSourceVerifier {
         const evidence = wording?.evidence ?? snippet;
         // Not verified: two wordings without a readable date, a repealed article, or a change not
         // in force printed in the text that its footnotes do not settle.
+        const unit = wording ? claimedUnitState(request.claim, wording.evidence, wording.pending) : null;
         const wordingProblem = !wording
             ? null
-            : wording.unresolved
-                ? "Tekst jednolity drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś."
-                : wording.repealed
-                    ? "Przepis jest w aktualnym tekście jednolitym uchylony."
-                    : request.requireFootnoteWording && !wording.pending.length
-                        ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
-                        : null;
+            : unit?.state === "PENDING"
+                ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
+                : unit?.state === "REPEALED"
+                    ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
+                    : unit?.state === "MISSING"
+                        ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
+                        : wording.unresolved
+                            ? "Tekst jednolity drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś."
+                            : wording.repealed
+                                ? "Przepis jest w aktualnym tekście jednolitym uchylony."
+                                : request.requireFootnoteWording && !wording.pending.length
+                                    ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
+                                    : null;
         const snapshotOnly = NSA_WSA_SNAPSHOT_HOSTS.has(host);
         const sourceAnchorUrl = matched && request.kind === "statute"
             ? anchoredUrl(sourceUrl, pdfSource
