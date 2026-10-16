@@ -60,7 +60,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
-import { answerCorrection } from "./answer-corrections.js";
+import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger } from "./task-routing.js";
@@ -2201,6 +2201,40 @@ export class SafeSessionExecutor {
         // 2) Lexical, for documents without a valid verdict: the user's topic words and quotations
         //    given to it are in its text.
         // One correcting round for both; what remains is shown to the user next to the answer.
+        // An answer that only defers ("nie mogę jeszcze…, odpowiedź zostanie przygotowana po…")
+        // without the substance or a question: one correcting round; what stays is no basis for a file.
+        if (legalTurn && !waitsForUser(modelOutput) && emptyDeferral(modelOutput)) {
+            step("MODEL", "odpowiedź bez treści i bez pytania: runda poprawcza");
+            let text = "";
+            try {
+                const corrected = await this.providers.stream(request.provider, {
+                    model: request.model,
+                    systemPrompt: [
+                        ...(placeholderKey ? [placeholderKey] : []),
+                        identityPrompt,
+                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                        ...pathSections
+                    ].join("\n\n"),
+                    messages: [
+                        { role: "user", content: protectedQuery },
+                        { role: "assistant", content: modelOutput },
+                        { role: "user", content: NO_ANSWER_CORRECTION }
+                    ],
+                    accountContinuity: "none",
+                    reasoning: "none"
+                });
+                text = corrected.fullText.trim();
+            }
+            catch {
+                text = "";
+            }
+            const fixed = Boolean(text) && !emptyDeferral(text);
+            audit.record("gate", "ANSWER_SUBSTANCE", fixed ? "OK" : "DEGRADED", { corrected: fixed });
+            if (fixed) {
+                corrections.push(answerCorrection("NO_ANSWER", ["odpowiedź odroczona bez treści i bez pytania do użytkownika"], modelOutput, text));
+                modelOutput = text;
+            }
+        }
         if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
             const topic = judgedQuestion(protectedQuery);
             const correctionPrompt = [
@@ -2917,7 +2951,7 @@ export class SafeSessionExecutor {
         const restoredAnswer = restoreWithReport(presentedText, chatPrivacyVault);
         // Next step of the pipeline: after the AUTO entry skill, or after the final
         // result of the mechanical workflow.
-        const nextContext = { question: pathFacts.query, materials: routingMaterials };
+        const nextContext = { question: pathFacts.query, materials: routingMaterials, answer: restoredAnswer.text };
         // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
         // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
         const workflowSkill = execution.workflowPlan.executionSkill;
@@ -2951,9 +2985,13 @@ export class SafeSessionExecutor {
                     : {})
             })
             : [];
-        const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
-        const next = choices.length
-            ? { skill: choices[0].skill, reason: choices[0].reason, choices }
+        // An answer without substance (deferred, no question) is no basis for a file: no "Generuj dokument".
+        const deferred = emptyDeferral(restoredAnswer.text);
+        const offered = deferred ? choices.filter((choice) => choice.kind !== "DOCUMENT") : choices;
+        const legacy = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
+        const legacyNext = legacy && deferred && /^pisma-/u.test(legacy.skill) ? null : legacy;
+        const next = offered.length
+            ? { skill: offered[0].skill, reason: offered[0].reason, choices: offered }
             : legacyNext;
         // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
         // Escalation / reduction between the letter skills: an offer to the user, nothing closed.

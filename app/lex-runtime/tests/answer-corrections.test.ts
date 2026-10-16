@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerCorrection, removedSentences, validAnswerCorrections } from "../src/answer-corrections.js";
+import { answerCorrection, emptyDeferral, removedSentences, validAnswerCorrections } from "../src/answer-corrections.js";
 
 describe("record of a correcting round", () => {
   const first = [
@@ -24,5 +24,18 @@ describe("record of a correcting round", () => {
     const record = answerCorrection("CASE_GROUNDING", ["art. 6 KC: teza nie wynika z tekstu"], first, corrected);
     expect(validAnswerCorrections([record])).toBe(true);
     expect(validAnswerCorrections([{ ...record, round: "OTHER" }])).toBe(false);
+  });
+});
+
+describe("an answer without substance", () => {
+  it("a deferral without a question or a list of what is missing is caught; questions and letters are not", () => {
+    const deferral =
+      "Nie mogę jeszcze sporządzić bezpiecznej, kompletnej odpowiedzi procesowej bez domknięcia wymaganych kontroli dokumentu i podstaw prawnych. Dalsza odpowiedź zostanie przygotowana po ich zakończeniu.\n⚖️ Ważna informacja: Niniejsza analiza ma charakter wyłącznie informacyjny.";
+    expect(emptyDeferral(deferral)).toBe(true);
+    const missing =
+      "Nie mogę bezpiecznie przygotować finalnego pisma na tym etapie bez danych krytycznych:\n* dane i adres nadawcy;\n* miejscowość sporządzenia;\n* adres adresata.\nPo ich podaniu przygotuję projekt.";
+    expect(emptyDeferral(missing)).toBe(false);
+    expect(emptyDeferral("Nie mogę jeszcze odpowiedzieć: czy doszło do zapłaty?")).toBe(false);
+    expect(emptyDeferral("Wezwanie nie wskazuje konkretnych naruszeń, więc kwestionuję je w całości.")).toBe(false);
   });
 });

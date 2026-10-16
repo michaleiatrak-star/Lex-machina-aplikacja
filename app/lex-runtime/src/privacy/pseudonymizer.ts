@@ -5,7 +5,8 @@ import { detectStreetAddresses } from "./street-addresses.js";
 import { detectFirmNames, type FirmSpan } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
-import { ocrTolerantPattern, type RegistryFormsProvider } from "./registry-enrichment.js";
+import { findNameApproximately } from "./fuzzy-names.js";
+import type { RegistryFormsProvider } from "./registry-enrichment.js";
 import {
   PERSON_CASES,
   type PersonCase,
@@ -940,18 +941,16 @@ export class LocalPolishPseudonymizer {
         });
         if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
       }
-      // The same name as OCR distorted it ("Michal Wiatrak", "Human Park G1obal"): masked,
-      // marked for the user to confirm.
-      const loose = form.pattern || form.kind !== "PERSON" ? null : ocrTolerantPattern(form.text);
-      if (!loose) continue;
-      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${loose}(?![\\p{L}\\p{N}])`, form.organization ? "giu" : "gu"))) {
-        if (match[0].toLocaleLowerCase("pl") === form.text.toLocaleLowerCase("pl")) continue;
-        if (form.organization && match[0] === match[0].toLocaleLowerCase("pl")) continue;
+      // The same name as OCR damaged it ("uman Park Global", "Michal Wiatrak"): the whole name
+      // within a letter or two, masked and marked for the user to confirm.
+      if (form.pattern || form.kind !== "PERSON") continue;
+      for (const match of findNameApproximately(text, form.text)) {
+        if (match.exact) continue;
         autoSpans.push({
-          start: match.index!, end: match.index! + match[0].length, kind: form.kind, value: match[0], confidence: 0.9, source: "AUTO",
-          uncertain: `zniekształcony odczyt z rejestru: ${form.text}`
+          start: match.start, end: match.end, kind: form.kind, value: match.value, confidence: 0.9, source: "AUTO",
+          uncertain: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}`
         });
-        if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
+        if (form.organization) registryFirms.set(match.value, form.organization.legalForm);
       }
     }
 

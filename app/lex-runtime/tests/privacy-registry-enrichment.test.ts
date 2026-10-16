@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { detectFirmNames, firmFragments } from "../src/privacy/firm-names.js";
+import { findNameApproximately } from "../src/privacy/fuzzy-names.js";
 import { LocalPolishPseudonymizer, PseudonymizationVault, type PiiSpan } from "../src/privacy/pseudonymizer.js";
 import {
   addressForms,
   ceidgForms,
   firmNameForms,
-  ocrTolerantPattern,
   RegistryEnrichment,
   registryKeys,
   titleCase,
@@ -232,10 +232,18 @@ describe("register and firm names as whole elements", () => {
 
   it("a register form as OCR distorted it is masked and marked for confirmation", async () => {
     const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "krs:0000019193": KRS }));
-    const text = "NIP 5261040828. Umowę z Transk0m zawarła Anna Wisniewska-Kowal.";
+    const text = "NIP 5261040828. Umowę zawarła Anna Wisniewska-Kowa1, a podpisała Ana Wiśniewska-Kowal.";
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
-    for (const leak of ["Transk0m", "Wisniewska"]) expect(result.text).not.toContain(leak);
-    expect(result.findings.filter((finding) => finding.uncertain?.startsWith("zniekształcony")).length).toBeGreaterThanOrEqual(2);
-    expect(ocrTolerantPattern("Kot")).toBeNull();
+    for (const leak of ["Wisniewska", "Ana Wi"]) expect(result.text).not.toContain(leak);
+    expect(result.findings.filter((finding) => finding.uncertain?.startsWith("odczyt zniekształcony")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("the whole name decides: a letter lost or misread in a long name, never a short or a single word", () => {
+    const text = "uman Park Global\nHurnan Park Global\nHuman Park Global sp. z o.o.\nhuman park global\nLorem Park Global";
+    const found = findNameApproximately(text, "Human Park Global").map((match) => `${match.value}:${match.exact}`);
+    expect(found).toEqual(["uman Park Global:false", "Hurnan Park Global:false", "Human Park Global:true"]);
+    // Up to 7 letters no edit is allowed; one word alone is never matched loosely.
+    expect(findNameApproximately("Ewa Kos przyszła", "Ewa Kot")).toEqual([]);
+    expect(findNameApproximately("Transkon", "Transkom")).toEqual([]);
   });
 });

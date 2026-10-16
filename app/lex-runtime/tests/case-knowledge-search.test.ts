@@ -221,6 +221,17 @@ describe("G39 protected case knowledge retrieval", () => {
       })
     ).resolves.toEqual([]);
 
+    // A message with the thread before it (longer than the search limit): its end is searched.
+    await expect(
+      search.search({
+        caseId:
+          "case_0123456789abcdef0123456789abcdef",
+        caseDataKey: key,
+        keyVersion: 1,
+        query: `${"Asystent: poprzednia odpowiedź. ".repeat(40)}Użytkownik: odpowiedzialność deliktowa`
+      })
+    ).resolves.toEqual([]);
+
     await expect(
       search.search({
         caseId:

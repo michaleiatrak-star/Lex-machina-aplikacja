@@ -35,7 +35,9 @@ describe("no letter file for questions or a switch offer", async () => {
   it("escalation offer and a checkpoint question make no .docx; a finished letter does", () => {
     expect(letterDocumentPlan({ ...base, skillSwitch: { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason: null } } as never)).toBeNull();
     expect(letterDocumentPlan({ ...base, waitingForUser: true } as never)).toBeNull();
-    expect(letterDocumentPlan(base as never)).toEqual({ documentType: "letter", stage: "FINAL" });
+    expect(letterDocumentPlan({ ...base, answer: "Kraków, dnia 3 marca 2026 r.\nAdresat: Spółka Przykład sp. z o.o., ul. Polna 1, 00-001 Warszawa\nODPOWIEDŹ NA WEZWANIE DO ZAPŁATY\nW odpowiedzi na wezwanie z dnia 20 lutego 2026 r. oświadczam, że kwestionuję roszczenie w całości. Wezwanie nie wskazuje podstawy faktycznej ani sposobu wyliczenia kwoty, a dołączone dokumenty nie potwierdzają wykonania usługi w terminie. Wzywam do przedstawienia dokumentów, na których oparto żądanie, w terminie 14 dni.\nNiniejsze pismo nie stanowi uznania roszczenia.\nZ poważaniem\n[podpis]" } as never)).toEqual({ documentType: "letter", stage: "FINAL" });
+    // Questions about missing data without the letter: no file.
+    expect(letterDocumentPlan({ ...base, answer: "Brakuje danych:\n* adres nadawcy;\n* miejscowość." } as never)).toBeNull();
   });
 });
 

@@ -1,3 +1,4 @@
+import { findNameApproximately } from "./fuzzy-names.js";
 import { genericWords } from "./generic-words.js";
 // Names of private firms (REGULY-ANONIMIZACJI: [FIRMA]). A name is a firm when a legal
 // form follows it ("Transkom sp. z o.o.", "Budex S.A.", "TERMEX SP. Z O.O.") or a business
@@ -294,6 +295,19 @@ export function detectFirmNames(text) {
                 start: match.index, end: match.index + match[0].length, kind: "PERSON", value: match[0], confidence: 0.9, source: "AUTO",
                 ...(legalForm ? { legalForm } : {}),
                 ...(match[0] !== value ? { canonical: value } : {})
+            });
+        }
+    }
+    // A name of two or more words as OCR damaged it ("uman Park Global"): the whole name within a
+    // letter or two (fuzzy-names.ts), the same firm.
+    for (const [value, legalForm] of names) {
+        for (const match of findNameApproximately(text, value)) {
+            if (spans.some((span) => span.start < match.end && match.start < span.end))
+                continue;
+            spans.push({
+                start: match.start, end: match.end, kind: "PERSON", value: match.value, confidence: 0.85, source: "AUTO",
+                ...(legalForm ? { legalForm } : {}),
+                canonical: value
             });
         }
     }

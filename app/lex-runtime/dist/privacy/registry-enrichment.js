@@ -35,28 +35,6 @@ export function titleCase(value) {
 function spellings(value) {
     return [...new Set([value, value.toLocaleUpperCase("pl"), titleCase(value)])];
 }
-// Letters OCR confuses or drops: diacritics ("Michal" for "Michał"), i/l/1, o/0.
-const OCR_CONFUSABLE = {
-    a: "aą", ą: "aą", c: "cć", ć: "cć", e: "eę", ę: "eę", l: "lłiI1|", ł: "lłiI1|", n: "nń", ń: "nń",
-    o: "oó0", ó: "oó0", s: "sś", ś: "sś", z: "zźż", ź: "zźż", ż: "zźż", i: "iIlł1|", "1": "1iIlł|", "0": "0oO"
-};
-/** A register form as OCR may have read it; null when the form is too short to match loosely. */
-export function ocrTolerantPattern(value) {
-    if (value.replace(/\s+/gu, "").length < 6)
-        return null;
-    return [...value]
-        .map((char) => {
-        if (/\s/u.test(char))
-            return "\\s+";
-        const lower = char.toLocaleLowerCase("pl");
-        const set = OCR_CONFUSABLE[lower];
-        if (!set)
-            return char.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-        const letters = new Set([...set].flatMap((letter) => [letter, char === lower ? letter : letter.toLocaleUpperCase("pl")]));
-        return `[${[...letters].join("").replace(/[\]\\^-]/gu, "\\$&")}]`;
-    })
-        .join("");
-}
 /** The firm's own name without its legal form, in the spellings a pleading uses. */
 export function firmNameForms(name) {
     const clean = name.replace(/[„”"«»]/gu, "").replace(/\s+/gu, " ").trim();

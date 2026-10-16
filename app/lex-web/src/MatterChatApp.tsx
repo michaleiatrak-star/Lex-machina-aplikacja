@@ -521,6 +521,18 @@ type DirectDocumentRequest = {
 // - a process pleading: a draft (marked PROJEKT – NIE SKŁADAĆ) when W2 wrote the
 //   draft, and the finished document at FINAL.
 // Other workflows produce no file on their own.
+/**
+ * An answer that is itself a letter: a place-and-date line or an addressee, and a closing
+ * (a signature, "Z poważaniem") or fields to fill in. Questions alone are no letter.
+ */
+export function looksLikeLetter(answer: string): boolean {
+  const body = answer.split(/⚖️|\bWażna informacja:/u)[0] ?? "";
+  const heading = /(?:^|\n)\s*(?:\[[^\]\n]{1,40}\]|\p{Lu}[\p{L}-]+(?:\s+\p{Lu}[\p{L}-]+)?)\s*,\s*(?:dnia\s+)?(?:\[[^\]\n]{1,20}\]|\d{1,2}[.\s])/u.test(body) ||
+    /(?:^|\n)\s*(?:Adresat|Do|Odbiorca)\s*:/u.test(body);
+  const closing = /\[podpis\]|(?:^|\n)\s*(?:Z\s+poważaniem|Z\s+wyrazami\s+szacunku)\b|(?:^|\n)\s*\.{5,}\s*(?:\n|$)|⬛|\[UZUPEŁNIJ/iu.test(body);
+  return heading && closing && body.replace(/\s+/gu, " ").length > 400;
+}
+
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
@@ -553,6 +565,8 @@ export function letterDocumentPlan(
       : null;
   }
   if (result.workflow?.id === "SIMPLE_LETTER_V1" || result.taskSkill === "pisma-proste-v2") {
+    // Questions about missing data are no letter yet: no file from them.
+    if (!looksLikeLetter(result.answer)) return null;
     return {
       documentType: "letter",
       stage:
@@ -1133,7 +1147,20 @@ export function documentChoiceLabel(steps: StepSummary | undefined): string {
  * After a result: generate the document when it is satisfactory, or one further stage of
  * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
  */
-export function PipelineChoices({ next, auto, disabled, onChoose }: { next: PipelineNext; auto: boolean; disabled: boolean; onChoose: (text: string) => void }) {
+export function PipelineChoices({
+  next,
+  auto,
+  disabled,
+  onChoose,
+  onDocument
+}: {
+  next: PipelineNext;
+  auto: boolean;
+  disabled: boolean;
+  onChoose: (text: string) => void;
+  // The answer is itself a ready letter: the file is made from it, no new session.
+  onDocument?: () => void;
+}) {
   const choices: NonNullable<PipelineNext["choices"]> = next.choices?.length
     ? next.choices
     : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? "DOCUMENT" : "ANALYSIS", reason: next.reason }];
@@ -1173,7 +1200,9 @@ export function PipelineChoices({ next, auto, disabled, onChoose }: { next: Pipe
             className={choice.kind === "DOCUMENT" ? "primary-button" : "chat-secondary-action"}
             disabled={disabled}
             title={`${choice.skill} (${choice.reason})`}
-            onClick={() => onChoose(pipelineChoiceMessage(choice))}
+            onClick={() =>
+              choice.kind === "DOCUMENT" && !choice.own && onDocument ? onDocument() : onChoose(pipelineChoiceMessage(choice))
+            }
           >
             {choice.kind === "DOCUMENT" ? documentChoiceLabel(choice.steps) : `Dalsza analiza: ${choice.skill}`}
           </button>
@@ -1184,7 +1213,9 @@ export function PipelineChoices({ next, auto, disabled, onChoose }: { next: Pipe
         <small className="field-help">
           {ownDocument
             ? "„Generuj dokument”, gdy wynik jest zadowalający: plik z tego wyniku, po walidacji HYBRID-VAL w pipeline tego dokumentu."
-            : `„Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
+            : onDocument
+              ? "„Generuj dokument”: plik .docx z pisma powyżej, w formatowaniu kancelaryjnym, z polami do uzupełnienia, po walidacji HYBRID-VAL."
+              : `„Generuj dokument”, gdy wynik jest zadowalający: powstanie plik po walidacji HYBRID-VAL (${choices.find((choice) => choice.kind === "DOCUMENT")!.skill}).`}
         </small>
       ) : null}
     </div>
@@ -1214,6 +1245,18 @@ export function exportBlockedMessage(error: unknown): string | null {
     return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
       .map((reason) => HYBRID_REASON[reason] ?? reason)
       .join("; ")}. Popraw treść w rozmowie i wygeneruj dokument ponownie.`;
+  }
+  if (error instanceof ApiError && /^TOKENIZED_DOCUMENT_VALIDATION_FAILED/.test(error.code)) {
+    const reason = error.code.split(":").slice(1).join(":");
+    return `Plik nie został zapisany: ${
+      reason === "EMPTY_DOCUMENT"
+        ? "z odpowiedzi nie powstała treść pisma (sama odpowiedź nie zawiera pisma: najpierw poproś o jego treść)"
+        : reason === "RENDERED_TEXT_MISMATCH"
+          ? "tekst zapisanego pliku różni się od przygotowanej treści (kontrola zgodności pliku)"
+          : reason.startsWith("ALIAS_MISSING")
+            ? "w pliku zabrakło symboli danych osobowych z dokumentów sprawy (kontrola anonimizacji)"
+            : "kontrola zgodności pliku nie przeszła"
+    }. Spróbuj ponownie; jeśli się powtórzy, zgłoś kod: ${error.code}.`;
   }
   if (!(error instanceof ApiError) || !/^(?:READY|FINAL)_DOCUMENT_EXPORT_GATE_BLOCKED/.test(error.code)) return null;
   const references = error.references ?? [];
@@ -3384,6 +3427,145 @@ export default function MatterChatApp({
     setUnverifiedDraftRetry({ text: pending.text, messageId: pending.messageId });
   }
 
+  // A letter, a pleading or a contract of an answer as a .docx (HYBRID-VAL on the server): after a
+  // workflow's turn, and from an answer that is itself a ready letter ("Generuj dokument").
+  async function createLetterFile({
+    executionCaseId,
+    context,
+    plan,
+    route,
+    attachments
+  }: {
+    executionCaseId: string;
+    context: CaseChatMessage[];
+    plan: NonNullable<ReturnType<typeof letterDocumentPlan>>;
+    route: string;
+    attachments: DocumentAttachmentSelection[];
+  }): Promise<void> {
+    const letterWorkflow = plan.documentType;
+    const stage = plan.stage;
+    setExecutionStage(
+      stage === "FINAL"
+        ? "Tworzenie gotowego dokumentu"
+        : "Tworzenie szkicu dokumentu"
+    );
+    try {
+      const generated =
+        await generateLegalDocument(
+          executionCaseId,
+          {
+            query:
+              buildSkillSelectionEnvelope(
+                conversationForProvider(
+                  context,
+                  letterWorkflow === "contract"
+                    ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
+                    : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
+                  conversationChars
+                ),
+                automaticSkills,
+                [],
+                manualSkills === null
+                  ? null
+                  : manualSkillSelection
+              ),
+            provider: runtimeProvider,
+            model,
+            primarySkill: route,
+            mode: "PRAWNIK",
+            format: "docx",
+            documentType: letterWorkflow,
+            styleProfile: "lex-classic-clean-v1",
+            attachments,
+            ...(firmTemplateIds.length > 0
+              ? { firmTemplates: firmTemplateIds }
+              : {}),
+            ...(plan.source ? { source: plan.source } : {}),
+            filename:
+              (plan.source === "REDACTION"
+                ? "LexMachina-pismo-poprawione"
+                : letterWorkflow === "contract"
+                ? "LexMachina-umowa"
+                : letterWorkflow === "pleading"
+                ? "LexMachina-pismo-procesowe"
+                : "LexMachina-pismo") +
+              (stage === "DRAFT" ? "-szkic" : "") +
+              ".docx"
+          }
+        );
+      if (
+        activeCaseIdRef.current ===
+          executionCaseId
+      ) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: messageId(),
+            role: "assistant",
+            content:
+              (stage === "FINAL"
+                ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
+                : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
+              documentWarningsText(generated.warnings),
+            meta: "dokument: " + generated.artifact.filename,
+            generatedDocument: {
+              artifactId: generated.artifact.artifactId,
+              filename: generated.artifact.filename,
+              format: generated.format,
+              tokenized: generated.readyForDownload !== true,
+              stage
+            }
+          }
+        ]);
+        setWorkspaceRefresh((value) => value + 1);
+      }
+    } catch (documentError) {
+      // The answer itself stays; only the file is missing.
+      if (
+        activeCaseIdRef.current ===
+          executionCaseId
+      ) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: messageId(),
+            role: "system",
+            content:
+              exportBlockedMessage(documentError) ??
+              "Nie udało się utworzyć pliku pisma: " +
+              (documentError instanceof ApiError
+                ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
+                : documentError instanceof Error
+                  ? documentError.message
+                  : String(documentError)) +
+              ". Możesz poprosić: „wygeneruj to w pliku docx”."
+          }
+        ]);
+      }
+    }
+  }
+
+  // "Generuj dokument" under an answer that is itself a letter: its file at once, from that
+  // answer (fields to fill in stay marked), with no new session that would ask again.
+  async function fileFromAnswer(answer: CaseChatMessage): Promise<void> {
+    if (executing || !caseId || !model) return;
+    const index = messages.findIndex((item) => item.id === answer.id);
+    const context = index >= 0 ? messages.slice(0, index + 1) : [...messages];
+    setExecuting(true);
+    try {
+      await createLetterFile({
+        executionCaseId: caseId,
+        context,
+        plan: { documentType: "letter", stage: /⬛|\[UZUPEŁNIJ|\[(?:podpis|data|Miejscowość)\]/iu.test(answer.content) ? "DRAFT" : "FINAL" },
+        route: automaticSkills ? "AUTO" : choosePrimaryRoute(answer.content, routes, skills, []) ?? "AUTO",
+        attachments: documentAttachments
+      });
+    } finally {
+      setExecuting(false);
+      setExecutionStage("");
+    }
+  }
+
   async function executeMessage(
     plain: string,
     options: { acceptUnverified?: boolean; autoStep?: number; autoMeta?: string; switchTo?: { action: DeterministicActionId; label: string } } = {}
@@ -3795,115 +3977,14 @@ export default function MatterChatApp({
         });
       }
       const letterPlan = letterDocumentPlan(result);
-      if (
-        letterPlan &&
-        canWriteCase(selectedCase)
-      ) {
-        const letterWorkflow = letterPlan.documentType;
-        const stage = letterPlan.stage;
-        setExecutionStage(
-          stage === "FINAL"
-            ? "Tworzenie gotowego dokumentu"
-            : "Tworzenie szkicu dokumentu"
-        );
-        try {
-          const generated =
-            await generateLegalDocument(
-              executionCaseId,
-              {
-                query:
-                  buildSkillSelectionEnvelope(
-                    conversationForProvider(
-                      [
-                        ...priorMessages,
-                        { id: messageId(), role: "user", content: trimmed },
-                        answerMessage
-                      ],
-                      letterWorkflow === "contract"
-                        ? "Przygotuj plik .docx z umową z ostatniej odpowiedzi Asystenta. Zachowaj treść umowy bez zmian merytorycznych; pomiń sekcje techniczne (rejestr kroków, HYBRID-VALIDATION, ślad weryfikacji, uwagi dla prawnika)."
-                        : "Przygotuj plik .docx z pismem z ostatniej odpowiedzi Asystenta. Zachowaj treść pisma bez zmian merytorycznych; pomiń sekcje techniczne (routing, weryfikacja, HYBRID-VALIDATION, raport redakcji, uwagi dla prawnika).",
-                      conversationChars
-                    ),
-                    automaticSkills,
-                    [],
-                    manualSkills === null
-                      ? null
-                      : manualSkillSelection
-                  ),
-                provider: runtimeProvider,
-                model,
-                primarySkill: route,
-                mode: "PRAWNIK",
-                format: "docx",
-                documentType: letterWorkflow,
-                styleProfile: "lex-classic-clean-v1",
-                attachments: sendAttachments,
-                ...(firmTemplateIds.length > 0
-                  ? { firmTemplates: firmTemplateIds }
-                  : {}),
-                ...(letterPlan.source ? { source: letterPlan.source } : {}),
-                filename:
-                  (letterPlan.source === "REDACTION"
-                    ? "LexMachina-pismo-poprawione"
-                    : letterWorkflow === "contract"
-                    ? "LexMachina-umowa"
-                    : letterWorkflow === "pleading"
-                    ? "LexMachina-pismo-procesowe"
-                    : "LexMachina-pismo") +
-                  (stage === "DRAFT" ? "-szkic" : "") +
-                  ".docx"
-              }
-            );
-          if (
-            activeCaseIdRef.current ===
-              executionCaseId
-          ) {
-            setMessages((current) => [
-              ...current,
-              {
-                id: messageId(),
-                role: "assistant",
-                content:
-                  (stage === "FINAL"
-                    ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
-                    : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
-                  documentWarningsText(generated.warnings),
-                meta: "dokument: " + generated.artifact.filename,
-                generatedDocument: {
-                  artifactId: generated.artifact.artifactId,
-                  filename: generated.artifact.filename,
-                  format: generated.format,
-                  tokenized: generated.readyForDownload !== true,
-                  stage
-                }
-              }
-            ]);
-            setWorkspaceRefresh((value) => value + 1);
-          }
-        } catch (documentError) {
-          // The answer itself stays; only the file is missing.
-          if (
-            activeCaseIdRef.current ===
-              executionCaseId
-          ) {
-            setMessages((current) => [
-              ...current,
-              {
-                id: messageId(),
-                role: "system",
-                content:
-                  exportBlockedMessage(documentError) ??
-                  "Nie udało się utworzyć pliku pisma: " +
-                  (documentError instanceof ApiError
-                    ? [documentError.code, documentError.reason].filter(Boolean).join(" · ")
-                    : documentError instanceof Error
-                      ? documentError.message
-                      : String(documentError)) +
-                  ". Możesz poprosić: „wygeneruj to w pliku docx”."
-              }
-            ]);
-          }
-        }
+      if (letterPlan && canWriteCase(selectedCase)) {
+        await createLetterFile({
+          executionCaseId,
+          context: [...priorMessages, { id: messageId(), role: "user", content: trimmed }, answerMessage],
+          plan: letterPlan,
+          route,
+          attachments: sendAttachments
+        });
       }
     } catch (error) {
       const code =
@@ -5564,6 +5645,11 @@ export default function MatterChatApp({
                       auto={workMode === "AUTO"}
                       disabled={executing}
                       onChoose={(text) => void executeMessage(text)}
+                      onDocument={
+                        message.role === "assistant" && looksLikeLetter(message.content) && canWriteCase(selectedCase)
+                          ? () => void fileFromAnswer(message)
+                          : undefined
+                      }
                     />
                   ) : null}
                   {message.sourceVerification ? (

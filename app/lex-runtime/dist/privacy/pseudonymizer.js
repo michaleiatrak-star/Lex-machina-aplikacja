@@ -5,7 +5,7 @@ import { detectStreetAddresses } from "./street-addresses.js";
 import { detectFirmNames } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
-import { ocrTolerantPattern } from "./registry-enrichment.js";
+import { findNameApproximately } from "./fuzzy-names.js";
 import { PERSON_CASES } from "./person-morphology.js";
 /** [PII:PERSON:0001] or, with the grammatical case a model asked for, [PII:PERSON:0001|INS]. */
 export const PII_TOKEN_WITH_CASE = /\[PII:([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
@@ -585,22 +585,19 @@ export class LocalPolishPseudonymizer {
                 if (form.organization)
                     registryFirms.set(match[0], form.organization.legalForm);
             }
-            // The same name as OCR distorted it ("Michal Wiatrak", "Human Park G1obal"): masked,
-            // marked for the user to confirm.
-            const loose = form.pattern || form.kind !== "PERSON" ? null : ocrTolerantPattern(form.text);
-            if (!loose)
+            // The same name as OCR damaged it ("uman Park Global", "Michal Wiatrak"): the whole name
+            // within a letter or two, masked and marked for the user to confirm.
+            if (form.pattern || form.kind !== "PERSON")
                 continue;
-            for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${loose}(?![\\p{L}\\p{N}])`, form.organization ? "giu" : "gu"))) {
-                if (match[0].toLocaleLowerCase("pl") === form.text.toLocaleLowerCase("pl"))
-                    continue;
-                if (form.organization && match[0] === match[0].toLocaleLowerCase("pl"))
+            for (const match of findNameApproximately(text, form.text)) {
+                if (match.exact)
                     continue;
                 autoSpans.push({
-                    start: match.index, end: match.index + match[0].length, kind: form.kind, value: match[0], confidence: 0.9, source: "AUTO",
-                    uncertain: `zniekształcony odczyt z rejestru: ${form.text}`
+                    start: match.start, end: match.end, kind: form.kind, value: match.value, confidence: 0.9, source: "AUTO",
+                    uncertain: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}`
                 });
                 if (form.organization)
-                    registryFirms.set(match[0], form.organization.legalForm);
+                    registryFirms.set(match.value, form.organization.legalForm);
             }
         }
         // A person found once is protected everywhere: mentions the recognizer

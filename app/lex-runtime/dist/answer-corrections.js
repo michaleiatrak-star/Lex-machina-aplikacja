@@ -56,7 +56,7 @@ export function validAnswerCorrections(value) {
         value.length <= 4 &&
         value.every((item) => item &&
             typeof item === "object" &&
-            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING") &&
+            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER") &&
             Array.isArray(item.findings) &&
             item.findings.length <= MAX_FINDINGS &&
             item.findings.every((finding) => typeof finding === "string" && finding.length <= 500) &&
@@ -64,3 +64,28 @@ export function validAnswerCorrections(value) {
             item.removed.length <= MAX_REMOVED &&
             item.removed.every((sentence) => typeof sentence === "string" && sentence.length <= MAX_SENTENCE + 1)));
 }
+// An answer that only puts the answer off ("nie mogę jeszcze sporządzić…, dalsza odpowiedź
+// zostanie przygotowana po…") gives the user neither the substance nor a question to answer.
+const DEFERRAL = /\b(?:nie\s+(?:mogę|mogłem|jestem\s+w\s+stanie|można)\s+(?:jeszcze\s+|na\s+tym\s+etapie\s+|teraz\s+)?(?:bezpiecznie\s+)?(?:sporządzić|przygotować|udzielić|odpowiedzieć|wydać|podać|przedstawić)|zostanie\s+przygotowan\p{L}*\s+po|po\s+(?:ich\s+)?(?:zakończeniu|domknięciu|uzupełnieniu)\s+(?:kontroli|weryfikacji|sprawdzeń))/iu;
+/** The body of an answer without the disclaimer the application appends. */
+function answerBody(text) {
+    const cut = text.search(/⚖️|\bWażna informacja:/u);
+    return (cut >= 0 ? text.slice(0, cut) : text).trim();
+}
+/** True for an answer that defers without substance and without a question or a list of what is missing. */
+export function emptyDeferral(text) {
+    const body = answerBody(text);
+    if (!body || body.length > 900 || !DEFERRAL.test(body))
+        return false;
+    if (/\?/u.test(body))
+        return false;
+    const items = body.split("\n").filter((line) => /^\s*(?:[-*•]|\d{1,2}[.)])\s+\S/u.test(line));
+    return items.length < 2;
+}
+export const NO_ANSWER_CORRECTION = [
+    "KONTROLA APLIKACJI — odpowiedź bez treści: poprzednia odpowiedź tylko zapowiada odpowiedź na później,",
+    "nie daje użytkownikowi ani merytorycznej odpowiedzi na jego pytanie, ani pytania, na które mógłby odpowiedzieć.",
+    "Napisz ją od nowa: odpowiedz merytorycznie na podstawie dokumentów sprawy w zakresie, w jakim to możliwe;",
+    "jeżeli czegoś brakuje do dalszej części, wymień konkretnie, czego (dane, dokumenty, decyzje użytkownika), w formie pytań.",
+    "Nie zapowiadaj odpowiedzi na później i nie powołuj się na niedomknięte kontrole bez wskazania, co z nich wynika."
+].join(" ");

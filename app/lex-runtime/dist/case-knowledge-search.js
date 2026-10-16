@@ -88,10 +88,13 @@ export class LocalCaseKnowledgeSearch {
         return result;
     }
     async search(args) {
-        const query = args.query.trim();
-        if (query.length < 2 ||
-            query.length >
-                this.maxQueryChars) {
+        // A message with the conversation before it is longer than a search needs: its end (the
+        // current question) is searched, not the whole thread refused (an HTTP 500 on a long thread).
+        const whole = args.query.trim();
+        const query = whole.length > this.maxQueryChars
+            ? whole.slice(-this.maxQueryChars).replace(/^\S*\s+/u, "")
+            : whole;
+        if (query.length < 2) {
             throw new Error("INVALID_KNOWLEDGE_QUERY");
         }
         const queryTerms = [...new Set(terms(query))].slice(0, 32);
