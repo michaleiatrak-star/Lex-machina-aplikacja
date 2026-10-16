@@ -1,0 +1,147 @@
+[CZĘŚĆ 2/3]
+@SEKCJA: § 16. Ceny i podatek VAT
+1. Wszystkie ceny Towarów w Sklepie podane są w złotych polskich (PLN) i są cenami brutto, to znaczy zawierają podatek od towarów i usług (VAT) w obowiązującej stawce.
+2. Cena Towaru widoczna w chwili składania Zamówienia jest wiążąca dla Sprzedawcy i Klienta. Cena ta nie ulega zmianie po zawarciu Umowy sprzedaży, z zastrzeżeniem ust. 3.
+3. Zmiana cen Towarów, wprowadzenie nowych Towarów, promocji lub ich odwołanie nie wpływa na Zamówienia złożone przed wprowadzeniem tych zmian, w tym na Zamówienia, dla których Umowa sprzedaży została już zawarta.
+4. Ceny nie obejmują kosztów dostawy ani innych kosztów dodatkowych, o których Klient zostanie poinformowany przed złożeniem Zamówienia. Łączna cena do zapłaty, obejmująca cenę Towarów oraz koszty dostawy, jest wyświetlana w podsumowaniu Zamówienia przed jego złożeniem.
+5. W przypadku Towarów objętych promocją, której czas trwania jest ograniczony, Sprzedawca podaje informację o okresie obowiązywania promocji. Jeżeli Sprzedawca ogłasza obniżenie ceny Towaru, obok informacji o obniżce podaje najniższą cenę Towaru, jaka obowiązywała w okresie 30 dni przed wprowadzeniem obniżki, zgodnie z przepisami ustawy o informowaniu o cenach towarów i usług.
+6. Jeżeli cena Towaru została ewidentnie błędnie podana w Sklepie, w szczególności na skutek oczywistego błędu technicznego lub pisarskiego, Sprzedawca niezwłocznie poinformuje o tym Klienta i zaproponuje mu potwierdzenie Zamówienia po prawidłowej cenie albo anulowanie Zamówienia. Postanowienie to nie ogranicza uprawnień Konsumenta wynikających z bezwzględnie obowiązujących przepisów prawa.
+7. Sprzedaż jest dokumentowana paragonem fiskalnym lub fakturą, na zasadach określonych w § 21.
+
+@SEKCJA: § 17. Formy płatności
+1. Klient może wybrać następujące formy płatności za Zamówienie:
+   1) przelew tradycyjny na rachunek bankowy Sprzedawcy wskazany w potwierdzeniu Zamówienia,
+   2) płatność elektroniczna za pośrednictwem Dostawcy usług płatniczych, w tym szybki przelew internetowy,
+   3) płatność kartą płatniczą,
+   4) płatność kodem BLIK, na zasadach określonych w § 18,
+   5) płatność ratalna, na zasadach określonych w § 19,
+   6) płatność za pobraniem przy odbiorze Przesyłki od kuriera, o ile taka forma została udostępniona dla danego Zamówienia.
+2. Aktualna lista dostępnych form płatności jest podawana w Sklepie w trakcie składania Zamówienia. Dostępność poszczególnych form płatności może zależeć od wartości Zamówienia, wybranego sposobu dostawy lub innych okoliczności, o których Klient jest informowany w Sklepie.
+3. Płatności elektroniczne i kartowe obsługuje Dostawca usług płatniczych, z którym Sprzedawca zawarł stosowną umowę. Dane Dostawcy usług płatniczych obsługującego daną płatność są wskazywane Klientowi w procesie płatności.
+4. Korzystając z płatności elektronicznej, Klient zawiera umowę z Dostawcą usług płatniczych i podlega regulaminowi tego Dostawcy usług płatniczych. Sprzedawca nie jest stroną tej umowy i nie odpowiada za działania lub zaniechania Dostawcy usług płatniczych, z wyjątkiem przypadków, w których odpowiedzialność ta wynika z bezwzględnie obowiązujących przepisów prawa.
+5. Sprzedawca nie pobiera od Konsumentów opłat z tytułu wyboru danej formy płatności, które przekraczałyby koszty poniesione przez Sprzedawcę z tytułu korzystania z tej formy płatności.
+6. Za dzień dokonania płatności przelewem lub płatnością elektroniczną uznaje się dzień uznania rachunku bankowego Sprzedawcy lub rachunku Dostawcy usług płatniczych, a w przypadku płatności za pobraniem – dzień przekazania należności kurierowi.
+7. Sprzedawca nie przyjmuje płatności gotówką w siedzibie, chyba że wyraźnie wskazano inaczej w Sklepie.
+
+@SEKCJA: § 18. Płatności BLIK
+1. Klient może wybrać płatność kodem BLIK jako formę płatności za Zamówienie. Płatność kodem BLIK jest obsługiwana przez Dostawcę usług płatniczych.
+2. W celu dokonania płatności Klient wprowadza w Sklepie sześciocyfrowy kod BLIK wygenerowany w aplikacji mobilnej swojego banku, a następnie potwierdza transakcję w tej aplikacji, zgodnie z instrukcjami wyświetlanymi w Sklepie i w aplikacji bankowej.
+3. Kod BLIK jest jednorazowy i ma ograniczony czas ważności określony przez operatora systemu BLIK. Klient powinien niezwłocznie po wprowadzeniu kodu potwierdzić transakcję w aplikacji bankowej.
+4. Czas na autoryzację płatności BLIK wynosi zazwyczaj do 2 minut od wprowadzenia kodu, chyba że w Sklepie lub w aplikacji bankowej wskazano inny czas. Po upływie tego czasu transakcja zostaje odrzucona.
+5. W razie odrzucenia, nieautoryzowania lub niepowodzenia płatności BLIK Zamówienie nie zostaje opłacone. Klient może ponowić płatność, wygenerowując nowy kod BLIK, lub wybrać inną formę płatności, w terminie wskazanym w § 20.
+6. Limity transakcji, opłaty bankowe oraz inne warunki korzystania z BLIK wynikają z umowy Klienta z jego bankiem oraz z regulaminów operatora systemu BLIK i Dostawcy usług płatniczych. Sprzedawca nie pobiera od Klienta dodatkowych opłat z tytułu płatności BLIK.
+7. Klient jest zobowiązany do ochrony swojego urządzenia mobilnego i danych służących do autoryzacji płatności oraz do niezwłocznego zgłaszania bankowi nieautoryzowanych transakcji. Zwrot środków za Zamówienie opłacone BLIK następuje w sposób określony w § 30.
+
+@SEKCJA: § 19. Płatności ratalne
+1. Klient będący osobą fizyczną może, o ile Sprzedawca udostępnił taką możliwość dla danego Zamówienia, wybrać płatność ratalną. Płatność ratalna jest realizowana za pośrednictwem współpracującego ze Sprzedawcą pośrednika finansowego lub instytucji finansowej (dalej: Finansujący).
+2. Umowa kredytu lub pożyczki jest zawierana wyłącznie pomiędzy Klientem a Finansującym, na podstawie jego regulaminu i warunków. Sprzedawca nie jest stroną tej umowy i nie udziela kredytu. Sprzedawca działa jedynie jako podmiot umożliwiający Klientowi skorzystanie z oferty Finansującego.
+3. Przed zawarciem umowy kredytu konsumenckiego Finansujący przekazuje Konsumentowi, w czasie umożliwiającym podjęcie świadomej decyzji, formularz informacyjny dotyczący kredytu konsumenckiego oraz inne informacje wymagane przepisami ustawy o kredycie konsumenckim, w tym informację o całkowitym koszcie kredytu, rzeczywistej rocznej stopie oprocentowania i całkowitej kwocie do zapłaty.
+4. Decyzja o przyznaniu finansowania, w tym ocena zdolności kredytowej, należy wyłącznie do Finansującego. Odmowa przyznania finansowania nie stanowi naruszenia Regulaminu przez Sprzedawcę; w takim przypadku Klient może wybrać inną formę płatności za Zamówienie.
+5. Realizacja Zamówienia opłaconego w formie ratalnej rozpoczyna się po otrzymaniu przez Sprzedawcę od Finansującego potwierdzenia przyznania finansowania, chyba że w Sklepie wskazano inaczej.
+6. Odstąpienie przez Konsumenta od Umowy sprzedaży na zasadach określonych w § 29 i § 30 może, na zasadach przewidzianych w ustawie o kredycie konsumenckim, wpływać na związaną z nią umowę kredytu. Konsument powinien w takim przypadku powiadomić także Finansującego, zgodnie z jego regulaminem i pouczeniem o prawie odstąpienia od umowy kredytu.
+7. Szczegółowe warunki spłaty rat, odsetki, prowizje i skutki opóźnienia w spłacie określa wyłącznie umowa zawarta z Finansującym. Sprzedawca nie odpowiada za wykonanie tej umowy.
+
+@SEKCJA: § 20. Terminy płatności i skutki braku zapłaty
+1. Klient, który wybrał płatność przelewem tradycyjnym, płatność elektroniczną, płatność kartą lub kodem BLIK, jest obowiązany dokonać zapłaty w terminie 5 Dni roboczych od dnia zawarcia Umowy sprzedaży, chyba że w potwierdzeniu Zamówienia wskazano inny, dłuższy termin.
+2. W przypadku płatności elektronicznej, kartą lub kodem BLIK Klient powinien dokonać płatności niezwłocznie po złożeniu Zamówienia, w trakcie procesu płatności prowadzonego w Sklepie.
+3. Jeżeli płatność nie zostanie zaksięgowana w terminie określonym w ust. 1, Sprzedawca może wezwać Klienta do zapłaty, wyznaczając mu dodatkowy termin nie krótszy niż 2 Dni robocze, za pośrednictwem poczty elektronicznej lub w inny sposób umożliwiający kontakt z Klientem.
+4. Po bezskutecznym upływie dodatkowego terminu wskazanego w wezwaniu Sprzedawca może anulować niezapłacone Zamówienie, informując o tym Klienta. Anulowanie niezapłaconego Zamówienia nie narusza uprawnień Sprzedawcy do dochodzenia należności na zasadach ogólnych, jeżeli Klient został wyraźnie poinformowany o obowiązku zapłaty.
+5. Roślina żywa objęta Zamówieniem, które nie zostało opłacone, może zostać po anulowaniu Zamówienia ponownie udostępniona do sprzedaży innym Klientom.
+6. W przypadku płatności za pobraniem Klient jest zobowiązany do zapłaty w chwili odbioru Przesyłki od kuriera. Odmowa przyjęcia Przesyłki skutkuje konsekwencjami określonymi w § 26.
+7. Sprzedawca może uzależnić rozpoczęcie realizacji Zamówienia od zaksięgowania płatności, o ile w Sklepie nie wskazano inaczej.
+
+@SEKCJA: § 21. Faktury i paragony
+1. Sprzedawca wystawia paragon fiskalny lub, na żądanie Klienta będącego Przedsiębiorcą albo na żądanie Konsumenta zgłoszone w terminie wynikającym z przepisów, fakturę VAT.
+2. Klient może żądać wystawienia faktury, podając w Zamówieniu pełne dane niezbędne do jej wystawienia, w szczególności nazwę lub imię i nazwisko, adres oraz numer NIP.
+3. Klient wyraża zgodę na przesyłanie faktur w formie elektronicznej, w szczególności w formacie PDF, na adres e-mail wskazany w Zamówieniu lub w Koncie. Zgodę tę Klient może w każdej chwili cofnąć, kontaktując się ze Sprzedawcą w sposób wskazany w § 3; wówczas faktury będą wystawiane w formie papierowej.
+4. Faktury elektroniczne są udostępniane Klientowi także w Koncie, o ile Klient je posiada, i mogą być pobierane przez Klienta w okresie wskazanym w Sklepie.
+5. Faktury korygujące są wystawiane w przypadkach przewidzianych w przepisach prawa, w szczególności w razie zwrotu płatności po odstąpieniu od umowy, obniżenia ceny, anulowania Zamówienia w części lub w całości albo stwierdzenia błędu w fakturze.
+6. Klient jest zobowiązany niezwłocznie zgłosić Sprzedawcy błędy w danych zawartych w fakturze lub paragonie. Dane na fakturze nie mogą zostać zmienione po jej wystawieniu inaczej niż przez wystawienie noty korygującej lub faktury korygującej, zgodnie z przepisami.
+7. Sprzedawca nie ponosi odpowiedzialności za skutki podania przez Klienta błędnych danych do faktury.
+
+@SEKCJA: § 22. Koszty i metody dostawy
+1. Sprzedawca realizuje dostawę Towarów za pośrednictwem firm kurierskich, których aktualna lista jest dostępna w Sklepie w trakcie składania Zamówienia.
+2. Dostępne sposoby dostawy obejmują w szczególności:
+   1) dostawę kurierską na wskazany adres,
+   2) dostawę kurierską z płatnością za pobraniem, o ile została udostępniona,
+   3) dostawę specjalistyczną Roślin żywych, realizowaną w oznaczonych oknach dostaw, zgodnie z § 23 i § 24.
+3. Koszt dostawy zależy od wybranego sposobu dostawy, wagi i gabarytów Przesyłki oraz wartości Zamówienia. Aktualny cennik kosztów dostawy jest publikowany w Sklepie i widoczny w podsumowaniu Zamówienia przed jego złożeniem.
+4. Sprzedawca może oferować bezpłatną dostawę dla Zamówień, których wartość przekracza kwotę wskazaną w Sklepie. Warunki bezpłatnej dostawy, w tym jej zakres i terminy obowiązywania, są podawane w Sklepie. Do wartości Zamówienia uprawniającej do bezpłatnej dostawy wlicza się cenę Towarów po uwzględnieniu rabatów, z wyłączeniem kosztów dostawy, chyba że w Sklepie wskazano inaczej.
+5. Jeżeli Zamówienie obejmuje Towary wysyłane w różnych terminach, w szczególności ze względu na sezonowość Roślin żywych, Sprzedawca może wysłać je w odrębnych Przesyłkach. Klient jest o tym informowany przed złożeniem Zamówienia lub w trakcie jego realizacji, a Sprzedawca nie pobiera dodatkowych kosztów dostawy z tego tytułu, chyba że Klient zażąda zmiany sposobu wysyłki.
+6. Koszt dostawy nie podlega zwrotowi w przypadku odstąpienia od umowy w zakresie, w jakim wynika to z § 30.
+7. Koszt zwrotu Towaru po odstąpieniu od umowy określa § 30.
+
+@SEKCJA: § 23. Terminy dostawy
+1. Termin realizacji Zamówienia składa się z czasu przygotowania Towaru do wysyłki oraz czasu dostawy przez przewoźnika. Czas przygotowania do wysyłki jest podany przy danym Towarze lub w sposobie dostawy.
+2. O ile nie wskazano inaczej, Sprzedawca wysyła Towary niebędące Roślinami żywymi w terminie do 3 Dni roboczych od dnia zawarcia Umowy sprzedaży, a w przypadku wyboru płatności z góry – od dnia zaksięgowania płatności.
+3. Czas dostawy przez przewoźnika wynosi zazwyczaj od 1 do 3 Dni roboczych od nadania Przesyłki, chyba że w Sklepie wskazano inaczej.
+4. Dostawa Roślin żywych odbywa się w oknach dostaw sezonowych, które są wskazane w opisie danej Rośliny żywej lub w Sklepie, w szczególności w okresach wiosennym i jesiennym, odpowiednich do sadzenia danego gatunku.
+5. Klient jest informowany przed złożeniem Zamówienia o przewidywanym terminie wysyłki Rośliny żywej. Jeżeli wybrany termin przypada na okno dostaw sezonowych rozpoczynające się później, Sprzedawca potwierdza termin wysyłki po dokonaniu płatności.
+6. Termin dostawy, o którym mowa w ust. 3, jest terminem przewidywanym. Termin, w którym Sprzedawca jest obowiązany wykonać Umowę sprzedaży z Konsumentem, wynika z § 15 ust. 7 oraz z art. 24 ustawy o prawach konsumenta.
+7. Jeżeli Sprzedawca nie może dotrzymać przewidywanego terminu wysyłki, w szczególności ze względu na warunki pogodowe wpływające na jakość Roślin żywych, informuje o tym Klienta i proponuje nowy termin.
+
+@SEKCJA: § 24. Dostawa roślin żywych – zasady szczególne
+1. Rośliny żywe są pakowane w sposób dostosowany do ich gatunku, wielkości i fazy wegetacji, w szczególności w opakowania chroniące przed uszkodzeniem mechanicznym, utratą wilgoci i zmianami temperatury.
+2. Sprzedawca może wstrzymać wysyłkę Roślin żywych albo zmienić jej termin, jeżeli prognozowane warunki pogodowe, w szczególności silne mrozy, upały lub intensywne opady, mogłyby zagrozić ich żywotności w transporcie. O wstrzymaniu wysyłki Sprzedawca informuje Klienta niezwłocznie, proponując nowy termin.
+3. Rośliny żywe są wysyłane w dniach i godzinach pozwalających ograniczyć czas pozostawania Przesyłki w transporcie, w szczególności od poniedziałku do środy, chyba że w Sklepie wskazano inaczej. Przesyłki z Roślinami żywymi nie są nadawane w dniach poprzedzających dni wolne od pracy, jeżeli mogłoby to wydłużyć czas transportu.
+4. Klient jest zobowiązany podać adres dostawy i numer telefonu umożliwiające skuteczne doręczenie Przesyłki oraz zapewnić jej odbiór w czasie dostawy. Jeżeli Klient nie będzie mógł odebrać Przesyłki w przewidywanym terminie, powinien niezwłocznie poinformować o tym Sprzedawcę, aby możliwa była zmiana terminu wysyłki.
+5. Klient jest zobowiązany odebrać Przesyłkę z Roślinami żywymi niezwłocznie po jej doręczeniu lub awizowaniu, ponieważ zwłoka w odbiorze może spowodować obumarcie lub pogorszenie stanu Roślin żywych.
+6. Po odbiorze Klient powinien niezwłocznie rozpakować Przesyłkę, sprawdzić stan Roślin żywych i zastosować się do instrukcji pielęgnacyjnych dołączonych do Przesyłki lub dostępnych w Sklepie, w tym podlać rośliny i posadzić je w odpowiednich warunkach.
+7. Postanowienia niniejszego paragrafu nie ograniczają praw Konsumenta wynikających z bezwzględnie obowiązujących przepisów prawa.
+
+@SEKCJA: § 25. Odbiór przesyłki i protokół szkody
+1. Klient jest obowiązany sprawdzić Przesyłkę w obecności kuriera, w momencie jej doręczenia, a w szczególności stan opakowania i widoczny stan zawartości.
+2. W razie stwierdzenia uszkodzenia, ubytku lub innych widocznych nieprawidłowości Klient powinien zażądać od kuriera sporządzenia protokołu szkody i podpisać go wraz z kurierem. Protokół szkody ułatwia dochodzenie roszczeń od przewoźnika oraz rozpatrzenie reklamacji.
+3. Jeżeli kurier odmawia sporządzenia protokołu lub jego sporządzenie nie jest możliwe, Klient powinien sporządzić dokumentację fotograficzną Przesyłki i jej zawartości oraz niezwłocznie powiadomić Sprzedawcę, nie później niż w ciągu 24 godzin od odbioru Przesyłki.
+4. Klient będący Konsumentem zachowuje wszystkie uprawnienia wynikające z przepisów prawa, w tym uprawnienia z tytułu niezgodności Towaru z umową, także gdy nie sporządził protokołu szkody. Brak protokołu nie pozbawia Konsumenta praw, jednak może utrudnić ustalenie, na którym etapie powstało uszkodzenie.
+5. Klient niebędący Konsumentem, w tym Przedsiębiorca na prawach konsumenta w zakresie, w jakim nie korzysta z ochrony przewidzianej dla Konsumentów, powinien sprawdzić Przesyłkę zgodnie z art. 545 Kodeksu cywilnego i zawiadomić Sprzedawcę o stwierdzonych brakach lub uszkodzeniach niezwłocznie po odbiorze, w terminie określonym w ust. 3.
+6. Sprzedawca na wniosek Klienta udziela pomocy w dochodzeniu roszczeń od przewoźnika, w szczególności przekazuje niezbędne dokumenty nadania.
+7. Zgłoszenia, o których mowa w niniejszym paragrafie, należy kierować na dane kontaktowe wskazane w § 3.
+
+@SEKCJA: § 26. Brak możliwości doręczenia
+1. Jeżeli doręczenie Przesyłki nie jest możliwe z przyczyn leżących po stronie Klienta, w szczególności z powodu podania błędnego adresu, nieobecności w miejscu dostawy lub odmowy przyjęcia Przesyłki, przewoźnik może pozostawić awizo lub podjąć ponowną próbę doręczenia w terminie wskazanym w jego regulaminie.
+2. Jeżeli Przesyłka nie zostanie odebrana i wróci do Sprzedawcy, Sprzedawca skontaktuje się z Klientem w celu ustalenia dalszego postępowania, w szczególności ponownej wysyłki na koszt Klienta albo zwrotu płatności.
+3. Roślina żywa zwrócona do Sprzedawcy po nieodebraniu Przesyłki może być uszkodzona lub obumarła z powodu dłuższego czasu transportu. W takim przypadku Sprzedawca nie jest obowiązany do ponownej wysyłki tej Rośliny żywej, a ryzyko jej obumarcia w okresie, w którym Klient pozostawał w zwłoce z odbiorem, ponosi Klient.
+4. Sprzedawca może obciążyć Klienta kosztami pierwotnej i ponownej wysyłki oraz zwrotu Przesyłki, jeżeli niemożność doręczenia wynikała z przyczyn leżących po stronie Klienta, w wysokości faktycznie poniesionej, o czym Klient został poinformowany przed zawarciem Umowy sprzedaży.
+5. Odmowa przyjęcia Przesyłki, bez zachowania wymogów odstąpienia od umowy określonych w § 29, nie stanowi oświadczenia o odstąpieniu od umowy.
+6. Konsument zachowuje uprawnienia wynikające z bezwzględnie obowiązujących przepisów prawa, w szczególności w razie, gdy brak możliwości doręczenia wynika z przyczyn leżących po stronie Sprzedawcy lub przewoźnika.
+7. Przechowywanie Towarów niebędących Roślinami żywymi, które nie zostały odebrane, może trwać nie dłużej niż 14 dni od zwrotu do Sprzedawcy, po czym Zamówienie może zostać anulowane na zasadach określonych w § 20 ust. 4.
+
+@SEKCJA: § 27. Dostawa poza terytorium Polski
+1. Sprzedawca realizuje dostawy na terytorium Rzeczypospolitej Polskiej. Dostawa do innych państw jest możliwa wyłącznie w przypadku, gdy została wyraźnie udostępniona w Sklepie dla danego Towaru i kraju.
+2. Dostawa Roślin żywych poza terytorium Polski podlega ograniczeniom wynikającym z przepisów fitosanitarnych i o ochronie zdrowia roślin, w tym wymogom dotyczącym świadectw fitosanitarnych, paszportów roślin, zakazów i ograniczeń przywozu określonych gatunków oraz kontroli granicznych.
+3. Sprzedawca może odmówić realizacji Zamówienia na Rośliny żywe do kraju, do którego dostawa jest zabroniona lub uniemożliwiona przez przepisy lub decyzje organów, o czym niezwłocznie powiadamia Klienta. W takim przypadku Sprzedawca zwraca dokonane płatności na zasadach określonych w § 15 ust. 6.
+4. Klient zamawiający dostawę poza terytorium Polski jest odpowiedzialny za sprawdzenie, czy przywóz zamówionych Towarów jest dopuszczalny w państwie dostawy, oraz za ewentualne cła, podatki i opłaty należne w państwie dostawy, o ile nie wskazano inaczej w Sklepie.
+5. Koszty dostawy poza terytorium Polski i czas dostawy są podawane w Sklepie dla danego kraju.
+6. Konsument mający miejsce zamieszkania w innym państwie członkowskim Unii Europejskiej zachowuje ochronę przyznaną mu przez bezwzględnie obowiązujące przepisy państwa zwykłego pobytu, o ile przepisy te zapewniają mu wyższy poziom ochrony.
+7. Przepisy niniejszego paragrafu stosuje się odpowiednio do dostaw realizowanych za pośrednictwem przewoźników zagranicznych.
+
+@SEKCJA: § 28. Przejście ryzyka i własność Towaru
+1. Ryzyko przypadkowej utraty lub uszkodzenia Towaru przechodzi na Konsumenta z chwilą wydania Towaru Konsumentowi lub wskazanej przez niego osobie trzeciej innej niż przewoźnik.
+2. Jeżeli Towar jest dostarczany przez przewoźnika wybranego przez Konsumenta, który nie był oferowany przez Sprzedawcę, ryzyko przypadkowej utraty lub uszkodzenia Towaru przechodzi na Konsumenta z chwilą wydania Towaru przewoźnikowi.
+3. Do chwili wydania Towaru Konsumentowi, zgodnie z ust. 1, ryzyko utraty, uszkodzenia lub obumarcia Towaru, w tym Rośliny żywej, w transporcie ponosi Sprzedawca, w szczególności gdy Towar jest dostarczany przez przewoźnika wskazanego przez Sprzedawcę.
+4. W stosunkach z Klientami niebędącymi Konsumentami ryzyko przypadkowej utraty lub uszkodzenia Towaru przechodzi na Klienta z chwilą wydania Towaru przewoźnikowi, o ile przepisy bezwzględnie obowiązujące nie stanowią inaczej.
+5. W przypadku zwłoki Klienta w odbiorze Przesyłki ryzyko przypadkowej utraty lub uszkodzenia Towaru przechodzi na Klienta z chwilą, w której Klient dopuścił się zwłoki, zgodnie z § 26.
+6. Własność Towaru przechodzi na Klienta z chwilą wydania Towaru, a w przypadku płatności z góry – z chwilą wydania Towaru po zaksięgowaniu płatności.
+7. Postanowienia niniejszego paragrafu nie wyłączają ani nie ograniczają uprawnień Konsumenta wynikających z przepisów o niezgodności Towaru z umową.
+
+@SEKCJA: § 29. Prawo odstąpienia od umowy – zasady ogólne
+1. Konsument, który zawarł Umowę sprzedaży na odległość, ma prawo odstąpić od niej bez podania przyczyny w terminie 14 dni od dnia, w którym objął Towar w posiadanie lub w którym osoba trzecia inna niż przewoźnik, wskazana przez Konsumenta, objęła Towar w posiadanie.
+2. W przypadku Umowy sprzedaży obejmującej wiele Towarów, które są dostarczane osobno, partiami lub w częściach, termin do odstąpienia liczy się od objęcia w posiadanie ostatniej rzeczy, partii lub części.
+3. Prawo odstąpienia, z zastrzeżeniem wyłączeń określonych w § 31, przysługuje także Przedsiębiorcy na prawach konsumenta, w zakresie przewidzianym w przepisach ustawy o prawach konsumenta.
+4. Do zachowania terminu wystarczy wysłanie oświadczenia o odstąpieniu przed jego upływem.
+5. Oświadczenie o odstąpieniu od umowy Konsument może złożyć na piśmie na adres Sprzedawcy wskazany w § 3 lub w postaci elektronicznej na adres e-mail wskazany w § 3. Konsument może skorzystać z Formularza odstąpienia, stanowiącego załącznik do Regulaminu i dostępnego w Sklepie, jednak nie jest to obowiązkowe.
+6. Sprzedawca niezwłocznie potwierdza Konsumentowi, na trwałym nośniku, otrzymanie oświadczenia o odstąpieniu od umowy.
+7. Konsument powinien zwrócić Towar Sprzedawcy lub przekazać go osobie upoważnionej przez Sprzedawcę do odbioru niezwłocznie, nie później niż w terminie 14 dni od dnia, w którym odstąpił od umowy, chyba że Sprzedawca zaproponował, że sam odbierze Towar. Do zachowania terminu wystarczy odesłanie Towaru przed jego upływem.
+8. W przypadku Towarów, które ze względu na swój charakter nie mogą być w zwykły sposób odesłane pocztą, Sprzedawca informuje o tym przed zawarciem Umowy sprzedaży. Prawo odstąpienia nie przysługuje w przypadkach określonych w § 31.
+
+@SEKCJA: § 30. Skutki odstąpienia i zwrot płatności
+1. W razie odstąpienia od umowy Umowa sprzedaży jest uważana za niezawartą, a Konsument jest zwolniony z wszelkich zobowiązań. To, co strony świadczyły, ulega zwrotowi w stanie niezmienionym, chyba że zmiana była konieczna w granicach zwykłego zarządu.
+2. Sprzedawca zwraca Konsumentowi wszystkie dokonane przez niego płatności, w tym koszty dostarczenia Towaru do Konsumenta, niezwłocznie, nie później niż w terminie 14 dni od dnia otrzymania oświadczenia Konsumenta o odstąpieniu od umowy.
+3. Sprzedawca może wstrzymać się ze zwrotem płatności do czasu otrzymania Towaru z powrotem lub dostarczenia przez Konsumenta dowodu jego odesłania, w zależności od tego, które zdarzenie nastąpi wcześniej, chyba że Sprzedawca zaproponował, że sam odbierze Towar od Konsumenta.
+4. Zwrot płatności następuje przy użyciu takiego samego sposobu zapłaty, jakiego użył Konsument, chyba że Konsument wyraźnie zgodził się na inny sposób zwrotu, który nie wiąże się dla niego z żadnymi kosztami. Zwrot płatności dokonanych kodem BLIK lub kartą następuje za pośrednictwem tego samego Dostawcy usług płatniczych, w miarę możliwości technicznych.
+5. Jeżeli Konsument wybrał sposób dostarczenia Towaru inny niż najtańszy zwykły sposób dostarczenia oferowany przez Sprzedawcę, Sprzedawca nie jest obowiązany do zwrotu poniesionych przez Konsumenta dodatkowych kosztów.
+6. Konsument ponosi bezpośrednie koszty zwrotu Towaru, o ile Sprzedawca nie zgodził się ich ponieść oraz o ile informacja o tych kosztach, a w przypadku Towarów, które ze względu na swój charakter nie mogą być odesłane zwykłą drogą pocztową – o ich wysokości, została podana przed zawarciem Umowy sprzedaży.
+7. Konsument odpowiada za zmniejszenie wartości Towaru będące wynikiem korzystania z niego w sposób wykraczający poza konieczny do stwierdzenia charakteru, cech i funkcjonowania Towaru. Sprzedawca może w takim przypadku potrącić odpowiednią kwotę ze zwracanych płatności.
+8. W razie zwrotu Towarów niebędących Roślinami żywymi Konsument powinien zwrócić Towar w stanie umożliwiającym jego dalszą sprzedaż, w oryginalnym opakowaniu, o ile to możliwe, wraz z wszystkimi akcesoriami i dokumentami.
+[KONIEC CZĘŚCI 2/3]

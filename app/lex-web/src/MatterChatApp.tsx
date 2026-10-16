@@ -549,12 +549,22 @@ export function looksLikeLetter(answer: string): boolean {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument"
   >
-): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" } | null {
+): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION"; longDocumentId?: string } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   // Questions to the user or an offer to switch the letter skill: no letter yet.
   if (result.waitingForUser || result.skillSwitch) return null;
+  // A long letter in parts: no file of one part; one file of all the parts once each passed.
+  // A contract's file waits for its pipeline (AU-HYBRID, AU-STRIP): "Generuj dokument".
+  if (result.longDocument) {
+    if (!result.longDocument.complete || !result.longDocument.id || result.taskSkill === "analizator-umow-v1") return null;
+    return {
+      documentType: longDocumentType(result.taskSkill),
+      stage: result.finalization === "PASS" && result.gateI?.result !== "BLOCKED" && result.verification.unverified === 0 ? "FINAL" : "DRAFT",
+      longDocumentId: result.longDocument.id
+    };
+  }
   // analizator-umow-v1: the contract drafted or corrected in its pipeline becomes a file in the
   // turn that closed AU-STRIP (after AU-HYBRID); the server checks the same state.
   const contract = result.contractWorkflow;
@@ -591,6 +601,11 @@ export function letterDocumentPlan(
     };
   }
   return null;
+}
+
+/** The document type of a long letter's file, by the skill that wrote it. */
+export function longDocumentType(skill: string | undefined): "letter" | "pleading" | "contract" {
+  return skill === "pisma-procesowe-v3" ? "pleading" : skill === "analizator-umow-v1" ? "contract" : "letter";
 }
 
 /** AUTO chose the process pleading skill, but its pipeline (and its file) has not started. */
@@ -1128,7 +1143,10 @@ const OWN_DOCUMENT_NOUN: Record<string, string> = {
   "pisma-proste-v2": "pismo"
 };
 
-export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; own?: true }): string {
+export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; own?: true; reason?: string }): string {
+  // A long letter in parts: the next part, or the same part again with its problems.
+  const part = choice.kind === "CONTINUE" ? /^(Popraw )?część (\d{1,2}) z (\d{1,2})/iu.exec(choice.reason ?? "") : null;
+  if (part) return part[1] ? `Popraw część ${part[2]} z ${part[3]}.` : `Kontynuuj: napisz część ${part[2]} z ${part[3]}.`;
   if (choice.kind === "CONTINUE") {
     return "Kontynuuj: wykonaj teraz zapowiedzianą weryfikację przepisów w źródłach (ELI) i podaj pełną odpowiedź na pismo, bez zapowiadania kolejnych kroków.";
   }
@@ -1168,7 +1186,8 @@ export function PipelineChoices({
   auto,
   disabled,
   onChoose,
-  onDocument
+  onDocument,
+  onLongDocument
 }: {
   next: PipelineNext;
   auto: boolean;
@@ -1176,19 +1195,38 @@ export function PipelineChoices({
   onChoose: (text: string) => void;
   // The answer is itself a ready letter: the file is made from it, no new session.
   onDocument?: () => void;
+  // A long letter written in parts: one file of all its checked parts.
+  onLongDocument?: (longDocumentId: string) => void;
 }) {
   const choices: NonNullable<PipelineNext["choices"]> = next.choices?.length
     ? next.choices
     : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? "DOCUMENT" : "ANALYSIS", reason: next.reason }];
+  const longFile = choices.find((choice) => choice.kind === "DOCUMENT" && choice.longDocumentId);
+  if (longFile?.longDocumentId && onLongDocument) {
+    const id = longFile.longDocumentId;
+    return (
+      <div className="chat-pipeline-next" role="note">
+        <button type="button" className="primary-button" disabled={disabled} onClick={() => onLongDocument(id)}>
+          Generuj dokument
+        </button>
+        <InfoTip>{`Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości (${longFile.reason}) po walidacji HYBRID-VAL.`}</InfoTip>
+      </div>
+    );
+  }
   const ownDocument = choices.find((choice) => choice.own);
   const resume = choices.find((choice) => choice.kind === "CONTINUE");
+  const resumesPart = Boolean(resume && /część \d{1,2} z \d{1,2}/iu.test(resume.reason));
   if (!auto && resume) {
     return (
       <div className="chat-pipeline-next" role="note">
         <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(resume))}>
           Kontynuuj
         </button>
-        <InfoTip>Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia.</InfoTip>
+        <InfoTip>
+          {resumesPart
+            ? `Długie pismo powstaje w częściach (${resume.reason}). „Kontynuuj” prosi o tę część; aplikacja sprawdza ją z planem i poprzednimi częściami.`
+            : "Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia."}
+        </InfoTip>
       </div>
     );
   }
@@ -3551,6 +3589,7 @@ export default function MatterChatApp({
               ? { firmTemplates: firmTemplateIds }
               : {}),
             ...(plan.source ? { source: plan.source } : {}),
+            ...(plan.longDocumentId ? { longDocumentId: plan.longDocumentId } : {}),
             filename:
               (plan.source === "REDACTION"
                 ? "LexMachina-pismo-poprawione"
@@ -3627,6 +3666,27 @@ export default function MatterChatApp({
         executionCaseId: caseId,
         context,
         plan: { documentType: "letter", stage: /⬛|\[UZUPEŁNIJ|\[(?:podpis|data|Miejscowość)\]/iu.test(answer.content) ? "DRAFT" : "FINAL" },
+        route: automaticSkills ? "AUTO" : choosePrimaryRoute(answer.content, routes, skills, []) ?? "AUTO",
+        attachments: documentAttachments
+      });
+    } finally {
+      setExecuting(false);
+      setExecutionStage("");
+    }
+  }
+
+  // "Generuj dokument" of a long letter: one file of its parts kept in the case (the server
+  // checks each was accepted), not of the chat.
+  async function fileFromLongDocument(answer: CaseChatMessage, longDocumentId: string): Promise<void> {
+    if (executing || !caseId || !model) return;
+    const index = messages.findIndex((item) => item.id === answer.id);
+    const skill = answer.pipelineNext?.choices?.find((choice) => choice.longDocumentId === longDocumentId)?.skill;
+    setExecuting(true);
+    try {
+      await createLetterFile({
+        executionCaseId: caseId,
+        context: index >= 0 ? messages.slice(0, index + 1) : [...messages],
+        plan: { documentType: longDocumentType(skill), stage: "DRAFT", longDocumentId },
         route: automaticSkills ? "AUTO" : choosePrimaryRoute(answer.content, routes, skills, []) ?? "AUTO",
         attachments: documentAttachments
       });
@@ -4021,7 +4081,8 @@ export default function MatterChatApp({
       const autoDecision = autoAdvanceDecision(
         result,
         workflowClosedRef.current[executionCaseId] ?? null,
-        options.autoStep ?? 0
+        options.autoStep ?? 0,
+        options.autoMeta
       );
       const autoProgress = workflowProgress(result);
       if (autoProgress) workflowClosedRef.current[executionCaseId] = autoProgress.closed;
@@ -5722,6 +5783,7 @@ export default function MatterChatApp({
                           ? () => void fileFromAnswer(message)
                           : undefined
                       }
+                      onLongDocument={canWriteCase(selectedCase) ? (longDocumentId) => void fileFromLongDocument(message, longDocumentId) : undefined}
                     />
                   ) : null}
                   {message.sourceVerification ? (

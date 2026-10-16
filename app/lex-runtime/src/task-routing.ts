@@ -808,6 +808,8 @@ export type NextChoice = {
   // The pipeline's step register at this point (pleading checkpoints): done, skipped with
   // the reason, still open. A file with an open or unexplained step is a draft.
   steps?: StepSummary;
+  // DOCUMENT of a long letter written in parts: the file renders these joined parts.
+  longDocumentId?: string;
 };
 
 export type StepSummary = {

@@ -222,6 +222,7 @@ import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./d
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { issueKey } from "./case-work.js";
+import { LONG_DOCUMENT_RULE } from "./long-document.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -907,6 +908,17 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string; choices?: NextChoice[] };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // A long letter written in parts (long-document.ts): this answer's part and its check.
+  longDocument?: {
+    id: string;
+    title: string;
+    part: number;
+    parts: number;
+    ok: boolean;
+    problems: string[];
+    complete: boolean;
+    next: number | null;
+  };
   // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
   taskMode?: "REDACTION";
   // The firm's default template the application used (none picked by the user).
@@ -2524,6 +2536,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
         // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
         const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
+        // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
+        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(LONG_DOCUMENT_RULE);
         const sharedForSkill = [
           "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
           ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])

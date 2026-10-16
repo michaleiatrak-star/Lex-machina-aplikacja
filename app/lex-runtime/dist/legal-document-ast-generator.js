@@ -2,6 +2,7 @@ import { SESSION_EXECUTION_INTERNAL } from "./session-executor.js";
 import { DOCUMENT_TYPES, STYLE_PROFILES, validateLegalDocumentAst } from "./legal-document-ast.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupError } from "./letter-markup.js";
+import { splitSourceText, wordCoverage } from "./long-document.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
 function extractJson(value) {
@@ -450,6 +451,8 @@ export function cleanAstMarkup(value) {
     };
 }
 const AST_GENERATION_ATTEMPTS = 2;
+// Above this, a text to render goes in pieces (about 6 pages of the office style each).
+export const LONG_SOURCE_CHARS = 18_000;
 const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+|LETTER_MARKUP_[A-Z_]+(?::[A-Z_]+)?)$/u;
 /**
  * A letter or a pleading outside the process pipeline: the model writes the text in the
@@ -486,12 +489,33 @@ function parseValidatedAst(answer, request) {
     }
     return validated;
 }
+// A fragment's markup error (an unknown marker, an empty title) for its own repair round; a
+// fragment's end is not a letter's end, so the truncation check waits for the whole document.
+function markupProblem(markup, request) {
+    if (!isLetterMarkup(markup))
+        return null;
+    try {
+        letterMarkupAst(`${markup}\n@PODPIS:`, { documentType: "other", styleProfile: request.styleProfile });
+        return null;
+    }
+    catch (error) {
+        if (error instanceof LetterMarkupError && error.message !== "LETTER_MARKUP_BODY_MISSING")
+            return `błąd znaczników: ${error.message}`;
+        if (error instanceof LetterMarkupError)
+            return null;
+        throw error;
+    }
+}
 export class LegalDocumentAstGenerator {
     sessions;
     constructor(sessions) {
         this.sessions = sessions;
     }
     async generate(request) {
+        // A long text to render (a letter from its parts, a long pipeline draft or contract): in
+        // pieces under the output limit, each checked, joined into one document.
+        if (request.sourceText && request.sourceText.text.length > LONG_SOURCE_CHARS)
+            return this.generateInParts(request);
         // A malformed AST (no JSON, a block shape, the wrong type) gets one repair round with the
         // validation error; a session the gates blocked is a policy decision and is not retried.
         let repair = null;
@@ -578,6 +602,102 @@ export class LegalDocumentAstGenerator {
                         }
                         : {})
                 }))
+            }
+        };
+    }
+    // One piece of a long text in the letter markup: the same session and gates as one document.
+    async generateInParts(request) {
+        const source = request.sourceText;
+        const pieces = splitSourceText(source.text);
+        // The markup contract for every type (a contract's § as @SEKCJA): one JSON object for 20
+        // pages did not fit the output limit (DOCUMENT_AST_JSON_INVALID).
+        const { processRenderOnly: _renderOnly, ...rest } = request;
+        const markupRequest = {
+            ...rest,
+            documentType: request.documentType === "letter" || request.documentType === "pleading" ? request.documentType : "letter"
+        };
+        const markups = [];
+        let first = null;
+        const results = [];
+        let acceptedUnverified = null;
+        for (const [index, piece] of pieces.entries()) {
+            const k = index + 1;
+            let repair = "";
+            for (let attempt = 1;; attempt += 1) {
+                const instruction = generationInstruction({ ...markupRequest, sourceText: { label: `${source.label}, fragment ${k} z ${pieces.length}`, text: piece } });
+                const rule = [
+                    `FRAGMENT ${k} Z ${pieces.length}: przenieś WYŁĄCZNIE ten fragment, w całości i 1:1, w LETTER MARKUP.`,
+                    k === 1 ? "To początek pisma: nagłówek (@MIEJSCE_DATA, strony, @TYTUL) jak w tekście." : "To dalszy ciąg pisma: bez @MIEJSCE_DATA, @NADAWCA, @ADRESAT, @STRONA i @TYTUL; zacznij od pierwszej sekcji lub akapitu fragmentu.",
+                    k === pieces.length ? "To koniec pisma: podpis i załączniki, jeśli są w tekście." : "Bez @PODPIS i @ZALACZNIKI (pismo trwa dalej)."
+                ].join("\n");
+                const result = await this.sessions.execute({
+                    query: `${instruction}\n\n${rule}${repair ? `\n\n${repair}` : ""}`,
+                    provider: request.provider,
+                    model: request.model,
+                    primarySkill: request.primarySkill,
+                    mode: request.mode,
+                    documentAstOutput: true,
+                    accountContinuity: "none",
+                    ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
+                    ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+                    ...(request.attachments?.length ? { documentAttachments: request.attachments } : {})
+                });
+                if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {
+                    if (!unverifiedOnlySession(result))
+                        throw blockedSessionDiagnostic(result);
+                    if (!request.acceptUnverified) {
+                        throw new ExportGateBlockedError("READY_DOCUMENT_EXPORT_GATE_BLOCKED", ["UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"], result.blockedReferences
+                            .filter((reference, position, all) => all.findIndex((other) => other.claim === reference.claim) === position)
+                            .map((reference) => ({ claim: reference.claim, status: reference.status, line: reference.line })), true);
+                    }
+                    acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...result.blockedReferences.map((reference) => reference.claim)])];
+                }
+                const answer = (result.answer ?? "").trim();
+                const markup = k === 1 ? answer : answer.replace(/^\s*@(?:MIEJSCE_DATA|NADAWCA|ADRESAT|STRONA|DOTYCZY|TYTUL|PODSTAWA):.*$/gmu, "").trim();
+                const coverage = wordCoverage(piece, markup);
+                const problem = /\[ODPOWIEDŹ UCIĘTA\b/u.test(answer)
+                    ? "fragment ucięty na limicie długości"
+                    : markupProblem(k === 1 ? markup : `@TYTUL: X\n${markup}`, request)
+                        ?? (k === 1 && !isLetterMarkup(markup)
+                            ? "brak @TYTUL na początku pisma"
+                            : k < pieces.length && /^\s*@PODPIS\b/mu.test(markup)
+                                ? "podpis przed końcem pisma"
+                                : coverage < 0.9
+                                    ? `fragment niekompletny (przeniesiono ${Math.round(coverage * 100)}% słów)`
+                                    : null);
+                if (!problem) {
+                    markups.push(markup);
+                    results.push(result);
+                    first ??= result;
+                    break;
+                }
+                if (attempt >= AST_GENERATION_ATTEMPTS)
+                    throw new Error(`DOCUMENT_PART_INVALID:${k}`);
+                repair = `BŁĄD POPRZEDNIEJ WERSJI FRAGMENTU ${k}: ${problem}. Przenieś ponownie cały fragment ${k}.`;
+            }
+        }
+        const validated = validateLegalDocumentAst(letterMarkupAst(markups.join("\n\n"), request), request.aliases.entries);
+        const internals = results.map((result) => result[SESSION_EXECUTION_INTERNAL]).filter((value) => Boolean(value));
+        if (internals.length !== results.length)
+            throw new Error("DOCUMENT_AST_INTERNAL_VALIDATION_MISSING");
+        const caseFileNumbers = [...new Set(internals.flatMap((internal) => internal.caseFileNumbers ?? []))];
+        const factAmounts = [...new Set(internals.flatMap((internal) => internal.factAmounts ?? []))];
+        return {
+            ast: validated.ast,
+            aliasesUsed: validated.aliasesUsed,
+            sessionId: first.sessionId,
+            validationContext: {
+                schemaVersion: 1,
+                ...(acceptedUnverified ? { acceptedUnverifiedSource: { claims: acceptedUnverified } } : {}),
+                sourceSessionId: first.sessionId,
+                primarySkill: request.primarySkill,
+                provider: request.provider,
+                model: request.model,
+                usedDocumentContext: Boolean(request.attachments?.length),
+                ...(caseFileNumbers.length ? { caseFileNumbers } : {}),
+                ...(factAmounts.length ? { factAmounts } : {}),
+                verificationRecords: internals.flatMap((internal) => internal.verificationRecords.map((record) => ({ ...record }))),
+                auditEvents: internals.flatMap((internal) => internal.auditEvents.map((event) => ({ ...event, ...(event.detail ? { detail: { ...event.detail } } : {}) })))
             }
         };
     }

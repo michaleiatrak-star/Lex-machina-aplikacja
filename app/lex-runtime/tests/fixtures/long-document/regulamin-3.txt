@@ -1,0 +1,171 @@
+[CZĘŚĆ 3/3]
+
+@SEKCJA: § 31. Wyłączenia prawa odstąpienia
+1. Prawo odstąpienia od Umowy sprzedaży zawartej na odległość nie przysługuje Konsumentowi ani Przedsiębiorcy na prawach konsumenta w przypadkach wskazanych w przepisach prawa, w szczególności w odniesieniu do umów:
+1) w której przedmiotem świadczenia jest rzecz ulegająca szybkiemu zepsuciu lub mająca krótki termin przydatności do użycia,
+2) w której przedmiotem świadczenia jest rzecz nieprefabrykowana, wyprodukowana według specyfikacji Konsumenta lub służąca zaspokojeniu jego zindywidualizowanych potrzeb,
+3) w której przedmiotem świadczenia jest rzecz dostarczana w zapieczętowanym opakowaniu, której po otwarciu opakowania nie można zwrócić ze względu na ochronę zdrowia lub ze względów higienicznych, jeżeli opakowanie zostało otwarte po dostarczeniu,
+4) w której przedmiotem świadczenia są rzeczy, które po dostarczeniu, ze względu na swój charakter, zostają nierozłącznie połączone z innymi rzeczami,
+5) o dostarczanie treści cyfrowych niezapisanych na nośniku materialnym, jeżeli spełnianie świadczenia rozpoczęło się za wyraźną zgodą Konsumenta przed upływem terminu do odstąpienia od umowy i po poinformowaniu go przez Sprzedawcę o utracie prawa odstąpienia.
+2. Za rzeczy ulegające szybkiemu zepsuciu w rozumieniu ust. 1 pkt 1 Sprzedawca uznaje w szczególności Rośliny żywe, a w szczególności sadzonki, rośliny z odkrytym korzeniem, cebule, kłącza i bulwy w okresie wegetacji, rośliny cięte oraz rośliny doniczkowe, których właściwości biologiczne – zależne od temperatury, światła, wilgotności i dostępu do wody – powodują, że po dostarczeniu ich jakość i żywotność mogą ulec szybkiemu pogorszeniu.
+3. Informacja o wyłączeniu prawa odstąpienia w odniesieniu do danego Towaru jest podawana na stronie internetowej Sklepu przy opisie Towaru oraz przed złożeniem Zamówienia.
+4. Wyłączenie prawa odstąpienia, o którym mowa w ust. 1 pkt 1, nie wpływa na uprawnienia Konsumenta wynikające z odpowiedzialności Sprzedawcy za zgodność Towaru z umową, o których mowa w § 32–34.
+5. Wyłączenie, o którym mowa w ust. 1 pkt 3, dotyczy w szczególności nasion, podłoży, nawozów i środków ochrony roślin dostarczonych w zapieczętowanych opakowaniach, które zostały otwarte po dostarczeniu.
+6. W przypadku wątpliwości co do zastosowania wyłączenia do konkretnego Towaru Klient może skontaktować się ze Sprzedawcą przed złożeniem Zamówienia, korzystając z danych kontaktowych wskazanych w § 3.
+7. Przedsiębiorcy niebędącemu Przedsiębiorcą na prawach konsumenta prawo odstąpienia od Umowy sprzedaży na podstawie przepisów o prawach konsumenta nie przysługuje.
+
+@SEKCJA: § 32. Odpowiedzialność za zgodność Towaru z umową
+1. Sprzedawca odpowiada wobec Konsumenta oraz Przedsiębiorcy na prawach konsumenta za Niezgodność Towaru z umową, która istniała w chwili dostarczenia Towaru i ujawniła się w ciągu dwóch lat od tej chwili.
+2. Towar jest zgodny z umową, jeżeli w szczególności:
+1) odpowiada opisowi, rodzajowi, ilości, jakości, kompletności i funkcjonalności określonym w Umowie sprzedaży oraz w opisie Towaru w Sklepie,
+2) nadaje się do celu, do którego jest zazwyczaj używany Towar tego rodzaju, z uwzględnieniem obowiązujących przepisów, norm technicznych i dobrych praktyk,
+3) występuje w ilości i ma cechy, w tym trwałość, funkcjonalność, kompatybilność i bezpieczeństwo, które są typowe dla towarów tego rodzaju i których Konsument może rozsądnie oczekiwać, biorąc pod uwagę charakter Towaru oraz publiczne zapewnienia składane przez Sprzedawcę lub inne osoby w jego imieniu,
+4) jest dostarczony z opakowaniem, akcesoriami i instrukcjami, których posiadanie Konsument może rozsądnie oczekiwać.
+3. Jeżeli Towar ma postać cyfrową lub zawiera elementy cyfrowe, odpowiedzialność Sprzedawcy za jego zgodność określają także przepisy dotyczące treści i usług cyfrowych, o których mowa w § 40.
+4. Domniemywa się, że Niezgodność Towaru z umową, która ujawniła się przed upływem roku od dostarczenia Towaru, istniała w chwili jego dostarczenia.
+5. Sprzedawca nie odpowiada za Niezgodność Towaru z umową, jeżeli Konsument został wyraźnie poinformowany, że określona cecha Towaru odbiega od wymogów zgodności, i wyraźnie i odrębnie zaakceptował brak tej cechy przy zawarciu Umowy sprzedaży.
+6. Sprzedawca nie odpowiada za Niezgodność Towaru z umową spowodowaną nieprawidłowym montażem lub użytkowaniem Towaru przez Konsumenta, chyba że montaż został wykonany przez Sprzedawcę lub na jego odpowiedzialność albo nieprawidłowy montaż wynikał z wad instrukcji dostarczonej przez Sprzedawcę.
+7. Odpowiedzialność, o której mowa w ust. 1, nie obejmuje zwykłego zużycia Towaru ani uszkodzeń powstałych z przyczyn leżących po stronie Konsumenta, w szczególności na skutek niewłaściwego przechowywania, użytkowania lub pielęgnacji.
+
+@SEKCJA: § 33. Zgodność roślin z umową – zasady szczególne
+1. Przy ocenie zgodności Rośliny żywej z umową uwzględnia się jej naturalny, biologiczny charakter, w szczególności zmienność cech roślin tego samego gatunku i odmiany oraz wpływ czynników środowiskowych.
+2. Niezgodnością Rośliny żywej z umową nie jest w szczególności:
+1) różnica w wielkości, pokroju, liczbie pędów, liściach lub kwiatach mieszcząca się w granicach naturalnej zmienności właściwej dla danego gatunku i odmiany, o ile opis Towaru nie przewidywał dokładnych parametrów,
+2) zmiana barwy liści, ich zrzucenie lub przejściowe osłabienie kondycji wynikające z naturalnego cyklu wegetacyjnego, sezonowości lub aklimatyzacji do nowych warunków,
+3) różnica barwy kwiatów, owoców lub liści w stosunku do zdjęcia poglądowego wynikająca z właściwości odmiany, oświetlenia lub ustawień ekranu,
+4) obumarcie lub uszkodzenie rośliny spowodowane brakiem zachowania zaleceń pielęgnacyjnych, niewłaściwym podłożem, nadmiernym lub niedostatecznym podlewaniem, nasłonecznieniem, mrozem, upałem lub innymi warunkami panującymi po dostarczeniu.
+3. Niezgodnością Rośliny żywej z umową jest w szczególności:
+1) dostarczenie rośliny innego gatunku lub odmiany niż określona w Zamówieniu,
+2) dostarczenie rośliny martwej, zgniłej, zainfekowanej chorobami lub szkodnikami w dniu dostarczenia albo uszkodzonej w stopniu istotnie odbiegającym od cech typowych dla Towaru tego rodzaju,
+3) dostarczenie rośliny o wyraźnie mniejszych parametrach niż wskazane w opisie Towaru, jeżeli opis określał dokładne parametry, w szczególności wysokość, obwód pnia, rozmiar doniczki lub wiek rośliny,
+4) niedostarczenie rośliny w ilości wskazanej w Zamówieniu.
+4. Do zgłoszenia Reklamacji Rośliny żywej Klient powinien dołączyć dokumentację fotograficzną rośliny, jej korzeni oraz opakowania, wykonaną niezwłocznie po odbiorze Przesyłki, a także – jeżeli został sporządzony – protokół szkody, o którym mowa w § 25.
+5. Konsument powinien przechowywać Roślinę żywą zgodnie z zaleceniami pielęgnacyjnymi podanymi w opisie Towaru lub w materiałach dołączonych do Przesyłki. Zalecenia te mają charakter informacyjny i nie ograniczają uprawnień Konsumenta wynikających z przepisów prawa.
+6. Z uwagi na szybkie zmiany stanu Roślin żywych Sprzedawca zaleca zgłoszenie widocznych wad w ciągu 48 godzin od odbioru Przesyłki. Niezachowanie tego terminu nie powoduje utraty uprawnień Konsumenta, lecz może utrudnić ustalenie, czy Niezgodność Towaru z umową istniała w chwili dostarczenia.
+7. Ograniczenia opisane w ust. 2 nie wyłączają odpowiedzialności Sprzedawcy, jeżeli stan Rośliny żywej wynika z jej wadliwego zapakowania, nieprawidłowego przechowywania przed wysyłką lub opóźnienia w dostawie z przyczyn leżących po stronie Sprzedawcy.
+
+@SEKCJA: § 34. Uprawnienia Konsumenta przy niezgodności
+1. W razie Niezgodności Towaru z umową Konsument może żądać jego naprawy lub wymiany.
+2. Sprzedawca może dokonać wymiany, gdy Konsument żąda naprawy, albo dokonać naprawy, gdy Konsument żąda wymiany, jeżeli doprowadzenie do zgodności Towaru z umową w sposób wybrany przez Konsumenta jest niemożliwe albo wymagałoby nadmiernych kosztów dla Sprzedawcy. Przy ocenie nadmierności kosztów uwzględnia się wszystkie okoliczności sprawy, w szczególności wartość Towaru zgodnego z umową oraz rodzaj i znaczenie stwierdzonej Niezgodności.
+3. Jeżeli naprawa i wymiana są niemożliwe lub wymagałyby nadmiernych kosztów, Sprzedawca może odmówić doprowadzenia Towaru do zgodności z umową i poinformuje o tym Konsumenta.
+4. Naprawa lub wymiana są dokonywane w rozsądnym czasie od chwili, w której Sprzedawca został poinformowany przez Konsumenta o Niezgodności, i bez nadmiernych niedogodności dla Konsumenta, z uwzględnieniem charakteru Towaru oraz celu, któremu miał służyć. Sprzedawca ponosi koszty naprawy lub wymiany, w tym koszty dostarczenia Towaru.
+5. W przypadku wymiany Rośliny żywej Sprzedawca może zaproponować dostarczenie rośliny tego samego gatunku i odmiany o zbliżonych parametrach, a jeżeli jest to niemożliwe z powodu sezonowości lub braku dostępności – wskazać możliwy termin dostawy albo zaproponować inne rozwiązanie za zgodą Konsumenta.
+6. Konsument może złożyć oświadczenie o obniżeniu ceny albo odstąpieniu od Umowy sprzedaży, jeżeli:
+1) Sprzedawca odmówił doprowadzenia Towaru do zgodności z umową,
+2) Sprzedawca nie doprowadził Towaru do zgodności z umową zgodnie z ust. 4,
+3) Niezgodność Towaru z umową występuje nadal, pomimo że Sprzedawca próbował doprowadzić Towar do zgodności z umową,
+4) Niezgodność jest na tyle istotna, że uzasadnia obniżenie ceny albo odstąpienie od umowy bez uprzedniego skorzystania z naprawy lub wymiany,
+5) z oświadczenia Sprzedawcy lub okoliczności wyraźnie wynika, że nie doprowadzi on Towaru do zgodności z umową w rozsądnym czasie lub bez nadmiernych niedogodności dla Konsumenta.
+7. Obniżona cena musi pozostawać w proporcji do wartości, jaką Towar miał w chwili dostarczenia, do wartości Towaru zgodnego z umową.
+8. Konsument nie może odstąpić od Umowy sprzedaży, jeżeli Niezgodność Towaru z umową jest nieistotna. Domniemywa się, że Niezgodność jest istotna.
+9. W razie odstąpienia od Umowy sprzedaży z powodu Niezgodności Towaru z umową Konsument niezwłocznie zwraca Towar na koszt Sprzedawcy, a Sprzedawca zwraca Konsumentowi cenę niezwłocznie, nie później niż w terminie 14 dni od otrzymania Towaru lub dowodu jego odesłania. Zwrot Rośliny żywej, która obumarła lub uległa zniszczeniu, może nastąpić po przedstawieniu dokumentacji fotograficznej, o której mowa w § 33 ust. 4, jeżeli Sprzedawca zrezygnuje z jej odbioru.
+
+@SEKCJA: § 35. Tryb składania reklamacji
+1. Reklamację można złożyć pisemnie na adres Sprzedawcy wskazany w § 3, w formie elektronicznej na adres e-mail wskazany w § 3 lub za pośrednictwem Konta, a także telefonicznie, w sposób wskazany w § 3.
+2. Zaleca się, aby zgłoszenie Reklamacji zawierało: imię i nazwisko lub nazwę Klienta, adres do korespondencji, numer Zamówienia, opis stwierdzonej Niezgodności Towaru z umową, datę jej stwierdzenia, określenie żądania Klienta oraz dane kontaktowe. Brak któregokolwiek z tych elementów nie wyłącza rozpatrzenia Reklamacji.
+3. Do Reklamacji dotyczącej Rośliny żywej Klient dołącza dokumentację fotograficzną, o której mowa w § 33 ust. 4. Zdjęcia powinny przedstawiać całą roślinę, jej liście, pędy, bryłę korzeniową oraz opakowanie, a także etykietę przesyłki.
+4. Sprzedawca ustosunkuje się do żądania Konsumenta dotyczącego doprowadzenia Towaru do zgodności z umową, obniżenia ceny lub odstąpienia od umowy w terminie 14 dni od dnia otrzymania Reklamacji. Brak odpowiedzi w tym terminie oznacza, że Sprzedawca uznał żądanie za uzasadnione.
+5. Sprzedawca może poprosić o uzupełnienie dokumentacji lub udostępnienie Towaru do oględzin, jeżeli jest to niezbędne do rozpatrzenia Reklamacji. Prośba ta nie wpływa na bieg terminu, o którym mowa w ust. 4.
+6. Konsument jest obowiązany udostępnić Sprzedawcy Towar w celu naprawy lub wymiany. Sprzedawca odbiera Towar od Konsumenta na swój koszt, z wyjątkiem Roślin żywych, które obumarły lub których odbiór nie jest możliwy, jeżeli Sprzedawca nie zażąda ich udostępnienia.
+7. Odpowiedź na Reklamację jest przekazywana Klientowi w sposób, w jaki została złożona Reklamacja, chyba że Klient wskaże inny sposób, w szczególności adres e-mail.
+8. Zgłoszenie Reklamacji nie uniemożliwia Klientowi dochodzenia swoich praw na drodze sądowej lub w trybie pozasądowego rozwiązywania sporów, o którym mowa w § 43.
+
+@SEKCJA: § 36. Rękojmia wobec przedsiębiorców na prawach konsumenta i przedsiębiorców
+1. Przedsiębiorca na prawach konsumenta korzysta z uprawnień przysługujących Konsumentowi z tytułu odpowiedzialności za zgodność Towaru z umową, na zasadach opisanych w § 32–35.
+2. Wobec Przedsiębiorcy niebędącego Przedsiębiorcą na prawach konsumenta Sprzedawca odpowiada z tytułu rękojmi za wady fizyczne i prawne Towaru na zasadach określonych w Kodeksie cywilnym, z zastrzeżeniem ust. 3–7.
+3. Odpowiedzialność Sprzedawcy z tytułu rękojmi wobec Przedsiębiorcy, o którym mowa w ust. 2, wyłącza się w zakresie dopuszczalnym przez prawo, z wyjątkiem przypadków, gdy Sprzedawca wadę podstępnie zataił.
+4. Przedsiębiorca, o którym mowa w ust. 2, jest obowiązany zbadać Towar w czasie i w sposób przyjęty przy rzeczach tego rodzaju oraz zawiadomić Sprzedawcę o stwierdzonej wadzie w terminie 3 dni od dnia dostarczenia – w przypadku Roślin żywych – oraz 7 dni – w przypadku pozostałych Towarów. Po upływie tych terminów Przedsiębiorca traci uprawnienia z tytułu rękojmi za wady, które można było wykryć przy zwykłym badaniu.
+5. Wady ukryte Przedsiębiorca zgłasza niezwłocznie po ich wykryciu, nie później niż przed upływem roku od dnia dostarczenia Towaru.
+6. Sprzedawca może według własnego wyboru wymienić Towar na wolny od wad, usunąć wadę albo obniżyć cenę. Odstąpienie od Umowy sprzedaży przez Przedsiębiorcę jest możliwe, jeżeli wada jest istotna.
+7. Odpowiedzialność Sprzedawcy wobec Przedsiębiorcy, o którym mowa w ust. 2, ogranicza się do rzeczywistej straty poniesionej przez tego Przedsiębiorcę, do wysokości ceny zapłaconej za Towar, z wyłączeniem utraconych korzyści, w zakresie dopuszczalnym przez prawo.
+8. Przepisy ust. 2–7 nie dotyczą Konsumentów ani Przedsiębiorców na prawach konsumenta i nie ograniczają ich uprawnień.
+
+@SEKCJA: § 37. Gwarancja i serwis
+1. Towary mogą być objęte gwarancją producenta lub dystrybutora. Informacja o gwarancji, jej warunkach, okresie i gwarancie jest podawana w opisie Towaru lub w dokumentach dołączonych do Przesyłki.
+2. Jeżeli Towar objęty jest gwarancją, Sprzedawca przekazuje Klientowi dokument gwarancyjny najpóźniej w chwili dostarczenia Towaru, w postaci umożliwiającej jego utrwalenie.
+3. Gwarancja nie wyłącza, nie ogranicza ani nie zawiesza uprawnień Konsumenta wynikających z odpowiedzialności Sprzedawcy za zgodność Towaru z umową, o której mowa w § 32–34. Konsument może korzystać z uprawnień z gwarancji i z odpowiedzialności Sprzedawcy niezależnie.
+4. Gwarancja udzielona przez producenta lub dystrybutora nie rozszerza ani nie zmienia zakresu odpowiedzialności Sprzedawcy, chyba że Sprzedawca wyraźnie oświadczy inaczej.
+5. W sprawach gwarancyjnych Klient może kontaktować się bezpośrednio z gwarantem, a w razie wątpliwości – ze Sprzedawcą, który udzieli informacji o sposobie dochodzenia roszczeń z gwarancji.
+6. Roślinom żywym nie towarzyszy gwarancja, chyba że w opisie Towaru wyraźnie wskazano inaczej. Sprzedawca może oferować dobrowolne programy, takie jak gwarancja przyjęcia się rośliny, na warunkach każdorazowo podanych w ich opisie.
+7. Sprzedawca nie świadczy serwisu pogwarancyjnego Towarów, chyba że informacja o takim serwisie została podana w opisie Towaru.
+
+@SEKCJA: § 38. Usługi cyfrowe – konto i dostęp do treści
+1. Usługa cyfrowa polegająca na prowadzeniu Konta jest świadczona nieodpłatnie na rzecz Użytkownika na czas nieokreślony, na zasadach opisanych w § 6–9.
+2. W ramach Konta Użytkownik ma dostęp w szczególności do: historii Zamówień, zapisanych danych do dostawy, listy ulubionych Towarów, ustawień zgód i powiadomień oraz wybranych materiałów dostępnych w ramach Poradnika.
+3. Sprzedawca dokłada starań, aby Konto było dostępne całodobowo, z zastrzeżeniem przerw technicznych niezbędnych do konserwacji, aktualizacji lub usunięcia awarii. Informacja o planowanych przerwach jest, o ile to możliwe, zamieszczana na stronie internetowej Sklepu z odpowiednim wyprzedzeniem.
+4. Dostęp do Treści cyfrowej lub Usługi cyfrowej jest zapewniany po zalogowaniu na Konto, a w przypadku treści ogólnodostępnych – bez konieczności logowania.
+5. Użytkownik jest obowiązany korzystać z Konta zgodnie z Regulaminem i przepisami prawa oraz nie udostępniać danych logowania osobom trzecim.
+6. Sprzedawca może zawiesić dostęp do Konta w przypadku uzasadnionego podejrzenia naruszenia bezpieczeństwa Konta lub naruszenia Regulaminu, informując o tym Użytkownika, o ile to możliwe, przed zawieszeniem lub niezwłocznie po nim.
+7. Przepisy o odpowiedzialności za zgodność Treści cyfrowej lub Usługi cyfrowej z umową stosuje się do Konsumenta także wtedy, gdy Usługa cyfrowa jest świadczona nieodpłatnie, o ile Konsument udostępnia dane osobowe niezbędne do jej świadczenia, a Sprzedawca nie przetwarza ich wyłącznie w celu dostarczenia Usługi cyfrowej lub wywiązania się z wymogów prawnych.
+
+@SEKCJA: § 39. Poradnik ogrodniczy online
+1. Poradnik jest zbiorem Treści cyfrowych, w szczególności artykułów, instrukcji pielęgnacyjnych, kalendarzy prac ogrodniczych, zdjęć i materiałów wideo, udostępnianych w ramach Sklepu.
+2. Część materiałów Poradnika jest dostępna nieodpłatnie dla wszystkich Użytkowników, a część – wyłącznie dla zalogowanych Użytkowników posiadających Konto. Zakres materiałów dostępnych odpłatnie, jeżeli Sprzedawca je oferuje, jest określany każdorazowo w opisie oferty.
+3. Sprzedawca udziela Użytkownikowi niewyłącznej, nieprzenaszalnej, nieodpłatnej licencji na korzystanie z materiałów Poradnika wyłącznie w zakresie własnego użytku osobistego, bez prawa do sublicencjonowania.
+4. Zabronione jest kopiowanie, powielanie, rozpowszechnianie, publiczne udostępnianie, zmienianie oraz wykorzystywanie materiałów Poradnika w celach komercyjnych bez uprzedniej pisemnej zgody Sprzedawcy, z zastrzeżeniem dozwolonego użytku wynikającego z przepisów prawa.
+5. Porady zawarte w Poradniku mają charakter informacyjny i ogólny. Skuteczność zaleceń zależy od warunków lokalnych, w szczególności gleby, klimatu, nasłonecznienia i sposobu uprawy, i nie stanowi gwarancji uzyskania określonego rezultatu.
+6. Poradnik nie zastępuje konsultacji ze specjalistą w zakresie ochrony roślin, a stosowanie środków ochrony roślin powinno odbywać się zgodnie z etykietą i instrukcją producenta.
+7. Użytkownik, który zakupił dostęp do płatnych materiałów Poradnika, wyraża – przed rozpoczęciem świadczenia – zgodę na ich dostarczenie przed upływem terminu do odstąpienia od umowy i potwierdza, że został poinformowany o utracie prawa odstąpienia, zgodnie z § 31 ust. 1 pkt 5.
+8. Sprzedawca zastrzega sobie prawo do zmiany, uzupełniania i aktualizacji materiałów Poradnika, z zachowaniem zasad określonych w § 40.
+
+@SEKCJA: § 40. Zgodność usług cyfrowych i ich aktualizacje
+1. Sprzedawca odpowiada wobec Konsumenta za brak zgodności Treści cyfrowej lub Usługi cyfrowej z umową, która istniała w chwili jej dostarczenia lub ujawniła się w okresie, w którym Usługa cyfrowa powinna być świadczona.
+2. Treść cyfrowa lub Usługa cyfrowa jest zgodna z umową, jeżeli w szczególności odpowiada opisowi, ilości, jakości, kompletności i funkcjonalności, nadaje się do celu, do którego jest zazwyczaj używana, oraz jest dostarczana wraz z dostępnymi aktualizacjami i instrukcjami, których Konsument może rozsądnie oczekiwać.
+3. Sprzedawca zapewnia Konsumentowi aktualizacje, w tym aktualizacje zabezpieczeń, niezbędne do utrzymania zgodności Treści cyfrowej lub Usługi cyfrowej z umową, w okresie, w którym Usługa cyfrowa powinna być świadczona, a w przypadku Treści cyfrowej dostarczanej jednorazowo – w okresie, jakiego Konsument może rozsądnie oczekiwać.
+4. Konsument nie ponosi odpowiedzialności za brak zgodności wynikający z niezainstalowania aktualizacji dostarczonej przez Sprzedawcę, jeżeli Sprzedawca nie poinformował go o dostępności aktualizacji i o skutkach jej niezainstalowania, a także gdy brak instalacji lub nieprawidłowa instalacja wynikały z wad instrukcji.
+5. Sprzedawca może zmienić Treść cyfrową lub Usługę cyfrową w zakresie wykraczającym poza to, co jest niezbędne do zachowania zgodności z umową, wyłącznie jeżeli umowa przewiduje taką możliwość i istnieje ważny powód zmiany. Zmiana nie może wiązać się z dodatkowymi kosztami dla Konsumenta, a Konsument zostanie jasno i zrozumiale poinformowany o zmianie.
+6. Jeżeli zmiana, o której mowa w ust. 5, istotnie i negatywnie wpływa na dostęp Konsumenta do Treści cyfrowej lub Usługi cyfrowej albo na korzystanie z nich, Sprzedawca poinformuje o tym Konsumenta z odpowiednim wyprzedzeniem na trwałym nośniku. Konsument może wówczas wypowiedzieć umowę bez zachowania terminu wypowiedzenia w ciągu 30 dni od zmiany lub poinformowania o niej, w zależności od tego, co nastąpiło później.
+7. W razie braku zgodności Treści cyfrowej lub Usługi cyfrowej z umową Konsument może żądać doprowadzenia jej do zgodności z umową. Sprzedawca doprowadza ją do zgodności w rozsądnym czasie, nieodpłatnie i bez nadmiernych niedogodności dla Konsumenta.
+8. Jeżeli doprowadzenie do zgodności jest niemożliwe, wymagałoby nadmiernych kosztów, nie zostało dokonane w rozsądnym czasie lub brak zgodności występuje nadal, Konsument może złożyć oświadczenie o obniżeniu ceny albo odstąpieniu od umowy, na zasadach określonych w przepisach prawa.
+9. Reklamacje dotyczące Treści cyfrowych i Usług cyfrowych rozpatrywane są w trybie określonym w § 35.
+
+@SEKCJA: § 41. Opinie konsumentów
+1. Sklep umożliwia Użytkownikom zamieszczanie Opinii o Towarach i Sklepie. Zamieszczenie Opinii jest dobrowolne i nieodpłatne.
+2. Sprzedawca zapewnia, że Opinie są publikowane niezależnie od ich treści pozytywnej lub negatywnej, o ile nie naruszają Regulaminu ani przepisów prawa.
+3. Opinie mogą być zamieszczane przez Użytkowników, którzy dokonali zakupu danego Towaru w Sklepie (Opinie zweryfikowane) lub przez pozostałych Użytkowników (Opinie niezweryfikowane). Przy każdej Opinii Sprzedawca zamieszcza informację, czy pochodzi ona od Użytkownika, który dokonał zakupu Towaru.
+4. Weryfikacja, czy Opinia pochodzi od Konsumenta, który korzystał z Towaru lub go nabył, polega na powiązaniu Opinii z historią Zamówień na Koncie Użytkownika, a Sprzedawca w sposób jasny informuje o jej zakresie i sposobie.
+5. Zabronione jest zamieszczanie Opinii o treści bezprawnej, wulgarnej, obraźliwej, naruszającej dobra osobiste lub prawa osób trzecich, o charakterze reklamowym, a także Opinii niepochodzących od rzeczywistych konsumentów i zamieszczanych w zamian za korzyść.
+6. Sprzedawca nie zamieszcza ani nie zleca zamieszczania fałszywych Opinii, nie przekształca Opinii w celu wypaczenia ich treści i nie oferuje korzyści w zamian za wyłącznie pozytywne Opinie.
+7. Opinie mogą być moderowane przez Sprzedawcę wyłącznie w zakresie koniecznym do usunięcia treści naruszających ust. 5. Użytkownik jest informowany o usunięciu Opinii wraz ze wskazaniem przyczyny.
+8. Sprzedawca udostępnia informacje o głównych parametrach decydujących o kolejności prezentowania Opinii oraz o ich ewentualnym uporządkowaniu według daty lub przydatności.
+9. Użytkownik może zażądać usunięcia lub edycji własnej Opinii w dowolnym czasie, kontaktując się ze Sprzedawcą w sposób wskazany w § 3.
+
+@SEKCJA: § 42. Ochrona danych osobowych
+1. Administratorem danych osobowych Klientów i Użytkowników jest Sprzedawca – Zielony Sad sp. z o.o. z siedzibą w Warszawie, ul. Przykładowa 1, 00-001 Warszawa, KRS 0000000000.
+2. Dane osobowe są przetwarzane zgodnie z rozporządzeniem Parlamentu Europejskiego i Rady (UE) 2016/679 (RODO) oraz przepisami prawa krajowego, w celach i na zasadach określonych w Polityce prywatności.
+3. Szczegółowe informacje o celach i podstawach przetwarzania, okresach przechowywania, odbiorcach danych oraz prawach osób, których dane dotyczą, zawiera Polityka prywatności, dostępna na stronie internetowej Sklepu.
+4. Podanie danych osobowych jest dobrowolne, lecz niezbędne do zawarcia i realizacji Umowy sprzedaży, założenia Konta oraz świadczenia innych usług w Sklepie. Brak podania danych uniemożliwia ich realizację.
+5. Osobie, której dane dotyczą, przysługuje w szczególności prawo dostępu do danych, ich sprostowania, usunięcia, ograniczenia przetwarzania, przenoszenia danych, wniesienia sprzeciwu oraz cofnięcia zgody w dowolnym momencie, bez wpływu na zgodność z prawem przetwarzania dokonanego przed jej cofnięciem.
+6. Osobie, której dane dotyczą, przysługuje prawo wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych.
+7. W zakresie nieuregulowanym w Regulaminie zasady przetwarzania danych osobowych określa Polityka prywatności.
+
+@SEKCJA: § 43. Pozasądowe rozwiązywanie sporów
+1. Konsument ma możliwość skorzystania z pozasądowych sposobów rozpatrywania reklamacji i dochodzenia roszczeń. Korzystanie z nich jest dobrowolne i wymaga zgody obu stron sporu.
+2. Konsument może w szczególności: zwrócić się do stałego polubownego sądu konsumenckiego działającego przy Inspekcji Handlowej z wnioskiem o rozstrzygnięcie sporu wynikającego z Umowy sprzedaży, zwrócić się do wojewódzkiego inspektora Inspekcji Handlowej z wnioskiem o wszczęcie postępowania mediacyjnego w sprawie polubownego zakończenia sporu, a także zwrócić się o pomoc do powiatowego (miejskiego) rzecznika konsumentów lub organizacji społecznej, do której zadań statutowych należy ochrona konsumentów.
+3. Informacje dotyczące procedur pozasądowego rozwiązywania sporów oraz wykaz podmiotów uprawnionych do ich prowadzenia są dostępne na stronie internetowej Urzędu Ochrony Konkurencji i Konsumentów oraz w siedzibach i na stronach internetowych wojewódzkich inspektoratów Inspekcji Handlowej.
+4. Konsument może skorzystać z platformy internetowego systemu rozstrzygania sporów (platforma ODR) dostępnej pod adresem: http://ec.europa.eu/consumers/odr, o ile platforma ta funkcjonuje i ma zastosowanie do danego sporu, a Sprzedawca zamieszcza na stronie internetowej Sklepu link do tej platformy i swój adres e-mail.
+5. Sprzedawca poinformuje Konsumenta w postaci papierowej lub na innym trwałym nośniku o stanowisku wobec wniosku o rozstrzygnięcie sporu, jeżeli spór nie został rozwiązany w drodze Reklamacji i Konsument zwrócił się do Sprzedawcy z takim wnioskiem.
+6. Skorzystanie z pozasądowych sposobów rozwiązywania sporów nie pozbawia Konsumenta prawa do dochodzenia roszczeń przed sądem powszechnym.
+
+@SEKCJA: § 44. Postanowienia końcowe
+1. Umowy zawierane za pośrednictwem Sklepu podlegają prawu polskiemu. Wybór prawa polskiego nie pozbawia Konsumenta ochrony przyznanej mu na podstawie przepisów, od których nie można odstąpić w drodze umowy, obowiązujących w państwie jego zwykłego pobytu.
+2. Sądem właściwym do rozpoznania sporów wynikających z Umów sprzedaży zawartych z Konsumentem i Przedsiębiorcą na prawach konsumenta jest sąd właściwy według przepisów ogólnych Kodeksu postępowania cywilnego, a w sporach z Przedsiębiorcami niebędącymi Przedsiębiorcami na prawach konsumenta – sąd właściwy dla siedziby Sprzedawcy.
+3. Językiem Umowy sprzedaży i komunikacji ze Sprzedawcą jest język polski.
+4. Jeżeli którekolwiek z postanowień Regulaminu zostanie uznane za nieważne, bezskuteczne lub niezgodne z prawem, pozostałe postanowienia pozostają w mocy. W miejsce postanowienia nieważnego stosuje się odpowiednie przepisy prawa.
+5. Postanowienia Regulaminu nie wyłączają ani nie ograniczają praw Konsumentów i Przedsiębiorców na prawach konsumenta wynikających z bezwzględnie obowiązujących przepisów prawa. W razie sprzeczności Regulaminu z takimi przepisami pierwszeństwo mają przepisy prawa.
+6. W sprawach nieuregulowanych w Regulaminie stosuje się przepisy prawa polskiego, w szczególności Kodeksu cywilnego, ustawy o prawach konsumenta, ustawy o świadczeniu usług drogą elektroniczną oraz ustawy o ochronie danych osobowych i RODO.
+7. Treść Regulaminu jest dostępna na stronie internetowej Sklepu w postaci umożliwiającej jego pobranie, utrwalenie i wydrukowanie. Na żądanie Klienta Regulamin może zostać przesłany drogą elektroniczną.
+8. Sprzedawca nie jest związany żadnym kodeksem dobrych praktyk w rozumieniu ustawy o przeciwdziałaniu nieuczciwym praktykom rynkowym, chyba że informacja o takim kodeksie zostanie zamieszczona na stronie internetowej Sklepu.
+
+@SEKCJA: § 45. Zmiana regulaminu
+1. Sprzedawca zastrzega sobie prawo do zmiany Regulaminu z ważnych przyczyn, do których należą w szczególności: zmiana przepisów prawa lub ich wykładni przez sądy i organy władzy publicznej, zmiana sposobów płatności i dostawy, zmiana zakresu lub sposobu świadczenia usług elektronicznych, konieczność usunięcia niejasności lub wyeliminowania nieprawidłowych postanowień oraz względy bezpieczeństwa i techniczne.
+2. O zmianie Regulaminu Sprzedawca informuje Użytkowników posiadających Konto oraz subskrybentów Newslettera drogą elektroniczną, a także zamieszcza informację na stronie internetowej Sklepu, co najmniej na 14 dni przed wejściem w życie zmian.
+3. Zmiany Regulaminu nie naruszają praw nabytych przez Klientów przed dniem wejścia zmian w życie, w szczególności dotyczących złożonych Zamówień. Do Umów sprzedaży zawartych przed zmianą stosuje się Regulamin w brzmieniu obowiązującym w dniu zawarcia umowy.
+4. Użytkownik posiadający Konto, który nie akceptuje zmian Regulaminu, może w terminie 14 dni od otrzymania informacji o zmianach rozwiązać umowę o prowadzenie Konta, składając Sprzedawcy oświadczenie o usunięciu Konta, zgodnie z § 9. Brak takiego oświadczenia oznacza akceptację zmian po upływie terminu ich wejścia w życie.
+5. Zmiana Regulaminu nie może prowadzić do ograniczenia praw Konsumentów wynikających z bezwzględnie obowiązujących przepisów prawa.
+6. Zmiana Regulaminu, która dotyczy Usług cyfrowych i istotnie oraz negatywnie wpływa na dostęp Konsumenta do nich, podlega zasadom określonym w § 40 ust. 5–6.
+7. Regulamin w niniejszym brzmieniu wchodzi w życie z dniem jego opublikowania na stronie internetowej Sklepu.
+
+@PODPIS:
+Zarząd Zielony Sad sp. z o.o.
+[KONIEC CZĘŚCI 3/3]

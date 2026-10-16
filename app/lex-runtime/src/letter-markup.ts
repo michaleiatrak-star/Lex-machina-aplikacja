@@ -18,6 +18,7 @@ import type { PersonCase } from "./privacy/person-morphology.js";
 // @TYTUL: OŚWIADCZENIE O SPEŁNIANIU ŚWIADCZEŃ Z ZASTRZEŻENIEM ZWROTU
 // @PODSTAWA: (art. 35 ustawy o rozpatrywaniu reklamacji)
 // @SEKCJA: I. Żądanie
+// @PODSEKCJA: 1. Zawarcie umowy   (a subsection of a long pleading or contract)
 // a paragraph per line; "1." / "-" lines are a list; **Etykieta:** is bold
 // @PODPIS:             the signer's lines below (none: a field to fill in)
 // @ZALACZNIKI:         a list below
@@ -31,6 +32,7 @@ export const LETTER_MARKUP_MARKERS = [
   "TYTUL",
   "PODSTAWA",
   "SEKCJA",
+  "PODSEKCJA",
   "PODPIS",
   "ZALACZNIKI"
 ] as const;
@@ -168,6 +170,9 @@ export function letterMarkupAst(
         case "SEKCJA":
           if (rest) blocks.push({ type: "heading", level: 2, content: markupInlines(rest) });
           break;
+        case "PODSEKCJA":
+          if (rest) blocks.push({ type: "heading", level: 3, content: markupInlines(rest) });
+          break;
         case "PODPIS": {
           const rows = blockLines(index + 1);
           const signer = [...(rest ? [rest] : []), ...rows.lines];
@@ -225,6 +230,7 @@ export const LETTER_MARKUP_CONTRACT = [
   "@TYTUL: <TITLE IN CAPITALS> — required, one line.",
   "@PODSTAWA: <legal basis under the title, in parentheses> — optional.",
   "@SEKCJA: <I. Section title> — for a letter with sections (numbered with Roman numerals).",
+  "@PODSEKCJA: <1. Subsection title> — a subsection under the current section (long pleadings, contracts).",
   "Body: one paragraph per line; list items start with \"1.\" (numbered) or \"- \" (bullets); **label:** marks a bold label at the start of a paragraph or item (e.g. \"**Żądanie główne:** …\").",
   "@PODPIS: then the signer's name below it (unknown: leave the line empty).",
   "@ZALACZNIKI: then the attachments as a numbered list below it (only when there are attachments).",

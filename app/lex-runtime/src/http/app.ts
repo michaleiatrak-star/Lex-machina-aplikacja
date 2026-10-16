@@ -17,7 +17,7 @@ import {
   ProcessingProgressRegistry,
   progressIdFrom
 } from "../processing-progress.js";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express, {
   type Express,
   type NextFunction,
@@ -33,11 +33,20 @@ import { threadUserText } from "../skill-selection.js";
 import {
   appendDraftVersion,
   emptyProcessPleadingDraft,
-  extractPleadingText,
   latestDraftVersion,
+  PLEADING_CONTINUATIONS_MAX,
+  PLEADING_END,
+  PLEADING_START,
+  pleadingContinuationPrompt,
+  pleadingStepText,
   withoutDraftRemarks,
   writesPleading
 } from "../process-pleading-draft.js";
+
+// A writing step whose pleading text was not kept (cut, unfinished, a change to no section).
+function pleadingDraftNotice(checkpoint: string, problems: readonly string[]): string {
+  return `**Projekt pisma nie został zaktualizowany (${checkpoint}):** ${problems.join("; ")}. Zapisana pozostaje poprzednia wersja; powtórz krok albo popraw projekt.`;
+}
 
 // A message that only moves a document pipeline on (its subject is earlier in the thread).
 const PIPELINE_CONTINUATION =
@@ -246,6 +255,7 @@ import {
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
+import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import {
   buildWorkflowAuditArtifact,
@@ -7419,8 +7429,23 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           req.body?.source === "REDACTION" &&
           earlierUserTurns.length > 0 &&
           options.sessionExecutor?.pleadingRedactionFor?.(earlierUserTurns.join("\n")) === true;
+        // A long letter written in parts in the chat (long-document.ts): the file renders the
+        // joined parts, each checked against the plan; the export gate and HYBRID-VAL still run.
+        const longDocumentId = typeof req.body?.longDocumentId === "string" ? req.body.longDocumentId : null;
+        const longDocumentState =
+          longDocumentId && options.caseMemoryStore
+            ? (await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) =>
+                options.caseMemoryStore!.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion })
+              )).longDocument ?? null
+            : null;
+        if (longDocumentId && (!longDocumentState || longDocumentState.id !== longDocumentId || !isComplete(longDocumentState) || longDocumentState.failed)) {
+          res.status(409).json({ error: "LONG_DOCUMENT_INCOMPLETE" });
+          return;
+        }
+        const longDocumentSource = longDocumentId ? longDocumentState : null;
         if (
           !redactionFile &&
+          !longDocumentSource &&
           (documentType === "pleading" ||
           previewSessionWorkflow(options.registry, sessionRequest).id === "PROCESS_PLEADING_V1")
         ) {
@@ -7475,7 +7500,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             .documentAstGenerator
             .generate({
               ...(processRenderOnly ? { processRenderOnly } : {}),
-              ...(pleadingSource
+              ...(longDocumentSource
+                ? {
+                    sourceText: {
+                      label: `długie pismo „${longDocumentSource.plan.tytul}” z ${longDocumentSource.plan.czesci.length} części`,
+                      text: joinParts(longDocumentSource)
+                    }
+                  }
+                : pleadingSource
                 ? {
                     sourceText: {
                       label: `zapisany projekt pisma, wersja ${pleadingSource.version}${processDocumentStatus === "FINAL" ? " (FINAL)" : ""}`,
@@ -8964,16 +8996,22 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     keyVersion: number,
     checkpoint: ProcessPleadingCheckpoint,
     stage: ProcessPleadingStage,
-    answer: string
+    answer: string,
+    problems: string[] = []
   ): Promise<{ version: number; checkpoint: ProcessPleadingCheckpoint } | null> {
     const store = options.processWorkflowStore;
     if (!store?.getProcessPleadingDraft || !store.saveProcessPleadingDraft || !options.caseAccessService) return null;
-    const text = writesPleading(checkpoint) ? extractPleadingText(answer) : null;
     try {
       return await options.caseAccessService.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
         const current = await store.getProcessPleadingDraft!({ caseId, caseDataKey, keyVersion });
         let next = current ?? emptyProcessPleadingDraft(caseId);
         const before = latestDraftVersion(next)?.version ?? 0;
+        // The whole text, or a long draft's changed sections applied to it; a cut block or an
+        // unfinished one is said, not kept silently as the previous version.
+        const step = writesPleading(checkpoint) ? pleadingStepText(answer, latestDraftVersion(next)?.text ?? null) : null;
+        if (step?.kind === "PROBLEM") problems.push(step.problem);
+        if (step?.kind === "PARTIAL") problems.push(`pismo niedokończone po ${PLEADING_CONTINUATIONS_MAX} rundach dalszego ciągu: nowa wersja nie została zapisana`);
+        const text = step?.kind === "FULL" ? step.text : null;
         if (text) next = appendDraftVersion(next, { text, source: "PIPELINE", stage, checkpoint });
         if (next.remarks?.checkpoint === checkpoint) next = withoutDraftRemarks(next);
         if (next.revision === (current?.revision ?? 0)) return null;
@@ -8991,6 +9029,35 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // The step stays committed; the draft keeps its previous version.
       return null;
     }
+  }
+
+  // A pleading over one answer (its block ends with "=== CIĄG DALSZY ==="): the rest asked for
+  // in the same step, each round through the same gates; the answer then holds the whole block.
+  async function completePleadingAnswer(
+    request: SessionExecutionRequest,
+    result: SessionExecutionResponse
+  ): Promise<SessionExecutionResponse> {
+    if (!result.answer || !request.processWorkflowContext || !writesPleading(request.processWorkflowContext.checkpoint)) return result;
+    const first = pleadingStepText(result.answer, null);
+    if (first.kind !== "PARTIAL") return result;
+    let written = first.text;
+    let tail = "";
+    for (let round = 1; round <= PLEADING_CONTINUATIONS_MAX; round += 1) {
+      request.onStep?.("PREPARE", `pismo: dalszy ciąg, runda ${round}`);
+      const next = await options.sessionExecutor!.execute({ ...request, query: `${request.query}\n\n${pleadingContinuationPrompt(written, round)}` });
+      if (next.status !== "DRAFT_PRESENTABLE" || !next.answer) break;
+      const piece = pleadingStepText(next.answer, null);
+      if (piece.kind !== "PARTIAL" && piece.kind !== "FULL") break;
+      written = `${written}\n\n${piece.text}`;
+      if (piece.kind === "FULL") {
+        tail = next.answer.slice(next.answer.lastIndexOf(PLEADING_END) + PLEADING_END.length).trim();
+        const start = result.answer.lastIndexOf(PLEADING_START);
+        // In place: the result's internal validation record stays with it.
+        result.answer = `${result.answer.slice(0, start)}${PLEADING_START}\n${written}\n${PLEADING_END}${tail ? `\n\n${tail}` : ""}`;
+        return result;
+      }
+    }
+    return result;
   }
 
   function hasFirmWorkspace(res: Response): boolean {
@@ -9618,6 +9685,27 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       ) {
         request.documentAttachments =
           sessionAttachments;
+      }
+
+      let longDocument: LongDocumentState | null = null;
+      // A long letter in parts (any model, also a short "kontynuuj"): the part asked for, with the
+      // plan, the last numbers and the end of the previous part from the case's record.
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+        try {
+          const actor = responseAuthContext(res);
+          const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+          longDocument =
+            (await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) =>
+              options.caseMemoryStore!.getCaseMemory({ caseId: knowledge.caseId!, caseDataKey, keyVersion: caseView.keyVersion })
+            )).longDocument ?? null;
+          const askedPart = longDocument && (!isComplete(longDocument) || longDocument.failed) ? requestedPart(latestUserMessage(request.query), longDocument) : null;
+          if (longDocument && askedPart) {
+            request.query = `${request.query}\n\n${continuationBlock(longDocument, askedPart, longDocument.failed?.k === askedPart ? longDocument.failed.problems : [])}`;
+            request.onStep?.("PREPARE", `długie pismo: część ${askedPart} z ${longDocument.plan.czesci.length}`);
+          }
+        } catch (error) {
+          console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
+        }
       }
 
       // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
@@ -10786,12 +10874,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       ...(await pleadingDraftContext(actor, processContext!.caseId, caseView.keyVersion, permit.checkpoint))
                     }
                   };
-                const nodeResult =
+                const nodeResult = await completePleadingAnswer(
+                  nodeRequest,
                   await options
                     .sessionExecutor!
                     .execute(
                       nodeRequest
-                    );
+                    )
+                );
                 await refreshCitations(
                   nodeResult
                 );
@@ -10805,14 +10895,17 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     .result ===
                     "PASS";
                 if (commit) {
+                  const draftProblems: string[] = [];
                   pleadingDraftWritten = (await recordPleadingStep(
                     actor,
                     processContext!.caseId,
                     caseView.keyVersion,
                     permit.checkpoint,
                     permit.stage,
-                    nodeResult.answer ?? ""
+                    nodeResult.answer ?? "",
+                    draftProblems
                   )) ?? pleadingDraftWritten;
+                  if (draftProblems.length) nodeResult.answer = `${nodeResult.answer ?? ""}\n\n${pleadingDraftNotice(permit.checkpoint, draftProblems)}`;
                 }
                 return {
                   result:
@@ -10986,10 +11079,12 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
 
-      const result =
+      const result = await completePleadingAnswer(
+        request,
         await options
           .sessionExecutor
-          .execute(request);
+          .execute(request)
+      );
 
       if (
         result.documentCitations &&
@@ -11770,6 +11865,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           result.workflow?.id === "PROCESS_PLEADING_V1" &&
           result.workflow.result === "PASS"
         ) {
+          const draftProblems: string[] = [];
           pleadingDraftWritten =
             (await recordPleadingStep(
               actor,
@@ -11777,8 +11873,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               caseView.keyVersion,
               processContext.permit.checkpoint,
               processContext.permit.stage,
-              result.answer ?? ""
+              result.answer ?? "",
+              draftProblems
             )) ?? pleadingDraftWritten;
+          if (draftProblems.length) result.answer = `${result.answer ?? ""}\n\n${pleadingDraftNotice(processContext.permit.checkpoint, draftProblems)}`;
         }
 
         result.processWorkflow = {
@@ -11873,6 +11971,68 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           if (timelineToKeep) result.chronologySaved = { updatedAt: timelineToKeep.updatedAt };
         } catch (error) {
           console.error("CASE_MEMORY_WORK_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+        }
+      }
+      // A part of a long letter: checked against the plan and the parts before it, kept in the
+      // case memory when it passes; the chat shows "Część k z N" and the next part is asked for.
+      const writtenPart = result.status === "DRAFT_PRESENTABLE" && result.answer ? parsePart(result.answer) : null;
+      if (writtenPart && knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+        const now = new Date().toISOString();
+        const started: LongDocumentState | null =
+          writtenPart.k === 1 && writtenPart.plan ? { id: randomUUID(), plan: writtenPart.plan, parts: [], updatedAt: now } : longDocument;
+        if (started) {
+          const check = checkPart(writtenPart, started.plan, started.parts);
+          const { failed: _failed, ...clean } = started;
+          const state: LongDocumentState = check.ok
+            ? withPart(clean, writtenPart, now)
+            : { ...started, failed: { k: writtenPart.k, problems: check.problems }, updatedAt: now };
+          try {
+            const actor = responseAuthContext(res);
+            const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+            await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) =>
+              options.caseMemoryStore!.saveCaseMemory({ caseId: knowledge.caseId!, caseDataKey, keyVersion: caseView.keyVersion, longDocument: state })
+            );
+            const next = nextPart(state);
+            result.answer = presentPart(result.answer!, writtenPart, state.plan.tytul);
+            result.longDocument = {
+              id: state.id,
+              title: state.plan.tytul,
+              part: writtenPart.k,
+              parts: state.plan.czesci.length,
+              ok: check.ok,
+              problems: check.problems,
+              complete: isComplete(state) && !state.failed,
+              next
+            };
+            // The next part (or the same part again, with its problems), else the one file of
+            // all the parts; the file's choice names the document so a reloaded thread keeps it.
+            const skill = result.taskSkill ?? result.primarySkill;
+            const choice = next
+              ? {
+                  skill,
+                  kind: "CONTINUE" as const,
+                  reason: check.ok ? `Część ${next} z ${state.plan.czesci.length}` : `Popraw część ${next} z ${state.plan.czesci.length}: ${check.problems.slice(0, 2).join("; ")}`
+                }
+              : { skill, kind: "DOCUMENT" as const, reason: `jeden plik z ${state.plan.czesci.length} części`, longDocumentId: state.id };
+            result.pipelineNext = {
+              skill: choice.skill,
+              reason: choice.reason,
+              choices: [choice, ...(result.pipelineNext?.choices ?? []).filter((item) => item.kind !== "CONTINUE" && item.kind !== "DOCUMENT")]
+            };
+          } catch (error) {
+            console.error("CASE_MEMORY_LONG_DOCUMENT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+          }
+        } else if (writtenPart.planInvalid || writtenPart.k > 1) {
+          result.longDocument = {
+            id: "",
+            title: "",
+            part: writtenPart.k,
+            parts: writtenPart.n,
+            ok: false,
+            problems: [writtenPart.planInvalid ? "plan pisma nieczytelny: poproś o pismo jeszcze raz" : "brak planu tego pisma w sprawie: zacznij od części 1"],
+            complete: false,
+            next: null
+          };
         }
       }
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {

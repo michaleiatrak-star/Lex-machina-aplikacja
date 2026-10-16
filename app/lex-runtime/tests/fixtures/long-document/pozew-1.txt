@@ -1,0 +1,65 @@
+[CZĘŚĆ 1/5]
+@MIEJSCE_DATA: Kraków, 16 października 2026 r.
+
+@STRONA: Powód: Budmar sp. z o.o. z siedzibą w Krakowie, KRS 0000000001 (adres siedziby i adres do doręczeń: [do uzupełnienia]), reprezentowana przez pełnomocnika: [imię i nazwisko, adres kancelarii, adres do doręczeń elektronicznych]
+
+@STRONA: Pozwany: Inwest-Dom S.A. z siedzibą w Katowicach, KRS 0000000002 (adres siedziby: [do uzupełnienia])
+
+@ADRESAT: Sąd Okręgowy w Krakowie, Wydział Gospodarczy, ul. [do uzupełnienia], Kraków
+
+@TYTUL: POZEW O ZAPŁATĘ. Wartość przedmiotu sporu: 1 284 500 zł
+
+@SEKCJA: I. ŻĄDANIA
+
+W imieniu Powoda, Budmar sp. z o.o. z siedzibą w Krakowie (KRS 0000000001, dalej: „Powód”), wnoszę przeciwko Inwest-Dom S.A. z siedzibą w Katowicach (KRS 0000000002, dalej: „Pozwany”) o:
+
+1. zasądzenie od Pozwanego na rzecz Powoda kwoty 1 284 500 zł (słownie: jeden milion dwieście osiemdziesiąt cztery tysiące pięćset złotych) tytułem niezapłaconego wynagrodzenia za roboty budowlane wykonane na podstawie umowy o roboty budowlane z 3 marca 2025 r. (dalej: „Umowa”), objęte czterema niezapłaconymi fakturami (dalej: „Faktury Niezapłacone”), wraz z odsetkami ustawowymi za opóźnienie w transakcjach handlowych, liczonymi od każdej z kwot wynikających z poszczególnych Faktur Niezapłaconych od dnia następującego po upływie terminu płatności wskazanego w danej fakturze do dnia zapłaty, zgodnie z zestawieniem należności i wyliczeniem odsetek stanowiącym załącznik nr 17;
+
+2. zasądzenie od Pozwanego na rzecz Powoda kosztów procesu, w tym kosztów zastępstwa procesowego według norm przepisanych oraz opłaty skarbowej od pełnomocnictwa w kwocie 17 zł, wraz z odsetkami ustawowymi za opóźnienie liczonymi od dnia uprawomocnienia się orzeczenia o kosztach do dnia zapłaty;
+
+3. rozpoznanie sprawy według przepisów o postępowaniu w sprawach gospodarczych, a na wypadek nieuwzględnienia powództwa w całości lub w części, o rozstrzygnięcie także o kosztach procesu w zakresie oddalonej części żądania zgodnie z zasadami określonymi w Kpc.
+
+@SEKCJA: II. WNIOSKI DOWODOWE I PROCESOWE
+
+Na wykazanie okoliczności faktycznych przedstawionych w uzasadnieniu pozwu, a w szczególności istnienia i treści Umowy, wykonania i odebrania robót, wystawienia i doręczenia faktur, wymagalności roszczenia, braku zwłoki Powoda oraz bezskuteczności potrącenia, Powód wnosi o przeprowadzenie następujących dowodów.
+
+@PODSEKCJA: A. Wnioski dowodowe
+
+1. Z dokumentów wymienionych w części IV pozwu, stanowiących załączniki nr 1–27, na okoliczności wskazane przy poszczególnych twierdzeniach w uzasadnieniu, w tym w szczególności:
+a) z odpisów z KRS (załączniki nr 1 i 2) na okoliczność statusu, siedziby i sposobu reprezentacji stron;
+b) z Umowy wraz z załącznikami (załącznik nr 3) oraz z aneksu nr 2 do Umowy (dalej: „Aneks nr 2”; załącznik nr 4) na okoliczność zakresu robót, wynagrodzenia, harmonogramu, zasad odbiorów i rozliczeń, warunków naliczania kar umownych oraz zmiany warunków realizacji Umowy;
+c) z protokołów odbioru częściowego nr 1–6 (załączniki nr 5–10; dalej łącznie: „Protokoły”) na okoliczność wykonania i odebrania robót bez zastrzeżeń uzasadniających wstrzymanie zapłaty;
+d) z faktur nr 1–6 (załączniki nr 11–16; dalej łącznie: „Faktury”) oraz z zestawienia należności i wyliczenia odsetek (załącznik nr 17) na okoliczność wysokości, terminów płatności i wymagalności roszczenia oraz wysokości odsetek;
+e) z korespondencji e-mail stron (załącznik nr 18; dalej: „Korespondencja”), wpisów do dziennika budowy (załącznik nr 19) oraz danych meteorologicznych IMGW (załącznik nr 20) na okoliczność zmian projektu, braku frontu robót, przestojów i warunków atmosferycznych, czyli przyczyn opóźnień leżących po stronie Pozwanego lub niezależnych od Powoda;
+f) z noty obciążeniowej lub pisma Pozwanego naliczającego karę umowną (załącznik nr 21; dalej: „Kara Umowna”), z oświadczenia Pozwanego o potrąceniu wraz z dowodem doręczenia (załącznik nr 22; dalej: „Potrącenie”) oraz z pisma Powoda kwestionującego Karę Umowną i Potrącenie (załącznik nr 23) na okoliczność podstaw, terminu i skuteczności tych czynności oraz ich zakwestionowania;
+g) z wezwania do zapłaty z 10 stycznia 2026 r. wraz z dowodem nadania i doręczenia (załącznik nr 24; dalej: „Wezwanie”) oraz z dokumentów dotyczących próby mediacji (załącznik nr 25; dalej: „Mediacja”) na okoliczność wezwania Pozwanego do zapłaty oraz podjęcia próby polubownego rozwiązania sporu przed wniesieniem pozwu;
+h) z dowodu uiszczenia opłaty sądowej od pozwu (załącznik nr 26) i pełnomocnictwa wraz z dowodem opłaty skarbowej (załącznik nr 27) na okoliczność zachowania wymogów formalnych pozwu.
+
+2. Z zeznań świadków, których imiona, nazwiska i adresy Powód wskaże w odrębnym piśmie procesowym, w tym kierownika budowy oraz osoby odpowiedzialnej za rozliczenia z ramienia Powoda, na okoliczność przebiegu robót, przyczyn przestojów, zakresu i terminów zmian projektowych, braku frontu robót, warunków pogodowych, odbiorów oraz rozliczeń finansowych.
+
+3. Z zeznań świadków wskazanych w pkt 2 na okoliczność treści rozmów i ustaleń stron dotyczących harmonogramu robót oraz okoliczności zawarcia Aneksu nr 2.
+
+4. Z opinii biegłego sądowego z zakresu budownictwa i organizacji robót budowlanych na okoliczność: (i) wpływu zmian projektu wprowadzonych przez Pozwanego na termin wykonania poszczególnych etapów robót, (ii) wpływu braku udostępnienia frontu robót na możliwość terminowego wykonania robót, (iii) wpływu opadów atmosferycznych na technologię i terminy robót, (iv) ustalenia, czy i o jaki okres termin wykonania robót winien ulec przedłużeniu, (v) ustalenia, czy po stronie Powoda wystąpiła zwłoka w rozumieniu Umowy, (vi) zgodności wykonanych robót z Protokołami.
+
+5. Z uzupełniającej opinii biegłego sądowego z zakresu meteorologii lub hydrometeorologii, o ile Sąd uzna to za konieczne, na okoliczność wystąpienia w okresie realizacji robót opadów o natężeniu i czasie trwania uniemożliwiających prowadzenie robót w technologii przewidzianej w Umowie.
+
+6. Z przesłuchania stron w trybie art. 299 Kpc, w tym z przesłuchania przedstawiciela Powoda i przedstawiciela Pozwanego, na okoliczności wskazane w pkt 2–4 powyżej, z ostrożności procesowej na wypadek uznania przez Sąd, że fakty te nie zostały wykazane innymi dowodami.
+
+@PODSEKCJA: B. Wnioski procesowe
+
+7. Na podstawie art. 248 Kpc Powód wnosi o zobowiązanie Pozwanego do przedłożenia, w terminie 14 dni, następujących dokumentów: (i) pełnej dokumentacji projektowej Inwestycji wraz z wykazem i datami wszystkich zmian projektu przekazanych Powodowi, (ii) dokumentów dotyczących protokolarnego przekazania frontów robót, (iii) dokumentów i obliczeń, na których Pozwany oparł naliczenie Kary Umownej, (iv) wewnętrznych dokumentów Pozwanego dotyczących przyjęcia robót, rozliczeń i księgowania Faktur, na okoliczność wykazania przyczyn rzekomej zwłoki, jej okresu i wysokości Kary Umownej oraz braku podstaw do wstrzymania zapłaty. Powód wskazuje, że wymienione dokumenty pozostają w posiadaniu Pozwanego, a ich treść bezpośrednio dotyczy faktów istotnych dla rozstrzygnięcia sprawy.
+
+8. Na podstawie art. 207 § 6 Kpc w związku z art. 6 § 2 Kpc Powód zastrzega sobie prawo do powołania dalszych faktów i dowodów w odpowiedzi na twierdzenia i zarzuty Pozwanego, jeżeli potrzeba ich powołania wyniknie z jego stanowiska procesowego.
+
+9. Powód wnosi o zwrócenie się do Pozwanego, po doręczeniu pozwu, o ustosunkowanie się do wszystkich twierdzeń faktycznych pozwu w odpowiedzi na pozew, z zastrzeżeniem skutków określonych w art. 230 Kpc.
+
+10. Powód oświadcza, że przed wniesieniem pozwu podjęto próbę polubownego rozwiązania sporu w drodze wezwania do zapłaty oraz Mediacji, które nie doprowadziły do zawarcia ugody (art. 187 § 1 pkt 3 Kpc); Powód pozostaje gotów do zawarcia ugody także na etapie postępowania przed Sądem, w tym do skierowania sprawy do mediacji na podstawie art. 183¹ Kpc.
+
+11. Powód oświadcza, że opłata sądowa od pozwu, wynosząca 5% wartości przedmiotu sporu, tj. 64 225 zł, została uiszczona, co wykazuje załącznik nr 26.
+
+12. Powód wnosi o doręczanie pism procesowych jego pełnomocnikowi na adres do doręczeń elektronicznych wskazany w oznaczeniu stron, a w przypadku wystąpienia przeszkód technicznych, na adres kancelarii pełnomocnika. Do pozwu dołączono pełnomocnictwo wraz z dowodem opłaty skarbowej (załącznik nr 27).
+
+13. Powód wnosi o doręczenie Pozwanemu odpisu pozwu wraz z załącznikami oraz o wyznaczenie terminu rozprawy po zakończeniu wymiany pism przygotowawczych.
+
+14. W przypadku zgłoszenia przez Pozwanego zarzutu potrącenia lub innych zarzutów procesowych (w tym zarzutu miarkowania Kary Umownej, rozłożenia świadczenia lub braku wymagalności), Powód wnosi o wyznaczenie mu terminu do pisemnego ustosunkowania się do tych zarzutów i do zgłoszenia dalszych wniosków dowodowych w tym zakresie.
+[KONIEC CZĘŚCI 1/5]

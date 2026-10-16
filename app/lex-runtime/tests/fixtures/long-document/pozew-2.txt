@@ -1,0 +1,52 @@
+[CZĘŚĆ 2/5]
+
+@SEKCJA: III. Uzasadnienie
+
+@SEKCJA: 1. Strony i umowa
+
+1. Powód jest spółką z ograniczoną odpowiedzialnością z siedzibą w Krakowie, wpisaną do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000000001. Prowadzi działalność w zakresie realizacji obiektów budowlanych, w tym budynków niemieszkalnych. Dowód: załącznik nr 1.
+
+2. Pozwany jest spółką akcyjną z siedzibą w Katowicach, wpisaną do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000000002. W relacji objętej pozwem występuje jako inwestor, czyli zamawiający roboty budowlane. Dowód: załącznik nr 2.
+
+3. Obie strony są przedsiębiorcami, a Umowa została zawarta w związku z prowadzoną przez nie działalnością gospodarczą. Spór ma zatem charakter sprawy gospodarczej w rozumieniu przepisów Kpc.
+
+4. W dniu 3 marca 2025 r. strony zawarły Umowę. Na jej podstawie Powód, jako wykonawca, zobowiązał się wykonać roboty budowlane przy realizacji Inwestycji, czyli budynku biurowego. Pozwany, jako inwestor, zobowiązał się do odbioru robót i zapłaty umówionego wynagrodzenia (art. 647 Kc). Dowód: załącznik nr 3.
+
+5. Integralną część Umowy stanowią załączniki określające zakres robót, harmonogram realizacji oraz zasady ustalania wynagrodzenia. Wynagrodzenie było rozliczane etapami, na podstawie faktur wystawianych po odbiorze poszczególnych zakresów robót. Dowód: załącznik nr 3.
+
+6. Podstawą wystawienia każdej faktury częściowej był protokół odbioru częściowego podpisany przez obie strony. Odbiór danego zakresu robót uruchamiał więc po stronie Pozwanego obowiązek zapłaty wynagrodzenia za ten zakres, w terminie przewidzianym w Umowie. Dowód: załącznik nr 3.
+
+7. Umowa przewiduje karę umowną za zwłokę wykonawcy w dotrzymaniu terminów. Z postanowień Umowy, zgodnie z art. 483 § 1 i art. 484 Kc, wynika, że kara należy się wyłącznie wtedy, gdy zwłoka jest następstwem okoliczności, za które odpowiada wykonawca. Na tę Umowę Pozwany powołuje się w celu uzasadnienia Kary Umownej i Potrącenia. Dowód: załącznik nr 3.
+
+8. Zgodnie z Umową oraz z art. 647 Kc inwestor jest zobowiązany do współdziałania przy wykonaniu robót. W szczególności musi przekazać wykonawcy front robót i dokumentację projektową oraz dokonać czynności niezbędnych do rozpoczęcia i prowadzenia robót. Niewykonanie tych obowiązków przez inwestora nie może obciążać wykonawcy ujemnymi skutkami w postaci kar umownych. Dowód: załącznik nr 3.
+
+9. W toku realizacji Inwestycji strony zawarły Aneks nr 2. Nie zawiera on oświadczenia Powoda o zrzeczeniu się roszczeń ani o uznaniu zwłoki po jego stronie. Nie zawiera też zgody Powoda na obciążanie go skutkami okoliczności leżących po stronie Pozwanego. Dowód: załącznik nr 4.
+
+@SEKCJA: 2. Przebieg robót i odbiory
+
+10. Powód przystąpił do wykonywania robót po zawarciu Umowy, zgodnie z jej postanowieniami i harmonogramem, i prowadził je z użyciem własnych zasobów, sprzętu i podwykonawców. Dowód: załącznik nr 3, załącznik nr 19.
+
+11. Roboty były odbierane etapami. Strony podpisały sześć Protokołów, którymi Pozwany odebrał kolejne zakresy robót wykonanych przez Powoda. Dowód: załączniki nr 5, 6, 7, 8, 9 i 10.
+
+12. Żaden z Protokołów nie zawiera zastrzeżenia Pozwanego co do zwłoki Powoda ani zapowiedzi naliczenia kary umownej. Pozwany odbierał roboty bez kwestionowania terminu ich wykonania. Dowód: załączniki nr 5, 6, 7, 8, 9 i 10.
+
+13. Na podstawie Protokołów Powód wystawił Faktury. Faktury nr 1 i nr 2 zostały zapłacone przez Pozwanego, a Faktury Niezapłacone, to jest faktury nr 3, 4, 5 i 6, do dnia wniesienia pozwu pozostają nieuregulowane. Szczegółowo okoliczności te omówiono w części uzasadnienia dotyczącej faktur i wymagalności. Dowód: załączniki nr 11, 12, 13, 14, 15 i 16.
+
+14. W toku realizacji Inwestycji Pozwany wielokrotnie dokonywał zmian w dokumentacji projektowej. Zmiany te dotyczyły rozwiązań, które wymagały od Powoda przeprojektowania organizacji robót, zmiany kolejności prac lub wstrzymania prac w danym zakresie do czasu otrzymania zaktualizowanej dokumentacji. Dowód: załącznik nr 18, załącznik nr 19.
+
+15. Zmiany projektu były przekazywane Powodowi w trakcie trwania robót, a nie przed ich rozpoczęciem. Powód nie mógł więc zachować pierwotnej kolejności i tempa prac przewidzianych w harmonogramie. Dowód: załącznik nr 3, załącznik nr 18.
+
+16. Pozwany nie zapewnił również Powodowi frontu robót w terminach wynikających z harmonogramu. W określonych okresach Powód nie mógł prowadzić prac w ustalonym zakresie, ponieważ teren lub obiekt nie został udostępniony albo nie był przygotowany do wykonywania robót. Dowód: załącznik nr 18, załącznik nr 19.
+
+17. Wpisy do dziennika budowy potwierdzają przestoje, ich przyczyny oraz okresy, w których roboty nie mogły być prowadzone. Wpisy te dokumentują także zmiany projektu oraz brak frontu robót w czasie rzeczywistym, a więc niezależnie od późniejszego sporu stron. Dowód: załącznik nr 19.
+
+18. Kolejną przyczyną utrudnień były intensywne opady atmosferyczne (ulewy) w okresie realizacji robót. Uniemożliwiały one prowadzenie określonych prac, zwłaszcza prac zewnętrznych, i były odnotowywane w dzienniku budowy. Ich występowanie potwierdzają dane meteorologiczne. Dowód: załącznik nr 19, załącznik nr 20.
+
+19. Powód na bieżąco informował Pozwanego o przeszkodach w realizacji robót, w tym o skutkach zmian projektu, braku frontu robót i warunkach atmosferycznych dla terminów wykonania. Czynił to w formie wiadomości e-mail oraz wpisów do dziennika budowy, wypełniając obowiązek zawiadamiania inwestora o okolicznościach utrudniających wykonanie robót. Dowód: załącznik nr 18, załącznik nr 19.
+
+20. Pozwany znał te okoliczności, bo sam wprowadzał zmiany projektu i odpowiadał za udostępnienie frontu robót. Na zawiadomienia Powoda nie reagował w sposób, który usuwałby przeszkody, i nie wskazywał, że opóźnienie powstało z winy Powoda. Dowód: załącznik nr 18.
+
+21. Powód, mimo tych przeszkód, kontynuował roboty w zakresie, w jakim było to możliwe, i dążył do ich ukończenia. Starał się ograniczać skutki przestojów przez reorganizację prac i przesuwanie zasobów na inne zakresy. Dowód: załącznik nr 19.
+
+22. Okoliczności opisane powyżej, to jest zmiany projektu, brak frontu robót oraz niekorzystne warunki atmosferyczne, odpowiadają za to, że termin wykonania poszczególnych zakresów robót uległ przesunięciu. Co do zmian projektu i braku frontu robót są to okoliczności, za które odpowiada Pozwany jako inwestor. Powód wykonał natomiast roboty objęte Protokołami, a Pozwany je odebrał, więc wynagrodzenie za te roboty jest należne. Dowód: załączniki nr 5–10, załącznik nr 18, załącznik nr 19, załącznik nr 20.
+[KONIEC CZĘŚCI 2/5]
