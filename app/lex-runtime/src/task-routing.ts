@@ -258,7 +258,7 @@ export const REPLY_REQUEST =
 // are analysed by the contract skill (ACTIVATION-MATRIX "Dokument + wezwanie").
 const DOCUMENT_ANALYSIS = "analizator-umow-v1";
 // "Odpowiedz na ten dokument", "przygotuj odpowiedź", "odpisz im" with a demand delivered.
-const DEMAND_REPLY = /(?<![\p{L}])(?:odpowiedz|odpowiedź|odpowiedzi|odpowiedzieć|odpisz|odpisać)(?![\p{L}])/iu;
+export const DEMAND_REPLY = /(?<![\p{L}])(?:odpowiedz|odpowiedź|odpowiedzi|odpowiedzieć|odpisz|odpisać)(?![\p{L}])/iu;
 // "Wygeneruj dokument", "generuj pismo", "przygotuj dokument" (the reply to the delivered demand).
 const GENERATE_DOCUMENT =
   /(?<![\p{L}])(?:(?:wy)?generuj\p{L}*|przygotuj|napisz|sporządź|zredaguj)\s+(?:\p{L}+\s+){0,2}?(?:dokument\p{L}*|pism\p{L}*|odpowied\p{L}*)(?![\p{L}])/iu;
@@ -751,20 +751,56 @@ export function pipelineNext(
   combinations: SkillCombination[],
   context?: { question: string; materials: DeliveredMaterial[] }
 ): { skill: string; reason: string } | null {
-  if (then) return { skill: then, reason: "macierz aktywacji (wejście → następny etap)" };
+  if (then && stageFitsMaterials(then, context?.materials)) return { skill: then, reason: "macierz aktywacji (wejście → następny etap)" };
   const combination = combinations.find(
     (row) =>
       row.entry === skill &&
       row.next.length &&
+      stageFitsMaterials(row.next[0]!, context?.materials) &&
       (!context || combinationApplies(row.matter, provisionsForDetection(context.question), context.materials))
   );
   return combination ? { skill: combination.next[0]!, reason: `kombinacja skilli: ${combination.matter}` } : null;
 }
 
+// Stages that work on court proceedings (the case file, a judgment, the opponent's pleading,
+// hearing records): offered only when such material is in the case, never after an out-of-court
+// document alone (a contract, an agreement, a demand between the parties).
+const COURT_STAGE = /^(?:analiza-sadowa|przesluchanie-swiadkow)/u;
+const COURT_MATERIAL = new Set(["AKTA", "ORZECZENIE", "PISMO_PROCESOWE"]);
+const COURT_RECORD = new Set(["PROTOKOL_PRZESLUCHANIA", "PROTOKOL", "OPINIA_BIEGLEGO"]);
+
+export function stageFitsMaterials(skill: string, materials: DeliveredMaterial[] | undefined): boolean {
+  if (!COURT_STAGE.test(skill) || !materials?.length) return true;
+  return materials.some((material) => COURT_MATERIAL.has(material.category) || COURT_RECORD.has(material.kind ?? ""));
+}
+
+/**
+ * How demanding the letter is, out of court: pisma-procesowe-v3 also writes complex letters
+ * that go to no court (a reasoned reply with several provisions, case law, many documents),
+ * pisma-proste-v2 the short ones. Court material keeps the skill the matrix names.
+ */
+export function letterComplexity(context: { question: string; materials: DeliveredMaterial[]; answer?: string }): "SIMPLE" | "COMPLEX" {
+  const answer = (context.answer ?? "").split(/⚖️|\bWażna informacja:/u)[0] ?? "";
+  const provisions = new Set(
+    [...answer.matchAll(/\bart\.\s*\d+[a-z]?(?:\s*§\s*\d+)?(?:\s*(?:ust\.|pkt)\s*\d+)?\s+(?:[A-ZŁŚŻ]{1,5}\b|\p{L}+(?:\s+\p{L}+){0,3})/gu)].map((match) =>
+      match[0].toLocaleLowerCase("pl").replace(/\s+/gu, " ")
+    )
+  ).size;
+  const asked = /\b(?:szczegółow|kompleksow|rozbudowan|wyczerpując|z\s+uzasadnieniem\s+prawnym|z\s+orzecznictwem|z\s+powołaniem\s+(?:przepisów|orzeczeń))/iu.test(context.question);
+  return asked || provisions >= 4 || answer.replace(/\s+/gu, " ").length > 7000 || context.materials.length >= 3 ? "COMPLEX" : "SIMPLE";
+}
+
+function letterSkillFor(candidate: string, context?: { question: string; materials: DeliveredMaterial[]; answer?: string }): string {
+  if (!context || !/^pisma-(?:proste|procesowe)-/u.test(candidate)) return candidate;
+  if (context.materials.some((material) => COURT_MATERIAL.has(material.category))) return candidate;
+  return letterComplexity(context) === "COMPLEX" ? "pisma-procesowe-v3" : "pisma-proste-v2";
+}
+
 /** One option offered after a result: draft the document, or one more stage of analysis. */
 export type NextChoice = {
   skill: string;
-  kind: "DOCUMENT" | "ANALYSIS";
+  // CONTINUE: the answer announced a step (a verification) it did not do; the user goes on.
+  kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE";
   reason: string;
   // The file of this very result (a pleading of pisma-procesowe-v3, a contract redacted or
   // drafted by analizator-umow-v1), made by that skill's own pipeline and its HYBRID-VAL.
@@ -772,6 +808,8 @@ export type NextChoice = {
   // The pipeline's step register at this point (pleading checkpoints): done, skipped with
   // the reason, still open. A file with an open or unexplained step is a draft.
   steps?: StepSummary;
+  // DOCUMENT of a long letter written in parts: the file renders these joined parts.
+  longDocumentId?: string;
 };
 
 export type StepSummary = {
@@ -799,23 +837,25 @@ const DRAFTING_SKILL = /^pisma-/u;
  * What the user may do after this skill's result, never started on its own: generate the
  * document when the result is satisfactory (one drafting skill), or go on with a further stage
  * of analysis. The matrix's "→" first, then the combinations this skill enters whose parts are
- * in the case. A reply to a demand between the parties is a simple letter (pisma-proste-v2).
+ * in the case. Out of court the letter skill follows the letter's complexity (letterComplexity).
  */
 export function nextChoices(
   skill: string,
   then: string | null,
   combinations: SkillCombination[],
-  context?: { question: string; materials: DeliveredMaterial[] },
+  context?: { question: string; materials: DeliveredMaterial[]; answer?: string },
   options: { ownDocument?: boolean; steps?: StepSummary } = {}
 ): NextChoice[] {
   const own: NextChoice[] = options.ownDocument
     ? [{ skill, kind: "DOCUMENT", reason: "plik z tego wyniku", own: true, ...(options.steps ? { steps: options.steps } : {}) }]
     : [];
-  const demand = context?.materials.some((material) => material.kind === "WEZWANIE") ?? false;
   const found: NextChoice[] = [];
   const add = (candidate: string, reason: string) => {
-    const next = demand && candidate === "pisma-procesowe-v3" ? "pisma-proste-v2" : candidate;
+    // Out of court the letter skill follows the letter's complexity (a demand between the parties
+    // is usually a simple reply; a reasoned, many-sided one goes to pisma-procesowe-v3).
+    const next = letterSkillFor(candidate, context);
     if (next === skill || found.some((choice) => choice.skill === next)) return;
+    if (!stageFitsMaterials(next, context?.materials)) return;
     found.push({ skill: next, kind: DRAFTING_SKILL.test(next) ? "DOCUMENT" : "ANALYSIS", reason });
   };
   if (then) add(then, "macierz aktywacji (wejście → następny etap)");
@@ -833,4 +873,20 @@ export function nextChoices(
 export function explicitHandoff(question: string, known: (skill: string) => boolean): string | null {
   const skill = new RegExp(`${PIPELINE_HANDOFF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*([a-z0-9-]+)`, "u").exec(question)?.[1];
   return skill && known(skill) ? skill : null;
+}
+
+/**
+ * A reply to a delivered document (a demand, a letter, a pleading): who writes to whom. A
+ * model left without it addressed the reply to its own sender ("Szanowna Osobo <the user>").
+ */
+export function replyRolesPrompt(query: string, materials: DeliveredMaterial[]): string | null {
+  if (!(REPLY_REQUEST.test(query) || DEMAND_REPLY.test(query))) return null;
+  if (!materials.some((material) => ["KORESPONDENCJA", "UMOWA", "PISMO_PROCESOWE", "ORZECZENIE"].includes(material.category))) return null;
+  return [
+    "# ODPOWIEDŹ NA DOSTARCZONE PISMO — ROLE",
+    "- Nadawcą odpowiedzi jest ADRESAT dostarczonego pisma (użytkownik albo osoba, w której imieniu działa); adresatem odpowiedzi jest NADAWCA tego pisma, a gdy pismo wysłał pełnomocnik — ten pełnomocnik (kancelaria) z oznaczeniem mocodawcy.",
+    "- Ustal obie strony z treści pisma (kto wzywa, w czyim imieniu, do kogo) i wpisz je w nagłówku: nadawca, adresat, „Dotyczy:”.",
+    "- Zwrot grzecznościowy kieruj do adresata odpowiedzi („Szanowni Państwo,” wobec kancelarii lub spółki); nigdy do osoby, w której imieniu piszesz.",
+    "- Pisz w pierwszej osobie nadawcy odpowiedzi („kwestionuję”, „wzywam”), a o nadawcy dostarczonego pisma w trzeciej osobie lub przez „Państwa”."
+  ].join("\n");
 }

@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
@@ -396,7 +397,8 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           ) : null}
         </div>
         <p className="field-help">
-          Wysyłka do KSeF: niedostępna w tej wersji. Faktury wystawiasz i drukujesz lokalnie.
+          Wysyłka do KSeF niedostępna w tej wersji.
+          <InfoTip>Faktury wystawiasz i drukujesz lokalnie.</InfoTip>
         </p>
         <input
           type="search"
@@ -427,7 +429,10 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           {invoices.length === 0 ? <li className="field-help">Brak faktur.</li> : null}
         </ul>
         <div className="invoice-templates">
-          <h3>Wzory faktur</h3>
+          <h3>
+            Wzory faktur
+            <InfoTip>Wzór zapiszesz w edytorze faktury („Zapisz jako wzór”): nabywca, pozycje, płatność, miejsce wystawienia i uwagi, bez numeru i dat.</InfoTip>
+          </h3>
           {templates.length ? (
             <>
               <select value={templateId} aria-label="Wzór faktury" onChange={(event) => setTemplateId(event.target.value)}>
@@ -443,7 +448,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
               </div>
             </>
           ) : (
-            <p className="field-help">Brak wzorów. W edytorze faktury użyj „Zapisz jako wzór”, aby zapisać stałego klienta z pozycjami i płatnością.</p>
+            <p className="field-help">Brak wzorów.</p>
           )}
         </div>
       </aside>
@@ -640,7 +645,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                     ? "Zaktualizuj wzór"
                     : "Zapisz wzór"}
                 </button>
-                <span className="field-help">Wzór zapisuje nabywcę, pozycje, płatność (termin w dniach), miejsce wystawienia i uwagi; bez numeru i dat.</span>
+                <InfoTip>Wzór zapisuje nabywcę, pozycje, płatność (termin w dniach), miejsce wystawienia i uwagi; bez numeru i dat.</InfoTip>
               </div>
             ) : null}
           </article>

@@ -145,18 +145,19 @@ export class LocalDocumentAuthoringService {
             const validation = await this.renderer
                 .validate(args.format, rendered.data);
             const astText = legalDocumentPlainText(documentAst);
-            if (validation.text
-                .replace(/\s+/g, " ")
-                .trim() !==
-                rendered.text
-                    .replace(/\s+/g, " ")
-                    .trim() ||
-                !validated
-                    .aliasesUsed
-                    .every((alias) => validation.text
-                    .includes(alias)) ||
-                !astText) {
-                throw new Error("TOKENIZED_DOCUMENT_VALIDATION_FAILED");
+            // Which check failed, named: an empty document, the file's text not what was rendered,
+            // or a privacy symbol of the document missing from the file.
+            const flat = (value) => value.replace(/\s+/g, " ").trim();
+            const missingAliases = validated.aliasesUsed.filter((alias) => !validation.text.includes(alias));
+            const failure = !astText
+                ? "EMPTY_DOCUMENT"
+                : flat(validation.text) !== flat(rendered.text)
+                    ? "RENDERED_TEXT_MISMATCH"
+                    : missingAliases.length
+                        ? `ALIAS_MISSING:${missingAliases.slice(0, 5).join(",")}`
+                        : null;
+            if (failure) {
+                throw new Error(`TOKENIZED_DOCUMENT_VALIDATION_FAILED:${failure}`);
             }
             // HYBRID-VAL before the .docx, as for a ready document; the privacy tokens are this
             // file's purpose (they are replaced and checked again on deanonymization).

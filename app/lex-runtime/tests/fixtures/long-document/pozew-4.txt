@@ -1,0 +1,48 @@
+[CZĘŚĆ 4/5]
+
+@SEKCJA: 5. Bezskuteczność potrącenia
+
+47. Pozwany po otrzymaniu Faktur Niezapłaconych nie uregulował ich w terminie. Zamiast tego złożył oświadczenie o Potrąceniu, w którym wskazał, że wierzytelność z tytułu Kary Umownej umarza wzajemnie z wierzytelnością Powoda o zapłatę wynagrodzenia. Dowód: załącznik nr 22.
+
+48. Zgodnie z art. 498 § 1 Kc, gdy dwie osoby są jednocześnie względem siebie dłużnikami i wierzycielami, każda z nich może potrącić swoją wierzytelność z wierzytelności drugiej strony. Warunkiem jest, aby przedmiotem obu wierzytelności były pieniądze lub rzeczy tej samej jakości oznaczone tylko co do gatunku. Wierzytelności muszą być też wymagalne i muszą nadawać się do dochodzenia przed sądem lub przed innym organem państwowym. Wierzytelność potrącającego musi zatem rzeczywiście istnieć, być wymagalna i być zaskarżalna. Jeżeli którakolwiek z tych przesłanek nie jest spełniona, potrącenie nie wywołuje skutku w postaci umorzenia wierzytelności.
+
+49. Potrącenie jest czynnością prawną o charakterze prawokształtującym. Może ono umorzyć wierzytelność wzajemną tylko wtedy, gdy wierzytelność przedstawiona do potrącenia w ogóle powstała. Skuteczność oświadczenia o potrąceniu zależy więc od wcześniejszego rozstrzygnięcia, czy Pozwanemu przysługiwała wierzytelność o zapłatę Kary Umownej.
+
+50. Jak wykazano w części III.4 uzasadnienia, Pozwanemu nie przysługuje wierzytelność z tytułu Kary Umownej. Powód nie pozostawał w zwłoce w rozumieniu Umowy i art. 476 Kc. Opóźnienia w robotach wynikały z okoliczności, za które odpowiada Pozwany: zmian projektu, braku frontu robót oraz niekorzystnych warunków atmosferycznych. Nie można ich przypisać Powodowi. Dowód: załącznik nr 18, załącznik nr 19, załącznik nr 20.
+
+51. Skoro Kara Umowna nie powstała, Potrącenie nie mogło doprowadzić do umorzenia jakiejkolwiek części wierzytelności Powoda. Oświadczenie Pozwanego należy uznać za bezskuteczne w całości. Nie ma to związku z formą oświadczenia ani z jego doręczeniem. Wynika to z braku wierzytelności, którą Pozwany chciał potrącić. Dowód: załącznik nr 21, załącznik nr 22.
+
+52. Powód zakwestionował zarówno naliczenie Kary Umownej, jak i Potrącenie. Zrobił to w piśmie skierowanym do Pozwanego, w którym wskazał, że wierzytelność z tytułu Kary Umownej nie istnieje. Pozwany nie odwołał oświadczenia o Potrąceniu ani nie wycofał noty. Dowód: załącznik nr 23.
+
+53. Z ostrożności procesowej Powód wskazuje, że nawet gdyby Sąd uznał, że Kara Umowna była należna co do zasady, Potrącenie byłoby skuteczne co najwyżej do wysokości kary po jej miarkowaniu. Powód podtrzymuje przy tym zarzut miarkowania podniesiony w punkcie 46. Nie mogłoby ono natomiast prowadzić do umorzenia wierzytelności Powoda w zakresie przewyższającym tak ustaloną wartość. Dowód: załącznik nr 21, załącznik nr 22.
+
+54. Powód podkreśla również, że Pozwany nie wykazał, aby wierzytelność z tytułu Kary Umownej była wymagalna w chwili składania oświadczenia o Potrąceniu. W szczególności Pozwany nie wykazał, aby przed złożeniem oświadczenia skutecznie wezwał Powoda do zapłaty kary w trybie art. 455 Kc. Ciężar dowodu przesłanek skutecznego potrącenia spoczywa na Pozwanym jako stronie, która z tej czynności wywodzi skutki prawne. Dowód: załącznik nr 21, załącznik nr 22.
+
+@SEKCJA: 6. Odsetki
+
+55. Wierzytelność Powoda jest wierzytelnością pieniężną. Pozostaje ona niezapłacona po upływie terminów płatności poszczególnych Faktur Niezapłaconych. Zgodnie z art. 481 § 1 Kc, jeżeli dłużnik opóźnia się ze spełnieniem świadczenia pieniężnego, wierzyciel może żądać odsetek za czas opóźnienia, chociażby nie poniósł żadnej szkody i chociażby opóźnienie było następstwem okoliczności, za które dłużnik nie ponosi odpowiedzialności. Dowód: załącznik nr 13, załącznik nr 14, załącznik nr 15, załącznik nr 16.
+
+56. Umowa została zawarta między przedsiębiorcami i dotyczy odpłatnego dostarczenia robót budowlanych. Jest to zatem transakcja handlowa w rozumieniu ustawy o przeciwdziałaniu nadmiernym opóźnieniom w transakcjach handlowych. Powodowi przysługują więc odsetki w wysokości odsetek ustawowych za opóźnienie w transakcjach handlowych, o których mowa w art. 4 pkt 3 tej ustawy. Dowód: załącznik nr 3.
+
+57. Odsetki te należą się Powodowi od dnia następującego po dniu upływu terminu płatności każdej z Faktur Niezapłaconych. Termin płatności wynika z treści Umowy i z treści poszczególnych Faktur. Wysokość odsetek za każdą z Faktur Niezapłaconych została wyliczona odrębnie, od odpowiedniej daty wymagalności. Dowód: załącznik nr 3, załącznik nr 13, załącznik nr 14, załącznik nr 15, załącznik nr 16, załącznik nr 17.
+
+58. Opóźnienie Pozwanego w zapłacie nie jest usprawiedliwione złożeniem oświadczenia o Potrąceniu. Jak wykazano w punktach 47–54, Potrącenie nie wywołało skutku prawnego. Z tego względu nie wpłynęło na wymagalność wierzytelności Powoda ani na bieg odsetek. Dowód: załącznik nr 22.
+
+59. Powód żąda odsetek do dnia zapłaty. Skapitalizowane odsetki za okres do dnia wniesienia pozwu zostały wyliczone w zestawieniu należności. Wyliczenie to ma charakter pomocniczy i przedstawia sposób ustalenia wysokości odsetek dla poszczególnych Faktur Niezapłaconych. Dowód: załącznik nr 17.
+
+60. Roszczenie o odsetki jest akcesoryjne wobec roszczenia głównego o zapłatę wynagrodzenia z Faktur Niezapłaconych. Uwzględnienie roszczenia głównego uzasadnia zatem również zasądzenie odsetek w żądanym zakresie i od żądanych dat. Dowód: załącznik nr 17.
+
+@SEKCJA: 7. Właściwość sądu i próba ugodowa
+
+61. Wartość przedmiotu sporu wynosi 1 284 500 zł i odpowiada kwocie Faktur Niezapłaconych. Zgodnie z art. 17 pkt 4 Kpc sprawy o prawa majątkowe, w których wartość przedmiotu sporu przekracza 100 000 zł, należą do właściwości rzeczowej sądu okręgowego w pierwszej instancji. Dowód: załącznik nr 17.
+
+62. Strony są przedsiębiorcami, a spór wynika z umowy o roboty budowlane zawartej w ramach prowadzonej przez nie działalności gospodarczej. Sprawa jest zatem sprawą gospodarczą w rozumieniu art. 2 § 3 Kpc i powinna zostać rozpoznana przez wydział gospodarczy. Dowód: załącznik nr 1, załącznik nr 2, załącznik nr 3.
+
+63. Właściwość miejscowa Sądu Okręgowego w Krakowie wynika z art. 34 Kpc w zw. z art. 454 § 1 Kc. Powództwo o zapłatę wynikające z umowy można wytoczyć przed sąd miejsca jej wykonania. Świadczenie pieniężne należy spełnić w miejscu zamieszkania lub siedziby wierzyciela w chwili spełnienia świadczenia. Siedziba Powoda znajduje się w Krakowie. Dowód: załącznik nr 1, załącznik nr 3.
+
+64. Zgodnie z art. 187 § 1 pkt 3 Kpc pozew powinien zawierać informację, czy strony podjęły próbę mediacji lub innego pozasądowego sposobu rozwiązania sporu. Jeżeli takiej próby nie podjęto, pozew powinien zawierać wyjaśnienie przyczyny jej niepodjęcia. Powód wskazuje, że przed wniesieniem pozwu skierował do Pozwanego Wezwanie z 10 stycznia 2026 r. Wezwanie pozostało bez skutku. Dowód: załącznik nr 24.
+
+65. Po bezskutecznym upływie terminu wskazanego w Wezwaniu Powód zaproponował Pozwanemu przeprowadzenie Mediacji. Pozwany nie przystąpił do rozmów w sposób, który pozwoliłby na zawarcie ugody, a Mediacja zakończyła się bez ugody. Strony nie zawarły ugody. Dowód: załącznik nr 25.
+
+66. Powód wykorzystał w ten sposób dostępne możliwości polubownego rozwiązania sporu. Dalsze próby ugodowe przed wniesieniem pozwu nie rokowały pozytywnego rezultatu. Powód pozostaje jednak otwarty na zawarcie ugody także w toku postępowania. Dowód: załącznik nr 24, załącznik nr 25.
+[KONIEC CZĘŚCI 4/5]

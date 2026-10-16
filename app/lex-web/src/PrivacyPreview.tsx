@@ -7,6 +7,7 @@ import {
   type PiiKind
 } from "./api.js";
 import { PageScanView } from "./PageScanView.js";
+import { InfoTip } from "./InfoTip";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
 
@@ -46,7 +47,16 @@ export function recognizerReason(reason: string): string {
   if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return "nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie";
   if (/SELF_TEST_NO_PERSON/u.test(reason)) return "uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji";
   if (/MemoryError|out of memory/iu.test(reason)) return "za mało pamięci";
-  return "błąd uruchomienia";
+  if (/DLL load failed|nie można odnaleźć określonego modułu|specified module could not be found|MSVCP|VCRUNTIME/iu.test(reason))
+    return "nie ładuje się biblioteka systemowa (Visual C++) - uruchom naprawę instalacji";
+  if (/FileNotFoundError|No such file|\.tsv|\.dict?\b|surnames_pesel|given_names_pesel|teryt/iu.test(reason))
+    return "brak pliku słownika (PESEL/TERYT) - uruchom naprawę instalacji";
+  if (/PermissionError|Access is denied|Odmowa dostępu|EACCES|EPERM/iu.test(reason))
+    return "brak uprawnień do plików programu (np. blokada antywirusa) - uruchom naprawę instalacji";
+  if (/SyntaxError|ImportError|AttributeError|NameError/iu.test(reason))
+    return "niezgodna wersja skryptu - uruchom naprawę instalacji";
+  if (/UnicodeDecodeError|UnicodeEncodeError/iu.test(reason)) return "błąd kodowania znaków - zgłoś szczegóły techniczne";
+  return "błąd uruchomienia - zgłoś szczegóły techniczne";
 }
 
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
@@ -296,8 +306,11 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           <small>
             {props.keepClear
               ? "Tekst bez anonimizacji - sprawdź odczyt, zanim trafi do modelu."
-              : `Zakryte zostanie: ${masked} · zostawione jawne z Twojej decyzji: ${clear}. Kliknij zaznaczenie, aby zostawić je jawne; zaznacz tekst, aby go zakryć.`}
+              : `Zakryte zostanie: ${masked} · zostawione jawne z Twojej decyzji: ${clear}.`}
           </small>
+          {props.keepClear ? null : (
+            <InfoTip>Kliknij zaznaczenie, aby zostawić je jawne; zaznacz tekst myszą, aby go zakryć.</InfoTip>
+          )}
         </div>
         <div className="privacy-preview-actions">
           {review.pages.length > 1 ? (
@@ -348,9 +361,19 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               Nie działa {item.name}: {recognizerReason(item.reason)}.{" "}
             </span>
           ))}
-          Aplikacja wykryła adresy i pary imię-nazwisko z bazy PESEL, ale mogła pominąć pojedyncze nazwiska - sprawdź tekst
-          i zaznacz je ręcznie. Po naprawie wczytaj plik jeszcze raz.
+          Mogły zostać pominięte pojedyncze nazwiska - sprawdź tekst i zaznacz je ręcznie. Po naprawie wczytaj plik
+          jeszcze raz.
+          <InfoTip>Adresy i pary imię-nazwisko z bazy PESEL są nadal wykrywane.</InfoTip>
         </p>
+      ) : null}
+      {!props.keepClear && review.recognizerWarnings?.length ? (
+        // The error itself, readable and copyable: the cause without guessing.
+        <details className="privacy-recognizer-details">
+          <summary>Szczegóły techniczne</summary>
+          {review.recognizerWarnings.map((item) => (
+            <pre key={item.name}>{`${item.name}: ${item.reason}`}</pre>
+          ))}
+        </details>
       ) : null}
       {aiHints.length || doubtful.length || fixes.length ? (
         <div className="privacy-preview-todo">
@@ -378,7 +401,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           {doubtful.length ? (
             <div>
-              <small>Odczyt niepewny (pismo odręczne, pieczątki, rozmazany druk): porównaj z oryginałem obok i popraw tekst strony.</small>
+              <small>Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.</small>
               <ul>
                 {doubtful.map((line, index) => (
                   <li key={`ocr-${line.page}-${index}`}>

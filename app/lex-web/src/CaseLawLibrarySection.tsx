@@ -6,6 +6,7 @@ import {
   setCaseLawLibrary,
   type CaseLawCatalogEntry
 } from "./api.js";
+import { InfoTip } from "./InfoTip";
 
 function label(entry: CaseLawCatalogEntry): string {
   return [entry.court, entry.form, entry.signature, entry.date].filter(Boolean).join(" ") || entry.cardUrl;
@@ -67,20 +68,18 @@ export function CaseLawLibrarySection() {
     <section className="core-law-updates">
       <div className="maintenance-heading">
         <div>
-          <strong>Baza orzeczeń (RAG)</strong>
-          <small>
-            orzeczenia pobrane z oficjalnych baz, skatalogowane według sądu, sygnatury i daty; źródłem jest karta orzeczenia
-          </small>
+          <strong>
+            Baza orzeczeń (RAG)
+            <InfoTip>Orzeczenia pobrane z oficjalnych baz, katalogowane według sądu, sygnatury i daty. Źródłem jest karta orzeczenia.</InfoTip>
+          </strong>
         </div>
         <span>{enabled ? `pozycji: ${entries.length}${query ? " (wyszukane)" : ""}` : "wyłączona"}</span>
       </div>
       <label className="core-law-auto">
         <input type="checkbox" checked={enabled} disabled={busy || !available} onChange={(event) => void toggle(event.target.checked)} />
-        Zapisuj pobrane orzeczenia w bazie orzeczeń (wyszukiwanej także przez model)
+        Zapisuj pobrane orzeczenia w bazie
+        <InfoTip>Baza jest przeszukiwana także przez model. Wyłączona: orzeczenie trafia tylko do akt sprawy, w której je użyto.</InfoTip>
       </label>
-      <p className="field-help">
-        Wyłączone: orzeczenie trafia tylko do akt sprawy, w której zostało użyte, i na tej kopii zaznaczane są cytaty.
-      </p>
       {enabled ? (
         <>
           <div className="core-law-add">
@@ -119,7 +118,7 @@ export function CaseLawLibrarySection() {
             </ul>
             </div>
           ) : (
-            <p className="field-help">{query ? "Brak trafień." : "Baza jest pusta - orzeczenia trafią tu przy pobraniu."}</p>
+            <p className="field-help">{query ? "Brak trafień." : "Baza jest pusta."}</p>
           )}
         </>
       ) : null}

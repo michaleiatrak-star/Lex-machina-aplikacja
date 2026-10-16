@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
+import { InfoTip } from "./InfoTip";
 
 function desktopInvoke():
   | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
@@ -135,7 +136,9 @@ export function SnVerification({
       {invoke ? (
         <>
           <p className="field-help">
-            1. Otwórz okno sn.pl. Jeśli nie ma captchy, aplikacja sama przeszuka wyniki. 2. Jeśli pojawi się zadanie — rozwiąż je w oknie (aż zobaczysz wyszukiwarkę orzeczeń); aplikacja wykryje to i ponowi zapytanie automatycznie. Możesz zminimalizować okno, ale nie zamykaj go, zanim zobaczysz wynik. „Gotowe” jest potrzebne tylko, gdyby wykrycie się nie powiodło.
+            Otwórz okno sn.pl i rozwiąż captchę, jeśli się pojawi - zapytanie ponowi się samo. Nie zamykaj okna przed
+            wynikiem.
+            <InfoTip>Okno możesz zminimalizować. „Gotowe” jest potrzebne tylko, gdy aplikacja nie wykryje rozwiązania.</InfoTip>
           </p>
           <div className="chat-form-row compact">
             <button type="button" className="chat-secondary-action" disabled={stage === "saving"} onClick={() => void open()}>

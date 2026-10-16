@@ -15,6 +15,7 @@ import {
   useFloatingPanelDrag
 } from "./use-floating-panel.js";
 import "./local-ai.css";
+import { InfoTip } from "./InfoTip";
 
 type LocalModel = {
   provider: "local";
@@ -333,11 +334,15 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   const progress = status.progress;
   return (
     <div className="local-ai-facts">
-      <strong>Odczyt wątpliwych linii skanu</strong>
+      <strong>
+        Odczyt wątpliwych linii skanu
+        <InfoTip>
+          Działa w trybie z korektą AI: czyta ponownie tylko niepewne linie, a zmianę zatwierdza słownik (bez dopisywania dat,
+          nazwisk i liczb). Pliki są weryfikowane SHA-256.
+        </InfoTip>
+      </strong>
       <small>
-        {status.label}, {formatBytes(status.bytes)}{status.license ? `, licencja ${status.license}` : ""}. Działa w
-        trybie z korektą AI: czyta ponownie tylko linie odczytane niepewnie, a zmianę przyjmuje słownik (bez dopisywania
-        dat, nazwisk i liczb). Pliki są pobierane i weryfikowane (SHA-256) tak jak modele lokalnej AI.
+        {status.label}, {formatBytes(status.bytes)}{status.license ? `, licencja ${status.license}` : ""}
       </small>
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
@@ -951,12 +956,7 @@ export function LocalAiSetupPanel({
       </summary>
 
       <div className="local-ai-body">
-        {provisioningSupported ? (
-          <p>
-            Program działa bez modelu lokalnego. Przycisk instalacji pobiera program do uruchamiania
-            modelu i jeden wybrany model; potem model działa wyłącznie na tym komputerze.
-          </p>
-        ) : (
+        {provisioningSupported ? null : (
           <p className="local-ai-error" role="note">
             Instalacja modelu lokalnego jest dostępna tylko w Windows. W tym systemie korzystaj z modeli
             przez klucz API albo konto dostawcy (Ustawienia → Modele i AI).
@@ -967,6 +967,12 @@ export function LocalAiSetupPanel({
           <>
             <label>
               Model lokalny
+              {provisioningSupported ? (
+                <InfoTip>
+                  Program działa też bez niego. Instalacja pobiera silnik i jeden wybrany model, który potem działa wyłącznie na
+                  tym komputerze.
+                </InfoTip>
+              ) : null}
               <select
                 value={modelId}
                 disabled={busy || user.appRole !== "ADMIN"}
@@ -1097,16 +1103,14 @@ export function LocalAiSetupPanel({
 
                 {modelUpdate?.signatureMode === "UNSIGNED_ALLOWED" ? (
                   <p className="local-ai-warning">
-                    Tryb przejściowy aktualizacji modeli: podpis Ed25519 indeksu jest opcjonalny.
-                    Indeks JSON, HTTPS, zgodność wersji i SHA-256 modelu pozostają obowiązkowe.
+                    Tryb przejściowy: podpis Ed25519 indeksu modeli jest opcjonalny. HTTPS, zgodność wersji i SHA-256
+                    modelu są nadal sprawdzane.
                   </p>
                 ) : null}
 
                 {extended ? (
                   <p className="local-ai-warning">
-                    Wybrana wartość przekracza natywne okno tego modelu. System użyje YaRN;
-                    większy kontekst zwiększa zapotrzebowanie na pamięć i nie gwarantuje takiej
-                    samej jakości jak natywne okno modelu.
+                    Wartość przekracza natywne okno modelu (YaRN): więcej pamięci, jakość może być niższa.
                   </p>
                 ) : null}
               </>
@@ -1206,7 +1210,7 @@ export function LocalAiSetupPanel({
                 ) : null}
               </>
             ) : (
-              <small>Instalację, naprawę lub usunięcie modelu lokalnego może wykonać administrator aplikacji.</small>
+              <small>Zmiany modelu lokalnego wykonuje administrator.</small>
             )}
           </>
         ) : null}

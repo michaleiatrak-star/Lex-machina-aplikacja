@@ -1217,6 +1217,89 @@ describe(
       expect(current.pleadingRedactionFor).toHaveBeenLastCalledWith("Popraw mój pozew, żeby był bardziej stanowczy.");
       current.auth.close();
     });
+    it("long pleading: written in rounds within one step, revised by changed sections, a cut block reported", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner", displayName: "Owner", password: "G39I long draft strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const caseId = String(
+        (await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Long" }).expect(201)).body.caseId
+      );
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/initialize`).set("Authorization", authorization).send({ mode: "AUTO" }).expect(201);
+      await request(current.app).post(`/api/cases/${caseId}/workflow/process-pleading/accept-start`).set("Authorization", authorization).send({}).expect(200);
+
+      const section = (roman: string, title: string) =>
+        [`${roman}. ${title}`, ...Array.from({ length: 80 }, (_, n) => `${n + 1}. Twierdzenie ${roman}-${n + 1}: powód wykonał roboty zgodnie z umową i odebrał protokół częściowy.`)].join("\n");
+      const sections = [section("I", "ŻĄDANIA"), section("II", "UZASADNIENIE"), section("III", "DOWODY")];
+      current.execute.mockImplementation(async (input) => {
+        const checkpoint = input.processWorkflowContext?.checkpoint ?? "";
+        const round = Number(/DALSZY CIĄG PISMA — runda (\d)/u.exec(input.query)?.[1] ?? 0);
+        const answer =
+          checkpoint === "CP-ATAK"
+            ? ["Raport CP-ATAK.", "=== PISMO ===", sections[round]!, round < 2 ? "=== CIĄG DALSZY ===" : "=== KONIEC PISMA ===", ...(round === 2 ? ["Rejestr CP-ATAK."] : [])].join("\n")
+            : checkpoint === "CP-PODMIOT"
+              ? ["Raport CP-PODMIOT.", "=== ZMIANA SEKCJI: II. UZASADNIENIE ===", "II. UZASADNIENIE", "1. Twierdzenie poprawione w CP-PODMIOT.", "=== KONIEC ZMIANY ==="].join("\n")
+              : checkpoint === "CP-QUALITY"
+                ? ["Raport CP-QUALITY.", "=== PISMO ===", "I. ŻĄDANIA", "1. Twierdzenie ucięte w poło"].join("\n")
+                : checkpoint === "CP-AUDYT" || checkpoint === "CP-PEER"
+                  ? [`Raport ${checkpoint}.`, "=== BEZ ZMIAN W TEKŚCIE ===", ...(checkpoint === "CP-PEER" ? ["RAPORT W3", "STATUS PISMA: do decyzji", "UWAGI REDAKCYJNE PRZED ZŁOŻENIEM", "REJESTR KROKÓW"] : [])].join("\n")
+                  : `Raport ${checkpoint}.`;
+        return {
+          sessionId: "session-long",
+          status: "DRAFT_PRESENTABLE",
+          provider: input.provider,
+          model: input.model,
+          primarySkill: input.primarySkill,
+          answer,
+          finalization: "PASS",
+          blockedReferences: [],
+          verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
+          evidence: [],
+          audit: { result: "PASS", eventCount: 1, closed: true },
+          workflow: { id: "PROCESS_PLEADING_V1", result: "PASS", requiredResources: [], missingResources: [] }
+        };
+      });
+      const body = {
+        query: "Przygotuj pismo procesowe w trybie automatycznym.",
+        provider: "openai",
+        model: "gpt-test",
+        primarySkill: DR,
+        mode: "PRAWNIK",
+        knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+      };
+      let stage = "";
+      const answers: string[] = [];
+      for (let turn = 0; turn < 8 && stage !== "FINAL"; turn += 1) {
+        const response = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(body).expect(200);
+        stage = response.body.processWorkflow.stage;
+        answers.push(String(response.body.answer));
+      }
+      expect(stage).toBe("FINAL");
+
+      const queries = current.execute.mock.calls.map((call) => call[0]);
+      const rounds = queries.filter((input) => input.processWorkflowContext?.checkpoint === "CP-ATAK");
+      expect(rounds).toHaveLength(3);
+      expect(rounds[1]!.query).toContain("DALSZY CIĄG PISMA — runda 1");
+      expect(rounds[2]!.query).toContain("I. ŻĄDANIA");
+      // A revising step on the long draft is told to return its changes only.
+      const podmiot = queries.find((input) => input.processWorkflowContext?.checkpoint === "CP-PODMIOT");
+      expect(podmiot?.processWorkflowContext?.draft?.text.length).toBeGreaterThan(18_000);
+
+      const stored = await request(current.app).get(`/api/cases/${caseId}/workflow/process-pleading/draft`).set("Authorization", authorization).expect(200);
+      expect(stored.body.draft.versions.map((item: { checkpoint: string }) => item.checkpoint)).toEqual(["CP-ATAK", "CP-PODMIOT"]);
+      const latest = String(stored.body.draft.latest.text);
+      expect(latest).toContain("1. Twierdzenie poprawione w CP-PODMIOT.");
+      expect(latest).not.toContain("Twierdzenie II-2:");
+      expect(latest).toContain("Twierdzenie I-80:");
+      expect(latest).toContain("Twierdzenie III-80:");
+      expect(latest.match(/^I\. ŻĄDANIA$/gmu)).toHaveLength(1);
+      expect(latest).not.toContain("ucięte");
+      expect(answers.join("\n")).toContain("Projekt pisma nie został zaktualizowany (CP-QUALITY):** tekst pisma ucięty");
+      current.auth.close();
+    });
+
     it("keeps the pleading text between stages, passes it to the next step and takes the user's versions", async () => {
       const current = fixture();
       const bootstrap = await request(current.app)

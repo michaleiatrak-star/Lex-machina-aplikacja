@@ -191,7 +191,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
-import { answerCorrection, type AnswerCorrection } from "./answer-corrections.js";
+import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION, type AnswerCorrection } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
@@ -212,7 +212,8 @@ import {
   type SkillCombination,
   type TaskDecision,
   type TaskRoute,
-  opponentPleadingTrigger
+  opponentPleadingTrigger,
+  replyRolesPrompt
 } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
@@ -220,6 +221,8 @@ import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules,
 import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./domain-fallback.js";
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { issueKey } from "./case-work.js";
+import { LONG_DOCUMENT_RULE } from "./long-document.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -350,6 +353,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
   // the encrypted case workspace.
   threadEvidence?: ThreadEvidence;
+  // Runtime-only: references earlier turns left unverified (the case's open issues):
+  // verified by the application before the model answers, so the register can close them.
+  openIssueClaims?: string[];
   // Dates (yyyy-mm-dd) of the case's timeline the application put before the conversation
   // (http/app.ts): the answer is checked for using it.
   caseTimelineDates?: string[];
@@ -902,6 +908,17 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string; choices?: NextChoice[] };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // A long letter written in parts (long-document.ts): this answer's part and its check.
+  longDocument?: {
+    id: string;
+    title: string;
+    part: number;
+    parts: number;
+    ok: boolean;
+    problems: string[];
+    complete: boolean;
+    next: number | null;
+  };
   // pisma-procesowe-v3 Test A: the user's own pleading corrected (MOD-REDAKCJA), not a new one.
   taskMode?: "REDACTION";
   // The firm's default template the application used (none picked by the user).
@@ -1883,6 +1900,24 @@ export class SafeSessionExecutor implements SessionExecutor {
     const verificationTools = this.verificationToolFactory?.(ledger, {
       localModel: request.model.startsWith("local/")
     });
+    // Open issues of the case (references left unverified earlier): to verification first,
+    // without waiting for the model to cite them again.
+    if (request.openIssueClaims?.length && verificationTools && !request.model.startsWith("local/") && !request.conversationalOnly) {
+      const plan = planAutomaticLegalVerification(request.openIssueClaims.join("\n"), ledger, requestedHistoricalAsOf);
+      if (plan.calls.length) {
+        await verificationTools.runTools(plan.calls.slice(0, 12));
+        const keys = new Set([...request.openIssueClaims, ...plan.calls.map((call) => String((call.input as { claim?: unknown }).claim ?? ""))].map(issueKey));
+        const settled = ledger.all().filter((record) => keys.has(issueKey(record.claim)));
+        const verified = settled.filter((record) => record.status === "VERIFIED" || record.status === "SUPPORTED");
+        step("VERIFY", `kwestie otwarte sprawy: ${verified.length} z ${request.openIssueClaims.length} potwierdzonych w źródle`);
+        const lines = settled.map((record) => `- ${record.claim}: ${record.status}${record.sourceUrl ? ` (${record.sourceUrl})` : ""}`);
+        if (lines.length) {
+          evidencePrompt = [evidencePrompt, ["[Kwestie otwarte sprawy sprawdzone przez aplikację przed tą odpowiedzią:]", ...lines, "[Niepotwierdzone nadal oznaczaj jako do weryfikacji; nie opieraj na nich wniosków.]"].join("\n")]
+            .filter(Boolean)
+            .join("\n\n");
+        }
+      }
+    }
     const corpusTools = new LegalCorpusToolRuntime(
       this.registry,
       {
@@ -2203,6 +2238,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
       });
       pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+      const roles = replyRolesPrompt(request.query, recognisedDocuments);
+      if (roles) pathSections.push(roles);
       step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
     }
     // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
@@ -2499,6 +2536,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         // ("przed wykonaniem zastosuj"), and FAKTY_v2 for a letter drafted from the
         // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
         const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
+        // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
+        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(LONG_DOCUMENT_RULE);
         const sharedForSkill = [
           "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
           ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])
@@ -3381,6 +3420,40 @@ export class SafeSessionExecutor implements SessionExecutor {
     // 2) Lexical, for documents without a valid verdict: the user's topic words and quotations
     //    given to it are in its text.
     // One correcting round for both; what remains is shown to the user next to the answer.
+    // An answer that only defers ("nie mogę jeszcze…, odpowiedź zostanie przygotowana po…")
+    // without the substance or a question: one correcting round; what stays is no basis for a file.
+    if (legalTurn && !waitsForUser(modelOutput) && emptyDeferral(modelOutput)) {
+      step("MODEL", "odpowiedź bez treści i bez pytania: runda poprawcza");
+      let text = "";
+      try {
+        const corrected = await this.providers.stream(request.provider, {
+          model: request.model,
+          systemPrompt: [
+            ...(placeholderKey ? [placeholderKey] : []),
+            identityPrompt,
+            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+            ...pathSections
+          ].join("\n\n"),
+          messages: [
+            { role: "user", content: protectedQuery },
+            { role: "assistant", content: modelOutput },
+            { role: "user", content: NO_ANSWER_CORRECTION }
+          ],
+          accountContinuity: "none",
+          reasoning: "none"
+        });
+        text = corrected.fullText.trim();
+      } catch {
+        text = "";
+      }
+      const fixed = Boolean(text) && !emptyDeferral(text);
+      audit.record("gate", "ANSWER_SUBSTANCE", fixed ? "OK" : "DEGRADED", { corrected: fixed });
+      if (fixed) {
+        corrections.push(answerCorrection("NO_ANSWER", ["odpowiedź odroczona bez treści i bez pytania do użytkownika"], modelOutput, text));
+        modelOutput = text;
+      }
+    }
+
     if (legalTurn && caseSourceTexts.length && !waitsForUser(modelOutput)) {
       const topic = judgedQuestion(protectedQuery);
       const correctionPrompt = [
@@ -4470,7 +4543,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     );
     // Next step of the pipeline: after the AUTO entry skill, or after the final
     // result of the mechanical workflow.
-    const nextContext = { question: pathFacts.query, materials: routingMaterials };
+    const nextContext = { question: pathFacts.query, materials: routingMaterials, answer: restoredAnswer.text };
     // A stateful workflow keeps the stage the request itself names ("dowody w pozwie"
     // -> pisma-procesowe-v3) when the router's entry is the workflow's own skill.
     const workflowSkill = execution.workflowPlan.executionSkill;
@@ -4506,9 +4579,19 @@ export class SafeSessionExecutor implements SessionExecutor {
             : {})
         })
       : [];
-    const legacyNext = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
-    const next = choices.length
-      ? { skill: choices[0]!.skill, reason: choices[0]!.reason, choices }
+    // An answer without substance (deferred, no question) is no basis for a file: no "Generuj dokument".
+    const deferred = emptyDeferral(restoredAnswer.text);
+    const offered = deferred ? choices.filter((choice) => choice.kind !== "DOCUMENT") : choices;
+    const legacy = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
+    const legacyNext = legacy && deferred && /^pisma-/u.test(legacy.skill) ? null : legacy;
+    // An answer that still only announces a step (a verification to be done): a visible
+    // "Kontynuuj" instead of nothing, so the user does not wait for what will not come.
+    const resumeSkill = nextFrom?.skill ?? taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? request.primarySkill;
+    const choicesShown: NextChoice[] = deferred
+      ? [{ skill: resumeSkill, kind: "CONTINUE", reason: "odpowiedź zapowiada krok, którego nie wykonała" }, ...offered]
+      : offered;
+    const next = choicesShown.length
+      ? { skill: choicesShown[0]!.skill, reason: choicesShown[0]!.reason, choices: choicesShown }
       : legacyNext;
     // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
     // Escalation / reduction between the letter skills: an offer to the user, nothing closed.

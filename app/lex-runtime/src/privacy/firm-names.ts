@@ -1,4 +1,5 @@
 import type { PiiSpan } from "./pseudonymizer.js";
+import { findNameApproximately } from "./fuzzy-names.js";
 import { genericWords } from "./generic-words.js";
 
 // Names of private firms (REGULY-ANONIMIZACJI: [FIRMA]). A name is a firm when a legal
@@ -190,6 +191,33 @@ function inflectedStems(name: string): string[] {
 
 export type FirmSpan = PiiSpan & { legalForm?: string; canonical?: string };
 
+// A part of a firm's name neither starts nor ends with a connector ("i Wspólnicy") and is
+// not made of generic words alone ("Global Group").
+const FRAGMENT_CONNECTOR = /^(?:i|oraz|&|and|und|et|w|z|na|do|-)$/iu;
+const FRAGMENT_GENERIC = /^(?:global|group|grupa|polska|poland|international|invest|service|serwis|holding|consulting|trade|centrum|sp\.|spółka)$/iu;
+
+/**
+ * Parts of a firm's name of two or more words, as OCR or a later mention cuts it: "Park
+ * Global" and "Human Park" of "Human Park Global". A name is one element: a surname or a
+ * word inside it ("Park", "Rak" of "Ciecierski Rak") belongs to the firm there, not to a
+ * person; outside the name it is judged on its own.
+ */
+export function firmFragments(name: string): string[] {
+  const words = name.trim().split(/\s+/u);
+  if (words.length < 3) return [];
+  const parts: string[] = [];
+  for (let size = words.length - 1; size >= 2; size -= 1) {
+    for (let start = 0; start + size <= words.length; start += 1) {
+      const part = words.slice(start, start + size);
+      if (FRAGMENT_CONNECTOR.test(part[0]!) || FRAGMENT_CONNECTOR.test(part[part.length - 1]!)) continue;
+      if (part.every((word) => FRAGMENT_GENERIC.test(word) || FRAGMENT_CONNECTOR.test(word))) continue;
+      if (!part.every((word) => /^[\p{Lu}\p{N}]/u.test(word) || FRAGMENT_CONNECTOR.test(word))) continue;
+      parts.push(part.join(" "));
+    }
+  }
+  return parts;
+}
+
 export function detectFirmNames(text: string): FirmSpan[] {
   const names = new Map<string, string | undefined>();
   const spans: FirmSpan[] = [];
@@ -243,7 +271,9 @@ export function detectFirmNames(text: string): FirmSpan[] {
     const spelled = value === value.toLocaleUpperCase("pl") && /\p{L}{2}/u.test(value)
       ? value.toLocaleLowerCase("pl").replace(/(^|[\s-])(\p{L})/gu, (_m, lead: string, letter: string) => lead + letter.toLocaleUpperCase("pl"))
       : null;
-    const forms = [value, ...(spelled ? [spelled] : [])].map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const forms = [value, ...(spelled ? [spelled] : [])]
+      .flatMap((form) => [form, ...firmFragments(form)])
+      .map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const stems = [value, ...(spelled ? [spelled] : [])]
       .flatMap((form) => inflectedStems(form))
       .map((stem) => stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -256,6 +286,18 @@ export function detectFirmNames(text: string): FirmSpan[] {
         start: match.index!, end: match.index! + match[0].length, kind: "PERSON", value: match[0], confidence: 0.9, source: "AUTO",
         ...(legalForm ? { legalForm } : {}),
         ...(match[0] !== value ? { canonical: value } : {})
+      });
+    }
+  }
+  // A name of two or more words as OCR damaged it ("uman Park Global"): the whole name within a
+  // letter or two (fuzzy-names.ts), the same firm.
+  for (const [value, legalForm] of names) {
+    for (const match of findNameApproximately(text, value)) {
+      if (spans.some((span) => span.start < match.end && match.start < span.end)) continue;
+      spans.push({
+        start: match.start, end: match.end, kind: "PERSON", value: match.value, confidence: 0.85, source: "AUTO",
+        ...(legalForm ? { legalForm } : {}),
+        canonical: value
       });
     }
   }

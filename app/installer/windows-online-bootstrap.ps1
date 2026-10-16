@@ -239,12 +239,17 @@ function Get-CommandVersionText(
   [string[]]$Arguments
 ) {
   if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { return $null }
+  # Windows PowerShell 5.1: with "Stop" a version printed to stderr is a terminating error.
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
     $line = & $Executable @Arguments 2>&1 | Select-Object -First 1
     if ($null -eq $line) { return $null }
     return $line.ToString().Trim()
   } catch {
     return $null
+  } finally {
+    $ErrorActionPreference = $previousPreference
   }
 }
 

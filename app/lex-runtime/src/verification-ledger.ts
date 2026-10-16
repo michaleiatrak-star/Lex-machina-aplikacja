@@ -62,6 +62,8 @@ export type VerificationRecord = {
   supportQuoteHash?: string;
   supportQuote?: string;
   evidence?: string;
+  // Wordings the consolidated text prints for later (from its footnotes), with their dates.
+  pendingWording?: Array<{ from: string | null; text: string }>;
   // NSA/WSA (CBOSA) material is kept as a dated snapshot and never promoted
   // to VERIFIED/SUPPORTED.
   verificationCeiling?: "SNAPSHOT_NO_PROMOTION";

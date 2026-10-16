@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useState
 } from "react";
@@ -138,10 +139,8 @@ export function RecoveryAuthPanel({
         </p>
         <h1>
           Użyj kodu recovery
+          <InfoTip>Odblokowuje ten sam klucz konta i istniejące sprawy, ustawia nowe hasło i wydaje nowy kod recovery (stary przestaje działać).</InfoTip>
         </h1>
-        <p className="auth-copy">
-          Recovery odblokuje ten sam UMK i istniejące sprawy, a następnie ustawi nowe hasło i obróci kod recovery.
-        </p>
 
         <label>
           Login

@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, nextChoices } from "../src/task-routing.js";
+import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, nextChoices, letterComplexity, replyRolesPrompt } from "../src/task-routing.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const routes = parseRoutingTable(fs.readFileSync(path.join(CORPUS, "prawny-router-v3/SKILL.md"), "utf8"));
@@ -269,15 +269,41 @@ describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
   it("after a result offers the user a choice: generate the document or a further analysis", () => {
     const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kary umownej 20 000 zł." });
     const choices = nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, { question: "Odpowiedz na ten dokument.", materials: [demand] });
-    expect(choices.map((choice) => [choice.kind, choice.skill])).toEqual([
-      ["DOCUMENT", "pisma-proste-v2"],
-      ["ANALYSIS", "analiza-sadowa-v6"]
-    ]);
+    // An out-of-court document alone (a demand, a contract, an agreement): no court-file analysis.
+    expect(choices.map((choice) => [choice.kind, choice.skill])).toEqual([["DOCUMENT", "pisma-proste-v2"]]);
+    // With court material in the case the stage is offered.
+    const claim = classifyDocument({ text: "POZEW o zapłatę\nWartość przedmiotu sporu: 20 000 zł\nWnoszę o zasądzenie." });
+    expect(
+      nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, { question: "Odpowiedz na ten dokument.", materials: [demand, claim] }).map((choice) => choice.skill)
+    ).toContain("analiza-sadowa-v6");
     // A reply to a demand between the parties is a simple letter, not a court pleading.
     expect(nextChoices("analizator-umow-v1", null, combinations, { question: "Przeanalizuj to wezwanie.", materials: [demand] })[0]).toMatchObject({
       kind: "DOCUMENT",
       skill: "pisma-proste-v2"
     });
+  });
+
+  it("out of court the letter skill follows the letter's complexity", () => {
+    const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kary umownej 20 000 zł." });
+    const simple = { question: "Odpowiedz na to wezwanie.", materials: [demand], answer: "Kwestionuję roszczenie w całości." };
+    expect(letterComplexity(simple)).toBe("SIMPLE");
+    expect(nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, simple)[0]?.skill).toBe("pisma-proste-v2");
+    const reasoned = {
+      ...simple,
+      answer: "Podstawą są art. 483 KC, art. 484 § 2 KC, art. 471 KC oraz art. 101(2) KP i art. 6 KC; kara jest rażąco wygórowana."
+    };
+    expect(letterComplexity(reasoned)).toBe("COMPLEX");
+    expect(nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, reasoned)[0]?.skill).toBe("pisma-procesowe-v3");
+    expect(letterComplexity({ ...simple, question: "Przygotuj szczegółową odpowiedź z uzasadnieniem prawnym." })).toBe("COMPLEX");
+  });
+
+  it("a reply to a delivered document names who writes to whom", () => {
+    const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kary umownej 20 000 zł." });
+    const roles = replyRolesPrompt("Odpowiedz na ten dokument i podważ w nim to, co jest niezgodne z prawem", [demand]);
+    expect(roles).toContain("Nadawcą odpowiedzi jest ADRESAT dostarczonego pisma");
+    expect(roles).toContain("nigdy do osoby, w której imieniu piszesz");
+    expect(replyRolesPrompt("Przeanalizuj tę umowę.", [demand])).toBeNull();
+    expect(replyRolesPrompt("Odpowiedz na pismo.", [])).toBeNull();
   });
 
   it("offers the file of the result itself for a pleading and a redacted contract", () => {

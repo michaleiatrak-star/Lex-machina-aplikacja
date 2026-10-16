@@ -15,6 +15,7 @@ import {
   type McpServerStatus
 } from "./api.js";
 import { INTEGRITY_TEXT } from "./McpSearchPanel.js";
+import { InfoTip } from "./InfoTip";
 
 const ERRORS: Record<string, string> = {
   CEIDG_KEY_NOT_JWT: "To nie wygląda na token CEIDG (JWT: trzy części rozdzielone kropkami). Wklej cały token.",
@@ -190,10 +191,11 @@ export function McpConnectorsPanel() {
       </p>
       <h2>
         Konektory MCP Lex Machina
+        <InfoTip>
+          Serwery z <code>audyt-systemu-v4/mcp-servers</code>. Instalacja uruchamia serwer i sprawdza połączenie; zainstalowane
+          źródła są dostępne w czacie.
+        </InfoTip>
       </h2>
-      <p>
-        Serwery z <code>audyt-systemu-v4/mcp-servers</code>. Instalacja uruchamia serwer i sprawdza handshake MCP; zainstalowane źródła są dostępne w czacie przez federację źródeł prawa.
-      </p>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert">{message}</div> : null}
@@ -222,9 +224,13 @@ export function McpConnectorsPanel() {
             />
             <span>
               Instaluj i odinstalowuj także w Claude Desktop
-              {status.desktop.available
-                ? <> — <code>{status.desktop.configPath}</code> (kopia zapasowa przed każdą zmianą)</>
-                : " — nie wykryto Claude Desktop na tym komputerze"}
+              {status.desktop.available ? (
+                <InfoTip>
+                  Zmienia <code>{status.desktop.configPath}</code>; przed każdą zmianą powstaje kopia zapasowa.
+                </InfoTip>
+              ) : (
+                " — nie wykryto Claude Desktop na tym komputerze"
+              )}
             </span>
           </label>
 
@@ -287,9 +293,15 @@ export function McpConnectorsPanel() {
           ))}
 
           <section>
-            <h3>Klucz API CEIDG</h3>
+            <h3>
+              Klucz API CEIDG
+              <InfoTip>
+                Token wydaje Hurtownia danych CEIDG w Biznes.gov.pl (wniosek, logowanie Profilem Zaufanym). Klucz jest zapisywany
+                lokalnie, tylko dla Twojego konta.
+              </InfoTip>
+            </h3>
             <p className="field-help">
-              CEIDG wymaga tokenu z Hurtowni danych CEIDG i Biznes.gov.pl (wniosek o dostęp, logowanie Profilem Zaufanym).{" "}
+              Stan: {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}.{" "}
               <a
                 href={status.ceidg.keyUrl}
                 target="_blank"
@@ -301,9 +313,6 @@ export function McpConnectorsPanel() {
               >
                 Uzyskaj klucz CEIDG
               </a>
-            </p>
-            <p className="field-help">
-              Stan: {status.ceidg.keyConfigured ? "klucz zapisany" : "brak klucza"}. Klucz jest zapisywany lokalnie z uprawnieniami tylko dla Twojego konta, nigdy w repozytorium.
             </p>
             <label>
               Token CEIDG

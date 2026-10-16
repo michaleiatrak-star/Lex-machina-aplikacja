@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useEffect, useState } from "react";
 import {
   clearCaseMemory,
@@ -68,22 +69,24 @@ export function CaseMemoryCard({
     <article className="chat-card">
       <details>
         <summary>
-          <span className="eyebrow">Pamięć sprawy</span>{" "}
+          <span className="eyebrow">Pamięć sprawy</span>
+          <InfoTip>
+            Kolejne odpowiedzi w sprawie zaczynają od tych ustaleń. Przepis jest użyty bez ponownej weryfikacji tylko, gdy w Sejm ELI nie ma nowszego tekstu jednolitego ani nowelizacji.
+          </InfoTip>{" "}
           {provisions.length ? `${provisions.length} przepisów` : "bez przepisów"}
           {summary ? `, streszczenie ${summary.coveredMessages} wiadomości` : ""}
           {chronology ? ", oś czasu" : ""}
           {work.length ? `, prace: ${work.filter((item) => item.status === "DONE").length} zamkniętych, ${work.filter((item) => item.status === "OPEN").length} otwartych` : ""}
         </summary>
-        <p className="field-help">
-          Kolejne odpowiedzi w tej sprawie zaczynają od tych ustaleń. Przepis zweryfikowany wcześniej jest użyty bez ponownej weryfikacji tylko wtedy, gdy Sejm ELI ma ten sam tekst jednolity i nie ma nowelizacji po nim.
-        </p>
-
-        <h3>Streszczenie wcześniejszej części rozmowy</h3>
+        <h3>
+          Streszczenie wcześniejszej części rozmowy
+          <InfoTip>Zastępuje najstarsze wiadomości, które nie mieszczą się w oknie modelu.</InfoTip>
+        </h3>
         {summary ? (
           <>
             <p className="field-help">
-              Zastępuje {summary.coveredMessages} najstarszych wiadomości, które nie mieszczą się w oknie modelu (stan z {date(summary.updatedAt)}
-              {summary.editedByUser ? ", poprawione ręcznie" : ""}).
+              {summary.coveredMessages} wiadomości, stan z {date(summary.updatedAt)}
+              {summary.editedByUser ? ", poprawione ręcznie" : ""}.
             </p>
             {editing ? (
               <>
@@ -123,30 +126,33 @@ export function CaseMemoryCard({
           <p className="field-help">Brak: cała rozmowa mieści się w oknie modelu.</p>
         )}
 
-        <h3>Prace w sprawie</h3>
+        <h3>
+          Prace w sprawie
+          <InfoTip>Kolejne odpowiedzi korzystają z wyników zamkniętych prac zamiast wykonywać je od nowa; otwarte dokańczają.</InfoTip>
+        </h3>
         {work.length ? (
-          <>
-            <p className="field-help">Kolejne odpowiedzi korzystają z wyników zamkniętych prac zamiast wykonywać je od nowa; otwarte dokańczają.</p>
-            <ul className="case-memory-list">
-              {work.map((item) => (
-                <li key={item.key}>{item.line}</li>
-              ))}
-            </ul>
-          </>
+          <ul className="case-memory-list">
+            {work.map((item) => (
+              <li key={item.key}>{item.line}</li>
+            ))}
+          </ul>
         ) : (
           <p className="field-help">Brak zapisanych prac.</p>
         )}
 
-        <h3>Oś czasu sprawy</h3>
+        <h3>
+          Oś czasu sprawy
+          <InfoTip>Zapisuje się po chronologii sprawy. Kolejne prace (także w nowym wątku) dostają ją jako materiał; nowa chronologia ją zastępuje.</InfoTip>
+        </h3>
         {chronology ? (
           <>
             <p className="field-help">
-              Z chronologii z {date(chronology.updatedAt)}; kolejne prace w tej sprawie (także w nowym wątku) dostają ją jako materiał. Nowa chronologia ją zastępuje.
+              Z chronologii z {date(chronology.updatedAt)}.
             </p>
             <pre className="case-memory-summary">{chronology.text}</pre>
           </>
         ) : (
-          <p className="field-help">Brak: zapisuje się po chronologii sprawy (oś czasu zdarzeń).</p>
+          <p className="field-help">Brak.</p>
         )}
 
         <h3>Przepisy ustalone wcześniej</h3>

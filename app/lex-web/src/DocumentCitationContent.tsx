@@ -9,6 +9,7 @@ import type { WorkspaceDocumentCitation } from "./workspace-client.js";
 import { getAnonymizedVersion, type AnonymizedVersion } from "./api.js";
 import { SourceLinkedText, type SourceClaim } from "./SourceLinkedText.js";
 import { MarkdownContent } from "./MarkdownContent.js";
+import { InfoTip } from "./InfoTip";
 
 function HighlightedContext({
   citation
@@ -247,8 +248,8 @@ export function DocumentCitationContent({
               <strong>Dokładny cytat zaznaczony w źródle</strong>
             ) : (
               <span>
-                Odnośnik prowadzi do źródłowego chunka; brak dokładnego zaznaczenia oznacza,
-                że odpowiedź opiera się na fragmencie, ale nie deklaruje cytatu dosłownego.
+                Bez dokładnego cytatu
+                <InfoTip>Odpowiedź opiera się na tym fragmencie, ale nie cytuje go dosłownie.</InfoTip>
               </span>
             )}
           </div>

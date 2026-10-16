@@ -14,6 +14,7 @@ import {
   type CoreLawProgress,
   type CoreLawStatus
 } from "./api.js";
+import { InfoTip } from "./InfoTip";
 
 const STATE_LABEL: Record<CoreLawActStatus["state"], string> = {
   CURRENT: "aktualny",
@@ -142,9 +143,15 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
     <section className="core-law-updates">
       <div className="maintenance-heading">
         <div>
-          <strong>Przepisy prawne</strong>
+          <strong>
+            Przepisy prawne
+            <InfoTip>
+              Kopia aktów z Dziennika Ustaw na tym komputerze. Nowszy tekst jednolity zastępuje tekst aktu w RAG, a nowelizacja
+              ogłoszona po nim trafia do RAG jako osobny dokument.
+            </InfoTip>
+          </strong>
           <small>
-            kopia aktów z Dziennika Ustaw na tym komputerze · ostatnie sprawdzenie: {day(status?.lastCheckAt)}
+            ostatnie sprawdzenie: {day(status?.lastCheckAt)}
             {status?.refreshing ? " · sprawdzanie w toku…" : ""}
             {status?.progress ? ` · ${status.progress.eli}: ${coreLawProgressText(status.progress)}` : ""}
           </small>
@@ -185,11 +192,6 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
             </small>
           ) : null}
 
-          <small>
-            Nowszy tekst jednolity zastępuje tekst aktu w RAG. Nowelizacja ogłoszona po tekście jednolitym jest
-            dodawana do RAG jako osobny dokument.
-          </small>
-
           {admin ? (
             <>
               <label className="core-law-auto">
@@ -222,11 +224,13 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
 
           {admin ? (
             <div className="core-law-add">
-              <strong>Dodaj akt prawny</strong>
-              <small>
-                Adres z ISAP (isap.sejm.gov.pl, np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”.
-                Akt jest sprawdzany w Sejm ELI; do RAG trafia jego najnowszy tekst jednolity.
-              </small>
+              <strong>
+                Dodaj akt prawny
+                <InfoTip>
+                  Adres z ISAP (np. WDU20250000383), ELI (DU/2025/383) albo „Dz.U. 2025 poz. 383”. Do RAG trafia najnowszy
+                  tekst jednolity z Sejm ELI.
+                </InfoTip>
+              </strong>
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -271,8 +275,8 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
                   </small>
                   {found.act.amendmentsAfter ? (
                     <small className="maintenance-trust-warning">
-                      Nowelizacje po tym tekście: {found.act.amendmentsAfter}. Zostaną dodane do RAG jako osobne
-                      dokumenty; do czasu nowego tekstu jednolitego przepisy tego aktu są weryfikowane bezpośrednio w ELI.
+                      Nowelizacje po tym tekście: {found.act.amendmentsAfter}. Do czasu nowego tekstu jednolitego przepisy
+                      tego aktu są weryfikowane bezpośrednio w ELI.
                     </small>
                   ) : null}
                   {found.presentAs ? (
@@ -383,11 +387,10 @@ export function CoreLawUpdatesSection({ user }: { user: AuthenticatedUser }) {
 
           {groups.unavailable.length ? (
             <details className="core-law-list">
-              <summary>Bez tekstu w ELI ({groups.unavailable.length})</summary>
-              <small>
-                Sejm ELI nie publikuje tekstu tych aktów (np. tylko skan strony Dz.U. z odesłaniem do załącznika).
-                Przepisy tych aktów nie są w lokalnej kopii; ELI jest sprawdzane ponownie raz na dobę.
-              </small>
+              <summary>
+                Bez tekstu w ELI ({groups.unavailable.length})
+                <InfoTip>Sejm ELI nie publikuje tekstu tych aktów, więc nie ma ich w lokalnej kopii. ELI jest sprawdzane ponownie raz na dobę.</InfoTip>
+              </summary>
               <ul>
                 {groups.unavailable.map((act) => (
                   <li key={act.eli}>

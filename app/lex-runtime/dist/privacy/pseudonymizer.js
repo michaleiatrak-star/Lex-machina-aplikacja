@@ -5,6 +5,7 @@ import { detectStreetAddresses } from "./street-addresses.js";
 import { detectFirmNames } from "./firm-names.js";
 import { genericWords, personPart } from "./generic-words.js";
 import { detectIdentifiers } from "./identifiers.js";
+import { findNameApproximately } from "./fuzzy-names.js";
 import { PERSON_CASES } from "./person-morphology.js";
 /** [PII:PERSON:0001] or, with the grammatical case a model asked for, [PII:PERSON:0001|INS]. */
 export const PII_TOKEN_WITH_CASE = /\[PII:([A-Z_]+):(\d{4})(?:\|([A-Z]{2,4}))?\]/g;
@@ -572,14 +573,31 @@ export class LocalPolishPseudonymizer {
             // Any letter case and spacing ("UL. DŁUGA 5", "Długa  5", "DŁUGA 5"): the same letters with
             // the register's house number do not appear by chance. A firm's name in any case too,
             // but not written all in small letters (a common phrase, not the name).
-            const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
-            const anyCase = form.kind === "ADDRESS" || Boolean(form.organization);
+            const escaped = form.pattern ?? form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
+            const anyCase = !form.pattern && (form.kind === "ADDRESS" || Boolean(form.organization));
             for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, anyCase ? "giu" : "gu"))) {
                 if (form.organization && match[0] !== form.text && match[0] === match[0].toLocaleLowerCase("pl"))
                     continue;
-                autoSpans.push({ start: match.index, end: match.index + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO" });
+                autoSpans.push({
+                    start: match.index, end: match.index + match[0].length, kind: form.kind, value: match[0], confidence: 1, source: "AUTO",
+                    ...(form.uncertain ? { uncertain: form.uncertain } : {})
+                });
                 if (form.organization)
                     registryFirms.set(match[0], form.organization.legalForm);
+            }
+            // The same name as OCR damaged it ("uman Park Global", "Michal Wiatrak"): the whole name
+            // within a letter or two, masked and marked for the user to confirm.
+            if (form.pattern || form.kind !== "PERSON")
+                continue;
+            for (const match of findNameApproximately(text, form.text)) {
+                if (match.exact)
+                    continue;
+                autoSpans.push({
+                    start: match.start, end: match.end, kind: form.kind, value: match.value, confidence: 0.9, source: "AUTO",
+                    uncertain: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}`
+                });
+                if (form.organization)
+                    registryFirms.set(match.value, form.organization.legalForm);
             }
         }
         // A person found once is protected everywhere: mentions the recognizer
@@ -657,7 +675,11 @@ export class LocalPolishPseudonymizer {
         }
         // A firm name read after a prefix may run into its owner's name ("P.H.U. Marex Marek
         // Nowak"): the firm ends where a recognized person starts; the person keeps its own token.
+        // A name before a legal form is the firm whole: "Ciecierski Rak Spółka Komandytowa" keeps
+        // "Ciecierski Rak" as one element, though both words are also surnames.
         for (const firm of firms) {
+            if (firm.legalForm)
+                continue;
             const owner = autoSpans
                 .filter((span) => span.kind === "PERSON" && !firms.includes(span) && span.start > firm.start && span.start < firm.end && span.end >= firm.end)
                 .sort((a, b) => a.start - b.start)[0];
@@ -896,9 +918,11 @@ export class LocalPolishPseudonymizer {
                 ...(finding.label
                     ? { label: finding.label }
                     : {}),
-                ...(finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
-                    ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
-                    : {})
+                ...(finding.uncertain && finding.source !== "USER"
+                    ? { uncertain: finding.uncertain }
+                    : finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
+                        ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
+                        : {})
             });
         }
         publicFindings.reverse();

@@ -61,6 +61,11 @@ export type WorkflowProgress = {
 
 /** Where the turn's checkpoint workflow stands, or null for a turn without one. */
 export function workflowProgress(result: SessionExecutionResponse): WorkflowProgress | null {
+  // A long letter in parts: each part that passed its check is a closed step.
+  if (result.longDocument?.id) {
+    const long = result.longDocument;
+    return { workflow: `Długie pismo „${long.title}”`, closed: long.ok ? long.part : long.part - 1, next: long.next ? `część ${long.next} z ${long.parts}` : null };
+  }
   if (result.contractWorkflow) {
     return { workflow: "Analiza umowy", closed: result.contractWorkflow.closedCheckpoints.length, next: result.contractWorkflow.nextCheckpoint };
   }
@@ -99,11 +104,24 @@ export type AutoAdvanceDecision =
 export function autoAdvanceDecision(
   result: SessionExecutionResponse,
   closedBefore: number | null,
-  stepsSoFar: number
+  stepsSoFar: number,
+  // The meta of the message that asked for this turn (an automatic repair of a part).
+  askedMeta?: string
 ): AutoAdvanceDecision {
   const progress = workflowProgress(result);
   if (!progress) return { advance: false, reason: "NO_WORKFLOW" };
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer?.trim()) return { advance: false, reason: "BLOCKED" };
+  // A long letter: the next part after one that passed; a rejected part is written again once
+  // with its problems, a second rejection waits for the user.
+  const long = result.longDocument;
+  if (long?.id) {
+    if (!long.next) return { advance: false, reason: "COMPLETE" };
+    if (stepsSoFar >= AUTO_ADVANCE_MAX_STEPS) return { advance: false, reason: "LIMIT" };
+    const label = `część ${long.next} z ${long.parts}`;
+    if (long.ok) return { advance: true, next: label, label, message: `Kontynuuj: napisz część ${long.next} z ${long.parts}.`, meta: `automatycznie · ${progress.workflow} · ${label}` };
+    if (askedMeta?.endsWith(`poprawa: ${label}`)) return { advance: false, reason: "NO_PROGRESS" };
+    return { advance: true, next: label, label, message: `Popraw część ${long.next} z ${long.parts}.`, meta: `automatycznie · ${progress.workflow} · poprawa: ${label}` };
+  }
   if (result.answer.includes(WAIT_FOR_USER_MARKER) || result.processAuto?.stopped === "WAITING_FOR_USER") {
     return { advance: false, reason: "WAITING_FOR_USER" };
   }
@@ -119,6 +137,13 @@ export function autoAdvanceDecision(
 export function autoAdvanceNote(result: SessionExecutionResponse, decision: AutoAdvanceDecision): string | null {
   const progress = workflowProgress(result);
   if (!progress) return null;
+  const long = result.longDocument?.id ? result.longDocument : null;
+  if (long) {
+    const problems = long.ok ? "" : ` Część ${long.part} odrzucona przez walidację: ${long.problems.join("; ")}.`;
+    if (decision.advance) return `${progress.workflow}: część ${long.part} z ${long.parts} ${long.ok ? "sprawdzona i zapisana" : "do poprawy"}.${problems} Następnie: ${decision.label} — uruchamiam automatycznie.`;
+    if (decision.reason === "COMPLETE") return `${progress.workflow}: wszystkie ${long.parts} części sprawdzone i zapisane. Plik powstaje z całości.`;
+    if (decision.reason === "NO_PROGRESS") return `${progress.workflow}:${problems} Poprawa nie pomogła: popraw część ręcznie albo napisz „Popraw część ${long.part} z ${long.parts}”.`;
+  }
   if (decision.advance) return `${progress.workflow}: zamknięte kroki ${progress.closed}. Następny krok: ${decision.label} — uruchamiam automatycznie.`;
   switch (decision.reason) {
     case "WAITING_FOR_USER":

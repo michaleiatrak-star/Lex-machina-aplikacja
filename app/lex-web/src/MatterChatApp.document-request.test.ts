@@ -77,7 +77,7 @@ describe("żądanie dokumentu a analiza i weryfikacja dokumentu", () => {
 describe("szkic i gotowy dokument po cyklu pisma", () => {
   const base = {
     status: "DRAFT_PRESENTABLE",
-    answer: "TREŚĆ PISMA ...",
+    answer: "Kraków, dnia 3 marca 2026 r.\nAdresat: Spółka Przykład sp. z o.o., ul. Polna 1, 00-001 Warszawa\nODPOWIEDŹ NA WEZWANIE DO ZAPŁATY\nW odpowiedzi na wezwanie z dnia 20 lutego 2026 r. oświadczam, że kwestionuję roszczenie w całości. Wezwanie nie wskazuje podstawy faktycznej ani sposobu wyliczenia kwoty, a dołączone dokumenty nie potwierdzają wykonania usługi w terminie. Wzywam do przedstawienia dokumentów, na których oparto żądanie, w terminie 14 dni.\nNiniejsze pismo nie stanowi uznania roszczenia.\nZ poważaniem\n[podpis]",
     finalization: "PASS",
     gateI: { gate: "G39I", result: "PASS" },
     verification: { records: 1, verified: 1, supported: 0, unverified: 0 }

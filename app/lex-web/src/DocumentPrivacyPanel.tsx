@@ -21,6 +21,7 @@ import { progressLabel, progressPercent, trackProgress } from "./processing-prog
 import { documentFailure, type DocumentFailure } from "./document-errors.js";
 import type { DocumentDropOutcome } from "./document-drop-queue.js";
 import { PrivacyPreview } from "./PrivacyPreview.js";
+import { InfoTip } from "./InfoTip";
 
 export type PrivacyDecisionMode =
   | "AUTO_PSEUDONYMIZE"
@@ -109,7 +110,12 @@ function finalDecisionForSuggestion(
   if (override) {
     return decisionLabel(override);
   }
-  return `PSEUDONIMIZUJ AUTOMATYCZNIE · ${suggestion.kind}`;
+  return `PSEUDONIMIZUJ AUTOMATYCZNIE · ${suggestionKind(suggestion)}`;
+}
+
+// A firm's name is masked with a PERSON token (declined as a name) but shown as a firm.
+export function suggestionKind(suggestion: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
+  return suggestion.firm ? "FIRMA" : suggestion.kind;
 }
 
 export function DocumentPrivacyPanel({
@@ -523,19 +529,12 @@ export function DocumentPrivacyPanel({
           </p>
           <h3>
             OCR automatyczny i anonimizacja per plik
+            <InfoTip>
+              Strony skanowane i zdjęcia przechodzą lokalny OCR, PDF z warstwą tekstową go nie potrzebuje.
+              Każdy plik ma własną zaszyfrowaną mapę reidentyfikacji; wskazania AI to tylko podpowiedzi do
+              sprawdzenia w podglądzie.
+            </InfoTip>
           </h3>
-          <p>
-            Zdjęcia są od razu kierowane do lokalnego OCR. PDF jest analizowany strona po stronie:
-            jeśli ma użyteczną warstwę tekstową, OCR nie jest potrzebny, a strony skanowane są OCR-owane
-            automatycznie. Kilka plików: najpierw OCR wszystkich (w trybie z AI pracuje wtedy tylko model
-            wizyjny), potem wykrywanie danych osobowych (model tekstowy uruchamia się raz), potem podgląd
-            każdego pliku: niepewne linie OCR, wskazania AI i zaczernienia do sprawdzenia i poprawy.
-          </p>
-          <p>
-            Każdy plik otrzymuje osobny documentId i osobną zaszyfrowaną mapę reidentyfikacji. Model AI
-            niczego nie odkrywa sam: jego wskazania są podpowiedziami w podglądzie. Przed zastosowaniem
-            zobaczysz jeszcze zbiorczy podgląd wszystkich plików i Twoich decyzji.
-          </p>
           {activeFileName ? (
             <small>
               Aktualny plik: {activeFileName}
@@ -549,8 +548,8 @@ export function DocumentPrivacyPanel({
               ? progressLabel(progress)
               : "Przetwarzanie…"
             : onFilesChosen
-              ? "Wybierz pliki: PDF, dokumenty, arkusze, zdjęcia lub ZIP (także kilka naraz)"
-              : "Wybierz PDF, dokument, arkusz, zdjęcie lub ZIP"}
+              ? "Wybierz pliki (PDF, DOCX, arkusze, zdjęcia, ZIP)"
+              : "Wybierz plik (PDF, DOCX, arkusz, zdjęcie, ZIP)"}
           <input
             type="file"
             accept=".pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
@@ -704,12 +703,11 @@ export function DocumentPrivacyPanel({
               <p className="eyebrow">Przed zatwierdzeniem</p>
               <h3>
                 Zbiorczy podgląd anonimizacji · {batchDrafts.length} plików
+                <InfoTip>
+                  Wersja robocza. Każdy plik jest zatwierdzany osobno: jeśli jeden zgłosi błąd, wróci do
+                  podglądu, a pozostałe zostaną gotowe.
+                </InfoTip>
               </h3>
-              <p>
-                To jest wersja robocza. Poniżej dla każdego pliku widać elementy wykryte automatycznie,
-                Twoje ręczne zaznaczenia i końcową decyzję, która zostanie zastosowana. Każdy plik nadal
-                zachowuje własny documentId i własną zaszyfrowaną mapę reidentyfikacji.
-              </p>
             </div>
             <button
               type="button"
@@ -748,7 +746,7 @@ export function DocumentPrivacyPanel({
                 {draft.review.pages.some((page) => page.review?.length) ? (
                   <div className="privacy-preview-todo">
                     <strong>Odczyt niepewny - porównaj ze skanem przed zatwierdzeniem</strong>
-                    <small>Pismo odręczne, pieczątki lub rozmazany druk. Popraw tekst strony: „Wróć do podglądu tego pliku”, potem „Popraw tekst strony”.</small>
+                    <small>Popraw: „Wróć do podglądu tego pliku”, potem „Popraw tekst strony”.</small>
                     <ul>
                       {draft.review.pages.flatMap((page) =>
                         (page.review ?? []).map((line, index) => (
@@ -771,7 +769,7 @@ export function DocumentPrivacyPanel({
                         {draft.review.suggestions.map((suggestion, index) => (
                           <li key={`${suggestion.page}-${suggestion.start}-${suggestion.end}-${index}`}>
                             <span>
-                              s. {suggestion.page} · {suggestion.kind} ·{" "}
+                              s. {suggestion.page} · {suggestionKind(suggestion)} ·{" "}
                               „{sourceText(draft.review, suggestion)}”
                             </span>
                             <strong>
@@ -829,13 +827,15 @@ export function DocumentPrivacyPanel({
                       </ul>
                     )}
 
-                    <h4>Końcowa decyzja dla pliku</h4>
+                    <h4>
+                      Końcowa decyzja dla pliku
+                      <InfoTip>
+                        Wykrycia bez ręcznej decyzji są pseudonimizowane. Ręczne KEEP i LABEL wyłączają
+                        nakładające się wykrycie, a ręczne PSEUDONYMIZE ma pierwszeństwo.
+                      </InfoTip>
+                    </h4>
                     <p>
                       <strong>{decisionModeLabel(draft.privacyMode)}</strong>
-                    </p>
-                    <p className="field-help">
-                      Wykrycia bez ręcznej decyzji są pseudonimizowane automatycznie. Ręczne KEEP i LABEL
-                      wyłączają nakładające się wykrycie automatyczne, a ręczne PSEUDONYMIZE ma pierwszeństwo.
                     </p>
                     {manualOnly.length > 0 ? (
                       <div>
@@ -863,10 +863,6 @@ export function DocumentPrivacyPanel({
             );
           })}
 
-          <p className="field-help">
-            Zatwierdzenie jest wykonywane osobno dla każdego documentId. Jeśli pojedynczy plik zgłosi błąd,
-            pliki zatwierdzone poprawnie pozostaną gotowe, a niezatwierdzony plik wróci do tego podglądu.
-          </p>
         </div>
       ) : null}
 
@@ -877,10 +873,10 @@ export function DocumentPrivacyPanel({
               <strong>
                 Zatwierdzone dokumenty: {finalizedBatch.length}
               </strong>
-              <p>
-                Mapy reidentyfikacji pozostają odrębne dla każdego documentId, zaszyfrowane lokalnie
-                i nie są przekazywane providerowi.
-              </p>
+              <InfoTip>
+                Mapy reidentyfikacji są osobne dla każdego pliku, zaszyfrowane lokalnie i nie trafiają do
+                providera.
+              </InfoTip>
             </div>
           </div>
 
@@ -900,10 +896,7 @@ export function DocumentPrivacyPanel({
               <div className="attachment-selector-head">
                 <div>
                   <strong>Chunki do analizy AI</strong>
-                  <p>
-                    Maksymalnie 32 chunki z dokumentu są zaznaczane automatycznie po zatwierdzeniu.
-                    Możesz zmienić wybór.
-                  </p>
+                  <InfoTip>Po zatwierdzeniu zaznacza się automatycznie do 32 chunków; wybór możesz zmienić.</InfoTip>
                 </div>
                 <span>
                   {item.selectedChunkIndices.length}/32 wybranych
@@ -992,14 +985,12 @@ export function DocumentPrivacyPanel({
 
               {item.result.chunks.length > 32 && (
                 <p className="field-help">
-                  Dokument ma więcej niż 32 chunki. Pierwsze 32 zostały zaznaczone automatycznie;
-                  kolejne partie możesz analizować osobno.
+                  Ponad 32 chunki: zaznaczono pierwsze 32, kolejne przeanalizuj osobno.
                 </p>
               )}
 
               <p className="field-help">
-                Uwaga: fragmenty oznaczone jako KEEP pozostają jawne zgodnie z decyzją użytkownika
-                i mogą trafić do providera, jeśli wybierzesz zawierający je chunk.
+                Uwaga: fragmenty KEEP pozostają jawne i trafią do providera razem z wybranym chunkiem.
               </p>
             </details>
           ))}

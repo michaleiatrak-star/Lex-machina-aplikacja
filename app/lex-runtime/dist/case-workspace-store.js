@@ -4,6 +4,7 @@ import { validThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary } from "./thread-summary.js";
 import { validCaseChronology } from "./case-chronology.js";
 import { validCaseWork } from "./case-work.js";
+import { validLongDocument } from "./long-document.js";
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -166,8 +167,9 @@ function safeMessage(input) {
                 steps.skipped.every((entry) => typeof entry?.checkpoint === "string" && entry.checkpoint.length <= 100 && (entry.reason === undefined || (typeof entry.reason === "string" && entry.reason.length <= 300))));
         return (typeof item === "object" && item !== null &&
             typeof item.skill === "string" && item.skill.length <= 200 &&
-            (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+            (item.kind === "DOCUMENT" || item.kind === "ANALYSIS" || item.kind === "CONTINUE") &&
             (item.own === undefined || item.own === true) &&
+            (item.longDocumentId === undefined || (typeof item.longDocumentId === "string" && /^[0-9a-f-]{36}$/u.test(item.longDocumentId))) &&
             validSteps &&
             typeof item.reason === "string" && item.reason.length <= 2_000);
     };
@@ -729,8 +731,10 @@ export class EncryptedCaseWorkspaceStore {
         const summary = validThreadSummary(index.memory?.summary);
         const chronology = validCaseChronology(index.memory?.chronology);
         const work = validCaseWork(index.memory?.work);
+        const longDocument = validLongDocument(index.memory?.longDocument);
         return {
             ...(work?.length ? { work } : {}),
+            ...(longDocument ? { longDocument } : {}),
             ...(evidence ? { evidence } : {}),
             ...(summary ? { summary } : {}),
             ...(chronology ? { chronology } : {}),
@@ -776,6 +780,15 @@ export class EncryptedCaseWorkspaceStore {
                 memory.work = work;
             else
                 delete memory.work;
+        }
+        if (args.longDocument !== undefined) {
+            const longDocument = args.longDocument === null ? null : validLongDocument(args.longDocument);
+            if (args.longDocument !== null && !longDocument)
+                throw new Error("CASE_MEMORY_LONG_DOCUMENT_INVALID");
+            if (longDocument)
+                memory.longDocument = longDocument;
+            else
+                delete memory.longDocument;
         }
         index.memory = memory;
         await this.write(index, args.caseDataKey, args.keyVersion);

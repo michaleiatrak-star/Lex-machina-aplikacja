@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { blocksFromDom, withExtension, type NodeLike } from "./office-editing.js";
 import { editedFilename } from "./text-editing.js";
 import type { EditableBlock, EditableRun } from "./workspace-client.js";
+import { InfoTip } from "./InfoTip";
 
 function appendRuns(parent: HTMLElement, runs: EditableRun[]): void {
   for (const run of runs) {
@@ -156,9 +157,11 @@ export function DocumentEditor(props: {
       </div>
       {editing ? (
         <p className="office-editor-note">
-          Zapis tworzy nowy plik w uproszczonym układzie: akapity, nagłówki, listy, tabele,
-          pogrubienie, kursywa i podkreślenie. Style, nagłówki i stopki strony, komentarze
-          oraz śledzone zmiany nie są przenoszone. Oryginał pozostaje bez zmian.
+          Zapis tworzy nowy plik w uproszczonym układzie; oryginał pozostaje bez zmian.
+          <InfoTip>
+            Zostają akapity, nagłówki, listy, tabele, pogrubienie, kursywa i podkreślenie. Style, nagłówki i stopki
+            strony, komentarze oraz śledzone zmiany nie są przenoszone.
+          </InfoTip>
         </p>
       ) : null}
       <div

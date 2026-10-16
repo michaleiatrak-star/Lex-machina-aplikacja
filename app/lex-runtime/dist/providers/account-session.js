@@ -1,3 +1,4 @@
+import { joinContinuations } from "./continuation-seams.js";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
@@ -350,6 +351,49 @@ function parseCodexFinalText(stdout) {
     }
     return finalText || null;
 }
+// Claude CLI past its output limit: it sends itself "Output token limit hit. Resume directly …"
+// and continues in a new message; its final `result` is only the LAST piece (a 45-paragraph
+// regulation came back as its § 46 and signature). The whole answer is the run of assistant
+// texts linked by those resume messages.
+const CLAUDE_RESUME = /^Output token limit hit\b/u;
+export function claudeContinuedText(stdout) {
+    const pieces = [];
+    let resumed = false;
+    for (const line of stdout.split(/\r?\n/u)) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("{"))
+            continue;
+        let event;
+        try {
+            event = JSON.parse(trimmed);
+        }
+        catch {
+            continue;
+        }
+        const content = Array.isArray(event.message?.content) ? event.message.content : [];
+        const text = content.filter((item) => item?.type === "text" && typeof item.text === "string").map((item) => item.text).join("");
+        if (event.type === "user") {
+            resumed = CLAUDE_RESUME.test(text.trim());
+            if (!resumed && content.length)
+                pieces.length = 0;
+            continue;
+        }
+        if (event.type !== "assistant")
+            continue;
+        if (content.some((item) => item?.type === "tool_use")) {
+            pieces.length = 0;
+            resumed = false;
+            continue;
+        }
+        if (!text)
+            continue;
+        if (!resumed)
+            pieces.length = 0;
+        pieces.push(text);
+        resumed = false;
+    }
+    return pieces.length > 1 ? { text: joinContinuations(pieces).trim(), pieces: pieces.length } : null;
+}
 function claudeResultPayload(stdout) {
     const candidates = [
         stdout.trim(),
@@ -397,12 +441,16 @@ export function parseClaudeResult(stdout) {
         "string"
         ? payload.result.trim()
         : "";
+    // The answer continued past the output limit: every piece, not only the last.
+    const continued = isError ? null : claudeContinuedText(stdout);
     const text = isError
         ? [resultText, errors]
             .filter(Boolean)
             .join(" ")
             .trim()
-        : resultText;
+        : continued && resultText && continued.text.endsWith(resultText.slice(-200))
+            ? continued.text
+            : resultText;
     if (!text && !isError)
         return null;
     const sessionId = typeof payload.session_id ===

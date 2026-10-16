@@ -12,6 +12,7 @@ import {
   type QualityBenchmarkReportSummary
 } from "./api.js";
 import { downloadBlob } from "./download-file.js";
+import { InfoTip } from "./InfoTip";
 
 const PROVIDERS: Array<[ProviderId, string]> = [
   ["openai", "OpenAI / ChatGPT"],
@@ -113,10 +114,14 @@ export function QualityBenchmarkSection({ user }: { user: AuthenticatedUser }) {
 
   return (
     <section className="anomaly-journal quality-benchmark">
-      <h3>Miernik jakości odpowiedzi</h3>
-      <p className="field-help">
-        Zanonimizowane pytania z różnych dziedzin (część jako rozmowy kilku wiadomości) wysyłane do wybranego modelu tak jak z czatu sprawy, z weryfikacją w Sejm ELI. Mierzy blokady, odsetek przepisów zweryfikowanych, kompletność, ciągłość w wątku, czas i tokeny (przy koncie tokenów nie widać). Każda wiadomość liczy się do limitu konta lub kosztu klucza API; sprawy testowe są po pomiarze archiwizowane.
-      </p>
+      <h3>
+        Miernik jakości odpowiedzi
+        <InfoTip>
+          Zanonimizowane pytania testowe idą do wybranego modelu jak z czatu sprawy, z weryfikacją w Sejm ELI. Mierzy blokady,
+          weryfikację przepisów, kompletność, ciągłość wątku, czas i tokeny; sprawy testowe są potem archiwizowane.
+        </InfoTip>
+      </h3>
+      <p className="field-help">Każda wiadomość liczy się do limitu konta lub kosztu klucza API.</p>
       <div className="chat-form-row">
         <label>
           Dostawca

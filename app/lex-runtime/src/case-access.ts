@@ -2316,6 +2316,22 @@ export class LocalCaseAccessService {
       );
   }
 
+  /**
+   * The case key for a read that must not wait for a running operation of the case (the list
+   * of its files while a document is read by OCR and anonymized for minutes): no operation
+   * lock. A key rotated in the meantime fails the read, which the client asks again.
+   */
+  async withCaseDataKeyForRead<T>(
+    context:
+      AuthenticatedContext,
+    caseId: string,
+    callback: (
+      caseDataKey: Buffer
+    ) => T | Promise<T>
+  ): Promise<T> {
+    return await this.withCaseDataKeyUnlocked(context, caseId, "READ", callback);
+  }
+
   private async withCaseDataKeyUnlocked<T>(
     context:
       AuthenticatedContext,

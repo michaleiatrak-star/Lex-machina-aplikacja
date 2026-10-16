@@ -16,6 +16,7 @@ import {
   type ProcessPleadingCheckpoint,
   type ProcessPleadingWorkflowState
 } from "./api.js";
+import { InfoTip } from "./InfoTip";
 import "./process-workflow.css";
 
 const CHECKPOINT_ORDER: readonly ProcessPleadingCheckpoint[] = [
@@ -248,8 +249,11 @@ export function ProcessPleadingWorkflowPanel({
             </button>
           </div>
           <small>
-            Zmiana merytoryczna (fakty, żądania, podstawa prawna) cofa pismo do W2: atak na projekt i kontrole W3
-            zostaną wykonane ponownie, status wraca do DRAFT. Drobna poprawka zachowuje zamknięte kontrole.
+            Zmiana merytoryczna cofa pismo do W2 i statusu DRAFT.
+            <InfoTip>
+              Merytoryczna (fakty, żądania, podstawa prawna): atak na projekt i kontrole W3 od nowa. Drobna zachowuje
+              zamknięte kontrole.
+            </InfoTip>
           </small>
         </>
       ) : null}
@@ -298,9 +302,10 @@ export function ProcessPleadingWorkflowPanel({
       {!state ? (
         <>
           <p>
-            To zadanie wymaga wieloturowego pipeline W1 → PRE-W2 → W2 → W3.
-            Runtime zapisuje checkpointy w zaszyfrowanym stanie tej sprawy i
-            nie pozwala przejść dalej bez wymaganych potwierdzeń.
+            Pipeline W1 → PRE-W2 → W2 → W3.
+            <InfoTip>
+              Checkpointy zapisują się w zaszyfrowanym stanie sprawy; bez wymaganych potwierdzeń nie da się przejść dalej.
+            </InfoTip>
           </p>
           <button
             type="button"
@@ -320,9 +325,8 @@ export function ProcessPleadingWorkflowPanel({
       ) : state.stage === "CG_ACCEPTANCE" ? (
         <>
           <p>
-            Pipeline ma wiele etapów kontroli jakości. Dokument pozostaje
-            DRAFT, dopóki cały wymagany rejestr CP nie zostanie rozwiązany.
-            Każde przejście jest zapisywane w zaszyfrowanym workspace sprawy.
+            Dokument pozostaje DRAFT, dopóki cały wymagany rejestr CP nie zostanie rozwiązany.
+            <InfoTip>Pipeline ma wiele etapów kontroli jakości; każde przejście jest zapisywane w zaszyfrowanym workspace sprawy.</InfoTip>
           </p>
           <button
             type="button"
@@ -360,10 +364,7 @@ export function ProcessPleadingWorkflowPanel({
               <strong>
                 Oczekuje na potwierdzenie: {state.pendingCheckpoint}
               </strong>
-              <p>
-                Runtime nie uruchomi następnego checkpointu, dopóki nie
-                potwierdzisz wyniku bieżącego kroku.
-              </p>
+              <InfoTip>Następny checkpoint ruszy dopiero po potwierdzeniu wyniku tego kroku.</InfoTip>
               <button
                 type="button"
                 disabled={locked}
@@ -407,7 +408,7 @@ export function ProcessPleadingWorkflowPanel({
             <div>
               <p className="process-workflow-final">
                 Wszystkie wymagane checkpointy są rozwiązane. Status procesu: FINAL.
-                Poprawki: „Edytuj projekt” — drobna zostawia FINAL, merytoryczna cofa do W2.
+                <InfoTip>Poprawki przez „Edytuj projekt”: drobna zostawia FINAL, merytoryczna cofa do W2.</InfoTip>
               </p>
               <button type="button" disabled={locked} onClick={() => void restart()}>
                 Nowe pismo w tej sprawie
@@ -418,11 +419,7 @@ export function ProcessPleadingWorkflowPanel({
               <strong>
                 Etap gotowy do następnego checkpointu
               </strong>
-              <p>
-                Kolejne wykonanie zostanie związane przez runtime z pierwszym
-                nierozwiązanym CP w kanonicznej kolejności. Model nie może
-                przeskoczyć do późniejszego etapu.
-              </p>
+              <InfoTip>Kolejny krok dotyczy pierwszego nierozwiązanego CP; model nie przeskoczy do późniejszego etapu.</InfoTip>
               <button
                 type="button"
                 disabled={locked}
@@ -439,8 +436,7 @@ export function ProcessPleadingWorkflowPanel({
 
       {!canWrite ? (
         <small>
-          Sprawa jest tylko do odczytu albo Twoja rola nie pozwala zmieniać
-          stanu pipeline.
+          Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pipeline.
         </small>
       ) : null}
       {loading ? (

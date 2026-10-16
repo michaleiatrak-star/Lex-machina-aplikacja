@@ -393,7 +393,8 @@ export type LegalDocumentType =
 export type LegalStyleProfile =
   | "lex-classic-clean-v1"
   | "lex-light-legal-design-v1"
-  | "lex-classic-tnr-v1";
+  | "lex-classic-tnr-v1"
+  | "lex-office-tnr-v1";
 
 export type StoredCaseArtifact = {
   schemaVersion: 1;
@@ -1039,7 +1040,7 @@ export type DocumentCoverageEntry = {
   status: "FULL" | "PARTIAL";
 };
 
-export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING"; findings: string[]; removed: string[] };
+export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER"; findings: string[]; removed: string[] };
 
 export type SessionExecutionResponse = {
   sessionId: string;
@@ -1051,8 +1052,10 @@ export type SessionExecutionResponse = {
   // What the application's correcting rounds removed from the answer, and why.
   corrections?: AnswerCorrection[];
   mandatoryPath?: MandatoryPathView;
+  // A part of a long letter written in parts: checked against its plan and the parts before it.
+  longDocument?: { id: string; title: string; part: number; parts: number; ok: boolean; problems: string[]; complete: boolean; next: number | null };
   // Next skill of the pipeline (ACTIVATION-MATRIX).
-  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] }; longDocumentId?: string }> };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
   // The firm's default template the application used (none picked).
@@ -2388,6 +2391,8 @@ export function generateLegalDocument(
     acceptUnverified?: boolean;
     // The user's own pleading corrected in the chat (MOD-REDAKCJA), not the W1–W3 pipeline.
     source?: "REDACTION";
+    // A long letter written in parts in the chat: the file renders its joined parts.
+    longDocumentId?: string;
   }
 ): Promise<
   GeneratedDocumentResponse

@@ -33,6 +33,11 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
+# Embedded Python (the online installer, python._pth) does not put the script's folder on
+# sys.path: the sibling modules were not found and the worker never started ("Morfeusz: błąd
+# uruchomienia"). The folder goes first, as for a regular interpreter.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import morfeusz2
 
 import address_base

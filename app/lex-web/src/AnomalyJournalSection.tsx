@@ -10,6 +10,7 @@ import {
   type AuthenticatedUser
 } from "./api.js";
 import { downloadBlob } from "./download-file.js";
+import { InfoTip } from "./InfoTip";
 
 const CODE_TEXT: Record<string, string> = {
   RESOURCE_PATH_CORRECTED: "model podał błędną ścieżkę lub nazwę; podano jedyny pasujący plik",
@@ -108,10 +109,10 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
     <section className="anomaly-journal">
       <div className="maintenance-heading">
         <div>
-          <strong>Dziennik nieprawidłowości</strong>
-          <small>
-            błędne ścieżki skilli, blokady i błędy sesji · bez treści spraw
-          </small>
+          <strong>
+            Dziennik nieprawidłowości
+            <InfoTip>Błędne ścieżki skilli, blokady i błędy sesji. Dziennik nie zawiera treści spraw.</InfoTip>
+          </strong>
         </div>
         <span className={errors || loadError ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
           {loadError ? "dziennik niedostępny" : `${errors} błędów · ${warnings} ostrzeżeń`}

@@ -1,4 +1,6 @@
 import { DEFAULT_PDF_MAX_BYTES, LocalPdfTextExtractor, PdfTextExtractionError } from "./pdf-text-extractor.js";
+import { articleWording, extractPageFootnotes } from "./core-law-footnotes.js";
+import { todayWarsaw } from "./warsaw-date.js";
 import { anchoredUrl, htmlUnitFragment, pageFragment, pdfArticlePage } from "./source-anchor.js";
 const NSA_WSA_SNAPSHOT_HOSTS = new Set([
     "nsa.gov.pl",
@@ -49,7 +51,7 @@ function decodeHtmlEntities(value) {
 }
 // "Art. 11<sup>1</sup>", "art. 11¹" and "art. 11^1" are one unit, never Art. 11 or Art. 111.
 const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
-function superscriptsAsCaret(value) {
+export function superscriptsAsCaret(value) {
     return value
         .replace(/<sup\b[^>]*>\s*(\d{1,3})\s*<\/sup>/giu, "^$1")
         .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => `^${[...digits].map((digit) => SUPERSCRIPT_DIGITS[digit]).join("")}`)
@@ -190,11 +192,91 @@ export class LegalSourceVerificationError extends Error {
         this.name = "LegalSourceVerificationError";
     }
 }
+// ELI HTML puts each footnote into a tooltip at its marker ("<a class=\"gloss-link\"><sup>25)</sup>
+// <span class=\"tooltip-text\">W brzmieniu ustalonym przez…</span></a>"); readable text had the
+// footnote inside the provision. The marker stays as "25 )" (the form the PDF reading gives) and
+// the footnote text goes to the map the wording choice reads.
+const GLOSS_LINK = /<a\b[^>]*class="[^"]*gloss-link[^"]*"[^>]*>\s*<sup>\s*(\d{1,3})\s*\)\s*<\/sup>\s*<span class="tooltip-text">([\s\S]*?)<\/span>\s*<\/a>/giu;
+export function htmlFootnotes(html) {
+    const footnotes = {};
+    const marked = html.replace(GLOSS_LINK, (_match, number, note) => {
+        footnotes[number] ??= readableText(note).replace(/\s+/gu, " ").trim();
+        return ` ${number} )`;
+    });
+    return { html: marked, footnotes };
+}
+const REPEALED_ARTICLE = /^Art\.?\s*[^\s.]+\s*\.?\s*\((?:uchylony|uchylona|uchylone|skreślony|pominięty)\)/iu;
+/**
+ * The article as in force on `today`: of two wordings the consolidated text prints (the current
+ * one and one entering into force later, told apart by the footnotes) the current one, a unit
+ * added with a future date left out; the later wording comes back as `pending`.
+ */
+export function statuteWording(section, footnotes, today) {
+    const marked = Object.keys(footnotes).length > 0 && /\d{1,3} \)/u.test(section);
+    const wording = marked ? articleWording(section, footnotes, today) : null;
+    // A page header of the Journal ("Dziennik Ustaw – 46 – Poz. 1245") is not provision text.
+    const evidence = (wording?.text ?? section)
+        .replace(/^\s*Dziennik Ustaw\s*[–-]\s*\d+\s*[–-]\s*Poz\.\s*\d+\s*$/gmu, "")
+        .replace(/\n{2,}/gu, "\n")
+        .trim();
+    return {
+        evidence,
+        // Footnote markers ("13 )") out of the later wording as out of the evidence.
+        pending: (wording?.pending ?? []).map((item) => ({
+            from: item.from,
+            text: item.text
+                .replace(/(?<![\p{L}\d])(\d{1,3}) \)/gu, (marker, number) => (footnotes[number] === undefined ? marker : ""))
+                .replace(/[ \t]{2,}/gu, " ")
+                .slice(0, 2_000)
+        })),
+        unresolved: wording?.unresolved ?? false,
+        repealed: REPEALED_ARTICLE.test(evidence),
+        footnotes: marked
+    };
+}
+const escapeUnit = (value) => value.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+/**
+ * The unit the claim names below the article (§ 3, ust. 2, or pkt 2c when neither): in force,
+ * repealed, printed only for later (pendingWording), or absent from an article that has units
+ * of that kind. Not checked when the article shows no such units (a layout we do not read).
+ */
+export function claimedUnitState(claim, evidence, pending) {
+    const text = superscriptsAsCaret(claim).replace(/\s+/gu, " ");
+    const unit = "(\\d+(?:\\^\\d+)?[a-z]{0,2})(?![a-z\\d])";
+    const para = new RegExp(`§\\s*${unit}`, "u").exec(text)?.[1];
+    const ust = para ? undefined : new RegExp(`\\bust\\.?\\s*${unit}`, "u").exec(text)?.[1];
+    const pkt = para || ust ? undefined : new RegExp(`\\bpkt\\s*${unit}`, "u").exec(text)?.[1];
+    const label = para ?? ust ?? pkt;
+    if (!label)
+        return { state: "NOT_CHECKED" };
+    const at = (value) => para
+        ? new RegExp(`(?:^|\\n|\\.\\s)§\\s*${escapeUnit(value)}\\s*\\.`, "u")
+        : ust
+            ? new RegExp(`(?:^|\\n)${escapeUnit(value)}\\s*\\.\\s`, "u")
+            : new RegExp(`(?:^|\\n)${escapeUnit(value)}\\)\\s`, "u");
+    const anyOfKind = para ? /(?:^|\n|\.\s)§\s*\d/u : ust ? /\n\d+[a-z]*\.\s/u : /\n\d+[a-z]*\)\s/u;
+    const found = at(label).exec(evidence);
+    if (found) {
+        const after = evidence.slice(found.index + found[0].length, found.index + found[0].length + 40);
+        return /^\s*\((?:uchylon|skreślon|pominięt)/u.test(after) ? { state: "REPEALED" } : { state: "IN_FORCE" };
+    }
+    const later = pending.find((item) => at(label).test(`\n${item.text}`));
+    if (later)
+        return { state: "PENDING", from: later.from };
+    // A cut evidence (a very long article) may hold the unit past its end. "§ N." is unmistakable,
+    // so a § the article does not have is missing; a "2." or "2)" only when the article shows such units.
+    if (evidence.length >= MAX_EVIDENCE_CHARS - 500)
+        return { state: "NOT_CHECKED" };
+    return para || anyOfKind.test(evidence) ? { state: "MISSING" } : { state: "NOT_CHECKED" };
+}
 export class OfficialLegalSourceVerifier {
     fetcher;
     now;
     pdfTextExtractor;
-    constructor(fetcher = globalThis.fetch.bind(globalThis), now = () => new Date().toISOString(), pdfTextExtractor = new LocalPdfTextExtractor()) {
+    constructor(fetcher = globalThis.fetch.bind(globalThis), now = () => new Date().toISOString(), pdfTextExtractor = 
+    // Lines and small print kept: "Art. N." starts a line and the footnotes (small print at
+    // the page bottom) say which wording of a unit is in force.
+    new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true })) {
         this.fetcher = fetcher;
         this.now = now;
         this.pdfTextExtractor = pdfTextExtractor;
@@ -243,6 +325,7 @@ export class OfficialLegalSourceVerifier {
         const pdfSource = isPdfResponse(url, contentType);
         let body;
         let pageTexts;
+        let footnotes = {};
         if (pdfSource) {
             if (!this.pdfTextExtractor) {
                 throw new LegalSourceVerificationError("Official PDF requires a configured local PDF text extractor.", "UNSUPPORTED_SOURCE_CONTENT");
@@ -256,8 +339,16 @@ export class OfficialLegalSourceVerifier {
             const bytes = new Uint8Array(await response.arrayBuffer());
             try {
                 const extracted = await this.pdfTextExtractor.extract(bytes);
-                body = extracted.text.slice(0, MAX_SOURCE_CHARS);
                 pageTexts = extracted.pageTexts;
+                if (pageTexts?.length) {
+                    // Footnotes off the page bottoms, kept for the wording choice (not in the provision).
+                    const split = extractPageFootnotes(pageTexts);
+                    footnotes = split.footnotes;
+                    body = split.pages.filter(Boolean).join("\n").slice(0, MAX_SOURCE_CHARS);
+                }
+                else {
+                    body = extracted.text.slice(0, MAX_SOURCE_CHARS);
+                }
             }
             catch (error) {
                 if (error instanceof
@@ -277,6 +368,11 @@ export class OfficialLegalSourceVerifier {
                 throw new LegalSourceVerificationError("Official source content is not directly verifiable text.", "UNSUPPORTED_SOURCE_CONTENT");
             }
             body = (await response.text()).slice(0, MAX_SOURCE_CHARS);
+            if (request.kind === "statute" && body.includes("gloss-link")) {
+                const split = htmlFootnotes(body);
+                body = split.html;
+                footnotes = split.footnotes;
+            }
         }
         const titleMatched = titleMatches(request.expectedTitle, body, request.kind);
         const referenceMatched = matchesClaim(request.claim, request.kind, body);
@@ -284,7 +380,29 @@ export class OfficialLegalSourceVerifier {
             referenceMatched;
         const fetchedAt = this.now();
         const sourceUrl = url.toString();
-        const evidence = evidenceSnippet(request.claim, request.kind, body);
+        const snippet = evidenceSnippet(request.claim, request.kind, body);
+        const wording = request.kind === "statute" && snippet
+            ? statuteWording(snippet, footnotes, request.asOf ?? todayWarsaw(Date.parse(fetchedAt) || Date.now()))
+            : null;
+        const evidence = wording?.evidence ?? snippet;
+        // Not verified: two wordings without a readable date, a repealed article, or a change not
+        // in force printed in the text that its footnotes do not settle.
+        const unit = wording ? claimedUnitState(request.claim, wording.evidence, wording.pending) : null;
+        const wordingProblem = !wording
+            ? null
+            : unit?.state === "PENDING"
+                ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
+                : unit?.state === "REPEALED"
+                    ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
+                    : unit?.state === "MISSING"
+                        ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
+                        : wording.unresolved
+                            ? "Tekst jednolity drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś."
+                            : wording.repealed
+                                ? "Przepis jest w aktualnym tekście jednolitym uchylony."
+                                : request.requireFootnoteWording && !wording.pending.length
+                                    ? "Tekst jednolity zawiera zmianę tego artykułu, która jeszcze nie obowiązuje, a jego odnośniki nie wskazują brzmienia obowiązującego dziś."
+                                    : null;
         const snapshotOnly = NSA_WSA_SNAPSHOT_HOSTS.has(host);
         const sourceAnchorUrl = matched && request.kind === "statute"
             ? anchoredUrl(sourceUrl, pdfSource
@@ -293,7 +411,7 @@ export class OfficialLegalSourceVerifier {
                     : undefined
                 : htmlUnitFragment(body, request.claim))
             : undefined;
-        const record = matched && !snapshotOnly
+        const record = matched && !snapshotOnly && !wordingProblem
             ? {
                 claim: request.claim,
                 kind: request.kind,
@@ -307,7 +425,8 @@ export class OfficialLegalSourceVerifier {
                     ? "web_fetch_pdf"
                     : "web_fetch",
                 sourceFormat: pdfSource ? "PDF" : "TEXT",
-                ...(evidence ? { evidence } : {})
+                ...(evidence ? { evidence } : {}),
+                ...(wording?.pending.length ? { pendingWording: wording.pending } : {})
             }
             : {
                 claim: request.claim,
@@ -326,11 +445,13 @@ export class OfficialLegalSourceVerifier {
                         verificationCeiling: "SNAPSHOT_NO_PROMOTION"
                     }
                     : {}),
-                evidence: snapshotOnly && matched
-                    ? `NSA/WSA SNAPSHOT (not promoted to VERIFIED): ${evidence ?? "reference found in the fetched CBOSA text"}`
-                    : !titleMatched
-                        ? "Official source was fetched, but the expected act title was not found."
-                        : "Official source was fetched, but the requested reference was not found in the fetched text."
+                evidence: matched && wordingProblem && !snapshotOnly
+                    ? `${wordingProblem}${evidence ? `\n${evidence}` : ""}`.slice(0, MAX_EVIDENCE_CHARS)
+                    : snapshotOnly && matched
+                        ? `NSA/WSA SNAPSHOT (not promoted to VERIFIED): ${evidence ?? "reference found in the fetched CBOSA text"}`
+                        : !titleMatched
+                            ? "Official source was fetched, but the expected act title was not found."
+                            : "Official source was fetched, but the requested reference was not found in the fetched text."
             };
         return {
             record,

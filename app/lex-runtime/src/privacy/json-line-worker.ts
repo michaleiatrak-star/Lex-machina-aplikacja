@@ -21,7 +21,8 @@ export class JsonLineWorker<T> {
     private readonly python: string,
     private readonly args: string[],
     private readonly startTimeoutMs: number,
-    private readonly requestTimeoutMs: number
+    private readonly requestTimeoutMs: number,
+    private readonly env: NodeJS.ProcessEnv = {}
   ) {}
 
   close(): void {
@@ -44,7 +45,7 @@ export class JsonLineWorker<T> {
     const child = spawn(this.python, this.args, {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
-      env: { ...process.env, PYTHONUNBUFFERED: "1" }
+      env: { ...process.env, ...this.env, PYTHONUNBUFFERED: "1" }
     });
     const pending = new Map<number, Pending<T>>();
     let stderr = "";
@@ -120,5 +121,32 @@ export class JsonLineWorker<T> {
       worker.pending.set(id, { resolve, reject, timer });
       worker.child.stdin.write(JSON.stringify({ id, text }) + "\n");
     });
+  }
+}
+
+/**
+ * When to try the long-running worker again after it failed to start: a slow first start
+ * (antivirus, a cold disk) must not turn every later page and file into a fresh Python
+ * process for the rest of the session. Retried after a pause; given up after three failures.
+ */
+export class WorkerStartBackoff {
+  private failures = 0;
+  private retryAt = 0;
+
+  constructor(private readonly pauseMs = 3 * 60 * 1000, private readonly maxFailures = 3) {}
+
+  /** True while the worker may be used (never failed, or the pause after a failure is over). */
+  usable(now = Date.now()): boolean {
+    return this.failures < this.maxFailures && now >= this.retryAt;
+  }
+
+  failed(now = Date.now()): void {
+    this.failures += 1;
+    this.retryAt = now + this.pauseMs;
+  }
+
+  started(): void {
+    this.failures = 0;
+    this.retryAt = 0;
   }
 }

@@ -392,6 +392,53 @@ describe("G34C/G34D case access", () => {
     current.auth.close();
   });
 
+  it("a read of the case key does not wait for an operation holding the case lock (file list during OCR)", async () => {
+    const current =
+      secureFixture();
+    const owner =
+      await current.auth.bootstrap({
+        loginName:
+          "lock-owner",
+        displayName:
+          "Lock Owner",
+        password:
+          "Lock owner bezpieczne haslo 2026"
+      });
+    const ownerContext =
+      context(owner);
+    const localCase =
+      await current.cases.createCase(
+        ownerContext,
+        "Sprawa w przetwarzaniu"
+      );
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // A long operation (a document being processed) holds the case lock.
+    const operation = current.cases.withCaseDataKey(ownerContext, localCase.caseId, "WRITE", async () => {
+      await held;
+      return "done";
+    });
+    const order: string[] = [];
+    const read = current.cases
+      .withCaseDataKeyForRead(ownerContext, localCase.caseId, async (caseDataKey) => {
+        order.push("read");
+        return caseDataKey.length;
+      });
+    const locked = current.cases
+      .withCaseDataKey(ownerContext, localCase.caseId, "READ", async () => {
+        order.push("locked");
+        return 0;
+      });
+    expect(await read).toBe(32);
+    expect(order).toEqual(["read"]);
+    release();
+    await operation;
+    await locked;
+    expect(order).toEqual(["read", "locked"]);
+  });
+
   it("shares encrypted case documents across users and removes access after rekey", async () => {
     const current =
       secureFixture();

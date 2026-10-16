@@ -1,0 +1,206 @@
+[CZĘŚĆ 1/3]
+@TYTUL: Regulamin sklepu internetowego „ZielonySad.pl”
+
+@SEKCJA: § 1. Postanowienia ogólne
+1. Niniejszy Regulamin określa zasady korzystania ze sklepu internetowego „ZielonySad.pl”, dostępnego pod adresem internetowym zielonysad.pl, w tym zasady zawierania umów sprzedaży Towarów na odległość, świadczenia usług drogą elektroniczną oraz rozpatrywania reklamacji.
+2. Sklep prowadzi Zielony Sad spółka z ograniczoną odpowiedzialnością z siedzibą w Warszawie, przy ul. Przykładowej 1, 00-001 Warszawa, wpisana do rejestru przedsiębiorców Krajowego Rejestru Sądowego pod numerem KRS 0000000000. Numery NIP i REGON Sprzedawcy są podane w stopce Sklepu.
+3. Sklep prowadzi sprzedaż Roślin żywych oraz Akcesoriów ogrodniczych z dostawą za pośrednictwem przewoźników kurierskich. Sprzedaż jest kierowana do Konsumentów, Przedsiębiorców na prawach konsumenta oraz Przedsiębiorców.
+4. Regulamin jest udostępniany nieodpłatnie na stronie internetowej Sklepu w sposób umożliwiający jego pozyskanie, odtworzenie i utrwalenie, w szczególności przez wydrukowanie lub zapisanie na nośniku. Regulamin stanowi regulamin, o którym mowa w art. 8 ustawy z dnia 18 lipca 2002 r. o świadczeniu usług drogą elektroniczną.
+5. Działalność Sklepu jest prowadzona zgodnie z obowiązującymi przepisami prawa polskiego i prawa Unii Europejskiej, w szczególności z przepisami:
+   1) ustawy z dnia 23 kwietnia 1964 r. – Kodeks cywilny,
+   2) ustawy z dnia 30 maja 2014 r. o prawach konsumenta,
+   3) ustawy z dnia 18 lipca 2002 r. o świadczeniu usług drogą elektroniczną,
+   4) ustawy z dnia 16 lutego 2007 r. o ochronie konkurencji i konsumentów,
+   5) rozporządzenia Parlamentu Europejskiego i Rady (UE) 2016/679 z dnia 27 kwietnia 2016 r. w sprawie ochrony osób fizycznych w związku z przetwarzaniem danych osobowych (RODO).
+6. Przepisy Regulaminu nie wyłączają ani nie ograniczają praw Konsumenta przysługujących mu na mocy bezwzględnie obowiązujących przepisów prawa. W razie sprzeczności postanowień Regulaminu z takimi przepisami pierwszeństwo mają przepisy prawa.
+7. Korzystanie ze Sklepu, w tym złożenie Zamówienia lub założenie Konta, oznacza, że Klient zapoznał się z Regulaminem i akceptuje jego postanowienia w zakresie, w jakim ma on zastosowanie do danej czynności.
+
+@SEKCJA: § 2. Definicje
+1. Użyte w Regulaminie pojęcia oznaczają:
+   1) Sklep – sklep internetowy „ZielonySad.pl” prowadzony przez Sprzedawcę pod adresem zielonysad.pl;
+   2) Sprzedawca – Zielony Sad spółka z ograniczoną odpowiedzialnością z siedzibą w Warszawie, przy ul. Przykładowej 1, 00-001 Warszawa, KRS 0000000000;
+   3) Regulamin – niniejszy regulamin sklepu internetowego „ZielonySad.pl”;
+   4) Klient – każdy podmiot dokonujący zakupów w Sklepie, w szczególności Konsument, Przedsiębiorca na prawach konsumenta oraz Przedsiębiorca;
+   5) Konsument – osoba fizyczna dokonująca ze Sprzedawcą czynności prawnej niezwiązanej bezpośrednio z jej działalnością gospodarczą lub zawodową;
+   6) Przedsiębiorca na prawach konsumenta – osoba fizyczna zawierająca umowę bezpośrednio związaną z jej działalnością gospodarczą, gdy z treści tej umowy wynika, że nie ma ona dla niej charakteru zawodowego, w szczególności z uwagi na przedmiot wykonywanej przez nią działalności gospodarczej, wynikający z wpisu do Centralnej Ewidencji i Informacji o Działalności Gospodarczej;
+   7) Przedsiębiorca – osoba fizyczna, osoba prawna lub jednostka organizacyjna niebędąca osobą prawną, której ustawa przyznaje zdolność prawną, dokonująca czynności prawnej w ramach swojej działalności gospodarczej lub zawodowej, niebędąca Przedsiębiorcą na prawach konsumenta;
+   8) Użytkownik – osoba korzystająca ze Sklepu lub z usług elektronicznych świadczonych przez Sprzedawcę, niezależnie od tego, czy dokonuje zakupu;
+   9) Konto – usługa elektroniczna polegająca na udostępnieniu Klientowi zindywidualizowanego panelu w Sklepie, chronionego loginem i hasłem, umożliwiającego w szczególności składanie Zamówień, przeglądanie ich historii oraz zarządzanie danymi;
+   10) Newsletter – usługa elektroniczna polegająca na przesyłaniu na podany adres e-mail informacji handlowych i informacyjnych o ofercie Sklepu, w tym o nowościach, promocjach i poradach ogrodniczych;
+   11) Towar – rzecz ruchoma oferowana w Sklepie, w tym Roślina żywa i Akcesoria ogrodnicze, będąca przedmiotem Umowy sprzedaży;
+   12) Roślina żywa – roślina oferowana w Sklepie w stanie żywym, w tym sadzonka, drzewko, krzew, bylina, cebula, kłącze lub inny materiał roślinny przeznaczony do dalszej uprawy, który z natury podlega procesom wegetacji, zmianom sezonowym i może ulec zepsuciu lub obumarciu;
+   13) Akcesoria ogrodnicze – oferowane w Sklepie narzędzia, doniczki, podłoża, nawozy, osłony, podpory oraz inne produkty służące do uprawy i pielęgnacji roślin, niebędące Roślinami żywymi;
+   14) Zamówienie – oświadczenie woli Klienta składane za pośrednictwem Sklepu, zmierzające bezpośrednio do zawarcia Umowy sprzedaży i określające rodzaj oraz liczbę Towarów, sposób dostawy i formę płatności;
+   15) Umowa sprzedaży – umowa sprzedaży Towaru zawierana na odległość pomiędzy Klientem a Sprzedawcą za pośrednictwem Sklepu, na zasadach określonych w Regulaminie;
+   16) Treść cyfrowa – dane wytworzone i dostarczane w postaci cyfrowej, udostępniane w Sklepie, w tym treści Poradnika;
+   17) Usługa cyfrowa – usługa umożliwiająca Konsumentowi wytwarzanie, przetwarzanie, przechowywanie lub uzyskiwanie dostępu do danych w postaci cyfrowej, a także współdzielenie takich danych, w tym Konto oraz dostęp do Poradnika w zakresie, w jakim ma on postać usługi;
+   18) Poradnik – udostępniany w Sklepie w formie elektronicznej zbiór artykułów, instrukcji i wskazówek dotyczących uprawy i pielęgnacji roślin;
+   19) Dostawca usług płatniczych – podmiot obsługujący płatności w Sklepie, w tym operator płatności internetowych, system płatności BLIK oraz instytucja finansowa udzielająca finansowania ratalnego, których wykaz podano w § 17;
+   20) Przesyłka – Towar lub Towary przygotowane przez Sprzedawcę i przekazane przewoźnikowi w celu doręczenia Klientowi w ramach jednego Zamówienia;
+   21) Dni robocze – dni od poniedziałku do piątku, z wyłączeniem dni ustawowo wolnych od pracy;
+   22) Formularz odstąpienia – wzór formularza odstąpienia od umowy, stanowiący załącznik do ustawy o prawach konsumenta, udostępniony na stronie Sklepu, o którym mowa w § 29;
+   23) Niezgodność Towaru z umową – niezgodność Towaru lub treści cyfrowej z Umową sprzedaży w rozumieniu przepisów ustawy o prawach konsumenta, w tym stan, w którym Towar nie spełnia wymogów podmiotowych lub przedmiotowych zgodności albo został wadliwie zamontowany bądź zainstalowany;
+   24) Reklamacja – zgłoszenie przez Klienta zastrzeżeń dotyczących Niezgodności Towaru z umową, wad Towaru lub sposobu wykonania Umowy sprzedaży albo świadczenia usług, składane w trybie określonym w § 35;
+   25) Opinia – wypowiedź Użytkownika dotycząca Towaru lub Sklepu, zamieszczana w Sklepie na zasadach określonych w § 41;
+   26) Polityka prywatności – dokument dostępny na stronie Sklepu, określający zasady przetwarzania danych osobowych Użytkowników przez Sprzedawcę, o którym mowa w § 42.
+2. Pojęcia zdefiniowane w ust. 1 mają to samo znaczenie bez względu na to, czy są użyte w liczbie pojedynczej, czy mnogiej.
+3. Nagłówki paragrafów mają charakter wyłącznie porządkowy i nie wpływają na wykładnię postanowień Regulaminu.
+
+@SEKCJA: § 3. Dane kontaktowe Sprzedawcy
+1. Adres do korespondencji i adres siedziby Sprzedawcy: Zielony Sad sp. z o.o., ul. Przykładowa 1, 00-001 Warszawa.
+2. Adres poczty elektronicznej Sprzedawcy: kontakt@zielonysad.pl.
+3. Numer telefonu Sprzedawcy: +48 22 000 00 00. Opłata za połączenie jest naliczana według taryfy operatora Klienta, bez dodatkowych kosztów po stronie Sprzedawcy.
+4. Sprzedawca odpowiada na zapytania i zgłoszenia kierowane drogą elektroniczną, telefoniczną lub pocztową w Dni robocze, w godzinach 9:00–16:00. Wiadomości przesłane poza tymi godzinami są rozpatrywane w następnym Dniu roboczym.
+5. Klient może porozumiewać się ze Sprzedawcą za pomocą środków wskazanych w ust. 1–3 oraz za pośrednictwem formularza kontaktowego dostępnego w Sklepie.
+6. Sprzedawca porozumiewa się z Klientem w języku polskim, za pośrednictwem adresu e-mail i numeru telefonu podanych przez Klienta w Zamówieniu lub przy zakładaniu Konta.
+7. Klient jest zobowiązany podawać prawdziwe dane kontaktowe i niezwłocznie informować Sprzedawcę o ich zmianie, tak aby możliwa była realizacja Zamówienia, w szczególności ustalenie terminu doręczenia Przesyłki zawierającej Rośliny żywe.
+
+@SEKCJA: § 4. Wymagania techniczne
+1. Do korzystania ze Sklepu, w tym przeglądania oferty i składania Zamówień, niezbędne są:
+   1) urządzenie z dostępem do sieci Internet, takie jak komputer, laptop, tablet lub telefon z ekranem dotykowym,
+   2) aktualna wersja przeglądarki internetowej, w szczególności Chrome, Firefox, Safari lub Edge, z włączoną obsługą plików cookies oraz JavaScript,
+   3) aktywny adres poczty elektronicznej,
+   4) w przypadku korzystania z Poradnika w formie plików – oprogramowanie umożliwiające otwieranie plików w formacie PDF.
+2. Do korzystania z płatności BLIK niezbędna jest aplikacja bankowa umożliwiająca generowanie kodu BLIK, a do płatności ratalnych – spełnienie warunków określonych przez instytucję finansującą.
+3. Sprzedawca stosuje mechanizmy kryptograficzne i zabezpieczenia transmisji danych (szyfrowanie połączenia) w celu ochrony danych przekazywanych za pośrednictwem Sklepu.
+4. Korzystanie ze Sklepu wiąże się ze standardowymi zagrożeniami występującymi w sieci Internet, w szczególności ryzykiem działania złośliwego oprogramowania i wyłudzania danych. Sprzedawca zaleca stosowanie aktualnego oprogramowania zabezpieczającego.
+5. Sprzedawca nie ponosi odpowiedzialności za brak możliwości korzystania ze Sklepu wynikający z niespełnienia przez Klienta wymagań technicznych lub z awarii leżących po stronie Klienta lub jego dostawcy usług internetowych.
+6. Sprzedawca zastrzega prawo do czasowego wyłączenia Sklepu w związku z koniecznością jego konserwacji lub aktualizacji. Sprzedawca dołoży starań, aby przerwy te przypadały w godzinach nocnych i były możliwie krótkie.
+
+@SEKCJA: § 5. Zasady korzystania ze Sklepu
+1. Użytkownik jest zobowiązany korzystać ze Sklepu w sposób zgodny z prawem, Regulaminem i dobrymi obyczajami, z poszanowaniem praw osób trzecich oraz dóbr osobistych i praw własności intelektualnej Sprzedawcy.
+2. Zabrania się w szczególności:
+   1) podawania w Sklepie danych nieprawdziwych, nieaktualnych lub dotyczących osób trzecich bez ich upoważnienia,
+   2) dostarczania treści o charakterze bezprawnym, w tym treści obraźliwych, wulgarnych, naruszających prawa osób trzecich lub wprowadzających w błąd,
+   3) podejmowania działań mogących zakłócić prawidłowe funkcjonowanie Sklepu, w tym przeciążania serwerów, wprowadzania złośliwego oprogramowania oraz prób obejścia zabezpieczeń,
+   4) automatycznego pozyskiwania danych ze Sklepu (scrapingu) bez zgody Sprzedawcy,
+   5) składania Zamówień w celu innym niż ich realizacja, w szczególności fikcyjnych Zamówień,
+   6) wysyłania niezamówionej informacji handlowej (spamu) za pośrednictwem Sklepu.
+3. Zawartość Sklepu, w tym teksty, fotografie, grafiki, układ strony, znaki towarowe i bazy danych, jest chroniona prawem autorskim i prawami pokrewnymi. Jej kopiowanie, rozpowszechnianie lub wykorzystywanie w celach komercyjnych wymaga uprzedniej pisemnej zgody Sprzedawcy, z zastrzeżeniem dozwolonego użytku wynikającego z przepisów prawa.
+4. W przypadku naruszenia przez Użytkownika ust. 1 lub 2 Sprzedawca może, po uprzednim wezwaniu do zaprzestania naruszeń, zablokować dostęp do Konta lub usług elektronicznych, a w przypadkach rażących naruszeń – także bez wezwania, zgodnie z § 9.
+5. Użytkownik ponosi odpowiedzialność za szkodę wyrządzoną Sprzedawcy lub osobom trzecim w wyniku korzystania ze Sklepu w sposób sprzeczny z Regulaminem lub prawem, na zasadach określonych w przepisach Kodeksu cywilnego.
+6. Użytkownik, który zauważy w Sklepie treści o charakterze bezprawnym, może zawiadomić o tym Sprzedawcę na adres e-mail wskazany w § 3. Sprzedawca rozpatruje zawiadomienie niezwłocznie i w razie potrzeby usuwa lub blokuje dostęp do takich treści.
+
+@SEKCJA: § 6. Rodzaje i zakres usług elektronicznych
+1. Sprzedawca świadczy za pośrednictwem Sklepu następujące usługi drogą elektroniczną:
+   1) prowadzenie Konta,
+   2) wysyłanie Newslettera,
+   3) umożliwienie składania Zamówień za pomocą formularza zamówienia,
+   4) udostępnianie formularza kontaktowego,
+   5) udostępnianie Poradnika,
+   6) umożliwienie zamieszczania Opinii.
+2. Usługi wskazane w ust. 1 są świadczone nieodpłatnie, z zastrzeżeniem ust. 3. Usługi, o których mowa w ust. 1 pkt 1, 2, 4 i 6, są świadczone przez czas nieoznaczony. Usługa, o której mowa w ust. 1 pkt 3, ma charakter jednorazowy i kończy się z chwilą złożenia Zamówienia albo zaprzestania jego składania.
+3. Jeżeli w ofercie Sklepu wyodrębniono płatne elementy Poradnika, informacja o cenie i warunkach dostępu jest podawana przed rozpoczęciem korzystania z nich, zgodnie z § 38–40.
+4. Umowa o świadczenie usług elektronicznych o charakterze ciągłym, w szczególności o prowadzenie Konta i wysyłanie Newslettera, zostaje zawarta w chwili rozpoczęcia korzystania z usługi przez Użytkownika, na warunkach określonych w Regulaminie.
+5. Użytkownik może w każdym czasie zrezygnować z usług świadczonych w sposób ciągły, na zasadach określonych w § 9 i § 10.
+6. Reklamacje dotyczące usług elektronicznych można składać w sposób wskazany w § 35. Sprzedawca rozpatruje je w terminie 14 dni od dnia ich otrzymania.
+7. Sprzedawca zastrzega prawo do zmiany zakresu i funkcjonalności usług elektronicznych z ważnych przyczyn, na zasadach określonych w § 45.
+
+@SEKCJA: § 7. Konto klienta – rejestracja
+1. Założenie Konta jest dobrowolne. Zakup w Sklepie jest możliwy również bez rejestracji, jako zakup jako gość, z zastrzeżeniem, że niektóre funkcje, takie jak historia Zamówień, są dostępne wyłącznie po zalogowaniu.
+2. Konto może założyć osoba fizyczna posiadająca pełną zdolność do czynności prawnych, a także osoba o ograniczonej zdolności do czynności prawnych za zgodą przedstawiciela ustawowego, osoba prawna lub jednostka organizacyjna, której ustawa przyznaje zdolność prawną.
+3. W celu założenia Konta Użytkownik:
+   1) wypełnia formularz rejestracyjny, podając adres e-mail oraz hasło, a w razie potrzeby – dane niezbędne do realizacji Zamówień, w tym imię, nazwisko, adres dostawy i numer telefonu,
+   2) zapoznaje się z Regulaminem i Polityką prywatności i oświadcza, że akceptuje Regulamin,
+   3) potwierdza rejestrację przez kliknięcie w link aktywacyjny przesłany na podany adres e-mail.
+4. Zawarcie umowy o prowadzenie Konta następuje z chwilą potwierdzenia rejestracji w sposób określony w ust. 3 pkt 3. Link aktywacyjny jest ważny przez 48 godzin od wysłania; po upływie tego terminu rejestracja wygasa, a Użytkownik może ją powtórzyć.
+5. Podanie danych oznaczonych w formularzu jako obowiązkowe jest warunkiem założenia Konta. Podanie danych dodatkowych jest dobrowolne.
+6. Jeden adres e-mail może być przypisany tylko do jednego Konta.
+7. Przed zawarciem umowy o prowadzenie Konta, oraz w każdym czasie po jej zawarciu, Użytkownik ma dostęp do treści Regulaminu w sposób umożliwiający jego utrwalenie. Sprzedawca potwierdza zawarcie umowy wiadomością e-mail, do której dołączony jest Regulamin lub link do jego aktualnej wersji.
+
+@SEKCJA: § 8. Konto klienta – zasady korzystania
+1. Dostęp do Konta jest chroniony loginem (adresem e-mail) oraz hasłem ustalonym przez Użytkownika. Użytkownik zobowiązany jest do zachowania hasła w poufności i nieudostępniania go osobom trzecim.
+2. Użytkownik powinien stosować hasło o odpowiedniej złożoności oraz zmieniać je w razie podejrzenia, że stało się znane osobom nieuprawnionym. Sprzedawca nigdy nie prosi Użytkownika o podanie hasła w wiadomości e-mail ani telefonicznie.
+3. W przypadku podejrzenia nieuprawnionego dostępu do Konta Użytkownik jest zobowiązany niezwłocznie powiadomić o tym Sprzedawcę. Sprzedawca może wówczas czasowo zablokować dostęp do Konta do czasu wyjaśnienia sprawy.
+4. Użytkownik zobowiązany jest do aktualizowania danych podanych w Koncie, w szczególności adresu dostawy, adresu e-mail i numeru telefonu. Sprzedawca nie ponosi odpowiedzialności za skutki podania nieprawidłowych lub nieaktualnych danych.
+5. Użytkownik może w każdej chwili samodzielnie modyfikować dane w Koncie lub zwrócić się do Sprzedawcy o ich zmianę.
+6. Konto jest przypisane do jednego Użytkownika i nie może być zbywane ani udostępniane osobom trzecim, chyba że Sprzedawca wyrazi na to zgodę.
+7. W ramach Konta Użytkownik ma dostęp do historii Zamówień, zapisanych adresów dostawy, danych do faktury, dokumentów sprzedaży w postaci elektronicznej oraz, w zakresie przewidzianym w ofercie, do Poradnika.
+8. Sprzedawca dokłada starań, aby Konto było dostępne w sposób ciągły, z zastrzeżeniem przerw technicznych, o których mowa w § 4 ust. 6.
+
+@SEKCJA: § 9. Usunięcie konta i rozwiązanie umowy o prowadzenie konta
+1. Użytkownik może w każdej chwili, bez podawania przyczyny i bez ponoszenia kosztów, rozwiązać umowę o prowadzenie Konta, usuwając Konto w ustawieniach Konta albo składając Sprzedawcy oświadczenie o rezygnacji na adres e-mail wskazany w § 3.
+2. Rozwiązanie umowy o prowadzenie Konta przez Użytkownika następuje ze skutkiem natychmiastowym od dnia usunięcia Konta lub otrzymania przez Sprzedawcę oświadczenia o rezygnacji. Sprzedawca potwierdza usunięcie Konta wiadomością e-mail.
+3. Sprzedawca może wypowiedzieć umowę o prowadzenie Konta z zachowaniem 14-dniowego okresu wypowiedzenia, wyłącznie z ważnych przyczyn, do których należą:
+   1) naruszenie przez Użytkownika Regulaminu lub przepisów prawa w sposób ciągły albo pomimo wezwania do zaprzestania naruszeń,
+   2) działanie Użytkownika na szkodę Sprzedawcy lub innych Użytkowników,
+   3) podanie danych nieprawdziwych, jeżeli uniemożliwia to realizację umowy,
+   4) zaprzestanie prowadzenia przez Sprzedawcę usługi Konta, o czym Sprzedawca informuje z odpowiednim wyprzedzeniem,
+   5) brak aktywności Konta przez okres co najmniej 24 miesięcy, po uprzednim powiadomieniu Użytkownika.
+4. W razie rażącego naruszenia Regulaminu lub prawa, w szczególności w przypadku działań zagrażających bezpieczeństwu Sklepu, Sprzedawca może rozwiązać umowę o prowadzenie Konta ze skutkiem natychmiastowym, podając Użytkownikowi przyczynę.
+5. Oświadczenie Sprzedawcy o wypowiedzeniu lub rozwiązaniu umowy jest składane na adres e-mail Użytkownika i zawiera uzasadnienie.
+6. Usunięcie Konta nie wpływa na Umowy sprzedaży zawarte przed jego usunięciem ani na prawa i obowiązki z nich wynikające, w tym na rozpatrywanie Reklamacji i wykonywanie prawa odstąpienia.
+7. Po usunięciu Konta Sprzedawca usuwa dane Użytkownika przetwarzane w związku z Kontem, z wyjątkiem danych, które Sprzedawca jest obowiązany lub uprawniony przechowywać na podstawie przepisów prawa, w szczególności w celach podatkowych, rachunkowych oraz dochodzenia lub obrony roszczeń. Szczegóły określa Polityka prywatności.
+8. Użytkownik przed usunięciem Konta powinien pobrać dokumenty i dane, które chce zachować. Po usunięciu Konta dostęp do nich może być niemożliwy.
+
+@SEKCJA: § 10. Newsletter
+1. Zapis na Newsletter jest dobrowolny i nieodpłatny. Newsletter może być wysyłany wyłącznie Użytkownikom, którzy wyrazili na to zgodę, w tym zgodę na otrzymywanie informacji handlowych drogą elektroniczną oraz zgodę na wykorzystanie telekomunikacyjnych urządzeń końcowych i automatycznych systemów wywołujących w celu marketingu bezpośredniego, w zakresie, w jakim jest to wymagane przepisami prawa.
+2. W celu zapisania się na Newsletter Użytkownik podaje adres e-mail w formularzu zapisu, zaznacza pole zgody i potwierdza zapis przez kliknięcie w link przesłany na podany adres e-mail (procedura podwójnego potwierdzenia). Brak potwierdzenia w terminie 48 godzin powoduje wygaśnięcie zapisu.
+3. Newsletter obejmuje w szczególności informacje o nowościach w ofercie, promocjach, sezonowych terminach sadzenia i wysyłki Roślin żywych oraz porady ogrodnicze. Częstotliwość wysyłki zależy od sezonu i nie przekracza z reguły dwóch wiadomości tygodniowo.
+4. Zgoda na Newsletter nie jest warunkiem złożenia Zamówienia ani założenia Konta. Zapis na Newsletter może nastąpić niezależnie od założenia Konta.
+5. Użytkownik może w każdej chwili, bez podawania przyczyny i bez ponoszenia kosztów, zrezygnować z Newslettera, klikając w link rezygnacji umieszczony w każdej wiadomości, w ustawieniach Konta albo wysyłając oświadczenie na adres e-mail wskazany w § 3. Wycofanie zgody nie wpływa na zgodność z prawem przetwarzania dokonanego przed jej wycofaniem.
+6. Sprzedawca zaprzestaje wysyłki Newslettera niezwłocznie po otrzymaniu rezygnacji, nie później niż w terminie 3 Dni roboczych.
+7. Dane osobowe w związku z Newsletterem są przetwarzane na zasadach określonych w Polityce prywatności. Sprzedawca może wypowiedzieć usługę Newslettera z zachowaniem 14-dniowego terminu, w szczególności w razie zaprzestania jej świadczenia lub nadużywania usługi przez Użytkownika.
+
+@SEKCJA: § 11. Informacje o Towarach i cenach
+1. Informacje o Towarach prezentowane w Sklepie, w tym opisy, zdjęcia, parametry i ceny, stanowią zaproszenie do zawarcia umowy w rozumieniu art. 71 Kodeksu cywilnego, a nie ofertę Sprzedawcy.
+2. Opis Towaru zawiera w szczególności nazwę, w przypadku Roślin żywych – nazwę gatunkową i odmianową, wielkość lub wysokość rośliny, rozmiar pojemnika lub formę sprzedaży (np. w doniczce, z bryłą korzenną, z korzeniem odkrytym), wymagania uprawowe, termin sadzenia oraz dostępność. Dla Akcesoriów ogrodniczych opis zawiera podstawowe cechy, wymiary i materiał.
+3. Zdjęcia Roślin żywych mają charakter poglądowy. Ze względu na naturalne cechy roślin, wynikające z odmiany, wieku, pory roku i warunków wegetacji, rzeczywisty wygląd Rośliny żywej, w tym jej pokrój, ulistnienie, kwitnienie i kolor, może się nieznacznie różnić od zdjęcia, co nie stanowi Niezgodności Towaru z umową, o ile pozostaje w granicach wskazanych w opisie. Sprzedawca zamieszcza w opisie informację, czy zdjęcie przedstawia roślinę w stanie dojrzałym, czy w stanie, w jakim zostanie dostarczona.
+4. Wymiary podane w opisach Roślin żywych są wartościami przybliżonymi, a dopuszczalna odchyłka wynika z opisu Towaru.
+5. Wszystkie ceny w Sklepie są cenami brutto, wyrażonymi w złotych polskich (PLN), i zawierają podatek od towarów i usług (VAT).
+6. Przy każdym Towarze Sprzedawca podaje cenę brutto oraz, w przypadkach przewidzianych przepisami, cenę jednostkową. W przypadku obniżki ceny Sprzedawca podaje najniższą cenę, jaka obowiązywała w okresie 30 dni przed wprowadzeniem obniżki, zgodnie z art. 4 ustawy o informowaniu o cenach towarów i usług.
+7. Cena podana przy Towarze nie obejmuje kosztów dostawy ani innych dodatkowych kosztów, o ile występują. Koszty te są wskazywane w koszyku i w podsumowaniu Zamówienia przed jego złożeniem, a Klient jest o nich informowany przed zawarciem Umowy sprzedaży.
+8. Na stronie Sklepu Sprzedawca informuje o ewentualnych szczególnych warunkach przechowywania i pielęgnacji Roślin żywych po ich odbiorze. Informacja ta ma charakter pomocniczy i nie zwalnia Klienta z obowiązku staranności w pielęgnacji.
+
+@SEKCJA: § 12. Zasady składania zamówień
+1. Zamówienia można składać za pośrednictwem strony internetowej Sklepu przez całą dobę, we wszystkie dni tygodnia, po zalogowaniu na Konto lub bez rejestracji.
+2. W celu złożenia Zamówienia Klient:
+   1) wybiera Towar i dodaje go do koszyka,
+   2) weryfikuje zawartość koszyka, w tym liczbę i rodzaj Towarów,
+   3) podaje dane niezbędne do realizacji Zamówienia, w szczególności dane kontaktowe, adres dostawy oraz w razie potrzeby dane do faktury,
+   4) wybiera sposób dostawy i formę płatności,
+   5) zapoznaje się z podsumowaniem Zamówienia zawierającym cenę brutto Towarów, koszty dostawy i łączną kwotę do zapłaty, a także z informacjami wymaganymi przepisami prawa,
+   6) oświadcza, że zapoznał się z Regulaminem i akceptuje jego treść,
+   7) składa Zamówienie przez kliknięcie przycisku opisanego „Zamawiam i płacę” lub innym równoznacznym jednoznacznym sformułowaniem informującym o obowiązku zapłaty.
+3. Złożenie Zamówienia jest równoznaczne ze zobowiązaniem się Klienta do zapłaty ceny Towaru oraz kosztów dostawy, wskazanych w podsumowaniu Zamówienia.
+4. Przed złożeniem Zamówienia Klient może poprawić błędy w danych, korzystając z funkcji edycji koszyka i formularza zamówienia.
+5. Klient jest zobowiązany podać dane prawdziwe i kompletne, w szczególności adres dostawy z kodem pocztowym i numerem telefonu umożliwiającym kontakt z kurierem. Zawierając Umowę sprzedaży na odległość, Klient ponosi skutki podania błędnych danych.
+6. Klient będący Przedsiębiorcą lub Przedsiębiorcą na prawach konsumenta podaje dodatkowo nazwę firmy i numer NIP. Złożenie Zamówienia z podaniem numeru NIP oznacza oświadczenie, że Klient nabywa Towar w związku z prowadzoną działalnością gospodarczą, z zastrzeżeniem § 14.
+7. Sprzedawca może odmówić przyjęcia Zamówienia lub wstrzymać jego realizację, jeżeli dane podane przez Klienta są niekompletne lub budzą uzasadnione wątpliwości co do ich prawdziwości, a Klient pomimo wezwania ich nie uzupełnił w terminie 3 Dni roboczych.
+
+@SEKCJA: § 13. Zawarcie umowy sprzedaży
+1. Po złożeniu Zamówienia Sprzedawca niezwłocznie przesyła na adres e-mail Klienta wiadomość potwierdzającą otrzymanie Zamówienia. Wiadomość ta ma charakter informacyjny i nie stanowi przyjęcia Zamówienia.
+2. Umowa sprzedaży zostaje zawarta w chwili wysłania przez Sprzedawcę na adres e-mail Klienta wiadomości zawierającej oświadczenie o przyjęciu Zamówienia do realizacji.
+3. Jeżeli Sprzedawca nie może zrealizować Zamówienia w całości lub w części, w szczególności z powodu braku Towaru, niezwłocznie informuje o tym Klienta, który może zgodnie z § 15 zdecydować o dalszym postępowaniu. Do czasu zawarcia Umowy sprzedaży Klient nie jest związany Zamówieniem w zakresie, w jakim nie zostało ono przyjęte.
+4. Do wiadomości potwierdzającej przyjęcie Zamówienia lub w terminie nie późniejszym niż w chwili dostarczenia Towaru Sprzedawca dołącza na trwałym nośniku, w szczególności w formie pliku PDF:
+   1) potwierdzenie zawarcia Umowy sprzedaży,
+   2) treść Regulaminu,
+   3) pouczenie o prawie odstąpienia od umowy wraz z Formularzem odstąpienia, a w odniesieniu do Roślin żywych – informację o wyłączeniach prawa odstąpienia, o których mowa w § 31,
+   4) informacje wymagane przepisami o prawach konsumenta, w tym o Sprzedawcy, Towarze, cenie i kosztach dostawy.
+5. Treść zawartej Umowy sprzedaży jest utrwalana i zabezpieczana poprzez zapisanie w systemie informatycznym Sprzedawcy oraz przesłanie Klientowi potwierdzenia, o którym mowa w ust. 4. Klient ma dostęp do treści Umowy sprzedaży w historii Zamówień na Koncie, a Klient niemający Konta – w otrzymanej wiadomości e-mail.
+6. Jeżeli Zamówienie dotyczy kilku Towarów, Sprzedawca może przyjąć je w całości albo w części. W razie przyjęcia w części Umowa sprzedaży obejmuje wyłącznie zaakceptowane Towary, o czym Sprzedawca informuje Klienta.
+7. Sprzedawca zastrzega sobie prawo do niezawarcia Umowy sprzedaży w przypadku oczywistego błędu w cenie lub opisie Towaru, o którym Klient został niezwłocznie poinformowany. Klient może wówczas potwierdzić Zamówienie po poprawieniu ceny albo od niego odstąpić bez żadnych konsekwencji. Jeżeli cena została już zapłacona, Sprzedawca niezwłocznie ją zwraca.
+
+@SEKCJA: § 14. Zamówienia przedsiębiorców i przedsiębiorców na prawach konsumenta
+1. Postanowienia Regulaminu dotyczące Konsumentów stosuje się odpowiednio do Przedsiębiorcy na prawach konsumenta w zakresie, w jakim przepisy prawa, w szczególności art. 7a ustawy o prawach konsumenta, przyznają mu ochronę przysługującą konsumentowi.
+2. Status Przedsiębiorcy na prawach konsumenta przysługuje wyłącznie osobie fizycznej prowadzącej jednoosobową działalność gospodarczą, która zawiera Umowę sprzedaży bezpośrednio związaną z jej działalnością, ale niemającą dla niej charakteru zawodowego, co wynika w szczególności z przedmiotu wykonywanej działalności ujawnionego w CEIDG, w tym z kodów Polskiej Klasyfikacji Działalności. Ocena, czy umowa ma charakter zawodowy, dokonywana jest na podstawie okoliczności konkretnej sprawy.
+3. Klient składający Zamówienie jako Przedsiębiorca na prawach konsumenta zobowiązany jest podać numer NIP oraz oświadczyć, że zakupu dokonuje w ramach swojej działalności gospodarczej. Przedsiębiorca na prawach konsumenta może powołać się na przepisy chroniące konsumenta, jeżeli spełnia przesłanki wskazane w ust. 2. W razie wątpliwości Sprzedawca może poprosić o przedstawienie dodatkowych informacji.
+4. Ochrona przedsiębiorcy na prawach konsumenta nie obejmuje przepisów, które z mocy prawa przysługują wyłącznie konsumentom, w szczególności przepisów dotyczących ochrony przed niedozwolonymi postanowieniami umownymi w zakresie, w jakim nie mają one zastosowania do przedsiębiorców, ani uprawnień wynikających z praw procesowych konsumenta, o ile przepisy tak stanowią.
+5. Wobec Przedsiębiorcy, który nie jest Przedsiębiorcą na prawach konsumenta, stosuje się odrębne postanowienia Regulaminu dotyczące Przedsiębiorców, w szczególności § 36. Przedsiębiorca nie ma prawa odstąpienia od umowy zawartej na odległość na podstawie przepisów o prawach konsumenta.
+6. Przedsiębiorca jest zobowiązany do zbadania Towaru w sposób przyjęty przy danego rodzaju przesyłkach niezwłocznie po jego odbiorze oraz do sprawdzenia Przesyłki w obecności kuriera zgodnie z § 25.
+7. W stosunkach z Przedsiębiorcą odpowiedzialność Sprzedawcy z tytułu szkody wyrządzonej niewykonaniem lub nienależytym wykonaniem umowy jest ograniczona do rzeczywistej straty i nie obejmuje utraconych korzyści, a jej wysokość nie może przekroczyć ceny Towaru, z którego dotyczy szkoda, z wyłączeniem szkód wyrządzonych umyślnie.
+8. Przedsiębiorca jest obowiązany niezwłocznie powiadomić Sprzedawcę o zmianie swoich danych rejestrowych, w szczególności numeru NIP i adresu.
+
+@SEKCJA: § 15. Dostępność Towarów i realizacja zamówień
+1. Informacje o dostępności Towarów są podawane na stronie Sklepu przy opisie danego Towaru. Dostępność może się zmieniać w czasie, w szczególności ze względu na sezonowość produkcji i sprzedaży Roślin żywych.
+2. Termin realizacji Zamówienia obejmuje czas potrzebny na skompletowanie i przygotowanie Przesyłki oraz czas dostawy. Czas przygotowania Przesyłki wskazany jest przy Towarze i w koszyku i wynosi z reguły od 1 do 5 Dni roboczych, z zastrzeżeniem ust. 4 i § 23.
+3. Jeżeli w jednym Zamówieniu Klient zamówił Towary o różnych terminach przygotowania, Zamówienie jest realizowane w terminie właściwym dla Towaru o najdłuższym terminie, chyba że Klient wybierze opcję wysyłki częściowej, jeżeli jest dostępna. Sprzedawca informuje Klienta o możliwości wysyłki częściowej oraz o związanych z nią kosztach dostawy.
+4. Rośliny żywe są wysyłane w terminach uzależnionych od sezonu wegetacyjnego, pory sadzenia i warunków pogodowych. W przypadku Zamówień złożonych poza sezonem sadzenia danej Rośliny żywej Sprzedawca może zaproponować termin wysyłki przypadający na najbliższy odpowiedni okres, o czym informuje Klienta. Klient może wówczas zaakceptować nowy termin albo zrezygnować z Zamówienia w zakresie tego Towaru.
+5. W razie niedostępności Towaru po zawarciu Umowy sprzedaży, w szczególności wskutek ograniczeń dostaw od producenta, strat w uprawie lub niekorzystnych warunków pogodowych, Sprzedawca niezwłocznie, nie później niż w ciągu 3 Dni roboczych, powiadamia o tym Klienta za pomocą poczty elektronicznej lub telefonicznie i przedstawia Klientowi do wyboru:
+   1) oczekiwanie na realizację Zamówienia w nowym terminie,
+   2) zastąpienie Towaru Towarem zamiennym o zbliżonych cechach i nie niższej jakości, za zgodą Klienta,
+   3) anulowanie Zamówienia w całości lub w części dotyczącej niedostępnego Towaru.
+6. Jeżeli Klient nie wybierze żadnej z opcji w terminie 3 Dni roboczych od powiadomienia, Sprzedawca może anulować Zamówienie w zakresie niedostępnego Towaru. W razie anulowania Zamówienia w całości lub części Sprzedawca zwraca Klientowi dokonane płatności za anulowany Towar, wraz z odpowiednią częścią kosztów dostawy, niezwłocznie, nie później niż w terminie 14 dni od dnia anulowania, tym samym sposobem płatności, jakiego użył Klient, chyba że Klient wyraźnie zgodził się na inny sposób zwrotu.
+7. Jeżeli Sprzedawca nie wykona Zamówienia w terminie, który uzgodniono, a w razie braku takiego terminu – bez zbędnej zwłoki, nie później niż w terminie 30 dni od zawarcia Umowy sprzedaży, Konsument może wezwać Sprzedawcę do dostarczenia Towaru w dodatkowym terminie, a po jego bezskutecznym upływie – odstąpić od umowy, na zasadach określonych w art. 24 ustawy o prawach konsumenta.
+8. Sprzedawca nie ponosi odpowiedzialności za opóźnienie lub niemożność wykonania Zamówienia spowodowane siłą wyższą, w szczególności ekstremalnymi zjawiskami pogodowymi, klęskami żywiołowymi, ograniczeniami wynikającymi z przepisów fitosanitarnych lub decyzji organów państwowych, o ile Sprzedawca powiadomił o tym Klienta niezwłocznie po wystąpieniu takiej okoliczności.
+[KONIEC CZĘŚCI 1/3]

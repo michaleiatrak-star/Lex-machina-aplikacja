@@ -106,7 +106,9 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     } as unknown as Pick<SessionExecutor, "execute">).generate(request as never);
     expect(repaired.ast.blocks).toHaveLength(1);
     expect(queries).toHaveLength(2);
-    expect(queries[1]).toContain("BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: DOCUMENT_AST_JSON_MISSING");
+    // A letter is asked for in the letter markup; prose about it gets the markup's repair round.
+    expect(queries[0]).toContain("LETTER MARKUP");
+    expect(queries[1]).toContain("BŁĄD WALIDACJI POPRZEDNIEJ ODPOWIEDZI: LETTER_MARKUP_MISSING");
 
     let calls = 0;
     const blocked = await new LegalDocumentAstGenerator({

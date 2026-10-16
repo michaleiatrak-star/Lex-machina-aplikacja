@@ -16,10 +16,16 @@ can show what was dictionary-backed and what needs a human look.
 from __future__ import annotations
 
 import json
+import sys
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# Embedded Python (the online installer, python._pth) does not put the script's folder on
+# sys.path: the sibling modules were not found and the worker never started ("Morfeusz: błąd
+# uruchomienia"). The folder goes first, as for a regular interpreter.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import foreign_surnames
 import given_name_base
@@ -676,28 +682,58 @@ def main() -> None:
     import os
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--input")
+    parser.add_argument("--output")
+    parser.add_argument("--serve", action="store_true")
     args = parser.parse_args()
-    requests = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    if not args.serve and (not args.input or not args.output):
+        parser.error("--input and --output are required without --serve")
     exceptions_raw = os.environ.get("LEX_NAME_EXCEPTIONS", "").strip()
     engine = PersonMorphology(Path(exceptions_raw) if exceptions_raw else None)
+    from polish_address_morphology import AddressMorphology
+
+    address_engine = AddressMorphology(engine.engine)
+    if args.serve:
+        serve(engine, address_engine)
+        return
+    requests = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    Path(args.output).write_text(
+        json.dumps(answer(requests, engine, address_engine), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def answer(requests: dict, engine: "PersonMorphology", address_engine) -> dict:
     results = [
         engine.analyze(item["surface"], item.get("genderHint"), item.get("numberHint"))
         for item in requests.get("persons", [])
     ]
-    from polish_address_morphology import AddressMorphology
-
-    address_engine = AddressMorphology(engine.engine)
     surfaces = tuple(item["surface"] for item in requests.get("addresses", []))
     addresses = [address_engine.analyze(surface, surfaces) for surface in surfaces]
     # OCR correction: is the word a form known to SGJP or, for a capitalized word, a given
     # name or surname of the PESEL register or a TERYT locality or street, in any case form?
     known = [known_word(word, engine, address_engine) for word in requests.get("words", [])]
-    Path(args.output).write_text(
-        json.dumps({"persons": results, "addresses": addresses, "known": known}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    return {"persons": results, "addresses": addresses, "known": known}
+
+
+def serve(engine: "PersonMorphology", address_engine) -> None:
+    # One JSON request per stdin line ({"id", "text": <request JSON>}), one answer per stdout
+    # line: Morfeusz, SGJP and the name bases are loaded once for all pages and files.
+    answer({"persons": [{"surface": "Jana Kowalskiego"}], "addresses": [{"surface": "ul. Długiej 5"}]}, engine, address_engine)
+    sys.stdout.write(json.dumps({"ready": True}) + "\n")
+    sys.stdout.flush()
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        request_id = None
+        try:
+            request = json.loads(line)
+            request_id = request.get("id")
+            reply = {"id": request_id, "spans": answer(json.loads(request["text"]), engine, address_engine)}
+        except Exception as error:  # the worker survives one bad request
+            reply = {"id": request_id, "error": str(error)[:500]}
+        sys.stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":

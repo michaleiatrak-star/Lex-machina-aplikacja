@@ -14,6 +14,7 @@ import {
 import { KIND_LABEL, PrivacyKeyTable } from "./PrivacyKeyTable.js";
 import { modelExportFilename, modelExportText } from "./model-export.js";
 import { downloadBlob } from "./download-file.js";
+import { InfoTip } from "./InfoTip";
 
 const TOKEN = /(\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/;
 const PAGE_HEADER = /\[STRONA (\d+)(?: · CZĘŚĆ (\d+)\/(\d+))? · [A-Z]+\]\n?/g;
@@ -208,9 +209,8 @@ export function AnonymizedDocumentView(props: {
       <div className="workspace-preview-head">
         <div>
           <strong>Wersja zanonimizowana: {props.filename}</strong>
-          <small>
-            Powiązana z oryginałem i kluczem anonimizacji · tę wersję widzą modele · {props.documentId}
-          </small>
+          <InfoTip>Powiązana z oryginałem i kluczem anonimizacji. Tylko tę wersję widzą modele.</InfoTip>
+          <small>{props.documentId}</small>
         </div>
         <div>
           <div className="text-editor-modes" role="group" aria-label="Widok">
@@ -224,7 +224,7 @@ export function AnonymizedDocumentView(props: {
             <>
               <button
                 type="button"
-                title="Legenda i klucz symboli na początku, potem tekst ze stronami - do wklejenia w zewnętrzny czat; bez żadnych danych osobowych"
+                title="Legenda, klucz symboli i tekst ze stronami - do wklejenia w zewnętrzny czat, bez danych osobowych"
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(exportText())
@@ -261,8 +261,7 @@ export function AnonymizedDocumentView(props: {
         <div className="privacy-preview-todo" role="status">
           <strong>Dokument nie jest zatwierdzony</strong>
           <small>
-            Przetworzono go bez podglądu. Sprawdź zaznaczenia i klucz poniżej; dopóki nie zatwierdzisz, nie trafi do
-            modelu spoza tego komputera.
+            Przetworzono go bez podglądu. Do zatwierdzenia nie trafi do modelu spoza tego komputera.
           </small>
           {props.readOnly ? null : (
             <div>
@@ -309,8 +308,8 @@ export function AnonymizedDocumentView(props: {
             {tab === "marked" ? (
               <>
                 <p className="anonymized-legend">
-                  Zaznaczone słowa są w wersji dla modelu zastąpione symbolami. Najedź, aby zobaczyć symbol;
-                  kliknij, aby przejść do klucza. Zaznacz inny fragment, aby go dodać do anonimizacji.
+                  Zaznaczone słowa model widzi jako symbole.
+                  <InfoTip>Najedź na słowo, aby zobaczyć symbol, kliknij, aby przejść do klucza. Zaznacz inny fragment, aby go zanonimizować.</InfoTip>
                 </p>
                 {version.highlighted.map((chunk) => (
                   <article key={chunk.index}>

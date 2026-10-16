@@ -1,4 +1,5 @@
 import { PERSON_CASES } from "./privacy/person-morphology.js";
+export const PARAGRAPH_ROLES = new Set(["place_date", "party", "addressee", "subject", "basis"]);
 export const DOCUMENT_TYPES = new Set([
     "pleading",
     "contract",
@@ -10,7 +11,8 @@ export const DOCUMENT_TYPES = new Set([
 export const STYLE_PROFILES = new Set([
     "lex-classic-clean-v1",
     "lex-light-legal-design-v1",
-    "lex-classic-tnr-v1"
+    "lex-classic-tnr-v1",
+    "lex-office-tnr-v1"
 ]);
 const SOURCE_TOKEN_RE = /\[PII:[A-Z_]+:\d{4}\]/;
 const GENERATION_ALIAS_RE = /^\[LMPII:D\d{2}:[A-Z_]+:\d{4}\]$/;
@@ -41,7 +43,8 @@ function parseInline(value, aliases, used) {
     if (record.type === "text") {
         return {
             type: "text",
-            text: safeText(record.text, 100_000, "AST_TEXT_INVALID")
+            text: safeText(record.text, 100_000, "AST_TEXT_INVALID"),
+            ...(record.bold === true ? { bold: true } : {})
         };
     }
     if (record.type === "pii_ref") {
@@ -130,9 +133,13 @@ function parseBlock(value, aliases, used, depth, ids) {
             "quote" ||
         record.type ===
             "signature") {
+        const role = record.type === "paragraph" && PARAGRAPH_ROLES.has(record.role)
+            ? record.role
+            : undefined;
         return {
             ...(id ? { id } : {}),
             type: record.type,
+            ...(role ? { role } : {}),
             content: parseInlineArray(record.content, aliases, used)
         };
     }

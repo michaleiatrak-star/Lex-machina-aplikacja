@@ -1,3 +1,4 @@
+import { euAct } from "./eu-law-verifier.js";
 import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
@@ -154,6 +155,12 @@ function resolveActs(references: DetectedLegalReference[], text: string): Detect
   return references.map((reference) => {
     if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim)) return reference;
     if (OTHER_ACT.test(reference.lineText)) return reference;
+    // An EU act named after the article ("art. 5 AI Act", "art. 6 GDPR"): never a Polish act
+    // borrowed from elsewhere in the answer (before, "art. 5 AI Act" became "art. 5 KC").
+    const written = reference.span ?? reference.claim;
+    const found = new RegExp(`${written.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&")}(?![\\d\\p{L}^])`, "u").exec(reference.lineText);
+    const own = found ? reference.lineText.slice(found.index + found[0].length).split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 160) : "";
+    if (euAct(own)) return reference;
     const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
     const lineActs = actsIn(reference.lineText);
     const unitActs = actsByUnit.get(unit);

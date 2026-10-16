@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, getDomainFallback, setDomainFallback, type DomainFallbackChoice } from "./api.js";
+import { InfoTip } from "./InfoTip";
 
 const LABELS: Record<DomainFallbackChoice, string> = {
   off: "Wyłączony",
@@ -44,8 +45,13 @@ export function DomainFallbackSection() {
     <section className="core-law-updates">
       <div className="maintenance-heading">
         <div>
-          <strong>Model zapasowy routingu dziedzin</strong>
-          <small>gdy reguły nie wskażą dziedziny prawa (ok. 1–3% pytań), krótkie zapytanie do wybranego modelu</small>
+          <strong>
+            Model zapasowy routingu dziedzin
+            <InfoTip>
+              Gdy reguły nie wskażą dziedziny prawa (ok. 1–3% pytań), wybrany model dostaje krótkie zapytanie. Pytanie idzie po
+              pseudonimizacji; model lokalny zostaje na tym komputerze.
+            </InfoTip>
+          </strong>
         </div>
         <span>{LABELS[choice]}</span>
       </div>
@@ -59,9 +65,7 @@ export function DomainFallbackSection() {
           ))}
         </select>
       </label>
-      <p className="field-help">
-        Pytanie trafia do modelu po pseudonimizacji. Model lokalny musi być zainstalowany; jeśli nie działa albo nie odpowie, rozmowa toczy się dalej bez wskazówki dziedziny.
-      </p>
+      <InfoTip>Model lokalny musi być zainstalowany. Jeśli nie odpowie, rozmowa toczy się dalej bez wskazówki dziedziny.</InfoTip>
       {error ? <p className="field-error">{error}</p> : null}
     </section>
   );

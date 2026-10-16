@@ -1,5 +1,6 @@
 import { courtOfSignature } from "./court-of-signature.js";
 import { compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { euAct } from "./eu-law-verifier.js";
 import { POLISH_DATE_SOURCE, polishDateToIso } from "./event-date-check.js";
 import { caseSignatureRecord, detectLegalReferences } from "./finalization-gate.js";
 import { verificationMarker } from "./source-anchor.js";
@@ -62,11 +63,26 @@ function uniqueActAlias(reference) {
     if (claimAliases.length > 1) {
         return null;
     }
+    // The act named right after the article ("art. 6 ust. 1 lit. f RODO", "art. 10 dyrektywy
+    // 2008/48/WE"), up to the next article: an EU act goes to the EU verification; another act
+    // named in words never takes the only abbreviation elsewhere on the line (before, "art. 6 …
+    // RODO" on a line with "art. 415 KC" was verified as art. 6 KC and got KC's marker).
+    const written = reference.span ?? reference.claim;
+    // The whole number only: "art. 4" is not the start of "art. 415".
+    const found = new RegExp(`${written.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&")}(?![\\d\\p{L}^])`, "u").exec(reference.lineText);
+    const after = found ? reference.lineText.slice(found.index + found[0].length) : "";
+    const own = after.split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].slice(0, 160);
+    const eu = euAct(own);
+    if (eu)
+        return eu.celex;
+    if (OTHER_ACT_WORDS.test(own))
+        return null;
     const lineAliases = aliases(compactActAbbreviations(reference.lineText));
     return lineAliases.length === 1
         ? lineAliases[0]
         : null;
 }
+const OTHER_ACT_WORDS = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|TFUE|TUE|EKPC|Karty)(?![\p{L}])/iu;
 function caseSignature(reference) {
     const bare = reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, "").trim();
     if (reference.kind !== "case" ||

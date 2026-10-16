@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { JsonLineWorker, WorkerStartBackoff, WorkerStartError } from "./json-line-worker.js";
 /**
  * Grammatical cases a model may request for a person token:
  * [PII:PERSON:0001|INS] -> "Janem Kowalskim".
@@ -128,6 +129,11 @@ export class LocalPersonMorphology {
     exceptionsPath;
     cache = new Map();
     addressCache = new Map();
+    // Morfeusz, SGJP and the name bases loaded once for every page and file of the session,
+    // not a fresh Python per page (the start-stop that made long documents slow).
+    persistent;
+    backoff = new WorkerStartBackoff();
+    worker = null;
     constructor(options = {}, timeoutMs = options.timeoutMs ?? 120_000) {
         this.timeoutMs = timeoutMs;
         this.python =
@@ -141,11 +147,23 @@ export class LocalPersonMorphology {
         this.exceptionsPath =
             options.exceptionsPath ??
                 defaultNameExceptionsPath();
+        this.persistent = options.persistent ?? process.env.LEX_PERSON_MORPHOLOGY_PERSISTENT !== "0";
+    }
+    /** Starts the worker in the background (server start), so no document waits for it. */
+    warmUp() {
+        if (this.persistent)
+            void this.analyze(["Jana Kowalskiego"]).catch(() => undefined);
+    }
+    close() {
+        this.worker?.close();
+        this.worker = null;
     }
     async saveCorrection(correction) {
         await saveNameFormCorrection(this.exceptionsPath, correction);
         this.cache.clear();
         this.addressCache.clear();
+        // The worker read the exceptions at its start: the next request starts it with the new file.
+        this.close();
     }
     async analyze(surfaces, hints = []) {
         // The cache key carries the hints: "Kowalskim" alone and after "państwu" differ.
@@ -175,15 +193,42 @@ export class LocalPersonMorphology {
         return surfaces.map((surface) => cache.get(surface) ?? null);
     }
     async run(surfaces, addresses, words = []) {
+        const request = {
+            persons: surfaces.map((item) => (typeof item === "string" ? { surface: item } : item)),
+            addresses: addresses.map((surface) => ({ surface })),
+            words
+        };
+        let parsed = null;
+        if (this.persistent && this.backoff.usable()) {
+            this.worker ??= new JsonLineWorker("Person morphology", this.python, ["-X", "utf8", this.workerPath, "--serve"], 2 * 60 * 1000, this.timeoutMs, { LEX_NAME_EXCEPTIONS: this.exceptionsPath });
+            try {
+                parsed = await this.worker.ask(JSON.stringify(request));
+                this.backoff.started();
+            }
+            catch (error) {
+                if (error instanceof WorkerStartError) {
+                    this.backoff.failed();
+                    process.stderr.write(`LOCAL_PERSON_MORPHOLOGY_PERSISTENT_UNAVAILABLE:${error.message.slice(0, 300)}\n`);
+                }
+                else {
+                    process.stderr.write(`LOCAL_PERSON_MORPHOLOGY_RETRY:${(error instanceof Error ? error.message : String(error)).slice(0, 300)}\n`);
+                    this.close();
+                }
+            }
+        }
+        parsed ??= await this.oneShot(request);
+        return {
+            persons: (parsed.persons ?? []).map(toEntity),
+            addresses: (parsed.addresses ?? []).map(toEntity),
+            known: words.map((_, index) => parsed.known?.[index] === true)
+        };
+    }
+    async oneShot(request) {
         const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lex-person-morphology-"));
         const input = path.join(tempRoot, "input.json");
         const output = path.join(tempRoot, "output.json");
         try {
-            await writeFile(input, JSON.stringify({
-                persons: surfaces.map((item) => (typeof item === "string" ? { surface: item } : item)),
-                addresses: addresses.map((surface) => ({ surface })),
-                words
-            }), "utf8");
+            await writeFile(input, JSON.stringify(request), "utf8");
             await new Promise((resolve, reject) => {
                 const child = spawn(this.python, ["-X", "utf8", this.workerPath, "--input", input, "--output", output], {
                     windowsHide: true,
@@ -210,12 +255,7 @@ export class LocalPersonMorphology {
                         reject(new Error(`PERSON_MORPHOLOGY_FAILED:${code}:${stderr.trim().slice(-400)}`));
                 });
             });
-            const parsed = JSON.parse(await readFile(output, "utf8"));
-            return {
-                persons: (parsed.persons ?? []).map(toEntity),
-                addresses: (parsed.addresses ?? []).map(toEntity),
-                known: words.map((_, index) => parsed.known?.[index] === true)
-            };
+            return JSON.parse(await readFile(output, "utf8"));
         }
         finally {
             await rm(tempRoot, { recursive: true, force: true });

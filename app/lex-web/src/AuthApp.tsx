@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import {
   useEffect,
   useLayoutEffect,
@@ -260,12 +261,12 @@ function AuthPanel({
             : phase === "locked"
               ? "Lex Machina jest zablokowana"
               : "Zaloguj się"}
+          <InfoTip>
+            {phase === "bootstrap"
+              ? "Pierwsze konto administruje aplikacją; dostęp do spraw nadaje się osobno."
+              : "Sesja i odblokowane klucze są tylko w pamięci lokalnego runtime."}
+          </InfoTip>
         </h1>
-        <p className="auth-copy">
-          {phase === "bootstrap"
-            ? "Pierwsze konto administruje aplikacją. Dostęp do poszczególnych spraw będzie nadawany osobno w kolejnym etapie."
-            : "Sesja oraz odblokowane klucze istnieją wyłącznie w pamięci lokalnego runtime."}
-        </p>
 
         {phase !== "bootstrap" && runtimeUnreachable && (
           <div className="auth-onboarding-note" role="alert">
@@ -352,7 +353,8 @@ function AuthPanel({
 
         {nativeUnlock ? (
           <p className="auth-copy">
-            To konto jest chronione przez systemowy magazyn poświadczeń (Windows: Menedżer poświadczeń, macOS: pęk kluczy). Odblokowanie nie wymaga wpisywania hasła aplikacji.
+            Konto odblokowuje systemowy magazyn poświadczeń; hasło aplikacji nie jest potrzebne.
+            <InfoTip>Windows: Menedżer poświadczeń, macOS: pęk kluczy.</InfoTip>
           </p>
         ) : (
           <label>

@@ -1,3 +1,4 @@
+import { joinContinuation } from "./continuation-seams.js";
 import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "ai";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import {
@@ -1028,7 +1029,9 @@ export async function readLocalSse(
     firstContentMs?: number;
     idleMs?: number;
   },
-  onDelta?: (text: string) => void
+  onDelta?: (text: string) => void,
+  // Long answers only: a short routing or JSON budget is cut on purpose.
+  noteWhenCut = false
 ): Promise<string> {
   if (!response.body) {
     throw new Error(
@@ -1045,6 +1048,7 @@ export async function readLocalSse(
 
   let terminalSeen =
     false;
+  let lengthCut = false;
   const firstContentDeadline =
     Date.now() +
     Math.max(
@@ -1085,6 +1089,8 @@ export async function readLocalSse(
       )
     ) {
       terminalSeen = true;
+      // Cut at the output budget (llama-server "length"): said in the text, as for hosted models.
+      if (/"finish_reason"\s*:\s*"length"/u.test(rawLine)) lengthCut = true;
     }
   };
 
@@ -1187,7 +1193,7 @@ export async function readLocalSse(
       "LOCAL_MODEL_HTTP_EMPTY_RESPONSE"
     );
   }
-  return fullText;
+  return lengthCut && noteWhenCut ? fullText + LENGTH_TRUNCATED_NOTE : fullText;
 }
 
 async function readLocalJson(
@@ -1485,7 +1491,8 @@ async function streamLocalChatCompletion(
         await readLocalSse(
           response,
           undefined,
-          onDelta
+          onDelta,
+          maxOutputTokens >= 1_024
         )
     };
   } catch (streamError) {
@@ -1960,7 +1967,8 @@ export async function continueAtLength(
       { role: "assistant", content: text },
       { role: "user", content: LENGTH_CONTINUATION_PROMPT }
     ]);
-    text += result.fullText;
+    // The model resumes mid-thought and repeats a few letters or lines: dropped at the seam.
+    text = joinContinuation(text, result.fullText);
     finishReason = result.finishReason;
     usage = addUsage(usage, result.usage);
   }

@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -438,8 +439,8 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
             )
           ) : (
             <p className="field-help">
-              Sprawa jest zaszyfrowana kluczem, który mają tylko jej członkowie. Uprawnienia zmienia
-              właściciel ({owner ? owner.displayName : "—"}).
+              Uprawnienia zmienia właściciel ({owner ? owner.displayName : "—"}).
+              <InfoTip>Sprawa jest zaszyfrowana kluczem, który mają tylko jej członkowie.</InfoTip>
             </p>
           )}
         </div>
@@ -449,18 +450,20 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
 
   return (
     <section className="case-access-admin-panel">
-      <p className="eyebrow">Uprawnienia do spraw</p>
-      <p className="field-help">
-        Kto ma dostęp do której sprawy i z jaką rolą. Nadawać, zmieniać i odbierać dostęp możesz w
-        sprawach, których jesteś właścicielem; pozostałe są widoczne do wglądu.
+      <p className="eyebrow">
+        Uprawnienia do spraw
+        <InfoTip>
+          Dostęp zmieniasz tylko w sprawach, których jesteś właścicielem; pozostałe są do wglądu.
+          {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => ` ${ROLE_HELP[role]}`).join("")}
+        </InfoTip>
       </p>
-      <ul className="case-access-admin-roles">
-        {(Object.keys(ROLE_HELP) as CaseRole[]).map((role) => (
-          <li key={role}>{ROLE_HELP[role]}</li>
-        ))}
-      </ul>
       <fieldset className="case-access-admin-quick">
-        <legend>Przypisz osobę do sprawy</legend>
+        <legend>
+          Przypisz osobę do sprawy
+          <InfoTip>
+            Tylko sprawy, których jesteś właścicielem (tylko on ma klucz sprawy). Przypisanie osoby z dostępem zmienia jej rolę.
+          </InfoTip>
+        </legend>
         <select
           value={quick.userId}
           aria-label="Osoba"
@@ -535,10 +538,6 @@ export function CaseAccessAdminPanel({ currentUserId }: { currentUserId: string 
         >
           {busy === "quick" ? "Przypisywanie…" : "Przypisz"}
         </button>
-        <p className="field-help">
-          Lista obejmuje sprawy, których jesteś właścicielem (tylko właściciel ma klucz sprawy i może go
-          udostępnić). Przypisanie osoby, która ma już dostęp, zmienia jej rolę.
-        </p>
       </fieldset>
       <label>
         Użytkownik

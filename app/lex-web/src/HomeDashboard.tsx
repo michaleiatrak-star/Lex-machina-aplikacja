@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useEffect, useState } from "react";
 import {
   listUpcomingEvents,
@@ -74,7 +75,9 @@ export function HomeDashboard({
           </small>
         </div>
         <div>
-          <p className="eyebrow">Model domyślny (ostatnio używany)</p>
+          <p className="eyebrow">
+            Model domyślny<InfoTip>Ostatnio używany model; nowe rozmowy startują z nim.</InfoTip>
+          </p>
           <strong>{modelLabel || "nie wybrano"}</strong>
           <small>{modelStatus}</small>
           <button type="button" className="chat-secondary-action" onClick={onOpenModels}>
@@ -96,7 +99,7 @@ export function HomeDashboard({
           ) : error ? (
             <p className="chat-error">{error}</p>
           ) : events.length === 0 ? (
-            <p>Brak zaplanowanych zdarzeń. Dodaj je w kalendarzu lub w zakładce Sprawa.</p>
+            <p>Brak zaplanowanych zdarzeń.</p>
           ) : (
             <div className="matter-schedule-list">
               {events.map((event) => (
@@ -155,8 +158,9 @@ export function HomeDashboard({
 
       <article className="chat-card lex-home-card-head">
         <div>
-          <h2>Kancelaria</h2>
-          <p>Wiedza kancelarii, wzory pism i materiały wspólne.</p>
+          <h2>
+            Kancelaria<InfoTip>Wiedza kancelarii, wzory pism i materiały wspólne.</InfoTip>
+          </h2>
         </div>
         <button type="button" className="chat-primary-action" onClick={onOpenFirm}>
           Przejdź do modułu Kancelaria

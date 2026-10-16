@@ -1,7 +1,8 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
+import { superscriptsAsCaret } from "./legal-source-verifier.js";
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
-import { AmendmentApplicabilityResolver } from "./amendment-applicability.js";
+import { AmendmentApplicabilityResolver, partEntryDates } from "./amendment-applicability.js";
 const ELI_API = "https://api.sejm.gov.pl/eli/acts";
 function text(value) {
     return typeof value === "string" ? value.trim() : "";
@@ -120,13 +121,49 @@ async function json(fetcher, url) {
     return response.json();
 }
 function articleTokenFromClaim(claim) {
-    const match = claim?.match(new RegExp(`${ARTICLE_LEAD}(\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu"));
+    // "art. 385¹", "art. 385^1", "art. 385[1]", "art. 385(1)": the superscript stays a part of
+    // the number (385^1), never dropped (385) nor glued to it (3851).
+    const match = claim && superscriptsAsCaret(claim)
+        .replace(/(\d)\s*[([](\d{1,3})[)\]]/gu, "$1^$2")
+        .match(new RegExp(`${ARTICLE_LEAD}(\\d+(?:\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu"));
     return match?.[1]
         ?.toLocaleLowerCase("pl") ??
         null;
 }
+// One amending act is read several times in a check (does it touch the article, its entry
+// dates, its transitional provisions): kept for a few minutes per fetcher.
+const BODY_CACHE_MS = 10 * 60 * 1000;
+const bodyCache = new WeakMap();
+function amendmentBody(fetcher, pdfTextExtractor, eli) {
+    let cache = bodyCache.get(fetcher);
+    if (!cache)
+        bodyCache.set(fetcher, (cache = new Map()));
+    const hit = cache.get(eli);
+    if (hit && Date.now() - hit.at < BODY_CACHE_MS)
+        return hit.body;
+    const body = fetchAmendmentBody(fetcher, pdfTextExtractor, eli);
+    cache.set(eli, { at: Date.now(), body });
+    // A failed read is not kept: the next check tries again.
+    void body.then((value) => {
+        if (value === null)
+            cache.delete(eli);
+    });
+    while (cache.size > 32)
+        cache.delete(cache.keys().next().value);
+    return body;
+}
+// Przepisy przejściowe noweli (czynności i sprawy sprzed jej wejścia w życie): jednostki
+// "Art. M." poza częściami zmieniającymi ustawy, z formułą intertemporalną.
+const TRANSITIONAL = /dotychczasow|wszczęt\p{L}*\s+i\s+niezakończon|stosuje\s+się\s+przepisy|zachowuj\p{L}*\s+moc|przed\s+dniem\s+wejścia\s+w\s+życie\s+niniejszej\s+ustawy/u;
+export function transitionalProvisions(body, limit = 3) {
+    return body
+        .split(/(?=\bart\.\s*\d+[a-ząćęłńóśźż]*\.\s)/iu)
+        .filter((unit) => /^art\./iu.test(unit) && !/^art\.\s*\d+[a-z]*\.\s+w\s+ustawie\b/iu.test(unit) && TRANSITIONAL.test(unit))
+        .slice(0, limit)
+        .map((unit) => unit.replace(/\s+/gu, " ").trim().slice(0, 900));
+}
 // Tekst noweli z ELI (HTML albo PDF), znormalizowany do porównań; null, gdy niedostępny.
-async function amendmentBody(fetcher, pdfTextExtractor, eli) {
+async function fetchAmendmentBody(fetcher, pdfTextExtractor, eli) {
     const metadataUrl = apiUrl(eli);
     const htmlUrl = apiUrl(eli, "/text.html");
     if (!metadataUrl ||
@@ -205,22 +242,24 @@ async function amendmentBody(fetcher, pdfTextExtractor, eli) {
     else {
         return null;
     }
-    return rawText
+    // Superscripts first (art. 385¹ -> 385^1): NFKC alone would make "3851" of it.
+    return superscriptsAsCaret(rawText)
         .normalize("NFKC")
         .replace(/<[^>]+>/gu, " ")
         .replace(/&nbsp;|&#160;/giu, " ")
         .replace(/\s+/gu, " ")
         .toLocaleLowerCase("pl");
 }
-const ARTICLE_UNIT = "\\d+[a-ząćęłńóśźż]*";
+const ARTICLE_UNIT = "\\d+(?:\\^\\d+)?[a-ząćęłńóśźż]*";
 // "art. 10", "art. 10–15", "art. 10 do 15", "art. 10, 11 i 12"; po "§", "ust.", "pkt"
 // kolejne liczby to jednostki niższego rzędu, więc wyliczenie się kończy.
 const ARTICLE_GROUP = new RegExp(`\\bart\\.?\\s*(${ARTICLE_UNIT}(?:\\s*(?:[–—-]|,|\\bi\\b|\\boraz\\b|\\bdo\\b)\\s*${ARTICLE_UNIT})*)(?![\\p{L}\\d])`, "giu");
 const ARTICLE_GROUP_PART = new RegExp(`([–—-]|\\bdo\\b)|(${ARTICLE_UNIT})`, "giu");
 function articleKey(unit) {
-    const match = /^(\d+)([a-ząćęłńóśźż]*)$/u.exec(unit.toLocaleLowerCase("pl"));
+    const match = /^(\d+)(?:\^(\d+))?([a-ząćęłńóśźż]*)$/u.exec(unit.toLocaleLowerCase("pl"));
+    // 385 < 385^1 < 385^2 < 385^10 < 385a: the superscript, padded, sorts before letters.
     return match
-        ? [Number(match[1]), match[2]]
+        ? [Number(match[1]), `${match[2] ? `^${match[2].padStart(3, "0")}` : ""}${match[3]}`]
         : null;
 }
 function compareArticles(a, b) {
@@ -310,11 +349,19 @@ export function amendmentHasEntryIntoForceExceptions(body) {
     return (entries.length !== 1 ||
         /wchodz\p{L}*\s+w\s+życie[^]{0,300}?z\s+wyjątkiem/u.test(body));
 }
-async function amendmentTouchesArticle(fetcher, pdfTextExtractor, eli, article, actTitle) {
-    const body = await amendmentBody(fetcher, pdfTextExtractor, eli);
-    return body === null
-        ? null
-        : amendmentMentionsArticle(amendmentPartFor(body, actTitle), article);
+// The article of an amending act that amends the given act ("art. 2. w ustawie … – kodeks
+// cywilny"): its own entry date may differ from the act's (staged entry into force).
+function amendingArticle(part) {
+    return /^\s*art\.\s*(\d+[a-ząćęłńóśźż]*)\.\s+w\s+ustawie\b/iu.exec(part)?.[1]?.toLocaleLowerCase("pl") ?? null;
+}
+// True when every date the act's part for this article enters into force is after `today`
+// (ELI staged dates); false when one has passed or the dates are not known.
+function partNotYetInForce(decision, part, today) {
+    const article = amendingArticle(part);
+    if (!article || !decision.stages?.length)
+        return false;
+    const dates = partEntryDates(decision.stages, decision.entryIntoForce, article);
+    return Boolean(dates?.length) && dates.every((date) => date > today);
 }
 /**
  * Nowele już ogłoszone, ale wchodzące w życie po dniu sprawdzenia: data wejścia
@@ -332,29 +379,40 @@ async function futureAmendmentsMayApplyToArticle(fetcher, pdfTextExtractor, deci
         decision.promulgation <= today);
     const checks = await Promise.all(promulgated.map(async (decision) => {
         const body = await amendmentBody(fetcher, pdfTextExtractor, decision.eli);
+        const part = body === null ? "" : amendmentPartFor(body, actTitle);
         const uncertain = body === null ||
-            (amendmentMentionsArticle(amendmentPartFor(body, actTitle), article) !== false &&
-                amendmentHasEntryIntoForceExceptions(body));
+            (amendmentMentionsArticle(part, article) !== false &&
+                amendmentHasEntryIntoForceExceptions(body) &&
+                // ELI's staged dates settle it: this part enters into force only later.
+                !partNotYetInForce(decision, part, today));
         return uncertain
             ? decision.eli
             : null;
     }));
     return checks.filter((eli) => eli !== null);
 }
-async function effectiveAmendmentsTouchArticle(fetcher, pdfTextExtractor, decisions, claim, actTitle) {
+async function effectiveAmendmentsTouchArticle(fetcher, pdfTextExtractor, decisions, claim, actTitle, today) {
     const article = articleTokenFromClaim(claim);
     if (!article) {
         return null;
     }
     const effective = decisions.filter((decision) => decision.status ===
         "EFFECTIVE");
-    const checks = await Promise.all(effective.map(async (decision) => ({
-        eli: decision.eli,
-        touches: await amendmentTouchesArticle(fetcher, pdfTextExtractor, decision.eli, article, actTitle)
-    })));
+    const checks = await Promise.all(effective.map(async (decision) => {
+        const body = await amendmentBody(fetcher, pdfTextExtractor, decision.eli);
+        const part = body === null ? "" : amendmentPartFor(body, actTitle);
+        const touches = body === null ? null : amendmentMentionsArticle(part, article);
+        return {
+            eli: decision.eli,
+            decision,
+            touches,
+            notYet: touches === true && Boolean(today) && partNotYetInForce(decision, part, today)
+        };
+    }));
     const checked = checks.map((item) => item.eli);
+    const notYet = checks.filter((item) => item.notYet).map((item) => item.decision);
     const affected = checks
-        .filter((item) => item.touches === true)
+        .filter((item) => item.touches === true && !item.notYet)
         .map((item) => item.eli);
     if (affected.length > 0) {
         return {
@@ -375,7 +433,8 @@ async function effectiveAmendmentsTouchArticle(fetcher, pdfTextExtractor, decisi
     }
     return {
         status: "UNAFFECTED",
-        checked
+        checked,
+        ...(notYet.length ? { notYet } : {})
     };
 }
 function pickCurrentConsolidated(refs) {
@@ -537,8 +596,16 @@ export class TemporalSourceFreshnessChecker {
         const checkedAt = this.now();
         const asOf = options.asOf?.trim();
         return asOf
-            ? this.checkHistorical(descriptor, asOf, checkedAt)
+            ? this.checkHistorical(descriptor, asOf, checkedAt, options.claim)
             : this.checkCurrent(descriptor, checkedAt, options.claim);
+    }
+    // Transitional provisions of the amendments that touch the article, for the model to apply.
+    async transitionalOf(elis) {
+        const found = await Promise.all([...new Set(elis)].slice(0, 4).map(async (eli) => {
+            const body = await amendmentBody(this.fetcher, this.pdfTextExtractor, eli);
+            return body ? transitionalProvisions(body).map((text) => ({ eli, text })) : [];
+        }));
+        return found.flat().slice(0, 6);
     }
     failure(descriptor, mode, checkedAt, status, reason, extra = {}) {
         return {
@@ -552,7 +619,7 @@ export class TemporalSourceFreshnessChecker {
             ...extra
         };
     }
-    async checkHistorical(descriptor, asOf, checkedAt) {
+    async checkHistorical(descriptor, asOf, checkedAt, claim) {
         const fail = (status, reason, extra = {}) => this.failure(descriptor, "HISTORICAL", checkedAt, status, reason, {
             requestedAsOf: asOf,
             ...extra
@@ -662,8 +729,15 @@ export class TemporalSourceFreshnessChecker {
             });
         }
         const effectiveAmendments = amendmentApplicability.filter((decision) => decision.status === "EFFECTIVE");
-        if (effectiveAmendments.length > 0) {
-            return fail("HISTORICAL_POST_TJ_AMENDMENTS", "EFFECTIVE_AMENDMENTS_AFTER_SELECTED_TJ_BEFORE_AS_OF", {
+        // As for the current text: amendments between the selected t.j. and the date that leave
+        // the cited article untouched (in force for it only after that date) do not block it.
+        const historicalImpact = effectiveAmendments.length > 0
+            ? await effectiveAmendmentsTouchArticle(this.fetcher, this.pdfTextExtractor, amendmentApplicability, claim, descriptor.title, asOf)
+            : null;
+        if (effectiveAmendments.length > 0 && historicalImpact?.status !== "UNAFFECTED") {
+            return fail("HISTORICAL_POST_TJ_AMENDMENTS", historicalImpact?.status === "AFFECTED"
+                ? "HISTORICAL_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"
+                : "EFFECTIVE_AMENDMENTS_AFTER_SELECTED_TJ_BEFORE_AS_OF", {
                 currentEli: selected.eli,
                 currentPromulgation: selected.stateDate,
                 ...(baseInterval.validFrom
@@ -710,6 +784,9 @@ export class TemporalSourceFreshnessChecker {
             amendmentsAfter,
             ...(amendmentApplicability.length > 0
                 ? { amendmentApplicability }
+                : {}),
+            ...(historicalImpact?.status === "UNAFFECTED"
+                ? { reason: "HISTORICAL_POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE" }
                 : {})
         };
     }
@@ -785,6 +862,7 @@ export class TemporalSourceFreshnessChecker {
         // the one in force today, so an article such an amendment touches (or may touch) is not
         // verified from this text (DU/2026/507 amends KC from 2028-11-01; t.j. KC 2026/795).
         const article = articleTokenFromClaim(claim);
+        let pendingWordingAmendments = [];
         if (article) {
             const pending = amendmentsInTextNotInForce(baseRefs, promulgation, todayWarsaw(checkedAt));
             const touching = (await Promise.all(pending.map(async (amendment) => {
@@ -793,9 +871,10 @@ export class TemporalSourceFreshnessChecker {
                     ? amendment.eli
                     : null;
             }))).filter((eli) => eli !== null);
-            if (touching.length > 0) {
-                return fail("PENDING_WORDING_IN_CONSOLIDATED_TEXT", `CONSOLIDATED_TEXT_HOLDS_ARTICLE_CHANGE_NOT_IN_FORCE:${touching.join(",")}`, common);
-            }
+            // The text prints the article's change not yet in force: verified only by the wording
+            // in force today, which its footnotes give (the verifier refuses when they do not).
+            if (touching.length > 0)
+                pendingWordingAmendments = touching;
         }
         const unknownAmendments = amendmentApplicability.filter((decision) => decision.status === "UNKNOWN");
         if (unknownAmendments.length > 0) {
@@ -812,7 +891,14 @@ export class TemporalSourceFreshnessChecker {
             // article claim, prove that every effective post-t.j. amendment leaves
             // that article untouched. Only then may the latest official consolidated
             // text verify the requested article.
-            const impact = await effectiveAmendmentsTouchArticle(this.fetcher, this.pdfTextExtractor, amendmentApplicability, claim, descriptor.title);
+            const impact = await effectiveAmendmentsTouchArticle(this.fetcher, this.pdfTextExtractor, amendmentApplicability, claim, descriptor.title, todayWarsaw(checkedAt));
+            // The act is in force, its change of this article only later (staged dates): the
+            // consolidated text's wording stands; one the text already prints is chosen by footnotes.
+            for (const decision of impact?.status === "UNAFFECTED" ? impact.notYet ?? [] : []) {
+                if (decision.promulgation && decision.promulgation <= promulgation)
+                    pendingWordingAmendments.push(decision.eli);
+            }
+            const notYetForArticle = impact?.status === "UNAFFECTED" ? (impact.notYet ?? []).map((decision) => decision.eli) : [];
             if (impact?.status ===
                 "UNAFFECTED") {
                 const sourceUrl = act.textHTML === true
@@ -834,16 +920,20 @@ export class TemporalSourceFreshnessChecker {
                     sourceUrl,
                     amendmentsAfter,
                     amendmentApplicability,
+                    ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {}),
+                    ...(notYetForArticle.length ? { notYetForArticle } : {}),
+                    ...(await this.transitionalOf([...notYetForArticle, ...pendingWordingAmendments]).then((found) => found.length ? { transitionalProvisions: found } : {})),
                     reason: "POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
                 };
             }
+            const transitional = impact?.status === "AFFECTED" ? await this.transitionalOf(impact.affected) : [];
             return fail("POST_TJ_AMENDMENTS", impact?.status ===
                 "AFFECTED"
                 ? "POST_TJ_AMENDMENT_TOUCHES_REQUESTED_ARTICLE"
                 : impact?.status ===
                     "UNKNOWN"
                     ? "POST_TJ_AMENDMENT_ARTICLE_IMPACT_UNKNOWN"
-                    : "EFFECTIVE_AMENDMENTS_AFTER_CONSOLIDATED_TEXT", common);
+                    : "EFFECTIVE_AMENDMENTS_AFTER_CONSOLIDATED_TEXT", { ...common, ...(transitional.length ? { transitionalProvisions: transitional } : {}) });
         }
         if (act.textHTML !== true &&
             act.textPDF !== true) {
@@ -867,7 +957,8 @@ export class TemporalSourceFreshnessChecker {
             amendmentsAfter,
             ...(amendmentApplicability.length > 0
                 ? { amendmentApplicability }
-                : {})
+                : {}),
+            ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {})
         };
     }
 }

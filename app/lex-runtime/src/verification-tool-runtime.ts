@@ -44,6 +44,7 @@ import { canonicalInterpretationSignature, verifyInterpretation } from "./interp
 import { SubstituteSourceError, verifySubstituteSources, type ConsolidatedIdentity, type SubstituteOutcome } from "./substitute-source.js";
 import type { CoreLawUseCheck } from "./core-law-index.js";
 import { describeEliAct } from "./eli-act-descriptor.js";
+import { euAct, verifyEuArticle } from "./eu-law-verifier.js";
 import {
   verificationMarker,
   verificationSourceLink
@@ -554,6 +555,27 @@ function kind(value: unknown): VerificationKind | null {
     : null;
 }
 
+// The amendments after the consolidated text by name and date, so the model can cite them
+// (a count told it nothing): entered into force, or still pending with the date.
+function amendmentList(freshness: TemporalFreshnessResult): Array<Record<string, string>> {
+  const decisions = new Map((freshness.amendmentApplicability ?? []).map((decision) => [decision.eli, decision]));
+  return freshness.amendmentsAfter.slice(0, 12).map((amendment) => {
+    const decision = decisions.get(amendment.eli);
+    return {
+      eli: amendment.eli,
+      dzU: amendment.displayAddress,
+      ...(decision?.effectiveFrom ?? amendment.relationDate ? { from: (decision?.effectiveFrom ?? amendment.relationDate)! } : {}),
+      status:
+        decision?.status === "FUTURE" || freshness.notYetForArticle?.includes(amendment.eli)
+          ? "OCZEKUJE"
+          : decision?.status === "EFFECTIVE"
+            ? "WESZLA_W_ZYCIE"
+            : "DATA_NIEUSTALONA",
+      ...(decision?.stages?.length ? { stages: decision.stages.map((stage) => `${stage.date}: ${stage.units}`.slice(0, 200)).join("; ") } : {})
+    };
+  });
+}
+
 function publicToolResult(
   record: {
     claim: string;
@@ -565,6 +587,7 @@ function publicToolResult(
     asOf?: string;
     sourceFormat?: "TEXT" | "PDF";
     evidence?: string;
+    pendingWording?: Array<{ from: string | null; text: string }>;
   },
   act: LegalActDescriptor,
   freshness?: TemporalFreshnessResult
@@ -596,13 +619,24 @@ function publicToolResult(
           checkedAt: freshness.checkedAt,
           requestedAsOf: freshness.requestedAsOf ?? null,
           currentEli: freshness.currentEli ?? null,
-          amendmentsAfter: freshness.amendmentsAfter.length
+          amendmentsAfter: freshness.amendmentsAfter.length,
+          amendments: amendmentList(freshness),
+          ...(freshness.pendingWordingAmendments?.length ? { pendingWordingAmendments: freshness.pendingWordingAmendments } : {}),
+          ...(freshness.transitionalProvisions?.length ? { transitionalProvisions: freshness.transitionalProvisions } : {})
         }
       : null,
     sourceUrl: record.sourceUrl ?? null,
     sourceLink: verificationSourceLink(record) ?? null,
     sourceFormat: record.sourceFormat ?? null,
     evidence: record.evidence ?? null,
+    ...(record.pendingWording?.length
+      ? {
+          // Printed in the consolidated text, not yet in force: told to the user with its date.
+          pendingWording: record.pendingWording.map((item) => ({ from: item.from, text: item.text.slice(0, 1_500) })),
+          pendingInstruction:
+            "The evidence is the wording in force today. pendingWording enters into force later: when it matters (deadlines, contracts, a later event), state its date and new wording separately; never present it as in force."
+        }
+      : {}),
     fetchedAt: record.fetchedAt,
     marker,
     instruction:
@@ -623,6 +657,8 @@ export const LEGAL_VERIFICATION_SYSTEM_APPENDIX = [
   "- Pass only claim + kind + legal act identity/alias. Never invent or supply an official-source URL.",  "- The runtime resolves the canonical official source and checks temporal freshness before reading the citation.",
   "- For current law omit asOf. A citation is verified only when the freshness check is CURRENT and the verification tool returns status=VERIFIED.",
   "- If the user explicitly asks for a past legal state, or the matter turns on an event in the past (PRAWO-HARDGATE KROK 4: the wording in force on the event date), pass asOf=YYYY-MM-DD for the provisions that decide it. The application also re-checks provisions verified in their current wording on event dates found in the question and reports a different wording in the mandatory-path register. Historical verification is allowed only when ELI proves the act was in force on that date and the selected historical consolidated text covers that date without intervening amendments.",
+  "- Amendments, vacatio legis, staged entry into force: freshness.amendments lists the amending acts after the consolidated text (Dz.U., date, WESZLA_W_ZYCIE / OCZEKUJE / DATA_NIEUSTALONA, staged dates); cite them by Dz.U. and date, never as a bare count. The evidence is the wording in force on the checked date (chosen by the consolidated text's footnotes); pendingWording is a wording printed for later: state its entry date and do not present it as in force. transitionalProvisions are the amending act's own transitional rules (matters begun before the change): apply them from that text, not from memory.",
+  "- EU law (a regulation or directive: RODO/GDPR, AI Act, DSA, DMA, NIS2, DORA, a number such as 'rozporządzenie (UE) 2016/679' or 'dyrektywa 2008/48/WE', or a CELEX) goes to verify_legal_reference too, act = the EU act: the article comes from Cellar/EUR-Lex in its consolidated version applicable today, with the act's in-force status; applicationRule = the act's staged application (say from which date the article applies). eurlex_lookup gives metadata only, never article text.",
   "- For VERIFIED results, copy the returned marker verbatim onto the SAME LINE as the exact citation.",
   "- " + STATUS_CONSISTENCY_INSTRUCTION,
   "- Every act, KC/KPC/KPK/KK included, is verified at the source (Sejm ELI: current consolidated text and amendments after it); an act outside the DR act maps is found by its Dz.U. reference or an unambiguous title and then added to the local copy. The local official ELI copy (RAG) is used only when ELI itself fails; such a result carries sourceNotice.eliUnavailable and you must say so explicitly next to the reference. Local models (Bielik, Mistral) check the local copy first. The act may be named by its full or inflected title, Dz.U. reference or ELI; what decides is whether the provision exists in the consolidated text and whether your optional quote matches it.",
@@ -1178,7 +1214,9 @@ export class LegalVerificationToolRuntime {
           kind: verificationKind,
           url,
           expectedTitle,
-          toolCallId
+          toolCallId,
+          ...(freshness?.pendingWordingAmendments?.length ? { requireFootnoteWording: true } : {}),
+          ...(temporalMode === "HISTORICAL" && asOf ? { asOf } : {})
         });
 
         if (
@@ -1273,6 +1311,9 @@ export class LegalVerificationToolRuntime {
                   evidence:
                     statutoryRecord.evidence
                 }
+              : {}),
+            ...(statutoryRecord.pendingWording?.length
+              ? { pendingWording: statutoryRecord.pendingWording }
               : {})
           },
           act,
@@ -1296,6 +1337,51 @@ export class LegalVerificationToolRuntime {
 
   systemPromptAppendix(): string {
     return LEGAL_VERIFICATION_SYSTEM_APPENDIX;
+  }
+
+  private async verifyEu(toolCallId: string, claim: string, act: NonNullable<ReturnType<typeof euAct>>): Promise<string> {
+    try {
+      const now = new Date().toISOString();
+      const result = await verifyEuArticle({ fetcher: this.eliFetch, claim, act, toolCallId, today: todayWarsaw(), now });
+      this.ledger.add(result.record);
+      this.resolverAudit.push({
+        sequence: this.resolverAudit.length + 1,
+        tool: TOOL_NAME,
+        capability: "network",
+        decision: result.record.status === "VERIFIED" ? "ALLOW" : "DENY",
+        reason: `EU_ACT:${act.celex}:${result.version}`
+      });
+      const marker = result.record.status === "VERIFIED" ? verificationMarker(result.record) : "⚠️ [NIEWERYFIKOWANE]";
+      return JSON.stringify({
+        claim,
+        status: result.record.status,
+        act: { celex: act.celex, title: act.name, version: result.version },
+        sourceUrl: result.record.sourceUrl ?? null,
+        evidence: result.record.evidence ?? null,
+        ...(result.applicationRule
+          ? {
+              applicationRule: result.applicationRule,
+              applicationInstruction:
+                "The act applies in stages (its own entry-into-force article above): say from which date the cited article applies; never present it as applicable before that date."
+            }
+          : {}),
+        ...(result.laterVersions.length ? { laterConsolidatedVersions: result.laterVersions } : {}),
+        fetchedAt: result.record.fetchedAt,
+        marker,
+        instruction:
+          result.record.status === "VERIFIED"
+            ? "Copy the marker verbatim onto the same line as this exact EU-law reference. " + STATUS_CONSISTENCY_INSTRUCTION + " Quote the article only from the returned evidence."
+            : "Do not present this reference as verified; if it must be mentioned, use the unverified marker."
+      });
+    } catch (error) {
+      // Cellar unreachable: an outage, not a finding about the act.
+      return JSON.stringify({
+        status: "DENIED",
+        error: "EU_SOURCE_UNAVAILABLE",
+        detail: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+        instruction: "Cellar/EUR-Lex could not be read now: put ⚠️ [NIEWERYFIKOWANE] next to the reference and say the source was unavailable."
+      });
+    }
   }
 
   private async describeUnregisteredAct(
@@ -1961,6 +2047,14 @@ export class LegalVerificationToolRuntime {
           ? call.input.asOf.trim()
           : "";
 
+      // EU law (RODO, AI Act, a regulation or directive by number or CELEX): the article from
+      // Cellar/EUR-Lex, in its consolidated version applicable today, the act's in-force status.
+      const eu = euAct(actInput || (typeof call.input.claim === "string" ? call.input.claim : ""));
+      if (eu && typeof call.input.claim === "string" && !asOf) {
+        results.push({ tool_use_id: call.id, content: await this.verifyEu(call.id, call.input.claim, eu) });
+        continue;
+      }
+
       // Modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG), także KC/KPC/KK/KPK.
       // Gdy kopia nie może odpowiedzieć, próba w źródle i dołączenie aktu do kopii.
       // Modele w chmurze: wyłącznie źródło (Sejm ELI), bez cichego przejścia na kopię.
@@ -2119,6 +2213,14 @@ export class LegalVerificationToolRuntime {
                 amendmentsAfter:
                   freshness.amendmentsAfter
                     .length,
+                amendments: amendmentList(freshness),
+                ...(freshness.transitionalProvisions?.length
+                  ? {
+                      // From the amending act itself (normalized to lower case): the rule for
+                      // matters begun before the change, to apply instead of a memory of it.
+                      transitionalProvisions: freshness.transitionalProvisions
+                    }
+                  : {}),
                 reason:
                   freshness.reason ?? null
               }

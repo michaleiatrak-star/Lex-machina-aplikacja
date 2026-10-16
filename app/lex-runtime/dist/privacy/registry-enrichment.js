@@ -1,3 +1,4 @@
+import { firmFragments } from "./firm-names.js";
 import { detectIdentifiers } from "./identifiers.js";
 const LEGAL_FORM_TAIL = /[\s,]*(?:spółka\s+z\s+ograniczoną\s+odpowiedzialnością(?:\s+spółka\s+komandytowa)?|spółka\s+(?:akcyjna|komandytowa|komandytowo-akcyjna|jawna|partnerska|cywilna)|sp\.\s?z\s?o\.\s?o\.(?:\s?sp\.\s?k\.)?|s\.\s?a\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.)\s*(?:w\s+(?:likwidacji|upadłości|restrukturyzacji))?\s*$/iu;
 // Words that alone are no firm name ("ZAKŁAD", "POLSKA" left after stripping the form).
@@ -44,7 +45,12 @@ export function firmNameForms(name) {
         return [];
     if (!/\s/u.test(core) && core.length < 4)
         return [];
-    return spellings(core).map((form) => ({ text: form, kind: "PERSON", organization: legalForm ? { legalForm } : {} }));
+    // The whole name, then its parts of two or more words (one element: "Park" of "Human Park
+    // Global" is the firm's, never a person's).
+    return [core, ...firmFragments(titleCase(core))]
+        .flatMap(spellings)
+        .filter((form, index, all) => all.indexOf(form) === index)
+        .map((form) => ({ text: form, kind: "PERSON", organization: legalForm ? { legalForm } : {} }));
 }
 /** A natural person from the register: "Jan Kowalski", "KOWALSKI Jan" and the capitals. */
 export function personForms(first, last) {
@@ -107,6 +113,58 @@ export function krsForms(reply) {
         return [];
     const result = row.result;
     return [...firmNameForms(text(result.tytul_lub_nazwa) ?? ""), ...addressForms(text(result.adres))];
+}
+// Case endings a masked name may take in a sentence ("Juneyounga Parka", "Wiśniewskiego").
+const NAME_ENDINGS = "(?:a|owi|em|iem|u|ie|ą|ej|y|i|ę|ego|emu|m)?";
+const MASK = /^\p{Lu}\*+(?:\s+\p{Lu}\*+)+$/u;
+function maskWord(word) {
+    const rest = word.length - 1;
+    return `${word[0]}(?:\\p{Ll}{${rest}}${NAME_ENDINGS}|\\p{Lu}{${rest}})`;
+}
+/**
+ * Members of the board, proxies and the supervisory board from KRS. The public extract
+ * masks their names ("J******** P***"); the first letter and the length of every word are
+ * enough to find "Juneyoung Park" in a letter signed by him, in either order.
+ */
+export function krsPersonForms(reply) {
+    const row = reply && typeof reply === "object" ? reply : {};
+    if (row.status !== "FOUND" || !row.result || typeof row.result !== "object")
+        return [];
+    const representation = row.result.reprezentacja;
+    if (!representation || typeof representation !== "object")
+        return [];
+    const groups = ["sklad", "prokurenci", "organ_nadzoru"].flatMap((key) => {
+        const value = representation[key];
+        return Array.isArray(value) ? value : [];
+    });
+    const masks = new Set();
+    for (const item of groups) {
+        const mask = typeof item === "string" ? item : item && typeof item === "object" ? text(item.osoba_maska) : undefined;
+        if (mask && MASK.test(mask.trim()))
+            masks.add(mask.trim().replace(/\s+/gu, " "));
+    }
+    const forms = [];
+    for (const mask of masks) {
+        const words = mask.split(" ");
+        // Short masks ("J* K**") fit too many words; every word at least three letters.
+        if (words.some((word) => word.length < 3))
+            continue;
+        const surname = words[words.length - 1];
+        const given = words.slice(0, -1);
+        const orders = [[...given, surname], [surname, ...given], ...(given.length > 1 ? [[given[0], surname], [surname, given[0]]] : [])];
+        for (const order of orders) {
+            // A short pattern ("S*** P***") fits ordinary words ("Spis Prac"): at least ten letters.
+            if (order.join("").length < 10)
+                continue;
+            forms.push({
+                text: order.join(" "),
+                kind: "PERSON",
+                pattern: order.map(maskWord).join("\\s+"),
+                uncertain: `osoba z KRS (${mask}) - potwierdź, że to ona`
+            });
+        }
+    }
+    return forms;
 }
 /** A sole trader in CEIDG: business name, owner and business address. */
 export function ceidgForms(reply) {
@@ -208,7 +266,7 @@ export class RegistryEnrichment {
     async resolve(source, id) {
         if (source === "krs") {
             const krs = await this.ask("krs", "krs_lookup", { numerKrs: id });
-            const forms = krsForms(krs.row);
+            const forms = [...krsForms(krs.row), ...(await this.board(id))];
             this.record({ source: "krs", status: krs.status === "UNAVAILABLE" ? "ERROR" : krs.status, forms: forms.length });
             return { forms, retry: this.retryAfter([krs]) };
         }
@@ -218,8 +276,12 @@ export class RegistryEnrichment {
         // A company in KRS is fully described by the white list; a sole trader (or a NIP the
         // list does not know) is also asked in CEIDG for the owner and the business address.
         const result = list.row.result && typeof list.row.result === "object" ? list.row.result : {};
-        if (list.status === "FOUND" && text(result.krs))
-            return { forms: listForms, retry: Number.POSITIVE_INFINITY };
+        // A company: its people from the white list; only when the list names none (usual for a
+        // sp. z o.o.), the board from KRS, whose public extract masks the names.
+        if (list.status === "FOUND" && text(result.krs)) {
+            const listed = listForms.some((form) => form.kind === "PERSON" && !form.organization);
+            return { forms: listed ? listForms : [...listForms, ...(await this.board(text(result.krs)))], retry: Number.POSITIVE_INFINITY };
+        }
         const ceidg = await this.ask("ceidg", "ceidg_szukaj_firmy", { nip: id });
         const ceidgFound = ceidgForms(ceidg.row);
         if (ceidg.status !== "UNAVAILABLE")
@@ -232,6 +294,10 @@ export class RegistryEnrichment {
         if (answers.some((answer) => answer.status === "UNAVAILABLE"))
             return UNAVAILABLE_TTL_MS;
         return Number.POSITIVE_INFINITY;
+    }
+    async board(id) {
+        const answer = await this.ask("krs", "krs_reprezentacja", { numerKrs: id });
+        return answer.status === "FOUND" ? krsPersonForms(answer.row) : [];
     }
     async ask(source, tool, args) {
         try {

@@ -175,19 +175,26 @@ def docx_text_run(text, rpr=""):
     xml_space = ' xml:space="preserve"' if text[:1].isspace() or text[-1:].isspace() else ""
     return "<w:r>%s<w:t%s>%s</w:t></w:r>" % (rpr, xml_space, escape(text))
 
+def with_bold(rpr):
+    """The run properties with bold added (a party's name, a label such as "Dotyczy:")."""
+    if not rpr:
+        return "<w:rPr><w:b/></w:rPr>"
+    return rpr.replace("<w:rPr>", "<w:rPr><w:b/>", 1)
+
 def docx_runs(nodes, rpr=""):
     runs = []
     for node in nodes or []:
         t = node.get("type")
         text = node.get("text", "") if t == "text" else pii_ref_text(node) if t == "pii_ref" else node.get("label", "")
+        node_rpr = with_bold(rpr) if t == "text" and node.get("bold") is True else rpr
         # A line break inside a text node (court address, parties) is a line break in the
         # document, not a space; each line is its own w:t (text extraction joins them with "\n").
         lines = text.split("\n")
         for index, line in enumerate(lines):
             if index:
-                runs.append("<w:r>%s<w:br/></w:r>" % rpr)
+                runs.append("<w:r>%s<w:br/></w:r>" % node_rpr)
             if line or len(lines) == 1:
-                runs.append(docx_text_run(line, rpr))
+                runs.append(docx_text_run(line, node_rpr))
     return "".join(runs)
 
 def docx_paragraph(nodes, style=None, extra_ppr="", rpr=""):
@@ -208,6 +215,8 @@ ADDRESSEE_RE = re.compile(
     r"Kasa Rolniczego|Krajowa Izba|Samorządowe Kolegium|Dyrektor|Prezes|Rzecznik|Wójt|Burmistrz|Prezydent|Starosta|Wojewoda|"
     r"Inspektor|Państwowa Inspekcja|Krajowa Informacja|Izba Administracji|Komendant|Sz\.\s*P\.|Szanown)", re.UNICODE)
 LETTER_TYPES = {"pleading", "letter"}
+# A paragraph's role (letter-markup.ts) decides its layout, not its text.
+ROLE_LAYOUT = {"place_date": "place_date", "basis": "center", "party": "party", "addressee": "addressee", "subject": "justify"}
 
 def inline_plain(nodes):
     return "".join(node.get("text", "") if node.get("type") == "text" else node.get("label", "") for node in nodes or [])
@@ -224,6 +233,10 @@ def block_layout(ast):
             if t == "heading" and int(block.get("level", 1)) == 1:
                 layout[index] = "center"
                 title_seen = True
+                continue
+            role = block.get("role") if t == "paragraph" else None
+            if role:
+                layout[index] = ROLE_LAYOUT.get(role)
                 continue
             if title_seen or t != "paragraph":
                 continue
@@ -246,12 +259,19 @@ def has_line_break(nodes):
     return any("\n" in (node.get("text", "") or "") for node in nodes or [] if node.get("type") == "text")
 
 DOCX_ALIGN = {
+    # The header of an office letter: a blank line's space after each block, the addressee
+    # from 9 cm (the right half of the page), as in the office's templates.
+    "place_date": '<w:spacing w:after="240"/><w:jc w:val="right"/>',
+    "party": '<w:spacing w:after="240"/><w:jc w:val="left"/>',
+    "addressee": '<w:spacing w:after="240"/><w:ind w:left="5103"/><w:jc w:val="left"/>',
+    "left": '<w:jc w:val="left"/>',
+    "justify": '<w:jc w:val="both"/>',
     "right": '<w:jc w:val="right"/>',
     "half": '<w:ind w:left="%d"/><w:jc w:val="left"/>' % ((11906 - 2 * 1417) // 2),
     "center": '<w:jc w:val="center"/>'
 }
 
-def docx_block(block, align=None):
+def docx_block(block, align=None, profile=None):
     t = block.get("type")
     extra = DOCX_ALIGN.get(align, "")
     if t == "heading":
@@ -273,9 +293,12 @@ def docx_block(block, align=None):
         out = []
         ordered = bool(block.get("ordered"))
         for index, item in enumerate(block.get("items") or [], start=1):
-            prefix = ("%d. " % index) if ordered else "• "
+            # An office letter numbers its points "1)", as in the office's templates.
+            prefix = (("%d) " if profile == "lex-office-tnr-v1" else "%d. ") % index) if ordered else "• "
             nodes = [{"type": "text", "text": prefix}] + list(item)
-            out.append(docx_paragraph(nodes, None, '<w:ind w:left="720" w:hanging="360"/>'))
+            # Office letter: the number at the margin, the wrapped lines under the item's text.
+            indent = '<w:ind w:left="357" w:hanging="357"/>' if profile == "lex-office-tnr-v1" else '<w:ind w:left="720" w:hanging="360"/>'
+            out.append(docx_paragraph(nodes, None, indent))
         return "".join(out)
     if t == "table":
         # Declared columns of equal width within the margins: without w:tblGrid and cell
@@ -298,7 +321,25 @@ def docx_block(block, align=None):
                 '<w:tblGrid>%s</w:tblGrid>%s</w:tbl><w:p/>') % (width * columns, grid, "".join(rows))
     raise ValueError("AST_BLOCK_TYPE_UNSUPPORTED")
 
+# A law office's letter (the office's templates): Times New Roman 12 throughout, single line
+# spacing, 6 pt after a paragraph, title in capitals and sections in bold in the text size.
+DOCX_OFFICE_STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="pl-PL"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="160"/><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:caps/><w:sz w:val="24"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="160"/><w:jc w:val="center"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="100"/><w:jc w:val="left"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="80"/><w:jc w:val="left"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:i/><w:sz w:val="24"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="120"/><w:ind w:left="720" w:right="720"/></w:pPr><w:rPr><w:i/></w:rPr></w:style>
+</w:styles>"""
+
+# Page margins (twentieths of a point): top, right, bottom, left.
+PAGE_MARGINS = {"lex-office-tnr-v1": (1134, 1134, 1134, 1417)}
+
 def docx_styles_for(profile):
+    if profile == "lex-office-tnr-v1":
+        return DOCX_OFFICE_STYLES
     if profile == "lex-classic-tnr-v1":
         return DOCX_STYLES.replace("Arial", "Times New Roman").replace('<w:sz w:val="23"/><w:lang', '<w:sz w:val="24"/><w:lang').replace('w:cs="Times New Roman"/><w:sz w:val="23"/>', 'w:cs="Times New Roman"/><w:sz w:val="24"/>')
     if profile == "lex-light-legal-design-v1":
@@ -309,6 +350,13 @@ def docx_styles_for(profile):
     return DOCX_STYLES
 
 def odt_styles_for(profile):
+    if profile == "lex-office-tnr-v1":
+        tnr = ODT_STYLES.replace("Arial", "Times New Roman").replace('style:font-name="Times New Roman" fo:font-size="11.5pt"', 'style:font-name="Times New Roman" fo:font-size="12pt"')
+        for size in ("16pt", "14pt", "12.5pt", "11.5pt"):
+            tnr = tnr.replace('fo:font-size="%s"' % size, 'fo:font-size="12pt"')
+        return (tnr.replace('fo:line-height="125%"', 'fo:line-height="115%"')
+                .replace('fo:margin-top="2.5cm" fo:margin-bottom="2cm" fo:margin-left="2.5cm" fo:margin-right="2.5cm"',
+                         'fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2.5cm" fo:margin-right="2cm"'))
     if profile == "lex-classic-tnr-v1":
         return ODT_STYLES.replace("Arial", "Times New Roman").replace('style:font-name="Times New Roman" fo:font-size="11.5pt"', 'style:font-name="Times New Roman" fo:font-size="12pt"')
     return ODT_STYLES
@@ -318,8 +366,10 @@ def render_docx(ast):
     if ast.get("title"):
         body.append(docx_paragraph(ast.get("title"), "Title"))
     layout = block_layout(ast)
-    body.extend(docx_block(block, layout.get(index)) for index, block in enumerate(ast.get("blocks") or []))
-    sect = '<w:sectPr><w:footerReference w:type="default" r:id="rId5"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="720" w:footer="567" w:gutter="0"/></w:sectPr>'
+    body.extend(docx_block(block, layout.get(index), ast.get("styleProfile")) for index, block in enumerate(ast.get("blocks") or []))
+    top, right, bottom, left = PAGE_MARGINS.get(ast.get("styleProfile"), (1417, 1417, 1417, 1417))
+    sect = ('<w:sectPr><w:footerReference w:type="default" r:id="rId5"/><w:pgSz w:w="11906" w:h="16838"/>'
+            '<w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" w:header="720" w:footer="567" w:gutter="0"/></w:sectPr>') % (top, right, bottom, left)
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>%s%s</w:body></w:document>') % ("".join(body), sect)
     entries = [
@@ -340,12 +390,20 @@ def render_docx(ast):
 def odt_inline(nodes):
     # Lines of a text node with a line break each go into a span: deanonymization replaces
     # aliases in p/h/span text, and a tail after <text:line-break/> would be left as is.
+    if any(node.get("type") == "text" and node.get("bold") is True for node in nodes or []):
+        parts = []
+        for node in nodes or []:
+            style = ' text:style-name="T_bold"' if node.get("type") == "text" and node.get("bold") is True else ""
+            lines = inline_text([node]).split("\n")
+            parts.append("<text:line-break/>".join("<text:span%s>%s</text:span>" % (style, escape(line)) for line in lines))
+        return "".join(parts)
     lines = inline_text(nodes).split("\n")
     if len(lines) == 1:
         return escape(lines[0])
     return "<text:line-break/>".join("<text:span>%s</text:span>" % escape(line) for line in lines)
 
-ODT_ALIGN = {"right": "P_right", "half": "P_half", "center": "P_center"}
+ODT_ALIGN = {"right": "P_right", "half": "P_half", "center": "P_center", "left": "P_left", "justify": None,
+             "place_date": "P_right", "party": "P_left", "addressee": "P_addressee"}
 
 def odt_block(block, align=None):
     t = block.get("type")
@@ -386,7 +444,7 @@ def render_odt(ast):
     layout = block_layout(ast)
     body.extend(odt_block(block, layout.get(index)) for index, block in enumerate(ast.get("blocks") or []))
     content = """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3"><office:automatic-styles><style:style style:name="Table" style:family="table"><style:table-properties style:width="16cm" table:align="margins"/></style:style><style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #000000"/></style:style><style:style style:name="P_right" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="end"/></style:style><style:style style:name="P_half" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:margin-left="8cm" fo:text-align="start"/></style:style><style:style style:name="P_left" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="start"/></style:style><style:style style:name="P_center" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H1_center" style:family="paragraph" style:parent-style-name="Heading_20_1"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:text-transform="uppercase"/></style:style><style:style style:name="H2_center" style:family="paragraph" style:parent-style-name="Heading_20_2"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H3_center" style:family="paragraph" style:parent-style-name="Heading_20_3"><style:paragraph-properties fo:text-align="center"/></style:style></office:automatic-styles><office:body><office:text>%s</office:text></office:body></office:document-content>""" % "".join(body)
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.3"><office:automatic-styles><style:style style:name="Table" style:family="table"><style:table-properties style:width="16cm" table:align="margins"/></style:style><style:style style:name="Cell" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #000000"/></style:style><style:style style:name="P_right" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="end"/></style:style><style:style style:name="P_half" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:margin-left="8cm" fo:text-align="start"/></style:style><style:style style:name="P_left" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="start"/></style:style><style:style style:name="P_center" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H1_center" style:family="paragraph" style:parent-style-name="Heading_20_1"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:text-transform="uppercase"/></style:style><style:style style:name="H2_center" style:family="paragraph" style:parent-style-name="Heading_20_2"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="H3_center" style:family="paragraph" style:parent-style-name="Heading_20_3"><style:paragraph-properties fo:text-align="center"/></style:style><style:style style:name="P_addressee" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:margin-left="9cm" fo:text-align="start" fo:margin-bottom="0.42cm"/></style:style><style:style style:name="T_bold" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style></office:automatic-styles><office:body><office:text>%s</office:text></office:body></office:document-content>""" % "".join(body)
     entries = [
         ("mimetype", ODT_MIMETYPE),
         ("content.xml", content.encode("utf-8")),

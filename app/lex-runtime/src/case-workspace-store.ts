@@ -4,6 +4,7 @@ import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
 import { validCaseWork, type CaseWorkItem } from "./case-work.js";
+import { validLongDocument, type LongDocumentState } from "./long-document.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -87,10 +88,11 @@ export type WorkspaceThreadMessage = {
   corrections?: AnswerCorrection[];
   pipelineNext?: { skill: string; reason: string; choices?: Array<{
     skill: string;
-    kind: "DOCUMENT" | "ANALYSIS";
+    kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE";
     reason: string;
     own?: true;
     steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] };
+    longDocumentId?: string;
   }> };
 };
 
@@ -134,6 +136,8 @@ export type CaseMemory = {
   chronology?: CaseChronology;
   // Work done and open in the case (case-work.ts).
   work?: CaseWorkItem[];
+  // A long letter written in parts: its plan and the parts written so far (long-document.ts).
+  longDocument?: LongDocumentState;
 };
 
 export type CaseWorkspaceIndex = {
@@ -343,7 +347,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   const mandatoryPath = plainRecords(input.mandatoryPath === undefined ? undefined : [input.mandatoryPath], 1, 200_000)?.[0];
   const next = input.pipelineNext;
   const validChoice = (choice: unknown) => {
-    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown; steps?: unknown } | null;
+    const item = choice as { skill?: unknown; kind?: unknown; reason?: unknown; own?: unknown; steps?: unknown; longDocumentId?: unknown } | null;
     const steps = item?.steps as { done?: unknown; total?: unknown; skipped?: unknown; open?: unknown } | undefined;
     const validSteps =
       steps === undefined ||
@@ -356,8 +360,9 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     return (
       typeof item === "object" && item !== null &&
       typeof item.skill === "string" && item.skill.length <= 200 &&
-      (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+      (item.kind === "DOCUMENT" || item.kind === "ANALYSIS" || item.kind === "CONTINUE") &&
       (item.own === undefined || item.own === true) &&
+      (item.longDocumentId === undefined || (typeof item.longDocumentId === "string" && /^[0-9a-f-]{36}$/u.test(item.longDocumentId))) &&
       validSteps &&
       typeof item.reason === "string" && item.reason.length <= 2_000
     );
@@ -1225,8 +1230,10 @@ export class EncryptedCaseWorkspaceStore {
     const summary = validThreadSummary(index.memory?.summary);
     const chronology = validCaseChronology(index.memory?.chronology);
     const work = validCaseWork(index.memory?.work);
+    const longDocument = validLongDocument(index.memory?.longDocument);
     return {
       ...(work?.length ? { work } : {}),
+      ...(longDocument ? { longDocument } : {}),
       ...(evidence ? { evidence } : {}),
       ...(summary ? { summary } : {}),
       ...(chronology ? { chronology } : {}),
@@ -1243,6 +1250,7 @@ export class EncryptedCaseWorkspaceStore {
     summary?: ThreadSummary | null;
     chronology?: CaseChronology | null;
     work?: CaseWorkItem[] | null;
+    longDocument?: LongDocumentState | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
@@ -1269,6 +1277,12 @@ export class EncryptedCaseWorkspaceStore {
       if (args.work !== null && !work) throw new Error("CASE_MEMORY_WORK_INVALID");
       if (work?.length) memory.work = work;
       else delete memory.work;
+    }
+    if (args.longDocument !== undefined) {
+      const longDocument = args.longDocument === null ? null : validLongDocument(args.longDocument);
+      if (args.longDocument !== null && !longDocument) throw new Error("CASE_MEMORY_LONG_DOCUMENT_INVALID");
+      if (longDocument) memory.longDocument = longDocument;
+      else delete memory.longDocument;
     }
     index.memory = memory;
     await this.write(index, args.caseDataKey, args.keyVersion);

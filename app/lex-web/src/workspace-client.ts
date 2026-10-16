@@ -64,7 +64,7 @@ export type WorkspaceThreadMessage = {
   evidence?: EvidenceItem[];
   auxiliarySources?: AuxiliarySourceItem[];
   mandatoryPath?: MandatoryPathView;
-  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] }; longDocumentId?: string }> };
   documentCoverage?: DocumentCoverageEntry[];
   documentAnalysis?: boolean;
   corrections?: AnswerCorrection[];

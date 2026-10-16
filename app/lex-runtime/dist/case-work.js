@@ -11,7 +11,7 @@ export function validCaseWork(value) {
         const item = raw;
         if (!item ||
             typeof item.key !== "string" || item.key.length > 200 ||
-            (item.kind !== "DOCUMENT_ANALYSIS" && item.kind !== "CHRONOLOGY" && item.kind !== "WORKFLOW") ||
+            (item.kind !== "DOCUMENT_ANALYSIS" && item.kind !== "CHRONOLOGY" && item.kind !== "WORKFLOW" && item.kind !== "OPEN_ISSUE") ||
             typeof item.label !== "string" || item.label.length > 300 ||
             (item.status !== "DONE" && item.status !== "OPEN") ||
             typeof item.at !== "string" || Number.isNaN(Date.parse(item.at)) ||
@@ -65,6 +65,23 @@ export function recordCaseWork(previous, turn) {
         if (!items.has(key))
             items.set(key, { key, kind: "WORKFLOW", label: WORKFLOW_LABEL[workflow] ?? workflow, status: "DONE", at: turn.now });
     }
+    if (turn.gapsListed) {
+        const listed = new Set((turn.openIssues ?? []).map((issue) => `ISSUE:${issue.key}`));
+        for (const [key, item] of items) {
+            if (key.startsWith("ISSUE:brak:") && item.status === "OPEN" && !listed.has(key))
+                items.set(key, { ...item, status: "DONE", at: turn.now });
+        }
+    }
+    for (const issue of turn.openIssues ?? []) {
+        const key = `ISSUE:${issue.key}`;
+        items.set(key, { key, kind: "OPEN_ISSUE", label: issue.label.slice(0, 300), status: "OPEN", at: turn.now, ...(turn.skill ? { skill: turn.skill } : {}) });
+    }
+    for (const resolved of turn.resolvedIssues ?? []) {
+        const key = `ISSUE:${resolved}`;
+        const item = items.get(key);
+        if (item?.status === "OPEN")
+            items.set(key, { ...item, status: "DONE", at: turn.now });
+    }
     // Open work first, then the newest; the register stays bounded.
     return [...items.values()]
         .sort((a, b) => (a.status === b.status ? b.at.localeCompare(a.at) : a.status === "OPEN" ? -1 : 1))
@@ -86,8 +103,67 @@ export function caseWorkBlock(items) {
     if (!items.length)
         return null;
     return [
-        "[Prace wykonane wcześniej w tej sprawie (rejestr aplikacji). Korzystaj z ich wyników z rozmowy i pamięci sprawy, nie wykonuj ich od nowa; prace OTWARTE dokończ, gdy prośba ich dotyczy:]",
+        "[Prace wykonane wcześniej w tej sprawie (rejestr aplikacji). Korzystaj z ich wyników z rozmowy i pamięci sprawy, nie wykonuj ich od nowa; prace OTWARTE dokończ, gdy prośba ich dotyczy; kwestie OTWARTE (do weryfikacji, do zbadania) rozstrzygnij w źródle, zanim oprzesz na nich odpowiedź albo pismo:]",
         ...items.slice(0, 30).map((item) => `- ${caseWorkLine(item)}`),
         "[Koniec rejestru prac]"
     ].join("\n");
+}
+/** The key of an open point: its text, normalized (the same provision in any spelling). */
+export function issueKey(text) {
+    return text.toLocaleLowerCase("pl").replace(/\s+/gu, " ").replace(/[„”"]/gu, "").trim().slice(0, 160);
+}
+/**
+ * The points a turn left open and those it settled, from the application's own records:
+ * references the verification could not confirm (do weryfikacji w źródle), a step the
+ * answer announced but did not do (do zbadania); a reference verified later closes its point.
+ */
+export function turnIssues(result) {
+    const open = new Map();
+    const gaps = answerGaps(result.answer ?? "");
+    for (const gap of gaps ?? [])
+        open.set(issueKey(`brak:${gap}`), `brak (do uzupełnienia): ${gap}`);
+    for (const reference of result.blockedReferences ?? []) {
+        if (/UNVERIFIED|NOT_FOUND|AMBIGUOUS/u.test(reference.status))
+            open.set(issueKey(reference.claim), `do weryfikacji w źródle: ${reference.claim}`);
+    }
+    for (const record of result.evidence ?? []) {
+        if (record.status === "UNVERIFIED")
+            open.set(issueKey(record.claim), `do weryfikacji w źródle: ${record.claim}`);
+    }
+    if (result.announcedStep)
+        open.set(issueKey(`krok:${result.announcedStep}`), `do zbadania (zapowiedziane, niewykonane): ${result.announcedStep}`);
+    const resolved = (result.evidence ?? [])
+        .filter((record) => record.status === "VERIFIED" || record.status === "SUPPORTED")
+        .map((record) => issueKey(record.claim))
+        .filter((key) => !open.has(key));
+    return { open: [...open].map(([key, label]) => ({ key, label })), resolved, gapsListed: gaps !== null };
+}
+const GAP_HEADING = /^\s*(?:#{1,4}\s*)?(?:\*\*)?\s*(?:[IVX]+\.\s*|\d+\.\s*)?(?:DANE DO UZUPEŁNIENIA|BRAKI(?: DANYCH| W DOKUMENTACJI)?|BRAKUJĄCE DANE|INFORMACJE DO UZUPEŁNIENIA)\b[^\n]*$/imu;
+const GAP_LINE = /^\s*(?:[-*•–]|\d{1,2}[.)])\s+(\S.*)$/u;
+/**
+ * The gaps an answer lists (its DANE DO UZUPEŁNIENIA / BRAKI section, one per item), null when
+ * it has no such section (the gaps of earlier turns stay as they were).
+ */
+export function answerGaps(answer) {
+    const lines = answer.replace(/\r\n?/gu, "\n").split("\n");
+    const start = lines.findIndex((line) => GAP_HEADING.test(line));
+    if (start < 0)
+        return null;
+    const gaps = [];
+    for (const line of lines.slice(start + 1)) {
+        if (!line.trim()) {
+            if (gaps.length)
+                break;
+            continue;
+        }
+        const item = GAP_LINE.exec(line);
+        if (!item)
+            break;
+        const text = item[1].replace(/\*\*/gu, "").replace(/\s+/gu, " ").trim();
+        if (text && !/^(?:brak|nie ma|—|-)\.?$/iu.test(text))
+            gaps.push(text.slice(0, 200));
+        if (gaps.length >= 15)
+            break;
+    }
+    return gaps;
 }

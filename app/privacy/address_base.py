@@ -65,7 +65,8 @@ class FoldedTsv:
             head = line.split(b"\t", 1)[0]
             if not head.startswith(key) or (exact and head != key):
                 break
-            found.append(line.decode("utf-8").split("\t"))
+            # A base checked out with CRLF (Windows): the last field without the "\r".
+            found.append(line.rstrip(b"\r").decode("utf-8").split("\t"))
             position = end + 1
         return found
 

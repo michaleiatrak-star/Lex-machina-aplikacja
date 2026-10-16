@@ -1,3 +1,4 @@
+import { InfoTip } from "./InfoTip";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -91,11 +92,10 @@ export function InvoiceSettingsPanel() {
   return (
     <article className="chat-card invoice-settings">
       <p className="eyebrow">Integracja</p>
-      <h2>Faktury i KSeF</h2>
-      <p className="field-help">
-        Token KSeF, dane sprzedawcy i logo są zapisywane w pliku zaszyfrowanym Twoim kluczem konta.
-        Token nie jest później wyświetlany ani wysyłany do przeglądarki.
-      </p>
+      <h2>
+        Faktury i KSeF
+        <InfoTip>Token KSeF, dane sprzedawcy i logo są zaszyfrowane Twoim kluczem konta. Zapisanego tokenu nie widać już w przeglądarce.</InfoTip>
+      </h2>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
       {message ? <div className="alert">{message}</div> : null}
@@ -103,8 +103,8 @@ export function InvoiceSettingsPanel() {
       <section>
         <h3>KSeF</h3>
         <p className="alert" role="note">
-          <strong>Wysyłka do KSeF jest niedostępna w tej wersji.</strong> Faktury wystawiasz, zapisujesz i drukujesz
-          w programie. Token ani środowisko nie są teraz potrzebne do pracy.
+          <strong>Wysyłka do KSeF jest niedostępna w tej wersji.</strong> Faktury wystawiasz i drukujesz w programie.
+          <InfoTip>Token ani środowisko KSeF nie są teraz potrzebne do pracy.</InfoTip>
         </p>
         <details className="ksef-later">
           <summary>Ustawienia KSeF na czas, gdy wysyłka będzie dostępna</summary>
@@ -113,7 +113,7 @@ export function InvoiceSettingsPanel() {
           <p className="field-help">
             {ksef?.tokenConfigured
               ? `Token zapisany (${ksef.tokenHint ?? ""}${ksef.tokenSetAt ? `, ${new Date(ksef.tokenSetAt).toLocaleString("pl-PL")}` : ""}).`
-              : "Brak tokenu. Nie jest potrzebny, dopóki wysyłka do KSeF nie zostanie udostępniona."}
+              : "Brak tokenu."}
           </p>
           <div className="invoice-grid">
             <label>
@@ -173,7 +173,7 @@ export function InvoiceSettingsPanel() {
           <p className={ksef?.environment === "production" ? "alert alert-error" : "field-help"}>
             {ksef?.environment === "production"
               ? "Środowisko PRODUKCYJNE: gdy wysyłka zostanie udostępniona, faktury będą trafiać do produkcyjnego systemu KSeF."
-              : "Środowisko TESTOWE (domyślne): gdy wysyłka zostanie udostępniona, faktury będą trafiać do testowego środowiska KSeF."}
+              : "Środowisko TESTOWE (domyślne)."}
           </p>
           {ksef?.environment === "production" ? (
             <button
@@ -227,8 +227,10 @@ export function InvoiceSettingsPanel() {
       </section>
 
       <section>
-        <h3>Dane sprzedawcy</h3>
-        <p className="field-help">Wstawiane do każdej nowej faktury.</p>
+        <h3>
+          Dane sprzedawcy
+          <InfoTip>Wstawiane do każdej nowej faktury.</InfoTip>
+        </h3>
         <div className="invoice-grid">
           <label>
             Nazwa
@@ -256,9 +258,12 @@ export function InvoiceSettingsPanel() {
       </section>
 
       <section>
-        <h3>Domyślne na nowej fakturze</h3>
+        <h3>
+          Domyślne na nowej fakturze
+          <InfoTip>Na fakturze każdą wartość można zmienić.</InfoTip>
+        </h3>
         <p className="field-help">
-          {settings?.defaults ? "Zapisane ustawienia." : "Ustawienia fabryczne (niezapisane)."} Na fakturze każdą wartość można zmienić.
+          {settings?.defaults ? "Zapisane ustawienia." : "Ustawienia fabryczne (niezapisane)."}
         </p>
         <div className="invoice-grid">
           <label>
@@ -326,12 +331,16 @@ export function InvoiceSettingsPanel() {
       </section>
 
       <section>
-        <h3>Autonumeracja</h3>
+        <h3>
+          Autonumeracja
+          <InfoTip>
+            Puste pole numeru dostaje kolejny numer. Tokeny wzoru: {"{NR}"} licznik, {"{DD}"} dzień, {"{MM}"} miesiąc, {"{RRRR}"} albo {"{RR}"} rok (z daty wystawienia).
+          </InfoTip>
+        </h3>
         <p className="field-help">
           {settings?.numbering
-            ? `Włączona: ${settings.numbering.pattern}. Puste pole numeru na nowej fakturze dostaje kolejny numer.`
-            : "Wyłączona: numer wpisujesz ręcznie."}{" "}
-          Tokeny: {"{NR}"} licznik, {"{DD}"} dzień, {"{MM}"} miesiąc, {"{RRRR}"} albo {"{RR}"} rok (z daty wystawienia).
+            ? `Włączona: ${settings.numbering.pattern}.`
+            : "Wyłączona: numer wpisujesz ręcznie."}
         </p>
         <div className="invoice-grid">
           <label>

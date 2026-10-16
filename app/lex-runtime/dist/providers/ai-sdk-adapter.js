@@ -1,3 +1,4 @@
+import { joinContinuation } from "./continuation-seams.js";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import { MissingProviderCredentialError } from "./credentials.js";
 import { ProviderRegistry } from "./gateway.js";
@@ -585,7 +586,9 @@ async function localHttpFailure(response) {
         .replace(/[\r\n]+/g, " ")
         .slice(-1200)}`);
 }
-export async function readLocalSse(response, timeouts, onDelta) {
+export async function readLocalSse(response, timeouts, onDelta, 
+// Long answers only: a short routing or JSON budget is cut on purpose.
+noteWhenCut = false) {
     if (!response.body) {
         throw new Error("LOCAL_MODEL_HTTP_EMPTY_BODY");
     }
@@ -594,6 +597,7 @@ export async function readLocalSse(response, timeouts, onDelta) {
     let buffer = "";
     let fullText = "";
     let terminalSeen = false;
+    let lengthCut = false;
     const firstContentDeadline = Date.now() +
         Math.max(1, timeouts?.firstContentMs ??
             LOCAL_FIRST_CONTENT_TIMEOUT_MS);
@@ -611,6 +615,9 @@ export async function readLocalSse(response, timeouts, onDelta) {
         }
         if (isLocalSseTerminalLine(rawLine)) {
             terminalSeen = true;
+            // Cut at the output budget (llama-server "length"): said in the text, as for hosted models.
+            if (/"finish_reason"\s*:\s*"length"/u.test(rawLine))
+                lengthCut = true;
         }
     };
     try {
@@ -667,7 +674,7 @@ export async function readLocalSse(response, timeouts, onDelta) {
     if (!fullText.trim()) {
         throw new Error("LOCAL_MODEL_HTTP_EMPTY_RESPONSE");
     }
-    return fullText;
+    return lengthCut && noteWhenCut ? fullText + LENGTH_TRUNCATED_NOTE : fullText;
 }
 async function readLocalJson(response) {
     let payload;
@@ -790,7 +797,7 @@ async function streamLocalChatCompletion(endpoint, modelId, systemPrompt, messag
     }
     try {
         return {
-            fullText: await readLocalSse(response, undefined, onDelta)
+            fullText: await readLocalSse(response, undefined, onDelta, maxOutputTokens >= 1_024)
         };
     }
     catch (streamError) {
@@ -1062,7 +1069,8 @@ export async function continueAtLength(first, next, messages) {
             { role: "assistant", content: text },
             { role: "user", content: LENGTH_CONTINUATION_PROMPT }
         ]);
-        text += result.fullText;
+        // The model resumes mid-thought and repeats a few letters or lines: dropped at the seam.
+        text = joinContinuation(text, result.fullText);
         finishReason = result.finishReason;
         usage = addUsage(usage, result.usage);
     }

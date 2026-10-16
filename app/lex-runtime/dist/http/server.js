@@ -301,7 +301,7 @@ export async function startLocalServer(options) {
     });
     const privacyNamedEntities = new LocalLlmPrivacyNamedEntityRecognizer(providerGateway, localModels, stanzaNamedEntities);
     const modelCatalog = new DynamicModelCatalog(credentials, undefined, localModels);
-    const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor());
+    const legalSourceVerifier = new OfficialLegalSourceVerifier(undefined, undefined, new LocalPdfTextExtractor(undefined, { lines: true, markSmallLines: true }));
     // Konto może nadpisać korpus samymi skillami — serwery MCP bierzemy z pierwszego korpusu, który je ma.
     const mcpConnectors = new LexMcpConnectorStore([
         runtimeRoot,
@@ -312,6 +312,7 @@ export async function startLocalServer(options) {
     const legalFederationTools = new LegalFederationToolRuntime(undefined, undefined, mcpConnectors);
     // Morfeusz2/SGJP person-name morphology in the payload Python.
     const personMorphology = new LocalPersonMorphology();
+    personMorphology.warmUp();
     // Official ELI texts of every act named in the domain act maps; refreshed
     // in the background, kept locally for offline and local-model use. Scanned
     // PDFs (old Dz.U.) are read with the local OCR.
@@ -462,6 +463,7 @@ export async function startLocalServer(options) {
             }
             catch (error) {
                 gazetteerRecognizer.close();
+                personMorphology.close();
                 server.close(() => {
                     reject(error instanceof Error
                         ? error
@@ -482,6 +484,7 @@ export async function startLocalServer(options) {
                         void localModels.stop();
                         stanzaRecognizer.close();
                         gazetteerRecognizer.close();
+                        personMorphology.close();
                         credentials.close();
                         supportService.close();
                         unsubscribeGuideRevocation();

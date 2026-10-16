@@ -42,7 +42,7 @@ class SurnameBase:
         end = data.find(b"\n", offset)
         if end < 0:
             end = len(data)
-        return start, data[start:end], end + 1
+        return start, data[start:end].rstrip(b"\r"), end + 1
 
     def counts(self, surname: str) -> tuple[int, int] | None:
         """(men, women) bearing the surname, or None when it is not in PESEL."""
