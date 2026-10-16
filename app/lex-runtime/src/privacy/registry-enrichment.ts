@@ -1,3 +1,4 @@
+import { firmFragments } from "./firm-names.js";
 import { detectIdentifiers } from "./identifiers.js";
 
 // Firm data from public registers for pseudonymization ([FIRMA], REGULY-ANONIMIZACJI).
@@ -12,6 +13,10 @@ export type RegistryForm = {
   kind: "PERSON" | "ADDRESS";
   // A firm's own name: one organization token, the legal form stays in the text.
   organization?: { legalForm?: string };
+  // A person known only by the register's mask ("J******** P***"): matched as a pattern
+  // (initials and word lengths), shown for the user to confirm.
+  pattern?: string;
+  uncertain?: string;
 };
 
 export interface RegistryFormsProvider {
@@ -68,6 +73,27 @@ function spellings(value: string): string[] {
   return [...new Set([value, value.toLocaleUpperCase("pl"), titleCase(value)])];
 }
 
+// Letters OCR confuses or drops: diacritics ("Michal" for "Michał"), i/l/1, o/0.
+const OCR_CONFUSABLE: Record<string, string> = {
+  a: "aą", ą: "aą", c: "cć", ć: "cć", e: "eę", ę: "eę", l: "lłiI1|", ł: "lłiI1|", n: "nń", ń: "nń",
+  o: "oó0", ó: "oó0", s: "sś", ś: "sś", z: "zźż", ź: "zźż", ż: "zźż", i: "iIlł1|", "1": "1iIlł|", "0": "0oO"
+};
+
+/** A register form as OCR may have read it; null when the form is too short to match loosely. */
+export function ocrTolerantPattern(value: string): string | null {
+  if (value.replace(/\s+/gu, "").length < 6) return null;
+  return [...value]
+    .map((char) => {
+      if (/\s/u.test(char)) return "\\s+";
+      const lower = char.toLocaleLowerCase("pl");
+      const set = OCR_CONFUSABLE[lower];
+      if (!set) return char.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const letters = new Set([...set].flatMap((letter) => [letter, char === lower ? letter : letter.toLocaleUpperCase("pl")]));
+      return `[${[...letters].join("").replace(/[\]\\^-]/gu, "\\$&")}]`;
+    })
+    .join("");
+}
+
 /** The firm's own name without its legal form, in the spellings a pleading uses. */
 export function firmNameForms(name: string): RegistryForm[] {
   const clean = name.replace(/[„”"«»]/gu, "").replace(/\s+/gu, " ").trim();
@@ -76,7 +102,12 @@ export function firmNameForms(name: string): RegistryForm[] {
   const legalForm = legal ? legal[0].replace(/^[\s,]+/u, "") : undefined;
   if (core.length < 3 || TOO_GENERIC.has(core.toLocaleLowerCase("pl"))) return [];
   if (!/\s/u.test(core) && core.length < 4) return [];
-  return spellings(core).map((form) => ({ text: form, kind: "PERSON", organization: legalForm ? { legalForm } : {} }));
+  // The whole name, then its parts of two or more words (one element: "Park" of "Human Park
+  // Global" is the firm's, never a person's).
+  return [core, ...firmFragments(titleCase(core))]
+    .flatMap(spellings)
+    .filter((form, index, all) => all.indexOf(form) === index)
+    .map((form) => ({ text: form, kind: "PERSON", organization: legalForm ? { legalForm } : {} }));
 }
 
 /** A natural person from the register: "Jan Kowalski", "KOWALSKI Jan" and the capitals. */
@@ -138,6 +169,56 @@ export function krsForms(reply: unknown): RegistryForm[] {
   if (row.status !== "FOUND" || !row.result || typeof row.result !== "object") return [];
   const result = row.result as Row;
   return [...firmNameForms(text(result.tytul_lub_nazwa) ?? ""), ...addressForms(text(result.adres))];
+}
+
+// Case endings a masked name may take in a sentence ("Juneyounga Parka", "Wiśniewskiego").
+const NAME_ENDINGS = "(?:a|owi|em|iem|u|ie|ą|ej|y|i|ę|ego|emu|m)?";
+const MASK = /^\p{Lu}\*+(?:\s+\p{Lu}\*+)+$/u;
+
+function maskWord(word: string): string {
+  const rest = word.length - 1;
+  return `${word[0]!}(?:\\p{Ll}{${rest}}${NAME_ENDINGS}|\\p{Lu}{${rest}})`;
+}
+
+/**
+ * Members of the board, proxies and the supervisory board from KRS. The public extract
+ * masks their names ("J******** P***"); the first letter and the length of every word are
+ * enough to find "Juneyoung Park" in a letter signed by him, in either order.
+ */
+export function krsPersonForms(reply: unknown): RegistryForm[] {
+  const row = reply && typeof reply === "object" ? (reply as Row) : {};
+  if (row.status !== "FOUND" || !row.result || typeof row.result !== "object") return [];
+  const representation = (row.result as Row).reprezentacja;
+  if (!representation || typeof representation !== "object") return [];
+  const groups = ["sklad", "prokurenci", "organ_nadzoru"].flatMap((key) => {
+    const value = (representation as Row)[key];
+    return Array.isArray(value) ? value : [];
+  });
+  const masks = new Set<string>();
+  for (const item of groups) {
+    const mask = typeof item === "string" ? item : item && typeof item === "object" ? text((item as Row).osoba_maska) : undefined;
+    if (mask && MASK.test(mask.trim())) masks.add(mask.trim().replace(/\s+/gu, " "));
+  }
+  const forms: RegistryForm[] = [];
+  for (const mask of masks) {
+    const words = mask.split(" ");
+    // Short masks ("J* K**") fit too many words; every word at least three letters.
+    if (words.some((word) => word.length < 3)) continue;
+    const surname = words[words.length - 1]!;
+    const given = words.slice(0, -1);
+    const orders = [[...given, surname], [surname, ...given], ...(given.length > 1 ? [[given[0]!, surname], [surname, given[0]!]] : [])];
+    for (const order of orders) {
+      // A short pattern ("S*** P***") fits ordinary words ("Spis Prac"): at least ten letters.
+      if (order.join("").length < 10) continue;
+      forms.push({
+        text: order.join(" "),
+        kind: "PERSON",
+        pattern: order.map(maskWord).join("\\s+"),
+        uncertain: `osoba z KRS (${mask}) - potwierdź, że to ona`
+      });
+    }
+  }
+  return forms;
 }
 
 /** A sole trader in CEIDG: business name, owner and business address. */
@@ -243,7 +324,7 @@ export class RegistryEnrichment implements RegistryFormsProvider {
   private async resolve(source: "nip" | "krs", id: string): Promise<{ forms: RegistryForm[]; retry: number }> {
     if (source === "krs") {
       const krs = await this.ask("krs", "krs_lookup", { numerKrs: id });
-      const forms = krsForms(krs.row);
+      const forms = [...krsForms(krs.row), ...(await this.board(id))];
       this.record({ source: "krs", status: krs.status === "UNAVAILABLE" ? "ERROR" : krs.status, forms: forms.length });
       return { forms, retry: this.retryAfter([krs]) };
     }
@@ -253,7 +334,12 @@ export class RegistryEnrichment implements RegistryFormsProvider {
     // A company in KRS is fully described by the white list; a sole trader (or a NIP the
     // list does not know) is also asked in CEIDG for the owner and the business address.
     const result = list.row.result && typeof list.row.result === "object" ? (list.row.result as Row) : {};
-    if (list.status === "FOUND" && text(result.krs)) return { forms: listForms, retry: Number.POSITIVE_INFINITY };
+    // A company: its people from the white list; only when the list names none (usual for a
+    // sp. z o.o.), the board from KRS, whose public extract masks the names.
+    if (list.status === "FOUND" && text(result.krs)) {
+      const listed = listForms.some((form) => form.kind === "PERSON" && !form.organization);
+      return { forms: listed ? listForms : [...listForms, ...(await this.board(text(result.krs)!))], retry: Number.POSITIVE_INFINITY };
+    }
     const ceidg = await this.ask("ceidg", "ceidg_szukaj_firmy", { nip: id });
     const ceidgFound = ceidgForms(ceidg.row);
     if (ceidg.status !== "UNAVAILABLE") this.record({ source: "ceidg", status: ceidg.status, forms: ceidgFound.length });
@@ -264,6 +350,11 @@ export class RegistryEnrichment implements RegistryFormsProvider {
     if (answers.some((answer) => answer.status === "ERROR")) return 0;
     if (answers.some((answer) => answer.status === "UNAVAILABLE")) return UNAVAILABLE_TTL_MS;
     return Number.POSITIVE_INFINITY;
+  }
+
+  private async board(id: string): Promise<RegistryForm[]> {
+    const answer = await this.ask("krs", "krs_reprezentacja", { numerKrs: id });
+    return answer.status === "FOUND" ? krsPersonForms(answer.row) : [];
   }
 
   private async ask(source: string, tool: string, args: Record<string, unknown>): Promise<Answer> {

@@ -187,6 +187,35 @@ function inflectedStems(name) {
         stems.push(name.slice(0, -1) + "ks");
     return stems;
 }
+// A part of a firm's name neither starts nor ends with a connector ("i Wspólnicy") and is
+// not made of generic words alone ("Global Group").
+const FRAGMENT_CONNECTOR = /^(?:i|oraz|&|and|und|et|w|z|na|do|-)$/iu;
+const FRAGMENT_GENERIC = /^(?:global|group|grupa|polska|poland|international|invest|service|serwis|holding|consulting|trade|centrum|sp\.|spółka)$/iu;
+/**
+ * Parts of a firm's name of two or more words, as OCR or a later mention cuts it: "Park
+ * Global" and "Human Park" of "Human Park Global". A name is one element: a surname or a
+ * word inside it ("Park", "Rak" of "Ciecierski Rak") belongs to the firm there, not to a
+ * person; outside the name it is judged on its own.
+ */
+export function firmFragments(name) {
+    const words = name.trim().split(/\s+/u);
+    if (words.length < 3)
+        return [];
+    const parts = [];
+    for (let size = words.length - 1; size >= 2; size -= 1) {
+        for (let start = 0; start + size <= words.length; start += 1) {
+            const part = words.slice(start, start + size);
+            if (FRAGMENT_CONNECTOR.test(part[0]) || FRAGMENT_CONNECTOR.test(part[part.length - 1]))
+                continue;
+            if (part.every((word) => FRAGMENT_GENERIC.test(word) || FRAGMENT_CONNECTOR.test(word)))
+                continue;
+            if (!part.every((word) => /^[\p{Lu}\p{N}]/u.test(word) || FRAGMENT_CONNECTOR.test(word)))
+                continue;
+            parts.push(part.join(" "));
+        }
+    }
+    return parts;
+}
 export function detectFirmNames(text) {
     const names = new Map();
     const spans = [];
@@ -249,7 +278,9 @@ export function detectFirmNames(text) {
         const spelled = value === value.toLocaleUpperCase("pl") && /\p{L}{2}/u.test(value)
             ? value.toLocaleLowerCase("pl").replace(/(^|[\s-])(\p{L})/gu, (_m, lead, letter) => lead + letter.toLocaleUpperCase("pl"))
             : null;
-        const forms = [value, ...(spelled ? [spelled] : [])].map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        const forms = [value, ...(spelled ? [spelled] : [])]
+            .flatMap((form) => [form, ...firmFragments(form)])
+            .map((form) => form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
         const stems = [value, ...(spelled ? [spelled] : [])]
             .flatMap((form) => inflectedStems(form))
             .map((stem) => stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));

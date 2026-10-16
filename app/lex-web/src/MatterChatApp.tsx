@@ -2139,6 +2139,9 @@ export default function MatterChatApp({
     localModelsRefreshToken
   ]);
 
+  // A different case: its files, attachments and drafts start empty. Only the case id: the
+  // name arrives later (a case created by the first file, a rename) and must not drop the
+  // files just anonymized and attached.
   useEffect(() => {
     setDocumentDropQueue(createDocumentDropQueueState());
     setDocumentAttachments([]);
@@ -2146,7 +2149,6 @@ export default function MatterChatApp({
     setLastDelivery(null);
     setPickerNotice("");
     setIncludeCaseKnowledge(false);
-    setCaseNameDraft(selectedCase?.displayName ?? "");
     setCaseScheduleError("");
     setScheduleTitle("");
     setScheduleStartsAt("");
@@ -2158,6 +2160,10 @@ export default function MatterChatApp({
     setFinalDocumentPassword("");
     setProcessWorkflowVisible(false);
     setProcessWorkflowRefresh((value) => value + 1);
+  }, [caseId]);
+
+  useEffect(() => {
+    setCaseNameDraft(selectedCase?.displayName ?? "");
   }, [caseId, selectedCase?.displayName]);
 
   useEffect(() => {

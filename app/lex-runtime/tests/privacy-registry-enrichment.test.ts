@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { LocalPolishPseudonymizer, PseudonymizationVault } from "../src/privacy/pseudonymizer.js";
+import { detectFirmNames, firmFragments } from "../src/privacy/firm-names.js";
+import { LocalPolishPseudonymizer, PseudonymizationVault, type PiiSpan } from "../src/privacy/pseudonymizer.js";
 import {
   addressForms,
   ceidgForms,
   firmNameForms,
+  ocrTolerantPattern,
   RegistryEnrichment,
   registryKeys,
   titleCase,
@@ -171,5 +173,69 @@ describe("CEIDG for a NIP outside KRS (sole trader), when its key is set", () =>
     answer({ ok: true, result: CEIDG });
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect((await registry.forms("NIP 1234563218")).map((form) => form.text)).toContain("Marek Zając");
+  });
+});
+
+// One element, whatever the words: a firm's name is the firm's in any part of two or more
+// words, a name before a legal form stays whole, the board from KRS is found by its mask, and
+// a register form is found as OCR distorted it (fictitious names; no rule names a word).
+describe("register and firm names as whole elements", () => {
+  it("parts of a firm's name of two or more words, not connectors or generic words alone", () => {
+    expect(firmFragments("Nordic Trade Solutions")).toEqual(["Nordic Trade", "Trade Solutions"]);
+    expect(firmFragments("Nowak i Wspólnicy Doradztwo")).toEqual(["Nowak i Wspólnicy", "Wspólnicy Doradztwo"]);
+    expect(firmFragments("Global Group Holding")).toEqual([]);
+    expect(firmFragments("Nordic Trade")).toEqual([]);
+  });
+
+  it("a part of a known firm's name OCR left alone is the firm, not a person", () => {
+    const text = "Nordic Trade Solutions sp. z o.o. z siedzibą w Gdyni.\nordic Trade Solutions\nPieczęć: Trade Solutions";
+    const spans = detectFirmNames(text);
+    expect(spans.map((span) => span.value)).toEqual(expect.arrayContaining(["Nordic Trade Solutions", "Trade Solutions"]));
+  });
+
+  it("a name before a legal form stays whole though its words are surnames of persons in the text", async () => {
+    const text = "Pełnomocnicy: Jan Nowak i Anna Lis z kancelarii Nowak Lis Spółka Komandytowa.";
+    const persons: PiiSpan[] = ["Jan Nowak", "Anna Lis"].map((value) => ({ start: text.indexOf(value), end: text.indexOf(value) + value.length, kind: "PERSON", value }));
+    for (const value of ["Nowak", "Lis"]) {
+      const start = text.indexOf(value, text.indexOf("kancelarii"));
+      persons.push({ start, end: start + value.length, kind: "PERSON", value });
+    }
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), { recognize: async () => persons }).pseudonymize(text);
+    const firm = result.findings.find((finding) => finding.firm);
+    expect(firm && text.slice(firm.start, firm.end)).toBe("Nowak Lis");
+  });
+
+  it("the board from KRS by its mask, in either order and case; only when the white list names no one", async () => {
+    const list = { status: "FOUND", result: { tytul_lub_nazwa: "NORDIC TRADE SOLUTIONS SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000123456", osoby: [] } };
+    const board = { status: "FOUND", result: { reprezentacja: { sklad: [{ funkcja: "PREZES ZARZĄDU", osoba_maska: "M******* W*********" }, { osoba_maska: "E** K**" }] } } };
+    const calls: string[] = [];
+    const registry = new RegistryEnrichment(async ({ tool, arguments: args }) => {
+      calls.push(tool);
+      return { ok: true, result: tool === "krs_reprezentacja" ? board : tool === "wl_sprawdz_nip" && args.nip ? list : { status: "NOT_FOUND" } };
+    });
+    const text = "Spółkę reprezentuje Mirosław Wiśniewski (NIP 5261040828). Pismo doręczono Mirosławowi Wiśniewskiemu; Wiśniewski Mirosław podpisał. Ewa Kot przyszła.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
+    for (const leak of ["Mirosław Wiśniewski", "Wiśniewski Mirosław"]) expect(result.text).not.toContain(leak);
+    expect(result.findings.some((finding) => finding.uncertain?.includes("KRS"))).toBe(true);
+    // "E** K**" is too short to match without the name: "Ewa Kot" is left to the other recognizers.
+    expect(result.text).toContain("Ewa Kot");
+    expect(calls).toContain("krs_reprezentacja");
+
+    const named = { ...list, result: { ...list.result, osoby: [{ rola: "reprezentant", imie: "MIROSŁAW", nazwisko: "WIŚNIEWSKI" }] } };
+    const calls2: string[] = [];
+    await new RegistryEnrichment(async ({ tool }) => {
+      calls2.push(tool);
+      return { ok: true, result: tool === "wl_sprawdz_nip" ? named : board };
+    }).forms("NIP 5261040828");
+    expect(calls2).toEqual(["wl_sprawdz_nip"]);
+  });
+
+  it("a register form as OCR distorted it is masked and marked for confirmation", async () => {
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": WL_COMPANY, "krs:0000019193": KRS }));
+    const text = "NIP 5261040828. Umowę z Transk0m zawarła Anna Wisniewska-Kowal.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
+    for (const leak of ["Transk0m", "Wisniewska"]) expect(result.text).not.toContain(leak);
+    expect(result.findings.filter((finding) => finding.uncertain?.startsWith("zniekształcony")).length).toBeGreaterThanOrEqual(2);
+    expect(ocrTolerantPattern("Kot")).toBeNull();
   });
 });

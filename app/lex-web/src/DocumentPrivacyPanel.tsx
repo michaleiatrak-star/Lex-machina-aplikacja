@@ -109,7 +109,12 @@ function finalDecisionForSuggestion(
   if (override) {
     return decisionLabel(override);
   }
-  return `PSEUDONIMIZUJ AUTOMATYCZNIE · ${suggestion.kind}`;
+  return `PSEUDONIMIZUJ AUTOMATYCZNIE · ${suggestionKind(suggestion)}`;
+}
+
+// A firm's name is masked with a PERSON token (declined as a name) but shown as a firm.
+export function suggestionKind(suggestion: { kind: string; firm?: "REGISTRY" | "TEXT" }): string {
+  return suggestion.firm ? "FIRMA" : suggestion.kind;
 }
 
 export function DocumentPrivacyPanel({
@@ -771,7 +776,7 @@ export function DocumentPrivacyPanel({
                         {draft.review.suggestions.map((suggestion, index) => (
                           <li key={`${suggestion.page}-${suggestion.start}-${suggestion.end}-${index}`}>
                             <span>
-                              s. {suggestion.page} · {suggestion.kind} ·{" "}
+                              s. {suggestion.page} · {suggestionKind(suggestion)} ·{" "}
                               „{sourceText(draft.review, suggestion)}”
                             </span>
                             <strong>
