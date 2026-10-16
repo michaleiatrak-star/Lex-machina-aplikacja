@@ -29,9 +29,17 @@ try {
       $receipt
     )
 
-    $output = & powershell.exe @arguments 2>&1
+    # Windows PowerShell 5.1: with "Stop" the child's redirected stderr is a terminating error.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+      $output = & powershell.exe @arguments 2>&1
+      $childExit = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousPreference
+    }
 
-    if ($LASTEXITCODE -eq 0) {
+    if ($childExit -eq 0) {
       throw "SIGNING_SELFTEST_UNEXPECTED_SUCCESS:$ExpectedCode"
     }
 

@@ -221,6 +221,7 @@ import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules,
 import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./domain-fallback.js";
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { issueKey } from "./case-work.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -351,6 +352,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
   // the encrypted case workspace.
   threadEvidence?: ThreadEvidence;
+  // Runtime-only: references earlier turns left unverified (the case's open issues):
+  // verified by the application before the model answers, so the register can close them.
+  openIssueClaims?: string[];
   // Dates (yyyy-mm-dd) of the case's timeline the application put before the conversation
   // (http/app.ts): the answer is checked for using it.
   caseTimelineDates?: string[];
@@ -1884,6 +1888,24 @@ export class SafeSessionExecutor implements SessionExecutor {
     const verificationTools = this.verificationToolFactory?.(ledger, {
       localModel: request.model.startsWith("local/")
     });
+    // Open issues of the case (references left unverified earlier): to verification first,
+    // without waiting for the model to cite them again.
+    if (request.openIssueClaims?.length && verificationTools && !request.model.startsWith("local/") && !request.conversationalOnly) {
+      const plan = planAutomaticLegalVerification(request.openIssueClaims.join("\n"), ledger, requestedHistoricalAsOf);
+      if (plan.calls.length) {
+        await verificationTools.runTools(plan.calls.slice(0, 12));
+        const keys = new Set([...request.openIssueClaims, ...plan.calls.map((call) => String((call.input as { claim?: unknown }).claim ?? ""))].map(issueKey));
+        const settled = ledger.all().filter((record) => keys.has(issueKey(record.claim)));
+        const verified = settled.filter((record) => record.status === "VERIFIED" || record.status === "SUPPORTED");
+        step("VERIFY", `kwestie otwarte sprawy: ${verified.length} z ${request.openIssueClaims.length} potwierdzonych w źródle`);
+        const lines = settled.map((record) => `- ${record.claim}: ${record.status}${record.sourceUrl ? ` (${record.sourceUrl})` : ""}`);
+        if (lines.length) {
+          evidencePrompt = [evidencePrompt, ["[Kwestie otwarte sprawy sprawdzone przez aplikację przed tą odpowiedzią:]", ...lines, "[Niepotwierdzone nadal oznaczaj jako do weryfikacji; nie opieraj na nich wniosków.]"].join("\n")]
+            .filter(Boolean)
+            .join("\n\n");
+        }
+      }
+    }
     const corpusTools = new LegalCorpusToolRuntime(
       this.registry,
       {

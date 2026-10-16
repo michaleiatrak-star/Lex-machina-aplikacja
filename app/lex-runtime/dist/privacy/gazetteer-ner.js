@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JsonLineWorker, WorkerStartError } from "./json-line-worker.js";
+import { JsonLineWorker, WorkerStartBackoff, WorkerStartError } from "./json-line-worker.js";
 import { mayContainPersonalNames } from "./name-candidates.js";
 const CACHE_ENTRIES = 32;
 function defaultWorkerPath() {
@@ -23,6 +23,7 @@ export class LocalGazetteerRecognizer {
     // A worker kept alive (Morfeusz, the PESEL surname base and TERYT loaded once): a
     // message costs a few ms instead of starting Python (~0.15 s on Linux, more on Windows).
     persistent;
+    backoff = new WorkerStartBackoff();
     worker;
     cache = new Map();
     constructor(options = {}, timeoutMs = 5 * 60 * 1000) {
@@ -72,15 +73,17 @@ export class LocalGazetteerRecognizer {
         }));
     }
     async spans(text) {
-        if (this.persistent) {
+        if (this.persistent && this.backoff.usable()) {
             try {
-                return await this.worker.ask(text);
+                const spans = await this.worker.ask(text);
+                this.backoff.started();
+                return spans;
             }
             catch (error) {
-                // A worker that cannot start (Python missing, old script) is not retried on
-                // every message: one process per text from now on, as before.
+                // A worker that cannot start (Python missing, a slow first start) is not retried on
+                // every message: one process per text for a while, then the worker again.
                 if (error instanceof WorkerStartError) {
-                    this.persistent = false;
+                    this.backoff.failed();
                     process.stderr.write(`LOCAL_GAZETTEER_PERSISTENT_UNAVAILABLE:${error.message.slice(0, 300)}\n`);
                 }
                 else {

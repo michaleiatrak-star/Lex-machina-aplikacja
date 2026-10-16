@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WorkerStartBackoff } from "./json-line-worker.js";
 import type {
   NamedEntityRecognizer,
   PiiSpan
@@ -50,7 +51,8 @@ implements NamedEntityRecognizer {
   private readonly workerPath: string;
   private readonly timeoutMs: number;
   private readonly requestTimeoutMs: number;
-  private persistent: boolean;
+  private readonly persistent: boolean;
+  private readonly backoff = new WorkerStartBackoff();
   private worker: {
     child: ChildProcessWithoutNullStreams;
     ready: Promise<void>;
@@ -96,7 +98,7 @@ implements NamedEntityRecognizer {
       this.cache.delete(key);
       this.cache.set(key, spans);
     } else {
-      spans = this.persistent ? await this.viaWorker(text) : await this.oneShot(text);
+      spans = this.persistent && this.backoff.usable() ? await this.viaWorker(text) : await this.oneShot(text);
       this.cache.set(key, spans);
       while (this.cache.size > CACHE_ENTRIES) this.cache.delete(this.cache.keys().next().value!);
     }
@@ -126,12 +128,14 @@ implements NamedEntityRecognizer {
       try {
         const worker = this.startWorker();
         await worker.ready;
-        return await this.ask(worker, text);
+        const spans = await this.ask(worker, text);
+        this.backoff.started();
+        return spans;
       } catch (error) {
-        // A worker that cannot start (no "--serve" support, Python missing) is not
-        // retried on every message: one process per text from now on.
+        // A worker that cannot start (no "--serve" support, a slow first model load) is not
+        // retried on every message: one process per text for a while, then the worker again.
         if (error instanceof WorkerStartError) {
-          this.persistent = false;
+          this.backoff.failed();
           process.stderr.write(`LOCAL_STANZA_PERSISTENT_UNAVAILABLE:${error.message.slice(0, 300)}\n`);
           return this.oneShot(text);
         }

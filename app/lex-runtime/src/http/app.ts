@@ -245,7 +245,7 @@ import {
   registerGooglePublicRoutes
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
-import { caseWorkBlock, caseWorkLine, recordCaseWork, type CaseWorkItem } from "../case-work.js";
+import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
 import { isoDates } from "../supervised-content.js";
 import {
   buildWorkflowAuditArtifact,
@@ -9633,6 +9633,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           threadEvidence = memory.evidence ?? null;
           if (threadEvidence) request.threadEvidence = threadEvidence;
           caseWork = memory.work ?? [];
+          // References left unverified earlier: the executor verifies them before the answer.
+          const openClaims = caseWork
+            .filter((item) => item.kind === "OPEN_ISSUE" && item.status === "OPEN" && item.label.startsWith("do weryfikacji w źródle: "))
+            .map((item) => item.label.slice("do weryfikacji w źródle: ".length));
+          if (openClaims.length) request.openIssueClaims = openClaims.slice(0, 12);
           // What the case already has: the register of work done and open, and the timeline
           // of its chronology (a part of the larger work). Later turns use them, not redo them.
           const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
@@ -11819,9 +11824,24 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         result.orderedCaseWorkflow?.status === "COMPLETE" ? result.orderedCaseWorkflow.workflowId : null,
         result.processWorkflow?.documentStatus === "FINAL" ? "PROCESS_PLEADING_V1" : null
       ].filter((id): id is string => Boolean(id));
+      // Points left open (to verify, to research) and settled: kept in the case memory with
+      // their label and sent with every later message, past the trimmed conversation.
+      const announced = result.pipelineNext?.choices?.some((choice) => choice.kind === "CONTINUE")
+        ? (result.answer ?? "").split(/⚖️/u)[0]!.replace(/\s+/gu, " ").trim().slice(0, 200)
+        : null;
+      const issues = result.status === "DRAFT_PRESENTABLE"
+        ? turnIssues({ blockedReferences: result.blockedReferences, evidence: result.evidence, announcedStep: announced, answer: result.answer ?? "" })
+        : { open: [], resolved: [], gapsListed: false };
       const workChanged =
         result.status === "DRAFT_PRESENTABLE" &&
-        ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length);
+        ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length ||
+          issues.open.length ||
+          caseWork.some(
+            (item) =>
+              item.kind === "OPEN_ISSUE" &&
+              item.status === "OPEN" &&
+              (issues.resolved.includes(item.key.slice("ISSUE:".length)) || (issues.gapsListed && item.key.startsWith("ISSUE:brak:")))
+          ));
       if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || workChanged)) {
         try {
           const actor = responseAuthContext(res);
@@ -11841,7 +11861,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       ...(result.documentAnalysis ? { documentAnalysis: true } : {}),
                       ...(result.documentCoverage ? { coverage: result.documentCoverage } : {}),
                       chronologySaved: Boolean(timelineToKeep),
-                      completedWorkflows
+                      completedWorkflows,
+                      openIssues: issues.open,
+                      resolvedIssues: issues.resolved,
+                      gapsListed: issues.gapsListed
                     })
                   }
                 : {})

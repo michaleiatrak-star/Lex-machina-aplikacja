@@ -70,6 +70,7 @@ import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules 
 import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./domain-fallback.js";
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
+import { issueKey } from "./case-work.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -985,6 +986,24 @@ export class SafeSessionExecutor {
         const verificationTools = this.verificationToolFactory?.(ledger, {
             localModel: request.model.startsWith("local/")
         });
+        // Open issues of the case (references left unverified earlier): to verification first,
+        // without waiting for the model to cite them again.
+        if (request.openIssueClaims?.length && verificationTools && !request.model.startsWith("local/") && !request.conversationalOnly) {
+            const plan = planAutomaticLegalVerification(request.openIssueClaims.join("\n"), ledger, requestedHistoricalAsOf);
+            if (plan.calls.length) {
+                await verificationTools.runTools(plan.calls.slice(0, 12));
+                const keys = new Set([...request.openIssueClaims, ...plan.calls.map((call) => String(call.input.claim ?? ""))].map(issueKey));
+                const settled = ledger.all().filter((record) => keys.has(issueKey(record.claim)));
+                const verified = settled.filter((record) => record.status === "VERIFIED" || record.status === "SUPPORTED");
+                step("VERIFY", `kwestie otwarte sprawy: ${verified.length} z ${request.openIssueClaims.length} potwierdzonych w źródle`);
+                const lines = settled.map((record) => `- ${record.claim}: ${record.status}${record.sourceUrl ? ` (${record.sourceUrl})` : ""}`);
+                if (lines.length) {
+                    evidencePrompt = [evidencePrompt, ["[Kwestie otwarte sprawy sprawdzone przez aplikację przed tą odpowiedzią:]", ...lines, "[Niepotwierdzone nadal oznaczaj jako do weryfikacji; nie opieraj na nich wniosków.]"].join("\n")]
+                        .filter(Boolean)
+                        .join("\n\n");
+                }
+            }
+        }
         const corpusTools = new LegalCorpusToolRuntime(this.registry, {
             modelSelectsSkills: request.modelSelectsSkills === true
         });

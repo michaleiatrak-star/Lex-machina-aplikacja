@@ -14,15 +14,17 @@ export class JsonLineWorker {
     args;
     startTimeoutMs;
     requestTimeoutMs;
+    env;
     worker = null;
     nextId = 1;
     queue = Promise.resolve();
-    constructor(name, python, args, startTimeoutMs, requestTimeoutMs) {
+    constructor(name, python, args, startTimeoutMs, requestTimeoutMs, env = {}) {
         this.name = name;
         this.python = python;
         this.args = args;
         this.startTimeoutMs = startTimeoutMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.env = env;
     }
     close() {
         this.worker?.child.kill();
@@ -43,7 +45,7 @@ export class JsonLineWorker {
         const child = spawn(this.python, this.args, {
             stdio: ["pipe", "pipe", "pipe"],
             windowsHide: true,
-            env: { ...process.env, PYTHONUNBUFFERED: "1" }
+            env: { ...process.env, ...this.env, PYTHONUNBUFFERED: "1" }
         });
         const pending = new Map();
         let stderr = "";
@@ -125,5 +127,32 @@ export class JsonLineWorker {
             worker.pending.set(id, { resolve, reject, timer });
             worker.child.stdin.write(JSON.stringify({ id, text }) + "\n");
         });
+    }
+}
+/**
+ * When to try the long-running worker again after it failed to start: a slow first start
+ * (antivirus, a cold disk) must not turn every later page and file into a fresh Python
+ * process for the rest of the session. Retried after a pause; given up after three failures.
+ */
+export class WorkerStartBackoff {
+    pauseMs;
+    maxFailures;
+    failures = 0;
+    retryAt = 0;
+    constructor(pauseMs = 3 * 60 * 1000, maxFailures = 3) {
+        this.pauseMs = pauseMs;
+        this.maxFailures = maxFailures;
+    }
+    /** True while the worker may be used (never failed, or the pause after a failure is over). */
+    usable(now = Date.now()) {
+        return this.failures < this.maxFailures && now >= this.retryAt;
+    }
+    failed(now = Date.now()) {
+        this.failures += 1;
+        this.retryAt = now + this.pauseMs;
+    }
+    started() {
+        this.failures = 0;
+        this.retryAt = 0;
     }
 }

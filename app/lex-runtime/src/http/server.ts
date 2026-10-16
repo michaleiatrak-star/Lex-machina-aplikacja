@@ -610,6 +610,7 @@ export async function startLocalServer(options?: {
   // Morfeusz2/SGJP person-name morphology in the payload Python.
   const personMorphology =
     new LocalPersonMorphology();
+  personMorphology.warmUp();
 
   // Official ELI texts of every act named in the domain act maps; refreshed
   // in the background, kept locally for offline and local-model use. Scanned
@@ -860,6 +861,7 @@ export async function startLocalServer(options?: {
         );
       } catch (error) {
         gazetteerRecognizer.close();
+        personMorphology.close();
         server.close(() => {
           reject(
             error instanceof Error
@@ -888,6 +890,7 @@ export async function startLocalServer(options?: {
               void localModels.stop();
               stanzaRecognizer.close();
               gazetteerRecognizer.close();
+              personMorphology.close();
               credentials.close();
               supportService.close();
               unsubscribeGuideRevocation();
