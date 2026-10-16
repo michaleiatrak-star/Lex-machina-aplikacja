@@ -3,3 +3,6 @@
 # "NIEZGODNY z sumą kontrolną skilla". Pliki skilli są kopiowane bez zmian końców linii.
 Wersja?rozwojowa?rozpakowana/** -text
 Wersja?stabilna?rozpakowana*/** -text
+# Bazy anonimizacji (PESEL, TERYT) czytane bajtowo: na Windows CRLF dawal "\r" w ostatnim
+# polu wiersza i gazetteer padal (ValueError w address_base.py) - bez zmian koncow linii.
+app/privacy/*.tsv -text
