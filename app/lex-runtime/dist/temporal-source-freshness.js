@@ -1,5 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
+import { superscriptsAsCaret } from "./legal-source-verifier.js";
 import { LocalPdfTextExtractor } from "./pdf-text-extractor.js";
 import { AmendmentApplicabilityResolver } from "./amendment-applicability.js";
 const ELI_API = "https://api.sejm.gov.pl/eli/acts";
@@ -120,7 +121,11 @@ async function json(fetcher, url) {
     return response.json();
 }
 function articleTokenFromClaim(claim) {
-    const match = claim?.match(new RegExp(`${ARTICLE_LEAD}(\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu"));
+    // "art. 385¹", "art. 385^1", "art. 385[1]", "art. 385(1)": the superscript stays a part of
+    // the number (385^1), never dropped (385) nor glued to it (3851).
+    const match = claim && superscriptsAsCaret(claim)
+        .replace(/(\d)\s*[([](\d{1,3})[)\]]/gu, "$1^$2")
+        .match(new RegExp(`${ARTICLE_LEAD}(\\d+(?:\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu"));
     return match?.[1]
         ?.toLocaleLowerCase("pl") ??
         null;
@@ -205,22 +210,24 @@ async function amendmentBody(fetcher, pdfTextExtractor, eli) {
     else {
         return null;
     }
-    return rawText
+    // Superscripts first (art. 385¹ -> 385^1): NFKC alone would make "3851" of it.
+    return superscriptsAsCaret(rawText)
         .normalize("NFKC")
         .replace(/<[^>]+>/gu, " ")
         .replace(/&nbsp;|&#160;/giu, " ")
         .replace(/\s+/gu, " ")
         .toLocaleLowerCase("pl");
 }
-const ARTICLE_UNIT = "\\d+[a-ząćęłńóśźż]*";
+const ARTICLE_UNIT = "\\d+(?:\\^\\d+)?[a-ząćęłńóśźż]*";
 // "art. 10", "art. 10–15", "art. 10 do 15", "art. 10, 11 i 12"; po "§", "ust.", "pkt"
 // kolejne liczby to jednostki niższego rzędu, więc wyliczenie się kończy.
 const ARTICLE_GROUP = new RegExp(`\\bart\\.?\\s*(${ARTICLE_UNIT}(?:\\s*(?:[–—-]|,|\\bi\\b|\\boraz\\b|\\bdo\\b)\\s*${ARTICLE_UNIT})*)(?![\\p{L}\\d])`, "giu");
 const ARTICLE_GROUP_PART = new RegExp(`([–—-]|\\bdo\\b)|(${ARTICLE_UNIT})`, "giu");
 function articleKey(unit) {
-    const match = /^(\d+)([a-ząćęłńóśźż]*)$/u.exec(unit.toLocaleLowerCase("pl"));
+    const match = /^(\d+)(?:\^(\d+))?([a-ząćęłńóśźż]*)$/u.exec(unit.toLocaleLowerCase("pl"));
+    // 385 < 385^1 < 385^2 < 385^10 < 385a: the superscript, padded, sorts before letters.
     return match
-        ? [Number(match[1]), match[2]]
+        ? [Number(match[1]), `${match[2] ? `^${match[2].padStart(3, "0")}` : ""}${match[3]}`]
         : null;
 }
 function compareArticles(a, b) {

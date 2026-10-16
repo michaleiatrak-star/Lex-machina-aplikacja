@@ -1,5 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
+import { superscriptsAsCaret } from "./legal-source-verifier.js";
 import {
   LocalPdfTextExtractor,
   type PdfTextExtractor
@@ -252,10 +253,14 @@ async function json(
 function articleTokenFromClaim(
   claim?: string
 ): string | null {
+  // "art. 385¹", "art. 385^1", "art. 385[1]", "art. 385(1)": the superscript stays a part of
+  // the number (385^1), never dropped (385) nor glued to it (3851).
   const match =
-    claim?.match(
-      new RegExp(`${ARTICLE_LEAD}(\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu")
-    );
+    claim && superscriptsAsCaret(claim)
+      .replace(/(\d)\s*[([](\d{1,3})[)\]]/gu, "$1^$2")
+      .match(
+        new RegExp(`${ARTICLE_LEAD}(\\d+(?:\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*)`, "iu")
+      );
   return match?.[1]
     ?.toLocaleLowerCase("pl") ??
     null;
@@ -377,7 +382,8 @@ async function amendmentBody(
     return null;
   }
 
-  return rawText
+  // Superscripts first (art. 385¹ -> 385^1): NFKC alone would make "3851" of it.
+  return superscriptsAsCaret(rawText)
     .normalize("NFKC")
     .replace(/<[^>]+>/gu, " ")
     .replace(/&nbsp;|&#160;/giu, " ")
@@ -386,7 +392,7 @@ async function amendmentBody(
 }
 
 const ARTICLE_UNIT =
-  "\\d+[a-ząćęłńóśźż]*";
+  "\\d+(?:\\^\\d+)?[a-ząćęłńóśźż]*";
 // "art. 10", "art. 10–15", "art. 10 do 15", "art. 10, 11 i 12"; po "§", "ust.", "pkt"
 // kolejne liczby to jednostki niższego rzędu, więc wyliczenie się kończy.
 const ARTICLE_GROUP =
@@ -404,11 +410,12 @@ function articleKey(
   unit: string
 ): [number, string] | null {
   const match =
-    /^(\d+)([a-ząćęłńóśźż]*)$/u.exec(
+    /^(\d+)(?:\^(\d+))?([a-ząćęłńóśźż]*)$/u.exec(
       unit.toLocaleLowerCase("pl")
     );
+  // 385 < 385^1 < 385^2 < 385^10 < 385a: the superscript, padded, sorts before letters.
   return match
-    ? [Number(match[1]), match[2]!]
+    ? [Number(match[1]), `${match[2] ? `^${match[2].padStart(3, "0")}` : ""}${match[3]!}`]
     : null;
 }
 

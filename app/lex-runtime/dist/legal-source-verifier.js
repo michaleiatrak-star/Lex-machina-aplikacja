@@ -49,7 +49,7 @@ function decodeHtmlEntities(value) {
 }
 // "Art. 11<sup>1</sup>", "art. 11¹" and "art. 11^1" are one unit, never Art. 11 or Art. 111.
 const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
-function superscriptsAsCaret(value) {
+export function superscriptsAsCaret(value) {
     return value
         .replace(/<sup\b[^>]*>\s*(\d{1,3})\s*<\/sup>/giu, "^$1")
         .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => `^${[...digits].map((digit) => SUPERSCRIPT_DIGITS[digit]).join("")}`)
