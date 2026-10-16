@@ -17,7 +17,28 @@ export type DocumentGenerationValidationContext = {
   // Values the case itself states (user's messages, case documents): not statutory amounts.
   factAmounts?: string[];
   auditEvents: AuditEvent[];
+  // The source session was blocked only by unverified legal references (DRAFT_PRESENTABLE,
+  // DEGRADED) and the user chose a draft with them named (ZAKAZ-14, decision "a").
+  acceptedUnverifiedSource?: { claims: string[] };
 };
+
+// Blocked events of a session degraded only by verification: a verification tool refused
+// (source unavailable, wording after the t.j. unconfirmed) and the gates that follow from it.
+const VERIFICATION_GATES = new Set([
+  "G8_HARD_GATE_FINALIZATION",
+  "G39I_WORKFLOW_CONTRACT",
+  "G39I_TURN_STATE",
+  "G39I_COMMON_LEGAL_INVARIANTS",
+  "G39H_WORKFLOW_FINALIZATION"
+]);
+
+export function verificationOnlyBlock(event: Pick<AuditEvent, "type" | "target" | "status">): boolean {
+  return (
+    event.status === "BLOCKED" &&
+    ((event.type === "tool_decision" && event.target.startsWith("verify_")) ||
+      (event.type === "gate" && VERIFICATION_GATES.has(event.target)))
+  );
+}
 
 export type LocalHybridValidationReport = {
   result: "PASS" | "BLOCKED";
@@ -43,7 +64,7 @@ export function validateLocalHybridDocument(
     reasons.push("CONTROL_CHARACTER");
   }
   const blockedSourceEvent = context.auditEvents.some(
-    (event) => event.status === "BLOCKED"
+    (event) => event.status === "BLOCKED" && !(context.acceptedUnverifiedSource && verificationOnlyBlock(event))
   );
   if (blockedSourceEvent) reasons.push("SOURCE_SESSION_BLOCKED_EVENT");
   if (
@@ -123,7 +144,8 @@ export function rebuildGenerationExportState(
         | "tool_decision"
         | "gate",
       event.target,
-      event.status,
+      // An accepted draft: its verification refusals stay in the trail as degraded, not blocking.
+      context.acceptedUnverifiedSource && verificationOnlyBlock(event) ? "DEGRADED" : event.status,
       {
         sourceSequence: event.sequence,
         ...(event.detail ? { sourceDetail: { ...event.detail } } : {})

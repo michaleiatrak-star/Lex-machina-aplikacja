@@ -3,6 +3,7 @@ import { ARTICLE_LEAD } from "./legal-act-abbreviations.js";
 import { articleWording, futureDate, hasPendingWording } from "./core-law-footnotes.js";
 import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
+import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
 import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
@@ -69,6 +70,34 @@ export function resolveActByTitle(index, act) {
         return null;
     return best.eli;
 }
+/**
+ * Whether the amendments published after the t.j. touch the article: their text in the copy is
+ * searched for the article ("w art. 484 § 2", "art. 480–485"). OCR text, a missing amendment
+ * text or an article the search cannot read leave the impact unknown.
+ */
+export function postConsolidationImpact(index, amendments, article, actTitle) {
+    if (!article || !index.record) {
+        return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENTS", amendments };
+    }
+    const affected = [];
+    const unknown = [];
+    for (const eli of amendments) {
+        const record = index.record(eli);
+        const body = record && record.textSource !== "ocr" && record.textSource !== "none"
+            ? record.text ?? record.articleOrder.map((unit) => `Art. ${unit}. ${record.articles[unit] ?? ""}`).join("\n")
+            : "";
+        const touches = body.trim() ? amendmentMentionsArticle(amendmentPartFor(body, actTitle), article) : null;
+        if (touches === true)
+            affected.push(eli);
+        else if (touches === null)
+            unknown.push(eli);
+    }
+    if (affected.length)
+        return { status: "AFFECTED", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE", amendments: affected };
+    if (unknown.length)
+        return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN", amendments: unknown };
+    return { status: "UNAFFECTED", checked: amendments };
+}
 export function verifyFromCoreLaw(args) {
     if (args.asOf) {
         return { decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" };
@@ -84,8 +113,15 @@ export function verifyFromCoreLaw(args) {
     if (!record || record.articleOrder.length === 0) {
         return { decision: "DENY", reason: "CORE_LAW_TEXT_UNAVAILABLE" };
     }
+    // Amendments after the t.j.: the copy's wording stands for a provision none of them touches
+    // (the same rule as in ELI, temporal-source-freshness.ts); a touched provision, or one whose
+    // amendment cannot be read with certainty, is not verified from the copy.
+    let amendmentsChecked = [];
     if (summary.amendmentsAfter.length > 0) {
-        return { decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENTS" };
+        const impact = postConsolidationImpact(args.index, summary.amendmentsAfter.map((item) => item.eli), args.kind === "statute" ? articleToken(args.claim) : null, summary.title ?? undefined);
+        if (impact.status !== "UNAFFECTED")
+            return { decision: "DENY", reason: impact.reason };
+        amendmentsChecked = impact.checked;
     }
     // Tekst z OCR skanu może mieć błędy odczytu: nie jest podstawą VERIFIED.
     if (record.textSource === "ocr") {
@@ -204,7 +240,8 @@ export function verifyFromCoreLaw(args) {
             currentEli: record.eli,
             title: record.title,
             resolvedBy: byReference ? "REFERENCE" : "TITLE",
-            relationsCheckedAt: summary.relationsCheckedAt
+            relationsCheckedAt: summary.relationsCheckedAt,
+            amendmentsChecked
         }
     };
 }

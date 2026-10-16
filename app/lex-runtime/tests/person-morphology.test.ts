@@ -179,14 +179,14 @@ describe.skipIf(!python)("SGJP gazetteer and address morphology workers", () => 
     const vault = new PseudonymizationVault();
     const result = await new LocalPolishPseudonymizer(vault, recognizer, morphology).pseudonymize(text);
     expect(result.text).toBe(
-      "Powódka [PII:PERSON:0001], zamieszkała przy [PII:ADDRESS:0001], wnosi przeciwko [PII:PERSON:0003]. " +
+      "Powódka [PII:PERSON:0001], zamieszkała przy [PII:ADDRESS:0001], wnosi przeciwko [PII:PERSON:0002]. " +
       "Szpital im. Jana Pawła II wystawił zaświadczenie. Adres do doręczeń: [PII:ADDRESS:0001]. " +
-      // The surname alone is protected too (its own token: it has no given name).
+      // The surname alone of Jan Kowalski is his token (surname-propagation.ts).
       "[PII:PERSON:0002] nie stawił się. Sąd Rejonowy w Krakowie wezwał [PII:PERSON:0001]."
     );
     expect(vault.restore("[PII:ADDRESS:0001]", "LOC").text).toBe("ul. Długiej 5/3, 30-001 Kraków");
     expect(vault.restore("[PII:ADDRESS:0001]", "NOM").text).toBe("ul. Długa 5/3, 30-001 Kraków");
-    expect(vault.restore("[PII:PERSON:0003]", "NOM").text).toBe("Jan Kowalski");
+    expect(vault.restore("[PII:PERSON:0002]", "NOM").text).toBe("Jan Kowalski");
   });
 });
 
@@ -234,11 +234,12 @@ describe.skipIf(!python)("PESEL surname register and foreign surnames", () => {
     }
     const full = /Powód (\[PII:PERSON:\d{4}\])/.exec(result.text)![1]!;
     expect(vault.restore(full, "INS").text).toBe("Piotrem Tkachukiem");
-    // The surname alone has its own token (no given name); every case of it is one.
+    // The surname alone of a known person is that person (surname-propagation.ts): one token in
+    // every case, so the model sees one person; restored, it names the person in full.
     const alone = /wezwał (\[PII:PERSON:\d{4}\]) do zapłaty/.exec(result.text)![1]!;
+    expect(alone).toBe(full);
     expect(result.text).toContain(`Doręczono pismo ${alone}.`);
-    expect(vault.restore(alone, "NOM").text).toBe("Tkachuk");
-    expect(vault.restore(alone, "DAT").text).toBe("Tkachukowi");
+    expect(vault.restore(alone, "DAT").text).toBe("Piotrowi Tkachukowi");
   });
 });
 

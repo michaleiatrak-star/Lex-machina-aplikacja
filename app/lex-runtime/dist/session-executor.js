@@ -60,6 +60,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
+import { answerCorrection } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger } from "./task-routing.js";
@@ -2108,6 +2109,7 @@ export class SafeSessionExecutor {
             pathSections.push(mandatoryPathInstructions(mandatoryModel, effectiveProfile, [...contextResources]));
         }
         let modelOutput = execution.output;
+        const corrections = [];
         // A legal answer (router: "odpowiedź prawna"): it cites the law or a domain skill was read.
         const domainSkillRead = audit.events.some((event) => event.type === "skill_read" && event.status === "OK" && event.target !== ROUTER_SKILL && event.target !== "prawo-polskie-v2");
         const legalAnswer = (text) => legalTurn && (domainSkillRead || detectLegalReferences(text).length > 0 || caseSignaturesIn(text).length > 0);
@@ -2171,8 +2173,10 @@ export class SafeSessionExecutor {
                 const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
                 const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
                 const accepted = Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;
-                if (accepted)
+                if (accepted) {
+                    corrections.push(answerCorrection("MANDATORY_PATH", [...missingGates.map((item) => `brak bloku ${item.block}`), ...supervisedMissing.map((check) => check.correction)], modelOutput, text));
                     modelOutput = text;
+                }
                 audit.record("gate", "MANDATORY_PATH_CORRECTION", accepted && remaining.length + remainingSupervised.length === 0 ? "OK" : "DEGRADED", {
                     missing: [...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)],
                     remaining: accepted
@@ -2268,6 +2272,11 @@ export class SafeSessionExecutor {
                 if (text) {
                     const second = await review(text);
                     if (size(second) < size(first)) {
+                        corrections.push(answerCorrection("CASE_GROUNDING", [
+                            ...first.semantic.map((item) => `${item.signature}: ${item.topic}/${item.claim}`),
+                            ...first.lexical.map((item) => `${item.signature}: brak w tekście dokumentu: ${item.missing.join(", ")}`),
+                            ...first.courts.map((item) => `${item.signature}: sąd ${item.named}, w źródle ${item.actual}`)
+                        ], modelOutput, text));
                         modelOutput = text;
                         final = second;
                     }
@@ -3033,6 +3042,16 @@ export class SafeSessionExecutor {
                     COVERAGE_SKILLS.has(taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? "");
                 return coverage.length ? { documentCoverage: coverage, ...(analysing ? { documentAnalysis: true } : {}) } : {};
             })(),
+            // Shown with the user's data restored, as the answer is.
+            ...(corrections.length
+                ? {
+                    corrections: corrections.map((item) => ({
+                        round: item.round,
+                        findings: item.findings.map((text) => restoreWithReport(text, chatPrivacyVault).text),
+                        removed: item.removed.map((text) => restoreWithReport(text, chatPrivacyVault).text)
+                    }))
+                }
+                : {}),
             context: {
                 ...contextSelection.report,
                 ...(() => {

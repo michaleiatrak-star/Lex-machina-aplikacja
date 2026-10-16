@@ -104,6 +104,12 @@ const WITNESS_NOUNS = /^(?:świadek|biegły)$/u;
 const WITNESS_WORK = /(?<![\p{L}])(?:pytani\p{L}*|przesłuch\p{L}*|przygotow\p{L}*|zezna\p{L}*|cross|rozbi\p{L}*|krzyżow\p{L}*|podważ\p{L}*)(?![\p{L}])/iu;
 const EVIDENCE_INTENT = /(?<![\p{L}])(?:dow[oó]d\p{L}*|ocen\p{L}*|oceń|przeanalizuj|analiz\p{L}*|wykorzyst\p{L}*|użyć|sprawdź|zweryfikuj)(?![\p{L}])/iu;
 
+// A question naming a provision ("art. 484 § 2 KC", "§ 7 rozporządzenia").
+const PROVISION_ONLY = /(?<![\p{L}])art\.\s*\d+/iu;
+
+// A question about evidence ("czy to wezwanie jest dowodem", "oceń materiał dowodowy").
+const EVIDENCE_QUESTION = /(?<![\p{L}])(?:dow[oó]d\p{L}*|dowodow\p{L}*)(?![\p{L}])/iu;
+
 // "Pracuję na umowie zlecenie / o pracę": the person's employment, not a contract to analyse.
 const EMPLOYMENT_BASIS = /(?<![\p{L}])na\s+umowi\p{L}*\s+(?:o\s+prac\p{L}*|o\s+dzieło|zlecen\p{L}*|b2b|śmieciow\p{L}*)/giu;
 
@@ -512,6 +518,8 @@ function decideTaskByMatrix(
     // One's own letter ("popraw to pismo", "sprawdź moje wezwanie") stays with the letter skills.
     !OWN_DOCUMENT.test(question) &&
     materials.every((material) => material.kind === "WEZWANIE" || material.category === "UMOWA") &&
+    // "Wyjaśnij art. 484 § 2 KC" asks about the provision, not the demand (analizator-przepisow-v2).
+    !(PROVISION_ONLY.test(question) && !DOCUMENT_REF.test(question) && !ANALYSIS_INTENT.test(question)) &&
     (ANALYSIS_INTENT.test(question) || REVIEW_REQUEST.test(question) || asksAbout(question) || DOCUMENT_REF.test(question))
   ) {
     return {
@@ -611,6 +619,28 @@ function decideTaskByMatrix(
     if (!best || score > best.score) {
       best = { rule, score, why: [...phrases.map((phrase) => `fraza „${phrase}”`), ...deliveredHits.map((word) => `dostarczono: ${word}`)] };
     }
+  }
+  // Only out-of-court documents delivered (umowa, aneks, regulamin, porozumienie, statut, uchwała
+  // spółki, pełnomocnictwo, polityka RODO, oferta, oświadczenie, wezwanie) and the question names
+  // no other skill's phrase ("jakie mam szanse", "znajdź orzeczenie", "co mam zrobić"): the
+  // document is assessed by analizator-umow-v1 (ACTIVATION-MATRIX "analiza umowy", "Dokument +
+  // wezwanie"). A demand is evidence only when the question asks about evidence.
+  const outOfCourt =
+    materials.length > 0 &&
+    known.has(DOCUMENT_ANALYSIS) &&
+    materials.every((material) => material.category === "UMOWA" || material.kind === "WEZWANIE") &&
+    !OWN_DOCUMENT.test(question);
+  if (outOfCourt && (!best || !best.why.some((reason) => reason.startsWith("fraza")))) {
+    // "Czy ta umowa może być dowodem?": the evidence row ("czy ten dowód jest mocny").
+    const evidence = EVIDENCE_QUESTION.test(question) && known.has("analizator-dowodow-v3");
+    return {
+      source: "MATRIX",
+      primary: evidence ? "analizator-dowodow-v3" : DOCUMENT_ANALYSIS,
+      then: null,
+      reason: evidence
+        ? `macierz aktywacji: ocena dokumentu jako dowodu (${materials.map((material) => material.label).join(", ")})`
+        : `macierz aktywacji: analiza dokumentu pozasądowego (${materials.map((material) => material.label).join(", ")})`
+    };
   }
   if (best) {
     // Asked to draft from a delivered decision / opponent's pleading ("napisz apelację" + wyrok):

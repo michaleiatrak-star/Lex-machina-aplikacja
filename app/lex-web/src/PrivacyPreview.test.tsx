@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { DocumentReviewResponse } from "./api.js";
 import { lineAt } from "./PageScanView.js";
-import { PrivacyPreview } from "./PrivacyPreview.js";
+import { PrivacyPreview, recognizerReason } from "./PrivacyPreview.js";
 
 const text = "Wilk zaatakował owce. Kowal złożył zeznania. Data doręczenia 810.2024";
 const review: DocumentReviewResponse = {
@@ -58,6 +58,16 @@ describe("preview before a document is finalized", () => {
     expect(html).toContain("privacy-preview is-split");
     expect(html).toContain("Oryginał · s. 1");
     expect(html.match(/Pokaż na skanie/g)).toHaveLength(2);
+  });
+
+  it("says which local recognizer is down: addresses and surnames may be missing", () => {
+    const down = { ...review, recognizerWarnings: [{ name: "Morfeusz (słownik imion, nazwisk i adresów)", reason: "GAZETTEER_FAILED:1" }] };
+    const html = renderToStaticMarkup(
+      <PrivacyPreview caseId="case_1" review={down} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />
+    );
+    expect(html).toContain("Nie działa Morfeusz (słownik imion, nazwisk i adresów): błąd uruchomienia.");
+    expect(recognizerReason("GAZETTEER_FAILED:1:ModuleNotFoundError: No module named 'morfeusz2'")).toContain("brak biblioteki Morfeusz");
+    expect(recognizerReason("SELF_TEST_NO_PERSON")).toContain("nie rozpoznaje nazwisk");
   });
 
   it("a document with a text layer only: no scan pane", () => {

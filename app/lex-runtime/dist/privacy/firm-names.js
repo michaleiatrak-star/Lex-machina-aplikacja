@@ -135,6 +135,48 @@ function nameAfter(text, start, requireTrade = false, abbreviation = false) {
         return null;
     return { start: start + first.index + lead, value };
 }
+// A law or professional office: its brand before it is the firm's own name ("LORICA IURIS
+// Kancelaria Adwokatów i Radców Prawnych", a letterhead "Lex Nova⏎Kancelaria Radcy Prawnego").
+const OFFICE = /(?<![\p{L}])(?:Kancelari[aiąę]|KANCELARI[AIĄĘ])\s+(?:i\s+)?(?:Adwokac|Adwokat|Radc|Radcy|Prawn|Notarial|Notariusz|Komornicz|Komornik|Doradc|Podatkow|Patentow|ADWOKA|RADC|PRAWN|NOTARI|KOMORNI|DORADC|PODATKOW|PATENTOW)/gu;
+const BRAND_WORD = /^\p{Lu}[\p{L}&'’.-]*$/u;
+/** The brand right before an office: up to three capitalized words on its line, or a line of them above. */
+function brandBefore(text, officeStart) {
+    const lineStart = text.lastIndexOf("\n", officeStart - 1) + 1;
+    let segment = text.slice(lineStart, officeStart);
+    let segmentStart = lineStart;
+    if (!segment.trim() && lineStart > 0) {
+        // The office opens its line: the brand is the whole line above ("LORICA IURIS⏎Kancelaria ...").
+        const above = text.lastIndexOf("\n", lineStart - 2) + 1;
+        segment = text.slice(above, lineStart - 1);
+        segmentStart = above;
+        const words = segment.trim().split(/\s+/u);
+        if (!segment.trim() || words.length > 3 || !words.every((word) => BRAND_WORD.test(word) && !notAName(word.toLocaleLowerCase("pl"))))
+            return null;
+    }
+    const words = [...segment.matchAll(/\S+/gu)];
+    const picked = [];
+    for (let index = words.length - 1; index >= 0 && picked.length < 3; index -= 1) {
+        const word = words[index][0];
+        if (!BRAND_WORD.test(word) || notAName(word.toLocaleLowerCase("pl")) || genericWords().institutions.has(word.toLocaleLowerCase("pl")))
+            break;
+        // A word ending a sentence or a clause is not part of the brand ("Sąd Rejonowy. Kancelaria ...").
+        if (/[.;:!?,]$/u.test(word))
+            break;
+        picked.unshift(words[index]);
+    }
+    if (!picked.length)
+        return null;
+    const start = segmentStart + picked[0].index;
+    const last = picked.at(-1);
+    const value = text.slice(start, segmentStart + last.index + last[0].length).replace(/[.,]+$/u, "");
+    return /\p{L}{3}/u.test(value) ? { start, value } : null;
+}
+// OCR reads a capital I as l or 1 ("Lorica luris"): a brand's later mentions allow it.
+function ocrTolerant(value) {
+    return [...value]
+        .map((char) => (/[iIl1]/u.test(char) ? "[iIlł1|]" : /\s/u.test(char) ? "\\s+" : char.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")))
+        .join("");
+}
 // Case endings of a firm's own name in a sentence ("z Transkomem", "Budeksowi").
 const FIRM_ENDINGS = "a|u|owi|em|iem|ie|ze|y|ę|ą|om|ach|ami";
 function inflectedStems(name) {
@@ -178,6 +220,28 @@ export function detectFirmNames(text) {
     }
     for (const match of text.matchAll(TRADE_NOUN))
         after(match.index + match[0].length, true);
+    // Brands of law offices, and their mentions in any letter case and OCR spelling.
+    const brands = new Set();
+    for (const match of text.matchAll(OFFICE)) {
+        const brand = brandBefore(text, match.index);
+        if (!brand || spans.some((span) => span.start < brand.start + brand.value.length && brand.start < span.end))
+            continue;
+        brands.add(brand.value);
+        spans.push({ start: brand.start, end: brand.start + brand.value.length, kind: "PERSON", value: brand.value, confidence: 0.9, source: "AUTO" });
+    }
+    for (const brand of brands) {
+        for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${ocrTolerant(brand)}(?![\\p{L}\\p{N}])`, "giu"))) {
+            if (spans.some((span) => span.start < match.index + match[0].length && match.index < span.end))
+                continue;
+            // Not a common phrase in small letters.
+            if (match[0] === match[0].toLocaleLowerCase("pl"))
+                continue;
+            spans.push({
+                start: match.index, end: match.index + match[0].length, kind: "PERSON", value: match[0], confidence: 0.9, source: "AUTO",
+                ...(match[0] !== brand ? { canonical: brand } : {})
+            });
+        }
+    }
     // Every other mention of a found name, also in another case.
     for (const [value, legalForm] of names) {
         // A name written in capitals in a heading is the same firm in normal spelling below

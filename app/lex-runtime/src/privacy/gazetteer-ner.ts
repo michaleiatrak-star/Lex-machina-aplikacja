@@ -89,9 +89,14 @@ export class LocalGazetteerRecognizer implements NamedEntityRecognizer {
       } catch (error) {
         // A worker that cannot start (Python missing, old script) is not retried on
         // every message: one process per text from now on, as before.
-        if (!(error instanceof WorkerStartError)) throw error;
-        this.persistent = false;
-        process.stderr.write(`LOCAL_GAZETTEER_PERSISTENT_UNAVAILABLE:${error.message.slice(0, 300)}\n`);
+        if (error instanceof WorkerStartError) {
+          this.persistent = false;
+          process.stderr.write(`LOCAL_GAZETTEER_PERSISTENT_UNAVAILABLE:${error.message.slice(0, 300)}\n`);
+        } else {
+          // A worker that broke mid-run is started again once for this text (a fresh process).
+          process.stderr.write(`LOCAL_GAZETTEER_RETRY:${(error instanceof Error ? error.message : String(error)).slice(0, 300)}\n`);
+          this.worker.close();
+        }
       }
     }
     return this.oneShot(text);
@@ -141,20 +146,70 @@ export class LocalGazetteerRecognizer implements NamedEntityRecognizer {
  * ("wyszukaj wyrok SN dotyczący grupy przestępczej") goes on with the deterministic
  * identifiers masked, so a broken NER runtime does not stop every question.
  */
+// Which local recognizer is down now (its last call failed): the preview says so, since
+// what it finds (addresses, surnames in every case) is then missing from the suggestions.
+const RECOGNIZER_LABEL: Record<string, string> = {
+  LocalGazetteerRecognizer: "Morfeusz (słownik imion, nazwisk i adresów)",
+  LocalStanzaNamedEntityRecognizer: "Stanza (rozpoznawanie nazw w zdaniu)"
+};
+const recognizerDown = new Map<string, string>();
+
+/** Local recognizers whose last call failed, with the reason (empty when all work). */
+export function degradedRecognizers(): Array<{ name: string; reason: string }> {
+  return [...recognizerDown].map(([name, reason]) => ({ name, reason }));
+}
+
+// A sample every working recognizer reads: a person and, for the gazetteer, an address.
+const SELF_TEST_TEXT = "Pozwany Jan Kowalski, zamieszkały przy ul. Długiej 5 w Krakowie, nie stawił się.";
+
 export class CompositeRecognizer implements NamedEntityRecognizer {
   constructor(private readonly recognizers: NamedEntityRecognizer[]) {}
+
+  /**
+   * Start check (server start): each recognizer reads a sample; one that fails or runs but
+   * finds no person (a missing dictionary) is reported as down with the reason, so the first
+   * document preview already says so. Its next call starts it again.
+   */
+  async selfTest(): Promise<Array<{ name: string; ok: boolean; reason?: string }>> {
+    return Promise.all(
+      this.recognizers.map(async (recognizer) => {
+        const name = RECOGNIZER_LABEL[recognizer.constructor.name] ?? recognizer.constructor.name;
+        try {
+          const spans = await recognizer.recognize(SELF_TEST_TEXT);
+          if (!spans.some((span) => span.kind === "PERSON")) {
+            recognizerDown.set(name, "SELF_TEST_NO_PERSON");
+            return { name, ok: false, reason: "SELF_TEST_NO_PERSON" };
+          }
+          recognizerDown.delete(name);
+          return { name, ok: true };
+        } catch (error) {
+          const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 200);
+          recognizerDown.set(name, reason);
+          return { name, ok: false, reason };
+        }
+      })
+    );
+  }
 
   async recognize(text: string): Promise<PiiSpan[]> {
     const reasons: string[] = [];
     const results = await Promise.all(
-      this.recognizers.map((recognizer) =>
-        recognizer.recognize(text).catch((error: unknown) => {
-          const reason = error instanceof Error ? error.message : String(error);
-          reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
-          process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
-          return [] as PiiSpan[];
-        })
-      )
+      this.recognizers.map((recognizer) => {
+        const name = RECOGNIZER_LABEL[recognizer.constructor.name] ?? recognizer.constructor.name;
+        return recognizer.recognize(text).then(
+          (spans) => {
+            recognizerDown.delete(name);
+            return spans;
+          },
+          (error: unknown) => {
+            const reason = error instanceof Error ? error.message : String(error);
+            reasons.push(reason.replace(/\s+/g, " ").slice(0, 160));
+            recognizerDown.set(name, reason.replace(/\s+/g, " ").slice(0, 200));
+            process.stderr.write(`PRIVACY_RECOGNIZER_DEGRADED:${reason}\n`);
+            return [] as PiiSpan[];
+          }
+        );
+      })
     );
     if (this.recognizers.length > 0 && reasons.length === this.recognizers.length && text.trim()) {
       if (mayContainPersonalNames(text)) throw new Error(`PRIVACY_RECOGNIZER_UNAVAILABLE:${reasons.join(" | ")}`);

@@ -46,3 +46,13 @@ describe.skipIf(!python)("gazetteer: addresses", () => {
     expect(addresses.some((value) => /Tel|32-111/u.test(value))).toBe(false);
   });
 });
+
+describe.skipIf(!python)("gazetteer: a role word ending a sentence", () => {
+  it("does not make the next sentence's first word a surname; an abbreviated title still does", async () => {
+    const gazetteer = new LocalGazetteerRecognizer({ persistent: false });
+    const persons = async (text: string) =>
+      (await gazetteer.recognize(text)).filter((span) => span.kind === "PERSON").map((span) => span.value);
+    expect(await persons("Wpłata na rachunek bankowy wierzyciela.\nBrak zapłaty w terminie spowoduje skierowanie sprawy do sądu.")).toEqual([]);
+    expect(await persons("Pełnomocnik: adw. Kowalski złożył pismo.")).toContain("Kowalski");
+  });
+});

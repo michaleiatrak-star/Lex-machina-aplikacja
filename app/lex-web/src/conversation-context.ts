@@ -41,8 +41,22 @@ function register(item: CaseChatMessage): string {
   return `\n[Rejestr aplikacji dla tej odpowiedzi: ${shown}${items.length > 8 ? `; i ${items.length - 8} więcej` : ""}]`;
 }
 
+// What the application's correcting round removed from this answer: asked "which claims
+// did you remove?", the model quotes this record instead of reconstructing it.
+function corrections(item: CaseChatMessage): string {
+  if (item.role !== "assistant" || !item.corrections?.length) return "";
+  return item.corrections
+    .map((correction) => {
+      const removed = correction.removed.length
+        ? `usunięte zdania pierwszej wersji: ${correction.removed.map((sentence) => `„${sentence}”`).join("; ")}`
+        : "bez usuniętych zdań (tylko uzupełnienia)";
+      return `\n[Runda poprawcza aplikacji (${correction.round === "CASE_GROUNDING" ? "zgodność z tekstem dokumentów" : "ścieżka obowiązkowa"}): zarzuty: ${correction.findings.join("; ") || "brak"}; ${removed}]`;
+    })
+    .join("");
+}
+
 function turn(item: CaseChatMessage): string {
-  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}${register(item)}`;
+  return `${item.role === "user" ? "Użytkownik" : "Asystent"}: ${item.content}${register(item)}${corrections(item)}`;
 }
 
 // Newest turns first, whole messages only; older turns that do not fit are dropped

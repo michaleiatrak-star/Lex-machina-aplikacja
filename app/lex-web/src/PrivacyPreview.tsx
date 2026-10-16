@@ -37,6 +37,18 @@ function suggestionLabel(mark: { kind: string; firm?: "REGISTRY" | "TEXT" }): st
   return KIND_LABEL[mark.kind] ?? mark.kind;
 }
 
+// Why a local recognizer is down, in words (the raw reason stays in the tooltip).
+export function recognizerReason(reason: string): string {
+  if (/No module named '?morfeusz2/iu.test(reason)) return "brak biblioteki Morfeusz w Pythonie - uruchom naprawę instalacji";
+  if (/No module named '?stanza/iu.test(reason)) return "brak biblioteki Stanza w Pythonie - uruchom naprawę instalacji";
+  if (/No module named/iu.test(reason)) return "brak składnika Pythona - uruchom naprawę instalacji";
+  if (/ENOENT|not recognized|nie jest rozpoznawan|cannot find|spawn/iu.test(reason)) return "nie znaleziono Pythona - uruchom naprawę instalacji";
+  if (/TIMEOUT|did not start in time|timed out/iu.test(reason)) return "nie odpowiedział na czas (komputer obciążony) - spróbuj ponownie";
+  if (/SELF_TEST_NO_PERSON/u.test(reason)) return "uruchomił się, ale nie rozpoznaje nazwisk (brak słownika) - uruchom naprawę instalacji";
+  if (/MemoryError|out of memory/iu.test(reason)) return "za mało pamięci";
+  return "błąd uruchomienia";
+}
+
 export function PrivacyPreview(props: PrivacyPreviewRequest & {
   busy?: boolean;
   // Decisions made earlier (back to a file in the batch preview).
@@ -167,40 +179,53 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   }
 
   // A fragment selected but not yet masked is masked too: confirming never drops it.
-  function confirm(): void {
+  // A page being edited is saved first: confirming never drops the correction.
+  async function confirm(): Promise<void> {
+    let current = { review, directives };
+    if (editing) {
+      const saved = await savePage();
+      if (!saved) return;
+      current = saved;
+    }
     if (props.keepClear) {
-      props.onConfirm(keepAllDirectives(review), review);
+      props.onConfirm(keepAllDirectives(current.review), current.review);
       return;
     }
-    const next = withSelection(directives);
+    const next = withSelection(current.directives);
     if (!next) return;
     if (selection) {
       setDirectives(next);
       setSelection(null);
       window.getSelection()?.removeAllRanges();
     }
-    props.onConfirm(next, review);
+    props.onConfirm(next, current.review);
   }
 
 
-  async function savePage(): Promise<void> {
-    if (!editing) return;
+  // The review and decisions after the save; null when the page was not saved.
+  async function savePage(): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
+    if (!editing) return { review, directives };
     setSaving(true);
     setError("");
     try {
       const result = await editDocumentPage(props.caseId, review.documentId, editing.page, editing.text);
-      setReview((current) => ({
-        ...current,
-        pages: current.pages.map((page) => (page.page === editing.page ? result.page : page)),
-        suggestions: [...current.suggestions.filter((item) => item.page !== editing.page), ...result.suggestions]
-      }));
+      const nextReview = {
+        ...review,
+        pages: review.pages.map((page) => (page.page === editing.page ? result.page : page)),
+        suggestions: [...review.suggestions.filter((item) => item.page !== editing.page), ...result.suggestions]
+      };
       // Offsets of the old text no longer apply.
-      setDirectives((current) => current.filter((item) => item.page !== editing.page));
+      const nextDirectives = directives.filter((item) => item.page !== editing.page);
+      setReview(nextReview);
+      setDirectives(nextDirectives);
       setEditing(null);
+      setSelection(null);
       setScanFocus(null);
       setScanRevision((value) => value + 1);
+      return { review: nextReview, directives: nextDirectives };
     } catch (failure) {
       setError(`Nie udało się zapisać tekstu strony: ${failure instanceof Error ? failure.message : String(failure)}`);
+      return null;
     } finally {
       setSaving(false);
     }
@@ -306,8 +331,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           <button
             type="button"
             className="primary-button"
-            disabled={props.busy || saving || editing !== null}
-            onClick={confirm}
+            disabled={props.busy || saving}
+            title={editing ? `Zapisze poprawiony tekst strony ${editing.page} i zatwierdzi plik` : undefined}
+            onClick={() => void confirm()}
           >
             {props.busy ? "Zatwierdzam…" : props.confirmLabel ?? "Zatwierdź"}
           </button>
@@ -315,6 +341,17 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         {error || props.confirmError ? <p className="field-error" role="alert">{error || props.confirmError}</p> : null}
       </header>
 
+      {!props.keepClear && review.recognizerWarnings?.length ? (
+        <p className="field-error" role="alert">
+          {review.recognizerWarnings.map((item) => (
+            <span key={item.name} title={item.reason}>
+              Nie działa {item.name}: {recognizerReason(item.reason)}.{" "}
+            </span>
+          ))}
+          Aplikacja wykryła adresy i pary imię-nazwisko z bazy PESEL, ale mogła pominąć pojedyncze nazwiska - sprawdź tekst
+          i zaznacz je ręcznie. Po naprawie wczytaj plik jeszcze raz.
+        </p>
+      ) : null}
       {aiHints.length || doubtful.length || fixes.length ? (
         <div className="privacy-preview-todo">
           <strong>Do decyzji</strong>

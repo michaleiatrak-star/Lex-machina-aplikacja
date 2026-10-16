@@ -61,6 +61,7 @@ TRIGGERS = {
 # them is the name, whatever SGJP says about it ("Park" is also a noun).
 FOREIGN_TITLES = frozenset({"mr", "mrs", "ms", "miss", "sir", "herr", "frau", "monsieur", "madame"})
 TRIGGERS |= FOREIGN_TITLES
+ABBREVIATED_TRIGGERS = frozenset({"adw", "mec", "dr", "prof", "mgr", "inż"}) | FOREIGN_TITLES
 
 # Nouns that head an institution name or name a party role, in every case form
 # (generate_generic_words.py). Several are also SGJP surnames ("Bank", "Rada",
@@ -490,7 +491,9 @@ def find_persons(text: str, blocked: list[tuple[int, int]]) -> list[tuple[int, i
         if trigger not in TRIGGERS and trigger not in PARTY_ROLES:
             continue
         gap = text[words[index][1]:words[index + 1][0]]
-        if gap.strip() not in {"", "."}:
+        # A dot only after an abbreviation ("adw. Kowalski"); after a full word it ends
+        # the sentence ("na rachunek wierzyciela.⏎Brak zapłaty").
+        if gap.strip() not in {"", "."} or (gap.strip() == "." and trigger not in ABBREVIATED_TRIGGERS):
             continue
         first = index + 1
         if not cap(first):

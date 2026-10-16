@@ -43,6 +43,15 @@ const RULES: Rule[] = [
   { kind: "SKARGA", label: "skarga", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*SKARGA\b/u, /\bwnoszę\s+skargę\b/iu] },
   { kind: "WNIOSEK", label: "wniosek / pismo procesowe", category: "PISMO_PROCESOWE", evidence: false, patterns: [/(?:^|\n)\s*(?:WNIOSEK|PISMO\s+PROCESOWE)\b/u, /\bwnoszę\s+o\b/iu], minHits: 2 },
   { kind: "WEZWANIE", label: "wezwanie", category: "KORESPONDENCJA", evidence: true, patterns: [/\b(?:przedsądowe\s+)?wezwanie\s+do\s+(?:zapłaty|wydania|usunięcia|zaniechania)\b/iu, /(?:^|\n)\s*WEZWANIE\b/u] },
+  // Out-of-court documents between the parties or of a company: analizator-umow-v1 (aneksy,
+  // statuty i umowy spółek, uchwały organów spółek, pełnomocnictwa, RODO, oferty, oświadczenia).
+  { kind: "ANEKS", label: "aneks do umowy", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*ANEKS\b/u, /\baneks\s+(?:nr\s*\S+\s+)?do\s+umowy\b/iu] },
+  { kind: "STATUT", label: "statut / umowa spółki", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:STATUT|UMOWA\s+SPÓŁKI|AKT\s+ZAŁOŻYCIELSKI)\b/u, /\b(?:statut\s+(?:spółki|fundacji|stowarzyszenia|spółdzielni)|umowa\s+spółki\s+(?:z\s+ograniczoną|komandytowej|jawnej|cywilnej|partnerskiej))\b/iu] },
+  // A company body's resolution; a resolution of a municipal council is local law (dr-08), not this.
+  { kind: "UCHWALA_SPOLKI", label: "uchwała organu spółki", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*UCHWAŁA\b/u, /\b(?:zgromadzeni\p{L}*\s+wspólników|walne\p{L}*\s+zgromadzeni\p{L}*|rad\p{L}*\s+nadzorcz\p{L}*|zarząd\p{L}*\s+spółki|akcjonariuszy|wspólnicy\s+postanawiają)\b/iu], minHits: 2 },
+  { kind: "POLITYKA_RODO", label: "polityka prywatności / klauzula informacyjna RODO", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:POLITYKA\s+PRYWATNOŚCI|KLAUZULA\s+INFORMACYJNA|POLITYKA\s+OCHRONY\s+DANYCH)\b/iu, /\badministratorem\s+(?:Twoich\s+|Pani\/?Pana\s+)?danych\s+osobowych\s+jest\b/iu] },
+  { kind: "OFERTA", label: "oferta", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*OFERTA\b/u, /\b(?:oferujemy|ważność\s+oferty|warunki\s+(?:płatności|dostawy)|cena\s+(?:netto|brutto))\b/iu], minHits: 2 },
+  { kind: "OSWIADCZENIE_WOLI", label: "oświadczenie (wypowiedzenie / odstąpienie / potrącenie)", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:WYPOWIEDZENIE(?:\s+UMOWY)?|OŚWIADCZENIE\s+O\s+(?:ODSTĄPIENIU|WYPOWIEDZENIU|POTRĄCENIU|UCHYLENIU\s+SIĘ))\b/u, /\b(?:niniejszym\s+)?(?:wypowiadam\s+umowę|odstępuję\s+od\s+umowy|oświadczam\s+o\s+(?:odstąpieniu|potrąceniu|wypowiedzeniu))\b/iu] },
   { kind: "POROZUMIENIE", label: "porozumienie / ugoda", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*(?:POROZUMIENIE|UGODA)\b/u, /\b(?:zawart\p{L}+\s+w\s+dniu|strony\s+(?:zgodnie\s+)?(?:postanawiają|ustalają|oświadczają))\b/iu], minHits: 2 },
   { kind: "REGULAMIN", label: "regulamin", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*REGULAMIN\b/u, /\bregulamin\s+(?:świadczenia|sklepu|serwisu|pracy|wynagradzania)\b/iu] },
   { kind: "UMOWA", label: "umowa", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*UMOWA\b/u, /\bzawarta\s+w\s+dniu\b/iu, /\bstrony\s+(?:zgodnie\s+)?postanawiają\b|\bstrony\s+ustalają\b/iu, /§\s*1\b/u], minHits: 2 },
@@ -53,7 +62,7 @@ const RULES: Rule[] = [
   { kind: "EMAIL", label: "wiadomość e-mail", category: "KORESPONDENCJA", evidence: true, patterns: [/(?:^|\n)\s*(?:Od|From)\s*:/u, /(?:^|\n)\s*(?:Do|To)\s*:/u, /(?:^|\n)\s*(?:Temat|Subject)\s*:/u], minHits: 2 },
   { kind: "KOMUNIKATOR", label: "SMS / komunikator", category: "KORESPONDENCJA", evidence: true, patterns: [/\b(?:SMS|WhatsApp|Messenger|Signal|Telegram)\b/u, /(?:\n.{0,40}\b\d{1,2}:\d{2}\b.*){4,}/u] },
   { kind: "ZASWIADCZENIE", label: "zaświadczenie / dokumentacja", category: "DOWOD", evidence: true, patterns: [/(?:^|\n)\s*ZAŚWIADCZENIE\b/u, /\b(?:karta\s+informacyjna|historia\s+choroby|epikryza)\b/iu] },
-  { kind: "PELNOMOCNICTWO", label: "pełnomocnictwo", category: "INNE", evidence: false, patterns: [/(?:^|\n)\s*PEŁNOMOCNICTWO\b/u, /\budzielam\s+pełnomocnictwa\b/iu] },
+  { kind: "PELNOMOCNICTWO", label: "pełnomocnictwo", category: "UMOWA", evidence: false, patterns: [/(?:^|\n)\s*PEŁNOMOCNICTWO\b/u, /\budzielam\s+pełnomocnictwa\b/iu] },
   { kind: "OPINIA_PRAWNA", label: "cudza opinia / analiza prawna", category: "MATERIAL_PRAWNY", evidence: false, patterns: [/\bopinia\s+prawna\b/iu, /\bklucz\s+odpowiedzi\b/iu, /\banaliza\s+prawna\b/iu] }
 ];
 

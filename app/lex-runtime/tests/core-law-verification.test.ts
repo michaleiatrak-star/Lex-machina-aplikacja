@@ -197,6 +197,27 @@ describe("verifyFromCoreLaw", () => {
     expect(resolveActByTitle(karne, "Kodeks karny skarbowy")).toBe("DU/2025/633");
   });
 
+  it("nowelizacje po t.j. w RAG: VER tylko gdy żadna nie dotyka artykułu", () => {
+    const amended = (text: string | null, textSource: CoreActRecord["textSource"] = "html") => {
+      const idx = index(kw({ amendmentsAfter: [{ eli: "DU/2026/600", title: null, promulgation: "2026-07-01" }] }));
+      return {
+        ...idx,
+        record: (eli: string) =>
+          eli === "DU/2026/600" && text !== null
+            ? { ...act({ eli, title: "Ustawa zmieniająca", labels: [], url: KW_URL, articles: {} }).record, textSource, text }
+            : null
+      };
+    };
+    const untouched = verify(amended("Art. 1. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 52 § 1 otrzymuje brzmienie: …"));
+    expect(untouched.decision === "RECORD" && untouched.record.status).toBe("VERIFIED");
+    expect(untouched.decision === "RECORD" && untouched.act.amendmentsChecked).toEqual(["DU/2026/600"]);
+    expect(verify(amended("Art. 1. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 wyrazy … zastępuje się …")))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_TOUCHES_ARTICLE" });
+    // An amendment the copy has no text of, or only an OCR reading: the impact is unknown.
+    expect(verify(amended(null))).toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
+    expect(verify(amended("Art. 1. … w art. 52 …", "ocr"))).toEqual({ decision: "DENY", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN" });
+  });
+
   it("checks the quoted wording against the provision", () => {
     const idx = index(kw());
     const matching = verify(idx, { quote: "zakłóca spokój, porządek publiczny, spoczynek nocny" });

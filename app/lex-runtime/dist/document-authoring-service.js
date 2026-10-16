@@ -50,9 +50,19 @@ function exportBlocked(code, report) {
  */
 function unverifiedDraft(markedText, context) {
     const report = new FinalizationGate().evaluate(markedText, rebuildGenerationExportState(context).ledger);
-    if (report.result !== "DEGRADED")
+    // The session that wrote the file named its unverified references; the file text may have
+    // lost their markers, the heading never loses them.
+    const fromSession = context.acceptedUnverifiedSource?.claims ?? [];
+    if (report.result !== "DEGRADED" && !fromSession.length)
         return null;
-    const claims = [...new Set(report.findings.filter((finding) => finding.status === "UNVERIFIED_MARKED").map((finding) => finding.reference.claim))];
+    const claims = [
+        ...new Set([
+            ...fromSession,
+            ...(report.result === "DEGRADED"
+                ? report.findings.filter((finding) => finding.status === "UNVERIFIED_MARKED").map((finding) => finding.reference.claim)
+                : [])
+        ])
+    ];
     return {
         claims,
         ast: (ast) => ({

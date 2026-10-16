@@ -176,6 +176,50 @@ def _line_crop(image: np.ndarray, poly) -> str | None:
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+def cpu_threads() -> int:
+    raw = os.environ.get("LEX_OCR_THREADS", "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return max(1, os.cpu_count() or 1)
+
+
+class OcrEngine:
+    """PaddleOCR on CPU oneDNN (about 5x faster, the same text); when oneDNN fails to
+    start or to run (PaddlePaddle CPU regressions on some builds), the plain path."""
+
+    def __init__(self, kwargs: dict) -> None:
+        self.kwargs = kwargs
+        self.mkldnn = os.environ.get("LEX_OCR_MKLDNN", "on") != "off"
+        self.verified = not self.mkldnn
+        try:
+            self.ocr = PaddleOCR(**kwargs, enable_mkldnn=self.mkldnn)
+        except Exception as error:  # noqa: BLE001
+            if not self.mkldnn:
+                raise
+            self._fallback(error)
+
+    def _fallback(self, error: Exception) -> None:
+        print(
+            f"LEX_OCR_MKLDNN_FALLBACK:{type(error).__name__}:{str(error)[:200]}",
+            file=sys.stderr,
+            flush=True,
+        )
+        self.mkldnn = False
+        self.verified = True
+        self.ocr = PaddleOCR(**self.kwargs, enable_mkldnn=False)
+
+    def predict(self, image):
+        if self.verified:
+            return self.ocr.predict(image)
+        try:
+            prediction = list(self.ocr.predict(image))
+        except Exception as error:  # noqa: BLE001
+            self._fallback(error)
+            return self.ocr.predict(image)
+        self.verified = True
+        return prediction
+
+
 def predict_image(
     ocr: PaddleOCR,
     image: np.ndarray,
@@ -360,11 +404,10 @@ def main() -> None:
         ocr_version="PP-OCRv6",
         use_doc_orientation_classify=True,
         use_doc_unwarping=(args.unwarp == "on" or (args.unwarp == "auto" and args.mode == "image")),
-        use_textline_orientation=True,
-        # PaddlePaddle 3.3.x CPU oneDNN has a released PIR attribute-conversion
-        # regression on Windows. Keep deterministic CPU inference on the
-        # non-oneDNN path until the upstream fix is in a pinned release.
-        enable_mkldnn=False,
+        # Per-line orientation (the model stays installed) turned lines of degraded
+        # scans upside down and garbled them; page orientation is still corrected.
+        use_textline_orientation=False,
+        cpu_threads=cpu_threads(),
         **{
             key: str(value)
             for key, value in required_models.items()
@@ -373,7 +416,7 @@ def main() -> None:
     if args.device:
         ocr_kwargs["device"] = args.device
 
-    ocr = PaddleOCR(**ocr_kwargs)
+    ocr = OcrEngine(ocr_kwargs)
     results = []
     evidence_dir = Path(args.evidence_dir) if args.evidence_dir else None
     if evidence_dir is not None:

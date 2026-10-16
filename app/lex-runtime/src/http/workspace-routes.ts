@@ -2182,6 +2182,7 @@ export function registerWorkspaceRoutes(
         ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
         ...(raw.documentCoverage !== undefined ? { documentCoverage: raw.documentCoverage } : {}),
         ...(raw.documentAnalysis !== undefined ? { documentAnalysis: raw.documentAnalysis } : {}),
+        ...(raw.corrections !== undefined ? { corrections: raw.corrections } : {}),
         ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
           ? {
               generatedDocument:
