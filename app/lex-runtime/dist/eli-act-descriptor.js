@@ -65,11 +65,34 @@ async function searchByTitle(fetcher, act) {
         return null;
     return best.eli;
 }
+// Codes named by their usual abbreviation or title, when the local copy does not know them and
+// a title search is ambiguous (every amending act is "o zmianie ustawy – Kodeks pracy").
+const CODES = [
+    ["DU/1974/141", ["kp", "kodeks pracy"]],
+    ["DU/2000/1037", ["ksh", "kodeks spółek handlowych"]],
+    ["DU/1964/59", ["kro", "kriop", "krio", "kodeks rodzinny i opiekuńczy"]],
+    ["DU/1960/168", ["kpa", "kodeks postępowania administracyjnego"]],
+    ["DU/1997/557", ["kkw", "kodeks karny wykonawczy"]],
+    ["DU/1999/930", ["kks", "kodeks karny skarbowy"]],
+    ["DU/1971/114", ["kw", "kodeks wykroczeń"]],
+    ["DU/2001/1148", ["kpw", "kpow", "kodeks postępowania w sprawach o wykroczenia"]],
+    ["DU/2002/1270", ["ppsa", "prawo o postępowaniu przed sądami administracyjnymi"]]
+];
+export function codeEli(act) {
+    const key = act.toLocaleLowerCase("pl").replace(/[.\s]+/gu, " ").replace(/ (?=\S( |$))/gu, "").replace(/\s+/gu, " ").trim();
+    const compact = key.replace(/\s+/gu, "");
+    for (const [eli, names] of CODES) {
+        if (names.some((name) => name === key || name.replace(/\s+/gu, "") === compact))
+            return eli;
+    }
+    return null;
+}
 export async function describeEliAct(args) {
     const eli = args.index?.resolve(args.act)?.eli ??
         (args.index ? resolveActByTitle(args.index, args.act) : null) ??
         journalEli(args.act) ??
         journalEli(args.claim) ??
+        codeEli(args.act) ??
         (await searchByTitle(args.fetcher, args.act));
     if (!eli)
         return null;
@@ -80,12 +103,19 @@ export async function describeEliAct(args) {
     const title = shortActTitle(typeof base.title === "string" ? base.title : "");
     if (title.length < 4)
         return null;
+    // The act named by its own Dz.U. (a code, "Dz.U. 1974 poz. 141"): its text is the newest
+    // consolidated text in force, not the promulgated one (the freshness check refused that as stale).
+    const pinned = eli === baseEli
+        ? eliLinks(references, (key) => /tekście jednolitym/i.test(key))
+            .filter((link) => /obowiązując/iu.test(link.status))
+            .sort((a, b) => b.year - a.year || b.pos - a.pos)[0]?.eli ?? eli
+        : eli;
     return {
         id: "ELI",
         title,
-        eli,
+        eli: pinned,
         baseEli,
-        sourceUrl: `${ELI_ACTS}/${eli}/text.html`,
+        sourceUrl: `${ELI_ACTS}/${pinned}/text.html`,
         sourceKind: "consolidated_text",
         registryAsOf: args.today
     };

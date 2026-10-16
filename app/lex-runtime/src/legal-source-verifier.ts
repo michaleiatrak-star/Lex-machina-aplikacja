@@ -365,7 +365,14 @@ export function statuteWording(
     .trim();
   return {
     evidence,
-    pending: (wording?.pending ?? []).map((item) => ({ from: item.from, text: item.text.slice(0, 2_000) })),
+    // Footnote markers ("13 )") out of the later wording as out of the evidence.
+    pending: (wording?.pending ?? []).map((item) => ({
+      from: item.from,
+      text: item.text
+        .replace(/(?<![\p{L}\d])(\d{1,3}) \)/gu, (marker, number: string) => (footnotes[number] === undefined ? marker : ""))
+        .replace(/[ \t]{2,}/gu, " ")
+        .slice(0, 2_000)
+    })),
     unresolved: wording?.unresolved ?? false,
     repealed: REPEALED_ARTICLE.test(evidence),
     footnotes: marked
