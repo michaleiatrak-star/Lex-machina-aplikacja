@@ -35,3 +35,21 @@ describe.skipIf(!morfeusz)("gazetteer na bazach z końcami linii CRLF (Windows)"
     }
   }, 120_000);
 });
+
+// The online installer's embedded Python (python._pth) does not put the script's folder on
+// sys.path, like -I here: the workers failed on their sibling modules (address_base).
+describe.skipIf(!morfeusz)("workery bez katalogu skryptu w sys.path (Python embeddable)", () => {
+  it.each(["polish_pii_gazetteer.py", "polish_person_morphology.py"])("%s startuje z -I", (worker) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-isolated-"));
+    try {
+      const input = path.join(root, "in");
+      const output = path.join(root, "out.json");
+      fs.writeFileSync(input, worker.includes("gazetteer") ? "Jan Kowalski mieszka przy ul. Długiej 5." : JSON.stringify({ persons: [{ surface: "Jana Kowalskiego" }], addresses: [], words: [] }));
+      const run = spawnSync(python!, ["-I", "-X", "utf8", path.join(PRIVACY, worker), "--input", input, "--output", output], { cwd: os.tmpdir(), encoding: "utf8" });
+      expect(run.stderr).not.toContain("ModuleNotFoundError");
+      expect(run.status).toBe(0);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+});

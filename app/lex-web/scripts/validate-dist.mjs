@@ -85,12 +85,12 @@ const required = [
   "Podgląd",
   "Otwórz w systemie",
   "Usuń",
-  "Foldery są logiczną, szyfrowaną strukturą workspace",
+  "Foldery to szyfrowana struktura sprawy",
   "Know-how i wzory kancelarii",
   "Know-how kancelarii",
   "Dodaj wiedzę / dokument",
   "OCR automatyczny i anonimizacja per plik",
-  "Zdjęcia są od razu kierowane do lokalnego OCR",
+  "Strony skanowane i zdjęcia przechodzą lokalny OCR",
   // Jeden przepływ (propozycja automatyczna, podgląd z decyzjami, zatwierdzenie pliku)
   // zamiast trybów "Przejrzyj ręcznie" / "Anonimizuj automatycznie" / "Pozostaw bez anonimizacji".
   "Przed zatwierdzeniem",
@@ -103,12 +103,12 @@ const required = [
   "Moje decyzje w podglądzie",
   "Końcowa decyzja dla pliku",
   "Zatwierdź decyzje dla",
-  "Mapy reidentyfikacji pozostają odrębne dla każdego documentId",
+  "Mapy reidentyfikacji są osobne dla każdego pliku",
   "Chunki do analizy AI",
   "Cytowany fragment dokumentu",
   "Przejdź do cytowanego fragmentu",
   "Dokładny cytat zaznaczony w źródle",
-  "źródłowego chunka",
+  "nie cytuje go dosłownie",
   "DRAFT_PRESENTABLE",
   "Źródła i weryfikacja",
   "VERIFIED",
@@ -169,7 +169,7 @@ process.stdout.write(JSON.stringify({
     content.includes("OCR automatyczny i anonimizacja per plik") &&
     content.includes("Zatwierdź plik") &&
     content.includes("Automatyczna anonimizacja / pseudonimizacja") &&
-    content.includes("Mapy reidentyfikacji pozostają odrębne dla każdego documentId"),
+    content.includes("Mapy reidentyfikacji są osobne dla każdego pliku"),
   multiFilePrivacyBatchPreviewPresent:
     content.includes("Zbiorczy podgląd anonimizacji") &&
     content.includes("Wykryte automatycznie") &&

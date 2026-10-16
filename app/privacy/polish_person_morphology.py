@@ -22,6 +22,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Embedded Python (the online installer, python._pth) does not put the script's folder on
+# sys.path: the sibling modules were not found and the worker never started ("Morfeusz: błąd
+# uruchomienia"). The folder goes first, as for a regular interpreter.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import foreign_surnames
 import given_name_base
 import surname_base
