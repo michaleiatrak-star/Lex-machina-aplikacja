@@ -162,8 +162,22 @@ Write-Host "SELFTEST_STAGE:python-ocr-import"
 if ($LASTEXITCODE -ne 0) { throw "SELFTEST_PYTHON_OCR_IMPORT_FAILED" }
 
 Write-Host "SELFTEST_STAGE:python-ner-import"
-& $python $pythonSelftest ner-import | Out-Host
-if ($LASTEXITCODE -ne 0) { throw "SELFTEST_PYTHON_NER_IMPORT_FAILED" }
+# Windows PowerShell 5.1 with "Stop" turns a native command's redirected stderr (a Python
+# warning) into a terminating error: the exit code decides here, not the stream.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  $nerImport = & $python $pythonSelftest ner-import 2>&1 | Out-String
+  $nerImportExit = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousPreference
+}
+Write-Host $nerImport
+if ($nerImportExit -ne 0) {
+  # Stanza, torch and the Morfeusz dictionary: the Python error in the log the acceptance prints.
+  Add-Content -LiteralPath (Join-Path $root "bootstrap\offline-payload-selftest.log") -Encoding UTF8 -Value ("SELFTEST_PYTHON_NER_IMPORT_FAILED`r`n" + $nerImport)
+  throw "SELFTEST_PYTHON_NER_IMPORT_FAILED"
+}
 
 $requiredPaddle = @(
  "PP-LCNet_x1_0_doc_ori",
@@ -244,12 +258,23 @@ try {
   $gazOut = Join-Path $temp "gazetteer.json"
   $gazErr = Join-Path $temp "gazetteer.err"
   [IO.File]::WriteAllText($gazInput, "Pozwany Jan Kowalski, zamieszkały przy ul. Długiej 5 w Krakowie, nie stawił się.", [Text.UTF8Encoding]::new($false))
-  & $python -X utf8 $gazetteerWorker --input $gazInput --output $gazOut 2> $gazErr
-  if ($LASTEXITCODE -ne 0) {
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & $python -X utf8 $gazetteerWorker --input $gazInput --output $gazOut 2> $gazErr
+    $gazExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if ($gazExit -ne 0) {
     # The Python error itself (a missing module, a DLL that does not load): what the app would show.
     $detail = if (Test-Path -LiteralPath $gazErr) { (Get-Content -Raw -LiteralPath $gazErr).Trim() } else { "" }
     if ($detail.Length -gt 1500) { $detail = $detail.Substring($detail.Length - 1500) }
     Write-Host $detail
+    # The installer's message is cut short (NSIS): the whole error goes to the self-test log,
+    # which the acceptance and the support read.
+    $selftestLog = Join-Path $root "bootstrap\offline-payload-selftest.log"
+    Add-Content -LiteralPath $selftestLog -Encoding UTF8 -Value ("SELFTEST_GAZETTEER_FAILED python=$python worker=$gazetteerWorker`r`n" + $detail)
     throw "SELFTEST_GAZETTEER_FAILED:$($detail -replace '\s+', ' ')"
   }
   $gazJson = Get-Content -Raw -Encoding UTF8 $gazOut | ConvertFrom-Json

@@ -22,4 +22,12 @@ describe("an answer that is itself a letter", () => {
     ).toBe(false);
     expect(looksLikeLetter("Nie mogę jeszcze sporządzić odpowiedzi. Dalsza odpowiedź zostanie przygotowana później.")).toBe(false);
   });
+
+  it("a letter written in the chat's Markdown is a letter", () => {
+    const markdown = letter
+      .replace("[Miejscowość], dnia [data]", "**[Miejscowość], dnia [data]**")
+      .replace("Odpowiedź na wezwanie do zaprzestania naruszeń i zapłaty", "### Odpowiedź na wezwanie do zaprzestania naruszeń i zapłaty")
+      .replace("[podpis]", "_[podpis]_");
+    expect(looksLikeLetter(markdown)).toBe(true);
+  });
 });

@@ -6,7 +6,7 @@ import type { ProviderStreamParams } from "../src/providers/types.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { SafeSessionExecutor } from "../src/session-executor.js";
 import { classifyDocument } from "../src/document-kind.js";
-import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, nextChoices, letterComplexity } from "../src/task-routing.js";
+import { PIPELINE_HANDOFF, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, pipelineNext, nextChoices, letterComplexity, replyRolesPrompt } from "../src/task-routing.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const routes = parseRoutingTable(fs.readFileSync(path.join(CORPUS, "prawny-router-v3/SKILL.md"), "utf8"));
@@ -295,6 +295,15 @@ describe("pipeline handoffs (ACTIVATION-MATRIX combinations)", () => {
     expect(letterComplexity(reasoned)).toBe("COMPLEX");
     expect(nextChoices("analizator-umow-v1", "pisma-proste-v2", combinations, reasoned)[0]?.skill).toBe("pisma-procesowe-v3");
     expect(letterComplexity({ ...simple, question: "Przygotuj szczegółową odpowiedź z uzasadnieniem prawnym." })).toBe("COMPLEX");
+  });
+
+  it("a reply to a delivered document names who writes to whom", () => {
+    const demand = classifyDocument({ text: "PRZEDSĄDOWE WEZWANIE DO ZAPŁATY\nWzywam do zapłaty kary umownej 20 000 zł." });
+    const roles = replyRolesPrompt("Odpowiedz na ten dokument i podważ w nim to, co jest niezgodne z prawem", [demand]);
+    expect(roles).toContain("Nadawcą odpowiedzi jest ADRESAT dostarczonego pisma");
+    expect(roles).toContain("nigdy do osoby, w której imieniu piszesz");
+    expect(replyRolesPrompt("Przeanalizuj tę umowę.", [demand])).toBeNull();
+    expect(replyRolesPrompt("Odpowiedz na pismo.", [])).toBeNull();
   });
 
   it("offers the file of the result itself for a pleading and a redacted contract", () => {

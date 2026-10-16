@@ -72,4 +72,17 @@ describe("co dalej po wyniku: wybór użytkownika", () => {
     expect(html).toContain("Generuj projekt (DRAFT)");
     expect(html).toContain("CP-PD (bez podanego powodu)");
   });
+
+  it("an answer that only announced a step: a visible Kontynuuj that runs it, in AUTO and in a mechanical thread", () => {
+    const next = {
+      skill: "analizator-umow-v1",
+      reason: "odpowiedź zapowiada krok",
+      choices: [{ skill: "analizator-umow-v1", kind: "CONTINUE" as const, reason: "odpowiedź zapowiada krok, którego nie wykonała" }]
+    };
+    for (const auto of [true, false]) {
+      const html = renderToStaticMarkup(<PipelineChoices next={next} auto={auto} disabled={false} onChoose={() => undefined} />);
+      expect(html).toContain(">Kontynuuj</button>");
+    }
+    expect(pipelineChoiceMessage(next.choices[0]!)).toMatch(/^Kontynuuj: wykonaj teraz zapowiedzianą weryfikację/u);
+  });
 });

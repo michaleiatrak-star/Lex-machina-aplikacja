@@ -258,7 +258,7 @@ export const REPLY_REQUEST =
 // are analysed by the contract skill (ACTIVATION-MATRIX "Dokument + wezwanie").
 const DOCUMENT_ANALYSIS = "analizator-umow-v1";
 // "Odpowiedz na ten dokument", "przygotuj odpowiedź", "odpisz im" with a demand delivered.
-const DEMAND_REPLY = /(?<![\p{L}])(?:odpowiedz|odpowiedź|odpowiedzi|odpowiedzieć|odpisz|odpisać)(?![\p{L}])/iu;
+export const DEMAND_REPLY = /(?<![\p{L}])(?:odpowiedz|odpowiedź|odpowiedzi|odpowiedzieć|odpisz|odpisać)(?![\p{L}])/iu;
 // "Wygeneruj dokument", "generuj pismo", "przygotuj dokument" (the reply to the delivered demand).
 const GENERATE_DOCUMENT =
   /(?<![\p{L}])(?:(?:wy)?generuj\p{L}*|przygotuj|napisz|sporządź|zredaguj)\s+(?:\p{L}+\s+){0,2}?(?:dokument\p{L}*|pism\p{L}*|odpowied\p{L}*)(?![\p{L}])/iu;
@@ -799,7 +799,8 @@ function letterSkillFor(candidate: string, context?: { question: string; materia
 /** One option offered after a result: draft the document, or one more stage of analysis. */
 export type NextChoice = {
   skill: string;
-  kind: "DOCUMENT" | "ANALYSIS";
+  // CONTINUE: the answer announced a step (a verification) it did not do; the user goes on.
+  kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE";
   reason: string;
   // The file of this very result (a pleading of pisma-procesowe-v3, a contract redacted or
   // drafted by analizator-umow-v1), made by that skill's own pipeline and its HYBRID-VAL.
@@ -870,4 +871,20 @@ export function nextChoices(
 export function explicitHandoff(question: string, known: (skill: string) => boolean): string | null {
   const skill = new RegExp(`${PIPELINE_HANDOFF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*([a-z0-9-]+)`, "u").exec(question)?.[1];
   return skill && known(skill) ? skill : null;
+}
+
+/**
+ * A reply to a delivered document (a demand, a letter, a pleading): who writes to whom. A
+ * model left without it addressed the reply to its own sender ("Szanowna Osobo <the user>").
+ */
+export function replyRolesPrompt(query: string, materials: DeliveredMaterial[]): string | null {
+  if (!(REPLY_REQUEST.test(query) || DEMAND_REPLY.test(query))) return null;
+  if (!materials.some((material) => ["KORESPONDENCJA", "UMOWA", "PISMO_PROCESOWE", "ORZECZENIE"].includes(material.category))) return null;
+  return [
+    "# ODPOWIEDŹ NA DOSTARCZONE PISMO — ROLE",
+    "- Nadawcą odpowiedzi jest ADRESAT dostarczonego pisma (użytkownik albo osoba, w której imieniu działa); adresatem odpowiedzi jest NADAWCA tego pisma, a gdy pismo wysłał pełnomocnik — ten pełnomocnik (kancelaria) z oznaczeniem mocodawcy.",
+    "- Ustal obie strony z treści pisma (kto wzywa, w czyim imieniu, do kogo) i wpisz je w nagłówku: nadawca, adresat, „Dotyczy:”.",
+    "- Zwrot grzecznościowy kieruj do adresata odpowiedzi („Szanowni Państwo,” wobec kancelarii lub spółki); nigdy do osoby, w której imieniu piszesz.",
+    "- Pisz w pierwszej osobie nadawcy odpowiedzi („kwestionuję”, „wzywam”), a o nadawcy dostarczonego pisma w trzeciej osobie lub przez „Państwa”."
+  ].join("\n");
 }

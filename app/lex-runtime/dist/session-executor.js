@@ -63,7 +63,7 @@ import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
 import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
-import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger } from "./task-routing.js";
+import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger, replyRolesPrompt } from "./task-routing.js";
 import { CONTRACT_BUDGET_CHARS, contractPrompt, executiveContract, loadContract } from "./executive-skill-contract.js";
 import { loadModules, modulesPrompt, schemaCatalog, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, parseFlashRouting, rankDomains, suggestDomainModules } from "./domain-module-map.js";
@@ -1206,6 +1206,9 @@ export class SafeSessionExecutor {
                 documents: recognisedDocuments.map((document) => `${document.documentId}:${document.kind}`)
             });
             pathSections.push(recognisedDocumentsPrompt(recognisedDocuments));
+            const roles = replyRolesPrompt(request.query, recognisedDocuments);
+            if (roles)
+                pathSections.push(roles);
             step("PREPARE", `rozpoznane dokumenty: ${recognisedDocuments.map((document) => document.label).join(", ")}`);
         }
         // AUTO: a criminal question gets the qualifier up front (Karne: +kwalifikator).
@@ -2990,8 +2993,14 @@ export class SafeSessionExecutor {
         const offered = deferred ? choices.filter((choice) => choice.kind !== "DOCUMENT") : choices;
         const legacy = nextFrom ? pipelineNext(nextFrom.skill, nextFrom.then, this.skillCombinations(), nextContext) : null;
         const legacyNext = legacy && deferred && /^pisma-/u.test(legacy.skill) ? null : legacy;
-        const next = offered.length
-            ? { skill: offered[0].skill, reason: offered[0].reason, choices: offered }
+        // An answer that still only announces a step (a verification to be done): a visible
+        // "Kontynuuj" instead of nothing, so the user does not wait for what will not come.
+        const resumeSkill = nextFrom?.skill ?? taskRoute?.primary ?? execution.workflowPlan.executionSkill ?? request.primarySkill;
+        const choicesShown = deferred
+            ? [{ skill: resumeSkill, kind: "CONTINUE", reason: "odpowiedź zapowiada krok, którego nie wykonała" }, ...offered]
+            : offered;
+        const next = choicesShown.length
+            ? { skill: choicesShown[0].skill, reason: choicesShown[0].reason, choices: choicesShown }
             : legacyNext;
         // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
         // Escalation / reduction between the letter skills: an offer to the user, nothing closed.

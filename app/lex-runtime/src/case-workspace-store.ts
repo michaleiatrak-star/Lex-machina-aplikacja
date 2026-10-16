@@ -87,7 +87,7 @@ export type WorkspaceThreadMessage = {
   corrections?: AnswerCorrection[];
   pipelineNext?: { skill: string; reason: string; choices?: Array<{
     skill: string;
-    kind: "DOCUMENT" | "ANALYSIS";
+    kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE";
     reason: string;
     own?: true;
     steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] };
@@ -356,7 +356,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     return (
       typeof item === "object" && item !== null &&
       typeof item.skill === "string" && item.skill.length <= 200 &&
-      (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+      (item.kind === "DOCUMENT" || item.kind === "ANALYSIS" || item.kind === "CONTINUE") &&
       (item.own === undefined || item.own === true) &&
       validSteps &&
       typeof item.reason === "string" && item.reason.length <= 2_000

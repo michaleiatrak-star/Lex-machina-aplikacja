@@ -37,5 +37,9 @@ describe("an answer without substance", () => {
     expect(emptyDeferral(missing)).toBe(false);
     expect(emptyDeferral("Nie mogę jeszcze odpowiedzieć: czy doszło do zapłaty?")).toBe(false);
     expect(emptyDeferral("Wezwanie nie wskazuje konkretnych naruszeń, więc kwestionuję je w całości.")).toBe(false);
+    // An announced verification ("muszę najpierw zweryfikować… Następnie przedstawię…") is no answer either.
+    expect(emptyDeferral("Przygotuję odpowiedź, ale do jej bezpiecznego sporządzenia muszę najpierw zweryfikować przepisy dotyczące zakazu konkurencji. Następnie przedstawię gotowy projekt pisma.")).toBe(true);
+    expect(emptyDeferral("Aby przygotować dokument, potrzebuję jeszcze potwierdzenia podstaw prawnych dotyczących zakazu konkurencji.")).toBe(true);
+    expect(emptyDeferral("**Nie mogę jeszcze sporządzić** odpowiedzi; zostanie przygotowana po weryfikacji.")).toBe(true);
   });
 });

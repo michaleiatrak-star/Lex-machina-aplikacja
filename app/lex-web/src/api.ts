@@ -1053,7 +1053,7 @@ export type SessionExecutionResponse = {
   corrections?: AnswerCorrection[];
   mandatoryPath?: MandatoryPathView;
   // Next skill of the pipeline (ACTIVATION-MATRIX).
-  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
+  pipelineNext?: { skill: string; reason: string; choices?: Array<{ skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; reason: string; own?: true; steps?: { done: number; total: number; skipped: Array<{ checkpoint: string; reason?: string }>; open: string[] } }> };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
   // The firm's default template the application used (none picked).

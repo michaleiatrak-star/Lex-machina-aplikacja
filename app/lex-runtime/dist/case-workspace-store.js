@@ -166,7 +166,7 @@ function safeMessage(input) {
                 steps.skipped.every((entry) => typeof entry?.checkpoint === "string" && entry.checkpoint.length <= 100 && (entry.reason === undefined || (typeof entry.reason === "string" && entry.reason.length <= 300))));
         return (typeof item === "object" && item !== null &&
             typeof item.skill === "string" && item.skill.length <= 200 &&
-            (item.kind === "DOCUMENT" || item.kind === "ANALYSIS") &&
+            (item.kind === "DOCUMENT" || item.kind === "ANALYSIS" || item.kind === "CONTINUE") &&
             (item.own === undefined || item.own === true) &&
             validSteps &&
             typeof item.reason === "string" && item.reason.length <= 2_000);

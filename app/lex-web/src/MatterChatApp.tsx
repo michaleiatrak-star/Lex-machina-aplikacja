@@ -534,7 +534,12 @@ type DirectDocumentRequest = {
  * (a signature, "Z poważaniem") or fields to fill in. Questions alone are no letter.
  */
 export function looksLikeLetter(answer: string): boolean {
-  const body = answer.split(/⚖️|\bWażna informacja:/u)[0] ?? "";
+  // The chat's Markdown ("**[Miejscowość], [data]**", "### Odpowiedź", "_[podpis]_") is not
+  // the letter's text: without it the date line and the signature were not seen.
+  const body = (answer.split(/⚖️|\bWażna informacja:/u)[0] ?? "")
+    .replace(/^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?)/gmu, "")
+    .replace(/(\*\*|__)(.+?)\1/gu, "$2")
+    .replace(/(?<![\p{L}\p{N}*_])[*_](?![\s*_])([^*_\n]+?)(?<![\s*_])[*_](?![\p{L}\p{N}*_])/gu, "$1");
   const heading = /(?:^|\n)\s*(?:\[[^\]\n]{1,40}\]|\p{Lu}[\p{L}-]+(?:\s+\p{Lu}[\p{L}-]+)?)\s*,\s*(?:dnia\s+)?(?:\[[^\]\n]{1,20}\]|\d{1,2}[.\s])/u.test(body) ||
     /(?:^|\n)\s*(?:Adresat|Do|Odbiorca)\s*:/u.test(body);
   const closing = /\[podpis\]|(?:^|\n)\s*(?:Z\s+poważaniem|Z\s+wyrazami\s+szacunku)\b|(?:^|\n)\s*\.{5,}\s*(?:\n|$)|⬛|\[UZUPEŁNIJ/iu.test(body);
@@ -1123,7 +1128,10 @@ const OWN_DOCUMENT_NOUN: Record<string, string> = {
   "pisma-proste-v2": "pismo"
 };
 
-export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS"; own?: true }): string {
+export function pipelineChoiceMessage(choice: { skill: string; kind: "DOCUMENT" | "ANALYSIS" | "CONTINUE"; own?: true }): string {
+  if (choice.kind === "CONTINUE") {
+    return "Kontynuuj: wykonaj teraz zapowiedzianą weryfikację przepisów w źródłach (ELI) i podaj pełną odpowiedź na pismo, bez zapowiadania kolejnych kroków.";
+  }
   if (choice.own) {
     return `Wygeneruj ${OWN_DOCUMENT_NOUN[choice.skill] ?? "dokument"} w pliku .docx z powyższego wyniku, bez zmian merytorycznych.`;
   }
@@ -1173,6 +1181,17 @@ export function PipelineChoices({
     ? next.choices
     : [{ skill: next.skill, kind: /^pisma-/.test(next.skill) ? "DOCUMENT" : "ANALYSIS", reason: next.reason }];
   const ownDocument = choices.find((choice) => choice.own);
+  const resume = choices.find((choice) => choice.kind === "CONTINUE");
+  if (!auto && resume) {
+    return (
+      <div className="chat-pipeline-next" role="note">
+        <button type="button" className="primary-button" disabled={disabled} onClick={() => onChoose(pipelineChoiceMessage(resume))}>
+          Kontynuuj
+        </button>
+        <InfoTip>Odpowiedź zapowiada krok (np. weryfikację przepisów), którego jeszcze nie wykonała. „Kontynuuj” go uruchamia.</InfoTip>
+      </div>
+    );
+  }
   if (!auto) {
     // A mechanical thread stays with its skill; the file of its own result is still at hand.
     const others = choices.filter((choice) => !choice.own);
@@ -1212,14 +1231,18 @@ export function PipelineChoices({
           <button
             key={`${choice.kind}-${choice.skill}`}
             type="button"
-            className={choice.kind === "DOCUMENT" ? "primary-button" : "chat-secondary-action"}
+            className={choice.kind === "DOCUMENT" || choice.kind === "CONTINUE" ? "primary-button" : "chat-secondary-action"}
             disabled={disabled}
             title={`${choice.skill} (${choice.reason})`}
             onClick={() =>
               choice.kind === "DOCUMENT" && !choice.own && onDocument ? onDocument() : onChoose(pipelineChoiceMessage(choice))
             }
           >
-            {choice.kind === "DOCUMENT" ? documentChoiceLabel(choice.steps) : `Dalsza analiza: ${choice.skill}`}
+            {choice.kind === "CONTINUE"
+              ? "Kontynuuj"
+              : choice.kind === "DOCUMENT"
+                ? documentChoiceLabel(choice.steps)
+                : `Dalsza analiza: ${choice.skill}`}
           </button>
         ))}
       </div>
