@@ -459,6 +459,9 @@ export function letterMarkupMode(request) {
     return (request.documentType === "letter" || request.documentType === "pleading") && !request.processRenderOnly;
 }
 function parseValidatedAst(answer, request) {
+    // An answer the provider cut (its note at the end): never a file, whatever its format.
+    if (/\[ODPOWIEDŹ UCIĘTA\b/u.test(answer))
+        throw new Error("DOCUMENT_OUTPUT_TRUNCATED");
     // The letter markup: the AST is made here, its text as the model wrote it (no normalization).
     if (letterMarkupMode(request) && isLetterMarkup(answer)) {
         return validateLegalDocumentAst(letterMarkupAst(answer, request), request.aliases.entries);

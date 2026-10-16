@@ -63,6 +63,21 @@ export function markupInlines(text, bold = false) {
     }
     return nodes;
 }
+/**
+ * A letter the model's answer cut short: the provider's own note ("[ODPOWIEDŹ UCIĘTA …]"), or a
+ * letter or pleading with no signature whose text stops mid-sentence. Such a text never becomes
+ * a file (before, it was laid out as a shorter letter with the note as its last paragraph).
+ */
+export function isTruncatedLetter(answer, documentType) {
+    if (/\[ODPOWIEDŹ UCIĘTA\b/u.test(answer))
+        return true;
+    if (documentType !== "letter" && documentType !== "pleading")
+        return false;
+    if (/^\s*@PODPIS\b/mu.test(answer))
+        return false;
+    const last = answer.trimEnd().split("\n").at(-1)?.trim() ?? "";
+    return Boolean(last) && !/^@/u.test(last) && !/[.!?:;)\]»”"…]$/u.test(last);
+}
 export class LetterMarkupError extends Error {
     constructor(code) {
         super(code);
@@ -180,6 +195,8 @@ export function letterMarkupAst(answer, options) {
         throw new LetterMarkupError("LETTER_MARKUP_TITLE_MISSING");
     if (!body)
         throw new LetterMarkupError("LETTER_MARKUP_BODY_MISSING");
+    if (isTruncatedLetter(answer, options.documentType))
+        throw new LetterMarkupError("LETTER_MARKUP_TRUNCATED");
     return {
         schemaVersion: "1",
         documentType: options.documentType,

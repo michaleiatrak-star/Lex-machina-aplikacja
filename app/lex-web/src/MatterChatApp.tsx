@@ -1269,6 +1269,10 @@ const HYBRID_REASON: Record<string, string> = {
 
 /** A refused export in words: which provisions or judgments stopped the file. */
 export function exportBlockedMessage(error: unknown): string | null {
+  // A letter the model's answer cut short: no file of a shortened letter.
+  if (error instanceof ApiError && /^(?:LETTER_MARKUP_TRUNCATED|DOCUMENT_OUTPUT_TRUNCATED)$/.test(error.code)) {
+    return "Plik nie został zapisany: pismo urywa się przed końcem (odpowiedź modelu ucięta na limicie długości). Długie pismo powstanie w częściach: poproś o nie ponownie albo kliknij Kontynuuj przy ostatniej części.";
+  }
   if (error instanceof ApiError && /^(?:READY|FINAL|TOKENIZED)_DOCUMENT_HYBRID_BLOCKED:/.test(error.code)) {
     const reasons = error.code.split(":")[1]!.split(",").filter(Boolean);
     return `Dokument nie został zapisany: walidacja HYBRID-VAL przed plikiem wykazała, że ${reasons
