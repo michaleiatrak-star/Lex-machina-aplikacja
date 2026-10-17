@@ -58,4 +58,10 @@ describe("długie pismo w częściach: czat", () => {
     expect(html).toContain("Generuj dokument");
     expect(html).toContain("jeden plik z 3 części");
   });
+
+  it("część zablokowana przez bramki: automatyczna poprawa z listą powołań", () => {
+    const blocked = turn({ part: 3, ok: false, problems: ["art. 43a KC: niezweryfikowany w ELI"], next: 3 }, { status: "BLOCKED", answer: "" });
+    expect(autoAdvanceDecision(blocked, 2, 3)).toMatchObject({ advance: true, message: "Popraw część 3 z 3." });
+    expect(autoAdvanceDecision({ status: "BLOCKED", answer: "" } as never, null, 0)).toEqual({ advance: false, reason: "NO_WORKFLOW" });
+  });
 });

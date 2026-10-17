@@ -14,6 +14,22 @@ import fs from "node:fs";
 import { latestUserTurn } from "../execution-engine.js";
 import { threadUserText } from "../skill-selection.js";
 import { appendDraftVersion, emptyProcessPleadingDraft, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
+// The citations that blocked a part of a long letter, as the corrections its rewrite needs.
+function blockedPartProblems(references) {
+    const seen = new Set();
+    const problems = [];
+    for (const reference of references) {
+        if (seen.has(reference.claim))
+            continue;
+        seen.add(reference.claim);
+        problems.push(reference.status === "CONFLICTING_STATUS"
+            ? `${reference.claim}: sprzeczne oznaczenia weryfikacji`
+            : `${reference.claim}: niezweryfikowany w ELI (sprawdź, czy to właściwy akt, np. u.p.k. zamiast KC; zweryfikuj albo usuń powołanie)`);
+        if (problems.length >= 12)
+            break;
+    }
+    return problems.length ? problems : ["część zablokowana przez bramki weryfikacji: napisz ją ponownie z powołaniami zweryfikowanymi w ELI"];
+}
 // A writing step whose pleading text was not kept (cut, unfinished, a change to no section).
 function pleadingDraftNotice(checkpoint, problems) {
     return `**Projekt pisma nie został zaktualizowany (${checkpoint}):** ${problems.join("; ")}. Zapisana pozostaje poprzednia wersja; powtórz krok albo popraw projekt.`;
@@ -5886,6 +5902,7 @@ export function createLexHttpApp(options) {
                     sessionAttachments;
             }
             let longDocument = null;
+            let askedLongPart = null;
             // A long letter in parts (any model, also a short "kontynuuj"): the part asked for, with the
             // plan, the last numbers and the end of the previous part from the case's record.
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
@@ -5895,6 +5912,7 @@ export function createLexHttpApp(options) {
                     longDocument =
                         (await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion }))).longDocument ?? null;
                     const askedPart = longDocument && (!isComplete(longDocument) || longDocument.failed) ? requestedPart(latestUserMessage(request.query), longDocument) : null;
+                    askedLongPart = askedPart;
                     if (longDocument && askedPart) {
                         request.query = `${request.query}\n\n${continuationBlock(longDocument, askedPart, longDocument.failed?.k === askedPart ? longDocument.failed.problems : [])}`;
                         request.onStep?.("PREPARE", `długie pismo: część ${askedPart} z ${longDocument.plan.czesci.length}`);
@@ -7299,6 +7317,30 @@ export function createLexHttpApp(options) {
             }
             // A part of a long letter: checked against the plan and the parts before it, kept in the
             // case memory when it passes; the chat shows "Część k z N" and the next part is asked for.
+            // A part the gates blocked (a provision unverified or cited under the wrong act): no text
+            // reaches the register, but the part is not lost from the loop - it is asked for again
+            // with the citations to correct, as a part that failed its own check.
+            if (result.status === "BLOCKED" &&
+                longDocument &&
+                askedLongPart &&
+                knowledge.caseId &&
+                options.caseMemoryStore &&
+                options.caseAccessService) {
+                const problems = blockedPartProblems(result.blockedReferences);
+                const state = { ...longDocument, failed: { k: askedLongPart, problems }, updatedAt: new Date().toISOString() };
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion, longDocument: state }));
+                    const n = state.plan.czesci.length;
+                    result.longDocument = { id: state.id, title: state.plan.tytul, part: askedLongPart, parts: n, ok: false, problems, complete: false, next: askedLongPart };
+                    const choice = { skill: result.taskSkill ?? result.primarySkill, kind: "CONTINUE", reason: `Popraw część ${askedLongPart} z ${n}: ${problems.slice(0, 2).join("; ")}` };
+                    result.pipelineNext = { skill: choice.skill, reason: choice.reason, choices: [choice] };
+                }
+                catch (error) {
+                    console.error("CASE_MEMORY_LONG_DOCUMENT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+                }
+            }
             const writtenPart = result.status === "DRAFT_PRESENTABLE" && result.answer ? parsePart(result.answer) : null;
             if (writtenPart && knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
                 const now = new Date().toISOString();

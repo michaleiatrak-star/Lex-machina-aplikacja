@@ -211,15 +211,17 @@ function fixture() {
   const answers: string[] = [];
   const execute =
     vi.fn<SessionExecutor["execute"]>(async (input) => {
+      const next = answers.shift() ?? "brak";
+      const blocked = next.startsWith("BLOCKED:");
       const result: SessionExecutionResponse = {
         sessionId: "session-long-document",
-        status: "DRAFT_PRESENTABLE",
+        status: blocked ? "BLOCKED" : "DRAFT_PRESENTABLE",
         provider: input.provider,
         model: input.model,
         primarySkill: input.primarySkill,
-        answer: answers.shift() ?? "brak",
-        finalization: "PASS",
-        blockedReferences: [],
+        answer: blocked ? "" : next,
+        finalization: blocked ? "DEGRADED" : "PASS",
+        blockedReferences: blocked ? [{ claim: next.slice(8), kind: "statute", line: 3, status: "UNVERIFIED_MARKED" }] : [],
         verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
         evidence: [],
         audit: { result: "PASS", eventCount: 0, closed: true }
@@ -433,8 +435,18 @@ describe("długie pismo w częściach: czat i plik", () => {
     expect(String(current.execute.mock.calls[2]?.[0].query)).toContain("POPRAW poprzednią wersję tej części");
     expect(fixed.body.longDocument).toMatchObject({ part: 2, ok: true, next: 3 });
 
+    // Part 3 blocked by the gates (a provision cited under the wrong act): a rejected part with
+    // the citation to correct, asked for again, not a dead end.
+    current.answers.push("BLOCKED:art. 43a KC");
+    const blockedTurn = await send("dalej");
+    expect(blockedTurn.body.status).toBe("BLOCKED");
+    expect(blockedTurn.body.longDocument).toMatchObject({ part: 3, ok: false, next: 3 });
+    expect(blockedTurn.body.longDocument.problems[0]).toMatch(/^art\. 43a KC: niezweryfikowany w ELI/u);
+    expect(blockedTurn.body.pipelineNext.choices[0].reason).toMatch(/^Popraw część 3 z 3: art\. 43a KC/u);
+
     current.answers.push(part("regulamin-3.txt"));
-    const last = await send("dalej");
+    const last = await send("Popraw część 3 z 3.");
+    expect(String(current.execute.mock.calls.at(-1)?.[0].query)).toContain("POPRAW poprzednią wersję tej części: art. 43a KC");
     expect(last.body.longDocument).toMatchObject({ part: 3, ok: true, complete: true, next: null });
     const id = String(last.body.longDocument.id);
     expect(id).toBe(String(first.body.longDocument.id));
@@ -457,6 +469,6 @@ describe("długie pismo w częściach: czat i plik", () => {
     // A later ordinary question: no continuation block once the document is complete.
     current.answers.push("Odpowiedź.");
     await send("Kontynuuj");
-    expect(String(current.execute.mock.calls[4]?.[0].query)).not.toContain("# DŁUGIE PISMO");
+    expect(String(current.execute.mock.calls.at(-1)?.[0].query)).not.toContain("# DŁUGIE PISMO");
   });
 });
