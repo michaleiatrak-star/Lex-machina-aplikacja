@@ -272,7 +272,7 @@ import {
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
-import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
+import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import {
   buildWorkflowAuditArtifact,
@@ -9281,8 +9281,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       });
     }
 
+    // A part of a long letter asked for in a case ("Popraw część 3 z 3."): legal work of that
+    // letter, never the conversational lane (the router read the short message as non-legal).
+    const partRequest =
+      Boolean(knowledge.caseId) && namesDocumentPart(latestUserMessage(parseSkillSelectionEnvelope(request.query).query));
     const trivialChat =
-      applyTrivialChatGate(
+      !partRequest &&
+      (applyTrivialChatGate(
         options.registry,
         request,
         attachments.length + firmTemplates.length
@@ -9292,7 +9297,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         request,
         attachments.length + firmTemplates.length,
         Boolean(knowledge.caseId && knowledge.includeCase)
-      );
+      ));
     // Entry gate: how much of the legal system this message needs.
     const entryEnvelope =
       parseSkillSelectionEnvelope(request.query);
@@ -9339,7 +9344,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         attachments.length,
         {
           allowModelSelection: true,
-          allowConversational: true
+          allowConversational: !partRequest
         }
       ))
     ) {

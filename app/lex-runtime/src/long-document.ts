@@ -326,6 +326,11 @@ export function continuationBlock(state: LongDocumentState, k: number, problems:
   ].join("\n");
 }
 
+/** A message naming a part ("Kontynuuj: napisz część 2 z 3.", "Popraw część 3 z 3."): legal work. */
+export function namesDocumentPart(message: string): boolean {
+  return /\bcz[eę][śs][ćc]\s+\d{1,2}\s+z\s+\d{1,2}\b/iu.test(message);
+}
+
 /** The rule the model follows for a long letter (the system prompt of drafting turns). */
 export const LONG_DOCUMENT_RULE = [
   "DŁUGIE PISMO (aplikacja): jeśli pismo, regulamin albo umowa przekroczą ok. 10 stron (ok. 20 000 znaków), nie pisz ich w jednej odpowiedzi — limit długości odpowiedzi je utnie.",

@@ -471,4 +471,16 @@ describe("długie pismo w częściach: czat i plik", () => {
     await send("Kontynuuj");
     expect(String(current.execute.mock.calls.at(-1)?.[0].query)).not.toContain("# DŁUGIE PISMO");
   });
+
+  it("prośba o część w sprawie (AUTO) idzie ścieżką prawną, nie rozmową", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    current.answers.push("Odpowiedź.");
+    await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ query: "Popraw część 3 z 3.", provider: "openai", model: "gpt-test", primarySkill: "AUTO", mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } });
+    expect(current.execute).toHaveBeenCalled();
+    expect(current.execute.mock.calls[0]?.[0].conversationalOnly).not.toBe(true);
+  });
 });
