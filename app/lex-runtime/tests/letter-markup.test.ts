@@ -190,3 +190,30 @@ describe("numbered points through a letter", () => {
     expect(bad(7)).not.toThrow();
   });
 });
+
+describe("list of attachments: its own numbering from 1", () => {
+  const renderer = new LocalLegalDocumentRenderer({ timeoutMs: 20_000 });
+  const ast = (tail: string) =>
+    validateLegalDocumentAst(letterMarkupAst(["@TYTUL: POZEW", "@SEKCJA: III. Uzasadnienie", "71. Powód wezwał pozwanego.", "72. Pozwany nie zapłacił.", tail, ...(tail.includes("@PODPIS") ? [] : ["@PODPIS: r.pr. X"])].join("\n"), options), []).ast;
+  const lists = (value: ReturnType<typeof ast>) => value.blocks.filter((block) => block.type === "list") as Array<{ start?: number; items: unknown[] }>;
+
+  it("@ZALACZNIKI with the points' numbers continued and blank lines: one list from 1", async () => {
+    const value = ast("@PODPIS: r.pr. X\n@ZALACZNIKI:\n73. Umowa\n\n74. Faktura\n75. Wezwanie");
+    expect(lists(value).map((list) => [list.start ?? 1, list.items.length])).toEqual([[71, 2], [1, 3]]);
+    const text = (await renderer.render("docx", value)).text;
+    expect(text).toMatch(/1[.)]\s+Umowa/u);
+    expect(text).toMatch(/3[.)]\s+Wezwanie/u);
+    expect(text).not.toMatch(/73[.)]\s+Umowa/u);
+  });
+
+  it("a section heading „IV. Załączniki” and a plain line „Załączniki:” open the list too", () => {
+    expect(lists(ast("@SEKCJA: IV. Załączniki\n5. Umowa\n6. Faktura")).at(-1)).toMatchObject({ items: [expect.anything(), expect.anything()] });
+    expect(lists(ast("@SEKCJA: IV. Załączniki\n5. Umowa\n6. Faktura")).at(-1)?.start).toBeUndefined();
+    expect(lists(ast("Załączniki:\n4. Umowa")).at(-1)?.start).toBeUndefined();
+  });
+
+  it("a sentence about attachments is not the list; points after another section keep their numbers", () => {
+    expect(lists(ast("Załączniki do umowy stanowią jej integralną część.\n73. Pozwany milczał.")).at(-1)?.start).toBe(73);
+    expect(lists(ast("@SEKCJA: IV. Załączniki\n1. Umowa\n@SEKCJA: V. Wnioski\n73. Wniosek")).at(-1)?.start).toBe(73);
+  });
+});
