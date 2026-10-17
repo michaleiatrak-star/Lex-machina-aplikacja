@@ -32,6 +32,50 @@ export function joinContinuation(text, next) {
     }
     return text + next;
 }
+const TAIL_MAX = 4_000;
+const START_PROBE = 40;
+/**
+ * The answer up to its last whole paragraph (or, in one long paragraph, its last whole sentence)
+ * and the unfinished rest. Asking for that rest again from its first word puts the seam on a
+ * paragraph boundary, where no letter is doubled or lost; null when the answer ends whole or has
+ * no such boundary (then it is continued where it stopped).
+ */
+export function unfinishedTail(text) {
+    if (!text.trim() || /\n\s*$/u.test(text))
+        return null;
+    const line = text.lastIndexOf("\n");
+    if (line > 0 && text.length - line - 1 <= TAIL_MAX && text.slice(0, line).trim() && text.slice(line + 1).trim()) {
+        return { kept: text.slice(0, line + 1), tail: text.slice(line + 1) };
+    }
+    const sentences = [...text.matchAll(/[.!?…;][”"»)]?\s+(?=\S)/gu)];
+    const last = sentences.at(-1);
+    if (last && text.length - (last.index + last[0].length) <= TAIL_MAX) {
+        const at = last.index + last[0].length;
+        return { kept: text.slice(0, at), tail: text.slice(at) };
+    }
+    return null;
+}
+/** The request for the paragraph the limit cut, rewritten whole, and the rest of the answer. */
+export function rewriteTailPrompt(tail) {
+    const start = tail.trim().replace(/\s+/gu, " ");
+    const shown = start.length > 160 ? `${start.slice(0, 160)}…` : start;
+    return `Twoja poprzednia odpowiedź została ucięta na limicie długości w połowie akapitu. Ten niedokończony akapit usunięto; zaczynał się od: „${shown}”. Napisz ten akapit od jego pierwszego słowa, w całości, a potem kontynuuj odpowiedź. Bez wstępu, bez powtarzania wcześniejszych akapitów i bez podsumowania.`;
+}
+/**
+ * The answer kept to its last whole paragraph joined with the model's rewrite of the cut one,
+ * from where the rewrite starts that paragraph (a preamble or a repeated paragraph before it is
+ * dropped). A reply that only continues the cut words (lower case, punctuation) is joined to the
+ * whole text instead; a reworded paragraph replaces the cut one.
+ */
+export function joinRewrittenTail(kept, tail, next) {
+    const probe = tail.trim().slice(0, START_PROBE);
+    const at = probe.length >= 8 ? next.slice(0, 2_000 + probe.length).indexOf(probe) : -1;
+    if (at >= 0)
+        return kept + next.slice(at);
+    if (/^\s*[\p{Ll},.;:)\]]/u.test(next))
+        return joinContinuation(kept + tail, next);
+    return kept + next.trimStart();
+}
 /** Continuation pieces joined in order. */
 export function joinContinuations(pieces) {
     return pieces.reduce((text, piece) => joinContinuation(text, piece), "");

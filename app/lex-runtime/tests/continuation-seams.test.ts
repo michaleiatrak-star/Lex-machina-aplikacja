@@ -72,3 +72,41 @@ describe("model lokalny: ucięcie na limicie wyjścia widoczne w tekście", asyn
     expect(await readLocalSse(sse("stop"), undefined, undefined, true)).toBe("Pozew o zapłatę, na mocy");
   });
 });
+
+describe("ucięty akapit napisany od nowa (szew między akapitami)", () => {
+  it("odcina niedokończony akapit albo zdanie; całe zakończenie zostaje", async () => {
+    const { unfinishedTail } = await import("../src/providers/continuation-seams.js");
+    expect(unfinishedTail("§ 1. Postanowienia ogólne.\n§ 2. Zarządc")).toEqual({ kept: "§ 1. Postanowienia ogólne.\n", tail: "§ 2. Zarządc" });
+    expect(unfinishedTail("Pierwsze zdanie. Drugie zdanie urwa")).toEqual({ kept: "Pierwsze zdanie. ", tail: "Drugie zdanie urwa" });
+    expect(unfinishedTail("Całość.\n")).toBeNull();
+    expect(unfinishedTail("bez granicy zdania urwa")).toBeNull();
+  });
+
+  it("dokleja przepisany akapit od jego początku; wstęp i powtórzony akapit odpadają", async () => {
+    const { joinRewrittenTail } = await import("../src/providers/continuation-seams.js");
+    const kept = "§ 1. Postanowienia ogólne.\n";
+    const tail = "§ 2. Zarządca nieruchomości odpowiada za utrzym";
+    const next = "Kontynuuję.\n§ 1. Postanowienia ogólne.\n§ 2. Zarządca nieruchomości odpowiada za utrzymanie części wspólnych.\n§ 3. Koszty.";
+    expect(joinRewrittenTail(kept, tail, next)).toBe("§ 1. Postanowienia ogólne.\n§ 2. Zarządca nieruchomości odpowiada za utrzymanie części wspólnych.\n§ 3. Koszty.");
+    // Only the cut words continued: joined to the whole text.
+    expect(joinRewrittenTail(kept, tail, "anie części wspólnych.")).toBe("§ 1. Postanowienia ogólne.\n§ 2. Zarządca nieruchomości odpowiada za utrzymanie części wspólnych.");
+    // Reworded: replaces the cut paragraph.
+    expect(joinRewrittenTail(kept, tail, "§ 2. Za utrzymanie części wspólnych odpowiada zarządca.")).toBe("§ 1. Postanowienia ogólne.\n§ 2. Za utrzymanie części wspólnych odpowiada zarządca.");
+  });
+
+  it("continueAtLength prosi o akapit od nowa zamiast dokańczania w pół słowa", async () => {
+    const { continueAtLength } = await import("../src/providers/ai-sdk-adapter.js");
+    const sent: string[] = [];
+    const result = await continueAtLength(
+      { fullText: "§ 1. Postanowienia ogólne.\n§ 2. Zarządc", finishReason: "length" },
+      async (messages) => {
+        sent.push(messages.map((m) => m.content).join("|"));
+        return { fullText: "§ 2. Zarządca odpowiada za części wspólne.\n§ 3. Koszty.", finishReason: "stop" };
+      },
+      [{ role: "user", content: "Napisz regulamin." }]
+    );
+    expect(result.fullText).toBe("§ 1. Postanowienia ogólne.\n§ 2. Zarządca odpowiada za części wspólne.\n§ 3. Koszty.");
+    expect(sent[0]).toContain("|§ 1. Postanowienia ogólne.\n|");
+    expect(sent[0]).toContain("zaczynał się od: „§ 2. Zarządc”");
+  });
+});
