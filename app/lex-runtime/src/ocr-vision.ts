@@ -5,6 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import type { IngestedPage, OcrCorrection, OcrLine } from "./document-ingestion.js";
+import { ocrLineText } from "./document-ingestion.js";
 
 /**
  * Doubtful OCR lines read again by a local vision model (Qwen2.5-VL 3B through the
@@ -145,7 +146,7 @@ export function arbitrateLine(
 export function doubtfulLines(lines: readonly OcrLine[], known: ReadonlySet<string>): number[] {
   return lines.flatMap((line, index) => {
     const score = typeof line.score === "number" ? line.score : 1;
-    if (!line.crop || score < HANDWRITING_SCORE) return [];
+    if (!line.crop || line.stamp || score < HANDWRITING_SCORE) return [];
     const unknown = (line.text.match(CHECKED_WORD) ?? []).some((word) => !known.has(word));
     return score < DOUBT_SCORE || unknown ? [index] : [];
   });
@@ -197,7 +198,7 @@ export async function correctWithVision(
       return decided.text === line.text ? line : { ...line, text: decided.text };
     });
     if (corrections.length === (page.corrections ?? []).length) return page;
-    return { ...page, lines, text: lines.map((line) => line.text).join("\n"), corrections };
+    return { ...page, lines, text: lines.map(ocrLineText).join("\n"), corrections };
   });
 }
 

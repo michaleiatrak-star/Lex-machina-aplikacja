@@ -30,6 +30,8 @@ export type OcrLine = {
   text: string;
   score?: number | null;
   box?: [number, number, number, number];
+  // Read from a coloured stamp's own layer (paddle_worker split_stamp_ink), not from the letter.
+  stamp?: boolean;
   // Straightened image of the line (base64 JPEG) for the local vision model; dropped
   // right after that step, never stored.
   crop?: string;
@@ -88,8 +90,16 @@ export type OcrReviewLine = {
   line: number;
   text: string;
   score?: number;
-  reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS";
+  reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP";
 };
+
+// Put before a stamp's line in the page text (the same mark as the OCR worker's).
+export const STAMP_MARK = "[PIECZĘĆ lub kolorowy tusz]";
+
+/** A line of an OCR page as the page text carries it (a stamp's line marked). */
+export function ocrLineText(line: Pick<OcrLine, "text" | "stamp">): string {
+  return line.stamp ? `${STAMP_MARK} ${line.text}` : line.text;
+}
 
 export type OcrCorrection = {
   line: number;

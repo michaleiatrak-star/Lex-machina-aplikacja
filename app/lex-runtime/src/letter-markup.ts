@@ -212,7 +212,7 @@ export function letterMarkupAst(
     const item = LIST_ITEM.exec(line);
     if (item) {
       const ordered = Boolean(item[1]);
-      const number = attachments ? (list ? list.start + list.items.length : 1) : ordered ? Number.parseInt(item[1]!, 10) : 0;
+      const number: number = attachments ? (list ? list.start + list.items.length : 1) : ordered ? Number.parseInt(item[1]!, 10) : 0;
       // A number out of sequence ("1." after "7.") starts a new list from that number.
       if (list && (list.ordered !== ordered || (ordered && number !== list.start + list.items.length))) flushList();
       list ??= { ordered, start: ordered && number >= 1 && number <= 9_999 ? number : 1, items: [] };

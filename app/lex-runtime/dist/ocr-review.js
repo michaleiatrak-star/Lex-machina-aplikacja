@@ -1,9 +1,12 @@
+import { ocrLineText } from "./document-ingestion.js";
 // Put before a flagged line in the text, so a model reading the document does not take it as written.
 export const REVIEW_MARK = "[OCR: odczyt niepewny, sprawdź w skanie]";
 export const REVIEW_SCORE = 0.85;
 const DOUBT_SCORE = 0.95;
 const UNKNOWN_SHARE = 0.34;
 const WORD = /\p{L}{3,}/gu;
+// "OkregANCELABkoWieDeY", "przeproWadzZZidBW5d6z": not a Polish word or abbreviation.
+const GARBLED = /\p{Ll}\p{Lu}+\p{Ll}|\p{Ll}\p{Lu}{2,}|\p{L}\d+\p{L}/u;
 export async function ocrReviewLines(page, knownWords) {
     if (page.source !== "OCR" || !page.lines?.length)
         return [];
@@ -14,6 +17,10 @@ export async function ocrReviewLines(page, knownWords) {
     const found = [];
     lines.forEach((line, index) => {
         const score = typeof line.score === "number" ? line.score : undefined;
+        if (line.stamp) {
+            found.push({ line: index, text: line.text, ...(score !== undefined ? { score } : {}), reason: "STAMP" });
+            return;
+        }
         if (score === undefined)
             return;
         if (score < REVIEW_SCORE) {
@@ -25,6 +32,10 @@ export async function ocrReviewLines(page, knownWords) {
         // A line of digits alone read with doubt: a handwritten date ("810.2024" for "8.10.2024").
         if (score < DOUBT_SCORE && (words.length === 0 || unknown / words.length >= UNKNOWN_SHARE)) {
             found.push({ line: index, text: line.text, score, reason: "UNKNOWN_WORDS" });
+            return;
+        }
+        if (score < DOUBT_SCORE && line.text.split(/\s+/u).some((token) => GARBLED.test(token))) {
+            found.push({ line: index, text: line.text, score, reason: "GARBLED" });
         }
     });
     return found;
@@ -37,7 +48,7 @@ export async function markOcrReview(page, knownWords) {
     const review = await ocrReviewLines(page, knownWords);
     if (!review.length)
         return page;
-    const flagged = new Set(review.map((item) => item.line));
-    const text = page.lines.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : line.text)).join("\n");
+    const flagged = new Set(review.filter((item) => item.reason !== "STAMP").map((item) => item.line));
+    const text = page.lines.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line))).join("\n");
     return { ...page, text, review };
 }

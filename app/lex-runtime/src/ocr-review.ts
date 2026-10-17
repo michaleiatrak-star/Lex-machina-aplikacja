@@ -1,4 +1,4 @@
-import type { IngestedPage, OcrReviewLine } from "./document-ingestion.js";
+import { ocrLineText, type IngestedPage, type OcrReviewLine } from "./document-ingestion.js";
 
 /**
  * Lines of an OCR page a person should check against the scan: handwriting, stamps and
@@ -7,6 +7,9 @@ import type { IngestedPage, OcrReviewLine } from "./document-ingestion.js";
  * unsure of it, or fairly unsure and most of its words are unknown to the dictionary
  * (SGJP, PESEL names, TERYT), or a line without words read with doubt. Measured on two real
  * scans: 11 of 11 handwritten lines flagged, none of 137 printed lines.
+ * A stamp's own line (coloured ink read apart) is always listed. A line a black stamp ran
+ * through is read as one word glued from both ("przeproWadzZZidBW5d6z"): a capital inside a
+ * word or letters around a digit, read with doubt, is listed too.
  */
 
 export type { OcrReviewLine };
@@ -21,6 +24,8 @@ const DOUBT_SCORE = 0.95;
 const UNKNOWN_SHARE = 0.34;
 
 const WORD = /\p{L}{3,}/gu;
+// "OkregANCELABkoWieDeY", "przeproWadzZZidBW5d6z": not a Polish word or abbreviation.
+const GARBLED = /\p{Ll}\p{Lu}+\p{Ll}|\p{Ll}\p{Lu}{2,}|\p{L}\d+\p{L}/u;
 
 export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords): Promise<OcrReviewLine[]> {
   if (page.source !== "OCR" || !page.lines?.length) return [];
@@ -31,6 +36,10 @@ export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords)
   const found: OcrReviewLine[] = [];
   lines.forEach((line, index) => {
     const score = typeof line.score === "number" ? line.score : undefined;
+    if (line.stamp) {
+      found.push({ line: index, text: line.text, ...(score !== undefined ? { score } : {}), reason: "STAMP" });
+      return;
+    }
     if (score === undefined) return;
     if (score < REVIEW_SCORE) {
       found.push({ line: index, text: line.text, score, reason: "LOW_CONFIDENCE" });
@@ -41,6 +50,10 @@ export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords)
     // A line of digits alone read with doubt: a handwritten date ("810.2024" for "8.10.2024").
     if (score < DOUBT_SCORE && (words.length === 0 || unknown / words.length >= UNKNOWN_SHARE)) {
       found.push({ line: index, text: line.text, score, reason: "UNKNOWN_WORDS" });
+      return;
+    }
+    if (score < DOUBT_SCORE && line.text.split(/\s+/u).some((token) => GARBLED.test(token))) {
+      found.push({ line: index, text: line.text, score, reason: "GARBLED" });
     }
   });
   return found;
@@ -53,7 +66,7 @@ export async function ocrReviewLines(page: IngestedPage, knownWords: KnownWords)
 export async function markOcrReview(page: IngestedPage, knownWords: KnownWords): Promise<IngestedPage> {
   const review = await ocrReviewLines(page, knownWords);
   if (!review.length) return page;
-  const flagged = new Set(review.map((item) => item.line));
-  const text = page.lines!.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : line.text)).join("\n");
+  const flagged = new Set(review.filter((item) => item.reason !== "STAMP").map((item) => item.line));
+  const text = page.lines!.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line))).join("\n");
   return { ...page, text, review };
 }

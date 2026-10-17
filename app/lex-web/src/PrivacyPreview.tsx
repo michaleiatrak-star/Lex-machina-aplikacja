@@ -130,7 +130,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const kept = (page: number, range: { start: number; end: number }) =>
     directives.some((item) => item.page === page && item.action === "KEEP" && overlaps(item, range));
   const aiHints = review.suggestions.filter((item) => (item.aiNotPerson || item.uncertain) && !props.keepClear);
-  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text })));
+  const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP" })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
     ? 0
@@ -401,11 +401,14 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ) : null}
           {doubtful.length ? (
             <div>
-              <small>Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.</small>
+              <small>
+                Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.
+                {doubtful.some((line) => line.stamp) ? " Pieczęć w kolorze odczytana osobno od tekstu pisma." : ""}
+              </small>
               <ul>
                 {doubtful.map((line, index) => (
                   <li key={`ocr-${line.page}-${index}`}>
-                    <span>s. {line.page} · „{line.text}”</span>
+                    <span>s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”</span>
                     <span className="privacy-preview-todo-actions">
                       {scanned ? (
                         <button type="button" onClick={() => showOnScan(line.page, { line: line.line }, true)}>

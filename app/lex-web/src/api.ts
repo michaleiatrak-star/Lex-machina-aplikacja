@@ -590,7 +590,7 @@ export type DocumentReviewResponse = {
     // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
     // Lines to check against the scan (handwriting, stamps, doubtful reading).
-    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" }>;
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
