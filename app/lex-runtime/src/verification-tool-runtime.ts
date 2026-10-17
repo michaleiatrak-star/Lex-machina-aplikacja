@@ -2060,14 +2060,6 @@ export class LegalVerificationToolRuntime {
         continue;
       }
 
-      // EU law (RODO, AI Act, a regulation or directive by number or CELEX): the article from
-      // Cellar/EUR-Lex, in its consolidated version applicable today, the act's in-force status.
-      const eu = euAct(actInput || (typeof call.input.claim === "string" ? call.input.claim : ""));
-      if (eu && typeof call.input.claim === "string" && !asOf) {
-        results.push({ tool_use_id: call.id, content: await this.verifyEu(call.id, call.input.claim, eu) });
-        continue;
-      }
-
       // Modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG), także KC/KPC/KK/KPK.
       // Gdy kopia nie może odpowiedzieć, próba w źródle i dołączenie aktu do kopii.
       // Modele w chmurze: wyłącznie źródło (Sejm ELI), bez cichego przejścia na kopię.
