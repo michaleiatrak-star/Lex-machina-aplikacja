@@ -244,7 +244,7 @@ export const LETTER_MARKUP_CONTRACT = [
     "@PODSEKCJA: <1. Subsection title> — a subsection under the current section (long pleadings, contracts).",
     "Body: one paragraph per line; list items start with \"1.\" (numbered) or \"- \" (bullets); **label:** marks a bold label at the start of a paragraph or item (e.g. \"**Żądanie główne:** …\").",
     "@PODPIS: then the signer's name below it (unknown: leave the line empty).",
-    "@ZALACZNIKI: then the attachments as a numbered list below it (only when there are attachments).",
+    "@ZALACZNIKI: then the attachments as a numbered list below it, its own numbering from 1 (not the numbers of the points before it; only when there are attachments).",
     "Copy the letter's text from the conversation without changing its substance: no shortening, no new claims, no meta-sections (DANE DO UZUPEŁNIENIA, UWAGI, CO DALEJ, HYBRID-VALIDATION, disclaimers, verification markers).",
     "Missing user data go into neutral square-bracket fields such as [Kwota] or [Termin zapłaty]; never [UZUPEŁNIJ].",
     "A person, firm or address of the case is written ONLY as its generation alias from the map below, with the grammatical case of this occurrence after a bar: [LMPII:D01:PERSON:0001|GEN] after \"wobec\", [LMPII:D01:ADDRESS:0001|LOC] after \"przy\" (NOM, GEN, DAT, ACC, INS, LOC, VOC). The value is inflected locally; never write the name or the address yourself."
