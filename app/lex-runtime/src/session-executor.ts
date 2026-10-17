@@ -222,7 +222,7 @@ import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./d
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { issueKey } from "./case-work.js";
-import { LONG_DOCUMENT_RULE } from "./long-document.js";
+import { longDocumentRule } from "./long-document.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -2537,7 +2537,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
         const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
         // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
-        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(LONG_DOCUMENT_RULE);
+        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(longDocumentRule(request.model.startsWith("local/")));
         const sharedForSkill = [
           "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
           ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])

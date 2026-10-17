@@ -71,7 +71,7 @@ import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./d
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { issueKey } from "./case-work.js";
-import { LONG_DOCUMENT_RULE } from "./long-document.js";
+import { longDocumentRule } from "./long-document.js";
 import { applyAutomaticVerificationMarkers, releaseModelUnverifiedMarkers, detectHistoricalAsOf, planAutomaticLegalVerification } from "./gate-i-auto-verification.js";
 import { runGateIRuntimePrelude } from "./gate-i-runtime-prelude.js";
 import { evaluateGateIInputCompleteness, evaluateGateIWorkflowContract, gateIWorkflowContract } from "./gate-i-contracts.js";
@@ -1509,7 +1509,7 @@ export class SafeSessionExecutor {
                 const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
                 // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
                 if (draftsLetter || skill === "analizator-umow-v1")
-                    pathSections.push(LONG_DOCUMENT_RULE);
+                    pathSections.push(longDocumentRule(request.model.startsWith("local/")));
                 const sharedForSkill = [
                     "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
                     ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])

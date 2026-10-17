@@ -147,13 +147,20 @@ function parseBlock(value, aliases, used, depth, ids) {
         if (typeof record.ordered !==
             "boolean" ||
             !Array.isArray(record.items) ||
-            record.items.length > 500) {
+            record.items.length > 500 ||
+            (record.start !== undefined &&
+                (!Number.isInteger(record.start) ||
+                    record.start < 1 ||
+                    record.start > 9_999))) {
             throw new Error("AST_LIST_INVALID");
         }
         return {
             ...(id ? { id } : {}),
             type: "list",
             ordered: record.ordered,
+            ...(record.ordered && typeof record.start === "number" && record.start > 1
+                ? { start: record.start }
+                : {}),
             items: record.items.map((item) => parseInlineArray(item, aliases, used))
         };
     }

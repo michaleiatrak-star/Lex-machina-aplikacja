@@ -537,6 +537,11 @@ export function cleanAstMarkup(value: unknown): unknown {
 const AST_GENERATION_ATTEMPTS = 2;
 // Above this, a text to render goes in pieces (about 6 pages of the office style each).
 export const LONG_SOURCE_CHARS = 18_000;
+// A local model writes at most 4 096 tokens an answer: its pieces are ~2 pages, so the markup of
+// a piece (the text 1:1 and its markers) fits one answer. A whole piece of 14 000 characters was
+// cut every time (DOCUMENT_PART_INVALID after the repair round).
+export const LOCAL_SOURCE_CHARS = 5_000;
+const localSourceModel = (model: string) => model.startsWith("local/");
 const REPAIRABLE_AST_ERROR = /^(?:DOCUMENT_AST_JSON_(?:MISSING|INVALID)|DOCUMENT_AST_CONTRACT_MISMATCH|AST_[A-Z_]+|LETTER_MARKUP_[A-Z_]+(?::[A-Z_]+)?)$/u;
 
 /**
@@ -603,7 +608,9 @@ export class LegalDocumentAstGenerator {
   }> {
     // A long text to render (a letter from its parts, a long pipeline draft or contract): in
     // pieces under the output limit, each checked, joined into one document.
-    if (request.sourceText && request.sourceText.text.length > LONG_SOURCE_CHARS) return this.generateInParts(request);
+    if (request.sourceText && request.sourceText.text.length > (localSourceModel(request.model) ? LOCAL_SOURCE_CHARS : LONG_SOURCE_CHARS)) {
+      return this.generateInParts(request);
+    }
     // A malformed AST (no JSON, a block shape, the wrong type) gets one repair round with the
     // validation error; a session the gates blocked is a policy decision and is not retried.
     let repair: string | null = null;
@@ -725,7 +732,7 @@ export class LegalDocumentAstGenerator {
   // One piece of a long text in the letter markup: the same session and gates as one document.
   private async generateInParts(request: LegalDocumentAstGenerationRequest): Promise<Awaited<ReturnType<LegalDocumentAstGenerator["generate"]>>> {
     const source = request.sourceText!;
-    const pieces = splitSourceText(source.text);
+    const pieces = localSourceModel(request.model) ? splitSourceText(source.text, LOCAL_SOURCE_CHARS) : splitSourceText(source.text);
     // The markup contract for every type (a contract's § as @SEKCJA): one JSON object for 20
     // pages did not fit the output limit (DOCUMENT_AST_JSON_INVALID).
     const { processRenderOnly: _renderOnly, ...rest } = request;

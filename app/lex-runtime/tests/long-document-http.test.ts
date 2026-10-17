@@ -472,6 +472,26 @@ describe("długie pismo w częściach: czat i plik", () => {
     expect(String(current.execute.mock.calls.at(-1)?.[0].query)).not.toContain("# DŁUGIE PISMO");
   });
 
+  it("„dalej” i „Kontynuuj” (AUTO) przy niedokończonym piśmie: kolejna część, nie rozmowa", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    const send = (query: string, primarySkill: string) =>
+      request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({ query, provider: "openai", model: "gpt-test", primarySkill, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+        .expect(200);
+    current.answers.push(`Regulamin jest długi: powstanie w 3 częściach.\n\n\`\`\`plan-pisma\n${part("regulamin-plan.json")}\n\`\`\`\n\n${part("regulamin-1.txt")}`);
+    await send("Napisz pełny regulamin sklepu internetowego.", DR);
+    for (const message of ["dalej", "Kontynuuj"]) {
+      current.answers.push("Odpowiedź.");
+      await send(message, "AUTO");
+      const call = current.execute.mock.calls.at(-1)?.[0];
+      expect(call?.conversationalOnly).not.toBe(true);
+      expect(String(call?.query)).toContain("# DŁUGIE PISMO — CZĘŚĆ 2 Z 3");
+    }
+  });
+
   it("prośba o część w sprawie (AUTO) idzie ścieżką prawną, nie rozmową", async () => {
     const current = fixture();
     const { authorization, caseId } = await bootstrapCase(current);

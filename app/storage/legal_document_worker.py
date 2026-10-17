@@ -292,7 +292,9 @@ def docx_block(block, align=None, profile=None):
     if t == "list":
         out = []
         ordered = bool(block.get("ordered"))
-        for index, item in enumerate(block.get("items") or [], start=1):
+        # The first number of points running through the letter ("23." after a heading).
+        start = block.get("start") if isinstance(block.get("start"), int) and block.get("start") >= 1 else 1
+        for index, item in enumerate(block.get("items") or [], start=start):
             # An office letter numbers its points "1)", as in the office's templates.
             prefix = (("%d) " if profile == "lex-office-tnr-v1" else "%d. ") % index) if ordered else "• "
             nodes = [{"type": "text", "text": prefix}] + list(item)
@@ -421,7 +423,11 @@ def odt_block(block, align=None):
     if t == "page_break":
         return '<text:p text:style-name="PageBreak"/>'
     if t == "list":
-        items = "".join("<text:list-item><text:p>%s</text:p></text:list-item>" % odt_inline(item) for item in block.get("items") or [])
+        start = block.get("start") if block.get("ordered") and isinstance(block.get("start"), int) and block.get("start") > 1 else None
+        items = "".join(
+            "<text:list-item%s><text:p>%s</text:p></text:list-item>" % (' text:start-value="%d"' % start if start and index == 0 else "", odt_inline(item))
+            for index, item in enumerate(block.get("items") or [])
+        )
         return '<text:list text:style-name="%s">%s</text:list>' % ("Numbered" if block.get("ordered") else "Bulleted", items)
     if t == "table":
         source_rows = block.get("rows") or []

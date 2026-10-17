@@ -464,6 +464,53 @@ function sendCaseAccessError(res, error) {
     });
     return true;
 }
+// A file from a long letter is converted piece by piece for many minutes (a local model: much
+// longer); the desktop proxy drops a request silent for 1200 s. Asked with `keepAlive: true`,
+// the response starts as 200 after DEFERRED_RESPONSE_AFTER_MS and sends a space every
+// DEFERRED_RESPONSE_INTERVAL_MS (JSON allows leading whitespace); its JSON carries the real
+// status as `deferredStatus`, which the client reads like the HTTP status.
+const DEFERRED_RESPONSE_AFTER_MS = 20_000;
+const DEFERRED_RESPONSE_INTERVAL_MS = 20_000;
+export function keepResponseAlive(res, timing = { afterMs: DEFERRED_RESPONSE_AFTER_MS, intervalMs: DEFERRED_RESPONSE_INTERVAL_MS }) {
+    let started = false;
+    let status = 200;
+    let timer;
+    const stop = () => clearTimeout(timer);
+    const originalStatus = res.status.bind(res);
+    const originalJson = res.json.bind(res);
+    const beat = () => {
+        if (res.writableEnded || res.destroyed)
+            return;
+        if (!started) {
+            if (res.headersSent)
+                return;
+            started = true;
+            originalStatus(200);
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.setHeader("Cache-Control", "no-store");
+            res.flushHeaders();
+        }
+        res.write(" ");
+        timer = setTimeout(beat, timing.intervalMs);
+    };
+    timer = setTimeout(beat, timing.afterMs);
+    res.once("close", stop);
+    res.status = ((code) => {
+        if (started) {
+            status = code;
+            return res;
+        }
+        return originalStatus(code);
+    });
+    res.json = ((body) => {
+        stop();
+        if (!started)
+            return originalJson(body);
+        const payload = body && typeof body === "object" && !Array.isArray(body) ? { ...body, deferredStatus: status } : { body, deferredStatus: status };
+        res.end(JSON.stringify(payload));
+        return res;
+    });
+}
 const EXECUTION_ID_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
 const EXECUTION_DRAFT_TTL_MS = 15 * 60_000;
 const EXECUTION_DRAFT_MAX_ENTRIES = 64;
@@ -4245,6 +4292,8 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/cases/:caseId/artifacts/generate", async (req, res) => {
+        if (req.body?.keepAlive === true)
+            keepResponseAlive(res);
         if (!options.caseAccessService ||
             !options.documentAuthoringService ||
             !options.documentAstGenerator ||
@@ -5918,7 +5967,7 @@ export function createLexHttpApp(options) {
                     const askedPart = longDocument && (!isComplete(longDocument) || longDocument.failed) ? requestedPart(latestUserMessage(request.query), longDocument) : null;
                     askedLongPart = askedPart;
                     if (longDocument && askedPart) {
-                        request.query = `${request.query}\n\n${continuationBlock(longDocument, askedPart, longDocument.failed?.k === askedPart ? longDocument.failed.problems : [])}`;
+                        request.query = `${request.query}\n\n${continuationBlock(longDocument, askedPart, longDocument.failed?.k === askedPart ? longDocument.failed.problems : [], { local: localModel })}`;
                         request.onStep?.("PREPARE", `długie pismo: część ${askedPart} z ${longDocument.plan.czesci.length}`);
                     }
                 }

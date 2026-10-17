@@ -149,3 +149,44 @@ describe("office letter layout (lex-office-tnr-v1)", () => {
     expect(paragraphs.find((item) => item.includes("(art. 5 ustawy"))).toContain('<w:jc w:val="center"/>');
   });
 });
+
+describe("numbered points through a letter", () => {
+  const renderer = new LocalLegalDocumentRenderer({ timeoutMs: 20_000 });
+  const markup = [
+    "@TYTUL: POZEW",
+    "@SEKCJA: III. Uzasadnienie",
+    "@PODSEKCJA: 1. Strony",
+    "1. Powód zawarł umowę.",
+    "2. Pozwany odebrał roboty.",
+    "",
+    "@PODSEKCJA: 2. Faktury",
+    "23. Powód wystawił faktury.",
+    "",
+    "24. Pozwany nie zapłacił:",
+    "1) faktury nr 3,",
+    "2) faktury nr 4.",
+    "@PODPIS: r.pr. X"
+  ].join("\n");
+  const ast = validateLegalDocumentAst(letterMarkupAst(markup, options), []).ast;
+
+  it("a list keeps its first number; a number out of sequence starts a new list", () => {
+    const lists = ast.blocks.filter((block) => block.type === "list") as Array<{ start?: number; items: unknown[] }>;
+    expect(lists.map((list) => [list.start ?? 1, list.items.length])).toEqual([[1, 2], [23, 1], [24, 1], [1, 2]]);
+  });
+
+  it("docx and odt number 23 and 24, not 1", async () => {
+    const docx = await renderer.render("docx", ast);
+    expect(docx.text).toMatch(/23[.)]\s+Powód wystawił faktury/u);
+    expect(docx.text).toMatch(/24[.)]\s+Pozwany nie zapłacił/u);
+    expect(docx.text).not.toMatch(/\b1[.)]\s+Powód wystawił faktury/u);
+    const odt = await renderer.render("odt", ast);
+    expect(unzip(odt.data, "content.xml")).toContain('<text:list-item text:start-value="23">');
+  });
+
+  it("AST: a start below 1 or not an integer is rejected", () => {
+    const bad = (start: unknown) => () => validateLegalDocumentAst({ ...ast, blocks: [{ type: "list", ordered: true, start, items: [[{ type: "text", text: "x" }]] }] }, []);
+    expect(bad(0)).toThrow("AST_LIST_INVALID");
+    expect(bad(2.5)).toThrow("AST_LIST_INVALID");
+    expect(bad(7)).not.toThrow();
+  });
+});

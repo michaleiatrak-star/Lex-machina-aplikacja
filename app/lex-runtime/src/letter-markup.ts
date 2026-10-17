@@ -109,9 +109,11 @@ export function letterMarkupAst(
   const blocks: LegalBlockNode[] = [];
   let title = false;
   let body = 0;
-  let list: { ordered: boolean; items: LegalInlineNode[][] } | null = null;
+  // An ordered list keeps its first number ("23." after a heading or a blank line renders 23,
+  // not 1: points run through a whole pleading, also one written in parts).
+  let list: { ordered: boolean; start: number; items: LegalInlineNode[][] } | null = null;
   const flushList = () => {
-    if (list?.items.length) blocks.push({ type: "list", ordered: list.ordered, items: list.items });
+    if (list?.items.length) blocks.push({ type: "list", ordered: list.ordered, ...(list.ordered && list.start > 1 ? { start: list.start } : {}), items: list.items });
     list = null;
   };
   // The lines of a block (a party, a signature) up to the next marker or a blank line.
@@ -196,8 +198,10 @@ export function letterMarkupAst(
     const item = LIST_ITEM.exec(line);
     if (item) {
       const ordered = Boolean(item[1]);
-      if (list && list.ordered !== ordered) flushList();
-      list ??= { ordered, items: [] };
+      const number = ordered ? Number.parseInt(item[1]!, 10) : 0;
+      // A number out of sequence ("1." after "7.") starts a new list from that number.
+      if (list && (list.ordered !== ordered || (ordered && number !== list.start + list.items.length))) flushList();
+      list ??= { ordered, start: ordered && number >= 1 && number <= 9_999 ? number : 1, items: [] };
       list.items.push(markupInlines(item[3]!.trim()));
       body += 1;
       continue;
