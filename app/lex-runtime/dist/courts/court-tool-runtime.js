@@ -44,7 +44,7 @@ export class CourtToolRuntime {
         return [
             "# SĄD WŁAŚCIWY (aplikacja)",
             "The court a letter is addressed to, its seat and its address come only from court_for_address or from the case record (SĄD SPRAWY in the material); never from memory or from a city's name alone (Warszawa, Kraków, Łódź, Poznań, Wrocław, Gdańsk, Katowice, Lublin and Szczecin have several district courts).",
-            "Material jurisdiction (SR or SO, art. 16-17 KPC, the value of the claim) is yours to decide with its basis; the tool returns both levels for the place.",
+            "Material jurisdiction (SR or SO, art. 17 KPC, the value of the claim) is yours to decide with its basis; the tool returns both levels for the place.",
             "status FOUND: use the court as returned. NEAR_BOUNDARY or ADDRESS_*: write the court as [Sąd do ustalenia: …] naming the candidates and what is missing (an existing building number); never pick one.",
             "kind.heard false: the district court does not hear that kind of case; the tool lists the courts of the region that do - name it and say the department must be confirmed."
         ].join("\n");
