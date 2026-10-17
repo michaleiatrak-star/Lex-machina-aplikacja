@@ -294,7 +294,8 @@ export function requestedPart(query: string, state: LongDocumentState): number |
 export function presentPart(answer: string, part: { k: number; n: number }, title: string): string {
   return answer
     .replace(PLAN_BLOCK, "")
-    .replace(PART_START, `**Część ${part.k} z ${part.n} — ${title}**`)
+    // Its own paragraph: a heading glued to the sentence before it renders inside that paragraph.
+    .replace(PART_START, `\n\n**Część ${part.k} z ${part.n} — ${title}**\n\n`)
     .replace(PART_END, "")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
