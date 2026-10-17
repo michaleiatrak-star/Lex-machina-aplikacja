@@ -75,6 +75,7 @@ import { completeContractExecution, requireContractExecutionPermit } from "../co
 import { registerGoogleAuthenticatedRoutes, registerGooglePublicRoutes } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues } from "../case-work.js";
+import { addresseeCourt, courtOfCaseDocuments } from "../courts/case-court.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart } from "../long-document.js";
 import { isoDates } from "../supervised-content.js";
 import { buildWorkflowAuditArtifact, isStatefulWorkflowAuditId, parseWorkflowAuditArtifact } from "../workflow-audit-artifact.js";
@@ -5685,6 +5686,11 @@ export function createLexHttpApp(options) {
             request.accountSessionKey =
                 knowledge.caseId;
         }
+        // Document aliases restored locally (the live draft, the court of a party's address).
+        if (options.documentService?.deanonymize) {
+            const documentService = options.documentService;
+            request.restoreDocumentToken = (documentId, sourceToken) => documentService.deanonymize(documentId, sourceToken);
+        }
         const executionId = String(req.get("x-lex-execution-id") ?? "");
         if (EXECUTION_ID_PATTERN.test(executionId)) {
             const owner = draftOwner(res);
@@ -5703,11 +5709,6 @@ export function createLexHttpApp(options) {
                 }
             };
             request.onStep("PREPARE", "przygotowanie wiadomości");
-            // Document aliases in the live draft, from the same local vaults as the answer.
-            const documentService = options.documentService;
-            if (documentService?.deanonymize) {
-                request.restoreDocumentToken = (documentId, sourceToken) => documentService.deanonymize(documentId, sourceToken);
-            }
             request.onDraft = (text) => {
                 const entry = executionDrafts.get(executionId);
                 if (entry && entry.owner === owner) {
@@ -5956,14 +5957,17 @@ export function createLexHttpApp(options) {
             }
             let longDocument = null;
             let askedLongPart = null;
+            // The court of the case (courts/case-court.ts): from its memory, else from its documents.
+            let caseCourt = null;
             // A long letter in parts (any model, also a short "kontynuuj"): the part asked for, with the
             // plan, the last numbers and the end of the previous part from the case's record.
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
                 try {
                     const actor = responseAuthContext(res);
                     const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
-                    longDocument =
-                        (await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion }))).longDocument ?? null;
+                    const memory = await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion }));
+                    longDocument = memory.longDocument ?? null;
+                    caseCourt = memory.court ?? null;
                     const askedPart = longDocument && (!isComplete(longDocument) || longDocument.failed) ? requestedPart(latestUserMessage(request.query), longDocument) : null;
                     askedLongPart = askedPart;
                     if (longDocument && askedPart) {
@@ -5975,6 +5979,32 @@ export function createLexHttpApp(options) {
                     console.error("CASE_MEMORY_LONG_DOCUMENT_READ_FAILED", error instanceof Error ? error.message : String(error));
                 }
             }
+            // A case's documents name its court (a court's letter, a judgment): found once and kept,
+            // the documents of this turn first, then the case's files by a court's head and signature.
+            if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && caseCourt?.zrodlo !== "AKTA") {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    const texts = sessionAttachments
+                        .filter((attachment) => attachment.caseId === knowledge.caseId)
+                        .map((attachment) => ({ documentId: attachment.documentId, text: attachment.chunks[0]?.text ?? "" }));
+                    if (options.caseKnowledgeSearch) {
+                        const hits = await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "ANALYZE", (caseDataKey) => options.caseKnowledgeSearch.search({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion, query: "Sąd Rejonowy Sąd Okręgowy Wydział Sygn. akt", limit: 6 }));
+                        texts.push(...hits.map((hit) => ({ documentId: hit.documentId, text: hit.text })));
+                    }
+                    const fromFiles = courtOfCaseDocuments(texts);
+                    if (fromFiles) {
+                        const found = { ...fromFiles, zrodlo: "AKTA", at: new Date().toISOString() };
+                        await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion, court: found }));
+                        caseCourt = found;
+                    }
+                }
+                catch (error) {
+                    console.error("CASE_COURT_READ_FAILED", error instanceof Error ? error.message : String(error));
+                }
+            }
+            if (caseCourt)
+                request.caseCourt = caseCourt;
             // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
             let threadEvidence = null;
             let caseWork = [];
@@ -7393,6 +7423,23 @@ export function createLexHttpApp(options) {
                 catch (error) {
                     console.error("CASE_MEMORY_LONG_DOCUMENT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
                 }
+            }
+            // The first letter of a case not yet in court: its addressee found by court_for_address
+            // becomes the case's court for the letters after it.
+            const letterCourt = result.status === "DRAFT_PRESENTABLE" && result.answer && !caseCourt && result.courtsFound?.length ? addresseeCourt(result.answer) : null;
+            if (letterCourt && result.courtsFound.includes(letterCourt) && knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({ caseId: knowledge.caseId, caseDataKey, keyVersion: caseView.keyVersion, court: { nazwa: letterCourt, zrodlo: "PISMO", at: new Date().toISOString() } }));
+                    result.caseCourt = { nazwa: letterCourt, zrodlo: "PISMO" };
+                }
+                catch (error) {
+                    console.error("CASE_COURT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
+                }
+            }
+            else if (caseCourt) {
+                result.caseCourt = { nazwa: caseCourt.nazwa, zrodlo: caseCourt.zrodlo, ...(caseCourt.sygnatura ? { sygnatura: caseCourt.sygnatura } : {}) };
             }
             const writtenPart = result.status === "DRAFT_PRESENTABLE" && result.answer ? parsePart(result.answer) : null;
             if (writtenPart && knowledge.caseId && options.caseMemoryStore && options.caseAccessService) {

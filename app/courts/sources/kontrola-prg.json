@@ -1,0 +1,32 @@
+{
+ "gminy": 2479,
+ "zgodne": 2450,
+ "miasta_dzielone": 9,
+ "rozbieznosci": [
+  "1406083 Nowe Miasto nad Pilicą: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406073 Mogielnica: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "2401042 Bobrowniki: akt Sąd Rejonowy w Czeladzi, PRG Sąd Rejonowy w Będzinie",
+  "2401031 Wojkowice: akt Sąd Rejonowy w Czeladzi, PRG Sąd Rejonowy w Będzinie",
+  "2604073 Łagów: akt Sąd Rejonowy w Kielcach, PRG Sąd Rejonowy w Ostrowcu Świętokrzyskim",
+  "2401021 Czeladź: akt Sąd Rejonowy w Czeladzi, PRG Sąd Rejonowy w Będzinie",
+  "1406022 Błędów: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406092 Pniewy: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406012 Belsk Duży: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406053 Grójec: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406042 Goszczyn: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406062 Jasieniec: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406032 Chynów: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "1406113 Warka: akt Sąd Rejonowy w Grójcu, PRG Sąd Rejonowy w Radomiu",
+  "0613022 Jabłoń: akt Sąd Rejonowy w Radzyniu Podlaskim, PRG Sąd Rejonowy w Białej Podlaskiej",
+  "0613052 Podedwórze: akt Sąd Rejonowy w Radzyniu Podlaskim, PRG Sąd Rejonowy w Białej Podlaskiej",
+  "3213032 Darłowo: akt Sąd Rejonowy w Sławnie, PRG Sąd Rejonowy w Koszalinie",
+  "3209033 Bobolice: akt Sąd Rejonowy w Koszalinie, PRG Sąd Rejonowy w Szczecinku",
+  "3213011 Darłowo: akt Sąd Rejonowy w Sławnie, PRG Sąd Rejonowy w Koszalinie",
+  "3213042 Malechowo: akt Sąd Rejonowy w Sławnie, PRG Sąd Rejonowy w Koszalinie"
+ ],
+ "bez_sadu_w_prg": [],
+ "sady_tylko_w_akcie": [
+  "sąd rejonowy w czeladzi"
+ ],
+ "sady_tylko_w_prg": []
+}

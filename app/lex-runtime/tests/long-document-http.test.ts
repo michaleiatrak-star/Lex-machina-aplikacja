@@ -209,6 +209,8 @@ function fixture() {
     });
 
   const answers: string[] = [];
+  // Fields of the next result beyond its answer (courtsFound of court_for_address…).
+  const extras: Array<Partial<SessionExecutionResponse>> = [];
   const execute =
     vi.fn<SessionExecutor["execute"]>(async (input) => {
       const next = answers.shift() ?? "brak";
@@ -226,6 +228,7 @@ function fixture() {
         evidence: [],
         audit: { result: "PASS", eventCount: 0, closed: true }
       };
+      Object.assign(result, extras.shift() ?? {});
       Object.defineProperty(result, SESSION_EXECUTION_INTERNAL, { value: { verificationRecords: [], auditEvents: [] }, enumerable: false });
       return result;
     });
@@ -327,6 +330,7 @@ function fixture() {
     auth,
     execute,
     answers,
+    extras,
     generate
   };
 }
@@ -490,6 +494,38 @@ describe("długie pismo w częściach: czat i plik", () => {
       expect(call?.conversationalOnly).not.toBe(true);
       expect(String(call?.query)).toContain("# DŁUGIE PISMO — CZĘŚĆ 2 Z 3");
     }
+  });
+
+  it("sąd sprawy: pierwsze pismo z sądem z court_for_address zapisuje go, kolejna tura dostaje go z pamięci", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    const send = (query: string) =>
+      request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({ query, provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+        .expect(200);
+    current.answers.push("=== PISMO ===\nWyszków, 17 października 2026 r.\n\nSąd Rejonowy w Wyszkowie\nI Wydział Cywilny\n\nPOZEW\n=== KONIEC PISMA ===");
+    current.extras.push({ courtsFound: ["Sąd Rejonowy w Wyszkowie", "Sąd Okręgowy w Ostrołęce", "Sąd Apelacyjny w Białymstoku"] });
+    const first = await send("Napisz pozew.");
+    expect(first.body.caseCourt).toEqual({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+    current.answers.push("Odpowiedź.");
+    const next = await send("Napisz pismo przygotowawcze.");
+    expect(current.execute.mock.calls.at(-1)?.[0].caseCourt).toMatchObject({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+    expect(next.body.caseCourt).toEqual({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+  });
+
+  it("a letter to a court not from the tool is not saved as the case's court", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    current.answers.push("=== PISMO ===\nSąd Rejonowy w Ostrołęce\nPOZEW\n=== KONIEC PISMA ===");
+    current.extras.push({ courtsFound: ["Sąd Rejonowy w Wyszkowie"] });
+    const first = await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ query: "Napisz pozew.", provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+      .expect(200);
+    expect(first.body.caseCourt).toBeUndefined();
   });
 
   it("prośba o część w sprawie (AUTO) idzie ścieżką prawną, nie rozmową", async () => {
