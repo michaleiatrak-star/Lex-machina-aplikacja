@@ -3,11 +3,11 @@ import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl } from "
 import { ApiError, type UpdateStatusResponse } from "./api.js";
 
 const status: UpdateStatusResponse = {
-  currentVersion: "0.1.36",
+  currentVersion: "0.1.37",
   status: "AVAILABLE",
   checkedAt: "2026-10-10T00:00:00Z",
-  latestVersion: "0.1.37",
-  releaseUrl: "https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/tag/v0.1.37"
+  latestVersion: "0.1.38",
+  releaseUrl: "https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/tag/v0.1.38"
 };
 
 describe("manualUpdateReleaseUrl (macOS: update by opening the new .pkg)", () => {
