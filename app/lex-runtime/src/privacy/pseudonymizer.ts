@@ -1,4 +1,5 @@
 import { surnameMentions } from "./surname-propagation.js";
+import { samePerson } from "./person-identity.js";
 import { degradedRecognizers } from "./gazetteer-ner.js";
 import { detectPeselNames } from "./pesel-names.js";
 import { detectStreetAddresses } from "./street-addresses.js";
@@ -351,6 +352,8 @@ export class PseudonymizationVault {
   private readonly tokenEntities =
     new Map<string, PersonEntity>();
   // Every surface mapped to a token in this session (for entity merging).
+  // Readings of a person merged into its token (mergePerson).
+  private readonly personReadings = new Set<PersonEntity>();
   private readonly tokenSurfaces =
     new Map<string, Set<string>>();
 
@@ -781,16 +784,50 @@ export class PseudonymizationVault {
   }
 
   /** Firms already protected (another page): their names, the register's spelling first. */
-  knownOrganizationNames(): Array<{ name: string; legalForm?: string }> {
-    const names = new Map<string, string | undefined>();
+  knownOrganizationNames(): Array<{ name: string; canonical: string; legalForm?: string }> {
+    const names = new Map<string, { canonical: string; legalForm?: string }>();
     for (const [token, value] of this.tokenToValue) {
       const entity = this.tokenEntities.get(token);
       if (entity?.type !== "organization") continue;
       for (const name of [entity.canonical, value]) {
-        if (/\p{Lu}/u.test(name) && name.replace(/\s+/gu, " ").trim().length >= 6 && !names.has(name)) names.set(name, entity.legalForm);
+        if (/\p{Lu}/u.test(name) && name.replace(/\s+/gu, " ").trim().length >= 6 && !names.has(name)) {
+          names.set(name, { canonical: entity.canonical, ...(entity.legalForm ? { legalForm: entity.legalForm } : {}) });
+        }
       }
     }
-    return [...names].map(([name, legalForm]) => ({ name, ...(legalForm ? { legalForm } : {}) }));
+    return [...names].map(([name, item]) => ({ name, ...item }));
+  }
+
+  /**
+   * Another reading of a known person (samePerson): its key leads to the person's token, and a
+   * clearer reading (a normal spelling, an unambiguous paradigm) becomes the person's paradigm,
+   * so the answer restores "Michał Wiatrak", not the OCR's "MICHAL WIATRAK". False when the
+   * person has no token yet.
+   */
+  mergePerson(known: PersonEntity, reading: PersonEntity): boolean {
+    const token = [...this.tokenEntities].find(([, entity]) => entity === known)?.[0] ?? this.keyToToken.get(personEntityKey(known, "PERSON"));
+    if (!token) return false;
+    this.keyToToken.set(personEntityKey(reading, "PERSON"), token);
+    this.personReadings.add(reading);
+    // Never a reading with fewer words ("MICHAŁWIATRAK" read without its space).
+    const current = this.tokenEntities.get(token) ?? known;
+    const wordCount = (entity: PersonEntity) => entity.canonical.split(/\s+/u).filter(Boolean).length;
+    const fuller = wordCount(reading) >= Math.max(2, wordCount(current));
+    const clearer = current.status !== "ok" && reading.status === "ok";
+    const calmer = isShouting(current.canonical) && !isShouting(reading.canonical);
+    if (fuller && (clearer || calmer)) this.tokenEntities.set(token, calmEntity(reading));
+    return true;
+  }
+
+  /** Persons already protected (another page of the document). */
+  knownPersons(): PersonEntity[] {
+    // Every reading merged into a person, so a later mention matches any of them.
+    const persons = new Set<PersonEntity>([...this.personReadings]);
+    for (const token of this.tokenToValue.keys()) {
+      const entity = this.tokenEntities.get(token);
+      if (entity && entity.type !== "organization" && this.tokenMetadata.get(token)?.kind === "PERSON") persons.add(entity);
+    }
+    return [...persons];
   }
 
   /** Identifiers already protected (another page of the document): their values by kind. */
@@ -1077,12 +1114,14 @@ export class LocalPolishPseudonymizer {
     }
     // A firm protected on another page (its NIP and register data were there): its name here
     // too, as the same firm; a recognized span running past it is cut off below.
-    for (const { name, legalForm } of this.vault.knownOrganizationNames()) {
+    for (const { name, canonical, legalForm } of this.vault.knownOrganizationNames()) {
       const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
       for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu"))) {
         if (match[0] === match[0].toLocaleLowerCase("pl")) continue;
         autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: "PERSON", value: match[0], confidence: 1, source: "AUTO" });
         if (!registryFirms.has(match[0])) registryFirms.set(match[0], legalForm);
+        // The firm's own name: one token whatever the case it is written in (no note).
+        if (!registryCanonical.has(match[0])) registryCanonical.set(match[0], { name: canonical, note: "" });
       }
     }
     // An identifier protected on another page (a KRS after its label on page 2, alone on
@@ -1452,6 +1491,29 @@ export class LocalPolishPseudonymizer {
       findings.sort((a, b) => a.start - b.start);
     }
 
+    // One person, one token: a mention the morphology read as another person ("MICHAL
+    // WIATRAK" without its mark, "MICHAŁWIATRAK" without the space, "Michałem Wiatrak" with
+    // the surname not inflected, "Junreyoung Park" with a letter misread) is the person known
+    // from this document (person-identity.ts).
+    {
+      const known = [
+        ...new Set([
+          ...this.vault.knownPersons(),
+          ...[...entities].filter(([key, entity]) => key.startsWith("PERSON\u0000") && entity.type !== "organization").map(([, entity]) => entity)
+        ])
+      ];
+      for (const finding of findings) {
+        if (finding.kind !== "PERSON" || finding.source === "USER") continue;
+        const own = byFinding.get(finding) ?? entities.get(`PERSON\u0000${finding.value}`);
+        if (own?.type === "organization") continue;
+        const same = samePerson(finding.value, own, known);
+        if (!same) continue;
+        // The mention's own reading joins the person's token; the clearer one becomes its paradigm.
+        byFinding.set(finding, own && this.vault.mergePerson(same.entity, own) ? own : same.entity);
+        if (same.uncertain && !finding.uncertain) finding.uncertain = same.uncertain;
+      }
+    }
+
     for (
       let index = findings.length - 1;
       index >= 0;
@@ -1481,7 +1543,7 @@ export class LocalPolishPseudonymizer {
         ...(finding.uncertain && finding.source !== "USER"
           ? { uncertain: finding.uncertain }
           // Kept when the firm rule, not the register, gave the span.
-          : registryCanonical.has(finding.value) && finding.source !== "USER"
+          : registryCanonical.get(finding.value)?.note && finding.source !== "USER"
             ? { uncertain: registryCanonical.get(finding.value)!.note }
           : finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
             ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }

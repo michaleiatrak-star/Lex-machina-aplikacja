@@ -112,3 +112,32 @@ describe("names across pages and lines", () => {
     expect(first!.text).toContain("Katowice to siedziba.");
   });
 });
+
+describe("one person, one token, however OCR or the writer spelled the name", () => {
+  // Case forms as the morphology gives them for a name it knows.
+  const forms = (cases: Partial<Record<(typeof PERSON_CASES)[number], string>>, canonical: string, status: PersonEntity["status"] = "ok"): PersonEntity => ({
+    canonical,
+    gender: "m1",
+    genderAlternatives: [],
+    status,
+    forms: Object.fromEntries(PERSON_CASES.map((personCase) => [personCase, { text: cases[personCase] ?? canonical, source: "sgjp", confidence: 1 }])) as PersonEntity["forms"],
+    warnings: []
+  });
+  const known = forms({ GEN: "Michała Wiatraka", DAT: "Michałowi Wiatrakowi", INS: "Michałem Wiatrakiem", LOC: "Michale Wiatraku" }, "Michał Wiatrak");
+
+  it("a lost mark or space, a given name inflected with the surname not, a letter misread in a long name", async () => {
+    const { samePerson } = await import("../src/privacy/person-identity.js");
+    expect(samePerson("MICHAL WIATRAK", undefined, [known])?.entity).toBe(known);
+    expect(samePerson("MICHAŁWIATRAK", undefined, [known])?.entity).toBe(known);
+    expect(samePerson("Michałem Wiatrak", undefined, [known])?.entity).toBe(known);
+    const park = forms({}, "Juneyoung Park");
+    expect(samePerson("Junreyoung Park", undefined, [park])).toMatchObject({ entity: park, uncertain: expect.stringMatching(/OCR/u) });
+  });
+
+  it("another person with a similar name stays another person", async () => {
+    const { samePerson } = await import("../src/privacy/person-identity.js");
+    expect(samePerson("Michalina Wiatrak", undefined, [known])).toBeNull();
+    expect(samePerson("Michał Wiatrowski", undefined, [known])).toBeNull();
+    expect(samePerson("Jan Nowak", undefined, [forms({}, "Jan Nowik")])).toBeNull();
+  });
+});

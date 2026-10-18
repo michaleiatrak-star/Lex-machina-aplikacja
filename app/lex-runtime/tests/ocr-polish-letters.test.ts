@@ -16,6 +16,7 @@ spec = importlib.util.spec_from_file_location("worker", sys.argv[1]); worker = i
 text = sys.argv[2]
 out = {"letters": worker._polish_letters(text)}
 if sys.argv[3] == "dict":
+    worker.DICTIONARY.prepare([out["letters"]])
     out["dict"] = worker.DICTIONARY.text(out["letters"])
 print(json.dumps(out, ensure_ascii=False))
 `;

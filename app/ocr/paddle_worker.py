@@ -548,70 +548,74 @@ def _polish_letters(text: str) -> str:
     return text.translate(FOREIGN_TO_POLISH)
 
 
-# Letters OCR confuses with a Polish one: "Spóika" (ł read as i), "ograniczeną" (o as e).
-DICT_CONFUSIONS = {
-    "i": "łl", "l": "łi", "I": "Ł", "L": "Ł", "e": "ę", "a": "ą", "o": "óą", "c": "ć", "n": "ń", "s": "ś", "z": "żź",
-    "E": "Ę", "A": "Ą", "O": "Ó", "C": "Ć", "N": "Ń", "S": "Ś", "Z": "ŻŹ", "ó": "o", "ł": "l",
-}
-
-
 class DictionaryFix:
     """A word the Polish dictionary (Morfeusz, installed for the anonymizer) does not know,
-    made into the one word it knows within two confusions of DICT_CONFUSIONS ("Spóika" ->
+    made into the one word it knows within two OCR confusions (dictionary_service.py: "Spóika" ->
     "Spółka", "zazalenia" -> "zażalenia"); two candidates or none: left as read. Measured on
     13 pages: marks 92.3 -> 94.8% (scan), 82.3 -> 90.4% (folded photo), no critical field lost.
-    Without Morfeusz (or LEX_OCR_DICT=off) the text is as read."""
+    Without Morfeusz, after a failure of its process or with LEX_OCR_DICT=off the text is as read."""
+
+    WORD = r"\S+"
 
     def __init__(self) -> None:
-        self.morfeusz = None
+        self.process = None
         self.failed = os.environ.get("LEX_OCR_DICT", "on") == "off"
-        self.known_cache: dict[str, bool] = {}
+        self.corrections: dict[str, str] = {}
+        self.asked: set[str] = set()
 
-    def _known(self, word: str) -> bool:
-        if word not in self.known_cache:
-            self.known_cache[word] = any(item[2][2] != "ign" for item in self.morfeusz.analyse(word))
-        return self.known_cache[word]
-
-    def word(self, token: str) -> str:
-        import itertools
+    @staticmethod
+    def _core(token: str) -> str | None:
         import re
 
         core = re.sub(r"^\W+|\W+$", "", token)
         # Abbreviations ("godz.", "ust."), numbers and short words are left alone.
         if len(core) < 4 or not core.isalpha() or (token.endswith(".") and len(core) <= 6):
-            return token
-        if self._known(core) or self._known(core.lower()):
-            return token
-        positions = [index for index, char in enumerate(core) if char in DICT_CONFUSIONS]
-        found: set[str] = set()
-        for count in (1, 2):
-            for combo in itertools.combinations(positions, count):
-                for letters in itertools.product(*[DICT_CONFUSIONS[core[index]] for index in combo]):
-                    chars = list(core)
-                    for index, letter in zip(combo, letters):
-                        chars[index] = letter
-                    candidate = "".join(chars)
-                    if self._known(candidate) or self._known(candidate.lower()):
-                        found.add(candidate)
-            if found:
-                break
-        return token.replace(core, found.pop()) if len(found) == 1 else token
+            return None
+        return core
 
-    def text(self, text: str) -> str:
+    def _ask(self, words: list[str]) -> None:
+        import subprocess
+
+        if self.process is None:
+            self.process = subprocess.Popen(
+                [sys.executable, "-X", "utf8", str(Path(__file__).with_name("dictionary_service.py"))],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        self.process.stdin.write(json.dumps(words, ensure_ascii=False) + "\n")
+        self.process.stdin.flush()
+        reply = self.process.stdout.readline()
+        if not reply:
+            raise RuntimeError(f"dictionary process ended ({self.process.poll()})")
+        self.corrections.update(json.loads(reply))
+
+    def prepare(self, texts: list[str]) -> None:
+        """One question to the dictionary for the words of a page not asked yet."""
         if self.failed:
-            return text
+            return
+        import re
+
+        words = sorted({core for text in texts for token in re.findall(self.WORD, text) if (core := self._core(token)) and core not in self.asked})
+        if not words:
+            return
         try:
-            if self.morfeusz is None:
-                import morfeusz2
-
-                self.morfeusz = morfeusz2.Morfeusz(generate=False)
-            import re
-
-            return re.sub(r"\S+", lambda match: self.word(match.group(0)), text)
+            self._ask(words)
+            self.asked.update(words)
         except Exception as error:  # noqa: BLE001
             self.failed = True
             print(f"LEX_OCR_DICT_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
+
+    def text(self, text: str) -> str:
+        if self.failed or not self.corrections:
             return text
+        import re
+
+        def fix(match):
+            token = match.group(0)
+            core = self._core(token)
+            return token.replace(core, self.corrections[core]) if core and core in self.corrections else token
+
+        return re.sub(self.WORD, fix, text)
 
 
 DICTIONARY = DictionaryFix()
@@ -847,9 +851,13 @@ def predict_image(
 
     # Polish text: a letter with another language's mark is a misreading ("uwažane", "dó"),
     # and a word the dictionary does not know is checked for a lost mark (DictionaryFix).
-    texts = [DICTIONARY.text(_polish_letters(text)) for text in texts]
+    texts = [_polish_letters(text) for text in texts]
     for line in lines:
-        line["text"] = DICTIONARY.text(_polish_letters(line["text"]))
+        line["text"] = _polish_letters(line["text"])
+    DICTIONARY.prepare(texts)
+    texts = [DICTIONARY.text(text) for text in texts]
+    for line in lines:
+        line["text"] = DICTIONARY.text(line["text"])
 
     confidence = (
         sum(scores) / len(scores)
