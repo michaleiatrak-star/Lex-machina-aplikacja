@@ -1,5 +1,5 @@
 import { firmFragments } from "./firm-names.js";
-import { detectIdentifiers } from "./identifiers.js";
+import { detectIdentifiers, validNip } from "./identifiers.js";
 const LEGAL_FORM_TAIL = /[\s,]*(?:spółka\s+z\s+ograniczoną\s+odpowiedzialnością(?:\s+spółka\s+komandytowa)?|spółka\s+(?:akcyjna|komandytowa|komandytowo-akcyjna|jawna|partnerska|cywilna)|sp\.\s?z\s?o\.\s?o\.(?:\s?sp\.\s?k\.)?|s\.\s?a\.|sp\.\s?k\.(?:\s?a\.)?|sp\.\s?j\.|sp\.\s?p\.|s\.\s?c\.)\s*(?:w\s+(?:likwidacji|upadłości|restrukturyzacji))?\s*$/iu;
 // Words that alone are no firm name ("ZAKŁAD", "POLSKA" left after stripping the form).
 const TOO_GENERIC = new Set([
@@ -100,7 +100,17 @@ export function whiteListForms(reply) {
         return [];
     const result = row.result;
     const persons = Array.isArray(result.osoby) ? result.osoby : [];
+    const name = text(result.tytul_lub_nazwa);
+    // The firm's accounts on the list: the one in a letter is the firm's, also as OCR misread it.
+    const accounts = (Array.isArray(result.rachunki) ? result.rachunki : [])
+        .filter((value) => typeof value === "string" && /^\d{26}$/u.test(value))
+        .map((value) => ({
+        text: value.replace(/^(\d{2})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})$/u, "$1 $2 $3 $4 $5 $6 $7"),
+        kind: "IBAN",
+        uncertain: `rachunek z białej listy VAT${name ? `: ${name}` : ""}`
+    }));
     return [
+        ...accounts,
         ...firmNameForms(text(result.tytul_lub_nazwa) ?? ""),
         ...addressForms(text(result.adres)),
         ...addressForms(text(result.adres_zamieszkania)),
@@ -188,8 +198,17 @@ export function registryKeys(value) {
             keys.set(`nip:${id}`, { source: "nip", id });
         }
         else if (span.kind === "KRS") {
-            keys.set(`krs:${span.value}`, { source: "krs", id: span.value });
+            // "KRS 0000 297714": the register's tool takes digits only.
+            const id = span.value.replace(/\D/gu, "");
+            keys.set(`krs:${id}`, { source: "krs", id });
         }
+    }
+    // A NIP after its label as OCR damaged it ("634–30–21–499", "634-3O-21-499", "NIP634 30 21 499"):
+    // asked only when the digits, with letters read for digits, pass the checksum.
+    for (const match of value.matchAll(/\bN[I1lí]P\s*(?:nr\.?\s*)?:?\s*((?:PL\s?)?[\dOoIl|][\dOoIl|  –—-]{8,16}[\dOoIl|])/gu)) {
+        const id = match[1].replace(/^PL\s?/u, "").replace(/[Oo]/gu, "0").replace(/[Il|]/gu, "1").replace(/\D/gu, "").slice(0, 10);
+        if (id.length === 10 && validNip(id))
+            keys.set(`nip:${id}`, { source: "nip", id });
     }
     return [...keys.values()];
 }

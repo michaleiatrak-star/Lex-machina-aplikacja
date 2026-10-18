@@ -7,6 +7,12 @@ export const EVIDENCE_MAX_BYTES = 160 * 1024 * 1024;
 export function evidenceBudget() {
     return { bytesLeft: EVIDENCE_MAX_BYTES };
 }
+function outline(value) {
+    if (!Array.isArray(value) || value.length < 3 || value.length > 64)
+        return undefined;
+    const points = value.filter((point) => Array.isArray(point) && point.length === 2 && point.every((item) => Number.isFinite(item)));
+    return points.length === value.length ? points.map(([x, y]) => [Number(x), Number(y)]) : undefined;
+}
 function box(value) {
     return Array.isArray(value) && value.length === 4 && value.every((item) => Number.isFinite(item))
         ? value.map(Number)
@@ -28,10 +34,12 @@ export async function readOcrPages(raw, evidenceDir, budget = evidenceBudget()) 
                 .filter((line) => typeof line?.text === "string")
                 .map((line) => {
                 const lineBox = box(line.box);
+                const linePoly = lineBox ? outline(line.poly) : undefined;
                 return {
                     text: line.text,
                     ...(typeof line.score === "number" ? { score: line.score } : {}),
                     ...(lineBox ? { box: lineBox } : {}),
+                    ...(linePoly ? { poly: linePoly } : {}),
                     ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {}),
                     ...(line.stamp === true ? { stamp: true } : {})
                 };

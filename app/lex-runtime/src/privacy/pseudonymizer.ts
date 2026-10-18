@@ -171,6 +171,18 @@ export function firmContext(text: string, start: number, end: number): { legalFo
   return legal ? { legalForm: legal[1]!.replace(/\s+/g, " ") } : {};
 }
 
+const STREET_MARK = /(?:^|\s)(?:ul\.|ulica|ulicy|al\.|aleja|alei|pl\.|plac|placu|os\.|osiedle|osiedlu)(?:\s|$)/iu;
+// The name of a court, prosecutor's office, police unit or other office runs up to the town:
+// "Prokuratura Rejonowa Katowice-Zachód w Katowicach", "Komisariat Policji VII w Katowicach".
+const INSTITUTION_BEFORE =
+  /(?:\b(?:Sąd|Sądu|Sądem|Sądzie|Prokuratur|Komisariat|Komend|Urząd|Urzęd|Izb|Starostw|Komornik|Kuratori|Inspektorat|Oddział|Policji)\p{L}*)[^.;:\n]{0,70}$/u;
+
+/** A town inside an institution's name: before it the institution, or it starts "Katowice-Zachód". */
+export function institutionTown(text: string, start: number, end: number): boolean {
+  if (/^-\p{Lu}/u.test(text.slice(end, end + 2))) return true;
+  return INSTITUTION_BEFORE.test(text.slice(Math.max(0, start - 90), start));
+}
+
 export function organizationEntity(value: string, legalForm?: string): PersonEntity {
   const form = { text: value, source: "frozen", confidence: 1 };
   return {
@@ -921,6 +933,9 @@ export class LocalPolishPseudonymizer {
     // Register data of firms named by NIP/KRS: their names, addresses and people are
     // protected even where no legal form or prefix marks them ("umowę z Transkomem").
     const registryFirms = new Map<string, string | undefined>();
+    // A firm's name as OCR damaged it -> the register's name: one firm, one token
+    // ("Human Park Giobal" is "Human Park Global", not a second company).
+    const registryCanonical = new Map<string, { name: string; note: string }>();
     let registered: Awaited<ReturnType<RegistryFormsProvider["forms"]>> = [];
     try {
       registered = this.registry ? await this.registry.forms(text) : [];
@@ -928,6 +943,22 @@ export class LocalPolishPseudonymizer {
       process.stderr.write(`REGISTRY_ENRICHMENT_DEGRADED:${error instanceof Error ? error.message : String(error)}\n`);
     }
     for (const form of registered) {
+      // A bank account of the firm from the white list: also as OCR damaged it (a digit or two
+      // misread, "O" for 0, "l" for 1), masked and marked: the register names whose account it is.
+      if (form.kind === "IBAN") {
+        const digits = form.text.replace(/\D/gu, "");
+        for (const match of text.matchAll(/(?<![\p{L}\p{N}])(?:PL\s?)?[\dOolI|]{2}(?:[ \u00a0-]?[\dOolI|]{4}){6}(?![\p{L}\p{N}])/gu)) {
+          const read = match[0].replace(/^PL\s?/u, "").replace(/[Oo]/gu, "0").replace(/[lI|]/gu, "1").replace(/\D/gu, "");
+          let differ = read.length === digits.length ? 0 : Infinity;
+          for (let index = 0; index < read.length && differ <= 2; index += 1) if (read[index] !== digits[index]) differ += 1;
+          if (differ > 2) continue;
+          autoSpans.push({
+            start: match.index!, end: match.index! + match[0].length, kind: "IBAN", value: match[0], confidence: differ ? 0.9 : 1, source: "AUTO",
+            ...(differ ? { uncertain: `odczyt zniekształcony przez OCR, ${form.uncertain ?? "rachunek z białej listy VAT"}` } : {})
+          });
+        }
+        continue;
+      }
       // Any letter case and spacing ("UL. DŁUGA 5", "Długa  5", "DŁUGA 5"): the same letters with
       // the register's house number do not appear by chance. A firm's name in any case too,
       // but not written all in small letters (a common phrase, not the name).
@@ -941,16 +972,26 @@ export class LocalPolishPseudonymizer {
         });
         if (form.organization) registryFirms.set(match[0], form.organization.legalForm);
       }
-      // The same name as OCR damaged it ("uman Park Global", "Michal Wiatrak"): the whole name
-      // within a letter or two, masked and marked for the user to confirm.
-      if (form.pattern || form.kind !== "PERSON") continue;
+      // The same name or address as OCR damaged it ("uman Park Global", "Michal Wiatrak",
+      // "Pukowca l5"): the whole of it within a letter or two, masked and marked for the user to
+      // confirm. An address only with its own numbers: "Pukowca 16" is another building.
+      if (form.pattern || (form.kind !== "PERSON" && form.kind !== "ADDRESS")) continue;
+      const numbers = (value: string) => value.replace(/[Oo](?=[\d\s,/-]|$)|(?<=\d)[Oo]/gu, "0").replace(/[lI|](?=\d|$)|(?<=\d)[lI|]/gu, "1").replace(/\D/gu, "");
       for (const match of findNameApproximately(text, form.text)) {
         if (match.exact) continue;
+        if (form.kind === "ADDRESS" && numbers(match.value) !== numbers(form.text)) continue;
         autoSpans.push({
           start: match.start, end: match.end, kind: form.kind, value: match.value, confidence: 0.9, source: "AUTO",
           uncertain: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}`
         });
-        if (form.organization) registryFirms.set(match.value, form.organization.legalForm);
+        if (form.organization) {
+          registryFirms.set(match.value, form.organization.legalForm);
+          // The whole name wins over a fragment of it ("Park Global").
+          const known = registryCanonical.get(match.value);
+          if (!known || known.name.length < form.text.length) {
+            registryCanonical.set(match.value, { name: form.text, note: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}` });
+          }
+        }
       }
     }
 
@@ -965,9 +1006,14 @@ export class LocalPolishPseudonymizer {
     });
     for (const form of knownForms) {
       const escaped = form.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // A town alone (no street, no number) masked where it was someone's address is not
+      // carried into a court's, office's or police unit's name ("Sąd Rejonowy Katowice-Zachód
+      // w Katowicach"): that is no personal data and the analysis needs the court.
+      const town = form.kind === "ADDRESS" && !/\d/u.test(form.text) && !STREET_MARK.test(form.text);
       for (const match of text.matchAll(
         new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "gu")
       )) {
+        if (town && institutionTown(text, match.index!, match.index! + match[0].length)) continue;
         autoSpans.push({
           start: match.index!,
           end: match.index! + match[0].length,
@@ -1111,7 +1157,8 @@ export class LocalPolishPseudonymizer {
     // An inflected mention ("z Transkomem") shares the firm's canonical name and so its token.
     for (const firm of firms) entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.canonical ?? firm.value, firm.legalForm));
     for (const [value, legalForm] of registryFirms) {
-      if (!entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
+      const canonical = registryCanonical.get(value)?.name;
+      if (canonical || !entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(canonical ?? value, legalForm));
     }
     // The user's "Firma" marks: the firm's identity, with the legal form written next to it.
     for (const item of manual) {
@@ -1207,7 +1254,10 @@ export class LocalPolishPseudonymizer {
     for (const finding of findings) {
       if (finding.kind !== "PERSON" || finding.source === "USER") continue;
       const firm = firmContext(text, finding.start, finding.end);
-      if (firm) byFinding.set(finding, organizationEntity((finding as FirmSpan).canonical ?? finding.value, firm.legalForm));
+      if (firm) {
+        const canonical = registryCanonical.get(finding.value)?.name ?? (finding as FirmSpan).canonical ?? finding.value;
+        byFinding.set(finding, organizationEntity(canonical, firm.legalForm));
+      }
     }
     if (this.morphology) {
       const morphology = this.morphology;
@@ -1305,6 +1355,9 @@ export class LocalPolishPseudonymizer {
           : {}),
         ...(finding.uncertain && finding.source !== "USER"
           ? { uncertain: finding.uncertain }
+          // Kept when the firm rule, not the register, gave the span.
+          : registryCanonical.has(finding.value) && finding.source !== "USER"
+            ? { uncertain: registryCanonical.get(finding.value)!.note }
           : finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
             ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
             : {})

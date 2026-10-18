@@ -256,6 +256,202 @@ def read_stamps(ocr, regions) -> list[dict]:
     return lines
 
 
+# A photographed page folded or bent: a line breaks on the fold (2-13 degrees on a real
+# 5-page decision, mostly at mid-width) and no rotated rectangle fits it. The detector then
+# scores the line inside its rectangle, the background drops the score below box_thresh and
+# the line is lost; a line kept anyway is cut as a rectangle two or three lines high and read
+# as nothing. Measured on that decision (206 lines): 120 lost, CER 73.8% -> with the line
+# read along its own shape: 11 lost, CER 7.5%. A flat page keeps the reading above: a line
+# counts as broken by its shape, and only a page with enough broken lines is read again.
+FOLD_LINE_RECT = 1.35  # rotated rectangle height / line thickness
+FOLD_LINE_BOW = 0.35  # midline off its straight fit, in line thicknesses
+FOLD_MIN_LINES = 6
+FOLD_PAGE_SHARE = 0.2
+FOLD_ENGINE = "PaddleOCR PP-OCRv6_medium, linie wzdłuż zgięcia"
+
+
+def _line_geometry(poly) -> np.ndarray | None:
+    """Per 4 px column of a line polygon: x, top and bottom of the line."""
+    import cv2
+
+    points = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
+    if len(points) < 3:
+        return None
+    x0, y0 = np.floor(points.min(axis=0)).astype(int)
+    x1, y1 = np.ceil(points.max(axis=0)).astype(int)
+    if x1 - x0 < 8 or y1 - y0 < 2:
+        return None
+    mask = np.zeros((y1 - y0 + 1, x1 - x0 + 1), np.uint8)
+    cv2.fillPoly(mask, [np.round(points - [x0, y0]).astype(np.int32)], 1)
+    columns = []
+    for x in range(1, mask.shape[1] - 1, 4):
+        rows = np.flatnonzero(mask[:, x])
+        if rows.size:
+            columns.append((x + x0, rows[0] + y0, rows[-1] + y0))
+    return np.asarray(columns, dtype=np.float32) if len(columns) >= 4 else None
+
+
+def _line_shape(poly) -> dict | None:
+    """Thickness of the line and whether it is broken or bent (its rectangle does not fit it)."""
+    import cv2
+
+    columns = _line_geometry(poly)
+    if columns is None:
+        return None
+    thickness = float(np.median(columns[:, 2] - columns[:, 1]))
+    middle = (columns[:, 1] + columns[:, 2]) / 2
+    straight = np.polyfit(columns[:, 0], middle, 1)
+    bow = float(np.max(np.abs(np.polyval(straight, columns[:, 0]) - middle))) / max(thickness, 1.0)
+    rect = min(cv2.minAreaRect(np.asarray(poly, dtype=np.float32).reshape(-1, 2))[1])
+    return {
+        "columns": columns,
+        "thickness": thickness,
+        "long": columns[-1, 0] - columns[0, 0] >= 8 * thickness,
+        "bent": rect > FOLD_LINE_RECT * thickness or bow > FOLD_LINE_BOW,
+    }
+
+
+def _strip(image: np.ndarray, columns: np.ndarray, thickness: float) -> np.ndarray:
+    """The line cut along its midline: every column of the crop taken at the line's own height."""
+    import cv2
+
+    x = columns[:, 0]
+    middle = (columns[:, 1] + columns[:, 2]) / 2
+    k = max(3, int(len(middle) / 25) | 1)
+    middle = np.convolve(np.pad(middle, k // 2, mode="edge"), np.ones(k) / k, mode="valid")
+    arc = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(x), np.diff(middle)))])
+    width, height = max(1, int(arc[-1])), max(8, int(round(thickness * 1.25)))
+    u = np.arange(width)
+    cx, cy = np.interp(u, arc, x), np.interp(u, arc, middle)
+    dx, dy = np.gradient(cx), np.gradient(cy)
+    norm = np.hypot(dx, dy) + 1e-6
+    nx, ny = -dy / norm, dx / norm
+    v = np.arange(height) - height / 2
+    map_x = (cx[None, :] + v[:, None] * nx[None, :]).astype(np.float32)
+    map_y = (cy[None, :] + v[:, None] * ny[None, :]).astype(np.float32)
+    crop = cv2.remap(image[:, :, :3].astype(np.uint8), map_x, map_y, cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    pad = int(height * 0.3)
+    return cv2.copyMakeBorder(crop, 0, 0, pad, pad, cv2.BORDER_REPLICATE)
+
+
+def _jpeg64(crop: np.ndarray) -> str:
+    import base64
+    import io
+
+    picture = Image.fromarray(crop).convert("L")
+    if picture.height > 64:
+        picture = picture.resize((max(1, round(picture.width * 64 / picture.height)), 64), Image.LANCZOS)
+    buffer = io.BytesIO()
+    picture.save(buffer, format="JPEG", quality=85)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _outline(poly, scale: float) -> list[list[float]]:
+    """The line polygon for the scan preview and the masks, a few points only."""
+    import cv2
+
+    points = np.asarray(poly, dtype=np.float32).reshape(-1, 1, 2)
+    simple = cv2.approxPolyDP(points, 1.5, True).reshape(-1, 2)
+    return [[round(float(x) * scale, 1), round(float(y) * scale, 1)] for x, y in simple]
+
+
+class FoldReader:
+    """Lines of a folded page read along their own shape: a polygon detector scoring the line
+    inside its contour, straight lines cut as before, broken ones along their midline."""
+
+    def __init__(self, models: dict, kwargs: dict) -> None:
+        from paddleocr import TextDetection
+        from paddlex.inference.pipelines.components import CropByPolys, SortPolyBoxes
+
+        self.detector = TextDetection(
+            model_name="PP-OCRv6_medium_det", model_dir=str(models["text_detection_model_dir"]),
+            limit_side_len=64, limit_type="min", thresh=0.3, box_thresh=0.6, unclip_ratio=1.5, **kwargs
+        )
+        post = self.detector.paddlex_predictor.post_op
+        post.box_type, post.score_mode = "poly", "slow"
+        self.models, self.kwargs = models, kwargs
+        self.recognizer = None
+        self.crop = CropByPolys(det_box_type="quad")
+        self.sort = SortPolyBoxes()
+
+    def detect(self, image: np.ndarray) -> list[tuple[np.ndarray, dict]]:
+        polys = list(self.detector.predict(image))[0]["dt_polys"]
+        polys = self.sort(polys) if len(polys) else []
+        found = []
+        for poly in polys:
+            poly = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
+            shape = _line_shape(poly)
+            if shape:
+                found.append((poly, shape))
+        return found
+
+    @staticmethod
+    def folded(found: list[tuple[np.ndarray, dict]]) -> tuple[int, int] | None:
+        """(broken, long lines) when the page is folded, else None. Short pieces (digits in
+        boxes, a signature) tell nothing about a fold."""
+        long = [shape for _, shape in found if shape["long"]]
+        broken = sum(1 for shape in long if shape["bent"])
+        if len(long) >= FOLD_MIN_LINES and broken >= FOLD_PAGE_SHARE * len(long):
+            return broken, len(long)
+        return None
+
+    def read(self, image: np.ndarray, found: list[tuple[np.ndarray, dict]]) -> list[dict]:
+        import cv2
+        from paddleocr import TextRecognition
+
+        if self.recognizer is None:
+            self.recognizer = TextRecognition(
+                model_name="PP-OCRv6_medium_rec", model_dir=str(self.models["text_recognition_model_dir"]), **self.kwargs
+            )
+        lines = []
+        for poly, shape in found:
+            if shape["bent"]:
+                crop = _strip(image, shape["columns"], shape["thickness"])
+            else:
+                crop = self.crop(image, [cv2.boxPoints(cv2.minAreaRect(poly))])[0]
+            result = list(self.recognizer.predict(crop))[0]
+            lines.append({
+                "text": str(result["rec_text"]).strip(), "score": float(result["rec_score"]),
+                "box": _box(poly), "poly": poly, "bent": shape["bent"], "crop_image": crop,
+            })
+        return lines
+
+
+class FoldMode:
+    """The fold reader, built on first use with the engine's oneDNN choice; a failure leaves
+    the page as read (LEX_OCR_FOLD_FAILED on stderr), never the document unread."""
+
+    def __init__(self, engine: "OcrEngine", models: dict) -> None:
+        self.engine, self.models = engine, models
+        self.reader: FoldReader | None = None
+        self.failed = False
+
+    def _kwargs(self, mkldnn: bool) -> dict:
+        kwargs = {"enable_mkldnn": mkldnn, "cpu_threads": self.engine.kwargs.get("cpu_threads", cpu_threads())}
+        if self.engine.kwargs.get("device"):
+            kwargs["device"] = self.engine.kwargs["device"]
+        return kwargs
+
+    def page(self, image: np.ndarray) -> tuple[list[dict], dict] | None:
+        if self.failed:
+            return None
+        for mkldnn in dict.fromkeys([self.engine.mkldnn, False]):
+            try:
+                if self.reader is None:
+                    self.reader = FoldReader(self.models, self._kwargs(mkldnn))
+                found = self.reader.detect(image)
+                folded = self.reader.folded(found)
+                if not folded:
+                    return None
+                return self.reader.read(image, found), {"brokenLines": folded[0], "lines": folded[1]}
+            except Exception as error:  # noqa: BLE001
+                self.reader = None
+                last = error
+        self.failed = True
+        print(f"LEX_OCR_FOLD_FAILED:{type(last).__name__}:{str(last)[:200]}", file=sys.stderr, flush=True)
+        return None
+
+
 def cpu_threads() -> int:
     raw = os.environ.get("LEX_OCR_THREADS", "").strip()
     if raw.isdigit() and int(raw) > 0:
@@ -307,16 +503,17 @@ def predict_page(
     evidence_dir: Path | None = None,
     line_crops: bool = False,
     stamps: bool = True,
+    fold: "FoldMode | None" = None,
 ) -> dict:
     """The page; with coloured stamp ink, its text layer and its stamps read apart."""
     split = split_stamp_ink(image) if stamps else None
     if split is None:
-        return predict_image(ocr, image, page_number, evidence_dir, line_crops)
+        return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
     text_layer, regions = split
-    result = predict_image(ocr, text_layer, page_number, evidence_dir, line_crops, original=image, stamp_regions=regions)
+    result = predict_image(ocr, text_layer, page_number, evidence_dir, line_crops, original=image, stamp_regions=regions, fold=fold)
     if result.pop("rotated", False):
         # The page was turned by the orientation step: stamp boxes would not match; as before.
-        return predict_image(ocr, image, page_number, evidence_dir, line_crops)
+        return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
     return result
 
 
@@ -328,6 +525,7 @@ def predict_image(
     line_crops: bool = False,
     original: np.ndarray | None = None,
     stamp_regions: list | None = None,
+    fold: "FoldMode | None" = None,
 ) -> dict:
     prediction = list(ocr.predict(image))
     texts: list[str] = []
@@ -398,6 +596,22 @@ def predict_image(
             if box and not any(_overlap(box, known) > 0.5 for known in read_boxes):
                 unread.append(box)
 
+    # A folded page: its lines read again along their shape, in the same image the boxes
+    # refer to (turned by the orientation step, text layer when stamps were split).
+    folded = None
+    if fold is not None and boxes_known:
+        again = fold.page(evidence_image)
+        if again is not None:
+            fold_lines, folded = again
+            texts, scores, lines, unread = [], [], [], []
+            for line in fold_lines:
+                if line["text"]:
+                    texts.append(line["text"])
+                    scores.append(line["score"])
+                    lines.append(line)
+                elif line["box"]:
+                    unread.append(line["box"])
+
     # Line crops from the text layer (no stamp over the line); the evidence image is the scan.
     crop_image = evidence_image
     if original is not None:
@@ -421,7 +635,8 @@ def predict_image(
         "text": "\n".join(texts),
         "confidence": confidence,
         "lineCount": len(texts),
-        "engine": "PaddleOCR PP-OCRv6_medium",
+        "engine": FOLD_ENGINE if folded else "PaddleOCR PP-OCRv6_medium",
+        **({"fold": folded} if folded else {}),
         "lines": [
             {"text": line["text"], "score": line["score"], **({"stamp": True} if line.get("stamp") else {})}
             for line in lines
@@ -433,7 +648,8 @@ def predict_image(
             if line["poly"] is None:
                 continue
             try:
-                crop = _line_crop(crop_image, line["poly"])
+                # A broken line: its strip along the midline, not a rectangle across the fold.
+                crop = _jpeg64(line["crop_image"]) if line.get("bent") else _line_crop(crop_image, line["poly"])
             except Exception:
                 crop = None
             if crop:
@@ -450,6 +666,12 @@ def predict_image(
         scaled = lambda box: [round(value * scale, 1) for value in box]
         for index, line in enumerate(lines):
             result["lines"][index]["box"] = scaled(line["box"])
+            # The line's own outline for the preview frame and the masks (a fold bends it).
+            if line.get("poly") is not None:
+                try:
+                    result["lines"][index]["poly"] = _outline(line["poly"], scale)
+                except Exception:
+                    pass
         result["evidence"] = {
             "file": name,
             "width": picture.width,
@@ -538,6 +760,8 @@ def main() -> None:
         ocr_kwargs["device"] = args.device
 
     ocr = OcrEngine(ocr_kwargs)
+    # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
+    fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).
     stamp_split = os.environ.get("LEX_OCR_STAMPS", "on") != "off"
     results = []
@@ -551,7 +775,7 @@ def main() -> None:
         with Image.open(args.input) as source:
             image = np.array(source.convert("RGB"))
         results.append(
-            predict_page(ocr, image, 1, evidence_dir, args.line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"])
+            predict_page(ocr, image, 1, evidence_dir, args.line_crops, stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"], fold=fold)
         )
     else:
         doc = fitz.open(args.input)
@@ -587,6 +811,7 @@ def main() -> None:
                         evidence_dir,
                         args.line_crops,
                         stamps=stamp_split and not ocr_kwargs["use_doc_unwarping"],
+                        fold=fold,
                     )
                 )
                 # Progress for the runtime (page number only, no content).

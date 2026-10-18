@@ -31,6 +31,20 @@ describe("page images as evidence", () => {
     expect(boxes.some((box) => box[1] < 80 && box[3] > 50)).toBe(false);
   });
 
+  it("a line bent on a fold: the mask takes the line's height at the name, not the whole rectangle", () => {
+    // Left half at y 100-130, right half (after the fold at x 300) 40 px lower: the rectangle is 100-170.
+    const scan: IngestedPage = {
+      page: 1, source: "OCR", image, text: "Najemca firma Jan Kowalski",
+      lines: [{
+        text: "Najemca firma Jan Kowalski", box: [100, 100, 620, 170],
+        poly: [[100, 100], [300, 100], [620, 140], [620, 170], [300, 130], [100, 130]]
+      }]
+    };
+    const name = maskBoxes(scan, ["Jan Kowalski"])!.find((box) => box[0] > 300)!;
+    expect(name[1]).toBeGreaterThan(100);
+    expect(name[3]).toBe(173);
+  });
+
   it("finds a name split over two lines by its parts", () => {
     const values = protectedValues([
       { token: "[PII:PERSON:0001]", kind: "PERSON", value: "Jan Kowalski", createdAt: "" }

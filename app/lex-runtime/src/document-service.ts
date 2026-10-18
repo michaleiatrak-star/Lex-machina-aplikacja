@@ -90,7 +90,7 @@ export type PageScan = {
   height: number;
   // Empty after a hand correction: the lines no longer match the text.
   // Indexed like the OCR lines (review and correction entries point at them).
-  lines: Array<{ text: string; box: [number, number, number, number] | null }>;
+  lines: Array<{ text: string; box: [number, number, number, number] | null; poly?: Array<[number, number]> }>;
 };
 
 export type DocumentSecurityContext = {
@@ -957,7 +957,7 @@ implements DocumentService {
       height: image.height,
       lines: page.editedByUser
         ? []
-        : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null }))
+        : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null, ...(line.poly ? { poly: line.poly } : {}) }))
     };
   }
 

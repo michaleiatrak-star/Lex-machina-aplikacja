@@ -68,6 +68,17 @@ describe("register forms", () => {
       { source: "krs", id: "0000019193" }
     ]);
   });
+
+  it("keys: a NIP as OCR damaged it (dash, letter for a digit, glued label) and a split KRS, digits only", () => {
+    for (const damaged of ["NIP 526–104–08–28", "NIP 526-1O4-08-28", "NIP526 104 08 2B", "NlP: 526-104-08-2 8"]) {
+      expect(registryKeys(damaged).filter((key) => key.source === "nip"), damaged).toEqual(
+        damaged.endsWith("2B") ? [] : [{ source: "nip", id: "5261040828" }]
+      );
+    }
+    // Checksum: digits that are no NIP are never asked.
+    expect(registryKeys("NIP 526-104-08-29")).toEqual([]);
+    expect(registryKeys("KRS 0000 019193")).toEqual([{ source: "krs", id: "0000019193" }]);
+  });
 });
 
 describe("pseudonymization with register data", () => {
@@ -236,6 +247,36 @@ describe("register and firm names as whole elements", () => {
     const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
     for (const leak of ["Wisniewska", "Ana Wi"]) expect(result.text).not.toContain(leak);
     expect(result.findings.filter((finding) => finding.uncertain?.startsWith("odczyt zniekształcony")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("a firm's name as OCR distorted it is the register's firm: one token, marked for confirmation", async () => {
+    const wl = { status: "FOUND", result: { tytul_lub_nazwa: "HUMAN PARK GLOBAL SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [] } };
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": wl }));
+    const text = "Human Park Global sp. z o.o., NIP 526-104-08-28.\nDziałając w imieniu Spółki Human Park Giobal sp. z o.o. wzywam do zapłaty.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
+    expect(result.text).not.toContain("Giobal");
+    const tokens = new Set(result.findings.filter((finding) => finding.firm).map((finding) => finding.token));
+    // Two tokens would read to the model as two companies ("rozbieżność umocowania").
+    expect(tokens.size).toBe(1);
+    expect(result.findings.some((finding) => finding.uncertain?.includes("w rejestrze: "))).toBe(true);
+  });
+
+  it("white list accounts and address as OCR misread them; another house number is not the address", async () => {
+    const wl = {
+      status: "FOUND",
+      result: { tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [], rachunki: ["61109010140000071219812874"] }
+    };
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": wl }));
+    const text = "Transkom sp. z o.o., NIP 526-104-08-28, ul. Kolorowa l5, 4O-001 Katowice. Wpłata na rachunek 61 1090 1014 0000 0712 1981 287A? " +
+      "Nie: 61 1090 1014 0000 0712 1981 2875. Sąsiad mieszka przy ul. Kolorowa 16.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
+    for (const leak of ["Kolorowa l5", "4O-001", "1981 2875"]) expect(result.text).not.toContain(leak);
+    // Another building: masked by the address rule, but never with the register's address token.
+    const token = (value: string) => result.findings.find((finding) => text.slice(finding.start, finding.end).includes(value))?.token;
+    expect(token("Kolorowa l5")).toBeDefined();
+    expect(token("Kolorowa 16")).not.toBe(token("Kolorowa l5"));
+    expect(result.findings.find((finding) => text.slice(finding.start, finding.end).includes("Kolorowa l5"))?.uncertain).toMatch(/w rejestrze/u);
+    expect(result.findings.some((finding) => finding.kind === "IBAN" && finding.uncertain?.includes("rachunek z białej listy VAT: TRANSKOM"))).toBe(true);
   });
 
   it("the whole name decides: a letter lost or misread in a long name, never a short or a single word", () => {

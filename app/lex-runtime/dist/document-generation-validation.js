@@ -18,9 +18,8 @@ export function validateLocalHybridDocument(text, context) {
     const reasons = [];
     if (!text.trim())
         reasons.push("EMPTY_DOCUMENT");
-    if (/⬛/u.test(text) || /\[UZUPEŁNIJ(?::|\])/iu.test(text)) {
-        reasons.push("OPEN_PLACEHOLDER");
-    }
+    // Fields to fill in ([UZUPEŁNIJ: …], ⬛, [Sąd do ustalenia: …]) stay in the file and are
+    // named to the user with it (documentCompletenessWarnings): never a reason to refuse the file.
     if (/DRAFT\s*[—-]\s*NIEWERYFIKOWANY/iu.test(text)) {
         reasons.push("DRAFT_UNVERIFIED");
     }

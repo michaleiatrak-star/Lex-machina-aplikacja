@@ -98,3 +98,19 @@ describe("start check of the local recognizers", () => {
     expect(degradedRecognizers().map((item) => item.name)).toEqual(["Morfeusz (słownik imion, nazwisk i adresów)"]);
   });
 });
+
+describe("a town masked as someone's address", () => {
+  it("is not carried into a court's, prosecutor's or police unit's name", async () => {
+    const vault = new PseudonymizationVault();
+    vault.getOrCreate("ADDRESS", "Katowicach");
+    const text =
+      "Komisariat Policji VII w Katowicach umorzył dochodzenie. Sąd Rejonowy Katowice-Zachód w Katowicach " +
+      "i Prokuratura Rejonowa Katowice-Zachód. Pokrzywdzony pracował w Katowicach.";
+    const result = await new LocalPolishPseudonymizer(vault).pseudonymize(text);
+    expect(result.text).toContain("Komisariat Policji VII w Katowicach");
+    expect(result.text).toContain("Sąd Rejonowy Katowice-Zachód w Katowicach");
+    expect(result.text).toContain("Prokuratura Rejonowa Katowice-Zachód");
+    // Elsewhere the town stays masked as before.
+    expect(result.text).toMatch(/pracował w \[PII:ADDRESS:\d{4}\]/u);
+  });
+});
