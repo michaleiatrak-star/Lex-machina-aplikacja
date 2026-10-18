@@ -1662,6 +1662,7 @@ export function WorkspaceManager({
           caseId={caseId}
           documentId={anonymized.documentId}
           filename={anonymized.item.filename}
+          {...(anonymized.item.itemId.startsWith("upload_") ? { uploadId: anonymized.item.itemId } : {})}
           readOnly={!canWrite}
           initialTab={anonymized.tab}
           onClose={() => setAnonymized(null)}

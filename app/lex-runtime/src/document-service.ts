@@ -1,3 +1,4 @@
+import { alignProtected, protectedPageText, type DocxAnonymizationPlan } from "./docx-anonymize.js";
 import type {
   PersonMorphology
 } from "./privacy/person-morphology.js";
@@ -448,6 +449,7 @@ export interface DocumentService {
     keyVersion: number;
   }): Promise<{ snapshot: PseudonymizationVaultSnapshot; members: Set<string> } | null>;
   anonymizedVersion?(documentId: string): AnonymizedVersion;
+  anonymizedDocxPlan?(documentId: string): DocxAnonymizationPlan;
   addProtection?(
     documentId: string,
     text: string,
@@ -1746,6 +1748,26 @@ implements DocumentService {
       entries: this.privacyKey(documentId),
       modelKey: modelKeyFor(chunks.map((chunk) => chunk.text), vault),
       ...(record.protectedIngestion.privacy.reviewed !== undefined ? { reviewed: record.protectedIngestion.privacy.reviewed } : {})
+    };
+  }
+
+  /** What the anonymized .docx needs: the read text, the anonymized one, where each token stands, the key's values. */
+  anonymizedDocxPlan(documentId: string): DocxAnonymizationPlan {
+    const record = this.editableRecord(documentId);
+    if (record.source.pages.length !== 1) throw new Error("DOCX_ANONYMIZED_UNSUPPORTED");
+    const vault = record.vault;
+    const surfaces = (token: string): string[] => {
+      const entity = vault.entity(token);
+      const value = vault.hasToken(token) ? vault.restore(token, null).text : "";
+      return [...new Set([value, ...(entity ? PERSON_CASES.map((personCase) => entity.forms[personCase].text) : [])])].filter(Boolean);
+    };
+    const source = record.source.pages[0]!.text;
+    const expected = protectedPageText(record.protectedIngestion.chunks);
+    return {
+      source,
+      expected,
+      replacements: alignProtected(source, expected, surfaces),
+      values: vault.snapshot().tokens.flatMap((item) => surfaces(item.token).map((value): [string, string] => [value, item.token]))
     };
   }
 

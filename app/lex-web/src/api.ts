@@ -4437,3 +4437,15 @@ export function importFromGoogle(
 ): Promise<{ files: unknown[] }> {
   return json(`/api/cases/${encodeURIComponent(caseId)}/google/import`, { method: "POST", body: JSON.stringify(selection) });
 }
+
+// The anonymized version of a stored .docx as .docx (formatting kept, values as symbols).
+export function anonymizedDocx(
+  caseId: string,
+  uploadId: string,
+  documentId: string
+): Promise<{ filename: string; mediaType: string; data: string; warnings: string[] }> {
+  return json(`/api/cases/${encodeURIComponent(caseId)}/files/${encodeURIComponent(uploadId)}/anonymized-docx`, {
+    method: "POST",
+    body: JSON.stringify({ documentId })
+  });
+}

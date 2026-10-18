@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  ApiError,
   addToAnonymization,
+  anonymizedDocx,
   approveAnonymizedVersion,
   getAnonymizedVersion,
   removeFromAnonymization,
@@ -14,6 +16,19 @@ import {
 import { KIND_LABEL, PrivacyKeyTable } from "./PrivacyKeyTable.js";
 import { modelExportFilename, modelExportText } from "./model-export.js";
 import { downloadBlob } from "./download-file.js";
+
+const DOCX_ERRORS: Record<string, string> = {
+  DOCX_ANONYMIZED_SOURCE_CHANGED: "Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx.",
+  DOCX_ANONYMIZED_ALIGNMENT_FAILED: "Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie.",
+  DOCX_ANONYMIZED_TEXT_MISMATCH: "Kontrola zgodności nie przeszła - plik nie został wydany.",
+  DOCX_ANONYMIZED_LEAK: "Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany.",
+  DOCX_ANONYMIZED_UNSUPPORTED: "Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny."
+};
+
+function docxErrorText(error: unknown): string {
+  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error);
+  return DOCX_ERRORS[code] ?? `Nie udało się utworzyć .docx: ${code}`;
+}
 import { InfoTip } from "./InfoTip";
 
 const TOKEN = /(\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/;
@@ -97,6 +112,8 @@ export function AnonymizedDocumentView(props: {
   caseId: string;
   documentId: string;
   filename: string;
+  // The stored file behind the document: a .docx can be downloaded anonymized as .docx.
+  uploadId?: string;
   readOnly: boolean;
   initialTab?: "marked" | "text" | "key";
   onClose: () => void;
@@ -251,6 +268,32 @@ export function AnonymizedDocumentView(props: {
               >
                 Pobierz .txt dla modelu
               </button>
+              {props.uploadId && /\.docx$/i.test(props.filename) ? (
+                <button
+                  type="button"
+                  title="Oryginalny plik Word z symbolami zamiast danych: formatowanie, przypisy, komentarze, nagłówki i stopki zachowane; autorzy i metadane usunięte"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void anonymizedDocx(props.caseId, props.uploadId!, props.documentId)
+                      .then(async (file) => {
+                        const bytes = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
+                        const savedPath = await downloadBlob(new Blob([bytes], { type: file.mediaType }), file.filename);
+                        const media = file.warnings.find((warning) => warning.startsWith("MEDIA_NOT_ANONYMIZED:"));
+                        setStatus(
+                          [
+                            savedPath ? `Zapisano: ${savedPath}` : "Pobrano zanonimizowany .docx.",
+                            media ? `Uwaga: obrazy i osadzone obiekty (${media.split(":")[1]}) nie są anonimizowane - sprawdź je przed wysłaniem.` : ""
+                          ].filter(Boolean).join(" ")
+                        );
+                      })
+                      .catch((error) => setStatus(docxErrorText(error)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Pobierz zanonimizowany .docx
+                </button>
+              ) : null}
             </>
           ) : null}
           <button type="button" onClick={props.onClose}>Zamknij</button>

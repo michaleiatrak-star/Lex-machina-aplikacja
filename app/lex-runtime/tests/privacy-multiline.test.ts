@@ -51,6 +51,11 @@ describe("brand of a law office ([FIRMA])", () => {
     expect(values(detectFirmNames("Powód\nKancelaria Radcy Prawnego"))).toEqual([]);
     expect(values(detectFirmNames("Sąd Rejonowy. Kancelaria Notarialna przesłała odpis."))).toEqual([]);
   });
+
+  it("a firm name before its legal form does not take the paragraph above (a heading)", () => {
+    expect(values(detectFirmNames("I. TEZA WSTĘPNA\n\nElectra S.A. kupuje procesory."))).toEqual(["Electra"]);
+    expect(values(detectFirmNames("Pozwana:\nNova Tech S.A."))).toEqual(["Nova Tech"]);
+  });
 });
 
 describe("a local recognizer that does not start is reported, not silent", () => {

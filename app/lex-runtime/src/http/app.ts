@@ -12,7 +12,8 @@ import {
   type PersonMorphology
 } from "../privacy/person-morphology.js";
 import type { PiiKind } from "../privacy/pseudonymizer.js";
-import { LocalOfficeEditor, editableMediaType } from "../office-edit.js";
+import { FORMAT_MEDIA_TYPE, LocalOfficeEditor, editableMediaType } from "../office-edit.js";
+import { anonymizeDocx } from "../docx-anonymize.js";
 import { deanonymizeModel } from "../deanonymize-file.js";
 import { decodePlainText } from "../document-service.js";
 import {
@@ -5531,6 +5532,66 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
     }
   );
+
+  // The anonymized version of a .docx as a .docx: formatting, footnotes, comments,
+  // headers and footers kept, values replaced by tokens (docx-anonymize.ts). Downloaded,
+  // not stored in the case.
+  app.post("/api/cases/:caseId/files/:uploadId/anonymized-docx", async (req, res) => {
+    const caseId = String(req.params.caseId ?? "").trim();
+    const uploadId = String(req.params.uploadId ?? "").trim();
+    const documentId = String(req.body?.documentId ?? "").trim();
+    const service = options.documentService;
+    if (!service?.restoreDocument || !service.anonymizedDocxPlan || !options.caseAccessService || !options.secureCaseUploadStore) {
+      res.status(503).json({ error: "DOCX_ANONYMIZED_UNAVAILABLE" });
+      return;
+    }
+    if (!/^case_[a-f0-9]{32}$/.test(caseId) || !/^upload_[a-f0-9]{32}$/.test(uploadId) || !/^doc_[a-f0-9]{24}$/.test(documentId)) {
+      res.status(400).json({ error: "INVALID_DOCX_ANONYMIZED_REQUEST" });
+      return;
+    }
+    try {
+      const context = responseAuthContext(res);
+      options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+      const caseView = options.caseAccessService.openCase(context, caseId);
+      const result = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => {
+        const store = options.secureCaseUploadStore!;
+        const keyVersion = caseView.keyVersion;
+        const upload = (await store.listUploads({ caseId, caseDataKey, keyVersion })).find((item) => item.uploadId === uploadId);
+        if (!upload) throw new Error("STORED_UPLOAD_NOT_FOUND");
+        if (editableMediaType(upload.mediaType, upload.filename) !== FORMAT_MEDIA_TYPE.docx) throw new Error("DOCX_ANONYMIZED_MEDIA_UNSUPPORTED");
+        await service.restoreDocument!({ caseId, documentId, caseDataKey, keyVersion });
+        const plan = service.anonymizedDocxPlan!(documentId);
+        const data = await store.readUploadPayload({ caseId, uploadId, caseDataKey, keyVersion, maxBytes: 64 * 1024 * 1024 });
+        try {
+          const output = await anonymizeDocx(data, plan);
+          const dot = upload.filename.lastIndexOf(".");
+          return {
+            filename: `${dot > 0 ? upload.filename.slice(0, dot) : upload.filename} (zanonimizowany).docx`,
+            mediaType: FORMAT_MEDIA_TYPE.docx,
+            data: output.data.toString("base64"),
+            warnings: output.warnings
+          };
+        } finally {
+          data.fill(0);
+        }
+      });
+      res.setHeader("Cache-Control", "no-store");
+      res.json(result);
+    } catch (error) {
+      if (sendCaseAccessError(res, error)) return;
+      const code = error instanceof Error ? error.message : "";
+      if (code === "ENOENT" || code.endsWith("NOT_FOUND") || code === "UNKNOWN_LOCAL_DOCUMENT") {
+        res.status(404).json({ error: code === "ENOENT" ? "DOCUMENT_NOT_FOUND" : code });
+        return;
+      }
+      if (code.startsWith("DOCX_ANONYMIZED_") || code.startsWith("OFFICE_DOCUMENT_")) {
+        res.status(422).json({ error: /^[A-Z_]+/.exec(code)![0] });
+        return;
+      }
+      console.error(`DOCX_ANONYMIZED_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+      res.status(500).json({ error: "DOCX_ANONYMIZED_FAILED" });
+    }
+  });
 
   // Stage and page counts of a running OCR/anonymization request.
   app.get(
