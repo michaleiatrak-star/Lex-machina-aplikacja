@@ -1,7 +1,9 @@
 # Local OCR runtime for Lex Machina.
 # PaddleOCR 3.7 defaults to PP-OCRv6_medium; Polish is selected with lang=pl.
 paddleocr>=3.7,<4
-paddlepaddle>=3.2,<4
+# 3.3.x: the oneDNN executor rejects the PP-OCRv6 detector (nearest_interp scale,
+# ConvertPirAttribute2RuntimeAttribute), OCR falls back to the plain path 5-7x slower.
+paddlepaddle==3.2.2
 pymupdf>=1.26,<2
 numpy>=1.26,<3
 

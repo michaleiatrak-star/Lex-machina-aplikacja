@@ -134,6 +134,8 @@ function calmEntity(entity: PersonEntity): PersonEntity {
 
 // Persons and addresses with a paradigm: one token per canonical entity.
 const ENTITY_KINDS = new Set<PiiKind>(["PERSON", "ADDRESS"]);
+// Numbers that identify a person or a firm wherever they appear (no context word needed).
+const IDENTIFIER_KINDS = new Set<PiiKind>(["PESEL", "NIP", "REGON", "KRS", "IBAN", "ID_CARD", "PASSPORT", "PAYMENT_CARD", "EMAIL", "PHONE", "BAR_NUMBER", "LAND_REGISTRY"]);
 
 function personEntityKey(entity: PersonEntity, kind: PiiKind = "PERSON"): string {
   return `${kind}\u0000entity\u0000${entity.canonical.toLocaleLowerCase("pl")}\u0000${entity.gender}\u0000${entity.type ?? ""}${entity.number ?? ""}`;
@@ -778,6 +780,29 @@ export class PseudonymizationVault {
       .map(([text, item]) => ({ text, ...item }));
   }
 
+  /** Firms already protected (another page): their names, the register's spelling first. */
+  knownOrganizationNames(): Array<{ name: string; legalForm?: string }> {
+    const names = new Map<string, string | undefined>();
+    for (const [token, value] of this.tokenToValue) {
+      const entity = this.tokenEntities.get(token);
+      if (entity?.type !== "organization") continue;
+      for (const name of [entity.canonical, value]) {
+        if (/\p{Lu}/u.test(name) && name.replace(/\s+/gu, " ").trim().length >= 6 && !names.has(name)) names.set(name, entity.legalForm);
+      }
+    }
+    return [...names].map(([name, legalForm]) => ({ name, ...(legalForm ? { legalForm } : {}) }));
+  }
+
+  /** Identifiers already protected (another page of the document): their values by kind. */
+  knownIdentifierValues(): Array<{ kind: PiiKind; value: string }> {
+    const known: Array<{ kind: PiiKind; value: string }> = [];
+    for (const [token, value] of this.tokenToValue) {
+      const kind = this.tokenMetadata.get(token)?.kind;
+      if (kind && IDENTIFIER_KINDS.has(kind)) known.push({ kind, value });
+    }
+    return known;
+  }
+
   hasToken(
     token: string
   ): boolean {
@@ -959,6 +984,22 @@ export class LocalPolishPseudonymizer {
         }
         continue;
       }
+      // The firm's KRS and REGON: the same digits anywhere; one digit off only after the label.
+      if (form.kind === "KRS" || form.kind === "REGON") {
+        for (const match of text.matchAll(/(?<![\p{L}\p{N}])\d(?:[ \u00a0-]?\d){8,13}(?![\p{L}\p{N}])/gu)) {
+          const read = match[0].replace(/\D/gu, "");
+          if (read.length !== form.text.length) continue;
+          let differ = 0;
+          for (let index = 0; index < read.length && differ <= 1; index += 1) if (read[index] !== form.text[index]) differ += 1;
+          const labelled = new RegExp(`\\b${form.kind}\\s*(?:nr\\.?|numer)?\\s*:?\\s*$`, "u").test(text.slice(Math.max(0, match.index! - 20), match.index!));
+          if (differ > 1 || (differ === 1 && !labelled)) continue;
+          autoSpans.push({
+            start: match.index!, end: match.index! + match[0].length, kind: form.kind, value: match[0], confidence: differ ? 0.9 : 1, source: "AUTO",
+            ...(differ ? { uncertain: `${form.kind} różni się od rejestru o jedną cyfrę (literówka lub błąd OCR); ${form.uncertain}` } : {})
+          });
+        }
+        continue;
+      }
       // Any letter case and spacing ("UL. DŁUGA 5", "Długa  5", "DŁUGA 5"): the same letters with
       // the register's house number do not appear by chance. A firm's name in any case too,
       // but not written all in small letters (a common phrase, not the name).
@@ -1026,6 +1067,48 @@ export class LocalPolishPseudonymizer {
       }
     }
 
+    // A number the register names with a note (one digit off its REGON, an account read with
+    // errors) keeps the note: the same span found by its label alone carries none.
+    for (const noted of autoSpans.filter((span) => span.uncertain && (span.kind === "REGON" || span.kind === "KRS" || span.kind === "IBAN"))) {
+      for (let index = autoSpans.length - 1; index >= 0; index -= 1) {
+        const other = autoSpans[index]!;
+        if (other !== noted && !other.uncertain && other.start === noted.start && other.end === noted.end) autoSpans.splice(index, 1);
+      }
+    }
+    // A firm protected on another page (its NIP and register data were there): its name here
+    // too, as the same firm; a recognized span running past it is cut off below.
+    for (const { name, legalForm } of this.vault.knownOrganizationNames()) {
+      const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/gu, "\\s+");
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu"))) {
+        if (match[0] === match[0].toLocaleLowerCase("pl")) continue;
+        autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: "PERSON", value: match[0], confidence: 1, source: "AUTO" });
+        if (!registryFirms.has(match[0])) registryFirms.set(match[0], legalForm);
+      }
+    }
+    // An identifier protected on another page (a KRS after its label on page 2, alone on
+    // page 3): the same digits in any grouping, the same text for the others.
+    for (const { kind, value } of this.vault.knownIdentifierValues()) {
+      const digits = value.replace(/\D/gu, "");
+      const pattern =
+        digits.length >= 6 && !/\p{L}{2}/u.test(value.replace(/^PL/u, ""))
+          ? digits.split("").join("[ \\u00a0-]?")
+          : value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{L}\\p{N}])(?:PL\\s?)?${pattern}(?![\\p{L}\\p{N}])`, "gu"))) {
+        autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind, value: match[0], confidence: 1, source: "AUTO" });
+      }
+    }
+    // A postal code of a protected address also where it stands apart ("w Katowicach 40-847
+    // przy ul. ..."): it narrows the address down.
+    const codes = new Set(
+      [...autoSpans.filter((span) => span.kind === "ADDRESS").map((span) => span.value), ...this.vault.knownEntityForms().filter((form) => form.kind === "ADDRESS").map((form) => form.text)]
+        .flatMap((value) => value.match(/\b\d{2}-\d{3}\b/gu) ?? [])
+    );
+    for (const code of codes) {
+      for (const match of text.matchAll(new RegExp(`(?<![\\p{N}-])${code}(?![\\p{N}-])`, "gu"))) {
+        autoSpans.push({ start: match.index!, end: match.index! + match[0].length, kind: "ADDRESS", value: match[0], confidence: 0.9, source: "AUTO" });
+      }
+    }
+
     if (this.namedEntities) {
       const named =
         await this.namedEntities.recognize(text);
@@ -1036,14 +1119,36 @@ export class LocalPolishPseudonymizer {
         // A role heading on the first line ("Radców Prawnych⏎Nowak Lis"): the name is below.
         const heading = lineEnd > 0 && roleHeading(recognized.value.slice(0, lineEnd));
         const below = heading ? recognized.value.slice(lineEnd + 1).split("\n")[0]!.trim() : "";
+        // A given name at the end of a line and the surname opening the next ("Adwokata
+        // Andrzeja⏎Ciecierskiego z Kancelarii"): one name; an address below is no part of it.
+        const wrapped =
+          lineEnd > 0 &&
+          !heading &&
+          /^\p{Lu}\p{Ll}+$/u.test(recognized.value.slice(0, lineEnd).trim()) &&
+          /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?$/u.test(recognized.value.slice(lineEnd + 1).trim()) &&
+          !STREET_MARK.test(` ${recognized.value.slice(lineEnd + 1)} `);
         const found =
           heading
             ? { ...recognized, start: recognized.start + recognized.value.indexOf(below, lineEnd + 1), value: below }
-            : lineEnd > 0
+            : lineEnd > 0 && !wrapped
               ? { ...recognized, end: recognized.start + lineEnd, value: recognized.value.slice(0, lineEnd).trimEnd() }
               : recognized;
         if (lineEnd > 0) found.end = found.start + found.value.length;
         if (!found.value) continue;
+        if (found.kind === "PERSON") {
+          // "Sz. P.", "Szan. Pani": a form of address, not a name.
+          if (/^(?:Sz(?:an)?\.?\s*P(?:\.|an|ani|aństwo)?|P\.|Pan|Pani|Państwo)\.?$/u.test(found.value.trim())) continue;
+          // "Katowice, dnia 4 czerwca", "Katowice, 01.01.2023": the place of a letter's date line.
+          const after = text.slice(found.end, found.end + 24);
+          const lineStart = found.start === 0 || text[found.start - 1] === "\n";
+          if (lineStart && !/\s/u.test(found.value) && /^\s*,\s*(?:dnia\s+)?\d/u.test(after)) continue;
+          // The name of a firm from the register is the register's span: a recognized span that
+          // runs past it takes words of the sentence with it ("Pomiędzy Human Park Global").
+          const firm = autoSpans.find(
+            (span) => registryFirms.has(span.value) && span.start < found.end && found.start < span.end && (found.start !== span.start || found.end !== span.end)
+          );
+          if (firm) continue;
+        }
         // A double surname the recognizer cut at the hyphen ("Nicole Brzezińska" of "Nicole Brzezińska-Król").
         if (found.kind === "PERSON") {
           const rest = /^-\p{Lu}\p{Ll}+/u.exec(text.slice(found.end, found.end + 40));
@@ -1100,6 +1205,18 @@ export class LocalPolishPseudonymizer {
     for (let index = autoSpans.length - 1; index >= 0; index -= 1) {
       const span = autoSpans[index]!;
       if (firms.includes(span as (typeof firms)[number]) && !/\p{L}{2}/u.test(span.value)) autoSpans.splice(index, 1);
+    }
+
+    // A firm read before its legal form may take the words before its name ("Pomiędzy Human
+    // Park Global Sp. z o.o.", "(dalej „Rozporządzenie”) Human Park Sp. z o.o."): a name the
+    // register or another page gave that ends the span is the firm.
+    for (const firm of firms) {
+      const known = autoSpans
+        .filter((span) => span !== firm && registryFirms.has(span.value) && span.end === firm.end && span.start > firm.start)
+        .sort((a, b) => a.start - b.start)[0];
+      if (!known) continue;
+      firm.start = known.start;
+      firm.value = known.value;
     }
 
     // The bare surname of a person recognized in this text, written with a capital inside a
@@ -1218,7 +1335,15 @@ export class LocalPolishPseudonymizer {
     // A known person by surname alone or surname first ("Nowakowi", "Pan Wilk", "WILK JAN"):
     // the full name's token, so the model sees one person (surname-propagation.ts).
     {
-      const known = [...new Set(entities.values())];
+      // Persons only: an address's last word ("40-847 Katowice") or a firm's ("Human Park") is
+      // no surname, and a person sharing it would be read as ambiguous.
+      // Also persons named in full only on another page ("Park Juneyoung" here, "Juneyoung Park" there).
+      const known = [
+        ...new Set([
+          ...[...entities].filter(([key, entity]) => key.startsWith("PERSON\u0000") && entity.type !== "organization").map(([, entity]) => entity),
+          ...this.vault.knownEntityForms().filter((form) => form.kind === "PERSON" && form.entity && form.entity.type !== "organization").map((form) => form.entity!)
+        ])
+      ];
       const singleWordPerson = (item: PiiSpan) => item.kind === "PERSON" && !/\s/u.test(item.value.trim());
       const blocked = (start: number, end: number) =>
         [...keep, ...labelDirectives, ...findings.filter((item) => !singleWordPerson(item))].some((item) => overlaps({ start, end }, item));

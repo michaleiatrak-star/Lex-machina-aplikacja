@@ -10,7 +10,7 @@ import { detectIdentifiers, validNip } from "./identifiers.js";
 
 export type RegistryForm = {
   text: string;
-  kind: "PERSON" | "ADDRESS" | "IBAN";
+  kind: "PERSON" | "ADDRESS" | "IBAN" | "KRS" | "REGON";
   // A firm's own name: one organization token, the legal form stays in the text.
   organization?: { legalForm?: string };
   // A person known only by the register's mask ("J******** P***"): matched as a pattern
@@ -142,8 +142,19 @@ export function whiteListForms(reply: unknown): RegistryForm[] {
       kind: "IBAN",
       uncertain: `rachunek z białej listy VAT${name ? `: ${name}` : ""}`
     }));
+  // The firm's KRS and REGON: found also without their label, and a REGON one digit off
+  // after its label is the same firm's (a typo in the document or an OCR misreading).
+  const numbers = (["krs", "regon"] as const)
+    .map((key) => ({ key, value: text(result[key])?.replace(/\D/gu, "") }))
+    .filter((item): item is { key: "krs" | "regon"; value: string } => Boolean(item.value && /^\d{9,14}$/u.test(item.value)))
+    .map(({ key, value }): RegistryForm => ({
+      text: value,
+      kind: key === "krs" ? "KRS" : "REGON",
+      uncertain: `${key.toUpperCase()} z białej listy VAT${name ? `: ${name}` : ""}: ${value}`
+    }));
   return [
     ...accounts,
+    ...numbers,
     ...firmNameForms(text(result.tytul_lub_nazwa) ?? ""),
     ...addressForms(text(result.adres)),
     ...addressForms(text(result.adres_zamieszkania)),
