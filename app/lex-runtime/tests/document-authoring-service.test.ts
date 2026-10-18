@@ -663,5 +663,49 @@ describe("ready document with an unverified provision", () => {
     const ok = await current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty 100 zł.") });
     expect(ok.aliasesUsed).toContain("[LMPII:D01:PERSON:0001]");
   });
+
+  it("accepts a privacy symbol written only in a grammatical case and restores it in the final file", async () => {
+    const current = fixture();
+    const vault = new PseudonymizationVault();
+    vault.getOrCreate("PERSON", "Jan Kowalski");
+    await current.vaultStore.saveDocumentVault({
+      caseId: current.caseId,
+      documentId: current.documentId,
+      vault,
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1
+    });
+    // "w imieniu spółki X", "przez Y": the file holds "[LMPII:D01:PERSON:0001|GEN]", never the bare symbol.
+    const tokenized = await current.service.createTokenized({
+      caseId: current.caseId,
+      createdByUserId: current.userId,
+      format: "docx",
+      sourceDocumentIds: [current.documentId],
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1,
+      validationContext: validationContext(current.documentId),
+      ast: {
+        ...ast,
+        blocks: [{
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Wezwanie wystosowano w imieniu " },
+            { type: "pii_ref", alias: "[LMPII:D01:PERSON:0001]", case: "GEN" },
+            { type: "text", text: "." }
+          ]
+        }]
+      }
+    });
+    expect(tokenized.aliasesUsed).toEqual(["[LMPII:D01:PERSON:0001]"]);
+    const target = await current.states.resolve(current.caseId, tokenized.artifact.artifactId);
+    const final = await current.service.deanonymizeConsumed({
+      target: target!,
+      createdByUserId: current.userId,
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1
+    });
+    expect(final.text).toContain("Kowalsk");
+    expect(final.text).not.toContain("LMPII");
+  });
 });
 
