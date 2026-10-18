@@ -248,6 +248,7 @@ export type SettingsRequest = {
 
 type SettingsPanels = {
   localAi?: ReactNode;
+  integrations?: ReactNode;
   users?: ReactNode;
   security?: ReactNode;
   mcp?: ReactNode;
@@ -7226,7 +7227,7 @@ export default function MatterChatApp({
                 ["models", "Modele i AI"],
                 ["users", "Użytkownicy i uprawnienia"],
                 ["security", "Hasło i bezpieczeństwo"],
-                ["mcp", "Konektory MCP"],
+                ["mcp", "Integracje i konektory"],
                 ["invoices", "Faktury i KSeF"],
                 ["skills", "Skille i routing"],
                 ["maintenance", "Aplikacja i utrzymanie"]
@@ -7769,6 +7770,7 @@ export default function MatterChatApp({
                 </div>
               ) : settingsSection === "mcp" ? (
                 <div className="chat-settings-section-stack">
+                  {settingsPanels?.integrations}
                   {user.appRole === "ADMIN"
                     ? settingsPanels?.mcp
                     : (

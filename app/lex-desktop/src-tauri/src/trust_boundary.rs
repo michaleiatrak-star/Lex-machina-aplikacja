@@ -1579,6 +1579,13 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if is_invoice_route(method, path) => true,
         "/api/widgets" => method == "POST",
         _ if is_widget_frame_route(path) => method == "GET",
+        // Ustawienia -> Integracje: konto Google (Gmail, Dysk) tylko do odczytu.
+        "/api/google/workspace/status"
+        | "/api/google/gmail/threads"
+        | "/api/google/drive/files" => method == "GET",
+        "/api/google/workspace/connect"
+        | "/api/google/workspace/connect/result"
+        | "/api/google/workspace/disconnect" => method == "POST",
         _ => false,
     }
 }
@@ -2166,6 +2173,12 @@ mod tests {
         assert!(!route_allowed("POST", "/api/schedule/upcoming"));
         assert!(route_allowed("POST", "/api/cases/case_abc/contacts"));
         assert!(route_allowed("POST", "/api/cases/case_abc/files"));
+        assert!(route_allowed("GET", "/api/google/workspace/status"));
+        assert!(route_allowed("POST", "/api/google/workspace/connect"));
+        assert!(route_allowed("GET", "/api/google/drive/files"));
+        assert!(route_allowed("POST", "/api/cases/case_abc/google/import"));
+        assert!(!route_allowed("DELETE", "/api/google/workspace/status"));
+        assert!(!route_allowed("POST", "/api/google/recovery/unlink"));
         assert!(route_allowed("GET", "/api/sensitive-download/download_abc"));
         assert!(!route_allowed("POST", "/api/update/status"));
         assert!(route_allowed("POST", "/api/update/download"));

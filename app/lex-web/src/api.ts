@@ -4384,3 +4384,56 @@ export function setInvoiceNumbering(
 export function previewInvoiceNumber(issueDate: string): Promise<{ number: string | null }> {
   return json(`/api/invoices/next-number?issueDate=${encodeURIComponent(issueDate)}`);
 }
+
+// Ustawienia -> Integracje: konto Google (Gmail i Dysk tylko do odczytu).
+export type GoogleWorkspaceStatus = {
+  configured: boolean;
+  connected: boolean;
+  email?: string;
+  gmail: boolean;
+  drive: boolean;
+  connectedAt?: string;
+};
+
+export type GoogleFlowStart = { flowId: string; flowToken: string; authorizationUrl: string };
+
+export type GmailThreadSummary = { id: string; subject: string; from: string; date: string; snippet: string; messages: number };
+
+export type DriveItem = { id: string; name: string; mimeType: string; folder: boolean; size?: number; modifiedTime?: string };
+
+export function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatus> {
+  return json("/api/google/workspace/status");
+}
+
+export function startGoogleWorkspaceConnect(): Promise<GoogleFlowStart> {
+  return json("/api/google/workspace/connect", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function googleWorkspaceConnectResult(
+  flow: Pick<GoogleFlowStart, "flowId" | "flowToken">
+): Promise<{ status: "PENDING" | "DONE" | "FAILED"; result?: GoogleWorkspaceStatus; error?: string }> {
+  return json("/api/google/workspace/connect/result", { method: "POST", body: JSON.stringify(flow) });
+}
+
+export function disconnectGoogleWorkspace(): Promise<GoogleWorkspaceStatus> {
+  return json("/api/google/workspace/disconnect", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function searchGmailThreads(q: string, pageToken?: string): Promise<{ threads: GmailThreadSummary[]; nextPageToken?: string }> {
+  const params = new URLSearchParams({ q });
+  if (pageToken) params.set("pageToken", pageToken);
+  return json(`/api/google/gmail/threads?${params}`);
+}
+
+export function listDriveFiles(options: { folderId?: string; q?: string; pageToken?: string }): Promise<{ items: DriveItem[]; nextPageToken?: string }> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) if (value) params.set(key, value);
+  return json(`/api/google/drive/files?${params}`);
+}
+
+export function importFromGoogle(
+  caseId: string,
+  selection: { gmailThreadIds?: string[]; driveFileIds?: string[] }
+): Promise<{ files: unknown[] }> {
+  return json(`/api/cases/${encodeURIComponent(caseId)}/google/import`, { method: "POST", body: JSON.stringify(selection) });
+}

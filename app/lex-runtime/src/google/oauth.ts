@@ -44,6 +44,8 @@ export function buildAuthorizationUrl(args: {
   nonce: string;
   codeChallenge: string;
   loginHint?: string;
+  // A refresh token for standing access (a connected Gmail or Drive), never for recovery.
+  offline?: boolean;
 }): string {
   const url = new URL(GOOGLE_AUTHORIZATION_ENDPOINT);
   url.searchParams.set("client_id", args.config.clientId);
@@ -59,6 +61,9 @@ export function buildAuthorizationUrl(args: {
   url.searchParams.set("prompt", "select_account consent");
   if (args.loginHint) {
     url.searchParams.set("login_hint", args.loginHint);
+  }
+  if (args.offline) {
+    url.searchParams.set("access_type", "offline");
   }
   return url.toString();
 }
