@@ -261,6 +261,24 @@ describe("register and firm names as whole elements", () => {
     expect(result.findings.some((finding) => finding.uncertain?.includes("w rejestrze: "))).toBe(true);
   });
 
+  it("white list accounts and address as OCR misread them; another house number is not the address", async () => {
+    const wl = {
+      status: "FOUND",
+      result: { tytul_lub_nazwa: "TRANSKOM SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ", krs: "0000019193", adres: "UL. KOLOROWA 15, 40-001 KATOWICE", osoby: [], rachunki: ["61109010140000071219812874"] }
+    };
+    const registry = new RegistryEnrichment(stub({ "wl:5261040828": wl }));
+    const text = "Transkom sp. z o.o., NIP 526-104-08-28, ul. Kolorowa l5, 4O-001 Katowice. Wpłata na rachunek 61 1090 1014 0000 0712 1981 287A? " +
+      "Nie: 61 1090 1014 0000 0712 1981 2875. Sąsiad mieszka przy ul. Kolorowa 16.";
+    const result = await new LocalPolishPseudonymizer(new PseudonymizationVault(), undefined, undefined, registry).pseudonymize(text);
+    for (const leak of ["Kolorowa l5", "4O-001", "1981 2875"]) expect(result.text).not.toContain(leak);
+    // Another building: masked by the address rule, but never with the register's address token.
+    const token = (value: string) => result.findings.find((finding) => text.slice(finding.start, finding.end).includes(value))?.token;
+    expect(token("Kolorowa l5")).toBeDefined();
+    expect(token("Kolorowa 16")).not.toBe(token("Kolorowa l5"));
+    expect(result.findings.find((finding) => text.slice(finding.start, finding.end).includes("Kolorowa l5"))?.uncertain).toMatch(/w rejestrze/u);
+    expect(result.findings.some((finding) => finding.kind === "IBAN" && finding.uncertain?.includes("rachunek z białej listy VAT: TRANSKOM"))).toBe(true);
+  });
+
   it("the whole name decides: a letter lost or misread in a long name, never a short or a single word", () => {
     const text = "uman Park Global\nHurnan Park Global\nHuman Park Global sp. z o.o.\nhuman park global\nLorem Park Global";
     const found = findNameApproximately(text, "Human Park Global").map((match) => `${match.value}:${match.exact}`);

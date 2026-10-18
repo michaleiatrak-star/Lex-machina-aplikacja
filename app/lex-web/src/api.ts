@@ -3544,7 +3544,7 @@ export type DocumentPageScan = {
   data: string;
   width: number;
   height: number;
-  lines: Array<{ text: string; box: [number, number, number, number] | null }>;
+  lines: Array<{ text: string; box: [number, number, number, number] | null; poly?: Array<[number, number]> }>;
 };
 
 /** Null when the page has no scan (text layer of a PDF, a page past the image limit). */

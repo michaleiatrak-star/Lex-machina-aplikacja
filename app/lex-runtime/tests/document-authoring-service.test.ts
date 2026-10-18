@@ -632,7 +632,7 @@ describe("ready document with an unverified provision", () => {
     expect(final.text).not.toContain("NIEWERYFIKOWANE]");
   });
 
-  it("runs HYBRID-VAL before the tokenized .docx: an open placeholder stops the file", async () => {
+  it("runs HYBRID-VAL before the tokenized .docx: open fields and an undecided court stay in the file as warnings", async () => {
     const current = fixture();
     const vault = new PseudonymizationVault();
     vault.getOrCreate("PERSON", "Jan Kowalski");
@@ -656,9 +656,17 @@ describe("ready document with an unverified provision", () => {
       ...ast,
       blocks: [{ type: "paragraph", content: [{ type: "pii_ref", alias: "[LMPII:D01:PERSON:0001]" }, { type: "text", text }] }]
     });
-    await expect(current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty [UZUPEŁNIJ: kwota].") })).rejects.toThrow(
-      "TOKENIZED_DOCUMENT_HYBRID_BLOCKED:OPEN_PLACEHOLDER"
-    );
+    // Fields to fill in stay in the file and are named to the user: no refusal.
+    const open = await current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty [UZUPEŁNIJ: kwota].") });
+    expect(open.text).toContain("[UZUPEŁNIJ: kwota]");
+    expect(open.warnings.join(" ")).toContain("[UZUPEŁNIJ: kwota]");
+    // A first letter whose court the application could not decide: the file keeps the field, the user is told.
+    const court = await current.service.createTokenized({
+      ...common,
+      ast: paragraph(" — pozew do [Sąd do ustalenia: SR Katowice-Wschód albo SR Katowice-Zachód, brak numeru budynku w ewidencji].")
+    });
+    expect(court.text).toContain("[Sąd do ustalenia:");
+    expect(court.warnings.join(" ")).toMatch(/sąd nie jest ustalony/u);
     // The privacy tokens are what this file is for: not a HYBRID-VAL failure.
     const ok = await current.service.createTokenized({ ...common, ast: paragraph(" wzywa do zapłaty 100 zł.") });
     expect(ok.aliasesUsed).toContain("[LMPII:D01:PERSON:0001]");

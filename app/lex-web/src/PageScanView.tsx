@@ -49,6 +49,8 @@ export function PageScanView(props: {
 
   const focusLine = scan && props.focus ? ("line" in props.focus ? props.focus.line : lineAt(scan.lines, props.text, props.focus.offset)) : null;
   const box = scan && focusLine !== null ? scan.lines[focusLine]?.box ?? null : null;
+  // A line bent on a fold: its own outline, not the rectangle that covers the lines around it.
+  const poly = scan && focusLine !== null && box ? scan.lines[focusLine]?.poly ?? null : null;
 
   useEffect(() => {
     focusRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
@@ -80,10 +82,15 @@ export function PageScanView(props: {
         ) : (
           <div className="page-scan-sheet" style={{ width: `${zoom * 100}%` }}>
             <img src={`data:${scan.mediaType};base64,${scan.data}`} alt={`Skan strony ${props.page}`} draggable={false} />
+            {poly ? (
+              <svg className="page-scan-outline" viewBox={`0 0 ${scan.width} ${scan.height}`} preserveAspectRatio="none" aria-hidden="true">
+                <polygon points={poly.map(([x, y]) => `${x},${y}`).join(" ")} vectorEffect="non-scaling-stroke" />
+              </svg>
+            ) : null}
             {box ? (
               <div
                 ref={focusRef}
-                className="page-scan-focus"
+                className={poly ? "page-scan-focus page-scan-anchor" : "page-scan-focus"}
                 style={{
                   left: `${(box[0] / scan.width) * 100}%`,
                   top: `${(box[1] / scan.height) * 100}%`,

@@ -10,7 +10,7 @@ import { detectIdentifiers, validNip } from "./identifiers.js";
 
 export type RegistryForm = {
   text: string;
-  kind: "PERSON" | "ADDRESS";
+  kind: "PERSON" | "ADDRESS" | "IBAN";
   // A firm's own name: one organization token, the legal form stays in the text.
   organization?: { legalForm?: string };
   // A person known only by the register's mask ("J******** P***"): matched as a pattern
@@ -133,7 +133,17 @@ export function whiteListForms(reply: unknown): RegistryForm[] {
   if (row.status !== "FOUND" || !row.result || typeof row.result !== "object") return [];
   const result = row.result as Row;
   const persons = Array.isArray(result.osoby) ? (result.osoby as Row[]) : [];
+  const name = text(result.tytul_lub_nazwa);
+  // The firm's accounts on the list: the one in a letter is the firm's, also as OCR misread it.
+  const accounts = (Array.isArray(result.rachunki) ? result.rachunki : [])
+    .filter((value): value is string => typeof value === "string" && /^\d{26}$/u.test(value))
+    .map((value): RegistryForm => ({
+      text: value.replace(/^(\d{2})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})$/u, "$1 $2 $3 $4 $5 $6 $7"),
+      kind: "IBAN",
+      uncertain: `rachunek z białej listy VAT${name ? `: ${name}` : ""}`
+    }));
   return [
+    ...accounts,
     ...firmNameForms(text(result.tytul_lub_nazwa) ?? ""),
     ...addressForms(text(result.adres)),
     ...addressForms(text(result.adres_zamieszkania)),

@@ -61,6 +61,21 @@ function escape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Top and bottom of an outline between two x positions: its vertices there and its edges crossing them. */
+export function polyBand(poly: Array<[number, number]> | undefined, left: number, right: number): [number, number] | null {
+  if (!poly || poly.length < 3) return null;
+  const ys: number[] = [];
+  for (let index = 0; index < poly.length; index += 1) {
+    const [ax, ay] = poly[index]!;
+    const [bx, by] = poly[(index + 1) % poly.length]!;
+    if (ax >= left && ax <= right) ys.push(ay);
+    for (const x of [left, right]) {
+      if ((ax - x) * (bx - x) < 0) ys.push(ay + ((by - ay) * (x - ax)) / (bx - ax));
+    }
+  }
+  return ys.length ? [Math.min(...ys), Math.max(...ys)] : null;
+}
+
 /**
  * Boxes to paint black on the page image: every occurrence of a protected
  * value (by the line boxes, spread proportionally over the line, padded),
@@ -87,12 +102,12 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
     const length = Math.max(1, lines[index]!.text.length);
     const charWidth = (x1 - x0) / length;
     const pad = charWidth * 1.5 + 4;
-    return [
-      Math.max(x0 - 2, x0 + charWidth * from - pad),
-      y0 - 3,
-      Math.min(x1 + 2, x0 + charWidth * to + pad),
-      y1 + 3
-    ];
+    const left = Math.max(x0 - 2, x0 + charWidth * from - pad);
+    const right = Math.min(x1 + 2, x0 + charWidth * to + pad);
+    // A line bent on a fold: the mask takes the line's height at those letters (from its
+    // outline), not the rectangle's, which would cover the lines above and below.
+    const band = polyBand(lines[index]!.poly, left, right);
+    return [left, (band?.[0] ?? y0) - 3, right, (band?.[1] ?? y1) + 3];
   };
   // Whole lines hidden: badly read ones, and lines to check against the scan (handwriting,
   // stamps): a handwritten "Wiatrak Michał" read as "Wire mats Mithet" matches no key value.

@@ -30,6 +30,9 @@ export type OcrLine = {
   text: string;
   score?: number | null;
   box?: [number, number, number, number];
+  // The line's outline on the page image (same scale as box): a line bent on a fold is no
+  // rectangle, the preview frame and the masks follow it.
+  poly?: Array<[number, number]>;
   // Read from a coloured stamp's own layer (paddle_worker split_stamp_ink), not from the letter.
   stamp?: boolean;
   // Straightened image of the line (base64 JPEG) for the local vision model; dropped

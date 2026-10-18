@@ -476,7 +476,7 @@ export class LocalPrivateDocumentService {
             height: image.height,
             lines: page.editedByUser
                 ? []
-                : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null }))
+                : (page.lines ?? []).map((line) => ({ text: line.text, box: line.box ?? null, ...(line.poly ? { poly: line.poly } : {}) }))
         };
     }
     async editPage(documentId, pageNumber, text, security) {

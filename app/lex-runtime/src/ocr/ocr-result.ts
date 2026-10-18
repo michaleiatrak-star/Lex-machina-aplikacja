@@ -15,6 +15,14 @@ export function evidenceBudget(): EvidenceBudget {
 
 type Box = [number, number, number, number];
 
+function outline(value: unknown): Array<[number, number]> | undefined {
+  if (!Array.isArray(value) || value.length < 3 || value.length > 64) return undefined;
+  const points = value.filter(
+    (point): point is [number, number] => Array.isArray(point) && point.length === 2 && point.every((item) => Number.isFinite(item))
+  );
+  return points.length === value.length ? points.map(([x, y]) => [Number(x), Number(y)]) : undefined;
+}
+
 function box(value: unknown): Box | undefined {
   return Array.isArray(value) && value.length === 4 && value.every((item) => Number.isFinite(item))
     ? (value.map(Number) as Box)
@@ -36,7 +44,7 @@ export async function readOcrPages(
   const pages: OcrPageResult[] = [];
   for (const item of raw) {
     const page = item as OcrPageResult & {
-      lines?: Array<{ text?: unknown; score?: unknown; box?: unknown; crop?: unknown; stamp?: unknown }>;
+      lines?: Array<{ text?: unknown; score?: unknown; box?: unknown; poly?: unknown; crop?: unknown; stamp?: unknown }>;
       evidence?: { file?: unknown; width?: unknown; height?: unknown; unread?: unknown };
     };
     const lines: OcrLine[] | undefined = Array.isArray(page.lines)
@@ -44,10 +52,12 @@ export async function readOcrPages(
           .filter((line) => typeof line?.text === "string")
           .map((line) => {
             const lineBox = box(line.box);
+            const linePoly = lineBox ? outline(line.poly) : undefined;
             return {
               text: line.text as string,
               ...(typeof line.score === "number" ? { score: line.score } : {}),
               ...(lineBox ? { box: lineBox } : {}),
+              ...(linePoly ? { poly: linePoly } : {}),
               ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {}),
               ...(line.stamp === true ? { stamp: true } : {})
             };

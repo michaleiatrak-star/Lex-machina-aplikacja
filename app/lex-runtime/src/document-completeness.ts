@@ -1,6 +1,9 @@
 import type { LegalDocumentAst } from "./legal-document-ast.js";
 
 const FIELD = /\[(?!(?:LM)?PII:)[^\[\]\r\n]{1,48}\]/gu;
+// Longer fields the drafting rules use: "[UZUPEŁNIJ: …]", the court the application could not decide.
+const LONG_FIELD = /\[(?:UZUPEŁNIJ|Sąd do ustalenia|SĄD DO SPRAWDZENIA)\b[^\[\]\r\n]{0,240}\]/giu;
+const COURT_FIELD = /\[(?:Sąd do ustalenia|SĄD DO SPRAWDZENIA)\b/iu;
 // Documents filed or sent under someone's name end with a signature.
 const SIGNED_TYPES = new Set(["pleading", "letter", "contract"]);
 
@@ -11,7 +14,12 @@ const SIGNED_TYPES = new Set(["pleading", "letter", "contract"]);
  */
 export function documentCompletenessWarnings(ast: LegalDocumentAst, text: string): string[] {
   const warnings: string[] = [];
-  const fields = [...new Set(text.match(FIELD) ?? [])];
+  if (COURT_FIELD.test(text)) {
+    warnings.push("sąd nie jest ustalony: podaj pełny adres strony, według którego ustala się właściwość (z numerem budynku), albo wpisz sąd");
+  }
+  const fields = [...new Set([...(text.match(LONG_FIELD) ?? []), ...(text.match(FIELD) ?? [])])].filter((field) => !COURT_FIELD.test(field));
+  const blanks = (text.match(/⬛+/gu) ?? []).length;
+  if (blanks) warnings.push(`puste pola ⬛ do wypełnienia: ${blanks}`);
   if (fields.length) {
     warnings.push(`pola do uzupełnienia: ${fields.slice(0, 10).join(", ")}${fields.length > 10 ? ` i ${fields.length - 10} innych` : ""}`);
   }

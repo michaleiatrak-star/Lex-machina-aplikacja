@@ -148,7 +148,10 @@ export class LocalDocumentAuthoringService {
             // Which check failed, named: an empty document, the file's text not what was rendered,
             // or a privacy symbol of the document missing from the file.
             const flat = (value) => value.replace(/\s+/g, " ").trim();
-            const missingAliases = validated.aliasesUsed.filter((alias) => !validation.text.includes(alias));
+            // A reference in a grammatical case is written "[LMPII:D00:PERSON:0003|GEN]" (pii_ref_text in
+            // the worker): the symbol is in the file with or without its case.
+            const inFile = (alias) => new RegExp(`${alias.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\|[A-Z]+)?\\]`).test(validation.text);
+            const missingAliases = validated.aliasesUsed.filter((alias) => !inFile(alias));
             const failure = !astText
                 ? "EMPTY_DOCUMENT"
                 : flat(validation.text) !== flat(rendered.text)
