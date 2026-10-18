@@ -1,4 +1,10 @@
 import { createHash } from "node:crypto";
+// Put before a stamp's line in the page text (the same mark as the OCR worker's).
+export const STAMP_MARK = "[PIECZĘĆ lub kolorowy tusz]";
+/** A line of an OCR page as the page text carries it (a stamp's line marked). */
+export function ocrLineText(line) {
+    return line.stamp ? `${STAMP_MARK} ${line.text}` : line.text;
+}
 export const DEFAULT_DOCUMENT_INGESTION_LIMITS = {
     maxBytes: 512 * 1024 * 1024,
     maxPages: 10_000,

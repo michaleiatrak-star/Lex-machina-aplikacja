@@ -26,6 +26,18 @@ const review: DocumentReviewResponse = {
 };
 
 describe("preview before a document is finalized", () => {
+  it("a coloured stamp's line is listed as a stamp", () => {
+    const stamped: DocumentReviewResponse = {
+      ...review,
+      pages: [{ ...review.pages[0]!, review: [{ line: 3, text: "BIURO PODAWCZE", score: 0.98, reason: "STAMP" }] }]
+    };
+    const html = renderToStaticMarkup(
+      <PrivacyPreview caseId="case_1" review={stamped} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />
+    );
+    expect(html).toContain("pieczęć · „BIURO PODAWCZE”");
+    expect(html).toContain("Pieczęć w kolorze odczytana osobno od tekstu pisma.");
+  });
+
   it("lists what to decide first, then the text with every detection masked", () => {
     const html = renderToStaticMarkup(
       <PrivacyPreview caseId="case_1" review={review} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />

@@ -222,7 +222,10 @@ import { domainFallbackChoice, domainFallbackTarget, fallbackDomains } from "./d
 import { isNonLegalMessage } from "./turn-gate.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
 import { issueKey } from "./case-work.js";
-import { LONG_DOCUMENT_RULE } from "./long-document.js";
+import { longDocumentRule } from "./long-document.js";
+import { CourtToolRuntime } from "./courts/court-tool-runtime.js";
+import { addresseeCourt, caseCourtPrompt, type CaseCourt } from "./courts/case-court.js";
+import { districtCourt, regionalCourt } from "./courts/court-base.js";
 import {
   applyAutomaticVerificationMarkers,
   releaseModelUnverifiedMarkers,
@@ -350,6 +353,8 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's full files for the
   // case file tools, bound to the caller's access.
   caseFiles?: CaseFileAccess;
+  // Runtime-only (never parsed from HTTP): the court of the case from its memory (case-court.ts).
+  caseCourt?: CaseCourt;
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
   // the encrypted case workspace.
   threadEvidence?: ThreadEvidence;
@@ -908,6 +913,12 @@ export type SessionExecutionResponse = {
   pipelineNext?: { skill: string; reason: string; choices?: NextChoice[] };
   // AUTO: the executive skill the router's table chose and the application loaded.
   taskSkill?: string;
+  // Courts court_for_address returned in this turn (a letter's addressee is checked against them).
+  courtsFound?: string[];
+  // A letter addressed to a court that came neither from court_for_address nor from the case.
+  courtCheck?: { unverified: string[] };
+  // The court of the case the turn used or saved (http/app.ts, case memory).
+  caseCourt?: { nazwa: string; zrodlo: "AKTA" | "PISMO"; sygnatura?: string };
   // A long letter written in parts (long-document.ts): this answer's part and its check.
   longDocument?: {
     id: string;
@@ -2161,8 +2172,27 @@ export class SafeSessionExecutor implements SessionExecutor {
     const nativeCorpus =
       request.modelSelectsSkills === true &&
       this.providers.nativeCorpusAccess(request.provider, request.model);
+    // The court of a party's address (a letter's addressee): the alias restored from the case's
+    // local vaults (the chat's own key and the documents' D01.. keys), never shown to the model.
+    const courtTools = request.conversationalOnly
+      ? undefined
+      : new CourtToolRuntime((token) => {
+          const match = /^\[(?:LMPII:D(\d{2})|PII):([A-Z_]+):(\d{4})\]$/u.exec(token);
+          if (!match) return null;
+          const raw = `[PII:${match[2]}:${match[3]}]`;
+          const documentNumber = match[1] ? Number(match[1]) : 0;
+          if (documentNumber === 0) return chatPrivacyVault.hasToken(raw) ? chatPrivacyVault.restore(raw, null).text : null;
+          const documentId = aliasRegistry.documentIds()[documentNumber - 1];
+          if (!documentId || !request.restoreDocumentToken) return null;
+          try {
+            return request.restoreDocumentToken(documentId, raw);
+          } catch {
+            return null;
+          }
+        });
     const toolSchemas = [
       ...(nativeCorpus ? [] : corpusTools.schemas()),
+      ...(courtTools ? courtTools.schemas() : []),
       ...(coreLawTools
         ? coreLawTools.schemas()
         : []),
@@ -2537,7 +2567,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         // delivered material (router KROK 5-6: "Materiały źródłowe? TAK -> FAKTY_v2").
         const draftsLetter = [skill, taskRoute.then].some((name) => /^pisma-/.test(name ?? ""));
         // A letter, a regulation or a contract over ~10 pages: written in parts (long-document.ts).
-        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(LONG_DOCUMENT_RULE);
+        if (draftsLetter || skill === "analizator-umow-v1") pathSections.push(longDocumentRule(request.model.startsWith("local/")));
         const sharedForSkill = [
           "shared/UNIVERSAL-RUNTIME-ADAPTER.md",
           ...(draftsLetter && attachments.length > 0 ? ["shared/FAKTY_v2.md"] : [])
@@ -2608,6 +2638,8 @@ export class SafeSessionExecutor implements SessionExecutor {
         : []),
       ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
       reportTools.systemPromptAppendix(),
+      ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
+      ...(request.caseCourt && !request.conversationalOnly ? [caseCourtPrompt(request.caseCourt)] : []),
       ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
       ...(federationTools
         ? [federationTools.systemPromptAppendix()]
@@ -2883,6 +2915,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         }
         const corpusCalls = calls.filter((call) => corpusTools.handles(call.name));
         const reportCalls = calls.filter((call) => reportTools.handles(call.name));
+        const courtCalls = calls.filter((call) => courtTools?.handles(call.name) ?? false);
         const caseFileCalls = calls.filter((call) => caseFileTools?.handles(call.name) ?? false);
         const widgetCalls = calls.filter((call) => widgetTools?.handles(call.name) ?? false);
         const federationCalls = calls.filter(
@@ -2902,6 +2935,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             !(coreLawTools?.handles(call.name) ?? false) &&
             !corpusTools.handles(call.name) &&
             !reportTools.handles(call.name) &&
+            !(courtTools?.handles(call.name) ?? false) &&
             !(caseFileTools?.handles(call.name) ?? false) &&
             !(widgetTools?.handles(call.name) ?? false) &&
             !(federationTools?.handles(call.name) ?? false)
@@ -2920,6 +2954,16 @@ export class SafeSessionExecutor implements SessionExecutor {
         const reportResults = reportCalls.length > 0
           ? await reportTools.runTools(reportCalls)
           : [];
+        const courtResults = courtTools && courtCalls.length > 0 ? await courtTools.runTools(courtCalls) : [];
+        for (const event of courtTools?.auditEvents().slice(-courtCalls.length) ?? []) {
+          // The address went to the GUGiK geocoder (a public register), the party's name never.
+          audit.record("gate", "ADDRESS_GEOCODED", event.status === "FOUND" ? "OK" : "DEGRADED", {
+            status: event.status,
+            method: event.method ?? "",
+            court: event.court ?? "",
+            kinds: event.disclosed.join(",")
+          });
+        }
         const caseFileResults = caseFileTools && caseFileCalls.length > 0
           ? await caseFileTools.runTools(caseFileCalls)
           : [];
@@ -3003,6 +3047,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             ...coreLawResults,
             ...caseFileResults,
             ...reportResults,
+            ...courtResults,
             ...widgetResults,
             ...federationResults,
             ...verificationResults
@@ -4602,11 +4647,29 @@ export class SafeSessionExecutor implements SessionExecutor {
           ? reductionOffer(restoredAnswer.text)
           : null;
     const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
+    // A letter's addressee court: from court_for_address or the case's court (its regional and
+    // appeal court too: an appeal goes through the district court), never from the model alone.
+    const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);
+    const addressee = letterSkill ? addresseeCourt(restoredAnswer.text) : null;
+    const known = new Set(courtTools?.courts() ?? []);
+    if (request.caseCourt) {
+      known.add(request.caseCourt.nazwa);
+      const district = regionalCourt(request.caseCourt.nazwa)?.so ?? request.caseCourt.nazwa;
+      known.add(district);
+      const appeal = districtCourt(district)?.sa;
+      if (appeal) known.add(appeal);
+    }
+    const courtCheck = addressee && !known.has(addressee) ? { unverified: [addressee] } : null;
+    if (courtCheck) {
+      restoredAnswer.text += `\n\n[SĄD DO SPRAWDZENIA: „${addressee}” nie pochodzi z ustalenia aplikacji (court_for_address) ani z akt sprawy. Sprawdź właściwość dla adresu strony.]`;
+    }
     const response: SessionExecutionResponse = {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
       ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
+      ...(courtTools?.courts().length ? { courtsFound: courtTools.courts() } : {}),
+      ...(courtCheck ? { courtCheck } : {}),
       ...(taskRoute?.modules?.some((module) => /MOD-REDAKCJA/u.test(module)) ? { taskMode: "REDACTION" as const } : {}),
       ...(mandatoryPath ? { mandatoryPath } : {}),
       ...(request.modeDecision ? { modeDecision: request.modeDecision } : {}),

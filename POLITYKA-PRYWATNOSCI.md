@@ -46,6 +46,8 @@ Gdy wybierzesz model OpenAI, Anthropic, Google (Gemini) lub xAI, treść rozmowy
 
 Zapytania (słowa kluczowe, sygnatury, numery aktów, KRS, NIP, numer rachunku) trafiają do źródła, które wybiera aplikacja: ISAP/ELI (api.sejm.gov.pl), EUR-Lex, SAOS, sn.pl, CBOSA (NSA), UODO, UZP/KIO, API KRS, NBP, CEIDG, biała lista VAT (wl-api.mf.gov.pl), Eureka (MF) i inne źródła z listy dozwolonych. Wyszukiwanie w internecie (Brave Search z Twoim kluczem lub DuckDuckGo) przyjmuje zapytania do 300 znaków i odrzuca te, które zawierają dane osobowe lub fragmenty dokumentów.
 
+Sąd właściwy dla pisma: gdy model prosi o sąd dla adresu strony, aplikacja odtwarza adres lokalnie i wysyła **sam adres** (ulica, numer, kod, miejscowość; bez imienia, nazwiska i treści sprawy) do usług Głównego Urzędu Geodezji i Kartografii: geokodera adresów (services.gugik.gov.pl/uug), a współrzędne punktu do usługi działek (uldk.gugik.gov.pl) i obszarów sądów PRG (mapy.geoportal.gov.pl). Model dostaje wyłącznie nazwy i adresy sądów, nigdy adres strony.
+
 ### 4.3. Aktualizacje i instalacja
 
 Aplikacja sprawdza wydania i skille w GitHub (api.github.com, codeload.github.com). Instalator pobiera komponenty z nodejs.org, python.org, files.pythonhosted.org, github.com, huggingface.co, download.visualstudio.microsoft.com oraz modele OCR (m.in. modelscope, aistudio). Serwery te widzą Twój adres IP i dane techniczne żądania.

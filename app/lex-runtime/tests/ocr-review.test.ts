@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { IngestedPage } from "../src/document-ingestion.js";
+import { STAMP_MARK, type IngestedPage } from "../src/document-ingestion.js";
+import { normalizeOcrPage } from "../src/ocr-correction.js";
+import { readOcrPages } from "../src/ocr/ocr-result.js";
 import { maskBoxes } from "../src/document-evidence.js";
 import { markOcrReview, ocrReviewLines, REVIEW_MARK } from "../src/ocr-review.js";
 
@@ -45,5 +47,42 @@ describe("OCR lines to check against the scan", () => {
     // The handwritten lines are hidden whole on the evidence image (line boxes at y = 20 * index).
     for (const line of [1, 3, 4, 5]) expect(boxes!.some((box) => box[1] === 20 * line - 3 && box[0] <= 10)).toBe(true);
     expect(maskBoxes(SCAN, [])!.some((box) => box[1] === 20 - 3)).toBe(false);
+  });
+});
+
+describe("stamps over printed lines", () => {
+  // Lines as the worker read a page with a black stamp over the print (synthetic scan, PP-OCRv6),
+  // and a coloured stamp read apart from its own layer.
+  const STAMPED = page([
+    ["Wnoszę o przeproWadzZZidBW5d6z zeznań świadka Marka Wiśniewskiego na okoliczność", 0.916],
+    ["Sad OkregANCELABkoWieDeY WPAWNFGeczowo i miejscowo do rozpoznania sprawy.", 0.888],
+    ["Wnoszę o przeprowadzenie dowodu z zeznań świadka", 0.93],
+    ["Pozwany odebrał roboty bez zastrzeżeń, sp. z o.o.", 0.99],
+    ["r.pr. Anna Nowak", 0.997]
+  ]);
+  STAMPED.lines![4] = { ...STAMPED.lines![4]!, stamp: true };
+  const words = new Set(["Wnoszę", "zeznań", "świadka", "Marka", "Wiśniewskiego", "okoliczność", "przeprowadzenie", "dowodu", "Pozwany", "odebrał", "roboty", "zastrzeżeń", "Anna", "Nowak", "miejscowo", "rozpoznania", "sprawy"]);
+  const knownHere = async (list: string[]) => list.map((word) => words.has(word));
+
+  it("a word glued from stamp and print is listed; clean print read with doubt is not", async () => {
+    const flagged = await ocrReviewLines(STAMPED, knownHere);
+    expect(flagged.map((item) => [item.line, item.reason])).toEqual([[0, "GARBLED"], [1, "UNKNOWN_WORDS"], [4, "STAMP"]]);
+  });
+
+  it("a stamp's line is marked as a stamp in the text, not as a doubtful reading", async () => {
+    const marked = await markOcrReview(STAMPED, knownHere);
+    const lines = marked.text.split("\n");
+    expect(lines[4]).toBe(`${STAMP_MARK} r.pr. Anna Nowak`);
+    expect(lines[0]).toBe(`${REVIEW_MARK} ${STAMPED.lines![0]!.text}`);
+    expect(marked.lines![4]!.text).toBe("r.pr. Anna Nowak");
+  });
+
+  it("the mark survives the cleaning of OCR lines and comes from the worker's output", async () => {
+    // A ligature in a printed line: the page text is rebuilt from the lines.
+    const cleaned = normalizeOcrPage({ ...STAMPED, lines: STAMPED.lines!.map((line, index) => (index === 3 ? { ...line, text: "ﬁrma Kowalski" } : line)) });
+    expect(cleaned.text.split("\n")[3]).toBe("firma Kowalski");
+    expect(cleaned.text.split("\n")[4]).toMatch(/^\[PIECZĘĆ lub kolorowy tusz\] r\.pr\./u);
+    const [read] = await readOcrPages([{ page: 1, source: "OCR", text: "x", lines: [{ text: "BIURO PODAWCZE", score: 0.98, stamp: true }, { text: "Treść", score: 0.99 }] }], "/nonexistent");
+    expect(read!.lines).toEqual([{ text: "BIURO PODAWCZE", score: 0.98, stamp: true }, { text: "Treść", score: 0.99 }]);
   });
 });

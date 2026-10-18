@@ -81,4 +81,10 @@ describe("plan i blok kontynuacji", () => {
     expect(block).toContain("[CZĘŚĆ 2/3]");
     expect(block).toContain("POPRAW poprzednią wersję tej części: brakuje § 17");
   });
+
+  it("nagłówek części jako osobny akapit", async () => {
+    const { presentPart } = await import("../src/long-document.js");
+    const shown = presentPart("Pismo powstanie w 2 częściach.\n[CZĘŚĆ 1/2]\n§ 1. Tekst.\n[KONIEC CZĘŚCI 1/2]", { k: 1, n: 2 }, "Regulamin");
+    expect(shown).toBe("Pismo powstanie w 2 częściach.\n\n**Część 1 z 2 — Regulamin**\n\n§ 1. Tekst.");
+  });
 });

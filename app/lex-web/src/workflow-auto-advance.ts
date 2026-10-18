@@ -110,7 +110,10 @@ export function autoAdvanceDecision(
 ): AutoAdvanceDecision {
   const progress = workflowProgress(result);
   if (!progress) return { advance: false, reason: "NO_WORKFLOW" };
-  if (result.status !== "DRAFT_PRESENTABLE" || !result.answer?.trim()) return { advance: false, reason: "BLOCKED" };
+  // A part the gates blocked comes back as a rejected part (its citations to correct): repaired
+  // like a part that failed its own check, not a dead end.
+  const blockedPart = result.status === "BLOCKED" && result.longDocument?.id && !result.longDocument.ok;
+  if (!blockedPart && (result.status !== "DRAFT_PRESENTABLE" || !result.answer?.trim())) return { advance: false, reason: "BLOCKED" };
   // A long letter: the next part after one that passed; a rejected part is written again once
   // with its problems, a second rejection waits for the user.
   const long = result.longDocument;
@@ -122,7 +125,7 @@ export function autoAdvanceDecision(
     if (askedMeta?.endsWith(`poprawa: ${label}`)) return { advance: false, reason: "NO_PROGRESS" };
     return { advance: true, next: label, label, message: `Popraw część ${long.next} z ${long.parts}.`, meta: `automatycznie · ${progress.workflow} · poprawa: ${label}` };
   }
-  if (result.answer.includes(WAIT_FOR_USER_MARKER) || result.processAuto?.stopped === "WAITING_FOR_USER") {
+  if (result.answer?.includes(WAIT_FOR_USER_MARKER) || result.processAuto?.stopped === "WAITING_FOR_USER") {
     return { advance: false, reason: "WAITING_FOR_USER" };
   }
   if (!progress.next) return { advance: false, reason: "COMPLETE" };

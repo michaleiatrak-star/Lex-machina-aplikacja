@@ -1,3 +1,4 @@
+import { validCaseCourt } from "./courts/case-court.js";
 import { validateProcessPleadingDraft } from "./process-pleading-draft.js";
 import { validAnswerCorrections } from "./answer-corrections.js";
 import { validThreadEvidence } from "./thread-evidence.js";
@@ -732,7 +733,9 @@ export class EncryptedCaseWorkspaceStore {
         const chronology = validCaseChronology(index.memory?.chronology);
         const work = validCaseWork(index.memory?.work);
         const longDocument = validLongDocument(index.memory?.longDocument);
+        const court = validCaseCourt(index.memory?.court);
         return {
+            ...(court ? { court } : {}),
             ...(work?.length ? { work } : {}),
             ...(longDocument ? { longDocument } : {}),
             ...(evidence ? { evidence } : {}),
@@ -789,6 +792,15 @@ export class EncryptedCaseWorkspaceStore {
                 memory.longDocument = longDocument;
             else
                 delete memory.longDocument;
+        }
+        if (args.court !== undefined) {
+            const court = args.court === null ? null : validCaseCourt(args.court);
+            if (args.court !== null && !court)
+                throw new Error("CASE_MEMORY_COURT_INVALID");
+            if (court)
+                memory.court = court;
+            else
+                delete memory.court;
         }
         index.memory = memory;
         await this.write(index, args.caseDataKey, args.keyVersion);

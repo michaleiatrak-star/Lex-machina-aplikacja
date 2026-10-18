@@ -1,4 +1,4 @@
-import { joinContinuation } from "./continuation-seams.js";
+import { joinContinuation, joinRewrittenTail, rewriteTailPrompt, unfinishedTail } from "./continuation-seams.js";
 import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "ai";
 import { AI_SDK_MODEL_FACTORIES } from "./ai-sdk-factories.js";
 import {
@@ -1962,13 +1962,16 @@ export async function continueAtLength(
   let finishReason = first.finishReason;
   let usage = first.usage;
   for (let round = 0; finishReason === "length" && round < MAX_LENGTH_CONTINUATIONS; round += 1) {
+    // The unfinished paragraph is dropped and asked for again whole: the seam falls between
+    // paragraphs. Without such a boundary the answer is continued where it stopped.
+    const cut = unfinishedTail(text);
     const result = await next([
       ...messages,
-      { role: "assistant", content: text },
-      { role: "user", content: LENGTH_CONTINUATION_PROMPT }
+      { role: "assistant", content: cut ? cut.kept : text },
+      { role: "user", content: cut ? rewriteTailPrompt(cut.tail) : LENGTH_CONTINUATION_PROMPT }
     ]);
     // The model resumes mid-thought and repeats a few letters or lines: dropped at the seam.
-    text = joinContinuation(text, result.fullText);
+    text = cut ? joinRewrittenTail(cut.kept, cut.tail, result.fullText) : joinContinuation(text, result.fullText);
     finishReason = result.finishReason;
     usage = addUsage(usage, result.usage);
   }

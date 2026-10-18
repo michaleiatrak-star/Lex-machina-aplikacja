@@ -70,6 +70,8 @@ export type LegalBlockNode =
       id?: string;
       type: "list";
       ordered: boolean;
+      // The first item's number when it is not 1 (points numbered through a whole letter).
+      start?: number;
       items: LegalInlineNode[][];
     }
   | {
@@ -404,7 +406,11 @@ function parseBlock(
       !Array.isArray(
         record.items
       ) ||
-      record.items.length > 500
+      record.items.length > 500 ||
+      (record.start !== undefined &&
+        (!Number.isInteger(record.start) ||
+          (record.start as number) < 1 ||
+          (record.start as number) > 9_999))
     ) {
       throw new Error(
         "AST_LIST_INVALID"
@@ -415,6 +421,9 @@ function parseBlock(
       type: "list",
       ordered:
         record.ordered,
+      ...(record.ordered && typeof record.start === "number" && record.start > 1
+        ? { start: record.start }
+        : {}),
       items:
         record.items.map(
           (item) =>

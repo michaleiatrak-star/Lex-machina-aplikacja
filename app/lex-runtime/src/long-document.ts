@@ -41,7 +41,9 @@ export type LongDocumentState = {
   updatedAt: string;
 };
 
-export const LONG_DOCUMENT_MAX_PARTS = 12;
+// 30 parts: a hosted model's ~100-page letter (over 65 000 tokens) at 6-8 pages a part, a local
+// model's ~60 pages at 2 pages a part (its answer holds 4 096 tokens).
+export const LONG_DOCUMENT_MAX_PARTS = 30;
 const MAX_PART_CHARS = 120_000;
 const PLAN_BLOCK = /```plan-pisma\s*\n([\s\S]*?)\n```/u;
 const PART_START = /^\s*\[CZĘŚĆ\s+(\d{1,2})\s*\/\s*(\d{1,2})\]\s*$/mu;
@@ -294,14 +296,15 @@ export function requestedPart(query: string, state: LongDocumentState): number |
 export function presentPart(answer: string, part: { k: number; n: number }, title: string): string {
   return answer
     .replace(PLAN_BLOCK, "")
-    .replace(PART_START, `**Część ${part.k} z ${part.n} — ${title}**`)
+    // Its own paragraph: a heading glued to the sentence before it renders inside that paragraph.
+    .replace(PART_START, `\n\n**Część ${part.k} z ${part.n} — ${title}**\n\n`)
     .replace(PART_END, "")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
 }
 
 /** What the model gets to write part k (the application's record, not the model's memory). */
-export function continuationBlock(state: LongDocumentState, k: number, problems: readonly string[] = []): string {
+export function continuationBlock(state: LongDocumentState, k: number, problems: readonly string[] = [], options: { local?: boolean } = {}): string {
   const n = state.plan.czesci.length;
   const previous = [...state.parts].sort((a, b) => a.k - b.k).filter((item) => item.k < k);
   const lastText = previous.at(-1)?.text.replace(UNFINISHED, "") ?? "";
@@ -320,17 +323,37 @@ export function continuationBlock(state: LongDocumentState, k: number, problems:
     ...(lastParagraph ? [`Ostatni paragraf poprzednich części: § ${lastParagraph}.`] : []),
     ...(lastPoint ? [`Ostatni punkt poprzednich części: ${lastPoint}.`] : []),
     ...(lastText ? ["Koniec poprzedniej części (dla ciągłości, nie powtarzaj):", lastText.slice(-1500)] : []),
+    ...(options.local ? [`Model lokalny: część musi zmieścić się w jednej odpowiedzi (ok. ${LOCAL_PART_PAGES} strony, do ok. ${LOCAL_PART_CHARS} znaków).`] : []),
     ...(problems.length ? [`POPRAW poprzednią wersję tej części: ${problems.join("; ")}.`] : []),
+    // The same plan in fewer words: a part cut at the output limit is cut again when rewritten as long.
+    ...(problems.some((problem) => /ucięta|znacznika końca/u.test(problem)) ? ["Poprzednia wersja tej części nie zmieściła się w odpowiedzi: napisz ją zwięźlej, bez pomijania sekcji i numerów z planu."] : []),
     `# KONIEC BLOKU CZĘŚCI ${k} Z ${n}`
   ].join("\n");
 }
 
+/** A message naming a part ("Kontynuuj: napisz część 2 z 3.", "Popraw część 3 z 3."): legal work. */
+export function namesDocumentPart(message: string): boolean {
+  return /\bcz[eę][śs][ćc]\s+\d{1,2}\s+z\s+\d{1,2}\b/iu.test(message);
+}
+
+// A local model's answer holds 4 096 tokens (~8 000 characters at its conservative 2 per token):
+// its parts are ~2 pages, a letter over ~3 pages is written in parts.
+const LOCAL_PART_PAGES = 2;
+const LOCAL_PART_CHARS = 4_000;
+
 /** The rule the model follows for a long letter (the system prompt of drafting turns). */
-export const LONG_DOCUMENT_RULE = [
-  "DŁUGIE PISMO (aplikacja): jeśli pismo, regulamin albo umowa przekroczą ok. 10 stron (ok. 20 000 znaków), nie pisz ich w jednej odpowiedzi — limit długości odpowiedzi je utnie.",
-  "Zamiast tego w pierwszej odpowiedzi: jedno zdanie, że pismo jest długie i powstanie w N częściach; blok ```plan-pisma z JSON {\"tytul\", \"czesci\": [{\"czesc\": 1, \"sekcje\": [...], \"paragrafy\": [od, do] albo \"punkty\": [od, do]}], \"zalaczniki\": [{\"nr\", \"opis\"}], \"pojecia\": {...}} (2–12 części po ok. 6–8 stron, numeracja ciągła przez części, lista załączników kompletna); potem [CZĘŚĆ 1/N], tekst części 1 i [KONIEC CZĘŚCI 1/N].",
-  "Kolejne części piszesz, gdy aplikacja poda blok „DŁUGIE PISMO — CZĘŚĆ k Z N”: tylko ta część, z markerami. Krótsze pisma piszesz jak dotąd, w jednej odpowiedzi."
-].join("\n");
+export function longDocumentRule(local = false): string {
+  const threshold = local ? "ok. 3 strony (ok. 6 000 znaków)" : "ok. 10 stron (ok. 20 000 znaków)";
+  const size = local ? `po ok. ${LOCAL_PART_PAGES} strony (do ok. ${LOCAL_PART_CHARS} znaków)` : "po ok. 6–8 stron";
+  return [
+    `DŁUGIE PISMO (aplikacja): jeśli pismo, regulamin albo umowa przekroczą ${threshold}, nie pisz ich w jednej odpowiedzi — limit długości odpowiedzi je utnie.`,
+    `Zamiast tego w pierwszej odpowiedzi: jedno zdanie, że pismo jest długie i powstanie w N częściach; blok \`\`\`plan-pisma z JSON {"tytul", "czesci": [{"czesc": 1, "sekcje": [...], "paragrafy": [od, do] albo "punkty": [od, do]}], "zalaczniki": [{"nr", "opis"}], "pojecia": {...}} (2–${LONG_DOCUMENT_MAX_PARTS} części ${size}, numeracja ciągła przez części, lista załączników kompletna); potem [CZĘŚĆ 1/N], tekst części 1 i [KONIEC CZĘŚCI 1/N].`,
+    `Pismo dłuższe niż ${LONG_DOCUMENT_MAX_PARTS} takich części${local ? " (ok. 60 stron) przekracza możliwości modelu lokalnego: powiedz to wprost i zaproponuj model w chmurze albo podział na osobne dokumenty" : " (ok. 200 stron): podziel je na osobne dokumenty (np. umowa i załączniki) i powiedz to wprost"}; nie zwiększaj części ponad limit długości.`,
+    "Kolejne części piszesz, gdy aplikacja poda blok „DŁUGIE PISMO — CZĘŚĆ k Z N”: tylko ta część, z markerami. Krótsze pisma piszesz jak dotąd, w jednej odpowiedzi."
+  ].join("\n");
+}
+
+export const LONG_DOCUMENT_RULE = longDocumentRule(false);
 
 // A line where a long text may be cut for its conversion into a file: a heading or a section.
 const CUT_LINE = /^\s*(?:@(?:POD)?SEKCJA:|@TYTUL:|@PODPIS:|@ZALACZNIKI:|#{1,4}\s|§\s*\d|\*\*[^*]+\*\*\s*$|[IVXL]+\.\s+\S|Art\.\s*\d|Rozdział\s+\w)/u;

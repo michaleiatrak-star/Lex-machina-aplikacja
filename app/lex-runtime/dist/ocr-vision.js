@@ -4,6 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { ocrLineText } from "./document-ingestion.js";
 // Handwriting, stamps and signatures: manual review, never the model.
 const HANDWRITING_SCORE = 0.85;
 // A line read with less confidence than this is read again.
@@ -121,7 +122,7 @@ export function arbitrateLine(ocrText, visionText, known) {
 export function doubtfulLines(lines, known) {
     return lines.flatMap((line, index) => {
         const score = typeof line.score === "number" ? line.score : 1;
-        if (!line.crop || score < HANDWRITING_SCORE)
+        if (!line.crop || line.stamp || score < HANDWRITING_SCORE)
             return [];
         const unknown = (line.text.match(CHECKED_WORD) ?? []).some((word) => !known.has(word));
         return score < DOUBT_SCORE || unknown ? [index] : [];
@@ -171,7 +172,7 @@ export async function correctWithVision(pages, readLine, knownWords, onProgress)
         });
         if (corrections.length === (page.corrections ?? []).length)
             return page;
-        return { ...page, lines, text: lines.map((line) => line.text).join("\n"), corrections };
+        return { ...page, lines, text: lines.map(ocrLineText).join("\n"), corrections };
     });
 }
 /** The page without line images: they live only for the vision step, never stored. */

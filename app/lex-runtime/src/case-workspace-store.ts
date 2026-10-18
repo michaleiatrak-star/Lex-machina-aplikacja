@@ -1,3 +1,4 @@
+import { validCaseCourt, type CaseCourt } from "./courts/case-court.js";
 import { validateProcessPleadingDraft, type ProcessPleadingDraft } from "./process-pleading-draft.js";
 import { type AnswerCorrection, validAnswerCorrections } from "./answer-corrections.js";
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
@@ -138,6 +139,8 @@ export type CaseMemory = {
   work?: CaseWorkItem[];
   // A long letter written in parts: its plan and the parts written so far (long-document.ts).
   longDocument?: LongDocumentState;
+  // The court of the case: from its documents or the first letter (courts/case-court.ts).
+  court?: CaseCourt;
 };
 
 export type CaseWorkspaceIndex = {
@@ -1231,7 +1234,9 @@ export class EncryptedCaseWorkspaceStore {
     const chronology = validCaseChronology(index.memory?.chronology);
     const work = validCaseWork(index.memory?.work);
     const longDocument = validLongDocument(index.memory?.longDocument);
+    const court = validCaseCourt(index.memory?.court);
     return {
+      ...(court ? { court } : {}),
       ...(work?.length ? { work } : {}),
       ...(longDocument ? { longDocument } : {}),
       ...(evidence ? { evidence } : {}),
@@ -1251,6 +1256,7 @@ export class EncryptedCaseWorkspaceStore {
     chronology?: CaseChronology | null;
     work?: CaseWorkItem[] | null;
     longDocument?: LongDocumentState | null;
+    court?: CaseCourt | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
@@ -1283,6 +1289,12 @@ export class EncryptedCaseWorkspaceStore {
       if (args.longDocument !== null && !longDocument) throw new Error("CASE_MEMORY_LONG_DOCUMENT_INVALID");
       if (longDocument) memory.longDocument = longDocument;
       else delete memory.longDocument;
+    }
+    if (args.court !== undefined) {
+      const court = args.court === null ? null : validCaseCourt(args.court);
+      if (args.court !== null && !court) throw new Error("CASE_MEMORY_COURT_INVALID");
+      if (court) memory.court = court;
+      else delete memory.court;
     }
     index.memory = memory;
     await this.write(index, args.caseDataKey, args.keyVersion);

@@ -40,6 +40,17 @@ afterEach(() => {
 
 describe("local API client", () => {
 
+  it("long file generation: keepAlive in the request, the real status from deferredStatus", async () => {
+    const caseId = "case_0123456789abcdef0123456789abcdef";
+    const input = { query: "Plik.", provider: "openai" as const, model: "gpt-test", primarySkill: "pisma-proste-v2", mode: "PRAWNIK" as const, format: "docx" as const, documentType: "letter" as const, longDocumentId: "00000000-0000-4000-8000-000000000000" };
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(`   ${JSON.stringify({ error: "READY_DOCUMENT_EXPORT_GATE_BLOCKED", deferredStatus: 422 })}`, { status: 200 }))
+      .mockResolvedValueOnce(new Response(`  ${JSON.stringify({ artifactId: "artifact_1", deferredStatus: 201 })}`, { status: 200 }));
+    await expect(generateLegalDocument(caseId, input as never)).rejects.toMatchObject({ code: "READY_DOCUMENT_EXPORT_GATE_BLOCKED", status: 422 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ keepAlive: true, longDocumentId: input.longDocumentId });
+    await expect(generateLegalDocument(caseId, input as never)).resolves.toMatchObject({ artifactId: "artifact_1" });
+  });
+
   it("a wrong password on re-authentication does not sign the user out", async () => {
     const authPayload = {
       user: { userId: "user_0123456789abcdef0123456789abcdef", loginName: "owner", displayName: "Owner", appRole: "ADMIN", status: "ACTIVE", createdAt: "2026-09-16T08:00:00.000Z" },

@@ -1535,9 +1535,14 @@ export class LegalVerificationToolRuntime {
             const actInput = typeof call.input.act === "string"
                 ? call.input.act.trim()
                 : "";
-            const asOf = typeof call.input.asOf === "string"
+            // asOf today or later (a letter's or regulation's effective date) is no past state: the
+            // current wording, whose changes not yet in force the check reports (pendingWording).
+            // Before, such a call was DENIED (AS_OF_MUST_BE_A_PAST_ISO_DATE) and the provision stayed
+            // unverified, blocking the answer.
+            const requestedAsOf = typeof call.input.asOf === "string"
                 ? call.input.asOf.trim()
                 : "";
+            const asOf = /^\d{4}-\d{2}-\d{2}$/u.test(requestedAsOf) && requestedAsOf >= todayWarsaw() ? "" : requestedAsOf;
             // EU law (RODO, AI Act, a regulation or directive by number or CELEX): the article from
             // Cellar/EUR-Lex, in its consolidated version applicable today, the act's in-force status.
             const eu = euAct(actInput || (typeof call.input.claim === "string" ? call.input.claim : ""));

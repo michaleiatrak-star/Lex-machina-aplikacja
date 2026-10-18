@@ -209,21 +209,26 @@ function fixture() {
     });
 
   const answers: string[] = [];
+  // Fields of the next result beyond its answer (courtsFound of court_for_address…).
+  const extras: Array<Partial<SessionExecutionResponse>> = [];
   const execute =
     vi.fn<SessionExecutor["execute"]>(async (input) => {
+      const next = answers.shift() ?? "brak";
+      const blocked = next.startsWith("BLOCKED:");
       const result: SessionExecutionResponse = {
         sessionId: "session-long-document",
-        status: "DRAFT_PRESENTABLE",
+        status: blocked ? "BLOCKED" : "DRAFT_PRESENTABLE",
         provider: input.provider,
         model: input.model,
         primarySkill: input.primarySkill,
-        answer: answers.shift() ?? "brak",
-        finalization: "PASS",
-        blockedReferences: [],
+        answer: blocked ? "" : next,
+        finalization: blocked ? "DEGRADED" : "PASS",
+        blockedReferences: blocked ? [{ claim: next.slice(8), kind: "statute", line: 3, status: "UNVERIFIED_MARKED" }] : [],
         verification: { records: 0, verified: 0, supported: 0, unverified: 0 },
         evidence: [],
         audit: { result: "PASS", eventCount: 0, closed: true }
       };
+      Object.assign(result, extras.shift() ?? {});
       Object.defineProperty(result, SESSION_EXECUTION_INTERNAL, { value: { verificationRecords: [], auditEvents: [] }, enumerable: false });
       return result;
     });
@@ -325,6 +330,7 @@ function fixture() {
     auth,
     execute,
     answers,
+    extras,
     generate
   };
 }
@@ -433,8 +439,18 @@ describe("długie pismo w częściach: czat i plik", () => {
     expect(String(current.execute.mock.calls[2]?.[0].query)).toContain("POPRAW poprzednią wersję tej części");
     expect(fixed.body.longDocument).toMatchObject({ part: 2, ok: true, next: 3 });
 
+    // Part 3 blocked by the gates (a provision cited under the wrong act): a rejected part with
+    // the citation to correct, asked for again, not a dead end.
+    current.answers.push("BLOCKED:art. 43a KC");
+    const blockedTurn = await send("dalej");
+    expect(blockedTurn.body.status).toBe("BLOCKED");
+    expect(blockedTurn.body.longDocument).toMatchObject({ part: 3, ok: false, next: 3 });
+    expect(blockedTurn.body.longDocument.problems[0]).toMatch(/^art\. 43a KC: niezweryfikowany w ELI/u);
+    expect(blockedTurn.body.pipelineNext.choices[0].reason).toMatch(/^Popraw część 3 z 3: art\. 43a KC/u);
+
     current.answers.push(part("regulamin-3.txt"));
-    const last = await send("dalej");
+    const last = await send("Popraw część 3 z 3.");
+    expect(String(current.execute.mock.calls.at(-1)?.[0].query)).toContain("POPRAW poprzednią wersję tej części: art. 43a KC");
     expect(last.body.longDocument).toMatchObject({ part: 3, ok: true, complete: true, next: null });
     const id = String(last.body.longDocument.id);
     expect(id).toBe(String(first.body.longDocument.id));
@@ -457,6 +473,70 @@ describe("długie pismo w częściach: czat i plik", () => {
     // A later ordinary question: no continuation block once the document is complete.
     current.answers.push("Odpowiedź.");
     await send("Kontynuuj");
-    expect(String(current.execute.mock.calls[4]?.[0].query)).not.toContain("# DŁUGIE PISMO");
+    expect(String(current.execute.mock.calls.at(-1)?.[0].query)).not.toContain("# DŁUGIE PISMO");
+  });
+
+  it("„dalej” i „Kontynuuj” (AUTO) przy niedokończonym piśmie: kolejna część, nie rozmowa", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    const send = (query: string, primarySkill: string) =>
+      request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({ query, provider: "openai", model: "gpt-test", primarySkill, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+        .expect(200);
+    current.answers.push(`Regulamin jest długi: powstanie w 3 częściach.\n\n\`\`\`plan-pisma\n${part("regulamin-plan.json")}\n\`\`\`\n\n${part("regulamin-1.txt")}`);
+    await send("Napisz pełny regulamin sklepu internetowego.", DR);
+    for (const message of ["dalej", "Kontynuuj"]) {
+      current.answers.push("Odpowiedź.");
+      await send(message, "AUTO");
+      const call = current.execute.mock.calls.at(-1)?.[0];
+      expect(call?.conversationalOnly).not.toBe(true);
+      expect(String(call?.query)).toContain("# DŁUGIE PISMO — CZĘŚĆ 2 Z 3");
+    }
+  });
+
+  it("sąd sprawy: pierwsze pismo z sądem z court_for_address zapisuje go, kolejna tura dostaje go z pamięci", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    const send = (query: string) =>
+      request(current.app)
+        .post("/api/sessions/execute")
+        .set("Authorization", authorization)
+        .send({ query, provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+        .expect(200);
+    current.answers.push("=== PISMO ===\nWyszków, 17 października 2026 r.\n\nSąd Rejonowy w Wyszkowie\nI Wydział Cywilny\n\nPOZEW\n=== KONIEC PISMA ===");
+    current.extras.push({ courtsFound: ["Sąd Rejonowy w Wyszkowie", "Sąd Okręgowy w Ostrołęce", "Sąd Apelacyjny w Białymstoku"] });
+    const first = await send("Napisz pozew.");
+    expect(first.body.caseCourt).toEqual({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+    current.answers.push("Odpowiedź.");
+    const next = await send("Napisz pismo przygotowawcze.");
+    expect(current.execute.mock.calls.at(-1)?.[0].caseCourt).toMatchObject({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+    expect(next.body.caseCourt).toEqual({ nazwa: "Sąd Rejonowy w Wyszkowie", zrodlo: "PISMO" });
+  });
+
+  it("a letter to a court not from the tool is not saved as the case's court", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    current.answers.push("=== PISMO ===\nSąd Rejonowy w Ostrołęce\nPOZEW\n=== KONIEC PISMA ===");
+    current.extras.push({ courtsFound: ["Sąd Rejonowy w Wyszkowie"] });
+    const first = await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ query: "Napisz pozew.", provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+      .expect(200);
+    expect(first.body.caseCourt).toBeUndefined();
+  });
+
+  it("prośba o część w sprawie (AUTO) idzie ścieżką prawną, nie rozmową", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    current.answers.push("Odpowiedź.");
+    await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ query: "Popraw część 3 z 3.", provider: "openai", model: "gpt-test", primarySkill: "AUTO", mode: "PRAWNIK", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } });
+    expect(current.execute).toHaveBeenCalled();
+    expect(current.execute.mock.calls[0]?.[0].conversationalOnly).not.toBe(true);
   });
 });

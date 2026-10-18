@@ -28,6 +28,8 @@ export const LETTER_MARKUP_MARKERS = [
 ];
 const MARKER = /^\s*@([A-ZŁ_]+)\s*:?\s*(.*)$/u;
 const LIST_ITEM = /^\s*(?:(\d{1,3}[.)])|([-•–]|\*(?!\*)))\s+(\S.*)$/u;
+// "Załączniki", "IV. Załączniki:", "**Załączniki:**" (a heading or a line before the list).
+const ATTACHMENTS_HEADING = /^(?:\*\*)?(?:[IVXL]+\.\s*)?(?:(?:wykaz|spis|lista)\s+)?za[łl][aą]cznik(?:i|ów)(?:\s+do\s+\p{L}+)?\s*:?\s*(?:\*\*)?\s*:?$/iu;
 const ALIAS = /\[(LMPII:D\d{2}:[A-Z_]+:\d{4})(?:\|(NOM|GEN|DAT|ACC|INS|LOC|VOC))?\]/gu;
 const SIGNATURE_LINE = "……………………………………";
 /** True when the answer is a letter in the markup (its title is marked). */
@@ -95,10 +97,15 @@ export function letterMarkupAst(answer, options) {
     const blocks = [];
     let title = false;
     let body = 0;
+    // An ordered list keeps its first number ("23." after a heading or a blank line renders 23,
+    // not 1: points run through a whole pleading, also one written in parts).
     let list = null;
+    // The list of attachments has its own numbering from 1, one list to the next section: the
+    // numbers the text gave it (points 73, 74 continued, a blank line between items) are not kept.
+    let attachments = false;
     const flushList = () => {
         if (list?.items.length)
-            blocks.push({ type: "list", ordered: list.ordered, items: list.items });
+            blocks.push({ type: "list", ordered: list.ordered, ...(list.ordered && list.start > 1 ? { start: list.start } : {}), items: list.items });
         list = null;
     };
     // The lines of a block (a party, a signature) up to the next marker or a blank line.
@@ -127,6 +134,7 @@ export function letterMarkupAst(answer, options) {
             flushList();
             const name = marker[1];
             const rest = marker[2].trim();
+            attachments = name === "ZALACZNIKI" || ((name === "SEKCJA" || name === "PODSEKCJA") && ATTACHMENTS_HEADING.test(rest));
             switch (name) {
                 case "MIEJSCE_DATA":
                     if (rest)
@@ -179,15 +187,26 @@ export function letterMarkupAst(answer, options) {
         }
         const text = line.trim();
         if (!text) {
+            if (!attachments)
+                flushList();
+            continue;
+        }
+        // "Załączniki:" as a plain line opens the attachments too.
+        if (ATTACHMENTS_HEADING.test(text) && !LIST_ITEM.test(line)) {
             flushList();
+            attachments = true;
+            blocks.push({ type: "paragraph", content: markupInlines(text) });
+            body += 1;
             continue;
         }
         const item = LIST_ITEM.exec(line);
         if (item) {
             const ordered = Boolean(item[1]);
-            if (list && list.ordered !== ordered)
+            const number = attachments ? (list ? list.start + list.items.length : 1) : ordered ? Number.parseInt(item[1], 10) : 0;
+            // A number out of sequence ("1." after "7.") starts a new list from that number.
+            if (list && (list.ordered !== ordered || (ordered && number !== list.start + list.items.length)))
                 flushList();
-            list ??= { ordered, items: [] };
+            list ??= { ordered, start: ordered && number >= 1 && number <= 9_999 ? number : 1, items: [] };
             list.items.push(markupInlines(item[3].trim()));
             body += 1;
             continue;
@@ -225,7 +244,7 @@ export const LETTER_MARKUP_CONTRACT = [
     "@PODSEKCJA: <1. Subsection title> — a subsection under the current section (long pleadings, contracts).",
     "Body: one paragraph per line; list items start with \"1.\" (numbered) or \"- \" (bullets); **label:** marks a bold label at the start of a paragraph or item (e.g. \"**Żądanie główne:** …\").",
     "@PODPIS: then the signer's name below it (unknown: leave the line empty).",
-    "@ZALACZNIKI: then the attachments as a numbered list below it (only when there are attachments).",
+    "@ZALACZNIKI: then the attachments as a numbered list below it, its own numbering from 1 (not the numbers of the points before it; only when there are attachments).",
     "Copy the letter's text from the conversation without changing its substance: no shortening, no new claims, no meta-sections (DANE DO UZUPEŁNIENIA, UWAGI, CO DALEJ, HYBRID-VALIDATION, disclaimers, verification markers).",
     "Missing user data go into neutral square-bracket fields such as [Kwota] or [Termin zapłaty]; never [UZUPEŁNIJ].",
     "A person, firm or address of the case is written ONLY as its generation alias from the map below, with the grammatical case of this occurrence after a bar: [LMPII:D01:PERSON:0001|GEN] after \"wobec\", [LMPII:D01:ADDRESS:0001|LOC] after \"przy\" (NOM, GEN, DAT, ACC, INS, LOC, VOC). The value is inflected locally; never write the name or the address yourself."

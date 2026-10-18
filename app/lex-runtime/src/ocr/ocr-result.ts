@@ -36,7 +36,7 @@ export async function readOcrPages(
   const pages: OcrPageResult[] = [];
   for (const item of raw) {
     const page = item as OcrPageResult & {
-      lines?: Array<{ text?: unknown; score?: unknown; box?: unknown; crop?: unknown }>;
+      lines?: Array<{ text?: unknown; score?: unknown; box?: unknown; crop?: unknown; stamp?: unknown }>;
       evidence?: { file?: unknown; width?: unknown; height?: unknown; unread?: unknown };
     };
     const lines: OcrLine[] | undefined = Array.isArray(page.lines)
@@ -48,7 +48,8 @@ export async function readOcrPages(
               text: line.text as string,
               ...(typeof line.score === "number" ? { score: line.score } : {}),
               ...(lineBox ? { box: lineBox } : {}),
-              ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {})
+              ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {}),
+              ...(line.stamp === true ? { stamp: true } : {})
             };
           })
       : undefined;

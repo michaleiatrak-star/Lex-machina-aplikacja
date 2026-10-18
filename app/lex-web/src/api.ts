@@ -590,7 +590,7 @@ export type DocumentReviewResponse = {
     // OCR words fixed: spaces restored, and by the local model.
     corrections?: Array<{ line: number; from: string; to: string }>;
     // Lines to check against the scan (handwriting, stamps, doubtful reading).
-    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" }>;
+    review?: Array<{ line: number; text: string; score?: number; reason: "LOW_CONFIDENCE" | "UNKNOWN_WORDS" | "GARBLED" | "STAMP" }>;
     // The user corrected this page's text by hand.
     editedByUser?: boolean;
   }>;
@@ -1426,14 +1426,22 @@ async function json<T>(
     await response.json() as
       | T
       | ApiFailure;
-  if (!response.ok) {
+  // A long file generation answers 200 at once and keeps the connection alive; its JSON
+  // carries the real status (keepResponseAlive in lex-runtime).
+  const deferred =
+    (payload as { deferredStatus?: unknown } | null)?.deferredStatus;
+  const status =
+    typeof deferred === "number"
+      ? deferred
+      : response.status;
+  if (status < 200 || status > 299) {
     const failure =
       payload as ApiFailure;
     // Błędne hasło przy ponownym potwierdzeniu (zmiana hasła, kod odzyskiwania,
     // odanonimizowanie) to też 401, ale sesja pozostaje ważna: bez wylogowania.
     if (
       authenticated &&
-      response.status === 401 &&
+      status === 401 &&
       failure.error !== "INVALID_CREDENTIALS" &&
       failure.error !== "INVALID_RECOVERY_CREDENTIALS"
     ) {
@@ -1442,8 +1450,8 @@ async function json<T>(
     }
     throw new ApiError(
       failure.error ||
-        `HTTP_${response.status}`,
-      response.status,
+        `HTTP_${status}`,
+      status,
       failure.retryAfter,
       failure.reason,
       failure.description,
@@ -2403,10 +2411,12 @@ export function generateLegalDocument(
     `/api/cases/${caseId}/artifacts/generate`,
     {
       method: "POST",
+      // Converting a long letter takes minutes: the server keeps the connection alive.
       body:
-        JSON.stringify(
-          input
-        )
+        JSON.stringify({
+          ...input,
+          keepAlive: true
+        })
     }
   );
 }

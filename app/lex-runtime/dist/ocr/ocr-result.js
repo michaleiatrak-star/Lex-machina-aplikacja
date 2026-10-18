@@ -32,7 +32,8 @@ export async function readOcrPages(raw, evidenceDir, budget = evidenceBudget()) 
                     text: line.text,
                     ...(typeof line.score === "number" ? { score: line.score } : {}),
                     ...(lineBox ? { box: lineBox } : {}),
-                    ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {})
+                    ...(typeof line.crop === "string" && line.crop ? { crop: line.crop } : {}),
+                    ...(line.stamp === true ? { stamp: true } : {})
                 };
             })
             : undefined;
