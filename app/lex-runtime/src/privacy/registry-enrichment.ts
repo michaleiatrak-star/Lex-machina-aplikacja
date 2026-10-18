@@ -1,5 +1,5 @@
 import { firmFragments } from "./firm-names.js";
-import { detectIdentifiers } from "./identifiers.js";
+import { detectIdentifiers, validNip } from "./identifiers.js";
 
 // Firm data from public registers for pseudonymization ([FIRMA], REGULY-ANONIMIZACJI).
 // A NIP or KRS number in the text is looked up once in the VAT white list (name, address,
@@ -221,8 +221,16 @@ export function registryKeys(value: string): Array<{ source: "nip" | "krs"; id: 
       const id = span.value.replace(/\D/gu, "");
       keys.set(`nip:${id}`, { source: "nip", id });
     } else if (span.kind === "KRS") {
-      keys.set(`krs:${span.value}`, { source: "krs", id: span.value });
+      // "KRS 0000 297714": the register's tool takes digits only.
+      const id = span.value.replace(/\D/gu, "");
+      keys.set(`krs:${id}`, { source: "krs", id });
     }
+  }
+  // A NIP after its label as OCR damaged it ("634–30–21–499", "634-3O-21-499", "NIP634 30 21 499"):
+  // asked only when the digits, with letters read for digits, pass the checksum.
+  for (const match of value.matchAll(/\bN[I1lí]P\s*(?:nr\.?\s*)?:?\s*((?:PL\s?)?[\dOoIl|][\dOoIl|  –—-]{8,16}[\dOoIl|])/gu)) {
+    const id = match[1]!.replace(/^PL\s?/u, "").replace(/[Oo]/gu, "0").replace(/[Il|]/gu, "1").replace(/\D/gu, "").slice(0, 10);
+    if (id.length === 10 && validNip(id)) keys.set(`nip:${id}`, { source: "nip", id });
   }
   return [...keys.values()];
 }

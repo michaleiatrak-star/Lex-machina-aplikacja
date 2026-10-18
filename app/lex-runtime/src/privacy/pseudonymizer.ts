@@ -921,6 +921,9 @@ export class LocalPolishPseudonymizer {
     // Register data of firms named by NIP/KRS: their names, addresses and people are
     // protected even where no legal form or prefix marks them ("umowę z Transkomem").
     const registryFirms = new Map<string, string | undefined>();
+    // A firm's name as OCR damaged it -> the register's name: one firm, one token
+    // ("Human Park Giobal" is "Human Park Global", not a second company).
+    const registryCanonical = new Map<string, { name: string; note: string }>();
     let registered: Awaited<ReturnType<RegistryFormsProvider["forms"]>> = [];
     try {
       registered = this.registry ? await this.registry.forms(text) : [];
@@ -950,7 +953,14 @@ export class LocalPolishPseudonymizer {
           start: match.start, end: match.end, kind: form.kind, value: match.value, confidence: 0.9, source: "AUTO",
           uncertain: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}`
         });
-        if (form.organization) registryFirms.set(match.value, form.organization.legalForm);
+        if (form.organization) {
+          registryFirms.set(match.value, form.organization.legalForm);
+          // The whole name wins over a fragment of it ("Park Global").
+          const known = registryCanonical.get(match.value);
+          if (!known || known.name.length < form.text.length) {
+            registryCanonical.set(match.value, { name: form.text, note: `odczyt zniekształcony przez OCR, w rejestrze: ${form.text}` });
+          }
+        }
       }
     }
 
@@ -1111,7 +1121,8 @@ export class LocalPolishPseudonymizer {
     // An inflected mention ("z Transkomem") shares the firm's canonical name and so its token.
     for (const firm of firms) entities.set(`PERSON\u0000${firm.value}`, organizationEntity(firm.canonical ?? firm.value, firm.legalForm));
     for (const [value, legalForm] of registryFirms) {
-      if (!entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(value, legalForm));
+      const canonical = registryCanonical.get(value)?.name;
+      if (canonical || !entities.has(`PERSON\u0000${value}`)) entities.set(`PERSON\u0000${value}`, organizationEntity(canonical ?? value, legalForm));
     }
     // The user's "Firma" marks: the firm's identity, with the legal form written next to it.
     for (const item of manual) {
@@ -1207,7 +1218,10 @@ export class LocalPolishPseudonymizer {
     for (const finding of findings) {
       if (finding.kind !== "PERSON" || finding.source === "USER") continue;
       const firm = firmContext(text, finding.start, finding.end);
-      if (firm) byFinding.set(finding, organizationEntity((finding as FirmSpan).canonical ?? finding.value, firm.legalForm));
+      if (firm) {
+        const canonical = registryCanonical.get(finding.value)?.name ?? (finding as FirmSpan).canonical ?? finding.value;
+        byFinding.set(finding, organizationEntity(canonical, firm.legalForm));
+      }
     }
     if (this.morphology) {
       const morphology = this.morphology;
@@ -1305,6 +1319,9 @@ export class LocalPolishPseudonymizer {
           : {}),
         ...(finding.uncertain && finding.source !== "USER"
           ? { uncertain: finding.uncertain }
+          // Kept when the firm rule, not the register, gave the span.
+          : registryCanonical.has(finding.value) && finding.source !== "USER"
+            ? { uncertain: registryCanonical.get(finding.value)!.note }
           : finding.ambiguous && finding.kind === "PERSON" && finding.source !== "USER" && entity
             ? { uncertain: `nazwisko osoby ${entity.canonical} czy słowo pospolite?` }
             : {})
