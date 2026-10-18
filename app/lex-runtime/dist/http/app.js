@@ -1,3 +1,5 @@
+import { answerLetterMarkup, answerValidationContext } from "../answer-document.js";
+import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
 import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
@@ -2202,7 +2204,7 @@ export function createLexHttpApp(options) {
             return;
         }
         try {
-            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null }));
+            await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) => options.caseMemoryStore.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null, answerDocument: null }));
             res.json({ cleared: true });
         }
         catch (error) {
@@ -4503,6 +4505,54 @@ export function createLexHttpApp(options) {
                 effectiveStyleProfile =
                     templateProfile
                         .styleProfile;
+            }
+            // "Generuj dokument" under an answer that is itself a letter: its file from that text,
+            // mechanically (answer-document.ts), with no model turn that would write it again. The
+            // answer's session is the source: HYBRID-VAL and the export gate run on its trail.
+            if (req.body?.source === "ANSWER") {
+                if (!options.caseMemoryStore || !options.documentAuthoringService) {
+                    res.status(503).json({ error: "CASE_MEMORY_UNAVAILABLE" });
+                    return;
+                }
+                const stored = (await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion }))).answerDocument;
+                const wanted = typeof req.body?.answerSessionId === "string" ? req.body.answerSessionId : null;
+                if (!stored || (wanted && stored.sessionId !== wanted)) {
+                    res.status(409).json({ error: "ANSWER_DOCUMENT_MISSING" });
+                    return;
+                }
+                const markup = answerLetterMarkup(stored.text);
+                if (!markup) {
+                    res.status(409).json({ error: "ANSWER_DOCUMENT_MISSING" });
+                    return;
+                }
+                const ast = letterMarkupAst(markup, {
+                    documentType: documentType === "pleading" ? "pleading" : "letter",
+                    styleProfile: effectiveStyleProfile
+                });
+                const ready = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", (caseDataKey) => options.documentAuthoringService.createReady({
+                    ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+                    caseId,
+                    createdByUserId: context.user.userId,
+                    format,
+                    ast,
+                    caseDataKey,
+                    keyVersion: caseView.keyVersion,
+                    validationContext: stored.validationContext,
+                    ...(typeof req.body?.filename === "string" ? { filename: req.body.filename } : {})
+                }));
+                res.status(201).json({
+                    ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+                    sessionId: stored.sessionId,
+                    artifact: ready.artifact,
+                    format: ready.format,
+                    sha256: ready.sha256,
+                    warnings: ready.warnings,
+                    aliasesUsed: [],
+                    readyForDownload: true,
+                    mechanical: true,
+                    ...(templateProfile ? { templateProfile } : {})
+                });
+                return;
             }
             // A pleading (pisma-procesowe-v3) is written by the case's process pipeline
             // (checkpoints, HYBRID-VAL before the file); the file only renders the text
@@ -7498,6 +7548,39 @@ export function createLexHttpApp(options) {
                         complete: false,
                         next: null
                     };
+                }
+            }
+            // An answer that is itself a letter: kept with its session's trail for its file.
+            const internalState = result[SESSION_EXECUTION_INTERNAL];
+            if (knowledge.caseId &&
+                options.caseMemoryStore &&
+                options.caseAccessService &&
+                internalState &&
+                result.status === "DRAFT_PRESENTABLE" &&
+                result.finalization === "PASS" &&
+                result.audit.result === "PASS" &&
+                result.answer &&
+                !result.waitingForUser &&
+                !result.longDocument &&
+                answerLetterMarkup(result.answer)) {
+                try {
+                    const actor = responseAuthContext(res);
+                    const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
+                    await options.caseAccessService.withCaseDataKey(actor, knowledge.caseId, "WRITE", (caseDataKey) => options.caseMemoryStore.saveCaseMemory({
+                        caseId: knowledge.caseId,
+                        caseDataKey,
+                        keyVersion: caseView.keyVersion,
+                        answerDocument: {
+                            sessionId: result.sessionId,
+                            at: new Date().toISOString(),
+                            text: result.answer,
+                            validationContext: answerValidationContext(request, result, internalState)
+                        }
+                    }));
+                    result.answerDocument = { sessionId: result.sessionId };
+                }
+                catch (error) {
+                    console.error("CASE_MEMORY_ANSWER_DOCUMENT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
                 }
             }
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {

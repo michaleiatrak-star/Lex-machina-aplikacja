@@ -717,3 +717,54 @@ describe("ready document with an unverified provision", () => {
   });
 });
 
+
+describe("plik z odpowiedzi-pisma, mechanicznie (answer-document.ts)", () => {
+  it("odpowiedź z pismem staje się gotowym .docx w stylu kancelarii, przez HYBRID-VAL i bramkę eksportu", async () => {
+    const { answerLetterMarkup } = await import("../src/answer-document.js");
+    const { letterMarkupAst } = await import("../src/letter-markup.js");
+    const answer = [
+      "Przygotowałem wersję dokumentu na podstawie poprzedniego wyniku.",
+      "",
+      "**ODPOWIEDŹ NA WEZWANIE DO ZAPŁATY**",
+      "",
+      "Jan Kowalski  ",
+      "ul. Polna 1, 00-001 Warszawa",
+      "",
+      "Do:  ",
+      "Kancelaria Przykładowa  ",
+      "ul. Leśna 2, 00-002 Warszawa",
+      "",
+      "W odpowiedzi na pismo z 3 grudnia 2024 r. kwestionuję roszczenie co do zasady i wysokości.",
+      "",
+      "Wzywam zatem do:",
+      "",
+      "1. wycofania żądania zapłaty 60 000 zł;",
+      "2. przedstawienia wyliczenia tej kwoty.",
+      "",
+      "Jan Kowalski",
+      "",
+      "### Status dokumentu",
+      "",
+      "- Nie dodano nowych wątków.",
+      "",
+      "⚖️ Ważna informacja: Niniejsza analiza ma charakter wyłącznie informacyjny."
+    ].join("\n");
+    const current = fixture();
+    const ready = await current.service.createReady({
+      caseId: current.caseId,
+      createdByUserId: current.userId,
+      format: "docx",
+      ast: letterMarkupAst(answerLetterMarkup(answer)!, { documentType: "letter", styleProfile: "lex-office-tnr-v1" }),
+      caseDataKey: current.caseDataKey,
+      keyVersion: 1,
+      validationContext: validationContext(current.documentId),
+      filename: "LexMachina-pismo.docx"
+    });
+    expect(ready.format).toBe("docx");
+    expect(ready.artifact.filename).toBe("LexMachina-pismo.docx");
+    expect(ready.text).toContain("ODPOWIEDŹ NA WEZWANIE DO ZAPŁATY");
+    expect(ready.text).toContain("Kancelaria Przykładowa");
+    expect(ready.text).toContain("wycofania żądania zapłaty 60 000 zł;");
+    expect(ready.text).not.toMatch(/Przygotowałem|Status dokumentu|Ważna informacja/u);
+  });
+});

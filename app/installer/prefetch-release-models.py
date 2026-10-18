@@ -126,6 +126,14 @@ try:
                 processors="tokenize,ner",
                 verbose=False,
             )
+            # Optional: the second recognizer for the Polish marks (paddle_worker LATIN_REC).
+            # Without it OCR reads as before, so a failed download never fails the install.
+            try:
+                from paddleocr import TextRecognition
+
+                TextRecognition(model_name="latin_PP-OCRv5_mobile_rec", enable_mkldnn=False, device="cpu")
+            except Exception as exc:  # noqa: BLE001
+                print(f"MODEL_PREFETCH_OPTIONAL_FAILED:latin_PP-OCRv5_mobile_rec:{type(exc).__name__}:{exc}")
         except BaseException as exc:
             prefetch_error = exc
         finally:
@@ -178,6 +186,10 @@ print(
     json.dumps(
         {
             "paddleModels": required,
+            "optionalPaddleModels": [
+                name for name in ("latin_PP-OCRv5_mobile_rec",)
+                if all((official / name / file).is_file() for file in ("inference.pdiparams", "inference.yml"))
+            ],
             "stanza": "pl:tokenize,ner",
             "status": "PASS",
             "source": model_source,

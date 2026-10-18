@@ -1459,6 +1459,7 @@ export function registerWorkspaceRoutes(app, dependencies) {
                 ...(raw.pipelineNext !== undefined ? { pipelineNext: raw.pipelineNext } : {}),
                 ...(raw.documentCoverage !== undefined ? { documentCoverage: raw.documentCoverage } : {}),
                 ...(raw.documentAnalysis !== undefined ? { documentAnalysis: raw.documentAnalysis } : {}),
+                ...(raw.answerDocument !== undefined ? { answerDocument: raw.answerDocument } : {}),
                 ...(raw.corrections !== undefined ? { corrections: raw.corrections } : {}),
                 ...(raw.generatedDocument && typeof raw.generatedDocument === "object"
                     ? {

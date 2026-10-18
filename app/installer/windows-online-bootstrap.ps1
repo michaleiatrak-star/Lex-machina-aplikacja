@@ -545,10 +545,12 @@ $requiredPaddle = @(
   "PP-OCRv6_medium_det",
   "PP-OCRv6_medium_rec"
 )
+# Optional (OCR reads without it): its absence runs the prefetch again, never fails it.
+$optionalPaddle = @("latin_PP-OCRv5_mobile_rec")
 $modelsReady = (Test-Path -LiteralPath $stanzaPl -PathType Container)
 # A model counts only with its weights: an earlier install cut short during the
 # download leaves directories that exist but are empty or partial.
-foreach ($name in $requiredPaddle) {
+foreach ($name in ($requiredPaddle + $optionalPaddle)) {
   $modelDir = Join-Path $paddleOfficial $name
   foreach ($file in @("inference.pdiparams", "inference.yml")) {
     if (-not (Test-Path -LiteralPath (Join-Path $modelDir $file) -PathType Leaf)) {
@@ -560,7 +562,7 @@ if (-not $modelsReady) {
   New-Item -ItemType Directory -Force -Path $modelRoot | Out-Null
   # PaddleX treats an existing model directory as downloaded: remove the partial
   # ones so the prefetch fetches them again (complete ones are kept).
-  foreach ($name in $requiredPaddle) {
+  foreach ($name in ($requiredPaddle + $optionalPaddle)) {
     $modelDir = Join-Path $paddleOfficial $name
     if (
       (Test-Path -LiteralPath $modelDir -PathType Container) -and -not (

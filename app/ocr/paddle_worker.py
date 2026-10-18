@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+import unicodedata
 import os
 from pathlib import Path
 
@@ -267,6 +268,11 @@ FOLD_LINE_RECT = 1.35  # rotated rectangle height / line thickness
 FOLD_LINE_BOW = 0.35  # midline off its straight fit, in line thicknesses
 FOLD_MIN_LINES = 6
 FOLD_PAGE_SHARE = 0.2
+# A blank back page with the other side showing through looks folded too (faint mirrored
+# lines, bent); read along their shape they come out as noise, scored 0.03-0.65 (54-page scan,
+# two such pages). The fold reading replaces the page only when it reads more letters with
+# at least this score than the standard reading did.
+FOLD_SURE_SCORE = 0.8
 FOLD_ENGINE = "PaddleOCR PP-OCRv6_medium, linie wzdłuż zgięcia"
 
 
@@ -353,6 +359,15 @@ def _outline(poly, scale: float) -> list[list[float]]:
     points = np.asarray(poly, dtype=np.float32).reshape(-1, 1, 2)
     simple = cv2.approxPolyDP(points, 1.5, True).reshape(-1, 2)
     return [[round(float(x) * scale, 1), round(float(y) * scale, 1)] for x, y in simple]
+
+
+def _sure_letters(lines: list[dict]) -> int:
+    """Letters in the lines read with a sure score."""
+    return sum(
+        sum(1 for char in line["text"] if char.isalpha())
+        for line in lines
+        if line.get("score") is not None and line["score"] >= FOLD_SURE_SCORE
+    )
 
 
 class FoldReader:
@@ -459,12 +474,45 @@ def cpu_threads() -> int:
     return max(1, os.cpu_count() or 1)
 
 
+# PP-OCRv6 medium drops Polish marks on some serif prints ("Michal", "Okregowa": 17% of the
+# words with them right on a letter of a bar council); the latin PP-OCRv5 model reads them
+# (83%) but loses more elsewhere. Each line is read by both: the same letters -> the reading
+# with more marks; different letters -> the higher score. Measured on 13 pages (scan, letter,
+# folded photo): CER 6.05 -> 5.85% and 5.65 -> 4.35%, marks 90 -> 92% and 17 -> 83%.
+LATIN_REC = "latin_PP-OCRv5_mobile_rec"
+
+
+def _bare(text: str) -> str:
+    text = text.replace("ł", "l").replace("Ł", "L")
+    return "".join(char for char in unicodedata.normalize("NFD", text) if not unicodedata.combining(char))
+
+
+class MarksReading:
+    """The pipeline's recognizer with a second one for the Polish marks (see LATIN_REC)."""
+
+    def __init__(self, primary, second) -> None:
+        self.primary, self.second = primary, second
+
+    def __call__(self, images, **kwargs):
+        images = list(images)
+        for first, other in zip(self.primary(images, **kwargs), self.second(images, **kwargs)):
+            if _bare(first["rec_text"]) == _bare(other["rec_text"]):
+                marks = lambda result: sum(1 for char in result["rec_text"] if ord(char) > 127)
+                yield other if marks(other) > marks(first) else first
+            else:
+                yield other if other["rec_score"] > first["rec_score"] else first
+
+    def __getattr__(self, name):
+        return getattr(self.primary, name)
+
+
 class OcrEngine:
     """PaddleOCR on CPU oneDNN (about 5x faster, the same text); when oneDNN fails to
     start or to run (PaddlePaddle CPU regressions on some builds), the plain path."""
 
-    def __init__(self, kwargs: dict) -> None:
+    def __init__(self, kwargs: dict, latin_dir: Path | None = None) -> None:
         self.kwargs = kwargs
+        self.latin_dir = latin_dir
         self.mkldnn = os.environ.get("LEX_OCR_MKLDNN", "on") != "off"
         self.verified = not self.mkldnn
         try:
@@ -473,6 +521,26 @@ class OcrEngine:
             if not self.mkldnn:
                 raise
             self._fallback(error)
+            return
+        self._marks()
+
+    def _marks(self) -> None:
+        """The second recognizer when its model is installed; without it, as before."""
+        if self.latin_dir is None:
+            return
+        try:
+            from paddleocr import TextRecognition
+
+            pipeline = self.ocr.paddlex_pipeline
+            pipeline = getattr(pipeline, "_pipeline", pipeline)
+            second = TextRecognition(
+                model_name=LATIN_REC, model_dir=str(self.latin_dir), enable_mkldnn=self.mkldnn,
+                cpu_threads=self.kwargs.get("cpu_threads", cpu_threads()),
+                **({"device": self.kwargs["device"]} if self.kwargs.get("device") else {}),
+            ).paddlex_predictor
+            pipeline.text_rec_model = MarksReading(pipeline.text_rec_model, second)
+        except Exception as error:  # noqa: BLE001
+            print(f"LEX_OCR_MARKS_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
 
     def _fallback(self, error: Exception) -> None:
         print(
@@ -483,6 +551,7 @@ class OcrEngine:
         self.mkldnn = False
         self.verified = True
         self.ocr = PaddleOCR(**self.kwargs, enable_mkldnn=False)
+        self._marks()
 
     def predict(self, image):
         if self.verified:
@@ -601,7 +670,7 @@ def predict_image(
     folded = None
     if fold is not None and boxes_known:
         again = fold.page(evidence_image)
-        if again is not None:
+        if again is not None and _sure_letters(again[0]) > _sure_letters(lines):
             fold_lines, folded = again
             texts, scores, lines, unread = [], [], [], []
             for line in fold_lines:
@@ -759,7 +828,9 @@ def main() -> None:
     if args.device:
         ocr_kwargs["device"] = args.device
 
-    ocr = OcrEngine(ocr_kwargs)
+    # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
+    latin_dir = native_model_root / LATIN_REC
+    ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).

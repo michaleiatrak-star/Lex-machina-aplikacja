@@ -6,6 +6,7 @@ import { validThreadSummary } from "./thread-summary.js";
 import { validCaseChronology } from "./case-chronology.js";
 import { validCaseWork } from "./case-work.js";
 import { validLongDocument } from "./long-document.js";
+import { validAnswerDocument } from "./answer-document.js";
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -197,10 +198,14 @@ function safeMessage(input) {
     if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
+    if (input.answerDocument !== undefined &&
+        (typeof input.answerDocument !== "object" || typeof input.answerDocument?.sessionId !== "string" || input.answerDocument.sessionId.length > 200)) {
+        throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+    }
     if (input.corrections !== undefined && !validAnswerCorrections(input.corrections)) {
         throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
     }
-    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentAnalysis: _analysis, corrections: _corrections, ...rest } = input;
+    const { restorations: _dropped, generatedDocument: _generated, evidence: _evidence, auxiliarySources: _auxiliary, mandatoryPath: _path, pipelineNext: _next, documentCoverage: _coverage, documentAnalysis: _analysis, answerDocument: _answerDocument, corrections: _corrections, ...rest } = input;
     return {
         ...rest,
         ...(coverage?.length
@@ -215,6 +220,7 @@ function safeMessage(input) {
             }
             : {}),
         ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
+        ...(input.answerDocument ? { answerDocument: { sessionId: input.answerDocument.sessionId } } : {}),
         ...(input.corrections?.length
             ? { corrections: input.corrections.map((item) => ({ round: item.round, findings: [...item.findings], removed: [...item.removed] })) }
             : {}),
@@ -600,6 +606,7 @@ export class EncryptedCaseWorkspaceStore {
             ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
             ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
             ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
+            ...(item.answerDocument ? { answerDocument: { sessionId: item.answerDocument.sessionId } } : {}),
             ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})
         }));
     }
@@ -734,8 +741,10 @@ export class EncryptedCaseWorkspaceStore {
         const work = validCaseWork(index.memory?.work);
         const longDocument = validLongDocument(index.memory?.longDocument);
         const court = validCaseCourt(index.memory?.court);
+        const answerDocument = validAnswerDocument(index.memory?.answerDocument);
         return {
             ...(court ? { court } : {}),
+            ...(answerDocument ? { answerDocument } : {}),
             ...(work?.length ? { work } : {}),
             ...(longDocument ? { longDocument } : {}),
             ...(evidence ? { evidence } : {}),
@@ -801,6 +810,15 @@ export class EncryptedCaseWorkspaceStore {
                 memory.court = court;
             else
                 delete memory.court;
+        }
+        if (args.answerDocument !== undefined) {
+            const answerDocument = args.answerDocument === null ? null : validAnswerDocument(args.answerDocument);
+            if (args.answerDocument !== null && !answerDocument)
+                throw new Error("CASE_MEMORY_ANSWER_DOCUMENT_INVALID");
+            if (answerDocument)
+                memory.answerDocument = answerDocument;
+            else
+                delete memory.answerDocument;
         }
         index.memory = memory;
         await this.write(index, args.caseDataKey, args.keyVersion);

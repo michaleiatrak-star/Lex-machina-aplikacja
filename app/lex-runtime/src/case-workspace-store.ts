@@ -6,6 +6,7 @@ import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
 import { validCaseWork, type CaseWorkItem } from "./case-work.js";
 import { validLongDocument, type LongDocumentState } from "./long-document.js";
+import { validAnswerDocument, type AnswerDocument } from "./answer-document.js";
 import {
   createCipheriv,
   createDecipheriv,
@@ -85,6 +86,8 @@ export type WorkspaceThreadMessage = {
   // Pages of the case's documents read for this answer (document-coverage.ts).
   documentCoverage?: Array<{ documentId: string; title?: string; totalPages: number; pages: Array<[number, number]>; status: "FULL" | "PARTIAL" }>;
   documentAnalysis?: boolean;
+  // The answer is itself a letter kept for its file (answer-document.ts): its session.
+  answerDocument?: { sessionId: string };
   // What the application's correcting rounds removed from the answer (answer-corrections.ts).
   corrections?: AnswerCorrection[];
   pipelineNext?: { skill: string; reason: string; choices?: Array<{
@@ -141,6 +144,8 @@ export type CaseMemory = {
   longDocument?: LongDocumentState;
   // The court of the case: from its documents or the first letter (courts/case-court.ts).
   court?: CaseCourt;
+  // The last answer that is itself a letter, with its session's trail: its file (answer-document.ts).
+  answerDocument?: AnswerDocument;
 };
 
 export type CaseWorkspaceIndex = {
@@ -401,6 +406,12 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
   if (input.documentAnalysis !== undefined && typeof input.documentAnalysis !== "boolean") {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
+  if (
+    input.answerDocument !== undefined &&
+    (typeof input.answerDocument !== "object" || typeof input.answerDocument?.sessionId !== "string" || input.answerDocument.sessionId.length > 200)
+  ) {
+    throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
+  }
   if (input.corrections !== undefined && !validAnswerCorrections(input.corrections)) {
     throw new Error("WORKSPACE_THREAD_MESSAGE_INVALID");
   }
@@ -414,6 +425,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
     pipelineNext: _next,
     documentCoverage: _coverage,
     documentAnalysis: _analysis,
+    answerDocument: _answerDocument,
     corrections: _corrections,
     ...rest
   } = input;
@@ -431,6 +443,7 @@ function safeMessage(input: WorkspaceThreadMessage): WorkspaceThreadMessage {
         }
       : {}),
     ...(input.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(input.answerDocument ? { answerDocument: { sessionId: input.answerDocument.sessionId } } : {}),
     ...(input.corrections?.length
       ? { corrections: input.corrections.map((item) => ({ round: item.round, findings: [...item.findings], removed: [...item.removed] })) }
       : {}),
@@ -950,6 +963,7 @@ export class EncryptedCaseWorkspaceStore {
       ...(item.pipelineNext ? { pipelineNext: structuredClone(item.pipelineNext) } : {}),
       ...(item.documentCoverage ? { documentCoverage: structuredClone(item.documentCoverage) } : {}),
       ...(item.documentAnalysis ? { documentAnalysis: true } : {}),
+      ...(item.answerDocument ? { answerDocument: { sessionId: item.answerDocument.sessionId } } : {}),
       ...(item.corrections ? { corrections: structuredClone(item.corrections) } : {})
     }));
   }
@@ -1235,8 +1249,10 @@ export class EncryptedCaseWorkspaceStore {
     const work = validCaseWork(index.memory?.work);
     const longDocument = validLongDocument(index.memory?.longDocument);
     const court = validCaseCourt(index.memory?.court);
+    const answerDocument = validAnswerDocument(index.memory?.answerDocument);
     return {
       ...(court ? { court } : {}),
+      ...(answerDocument ? { answerDocument } : {}),
       ...(work?.length ? { work } : {}),
       ...(longDocument ? { longDocument } : {}),
       ...(evidence ? { evidence } : {}),
@@ -1257,6 +1273,7 @@ export class EncryptedCaseWorkspaceStore {
     work?: CaseWorkItem[] | null;
     longDocument?: LongDocumentState | null;
     court?: CaseCourt | null;
+    answerDocument?: AnswerDocument | null;
   }): Promise<CaseMemory> {
     const index = await this.read(args.caseId, args.caseDataKey, args.keyVersion);
     const memory: CaseMemory = { ...(index.memory ?? {}) };
@@ -1295,6 +1312,12 @@ export class EncryptedCaseWorkspaceStore {
       if (args.court !== null && !court) throw new Error("CASE_MEMORY_COURT_INVALID");
       if (court) memory.court = court;
       else delete memory.court;
+    }
+    if (args.answerDocument !== undefined) {
+      const answerDocument = args.answerDocument === null ? null : validAnswerDocument(args.answerDocument);
+      if (args.answerDocument !== null && !answerDocument) throw new Error("CASE_MEMORY_ANSWER_DOCUMENT_INVALID");
+      if (answerDocument) memory.answerDocument = answerDocument;
+      else delete memory.answerDocument;
     }
     index.memory = memory;
     await this.write(index, args.caseDataKey, args.keyVersion);

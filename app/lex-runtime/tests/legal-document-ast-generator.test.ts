@@ -155,6 +155,26 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     expect(mixed.blocks[2]).toMatchObject({ type: "table" });
   });
 
+  it("typy inline innych formatów i blok z „content” i „inlines” naraz (AST_INLINE_TYPE_UNSUPPORTED) bez zmiany treści", () => {
+    const ast = validateLegalDocumentAst(
+      normalizeAstBlocks(normalizeAstHeader({
+        schemaVersion: "1",
+        documentType: "other",
+        blocks: [
+          { type: "paragraph", inlines: [{ type: "text", text: "Jan Kowalski" }, { type: "line_break" }, { type: "text", text: "ul. Polna 1" }], content: [{ type: "paragraph", content: [{ type: "text", text: "Jan Kowalski" }] }] },
+          { type: "heading", level: 1, inlines: [{ type: "strong", text: "ODPOWIEDŹ NA WEZWANIE" }], content: [] },
+          { type: "paragraph", content: [{ type: "text", text: "Zgodnie z " }, { type: "link", label: "art. 483 § 1 KC", href: "https://api.sejm.gov.pl/eli" }, { type: "emphasis", content: [{ type: "text", text: " – kara umowna" }] }] }
+        ]
+      }, { documentType: "other", styleProfile: "lex-classic-clean-v1" })),
+      []
+    ).ast;
+    expect(ast.blocks).toEqual([
+      { type: "paragraph", content: [{ type: "text", text: "Jan Kowalski" }, { type: "text", text: "\n" }, { type: "text", text: "ul. Polna 1" }] },
+      { type: "heading", level: 1, content: [{ type: "text", text: "ODPOWIEDŹ NA WEZWANIE", bold: true }] },
+      { type: "paragraph", content: [{ type: "text", text: "Zgodnie z " }, { type: "text", text: "art. 483 § 1 KC" }, { type: "text", text: " – kara umowna" }] }
+    ]);
+  });
+
   it("nie zmienia poprawnego, innego typu dokumentu ani bloków", () => {
     const normalized = normalizeAstHeader(
       { schemaVersion: "1", locale: "pl-PL", documentType: "contract", styleProfile: "lex-classic-clean-v1", blocks },

@@ -1,0 +1,209 @@
+import type { DocumentGenerationValidationContext } from "./document-generation-validation.js";
+import type { SessionExecutionInternalState, SessionExecutionRequest } from "./session-executor.js";
+
+// A letter the chat answer already wrote (pisma-proste, "przygotuj dokument" after an
+// analysis): its file is made from that text mechanically, without a model turn that would
+// write it again (AST_INLINE_TYPE_UNSUPPORTED, a shortened letter, a new thread). The answer
+// passed its gates in its own session; the file goes through HYBRID-VAL and the export gate
+// with that session's trail and verification register.
+
+/** The answer whose letter can become a file: its text and its session's trail. */
+export type AnswerDocument = {
+  sessionId: string;
+  at: string;
+  text: string;
+  validationContext: DocumentGenerationValidationContext;
+};
+
+const MAX_ANSWER_CHARS = 200_000;
+
+/** The answer's session as the file's source: its trail and verification register. */
+export function answerValidationContext(
+  request: Pick<SessionExecutionRequest, "provider" | "model" | "primarySkill" | "documentAttachments">,
+  result: { sessionId: string },
+  internal: SessionExecutionInternalState
+): DocumentGenerationValidationContext {
+  return {
+    schemaVersion: 1,
+    sourceSessionId: result.sessionId,
+    primarySkill: request.primarySkill,
+    provider: request.provider,
+    model: request.model,
+    usedDocumentContext: Boolean(request.documentAttachments?.length),
+    ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+    ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
+    verificationRecords: internal.verificationRecords.map((record) => ({ ...record })),
+    auditEvents: internal.auditEvents.map((event) => ({ ...event, ...(event.detail ? { detail: { ...event.detail } } : {}) }))
+  };
+}
+
+export function validAnswerDocument(value: unknown): AnswerDocument | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const context = raw.validationContext as Record<string, unknown> | undefined;
+  if (
+    typeof raw.sessionId !== "string" ||
+    typeof raw.at !== "string" ||
+    typeof raw.text !== "string" ||
+    raw.text.length > MAX_ANSWER_CHARS ||
+    !context ||
+    context.schemaVersion !== 1 ||
+    typeof context.sourceSessionId !== "string" ||
+    !Array.isArray(context.verificationRecords) ||
+    !Array.isArray(context.auditEvents)
+  ) {
+    return null;
+  }
+  return {
+    sessionId: raw.sessionId,
+    at: raw.at,
+    text: raw.text,
+    validationContext: context as unknown as DocumentGenerationValidationContext
+  };
+}
+
+// What follows the letter in an answer: the skill's report on it, never part of the file.
+const META_HEADING =
+  /^(?:status\s+dokumentu|zakres\s+sprawdzenia|uwagi(?:\s+praktyczne|\s+dla\s+\p{L}+)?|co\s+dalej|dane\s+do\s+uzupełnienia|hybrid[-\s]?valid\p{L}*|ślad\s+\p{L}+|weryfikacja(?:\s+\p{L}+)*|raport\s+\p{L}+|informacj\p{L}+\s+dla\s+\p{L}+|notatk\p{L}*(?:\s+\p{L}+)*|przed\s+wysłaniem(?:\s+\p{L}+)*|źródła(?:\s+i\s+weryfikacja)?)\s*:?$/iu;
+// The answer's own sentence before the letter ("Poniżej pełna poprawiona wersja ...").
+const INTRO = /^(?:poniżej|przygotowa\p{L}*|oto|poprawi\p{L}*|zgodnie\s+z|na\s+podstawie\s+(?:poprzedni|wcześniejsz)\p{L}*|zachowa\p{L}*|wersja)\b/iu;
+const PLACE_DATE = /^(?:\[[^\]\n]{1,40}\]|\p{Lu}[\p{L}-]+(?:[ -]\p{Lu}?[\p{L}-]+){0,2})\s*,\s*(?:dnia\s+)?(?:\[[^\]\n]{1,30}\]|\d{1,2}[.\s])/u;
+const ADDRESSEE = /^(?:do|adresat|odbiorca)\s*:\s*/iu;
+const LIST_ITEM = /^(?:\d{1,3}[.)]|[-•–]|\*(?!\*))\s+\S/u;
+
+function plainLine(line: string): { text: string; heading: boolean } {
+  const heading = /^\s{0,3}#{1,6}\s+/u.test(line);
+  let text = line
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?)/u, "")
+    // Links of the chat (the provision's anchor in the act): the label stays.
+    .replace(/\[([^[\]\n]+)\]\((?:https?:)?[^)\s]+\)/gu, "$1")
+    .replace(/[ \t]+$/u, "")
+    .trim();
+  // A line bold as a whole ("**ODPOWIEDŹ ...**") is a title or a heading, not a bold label.
+  const whole = /^(\*\*|__)([^*_\n]+)\1$/u.exec(text);
+  if (whole) text = whole[2]!.trim();
+  return { text, heading };
+}
+
+function titleLike(text: string): boolean {
+  if (LIST_ITEM.test(text) || text.length > 200) return false;
+  const letters = [...text.replace(/\[[^\]]*\]/gu, "")].filter((char) => /\p{L}/u.test(char));
+  if (letters.length < 8) return false;
+  const upper = letters.filter((char) => char === char.toLocaleUpperCase("pl") && char !== char.toLocaleLowerCase("pl")).length;
+  return upper / letters.length >= 0.85 && /\p{L}{3,}\s+\p{L}{2,}/u.test(text);
+}
+
+// A block of a party or an address: a few short lines, none of them a sentence.
+function partyLike(block: string[]): boolean {
+  return (
+    block.length >= 2 &&
+    block.length <= 7 &&
+    block.every((line) => line.length <= 90 && !LIST_ITEM.test(line) && !/[.;!?]$/u.test(line.replace(/\b(?:r|ul|al|pl|lok|m|nr|os)\.$/u, "")))
+  );
+}
+
+const CLOSING = /^(?:z\s+poważaniem|z\s+wyrazami\s+szacunku|łączę\s+wyrazy\s+szacunku|z\s+up(?:oważnienia)?\.?)$/iu;
+
+// A heading the answer wrote as a plain line ("Uzasadnienie", "Odpowiedź"): short, no sentence.
+function headingLike(line: string): boolean {
+  return (
+    line.length <= 60 &&
+    line.split(/\s+/u).length <= 8 &&
+    /^\p{Lu}/u.test(line) &&
+    !/[.,;:!?\]]$/u.test(line) &&
+    !/[[§]/u.test(line) &&
+    !LIST_ITEM.test(line) &&
+    !CLOSING.test(line)
+  );
+}
+
+function signatureLike(block: string[]): boolean {
+  return (
+    block.length >= 1 &&
+    block.length <= 3 &&
+    block.every((line) => line.length <= 70 && !LIST_ITEM.test(line) && !/[.:;!?,]$/u.test(line) && !META_HEADING.test(line))
+  );
+}
+
+/** Blocks of lines separated by blank lines, with the heading flag of their first line. */
+function blocksOf(lines: Array<{ text: string; heading: boolean }>): Array<{ lines: string[]; heading: boolean }> {
+  const blocks: Array<{ lines: string[]; heading: boolean }> = [];
+  let current: { lines: string[]; heading: boolean } | null = null;
+  for (const line of lines) {
+    if (!line.text) {
+      current = null;
+      continue;
+    }
+    // A Markdown heading is its own block even without a blank line around it.
+    if (line.heading || !current || current.heading) {
+      current = { lines: [line.text], heading: line.heading };
+      blocks.push(current);
+    } else {
+      current.lines.push(line.text);
+    }
+  }
+  return blocks;
+}
+
+/**
+ * The letter of a chat answer in the letter markup (letter-markup.ts), its wording as the
+ * answer has it; null when the answer holds no letter (no title in capitals, no body).
+ * The verification markers stay: the export gate reads them and the file is without them.
+ */
+export function answerLetterMarkup(answer: string): string | null {
+  const body = answer.replace(/\r\n?/gu, "\n").split(/⚖️|\bWażna informacja:/u)[0] ?? "";
+  const lines = body.split("\n").map(plainLine);
+  const titleAt = lines.findIndex((line) => titleLike(line.text));
+  if (titleAt < 0) return null;
+  const metaAt = lines.findIndex((line, index) => index > titleAt && line.text.length <= 60 && META_HEADING.test(line.text.replace(/[*_]/gu, "")));
+  const before = blocksOf(lines.slice(0, titleAt));
+  const after = blocksOf(lines.slice(titleAt + 1, metaAt < 0 ? lines.length : metaAt));
+  if (!after.length) return null;
+
+  const out: string[] = [];
+  let sender = false;
+  const party = (block: string[]) => {
+    const [first, ...rest] = block;
+    if (ADDRESSEE.test(first!)) {
+      const label = first!.replace(ADDRESSEE, "").trim();
+      out.push("@ADRESAT:", ...(label ? [label] : []), ...rest, "");
+    } else {
+      out.push(sender ? "@STRONA:" : "@NADAWCA:", ...block, "");
+      sender = true;
+    }
+  };
+  for (const block of before) {
+    const [first] = block.lines;
+    if (block.lines.length === 1 && PLACE_DATE.test(first!)) out.push(`@MIEJSCE_DATA: ${first}`, "");
+    else if (block.lines.length === 1 && INTRO.test(first!)) continue;
+    else if (ADDRESSEE.test(first!) || partyLike(block.lines)) party(block.lines);
+    else if (block.lines.every((line) => INTRO.test(line) || /[.:]$/u.test(line))) continue;
+    else party(block.lines);
+  }
+  out.push(`@TYTUL: ${lines[titleAt]!.text}`, "");
+
+  // The signer: the last block, a name (and a role) without a sentence's end.
+  const last = after.at(-1)!;
+  const signer = after.length > 1 && !last.heading && signatureLike(last.lines) ? after.pop()!.lines : null;
+  let opening = true;
+  for (const block of after) {
+    const [first] = block.lines;
+    // The parties right under the title (as some answers put them), before the body.
+    if (opening && !block.heading && (ADDRESSEE.test(first!) || partyLike(block.lines))) {
+      party(block.lines);
+      continue;
+    }
+    if (opening && block.lines.length === 1 && PLACE_DATE.test(first!)) {
+      out.push(`@MIEJSCE_DATA: ${first}`, "");
+      continue;
+    }
+    opening = false;
+    if (block.heading || (block.lines.length === 1 && headingLike(first!))) {
+      out.push(`@SEKCJA: ${block.lines.join(" ")}`, "");
+      continue;
+    }
+    out.push(...block.lines, "");
+  }
+  if (signer) out.push("@PODPIS:", ...signer);
+  return out.join("\n").trimEnd();
+}
