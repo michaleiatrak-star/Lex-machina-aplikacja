@@ -2603,3 +2603,13 @@ textarea:focus {
   visibility: visible;
   opacity: 1;
 }
+
+/* OCR lists in the preview: collapsible, the count in the header. */
+.privacy-preview-group > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.privacy-preview-group:not([open]) > summary {
+  color: var(--muted, #555);
+}

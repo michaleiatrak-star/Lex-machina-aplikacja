@@ -158,3 +158,39 @@ export function accountModelChoices(
     }))
   ];
 }
+
+// One entry per provider in the selectors; the account or the API key is the provider's
+// connection, chosen in Settings → Models (a nine-item list repeated each provider twice).
+export type ProviderGroup = ProviderId | "local";
+export const PROVIDER_GROUPS: Array<{ id: ProviderGroup; label: string }> = [
+  { id: "openai", label: "OpenAI · ChatGPT" },
+  { id: "anthropic", label: "Anthropic · Claude" },
+  { id: "xai", label: "xAI · Grok" },
+  { id: "google", label: "Google · Gemini" },
+  { id: "local", label: "Lokalne" }
+];
+
+export function providerGroupOf(source: PrimaryModelSource): ProviderGroup {
+  return source === "local" ? "local" : runtimeProviderForPrimarySource(source);
+}
+
+export function sourceForGroup(group: ProviderGroup, channel: "account" | "api"): PrimaryModelSource {
+  if (group === "local") return "local";
+  return channel === "account" ? (`${group}-account` as AccountPrimaryModelSource) : group;
+}
+
+/**
+ * The connection a provider uses when picked: the one the user chose for it before,
+ * else a connected account, else a configured API key, else the account (to connect).
+ */
+export function preferredSourceForGroup(
+  group: ProviderGroup,
+  remembered: "account" | "api" | undefined,
+  state: { accountConnected?: boolean; apiConfigured?: boolean }
+): PrimaryModelSource {
+  if (group === "local") return "local";
+  if (remembered) return sourceForGroup(group, remembered);
+  if (state.accountConnected) return sourceForGroup(group, "account");
+  if (state.apiConfigured) return sourceForGroup(group, "api");
+  return sourceForGroup(group, "account");
+}

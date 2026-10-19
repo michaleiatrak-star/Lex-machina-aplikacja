@@ -379,7 +379,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
         <div className="privacy-preview-todo">
           <strong>Do decyzji</strong>
           {aiHints.length ? (
-            <div>
+            <details className="privacy-preview-group">
+              <summary>Do przejrzenia ({aiHints.length})</summary>
               <small>
                 {aiHints.some((item) => item.aiNotPerson) ? "Lokalne AI uznało część wykryć za nie-osoby. " : ""}
                 {aiHints.some((item) => item.uncertain) ? "Nazwisko znanej osoby w miejscu, gdzie może to być zwykłe słowo. " : ""}
@@ -397,10 +398,11 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           ) : null}
           {doubtful.length ? (
-            <div>
+            <details className="privacy-preview-group" open>
+              <summary>Niepewne ({doubtful.length})</summary>
               <small>
                 Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.
                 {doubtful.some((line) => line.stamp) ? " Pieczęć w kolorze odczytana osobno od tekstu pisma." : ""}
@@ -429,11 +431,12 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           ) : null}
           {fixes.length ? (
-            <div>
-              <small>Słowa poprawione po OCR (odstępy, ogonki, model wizyjny lub Bielik): {fixes.length}.</small>
+            <details className="privacy-preview-group">
+              <summary>Skorygowane ({fixes.length})</summary>
+              <small>Słowa poprawione po OCR (odstępy, ogonki, model wizyjny lub Bielik).</small>
               <ul>
                 {fixes.slice(0, 50).map((fix, index) => (
                   <li key={`fix-${fix.page}-${index}`}>
@@ -451,7 +454,7 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                   Przetwórz ponownie bez korekt modelu
                 </button>
               ) : null}
-            </div>
+            </details>
           ) : null}
         </div>
       ) : null}
