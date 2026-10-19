@@ -82,3 +82,25 @@ export function shouldAutoStartLocalModel(args: {
     !(args.runtimeState === "READY" && args.activeModelId === args.model)
   );
 }
+
+// The connection (account or API key) the user chose per provider: preselects it next time.
+export type ProviderChannels = Partial<Record<string, "account" | "api">>;
+
+export function loadProviderChannels(userId: string): ProviderChannels {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(`lex.providerChannel.${userId}`) ?? "{}") as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(value).filter(([, channel]) => channel === "account" || channel === "api")
+    ) as ProviderChannels;
+  } catch {
+    return {};
+  }
+}
+
+export function saveProviderChannels(userId: string, value: ProviderChannels): void {
+  try {
+    window.localStorage.setItem(`lex.providerChannel.${userId}`, JSON.stringify(value));
+  } catch {
+    // Private window: the choice lasts for this session only.
+  }
+}

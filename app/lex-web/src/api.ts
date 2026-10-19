@@ -1896,6 +1896,8 @@ export type CaseMemory = {
   summary: CaseThreadSummary | null;
   // The case's timeline from its last chronology; later answers in the case start from it.
   chronology?: { text: string; updatedAt: string; source: "CHRONOLOGY_V1" | "AUTO" } | null;
+  // The case summary made on the user's request (parties, documents, timeline, key facts, gaps).
+  overview?: { text: string; updatedAt: string } | null;
   // Work done and open in the case (the application's register): later answers use it.
   work?: Array<{ key: string; kind: string; label: string; status: "DONE" | "OPEN"; at: string; line: string }>;
   evidence: {
@@ -3702,6 +3704,19 @@ export function removeFromAnonymization(
   });
 }
 
+/** The user's correction of one fragment of the anonymized version (symbols must stay the key's). */
+export function editAnonymizedText(
+  caseId: string,
+  documentId: string,
+  chunkIndex: number,
+  text: string
+): Promise<AnonymizedVersion> {
+  return json(anonymizedPath(caseId, documentId, "text"), {
+    method: "POST",
+    body: JSON.stringify({ chunkIndex, text })
+  });
+}
+
 export function updateAnonymizationForms(
   caseId: string,
   documentId: string,
@@ -4436,4 +4451,16 @@ export function importFromGoogle(
   selection: { gmailThreadIds?: string[]; driveFileIds?: string[] }
 ): Promise<{ files: unknown[] }> {
   return json(`/api/cases/${encodeURIComponent(caseId)}/google/import`, { method: "POST", body: JSON.stringify(selection) });
+}
+
+// The anonymized version of a stored .docx as .docx (formatting kept, values as symbols).
+export function anonymizedDocx(
+  caseId: string,
+  uploadId: string,
+  documentId: string
+): Promise<{ filename: string; mediaType: string; data: string; warnings: string[] }> {
+  return json(`/api/cases/${encodeURIComponent(caseId)}/files/${encodeURIComponent(uploadId)}/anonymized-docx`, {
+    method: "POST",
+    body: JSON.stringify({ documentId })
+  });
 }

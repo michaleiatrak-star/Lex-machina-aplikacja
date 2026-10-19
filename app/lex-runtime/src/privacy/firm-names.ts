@@ -65,6 +65,8 @@ function nameBefore(text: string, end: number): { start: number; value: string }
     if (!clean || !NAME_WORD.test(clean) || (!joiner && notAName(clean.toLocaleLowerCase("pl")))) break;
     // A word ending a sentence is not part of the name ("…zapłaty. Budex S.A.").
     if (index < words.length - 1 && /[.;:!?]$/u.test(word) && !/^\p{Lu}\.$/u.test(word)) break;
+    // Nor a word of the paragraph above ("I. TEZA WSTĘPNA\n\nElectra S.A.").
+    if (picked.length && /\n[^\S\n]*\n/u.test(line.slice(words[index]!.index!, picked[0]!.index!))) break;
     picked.unshift(words[index]!);
   }
   // "w Katowicach i Human Park sp. z o.o.": a place after "w" is not the first firm's name.

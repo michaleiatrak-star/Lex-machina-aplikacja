@@ -293,7 +293,7 @@ describe("TemporalSourceFreshnessChecker", () => {
     });
   });
 
-  it("detects a newer in-force consolidated text", async () => {
+  it("a newer in-force t.j. replaces the pinned one: its text is the source", async () => {
     const result = await new TemporalSourceFreshnessChecker(
       fixtureFetcher({
         currentEli: "DU/2027/10"
@@ -301,10 +301,12 @@ describe("TemporalSourceFreshnessChecker", () => {
     ).check(kc);
 
     expect(result).toMatchObject({
-      status: "STALE_CONSOLIDATED_TEXT",
+      status: "CURRENT",
       mode: "CURRENT",
       currentEli: "DU/2027/10",
-      reason: "PINNED_ELI_DIFFERS_FROM_CURRENT"
+      pinnedSuperseded: true,
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2027/10/text.html",
+      reason: "PINNED_TJ_SUPERSEDED_CURRENT_TJ_USED"
     });
   });
 
@@ -818,5 +820,72 @@ describe("wejście w życie etapami (pole comments w ELI)", () => {
   it("przepisy przejściowe: tylko jednostki z formułą intertemporalną, bez części zmieniających", () => {
     const body = "art. 1. w ustawie z dnia … w art. 5 stosuje się przepisy dotychczasowe. art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych. art. 8. minister wyda rozporządzenie.";
     expect(transitionalProvisions(body)).toEqual(["art. 7. postępowania wszczęte i niezakończone prowadzi się według przepisów dotychczasowych."]);
+  });
+});
+
+// KK: t.j. 2025/383 expired, t.j. 2026/1342 announced 16.10.2026 with no text in ELI yet.
+function pendingTextFetcher(amendmentText: string) {
+  return async (input: string | URL): Promise<Response> => {
+    const url = String(input);
+    if (url.endsWith("/DU/1964/93/references")) {
+      return jsonResponse({
+        "Inf. o tekście jednolitym": [
+          { act: { ELI: "DU/2025/383", year: 2025, pos: 383, status: "wygaśnięcie aktu" } },
+          { act: { ELI: "DU/2026/1342", year: 2026, pos: 1342, status: "obowiązujący" } }
+        ],
+        "Akty zmieniające": [{
+          act: { ELI: "DU/2025/1872", date: "2026-01-29", promulgation: "2025-12-30", displayAddress: "DU/2025/1872", title: "Ustawa zmieniająca" }
+        }]
+      });
+    }
+    if (url.endsWith("/references")) return jsonResponse({});
+    if (url.endsWith("/DU/2026/1342")) {
+      return jsonResponse({ ELI: "DU/2026/1342", status: "obowiązujący", promulgation: "2026-10-16", textHTML: false, textPDF: false });
+    }
+    if (url.endsWith("/DU/2025/383")) {
+      return jsonResponse({ ELI: "DU/2025/383", status: "wygaśnięcie aktu", promulgation: "2025-03-25", textHTML: true, textPDF: true });
+    }
+    if (url.endsWith("/DU/2025/1872")) {
+      return jsonResponse({ ELI: "DU/2025/1872", promulgation: "2025-12-30", entryIntoForce: "2026-01-29", textHTML: true, textPDF: true });
+    }
+    if (url.endsWith("/DU/2025/1872/text.html")) {
+      return new Response(amendmentText, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    throw new Error("Unexpected pending-text fixture URL: " + url);
+  };
+}
+
+describe("najnowszy t.j. bez tekstu w ELI (KK 2026/1342)", () => {
+  const descriptor = { ...kc, eli: "DU/2025/383" };
+
+  it("brzmienie z poprzedniego t.j., gdy zmiany po nim nie dotyczą artykułu", async () => {
+    const result = await new TemporalSourceFreshnessChecker(
+      pendingTextFetcher("<html><body>Art. 1. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cywilny art. 999 otrzymuje brzmienie.</body></html>"),
+      () => "2026-10-19T10:00:00.000Z"
+    ).check(descriptor, { claim: "art. 5 KC" });
+
+    expect(result).toMatchObject({
+      status: "CURRENT",
+      currentEli: "DU/2026/1342",
+      textPendingEli: "DU/2026/1342",
+      textEli: "DU/2025/383",
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.html",
+      reason: "CURRENT_TJ_TEXT_PENDING_PREVIOUS_TJ_AMENDMENTS_DO_NOT_TOUCH_ARTICLE"
+    });
+    expect(result.amendmentsAfter.map((item) => item.eli)).toEqual(["DU/2025/1872"]);
+  });
+
+  it("zmiana po poprzednim t.j. dotyczy artykułu: bez weryfikacji ze starego tekstu", async () => {
+    const result = await new TemporalSourceFreshnessChecker(
+      pendingTextFetcher("<html><body>Art. 1. W ustawie z dnia 23 kwietnia 1964 r. – Kodeks cywilny art. 5 otrzymuje brzmienie.</body></html>"),
+      () => "2026-10-19T10:00:00.000Z"
+    ).check(descriptor, { claim: "art. 5 KC" });
+
+    expect(result).toMatchObject({
+      status: "POST_TJ_AMENDMENTS",
+      reason: "POST_TJ_AMENDMENT_TOUCHES_REQUESTED_ARTICLE",
+      textPendingEli: "DU/2026/1342"
+    });
+    expect(result.sourceUrl).toBeUndefined();
   });
 });

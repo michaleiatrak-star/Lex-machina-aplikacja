@@ -1,5 +1,6 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.66 (2026-10-19a, AUDYT-2026-10-19a): ROUTING-MAP: KK — t.j. Dz.U. 2026 poz. 1342 (wiersze DR-03, tekst w ELI nieopublikowany — do publikacji 2025/383 + 4 nowelizacje); ⛔ KOREKTA: wiersz KK podawał „zm. 2026.638” — to nowelizacja KPK; Prawo o adwokaturze 1290: ⚡ WCHODZI → W MOCY od 17.10.2026; nowe wiersze ustawy o prawnikach zagranicznych (2020/823 + 1290 art. 2).
 - 6.65 (2026-10-17c, AUDYT-2026-10-17c): ROUTING-MAP: rozporządzenie MS w sprawie siedzib i obszarów właściwości sądów powszechnych (t.j. Dz.U. 2026 poz. 492) → DR-12 mod-wlasciwosc-miejscowa-sadow-powszechnych.
 - 6.64 (2026-10-17b, AUDYT-2026-10-17b): ROUTING-MAP: ZZ — ⏳ zm. 2026/1340 od 30.10.2026; nowy wiersz ustawy o informowaniu pracowników (2006/550 + 2026/1340); nowy wiersz ustawy o ochronie i pomocy dla pokrzywdzonego i świadka (t.j. 2026/1306). ELI 2026-10-17.
 - 6.63 (2026-10-17a, AUDYT-2026-10-17a): ROUTING-MAP: KPW — nowy t.j. Dz.U. 2026 poz. 1336 (obwieszczenie z 2.10.2026, ogłoszone 15.10.2026; stan prawny na 27.09.2026; obejmuje Dz.U. 2025 poz. 1178, 1661, 1814, 1818, 1872 i 2026 poz. 473; brak zmian po t.j. — ELI 2026-10-17) (wiersz KPW i wiersz grzywna/mandat).

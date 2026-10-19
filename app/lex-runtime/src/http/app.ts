@@ -12,7 +12,8 @@ import {
   type PersonMorphology
 } from "../privacy/person-morphology.js";
 import type { PiiKind } from "../privacy/pseudonymizer.js";
-import { LocalOfficeEditor, editableMediaType } from "../office-edit.js";
+import { FORMAT_MEDIA_TYPE, LocalOfficeEditor, editableMediaType } from "../office-edit.js";
+import { anonymizeDocx } from "../docx-anonymize.js";
 import { deanonymizeModel } from "../deanonymize-file.js";
 import { decodePlainText } from "../document-service.js";
 import {
@@ -275,6 +276,7 @@ import {
   registerGoogleWorkspaceRoutes
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
+import { overviewBlock, overviewFromAnswer, overviewRequested, queryWithOverviewTemplate } from "../case-overview.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
 import { addresseeCourt, courtOfCaseDocuments, type CaseCourt } from "../courts/case-court.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
@@ -3827,6 +3829,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       res.json({
         summary: memory.summary ?? null,
         chronology: memory.chronology ? { text: memory.chronology.text, updatedAt: memory.chronology.updatedAt, source: memory.chronology.source } : null,
+        overview: memory.overview ? { text: memory.overview.text, updatedAt: memory.overview.updatedAt } : null,
         work: (memory.work ?? []).map((item) => ({ ...item, line: caseWorkLine(item) })),
         evidence: memory.evidence
           ? {
@@ -3884,7 +3887,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
     try {
       await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) =>
-        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null, answerDocument: null })
+        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, overview: null, work: null, answerDocument: null })
       );
       res.json({ cleared: true });
     } catch (error) {
@@ -5384,6 +5387,21 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     })
   );
 
+  // The user's correction of one fragment of the anonymized version (symbols must stay the key's).
+  app.post("/api/cases/:caseId/documents/:documentId/anonymized/text", (req, res) =>
+    withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {
+      if (!options.documentService!.editProtectedText) throw new Error("ANONYMIZED_VERSION_UNAVAILABLE");
+      const chunkIndex = Number(req.body?.chunkIndex);
+      if (!Number.isInteger(chunkIndex) || chunkIndex < 0) throw new Error("PRIVACY_EDIT_CHUNK_NOT_FOUND");
+      return await options.documentService!.editProtectedText(
+        documentId,
+        chunkIndex,
+        typeof req.body?.text === "string" ? req.body.text : "",
+        security
+      );
+    })
+  );
+
   app.post("/api/cases/:caseId/documents/:documentId/anonymized/unprotect", (req, res) =>
     withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) =>
       await options.documentService!
@@ -5531,6 +5549,66 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
     }
   );
+
+  // The anonymized version of a .docx as a .docx: formatting, footnotes, comments,
+  // headers and footers kept, values replaced by tokens (docx-anonymize.ts). Downloaded,
+  // not stored in the case.
+  app.post("/api/cases/:caseId/files/:uploadId/anonymized-docx", async (req, res) => {
+    const caseId = String(req.params.caseId ?? "").trim();
+    const uploadId = String(req.params.uploadId ?? "").trim();
+    const documentId = String(req.body?.documentId ?? "").trim();
+    const service = options.documentService;
+    if (!service?.restoreDocument || !service.anonymizedDocxPlan || !options.caseAccessService || !options.secureCaseUploadStore) {
+      res.status(503).json({ error: "DOCX_ANONYMIZED_UNAVAILABLE" });
+      return;
+    }
+    if (!/^case_[a-f0-9]{32}$/.test(caseId) || !/^upload_[a-f0-9]{32}$/.test(uploadId) || !/^doc_[a-f0-9]{24}$/.test(documentId)) {
+      res.status(400).json({ error: "INVALID_DOCX_ANONYMIZED_REQUEST" });
+      return;
+    }
+    try {
+      const context = responseAuthContext(res);
+      options.caseAccessService.assertAccess(context, caseId, "ANALYZE");
+      const caseView = options.caseAccessService.openCase(context, caseId);
+      const result = await options.caseAccessService.withCaseDataKey(context, caseId, "ANALYZE", async (caseDataKey) => {
+        const store = options.secureCaseUploadStore!;
+        const keyVersion = caseView.keyVersion;
+        const upload = (await store.listUploads({ caseId, caseDataKey, keyVersion })).find((item) => item.uploadId === uploadId);
+        if (!upload) throw new Error("STORED_UPLOAD_NOT_FOUND");
+        if (editableMediaType(upload.mediaType, upload.filename) !== FORMAT_MEDIA_TYPE.docx) throw new Error("DOCX_ANONYMIZED_MEDIA_UNSUPPORTED");
+        await service.restoreDocument!({ caseId, documentId, caseDataKey, keyVersion });
+        const plan = service.anonymizedDocxPlan!(documentId);
+        const data = await store.readUploadPayload({ caseId, uploadId, caseDataKey, keyVersion, maxBytes: 64 * 1024 * 1024 });
+        try {
+          const output = await anonymizeDocx(data, plan);
+          const dot = upload.filename.lastIndexOf(".");
+          return {
+            filename: `${dot > 0 ? upload.filename.slice(0, dot) : upload.filename} (zanonimizowany).docx`,
+            mediaType: FORMAT_MEDIA_TYPE.docx,
+            data: output.data.toString("base64"),
+            warnings: output.warnings
+          };
+        } finally {
+          data.fill(0);
+        }
+      });
+      res.setHeader("Cache-Control", "no-store");
+      res.json(result);
+    } catch (error) {
+      if (sendCaseAccessError(res, error)) return;
+      const code = error instanceof Error ? error.message : "";
+      if (code === "ENOENT" || code.endsWith("NOT_FOUND") || code === "UNKNOWN_LOCAL_DOCUMENT") {
+        res.status(404).json({ error: code === "ENOENT" ? "DOCUMENT_NOT_FOUND" : code });
+        return;
+      }
+      if (code.startsWith("DOCX_ANONYMIZED_") || code.startsWith("OFFICE_DOCUMENT_")) {
+        res.status(422).json({ error: /^[A-Z_]+/.exec(code)![0] });
+        return;
+      }
+      console.error(`DOCX_ANONYMIZED_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+      res.status(500).json({ error: "DOCX_ANONYMIZED_FAILED" });
+    }
+  });
 
   // Stage and page counts of a running OCR/anonymization request.
   app.get(
@@ -7552,7 +7630,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           });
           const ready = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", (caseDataKey) =>
             options.documentAuthoringService!.createReady({
-              ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+              // Draft by default: only unverified references -> a file headed „PROJEKT – NIE SKŁADAĆ BEZ
+              // WERYFIKACJI” naming them; acceptUnverified: false asks the user first.
+              ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
               caseId,
               createdByUserId: context.user.userId,
               format,
@@ -7687,7 +7767,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               ...(sharedGeneration && sharedGeneration.members.size > 0
                 ? { privacySeed: sharedGeneration.snapshot }
                 : {}),
-              ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+              ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
               query:
                 sessionRequest
                   .query,
@@ -7759,7 +7839,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   await options
                     .documentAuthoringService!
                     .createReady({
-                      ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+                      ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
                       caseId,
                       createdByUserId:
                         context.user
@@ -7825,7 +7905,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   .documentAuthoringService!
                   .createTokenized({
                     ...(processDocumentStatus ? { processDocumentStatus } : {}),
-                    ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+                    ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
                     caseId,
                     createdByUserId:
                       context.user
@@ -9918,6 +9998,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
       let threadEvidence: ThreadEvidence | null = null;
       let caseWork: CaseWorkItem[] = [];
+      // The user asked for the case summary (button): the template goes with the request, the
+      // answer is kept in the case memory.
+      const overviewAsked = overviewRequested(request.query);
+      if (overviewAsked) request.query = queryWithOverviewTemplate(request.query);
       if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
         try {
           const actor = responseAuthContext(res);
@@ -9936,12 +10020,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           // What the case already has: the register of work done and open, and the timeline
           // of its chronology (a part of the larger work). Later turns use them, not redo them.
           const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
+          const overview = memory.overview && !overviewAsked ? overviewBlock(memory.overview, request.query) : null;
           // The dates the model got with the timeline: the executor checks the answer uses them
           // (an API model keeps nothing between calls; the application gives and supervises it).
           if (memory.chronology) request.caseTimelineDates = [...isoDates(memory.chronology.text)].slice(0, 500);
           const register = caseWorkBlock(caseWork);
-          if (timeline || register) {
-            request.query = queryWithChronology(request.query, [register, timeline].filter(Boolean).join("\n\n"));
+          if (timeline || register || overview) {
+            request.query = queryWithChronology(request.query, [register, overview, timeline].filter(Boolean).join("\n\n"));
             request.onStep?.(
               "PREPARE",
               [register ? `rejestr prac sprawy (${caseWork.length})` : "", timeline ? `oś czasu z ${memory.chronology!.updatedAt.slice(0, 10)}` : ""].filter(Boolean).join(", ")
@@ -12121,6 +12206,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               sessionId: result.sessionId
             })
           : null;
+      const overviewToKeep =
+        knowledge.caseId && options.caseMemoryStore && options.caseAccessService
+          ? overviewFromAnswer({ answer: result.answer, status: result.status, requested: overviewAsked, sessionId: result.sessionId })
+          : null;
       // The register of the case's work: documents analysed (pages), the chronology, workflows done.
       const completedWorkflows = [
         result.courtWorkflow?.stage === "COMPLETE" ? "COURT_ANALYSIS_V1" : null,
@@ -12147,7 +12236,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               item.status === "OPEN" &&
               (issues.resolved.includes(item.key.slice("ISSUE:".length)) || (issues.gapsListed && item.key.startsWith("ISSUE:brak:")))
           ));
-      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || workChanged)) {
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || overviewToKeep || workChanged)) {
         try {
           const actor = responseAuthContext(res);
           const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
@@ -12158,6 +12247,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             await options.caseMemoryStore!.saveCaseMemory({
               ...key,
               ...(timelineToKeep ? { chronology: timelineToKeep } : {}),
+              ...(overviewToKeep ? { overview: overviewToKeep } : {}),
               ...(workChanged
                 ? {
                     work: recordCaseWork(current.work ?? caseWork, {

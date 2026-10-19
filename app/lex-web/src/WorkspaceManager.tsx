@@ -1,5 +1,5 @@
 import { InfoTip } from "./InfoTip";
-import { GoogleImportDialog } from "./GoogleIntegrationPanel.js";
+import { GOOGLE_INTEGRATION_VISIBLE, GoogleImportDialog } from "./GoogleIntegrationPanel.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
@@ -643,7 +643,7 @@ export function WorkspaceManager({
   function showAnonymized(item: WorkspaceItem, tab: "marked" | "text" | "key"): void {
     const documentId = processingFor(item)?.documentId;
     if (!documentId) return;
-    setPreview(null);
+    if (preview?.item.itemId !== item.itemId) setPreview(null);
     setAnonymized({ item, documentId, tab });
   }
 
@@ -961,7 +961,9 @@ export function WorkspaceManager({
   ): Promise<void> {
     setBusy(true);
     setError("");
-    setAnonymized(null);
+    // A processed document opens next to its anonymized version (no separate button).
+    const documentId = processingFor(item)?.anonymized !== false ? processingFor(item)?.documentId : undefined;
+    setAnonymized(documentId ? { item, documentId, tab: "marked" } : null);
     try {
       if (preview?.url) URL.revokeObjectURL(preview.url);
       const pageProps = page ? { page } : {};
@@ -1169,7 +1171,7 @@ export function WorkspaceManager({
               />
             </label>
           ) : null}
-          {canWrite ? (
+          {canWrite && GOOGLE_INTEGRATION_VISIBLE ? (
             <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setGoogleImport(true)}>
               Importuj z Google
             </button>
@@ -1384,14 +1386,6 @@ export function WorkspaceManager({
                     ) : null}
                     {processingFor(item) && processingFor(item)!.anonymized !== false ? (
                       <>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          title="Tekst z symbolami zastępczymi - ta wersja trafia do modeli"
-                          onClick={() => showAnonymized(item, "marked")}
-                        >
-                          Wersja zanonimizowana
-                        </button>
                         <button
                           type="button"
                           disabled={busy}
@@ -1656,18 +1650,8 @@ export function WorkspaceManager({
         </section>
       ) : null}
 
-      {anonymized ? (
-        <AnonymizedDocumentView
-          key={`${anonymized.documentId}-${anonymized.tab}`}
-          caseId={caseId}
-          documentId={anonymized.documentId}
-          filename={anonymized.item.filename}
-          readOnly={!canWrite}
-          initialTab={anonymized.tab}
-          onClose={() => setAnonymized(null)}
-        />
-      ) : null}
-
+      {/* The original and its anonymized version side by side: corrections checked against the source. */}
+      <div className={preview && anonymized && preview.item.itemId === anonymized.item.itemId ? "workspace-side-by-side" : "workspace-preview-stack"}>
       {preview ? (
         <section className="workspace-preview" aria-label="Podgląd pliku">
           <div className="workspace-preview-head">
@@ -1726,6 +1710,19 @@ export function WorkspaceManager({
           )}
         </section>
       ) : null}
+      {anonymized ? (
+        <AnonymizedDocumentView
+          key={`${anonymized.documentId}-${anonymized.tab}`}
+          caseId={caseId}
+          documentId={anonymized.documentId}
+          filename={anonymized.item.filename}
+          {...(anonymized.item.itemId.startsWith("upload_") ? { uploadId: anonymized.item.itemId } : {})}
+          readOnly={!canWrite}
+          initialTab={anonymized.tab}
+          onClose={() => setAnonymized(null)}
+        />
+      ) : null}
+      </div>
 
       {knowledgeSearchError &&
       documentSearch.trim().length >= 2 ? (

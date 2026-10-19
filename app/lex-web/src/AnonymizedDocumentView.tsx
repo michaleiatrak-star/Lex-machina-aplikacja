@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  ApiError,
   addToAnonymization,
+  anonymizedDocx,
   approveAnonymizedVersion,
+  editAnonymizedText,
   getAnonymizedVersion,
   removeFromAnonymization,
   updateAnonymizationForms,
@@ -14,6 +17,19 @@ import {
 import { KIND_LABEL, PrivacyKeyTable } from "./PrivacyKeyTable.js";
 import { modelExportFilename, modelExportText } from "./model-export.js";
 import { downloadBlob } from "./download-file.js";
+
+const DOCX_ERRORS: Record<string, string> = {
+  DOCX_ANONYMIZED_SOURCE_CHANGED: "Plik przetworzono starszą wersją aplikacji (bez przypisów, nagłówków i komentarzy). Przetwórz go ponownie, potem pobierz .docx.",
+  DOCX_ANONYMIZED_ALIGNMENT_FAILED: "Wersji zanonimizowanej nie da się dopasować do pliku. Przetwórz plik ponownie.",
+  DOCX_ANONYMIZED_TEXT_MISMATCH: "Kontrola zgodności nie przeszła - plik nie został wydany.",
+  DOCX_ANONYMIZED_LEAK: "Kontrola szczelności znalazła dane poza tekstem (pole, łącze, właściwości) - plik nie został wydany.",
+  DOCX_ANONYMIZED_UNSUPPORTED: "Ten dokument nie ma jednej strony tekstu Word - .docx niedostępny."
+};
+
+function docxErrorText(error: unknown): string {
+  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error);
+  return DOCX_ERRORS[code] ?? `Nie udało się utworzyć .docx: ${code}`;
+}
 import { InfoTip } from "./InfoTip";
 
 const TOKEN = /(\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/;
@@ -97,6 +113,8 @@ export function AnonymizedDocumentView(props: {
   caseId: string;
   documentId: string;
   filename: string;
+  // The stored file behind the document: a .docx can be downloaded anonymized as .docx.
+  uploadId?: string;
   readOnly: boolean;
   initialTab?: "marked" | "text" | "key";
   onClose: () => void;
@@ -105,6 +123,7 @@ export function AnonymizedDocumentView(props: {
   const [version, setVersion] = useState<AnonymizedVersion | null>(null);
   const [tab, setTab] = useState<"marked" | "text" | "key">(props.initialTab ?? "marked");
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [editingChunk, setEditingChunk] = useState<{ index: number; text: string } | null>(null);
   const [selection, setSelection] = useState("");
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [busy, setBusy] = useState(false);
@@ -149,6 +168,8 @@ export function AnonymizedDocumentView(props: {
       setStatus(
         code === "PRIVACY_EDIT_TEXT_NOT_FOUND"
           ? "Tego tekstu nie ma w wersji zanonimizowanej (może już jest zastąpiony symbolem)."
+          : code === "PRIVACY_EDIT_UNKNOWN_TOKEN"
+            ? "Poprawka zawiera symbol, którego nie ma w kluczu tego dokumentu (np. zmieniony numer). Przywróć symbol w pierwotnej postaci."
           : `Nie udało się zapisać: ${code}`
       );
     } finally {
@@ -251,6 +272,32 @@ export function AnonymizedDocumentView(props: {
               >
                 Pobierz .txt dla modelu
               </button>
+              {props.uploadId && /\.docx$/i.test(props.filename) ? (
+                <button
+                  type="button"
+                  title="Oryginalny plik Word z symbolami zamiast danych: formatowanie, przypisy, komentarze, nagłówki i stopki zachowane; autorzy i metadane usunięte"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void anonymizedDocx(props.caseId, props.uploadId!, props.documentId)
+                      .then(async (file) => {
+                        const bytes = Uint8Array.from(atob(file.data), (c) => c.charCodeAt(0));
+                        const savedPath = await downloadBlob(new Blob([bytes], { type: file.mediaType }), file.filename);
+                        const media = file.warnings.find((warning) => warning.startsWith("MEDIA_NOT_ANONYMIZED:"));
+                        setStatus(
+                          [
+                            savedPath ? `Zapisano: ${savedPath}` : "Pobrano zanonimizowany .docx.",
+                            media ? `Uwaga: obrazy i osadzone obiekty (${media.split(":")[1]}) nie są anonimizowane - sprawdź je przed wysłaniem.` : ""
+                          ].filter(Boolean).join(" ")
+                        );
+                      })
+                      .catch((error) => setStatus(docxErrorText(error)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Pobierz zanonimizowany .docx
+                </button>
+              ) : null}
             </>
           ) : null}
           <button type="button" onClick={props.onClose}>Zamknij</button>
@@ -329,13 +376,55 @@ export function AnonymizedDocumentView(props: {
                 <small>
                   s. {chunk.pageStart}
                   {chunk.pageEnd !== chunk.pageStart ? `–${chunk.pageEnd}` : ""}
+                  {props.readOnly || editingChunk?.index === chunk.index ? null : (
+                    <button
+                      type="button"
+                      className="anonymized-edit-button"
+                      title="Popraw błąd odczytu albo zakryj ręcznie dane, których wykrywanie nie znalazło; symbole zostaw bez zmian"
+                      onClick={() => setEditingChunk({ index: chunk.index, text: chunk.text })}
+                    >
+                      Popraw tekst
+                    </button>
+                  )}
                 </small>
-                <p>
-                  {renderProtected(chunk.text, version.totalPages, (token) => {
-                    setHighlight(token);
-                    setTab("key");
-                  })}
-                </p>
+                {editingChunk?.index === chunk.index ? (
+                  <div className="anonymized-edit">
+                    <textarea
+                      aria-label={`Tekst fragmentu ze s. ${chunk.pageStart}`}
+                      value={editingChunk.text}
+                      rows={Math.min(24, Math.max(6, editingChunk.text.split("\n").length + 1))}
+                      onChange={(event) => setEditingChunk({ index: chunk.index, text: event.target.value })}
+                    />
+                    <div>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={busy || !editingChunk.text.trim()}
+                        onClick={() =>
+                          void apply(
+                            () => editAnonymizedText(props.caseId, props.documentId, chunk.index, editingChunk.text),
+                            () => {
+                              setEditingChunk(null);
+                              return "Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.";
+                            }
+                          )
+                        }
+                      >
+                        Zapisz poprawkę
+                      </button>
+                      <button type="button" onClick={() => setEditingChunk(null)}>
+                        Anuluj
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p>
+                    {renderProtected(chunk.text, version.totalPages, (token) => {
+                      setHighlight(token);
+                      setTab("key");
+                    })}
+                  </p>
+                )}
               </article>
             ))}
           </div>

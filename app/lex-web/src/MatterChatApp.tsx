@@ -34,8 +34,7 @@ import { HomeDashboard } from "./HomeDashboard.js";
 import {
   loadLastUsedModel,
   saveLastUsedModel,
-  shouldAutoStartLocalModel
-} from "./last-used-model.js";
+  shouldAutoStartLocalModel, loadProviderChannels, saveProviderChannels } from "./last-used-model.js";
 import {
   useEffect,
   useMemo,
@@ -199,7 +198,12 @@ import {
   modelsForPrimarySource,
   runtimeProviderForPrimarySource,
   shouldLoadPrimaryModelCatalog,
-  type PrimaryModelSource
+  type PrimaryModelSource,
+  PROVIDER_GROUPS,
+  preferredSourceForGroup,
+  providerGroupOf,
+  sourceForGroup,
+  type ProviderGroup
 } from "./primary-model-policy.js";
 import type {
   WorkspaceDocumentCitation
@@ -392,6 +396,10 @@ const ACCOUNT_MODEL_LABELS: Record<
   google:
     "Gemini CLI · model konta"
 };
+
+// The case summary button's message (the server adds the template and keeps the answer).
+const CASE_OVERVIEW_REQUEST =
+  "Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.";
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const KNOWN_EXECUTION_SKILLS = new Set([
@@ -1505,6 +1513,24 @@ export default function MatterChatApp({
   const [rememberedModel] = useState(() => loadLastUsedModel(user.userId));
   const [provider, setProvider] =
     useState<PrimaryModelSource>(rememberedModel?.provider ?? "local");
+  // The connection (account or API key) the user chose per provider, remembered on this device.
+  const [providerChannels, setProviderChannels] = useState<Partial<Record<ProviderGroup, "account" | "api">>>(() =>
+    loadProviderChannels(user.userId)
+  );
+  function rememberChannel(group: ProviderGroup, channel: "account" | "api"): void {
+    setProviderChannels((current) => {
+      const next = { ...current, [group]: channel };
+      saveProviderChannels(user.userId, next);
+      return next;
+    });
+  }
+  function sourceOfGroup(group: ProviderGroup): PrimaryModelSource {
+    if (group === "local") return "local";
+    return preferredSourceForGroup(group, providerChannels[group], {
+      accountConnected: providerAccounts[group]?.authenticated === true,
+      apiConfigured: providerConfiguration[group] === true
+    });
+  }
   const [providerConfiguration, setProviderConfiguration] = useState<
     Record<ProviderId, boolean | undefined>
   >({ openai: undefined, anthropic: undefined, xai: undefined, google: undefined });
@@ -4991,13 +5017,11 @@ export default function MatterChatApp({
             </div>
             <div className="chat-model-dock-controls">
               <select
-                aria-label="Źródło modelu głównego"
-                value={provider}
+                aria-label="Dostawca modelu głównego"
+                value={providerGroupOf(provider)}
                 disabled={executing}
                 onChange={(event) => {
-                  setProvider(
-                    event.target.value as PrimaryModelSource
-                  );
+                  setProvider(sourceOfGroup(event.target.value as ProviderGroup));
                   localAutoStartTried.current = true;
                   setProviderApiKeyInput("");
                   setProviderKeyMessage("");
@@ -5005,16 +5029,11 @@ export default function MatterChatApp({
                   setLocalStartMessage("");
                 }}
               >
-                {PRIMARY_MODEL_SOURCES.map(
-                  (item) => (
-                    <option
-                      key={item.id}
-                      value={item.id}
-                    >
-                      {item.label}
-                    </option>
-                  )
-                )}
+                {PROVIDER_GROUPS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
               </select>
               <select
                 aria-label="Model główny"
@@ -7130,6 +7149,9 @@ export default function MatterChatApp({
                 caseId={caseId}
                 canWrite={canWriteCase(selectedCase)}
                 refreshToken={memoryRefresh}
+                onRequestOverview={() => {
+                  if (!executing) void executeMessage(CASE_OVERVIEW_REQUEST);
+                }}
               />
             ) : null}
 
@@ -7269,67 +7291,64 @@ export default function MatterChatApp({
               </h2>
               <div className="chat-settings-field-grid">
               <label>
-                Źródło
+                Dostawca
                 <select
-                  value={provider}
+                  value={providerGroupOf(provider)}
                   onChange={(event) => {
-                    setProvider(
-                      event.target.value as PrimaryModelSource
-                    );
+                    setProvider(sourceOfGroup(event.target.value as ProviderGroup));
                     setProviderApiKeyInput("");
                     setProviderKeyMessage("");
                     setProviderAccountMessage("");
                   }}
                 >
-                  {PRIMARY_MODEL_SOURCES.map((item) => {
-                    const accountSource =
-                      isAccountPrimarySource(
-                        item.id
-                      );
-                    const itemProvider =
-                      runtimeProviderForPrimarySource(
-                        item.id
-                      );
-                    const account =
-                      accountSource
-                        ? providerAccounts[
-                            itemProvider
-                          ]
-                        : undefined;
-                    const apiReady =
-                      !accountSource &&
-                      item.id !== "local"
-                        ? providerConfiguration[
-                            itemProvider
-                          ]
-                        : undefined;
-                    const suffix =
-                      item.id === "local"
-                        ? " · bez klucza API"
-                        : accountSource
-                          ? account?.authenticated
-                            ? " · połączone"
-                            : account?.installed === false
-                              ? " · brak CLI"
-                              : account
-                                ? " · niezalogowane"
-                                : " · sprawdzanie"
-                          : apiReady === true
-                            ? " · API gotowe"
-                            : apiReady === false
-                              ? " · brak klucza"
-                              : " · sprawdzanie";
-                    return (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.label}{suffix}
-                      </option>
-                    );
-                  })}
+                  {PROVIDER_GROUPS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
                 </select>
               </label>
+              {provider !== "local" ? (
+                <fieldset className="chat-settings-channel">
+                  <legend>Połączenie</legend>
+                  {(["account", "api"] as const).map((channel) => {
+                    const group = providerGroupOf(provider) as ProviderId;
+                    const account = providerAccounts[group];
+                    const apiReady = providerConfiguration[group];
+                    const status =
+                      channel === "account"
+                        ? account?.authenticated
+                          ? "połączone"
+                          : account?.installed === false
+                            ? "brak klienta"
+                            : account
+                              ? "niezalogowane"
+                              : "sprawdzanie"
+                        : apiReady === true
+                          ? "klucz zapisany"
+                          : apiReady === false
+                            ? "brak klucza"
+                            : "sprawdzanie";
+                    return (
+                      <label key={channel} className="chat-settings-channel-option">
+                        <input
+                          type="radio"
+                          name="provider-channel"
+                          checked={(channel === "account") === isAccountPrimarySource(provider)}
+                          onChange={() => {
+                            rememberChannel(group, channel);
+                            setProvider(sourceForGroup(group, channel));
+                            setProviderApiKeyInput("");
+                            setProviderKeyMessage("");
+                            setProviderAccountMessage("");
+                          }}
+                        />
+                        {channel === "account" ? "Konto (logowanie, OAuth)" : "Klucz API"} · {status}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              ) : null}
               <label>
                 Model
                 <select
@@ -7689,7 +7708,7 @@ export default function MatterChatApp({
                 <>
                   {runtimeProvider === "anthropic" ? (
                     <p className="chat-inline-warning">
-                      Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth wybierz „Claude · konto / OAuth”.
+                      Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth zaznacz wyżej „Połączenie: Konto (logowanie, OAuth)”.
                     </p>
                   ) : null}
                   <input

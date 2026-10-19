@@ -89,8 +89,9 @@ export function expectedVerificationMarker(
 }
 
 // "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
+// "art. 187 § 1 pkt 3 KPC": the point belongs to the provision, so a marker never splits it.
 const ARTICLE_PATTERN = new RegExp(
-  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+pkt\\s*\\d+[a-z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
   "giu"
 );
 

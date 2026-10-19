@@ -30,6 +30,9 @@ const ERRORS: Record<string, string> = {
   GOOGLE_FLOW_NOT_FOUND: "Okno łączenia wygasło — spróbuj ponownie."
 };
 
+// Ukryte do czasu dostarczenia klienta OAuth wydawcy w instalatorze (logowanie kontem Google).
+export const GOOGLE_INTEGRATION_VISIBLE = false;
+
 export function googleErrorText(error: unknown): string {
   const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : String(error);
   return ERRORS[code] ?? code;

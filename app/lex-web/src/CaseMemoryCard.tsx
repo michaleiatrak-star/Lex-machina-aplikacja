@@ -1,4 +1,5 @@
 import { InfoTip } from "./InfoTip";
+import { MarkdownContent } from "./MarkdownContent.js";
 import { useEffect, useState } from "react";
 import {
   clearCaseMemory,
@@ -17,11 +18,14 @@ const date = (value: string | null) => (value ? new Date(value).toLocaleDateStri
 export function CaseMemoryCard({
   caseId,
   canWrite,
-  refreshToken
+  refreshToken,
+  onRequestOverview
 }: {
   caseId: string;
   canWrite: boolean;
   refreshToken: unknown;
+  // Sends the summary request to the chat (the answer is kept here).
+  onRequestOverview?: () => void;
 }) {
   const [memory, setMemory] = useState<CaseMemory | null>(null);
   const [draft, setDraft] = useState("");
@@ -50,6 +54,9 @@ export function CaseMemoryCard({
   const provisions = memory?.evidence?.provisions ?? [];
   const summary = memory?.summary ?? null;
   const chronology = memory?.chronology ?? null;
+  const overview = memory?.overview ?? null;
+  // "## SECTION" parts of the summary: each one a collapsible entry of its table of contents.
+  const overviewSections = overview ? overviewParts(overview.text) : [];
   const work = memory?.work ?? [];
 
   const run = async (work: () => Promise<void>, done: string) => {
@@ -75,9 +82,38 @@ export function CaseMemoryCard({
           </InfoTip>{" "}
           {provisions.length ? `${provisions.length} przepisów` : "bez przepisów"}
           {summary ? `, streszczenie ${summary.coveredMessages} wiadomości` : ""}
+          {overview ? ", podsumowanie" : ""}
           {chronology ? ", oś czasu" : ""}
           {work.length ? `, prace: ${work.filter((item) => item.status === "DONE").length} zamkniętych, ${work.filter((item) => item.status === "OPEN").length} otwartych` : ""}
         </summary>
+        <h3>
+          Podsumowanie sprawy
+          <InfoTip>
+            Metryka, dokumenty, podmioty, oś czasu, kwoty, fakty kluczowe, spory i braki z dokumentów sprawy. Kolejne odpowiedzi
+            zaczynają od niego; nowe podsumowanie zastępuje poprzednie.
+          </InfoTip>
+        </h3>
+        {overview ? (
+          <>
+            <p className="field-help">Stan z {date(overview.updatedAt)}.</p>
+            <div className="case-overview">
+              {overviewSections.map((part, index) => (
+                <details key={`${index}-${part.title}`} open={index === 0}>
+                  <summary>{part.title}</summary>
+                  <MarkdownContent content={part.body} renderText={(text) => text} />
+                </details>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="field-help">Brak. Utwórz je z dokumentów sprawy.</p>
+        )}
+        {canWrite && onRequestOverview ? (
+          <button type="button" className="chat-secondary-action" disabled={busy} onClick={onRequestOverview}>
+            {overview ? "Odśwież podsumowanie sprawy" : "Utwórz podsumowanie sprawy"}
+          </button>
+        ) : null}
+
         <h3>
           Streszczenie wcześniejszej części rozmowy
           <InfoTip>Zastępuje najstarsze wiadomości, które nie mieszczą się w oknie modelu.</InfoTip>
@@ -179,7 +215,7 @@ export function CaseMemoryCard({
           <p className="field-help">Skille użyte w sprawie: {memory.evidence.skills.join(", ")}</p>
         ) : null}
 
-        {canWrite && (summary || provisions.length || chronology || work.length) ? (
+        {canWrite && (summary || provisions.length || chronology || overview || work.length) ? (
           <button
             type="button"
             className="chat-secondary-action"
@@ -187,7 +223,7 @@ export function CaseMemoryCard({
             onClick={() =>
               void run(async () => {
                 await clearCaseMemory(caseId);
-                setMemory({ summary: null, evidence: null, chronology: null, work: [] });
+                setMemory({ summary: null, evidence: null, chronology: null, overview: null, work: [] });
                 setDraft("");
               }, "Pamięć sprawy wyczyszczona.")
             }
@@ -199,4 +235,21 @@ export function CaseMemoryCard({
       </details>
     </article>
   );
+}
+
+/** The summary split at its "## " headings (text before the first one goes under "Podsumowanie"). */
+export function overviewParts(text: string): Array<{ title: string; body: string }> {
+  const parts: Array<{ title: string; body: string }> = [];
+  let current = { title: "Podsumowanie", body: "" };
+  for (const line of text.split("\n")) {
+    const heading = /^##\s+(.+?)\s*$/u.exec(line);
+    if (heading) {
+      if (current.body.trim()) parts.push({ ...current, body: current.body.trim() });
+      current = { title: heading[1]!.replace(/\s+—.*$/u, ""), body: "" };
+    } else if (!/^#\s+/u.test(line)) {
+      current.body += `${line}\n`;
+    }
+  }
+  if (current.body.trim()) parts.push({ ...current, body: current.body.trim() });
+  return parts;
 }

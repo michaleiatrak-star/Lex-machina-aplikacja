@@ -1215,3 +1215,65 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Anonymized version: a fragment corrected by hand. */
+.anonymized-edit-button {
+  margin-left: 8px;
+  font-size: 0.85em;
+}
+.anonymized-edit {
+  display: grid;
+  gap: 6px;
+}
+.anonymized-edit textarea {
+  width: 100%;
+  font: inherit;
+}
+.anonymized-edit > div {
+  display: flex;
+  gap: 8px;
+}
+
+/* Original (left) and anonymized version (right) of one document. */
+.workspace-side-by-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.workspace-side-by-side > .workspace-preview {
+  min-width: 0;
+  max-height: 80vh;
+  overflow: auto;
+}
+@media (max-width: 1100px) {
+  .workspace-side-by-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.workspace-preview-stack {
+  display: contents;
+}
+
+/* Case summary: one collapsible entry per section (its table of contents). */
+.case-overview {
+  display: grid;
+  gap: 4px;
+}
+.case-overview > details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.case-overview table {
+  display: block;
+  overflow-x: auto;
+}
+.workspace-side-by-side .workspace-preview-head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-side-by-side .workspace-preview-head > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

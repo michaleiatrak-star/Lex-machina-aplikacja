@@ -61,6 +61,7 @@ jobs:
     uses: ./.github/workflows/macos-installer.yml
     with:
       asset_name: Lex-Machina-${{ needs.version.outputs.version }}-macOS-arm64-Online.pkg
+    secrets: inherit
 
   runtime:
     uses: ./.github/workflows/lex-runtime.yml

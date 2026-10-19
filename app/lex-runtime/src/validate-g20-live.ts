@@ -145,8 +145,9 @@ const pass =
   /\bArt\.?\s+190a\b/iu.test(
     kkEvidence
   ) &&
-  kkSourceUrl.includes(
-    "/DU/2025/383/"
+  // The in-force t.j. of KK per ELI (it changes: 2025/383 -> 2026/1342), not a fixed number.
+  /^https:\/\/api\.sejm\.gov\.pl\/eli\/acts\/DU\/\d{4}\/\d+\/text\.(?:html|pdf)/u.test(
+    kkSourceUrl
   );
 
 process.stdout.write(

@@ -54,6 +54,8 @@ jobs:
           rustc --version
 
       - name: Build .app and .pkg
+        env:
+          LEX_GOOGLE_OAUTH_CLIENT_JSON: ${{ secrets.LEX_GOOGLE_OAUTH_CLIENT_JSON }}
         run: bash app/installer/build-macos-online.sh "$RUNNER_TEMP/$ASSET_NAME"
 
       - name: Install the .pkg (online bootstrap as the logged-in user)

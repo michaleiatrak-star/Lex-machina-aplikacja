@@ -55,7 +55,10 @@ export const OFFICIAL_LEGAL_SOURCE_HOSTS = [
   "nsa.gov.pl",
   "orzeczenia.nsa.gov.pl",
   "sn.pl",
-  "www.sn.pl"
+  "www.sn.pl",
+  // Monitor Polski: official journal, R1 like Dziennik Ustaw (ELI serves it as MP/...).
+  "monitorpolski.gov.pl",
+  "www.monitorpolski.gov.pl"
 ] as const;
 
 const OFFICIAL_SOURCE_HOSTS = new Set<string>([
