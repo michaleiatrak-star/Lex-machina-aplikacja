@@ -3248,3 +3248,10 @@ mark.restored {
   gap: 6px;
   font-weight: normal;
 }
+.chat-settings-channel-option input[type="radio"] {
+  width: auto;
+  min-height: 0;
+  height: auto;
+  margin: 0;
+  padding: 0;
+}

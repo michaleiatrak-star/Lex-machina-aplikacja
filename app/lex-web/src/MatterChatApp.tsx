@@ -7708,7 +7708,7 @@ export default function MatterChatApp({
                 <>
                   {runtimeProvider === "anthropic" ? (
                     <p className="chat-inline-warning">
-                      Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth wybierz „Claude · konto / OAuth”.
+                      Ten kanał używa klucza Anthropic API. Dla Claude Code/OAuth zaznacz wyżej „Połączenie: Konto (logowanie, OAuth)”.
                     </p>
                   ) : null}
                   <input

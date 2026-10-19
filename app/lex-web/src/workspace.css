@@ -1268,3 +1268,12 @@
   display: block;
   overflow-x: auto;
 }
+.workspace-side-by-side .workspace-preview-head {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-side-by-side .workspace-preview-head > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
