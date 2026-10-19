@@ -268,9 +268,11 @@ import {
   type ContractExecutionPermit
 } from "../contract-analysis-execution-gate.js";
 import type { GoogleRecoveryController } from "../google/recovery-controller.js";
+import type { GoogleWorkspaceController } from "../google/workspace-controller.js";
 import {
   registerGoogleAuthenticatedRoutes,
-  registerGooglePublicRoutes
+  registerGooglePublicRoutes,
+  registerGoogleWorkspaceRoutes
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
@@ -617,6 +619,7 @@ export type LexHttpAppOptions = {
   >;
   authService?: AuthService;
   googleRecovery?: GoogleRecoveryController;
+  googleWorkspace?: GoogleWorkspaceController;
   supportService?: Pick<
     LocalSupportService,
     | "status"
@@ -2607,7 +2610,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   if (options.googleRecovery) {
     registerGooglePublicRoutes(
       app,
-      options.googleRecovery
+      options.googleRecovery,
+      options.googleWorkspace
     );
   }
 
@@ -2860,6 +2864,46 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         app,
         options.googleRecovery,
         responseAuthContext
+      );
+    }
+
+    if (
+      options.googleWorkspace &&
+      options.caseAccessService &&
+      options.secureCaseUploadStore
+    ) {
+      const access = options.caseAccessService;
+      const store = options.secureCaseUploadStore;
+      registerGoogleWorkspaceRoutes(
+        app,
+        options.googleWorkspace,
+        responseAuthContext,
+        async (context, caseId, files) => {
+          access.assertAccess(context, caseId, "WRITE");
+          const caseView = access.openCase(context, caseId);
+          return await access.withCaseDataKey(
+            context,
+            caseId,
+            "WRITE",
+            async (caseDataKey) => {
+              const stored: StoredUpload[] = [];
+              for (const file of files) {
+                stored.push(
+                  await store.saveUpload({
+                    caseId,
+                    filename: file.filename,
+                    mediaType: file.mediaType,
+                    data: file.data,
+                    caseDataKey,
+                    keyVersion: caseView.keyVersion
+                  })
+                );
+              }
+              return stored;
+            }
+          );
+        },
+        sendCaseAccessError
       );
     }
 

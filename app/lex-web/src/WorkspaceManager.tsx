@@ -1,4 +1,5 @@
 import { InfoTip } from "./InfoTip";
+import { GoogleImportDialog } from "./GoogleIntegrationPanel.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
@@ -441,6 +442,7 @@ export function WorkspaceManager({
 
   // "Od razu do kolejki": files added in a group are read one after another without a click.
   const [autoQueue, setAutoQueue] = useState(false);
+  const [googleImport, setGoogleImport] = useState(false);
   const pendingAutoQueue = useRef(new Set<string>());
   useEffect(() => {
     if (!workspace || !pendingAutoQueue.current.size) return;
@@ -484,6 +486,16 @@ export function WorkspaceManager({
           : `Dodano ${files.length} plik(ów) do akt sprawy.`
       );
     });
+  }
+
+  // Files from Gmail or Drive: stored by the runtime, then the same path as added files.
+  async function addImported(uploadIds: string[]): Promise<void> {
+    for (const uploadId of uploadIds) {
+      if (autoQueue) pendingAutoQueue.current.add(uploadId);
+      if (selectedFolder) await moveWorkspaceItem(caseId, uploadId, selectedFolder);
+    }
+    setNotice(`Dodano ${uploadIds.length} plik(ów) z Google do akt sprawy${autoQueue ? " i do kolejki przetwarzania" : ""}.`);
+    await refresh();
   }
 
   // The models a mode needs: the vision model (OCR with AI) and an installed text model (anonymization with AI).
@@ -1156,6 +1168,14 @@ export function WorkspaceManager({
                 }}
               />
             </label>
+          ) : null}
+          {canWrite ? (
+            <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setGoogleImport(true)}>
+              Importuj z Google
+            </button>
+          ) : null}
+          {googleImport ? (
+            <GoogleImportDialog caseId={caseId} onImported={addImported} onClose={() => setGoogleImport(false)} />
           ) : null}
           {canWrite && (unprocessed.length > 1 || (queueActive && unprocessed.length > 0)) ? (
             <span>

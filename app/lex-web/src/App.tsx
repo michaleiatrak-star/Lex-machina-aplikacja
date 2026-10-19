@@ -7,6 +7,7 @@ import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
+import { GoogleIntegrationPanel } from "./GoogleIntegrationPanel.js";
 import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
 import type {
   AuthMeResponse,
@@ -65,6 +66,7 @@ export default function App({
               />
             </>
           ) : null,
+        integrations: <GoogleIntegrationPanel />,
         mcp:
           user.appRole ===
           "ADMIN" ? (

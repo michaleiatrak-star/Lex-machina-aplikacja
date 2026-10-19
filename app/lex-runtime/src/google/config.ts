@@ -20,7 +20,8 @@ export const GOOGLE_CALLBACK_PATH =
   "/oauth/google/callback";
 
 // Narrowest scope per feature. Each optional service gets its own consent
-// and its own token; only "identity" and "recoveryEscrow" are used today.
+// and its own token: "identity" and "recoveryEscrow" for password recovery,
+// "identity", "gmailRead" and "driveRead" for the connected account (workspace-controller.ts).
 export const GOOGLE_SCOPES = {
   identity: ["openid", "email"],
   recoveryEscrow: [
@@ -28,6 +29,10 @@ export const GOOGLE_SCOPES = {
   ],
   drive: [
     "https://www.googleapis.com/auth/drive.file"
+  ],
+  // Read-only: the user's folders and files picked for a case (Dysk Google).
+  driveRead: [
+    "https://www.googleapis.com/auth/drive.readonly"
   ],
   gmailRead: [
     "https://www.googleapis.com/auth/gmail.readonly"

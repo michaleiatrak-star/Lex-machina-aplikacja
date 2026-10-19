@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
+import { GoogleWorkspaceController } from "../google/workspace-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
@@ -717,6 +718,8 @@ export async function startLocalServer(options?: {
     // Off until a Google OAuth client is configured (see google/config.ts).
     googleRecovery:
       new GoogleRecoveryController(authService),
+    googleWorkspace:
+      new GoogleWorkspaceController(authService, caseFileStore.rootDir),
     personMorphology,
     modelCatalog,
     credentialResolver: credentials,
