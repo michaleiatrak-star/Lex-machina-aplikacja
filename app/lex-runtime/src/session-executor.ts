@@ -13,6 +13,7 @@ import type { MatterComplexity } from "./matter-complexity.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import {
   evaluateStatusConsistency,
+  unifyConflictingProvisions,
   reconcileStatusMarkers,
   stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
@@ -3753,11 +3754,14 @@ export class SafeSessionExecutor implements SessionExecutor {
         markedAnswer.text,
         ledger
       );
+    // A conflict the registry does not settle: the provision is shown ⚠️ everywhere (a
+    // draft with it marked), never ✅ in one place and ⚠️ in another, and never a blocked turn.
+    const unifiedStatus = unifyConflictingProvisions(statusReconciliation.text, ledger);
     const processedDocumentCitations =
-      statusReconciliation.repaired > 0
+      statusReconciliation.repaired > 0 || unifiedStatus.unified.length > 0
         ? {
             ...markedAnswer,
-            text: statusReconciliation.text
+            text: unifiedStatus.text
           }
         : markedAnswer;
     const statusConsistency =
@@ -3777,6 +3781,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       {
         repairedMarkers:
           statusReconciliation.repaired,
+        unifiedUnverified:
+          unifiedStatus.unified,
         provisions:
           statusConsistency.provisions.length,
         findings:
