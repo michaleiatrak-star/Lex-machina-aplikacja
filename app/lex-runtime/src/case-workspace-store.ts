@@ -4,6 +4,7 @@ import { type AnswerCorrection, validAnswerCorrections } from "./answer-correcti
 import { validThreadEvidence, type ThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary, type ThreadSummary } from "./thread-summary.js";
 import { validCaseChronology, type CaseChronology } from "./case-chronology.js";
+import { validCaseOverview, type CaseOverview } from "./case-overview.js";
 import { validCaseWork, type CaseWorkItem } from "./case-work.js";
 import { validLongDocument, type LongDocumentState } from "./long-document.js";
 import { validAnswerDocument, type AnswerDocument } from "./answer-document.js";
@@ -138,6 +139,8 @@ export type CaseMemory = {
   summary?: ThreadSummary;
   // The case's timeline from its last chronology (case-chronology.ts).
   chronology?: CaseChronology;
+  // The case summary made on the user's request (case-overview.ts).
+  overview?: CaseOverview;
   // Work done and open in the case (case-work.ts).
   work?: CaseWorkItem[];
   // A long letter written in parts: its plan and the parts written so far (long-document.ts).
@@ -1246,6 +1249,7 @@ export class EncryptedCaseWorkspaceStore {
     const evidence = validThreadEvidence(index.memory?.evidence);
     const summary = validThreadSummary(index.memory?.summary);
     const chronology = validCaseChronology(index.memory?.chronology);
+    const overview = validCaseOverview(index.memory?.overview);
     const work = validCaseWork(index.memory?.work);
     const longDocument = validLongDocument(index.memory?.longDocument);
     const court = validCaseCourt(index.memory?.court);
@@ -1258,6 +1262,7 @@ export class EncryptedCaseWorkspaceStore {
       ...(evidence ? { evidence } : {}),
       ...(summary ? { summary } : {}),
       ...(chronology ? { chronology } : {}),
+      ...(overview ? { overview } : {}),
       threadMessages: index.thread.messages.map((message) => ({ ...message }))
     };
   }
@@ -1270,6 +1275,7 @@ export class EncryptedCaseWorkspaceStore {
     evidence?: ThreadEvidence | null;
     summary?: ThreadSummary | null;
     chronology?: CaseChronology | null;
+    overview?: CaseOverview | null;
     work?: CaseWorkItem[] | null;
     longDocument?: LongDocumentState | null;
     court?: CaseCourt | null;
@@ -1294,6 +1300,12 @@ export class EncryptedCaseWorkspaceStore {
       if (args.chronology !== null && !chronology) throw new Error("CASE_MEMORY_CHRONOLOGY_INVALID");
       if (chronology) memory.chronology = chronology;
       else delete memory.chronology;
+    }
+    if (args.overview !== undefined) {
+      const overview = args.overview === null ? null : validCaseOverview(args.overview);
+      if (args.overview !== null && !overview) throw new Error("CASE_MEMORY_OVERVIEW_INVALID");
+      if (overview) memory.overview = overview;
+      else delete memory.overview;
     }
     if (args.work !== undefined) {
       const work = args.work === null ? null : validCaseWork(args.work);

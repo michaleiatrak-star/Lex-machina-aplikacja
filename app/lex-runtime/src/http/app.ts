@@ -276,6 +276,7 @@ import {
   registerGoogleWorkspaceRoutes
 } from "../google/http-routes.js";
 import { chronologyBlock, chronologyFromAnswer, queryWithChronology } from "../case-chronology.js";
+import { overviewBlock, overviewFromAnswer, overviewRequested, queryWithOverviewTemplate } from "../case-overview.js";
 import { caseWorkBlock, caseWorkLine, recordCaseWork, turnIssues, type CaseWorkItem } from "../case-work.js";
 import { addresseeCourt, courtOfCaseDocuments, type CaseCourt } from "../courts/case-court.js";
 import { checkPart, continuationBlock, isComplete, joinParts, latestUserMessage, namesDocumentPart, nextPart, parsePart, presentPart, requestedPart, withPart, type LongDocumentState } from "../long-document.js";
@@ -3828,6 +3829,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       res.json({
         summary: memory.summary ?? null,
         chronology: memory.chronology ? { text: memory.chronology.text, updatedAt: memory.chronology.updatedAt, source: memory.chronology.source } : null,
+        overview: memory.overview ? { text: memory.overview.text, updatedAt: memory.overview.updatedAt } : null,
         work: (memory.work ?? []).map((item) => ({ ...item, line: caseWorkLine(item) })),
         evidence: memory.evidence
           ? {
@@ -3885,7 +3887,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     }
     try {
       await withCaseMemory(res, String(req.params.caseId ?? ""), "WRITE", (key) =>
-        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, work: null, answerDocument: null })
+        options.caseMemoryStore!.saveCaseMemory({ ...key, evidence: null, summary: null, chronology: null, overview: null, work: null, answerDocument: null })
       );
       res.json({ cleared: true });
     } catch (error) {
@@ -9996,6 +9998,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
       let threadEvidence: ThreadEvidence | null = null;
       let caseWork: CaseWorkItem[] = [];
+      // The user asked for the case summary (button): the template goes with the request, the
+      // answer is kept in the case memory.
+      const overviewAsked = overviewRequested(request.query);
+      if (overviewAsked) request.query = queryWithOverviewTemplate(request.query);
       if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
         try {
           const actor = responseAuthContext(res);
@@ -10014,12 +10020,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           // What the case already has: the register of work done and open, and the timeline
           // of its chronology (a part of the larger work). Later turns use them, not redo them.
           const timeline = memory.chronology ? chronologyBlock(memory.chronology, request.query) : null;
+          const overview = memory.overview && !overviewAsked ? overviewBlock(memory.overview, request.query) : null;
           // The dates the model got with the timeline: the executor checks the answer uses them
           // (an API model keeps nothing between calls; the application gives and supervises it).
           if (memory.chronology) request.caseTimelineDates = [...isoDates(memory.chronology.text)].slice(0, 500);
           const register = caseWorkBlock(caseWork);
-          if (timeline || register) {
-            request.query = queryWithChronology(request.query, [register, timeline].filter(Boolean).join("\n\n"));
+          if (timeline || register || overview) {
+            request.query = queryWithChronology(request.query, [register, overview, timeline].filter(Boolean).join("\n\n"));
             request.onStep?.(
               "PREPARE",
               [register ? `rejestr prac sprawy (${caseWork.length})` : "", timeline ? `oś czasu z ${memory.chronology!.updatedAt.slice(0, 10)}` : ""].filter(Boolean).join(", ")
@@ -12199,6 +12206,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               sessionId: result.sessionId
             })
           : null;
+      const overviewToKeep =
+        knowledge.caseId && options.caseMemoryStore && options.caseAccessService
+          ? overviewFromAnswer({ answer: result.answer, status: result.status, requested: overviewAsked, sessionId: result.sessionId })
+          : null;
       // The register of the case's work: documents analysed (pages), the chronology, workflows done.
       const completedWorkflows = [
         result.courtWorkflow?.stage === "COMPLETE" ? "COURT_ANALYSIS_V1" : null,
@@ -12225,7 +12236,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               item.status === "OPEN" &&
               (issues.resolved.includes(item.key.slice("ISSUE:".length)) || (issues.gapsListed && item.key.startsWith("ISSUE:brak:")))
           ));
-      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || workChanged)) {
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || overviewToKeep || workChanged)) {
         try {
           const actor = responseAuthContext(res);
           const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
@@ -12236,6 +12247,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             await options.caseMemoryStore!.saveCaseMemory({
               ...key,
               ...(timelineToKeep ? { chronology: timelineToKeep } : {}),
+              ...(overviewToKeep ? { overview: overviewToKeep } : {}),
               ...(workChanged
                 ? {
                     work: recordCaseWork(current.work ?? caseWork, {

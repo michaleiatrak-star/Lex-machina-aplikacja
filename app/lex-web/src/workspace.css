@@ -1254,3 +1254,17 @@
 .workspace-preview-stack {
   display: contents;
 }
+
+/* Case summary: one collapsible entry per section (its table of contents). */
+.case-overview {
+  display: grid;
+  gap: 4px;
+}
+.case-overview > details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.case-overview table {
+  display: block;
+  overflow-x: auto;
+}

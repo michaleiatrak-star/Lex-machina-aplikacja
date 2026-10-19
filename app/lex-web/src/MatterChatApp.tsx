@@ -398,6 +398,10 @@ const ACCOUNT_MODEL_LABELS: Record<
     "Gemini CLI · model konta"
 };
 
+// The case summary button's message (the server adds the template and keeps the answer).
+const CASE_OVERVIEW_REQUEST =
+  "Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.";
+
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
 const KNOWN_EXECUTION_SKILLS = new Set([
   "analiza-sadowa-v6",
@@ -7155,6 +7159,9 @@ export default function MatterChatApp({
                 caseId={caseId}
                 canWrite={canWriteCase(selectedCase)}
                 refreshToken={memoryRefresh}
+                onRequestOverview={() => {
+                  if (!executing) void executeMessage(CASE_OVERVIEW_REQUEST);
+                }}
               />
             ) : null}
 

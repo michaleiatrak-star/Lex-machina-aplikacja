@@ -1896,6 +1896,8 @@ export type CaseMemory = {
   summary: CaseThreadSummary | null;
   // The case's timeline from its last chronology; later answers in the case start from it.
   chronology?: { text: string; updatedAt: string; source: "CHRONOLOGY_V1" | "AUTO" } | null;
+  // The case summary made on the user's request (parties, documents, timeline, key facts, gaps).
+  overview?: { text: string; updatedAt: string } | null;
   // Work done and open in the case (the application's register): later answers use it.
   work?: Array<{ key: string; kind: string; label: string; status: "DONE" | "OPEN"; at: string; line: string }>;
   evidence: {
