@@ -34,8 +34,7 @@ import { HomeDashboard } from "./HomeDashboard.js";
 import {
   loadLastUsedModel,
   saveLastUsedModel,
-  shouldAutoStartLocalModel
-} from "./last-used-model.js";
+  shouldAutoStartLocalModel, loadProviderChannels, saveProviderChannels } from "./last-used-model.js";
 import {
   useEffect,
   useMemo,
@@ -1515,22 +1514,13 @@ export default function MatterChatApp({
   const [provider, setProvider] =
     useState<PrimaryModelSource>(rememberedModel?.provider ?? "local");
   // The connection (account or API key) the user chose per provider, remembered on this device.
-  const channelKey = `lex.providerChannel.${user.userId}`;
-  const [providerChannels, setProviderChannels] = useState<Partial<Record<ProviderGroup, "account" | "api">>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(channelKey) ?? "{}") as Partial<Record<ProviderGroup, "account" | "api">>;
-    } catch {
-      return {};
-    }
-  });
+  const [providerChannels, setProviderChannels] = useState<Partial<Record<ProviderGroup, "account" | "api">>>(() =>
+    loadProviderChannels(user.userId)
+  );
   function rememberChannel(group: ProviderGroup, channel: "account" | "api"): void {
     setProviderChannels((current) => {
       const next = { ...current, [group]: channel };
-      try {
-        localStorage.setItem(channelKey, JSON.stringify(next));
-      } catch {
-        // Private mode: the choice lasts for this session only.
-      }
+      saveProviderChannels(user.userId, next);
       return next;
     });
   }
