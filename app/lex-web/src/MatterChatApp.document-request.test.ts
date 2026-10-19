@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded } from "./MatterChatApp.js";
+import { directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded, refersToLastAnswer } from "./MatterChatApp.js";
 
 describe("rozpoznanie prośby o plik pisma", () => {
   it("doc, docx, Word i „plik” z czasownikiem to generowanie .docx", () => {
@@ -120,5 +120,29 @@ describe("szkic i gotowy dokument po cyklu pisma", () => {
   it("zwykła odpowiedź albo zablokowana sesja nie tworzy pliku", () => {
     expect(letterDocumentPlan({ ...base, workflow: { id: "LEGAL_QUERY_V1", result: "PASS", requiredResources: [], missingResources: [] } } as never)).toBeNull();
     expect(letterDocumentPlan({ ...base, status: "BLOCKED", workflow: { id: "SIMPLE_LETTER_V1" } } as never)).toBeNull();
+  });
+});
+
+describe("plik z odpowiedzi, która sama jest pismem (bez tury modelu)", () => {
+  it("„ok daj mi pismo” i „wygeneruj to w docx” to plik ostatniego pisma; nowe pismo nie", () => {
+    for (const text of ["ok daj mi pismo", "daj mi pismo", "wygeneruj to w pliku docx", "Pobierz gotowe pismo", "zapisz powyższe jako plik"]) {
+      expect(refersToLastAnswer(text)).toBe(true);
+    }
+    for (const text of ["Przygotuj pismo do pracodawcy", "Napisz wezwanie do zapłaty", "daj mi nowe pismo"]) {
+      expect(refersToLastAnswer(text)).toBe(false);
+    }
+  });
+
+  it("pismo zachowane przez serwer (answerDocument) daje plan mechaniczny, nawet gdy pismo kończy się samym podpisem", () => {
+    const result = {
+      status: "DRAFT_PRESENTABLE",
+      answer: "ODPOWIEDŹ NA WEZWANIE\n\nTreść pisma.\n\nJan Kowalski",
+      taskSkill: "pisma-proste-v2",
+      finalization: "PASS",
+      verification: { records: 1, verified: 1, supported: 0, unverified: 0 },
+      answerDocument: { sessionId: "session-1" }
+    };
+    expect(letterDocumentPlan(result as never)).toEqual({ documentType: "letter", stage: "FINAL", source: "ANSWER", answerSessionId: "session-1" });
+    expect(letterDocumentPlan({ ...result, answer: result.answer + " [UZUPEŁNIJ]" } as never)).toMatchObject({ stage: "DRAFT", source: "ANSWER" });
   });
 });

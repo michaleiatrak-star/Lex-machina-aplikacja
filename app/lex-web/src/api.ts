@@ -1052,6 +1052,8 @@ export type SessionExecutionResponse = {
   // What the application's correcting rounds removed from the answer, and why.
   corrections?: AnswerCorrection[];
   mandatoryPath?: MandatoryPathView;
+  // The answer is itself a letter kept in the case: its file is made from it mechanically.
+  answerDocument?: { sessionId: string };
   // A part of a long letter written in parts: checked against its plan and the parts before it.
   longDocument?: { id: string; title: string; part: number; parts: number; ok: boolean; problems: string[]; complete: boolean; next: number | null };
   // Next skill of the pipeline (ACTIVATION-MATRIX).
@@ -2397,8 +2399,10 @@ export function generateLegalDocument(
     filename?: string;
     // Save a draft naming its unverified references (user's decision).
     acceptUnverified?: boolean;
-    // The user's own pleading corrected in the chat (MOD-REDAKCJA), not the W1–W3 pipeline.
-    source?: "REDACTION";
+    // The user's own pleading corrected in the chat (MOD-REDAKCJA), not the W1–W3 pipeline;
+    // ANSWER: the letter of an answer kept in the case, made into the file mechanically.
+    source?: "REDACTION" | "ANSWER";
+    answerSessionId?: string;
     // A long letter written in parts in the chat: the file renders its joined parts.
     longDocumentId?: string;
   }

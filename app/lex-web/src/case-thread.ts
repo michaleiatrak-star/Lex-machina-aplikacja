@@ -38,6 +38,8 @@ export type CaseChatMessage = {
   documentCitations?: WorkspaceDocumentCitation[];
   restorations?: RestorationMark[];
   generatedDocument?: GeneratedDocumentRef;
+  // The answer is itself a letter kept in the case: "Pobierz .docx" makes its file mechanically.
+  answerDocument?: { sessionId: string };
   widgets?: ChatWidget[];
   // Ramka weryfikacji sn.pl (tylko bieżąca odpowiedź; nie jest zapisywana w wątku).
   sourceVerification?: { source: "sn"; url: string };
@@ -75,6 +77,7 @@ function fromStored(message: WorkspaceThreadMessage): CaseChatMessage {
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
     ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(message.answerDocument ? { answerDocument: message.answerDocument } : {}),
     ...(message.corrections?.length ? { corrections: message.corrections } : {})
   };
 }
@@ -102,6 +105,7 @@ function toStored(message: CaseChatMessage): WorkspaceThreadMessage {
     ...(message.pipelineNext ? { pipelineNext: message.pipelineNext } : {}),
     ...(message.documentCoverage?.length ? { documentCoverage: message.documentCoverage } : {}),
     ...(message.documentAnalysis ? { documentAnalysis: true } : {}),
+    ...(message.answerDocument ? { answerDocument: message.answerDocument } : {}),
     ...(message.corrections?.length ? { corrections: message.corrections } : {})
   };
 }

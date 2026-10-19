@@ -129,6 +129,9 @@ const DETECTORS = [
         validate: validNip
     },
     { kind: "REGON", regex: /(?<![\d-])(?:\d{9}|\d{14})(?![\d-])/g, validate: validRegon },
+    // After its label a REGON is masked also when its check digit fails (a typo in the
+    // document, an OCR misreading): "REGON: 284106330" next to the register's 384106330.
+    { kind: "REGON", regex: /\bREGON\s*(?:nr\.?|numer)?\s*:?\s*(\d{9}|\d{14})(?!\d)/g, group: 1 },
     {
         kind: "IBAN",
         regex: /(?<![\w])(?:[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){2,7}(?:[ -]?[A-Z0-9]{1,4})?|\d{2}(?:[ -]?\d{4}){6})(?![\w])/g,
@@ -161,6 +164,9 @@ const DETECTORS = [
     { kind: "LAND_REGISTRY", regex: /(?<![\w])[A-Z]{2}\d[A-Z]\/\d{8}\/\d(?![\w])/g, validate: validLandRegistry },
     // "KRS 0000 297714": the number is also written split after the leading zeros.
     { kind: "KRS", regex: /\bKRS\s*(?:nr\.?|numer)?\s*:?\s*(\d{10}|\d{4}\s\d{6})(?!\d)/g, group: 1 },
+    // "wpisana do rejestru przedsiębiorców ... pod numerem 0000796445": a KRS number without
+    // its label (ten digits, leading zeros).
+    { kind: "KRS", regex: /\bpod\s+(?:nr\.?|numerem)\s*:?\s*(000\d{7})(?!\d)/giu, group: 1 },
     // Bar and chamber register numbers identify an advocate or legal adviser: "KAT/ADW/544",
     // "WAW/Adw/8925", "KR/RP/1234"; a bare "KAT 2575" only after the chamber (ORA, OIRP).
     { kind: "BAR_NUMBER", regex: /(?<![\w/])[A-Z]{2,4}\/(?:ADW|Adw|adw|RP|Rp|rp|R|AP)\/\d{1,6}(?![\w/])/g },

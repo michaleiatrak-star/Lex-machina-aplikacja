@@ -128,9 +128,32 @@ function normalizeInlines(value: unknown): unknown {
   return value;
 }
 
+// Inline types of other formats (Markdown, HTML, rich text) for the same text: emphasis, a
+// link, a line break. Only the wording goes to the file; bold stays bold.
+const BOLD_INLINES = new Set(["strong", "bold", "b"]);
+const TEXT_INLINES = new Set(["em", "emphasis", "italic", "i", "u", "underline", "span", "run", "plain", "string", "link", "url", "code", "inline_code"]);
+const BREAK_INLINES = new Set(["line_break", "linebreak", "break", "br", "newline", "soft_break", "hard_break"]);
+
+function inlineText(node: AstRecord): string | null {
+  for (const key of ["text", "label", "value"]) if (typeof node[key] === "string") return node[key] as string;
+  const content = node.content ?? node.children ?? node.inlines;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts = content.map((item) => (typeof item === "string" ? item : isRecord(item) ? inlineText(normalizeInline(item)) : null));
+    return parts.every((part): part is string => part !== null) ? parts.join("") : null;
+  }
+  return null;
+}
+
 function normalizeInline(node: AstRecord): AstRecord {
   if (node.type === undefined && typeof node.text === "string") {
     return { ...node, type: "text" };
+  }
+  const type = typeof node.type === "string" ? node.type.toLowerCase() : "";
+  if (BREAK_INLINES.has(type)) return { type: "text", text: "\n" };
+  if (BOLD_INLINES.has(type) || TEXT_INLINES.has(type)) {
+    const text = inlineText(node);
+    if (text !== null) return { type: "text", text, ...(BOLD_INLINES.has(type) || node.bold === true ? { bold: true } : {}) };
   }
   return node;
 }
@@ -156,9 +179,17 @@ function normalizeBlock(value: unknown, depth = 0): unknown {
     ? { ...value, type: alias.type, ...(alias.level && value.level === undefined ? { level: alias.level } : {}) }
     : { ...value };
   if (typeof block.type === "string" && INLINE_BLOCKS.has(block.type)) {
-    const content =
-      block.content ?? block.text ?? block.inlines ?? block.children;
+    // A block with both "content" and "inlines" (seen: AST_INLINE_TYPE_UNSUPPORTED): the list
+    // whose items are inline nodes, not the one that repeats the block or nests blocks.
+    const candidates = [block.content, block.text, block.inlines, block.children].filter((item) => item !== undefined);
+    const inlineOnly = (value: unknown) => {
+      const list = normalizeInlines(value);
+      return Array.isArray(list) && list.length > 0 && list.every((item) => isRecord(item) && ["text", "pii_ref", "xref"].includes(String(item.type)));
+    };
+    const content = candidates.find(inlineOnly) ?? candidates[0];
     block.content = normalizeInlines(content);
+    delete block.inlines;
+    delete block.children;
     if (block.type === "heading") {
       const level = Number(block.level ?? 1);
       block.level = Number.isInteger(level) ? Math.min(3, Math.max(1, level)) : 1;

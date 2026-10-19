@@ -919,6 +919,9 @@ export type SessionExecutionResponse = {
   courtCheck?: { unverified: string[] };
   // The court of the case the turn used or saved (http/app.ts, case memory).
   caseCourt?: { nazwa: string; zrodlo: "AKTA" | "PISMO"; sygnatura?: string };
+  // The answer is itself a letter kept with its session's trail: "Generuj dokument" makes its
+  // file from this text mechanically (answer-document.ts), with no model turn.
+  answerDocument?: { sessionId: string };
   // A long letter written in parts (long-document.ts): this answer's part and its check.
   longDocument?: {
     id: string;

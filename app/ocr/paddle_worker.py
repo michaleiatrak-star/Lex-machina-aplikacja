@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+import unicodedata
 import os
 from pathlib import Path
 
@@ -267,6 +268,11 @@ FOLD_LINE_RECT = 1.35  # rotated rectangle height / line thickness
 FOLD_LINE_BOW = 0.35  # midline off its straight fit, in line thicknesses
 FOLD_MIN_LINES = 6
 FOLD_PAGE_SHARE = 0.2
+# A blank back page with the other side showing through looks folded too (faint mirrored
+# lines, bent); read along their shape they come out as noise, scored 0.03-0.65 (54-page scan,
+# two such pages). The fold reading replaces the page only when it reads more letters with
+# at least this score than the standard reading did.
+FOLD_SURE_SCORE = 0.8
 FOLD_ENGINE = "PaddleOCR PP-OCRv6_medium, linie wzdłuż zgięcia"
 
 
@@ -355,35 +361,86 @@ def _outline(poly, scale: float) -> list[list[float]]:
     return [[round(float(x) * scale, 1), round(float(y) * scale, 1)] for x, y in simple]
 
 
+def _sure_letters(lines: list[dict]) -> int:
+    """Letters in the lines read with a sure score."""
+    return sum(
+        sum(1 for char in line["text"] if char.isalpha())
+        for line in lines
+        if line.get("score") is not None and line["score"] >= FOLD_SURE_SCORE
+    )
+
+
+def _lines_of(polys) -> list[tuple[np.ndarray, dict]]:
+    """Line polygons in reading order, each with its shape (thickness, bent or not)."""
+    from paddlex.inference.pipelines.components import SortPolyBoxes
+
+    polys = SortPolyBoxes()(polys) if len(polys) else []
+    found = []
+    for poly in polys:
+        poly = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
+        shape = _line_shape(poly)
+        if shape:
+            found.append((poly, shape))
+    return found
+
+
+class DetectionMap:
+    """The text probability map of the page's own detection, kept for the fold check: its line
+    polygons come from that map (0.06 s a page) instead of a second detection (4.7-6.5 s; the
+    same polygons and decisions on the folded and flat pages measured, the same parameters:
+    limit 64 min, thresh 0.3, box 0.6, unclip 1.5)."""
+
+    def __init__(self, post) -> None:
+        import copy
+
+        self.inner = post
+        self.poly = copy.copy(post)
+        self.poly.box_type, self.poly.score_mode = "poly", "slow"
+        self.last = None
+
+    def __call__(self, preds, img_shapes, **kwargs):
+        maps = preds[0]
+        self.last = (maps[0].copy(), img_shapes[0], kwargs) if len(maps) == 1 else None
+        return self.inner(preds, img_shapes, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def lines(self, image: np.ndarray) -> list[tuple[np.ndarray, dict]] | None:
+        """The page's line polygons from the kept map; None when it is not this image's."""
+        if self.last is None:
+            return None
+        pred, shape, kwargs = self.last
+        if (int(shape[0]), int(shape[1])) != tuple(image.shape[:2]):
+            return None
+        polys, _ = self.poly([pred[None]], [shape], **kwargs)
+        return _lines_of(polys[0])
+
+
 class FoldReader:
     """Lines of a folded page read along their own shape: a polygon detector scoring the line
     inside its contour, straight lines cut as before, broken ones along their midline."""
 
     def __init__(self, models: dict, kwargs: dict) -> None:
-        from paddleocr import TextDetection
-        from paddlex.inference.pipelines.components import CropByPolys, SortPolyBoxes
+        from paddlex.inference.pipelines.components import CropByPolys
 
-        self.detector = TextDetection(
-            model_name="PP-OCRv6_medium_det", model_dir=str(models["text_detection_model_dir"]),
-            limit_side_len=64, limit_type="min", thresh=0.3, box_thresh=0.6, unclip_ratio=1.5, **kwargs
-        )
-        post = self.detector.paddlex_predictor.post_op
-        post.box_type, post.score_mode = "poly", "slow"
         self.models, self.kwargs = models, kwargs
+        self.detector = None
         self.recognizer = None
         self.crop = CropByPolys(det_box_type="quad")
-        self.sort = SortPolyBoxes()
 
     def detect(self, image: np.ndarray) -> list[tuple[np.ndarray, dict]]:
-        polys = list(self.detector.predict(image))[0]["dt_polys"]
-        polys = self.sort(polys) if len(polys) else []
-        found = []
-        for poly in polys:
-            poly = np.asarray(poly, dtype=np.float32).reshape(-1, 2)
-            shape = _line_shape(poly)
-            if shape:
-                found.append((poly, shape))
-        return found
+        """A detection of its own, when the page's map is not at hand (see DetectionMap)."""
+        from paddleocr import TextDetection
+
+        if self.detector is None:
+            self.detector = TextDetection(
+                model_name="PP-OCRv6_medium_det", model_dir=str(self.models["text_detection_model_dir"]),
+                limit_side_len=64, limit_type="min", thresh=0.3, box_thresh=0.6, unclip_ratio=1.5, **self.kwargs
+            )
+            post = self.detector.paddlex_predictor.post_op
+            post.box_type, post.score_mode = "poly", "slow"
+        return _lines_of(list(self.detector.predict(image))[0]["dt_polys"])
 
     @staticmethod
     def folded(found: list[tuple[np.ndarray, dict]]) -> tuple[int, int] | None:
@@ -437,9 +494,13 @@ class FoldMode:
             return None
         for mkldnn in dict.fromkeys([self.engine.mkldnn, False]):
             try:
+                found = self.engine.det_map.lines(image) if self.engine.det_map else None
+                if found is not None and not FoldReader.folded(found):
+                    return None
                 if self.reader is None:
                     self.reader = FoldReader(self.models, self._kwargs(mkldnn))
-                found = self.reader.detect(image)
+                if found is None:
+                    found = self.reader.detect(image)
                 folded = self.reader.folded(found)
                 if not folded:
                     return None
@@ -459,12 +520,144 @@ def cpu_threads() -> int:
     return max(1, os.cpu_count() or 1)
 
 
+# PP-OCRv6 medium drops Polish marks on some serif prints ("Michal", "Okregowa": 17% of the
+# words with them right on a letter of a bar council); the latin PP-OCRv5 model reads them
+# (83%) but loses more elsewhere. Each line is read by both: the same letters -> the reading
+# with more marks; different letters -> the higher score. Measured on 13 pages (scan, letter,
+# folded photo): CER 6.05 -> 5.85% and 5.65 -> 4.35%, marks 90 -> 92% and 17 -> 83%.
+LATIN_REC = "latin_PP-OCRv5_mobile_rec"
+
+
+def _bare(text: str) -> str:
+    text = text.replace("ł", "l").replace("Ł", "L")
+    return "".join(char for char in unicodedata.normalize("NFD", text) if not unicodedata.combining(char))
+
+
+POLISH_MARKS = frozenset("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ")
+
+
+# Each foreign mark to the Polish letter it is misread for, else the bare letter; one character
+# for one, so the lines stay aligned with the page text (masks, the scan preview).
+FOREIGN_TO_POLISH = str.maketrans(
+    "žŽčČšŠňŇñÑřŘďĎťŤľĽĺĹŕŔáÁàÀâÂäÄãÃåÅéÉèÈêÊëËěĚíÍìÌîÎïÏôÔòÒöÖõÕőŐúÚùÙûÛüÜůŮűŰýÝÿçÇğĞşŞţŢı",
+    "żŻćĆśŚńŃńŃrRdDtTlLlLrRaAaAaAaAaAaAeEeEeEeEeEiIiIiIiIoOoOoOoOoOuUuUuUuUuUuUyYycCgGsStTi",
+)
+
+
+def _polish_letters(text: str) -> str:
+    return text.translate(FOREIGN_TO_POLISH)
+
+
+class DictionaryFix:
+    """A word the Polish dictionary (Morfeusz, installed for the anonymizer) does not know,
+    made into the one word it knows within two OCR confusions (dictionary_service.py: "Spóika" ->
+    "Spółka", "zazalenia" -> "zażalenia"); two candidates or none: left as read. Measured on
+    13 pages: marks 92.3 -> 94.8% (scan), 82.3 -> 90.4% (folded photo), no critical field lost.
+    Without Morfeusz, after a failure of its process or with LEX_OCR_DICT=off the text is as read."""
+
+    WORD = r"\S+"
+
+    def __init__(self) -> None:
+        self.process = None
+        self.failed = os.environ.get("LEX_OCR_DICT", "on") == "off"
+        self.corrections: dict[str, str] = {}
+        self.asked: set[str] = set()
+
+    @staticmethod
+    def _core(token: str) -> str | None:
+        import re
+
+        core = re.sub(r"^\W+|\W+$", "", token)
+        # Abbreviations ("godz.", "ust."), numbers and short words are left alone.
+        if len(core) < 4 or not core.isalpha() or (token.endswith(".") and len(core) <= 6):
+            return None
+        return core
+
+    def _ask(self, words: list[str]) -> None:
+        import subprocess
+
+        if self.process is None:
+            self.process = subprocess.Popen(
+                [sys.executable, "-X", "utf8", str(Path(__file__).with_name("dictionary_service.py"))],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        self.process.stdin.write(json.dumps(words, ensure_ascii=False) + "\n")
+        self.process.stdin.flush()
+        reply = self.process.stdout.readline()
+        if not reply:
+            raise RuntimeError(f"dictionary process ended ({self.process.poll()})")
+        self.corrections.update(json.loads(reply))
+
+    def prepare(self, texts: list[str]) -> None:
+        """One question to the dictionary for the words of a page not asked yet."""
+        if self.failed:
+            return
+        import re
+
+        words = sorted({core for text in texts for token in re.findall(self.WORD, text) if (core := self._core(token)) and core not in self.asked})
+        if not words:
+            return
+        try:
+            self._ask(words)
+            self.asked.update(words)
+        except Exception as error:  # noqa: BLE001
+            self.failed = True
+            print(f"LEX_OCR_DICT_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
+
+    def text(self, text: str) -> str:
+        if self.failed or not self.corrections:
+            return text
+        import re
+
+        def fix(match):
+            token = match.group(0)
+            core = self._core(token)
+            return token.replace(core, self.corrections[core]) if core and core in self.corrections else token
+
+        return re.sub(self.WORD, fix, text)
+
+
+DICTIONARY = DictionaryFix()
+
+
+def _polish_marks(text: str) -> int:
+    return sum(1 for char in text if char in POLISH_MARKS)
+
+
+def _foreign_marks(text: str) -> int:
+    return sum(1 for char in text if char.isalpha() and ord(char) > 127 and char not in POLISH_MARKS)
+
+
+class MarksReading:
+    """The pipeline's recognizer with a second one for the Polish marks (see LATIN_REC)."""
+
+    def __init__(self, primary, second) -> None:
+        self.primary, self.second = primary, second
+
+    def __call__(self, images, **kwargs):
+        images = list(images)
+        for first, other in zip(self.primary(images, **kwargs), self.second(images, **kwargs)):
+            # Marks of other languages ("dó skłádania", "uwažane") are misreadings, never a gain.
+            if _foreign_marks(other["rec_text"]) > _foreign_marks(first["rec_text"]):
+                yield first
+            elif _bare(first["rec_text"]) == _bare(other["rec_text"]):
+                yield other if _polish_marks(other["rec_text"]) > _polish_marks(first["rec_text"]) else first
+            else:
+                yield other if other["rec_score"] > first["rec_score"] else first
+
+    def __getattr__(self, name):
+        return getattr(self.primary, name)
+
+
 class OcrEngine:
     """PaddleOCR on CPU oneDNN (about 5x faster, the same text); when oneDNN fails to
     start or to run (PaddlePaddle CPU regressions on some builds), the plain path."""
 
-    def __init__(self, kwargs: dict) -> None:
+    def __init__(self, kwargs: dict, latin_dir: Path | None = None) -> None:
         self.kwargs = kwargs
+        self.latin_dir = latin_dir
+        self.det_map: DetectionMap | None = None
         self.mkldnn = os.environ.get("LEX_OCR_MKLDNN", "on") != "off"
         self.verified = not self.mkldnn
         try:
@@ -473,6 +666,35 @@ class OcrEngine:
             if not self.mkldnn:
                 raise
             self._fallback(error)
+            return
+        self._attach()
+
+    def _attach(self) -> None:
+        """The page's detection map kept for the fold check, and the second recognizer when
+        its model is installed (without it, as before)."""
+        try:
+            pipeline = self.ocr.paddlex_pipeline
+            detector = getattr(pipeline, "_pipeline", pipeline).text_det_model
+            self.det_map = DetectionMap(detector.post_op)
+            detector.post_op = self.det_map
+        except Exception as error:  # noqa: BLE001
+            self.det_map = None
+            print(f"LEX_OCR_DET_MAP_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
+        if self.latin_dir is None:
+            return
+        try:
+            from paddleocr import TextRecognition
+
+            pipeline = self.ocr.paddlex_pipeline
+            pipeline = getattr(pipeline, "_pipeline", pipeline)
+            second = TextRecognition(
+                model_name=LATIN_REC, model_dir=str(self.latin_dir), enable_mkldnn=self.mkldnn,
+                cpu_threads=self.kwargs.get("cpu_threads", cpu_threads()),
+                **({"device": self.kwargs["device"]} if self.kwargs.get("device") else {}),
+            ).paddlex_predictor
+            pipeline.text_rec_model = MarksReading(pipeline.text_rec_model, second)
+        except Exception as error:  # noqa: BLE001
+            print(f"LEX_OCR_MARKS_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
 
     def _fallback(self, error: Exception) -> None:
         print(
@@ -483,8 +705,11 @@ class OcrEngine:
         self.mkldnn = False
         self.verified = True
         self.ocr = PaddleOCR(**self.kwargs, enable_mkldnn=False)
+        self._attach()
 
     def predict(self, image):
+        if self.det_map:
+            self.det_map.last = None
         if self.verified:
             return self.ocr.predict(image)
         try:
@@ -601,7 +826,7 @@ def predict_image(
     folded = None
     if fold is not None and boxes_known:
         again = fold.page(evidence_image)
-        if again is not None:
+        if again is not None and _sure_letters(again[0]) > _sure_letters(lines):
             fold_lines, folded = again
             texts, scores, lines, unread = [], [], [], []
             for line in fold_lines:
@@ -623,6 +848,16 @@ def predict_image(
             lines.append(line)
             if line["box"] is None:
                 boxes_known = False
+
+    # Polish text: a letter with another language's mark is a misreading ("uwažane", "dó"),
+    # and a word the dictionary does not know is checked for a lost mark (DictionaryFix).
+    texts = [_polish_letters(text) for text in texts]
+    for line in lines:
+        line["text"] = _polish_letters(line["text"])
+    DICTIONARY.prepare(texts)
+    texts = [DICTIONARY.text(text) for text in texts]
+    for line in lines:
+        line["text"] = DICTIONARY.text(line["text"])
 
     confidence = (
         sum(scores) / len(scores)
@@ -759,7 +994,9 @@ def main() -> None:
     if args.device:
         ocr_kwargs["device"] = args.device
 
-    ocr = OcrEngine(ocr_kwargs)
+    # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
+    latin_dir = native_model_root / LATIN_REC
+    ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).

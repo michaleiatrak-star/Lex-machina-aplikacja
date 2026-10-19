@@ -95,15 +95,17 @@ echo "[4/6] OCR/NER models"
 MODELS="$COMPONENTS_ROOT/models"
 models_ready() {
   [ -d "$MODELS/stanza/pl" ] || return 1
-  for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medium_det PP-OCRv6_medium_rec; do
+  # latin_PP-OCRv5_mobile_rec is optional: missing, the prefetch runs again, never fails on it.
+  for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medium_det PP-OCRv6_medium_rec "${1:-}"; do
+    [ -n "$name" ] || continue
     [ -f "$MODELS/paddle/official_models/$name/inference.pdiparams" ] || return 1
     [ -f "$MODELS/paddle/official_models/$name/inference.yml" ] || return 1
   done
 }
-if ! models_ready; then
+if ! models_ready latin_PP-OCRv5_mobile_rec; then
   mkdir -p "$MODELS"
   # PaddleX treats an existing model directory as downloaded: drop partial ones.
-  for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medium_det PP-OCRv6_medium_rec; do
+  for name in PP-LCNet_x1_0_doc_ori UVDoc PP-LCNet_x1_0_textline_ori PP-OCRv6_medium_det PP-OCRv6_medium_rec latin_PP-OCRv5_mobile_rec; do
     dir="$MODELS/paddle/official_models/$name"
     if [ -d "$dir" ] && { [ ! -f "$dir/inference.pdiparams" ] || [ ! -f "$dir/inference.yml" ]; }; then
       rm -rf "$dir"

@@ -549,9 +549,9 @@ export function looksLikeLetter(answer: string): boolean {
 export function letterDocumentPlan(
   result: Pick<
     ExtendedExecution,
-    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument"
+    "status" | "answer" | "workflow" | "processWorkflow" | "finalization" | "gateI" | "verification" | "taskSkill" | "waitingForUser" | "skillSwitch" | "taskMode" | "contractWorkflow" | "longDocument" | "answerDocument"
   >
-): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION"; longDocumentId?: string } | null {
+): { documentType: "letter" | "pleading" | "contract"; stage: "DRAFT" | "FINAL"; source?: "REDACTION" | "ANSWER"; answerSessionId?: string; longDocumentId?: string } | null {
   if (result.status !== "DRAFT_PRESENTABLE" || !result.answer) return null;
   // Questions to the user or an offer to switch the letter skill: no letter yet.
   if (result.waitingForUser || result.skillSwitch) return null;
@@ -588,6 +588,12 @@ export function letterDocumentPlan(
       : null;
   }
   if (result.workflow?.id === "SIMPLE_LETTER_V1" || result.taskSkill === "pisma-proste-v2") {
+    // The server kept the answer as a letter (its title, body and signer read): the file is
+    // made from that text mechanically, with no model turn writing it again.
+    if (result.answerDocument) {
+      const ready = result.verification.unverified === 0 && result.gateI?.result !== "BLOCKED" && !/⬛|\[UZUPEŁNIJ/u.test(result.answer);
+      return { documentType: "letter", stage: ready ? "FINAL" : "DRAFT", source: "ANSWER", answerSessionId: result.answerDocument.sessionId };
+    }
     // Questions about missing data are no letter yet: no file from them.
     if (!looksLikeLetter(result.answer)) return null;
     return {
@@ -657,6 +663,24 @@ const GOVERNED_ACTIVITY = new RegExp(
   `(?<![\\p{L}\\d])(${withoutPolishLetters("procedur\\p{L}*|polityk\\p{L}*|regulamin\\p{L}*|instrukcj\\p{L}*")})\\s+\\p{L}+`,
   "gu"
 );
+
+/**
+ * A request for the file of the letter just written ("ok daj mi pismo", "wygeneruj to w docx"),
+ * not for a new letter: short, or pointing back at it, with no new subject of its own.
+ */
+export function refersToLastAnswer(input: string): boolean {
+  const words = withoutPolishLetters(input.toLocaleLowerCase("pl")).match(/\p{L}+/gu) ?? [];
+  if (words.some((word) => /^(?:nowe|nowy|inne|inny|kolejne|drugie)$/u.test(word))) return false;
+  if (words.some((word) => /^(?:to|tego|ten|te|tym|powyzsz\p{L}*|ostatni\p{L}*|gotow\p{L}*|przygotowan\p{L}*|wyzej)$/u.test(word))) return true;
+  return words.length > 0 && words.every((word) => GENERIC_FILE_WORDS.has(word));
+}
+
+// Words of a bare request for a file, naming nothing new ("ok daj mi pismo w docx").
+const GENERIC_FILE_WORDS = new Set([
+  "ok", "okej", "dobrze", "tak", "prosze", "teraz", "juz", "a", "i", "mi", "mnie", "nam", "w", "we", "jako", "z", "do", "pobrania",
+  "daj", "dawaj", "wygeneruj", "generuj", "przygotuj", "zrob", "stworz", "utworz", "zapisz", "pobierz", "wyeksportuj", "eksportuj",
+  "pismo", "pisma", "plik", "pliku", "dokument", "dokumentu", "docx", "doc", "word", "wordzie", "worda", "formie", "formacie", "wersji", "wersje"
+]);
 
 export function directDocumentRequest(
   input: string
@@ -1023,6 +1047,7 @@ function executionMessage(
       evidence: execution.evidence,
       ...(execution.mandatoryPath ? { mandatoryPath: execution.mandatoryPath } : {}),
       ...(execution.pipelineNext ? { pipelineNext: execution.pipelineNext } : {}),
+      ...(execution.answerDocument ? { answerDocument: execution.answerDocument } : {}),
       ...(execution.documentCoverage?.length
         ? { documentCoverage: execution.documentCoverage, ...(execution.documentAnalysis ? { documentAnalysis: true } : {}) }
         : {}),
@@ -3541,13 +3566,16 @@ export default function MatterChatApp({
     context,
     plan,
     route,
-    attachments
+    attachments,
+    download = false
   }: {
     executionCaseId: string;
     context: CaseChatMessage[];
     plan: NonNullable<ReturnType<typeof letterDocumentPlan>>;
     route: string;
     attachments: DocumentAttachmentSelection[];
+    // "Pobierz .docx": the file is saved at once, not only shown in the thread.
+    download?: boolean;
   }): Promise<void> {
     const letterWorkflow = plan.documentType;
     const stage = plan.stage;
@@ -3589,6 +3617,7 @@ export default function MatterChatApp({
               ? { firmTemplates: firmTemplateIds }
               : {}),
             ...(plan.source ? { source: plan.source } : {}),
+            ...(plan.answerSessionId ? { answerSessionId: plan.answerSessionId } : {}),
             ...(plan.longDocumentId ? { longDocumentId: plan.longDocumentId } : {}),
             filename:
               (plan.source === "REDACTION"
@@ -3628,6 +3657,10 @@ export default function MatterChatApp({
         ]);
         setWorkspaceRefresh((value) => value + 1);
       }
+      if (download) {
+        const blob = await downloadGeneratedArtifact(executionCaseId, generated.artifact.artifactId);
+        await downloadBlob(blob, generated.artifact.filename);
+      }
     } catch (documentError) {
       // The answer itself stays; only the file is missing.
       if (
@@ -3656,7 +3689,9 @@ export default function MatterChatApp({
 
   // "Generuj dokument" under an answer that is itself a letter: its file at once, from that
   // answer (fields to fill in stay marked), with no new session that would ask again.
-  async function fileFromAnswer(answer: CaseChatMessage): Promise<void> {
+  // An answer the server kept as a letter (answerDocument): the file is made from its text
+  // mechanically (no model turn); otherwise the model lays out the letter of the answer.
+  async function fileFromAnswer(answer: CaseChatMessage, download = false): Promise<void> {
     if (executing || !caseId || !model) return;
     const index = messages.findIndex((item) => item.id === answer.id);
     const context = index >= 0 ? messages.slice(0, index + 1) : [...messages];
@@ -3665,9 +3700,14 @@ export default function MatterChatApp({
       await createLetterFile({
         executionCaseId: caseId,
         context,
-        plan: { documentType: "letter", stage: /⬛|\[UZUPEŁNIJ|\[(?:podpis|data|Miejscowość)\]/iu.test(answer.content) ? "DRAFT" : "FINAL" },
+        plan: {
+          documentType: "letter",
+          stage: /⬛|\[UZUPEŁNIJ|\[(?:podpis|data|Miejscowość)\]|\[NIEWERYFIKOWANE/iu.test(answer.content) ? "DRAFT" : "FINAL",
+          ...(answer.answerDocument ? { source: "ANSWER" as const, answerSessionId: answer.answerDocument.sessionId } : {})
+        },
         route: automaticSkills ? "AUTO" : choosePrimaryRoute(answer.content, routes, skills, []) ?? "AUTO",
-        attachments: documentAttachments
+        attachments: documentAttachments,
+        download
       });
     } finally {
       setExecuting(false);
@@ -3787,6 +3827,24 @@ export default function MatterChatApp({
     setWorkflowRecoveryRequest(null);
 
     try {
+      // "daj mi pismo", "wygeneruj to w docx" after an answer that is itself a letter: the file of
+      // that answer, mechanically, not a new letter the model would write again.
+      const lastAnswer = [...priorMessages].reverse().find((item) => item.role === "assistant");
+      if (directDocumentRequest(trimmed) && caseId && lastAnswer?.answerDocument && refersToLastAnswer(trimmed)) {
+        await createLetterFile({
+          executionCaseId,
+          context: priorMessages,
+          plan: {
+            documentType: "letter",
+            stage: /⬛|\[UZUPEŁNIJ|\[NIEWERYFIKOWANE/u.test(lastAnswer.content) ? "DRAFT" : "FINAL",
+            source: "ANSWER",
+            answerSessionId: lastAnswer.answerDocument.sessionId
+          },
+          route,
+          attachments: sendAttachments
+        });
+        return;
+      }
       let readyAccount =
         accountAuthenticated;
       if (
@@ -5673,6 +5731,16 @@ export default function MatterChatApp({
                       }}
                     />
                   ))}
+                  {message.role === "assistant" && message.answerDocument && caseId && canWriteCase(selectedCase) ? (
+                    <div className="chat-pipeline-next" role="note">
+                      <button type="button" className="primary-button" disabled={executing} onClick={() => void fileFromAnswer(message, true)}>
+                        Pobierz .docx
+                      </button>
+                      <InfoTip>
+                        Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje mechanicznie z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi HYBRID-VAL i bramkę eksportu (przepisy z rejestru weryfikacji tej odpowiedzi); znaczniki weryfikacji nie trafiają do pliku.
+                      </InfoTip>
+                    </div>
+                  ) : null}
                   {message.generatedDocument && caseId ? (
                     <ChatDocumentCard
                       caseId={caseId}
@@ -5779,7 +5847,7 @@ export default function MatterChatApp({
                       disabled={executing}
                       onChoose={(text) => void executeMessage(text)}
                       onDocument={
-                        message.role === "assistant" && looksLikeLetter(message.content) && canWriteCase(selectedCase)
+                        message.role === "assistant" && (message.answerDocument || looksLikeLetter(message.content)) && canWriteCase(selectedCase)
                           ? () => void fileFromAnswer(message)
                           : undefined
                       }
