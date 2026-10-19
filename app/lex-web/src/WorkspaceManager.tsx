@@ -1,5 +1,5 @@
 import { InfoTip } from "./InfoTip";
-import { GoogleImportDialog } from "./GoogleIntegrationPanel.js";
+import { GOOGLE_INTEGRATION_VISIBLE, GoogleImportDialog } from "./GoogleIntegrationPanel.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
@@ -1171,7 +1171,7 @@ export function WorkspaceManager({
               />
             </label>
           ) : null}
-          {canWrite ? (
+          {canWrite && GOOGLE_INTEGRATION_VISIBLE ? (
             <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setGoogleImport(true)}>
               Importuj z Google
             </button>
