@@ -4,6 +4,7 @@ import {
   addToAnonymization,
   anonymizedDocx,
   approveAnonymizedVersion,
+  editAnonymizedText,
   getAnonymizedVersion,
   removeFromAnonymization,
   updateAnonymizationForms,
@@ -122,6 +123,7 @@ export function AnonymizedDocumentView(props: {
   const [version, setVersion] = useState<AnonymizedVersion | null>(null);
   const [tab, setTab] = useState<"marked" | "text" | "key">(props.initialTab ?? "marked");
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [editingChunk, setEditingChunk] = useState<{ index: number; text: string } | null>(null);
   const [selection, setSelection] = useState("");
   const [kind, setKind] = useState<PiiKind>("PERSON");
   const [busy, setBusy] = useState(false);
@@ -166,6 +168,8 @@ export function AnonymizedDocumentView(props: {
       setStatus(
         code === "PRIVACY_EDIT_TEXT_NOT_FOUND"
           ? "Tego tekstu nie ma w wersji zanonimizowanej (może już jest zastąpiony symbolem)."
+          : code === "PRIVACY_EDIT_UNKNOWN_TOKEN"
+            ? "Poprawka zawiera symbol, którego nie ma w kluczu tego dokumentu (np. zmieniony numer). Przywróć symbol w pierwotnej postaci."
           : `Nie udało się zapisać: ${code}`
       );
     } finally {
@@ -372,13 +376,55 @@ export function AnonymizedDocumentView(props: {
                 <small>
                   s. {chunk.pageStart}
                   {chunk.pageEnd !== chunk.pageStart ? `–${chunk.pageEnd}` : ""}
+                  {props.readOnly || editingChunk?.index === chunk.index ? null : (
+                    <button
+                      type="button"
+                      className="anonymized-edit-button"
+                      title="Popraw błąd odczytu albo zakryj ręcznie dane, których wykrywanie nie znalazło; symbole zostaw bez zmian"
+                      onClick={() => setEditingChunk({ index: chunk.index, text: chunk.text })}
+                    >
+                      Popraw tekst
+                    </button>
+                  )}
                 </small>
-                <p>
-                  {renderProtected(chunk.text, version.totalPages, (token) => {
-                    setHighlight(token);
-                    setTab("key");
-                  })}
-                </p>
+                {editingChunk?.index === chunk.index ? (
+                  <div className="anonymized-edit">
+                    <textarea
+                      aria-label={`Tekst fragmentu ze s. ${chunk.pageStart}`}
+                      value={editingChunk.text}
+                      rows={Math.min(24, Math.max(6, editingChunk.text.split("\n").length + 1))}
+                      onChange={(event) => setEditingChunk({ index: chunk.index, text: event.target.value })}
+                    />
+                    <div>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        disabled={busy || !editingChunk.text.trim()}
+                        onClick={() =>
+                          void apply(
+                            () => editAnonymizedText(props.caseId, props.documentId, chunk.index, editingChunk.text),
+                            () => {
+                              setEditingChunk(null);
+                              return "Zapisano poprawkę wersji zanonimizowanej. Oryginał i klucz bez zmian.";
+                            }
+                          )
+                        }
+                      >
+                        Zapisz poprawkę
+                      </button>
+                      <button type="button" onClick={() => setEditingChunk(null)}>
+                        Anuluj
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p>
+                    {renderProtected(chunk.text, version.totalPages, (token) => {
+                      setHighlight(token);
+                      setTab("key");
+                    })}
+                  </p>
+                )}
               </article>
             ))}
           </div>

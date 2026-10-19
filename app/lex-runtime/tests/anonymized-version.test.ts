@@ -129,3 +129,24 @@ describe("highlighted original text", () => {
     ]);
   });
 });
+
+describe("hand correction of the anonymized version", () => {
+  it("saves a corrected fragment that keeps the key's symbols; an invented symbol is refused", async () => {
+    const { service, documentId, security } = await processed("Pozew doręczono Adamowi Zielińskiemu, PESEL 44051401359. Umowa z dnia 1 marca.");
+    const before = service.anonymizedVersion(documentId);
+    const chunk = before.chunks[0]!;
+    const pesel = chunk.text.match(/\[PII:PESEL:\d{4}\]/)![0];
+    const corrected = chunk.text.replace("Umowa z dnia 1 marca.", "Umowa z dnia 1 marca 2024 r.");
+    const saved = await service.editProtectedText(documentId, chunk.index, corrected, security);
+    expect(saved.chunks[0]!.text).toContain("1 marca 2024 r.");
+    expect(saved.chunks[0]!.text).toContain(pesel);
+    await expect(
+      service.editProtectedText(documentId, chunk.index, corrected.replace(pesel, "[PII:PESEL:9999]"), security)
+    ).rejects.toThrow("PRIVACY_EDIT_UNKNOWN_TOKEN");
+    await expect(service.editProtectedText(documentId, chunk.index, "[PII:PESEL:12]", security)).rejects.toThrow(
+      "PRIVACY_EDIT_UNKNOWN_TOKEN"
+    );
+    await expect(service.editProtectedText(documentId, 999, corrected, security)).rejects.toThrow("PRIVACY_EDIT_CHUNK_NOT_FOUND");
+    expect(service.anonymizedVersion(documentId).chunks[0]!.text).toContain("1 marca 2024 r.");
+  });
+});

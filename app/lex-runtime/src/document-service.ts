@@ -461,6 +461,12 @@ export interface DocumentService {
     token: string,
     security: DocumentSecurityContext
   ): Promise<AnonymizedVersion & { restored: number }>;
+  editProtectedText?(
+    documentId: string,
+    chunkIndex: number,
+    text: string,
+    security: DocumentSecurityContext
+  ): Promise<AnonymizedVersion>;
   updateKeyGrammar?(
     documentId: string,
     token: string,
@@ -1835,6 +1841,38 @@ implements DocumentService {
       return { token, replaced };
     });
     return { ...this.anonymizedVersion(documentId), token, replaced };
+  }
+
+  /**
+   * The user's correction of one fragment of the anonymized version (an OCR error, a
+   * value the detection missed and the user rewrote by hand). Every symbol in the new
+   * text must be one of this document's key: a symbol cannot be invented or mistyped,
+   * since the model would then see a value nobody can restore.
+   */
+  async editProtectedText(
+    documentId: string,
+    chunkIndex: number,
+    text: string,
+    security: DocumentSecurityContext
+  ): Promise<AnonymizedVersion> {
+    const record = this.editableRecord(documentId);
+    if (text.length > 200_000 || !text.trim()) throw new Error("PRIVACY_EDIT_TEXT_INVALID");
+    if (!record.protectedIngestion.chunks.some((chunk) => chunk.index === chunkIndex)) {
+      throw new Error("PRIVACY_EDIT_CHUNK_NOT_FOUND");
+    }
+    await this.withKey(documentId, record, security, (vault) => {
+      for (const [token] of text.matchAll(/\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\]/g)) {
+        if (!vault.hasToken(token.replace(/\|[A-Z]{2,4}\]$/, "]"))) throw new Error("PRIVACY_EDIT_UNKNOWN_TOKEN");
+      }
+      // A bracket that only looks like a symbol ("[PII:", "[PII:PERSON:12]") is a broken one.
+      if (/\[PII:(?![A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/.test(text)) throw new Error("PRIVACY_EDIT_UNKNOWN_TOKEN");
+      const chunks = record.protectedIngestion.chunks.map((chunk) =>
+        chunk.index === chunkIndex ? { ...chunk, text } : chunk
+      );
+      const privacy = record.protectedIngestion.privacy;
+      this.replaceProtected(record, chunks, privacy);
+    });
+    return this.anonymizedVersion(documentId);
   }
 
   /**

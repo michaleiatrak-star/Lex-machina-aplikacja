@@ -5385,6 +5385,21 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     })
   );
 
+  // The user's correction of one fragment of the anonymized version (symbols must stay the key's).
+  app.post("/api/cases/:caseId/documents/:documentId/anonymized/text", (req, res) =>
+    withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) => {
+      if (!options.documentService!.editProtectedText) throw new Error("ANONYMIZED_VERSION_UNAVAILABLE");
+      const chunkIndex = Number(req.body?.chunkIndex);
+      if (!Number.isInteger(chunkIndex) || chunkIndex < 0) throw new Error("PRIVACY_EDIT_CHUNK_NOT_FOUND");
+      return await options.documentService!.editProtectedText(
+        documentId,
+        chunkIndex,
+        typeof req.body?.text === "string" ? req.body.text : "",
+        security
+      );
+    })
+  );
+
   app.post("/api/cases/:caseId/documents/:documentId/anonymized/unprotect", (req, res) =>
     withRestoredDocument(req, res, "WRITE", async ({ documentId, security }) =>
       await options.documentService!

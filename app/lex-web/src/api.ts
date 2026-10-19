@@ -3702,6 +3702,19 @@ export function removeFromAnonymization(
   });
 }
 
+/** The user's correction of one fragment of the anonymized version (symbols must stay the key's). */
+export function editAnonymizedText(
+  caseId: string,
+  documentId: string,
+  chunkIndex: number,
+  text: string
+): Promise<AnonymizedVersion> {
+  return json(anonymizedPath(caseId, documentId, "text"), {
+    method: "POST",
+    body: JSON.stringify({ chunkIndex, text })
+  });
+}
+
 export function updateAnonymizationForms(
   caseId: string,
   documentId: string,
