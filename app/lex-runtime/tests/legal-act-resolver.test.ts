@@ -26,7 +26,7 @@ describe("DeterministicLegalActResolver", () => {
       resolver.resolve("Kodeks karny")
     ).toMatchObject({
       id: "KK",
-      eli: "DU/2025/383",
+      eli: "DU/2026/1342",
       baseEli: "DU/1997/553"
     });
     expect(

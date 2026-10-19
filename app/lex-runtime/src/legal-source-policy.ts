@@ -97,6 +97,7 @@ const R1_HOSTS =
     "uodo.gov.pl",
     "www.uodo.gov.pl",
     "monitorpolski.gov.pl",
+    "www.monitorpolski.gov.pl",
     "dziennikustaw.gov.pl",
     "dziennikiurzedowe.gov.pl"
   ]);
