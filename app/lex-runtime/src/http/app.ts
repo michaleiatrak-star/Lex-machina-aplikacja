@@ -7613,7 +7613,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           });
           const ready = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", (caseDataKey) =>
             options.documentAuthoringService!.createReady({
-              ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+              // Draft by default: only unverified references -> a file headed „PROJEKT – NIE SKŁADAĆ BEZ
+              // WERYFIKACJI” naming them; acceptUnverified: false asks the user first.
+              ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
               caseId,
               createdByUserId: context.user.userId,
               format,
@@ -7748,7 +7750,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               ...(sharedGeneration && sharedGeneration.members.size > 0
                 ? { privacySeed: sharedGeneration.snapshot }
                 : {}),
-              ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+              ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
               query:
                 sessionRequest
                   .query,
@@ -7820,7 +7822,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   await options
                     .documentAuthoringService!
                     .createReady({
-                      ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+                      ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
                       caseId,
                       createdByUserId:
                         context.user
@@ -7886,7 +7888,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   .documentAuthoringService!
                   .createTokenized({
                     ...(processDocumentStatus ? { processDocumentStatus } : {}),
-                    ...(req.body?.acceptUnverified === true ? { acceptUnverified: true } : {}),
+                    ...(req.body?.acceptUnverified === false ? {} : { acceptUnverified: true }),
                     caseId,
                     createdByUserId:
                       context.user
