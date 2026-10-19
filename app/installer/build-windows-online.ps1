@@ -38,6 +38,18 @@ $appStage = Join-Path $payload "app"
 New-Item $appStage -ItemType Directory | Out-Null
 Copy-Item (Join-Path $repo "app\lex-runtime\dist") $appStage -Recurse
 Copy-Item (Join-Path $repo "app\lex-runtime\package.json") $appStage
+# The publisher's Google OAuth client ("Zaloguj kontem Google" for every user, nothing to set up):
+# from the repository secret LEX_GOOGLE_OAUTH_CLIENT_JSON (Google Cloud Console, "Desktop app" JSON).
+$googleClient = Join-Path $appStage "config\google-oauth-client.json"
+if ($env:LEX_GOOGLE_OAUTH_CLIENT_JSON) {
+  New-Item (Split-Path $googleClient) -ItemType Directory -Force | Out-Null
+  [System.IO.File]::WriteAllText($googleClient, $env:LEX_GOOGLE_OAUTH_CLIENT_JSON)
+} elseif (Test-Path (Join-Path $repo "app\lex-runtime\config\google-oauth-client.json")) {
+  New-Item (Split-Path $googleClient) -ItemType Directory -Force | Out-Null
+  Copy-Item (Join-Path $repo "app\lex-runtime\config\google-oauth-client.json") $googleClient
+} else {
+  Write-Warning "No Google OAuth client (LEX_GOOGLE_OAUTH_CLIENT_JSON): Google sign-in stays off in this build."
+}
 Push-Location $appStage
 try {
   npm install --omit=dev --ignore-scripts --no-audit --no-fund

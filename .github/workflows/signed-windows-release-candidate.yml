@@ -51,6 +51,8 @@ jobs:
 
       - name: Build online bootstrap payload
         shell: pwsh
+        env:
+          LEX_GOOGLE_OAUTH_CLIENT_JSON: ${{ secrets.LEX_GOOGLE_OAUTH_CLIENT_JSON }}
         run: ./app/installer/build-windows-online.ps1
 
       - name: Prepare signing metadata directory

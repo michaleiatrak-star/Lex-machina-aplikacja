@@ -35,6 +35,14 @@ echo "[1/6] Runtime JS"
 rm -rf "$PAYLOAD" && mkdir -p "$PAYLOAD/app"
 cp -R "$REPO/app/lex-runtime/dist" "$PAYLOAD/app/dist"
 cp "$REPO/app/lex-runtime/package.json" "$PAYLOAD/app/"
+# The publisher's Google OAuth client ("Zaloguj kontem Google" for every user, nothing to set up).
+if [ -n "${LEX_GOOGLE_OAUTH_CLIENT_JSON:-}" ]; then
+  mkdir -p "$PAYLOAD/app/config" && printf '%s' "$LEX_GOOGLE_OAUTH_CLIENT_JSON" >"$PAYLOAD/app/config/google-oauth-client.json"
+elif [ -f "$REPO/app/lex-runtime/config/google-oauth-client.json" ]; then
+  mkdir -p "$PAYLOAD/app/config" && cp "$REPO/app/lex-runtime/config/google-oauth-client.json" "$PAYLOAD/app/config/"
+else
+  echo "WARNING: no Google OAuth client (LEX_GOOGLE_OAUTH_CLIENT_JSON): Google sign-in stays off in this build." >&2
+fi
 (cd "$PAYLOAD/app" && npm install --omit=dev --ignore-scripts --no-audit --no-fund \
   && npm ls --omit=dev --all --json >"$PAYLOAD/npm-dependency-tree.json")
 
