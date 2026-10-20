@@ -2543,6 +2543,40 @@ export class SafeSessionExecutor implements SessionExecutor {
     // AUTO: the task type from the router's table [1]–[11] names the executive skill
     // the router requires; the app loads it in full with its contract (mechanically,
     // as in the mechanical mode) instead of leaving the choice to the model.
+    // Mechanical mode: the user pinned the executive skill. A request the activation matrix
+    // gives to another skill ("napisz pozew" with the simple letter or the statute analysis
+    // pinned) is not dropped: a pleading asked of pisma-proste-v2 gets its M7 escalation
+    // (offered by the application even when the model writes the letter anyway), any other
+    // one a "next stage" choice under the answer. The pinned skill still answers this turn.
+    let mechanicalTask: TaskDecision | null = null;
+    if (mechanicalTurn(request) && legalTurn) {
+      const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !name.startsWith("dr-"));
+      const letters = { skill: "pisma-proste-v2", entries: schemaCatalog(this.registry, "pisma-proste-v2") };
+      const decided = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [...recognisedDocuments], this.redactionTest(), letters);
+      // The request itself (without the delivered files' own rows) asks the pinned skill's work:
+      // a contract in the files of "przygotuj pozew" is the pleading's material, not a task.
+      const asked = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [], this.redactionTest(), letters);
+      if (decided && pinned.length && !pinned.includes(decided.primary) && !(asked && pinned.includes(asked.primary)) && this.registry.get(decided.primary)) {
+        mechanicalTask = decided;
+      }
+    }
+    const appEscalation: SkillSwitchOffer | null =
+      mechanicalTask?.primary === "pisma-procesowe-v3" && parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-proste-v2")
+        ? { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason: `rozpoznanie aplikacji — ${mechanicalTask.reason}` }
+        : null;
+    if (appEscalation) {
+      pathSections.push(
+        [
+          "# ROZPOZNANIE APLIKACJI: PISMO PROCESOWE (M7-eskalacja)",
+          `Aplikacja (macierz aktywacji) rozpoznała pismo procesowe: ${mechanicalTask!.reason}.`,
+          "Nie pisz pisma w tym wątku. Napisz komunikat M7: „ESKALACJA DO pisma-procesowe-v3” i linię „Przyczyna: …”, a potem zapytaj, czy przełączyć wątek; aplikacja zaproponuje przełączenie."
+        ].join("\n")
+      );
+    } else if (mechanicalTask) {
+      pathSections.push(
+        `# ROZPOZNANIE APLIKACJI: KOLEJNY ETAP\nCzęść prośby należy do ${mechanicalTask.primary} (${mechanicalTask.reason}). Odpowiedz w ramach przypiętego skilla; aplikacja zaproponuje użytkownikowi przejście do ${mechanicalTask.primary} pod odpowiedzią. Nie wykonuj tej części ani jej nie symuluj.`
+      );
+    }
     let taskRoute: TaskDecision | null = null;
     let routingMaterials: Array<{ category: string; evidence: boolean; label: string; kind?: string }> = [];
     if (
@@ -4707,17 +4741,35 @@ export class SafeSessionExecutor implements SessionExecutor {
     const choicesShown: NextChoice[] = deferred
       ? [{ skill: resumeSkill, kind: "CONTINUE", reason: "odpowiedź zapowiada krok, którego nie wykonała" }, ...offered]
       : offered;
-    const next = choicesShown.length
-      ? { skill: choicesShown[0]!.skill, reason: choicesShown[0]!.reason, choices: choicesShown }
+    // A switch the answer offers (Test B reduction, M7 escalation) is the choice already.
+    const switchOffered = workflowOutput.mode === "REDUCTION_OFFERED" || workflowOutput.mode === "ESCALATION_REQUIRED";
+    // The mechanical turn's request for another skill (not an escalation, which is the offer below).
+    const mechanicalChoice: NextChoice | null =
+      mechanicalTask && !appEscalation && !switchOffered && !choicesShown.some((choice) => choice.skill === mechanicalTask!.primary)
+        ? { skill: mechanicalTask.primary, kind: /^pisma-/u.test(mechanicalTask.primary) ? "DOCUMENT" : "ANALYSIS", reason: `rozpoznanie aplikacji: ${mechanicalTask.reason}` }
+        : null;
+    // Several executive skills pinned, one workflow per turn: the others are not dropped
+    // silently but offered as the next stage (chronologia-sprawy-v1 next to a pleading).
+    const pinnedLater: NextChoice[] = mechanicalTurn(request) && !switchOffered
+      ? parseSkillSelectionEnvelope(request.query)
+          .manualSkills.filter((name) => !name.startsWith("dr-") && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
+          // Both letter skills pinned: the stricter pleading workflow controls (no offer of the simple one).
+          .filter((name) => !(name === "pisma-proste-v2" && execution.workflowPlan.executionSkill === "pisma-procesowe-v3"))
+          .filter((name) => name !== mechanicalChoice?.skill && !choicesShown.some((choice) => choice.skill === name))
+          .map((name) => ({ skill: name, kind: /^pisma-/u.test(name) ? ("DOCUMENT" as const) : ("ANALYSIS" as const), reason: "skill przypięty przez użytkownika, nie wykonany w tej turze" }))
+      : [];
+    const shown = [...(mechanicalChoice ? [mechanicalChoice] : []), ...choicesShown, ...pinnedLater];
+    const next = shown.length
+      ? { skill: shown[0]!.skill, reason: shown[0]!.reason, choices: shown }
       : legacyNext;
     // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
     // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
     const skillSwitch =
-      workflowOutput.mode === "ESCALATION_REQUIRED"
+      (workflowOutput.mode === "ESCALATION_REQUIRED"
         ? escalationOffer(restoredAnswer.text)
         : workflowOutput.mode === "REDUCTION_OFFERED"
           ? reductionOffer(restoredAnswer.text)
-          : null;
+          : null) ?? appEscalation;
     const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
@@ -4739,6 +4791,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       sessionId: audit.sessionId,
       status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
       ...(next && safeToPresent ? { pipelineNext: next } : {}),
+      // The application's own escalation stands even when the answer was blocked (a simple
+      // letter written for a pleading): the user still gets the switch to pisma-procesowe-v3.
+      ...(appEscalation && !safeToPresent ? { skillSwitch: appEscalation } : {}),
       ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
       ...(courtTools?.courts().length ? { courtsFound: courtTools.courts() } : {}),
       ...(courtCheck ? { courtCheck } : {}),
