@@ -3163,14 +3163,11 @@ export function executeSession(input: {
 }, executionId?: string): Promise<SessionExecutionResponse> {
   return json<SessionExecutionResponse>("/api/sessions/execute", {
     method: "POST",
-    ...(executionId
-      ? {
-          headers: {
-            "X-Lex-Execution-Id":
-              executionId
-          }
-        }
-      : {}),
+    // A local model can answer for longer than the desktop proxy waits in silence.
+    headers: {
+      "X-Lex-Keep-Alive": "1",
+      ...(executionId ? { "X-Lex-Execution-Id": executionId } : {})
+    },
     body: JSON.stringify({
       ...input,
       mode: input.mode ?? "PRAWNIK"
@@ -3347,6 +3344,7 @@ export async function reviewDocument(
         "X-Lex-Case-Id": caseId,
         ...(processing ? { "X-Lex-Processing": processing } : {}),
         ...(progressId ? { "X-Lex-Progress": progressId } : {}),
+        "X-Lex-Keep-Alive": "1",
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },
@@ -3357,13 +3355,16 @@ export async function reviewDocument(
     await response.json() as
       | DocumentReviewResponse
       | ApiFailure;
-  if (!response.ok) {
+  // Kept alive (X-Lex-Keep-Alive): 200 at once, the real status in the JSON.
+  const deferred = (payload as { deferredStatus?: unknown } | null)?.deferredStatus;
+  const status = typeof deferred === "number" ? deferred : response.status;
+  if (status < 200 || status > 299) {
     const failure =
       payload as ApiFailure;
     throw new ApiError(
       failure.error ||
-        `HTTP_${response.status}`,
-      response.status,
+        `HTTP_${status}`,
+      status,
       failure.retryAfter,
       failure.reason,
       failure.description,
@@ -3378,21 +3379,39 @@ export async function reviewDocument(
  * Personal data of a document read with detect: false. Several files: all are read first
  * (vision model, text models stopped), then detected (the text model starts once).
  */
-export function detectDocument(
+export async function detectDocument(
   caseId: string,
   documentId: string,
   options?: { localAi?: boolean },
   progressId?: string
 ): Promise<DocumentReviewResponse> {
-  return json<DocumentReviewResponse>(`/api/documents/${documentId}/detect`, {
+  const request = () => json<DocumentReviewResponse>(`/api/documents/${documentId}/detect`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Lex-Keep-Alive": "1",
       ...(options?.localAi ? { "X-Lex-Processing": "local-ai" } : {}),
       ...(progressId ? { "X-Lex-Progress": progressId } : {})
     },
     body: JSON.stringify({ caseId })
   });
+  // A dropped connection does not stop the check in the runtime: asked again, the request
+  // joins the run still going (or reuses the pages the local model already checked).
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (attempt >= DETECT_RESUME_ATTEMPTS || !connectionDropped(error)) throw error;
+    }
+  }
+}
+
+const DETECT_RESUME_ATTEMPTS = 4;
+
+/** The desktop proxy lost the connection to the runtime (not an answer of the runtime). */
+export function connectionDropped(error: unknown): boolean {
+  const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : "";
+  return /^DESKTOP_RUNTIME_PROXY_FAILED:(READ|CONNECT)/.test(code);
 }
 
 /**
@@ -3416,10 +3435,11 @@ export async function processStoredCaseFile(
     path,
     {
       method: "POST",
-      ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
+      headers: { "X-Lex-Keep-Alive": "1", ...(progressId ? { "X-Lex-Progress": progressId } : {}) },
       ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false
         ? {
             headers: {
+              "X-Lex-Keep-Alive": "1",
               ...(progressId ? { "X-Lex-Progress": progressId } : {}),
               "Content-Type": "application/json"
             },

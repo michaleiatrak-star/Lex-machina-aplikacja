@@ -50,4 +50,44 @@ describe("reading and detection as two steps", () => {
     expect(events).toEqual(["start"]);
     expect(detected.suggestions.map((item) => text.slice(item.start, item.end))).toEqual(["Jan Kowalski"]);
   });
+
+  it("a retry after a dropped connection joins the running check (one model run)", async () => {
+    let starts = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const recognizer = new LocalLlmPrivacyNamedEntityRecognizer(
+      { stream: async () => ({ fullText: "[]" }) } as never,
+      { configuredModelId: () => "local/bielik", status: () => ({ configured: true, state: "READY" }) } as never,
+      { recognize: async () => [] }
+    );
+    const service = new LocalPrivateDocumentService(
+      new CompleteDocumentIngestor({ async extract() { return { bytes: 1, pages: [] }; } }),
+      recognizer,
+      24_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      morphology,
+      undefined,
+      undefined,
+      undefined,
+      async () => undefined,
+      async () => {
+        starts += 1;
+        await gate;
+      }
+    );
+    const read = await service.review(Buffer.from("Umowa z dnia 1 marca."), "text/plain", { caseId: "case-1", localAi: true, detect: false });
+    const first = service.detect(read.documentId, { caseId: "case-1", localAi: true });
+    const retry = service.detect(read.documentId, { caseId: "case-1", localAi: true });
+    release();
+    const [a, b] = await Promise.all([first, retry]);
+    expect(starts).toBe(1);
+    expect(b).toBe(a);
+    // Finished: a later request runs again (nothing stale is kept).
+    await service.detect(read.documentId, { caseId: "case-1", localAi: true });
+    expect(starts).toBe(2);
+  });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   desktopApiBase,
   clearAuthSession,
+  detectDocument,
   createCase,
   createDeanonymizationIntent,
   downloadSensitiveArtifact,
@@ -49,6 +50,20 @@ describe("local API client", () => {
     await expect(generateLegalDocument(caseId, input as never)).rejects.toMatchObject({ code: "READY_DOCUMENT_EXPORT_GATE_BLOCKED", status: 422 });
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ keepAlive: true, longDocumentId: input.longDocumentId });
     await expect(generateLegalDocument(caseId, input as never)).resolves.toMatchObject({ artifactId: "artifact_1" });
+  });
+
+  it("Bielik check: kept alive, a dropped proxy connection is resumed, an answer of the runtime is not", async () => {
+    const caseId = "case_0123456789abcdef0123456789abcdef";
+    const dropped = JSON.stringify({ error: "DESKTOP_RUNTIME_PROXY_FAILED:READ:os error 10060" });
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(dropped, { status: 502 }))
+      .mockResolvedValueOnce(new Response(`  ${JSON.stringify({ documentId: "doc_1", suggestions: [], deferredStatus: 200 })}`, { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "LOCAL_PRIVACY_MODEL_NOT_READY" }), { status: 503 }));
+    await expect(detectDocument(caseId, "doc_1", { localAi: true })).resolves.toMatchObject({ documentId: "doc_1" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("X-Lex-Keep-Alive")).toBe("1");
+    await expect(detectDocument(caseId, "doc_1", { localAi: true })).rejects.toMatchObject({ code: "LOCAL_PRIVACY_MODEL_NOT_READY" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("a wrong password on re-authentication does not sign the user out", async () => {

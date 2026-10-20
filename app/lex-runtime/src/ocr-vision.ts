@@ -95,6 +95,21 @@ function keepEdges(was: string, read: string): string {
   return `${leadWas}${core}${trail}`;
 }
 
+const capitalized = (word: string) => /^\p{Lu}/u.test(word);
+
+/**
+ * A capitalized word changed into another capitalized word that is no common word: a name
+ * (Juneyoung -> Joneyoung, Kowalski -> Kowalska). A name register knows both spellings,
+ * so only the scan can tell; the OCR reading stays. A common word written with a capital
+ * ("Pracodawey" -> "Pracodawcy") is known in lower case and is still taken.
+ */
+function anotherName(was: string, read: string, known: ReadonlySet<string>): boolean {
+  const before: string[] = was.match(WORD) ?? [];
+  const after: string[] = read.match(WORD) ?? [];
+  return before.some(capitalized) &&
+    after.some((word) => capitalized(word) && !known.has(word.toLocaleLowerCase("pl")) && !before.includes(word));
+}
+
 /**
  * The line with the changes the arbiter takes from the model's reading. `known` holds the
  * dictionary words among the words of both readings.
@@ -129,6 +144,7 @@ export function arbitrateLine(
       take =
         anyUnknown(was) &&
         allKnown(read) &&
+        !anotherName(was, read, known) &&
         editDistance(was.toLocaleLowerCase("pl"), read.toLocaleLowerCase("pl")) <= Math.max(2, Math.ceil(0.34 * was.length));
     }
     if (!take) continue;
@@ -182,7 +198,10 @@ export async function correctWithVision(
   // Words of the model's readings checked against the dictionary in one call.
   const newWords = [
     ...new Set([...readings.values()].flatMap((read) => [...read.values()].flatMap((text) => text.match(WORD) ?? [])))
-  ].filter((word) => !vocabulary.includes(word));
+  ]
+    // A capitalized word also in lower case: a common word, or a name (anotherName).
+    .flatMap((word) => (capitalized(word) ? [word, word.toLocaleLowerCase("pl")] : [word]))
+    .filter((word, index, all) => !vocabulary.includes(word) && all.indexOf(word) === index);
   const newFlags = newWords.length ? await knownWords(newWords) : [];
   newWords.forEach((word, index) => newFlags[index] && known.add(word));
 

@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { keepResponseAlive } from "../src/http/app.js";
+import { keepAliveRequested, keepResponseAlive } from "../src/http/app.js";
 import { LegalDocumentAstGenerator, LOCAL_SOURCE_CHARS } from "../src/legal-document-ast-generator.js";
 import {
   checkPart,
@@ -168,7 +168,7 @@ describe("plik długiego pisma: połączenie podtrzymane ponad limit proxy", () 
     const server = express();
     server.use(express.json());
     server.post("/gen", async (req, res) => {
-      if (req.body?.keepAlive === true) keepResponseAlive(res, { afterMs: 20, intervalMs: 20 });
+      if (keepAliveRequested(req)) keepResponseAlive(res, { afterMs: 20, intervalMs: 20 });
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       res.status(status).json(status >= 400 ? { error: "EXPORT_GATE_BLOCKED" } : { artifactId: "a" });
     });
@@ -185,6 +185,16 @@ describe("plik długiego pisma: połączenie podtrzymane ponad limit proxy", () 
     const text = String(response.body);
     expect(text).toMatch(/^ +\{/u);
     expect(JSON.parse(text)).toEqual({ error: "EXPORT_GATE_BLOCKED", deferredStatus: 422 });
+  });
+
+  it("nagłówek X-Lex-Keep-Alive (Bielik, czat z modelem lokalnym): jak keepAlive w treści", async () => {
+    const response = await request(app(150, 200)).post("/gen").set("X-Lex-Keep-Alive", "1").send({}).buffer(true).parse((res, done) => {
+      let text = "";
+      res.on("data", (chunk: Buffer) => (text += chunk.toString("utf8")));
+      res.on("end", () => done(null, text));
+    });
+    expect(String(response.body)).toMatch(/^ +\{/u);
+    expect(JSON.parse(String(response.body))).toEqual({ artifactId: "a", deferredStatus: 200 });
   });
 
   it("szybka odpowiedź albo bez keepAlive: zwykły status", async () => {

@@ -16,7 +16,9 @@ import {
 const DICTIONARY = new Set([
   "lub", "innego", "stosunku", "prawnego", "do", "niewykonania", "radcy", "Pawła", "Raka",
   "wszelkie", "Pana", "zadania", "żądania", "dotyczące", "zapłaty", "ją", "przedsiębiorstwa", "Paweł", "Rak", "Rafał",
-  "Pawel", "dnia", "Pracodawcy", "wobec", "się", "umowy", "OIRP", "Katowice", "nr", "KAT"
+  "Pawel", "dnia", "Pracodawcy", "pracodawcy", "wobec", "się", "umowy", "OIRP", "Katowice", "nr", "KAT",
+  // Name registers know both spellings; neither is a common word.
+  "Juneyoung", "Joneyoung", "Kowalski", "Kowalska"
 ]);
 const known = new Set(DICTIONARY);
 const knownWords = async (words: string[]) => words.map((word) => DICTIONARY.has(word));
@@ -40,6 +42,13 @@ describe("arbiter between the OCR line and the vision model", () => {
     expect(arbitrateLine("przedsiębiorstwa Pana", "przedsiebiorstwa Pana", known).fixes).toEqual([]);
     expect(arbitrateLine("OIRP Katowice nr KAT 2575", "OIRP Katowice nr KAT 2576", known).fixes).toEqual([]);
     expect(arbitrateLine("lub innego stosunku prawnego", "Sąd Rejonowy w Gliwicach oddalił powództwo w całości", known).fixes).toEqual([]);
+  });
+
+  it("never turns a name into another name; a capitalized common word is still corrected", () => {
+    const unknownName = new Set([...known].filter((word) => word !== "Juneyoung"));
+    expect(arbitrateLine("Mr. Juneyoung Park", "Mr. Joneyoung Park", unknownName).fixes).toEqual([]);
+    expect(arbitrateLine("Jan Kowalskl", "Jan Kowalska", known).fixes).toEqual([]);
+    expect(arbitrateLine("wobec Pracodawey", "wobec Pracodawcy", known).text).toBe("wobec Pracodawcy");
   });
 
   it("reads again only doubtful printed lines with an image; handwriting goes to manual review", () => {

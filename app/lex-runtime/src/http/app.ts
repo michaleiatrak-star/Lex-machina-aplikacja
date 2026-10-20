@@ -1100,6 +1100,17 @@ function sendCaseAccessError(
 const DEFERRED_RESPONSE_AFTER_MS = 20_000;
 const DEFERRED_RESPONSE_INTERVAL_MS = 20_000;
 
+/**
+ * The client asked for a kept-alive response (`X-Lex-Keep-Alive: 1`, or `keepAlive: true` in a
+ * JSON body): OCR with the vision model, the local model's (Bielik) check of personal data
+ * and a chat answer from a local model can each run longer than the proxy waits in silence.
+ */
+export function keepAliveRequested(req: Request): boolean {
+  if (req.get("x-lex-keep-alive") === "1") return true;
+  const body: unknown = req.body;
+  return Boolean(body && typeof body === "object" && !Buffer.isBuffer(body) && (body as { keepAlive?: unknown }).keepAlive === true);
+}
+
 export function keepResponseAlive(
   res: Response,
   timing: { afterMs: number; intervalMs: number } = { afterMs: DEFERRED_RESPONSE_AFTER_MS, intervalMs: DEFERRED_RESPONSE_INTERVAL_MS }
@@ -4964,6 +4975,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     res: Response,
     fileId?: string
   ): Promise<void> {
+    if (keepAliveRequested(req)) keepResponseAlive(res);
     if (
       !options.documentService ||
       !options.caseAccessService ||
@@ -6639,6 +6651,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     "/api/documents/review",
     documentBody,
     async (req, res) => {
+      if (keepAliveRequested(req)) keepResponseAlive(res);
       if (!options.documentService) {
         res.status(503).json({
           error: "DOCUMENT_INGESTION_UNAVAILABLE"
@@ -6975,6 +6988,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   // The second step after "ocr-only": personal data of a document already read (the text model,
   // with "local-ai", is started only now, after the OCR of every file).
   app.post("/api/documents/:documentId/detect", async (req, res) => {
+    if (keepAliveRequested(req)) keepResponseAlive(res);
     const documentId = String(req.params.documentId ?? "").trim();
     const caseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
     const service = options.documentService;
@@ -7244,7 +7258,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   app.post(
     "/api/cases/:caseId/artifacts/generate",
     async (req, res) => {
-      if (req.body?.keepAlive === true) keepResponseAlive(res);
+      if (keepAliveRequested(req)) keepResponseAlive(res);
       if (
         !options.caseAccessService ||
         !options.documentAuthoringService ||
@@ -9409,6 +9423,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
   });
 
   app.post("/api/sessions/execute", async (req, res) => {
+    if (keepAliveRequested(req)) keepResponseAlive(res);
     if (!options.sessionExecutor) {
       res.status(503).json({
         error: "SESSION_EXECUTION_UNAVAILABLE"
