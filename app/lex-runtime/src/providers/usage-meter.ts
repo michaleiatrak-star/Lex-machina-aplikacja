@@ -4,6 +4,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export type ModelUsage = {
   inputTokens: number;
   outputTokens: number;
+  // Of inputTokens: read from the provider's prompt cache / written to it.
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   modelCalls: number;
   // Calls whose adapter does not report tokens (account CLI clients).
   unmeteredCalls: number;
@@ -12,12 +15,14 @@ export type ModelUsage = {
 const scope = new AsyncLocalStorage<ModelUsage>();
 
 export async function meterUsage<T>(work: () => Promise<T>): Promise<{ result: T; usage: ModelUsage }> {
-  const usage: ModelUsage = { inputTokens: 0, outputTokens: 0, modelCalls: 0, unmeteredCalls: 0 };
+  const usage: ModelUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, modelCalls: 0, unmeteredCalls: 0 };
   const result = await scope.run(usage, work);
   return { result, usage };
 }
 
-export function reportUsage(tokens: { inputTokens?: number | undefined; outputTokens?: number | undefined } | null): void {
+export function reportUsage(
+  tokens: { inputTokens?: number | undefined; outputTokens?: number | undefined; cacheReadTokens?: number | undefined; cacheWriteTokens?: number | undefined } | null
+): void {
   const usage = scope.getStore();
   if (!usage) return;
   usage.modelCalls += 1;
@@ -27,4 +32,6 @@ export function reportUsage(tokens: { inputTokens?: number | undefined; outputTo
   }
   usage.inputTokens += tokens.inputTokens ?? 0;
   usage.outputTokens += tokens.outputTokens ?? 0;
+  usage.cacheReadTokens += tokens.cacheReadTokens ?? 0;
+  usage.cacheWriteTokens += tokens.cacheWriteTokens ?? 0;
 }

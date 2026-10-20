@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { draftPrompt } from "./process-pleading-draft.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
@@ -287,6 +288,11 @@ export function localSkillDigest(
   ].join("\n");
 }
 
+/** One key per skill and stable text: the provider routes these requests to the same cache. */
+function promptCacheKeyFor(skill: string, stable: string): string {
+  return `lex-${skill}-${createHash("sha256").update(stable).digest("hex").slice(0, 16)}`;
+}
+
 function combineSkillPrompt(
   registry: LexSkillRegistry,
   skillNames: string[],
@@ -393,6 +399,9 @@ export class LexExecutionEngine {
     // How the turn compacts skill text (sections the application executes, stages
     // reached); the executive SKILL.md of a mechanical turn is compacted the same way.
     instructionCompaction?: { inactive: string[]; stages: string[]; optIn?: string[] };
+    // The turn's own part of the tool appendix (documents, act modules, cited articles); the
+    // stable part is toolSystemPromptAppendix.
+    toolSystemPromptTurn?: string;
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -1184,6 +1193,9 @@ export class LexExecutionEngine {
     // only checked for existence and logged as read without reaching the model.
     let executiveContractText = "";
     let stageModulesText = "";
+    // What this question and its documents trigger (skill modules, act modules, domain hint):
+    // the turn's part, after the cached prefix.
+    let turnContextText = "";
     if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       const contract = executiveContract(this.registry, workflowPlan.executionSkill);
       if (contract) {
@@ -1273,7 +1285,7 @@ export class LexExecutionEngine {
             `skill=${contract.skill};loaded=${[...modules.loaded, ...stage.loaded].map((item) => item.resource).join(",")};toRead=${[...modules.toRead, ...stage.toRead].map((item) => item.resource).join(",")}`
           );
         }
-        if (modules.loaded.length || modules.toRead.length) executiveContractText += `\n\n${modulesPrompt(contract.skill, modules)}`;
+        if (modules.loaded.length || modules.toRead.length) turnContextText = modulesPrompt(contract.skill, modules);
         if (stage.loaded.length || stage.toRead.length) {
           stageModulesText = modulesPrompt(contract.skill, stage, `# MODUŁY ETAPU ${args.processWorkflowContext!.stage} SKILLA ${contract.skill} (aplikacja, z mapy modułów w SKILL.md)`);
         }
@@ -1376,10 +1388,10 @@ export class LexExecutionEngine {
           [...acts.modules.map((item) => `${item.skill}:${item.resource}:${item.rule}`), ...acts.rejected.map((item) => `ODRZUCONY:${item.resource}`)].join(";")
         );
         if (loaded.loaded.length || loaded.toRead.length) {
-          executiveContractText += `${executiveContractText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
+          turnContextText += `${turnContextText ? "\n\n" : ""}${actModulesPrompt(loaded)}`;
         }
         if (acts.rejected.length) {
-          executiveContractText += `\n\n# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
+          turnContextText += `${turnContextText ? "\n\n" : ""}# MAPA-AKTOW: WIERSZ WSKAZUJE NIEWŁAŚCIWY MODUŁ (aplikacja go nie wczytała)\n${acts.rejected.map((item) => `- ${item.resource}: ${item.reason}`).join("\n")}`;
         }
       }
     }
@@ -1400,7 +1412,7 @@ export class LexExecutionEngine {
           "OK",
           domains.map((domain) => `${domain.skill}:${domain.modules.map((module) => module.resource).join(",")}`).join(";")
         );
-        executiveContractText += `${executiveContractText ? "\n\n" : ""}${domainHintPrompt(domains)}`;
+        turnContextText += `${turnContextText ? "\n\n" : ""}${domainHintPrompt(domains)}`;
       }
     }
 
@@ -1912,13 +1924,28 @@ export class LexExecutionEngine {
       args.model.startsWith(
         "local/"
       );
+    // Prompt cache: the parts the same for every question of this skill (router and facade
+    // contracts, executive skills, core resources, mandatory path) open the prompt; the
+    // domain's SKILL and the turn's own parts follow. The model reads the same text.
+    const skillCompaction = (body: string) =>
+      compactForModel(
+        body,
+        undefined,
+        new Set(args.instructionCompaction?.inactive ?? []),
+        args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined,
+        new Set(args.instructionCompaction?.optIn ?? [])
+      ).text;
+    const stableSkillPrompt = combineSkillPrompt(
+      this.registry,
+      ["prawny-router-v3", "prawo-polskie-v2", ...skillSelection.additionalSkills.filter((name) => !name.startsWith("dr-"))],
+      localModel,
+      skillCompaction
+    );
     const baseSystemPrompt = combineSkillPrompt(
       this.registry,
       [
-        "prawny-router-v3",
-        "prawo-polskie-v2",
         args.route.primarySkill,
-        ...skillSelection.additionalSkills
+        ...skillSelection.additionalSkills.filter((name) => name.startsWith("dr-"))
       ],
       localModel,
       (body) =>
@@ -2019,9 +2046,24 @@ export class LexExecutionEngine {
           ]
         : [])
     ];
+    const stableParts = [
+      stableSkillPrompt,
+      coreResourcePrompt,
+      deterministicWorkflowPrompt(workflowPlan),
+      ...(semanticWorkflowResources.length > 0
+        ? [
+            [
+              "# RUNTIME-PRELOADED SEMANTIC CONTEXT",
+              "The following bounded excerpts were read by deterministic runtime. Do not reopen them mechanically in this turn.",
+              ...semanticWorkflowResources
+            ].join("\n\n")
+          ]
+        : []),
+      ...(executiveContractText ? [executiveContractText] : []),
+      ...(args.tools?.length && args.toolSystemPromptAppendix ? [args.toolSystemPromptAppendix] : [])
+    ].filter(Boolean);
     const promptParts = [
       baseSystemPrompt,
-      coreResourcePrompt,
       [
         "# ACTIVE SKILL SET",
         "The following legal skills/resources were selected for this turn:",
@@ -2038,7 +2080,6 @@ export class LexExecutionEngine {
         toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
         ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
       }),
-      deterministicWorkflowPrompt(workflowPlan),
       gateIRuntimePlanPrompt(
         gateIPlan
       ),
@@ -2047,16 +2088,6 @@ export class LexExecutionEngine {
             runtimePrelude.appendix
           ]
         : []),
-      ...(semanticWorkflowResources.length > 0
-        ? [
-            [
-              "# RUNTIME-PRELOADED SEMANTIC CONTEXT",
-              "The following bounded excerpts were read by deterministic runtime. Do not reopen them mechanically in this turn.",
-              ...semanticWorkflowResources
-            ].join("\n\n")
-          ]
-        : []),
-      ...(executiveContractText ? [executiveContractText] : []),
       ...(args.guideContext
         ? [
             [
@@ -2111,11 +2142,12 @@ export class LexExecutionEngine {
       promptParts.push(PERSON_CASE_PROTOCOL);
     }
     if (args.placeholderKey) {
-      // The placeholder legend and key open the prompt (HARD GATE).
+      // The placeholder legend opens the turn's part: after the cached skill text, before the
+      // domain, the documents and the question that use the placeholders (HARD GATE).
       promptParts.unshift(args.placeholderKey);
     }
-    if (args.tools?.length && args.toolSystemPromptAppendix) {
-      promptParts.push(args.toolSystemPromptAppendix);
+    if (args.tools?.length && args.toolSystemPromptTurn) {
+      promptParts.push(args.toolSystemPromptTurn);
     }
     // Everything before the checkpoint's own part is the same between checkpoints of one
     // matter: the provider caches it as a separate block (systemPromptCachePrefix).
@@ -2124,13 +2156,24 @@ export class LexExecutionEngine {
     if (!workflowStateParts.length && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\nGdy potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}.`);
     }
-    const turnTail = [stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
-    const stablePromptLength = promptParts.join("\n\n").length + 2;
+    const turnTail = [turnContextText, stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
+    const stableText = stableParts.join("\n\n");
     promptParts.push(...turnTail);
-    const systemPrompt = promptParts.join("\n\n");
-    const promptCache = workflowTurn
-      ? { promptCacheTtl: "1h" as const, ...(turnTail.length ? { systemPromptCachePrefix: stablePromptLength } : {}) }
-      : {};
+    // The cached prefix: the skill's stable part, the same for every question of this skill
+    // (across domains); the checkpoints of a matter and the next questions read it from the cache.
+    const cacheable = !localModel && stableText.length >= 4_096;
+    // Without a cached prefix (local model, short prompt) the placeholder legend opens the prompt.
+    const systemPrompt = (
+      cacheable || !args.placeholderKey ? [stableText, ...promptParts] : [promptParts[0], stableText, ...promptParts.slice(1)]
+    )
+      .filter(Boolean)
+      .join("\n\n");
+    const promptCache = {
+      ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
+      ...(cacheable
+        ? { systemPromptCachePrefix: stableText.length + 2, promptCacheKey: promptCacheKeyFor(workflowPlan.executionSkill ?? "auto", stableText) }
+        : {})
+    };
     emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(systemPrompt)));
 
     emit(
@@ -2188,6 +2231,15 @@ export class LexExecutionEngine {
       "OK",
       args.model
     );
+    if (promptCache.systemPromptCachePrefix && response.usage) {
+      // Whether the stable prefix came from the provider's cache (read) or was written to it.
+      emit(
+        "gate",
+        "PROMPT_CACHE",
+        "OK",
+        `prefix_chars=${promptCache.systemPromptCachePrefix};input=${response.usage.inputTokens};read=${response.usage.cacheReadTokens ?? 0};write=${response.usage.cacheWriteTokens ?? 0}`
+      );
+    }
     emit(
       "gate",
       "G39H_WORKFLOW_PROVIDER_COMPLETE",
@@ -2474,6 +2526,9 @@ export class LexExecutionEngine {
     }
     if (args.toolSystemPromptAppendix) {
       promptParts.push(args.toolSystemPromptAppendix);
+    }
+    if (args.toolSystemPromptTurn) {
+      promptParts.push(args.toolSystemPromptTurn);
     }
 
     emit("gate", "MODEL_SKILL_SELECTION", "OK", `catalog=${catalog.length}`);

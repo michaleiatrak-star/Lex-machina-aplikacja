@@ -2720,15 +2720,31 @@ export class SafeSessionExecutor implements SessionExecutor {
       "Pytany, jakim jesteś modelem, podaj te dane; nie zgaduj nazwy ani wersji z pamięci."
     ].join("\n");
 
+    // Prompt cache: what is the same for every turn of this skill path (identity, the
+    // mandatory path and shared resources, tool contracts) goes first and is cached by
+    // the provider; what this turn adds (mode, recognitions, act modules, evidence,
+    // cited law, retrieval) goes after it.
+    const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE]);
+    const stablePath = (section: string): boolean => {
+      const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
+      return Boolean(resource) && !turnScoped.has(resource as string);
+    };
     const toolPrompt = [
       identityPrompt,
-      ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-      ...pathSections,
-      ...(evidencePrompt ? [evidencePrompt] : []),
+      ...pathSections.filter(stablePath),
       ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
-      ...(coreLawTools
-        ? [coreLawTools.systemPromptAppendix()]
-        : []),
+      ...(coreLawTools ? [coreLawTools.systemPromptAppendix()] : []),
+      ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
+      reportTools.systemPromptAppendix(),
+      ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
+      ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
+      ...(federationTools ? [federationTools.systemPromptAppendix()] : []),
+      ...(verificationTools ? [verificationTools.systemPromptAppendix()] : [])
+    ].join("\n\n");
+    const toolPromptTurn = [
+      ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      ...pathSections.filter((section) => !stablePath(section)),
+      ...(evidencePrompt ? [evidencePrompt] : []),
       ...(citedLaw ? [citedLaw] : []),
       // Statute analysis pinned by the user, no article number in the question ("zasiedzenie"):
       // the articles the core law search ranks first, as local models get them.
@@ -2736,20 +2752,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       parseSkillSelectionEnvelope(request.query).manualSkills.includes("analizator-przepisow-v2")
         ? [coreLawRetrievalPrompt(this.coreLawIndex, protectedQuery)].filter((block): block is string => Boolean(block))
         : []),
-      ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
-      reportTools.systemPromptAppendix(),
-      ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
       ...(request.caseCourt && !request.conversationalOnly ? [caseCourtPrompt(request.caseCourt)] : []),
-      ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
-      ...(federationTools
-        ? [federationTools.systemPromptAppendix()]
-        : []),
-      ...(verificationTools
-        ? [verificationTools.systemPromptAppendix()]
-        : []),
-      ...(attachments.length > 0
-        ? [documentCitationSystemPrompt(attachments)]
-        : []),
+      ...(attachments.length > 0 ? [documentCitationSystemPrompt(attachments)] : []),
       ...(coreLawRag ? [coreLawRag] : [])
     ].join("\n\n");
 
@@ -2935,6 +2939,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       tools: toolSchemas,
       toolSystemPromptAppendix: toolPrompt,
+      toolSystemPromptTurn: toolPromptTurn,
       // A SIMPLE matter (entry gate) on a local model takes the compact
       // lane: core-law texts in the prompt, core-law tools for the rest.
       ...(coreLawTools && request.model.startsWith("local/") && attachments.length === 0
