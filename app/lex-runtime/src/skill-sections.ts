@@ -21,6 +21,7 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   DISCLAIMER: "zastrzeżenie z shared/DISCLAIMER.md dokładane po bramkach",
   "CHECKPOINTY-PISM": "checkpointy pisma procesowego i ich kontrakt odpowiedzi",
   "WIDGET-DANE": "widget z szablonu korpusu zasilany danymi (show_widget z path i data) oraz pasek eksportu/importu",
+  "REJESTR-MODULOW": "rejestr modułów dziedziny: moduły aktów wskazanych w sprawie wczytuje aplikacja (MAPA-AKTOW), pozostałe czytasz narzędziem korpusu; poniżej indeks nazw",
   // Not a procedure: the file's change history, kept in the file for the audit.
   HISTORIA: "historia zmian pliku (metadane audytu)"
 };
@@ -28,7 +29,24 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
 // Components the application runs only in some turns: their sections are replaced only
 // when the caller names them in `optIn` (ROUTING: the mechanical mode, where the user chose
 // the executive skill; in AUTO the model routes and reads the section whole).
-export const OPT_IN_COMPONENTS: ReadonlySet<string> = new Set(["ROUTING"]);
+// REJESTR-MODULOW: in the mechanical mode the application resolves the act modules itself;
+// the model keeps an index of names (first line of each description) instead of the register.
+export const OPT_IN_COMPONENTS: ReadonlySet<string> = new Set(["ROUTING", "REJESTR-MODULOW"]);
+
+const MODULE_ENTRY = /^\s*\[[✓☐x ]\]\s*(?:[A-ZĄĆĘŁŃÓŚŹŻ]+\s+)?([\w./-]+)/u;
+
+/** The register reduced to module names and the first line of each description. */
+export function moduleIndex(section: string): string[] {
+  const lines = section.split("\n");
+  const index: string[] = [];
+  for (let at = 0; at < lines.length; at += 1) {
+    const entry = MODULE_ENTRY.exec(lines[at]!);
+    if (!entry) continue;
+    const note = /^\s{6,}\((.*)/u.exec(lines[at + 1] ?? "")?.[1]?.replace(/\)\s*$/u, "").trim();
+    index.push(`- ${entry[1]}${note ? ` — ${note.length > 110 ? `${note.slice(0, 110)}…` : note}` : ""}`);
+  }
+  return index;
+}
 
 const MARK = /^<!--\s*lex:wykonuje-aplikacja:\s*([A-Z0-9-]+)\s*-->\s*$/u;
 
@@ -145,6 +163,8 @@ export function compactForModel(
       out.push(
         ...(component === "HISTORIA"
           ? [`${heading[1]} ${heading[2]} [pominięte: ${APP_COMPONENTS[component]}]`, ""]
+          : component === "REJESTR-MODULOW"
+          ? [`${heading[1]} ${heading[2]} [indeks; ${APP_COMPONENTS[component]}]`, ...moduleIndex(removed), ""]
           : [
               `${heading[1]} ${heading[2]} [wykonuje aplikacja: ${component}]`,
               `Tę procedurę (${APP_COMPONENTS[component!]}) wykonuje aplikacja; nie powtarzaj jej, stosuj wynik podany przez aplikację.`,

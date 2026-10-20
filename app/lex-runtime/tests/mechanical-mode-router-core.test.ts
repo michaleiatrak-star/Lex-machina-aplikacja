@@ -160,6 +160,26 @@ describe("tryb mechaniczny: dziedzina z aktu w pytaniu, nie ze zgadywania czatu"
     }, 120_000);
   }
 
+  it("dziedzina z dokumentów workflow, gdy pytanie jej nie nazywa (przesłuchanie świadka w sprawie pożyczki)", async () => {
+    const { calls } = await run({ ...SC.find((sc) => sc.skill === "przesluchanie-swiadkow-v2-min90")!, dr: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa", q: "Przygotuj przesłuchanie świadka Jana Nowaka." }, false);
+    expect(calls[0]!.systemPrompt).toContain(`# SKILL: ${KC}`);
+  }, 120_000);
+
+  it("nazwa sądu nie wyznacza dziedziny materii (NSA + VAT -> DR-06)", async () => {
+    const { calls } = await run({ skill: "orzeczenia-sadowe-v2", dr: "dr-05-prawo-administracyjne-sadowoadministracyjne", q: "Sprawdź wyrok NSA II FSK 1234/20 dotyczący VAT." }, false);
+    expect(calls[0]!.systemPrompt).toContain("# SKILL: dr-06-podatki-finanse-publiczne-aml");
+  }, 120_000);
+
+  it("rejestr modułów DR jako indeks nazw (moduły aktów dobiera aplikacja)", async () => {
+    const { calls } = await run(SC[0]!, false);
+    const prompt = calls[0]!.systemPrompt;
+    expect(prompt).toMatch(/## Moduły \(71 łącznie[^\n]*\[indeks; rejestr modułów dziedziny/u);
+    expect(prompt).toContain("- mod-KK-current-state-COV");
+    // AUTO: the register whole.
+    const auto = (await run(SC[0]!, true)).calls[0]!.systemPrompt;
+    expect(auto).not.toContain("[indeks; rejestr modułów dziedziny");
+  }, 120_000);
+
   it("dziedzina wybrana przez użytkownika zostaje", async () => {
     const calls: ProviderStreamParams[] = [];
     const providers = new ProviderRegistry();

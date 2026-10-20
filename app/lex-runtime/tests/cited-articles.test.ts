@@ -31,3 +31,10 @@ describe("przepisy wskazane w pytaniu: akt i numer artykułu bez modelu", () => 
     expect(citedArticlesPrompt(index, [])).toBeNull();
   });
 });
+
+describe("indeks rejestru modułów", () => {
+  it("nazwa i pierwsza linia opisu", async () => {
+    const { moduleIndex } = await import("../src/skill-sections.js");
+    expect(moduleIndex("  [✓] OK    mod-a\n              (opis modułu A)\n  [✓] NOWY  mod-b\n")).toEqual(["- mod-a — opis modułu A", "- mod-b"]);
+  });
+});

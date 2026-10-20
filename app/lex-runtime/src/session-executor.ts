@@ -443,6 +443,9 @@ export function resumeHostThread(env: NodeJS.ProcessEnv = process.env): boolean 
 
 // Mechanical mode: the user pinned an executive skill (envelope with auto:false from the
 // chat), not the model's own selection (AUTO) or the model-routed prepass.
+// Court names: the procedure a question names, not the domain of its matter.
+const COURT_NAME = /^(?:NSA|WSA|SN|SA|SO|SR|TK|TSUE|ETPC|ETPCz|Sąd(?:u|em|zie)?(?:\s+\S+)?|sąd\S*)$/u;
+
 export function mechanicalTurn(request: Pick<SessionExecutionRequest, "query" | "modelSelectsSkills">): boolean {
   if (request.modelSelectsSkills) return false;
   const envelope = parseSkillSelectionEnvelope(request.query);
@@ -2370,7 +2373,19 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (mechanical) {
         const allowed = (skill: string | undefined) =>
           skill && (!mechanicalEnvelope.domainRestrictionActive || mechanicalEnvelope.domainAllowList.includes(skill)) ? skill : undefined;
-        return allowed(cited) ?? allowed(phrased(caseText)) ?? allowed(phrased(threadUserText(request.query))) ?? request.primarySkill;
+        // A court named in the question (NSA, SN, WSA) tells the procedure, not the matter:
+        // "wyrok NSA ... VAT" is a tax matter. The matter's domain wins when only the court
+        // name matched the other one.
+        const ofMatter = (text: string) => {
+          const ranked = rankDomains(this.registry, this.flashRoutes(), text).filter((domain) => allowed(domain.skill));
+          const courtOnly = (domain: (typeof ranked)[number]) => domain.matched.length > 0 && domain.matched.every((phrase) => COURT_NAME.test(phrase));
+          // A domain the ranking only adds by the matter's kind (no phrase matched) names nothing here.
+          const named = ranked.filter((domain) => domain.matched.length > 0 && !courtOnly(domain));
+          return (named.find((domain) => domain.strong) ?? named.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
+        };
+        // The documents of a workflow (a witness to question, an evidence file) name the
+        // matter when the question does not ("Przygotuj przesłuchanie świadka Jana Nowaka").
+        return allowed(cited) ?? allowed(ofMatter(caseText)) ?? allowed(ofMatter(threadUserText(request.query))) ?? allowed(documentText.trim() ? ofMatter(documentText) : undefined) ?? request.primarySkill;
       }
       return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
     };
@@ -2485,7 +2500,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Mechanical mode: the user chose the executive skill and the application the domain,
     // so the router's routing sections (lex:wykonuje-aplikacja: ROUTING) go as a reference;
     // its mandatory core, gates and self-check stay whole.
-    const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING"] : []);
+    const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING", "REJESTR-MODULOW"] : []);
     const forModel = (resource: string, content: string): string => {
       const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents);
       if (result.compacted.length) {
@@ -2755,7 +2770,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           )
         : undefined;
     const execution = await this.engine.executePolishLegalQuery({
-      instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages] },
+      instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages], optIn: [...optInComponents] },
       ...(this.coreLawIndex
         ? {
             coreLaw: this.coreLawIndex.distinctSummaries().map((act) => ({

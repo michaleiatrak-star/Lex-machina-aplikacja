@@ -290,7 +290,9 @@ export function localSkillDigest(
 function combineSkillPrompt(
   registry: LexSkillRegistry,
   skillNames: string[],
-  localModel = false
+  localModel = false,
+  // The turn's compaction (sections the application executes), as for the other skill files.
+  compact: (body: string) => string = (body) => body
 ): string {
   return [...new Set(skillNames)]
     .map((name) => {
@@ -316,7 +318,7 @@ function combineSkillPrompt(
           skill.body
         );
       }
-      return `# SKILL: ${name}\n\n${skill.body}`;
+      return `# SKILL: ${name}\n\n${compact(skill.body)}`;
     })
     .join("\n\n---\n\n");
 }
@@ -390,7 +392,7 @@ export class LexExecutionEngine {
     query: string;
     // How the turn compacts skill text (sections the application executes, stages
     // reached); the executive SKILL.md of a mechanical turn is compacted the same way.
-    instructionCompaction?: { inactive: string[]; stages: string[] };
+    instructionCompaction?: { inactive: string[]; stages: string[]; optIn?: string[] };
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -1218,7 +1220,8 @@ export class LexExecutionEngine {
               fs.readFileSync(skillRecord.skillFile, "utf8"),
               undefined,
               new Set(args.instructionCompaction?.inactive ?? []),
-              args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined
+              args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined,
+              new Set(args.instructionCompaction?.optIn ?? [])
             ).text;
           } catch {
             skillText = "";
@@ -1917,7 +1920,15 @@ export class LexExecutionEngine {
         args.route.primarySkill,
         ...skillSelection.additionalSkills
       ],
-      localModel
+      localModel,
+      (body) =>
+        compactForModel(
+          body,
+          undefined,
+          new Set(args.instructionCompaction?.inactive ?? []),
+          args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined,
+          new Set(args.instructionCompaction?.optIn ?? [])
+        ).text
     );
     const coreResourcePrompt =
       buildCoreLegalResourcePrompt(
