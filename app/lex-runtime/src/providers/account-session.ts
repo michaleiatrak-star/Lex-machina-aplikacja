@@ -630,6 +630,39 @@ function parseCodexFinalText(
   return finalText || null;
 }
 
+// What a Codex run without a final message did: the items it produced and the
+// tokens of turn.completed. "reasoning×3;in=118000;out=32000;reasoning_out=31800"
+// tells an answer lost to the output limit from one the model never started.
+export function codexRunSummary(stdout: string): string {
+  const items = new Map<string, number>();
+  let usage = "";
+  for (const line of stdout.split(/\r?\n/)) {
+    let event: { type?: unknown; item?: { type?: unknown }; usage?: Record<string, unknown> };
+    try {
+      event = JSON.parse(line) as typeof event;
+    } catch {
+      continue;
+    }
+    if (event.type === "item.completed" && typeof event.item?.type === "string") {
+      items.set(event.item.type, (items.get(event.item.type) ?? 0) + 1);
+    }
+    if (event.type === "turn.completed" && event.usage) {
+      const token = (key: string) => (typeof event.usage![key] === "number" ? event.usage![key] : null);
+      usage = [
+        ["in", token("input_tokens")],
+        ["cached", token("cached_input_tokens")],
+        ["out", token("output_tokens")],
+        ["reasoning_out", token("reasoning_output_tokens")]
+      ]
+        .filter(([, value]) => value !== null)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(";");
+    }
+  }
+  const list = [...items.entries()].map(([type, count]) => `${type}×${count}`).join(",");
+  return [list ? `items=${list}` : "items=brak", usage].filter(Boolean).join(";");
+}
+
 // Claude CLI past its output limit: it sends itself "Output token limit hit. Resume directly …"
 // and continues in a new message; its final `result` is only the LAST piece (a 45-paragraph
 // regulation came back as its § 46 and signature). The whole answer is the run of assistant
@@ -2459,6 +2492,17 @@ export function isTransientRateLimit(error: unknown): boolean {
   );
 }
 
+export function isEmptyResponse(error: unknown): boolean {
+  return (error instanceof Error ? error.message : String(error)).startsWith("ACCOUNT_SESSION_EMPTY_RESPONSE");
+}
+
+const EMPTY_RESPONSE_RETRY_NOTE = [
+  "",
+  "",
+  "LEX_RUNTIME_NOTE: the previous run of this exact request ended without any output text.",
+  "Write the output now as plain text: either the final answer, or ONE line with the tool protocol above. Keep the reasoning short."
+].join("\n");
+
 // Waits before repeating a model run refused by a short request limit.
 const RATE_LIMIT_BACKOFF_MS = [15_000, 45_000];
 
@@ -4231,7 +4275,7 @@ export class AccountSessionManager {
           return finalText;
         }
         throw new Error(
-          "ACCOUNT_SESSION_EMPTY_RESPONSE:openai"
+          `ACCOUNT_SESSION_EMPTY_RESPONSE:openai:${codexRunSummary(result.stdout)}`
         );
       }
 
@@ -4526,13 +4570,14 @@ export async function streamAccountSession(
     iteration < maxIterations;
     iteration += 1
   ) {
+    let emptyRetried = false;
     const runOnce = () =>
       manager.runText(
         provider,
         buildAccountPrompt(
           params,
           toolTranscript
-        ),
+        ) + (emptyRetried ? EMPTY_RESPONSE_RETRY_NOTE : ""),
         params.abortSignal,
         params.continuityKey,
         provider === "anthropic" ? messageImages(params) : [],
@@ -4545,6 +4590,14 @@ export async function streamAccountSession(
         output = await runOnce();
         break;
       } catch (error) {
+        // A run that ended without any text (Codex: the turn completed with reasoning
+        // only, e.g. the output limit spent on a long prompt) is repeated once with a
+        // request for the text; the second empty run is reported with its summary.
+        if (!emptyRetried && isEmptyResponse(error) && !params.abortSignal?.aborted) {
+          emptyRetried = true;
+          attempt -= 1;
+          continue;
+        }
         const wait = RATE_LIMIT_BACKOFF_MS[attempt];
         if (wait === undefined || !isTransientRateLimit(error) || params.abortSignal?.aborted) {
           throw error;

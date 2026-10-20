@@ -27,6 +27,7 @@ import {
   LocalLegalDocumentRenderer,
   type LegalDocumentFormat
 } from "./legal-document-renderer.js";
+import type { LetterheadReport } from "./legal-document-renderer.js";
 import type {
   DocumentGenerationStateStore
 } from "./document-generation-state.js";
@@ -137,6 +138,8 @@ function unverifiedDraft(
 }
 
 export type TokenizedDocumentResult = {
+  // The firm's template (letterhead) applied to the file, or why not.
+  letterhead?: LetterheadReport;
   artifact:
     StoredCaseArtifact;
   format:
@@ -180,6 +183,8 @@ export type ReadyDocumentResult = {
   sha256: string;
   text: string;
   warnings: string[];
+  // The firm's template (letterhead) applied to the file, or why not.
+  letterhead?: LetterheadReport;
 };
 
 export class LocalDocumentAuthoringService {
@@ -279,6 +284,8 @@ export class LocalDocumentAuthoringService {
   }
 
   async createTokenized(args: {
+    // The firm's template file (DOCX): its letterhead frames the generated body.
+    template?: Uint8Array;
     caseId: string;
     createdByUserId:
       string;
@@ -333,7 +340,8 @@ export class LocalDocumentAuthoringService {
       await this.renderer
         .render(
           args.format,
-          documentAst
+          documentAst,
+          args.template
         );
     try {
       const validation =
@@ -497,7 +505,8 @@ export class LocalDocumentAuthoringService {
         deanonymizationKeyBound:
           true,
         warnings:
-          documentCompletenessWarnings(documentAst, rendered.text)
+          documentCompletenessWarnings(documentAst, rendered.text),
+        ...(rendered.template ? { letterhead: rendered.template } : {})
       };
     } finally {
       rendered.data.fill(0);
@@ -505,6 +514,8 @@ export class LocalDocumentAuthoringService {
   }
 
   async createReady(args: {
+    // The firm's template file (DOCX): its letterhead frames the generated body.
+    template?: Uint8Array;
     caseId: string;
     createdByUserId:
       string;
@@ -556,7 +567,8 @@ export class LocalDocumentAuthoringService {
       await this.renderer
         .render(
           args.format,
-          documentAst
+          documentAst,
+          args.template
         );
     try {
       const validation =
@@ -688,7 +700,8 @@ export class LocalDocumentAuthoringService {
         text:
           validation.text,
         warnings:
-          documentCompletenessWarnings(documentAst, validation.text)
+          documentCompletenessWarnings(documentAst, validation.text),
+        ...(rendered.template ? { letterhead: rendered.template } : {})
       };
     } finally {
       rendered.data.fill(0);

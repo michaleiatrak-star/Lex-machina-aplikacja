@@ -69,19 +69,44 @@ describe("stamps over printed lines", () => {
     expect(flagged.map((item) => [item.line, item.reason])).toEqual([[0, "GARBLED"], [1, "UNKNOWN_WORDS"], [4, "STAMP"]]);
   });
 
-  it("a stamp's line is marked as a stamp in the text, not as a doubtful reading", async () => {
+  it("a stamp's line is on the review list only, not in the page text; the OCR line stays", async () => {
     const marked = await markOcrReview(STAMPED, knownHere);
     const lines = marked.text.split("\n");
-    expect(lines[4]).toBe(`${STAMP_MARK} r.pr. Anna Nowak`);
+    expect(lines).toHaveLength(4);
+    expect(marked.text).not.toContain("r.pr. Anna Nowak");
+    expect(marked.text).not.toContain(STAMP_MARK);
     expect(lines[0]).toBe(`${REVIEW_MARK} ${STAMPED.lines![0]!.text}`);
-    expect(marked.lines![4]!.text).toBe("r.pr. Anna Nowak");
+    expect(marked.review!.find((item) => item.reason === "STAMP")).toMatchObject({ line: 4, text: "r.pr. Anna Nowak" });
+    expect(marked.lines![4]).toMatchObject({ text: "r.pr. Anna Nowak", stamp: true });
   });
 
-  it("the mark survives the cleaning of OCR lines and comes from the worker's output", async () => {
+  it("LEX_OCR_STAMP_TEXT=text: the stamp's line stays in the text with its mark (as before)", async () => {
+    process.env.LEX_OCR_STAMP_TEXT = "text";
+    try {
+      const marked = await markOcrReview(STAMPED, knownHere);
+      expect(marked.text.split("\n")[4]).toBe(`${STAMP_MARK} r.pr. Anna Nowak`);
+    } finally {
+      delete process.env.LEX_OCR_STAMP_TEXT;
+    }
+  });
+
+  it("the evidence image hides a stamp's line whole and still masks values in the text", async () => {
+    const marked = await markOcrReview(STAMPED, knownHere);
+    const boxes = maskBoxes(marked, ["Marka Wiśniewskiego"]);
+    expect(boxes).not.toBeNull();
+    // Line 4 (the stamp) at y = 80: hidden whole although it is not in the text.
+    expect(boxes!.some((box) => box[1] === 80 - 3 && box[0] <= 10)).toBe(true);
+    // Without the review list the stamp's line is hidden too (its values cannot be found in the text).
+    const bare = { ...STAMPED, text: normalizeOcrPage(STAMPED).text };
+    expect(maskBoxes(bare, [])!.some((box) => box[1] === 80 - 3)).toBe(true);
+  });
+
+  it("the cleaning of OCR lines rebuilds the text without stamps; the worker's lines keep the flag", async () => {
     // A ligature in a printed line: the page text is rebuilt from the lines.
     const cleaned = normalizeOcrPage({ ...STAMPED, lines: STAMPED.lines!.map((line, index) => (index === 3 ? { ...line, text: "ﬁrma Kowalski" } : line)) });
     expect(cleaned.text.split("\n")[3]).toBe("firma Kowalski");
-    expect(cleaned.text.split("\n")[4]).toMatch(/^\[PIECZĘĆ lub kolorowy tusz\] r\.pr\./u);
+    expect(cleaned.text).not.toContain("r.pr. Anna Nowak");
+    expect(cleaned.lines![4]).toMatchObject({ stamp: true });
     const [read] = await readOcrPages([{ page: 1, source: "OCR", text: "x", lines: [{ text: "BIURO PODAWCZE", score: 0.98, stamp: true }, { text: "Treść", score: 0.99 }] }], "/nonexistent");
     expect(read!.lines).toEqual([{ text: "BIURO PODAWCZE", score: 0.98, stamp: true }, { text: "Treść", score: 0.99 }]);
   });

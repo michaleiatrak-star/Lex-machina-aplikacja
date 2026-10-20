@@ -405,7 +405,9 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
               <summary>Niepewne ({doubtful.length})</summary>
               <small>
                 Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.
-                {doubtful.some((line) => line.stamp) ? " Pieczęć w kolorze odczytana osobno od tekstu pisma." : ""}
+                {doubtful.some((line) => line.stamp)
+                  ? " Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma: gdy niosą istotne dane (data wpływu, podpis, kwota), dopisz je przez „Popraw tekst strony”."
+                  : ""}
               </small>
               <ul>
                 {doubtful.map((line, index) => (

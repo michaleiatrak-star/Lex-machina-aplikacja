@@ -108,6 +108,7 @@ import {
   unarchiveCase,
   type AuthenticatedUser,
   type CaseListItem,
+  type GeneratedDocumentResponse,
   type CaseScheduleEvent,
   type CaseScheduleKind,
   type DocumentAttachmentSelection,
@@ -857,7 +858,7 @@ export function providerFailureMessage(
       case "ACCOUNT_SESSION_COMMAND_TIMEOUT":
         return `Klient ${client} przekroczył limit czasu wykonania.`;
       case "ACCOUNT_SESSION_EMPTY_RESPONSE":
-        return `${name} zakończył wykonanie bez treści odpowiedzi.`;
+        return `${name} zakończył wykonanie bez treści odpowiedzi${provider.startsWith("anthropic") ? "" : " także po jednym ponowieniu z prośbą o tekst"}. Zwykle oznacza to, że model zużył limit odpowiedzi na rozumowanie nad długim kontekstem; „reasoning_out” w szczegółach pokazuje, ile. Ponów wiadomość albo zawęź pytanie lub kontekst sprawy.`;
       case "ACCOUNT_SESSION_CLI_FAILED":
         return `Klient ${client} zakończył wykonanie błędem.`;
       default:
@@ -1163,6 +1164,14 @@ const EXPORT_REFERENCE_STATUS: Record<string, string> = {
 /** What to check in a generated file before using it (empty when nothing). */
 export function documentWarningsText(warnings: string[] | undefined): string {
   return warnings?.length ? ` Sprawdź przed użyciem: ${warnings.join("; ")}.` : "";
+}
+
+// Whether the firm's letterhead (header, footer, page setup of its DOCX template) is in the file.
+export function letterheadText(letterhead: GeneratedDocumentResponse["letterhead"]): string {
+  if (!letterhead) return "";
+  return letterhead.applied
+    ? ` Pismo wstawione do wzoru kancelarii (nagłówek: ${letterhead.headers}, stopka: ${letterhead.footers}, grafiki: ${letterhead.images}; marginesy ze wzoru).`
+    : ` Wzoru kancelarii nie wstawiono do pliku (${letterhead.reason}); plik ma układ Lex.`;
 }
 
 type PipelineNext = NonNullable<ExtendedExecution["pipelineNext"]>;
@@ -3671,7 +3680,7 @@ export default function MatterChatApp({
               (stage === "FINAL"
                 ? "Gotowy dokument pisma jest poniżej: pobierz, obejrzyj i edytuj albo otwórz w edytorze."
                 : "Szkic pisma jako plik .docx jest poniżej. Po zakończeniu kolejnych etapów powstanie wersja gotowa.") +
-              documentWarningsText(generated.warnings),
+              documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
             meta: "dokument: " + generated.artifact.filename,
             generatedDocument: {
               artifactId: generated.artifact.artifactId,
@@ -4050,7 +4059,7 @@ export default function MatterChatApp({
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
                         " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).") +
-                    documentWarningsText(generated.warnings),
+                    documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
                   meta:
                     "dokument: " +
                     generated

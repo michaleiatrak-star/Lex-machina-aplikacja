@@ -427,6 +427,10 @@ export type GeneratedDocumentResponse = {
   readyForDownload?: boolean;
   // Fields left in square brackets, missing title or signature.
   warnings?: string[];
+  // The firm's DOCX template (letterhead) put around the generated body, or why not.
+  letterhead?:
+    | { applied: true; headers: number; footers: number; images: number }
+    | { applied: false; reason: string };
   downloadTicket?: {
     ticketId: string;
     caseId: string;
@@ -2929,74 +2933,6 @@ export function validateRoute(
     method: "POST",
     body: JSON.stringify({ primarySkill })
   });
-}
-
-export type QualitySummary = {
-  turns: number;
-  score: number;
-  blockedRate: number;
-  verificationRate: number | null;
-  topicCoverage: number;
-  actCoverage: number | null;
-  continuity: number | null;
-  pathCoverage?: number | null;
-  unbackedClaimRate?: number;
-  meanTimeMs: number;
-  inputTokens: number | null;
-  outputTokens: number | null;
-};
-
-export type QualityBenchmarkJob = {
-  reportId: string;
-  provider: string;
-  model: string;
-  startedAt: string;
-  done: number;
-  total: number;
-  current: string | null;
-  cancelling: boolean;
-  error?: string;
-};
-
-export type QualityBenchmarkReportSummary = {
-  reportId: string;
-  createdAt: string;
-  finishedAt: string;
-  provider: string;
-  model: string;
-  historyChars: number;
-  cases: string[];
-  cancelled: boolean;
-  summary: QualitySummary;
-  comparison?: {
-    baselineReportId: string;
-    items: Array<{ metric: keyof QualitySummary; baseline: number | null; current: number | null; delta: number | null; regression: boolean }>;
-  };
-};
-
-export function getQualityBenchmark(): Promise<{
-  job: QualityBenchmarkJob | null;
-  failed: QualityBenchmarkJob | null;
-  reports: QualityBenchmarkReportSummary[];
-}> {
-  return json("/api/admin/quality-benchmark");
-}
-
-export function startQualityBenchmark(input: {
-  provider: ProviderId;
-  model: string;
-  cases?: string[];
-  historyChars?: number;
-}): Promise<{ job: QualityBenchmarkJob }> {
-  return json("/api/admin/quality-benchmark", { method: "POST", body: JSON.stringify(input) });
-}
-
-export function cancelQualityBenchmark(): Promise<{ job: QualityBenchmarkJob | null }> {
-  return json("/api/admin/quality-benchmark/cancel", { method: "POST", body: "{}" });
-}
-
-export function getQualityBenchmarkReport(reportId: string): Promise<{ report: QualityBenchmarkReportSummary & { answers: unknown[] }; markdown: string }> {
-  return json(`/api/admin/quality-benchmark/reports/${reportId}`);
 }
 
 export function getModels(

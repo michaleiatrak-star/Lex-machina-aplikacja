@@ -2021,6 +2021,9 @@ export class LexExecutionEngine {
         registry: this.registry,
         activeSkills: skillSelection.loadedSkills,
         local: localModel,
+        // Mechanical mode (the user pinned the executive skill): no catalog of the other
+        // skills; a switch is offered by the application, not chosen by the model.
+        catalog: skillEnvelope.automatic || skillEnvelope.modelRouted || !workflowPlan.executionSkill,
         toolNames: new Set((args.tools ?? []).map((tool) => tool.function.name)),
         ...(args.coreLaw ? { coreLaw: args.coreLaw } : {})
       }),

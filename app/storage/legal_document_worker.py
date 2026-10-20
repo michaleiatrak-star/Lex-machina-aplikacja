@@ -144,6 +144,24 @@ ODT_ALLOWED = {
     "META-INF/manifest.xml",
 }
 
+# Parts a firm's letterhead brings into a rendered document (render_docx with a template):
+# its headers and footers, their relationships and the images they show. Nothing else of
+# the template is copied; the body is always the generated one.
+LETTERHEAD_PART_RE = re.compile(r"^word/(?:header|footer)\d{1,3}\.xml$")
+LETTERHEAD_RELS_RE = re.compile(r"^word/_rels/(?:header|footer)\d{1,3}\.xml\.rels$")
+LETTERHEAD_MEDIA_RE = re.compile(r"^word/media/lex_t\d{1,3}\.(png|jpeg|gif|bmp|emf|wmf)$")
+MEDIA_CONTENT_TYPES = {"png": "image/png", "jpeg": "image/jpeg", "gif": "image/gif", "bmp": "image/bmp", "emf": "image/x-emf", "wmf": "image/x-wmf"}
+MAX_LETTERHEAD_PARTS = 6
+MAX_LETTERHEAD_MEDIA = 12
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+REL_TYPE_BASE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+
+def docx_part_allowed(name):
+    return (name in DOCX_ALLOWED or LETTERHEAD_PART_RE.match(name) is not None
+            or LETTERHEAD_RELS_RE.match(name) is not None or LETTERHEAD_MEDIA_RE.match(name) is not None)
+
 def zip_bytes(entries, stored_first=None):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -363,7 +381,101 @@ def odt_styles_for(profile):
         return ODT_STYLES.replace("Arial", "Times New Roman").replace('style:font-name="Times New Roman" fo:font-size="11.5pt"', 'style:font-name="Times New Roman" fo:font-size="12pt"')
     return ODT_STYLES
 
-def render_docx(ast):
+def read_template_entries(data):
+    """The firm template's parts, with the size limits of read_zip and no part filter."""
+    if len(data) > MAX_PACKAGE_BYTES:
+        raise ValueError("DOCUMENT_PACKAGE_TOO_LARGE")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data), "r")
+    except zipfile.BadZipFile:
+        raise ValueError("TEMPLATE_PACKAGE_INVALID")
+    with zf:
+        entries = {}
+        total = 0
+        for info in zf.infolist():
+            total += info.file_size
+            if total > MAX_PACKAGE_BYTES * 4:
+                raise ValueError("DOCUMENT_PACKAGE_EXPANSION_LIMIT")
+            entries[info.filename] = zf.read(info.filename)
+        return entries
+
+def template_letterhead(data):
+    """Headers, footers (with their images) and the page setup of the template's last
+    section: what a firm's letterhead is. Fails closed (ValueError) on anything that would
+    have to be copied blindly: an external link, a non-image relationship, a missing part."""
+    entries = read_template_entries(data)
+    if "word/document.xml" not in entries:
+        raise ValueError("TEMPLATE_NOT_DOCX")
+    doc = ET.fromstring(entries["word/document.xml"])
+    body = doc.find("{%s}body" % W_NS)
+    sect = body.find("{%s}sectPr" % W_NS) if body is not None else None
+    if sect is None:
+        raise ValueError("TEMPLATE_SECTION_MISSING")
+    rels = {}
+    if "word/_rels/document.xml.rels" in entries:
+        for rel in ET.fromstring(entries["word/_rels/document.xml.rels"]).iter("{%s}Relationship" % PKG_REL_NS):
+            rels[rel.attrib.get("Id")] = rel.attrib
+    parts, media, references = [], [], []
+    for ref in list(sect):
+        kind = ref.tag.split("}")[1]
+        if kind not in ("headerReference", "footerReference"):
+            continue
+        ref_type = ref.attrib.get("{%s}type" % W_NS, "default")
+        if ref_type == "even":
+            continue
+        rel = rels.get(ref.attrib.get("{%s}id" % R_NS))
+        if not rel or rel.get("TargetMode") == "External":
+            raise ValueError("TEMPLATE_LETTERHEAD_RELATIONSHIP_INVALID")
+        source = "word/" + rel.get("Target", "").lstrip("/").replace("word/", "", 1)
+        if source not in entries or not re.match(r"^word/(?:header|footer)\d{1,3}\.xml$", source):
+            raise ValueError("TEMPLATE_LETTERHEAD_PART_MISSING")
+        if len(parts) >= MAX_LETTERHEAD_PARTS:
+            raise ValueError("TEMPLATE_LETTERHEAD_TOO_MANY_PARTS")
+        part_kind = "header" if kind == "headerReference" else "footer"
+        name = "%s%d.xml" % (part_kind, 100 + len(parts))
+        ET.fromstring(entries[source])
+        part_rels = None
+        rels_source = "word/_rels/" + source.split("/", 1)[1] + ".rels"
+        if rels_source in entries:
+            rels_root = ET.fromstring(entries[rels_source])
+            image_rels = []
+            for prel in rels_root.iter("{%s}Relationship" % PKG_REL_NS):
+                if prel.attrib.get("TargetMode") == "External":
+                    raise ValueError("DOCUMENT_PACKAGE_EXTERNAL_RELATIONSHIP")
+                if prel.attrib.get("Type") != REL_TYPE_BASE + "image":
+                    raise ValueError("TEMPLATE_LETTERHEAD_RELATIONSHIP_UNSUPPORTED")
+                target = "word/" + prel.attrib.get("Target", "").lstrip("/").replace("word/", "", 1)
+                ext = target.rsplit(".", 1)[-1].lower().replace("jpg", "jpeg")
+                if target not in entries or ext not in MEDIA_CONTENT_TYPES:
+                    raise ValueError("TEMPLATE_LETTERHEAD_MEDIA_INVALID")
+                if len(media) >= MAX_LETTERHEAD_MEDIA:
+                    raise ValueError("TEMPLATE_LETTERHEAD_TOO_MANY_MEDIA")
+                media_name = "media/lex_t%d.%s" % (len(media) + 1, ext)
+                media.append(("word/" + media_name, entries[target], ext))
+                image_rels.append((prel.attrib.get("Id", ""), media_name))
+            # Written anew in the default namespace: OPC readers (LibreOffice) refuse the
+            # "ns0:" prefixes ElementTree would give a re-serialized part.
+            part_rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                         '<Relationships xmlns="%s">%s</Relationships>' % (PKG_REL_NS, "".join(
+                             '<Relationship Id="%s" Type="%simage" Target="%s"/>' % (escape(rid, {'"': "&quot;"}), REL_TYPE_BASE, target)
+                             for rid, target in image_rels))).encode("utf-8")
+        rid = "rIdT%d" % (len(parts) + 1)
+        parts.append((part_kind, name, entries[source], part_rels, rid))
+        references.append('<w:%s w:type="%s" r:id="%s"/>' % (kind, escape(ref_type, {'"': "&quot;"}), rid))
+    def first(tag):
+        node = sect.find("{%s}%s" % (W_NS, tag))
+        return node.attrib if node is not None else None
+    def number(attrs, key, default):
+        value = (attrs or {}).get("{%s}%s" % (W_NS, key))
+        return int(value) if value is not None and re.fullmatch(r"\d{1,6}", value) else default
+    size, margins = first("pgSz"), first("pgMar")
+    page = (number(size, "w", 11906), number(size, "h", 16838))
+    pg_mar = tuple(number(margins, key, default) for key, default in
+                   (("top", 1417), ("right", 1417), ("bottom", 1417), ("left", 1417), ("header", 720), ("footer", 567)))
+    return {"parts": parts, "media": media, "references": references, "page": page, "margins": pg_mar,
+            "titlePg": sect.find("{%s}titlePg" % W_NS) is not None}
+
+def render_docx(ast, letterhead=None):
     body = []
     if ast.get("title"):
         body.append(docx_paragraph(ast.get("title"), "Title"))
@@ -372,10 +484,37 @@ def render_docx(ast):
     top, right, bottom, left = PAGE_MARGINS.get(ast.get("styleProfile"), (1417, 1417, 1417, 1417))
     sect = ('<w:sectPr><w:footerReference w:type="default" r:id="rId5"/><w:pgSz w:w="11906" w:h="16838"/>'
             '<w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" w:header="720" w:footer="567" w:gutter="0"/></w:sectPr>') % (top, right, bottom, left)
+    content_types, doc_rels = DOCX_CT, DOCX_DOC_RELS
+    extra = []
+    own_footer = True
+    if letterhead:
+        # The firm's letterhead: its headers and footers and its page setup; Lex keeps its
+        # page-number footer only where the template has no default footer.
+        own_footer = not any(kind == "footer" and 'w:type="default"' in ref
+                             for (kind, _, _, _, _), ref in zip(letterhead["parts"], letterhead["references"]))
+        refs = "".join(letterhead["references"]) + ('<w:footerReference w:type="default" r:id="rId5"/>' if own_footer else "")
+        t, r, b, l, h, f = letterhead["margins"]
+        sect = ('<w:sectPr>%s<w:pgSz w:w="%d" w:h="%d"/><w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" '
+                'w:header="%d" w:footer="%d" w:gutter="0"/>%s</w:sectPr>') % (
+                    refs, letterhead["page"][0], letterhead["page"][1], t, r, b, l, h, f, "<w:titlePg/>" if letterhead["titlePg"] else "")
+        overrides, relationships = [], []
+        for kind, name, data, rels, rid in letterhead["parts"]:
+            overrides.append('<Override PartName="/word/%s" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.%s+xml"/>' % (name, kind))
+            relationships.append('<Relationship Id="%s" Type="%s%s" Target="%s"/>' % (rid, REL_TYPE_BASE, kind, name))
+            extra.append(("word/" + name, data))
+            if rels is not None:
+                extra.append(("word/_rels/" + name + ".rels", rels))
+        defaults = "".join('<Default Extension="%s" ContentType="%s"/>' % (ext, MEDIA_CONTENT_TYPES[ext]) for ext in sorted({ext for _, _, ext in letterhead["media"]}))
+        extra.extend((name, data) for name, data, _ in letterhead["media"])
+        content_types = DOCX_CT.replace('<Default Extension="xml" ContentType="application/xml"/>', '<Default Extension="xml" ContentType="application/xml"/>' + defaults, 1).replace("</Types>", "".join(overrides) + "</Types>")
+        doc_rels = DOCX_DOC_RELS.replace("</Relationships>", "".join(relationships) + "</Relationships>")
+        if not own_footer:
+            content_types = content_types.replace('<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>', "")
+            doc_rels = doc_rels.replace('<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>', "")
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>%s%s</w:body></w:document>') % ("".join(body), sect)
     entries = [
-        ("[Content_Types].xml", DOCX_CT),
+        ("[Content_Types].xml", content_types),
         ("_rels/.rels", DOCX_ROOT_RELS),
         ("docProps/core.xml", DOCX_CORE),
         ("docProps/app.xml", DOCX_APP),
@@ -384,8 +523,9 @@ def render_docx(ast):
         ("word/settings.xml", DOCX_SETTINGS),
         ("word/fontTable.xml", DOCX_FONT),
         ("word/numbering.xml", DOCX_NUMBERING),
-        ("word/footer1.xml", DOCX_FOOTER),
-        ("word/_rels/document.xml.rels", DOCX_DOC_RELS),
+        *([("word/footer1.xml", DOCX_FOOTER)] if own_footer else []),
+        ("word/_rels/document.xml.rels", doc_rels),
+        *extra,
     ]
     return zip_bytes([(n, d.encode("utf-8") if isinstance(d, str) else d) for n, d in entries])
 
@@ -472,7 +612,7 @@ def read_zip(data, allowed, required):
         names = zf.namelist()
         if len(names) != len(set(names)):
             raise ValueError("DOCUMENT_PACKAGE_DUPLICATE_ENTRY")
-        if set(names) - allowed:
+        if any(not (allowed(name) if callable(allowed) else name in allowed) for name in names):
             raise ValueError("DOCUMENT_PACKAGE_FORBIDDEN_PART")
         if not required.issubset(set(names)):
             raise ValueError("DOCUMENT_PACKAGE_REQUIRED_PART_MISSING")
@@ -514,7 +654,7 @@ def extract_odt_text(entries):
     return "\n".join(text_of(node) for node in root.iter() if node.tag in tags)
 
 def validate_docx(data):
-    names, entries = read_zip(data, DOCX_ALLOWED, DOCX_REQUIRED)
+    names, entries = read_zip(data, docx_part_allowed, DOCX_REQUIRED)
     assert_no_external_relationships(entries)
     for name, raw in entries.items():
         if name.endswith(".xml") or name.endswith(".rels"):
@@ -644,8 +784,24 @@ def main():
     if operation == "render":
         fmt = request.get("format")
         ast = request.get("ast")
+        template = request.get("templateBase64")
+        letterhead, template_report = None, None
+        if template:
+            # The firm's template: its letterhead goes into the file; a template whose parts
+            # cannot be copied safely is reported, and the document keeps Lex's own layout.
+            if fmt != "docx":
+                template_report = {"applied": False, "reason": "TEMPLATE_FORMAT_UNSUPPORTED"}
+            else:
+                try:
+                    letterhead = template_letterhead(base64.b64decode(template, validate=True))
+                    template_report = {"applied": True,
+                                       "headers": sum(1 for part in letterhead["parts"] if part[0] == "header"),
+                                       "footers": sum(1 for part in letterhead["parts"] if part[0] == "footer"),
+                                       "images": len(letterhead["media"])}
+                except (ValueError, ET.ParseError) as exc:
+                    template_report = {"applied": False, "reason": str(exc) or exc.__class__.__name__}
         if fmt == "docx":
-            package = render_docx(ast)
+            package = render_docx(ast, letterhead)
             _, _, text = validate_docx(package)
         elif fmt == "odt":
             package = render_odt(ast)
@@ -653,6 +809,8 @@ def main():
         else:
             raise ValueError("DOCUMENT_FORMAT_UNSUPPORTED")
         response = {"packageBase64": base64.b64encode(package).decode("ascii"), "text": text, "bytes": len(package)}
+        if template_report is not None:
+            response["template"] = template_report
     elif operation == "deanonymize":
         fmt = request.get("format")
         package = base64.b64decode(request.get("packageBase64", ""), validate=True)

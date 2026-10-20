@@ -441,6 +441,14 @@ export function resumeHostThread(env: NodeJS.ProcessEnv = process.env): boolean 
   return env.LEX_ACCOUNT_RESUME === "1";
 }
 
+// Mechanical mode: the user pinned an executive skill (envelope with auto:false from the
+// chat), not the model's own selection (AUTO) or the model-routed prepass.
+export function mechanicalTurn(request: Pick<SessionExecutionRequest, "query" | "modelSelectsSkills">): boolean {
+  if (request.modelSelectsSkills) return false;
+  const envelope = parseSkillSelectionEnvelope(request.query);
+  return !envelope.automatic && !envelope.modelRouted && envelope.manualSkills.length > 0;
+}
+
 function duplicateSkills(names: string[]): string[] {
   const byBase = new Map<string, string[]>();
   for (const name of names) {
@@ -1271,7 +1279,8 @@ export const FIRM_MATERIAL_NOTE = [
   "Bloki oznaczone WZÓR KANCELARII i KNOW-HOW KANCELARII pochodzą z biblioteki kancelarii, nie z akt sprawy.",
   "- Wzór: przejmij jego układ, kolejność części, styl i stałe formuły; treść merytoryczną bierz z dokumentów sprawy i wiadomości użytkownika.",
   "- Nie przenoś do pisma danych przykładowych z wzoru (stron, sygnatur, kwot, dat, adresów); w miejsca bez danych wstaw neutralne pole w nawiasie kwadratowym, np. [Kwota], [Termin].",
-  "- Materiały kancelarii nie są dowodami ani faktami w sprawie; nie cytuj ich jako źródła faktów."
+  "- Materiały kancelarii nie są dowodami ani faktami w sprawie; nie cytuj ich jako źródła faktów.",
+  "- Papier firmowy wzoru (nagłówek, logo, stopka, marginesy) aplikacja wstawia do pliku .docx sama; nie powtarzaj go w treści pisma."
 ].join("\n");
 
 function transferExecutionEvents(
@@ -2446,8 +2455,12 @@ export class SafeSessionExecutor implements SessionExecutor {
     ]);
     // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
     const stages = reachedStages(request.query);
+    // Mechanical mode: the user chose the executive skill and the application the domain,
+    // so the router's routing sections (lex:wykonuje-aplikacja: ROUTING) go as a reference;
+    // its mandatory core, gates and self-check stay whole.
+    const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING"] : []);
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content, undefined, inactiveComponents, stages);
+      const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,
@@ -2554,7 +2567,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             forModel(`${skill}/SKILL.md`, text)
           ].join("\n\n")
         );
-        const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages).text);
+        const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages, optInComponents).text);
         if (contract) {
           const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
           for (const item of loaded.loaded) {

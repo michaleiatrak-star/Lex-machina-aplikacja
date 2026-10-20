@@ -21,6 +21,10 @@ const EXECUTION_SKILL_NAME_OVERRIDES =
     "raport-klienta-v1"
   ]);
 
+// The legal guide (type ux-guide) runs its LEGAL_GUIDE_V1 pipeline only when the user pins
+// it in the mechanical mode; in AUTO it stays the conversational fallback and pins nothing.
+const PINNED_WORKFLOW_SKILLS = new Set(["przewodnik-prawny-v2"]);
+
 export type SkillSelectionEnvelope = {
   query: string;
   automatic: boolean;
@@ -620,7 +624,7 @@ export function resolveAdditionalSkills(
   for (const name of manual) {
     const skill = registry.get(name);
     if (!skill) continue;
-    if (isExecutionSkill(skill)) {
+    if (isExecutionSkill(skill) || (!automatic && PINNED_WORKFLOW_SKILLS.has(name))) {
       executionSkills.add(name);
       promoteWorkflowExecutionSkill(name);
     }

@@ -5,7 +5,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import type { IngestedPage, OcrCorrection, OcrLine } from "./document-ingestion.js";
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 
 /**
  * Doubtful OCR lines read again by a local vision model (Qwen2.5-VL 3B through the
@@ -198,7 +198,7 @@ export async function correctWithVision(
       return decided.text === line.text ? line : { ...line, text: decided.text };
     });
     if (corrections.length === (page.corrections ?? []).length) return page;
-    return { ...page, lines, text: lines.map(ocrLineText).join("\n"), corrections };
+    return { ...page, lines, text: ocrPageText(lines), corrections };
   });
 }
 

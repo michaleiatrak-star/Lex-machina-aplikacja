@@ -92,6 +92,11 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
   let cursor = 0;
   for (const line of lines) {
     const at = page.text.indexOf(line.text, cursor);
+    // A stamp's line is on the review list, not in the text: hidden whole below.
+    if (at < 0 && line.stamp) {
+      offsets.push(-1);
+      continue;
+    }
     if (at < 0) return null;
     offsets.push(at);
     cursor = at + line.text.length;
@@ -113,7 +118,7 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
   // stamps): a handwritten "Wiatrak Michał" read as "Wire mats Mithet" matches no key value.
   const review = new Set((page.review ?? []).map((item) => item.line));
   lines.forEach((line, index) => {
-    if ((typeof line.score === "number" && line.score < LOW_SCORE_LINE) || review.has(index)) {
+    if ((typeof line.score === "number" && line.score < LOW_SCORE_LINE) || review.has(index) || line.stamp) {
       boxes.push(lineBox(index, 0, line.text.length));
     }
   });
@@ -125,6 +130,7 @@ export function maskBoxes(page: IngestedPage, values: string[]): Box[] | null {
       const end = start + match[0].length;
       lines.forEach((line, index) => {
         const lineStart = offsets[index]!;
+        if (lineStart < 0) return;
         const lineEnd = lineStart + line.text.length;
         if (end <= lineStart || start >= lineEnd) return;
         boxes.push(lineBox(index, Math.max(start, lineStart) - lineStart, Math.min(end, lineEnd) - lineStart));

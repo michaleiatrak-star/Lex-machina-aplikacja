@@ -106,8 +106,9 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
   }
 
   return (
-    <section className="anomaly-journal">
-      <div className="maintenance-heading">
+    // Collapsed by default: the counts stay in the heading, the filters and tables open on demand.
+    <details className="anomaly-journal">
+      <summary className="maintenance-heading">
         <div>
           <strong>
             Dziennik nieprawidłowości
@@ -117,7 +118,7 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
         <span className={errors || loadError ? "anomaly-count anomaly-count-error" : "anomaly-count"}>
           {loadError ? "dziennik niedostępny" : `${errors} błędów · ${warnings} ostrzeżeń`}
         </span>
-      </div>
+      </summary>
 
       <div className="anomaly-filters">
         <select value={hours} onChange={(event) => setHours(Number(event.target.value))} aria-label="Okres">
@@ -184,6 +185,6 @@ export function AnomalyJournalSection({ user }: { user: AuthenticatedUser }) {
       )}
 
       {message ? <p className="maintenance-error">{message}</p> : null}
-    </section>
+    </details>
   );
 }

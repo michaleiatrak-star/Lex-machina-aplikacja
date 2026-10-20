@@ -166,6 +166,7 @@ import type {
 import type {
   LocalSharedTemplateStore
 } from "../shared-template-store.js";
+import { DOCX_MEDIA_TYPE } from "../shared-template-store.js";
 import { ExecutionSteps } from "../execution-steps.js";
 import {
   ContextBudgetError,
@@ -7600,6 +7601,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             templateProfile
               .styleProfile;
         }
+        // The firm's DOCX template frames the file: its letterhead (headers, footers with
+        // their images, page setup) around the generated body (legal_document_worker).
+        let letterheadTemplate: Buffer | undefined;
+        if (templateId && format === "docx" && options.sharedTemplateStore?.readTemplate) {
+          const template = await options.sharedTemplateStore.readTemplate(templateId);
+          if (template.manifest.mediaType === DOCX_MEDIA_TYPE) letterheadTemplate = template.data;
+          else template.data.fill(0);
+        }
 
         // "Generuj dokument" under an answer that is itself a letter: its file from that text,
         // mechanically (answer-document.ts), with no model turn that would write it again. The
@@ -7640,11 +7649,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               caseDataKey,
               keyVersion: caseView.keyVersion,
               validationContext: stored.validationContext,
+              ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
               ...(typeof req.body?.filename === "string" ? { filename: req.body.filename } : {})
             })
           );
           res.status(201).json({
             ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+            ...(ready.letterhead ? { letterhead: ready.letterhead } : {}),
             sessionId: stored.sessionId,
             artifact: ready.artifact,
             format: ready.format,
@@ -7854,6 +7865,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       validationContext:
                         generated
                           .validationContext,
+                      ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
                       ...(typeof req
                         .body
                         ?.filename ===
@@ -7868,6 +7880,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               );
           res.status(201).json({
             ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+            ...(ready.letterhead ? { letterhead: ready.letterhead } : {}),
             sessionId:
               generated
                 .sessionId,
@@ -7921,6 +7934,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     validationContext:
                       generated
                         .validationContext,
+                    ...(letterheadTemplate ? { template: letterheadTemplate } : {}),
                     ...(typeof req
                       .body
                       ?.filename ===
@@ -7936,6 +7950,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
 
         res.status(201).json({
             ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+            ...(tokenized.letterhead ? { letterhead: tokenized.letterhead } : {}),
           sessionId:
             generated
               .sessionId,

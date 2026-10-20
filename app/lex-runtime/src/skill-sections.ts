@@ -10,7 +10,7 @@
 
 export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   ANONIMIZACJA: "pseudonimizacja danych przed wysłaniem do modelu (KROK 0A)",
-  ROUTING: "wybór skilla wykonawczego z macierzy aktywacji i tabeli routingu KROK 2",
+  ROUTING: "routing KROK 2: dziedzinę wskazała aplikacja, skill wykonawczy wybrał użytkownik w trybie mechanicznym; ślad KROK 3A wypisuje aplikacja",
   PROFIL: "profil ścieżki obowiązkowej i wczytanie jej zasobów",
   "REJESTR-KROKOW": "rejestr kroków ścieżki obowiązkowej z faktycznych odczytów",
   "MAPA-AKTOW": "moduły aktów wskazywane mechanicznie z MAPA-AKTOW",
@@ -24,6 +24,11 @@ export const APP_COMPONENTS: Readonly<Record<string, string>> = {
   // Not a procedure: the file's change history, kept in the file for the audit.
   HISTORIA: "historia zmian pliku (metadane audytu)"
 };
+
+// Components the application runs only in some turns: their sections are replaced only
+// when the caller names them in `optIn` (ROUTING: the mechanical mode, where the user chose
+// the executive skill; in AUTO the model routes and reads the section whole).
+export const OPT_IN_COMPONENTS: ReadonlySet<string> = new Set(["ROUTING"]);
 
 const MARK = /^<!--\s*lex:wykonuje-aplikacja:\s*([A-Z0-9-]+)\s*-->\s*$/u;
 
@@ -96,11 +101,13 @@ export function laterTurn(query: string): boolean {
 // `inactive`: components the application does not run in this turn (e.g. DISCLAIMER
 // for a local model or structured output); their sections reach the model whole.
 // `reached`: stages reached in this turn; undefined = every stage (whole files).
+// `optIn`: components of OPT_IN_COMPONENTS the application runs in this turn.
 export function compactForModel(
   text: string,
   enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0",
   inactive: ReadonlySet<string> = new Set(),
-  reached?: ReadonlySet<string>
+  reached?: ReadonlySet<string>,
+  optIn: ReadonlySet<string> = new Set()
 ): { text: string; compacted: CompactedSection[] } {
   if (!enabled) return { text, compacted: [] };
   const front = compactFrontmatter(text);
@@ -113,7 +120,8 @@ export function compactForModel(
     const heading = /^(#{1,6})\s+(.*)$/u.exec(lines[index + 1] ?? "");
     const component = MARK.exec(lines[index]!)?.[1];
     const stage = reached ? STAGE_MARK.exec(lines[index]!)?.[1] : undefined;
-    const executed = component && APP_COMPONENTS[component] && !inactive.has(component);
+    const executed =
+      component && APP_COMPONENTS[component] && !inactive.has(component) && (!OPT_IN_COMPONENTS.has(component) || optIn.has(component));
     const deferred = stage && STAGES[stage] && !reached!.has(stage);
     if (!heading || (!executed && !deferred)) {
       out.push(lines[index]!);

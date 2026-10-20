@@ -35,7 +35,7 @@ describe("preview before a document is finalized", () => {
       <PrivacyPreview caseId="case_1" review={stamped} fileName="pismo.pdf" keepClear={false} onConfirm={() => undefined} onCancel={() => undefined} />
     );
     expect(html).toContain("pieczęć · „BIURO PODAWCZE”");
-    expect(html).toContain("Pieczęć w kolorze odczytana osobno od tekstu pisma.");
+    expect(html).toContain("Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma");
   });
 
   it("lists what to decide first, then the text with every detection masked", () => {
