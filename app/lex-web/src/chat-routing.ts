@@ -280,7 +280,9 @@ function normalize(value: string): string {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    // "ł" has no decomposition: "opłata" must read as "oplata".
+    .replace(/ł/g, "l");
 }
 
 function tokens(value: string): Set<string> {
@@ -331,12 +333,31 @@ export function choosePrimaryRoute(
         "dr-03-prawo-karne",
       patterns: [
         /\bk\.?\s*k\.?\b/,
-        /\bkodeks karny\b/,
+        /\bkodeks[a-z]* karn[a-z]*\b/,
         /\bk\.?\s*p\.?\s*k\.?\b/,
-        /\bkodeks postepowania karnego\b/,
+        /\bkodeks[a-z]* postepowania karnego\b/,
+        /\bkodeks[a-z]* wykroczen\b/,
         /\bprzestepstw[a-z]*\b/,
         /\bodpowiedzialnosc karn[a-z]*\b/
       ]
+    },
+    // The codes and acts named in a question about one provision ("art. 415 KC",
+    // "art. 52 kodeksu pracy"); the runtime confirms the domain from the act maps.
+    {
+      routePrefix: "dr-02-prawo-cywilne",
+      patterns: [/\bk\.?\s*c\.?\b/, /\bkodeks[a-z]* cywiln[a-z]*\b/, /\bk\.?\s*s\.?\s*h\.?\b/, /\bkodeks[a-z]* spolek handlowych\b/, /\bk\.?\s*r\.?\s*o\.?\b/, /\bk\.?\s*p\.?\s*c\.?\b/]
+    },
+    {
+      routePrefix: "dr-04-prawo-pracy",
+      patterns: [/\bkodeks[a-z]* pracy\b/, /\bk\.?\s*p\.?(?=\s|$)/]
+    },
+    {
+      routePrefix: "dr-05-prawo-administracyjne",
+      patterns: [/\bk\.?\s*p\.?\s*a\.?\b/, /\bkodeks[a-z]* postepowania administracyjnego\b/, /\bp\.?\s*p\.?\s*s\.?\s*a\.?\b/]
+    },
+    {
+      routePrefix: "dr-06-podatki",
+      patterns: [/\bvat\b/, /\bpcc\b/, /\bczynnosci cywilnoprawnych\b/, /\bordynacj[a-z]* podatkow[a-z]*\b/, /\boplat[a-z]* (?:miejscow|uzdrowiskow|lokaln)[a-z]*\b/]
     }
   ];
   for (

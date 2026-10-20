@@ -18,7 +18,7 @@ import {
   stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
-import { compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { compactActAbbreviations, provisionsForDetection } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { registryEnrichmentFor, type RegistryEnrichment } from "./privacy/registry-enrichment.js";
 import type { EvidenceImage } from "./document-evidence.js";
@@ -29,7 +29,7 @@ import {
   placeholderKeyPrompt,
   type PlaceholderGrammar
 } from "./privacy/token-legend.js";
-import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
+import { citedArticles, citedArticlesPrompt, coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import {
   restoreWithReport,
   type Restoration
@@ -2237,6 +2237,22 @@ export class SafeSessionExecutor implements SessionExecutor {
       documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
       foreignJurisdiction: foreignJurisdiction(withoutOutputContract(request.query))
     };
+    // The wording of the articles the question cites, read by number from the core law copy
+    // before the model starts: no tool round trip (each one re-sends the whole prompt) and
+    // no quoting from memory. The act comes from the code ("art. 286 KK") or from the act
+    // maps ("art. 23 ustawy o obszarach morskich" -> its Dz.U.).
+    const citedLaw =
+      this.coreLawIndex && legalTurn
+        ? citedArticlesPrompt(
+            this.coreLawIndex,
+            citedArticles(
+              pathFacts.query,
+              resolveActModulesWithChecks(this.registry, pathFacts.query).modules.flatMap((module) => (module.basis ? [module.basis] : [])),
+              provisionsForDetection
+            ),
+            request.model.startsWith("local/") ? 1_800 : undefined
+          )
+        : null;
     // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
     // A message typed without Polish letters gets them back for the executive routing phrases.
     const taskQuery = legalTurn && !/[ąćęłńóśźż]/iu.test(pathFacts.query) ? restoreAccents(pathFacts.query, this.accentMap()) : pathFacts.query;
@@ -2324,11 +2340,17 @@ export class SafeSessionExecutor implements SessionExecutor {
     // name, dr-01). A stateful workflow does not take the model-selected path, so the engine
     // read that placeholder as the matter's domain (constitutional law for an SMS evidence
     // report). The workflow gets the domain the routing phrases name, else DR-16.
+    const mechanicalEnvelope = parseSkillSelectionEnvelope(request.query);
     const workflowPrimarySkill = (): string => {
       const workflowContext =
         request.guideContext || request.processWorkflowContext || request.courtWorkflowContext ||
         request.chronologyWorkflowContext || request.contractWorkflowContext || request.orderedCaseWorkflowContext;
-      if (!request.modelSelectsSkills || !workflowContext) return request.primarySkill;
+      // Mechanical mode: the user pinned the skill, not the domain; the chat's guess at the
+      // domain (word overlap with skill descriptions — "art. 415 KC" read as DR-01) gives way
+      // to the act the question cites, then to a routing phrase. A domain the user picked
+      // (a DR in the selection, or the domain allow-list) stays.
+      const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => name.startsWith("dr-"));
+      if (!mechanical && (!request.modelSelectsSkills || !workflowContext)) return request.primarySkill;
       // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
       // the matter or of its thread; two shared words of an act-map row ("wyrok", "apelacja")
       // do not name the domain of a whole workflow.
@@ -2345,6 +2367,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
       };
       const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+      if (mechanical) {
+        const allowed = (skill: string | undefined) =>
+          skill && (!mechanicalEnvelope.domainRestrictionActive || mechanicalEnvelope.domainAllowList.includes(skill)) ? skill : undefined;
+        return allowed(cited) ?? allowed(phrased(caseText)) ?? allowed(phrased(threadUserText(request.query))) ?? request.primarySkill;
+      }
       return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
     };
     // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
@@ -2653,6 +2680,13 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(coreLawTools
         ? [coreLawTools.systemPromptAppendix()]
         : []),
+      ...(citedLaw ? [citedLaw] : []),
+      // Statute analysis pinned by the user, no article number in the question ("zasiedzenie"):
+      // the articles the core law search ranks first, as local models get them.
+      ...(!citedLaw && !coreLawRag && this.coreLawIndex && legalTurn && mechanicalTurn(request) &&
+      parseSkillSelectionEnvelope(request.query).manualSkills.includes("analizator-przepisow-v2")
+        ? [coreLawRetrievalPrompt(this.coreLawIndex, protectedQuery)].filter((block): block is string => Boolean(block))
+        : []),
       ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
       reportTools.systemPromptAppendix(),
       ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
@@ -2859,6 +2893,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             quickLocalLegal: {
               toolPrompt: [
                 coreLawTools.systemPromptAppendix(),
+                ...(citedLaw ? [citedLaw] : []),
                 coreLawRag ??
                   "# LOKALNE TEKSTY USTAW\nDla tego pytania nie dobrano automatycznie artykułów. Znajdź przepis search_core_law, a jego brzmienie weź z read_core_law_article; bez tego nie podawaj treści przepisu."
               ].join("\n\n")

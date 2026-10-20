@@ -134,3 +134,39 @@ describe("tryb mechaniczny, każdy skill wykonawczy osobno: router tylko w czę�
     expect(prompt).toContain("### [9] ANALIZA PRZEPISU");
   }, 120_000);
 });
+
+// The chat guesses the domain from words shared with skill descriptions; "art. 415 KC" or
+// "artykule 286 kodeksu karnego" came out as DR-01. In mechanical mode the runtime takes the
+// domain from the act the question cites (act maps), then from a routing phrase.
+describe("tryb mechaniczny: dziedzina z aktu w pytaniu, nie ze zgadywania czatu", () => {
+  const CASES: Array<[string, string, string]> = [
+    ["Zbadaj zmianę treści w artykule 286 kodeksu karnego.", "dr-03-", "mod-KK-art278-295"],
+    ["Wyjaśnij przesłanki odpowiedzialności z art. 415 KC.", "dr-02-", "mod-KC-cywilne-zobowiazania"],
+    ["Czy sprzedaż roweru za 2500 zł jest zwolniona z podatku od czynności cywilnoprawnych (art. 9 pkt 6)?", "dr-06-", "mod-ustawa-PCC"],
+    ["Kto płaci opłatę miejscową od 2027 roku?", "dr-06-", "OPŁATA MIEJSCOWA"],
+    ["Analiza art. 299 KSH — odpowiedzialność członków zarządu.", "dr-02-", "mod-KSH"],
+    ["Jakie terminy załatwienia sprawy wynikają z art. 35 KPA?", "dr-05-", "mod-KPA"],
+    ["Przeanalizuj art. 23 ustawy o obszarach morskich RP i administracji morskiej.", "dr-09-", "mod-ustawa-obszary-morskie"]
+  ];
+  for (const [q, domain, module] of CASES) {
+    it(q, async () => {
+      // The chat's guess: DR-01 (no word of the question in its descriptions).
+      const { calls } = await run({ skill: "analizator-przepisow-v2", dr: "dr-01-ustroj-konstytucyjny-i-zrodla-prawa", q }, false);
+      const prompt = calls[0]!.systemPrompt;
+      expect([...prompt.matchAll(/# SKILL: (dr-\d\d-[a-z-]+)/gu)].map((m) => m[1])).toContain(
+        [...registry.skills.keys()].find((name) => name.startsWith(domain))
+      );
+      expect(prompt).toContain(module);
+    }, 120_000);
+  }
+
+  it("dziedzina wybrana przez użytkownika zostaje", async () => {
+    const calls: ProviderStreamParams[] = [];
+    const providers = new ProviderRegistry();
+    providers.register({ id: "openai", label: "m", capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false }, async stream(r) { calls.push(r); return { fullText: ANSWER }; } });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    const envelope = { auto: false, manual: ["analizator-przepisow-v2", KC], caseType: ["analizator-przepisow-v2"] };
+    await executor.execute({ query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify(envelope)}\nZbadaj art. 286 KK.`, provider: "openai", model: "account/openai/default", primarySkill: KC, mode: "PRAWNIK" } as never);
+    expect(calls[0]!.systemPrompt).toContain(`# SKILL: ${KC}`);
+  }, 120_000);
+});
