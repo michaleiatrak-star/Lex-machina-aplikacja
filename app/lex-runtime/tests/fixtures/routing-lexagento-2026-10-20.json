@@ -1,0 +1,10 @@
+[
+  { "q": "Pracodawca zwolnił mnie dyscyplinarnie, czy mogę się odwołać?", "domains": ["dr-04"], "module": "mod-KP-prawo-pracy.md", "notModule": "mod-ustawa-zwolnienia-grupowe.md" },
+  { "q": "Dostałem zwolnienie dyscyplinarne z art. 52 KP", "domains": ["dr-04"], "module": "mod-KP-prawo-pracy.md" },
+  { "q": "Jaki podatek PIT zapłacę od sprzedaży mieszkania?", "domains": ["dr-06"], "module": "mod-PIT-podatek-dochodowy-fizyczne.md" },
+  { "q": "Sprzedałem mieszkanie po 3 latach, czy muszę zapłacić PIT?", "domains": ["dr-06"], "module": "mod-PIT-podatek-dochodowy-fizyczne.md", "notModule": "mod-alkohol-tyton-regulacja-sprzedazy.md" },
+  { "q": "Jak złożyć skargę na czynności komornika?", "domains": ["dr-02", "dr-12"], "module": "mod-KPC-egzekucja-windykacja.md" },
+  { "q": "Chcę złożyć skargę na komornika", "domains": ["dr-02", "dr-12"], "module": "mod-KPC-egzekucja-windykacja.md" },
+  { "q": "Znajdź orzecznictwo SN o zadośćuczynieniu za krzywdę", "domains": ["dr-02", "dr-16"] },
+  { "q": "Orzecznictwo Sądu Najwyższego o wysokości zadośćuczynienia", "domains": ["dr-02", "dr-16"] }
+]

@@ -458,15 +458,22 @@ const PROCEDURE: Record<string, Set<string>> = {
       "nie wyznaczył rozprawy", "wyznaczenie rozprawy", "biegły sądowy", "koszty zastępstwa procesowego", "koszty pozwu", "koszty sądowe",
       "opłata sądowa", "opłata od pozwu", "opłata od apelacji", "zwolnienie od kosztów sądowych", "referendarz", "mediacja", "mediator", "notariusz"
     ].map((phrase) => phrase.toLocaleLowerCase("pl"))
-  )
+  ),
+  // "Orzecznictwo SN w sprawie zachowku": the matter first, case-law research (DR-16) second.
+  "dr-16": new Set(["orzecznictwo SN", "orzecznictwo Sądu Najwyższego"].map((phrase) => phrase.toLocaleLowerCase("pl")))
 };
 
 function substanceFirst<T extends { skill: string; matched: string[]; weight: number }>(ranked: T[]): T[] {
   const top = ranked[0];
   const words = top ? PROCEDURE[top.skill.slice(0, 5)] : undefined;
   if (!top || !words || !top.matched.every((phrase) => words.has(phrase.toLocaleLowerCase("pl")))) return ranked;
-  const matter = ranked.find((row) => row !== top && !PROCEDURE[row.skill.slice(0, 5)] && row.weight >= Math.max(2, top.weight * 0.75));
-  return matter ? [matter, ...ranked.filter((row) => row !== matter)] : ranked;
+  // A case-law search names its matter in one word ("zadośćuczynienie"); a procedure word needs two.
+  const least = top.skill.startsWith("dr-16-") ? 1 : Math.max(2, top.weight * 0.75);
+  const matter = ranked.find((row) => row !== top && !PROCEDURE[row.skill.slice(0, 5)] && row.weight >= least);
+  if (!matter) return ranked;
+  // DR-16 stays second and no stronger than the matter (the mechanical domain pick takes a strong one first).
+  const second = top.skill.startsWith("dr-16-") ? { ...top, weight: Math.min(top.weight, matter.weight) } : top;
+  return [matter, second, ...ranked.filter((row) => row !== matter && row !== top)];
 }
 
 function rankByPhrases(
