@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 import { detectHealthData } from "./privacy/health-data.js";
 import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
@@ -1825,12 +1826,19 @@ export class SafeSessionExecutor implements SessionExecutor {
                 request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null
               )
             : [];
-        const protectedPrimary =
+        // The document generator's contract (the application's own instructions and its alias
+        // map, no personal data) follows the user's text: only that text is pseudonymized.
+        // Run through the recognizers, "PII ALIAS" and "I. Section" became PERSON symbols.
+        const contractAt = request.query.indexOf(DOCUMENT_OUTPUT_CONTRACT_HEADING);
+        const userText = contractAt >= 0 ? request.query.slice(0, contractAt) : request.query;
+        const contractText = contractAt >= 0 ? request.query.slice(contractAt) : "";
+        const pseudonymizedUser =
           await chatPseudonymizer
             .pseudonymize(
-              request.query,
-              exampleData
+              userText,
+              exampleData.filter((directive) => directive.end <= userText.length)
             );
+        const protectedPrimary = { ...pseudonymizedUser, text: pseudonymizedUser.text + contractText };
         // Health data (art. 9 RODO) goes as written (the injury is often the matter); the log says so.
         const health = detectHealthData(latestMessage);
         if (health.length) {
