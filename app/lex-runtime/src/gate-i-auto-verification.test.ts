@@ -6,6 +6,7 @@ import {
 import {
   applyAutomaticVerificationMarkers,
   detectHistoricalAsOf,
+  lineQuote,
   planAutomaticLegalVerification
 } from "./gate-i-auto-verification.js";
 import {
@@ -407,3 +408,18 @@ describe(
     );
   }
 );
+
+describe("Gate I: the wording quoted next to a provision goes to the check", () => {
+  it("passes the line's quotation (its longest part around an ellipsis) as the quote", () => {
+    const plan = planAutomaticLegalVerification(
+      "Zgodnie z art. 52 § 1 pkt 1 KP w brzmieniu: „pracodawca może rozwiązać umowę z powodu zwolnień grupowych bez wypowiedzenia”.",
+      new VerificationLedger()
+    );
+    expect(plan.calls[0]?.input).toMatchObject({ quote: "pracodawca może rozwiązać umowę z powodu zwolnień grupowych bez wypowiedzenia" });
+    expect(lineQuote("art. 415 KC: „Kto z winy swej … wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia”")).toBe(
+      "wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia"
+    );
+    expect(lineQuote("art. 415 KC („deliktowa”)")).toBeNull();
+    expect(planAutomaticLegalVerification("Podstawą jest art. 5 KC.", new VerificationLedger()).calls[0]?.input).not.toHaveProperty("quote");
+  });
+});

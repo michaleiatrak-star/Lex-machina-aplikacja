@@ -66,7 +66,7 @@ const OFFICIAL_SOURCE_HOSTS = new Set<string>([
 ]);
 
 const MAX_SOURCE_CHARS = 2_000_000;
-const MAX_EVIDENCE_CHARS = 12_000;
+export const MAX_EVIDENCE_CHARS = 12_000;
 
 function decodeHtmlEntities(
   value: string

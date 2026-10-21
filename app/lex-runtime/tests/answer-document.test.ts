@@ -58,6 +58,15 @@ describe("a letter of a chat answer as a file, without a model turn", () => {
     expect(validated.ast.blocks.at(-1)).toMatchObject({ type: "signature" });
   });
 
+  it("a section label of the skill's contract (## TREŚĆ PISMA) is neither the title nor a line of the letter", () => {
+    const markup = answerLetterMarkup(
+      "## TREŚĆ PISMA\n\nKraków, dnia 21 października 2026 r.\n\n**Wierzyciel:**\nTeodor Wiśniowiecki\nul. Jaworzyńska 5, 30-001 Kraków\n\n**Dłużnik:**\nKazimierz Pietrzykowski\nul. Sobiesławska 12, 31-147 Kraków\n\n**WEZWANIE DO ZAPŁATY**\n\nWzywam do zapłaty kwoty 40 000 zł w terminie 7 dni.\n\nZ poważaniem\n\nTeodor Wiśniowiecki\n\n## UWAGI PRAKTYCZNE\n- Wyślij listem poleconym."
+    )!;
+    expect(markup).toContain("WEZWANIE DO ZAPŁATY");
+    expect(markup).not.toContain("TREŚĆ PISMA");
+    expect(markup.indexOf("Kraków, dnia")).toBeLessThan(markup.indexOf("WEZWANIE DO ZAPŁATY"));
+  });
+
   it("finds no letter in an answer without a title in capitals", () => {
     expect(answerLetterMarkup("Kara umowna może zabezpieczać wyłącznie zobowiązanie niepieniężne.\n\nCzy mam przygotować pismo?")).toBeNull();
   });
