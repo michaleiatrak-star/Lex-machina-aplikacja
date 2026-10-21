@@ -135,6 +135,7 @@ import {
   type AcceptedReportBlueprint,
   type ReportBlueprintKind
 } from "./report-blueprint-tool-runtime.js";
+import { blueprintFinalizationText } from "./report-blueprint-finalization.js";
 import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import {
   evaluateDeterministicWorkflowOutput,
@@ -4120,14 +4121,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     const finalizationText =
       reportBlueprint
-        ? [
-            processedDocumentCitations.text,
-            "[STRUCTURED_REPORT_BLUEPRINT_DATA]",
-            JSON.stringify(
-              reportBlueprint.blueprint
-            ),
-            "[/STRUCTURED_REPORT_BLUEPRINT_DATA]"
-          ].join("\n")
+        ? blueprintFinalizationText(processedDocumentCitations.text, reportBlueprint.blueprint, ledger)
         : processedDocumentCitations.text;
 
     step("VERIFY", "przepisy, orzeczenia i cytaty w odpowiedzi");
