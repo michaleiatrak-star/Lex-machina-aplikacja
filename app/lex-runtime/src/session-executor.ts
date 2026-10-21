@@ -915,6 +915,17 @@ export function privacyGateFailure(error: unknown): Error & { reason?: string } 
   return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
 }
 
+// A request to the user: a question, or a line opening with an asking verb.
+const ASKS = /\?|(?:^|\n)\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*)?(?:Podaj|Wskaż|Prześlij|Dołącz|Załącz|Wklej|Potwierdź|Wybierz|Określ|Uzupełnij|Doprecyzuj|Napisz,|Proszę)/u;
+
+/** The answer is the active checkpoint's report, the marker added after it without asking. */
+function reportOnly(answer: string, checkpoint: string | undefined): boolean {
+  if (!checkpoint) return false;
+  const report = answer.lastIndexOf(`[${checkpoint}`);
+  const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
+  return report >= 0 && marker > report && !ASKS.test(answer.slice(report, marker));
+}
+
 // Executive skills that work on the case's material, and what to ask for when there is none.
 const MATERIAL_SKILLS: Record<string, string> = {
   "analizator-umow-v1": "umowa (plik albo pełny tekst)",
@@ -4827,7 +4838,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         : workflowOutput.mode === "REDUCTION_OFFERED"
           ? reductionOffer(restoredAnswer.text)
           : null) ?? appEscalation;
-    const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
+    // A checkpoint's report followed by the marker without a question or request after it
+    // (the skill's "STOP, czekaj na użytkownika") is a report to confirm: otherwise the
+    // checkpoint never reached confirmation and the chain asked for it again (E2E: 18 turns
+    // on CP-1a). A question or a request ("Podaj…") still waits for the user's reply.
+    const activeCheckpoint =
+      request.processWorkflowContext?.checkpoint ??
+      request.contractWorkflowContext?.checkpoint ??
+      request.orderedCaseWorkflowContext?.checkpoint ??
+      request.chronologyWorkflowContext?.checkpoint ??
+      request.courtWorkflowContext?.checkpoint;
+    const waitingForUser =
+      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) || skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);
