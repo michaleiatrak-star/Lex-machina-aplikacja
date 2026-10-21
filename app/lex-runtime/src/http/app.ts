@@ -167,7 +167,7 @@ import type {
   LocalSharedTemplateStore
 } from "../shared-template-store.js";
 import { DOCX_MEDIA_TYPE } from "../shared-template-store.js";
-import { ExecutionSteps } from "../execution-steps.js";
+import { ExecutionSteps, type ExecutionPhase } from "../execution-steps.js";
 import {
   ContextBudgetError,
   estimateDocumentFit,
@@ -518,13 +518,23 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * Server mode behind the firm's reverse proxy: the public address of the web
+ * application (LEX_ALLOWED_ORIGINS, exact origins separated by commas).
+ * Unset (the desktop): only loopback origins, as before.
+ */
+export function allowedPublicOrigin(origin: string): boolean {
+  const allowed = process.env.LEX_ALLOWED_ORIGINS?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+  return allowed.includes(origin);
+}
+
 function loopbackOriginGuard(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
   const origin = req.get("origin");
-  if (!origin || isLoopbackOrigin(origin)) {
+  if (!origin || isLoopbackOrigin(origin) || allowedPublicOrigin(origin)) {
     next();
     return;
   }
@@ -1063,6 +1073,28 @@ function sendAuthError(
     ...(error.retryAfter
       ? { retryAfter: error.retryAfter }
       : {})
+  });
+  return true;
+}
+
+// Server mode: a model call refused by the account's plan (see server-mode/service.ts).
+const ACCOUNT_POLICY_STATUS: Record<string, number> = {
+  TOKEN_LIMIT_REACHED: 429,
+  PLAN_REQUIRED: 402,
+  PROVIDER_NOT_IN_PLAN: 403,
+  SERVER_MODE_LOCAL_ONLY: 403
+};
+
+export function sendAccountPolicyError(
+  res: Response,
+  error: unknown
+): boolean {
+  if (!(error instanceof ProviderGatewayError) || error.code !== "ACCOUNT_POLICY") {
+    return false;
+  }
+  const code = error.message.split(":", 1)[0] ?? "";
+  res.status(ACCOUNT_POLICY_STATUS[code] ?? 403).json({
+    error: ACCOUNT_POLICY_STATUS[code] ? code : "ACCOUNT_POLICY_DENIED"
   });
   return true;
 }
@@ -2163,6 +2195,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               true;
           }
         } catch (error) {
+          if (sendAccountPolicyError(res, error)) {
+            return false;
+          }
           if (
             error instanceof Error &&
             error.message ===
@@ -9595,6 +9630,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       });
     }
 
+    // Server mode: the admin's live view of turns gets the stage and the skill only.
+    const observeTurn = res.locals.lexTurnObserver as ((phase: ExecutionPhase, skill: string) => void) | undefined;
+    if (observeTurn) {
+      const reportStep = request.onStep;
+      request.onStep = (phase, detail) => {
+        observeTurn(phase, request.primarySkill);
+        reportStep?.(phase, detail);
+      };
+    }
+
     // A part of a long letter asked for in a case ("Popraw część 3 z 3."): legal work of that
     // letter, never the conversational lane (the router read the short message as non-legal).
     const partRequest =
@@ -12624,6 +12669,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error:
             "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
         });
+        return;
+      }
+
+      if (sendAccountPolicyError(res, error)) {
         return;
       }
 
