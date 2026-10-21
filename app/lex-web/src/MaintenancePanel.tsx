@@ -25,6 +25,7 @@ import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
+import { useDeveloperMode } from "./developer-mode.js";
 import "./maintenance.css";
 import { InfoTip } from "./InfoTip";
 
@@ -169,6 +170,7 @@ export function MaintenancePanel({
   user: AuthenticatedUser;
   embedded?: boolean;
 }) {
+  const developer = useDeveloperMode();
   const [appStatus, setAppStatus] =
     useState<UpdateStatusResponse | null>(null);
   const [channel, setChannel] =
@@ -599,7 +601,7 @@ export function MaintenancePanel({
         <CaseLawLibrarySection />
         <DomainFallbackSection />
 
-        <AnomalyJournalSection user={user} />
+        {developer ? <AnomalyJournalSection user={user} /> : null}
 
         <button
           type="button"

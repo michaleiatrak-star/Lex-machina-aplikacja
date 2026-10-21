@@ -1,5 +1,6 @@
 import { InfoTip } from "./InfoTip";
 import { MarkdownContent } from "./MarkdownContent.js";
+import { useDeveloperMode } from "./developer-mode.js";
 import { useEffect, useState } from "react";
 import {
   clearCaseMemory,
@@ -28,6 +29,7 @@ export function CaseMemoryCard({
   onRequestOverview?: () => void;
 }) {
   const [memory, setMemory] = useState<CaseMemory | null>(null);
+  const developer = useDeveloperMode();
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -211,7 +213,7 @@ export function CaseMemoryCard({
         ) : (
           <p className="field-help">Brak.</p>
         )}
-        {memory?.evidence?.skills.length ? (
+        {developer && memory?.evidence?.skills.length ? (
           <p className="field-help">Skille użyte w sprawie: {memory.evidence.skills.join(", ")}</p>
         ) : null}
 

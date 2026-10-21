@@ -17,6 +17,7 @@ import {
   type ProcessPleadingWorkflowState
 } from "./api.js";
 import { InfoTip } from "./InfoTip";
+import { checkpointLabel, plainErrorMessage, useDeveloperMode } from "./developer-mode.js";
 import "./process-workflow.css";
 
 const CHECKPOINT_ORDER: readonly ProcessPleadingCheckpoint[] = [
@@ -48,6 +49,24 @@ const STAGE_LABELS: Record<
   W2: "W2 · projekt i red-team",
   W3: "W3 · walidacja końcowa",
   FINAL: "FINAL"
+};
+
+// The same stages for a lawyer (developer mode off): no stage codes.
+const PLAIN_STAGE_LABELS: Record<
+  ProcessPleadingWorkflowState["stage"],
+  string
+> = {
+  CG_ACCEPTANCE: "Akceptacja startu",
+  W1: "Etap 1 · rama i strategia",
+  PRE_W2: "Etap 2 · weryfikacja",
+  W2: "Etap 3 · projekt i przegląd krytyczny",
+  W3: "Etap 4 · kontrola końcowa",
+  FINAL: "Pismo gotowe"
+};
+
+const PLAIN_DOCUMENT_STATUS: Record<string, string> = {
+  DRAFT: "projekt",
+  FINAL: "gotowe"
 };
 
 function checkpointStats(
@@ -94,6 +113,9 @@ export function ProcessPleadingWorkflowPanel({
   const [loading, setLoading] = useState(false);
   const [operation, setOperation] = useState(false);
   const [error, setError] = useState("");
+  const developer = useDeveloperMode();
+  const stageLabels = developer ? STAGE_LABELS : PLAIN_STAGE_LABELS;
+  const shownError = error && !developer ? plainErrorMessage(error, error) : error;
 
   async function refresh(): Promise<void> {
     if (!caseId) {
@@ -209,8 +231,8 @@ export function ProcessPleadingWorkflowPanel({
         <strong>Projekt pisma</strong>
         <span>
           {latest
-            ? `wersja ${latest.version} · ${latest.source === "USER" ? "Twoja poprawka" : `pipeline, etap ${latest.stage}`}`
-            : "jeszcze nie powstał (pojawi się po W2)"}
+            ? `wersja ${latest.version} · ${latest.source === "USER" ? "Twoja poprawka" : developer ? `pipeline, etap ${latest.stage}` : "przygotowana przez aplikację"}`
+            : developer ? "jeszcze nie powstał (pojawi się po W2)" : "jeszcze nie powstał (pojawi się w etapie projektu)"}
         </span>
       </div>
       {latest && editText === null ? (
@@ -249,7 +271,7 @@ export function ProcessPleadingWorkflowPanel({
             </button>
           </div>
           <small>
-            Zmiana merytoryczna cofa pismo do W2 i statusu DRAFT.
+            {developer ? "Zmiana merytoryczna cofa pismo do W2 i statusu DRAFT." : "Zmiana merytoryczna cofa pismo do etapu projektu."}
             <InfoTip>
               Merytoryczna (fakty, żądania, podstawa prawna): atak na projekt i kontrole W3 od nowa. Drobna zachowuje
               zamknięte kontrole.
@@ -266,7 +288,7 @@ export function ProcessPleadingWorkflowPanel({
               .reverse()
               .map((item) => (
                 <li key={item.version}>
-                  {`v${item.version} · ${item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : `pipeline ${item.checkpoint ?? item.stage}`} · ${new Date(item.createdAt).toLocaleString("pl-PL")}`}
+                  {`v${item.version} · ${item.source === "USER" ? `użytkownik${item.change === "SUBSTANTIVE" ? " (merytoryczna)" : " (drobna)"}` : developer ? `pipeline ${item.checkpoint ?? item.stage}` : "aplikacja"} · ${new Date(item.createdAt).toLocaleString("pl-PL")}`}
                 </li>
               ))}
           </ul>
@@ -280,12 +302,12 @@ export function ProcessPleadingWorkflowPanel({
       <div className="process-workflow-heading">
         <div>
           <p className="eyebrow">
-            Deterministyczny pipeline pisma
+            {developer ? "Deterministyczny pipeline pisma" : "Pismo procesowe"}
           </p>
           <h3>
             {state
-              ? STAGE_LABELS[state.stage]
-              : "Pisma procesowe v3"}
+              ? stageLabels[state.stage]
+              : developer ? "Pisma procesowe v3" : "Pismo procesowe etapami"}
           </h3>
         </div>
         <span
@@ -295,16 +317,22 @@ export function ProcessPleadingWorkflowPanel({
               : "process-workflow-status"
           }
         >
-          {state?.documentStatus ?? "NIEAKTYWNY"}
+          {developer
+            ? (state?.documentStatus ?? "NIEAKTYWNY")
+            : state?.documentStatus
+              ? (PLAIN_DOCUMENT_STATUS[state.documentStatus] ?? "projekt")
+              : "nieaktywne"}
         </span>
       </div>
 
       {!state ? (
         <>
           <p>
-            Pipeline W1 → PRE-W2 → W2 → W3.
+            {developer ? "Pipeline W1 → PRE-W2 → W2 → W3." : "Pismo powstaje w czterech etapach: rama, weryfikacja, projekt, kontrola końcowa."}
             <InfoTip>
-              Checkpointy zapisują się w zaszyfrowanym stanie sprawy; bez wymaganych potwierdzeń nie da się przejść dalej.
+              {developer
+                ? "Checkpointy zapisują się w zaszyfrowanym stanie sprawy; bez wymaganych potwierdzeń nie da się przejść dalej."
+                : "Postęp zapisuje się w zaszyfrowanej sprawie; bez Twoich potwierdzeń pismo nie przejdzie dalej."}
             </InfoTip>
           </p>
           <button
@@ -319,14 +347,20 @@ export function ProcessPleadingWorkflowPanel({
               )
             }
           >
-            Uruchom pipeline w trybie checkpoint
+            {developer ? "Uruchom pipeline w trybie checkpoint" : "Rozpocznij pismo z potwierdzaniem etapów"}
           </button>
         </>
       ) : state.stage === "CG_ACCEPTANCE" ? (
         <>
           <p>
-            Dokument pozostaje DRAFT, dopóki cały wymagany rejestr CP nie zostanie rozwiązany.
-            <InfoTip>Pipeline ma wiele etapów kontroli jakości; każde przejście jest zapisywane w zaszyfrowanym workspace sprawy.</InfoTip>
+            {developer
+              ? "Dokument pozostaje DRAFT, dopóki cały wymagany rejestr CP nie zostanie rozwiązany."
+              : "Pismo pozostaje projektem, dopóki wszystkie wymagane etapy nie zostaną zakończone."}
+            <InfoTip>
+              {developer
+                ? "Pipeline ma wiele etapów kontroli jakości; każde przejście jest zapisywane w zaszyfrowanym workspace sprawy."
+                : "Pismo przechodzi kilka kontroli jakości; postęp zapisuje się w zaszyfrowanej sprawie."}
+            </InfoTip>
           </p>
           <button
             type="button"
@@ -339,32 +373,38 @@ export function ProcessPleadingWorkflowPanel({
               )
             }
           >
-            Akceptuję warunki i rozpoczynam W1
+            {developer ? "Akceptuję warunki i rozpoczynam W1" : "Akceptuję warunki i rozpoczynam"}
           </button>
         </>
       ) : (
         <>
           <div className="process-workflow-stats">
             <span>
-              Zamknięte: {stats?.closed ?? 0}
+              {developer ? "Zamknięte" : "Zakończone kroki"}: {stats?.closed ?? 0}
             </span>
             <span>
-              N/A: {stats?.na ?? 0}
+              {developer ? "N/A" : "Pominięte"}: {stats?.na ?? 0}
             </span>
             <span>
-              Otwarte / oczekujące: {stats?.open ?? 0}
+              {developer ? "Otwarte / oczekujące" : "Pozostało"}: {stats?.open ?? 0}
             </span>
-            <span>
-              Rewizja: {state.revision}
-            </span>
+            {developer ? (
+              <span>
+                Rewizja: {state.revision}
+              </span>
+            ) : null}
           </div>
 
           {state.pendingCheckpoint ? (
             <div className="process-workflow-checkpoint">
               <strong>
-                Oczekuje na potwierdzenie: {state.pendingCheckpoint}
+                Oczekuje na potwierdzenie: {developer ? state.pendingCheckpoint : checkpointLabel(state.pendingCheckpoint)}
               </strong>
-              <InfoTip>Następny checkpoint ruszy dopiero po potwierdzeniu wyniku tego kroku.</InfoTip>
+              <InfoTip>
+                {developer
+                  ? "Następny checkpoint ruszy dopiero po potwierdzeniu wyniku tego kroku."
+                  : "Następny krok ruszy dopiero po potwierdzeniu wyniku tego kroku."}
+              </InfoTip>
               <button
                 type="button"
                 disabled={locked}
@@ -377,7 +417,7 @@ export function ProcessPleadingWorkflowPanel({
                   )
                 }
               >
-                Potwierdź checkpoint i odblokuj kolejny krok
+                {developer ? "Potwierdź checkpoint i odblokuj kolejny krok" : "Potwierdź i przejdź do kolejnego kroku"}
               </button>
               {remarks === null ? (
                 <button type="button" disabled={locked} onClick={() => setRemarks("")}>
@@ -400,14 +440,16 @@ export function ProcessPleadingWorkflowPanel({
                       Anuluj
                     </button>
                   </div>
-                  <small>Krok wróci do wykonania z Twoimi uwagami po kliknięciu „Kontynuuj pipeline”.</small>
+                  <small>Krok wróci do wykonania z Twoimi uwagami po kliknięciu „{developer ? "Kontynuuj pipeline" : "Kontynuuj"}”.</small>
                 </>
               )}
             </div>
           ) : state.stage === "FINAL" ? (
             <div>
               <p className="process-workflow-final">
-                Wszystkie wymagane checkpointy są rozwiązane. Status procesu: FINAL.
+                {developer
+                  ? "Wszystkie wymagane checkpointy są rozwiązane. Status procesu: FINAL."
+                  : "Wszystkie wymagane etapy są zakończone. Pismo jest gotowe."}
                 <InfoTip>Poprawki przez „Edytuj projekt”: drobna zostawia FINAL, merytoryczna cofa do W2.</InfoTip>
               </p>
               <button type="button" disabled={locked} onClick={() => void restart()}>
@@ -417,15 +459,19 @@ export function ProcessPleadingWorkflowPanel({
           ) : (
             <div className="process-workflow-checkpoint">
               <strong>
-                Etap gotowy do następnego checkpointu
+                {developer ? "Etap gotowy do następnego checkpointu" : "Etap gotowy do kolejnego kroku"}
               </strong>
-              <InfoTip>Kolejny krok dotyczy pierwszego nierozwiązanego CP; model nie przeskoczy do późniejszego etapu.</InfoTip>
+              <InfoTip>
+                {developer
+                  ? "Kolejny krok dotyczy pierwszego nierozwiązanego CP; model nie przeskoczy do późniejszego etapu."
+                  : "Kroki idą po kolei; aplikacja nie przeskoczy do późniejszego etapu."}
+              </InfoTip>
               <button
                 type="button"
                 disabled={locked}
                 onClick={onContinue}
               >
-                Kontynuuj pipeline
+                {developer ? "Kontynuuj pipeline" : "Kontynuuj"}
               </button>
             </div>
           )}
@@ -436,15 +482,17 @@ export function ProcessPleadingWorkflowPanel({
 
       {!canWrite ? (
         <small>
-          Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pipeline.
+          {developer
+            ? "Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pipeline."
+            : "Tylko odczyt: sprawa lub Twoja rola nie pozwala zmieniać pisma."}
         </small>
       ) : null}
       {loading ? (
-        <small>Odświeżam stan procesu…</small>
+        <small>{developer ? "Odświeżam stan procesu…" : "Odświeżam stan pisma…"}</small>
       ) : null}
       {error ? (
         <p className="process-workflow-error">
-          {error}
+          {shownError}
         </p>
       ) : null}
     </section>

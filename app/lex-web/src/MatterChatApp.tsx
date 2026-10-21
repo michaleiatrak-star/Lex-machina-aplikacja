@@ -226,6 +226,17 @@ import { progressLabel, progressPercent, trackProgress } from "./processing-prog
 import { SnVerification } from "./SnVerification.js";
 import { autoAdvanceDecision, autoAdvanceNote, workflowProgress } from "./workflow-auto-advance.js";
 import { actionMetaMessage, switchAction, switchMessage, switchTitle, type SkillSwitchOffer } from "./skill-switch-offer.js";
+import {
+  DeveloperModeContext,
+  loadDeveloperMode,
+  phaseLabel,
+  plainErrorMessage,
+  plainMeta,
+  plainStepLabel,
+  saveDeveloperMode,
+  skillLabel,
+  visibleContent
+} from "./developer-mode.js";
 
 type TabId =
   | "home"
@@ -777,9 +788,11 @@ function isExecutionSkill(skill: PublicSkillDescriptor): boolean {
 }
 
 function visibleMessageMeta(
-  meta?: string
+  meta?: string,
+  developer = true
 ): string {
   if (!meta) return "";
+  if (!developer) return plainMeta(meta);
   return meta
     .split(/\s*[|;]\s*/)
     .filter(
@@ -1225,6 +1238,7 @@ export function documentChoiceLabel(steps: StepSummary | undefined): string {
  * analysis. Nothing starts on its own, so the conversation does not drift into side issues.
  */
 export function PipelineChoices({
+  developer = true,
   next,
   auto,
   disabled,
@@ -1232,6 +1246,8 @@ export function PipelineChoices({
   onDocument,
   onLongDocument
 }: {
+  // Off: skills by what they do, no validation names.
+  developer?: boolean;
   next: PipelineNext;
   auto: boolean;
   disabled: boolean;
@@ -1252,7 +1268,11 @@ export function PipelineChoices({
         <button type="button" className="primary-button" disabled={disabled} onClick={() => onLongDocument(id)}>
           Generuj dokument
         </button>
-        <InfoTip>{`Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości (${longFile.reason}) po walidacji HYBRID-VAL.`}</InfoTip>
+        <InfoTip>
+          {developer
+            ? `Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości (${longFile.reason}) po walidacji HYBRID-VAL.`
+            : "Pismo powstało w częściach, każda sprawdzona z planem (numeracja, sekcje, załączniki). Plik .docx powstaje z całości po końcowej kontroli."}
+        </InfoTip>
       </div>
     );
   }
@@ -1283,11 +1303,15 @@ export function PipelineChoices({
             {documentChoiceLabel(ownDocument.steps)}
           </button>
         ) : null}
-        {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
+        {ownDocument?.steps ? <small className="field-help">{plainStepLabel(stepSummaryText(ownDocument.steps), developer)}</small> : null}
         {others.length ? (
           <span>
-            Dalej możliwe: {others.map((choice) => choice.skill).join(", ")}.
-            <InfoTip>Ten wątek jest przypięty do swojego skilla. Inny skill wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim.</InfoTip>
+            Dalej możliwe: {others.map((choice) => skillLabel(choice.skill, developer)).join(", ")}.
+            <InfoTip>
+              {developer
+                ? "Ten wątek jest przypięty do swojego skilla. Inny skill wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim."
+                : "Ten wątek jest przypięty do swojego rodzaju pracy. Inną pracę wybierzesz w nowym wątku tej sprawy; pamięć sprawy przejdzie razem z nim."}
+            </InfoTip>
           </span>
         ) : null}
       </div>
@@ -1299,7 +1323,9 @@ export function PipelineChoices({
         Co dalej? Wybierz jedną opcję; nic nie uruchomi się bez Twojej decyzji.
         {choices.some((choice) => choice.kind === "DOCUMENT") ? (
           <InfoTip>
-            {ownDocument
+            {!developer
+              ? "„Generuj dokument” tworzy plik .docx z tego wyniku po końcowej kontroli pisma."
+              : ownDocument
               ? "„Generuj dokument” tworzy plik z tego wyniku po walidacji HYBRID-VAL."
               : onDocument
                 ? "„Generuj dokument” tworzy plik .docx z pisma powyżej (format kancelaryjny, pola do uzupełnienia) po walidacji HYBRID-VAL."
@@ -1314,7 +1340,7 @@ export function PipelineChoices({
             type="button"
             className={choice.kind === "DOCUMENT" || choice.kind === "CONTINUE" ? "primary-button" : "chat-secondary-action"}
             disabled={disabled}
-            title={`${choice.skill} (${choice.reason})`}
+            title={developer ? `${choice.skill} (${choice.reason})` : choice.reason}
             onClick={() =>
               choice.kind === "DOCUMENT" && !choice.own && onDocument ? onDocument() : onChoose(pipelineChoiceMessage(choice))
             }
@@ -1323,11 +1349,11 @@ export function PipelineChoices({
               ? "Kontynuuj"
               : choice.kind === "DOCUMENT"
                 ? documentChoiceLabel(choice.steps)
-                : `Dalsza analiza: ${choice.skill}`}
+                : `Dalsza analiza: ${skillLabel(choice.skill, developer)}`}
           </button>
         ))}
       </div>
-      {ownDocument?.steps ? <small className="field-help">{stepSummaryText(ownDocument.steps)}</small> : null}
+      {ownDocument?.steps ? <small className="field-help">{plainStepLabel(stepSummaryText(ownDocument.steps), developer)}</small> : null}
     </div>
   );
 }
@@ -1403,6 +1429,15 @@ export default function MatterChatApp({
   const [scheduleRefresh, setScheduleRefresh] = useState(0);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("models");
+  // Developer mode: journal, skills, gates, codes and traces; off for a lawyer's view.
+  const [developerMode, setDeveloperModeState] = useState(() => loadDeveloperMode(user.userId));
+  useEffect(() => {
+    setDeveloperModeState(loadDeveloperMode(user.userId));
+  }, [user.userId]);
+  function setDeveloperMode(enabled: boolean): void {
+    setDeveloperModeState(enabled);
+    saveDeveloperMode(user.userId, enabled);
+  }
   const [runtimeOnline, setRuntimeOnline] = useState(false);
   const [runtimeError, setRuntimeError] = useState("");
 
@@ -4101,7 +4136,7 @@ export default function MatterChatApp({
       setExecutionStage(
         selectedFileCount > 0
           ? `Wysyłanie ${selectedFileCount} ${selectedFileCount === 1 ? "pliku" : "plików"} do modelu · analiza prawna i weryfikacja źródeł`
-          : "Analiza prawna, routing i weryfikacja źródeł"
+          : developerMode ? "Analiza prawna, routing i weryfikacja źródeł" : "Analiza prawna i weryfikacja źródeł"
       );
       setLastDelivery(null);
       const executionId =
@@ -4421,7 +4456,8 @@ export default function MatterChatApp({
           id: messageId(),
           role: "system",
           content:
-            friendly
+            friendly,
+          plainContent: plainErrorMessage(code, friendly, reason)
         }
       ]);
     } finally {
@@ -4757,6 +4793,7 @@ export default function MatterChatApp({
     documentFit?.estimate?.fits !== false;
 
   return (
+    <DeveloperModeContext.Provider value={developerMode}>
     <div className="chat-app-shell matter-chat-app">
       {privacyPreview ? (
         <div className="privacy-preview-overlay" role="dialog" aria-modal="true">
@@ -5614,12 +5651,16 @@ export default function MatterChatApp({
                   <p className="eyebrow">Tryb pracy</p>
                   <h3>
                     {workMode === "AUTO"
-                      ? "Automatyczny — prawny router"
+                      ? developerMode ? "Automatyczny — prawny router" : "Automatyczny"
                       : selectedDeterministicAction
                         ? `Mechaniczny — ${selectedDeterministicAction.label}`
-                        : "Mechaniczny — wybierz skill wykonawczy"}
+                        : developerMode ? "Mechaniczny — wybierz skill wykonawczy" : "Mechaniczny — wybierz rodzaj pracy"}
                     <InfoTip>
-                      {workMode === "AUTO"
+                      {!developerMode
+                        ? workMode === "AUTO"
+                          ? "Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości."
+                          : "Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku."
+                        : workMode === "AUTO"
                         ? "Router dobiera dziedziny DR, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych."
                         : "Wybrany skill uruchamia stały pipeline; router nadal dobiera dziedzinę DR. Po pierwszej wiadomości wybór zostaje przypięty do wątku."}
                     </InfoTip>
@@ -5645,7 +5686,7 @@ export default function MatterChatApp({
                     }}
                   >
                     <strong>Automatyczny</strong>
-                    <small>Router sam dobiera skille i moduły.</small>
+                    <small>{developerMode ? "Router sam dobiera skille i moduły." : "Aplikacja sama dobiera sposób pracy."}</small>
                   </button>
                   <button
                     type="button"
@@ -5662,8 +5703,12 @@ export default function MatterChatApp({
                     <strong>Mechaniczny</strong>
                     <small>
                       {availableActions.length > 0
-                        ? "Ty wybierasz skill wykonawczy i jego pipeline."
-                        : "Brak skilli wykonawczych w korpusie."}
+                        ? developerMode
+                          ? "Ty wybierasz skill wykonawczy i jego pipeline."
+                          : "Ty wybierasz rodzaj pracy (np. pismo, analiza umowy)."
+                        : developerMode
+                          ? "Brak skilli wykonawczych w korpusie."
+                          : "Brak dostępnych rodzajów pracy."}
                     </small>
                   </button>
                 </div>
@@ -5722,7 +5767,7 @@ export default function MatterChatApp({
                         : "System"}
                   </div>
                   <DocumentCitationContent
-                    content={message.content}
+                    content={visibleContent(message, developerMode)}
                     citations={message.documentCitations}
                     onOpenUrl={openExternalUrl}
                     {...(selectedCase?.caseId ? { caseId: selectedCase.caseId } : {})}
@@ -5783,7 +5828,9 @@ export default function MatterChatApp({
                         Pobierz .docx
                       </button>
                       <InfoTip>
-                        Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje mechanicznie z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi HYBRID-VAL i bramkę eksportu (przepisy z rejestru weryfikacji tej odpowiedzi); znaczniki weryfikacji nie trafiają do pliku.
+                        {developerMode
+                          ? "Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje mechanicznie z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi HYBRID-VAL i bramkę eksportu (przepisy z rejestru weryfikacji tej odpowiedzi); znaczniki weryfikacji nie trafiają do pliku."
+                          : "Plik .docx z pisma powyżej, w formacie kancelaryjnym (Times New Roman 12, strony, tytuł, podpis): powstaje z tekstu tej odpowiedzi, bez ponownej pracy modelu. Przed zapisem przechodzi kontrolę powołanych przepisów; znaczniki weryfikacji nie trafiają do pliku."}
                       </InfoTip>
                     </div>
                   ) : null}
@@ -5796,9 +5843,9 @@ export default function MatterChatApp({
                       onRenamed={rememberArtifactName}
                     />
                   ) : null}
-                  {visibleMessageMeta(message.meta) ? (
+                  {visibleMessageMeta(message.meta, developerMode) ? (
                     <small className="chat-message-meta">
-                      {visibleMessageMeta(message.meta)}
+                      {visibleMessageMeta(message.meta, developerMode)}
                     </small>
                   ) : null}
                   {message.evidence?.length ? (
@@ -5816,9 +5863,15 @@ export default function MatterChatApp({
                                 </span>
                               ) : null}
                               {item.role === "gate" ? (
-                                <span className="chat-evidence-gate" title="Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi">
-                                  pomocniczy — bramka
-                                </span>
+                                developerMode ? (
+                                  <span className="chat-evidence-gate" title="Przepis sprawdzony przez model tylko na potrzeby bramek (np. sąsiednie artykuły w WYJ-GATE), nie jest podstawą odpowiedzi">
+                                    pomocniczy — bramka
+                                  </span>
+                                ) : (
+                                  <span className="chat-evidence-gate" title="Przepis sprawdzony pomocniczo, nie jest podstawą odpowiedzi">
+                                    pomocniczy
+                                  </span>
+                                )
                               ) : null}
                             </span>
                             <strong>{item.claim}</strong>
@@ -5881,13 +5934,14 @@ export default function MatterChatApp({
                       </ul>
                     </details>
                   ) : null}
-                  {message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
-                  {message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
+                  {developerMode && message.mandatoryPath ? <MandatoryPathDetails path={message.mandatoryPath} /> : null}
+                  {developerMode && message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
                   ) : null}
                   {message.pipelineNext ? (
                     <PipelineChoices
+                      developer={developerMode}
                       next={message.pipelineNext}
                       auto={workMode === "AUTO"}
                       disabled={executing}
@@ -6056,8 +6110,8 @@ export default function MatterChatApp({
                           <span className="chat-step-status">
                             {phase.status === "done" ? "zakończono" : phase.status === "active" ? "w toku" : "oczekuje"}
                           </span>
-                          <strong>{phase.label}</strong>
-                          {phase.details.length ? (
+                          <strong>{phaseLabel(phase.key, phase.label, developerMode)}</strong>
+                          {developerMode && phase.details.length ? (
                             <small>{phase.details.slice(-6).join(" · ")}</small>
                           ) : null}
                         </li>
@@ -6077,10 +6131,12 @@ export default function MatterChatApp({
                   <div className="chat-working-meta">
                     <span>
                       {runtimePulse === "OK"
-                        ? "Runtime odpowiada"
+                        ? developerMode ? "Runtime odpowiada" : "Aplikacja pracuje"
                         : runtimePulse === "LOST"
-                          ? "Brak odpowiedzi z runtime — operacja nadal oczekuje"
-                          : "Sprawdzam runtime…"}
+                          ? developerMode
+                            ? "Brak odpowiedzi z runtime — operacja nadal oczekuje"
+                            : "Aplikacja chwilowo nie odpowiada — operacja nadal oczekuje"
+                          : developerMode ? "Sprawdzam runtime…" : "Sprawdzam połączenie…"}
                     </span>
                     <span>
                       To okno aktualizuje się podczas oczekiwania na model i źródła.
@@ -6102,7 +6158,7 @@ export default function MatterChatApp({
                 <span>
                   Działanie: {selectedDeterministicAction
                     ? selectedDeterministicAction.label
-                    : "AUTO · prawny router"}
+                    : developerMode ? "AUTO · prawny router" : "automatycznie"}
                 </span>
                 <span>Załączniki: {selectedFileCount}</span>
                 {firmTemplateIds.length > 0 ||
@@ -6200,16 +6256,18 @@ export default function MatterChatApp({
                 >
                   Pliki{selectedFileCount ? ` (${selectedFileCount})` : ""}
                 </button>
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  onClick={() => {
-                    setSettingsSection("skills");
-                    setActiveTab("settings");
-                  }}
-                >
-                  ⚙ Skille
-                </button>
+                {developerMode ? (
+                  <button
+                    type="button"
+                    className="chat-secondary-action"
+                    onClick={() => {
+                      setSettingsSection("skills");
+                      setActiveTab("settings");
+                    }}
+                  >
+                    ⚙ Skille
+                  </button>
+                ) : null}
                 <span className="chat-composer-spacer" />
                 <button
                   type="button"
@@ -6617,8 +6675,12 @@ export default function MatterChatApp({
                     {switchTitle(skillSwitchOffer.offer)}
                     <InfoTip>
                       {skillSwitchOffer.offer.direction === "ESCALATION"
-                        ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
-                        : "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."}
+                        ? developerMode
+                          ? "Pismo procesowe powstaje etapami (W1-W3); przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
+                          : "Pismo procesowe powstaje etapami; przed startem aplikacja poprosi o akceptację. Rozmowa zostaje w wątku."
+                        : developerMode
+                          ? "Pipeline pisma procesowego tej sprawy zostanie zamknięty; rozmowa zostaje w wątku."
+                          : "Rozpoczęte pismo procesowe tej sprawy zostanie zamknięte; rozmowa zostaje w wątku."}
                     </InfoTip>
                   </strong>
                   {skillSwitchOffer.offer.reason ? <small>{skillSwitchOffer.offer.reason}</small> : null}
@@ -6637,10 +6699,11 @@ export default function MatterChatApp({
                   {workflowRecoveryRequest.recovery.kind === "process-start" ? (
                     <>
                       <strong>
-                        Uruchomić pipeline pisma procesowego?
+                        {developerMode ? "Uruchomić pipeline pisma procesowego?" : "Przygotować pismo procesowe etapami?"}
                         <InfoTip>
-                          Etapy: W1 rama, W2 projekt, W3 weryfikacja. Plik .docx powstaje sam (szkic po W2, gotowe pismo
-                          po W3); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie.
+                          {developerMode
+                            ? "Etapy: W1 rama, W2 projekt, W3 weryfikacja. Plik .docx powstaje sam (szkic po W2, gotowe pismo po W3); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie."
+                            : "Etapy: rama, projekt, weryfikacja. Plik .docx powstaje sam (szkic po projekcie, gotowe pismo po weryfikacji); dokumenty sprawy i materiały kancelarii są dostępne w każdym etapie."}
                         </InfoTip>
                       </strong>
                       <div className="chat-contract-mode-options">
@@ -6669,7 +6732,7 @@ export default function MatterChatApp({
                               className="chat-secondary-action"
                               disabled={workflowRecoveryBusy}
                               onClick={() => void recoverWorkflow("AUTO")}
-                              title="etapy przechodzą bez pytania; HYBRID-VAL przed plikiem nadal obowiązuje"
+                              title={developerMode ? "etapy przechodzą bez pytania; HYBRID-VAL przed plikiem nadal obowiązuje" : "etapy przechodzą bez pytania; kontrola końcowa przed plikiem nadal obowiązuje"}
                             >
                               Automatycznie
                             </button>
@@ -6708,9 +6771,11 @@ export default function MatterChatApp({
               {executionError ? (
                 <div className="chat-error-diagnostic">
                   <p className="chat-inline-error">
-                    {executionError}
+                    {developerMode || !executionDiagnostic
+                      ? executionError
+                      : plainErrorMessage(executionDiagnostic.code, executionError, executionDiagnostic.reason)}
                   </p>
-                  {executionDiagnostic ? (
+                  {developerMode && executionDiagnostic ? (
                     <details>
                       <summary>
                         Pełne informacje diagnostyczne
@@ -7265,6 +7330,7 @@ export default function MatterChatApp({
               ] as Array<
                 [SettingsSection, string]
               >)
+                .filter(([section]) => developerMode || section !== "skills")
                 .map(
                   ([section, label]) => (
                     <button
@@ -7816,7 +7882,7 @@ export default function MatterChatApp({
                 <div className="chat-settings-section-stack">
                   {settingsPanels?.invoices}
                 </div>
-              ) : settingsSection === "skills" ? (
+              ) : settingsSection === "skills" && developerMode ? (
                 <section className="chat-card-stack">
             <article className="chat-card">
               <p className="eyebrow">Sterowanie wykonaniem</p>
@@ -8016,6 +8082,22 @@ export default function MatterChatApp({
           </section>
               ) : (
                 <div className="chat-settings-section-stack">
+                  <article className="chat-card developer-mode-card">
+                    <label className="developer-mode-toggle">
+                      <input
+                        type="checkbox"
+                        checked={developerMode}
+                        onChange={(event) => setDeveloperMode(event.target.checked)}
+                      />
+                      <span>
+                        <strong>Tryb dewelopera</strong>
+                        <small>
+                          Pokazuje dziennik wykonania, skille i moduły użyte w odpowiedzi, bramki, kody błędów
+                          i inne informacje techniczne. Wyłączony: widok dla prawnika.
+                        </small>
+                      </span>
+                    </label>
+                  </article>
                   {settingsPanels?.maintenance}
                 </div>
               )}
@@ -8024,5 +8106,6 @@ export default function MatterChatApp({
         ) : null}
       </main>
     </div>
+    </DeveloperModeContext.Provider>
   );
 }

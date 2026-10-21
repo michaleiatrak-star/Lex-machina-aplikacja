@@ -2106,6 +2106,24 @@
   min-width: 0;
 }
 
+.developer-mode-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.developer-mode-toggle span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.developer-mode-toggle small {
+  color: #718078;
+  line-height: 1.4;
+}
+
 .chat-settings-embedded-wide {
   grid-column: 1 / -1;
   order: 3;
