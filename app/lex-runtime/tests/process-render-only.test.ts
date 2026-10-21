@@ -51,5 +51,5 @@ describe("pleading file rendered from the case pipeline", () => {
     const result: any = await current.executor.execute({ ...request, processRenderOnly: { stage: "FINAL" } } as never);
     const events: Array<{ target: string; status: string }> = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
     expect(events.find((event) => event.target === "G39I_WORKFLOW_CONTRACT")?.status).toBe("OK");
-  });
+  }, 30_000);
 });

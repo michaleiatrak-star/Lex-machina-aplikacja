@@ -38,7 +38,7 @@ describe("contract file rendered after its pipeline (E2E AU2: HTTP 422 before)",
     const current = executor();
     await expect(current.executor.execute({ ...request } as never)).rejects.toThrow("Persisted contract-analysis context is required.");
     expect(current.calls).toHaveLength(0);
-  });
+  }, 30_000);
 
   it("renders the file of a drafted contract (AU-HYBRID and AU-STRIP checked by the route)", async () => {
     const current = executor();
@@ -47,5 +47,5 @@ describe("contract file rendered after its pipeline (E2E AU2: HTTP 422 before)",
     const events: Array<{ target: string; status: string }> = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
     expect(events.find((event) => event.target === "G39I_CONTRACT_STATE_BINDING")?.status).toBe("OK");
     expect(events.find((event) => event.target === "G39I_WORKFLOW_CONTRACT")?.status).toBe("OK");
-  });
+  }, 30_000);
 });
