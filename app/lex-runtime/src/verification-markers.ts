@@ -25,6 +25,8 @@ export function stripVerificationMarkers(text: string): string {
     .replace(new RegExp(`\\.(?:[ \\t]*${MARKER_SOURCE})+[ \\t]*\\.`, "gu"), ".")
     .replace(new RegExp(`[ \\t]*${MARKER_SOURCE}`, "gu"), "")
     .replace(/[ \t]+([.,;:)\]])/gu, "$1")
+    // The chat moved the marker to the line's end ("k.c.. ✅ [VER: …]"): one dot, not an ellipsis.
+    .replace(/(\p{L})\.\.(?!\.)/gu, "$1.")
     .replace(/[ \t]{2,}/gu, " ")
     .replace(/[ \t]+$/gmu, "");
 }

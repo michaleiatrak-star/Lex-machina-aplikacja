@@ -30,6 +30,8 @@ describe("verification markers in documents (STRIP-VER-GATE)", () => {
     expect(stripVerificationMarkers("Wymagalność — art. 720 § 1 k.c. ✅ [VER: https://eli.gov.pl/a720, 2026-10-21].")).toBe("Wymagalność — art. 720 § 1 k.c.");
     expect(stripVerificationMarkers("Bez terminu — art. 723 k.c. ⚠️ [NIEWERYFIKOWANE] 🟠 [KALIBRACJA]. Dalej.")).toBe("Bez terminu — art. 723 k.c. Dalej.");
     expect(stripVerificationMarkers("Art. 5 KC ✅ [VER: https://eli.gov.pl/a5, 2026-10-21].")).toBe("Art. 5 KC.");
+    expect(stripVerificationMarkers("Bez terminu — art. 723 k.c.. ✅ [VER: https://eli.gov.pl/a723, 2026-10-21]")).toBe("Bez terminu — art. 723 k.c.");
+    expect(stripVerificationMarkers("I tak dalej... ✅ [VER: https://eli.gov.pl/a1, 2026-10-21]")).toBe("I tak dalej...");
   });
 
   it("keeps a gap to fill and ordinary brackets", () => {
