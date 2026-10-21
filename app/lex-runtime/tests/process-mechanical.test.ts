@@ -76,6 +76,12 @@ describe("mechanical mode: pisma-procesowe-v3, one checkpoint per turn", () => {
     expect(c.systemPrompt.slice(c.systemPromptCachePrefix!)).toContain("# MODUŁY ETAPU W2");
   }, 180_000);
 
+  it("the first turn of a thread caches the same prefix as the later checkpoints (stage sections after it)", async () => {
+    const first = await run("CP-1a", "W1", CASE);
+    const later = await run("CP-1d", "W1", `Użytkownik: ${CASE}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`);
+    expect(first.systemPrompt.slice(0, first.systemPromptCachePrefix!)).toBe(later.systemPrompt.slice(0, later.systemPromptCachePrefix!));
+  }, 180_000);
+
   it("a construction claim with an attached protocol selects no employer or party-identity module", async () => {
     const call = await run("CP-ATAK", "W2", `Użytkownik: ${CASE}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`);
     expect(call.systemPrompt).not.toMatch(/- \S*(?:MOD-PRACODAWCA-RZECZYWISTY|MOD-IDENTYFIKACJA-STRONY-UMOWY)\.md — warunek/u);

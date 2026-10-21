@@ -59,6 +59,23 @@ describe("prompt cache: the stable prefix of a mechanical turn", () => {
     expect(prefix(a).length / a.systemPrompt.length).toBeGreaterThan(0.5);
   }, 180_000);
 
+  it.each(["analizator-przepisow-v2", "orzeczenia-sadowe-v2", "pisma-proste-v2"])(
+    "%s: the same in the first and a later turn of a thread; the later turn's stage sections follow it",
+    async (skill) => {
+      const first = await ask(skill, "dr-02-prawo-cywilne-rodzinne-gospodarcze", "Pozwany nie zapłacił 12 000 zł za usługę. Co dalej?");
+      const later = await ask(
+        skill,
+        "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+        "Użytkownik: Pozwany nie zapłacił 12 000 zł za usługę. Co dalej?\n\nAsystent: Podaj datę wymagalności.\n\nUżytkownik: 30 czerwca 2026 r."
+      );
+      expect(prefix(later)).toBe(prefix(first));
+      if (later.systemPrompt.includes("# SEKCJE ETAPU WĄTKU")) {
+        expect(later.systemPrompt.indexOf("# SEKCJE ETAPU WĄTKU")).toBeGreaterThan(later.systemPromptCachePrefix!);
+      }
+    },
+    180_000
+  );
+
   it("differs between executive skills, so their caches do not collide", async () => {
     const a = await ask("pisma-proste-v2", "dr-02-prawo-cywilne-rodzinne-gospodarcze", "Napisz wezwanie do zapłaty 5 000 zł.");
     const b = await ask("analizator-przepisow-v2", "dr-02-prawo-cywilne-rodzinne-gospodarcze", "Przeanalizuj art. 415 KC.");

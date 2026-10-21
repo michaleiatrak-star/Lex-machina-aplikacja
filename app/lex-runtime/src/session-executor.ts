@@ -2,7 +2,7 @@ import { todayWarsaw } from "./warsaw-date.js";
 import { detectHealthData } from "./privacy/health-data.js";
 import { waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
-import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
+import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
@@ -2508,8 +2508,10 @@ export class SafeSessionExecutor implements SessionExecutor {
     // so the router's routing sections (lex:wykonuje-aplikacja: ROUTING) go as a reference;
     // its mandatory core, gates and self-check stay whole.
     const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING", "REJESTR-MODULOW"] : []);
+    // Prompt cache: the stage sections of these resources go after the cached prefix.
+    const stageTail = { reached: stages, sections: [] as string[] };
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents);
+      const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents, stageTail);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,
@@ -2750,6 +2752,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     ].join("\n\n");
     const toolPromptTurn = [
       ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      ...[stageTailPrompt(stageTail.sections)].filter((block): block is string => Boolean(block)),
       ...pathSections.filter((section) => !stablePath(section)),
       ...(evidencePrompt ? [evidencePrompt] : []),
       ...(citedLaw ? [citedLaw] : []),
