@@ -388,6 +388,9 @@ export type SessionExecutionRequest = {
   documentAstOutput?: boolean;
   // The .docx of a pleading the case's pipeline already wrote (route checked the state).
   processRenderOnly?: { stage: ProcessPleadingStage };
+  // The .docx of a contract the case's contract pipeline drafted (route checked AU-HYBRID and
+  // AU-STRIP): rendered from the conversation, no AU checkpoint runs.
+  contractRenderOnly?: boolean;
   processWorkflowContext?: {
     stage: ProcessPleadingStage;
     checkpoint: ProcessPleadingCheckpoint;
@@ -2977,6 +2980,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(request.processRenderOnly && request.documentAstOutput
         ? { processRenderOnly: request.processRenderOnly }
         : {}),
+      ...(request.contractRenderOnly && request.documentAstOutput
+        ? { contractRenderOnly: true }
+        : {}),
       ...(protectedProcessContext
         ? {
             processWorkflowContext:
@@ -4226,8 +4232,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             (
               execution.workflowPlan.id ===
                 "CONTRACT_ANALYSIS_V1" &&
-              request
-                .contractWorkflowContext
+              (request.contractWorkflowContext || (request.contractRenderOnly && request.documentAstOutput))
             ) ||
             (
               (

@@ -7724,6 +7724,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         let processRenderOnly: { stage: ProcessPleadingStage } | undefined;
         let processDocumentStatus: "DRAFT" | "FINAL" | undefined;
         let pleadingSource: { version: number; text: string } | undefined;
+        // A contract drafted in its pipeline (AU-HYBRID, AU-STRIP closed): the file runs no AU step.
+        let contractRenderOnly = false;
         // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
         // names no pleading keyword; its document type does.
         // pisma-procesowe-v3 Test A (MOD-REDAKCJA): the user's own pleading corrected in the
@@ -7802,6 +7804,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             res.status(409).json({ error: "WORKFLOW_PIPELINE_REQUIRED", workflow: statefulWorkflow });
             return;
           }
+          contractRenderOnly = contractExportReady;
         }
 
         const generated =
@@ -7809,6 +7812,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             .documentAstGenerator
             .generate({
               ...(processRenderOnly ? { processRenderOnly } : {}),
+              ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
               ...(longDocumentSource
                 ? {
                     sourceText: {
