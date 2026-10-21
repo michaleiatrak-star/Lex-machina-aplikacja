@@ -255,7 +255,9 @@ export type SettingsSection =
   | "mcp"
   | "invoices"
   | "skills"
-  | "maintenance";
+  | "maintenance"
+  | "server"
+  | "account";
 
 export type SettingsRequest = {
   section: SettingsSection;
@@ -270,6 +272,8 @@ type SettingsPanels = {
   mcp?: ReactNode;
   invoices?: ReactNode;
   maintenance?: ReactNode;
+  server?: ReactNode;
+  account?: ReactNode;
 };
 
 type ExtendedExecution = SessionExecutionResponse & {
@@ -1412,17 +1416,23 @@ export function exportBlockedMessage(error: unknown): string | null {
 
 export default function MatterChatApp({
   user,
+  serverMode = false,
   settingsPanels,
   settingsRequest,
   onLock,
   onLogout
 }: {
   user: AuthenticatedUser;
+  serverMode?: boolean;
   settingsPanels?: SettingsPanels;
   settingsRequest?: SettingsRequest | null;
   onLock?: () => void;
   onLogout?: () => void;
 }) {
+  // Tryb serwerowy: tylko kanał API (bez kont przez klienta CLI i bez modeli lokalnych).
+  const providerGroups = serverMode
+    ? PROVIDER_GROUPS.filter((item) => item.id !== "local")
+    : PROVIDER_GROUPS;
   const [activeTab, setActiveTab] = useState<TabId>("home");
   // Bumped when events change anywhere, so the home screen, the calendar and
   // the case schedule show the same data.
@@ -1567,12 +1577,19 @@ export default function MatterChatApp({
     });
   }
   function sourceOfGroup(group: ProviderGroup): PrimaryModelSource {
+    if (serverMode) return runtimeProviderForPrimarySource(group === "local" ? "openai" : sourceForGroup(group, "api"));
     if (group === "local") return "local";
     return preferredSourceForGroup(group, providerChannels[group], {
       accountConnected: providerAccounts[group]?.authenticated === true,
       apiConfigured: providerConfiguration[group] === true
     });
   }
+  // Tryb serwerowy: źródło konta (CLI) albo lokalne przechodzi na kanał API dostawcy.
+  useEffect(() => {
+    if (serverMode && (provider === "local" || isAccountPrimarySource(provider))) {
+      setProvider(runtimeProviderForPrimarySource(provider));
+    }
+  }, [serverMode, provider]);
   const [providerConfiguration, setProviderConfiguration] = useState<
     Record<ProviderId, boolean | undefined>
   >({ openai: undefined, anthropic: undefined, xai: undefined, google: undefined });
@@ -2060,7 +2077,7 @@ export default function MatterChatApp({
       getHealth(),
       getRoutes(),
       getProviderStatus(),
-      getProviderAccountStatus(),
+      serverMode ? Promise.resolve({ providers: [] }) : getProviderAccountStatus(),
       listCases()
     ])
       .then(([
@@ -5092,7 +5109,7 @@ export default function MatterChatApp({
                   setLocalStartMessage("");
                 }}
               >
-                {PROVIDER_GROUPS.map((item) => (
+                {providerGroups.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
                   </option>
@@ -7326,7 +7343,9 @@ export default function MatterChatApp({
                 ["mcp", "Integracje i konektory"],
                 ["invoices", "Faktury i KSeF"],
                 ["skills", "Skille i routing"],
-                ["maintenance", "Aplikacja i utrzymanie"]
+                ["maintenance", "Aplikacja i utrzymanie"],
+                ...(settingsPanels?.account ? [["account", "Plan i klucze API"]] : []),
+                ...(settingsPanels?.server ? [["server", "Tryb serwerowy"]] : [])
               ] as Array<
                 [SettingsSection, string]
               >)
@@ -7376,7 +7395,7 @@ export default function MatterChatApp({
                     setProviderAccountMessage("");
                   }}
                 >
-                  {PROVIDER_GROUPS.map((item) => (
+                  {providerGroups.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
                     </option>
@@ -7386,7 +7405,7 @@ export default function MatterChatApp({
               {provider !== "local" ? (
                 <fieldset className="chat-settings-channel">
                   <legend>Połączenie</legend>
-                  {(["account", "api"] as const).map((channel) => {
+                  {(serverMode ? (["api"] as const) : (["account", "api"] as const)).map((channel) => {
                     const group = providerGroupOf(provider) as ProviderId;
                     const account = providerAccounts[group];
                     const apiReady = providerConfiguration[group];
@@ -7877,6 +7896,14 @@ export default function MatterChatApp({
                         </p>
                       </article>
                     )}
+                </div>
+              ) : settingsSection === "server" ? (
+                <div className="chat-settings-section-stack">
+                  {settingsPanels?.server}
+                </div>
+              ) : settingsSection === "account" ? (
+                <div className="chat-settings-section-stack">
+                  {settingsPanels?.account}
                 </div>
               ) : settingsSection === "invoices" ? (
                 <div className="chat-settings-section-stack">

@@ -9,6 +9,8 @@ import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleIntegrationPanel } from "./GoogleIntegrationPanel.js";
 import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
+import { ServerAdminPanel } from "./ServerAdminPanel.js";
+import { MyServerAccountPanel } from "./MyServerAccountPanel.js";
 import type {
   AuthMeResponse,
   AuthenticatedUser
@@ -16,12 +18,17 @@ import type {
 
 export default function App({
   user,
+  serverMode = false,
+  onServerModeChanged,
   onAuthUpdated,
   settingsRequest,
   onLock,
   onLogout
 }: {
   user: AuthenticatedUser;
+  // Tryb serwerowy: bez funkcji lokalnych (CLI kont, modele lokalne), z planami i BYOK.
+  serverMode?: boolean;
+  onServerModeChanged?: (enabled: boolean) => void;
   onAuthUpdated: (
     value: AuthMeResponse
   ) => void;
@@ -32,16 +39,26 @@ export default function App({
   return (
     <MatterChatApp
       user={user}
+      serverMode={serverMode}
       settingsRequest={settingsRequest}
       onLock={onLock}
       onLogout={onLogout}
       settingsPanels={{
-        localAi: (
+        localAi: serverMode ? null : (
           <LocalAiSetupPanel
             user={user}
             embedded
           />
         ),
+        server:
+          user.appRole === "ADMIN" ? (
+            <ServerAdminPanel
+              {...(onServerModeChanged
+                ? { onModeChanged: onServerModeChanged }
+                : {})}
+            />
+          ) : null,
+        account: serverMode ? <MyServerAccountPanel /> : null,
         security: (
           <AccountSecurityPanel
             user={user}
