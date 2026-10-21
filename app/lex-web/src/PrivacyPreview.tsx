@@ -130,6 +130,17 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const kept = (page: number, range: { start: number; end: number }) =>
     directives.some((item) => item.page === page && item.action === "KEEP" && overlaps(item, range));
   const aiHints = review.suggestions.filter((item) => (item.aiNotPerson || item.uncertain) && !props.keepClear);
+  const health = props.keepClear ? [] : review.healthData ?? [];
+  const healthMasked = (item: { page: number; start: number; end: number }) =>
+    directives.some((directive) => directive.page === item.page && directive.action === "LABEL" && overlaps(directive, item));
+  function maskHealth(items: Array<{ page: number; start: number; end: number }>): void {
+    setDirectives((current) =>
+      items.filter((item) => !healthMasked(item)).reduce((next, item) => addMark(next, { ...item, action: "LABEL", label: "dane o zdrowiu" }), current)
+    );
+  }
+  function unmaskHealth(item: { page: number; start: number; end: number }): void {
+    setDirectives((current) => current.filter((directive) => !(directive.page === item.page && directive.action === "LABEL" && overlaps(directive, item))));
+  }
   const doubtful = review.pages.flatMap((page) => (page.review ?? []).map((line) => ({ page: page.page, line: line.line, text: line.text, stamp: line.reason === "STAMP" })));
   const fixes = review.pages.flatMap((page) => (page.corrections ?? []).map((fix) => ({ page: page.page, ...fix })));
   const masked = props.keepClear
@@ -375,9 +386,35 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
           ))}
         </details>
       ) : null}
-      {aiHints.length || doubtful.length || fixes.length ? (
+      {aiHints.length || doubtful.length || fixes.length || health.length ? (
         <div className="privacy-preview-todo">
           <strong>Do decyzji</strong>
+          {health.length ? (
+            <details className="privacy-preview-group" open>
+              <summary>Dane o zdrowiu ({health.length})</summary>
+              <small>
+                Szczególna kategoria danych (art. 9 RODO). Nie są zakrywane automatycznie, bo w sprawie o szkodę lub
+                zadośćuczynienie są jej istotą. Zakryj je, gdy analiza ich nie potrzebuje.
+              </small>
+              <ul>
+                {health.map((item) => (
+                  <li key={`health-${item.page}-${item.start}`}>
+                    <span>
+                      s. {item.page} · „{review.pages.find((page) => page.page === item.page)?.text.slice(item.start, item.end)}”
+                    </span>
+                    <button type="button" onClick={() => (healthMasked(item) ? unmaskHealth(item) : maskHealth([item]))}>
+                      {healthMasked(item) ? "Odkryj" : "Zakryj"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {health.length > 1 && health.some((item) => !healthMasked(item)) ? (
+                <button type="button" onClick={() => maskHealth(health)}>
+                  Zakryj wszystkie
+                </button>
+              ) : null}
+            </details>
+          ) : null}
           {aiHints.length ? (
             <details className="privacy-preview-group">
               <summary>Do przejrzenia ({aiHints.length})</summary>

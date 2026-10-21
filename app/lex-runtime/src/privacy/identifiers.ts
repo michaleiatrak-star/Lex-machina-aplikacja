@@ -117,6 +117,10 @@ const MONTHS =
   "stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia";
 const DATE = `(?:\\d{1,2}[.\\-/]\\d{1,2}[.\\-/](?:19|20)\\d{2}|\\d{1,2}\\s+(?:${MONTHS})\\s+(?:19|20)\\d{2}|(?:19|20)\\d{2}-\\d{2}-\\d{2})(?:\\s*r\\.)?`;
 
+// A town of one to three capitalised words: "Tarnowie", "Nowym Sączu", "Kędzierzynie-Koźlu",
+// "Nowym Mieście nad Wartą".
+const TOWN = `\\p{Lu}[\\p{L}-]+(?:\\s+(?:(?:nad|pod)\\s+)?\\p{Lu}[\\p{L}-]+){0,2}`;
+
 type Detector = {
   kind: PiiKind;
   regex: RegExp;
@@ -171,6 +175,13 @@ const DETECTORS: Detector[] = [
   },
   { kind: "PHONE", regex: /\+\d{2,3}[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3,4}(?!\d)/g },
   { kind: "ID_CARD", regex: /(?<![\w])[A-Z]{3}\s?\d{6}(?![\w])/g, validate: validIdCard },
+  // Named as an identity card ("nr dowodu ABC123456", "seria i numer"): masked also when its
+  // check digit is wrong (a typo or OCR still identifies the person).
+  {
+    kind: "ID_CARD",
+    regex: /(?:dow(?:ód|odu|odem|odzie)\s+osobist\p{L}*|nr\.?\s+dowodu|numer\s+dowodu|seri\p{L}*\s+i\s+(?:nr\.?|numer\p{L}*))\s*:?\s*(?:nr\.?\s*)?([A-Z]{3}\s?\d{6})(?![\w])/giu,
+    group: 1
+  },
   { kind: "PASSPORT", regex: /(?<![\w])[A-Z]{2}\s?\d{7}(?![\w])/g, validate: validPassport },
   { kind: "LAND_REGISTRY", regex: /(?<![\w])[A-Z]{2}\d[A-Z]\/\d{8}\/\d(?![\w])/g, validate: validLandRegistry },
   // "KRS 0000 297714": the number is also written split after the leading zeros.
@@ -192,6 +203,24 @@ const DETECTORS: Detector[] = [
       `(?:ur\\.|urodzon[aey]j?|urodzin|(?:data|dat[ąy])(?:\\s+i\\s+miejsc[ae])?\\s+(?:urodzenia|ur\\.))\\s*(?:się\\s*)?(?:dnia\\s*|w\\s+dniu\\s*)?:?\\s*(${DATE})`,
       "giu"
     ),
+    group: 1
+  },
+  // "urodzona w Gdańsku dnia 1.02.1990": the date after the place.
+  {
+    kind: "BIRTH_DATE",
+    regex: new RegExp(`(?:ur\\.|urodzon[aey]j?)\\s+w\\s+${TOWN}\\s*,?\\s*(?:dnia\\s*|w\\s+dniu\\s*)?(${DATE})`, "gu"),
+    group: 1
+  },
+  // Place of birth, also when the sentence recognizers are down: "ur. 12.03.1980 r. w Tarnowie",
+  // "urodzony w Nowym Sączu", "miejsce urodzenia: Kraków".
+  {
+    kind: "ADDRESS",
+    regex: new RegExp(`(?:ur\\.|urodzon[aey]j?)\\s+(?:(?:dnia\\s*)?${DATE}\\s*,?\\s*)?w\\s+(${TOWN})`, "gu"),
+    group: 1
+  },
+  {
+    kind: "ADDRESS",
+    regex: new RegExp(`(?:miejsce|miejscowość)\\s+urodzenia\\s*:?\\s*(${TOWN})`, "giu"),
     group: 1
   },
   {

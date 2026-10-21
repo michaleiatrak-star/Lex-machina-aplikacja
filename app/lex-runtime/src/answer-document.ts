@@ -85,8 +85,12 @@ function plainLine(line: string): { text: string; heading: boolean } {
   return { text, heading };
 }
 
+// The answer's section labels of the skill's contract ("## TREŚĆ PISMA") stand above the
+// letter; they are no title of it ("WEZWANIE DO ZAPŁATY" is).
+const CONTRACT_LABEL = /^(?:TREŚĆ|PROJEKT|TEKST)\s+(?:PISMA|DOKUMENTU|UMOWY|WEZWANIA|WNIOSKU)\s*:?$/u;
+
 function titleLike(text: string): boolean {
-  if (LIST_ITEM.test(text) || text.length > 200) return false;
+  if (LIST_ITEM.test(text) || text.length > 200 || CONTRACT_LABEL.test(text.replace(/[*_]/gu, "").trim())) return false;
   const letters = [...text.replace(/\[[^\]]*\]/gu, "")].filter((char) => /\p{L}/u.test(char));
   if (letters.length < 8) return false;
   const upper = letters.filter((char) => char === char.toLocaleUpperCase("pl") && char !== char.toLocaleLowerCase("pl")).length;
@@ -152,7 +156,11 @@ function blocksOf(lines: Array<{ text: string; heading: boolean }>): Array<{ lin
  */
 export function answerLetterMarkup(answer: string): string | null {
   const body = answer.replace(/\r\n?/gu, "\n").split(/⚖️|\bWażna informacja:/u)[0] ?? "";
-  const lines = body.split("\n").map(plainLine);
+  // A section label of the skill's contract is no line of the letter.
+  const lines = body
+    .split("\n")
+    .map(plainLine)
+    .map((line) => (CONTRACT_LABEL.test(line.text.replace(/[*_]/gu, "").trim()) ? { ...line, text: "" } : line));
   const titleAt = lines.findIndex((line) => titleLike(line.text));
   if (titleAt < 0) return null;
   const metaAt = lines.findIndex((line, index) => index > titleAt && line.text.length <= 60 && META_HEADING.test(line.text.replace(/[*_]/gu, "")));

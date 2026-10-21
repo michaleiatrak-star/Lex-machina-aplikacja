@@ -147,10 +147,12 @@ describe(
         ).toContain(
           "[PII:ADDRESS:0001]"
         );
+        // "Dowód osobisty ABC123456": the identity card by its context (a wrong check digit too),
+        // before the local model's CUSTOM finding of the same number.
         expect(
           protectedText.text
         ).toContain(
-          "[PII:CUSTOM:0001]"
+          "[PII:ID_CARD:0001]"
         );
         expect(
           protectedText.text

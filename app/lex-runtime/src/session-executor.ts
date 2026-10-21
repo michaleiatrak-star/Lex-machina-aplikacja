@@ -1,7 +1,9 @@
 import { todayWarsaw } from "./warsaw-date.js";
-import { waitsForUser } from "./workflow-wait.js";
+import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
+import { detectHealthData } from "./privacy/health-data.js";
+import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
-import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
+import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
@@ -914,6 +916,28 @@ export function privacyGateFailure(error: unknown): Error & { reason?: string } 
   return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
 }
 
+// A request to the user: a question, or a line opening with an asking verb.
+const ASKS = /\?|(?:^|\n)\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*)?(?:Podaj|Wskaż|Prześlij|Dołącz|Załącz|Wklej|Potwierdź|Wybierz|Określ|Uzupełnij|Doprecyzuj|Napisz,|Proszę)/u;
+
+/** The answer is the active checkpoint's report, the marker added after it without asking. */
+function reportOnly(answer: string, checkpoint: string | undefined): boolean {
+  if (!checkpoint) return false;
+  const report = answer.lastIndexOf(`[${checkpoint}`);
+  const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
+  return report >= 0 && marker > report && !ASKS.test(answer.slice(report, marker));
+}
+
+// Executive skills that work on the case's material, and what to ask for when there is none.
+const MATERIAL_SKILLS: Record<string, string> = {
+  "analizator-umow-v1": "umowa (plik albo pełny tekst)",
+  "analiza-sadowa-v6": "orzeczenie, pisma albo akta sprawy",
+  "analizator-dowodow-v3": "dowody (dokumenty, zeznania, korespondencja)",
+  "chronologia-sprawy-v1": "dokumenty sprawy, z których ma powstać oś czasu",
+  "przesluchanie-swiadkow-v2-min90": "akta sprawy (zeznania, protokoły, pisma) i dane o świadku"
+};
+// A message this long carries the material itself (a pasted contract or statement).
+const MATERIAL_PASTED_CHARS = 1_500;
+
 export type SessionExecutionResponse = {
   sessionId: string;
   status: "DRAFT_PRESENTABLE" | "BLOCKED";
@@ -1802,12 +1826,25 @@ export class SafeSessionExecutor implements SessionExecutor {
                 request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null
               )
             : [];
-        const protectedPrimary =
+        // The document generator's contract (the application's own instructions and its alias
+        // map, no personal data) follows the user's text: only that text is pseudonymized.
+        // Run through the recognizers, "PII ALIAS" and "I. Section" became PERSON symbols.
+        const contractAt = request.query.indexOf(DOCUMENT_OUTPUT_CONTRACT_HEADING);
+        const userText = contractAt >= 0 ? request.query.slice(0, contractAt) : request.query;
+        const contractText = contractAt >= 0 ? request.query.slice(contractAt) : "";
+        const pseudonymizedUser =
           await chatPseudonymizer
             .pseudonymize(
-              request.query,
-              exampleData
+              userText,
+              exampleData.filter((directive) => directive.end <= userText.length)
             );
+        const protectedPrimary = { ...pseudonymizedUser, text: pseudonymizedUser.text + contractText };
+        // Health data (art. 9 RODO) goes as written (the injury is often the matter); the log says so.
+        const health = detectHealthData(latestMessage);
+        if (health.length) {
+          step("PREPARE", `dane o zdrowiu w wiadomości (art. 9 RODO): ${health.length}, wysłane bez zakrycia; gdy analiza ich nie potrzebuje, pomiń je w wiadomości`);
+          audit.record("gate", "HEALTH_DATA_SENT", "OK", { count: health.length });
+        }
         // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
         const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
         protectedQuery =
@@ -2501,8 +2538,10 @@ export class SafeSessionExecutor implements SessionExecutor {
     // so the router's routing sections (lex:wykonuje-aplikacja: ROUTING) go as a reference;
     // its mandatory core, gates and self-check stay whole.
     const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING", "REJESTR-MODULOW"] : []);
+    // Prompt cache: the stage sections of these resources go after the cached prefix.
+    const stageTail = { reached: stages, sections: [] as string[] };
     const forModel = (resource: string, content: string): string => {
-      const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents);
+      const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents, stageTail);
       if (result.compacted.length) {
         audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
           resource,
@@ -2743,6 +2782,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     ].join("\n\n");
     const toolPromptTurn = [
       ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+      ...[stageTailPrompt(stageTail.sections)].filter((block): block is string => Boolean(block)),
       ...pathSections.filter((section) => !stablePath(section)),
       ...(evidencePrompt ? [evidencePrompt] : []),
       ...(citedLaw ? [citedLaw] : []),
@@ -2807,7 +2847,38 @@ export class SafeSessionExecutor implements SessionExecutor {
               : undefined
           )
         : undefined;
+    // Material gate: a pinned skill that works on documents, the first turn, no file in the
+    // message, none in the case and no pasted text - the application asks for the material
+    // itself (no model call, ~100k tokens saved; the checkpoint stays open until it comes).
+    const materialSkill = mechanicalTurn(request)
+      ? mechanicalEnvelope.manualSkills.find(
+          (name) => name in MATERIAL_SKILLS && !(name === "analizator-umow-v1" && request.contractWorkflowContext?.mode === "DRAFT")
+        )
+      : undefined;
+    let caseDocuments = 0;
+    if (materialSkill && request.caseFiles) {
+      try {
+        caseDocuments = (await request.caseFiles.listDocuments()).length;
+      } catch {
+        caseDocuments = 1;
+      }
+    }
+    // Only at the workflow's first step: a later checkpoint means the work is under way.
+    const firstStep =
+      (!request.contractWorkflowContext || request.contractWorkflowContext.checkpoint === "AU-F0") &&
+      (!request.orderedCaseWorkflowContext || /INTAKE/u.test(request.orderedCaseWorkflowContext.checkpoint)) &&
+      (!request.chronologyWorkflowContext || request.chronologyWorkflowContext.stage === "INVENTORY") &&
+      (!request.courtWorkflowContext || request.courtWorkflowContext.stage === "EVIDENCE_SCAN");
+    const fixedAnswer =
+      materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS
+        ? `Do tej pracy potrzebny jest materiał: ${MATERIAL_SKILLS[materialSkill]}. Dołącz plik do wiadomości albo wklej jego treść; dokumenty już zapisane w aktach wybierz w sprawie.\n\n${WAIT_FOR_USER_MARKER}`
+        : undefined;
+    if (fixedAnswer) {
+      step("MODEL", "brak materiału: pytanie aplikacji, bez wywołania modelu");
+      audit.record("gate", "MATERIAL_REQUIRED", "OK", { skill: materialSkill, waitingForUser: true });
+    }
     const execution = await this.engine.executePolishLegalQuery({
+      ...(fixedAnswer ? { fixedAnswer } : {}),
       instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages], optIn: [...optInComponents] },
       ...(this.coreLawIndex
         ? {
@@ -3915,9 +3986,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         request.orderedCaseWorkflowContext ||
         request.contractWorkflowContext ||
         request.chronologyWorkflowContext ||
+        request.processRenderOnly ||
         execution.workflowPlan.executionSkill
           ? {
               checkpointTurn: true,
+              ...(request.processRenderOnly ? { processRenderStage: request.processRenderOnly.stage } : {}),
               ...(request.processWorkflowContext
                 ? {
                     processCheckpoint:
@@ -4775,7 +4848,18 @@ export class SafeSessionExecutor implements SessionExecutor {
         : workflowOutput.mode === "REDUCTION_OFFERED"
           ? reductionOffer(restoredAnswer.text)
           : null) ?? appEscalation;
-    const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
+    // A checkpoint's report followed by the marker without a question or request after it
+    // (the skill's "STOP, czekaj na użytkownika") is a report to confirm: otherwise the
+    // checkpoint never reached confirmation and the chain asked for it again (E2E: 18 turns
+    // on CP-1a). A question or a request ("Podaj…") still waits for the user's reply.
+    const activeCheckpoint =
+      request.processWorkflowContext?.checkpoint ??
+      request.contractWorkflowContext?.checkpoint ??
+      request.orderedCaseWorkflowContext?.checkpoint ??
+      request.chronologyWorkflowContext?.checkpoint ??
+      request.courtWorkflowContext?.checkpoint;
+    const waitingForUser =
+      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) || skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);

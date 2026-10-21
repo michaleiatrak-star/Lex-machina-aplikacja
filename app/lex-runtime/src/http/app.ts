@@ -9626,9 +9626,15 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       const actor =
         responseAuthContext(res);
 
+      // The guide pinned in the chat's envelope (the route is a DR then) as the only
+      // executive skill runs LEGAL_GUIDE_V1 too and needs its session state (E2E: 422).
+      const pinnedExecutive = parseSkillSelectionEnvelope(request.query).manualSkills.filter(
+        (name) => !/^dr-\d{2}-/u.test(name) && name !== "prawny-router-v3" && name !== "prawo-polskie-v2" && name !== "shared"
+      );
       if (
         request.primarySkill ===
-          "przewodnik-prawny-v2"
+          "przewodnik-prawny-v2" ||
+        (pinnedExecutive.length === 1 && pinnedExecutive[0] === "przewodnik-prawny-v2")
       ) {
         if (
           !options.guideSessionStore

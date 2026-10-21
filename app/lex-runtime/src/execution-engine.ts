@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ProviderStreamResult } from "./providers/types.js";
 import { draftPrompt } from "./process-pleading-draft.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
@@ -9,7 +10,7 @@ import {
   ORDERED_CHECKPOINT_SECTIONS,
   markdownSection
 } from "./checkpoint-skill-sections.js";
-import { compactForModel } from "./skill-sections.js";
+import { compactForModel, stageTailPrompt, type StageTail } from "./skill-sections.js";
 import { reductionOffer } from "./skill-switch.js";
 import { ANNOUNCED_ACTION_PROMPT, onlyAnnouncesWork } from "./announced-action.js";
 import { defenceCount, opponentPleadingTrigger } from "./task-routing.js";
@@ -402,6 +403,8 @@ export class LexExecutionEngine {
     // The turn's own part of the tool appendix (documents, act modules, cited articles); the
     // stable part is toolSystemPromptAppendix.
     toolSystemPromptTurn?: string;
+    // Answer of this turn given by the application, no model call (material gate).
+    fixedAnswer?: string;
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -1191,6 +1194,11 @@ export class LexExecutionEngine {
     // mandatory gates and their resources) plus every required workflow resource
     // goes to the model's context. Before, the "mechanical-policy" resources were
     // only checked for existence and logged as read without reaching the model.
+    // Prompt cache: stage sections of the stable skills (KOLEJNA-TURA, a public procurement
+    // matter) stay a note in the cached prefix; their text goes to the turn's part.
+    const stageTail: StageTail | undefined = args.instructionCompaction
+      ? { reached: new Set(args.instructionCompaction.stages), sections: [] }
+      : undefined;
     let executiveContractText = "";
     let stageModulesText = "";
     // What this question and its documents trigger (skill modules, act modules, domain hint):
@@ -1233,7 +1241,8 @@ export class LexExecutionEngine {
               undefined,
               new Set(args.instructionCompaction?.inactive ?? []),
               args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined,
-              new Set(args.instructionCompaction?.optIn ?? [])
+              new Set(args.instructionCompaction?.optIn ?? []),
+              stageTail
             ).text;
           } catch {
             skillText = "";
@@ -1933,7 +1942,8 @@ export class LexExecutionEngine {
         undefined,
         new Set(args.instructionCompaction?.inactive ?? []),
         args.instructionCompaction ? new Set(args.instructionCompaction.stages) : undefined,
-        new Set(args.instructionCompaction?.optIn ?? [])
+        new Set(args.instructionCompaction?.optIn ?? []),
+        stageTail
       ).text;
     const stableSkillPrompt = combineSkillPrompt(
       this.registry,
@@ -2156,7 +2166,7 @@ export class LexExecutionEngine {
     if (!workflowStateParts.length && workflowPlan.executionSkill && !args.model.startsWith("local/")) {
       workflowStateParts.push(`# KROK CZEKAJĄCY NA UŻYTKOWNIKA\nGdy potrzebna jest odpowiedź użytkownika (brakujące dane, wybór wariantu), zadaj pytania i zakończ odpowiedź osobną linią ${WAIT_FOR_USER_MARKER}.`);
     }
-    const turnTail = [turnContextText, stageModulesText, contractCheckpointText, ...workflowStateParts].filter(Boolean);
+    const turnTail = [stageTailPrompt(stageTail?.sections ?? []), turnContextText, stageModulesText, contractCheckpointText, ...workflowStateParts].filter((part): part is string => Boolean(part));
     const stableText = stableParts.join("\n\n");
     promptParts.push(...turnTail);
     // The cached prefix: the skill's stable part, the same for every question of this skill
@@ -2183,7 +2193,8 @@ export class LexExecutionEngine {
       args.model
     );
 
-    const response = await this.providers.stream(
+    // The application's own answer (a question it asks without the model, e.g. for the material).
+    const response: ProviderStreamResult = args.fixedAnswer !== undefined ? { fullText: args.fixedAnswer } : await this.providers.stream(
       args.provider,
       {
         model: args.model,

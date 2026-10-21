@@ -76,6 +76,12 @@ describe("mechanical mode: pisma-procesowe-v3, one checkpoint per turn", () => {
     expect(c.systemPrompt.slice(c.systemPromptCachePrefix!)).toContain("# MODUŁY ETAPU W2");
   }, 180_000);
 
+  it("the first turn of a thread caches the same prefix as the later checkpoints (stage sections after it)", async () => {
+    const first = await run("CP-1a", "W1", CASE);
+    const later = await run("CP-1d", "W1", `Użytkownik: ${CASE}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`);
+    expect(first.systemPrompt.slice(0, first.systemPromptCachePrefix!)).toBe(later.systemPrompt.slice(0, later.systemPromptCachePrefix!));
+  }, 180_000);
+
   it("a construction claim with an attached protocol selects no employer or party-identity module", async () => {
     const call = await run("CP-ATAK", "W2", `Użytkownik: ${CASE}\n\nAsystent: Punkt zakończony.\n\nUżytkownik: Kontynuuj.`);
     expect(call.systemPrompt).not.toMatch(/- \S*(?:MOD-PRACODAWCA-RZECZYWISTY|MOD-IDENTYFIKACJA-STRONY-UMOWY)\.md — warunek/u);
@@ -276,6 +282,34 @@ describe("mechanical checkpoint that asks the user", () => {
   }, 120_000);
 });
 
+
+describe("a checkpoint's report with the marker added after it", () => {
+  it("is a report to confirm, not a question (the chain does not ask for the same checkpoint again)", async () => {
+    const answer = async (fullText: string) => {
+      const providers = new ProviderRegistry();
+      providers.register({
+        id: "openai",
+        label: "mechanical",
+        capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+        async stream() {
+          return { fullText };
+        }
+      });
+      const envelope = { auto: false, manual: ["pisma-procesowe-v3"], caseType: ["pisma-procesowe-v3"] };
+      return new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification).execute({
+        query: `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify(envelope)}\n${CASE}`,
+        provider: "openai",
+        model: "account/openai/default",
+        primarySkill: "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+        mode: "PRAWNIK",
+        processWorkflowContext: { stage: "W1", checkpoint: "CP-1a", mode: "CHECKPOINT" }
+      } as never);
+    };
+    expect((await answer("[CP-1a] Rama faktów zakończona: strony, roszczenie 48 000 zł.\n⛔ STOP\n\n[CZEKAM NA ODPOWIEDŹ]")).waitingForUser).toBeUndefined();
+    expect((await answer("[CP-1a] Rama faktów.\n\nPodaj datę doręczenia faktury.\n\n[CZEKAM NA ODPOWIEDŹ]")).waitingForUser).toBe(true);
+    expect((await answer("[CP-1a] Rama faktów.\n\nCzy pozwany był wzywany do zapłaty?\n\n[CZEKAM NA ODPOWIEDŹ]")).waitingForUser).toBe(true);
+  }, 180_000);
+});
 
 describe("AUTO pleading: a step that asks the user ends the server's batch", () => {
   it("stops with WAITING_FOR_USER; the step that asked stays open for the reply", async () => {

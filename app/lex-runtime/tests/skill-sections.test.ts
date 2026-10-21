@@ -157,7 +157,7 @@ describe("sections of a later stage of the thread", () => {
     return calls[0]!.systemPrompt ?? "";
   }
 
-  it("the first turn of a pleading gets W2/W3 as headings, a later turn in full", async () => {
+  it("the first turn of a pleading gets W2/W3 as headings, a later turn in full after them (cached prefix unchanged)", async () => {
     const first = await pleadingPrompt("Napisz apelację od wyroku sądu rejonowego w sprawie o zapłatę.");
     expect(first).toContain("# SKILL WYKONAWCZY WG ROUTERA: pisma-procesowe-v3");
     expect(first).toContain("## WIADOMOŚĆ 2 — PROJEKT PISMA [etap późniejszy");
@@ -165,8 +165,10 @@ describe("sections of a later stage of the thread", () => {
     const later = await pleadingPrompt(
       "Użytkownik: Napisz apelację od wyroku sądu rejonowego w sprawie o zapłatę.\n\nAsystent: Rama W1.\n\nUżytkownik: Zatwierdzam ramę, napisz apelację."
     );
-    expect(later).not.toContain("[etap późniejszy");
-    expect(later).toContain("## WIADOMOŚĆ 2 — PROJEKT PISMA\n");
+    // The heading keeps its note (the same text in every turn); the section follows in the turn's part.
+    expect(later).toContain("## WIADOMOŚĆ 2 — PROJEKT PISMA [etap późniejszy");
+    expect(later.indexOf("## WIADOMOŚĆ 2 — PROJEKT PISMA\n")).toBeGreaterThan(later.indexOf("# SEKCJE ETAPU WĄTKU"));
+    expect(later.indexOf("# SEKCJE ETAPU WĄTKU")).toBeGreaterThan(-1);
   }, 120_000);
 });
 

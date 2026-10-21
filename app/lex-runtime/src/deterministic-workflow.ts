@@ -4,7 +4,7 @@ import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import fs from "node:fs";
 import type { LegalCorpusAuditEvent } from "./legal-corpus-tool-runtime.js";
 import type { LexSkillRegistry } from "./registry.js";
-import type { ProcessPleadingCheckpoint } from "./process-pleading-state.js";
+import type { ProcessPleadingCheckpoint, ProcessPleadingStage } from "./process-pleading-state.js";
 import type { CourtAnalysisCheckpoint } from "./court-analysis-state.js";
 
 export type DeterministicWorkflowId =
@@ -618,6 +618,8 @@ export function evaluateDeterministicWorkflowOutput(
     orderedCheckpoint?: string;
     // Any checkpoint workflow of this turn (contract and chronology included).
     checkpointTurn?: boolean;
+    // The file of a pleading rendered from its pipeline's text (no checkpoint in this turn).
+    processRenderStage?: ProcessPleadingStage;
   }
 ): DeterministicWorkflowOutputReport {
   // A checkpoint that asks the user for missing facts or a decision is not its report:
@@ -642,9 +644,12 @@ export function evaluateDeterministicWorkflowOutput(
     plan.id ===
       "PROCESS_PLEADING_V1"
   ) {
+    // CP-PEER, or the file rendered after the pipeline reached FINAL: "GOTOWE DO ZŁOŻENIA"
+    // is the pipeline's own status then, not a premature one.
     const finalCheckpoint =
       context?.processCheckpoint ===
-        "CP-PEER";
+        "CP-PEER" ||
+      (plan.documentAstOutput === true && context?.processRenderStage === "FINAL");
 
     // The active checkpoint's report contract (process-checkpoint-contract).
     const contract = context?.processCheckpoint

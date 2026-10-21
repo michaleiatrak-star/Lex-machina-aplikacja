@@ -101,6 +101,13 @@ export const STAGES: Readonly<Record<string, string>> = {
     "sprawa nie dotyczy zamówień publicznych według aplikacji; jeśli jednak dotyczy (KIO, Pzp), przeczytaj tę sekcję z pliku skilla"
 };
 
+// The same note in every turn (prompt cache): the section's text follows the prefix once reached.
+const STAGE_TAIL_NOTES: Readonly<Record<string, string>> = {
+  "KOLEJNA-TURA": "etap późniejszy: od drugiej tury wątku aplikacja podaje treść tej sekcji niżej, w SEKCJE ETAPU WĄTKU",
+  "ZAMOWIENIA-PUBLICZNE":
+    "zamówienia publiczne: gdy sprawa ich dotyczy, aplikacja podaje treść tej sekcji niżej, w SEKCJE ETAPU WĄTKU; jeśli dotyczy, a treści tam brak, przeczytaj ją z pliku skilla"
+};
+
 const PUBLIC_PROCUREMENT =
   /zam[óo]wie\p{L}*\s+publiczn|\bKIO\b|Krajow\p{L}*\s+Izb\p{L}*\s+Odwo|\bPzp\b|\bp\.?z\.?p\b|przetarg|\bSWZ\b|ra[żz][ąa]co\s+nisk|odrzuc\p{L}*\s+ofert|wyklucz\p{L}*\s+wykonawc|zamawiaj[ąa]c/iu;
 
@@ -120,13 +127,18 @@ export function laterTurn(query: string): boolean {
 // for a local model or structured output); their sections reach the model whole.
 // `reached`: stages reached in this turn; undefined = every stage (whole files).
 // `optIn`: components of OPT_IN_COMPONENTS the application runs in this turn.
+// `tail`: prompt cache - a stage section reached in this turn (tail.reached) stays a note in
+// the text, the same in every turn, and its full text goes to tail.sections (the turn's part).
+export type StageTail = { reached: ReadonlySet<string>; sections: string[] };
 export function compactForModel(
   text: string,
   enabled = process.env.LEX_COMPACT_INSTRUCTIONS !== "0",
   inactive: ReadonlySet<string> = new Set(),
   reached?: ReadonlySet<string>,
-  optIn: ReadonlySet<string> = new Set()
+  optIn: ReadonlySet<string> = new Set(),
+  tail?: StageTail
 ): { text: string; compacted: CompactedSection[] } {
+  if (tail) reached = new Set();
   if (!enabled) return { text, compacted: [] };
   const front = compactFrontmatter(text);
   const compacted: CompactedSection[] = front.keys.length ? [{ heading: `frontmatter: ${front.keys.join(", ")}`, component: "METADANE", chars: front.chars }] : [];
@@ -156,7 +168,15 @@ export function compactForModel(
     // A mark right above the next heading belongs to that section, not to this one.
     while (end > index + 2 && (MARK.test(lines[end - 1]!) || STAGE_MARK.test(lines[end - 1]!))) end -= 1;
     const removed = lines.slice(index, end).join("\n");
-    if (deferred) {
+    if (deferred && tail) {
+      out.push(`${heading[1]} ${heading[2]} [${STAGE_TAIL_NOTES[stage!] ?? STAGES[stage!]}]`, "");
+      if (tail.reached.has(stage!)) {
+        tail.sections.push(removed.split("\n").filter((line) => !STAGE_MARK.test(line)).join("\n").trim());
+        compacted.push({ heading: heading[2]!.slice(0, 90), component: `ETAP:${stage}:TURA`, chars: 0 });
+      } else {
+        compacted.push({ heading: heading[2]!.slice(0, 90), component: `ETAP:${stage}`, chars: removed.length });
+      }
+    } else if (deferred) {
       out.push(`${heading[1]} ${heading[2]} [${STAGES[stage!]}]`, "");
       compacted.push({ heading: heading[2]!.slice(0, 90), component: `ETAP:${stage}`, chars: removed.length });
     } else {
@@ -207,4 +227,10 @@ export function markdownSection(text: string, heading: RegExp): string {
     }
   }
   return start < 0 ? "" : lines.slice(start).join("\n").trim();
+}
+
+/** The stage sections of this turn, after the cached prefix; null when none. */
+export function stageTailPrompt(sections: readonly string[]): string | null {
+  const unique = [...new Set(sections)];
+  return unique.length ? ["# SEKCJE ETAPU WĄTKU (aplikacja; pełna treść sekcji oznaczonych w skillach wyżej)", ...unique].join("\n\n") : null;
 }

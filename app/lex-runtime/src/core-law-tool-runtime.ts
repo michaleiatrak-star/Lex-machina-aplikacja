@@ -186,8 +186,16 @@ export function citedArticles(
     if (cites.length < CITED_MAX_ARTICLES && !cites.some((cite) => cite.act === act && cite.article === article)) cites.push({ act, article });
   };
   const provisions = normalize(text);
-  const coded = /\bart\.?\s*(\d+[a-z]*)(?=[\s,§])(?:[^.;]*?)?\s(KK|KW|KC|KP|KPC|KPK|KPA|KRO|KSH|KKS|KKW|KPW|OP|PPSA)\b/gu;
-  for (const match of provisions.matchAll(coded)) add(match[2]!, match[1]!);
+  // "art. 55^1 KP"; a list with one code: "art. 148 i 286 KK", "art. 415, 445 i 448 KC".
+  const number = "\\d+[a-z]*(?:\\^\\d+[a-z]*)?";
+  const coded = new RegExp(
+    // Units with their dots ("ust. 1 pkt 2", "lit. a") stay inside the citation.
+    `\\bart\\.?\\s*(${number}(?:\\s*(?:,|i|oraz)\\s*(?:art\\.?\\s*)?${number})*)(?=[\\s,§])(?:[^.;]|\\b(?:ust|lit|pkt|zd|par)\\.)*?\\s(KK|KW|KC|KP|KPC|KPK|KPA|KRO|KSH|KKS|KKW|KPW|OP|PPSA)\\b`,
+    "gu"
+  );
+  for (const match of provisions.matchAll(coded)) {
+    for (const article of match[1]!.split(/\s*(?:,|\bi\b|\boraz\b)\s*/u).filter(Boolean)) add(match[2]!, article.replace(/^art\.?\s*/u, ""));
+  }
   if (cites.length) return cites;
   // The map's basis cell: its first Dz.U. is the consolidated text (amendments follow it).
   const journal = actBases.map((item) => /Dz\.\s?U\.\s*(?:z\s*)?(\d{4})\s*(?:r\.)?\s*,?\s*poz\.\s*(\d+)/u.exec(item)).find(Boolean);

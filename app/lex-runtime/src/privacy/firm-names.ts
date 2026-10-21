@@ -220,6 +220,28 @@ export function firmFragments(name: string): string[] {
   return parts;
 }
 
+// A sole trader's firm is the person's name, often with a trade ("Grzegorz Brzęczyszczykiewicz
+// Usługi Remontowe", art. 43^4 KC). The name is the person (one token with "Powód Grzegorz
+// Brzęczyszczykiewicz", found by the person recognizers); the trade words stay readable; a
+// brand of its own after the name ("Jan Nowak Kowbud") is still a firm.
+const SOLE_TRADER = /działalnoś\p{L}*\s+gospodarcz\p{L}*\s+pod\s+(?:firmą|nazwą)\s*[„"»]?$/iu;
+const TRADE_WORD = /^(?:Usługi|Usług|Zakład|Zakładu|Biuro|Biura|Hurtownia|Sklep|Warsztat|Pracownia|Studio|i|&|-|–)$/u;
+
+function soleTrader(text: string, name: { start: number; value: string }): { start: number; value: string } | null | undefined {
+  const words = [...name.value.matchAll(/\S+/gu)];
+  if (words.length < 2) return undefined;
+  const person = `${words[0]![0]} ${words[1]![0]}`;
+  const escaped = person.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const elsewhere = [...text.matchAll(new RegExp(`(?<![\\p{L}])${escaped}(?![\\p{L}])`, "gu"))].some(
+    (match) => match.index! < name.start || match.index! >= name.start + name.value.length
+  );
+  if (!elsewhere && !SOLE_TRADER.test(text.slice(Math.max(0, name.start - 80), name.start))) return undefined;
+  const rest = words.slice(2).filter((word) => !TRADE_WORD.test(cleanWord(word[0])) && !TRADE_ADJECTIVE.test(cleanWord(word[0])));
+  if (!rest.length) return null;
+  const from = rest[0]!.index!;
+  return { start: name.start + from, value: name.value.slice(from) };
+}
+
 export function detectFirmNames(text: string): FirmSpan[] {
   const names = new Map<string, string | undefined>();
   const spans: FirmSpan[] = [];
@@ -235,7 +257,9 @@ export function detectFirmNames(text: string): FirmSpan[] {
     spans.push({ start: name.start, end: name.start + name.value.length, kind: "PERSON", value: name.value, confidence: 0.95, source: "AUTO", legalForm: form });
   }
   const after = (end: number, requireTrade: boolean, abbreviation = false) => {
-    const name = nameAfter(text, end, requireTrade, abbreviation);
+    const found = nameAfter(text, end, requireTrade, abbreviation);
+    const trader = found ? soleTrader(text, found) : undefined;
+    const name = trader === undefined ? found : trader;
     // A name already known (with its legal form) is added below as a later mention.
     if (!name || names.has(name.value) || spans.some((span) => span.start <= name.start && name.start < span.end)) return;
     names.set(name.value, undefined);

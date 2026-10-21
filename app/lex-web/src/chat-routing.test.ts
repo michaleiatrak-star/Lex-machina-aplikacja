@@ -83,7 +83,10 @@ describe("chat routing", () => {
     ["Art. 52 § 1 Kodeksu pracy — rozwiązanie umowy.", "dr-04-prawo-pracy-zus-swiadczenia"],
     ["Terminy z art. 35 KPA.", "dr-05-prawo-administracyjne-sadowoadministracyjne"],
     ["Kto płaci opłatę miejscową?", "dr-06-podatki-finanse-publiczne-aml"],
-    ["Art. 9 pkt 6 ustawy o podatku od czynności cywilnoprawnych.", "dr-06-podatki-finanse-publiczne-aml"]
+    ["Art. 9 pkt 6 ustawy o podatku od czynności cywilnoprawnych.", "dr-06-podatki-finanse-publiczne-aml"],
+    ["Jaka stawka VAT na usługi budowlane?", "dr-06-podatki-finanse-publiczne-aml"],
+    // A VAT invoice in a claim for payment is a civil matter (art. 415 KC picks it).
+    ["Kontrahent nie zapłacił faktury VAT, czy mogę go pozwać z art. 471 KC?", "dr-02-prawo-cywilne-rodzinne-gospodarcze"]
   ])("a code or act named in the question picks its domain (inflected too): %s", (query, expected) => {
     const all = [
       "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
