@@ -123,17 +123,18 @@ const required = [
   "Konfiguracja lokalna"
 ];
 
-// localStorage: dopuszczony wyłącznie dla niesekretnego wyboru ostatniego modelu
-// (klucz lex.lastUsedModel.<userId> w src/last-used-model.ts). Każdy inny plik źródłowy
-// z localStorage albo bundle bez tego klucza blokuje bramkę.
-const LOCAL_STORAGE_ALLOWED_SOURCE = "last-used-model.ts";
+// localStorage: dopuszczony wyłącznie dla niesekretnych wyborów per użytkownik: ostatni model
+// (lex.lastUsedModel.<userId>, src/last-used-model.ts) i tryb dewelopera
+// (lex.developerMode.<userId>, src/developer-mode.ts). Każdy inny plik źródłowy
+// z localStorage albo bundle bez tych kluczy blokuje bramkę.
+const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts"]);
 const sourceRoot = path.resolve(process.cwd(), "src");
 const localStorageSources = collect(sourceRoot)
   .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))
   .filter((file) => fs.readFileSync(file, "utf8").includes("localStorage"))
   .map((file) => path.basename(file));
 const localStorageViolation =
-  localStorageSources.some((file) => file !== LOCAL_STORAGE_ALLOWED_SOURCE) ||
+  localStorageSources.some((file) => !LOCAL_STORAGE_ALLOWED_SOURCES.has(file)) ||
   (content.includes("localStorage") && !content.includes("lex.lastUsedModel."));
 
 const exposed = [
