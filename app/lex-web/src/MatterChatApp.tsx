@@ -1503,8 +1503,6 @@ export default function MatterChatApp({
       artifactId: string;
       format: LegalDocumentFormat;
     } | null>(null);
-  const [finalDocumentPassword, setFinalDocumentPassword] =
-    useState("");
   const [finalDocumentBusy, setFinalDocumentBusy] =
     useState(false);
   const [finalReview, setFinalReview] =
@@ -2336,7 +2334,6 @@ export default function MatterChatApp({
     setDeletePhrase("");
     setDeletePassword("");
     setPendingFinalDocument(null);
-    setFinalDocumentPassword("");
     setProcessWorkflowVisible(false);
     setProcessWorkflowRefresh((value) => value + 1);
   }, [caseId]);
@@ -2624,7 +2621,6 @@ export default function MatterChatApp({
     setExecutionError("");
     setGeneratedDocumentMessage("");
     setPendingFinalDocument(null);
-    setFinalDocumentPassword("");
     setCaseFilePickerOpen(false);
     setCaseId(nextCaseId);
     setActiveTab("chat");
@@ -4021,26 +4017,41 @@ export default function MatterChatApp({
             throw error;
           });
         if (generated) {
+          // The document with the case's data at once (no password): the file is saved now
+          // (a one-time ticket); the card keeps the placeholder version for the preview,
+          // the editor and another restoration.
+          let savedFinal: string | null = null;
+          if (generated.deanonymized && generated.downloadTicket) {
+            const blob = await downloadSensitiveArtifact(generated.downloadTicket.ticketId);
+            savedFinal = (await downloadBlob(blob, generated.artifact.filename)) ?? generated.artifact.filename;
+          }
           const downloadedFinal =
             generated
               .readyForDownload ===
-              true;
+              true && !generated.deanonymized;
 
           // The document is shown in the chat as a card (download, preview, open in
           // Word, machine deanonymization) instead of being saved without asking.
-          const generatedDocument = {
-            artifactId: generated.artifact.artifactId,
-            filename: generated.artifact.filename,
-            format: generated.format,
-            tokenized: !downloadedFinal
-          };
+          const generatedDocument = generated.deanonymized
+            ? {
+                artifactId: generated.deanonymized.tokenizedArtifactId,
+                filename: generated.artifact.filename,
+                format: generated.format,
+                tokenized: true
+              }
+            : {
+                artifactId: generated.artifact.artifactId,
+                filename: generated.artifact.filename,
+                format: generated.format,
+                tokenized: !downloadedFinal
+              };
+          const toCheck = (generated.deanonymized?.restorations ?? []).filter((item) => item.status !== "ok").length;
 
           if (
             activeCaseIdRef.current ===
               executionCaseId
           ) {
             setPendingFinalDocument(null);
-            setFinalDocumentPassword("");
             setMessages(
               (
                 current
@@ -4052,13 +4063,21 @@ export default function MatterChatApp({
                   role:
                     "assistant",
                   content:
-                    (downloadedFinal
+                    (savedFinal
+                      ? "Dokument " +
+                        documentRequest.format.toUpperCase() +
+                        " z danymi osobowymi zapisano: " +
+                        savedFinal +
+                        "." +
+                        (toCheck ? ` Formy do sprawdzenia: ${toCheck} - użyj podglądu w karcie.` : "") +
+                        " Karta poniżej: wersja z symbolami (podgląd, edycja, ponowne przywrócenie danych)."
+                      : downloadedFinal
                       ? "Gotowy dokument " +
                         documentRequest.format.toUpperCase() +
                         " jest poniżej: pobierz go, obejrzyj podgląd albo otwórz w edytorze."
                       : "Dokument " +
                         documentRequest.format.toUpperCase() +
-                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy (po potwierdzeniu hasłem).") +
+                        " jest gotowy w wersji z symbolami danych osobowych. Użyj „Deanonimizuj”, aby Lex Machina maszynowo przywróciła dane z klucza sprawy.") +
                     documentWarningsText(generated.warnings) + letterheadText(generated.letterhead),
                   meta:
                     "dokument: " +
@@ -4418,12 +4437,11 @@ export default function MatterChatApp({
     }
   }
 
-  // Step 1: password -> grant -> restored text with every value marked.
+  // Step 1: the session's grant -> restored text with every value marked.
   async function reviewPendingDocument(): Promise<void> {
     if (
       !pendingFinalDocument ||
-      finalDocumentBusy ||
-      !finalDocumentPassword.trim()
+      finalDocumentBusy
     ) {
       return;
     }
@@ -4434,11 +4452,10 @@ export default function MatterChatApp({
         pendingFinalDocument.caseId,
         pendingFinalDocument.artifactId
       );
+      // The signed-in session's grant: no second password (the chat shows the data too).
       const authorized = await reauthorizeDeanonymization(
-        intent.intent.intentId,
-        finalDocumentPassword
+        intent.intent.intentId
       );
-      setFinalDocumentPassword("");
       const preview = await previewDeanonymization(
         authorized.grant.grantId
       );
@@ -6501,28 +6518,11 @@ export default function MatterChatApp({
                     />
                   ) : (
                   <>
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={finalDocumentPassword}
-                    disabled={finalDocumentBusy}
-                    placeholder="Bieżące hasło — jednorazowa reautoryzacja"
-                    onChange={(event) =>
-                      setFinalDocumentPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                  />
                   <div className="chat-form-row compact">
                     <button
                       type="button"
                       className="chat-primary-action"
-                      disabled={
-                        finalDocumentBusy ||
-                        !finalDocumentPassword
-                          .trim()
-                      }
+                      disabled={finalDocumentBusy}
                       onClick={() =>
                         void reviewPendingDocument()
                       }

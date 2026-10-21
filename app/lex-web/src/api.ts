@@ -425,6 +425,13 @@ export type GeneratedDocumentResponse = {
   aliasesUsed: string[];
   deanonymizationKeyBound?: boolean;
   readyForDownload?: boolean;
+  // The document came back with the case's data at once (no password); the placeholder
+  // version stays in the case files.
+  deanonymized?: {
+    tokenizedArtifactId: string;
+    replacements: number;
+    restorations?: Array<{ status: string }>;
+  };
   // Fields left in square brackets, missing title or signature.
   warnings?: string[];
   // The firm's DOCX template (letterhead) put around the generated body, or why not.
@@ -2487,9 +2494,10 @@ export function createDeanonymizationIntent(
   );
 }
 
+// Without a password: the signed-in session's grant (the chat's answers show the data too).
 export function reauthorizeDeanonymization(
   intentId: string,
-  password: string
+  password = ""
 ): Promise<
   DeanonymizationReauthorizationResponse
 > {
@@ -2502,12 +2510,12 @@ export function reauthorizeDeanonymization(
       body:
         JSON.stringify({
           intentId,
-          // The password typed by the user is always forwarded verbatim.
+          // A password typed by the user is forwarded verbatim; none -> the session's grant.
           // The desktop bridge still substitutes __LEX_NATIVE_REAUTH__ when a
           // managed bootstrap secret exists, but that secret is absent once the
           // runtime seeds the first admin account, so a sentinel sent from here
           // would reach the runtime literally and fail reauthorization.
-          password
+          ...(password ? { password } : {})
         })
     }
   );

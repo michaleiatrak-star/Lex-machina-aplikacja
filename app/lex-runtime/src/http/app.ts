@@ -676,7 +676,7 @@ export type LexHttpAppOptions = {
     Partial<
       Pick<
         DeanonymizationReauthorizationManager,
-        "previewGrant"
+        "previewGrant" | "authorizeIntentInSession"
       >
     >;
   sensitiveDownloadTickets?: Pick<
@@ -7962,6 +7962,61 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   })
             );
 
+        // The user's own document comes back with the case's data at once, as the chat's answers
+        // do (no second password): the signed-in session's grant, the same restoration as
+        // /api/deanonymization/finalize. A role without REIDENTIFY, a pleading still in its
+        // pipeline or any failure: the placeholder version as before.
+        if (req.body?.deanonymize !== false && options.reauthorizationManager?.authorizeIntentInSession) {
+          try {
+            const manager = options.reauthorizationManager;
+            const intent = await manager.createIntent(context, caseId, tokenized.artifact.artifactId);
+            const { grant } = await manager.authorizeIntentInSession!(context, intent.intentId);
+            const target = await manager.consumeGrant(context, grant.grantId);
+            const final = await options.caseAccessService.withCaseDataKey(context, caseId, "REIDENTIFY", async (caseDataKey) => {
+              await assertDocumentWorkflowFinalizationAllowed(options, {
+                caseId,
+                artifactId: target.artifactId,
+                caseDataKey,
+                keyVersion: target.caseKeyVersion
+              });
+              return await options.documentAuthoringService!.deanonymizeConsumed({
+                target,
+                createdByUserId: context.user.userId,
+                caseDataKey,
+                keyVersion: target.caseKeyVersion,
+                ...(typeof req.body?.filename === "string" ? { filename: req.body.filename } : {})
+              });
+            });
+            // The file with the data is downloaded once, by a ticket (CLEAR_PII, as after /finalize).
+            const downloadTicket = options.sensitiveDownloadTickets?.issue(context, {
+              caseId,
+              artifactId: final.artifact.artifactId,
+              finalSha256: final.sha256
+            });
+            res.status(201).json({
+              ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+              ...(tokenized.letterhead ? { letterhead: tokenized.letterhead } : {}),
+              sessionId: generated.sessionId,
+              artifact: final.artifact,
+              format: final.format,
+              sha256: final.sha256,
+              aliasesUsed: tokenized.aliasesUsed,
+              readyForDownload: true,
+              deanonymized: {
+                tokenizedArtifactId: tokenized.artifact.artifactId,
+                replacements: final.replacements,
+                ...(final.restorations ? { restorations: final.restorations } : {})
+              },
+              warnings: tokenized.warnings,
+              ...(templateProfile ? { templateProfile } : {}),
+              ...(downloadTicket ? { downloadTicket } : {})
+            });
+            return;
+          } catch (error) {
+            console.error("DIRECT_DEANONYMIZATION_SKIPPED", error instanceof Error ? error.message : String(error));
+          }
+        }
+
         res.status(201).json({
             ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
             ...(tokenized.letterhead ? { letterhead: tokenized.letterhead } : {}),
@@ -8304,9 +8359,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         typeof req.body
           ?.intentId !==
           "string" ||
-        typeof req.body
-          ?.password !==
-          "string"
+        (req.body?.password !== undefined && typeof req.body?.password !== "string")
       ) {
         res.status(400).json({
           error:
@@ -8315,16 +8368,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
       try {
-        const result =
-          await options
-            .reauthorizationManager
-            .authorizeIntent(
-              responseAuthContext(
-                res
-              ),
-              req.body.intentId,
-              req.body.password
-            );
+        // Without a password: the signed-in session's grant (the chat restores the case's data
+        // in its answers the same way); a password still re-authenticates when given.
+        const manager = options.reauthorizationManager;
+        const context = responseAuthContext(res);
+        const result: { grant: Awaited<ReturnType<typeof manager.authorizeIntent>>["grant"]; session?: unknown } =
+          typeof req.body.password === "string" && req.body.password !== ""
+            ? await manager.authorizeIntent(context, req.body.intentId, req.body.password)
+            : manager.authorizeIntentInSession
+              ? await manager.authorizeIntentInSession(context, req.body.intentId)
+              : await manager.authorizeIntent(context, req.body.intentId, "");
         res.json({
           grant: {
             grantId:
@@ -8346,8 +8399,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               result.grant
                 .expiresAt
           },
-          session:
-            result.session
+          ...(result.session ? { session: result.session } : {})
         });
       } catch (error) {
         if (

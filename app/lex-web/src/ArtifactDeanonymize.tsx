@@ -21,8 +21,8 @@ function finalName(filename: string): string {
 
 /**
  * Deanonymizes a model-made document with placeholders, the same way as in
- * chat: the password confirms that personal data may be put back, then the
- * values come from the case key automatically. The preview is optional.
+ * chat: the values come from the case key of the signed-in session, no second
+ * password. The preview is optional.
  */
 export function ArtifactDeanonymize(props: {
   caseId: string;
@@ -30,7 +30,6 @@ export function ArtifactDeanonymize(props: {
   onDone: (message: string) => void;
   onCancel: () => void;
 }) {
-  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [review, setReview] = useState<{
@@ -42,8 +41,7 @@ export function ArtifactDeanonymize(props: {
 
   async function authorize(): Promise<string> {
     const intent = await createDeanonymizationIntent(props.caseId, props.artifact.artifactId);
-    const authorized = await reauthorizeDeanonymization(intent.intent.intentId, password);
-    setPassword("");
+    const authorized = await reauthorizeDeanonymization(intent.intent.intentId);
     return authorized.grant.grantId;
   }
 
@@ -69,8 +67,8 @@ export function ArtifactDeanonymize(props: {
     } catch (failure) {
       const code = failure instanceof Error ? failure.message : String(failure);
       setError(
-        /REAUTH|PASSWORD|INVALID_CREDENTIALS/.test(code)
-          ? `Nie potwierdzono hasła (${code}).`
+        /REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(code)
+          ? `Uprawnienie wygasło (${code}) - spróbuj ponownie.`
           : `Nie udało się deanonimizować: ${code}`
       );
       if (/REAUTH_GRANT_(EXPIRED|ALREADY_USED)/.test(code)) setReview(null);
@@ -141,32 +139,21 @@ export function ArtifactDeanonymize(props: {
   return (
     <div className="artifact-deanonymize">
       <p>
-        Potwierdź hasłem przywrócenie danych osobowych.
+        Przywróć dane osobowe w dokumencie.
         <InfoTip>Dane wrócą z klucza tej sprawy w przypadkach podanych przez model. Plik z symbolami zostaje bez zmian.</InfoTip>
       </p>
       <div className="chat-form-row compact">
-        <input
-          type="password"
-          aria-label="Hasło do deanonimizacji"
-          placeholder="Hasło"
-          value={password}
-          autoComplete="current-password"
-          onChange={(event) => setPassword(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && password) void run(async () => finalize(await authorize(), {}));
-          }}
-        />
         <button
           type="button"
           className="chat-primary-action"
-          disabled={busy || !password}
+          disabled={busy}
           onClick={() => void run(async () => finalize(await authorize(), {}))}
         >
           {busy ? "Deanonimizuję…" : "Deanonimizuj"}
         </button>
         <button
           type="button"
-          disabled={busy || !password}
+          disabled={busy}
           onClick={() =>
             void run(async () => {
               const grantId = await authorize();
