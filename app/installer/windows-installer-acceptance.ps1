@@ -175,7 +175,7 @@ try {
     if (Test-Path -LiteralPath $diagnosticLog -PathType Leaf) {
       Write-Host "Installer bootstrap diagnostic follows:"
       Get-Content -LiteralPath $diagnosticLog | Out-Host
-      $fullLog = Join-Path $InstallRoot "runtime\bootstrap-install.log"
+      $fullLog = Join-Path $InstallRoot "bootstrap-install.log"
       if (Test-Path -LiteralPath $fullLog -PathType Leaf) {
         Write-Host "Full bootstrap log (last 80 lines):"
         Get-Content -LiteralPath $fullLog -Tail 80 | Out-Host

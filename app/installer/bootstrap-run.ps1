@@ -9,7 +9,10 @@ param(
 # cause. The script runs here with its whole output in a log file; on failure the cause
 # comes first, then the last lines and the log path, so the installer dialog shows them.
 $ErrorActionPreference = "Continue"
-$log = Join-Path $RuntimeRoot "bootstrap-install.log"
+# Outside the runtime folder: step 6 hashes every runtime file and must not meet the log
+# this wrapper is still writing.
+$installRoot = Split-Path -Parent ([IO.Path]::GetFullPath($RuntimeRoot).TrimEnd('\'))
+$log = Join-Path $installRoot "bootstrap-install.log"
 $psArgs = @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", $Script, "-RuntimeRoot", $RuntimeRoot)
 if ($BundlePath) { $psArgs += @("-BundlePath", $BundlePath) }
 $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
