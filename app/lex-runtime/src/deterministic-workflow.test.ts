@@ -1305,3 +1305,18 @@ describe("deterministic legal workflow", () => {
     ).toBe("PASS");
   });
 });
+
+describe("a pleading's file rendered after FINAL", () => {
+  it("keeps the pipeline's GOTOWE DO ZŁOŻENIA status; without FINAL it is still premature", async () => {
+    const { createDeterministicWorkflowPlan } = await import("./deterministic-workflow.js");
+    const { LexSkillRegistry } = await import("./registry.js");
+    const path = await import("node:path");
+    const registry = new LexSkillRegistry(path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana"));
+    registry.scan();
+    const plan = { ...createDeterministicWorkflowPlan(registry, "pisma-procesowe-v3"), documentAstOutput: true };
+    expect(plan.id).toBe("PROCESS_PLEADING_V1");
+    const text = "POZEW O ZAPŁATĘ\n\nSTATUS PISMA: ✅ GOTOWE DO ZŁOŻENIA";
+    expect(evaluateDeterministicWorkflowOutput(plan, text, { checkpointTurn: true, processRenderStage: "FINAL" }).observed).not.toContain("PREMATURE_FINAL_STATUS");
+    expect(evaluateDeterministicWorkflowOutput(plan, text, { checkpointTurn: true, processRenderStage: "W2" }).observed).toContain("PREMATURE_FINAL_STATUS");
+  });
+});

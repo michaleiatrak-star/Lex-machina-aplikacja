@@ -3978,9 +3978,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         request.orderedCaseWorkflowContext ||
         request.contractWorkflowContext ||
         request.chronologyWorkflowContext ||
+        request.processRenderOnly ||
         execution.workflowPlan.executionSkill
           ? {
               checkpointTurn: true,
+              ...(request.processRenderOnly ? { processRenderStage: request.processRenderOnly.stage } : {}),
               ...(request.processWorkflowContext
                 ? {
                     processCheckpoint:
