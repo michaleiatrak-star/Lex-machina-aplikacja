@@ -30,7 +30,7 @@ import { WidgetFrameStore } from "../widget-runtime.js";
 import { ServerModeStore } from "../server-mode/store.js";
 import { ServerSecretBox } from "../server-mode/secret-box.js";
 import { ServerModeService } from "../server-mode/service.js";
-import { AccountScopedCredentialResolver } from "../server-mode/account-scope.js";
+import { ServerModeCredentialResolver } from "../server-mode/credentials.js";
 import { registerServerModeRoutes } from "../server-mode/routes.js";
 import { EncryptedInvoiceStore } from "../invoice-store.js";
 import {
@@ -549,13 +549,16 @@ export async function startLocalServer(options?: {
     authService,
     { forceEnv: process.env.LEX_SERVER_MODE_FORCE }
   );
-  // An account's own API key (server mode, BYOK) before the firm's key.
+  // Server mode: the admin's global API keys for every account.
+  const environmentCredentials =
+    new EnvironmentCredentialResolver();
   const credentials =
-    new AccountScopedCredentialResolver(
+    new ServerModeCredentialResolver(
       new MemoryOverlayCredentialResolver(
-        new EnvironmentCredentialResolver()
+        environmentCredentials
       ),
-      (scope, provider) => serverMode.accountApiKey(scope, provider)
+      environmentCredentials,
+      serverMode
     );
   const accountSessions =
     new AccountSessionManager();

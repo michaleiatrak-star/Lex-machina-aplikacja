@@ -6,15 +6,9 @@ import type { AuthenticatedContext, PublicLocalUser, StoredLocalUser } from "../
 import type { ModelCallGuard } from "../providers/gateway.js";
 import { isAccountSessionModel } from "../providers/account-session.js";
 import type { ProviderId, ProviderStreamResult } from "../providers/types.js";
-import { currentAccountScope, type AccountScope } from "./account-scope.js";
+import { currentAccountScope } from "./account-scope.js";
 import { LiveTurnRegistry } from "./live-turns.js";
-import {
-  openWithUserMasterKey,
-  sealWithUserMasterKey,
-  sealedFromJson,
-  sealedToJson,
-  type ServerSecretBox
-} from "./secret-box.js";
+import { sealedFromJson, sealedToJson, type ServerSecretBox } from "./secret-box.js";
 import { SmtpMailTransport, validMailAddress, type MailTransport, type SmtpSettings } from "./smtp.js";
 import type { MonthlyUsage, PlanRecord, ServerModeStore } from "./store.js";
 
@@ -30,6 +24,26 @@ export class ServerModeError extends Error {
 }
 
 export const PROVIDERS: ProviderId[] = ["openai", "anthropic", "xai", "google"];
+
+function isProvider(value: string): value is ProviderId {
+  return (PROVIDERS as string[]).includes(value);
+}
+
+// Reason codes of a refused model call (message of the guard's error, "CODE" or "CODE:REASON").
+const POLICY_STATUS: Record<string, number> = {
+  TOKEN_LIMIT_REACHED: 429,
+  PLAN_REQUIRED: 402,
+  PROVIDER_NOT_IN_PLAN: 403,
+  SERVER_MODE_LOCAL_ONLY: 403
+};
+
+/** HTTP answer to a model call refused by the account policy; TOKEN_LIMIT_REACHED carries reason GLOBAL or PLAN. */
+export function accountPolicyResponse(message: string): { status: number; body: { error: string; reason?: string } } {
+  const [code = "", reason] = message.split(":", 2);
+  const status = POLICY_STATUS[code];
+  if (!status) return { status: 403, body: { error: "ACCOUNT_POLICY_DENIED" } };
+  return { status, body: reason ? { error: code, reason } : { error: code } };
+}
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -70,6 +84,17 @@ export type ServerSettingsView = {
   defaultPlanId: string | null;
   smtp: SmtpSettingsView | null;
   mailConfigured: boolean;
+  // Sum over all accounts in the UTC month; null: no global limit.
+  globalMonthlyTokenLimit: number | null;
+  globalUsage: MonthlyUsage;
+  month: string;
+};
+
+/** Whether the admin set a key for the provider; the key itself never leaves the server. */
+export type ProviderKeyView = {
+  provider: ProviderId;
+  configured: boolean;
+  updatedAt: string | null;
 };
 
 export type AccountView = PublicLocalUser & {
@@ -84,6 +109,10 @@ type StoredSmtp = Omit<SmtpSettingsView, "passwordSet">;
 
 function sha256(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
+}
+
+function totalTokens(usage: MonthlyUsage): number {
+  return usage.inputTokens + usage.outputTokens;
 }
 
 function bucket(...parts: string[]): string {
@@ -108,7 +137,8 @@ function forcedMode(value: string | undefined): boolean | null {
 /**
  * Server mode (one runtime per firm, accounts registered by e-mail): the
  * switch, SMTP, registration and password reset by e-mail, plans with monthly
- * token limits, per-account API keys (BYOK) and the admin's live view of turns.
+ * token limits, a global monthly limit, the admin's global provider API keys
+ * and the admin's live view of turns.
  * With the mode off nothing here changes how the runtime behaves.
  */
 export class ServerModeService implements ModelCallGuard {
@@ -164,13 +194,17 @@ export class ServerModeService implements ModelCallGuard {
   settings(actor: AuthenticatedContext): ServerSettingsView {
     requireAdmin(actor);
     const smtp = this.storedSmtp();
+    const month = monthOf(this.now());
     return {
       serverMode: this.isEnabled(),
       forced: this.forced !== null,
       publicBaseUrl: this.publicBaseUrl(),
       defaultPlanId: this.store.getSetting("default_plan_id"),
       smtp: smtp ? { ...smtp, passwordSet: this.store.getSetting("smtp_password") !== null } : null,
-      mailConfigured: this.mailConfigured()
+      mailConfigured: this.mailConfigured(),
+      globalMonthlyTokenLimit: this.globalMonthlyTokenLimit(),
+      globalUsage: this.store.getTotalUsage(month),
+      month
     };
   }
 
@@ -179,6 +213,7 @@ export class ServerModeService implements ModelCallGuard {
     input: {
       publicBaseUrl?: unknown;
       defaultPlanId?: unknown;
+      globalMonthlyTokenLimit?: unknown;
       smtp?: { host?: unknown; port?: unknown; secure?: unknown; user?: unknown; from?: unknown; password?: unknown; clearPassword?: unknown };
     }
   ): ServerSettingsView {
@@ -200,6 +235,13 @@ export class ServerModeService implements ModelCallGuard {
       const planId = typeof input.defaultPlanId === "string" && input.defaultPlanId ? input.defaultPlanId : null;
       if (planId && !this.store.getPlan(planId)) throw new ServerModeError("PLAN_NOT_FOUND", 404);
       this.store.setSetting("default_plan_id", planId);
+    }
+    if (input.globalMonthlyTokenLimit !== undefined) {
+      // 0, empty or null: no global limit.
+      const raw = input.globalMonthlyTokenLimit;
+      const limit = raw === null || raw === "" ? 0 : Number(raw);
+      if (!Number.isSafeInteger(limit) || limit < 0) throw new ServerModeError("INVALID_GLOBAL_TOKEN_LIMIT", 400);
+      this.store.setSetting("global_monthly_token_limit", limit > 0 ? String(limit) : null);
     }
     if (input.smtp) {
       const smtp = input.smtp;
@@ -227,6 +269,48 @@ export class ServerModeService implements ModelCallGuard {
       }
     }
     return this.settings(actor);
+  }
+
+  private globalMonthlyTokenLimit(): number | null {
+    const raw = this.store.getSetting("global_monthly_token_limit");
+    const limit = raw === null ? 0 : Number(raw);
+    return Number.isSafeInteger(limit) && limit > 0 ? limit : null;
+  }
+
+  // ---- global provider API keys (admin) ----
+
+  providerKeys(actor: AuthenticatedContext): ProviderKeyView[] {
+    requireAdmin(actor);
+    const stored = new Map(this.store.listProviderKeys().map((item) => [item.provider, item.updatedAt]));
+    return PROVIDERS.map((provider) => ({ provider, configured: stored.has(provider), updatedAt: stored.get(provider) ?? null }));
+  }
+
+  setProviderKey(actor: AuthenticatedContext, provider: string, apiKey: unknown): ProviderKeyView[] {
+    requireAdmin(actor);
+    if (!isProvider(provider)) throw new ServerModeError("UNKNOWN_PROVIDER", 404);
+    const key = typeof apiKey === "string" ? apiKey.trim() : "";
+    if (key.length < 10 || key.length > 8192 || /\s/.test(key)) throw new ServerModeError("INVALID_PROVIDER_API_KEY", 400);
+    this.store.putProviderKey(provider, this.box.seal("provider-api-key", provider, key), new Date(this.now()).toISOString());
+    return this.providerKeys(actor);
+  }
+
+  clearProviderKey(actor: AuthenticatedContext, provider: string): ProviderKeyView[] {
+    requireAdmin(actor);
+    if (!isProvider(provider)) throw new ServerModeError("UNKNOWN_PROVIDER", 404);
+    this.store.deleteProviderKey(provider);
+    return this.providerKeys(actor);
+  }
+
+  /** The admin's key for the provider, used by every account in server mode; null: not set. */
+  globalApiKey(provider: ProviderId): string | null {
+    const sealed = this.store.getProviderKey(provider);
+    if (!sealed) return null;
+    try {
+      return this.box.open("provider-api-key", provider, sealed).toString("utf8");
+    } catch {
+      process.stderr.write(`SERVER_MODE_PROVIDER_KEY_UNREADABLE:${provider}\n`);
+      return null;
+    }
   }
 
   private transport(): MailTransport {
@@ -462,7 +546,7 @@ export class ServerModeService implements ModelCallGuard {
   savePlan(
     actor: AuthenticatedContext,
     planId: string | null,
-    input: { name?: unknown; monthlyTokenLimit?: unknown; allowedProviders?: unknown; byokAllowed?: unknown; externalSubscriptionId?: unknown }
+    input: { name?: unknown; monthlyTokenLimit?: unknown; allowedProviders?: unknown; externalSubscriptionId?: unknown }
   ): PlanRecord {
     requireAdmin(actor);
     const existing = planId ? this.store.getPlan(planId) : null;
@@ -475,7 +559,7 @@ export class ServerModeService implements ModelCallGuard {
       !name ||
       name.length > 80 ||
       (limit !== null && (!Number.isSafeInteger(limit) || limit < 0)) ||
-      !providers.every((item) => typeof item === "string" && (PROVIDERS as string[]).includes(item)) ||
+      !providers.every((item) => typeof item === "string" && isProvider(item)) ||
       (external !== null && external.length > 200)
     ) {
       throw new ServerModeError("INVALID_PLAN", 400);
@@ -486,7 +570,6 @@ export class ServerModeService implements ModelCallGuard {
       name,
       monthlyTokenLimit: limit,
       allowedProviders: [...new Set(providers as string[])],
-      byokAllowed: input.byokAllowed === true,
       externalSubscriptionId: external,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
@@ -538,60 +621,17 @@ export class ServerModeService implements ModelCallGuard {
   }
 
   myAccount(actor: AuthenticatedContext): {
-    plan: Pick<PlanRecord, "name" | "monthlyTokenLimit" | "allowedProviders" | "byokAllowed"> | null;
+    plan: Pick<PlanRecord, "name" | "monthlyTokenLimit"> | null;
     usage: MonthlyUsage;
     month: string;
-    byok: Array<{ provider: string; updatedAt: string }>;
   } {
     const plan = this.effectivePlan(actor.user.userId);
     const month = monthOf(this.now());
     return {
-      plan: plan ? { name: plan.name, monthlyTokenLimit: plan.monthlyTokenLimit, allowedProviders: plan.allowedProviders, byokAllowed: plan.byokAllowed } : null,
+      plan: plan ? { name: plan.name, monthlyTokenLimit: plan.monthlyTokenLimit } : null,
       usage: this.store.getUsage(actor.user.userId, month),
-      month,
-      // Which providers have a key, never the key.
-      byok: this.store.listByokProviders(actor.user.userId)
+      month
     };
-  }
-
-  // ---- BYOK ----
-
-  private byokAllowed(userId: string): boolean {
-    const plan = this.effectivePlan(userId);
-    if (plan) return plan.byokAllowed;
-    return this.auth.getUser(userId)?.appRole === "ADMIN";
-  }
-
-  async setByok(actor: AuthenticatedContext, provider: string, apiKey: unknown): Promise<void> {
-    this.requireMode();
-    if (!(PROVIDERS as string[]).includes(provider)) throw new ServerModeError("UNKNOWN_PROVIDER", 404);
-    if (!this.byokAllowed(actor.user.userId)) throw new ServerModeError("BYOK_NOT_ALLOWED", 403);
-    const key = typeof apiKey === "string" ? apiKey.trim() : "";
-    if (key.length < 10 || key.length > 8192 || /[\r\n\s]/.test(key)) throw new ServerModeError("INVALID_PROVIDER_API_KEY", 400);
-    const userId = actor.user.userId;
-    const sealed = await this.auth.withSessionUserMasterKey(actor.session.sessionId, (userMasterKey) =>
-      sealWithUserMasterKey(userMasterKey, userId, `byok:${provider}`, key)
-    );
-    this.store.putByok(userId, provider, sealed, new Date(this.now()).toISOString());
-  }
-
-  clearByok(actor: AuthenticatedContext, provider: string): void {
-    if (!(PROVIDERS as string[]).includes(provider)) throw new ServerModeError("UNKNOWN_PROVIDER", 404);
-    this.store.deleteByok(actor.user.userId, provider);
-  }
-
-  /** The account's own key for the provider (scope of a request), else null. */
-  async accountApiKey(scope: AccountScope, provider: ProviderId): Promise<string | null> {
-    if (!this.isEnabled() || !this.byokAllowed(scope.userId)) return null;
-    const sealed = this.store.getByok(scope.userId, provider);
-    if (!sealed) return null;
-    try {
-      return await this.auth.withSessionUserMasterKey(scope.sessionId, (userMasterKey) =>
-        openWithUserMasterKey(userMasterKey, scope.userId, `byok:${provider}`, sealed)
-      );
-    } catch {
-      return null;
-    }
   }
 
   // ---- model calls (ModelCallGuard) ----
@@ -601,18 +641,18 @@ export class ServerModeService implements ModelCallGuard {
     if (!this.isEnabled()) return;
     if (providerId && model && isAccountSessionModel(providerId, model)) throw new Error("SERVER_MODE_LOCAL_ONLY");
     if (model.startsWith("account/")) throw new Error("SERVER_MODE_LOCAL_ONLY");
+    // Without a plan only the admin may call a model (still within the global limit).
     const plan = this.effectivePlan(userId);
-    if (!plan) {
-      if (this.auth.getUser(userId)?.appRole === "ADMIN") return;
-      throw new Error("PLAN_REQUIRED");
-    }
-    if (providerId && model && !model.startsWith("local/") && !plan.allowedProviders.includes(providerId)) {
+    if (!plan && this.auth.getUser(userId)?.appRole !== "ADMIN") throw new Error("PLAN_REQUIRED");
+    if (plan && providerId && model && !model.startsWith("local/") && !plan.allowedProviders.includes(providerId)) {
       throw new Error("PROVIDER_NOT_IN_PLAN");
     }
-    if (plan.monthlyTokenLimit !== null) {
-      const usage = this.store.getUsage(userId, monthOf(this.now()));
-      if (usage.inputTokens + usage.outputTokens >= plan.monthlyTokenLimit) throw new Error("TOKEN_LIMIT_REACHED");
+    const month = monthOf(this.now());
+    if (plan && plan.monthlyTokenLimit !== null && totalTokens(this.store.getUsage(userId, month)) >= plan.monthlyTokenLimit) {
+      throw new Error("TOKEN_LIMIT_REACHED:PLAN");
     }
+    const globalLimit = this.globalMonthlyTokenLimit();
+    if (globalLimit !== null && totalTokens(this.store.getTotalUsage(month)) >= globalLimit) throw new Error("TOKEN_LIMIT_REACHED:GLOBAL");
   }
 
   beforeCall(providerId: ProviderId, model: string): void {

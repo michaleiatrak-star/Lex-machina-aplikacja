@@ -29,31 +29,9 @@ function derive(root: Buffer, salt: string, purpose: string): Buffer {
 }
 
 /**
- * Per-account secrets (BYOK keys) are sealed with a key derived from the
- * account's UMK, like the Google refresh token and the KSeF token: readable
- * only within a session of that account.
- */
-export function sealWithUserMasterKey(userMasterKey: Buffer, userId: string, purpose: string, plaintext: string): SealedSecret {
-  const key = derive(userMasterKey, userId, `lex-server-mode:${purpose}`);
-  try {
-    return aesSeal(key, `${purpose}:${userId}`, Buffer.from(plaintext, "utf8"));
-  } finally {
-    key.fill(0);
-  }
-}
-
-export function openWithUserMasterKey(userMasterKey: Buffer, userId: string, purpose: string, sealed: SealedSecret): string {
-  const key = derive(userMasterKey, userId, `lex-server-mode:${purpose}`);
-  try {
-    return aesOpen(key, `${purpose}:${userId}`, sealed).toString("utf8");
-  } finally {
-    key.fill(0);
-  }
-}
-
-/**
- * Secrets the server needs without a user session (SMTP password, the UMK
- * escrow for password reset by e-mail). The root key comes from
+ * Secrets the server needs without a user session (SMTP password, the
+ * admin's global provider API keys, the UMK escrow for password reset by
+ * e-mail). The root key comes from
  * LEX_SERVER_SECRET_KEY (base64, 32 bytes; a secret store of the container)
  * or a 0600 file next to the data, created on first use.
  */

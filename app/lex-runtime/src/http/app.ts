@@ -84,6 +84,7 @@ import {
 import {
   ProviderGatewayError
 } from "../providers/gateway.js";
+import { accountPolicyResponse } from "../server-mode/service.js";
 import type { ProviderId } from "../providers/types.js";
 import type {
   AccountSessionManager
@@ -1077,14 +1078,7 @@ function sendAuthError(
   return true;
 }
 
-// Server mode: a model call refused by the account's plan (see server-mode/service.ts).
-const ACCOUNT_POLICY_STATUS: Record<string, number> = {
-  TOKEN_LIMIT_REACHED: 429,
-  PLAN_REQUIRED: 402,
-  PROVIDER_NOT_IN_PLAN: 403,
-  SERVER_MODE_LOCAL_ONLY: 403
-};
-
+// Server mode: a model call refused by the account's plan or the global limit (see server-mode/service.ts).
 export function sendAccountPolicyError(
   res: Response,
   error: unknown
@@ -1092,10 +1086,8 @@ export function sendAccountPolicyError(
   if (!(error instanceof ProviderGatewayError) || error.code !== "ACCOUNT_POLICY") {
     return false;
   }
-  const code = error.message.split(":", 1)[0] ?? "";
-  res.status(ACCOUNT_POLICY_STATUS[code] ?? 403).json({
-    error: ACCOUNT_POLICY_STATUS[code] ? code : "ACCOUNT_POLICY_DENIED"
-  });
+  const refusal = accountPolicyResponse(error.message);
+  res.status(refusal.status).json(refusal.body);
   return true;
 }
 

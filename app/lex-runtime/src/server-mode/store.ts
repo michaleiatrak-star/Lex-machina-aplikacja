@@ -9,7 +9,6 @@ export type PlanRecord = {
   // null: no monthly limit.
   monthlyTokenLimit: number | null;
   allowedProviders: string[];
-  byokAllowed: boolean;
   // Placeholder for a future payment provider; nothing reads it.
   externalSubscriptionId: string | null;
   createdAt: string;
@@ -46,7 +45,17 @@ function num(value: unknown): number {
   return typeof value === "bigint" ? Number(value) : typeof value === "number" ? value : 0;
 }
 
-/** SQLite of the server mode: settings, plans, BYOK keys, e-mail tokens, usage. */
+function usageOf(row: Record<string, unknown> | undefined): MonthlyUsage {
+  return {
+    inputTokens: num(row?.input_tokens),
+    outputTokens: num(row?.output_tokens),
+    cacheReadTokens: num(row?.cache_read_tokens),
+    cacheWriteTokens: num(row?.cache_write_tokens),
+    modelCalls: num(row?.model_calls)
+  };
+}
+
+/** SQLite of the server mode: settings, plans, provider API keys, e-mail tokens, usage. */
 export class ServerModeStore {
   private readonly db: DatabaseSync;
 
@@ -70,7 +79,6 @@ export class ServerModeStore {
         name TEXT NOT NULL UNIQUE,
         monthly_token_limit INTEGER,
         allowed_providers TEXT NOT NULL,
-        byok_allowed INTEGER NOT NULL CHECK (byok_allowed IN (0,1)),
         external_subscription_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -80,14 +88,12 @@ export class ServerModeStore {
         plan_id TEXT NOT NULL REFERENCES plans(plan_id),
         assigned_at TEXT NOT NULL
       ) STRICT;
-      CREATE TABLE IF NOT EXISTS byok_keys (
-        user_id TEXT NOT NULL,
-        provider TEXT NOT NULL,
+      CREATE TABLE IF NOT EXISTS provider_keys (
+        provider TEXT PRIMARY KEY,
         nonce BLOB NOT NULL,
         ciphertext BLOB NOT NULL,
         tag BLOB NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (user_id, provider)
+        updated_at TEXT NOT NULL
       ) STRICT;
       CREATE TABLE IF NOT EXISTS umk_escrow (
         user_id TEXT PRIMARY KEY,
@@ -130,6 +136,10 @@ export class ServerModeStore {
         count INTEGER NOT NULL
       ) STRICT;
     `);
+    // Per-account API keys (BYOK) are gone: the admin's global keys replace them.
+    this.db.exec("DROP TABLE IF EXISTS byok_keys");
+    const planColumns = this.db.prepare("SELECT name FROM pragma_table_info('plans')").all() as Array<{ name?: string }>;
+    if (planColumns.some((column) => column.name === "byok_allowed")) this.db.exec("ALTER TABLE plans DROP COLUMN byok_allowed");
   }
 
   close(): void {
@@ -152,7 +162,6 @@ export class ServerModeStore {
       name: String(row.name),
       monthlyTokenLimit: row.monthly_token_limit === null ? null : num(row.monthly_token_limit),
       allowedProviders: JSON.parse(String(row.allowed_providers)) as string[],
-      byokAllowed: num(row.byok_allowed) === 1,
       externalSubscriptionId: typeof row.external_subscription_id === "string" ? row.external_subscription_id : null,
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at)
@@ -170,13 +179,12 @@ export class ServerModeStore {
 
   putPlan(plan: PlanRecord): void {
     this.db.prepare(`
-      INSERT INTO plans(plan_id, name, monthly_token_limit, allowed_providers, byok_allowed, external_subscription_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO plans(plan_id, name, monthly_token_limit, allowed_providers, external_subscription_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(plan_id) DO UPDATE SET
         name = excluded.name,
         monthly_token_limit = excluded.monthly_token_limit,
         allowed_providers = excluded.allowed_providers,
-        byok_allowed = excluded.byok_allowed,
         external_subscription_id = excluded.external_subscription_id,
         updated_at = excluded.updated_at
     `).run(
@@ -184,7 +192,6 @@ export class ServerModeStore {
       plan.name,
       plan.monthlyTokenLimit,
       JSON.stringify(plan.allowedProviders),
-      plan.byokAllowed ? 1 : 0,
       plan.externalSubscriptionId,
       plan.createdAt,
       plan.updatedAt
@@ -209,27 +216,27 @@ export class ServerModeStore {
     else this.db.prepare("INSERT INTO account_plans(user_id, plan_id, assigned_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET plan_id = excluded.plan_id, assigned_at = excluded.assigned_at").run(userId, planId, now);
   }
 
-  getByok(userId: string, provider: string): SealedSecret | null {
-    const row = this.db.prepare("SELECT nonce, ciphertext, tag FROM byok_keys WHERE user_id = ? AND provider = ?").get(userId, provider) as Record<string, unknown> | undefined;
+  getProviderKey(provider: string): SealedSecret | null {
+    const row = this.db.prepare("SELECT nonce, ciphertext, tag FROM provider_keys WHERE provider = ?").get(provider) as Record<string, unknown> | undefined;
     return row ? sealed(row) : null;
   }
 
-  listByokProviders(userId: string): Array<{ provider: string; updatedAt: string }> {
-    return (this.db.prepare("SELECT provider, updated_at FROM byok_keys WHERE user_id = ? ORDER BY provider").all(userId) as Record<string, unknown>[]).map((row) => ({
+  listProviderKeys(): Array<{ provider: string; updatedAt: string }> {
+    return (this.db.prepare("SELECT provider, updated_at FROM provider_keys ORDER BY provider").all() as Record<string, unknown>[]).map((row) => ({
       provider: String(row.provider),
       updatedAt: String(row.updated_at)
     }));
   }
 
-  putByok(userId: string, provider: string, secret: SealedSecret, now: string): void {
+  putProviderKey(provider: string, secret: SealedSecret, now: string): void {
     this.db.prepare(`
-      INSERT INTO byok_keys(user_id, provider, nonce, ciphertext, tag, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, provider) DO UPDATE SET nonce = excluded.nonce, ciphertext = excluded.ciphertext, tag = excluded.tag, updated_at = excluded.updated_at
-    `).run(userId, provider, secret.nonce, secret.ciphertext, secret.tag, now);
+      INSERT INTO provider_keys(provider, nonce, ciphertext, tag, updated_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(provider) DO UPDATE SET nonce = excluded.nonce, ciphertext = excluded.ciphertext, tag = excluded.tag, updated_at = excluded.updated_at
+    `).run(provider, secret.nonce, secret.ciphertext, secret.tag, now);
   }
 
-  deleteByok(userId: string, provider: string): void {
-    this.db.prepare("DELETE FROM byok_keys WHERE user_id = ? AND provider = ?").run(userId, provider);
+  deleteProviderKey(provider: string): boolean {
+    return Number(this.db.prepare("DELETE FROM provider_keys WHERE provider = ?").run(provider).changes) > 0;
   }
 
   getEscrow(userId: string): SealedSecret | null {
@@ -320,13 +327,17 @@ export class ServerModeStore {
 
   getUsage(userId: string, month: string): MonthlyUsage {
     const row = this.db.prepare("SELECT * FROM usage_monthly WHERE user_id = ? AND month = ?").get(userId, month) as Record<string, unknown> | undefined;
-    return {
-      inputTokens: num(row?.input_tokens),
-      outputTokens: num(row?.output_tokens),
-      cacheReadTokens: num(row?.cache_read_tokens),
-      cacheWriteTokens: num(row?.cache_write_tokens),
-      modelCalls: num(row?.model_calls)
-    };
+    return usageOf(row);
+  }
+
+  /** Sum over all accounts (the global monthly limit). */
+  getTotalUsage(month: string): MonthlyUsage {
+    const row = this.db.prepare(`
+      SELECT SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens, SUM(cache_read_tokens) AS cache_read_tokens,
+        SUM(cache_write_tokens) AS cache_write_tokens, SUM(model_calls) AS model_calls
+      FROM usage_monthly WHERE month = ?
+    `).get(month) as Record<string, unknown> | undefined;
+    return usageOf(row);
   }
 
   /** Fixed-window counter; true while the bucket is within its limit. */

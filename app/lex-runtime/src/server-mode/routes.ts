@@ -4,17 +4,19 @@ import type { AuthenticatedContext, LocalUserStatus } from "../auth/types.js";
 import type { ExecutionPhase } from "../execution-steps.js";
 import type { ProviderId } from "../providers/types.js";
 import { runInAccountScope, type AccountScope } from "./account-scope.js";
-import { PROVIDERS, ServerModeError, type ServerModeService } from "./service.js";
+import { PROVIDERS, ServerModeError, accountPolicyResponse, type ServerModeService } from "./service.js";
 
 /**
  * Local-only features refused in server mode: they act on the machine the
  * runtime runs on (provider CLI logins, local model install/update, the
  * desktop updater, saving to the Downloads folder, opening a file in a local
- * program, writing the Claude Desktop config).
+ * program, writing the Claude Desktop config) and the process-memory API
+ * keys of the desktop (the admin sets global keys under /api/server-mode/provider-keys).
  */
 const LOCAL_ONLY: Array<{ method?: string; path: RegExp; when?: (req: Request) => boolean }> = [
   { path: /^\/api\/provider-accounts(?:\/|$)/ },
   { path: /^\/api\/admin\/provider-accounts(?:\/|$)/ },
+  { path: /^\/api\/admin\/providers\/[^/]+\/credential$/ },
   { path: /^\/api\/local-models(?:\/|$)/ },
   { path: /^\/api\/update(?:\/|$)/ },
   { path: /^\/api\/downloads\/save$/ },
@@ -28,13 +30,6 @@ export function localOnlyRoute(req: Request): boolean {
 }
 
 const MODEL_ROUTES = [/^\/api\/sessions\/execute$/, /^\/api\/cases\/[^/]+\/artifacts\/generate$/];
-
-const POLICY_STATUS: Record<string, number> = {
-  TOKEN_LIMIT_REACHED: 429,
-  PLAN_REQUIRED: 402,
-  PROVIDER_NOT_IN_PLAN: 403,
-  SERVER_MODE_LOCAL_ONLY: 403
-};
 
 function clientIp(req: Request): string {
   // Behind the firm's reverse proxy (LEX_TRUST_PROXY=1) the first X-Forwarded-For address.
@@ -125,7 +120,7 @@ export function registerServerModeRoutes(
     })(req, res);
   });
 
-  // Local-only refusal and the account scope (BYOK, plan limits, usage, live turns).
+  // Local-only refusal and the account scope (plan and global limits, usage, live turns).
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (!req.path.startsWith("/api/") || !serverMode.isEnabled()) {
       next();
@@ -150,8 +145,8 @@ export function registerServerModeRoutes(
       try {
         serverMode.assertModelAllowed(context.user.userId, provider, model);
       } catch (error) {
-        const code = error instanceof Error ? error.message : "";
-        res.status(POLICY_STATUS[code] ?? 403).json({ error: POLICY_STATUS[code] ? code : "ACCOUNT_POLICY_DENIED" });
+        const refusal = accountPolicyResponse(error instanceof Error ? error.message : "");
+        res.status(refusal.status).json(refusal.body);
         return;
       }
       if (req.path === "/api/sessions/execute") {
@@ -198,6 +193,20 @@ export function registerServerModeRoutes(
     res.json({ status: "SENT" });
   }));
 
+  // Global provider API keys: only whether a key is set, never the key.
+  app.get("/api/server-mode/provider-keys", handle((req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({ providerKeys: serverMode.providerKeys(admin(req)) });
+  }));
+
+  app.put("/api/server-mode/provider-keys/:provider", handle((req, res) => {
+    res.json({ providerKeys: serverMode.setProviderKey(admin(req), String(req.params.provider), req.body?.apiKey) });
+  }));
+
+  app.delete("/api/server-mode/provider-keys/:provider", handle((req, res) => {
+    res.json({ providerKeys: serverMode.clearProviderKey(admin(req), String(req.params.provider)) });
+  }));
+
   app.get("/api/server-mode/plans", handle((req, res) => {
     res.json({ plans: serverMode.listPlans(admin(req)) });
   }));
@@ -239,15 +248,5 @@ export function registerServerModeRoutes(
   app.get("/api/server-mode/me", handle((req, res) => {
     if (!serverMode.isEnabled()) throw new ServerModeError("SERVER_MODE_DISABLED", 404);
     res.json(serverMode.myAccount(actor(req)));
-  }));
-
-  app.put("/api/server-mode/me/keys/:provider", handle(async (req, res) => {
-    await serverMode.setByok(actor(req), String(req.params.provider), req.body?.apiKey);
-    res.status(204).end();
-  }));
-
-  app.delete("/api/server-mode/me/keys/:provider", handle((req, res) => {
-    serverMode.clearByok(actor(req), String(req.params.provider));
-    res.status(204).end();
   }));
 }
