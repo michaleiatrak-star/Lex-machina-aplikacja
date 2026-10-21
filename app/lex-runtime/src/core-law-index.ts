@@ -633,6 +633,24 @@ export function splitArticles(text: string): {
   return { order, articles, repeats };
 }
 
+// Abbreviations of the codes (as in the act maps and the questions) -> the code's name.
+const CODE_NAMES: Record<string, string> = {
+  kc: "Kodeks cywilny",
+  kpc: "Kodeks postępowania cywilnego",
+  kk: "Kodeks karny",
+  kpk: "Kodeks postępowania karnego",
+  kkw: "Kodeks karny wykonawczy",
+  kks: "Kodeks karny skarbowy",
+  kp: "Kodeks pracy",
+  kro: "Kodeks rodzinny i opiekuńczy",
+  ksh: "Kodeks spółek handlowych",
+  kpa: "Kodeks postępowania administracyjnego",
+  kw: "Kodeks wykroczeń",
+  kpw: "Kodeks postępowania w sprawach o wykroczenia",
+  ppsa: "Prawo o postępowaniu przed sądami administracyjnymi",
+  op: "Ordynacja podatkowa"
+};
+
 export function normalizeForSearch(value: string): string {
   return value
     .normalize("NFD")
@@ -1129,21 +1147,42 @@ export class CoreLawIndex {
     if (dzu) return this.refOrAmendment(`DU/${dzu[1]}/${Number(dzu[2])}`);
     const wanted = normalizeForSearch(trimmed).replace(/[.\s]+/g, "");
     if (!wanted) return null;
+    // A code's abbreviation names its code: "KP" is the Labour Code, not a label that only
+    // starts with the letters ("KPA art. 156 + ustawa reprywatyzacyjna", "KRO" in a regulation).
+    // The code's name or abbreviation opens a label of the act's map ("Kodeks pracy (KP)",
+    // "KP art. 94³ — mobbing"); "Kodeks karny" does not open "Kodeks karny skarbowy".
+    const code = CODE_NAMES[wanted];
+    const opens = (label: string, name: string) => {
+      const text = normalizeForSearch(label).trim();
+      return text.startsWith(name) && /^\s*(?:$|[(—–\-:,+]|art\b)/u.test(text.slice(name.length));
+    };
+    const words = (name: string) => ` ${normalizeForSearch(name).replace(/[^\p{L}\p{N}§]+/gu, " ").trim()} `;
+    const wantedWords = words(trimmed.replace(/\./g, ""));
     const scored = this.refs
       .map((ref) => {
-        const names = [
-          ...this.labelsOf(ref),
-          this.state.acts[ref.eli]?.title ?? ""
-        ].map((name) => normalizeForSearch(name).replace(/[.\s]+/g, ""));
+        const raw = [...this.labelsOf(ref), this.state.acts[ref.eli]?.title ?? ""];
+        if (code) {
+          const name = normalizeForSearch(code);
+          // The code itself ("Kodeks karny (KK)", "KK") before a row that starts with it ("KK art. 278–295").
+          const labels = this.labelsOf(ref).map((label) => normalizeForSearch(label).trim());
+          const itself = labels.some((label) => label === name || label === wanted || label === `${name} (${wanted})`);
+          const named = labels.some((label) => opens(label, name) || opens(label, wanted));
+          return { ref, score: itself ? 3 : named ? 2 : 0 };
+        }
+        const names = raw.map((name) => normalizeForSearch(name).replace(/[.\s]+/g, ""));
         const exact = names.some((name) => name === wanted);
-        const partial = names.some((name) => name.length > 0 && name.includes(wanted));
+        // Whole words only: a fragment of a word names nothing.
+        const partial = !exact && wantedWords.trim().length > 0 && raw.some((name) => words(name).includes(wantedWords));
         return { ref, score: exact ? 2 : partial ? 1 : 0 };
       })
       .filter((item) => item.score > 0)
       .sort(
         (a, b) =>
           b.score - a.score ||
-          Number(b.ref.consolidated) - Number(a.ref.consolidated)
+          Number(b.ref.consolidated) - Number(a.ref.consolidated) ||
+          // The newer consolidated text of the same code.
+          eliOrder(b.ref.eli)[0] - eliOrder(a.ref.eli)[0] ||
+          eliOrder(b.ref.eli)[1] - eliOrder(a.ref.eli)[1]
       );
     return scored[0]?.ref ?? null;
   }
