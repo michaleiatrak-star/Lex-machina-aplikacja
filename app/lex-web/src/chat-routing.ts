@@ -357,7 +357,8 @@ export function choosePrimaryRoute(
     },
     {
       routePrefix: "dr-06-podatki",
-      patterns: [/\bvat\b/, /\bpcc\b/, /\bczynnosci cywilnoprawnych\b/, /\bordynacj[a-z]* podatkow[a-z]*\b/, /\boplat[a-z]* (?:miejscow|uzdrowiskow|lokaln)[a-z]*\b/]
+      // VAT as the tax, not "faktura VAT" in a civil claim for payment.
+      patterns: [/\b(?:podat[a-z]* vat|stawk[a-z]* vat|vat od|ustaw[a-z]* o vat|deklaracj[a-z]* vat|zwrot[a-z]* vat|odliczeni[a-z]* vat|naliczon[a-z]* vat|nalezn[a-z]* vat|vat-\d+|jpk)\b/, /\bpcc\b/, /\bczynnosci cywilnoprawnych\b/, /\bordynacj[a-z]* podatkow[a-z]*\b/, /\boplat[a-z]* (?:miejscow|uzdrowiskow|lokaln)[a-z]*\b/]
     }
   ];
   for (

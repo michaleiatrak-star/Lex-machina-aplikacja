@@ -175,6 +175,13 @@ const DETECTORS: Detector[] = [
   },
   { kind: "PHONE", regex: /\+\d{2,3}[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{3,4}(?!\d)/g },
   { kind: "ID_CARD", regex: /(?<![\w])[A-Z]{3}\s?\d{6}(?![\w])/g, validate: validIdCard },
+  // Named as an identity card ("nr dowodu ABC123456", "seria i numer"): masked also when its
+  // check digit is wrong (a typo or OCR still identifies the person).
+  {
+    kind: "ID_CARD",
+    regex: /(?:dow(?:ód|odu|odem|odzie)\s+osobist\p{L}*|nr\.?\s+dowodu|numer\s+dowodu|seri\p{L}*\s+i\s+(?:nr\.?|numer\p{L}*))\s*:?\s*(?:nr\.?\s*)?([A-Z]{3}\s?\d{6})(?![\w])/giu,
+    group: 1
+  },
   { kind: "PASSPORT", regex: /(?<![\w])[A-Z]{2}\s?\d{7}(?![\w])/g, validate: validPassport },
   { kind: "LAND_REGISTRY", regex: /(?<![\w])[A-Z]{2}\d[A-Z]\/\d{8}\/\d(?![\w])/g, validate: validLandRegistry },
   // "KRS 0000 297714": the number is also written split after the leading zeros.

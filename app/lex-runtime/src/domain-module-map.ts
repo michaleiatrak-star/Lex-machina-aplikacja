@@ -387,6 +387,22 @@ export function rankDomains(
   text: string,
   limit = 2
 ): Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> {
+  const ranked = rankDomainsOnce(registry, rows, text, limit);
+  // A foreign element first: a domain named only by a word of the procedure ("przed którym
+  // sądem") is the conflict question itself, not a second matter.
+  if (!ranked[0]?.skill.startsWith("dr-14-")) return ranked;
+  return ranked.filter((row, index) => {
+    const words = PROCEDURE[row.skill.slice(0, 5)];
+    return index === 0 || !words || !row.matched.length || !row.matched.every((phrase) => words.has(phrase.toLocaleLowerCase("pl")));
+  });
+}
+
+function rankDomainsOnce(
+  registry: LexSkillRegistry,
+  rows: FlashRoute[],
+  text: string,
+  limit: number
+): Array<{ skill: string; matched: string[]; modules: DomainModule[]; strong: boolean }> {
   // A domain the case adds by its kind (criminal, foreign element) is one more, not one
   // instead of the matter's second domain ("monitoring w pracy" stays with "co grozi").
   const phrased = rankByPhrases(registry, rows, text, limit);

@@ -22,6 +22,15 @@ describe("place and date of birth (deterministic, also with the recognizers down
   });
 });
 
+describe("identity card named in the text", () => {
+  it("is masked also with a wrong check digit; a bare code of an invoice is not", () => {
+    const kinds = (text: string) => detectIdentifiers(text).filter((span) => span.kind === "ID_CARD").map((span) => span.value);
+    expect(kinds("legitymujący się dowodem osobistym nr ABC123456")).toEqual(["ABC123456"]);
+    expect(kinds("dowód osobisty seria i nr: ABC 123456")).toEqual(["ABC 123456"]);
+    expect(kinds("Faktura ABC123456")).toEqual([]);
+  });
+});
+
 describe("sole trader's firm named after the person", () => {
   it("keeps the trade words readable and the person's name out of the firm span", () => {
     const text = "Powód Jan Nowak prowadzi działalność gospodarczą pod firmą Jan Nowak Usługi Remontowe.";
