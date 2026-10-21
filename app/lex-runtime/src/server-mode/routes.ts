@@ -92,8 +92,8 @@ export function registerServerModeRoutes(
     res.status(202).json({ status: "CHECK_EMAIL" });
   }));
 
-  app.post("/api/server-mode/verify-email", handle((req, res) => {
-    serverMode.verifyEmail(req.body ?? {}, clientIp(req));
+  app.post("/api/server-mode/verify-email", handle(async (req, res) => {
+    await serverMode.verifyEmail(req.body ?? {}, clientIp(req));
     res.json({ status: "VERIFIED" });
   }));
 

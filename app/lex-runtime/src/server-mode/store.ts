@@ -291,6 +291,12 @@ export class ServerModeStore {
     }
   }
 
+  /** The subject of a valid, unused token, without using it. */
+  peekToken(tokenHash: Buffer, purpose: EmailTokenPurpose, now: number): string | null {
+    const row = this.db.prepare("SELECT subject, expires_at, used_at FROM email_tokens WHERE token_hash = ? AND purpose = ?").get(tokenHash, purpose) as Record<string, unknown> | undefined;
+    return row && row.used_at === null && num(row.expires_at) > now ? String(row.subject) : null;
+  }
+
   /** Ends every unused token of the subject (a new link replaces the old ones). */
   invalidateTokens(purpose: EmailTokenPurpose, subject: string, now: number): void {
     this.db.prepare("UPDATE email_tokens SET used_at = ? WHERE purpose = ? AND subject = ? AND used_at IS NULL").run(now, purpose, subject);

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { LocalAuthService } from "../auth/service.js";
 import { AuthError } from "../auth/service.js";
-import { isValidEmailLogin, normalizeLoginName, validateNewPassword } from "../auth/crypto.js";
+import { decryptUserMasterKey, derivePasswordKey, isValidEmailLogin, normalizeLoginName, validateNewPassword } from "../auth/crypto.js";
 import type { AuthenticatedContext, PublicLocalUser, StoredLocalUser } from "../auth/types.js";
 import type { ModelCallGuard } from "../providers/gateway.js";
 import { isAccountSessionModel } from "../providers/account-session.js";
@@ -39,6 +39,7 @@ export const EMAIL_RATE_LIMITS = {
   register: { ip: 10, email: 3, windowMs: HOUR_MS },
   reset: { ip: 10, email: 3, windowMs: HOUR_MS },
   token: { ip: 30, windowMs: HOUR_MS },
+  verifyPassword: { registration: 5, windowMs: HOUR_MS },
   login: { ip: 30, windowMs: 15 * 60 * 1000 }
 } as const;
 
@@ -348,14 +349,28 @@ export class ServerModeService implements ModelCallGuard {
     });
   }
 
-  verifyEmail(input: { token?: unknown }, ip: string): void {
+  // The link alone does not activate the account: the password chosen at registration is
+  // asked again. Someone who registers another person's address cannot click the link, and
+  // the owner who clicks it cannot finish a registration made with someone else's password.
+  async verifyEmail(input: { token?: unknown; password?: unknown }, ip: string): Promise<void> {
     this.requireMode();
     this.limit("token:ip", ip, EMAIL_RATE_LIMITS.token.ip, EMAIL_RATE_LIMITS.token.windowMs);
     const token = typeof input.token === "string" ? input.token.slice(0, 128) : "";
-    const pendingId = token ? this.store.consumeToken(sha256(token), "VERIFY", this.now()) : null;
-    const pending = pendingId ? this.store.getPending(pendingId) : null;
+    const password = typeof input.password === "string" ? input.password : "";
+    const tokenHash = token ? sha256(token) : null;
+    const peeked = tokenHash ? this.store.peekToken(tokenHash, "VERIFY", this.now()) : null;
+    const candidate = peeked ? this.store.getPending(peeked) : null;
+    if (!candidate || !tokenHash) throw new ServerModeError("INVALID_OR_EXPIRED_TOKEN", 400);
+    const user = deserializeUser(candidate.userJson);
+    this.limit("verify:password", candidate.pendingId, EMAIL_RATE_LIMITS.verifyPassword.registration, EMAIL_RATE_LIMITS.verifyPassword.windowMs);
+    try {
+      decryptUserMasterKey(await derivePasswordKey(password, user.kdfSalt, user.kdf), user).fill(0);
+    } catch {
+      throw new ServerModeError("INVALID_PASSWORD", 400);
+    }
+    const pendingId = this.store.consumeToken(tokenHash, "VERIFY", this.now());
+    const pending = pendingId === candidate.pendingId ? this.store.getPending(pendingId) : null;
     if (!pending) throw new ServerModeError("INVALID_OR_EXPIRED_TOKEN", 400);
-    const user = deserializeUser(pending.userJson);
     try {
       this.auth.insertPreparedAccount(user);
     } catch (error) {

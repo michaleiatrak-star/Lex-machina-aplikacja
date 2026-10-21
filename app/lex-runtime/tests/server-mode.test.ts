@@ -260,17 +260,27 @@ describe("registration and password reset by e-mail", () => {
     const token = tokenFrom(current.mails[0], "weryfikacja");
 
     await request(current.app).post("/api/auth/login").send({ loginName: "nowy@example.pl", password: USER_PASSWORD }).expect(401, { error: "INVALID_CREDENTIALS" });
-    await request(current.app).post("/api/server-mode/verify-email").send({ token: "x" + token.slice(1) }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
-    await request(current.app).post("/api/server-mode/verify-email").send({ token }).expect(200, { status: "VERIFIED" });
-    await request(current.app).post("/api/server-mode/verify-email").send({ token }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: "x" + token.slice(1), password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
+    await request(current.app).post("/api/server-mode/verify-email").send({ token, password: USER_PASSWORD }).expect(200, { status: "VERIFIED" });
+    await request(current.app).post("/api/server-mode/verify-email").send({ token, password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
     const login = await request(current.app).post("/api/auth/login").send({ loginName: "nowy@example.pl", password: USER_PASSWORD }).expect(200);
     expect(login.body.user.appRole).toBe("USER");
+
+    // The link alone does not activate: someone who registered another person's address
+    // with their own password cannot be activated by the owner's click, and a wrong password
+    // leaves the link usable.
+    await request(current.app).post("/api/server-mode/register").send({ email: "ofiara@example.pl", password: "Haslo napastnika 2026 xyz" }).expect(202);
+    const planted = tokenFrom(current.mails.at(-1), "weryfikacja");
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: planted, password: USER_PASSWORD }).expect(400, { error: "INVALID_PASSWORD" });
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: planted }).expect(400, { error: "INVALID_PASSWORD" });
+    await request(current.app).post("/api/auth/login").send({ loginName: "ofiara@example.pl", password: "Haslo napastnika 2026 xyz" }).expect(401);
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: planted, password: "Haslo napastnika 2026 xyz" }).expect(200, { status: "VERIFIED" });
 
     // Expired link (24 h).
     await request(current.app).post("/api/server-mode/register").send({ email: "pozny@example.pl", password: USER_PASSWORD }).expect(202);
     const late = tokenFrom(current.mails.at(-1), "weryfikacja");
     current.clock.now += 24 * 60 * 60 * 1000 + 1;
-    await request(current.app).post("/api/server-mode/verify-email").send({ token: late }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: late, password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
     await request(current.app).post("/api/auth/login").send({ loginName: "pozny@example.pl", password: USER_PASSWORD }).expect(401);
   });
 
@@ -280,7 +290,7 @@ describe("registration and password reset by e-mail", () => {
     await enable(current, adminToken);
     await configureMail(current, adminToken);
     await request(current.app).post("/api/server-mode/register").send({ email: "jest@example.pl", password: USER_PASSWORD }).expect(202);
-    await request(current.app).post("/api/server-mode/verify-email").send({ token: tokenFrom(current.mails.at(-1), "weryfikacja") }).expect(200);
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: tokenFrom(current.mails.at(-1), "weryfikacja"), password: USER_PASSWORD }).expect(200);
 
     const taken = await request(current.app).post("/api/server-mode/register").send({ email: "jest@example.pl", password: USER_PASSWORD });
     const free = await request(current.app).post("/api/server-mode/register").send({ email: "wolny@example.pl", password: USER_PASSWORD });
@@ -306,7 +316,7 @@ describe("registration and password reset by e-mail", () => {
     await request(current.app).put("/api/server-mode/settings").set("Authorization", `Bearer ${adminToken}`).send({ defaultPlanId: plan.body.plan.planId }).expect(200);
 
     await request(current.app).post("/api/server-mode/register").send({ email: "klient@example.pl", password: USER_PASSWORD }).expect(202);
-    await request(current.app).post("/api/server-mode/verify-email").send({ token: tokenFrom(current.mails.at(-1), "weryfikacja") }).expect(200);
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: tokenFrom(current.mails.at(-1), "weryfikacja"), password: USER_PASSWORD }).expect(200);
     const login = await request(current.app).post("/api/auth/login").send({ loginName: "klient@example.pl", password: USER_PASSWORD }).expect(200);
     const oldToken = String(login.body.sessionToken);
     await request(current.app).put("/api/server-mode/me/keys/openai").set("Authorization", `Bearer ${oldToken}`).send({ apiKey: OWN_KEY }).expect(204);

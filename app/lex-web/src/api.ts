@@ -4535,8 +4535,8 @@ export function registerAccount(input: { email: string; displayName: string; pas
   return send("/api/server-mode/register", { method: "POST", body: JSON.stringify(input) }, false);
 }
 
-export function verifyEmail(token: string): Promise<void> {
-  return send("/api/server-mode/verify-email", { method: "POST", body: JSON.stringify({ token }) }, false);
+export function verifyEmail(token: string, password: string): Promise<void> {
+  return send("/api/server-mode/verify-email", { method: "POST", body: JSON.stringify({ token, password }) }, false);
 }
 
 export function requestPasswordReset(email: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, confirmPasswordReset, registerAccount, requestPasswordReset, verifyEmail } from "./api.js";
 
 // Ekrany trybu serwerowego: rejestracja e-mailem, potwierdzenie adresu, reset hasła.
@@ -33,6 +33,8 @@ function errorText(failure: unknown): string {
       return "To hasło jest zbyt popularne. Wybierz inne.";
     case "INVALID_OR_EXPIRED_TOKEN":
       return "Link jest nieprawidłowy, wygasł albo został już użyty.";
+    case "INVALID_PASSWORD":
+      return "To nie jest hasło podane przy zakładaniu konta.";
     case "MAIL_DELIVERY_FAILED":
       return "Nie udało się wysłać wiadomości. Spróbuj ponownie później.";
     default:
@@ -127,32 +129,48 @@ export function RegisterPanel({ onBack }: { onBack: () => void }) {
 }
 
 export function VerifyEmailPanel({ token, onBack }: { token: string; onBack: () => void }) {
-  const [state, setState] = useState<"working" | "done" | "failed">("working");
+  const [password, setPassword] = useState("");
+  const [state, setState] = useState<"input" | "done">("input");
   const [error, setError] = useState("");
-  const started = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     clearEmailLinkHash();
-    verifyEmail(token)
-      .then(() => setState("done"))
-      .catch((failure: unknown) => {
-        setError(errorText(failure));
-        setState("failed");
-      });
   }, [token]);
+
+  async function submit(): Promise<void> {
+    setBusy(true);
+    setError("");
+    try {
+      await verifyEmail(token, password);
+      setState("done");
+    } catch (failure) {
+      setError(errorText(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Shell title="Potwierdzenie adresu e-mail" onBack={onBack}>
-      {state === "working" && <p className="auth-copy">Potwierdzam adres…</p>}
-      {state === "done" && (
+      {state === "done" ? (
         <div className="auth-onboarding-note" role="status">
           <strong>Adres potwierdzony</strong>
           <span>Konto jest aktywne. Zaloguj się adresem e-mail i hasłem.</span>
         </div>
+      ) : (
+        <>
+          <p className="auth-copy">Aby aktywować konto, podaj hasło ustawione przy jego zakładaniu.</p>
+          <label>
+            Hasło
+            <input type="password" value={password} autoComplete="current-password" maxLength={128} onChange={(event) => setPassword(event.target.value)} />
+          </label>
+          {error && <div className="alert alert-error auth-alert">{error}</div>}
+          <button type="button" className="primary-button auth-submit" disabled={busy || !password} onClick={() => void submit()}>
+            {busy ? "Sprawdzanie…" : "Aktywuj konto"}
+          </button>
+        </>
       )}
-      {state === "failed" && <div className="alert alert-error auth-alert">{error}</div>}
     </Shell>
   );
 }
