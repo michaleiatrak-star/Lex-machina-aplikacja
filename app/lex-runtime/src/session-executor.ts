@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { detectHealthData } from "./privacy/health-data.js";
 import { waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
@@ -1808,6 +1809,12 @@ export class SafeSessionExecutor implements SessionExecutor {
               request.query,
               exampleData
             );
+        // Health data (art. 9 RODO) goes as written (the injury is often the matter); the log says so.
+        const health = detectHealthData(latestMessage);
+        if (health.length) {
+          step("PREPARE", `dane o zdrowiu w wiadomości (art. 9 RODO): ${health.length}, wysłane bez zakrycia; gdy analiza ich nie potrzebuje, pomiń je w wiadomości`);
+          audit.record("gate", "HEALTH_DATA_SENT", "OK", { count: health.length });
+        }
         // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
         const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
         protectedQuery =

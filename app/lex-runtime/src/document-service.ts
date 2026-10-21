@@ -1,4 +1,5 @@
 import { alignProtected, protectedPageText, type DocxAnonymizationPlan } from "./docx-anonymize.js";
+import { detectHealthData } from "./privacy/health-data.js";
 import type {
   PersonMorphology
 } from "./privacy/person-morphology.js";
@@ -365,6 +366,8 @@ export type PublicDocumentReview = {
   suggestions: PublicPrivacySuggestion[];
   // Local recognizers down during the detection: what they find may be missing above.
   recognizerWarnings?: Array<{ name: string; reason: string }>;
+  // Health data (art. 9 RODO), not masked by default: the user masks them or not (privacy/health-data.ts).
+  healthData?: Array<{ page: number; start: number; end: number }>;
 };
 
 export type PublicDocumentIngestion = {
@@ -901,7 +904,16 @@ implements DocumentService {
     }
 
     const down = degradedRecognizers();
-    return { ...this.publicReview(documentId, mediaType, source, suggestions), ...(down.length ? { recognizerWarnings: down } : {}) };
+    const health = source.pages.flatMap((page) =>
+      detectHealthData(page.text)
+        .filter((item) => !suggestions.some((suggestion) => suggestion.page === page.page && suggestion.start < item.end && item.start < suggestion.end))
+        .map((item) => ({ page: page.page, start: item.start, end: item.end }))
+    );
+    return {
+      ...this.publicReview(documentId, mediaType, source, suggestions),
+      ...(down.length ? { recognizerWarnings: down } : {}),
+      ...(health.length ? { healthData: health } : {})
+    };
   }
 
   private publicReview(

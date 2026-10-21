@@ -600,6 +600,8 @@ export type DocumentReviewResponse = {
   }>;
   // Local recognizers down during the detection (Morfeusz, Stanza): their finds may be missing.
   recognizerWarnings?: Array<{ name: string; reason: string }>;
+  // Health data (art. 9 RODO), not masked unless the user masks them.
+  healthData?: Array<{ page: number; start: number; end: number }>;
   suggestions: Array<{
     page: number;
     start: number;
