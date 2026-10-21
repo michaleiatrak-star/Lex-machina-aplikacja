@@ -4208,8 +4208,8 @@ export class SafeSessionExecutor implements SessionExecutor {
             (
               execution.workflowPlan.id ===
                 "PROCESS_PLEADING_V1" &&
-              request
-                .processWorkflowContext
+              // The file of the pipeline's pleading: its state bound by the route (render-only).
+              (request.processWorkflowContext || (request.processRenderOnly && request.documentAstOutput))
             ) ||
             (
               execution.workflowPlan.id ===

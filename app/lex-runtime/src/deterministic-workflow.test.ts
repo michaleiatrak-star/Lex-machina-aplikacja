@@ -1319,4 +1319,15 @@ describe("a pleading's file rendered after FINAL", () => {
     expect(evaluateDeterministicWorkflowOutput(plan, text, { checkpointTurn: true, processRenderStage: "FINAL" }).observed).not.toContain("PREMATURE_FINAL_STATUS");
     expect(evaluateDeterministicWorkflowOutput(plan, text, { checkpointTurn: true, processRenderStage: "W2" }).observed).toContain("PREMATURE_FINAL_STATUS");
   });
+
+  it("does not require the chat's W3 report sections in the court file after FINAL (E2E PR1)", async () => {
+    const { createDeterministicWorkflowPlan } = await import("./deterministic-workflow.js");
+    const { LexSkillRegistry } = await import("./registry.js");
+    const path = await import("node:path");
+    const registry = new LexSkillRegistry(path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana"));
+    registry.scan();
+    const plan = { ...createDeterministicWorkflowPlan(registry, "pisma-procesowe-v3"), documentAstOutput: true };
+    const pleading = "Sąd Okręgowy w Krakowie\n\nPOZEW O ZAPŁATĘ\n\nI. Wnoszę o zasądzenie kwoty 40 000 zł.";
+    expect(evaluateDeterministicWorkflowOutput(plan, pleading, { checkpointTurn: true, processRenderStage: "FINAL" }).result).toBe("PASS");
+  });
 });
