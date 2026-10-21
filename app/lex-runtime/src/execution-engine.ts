@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ProviderStreamResult } from "./providers/types.js";
 import { draftPrompt } from "./process-pleading-draft.js";
 import { WAIT_FOR_USER_CHECKPOINT_INSTRUCTION, WAIT_FOR_USER_INSTRUCTION, WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import {
@@ -402,6 +403,8 @@ export class LexExecutionEngine {
     // The turn's own part of the tool appendix (documents, act modules, cited articles); the
     // stable part is toolSystemPromptAppendix.
     toolSystemPromptTurn?: string;
+    // Answer of this turn given by the application, no model call (material gate).
+    fixedAnswer?: string;
     documentContext?: string;
     // Masked page images for models that see images (after documentContext).
     documentImages?: LlmImage[];
@@ -2190,7 +2193,8 @@ export class LexExecutionEngine {
       args.model
     );
 
-    const response = await this.providers.stream(
+    // The application's own answer (a question it asks without the model, e.g. for the material).
+    const response: ProviderStreamResult = args.fixedAnswer !== undefined ? { fullText: args.fixedAnswer } : await this.providers.stream(
       args.provider,
       {
         model: args.model,

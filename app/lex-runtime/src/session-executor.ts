@@ -1,6 +1,6 @@
 import { todayWarsaw } from "./warsaw-date.js";
 import { detectHealthData } from "./privacy/health-data.js";
-import { waitsForUser } from "./workflow-wait.js";
+import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer, type SkillSwitchOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
@@ -914,6 +914,17 @@ export function privacyGateFailure(error: unknown): Error & { reason?: string } 
   const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 400);
   return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
 }
+
+// Executive skills that work on the case's material, and what to ask for when there is none.
+const MATERIAL_SKILLS: Record<string, string> = {
+  "analizator-umow-v1": "umowa (plik albo pełny tekst)",
+  "analiza-sadowa-v6": "orzeczenie, pisma albo akta sprawy",
+  "analizator-dowodow-v3": "dowody (dokumenty, zeznania, korespondencja)",
+  "chronologia-sprawy-v1": "dokumenty sprawy, z których ma powstać oś czasu",
+  "przesluchanie-swiadkow-v2-min90": "akta sprawy (zeznania, protokoły, pisma) i dane o świadku"
+};
+// A message this long carries the material itself (a pasted contract or statement).
+const MATERIAL_PASTED_CHARS = 1_500;
 
 export type SessionExecutionResponse = {
   sessionId: string;
@@ -2817,7 +2828,38 @@ export class SafeSessionExecutor implements SessionExecutor {
               : undefined
           )
         : undefined;
+    // Material gate: a pinned skill that works on documents, the first turn, no file in the
+    // message, none in the case and no pasted text - the application asks for the material
+    // itself (no model call, ~100k tokens saved; the checkpoint stays open until it comes).
+    const materialSkill = mechanicalTurn(request)
+      ? mechanicalEnvelope.manualSkills.find(
+          (name) => name in MATERIAL_SKILLS && !(name === "analizator-umow-v1" && request.contractWorkflowContext?.mode === "DRAFT")
+        )
+      : undefined;
+    let caseDocuments = 0;
+    if (materialSkill && request.caseFiles) {
+      try {
+        caseDocuments = (await request.caseFiles.listDocuments()).length;
+      } catch {
+        caseDocuments = 1;
+      }
+    }
+    // Only at the workflow's first step: a later checkpoint means the work is under way.
+    const firstStep =
+      (!request.contractWorkflowContext || request.contractWorkflowContext.checkpoint === "AU-F0") &&
+      (!request.orderedCaseWorkflowContext || /INTAKE/u.test(request.orderedCaseWorkflowContext.checkpoint)) &&
+      (!request.chronologyWorkflowContext || request.chronologyWorkflowContext.stage === "INVENTORY") &&
+      (!request.courtWorkflowContext || request.courtWorkflowContext.stage === "EVIDENCE_SCAN");
+    const fixedAnswer =
+      materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS
+        ? `Do tej pracy potrzebny jest materiał: ${MATERIAL_SKILLS[materialSkill]}. Dołącz plik do wiadomości albo wklej jego treść; dokumenty już zapisane w aktach wybierz w sprawie.\n\n${WAIT_FOR_USER_MARKER}`
+        : undefined;
+    if (fixedAnswer) {
+      step("MODEL", "brak materiału: pytanie aplikacji, bez wywołania modelu");
+      audit.record("gate", "MATERIAL_REQUIRED", "OK", { skill: materialSkill, waitingForUser: true });
+    }
     const execution = await this.engine.executePolishLegalQuery({
+      ...(fixedAnswer ? { fixedAnswer } : {}),
       instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages], optIn: [...optInComponents] },
       ...(this.coreLawIndex
         ? {
