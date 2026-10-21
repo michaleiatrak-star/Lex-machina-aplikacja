@@ -7798,6 +7798,8 @@ export default function MatterChatApp({
                     <small className="chat-account-note">{providerAccountMessage}</small>
                   ) : null}
                 </>
+              ) : serverMode ? (
+                <p>W trybie serwerowym klucze API dla wszystkich kont ustawia administrator w zakładce „Tryb serwerowy”.</p>
               ) : user.appRole === "ADMIN" ? (
                 <>
                   {runtimeProvider === "anthropic" ? (

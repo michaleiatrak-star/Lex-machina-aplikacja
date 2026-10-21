@@ -2,20 +2,24 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   assignServerPlan,
+  clearServerProviderKey,
   deleteServerPlan,
   getServerSettings,
   listLiveTurns,
   listServerAccounts,
   listServerPlans,
+  listServerProviderKeys,
   saveServerPlan,
   sendServerTestMail,
   setServerAccountStatus,
   setServerModeEnabled,
+  setServerProviderKey,
   updateServerSettings,
   type LiveTurn,
   type ProviderId,
   type ServerAccount,
   type ServerPlan,
+  type ServerProviderKey,
   type ServerSettings
 } from "./api.js";
 
@@ -47,6 +51,8 @@ function failureText(failure: unknown): string {
     INVALID_PLAN: "Nieprawidłowy plan (nazwa, limit tokenów).",
     PLAN_NAME_EXISTS: "Plan o tej nazwie już istnieje.",
     PLAN_IN_USE: "Plan jest przypisany do kont albo jest planem domyślnym.",
+    INVALID_PROVIDER_API_KEY: "Nieprawidłowy klucz API.",
+    INVALID_GLOBAL_TOKEN_LIMIT: "Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu).",
     USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora."
   };
   return known[failure.code] ?? failure.code;
@@ -56,11 +62,11 @@ function tokens(value: number): string {
   return value.toLocaleString("pl-PL");
 }
 
-type PlanDraft = { planId: string | null; name: string; limit: string; providers: ProviderId[]; byok: boolean; external: string };
+type PlanDraft = { planId: string | null; name: string; limit: string; providers: ProviderId[]; external: string };
 
-const EMPTY_PLAN: PlanDraft = { planId: null, name: "", limit: "", providers: ["openai", "anthropic", "xai", "google"], byok: false, external: "" };
+const EMPTY_PLAN: PlanDraft = { planId: null, name: "", limit: "", providers: ["openai", "anthropic", "xai", "google"], external: "" };
 
-/** Administrator: włączenie trybu serwerowego, SMTP, plany, konta i podgląd tur na żywo. */
+/** Administrator: włączenie trybu serwerowego, SMTP, klucze API, limit globalny, plany, konta i podgląd tur na żywo. */
 export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: boolean) => void }) {
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [plans, setPlans] = useState<ServerPlan[]>([]);
@@ -73,17 +79,22 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
   const [smtp, setSmtp] = useState({ host: "", port: "587", secure: false, user: "", from: "", password: "" });
   const [testTo, setTestTo] = useState("");
   const [plan, setPlan] = useState<PlanDraft>(EMPTY_PLAN);
+  const [providerKeys, setProviderKeys] = useState<ServerProviderKey[]>([]);
+  const [keyInputs, setKeyInputs] = useState<Partial<Record<ProviderId, string>>>({});
+  const [globalLimit, setGlobalLimit] = useState("");
 
   async function refresh(): Promise<void> {
     const current = await getServerSettings();
     setSettings(current);
     setBaseUrl(current.publicBaseUrl);
+    setGlobalLimit(current.globalMonthlyTokenLimit === null ? "" : String(current.globalMonthlyTokenLimit));
     if (current.smtp) {
       setSmtp({ host: current.smtp.host, port: String(current.smtp.port), secure: current.smtp.secure, user: current.smtp.user, from: current.smtp.from, password: "" });
     }
-    const [planList, accountList] = await Promise.all([listServerPlans(), listServerAccounts()]);
+    const [planList, accountList, keyList] = await Promise.all([listServerPlans(), listServerAccounts(), listServerProviderKeys()]);
     setPlans(planList);
     setAccounts(accountList);
+    setProviderKeys(keyList);
   }
 
   useEffect(() => {
@@ -139,8 +150,8 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
         <h3>Tryb serwerowy</h3>
         <p className="field-help">
           W trybie serwerowym ukryte są funkcje działające na komputerze (logowanie kontem dostawcy przez klienta CLI, instalacja modeli
-          lokalnych, aktualizacje aplikacji, zapis do folderu Pobrane). Dochodzi rejestracja e-mailem, plany z limitem tokenów i własne klucze
-          API kont. Płatności nie są obsługiwane.
+          lokalnych, aktualizacje aplikacji, zapis do folderu Pobrane). Dochodzi rejestracja e-mailem, plany z limitem tokenów oraz globalne
+          klucze API i globalny limit tokenów ustawiane przez administratora. Płatności nie są obsługiwane.
         </p>
         <label className="chat-settings-channel-option">
           <input
@@ -242,6 +253,88 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
       </div>
 
       <div>
+        <h3>Klucze API dostawców</h3>
+        <p className="field-help">
+          Jeden klucz na dostawcę dla wszystkich kont. Klucz jest szyfrowany kluczem serwera i nie wraca do przeglądarki; widać tylko, czy jest
+          ustawiony. Bez klucza używany jest klucz ze zmiennej środowiskowej serwera, jeśli jest.
+        </p>
+        <div className="admin-users-list">
+          {PROVIDERS.map(([id, label]) => {
+            const stored = providerKeys.find((item) => item.provider === id);
+            return (
+              <article key={id} className="admin-user-row">
+                <div>
+                  <strong>{label}</strong>
+                  <span>
+                    {stored?.configured
+                      ? `klucz ustawiony${stored.updatedAt ? ` (${new Date(stored.updatedAt).toLocaleString("pl-PL")})` : ""}`
+                      : "klucz nieustawiony"}
+                  </span>
+                </div>
+                <div className="admin-user-actions">
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    aria-label={`Klucz API ${label}`}
+                    placeholder={stored?.configured ? "nowy klucz zastąpi obecny" : "Wklej klucz API"}
+                    value={keyInputs[id] ?? ""}
+                    onChange={(event) => setKeyInputs({ ...keyInputs, [id]: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !(keyInputs[id] ?? "").trim()}
+                    onClick={() =>
+                      void run(async () => {
+                        await setServerProviderKey(id, (keyInputs[id] ?? "").trim());
+                        setKeyInputs({ ...keyInputs, [id]: "" });
+                      }, `Zapisano klucz ${label}.`)
+                    }
+                  >
+                    Zapisz
+                  </button>
+                  {stored?.configured && (
+                    <button type="button" className="danger-button" disabled={busy} onClick={() => void run(() => clearServerProviderKey(id), `Usunięto klucz ${label}.`)}>
+                      Usuń
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h3>Limit globalny</h3>
+        <p className="field-help">
+          Suma tokenów wejścia i wyjścia wszystkich kont w miesiącu kalendarzowym (UTC). Sprawdzany przed każdym wywołaniem modelu razem z
+          limitem planu. 0 albo puste: bez limitu globalnego.
+        </p>
+        <p>
+          Zużycie w {settings.month}: <strong>{tokens(settings.globalUsage.inputTokens + settings.globalUsage.outputTokens)}</strong>
+          {settings.globalMonthlyTokenLimit !== null ? ` z ${tokens(settings.globalMonthlyTokenLimit)}` : " (bez limitu)"} tokenów
+        </p>
+        <div className="admin-user-create">
+          <label>
+            Limit tokenów miesięcznie (wszystkie konta)
+            <input value={globalLimit} inputMode="numeric" onChange={(event) => setGlobalLimit(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void run(
+                () => updateServerSettings({ globalMonthlyTokenLimit: globalLimit.trim() ? Number(globalLimit.trim()) : null }),
+                "Zapisano limit globalny."
+              )
+            }
+          >
+            Zapisz limit
+          </button>
+        </div>
+      </div>
+
+      <div>
         <h3>Plany</h3>
         <p className="field-help">
           Limit to suma tokenów wejścia i wyjścia w miesiącu kalendarzowym (UTC). Konto bez planu korzysta z planu domyślnego; bez niego
@@ -269,7 +362,7 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                 <strong>{item.name}</strong>
                 <span>
                   {item.monthlyTokenLimit === null ? "bez limitu" : `${tokens(item.monthlyTokenLimit)} tokenów / mies.`} ·{" "}
-                  {item.allowedProviders.join(", ") || "brak dostawców"} · {item.byokAllowed ? "własny klucz API dozwolony" : "bez własnego klucza"}
+                  {item.allowedProviders.join(", ") || "brak dostawców"}
                 </span>
               </div>
               <div className="admin-user-actions">
@@ -282,7 +375,6 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                       name: item.name,
                       limit: item.monthlyTokenLimit === null ? "" : String(item.monthlyTokenLimit),
                       providers: item.allowedProviders,
-                      byok: item.byokAllowed,
                       external: item.externalSubscriptionId ?? ""
                     })
                   }
@@ -320,10 +412,6 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
               </label>
             ))}
           </fieldset>
-          <label className="chat-settings-channel-option">
-            <input type="checkbox" checked={plan.byok} onChange={(event) => setPlan({ ...plan, byok: event.target.checked })} />
-            Własny klucz API konta (BYOK) dozwolony
-          </label>
           <label>
             Identyfikator subskrypcji zewnętrznej (opcjonalnie, bez płatności)
             <input value={plan.external} maxLength={200} onChange={(event) => setPlan({ ...plan, external: event.target.value })} />
@@ -337,7 +425,6 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                   name: plan.name.trim(),
                   monthlyTokenLimit: plan.limit.trim() ? Number(plan.limit.trim()) : null,
                   allowedProviders: plan.providers,
-                  byokAllowed: plan.byok,
                   externalSubscriptionId: plan.external.trim() || null
                 });
                 setPlan(EMPTY_PLAN);

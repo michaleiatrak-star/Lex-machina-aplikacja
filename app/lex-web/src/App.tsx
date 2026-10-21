@@ -26,7 +26,7 @@ export default function App({
   onLogout
 }: {
   user: AuthenticatedUser;
-  // Tryb serwerowy: bez funkcji lokalnych (CLI kont, modele lokalne), z planami i BYOK.
+  // Tryb serwerowy: bez funkcji lokalnych (CLI kont, modele lokalne), z planami i globalnymi kluczami API.
   serverMode?: boolean;
   onServerModeChanged?: (enabled: boolean) => void;
   onAuthUpdated: (

@@ -4431,7 +4431,7 @@ export function anonymizedDocx(
   });
 }
 
-// ---- Tryb serwerowy (konta rejestrowane e-mailem, plany, BYOK, podgląd tur) ----
+// ---- Tryb serwerowy (konta rejestrowane e-mailem, plany, globalne klucze API i limit, podgląd tur) ----
 
 export type ServerModeStatus = {
   serverMode: boolean;
@@ -4445,11 +4445,17 @@ export type ServerSettings = {
   defaultPlanId: string | null;
   smtp: { host: string; port: number; secure: boolean; user: string; from: string; passwordSet: boolean } | null;
   mailConfigured: boolean;
+  // Suma tokenów wszystkich kont w miesiącu (UTC); null: bez limitu globalnego.
+  globalMonthlyTokenLimit: number | null;
+  globalUsage: MonthlyTokenUsage;
+  month: string;
 };
 
 export type ServerSettingsInput = {
   publicBaseUrl?: string;
   defaultPlanId?: string | null;
+  // 0 albo null: bez limitu globalnego.
+  globalMonthlyTokenLimit?: number | null;
   smtp?: { host: string; port: number; secure: boolean; user: string; from: string; password?: string; clearPassword?: boolean };
 };
 
@@ -4458,7 +4464,6 @@ export type ServerPlan = {
   name: string;
   monthlyTokenLimit: number | null;
   allowedProviders: ProviderId[];
-  byokAllowed: boolean;
   externalSubscriptionId: string | null;
 };
 
@@ -4497,10 +4502,16 @@ export type LiveTurn = {
 };
 
 export type MyServerAccount = {
-  plan: { name: string; monthlyTokenLimit: number | null; allowedProviders: ProviderId[]; byokAllowed: boolean } | null;
+  plan: { name: string; monthlyTokenLimit: number | null } | null;
   usage: MonthlyTokenUsage;
   month: string;
-  byok: Array<{ provider: ProviderId; updatedAt: string }>;
+};
+
+// Tylko informacja, czy klucz jest ustawiony; sam klucz nie wraca z serwera.
+export type ServerProviderKey = {
+  provider: ProviderId;
+  configured: boolean;
+  updatedAt: string | null;
 };
 
 // Odpowiedź bez treści (204) albo błąd w formacie ApiFailure.
@@ -4599,10 +4610,14 @@ export function getMyServerAccount(): Promise<MyServerAccount> {
   return json<MyServerAccount>("/api/server-mode/me");
 }
 
-export function setMyApiKey(provider: ProviderId, apiKey: string): Promise<void> {
-  return send(`/api/server-mode/me/keys/${provider}`, { method: "PUT", body: JSON.stringify({ apiKey }) });
+export async function listServerProviderKeys(): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>("/api/server-mode/provider-keys")).providerKeys;
 }
 
-export function clearMyApiKey(provider: ProviderId): Promise<void> {
-  return send(`/api/server-mode/me/keys/${provider}`, { method: "DELETE" });
+export async function setServerProviderKey(provider: ProviderId, apiKey: string): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>(`/api/server-mode/provider-keys/${provider}`, { method: "PUT", body: JSON.stringify({ apiKey }) })).providerKeys;
+}
+
+export async function clearServerProviderKey(provider: ProviderId): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>(`/api/server-mode/provider-keys/${provider}`, { method: "DELETE" })).providerKeys;
 }
