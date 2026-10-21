@@ -1833,6 +1833,11 @@ async function ensureAccountExecutable(
   provider: ProviderId,
   { pinnedFirst = false }: { pinnedFirst?: boolean } = {}
 ): Promise<string | null> {
+  // LEX_CODEX_CLI names the client to run: used as is, never replaced by a download.
+  const codexOverride = process.env.LEX_CODEX_CLI?.trim();
+  if (provider === "openai" && codexOverride && existsSync(codexOverride)) {
+    return codexOverride;
+  }
   if (
     provider === "openai" ||
     provider === "anthropic" ||
