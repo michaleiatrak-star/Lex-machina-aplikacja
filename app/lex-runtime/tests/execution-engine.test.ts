@@ -670,7 +670,7 @@ describe("local quick lane: provisions only from ELI texts", () => {
 describe("placeholder key position", () => {
   const key = "# LEGENDA: JAK ODPOWIADAĆ Z SYMBOLAMI ZASTĘPCZYMI (HARD GATE)\n# KLUCZ SYMBOLI ZASTĘPCZYCH (HARD GATE)\n- [PII:PERSON:0001]: osoba";
 
-  it("opens the system prompt of a legal turn", async () => {
+  it("opens the turn's part of a legal turn, right after the cached skill prefix", async () => {
     const { engine: lex, adapter } = capturingEngine(fixture());
     await lex.executePolishLegalQuery({
       query: "Czy [PII:PERSON:0001] musi zapłacić fakturę?",
@@ -679,6 +679,22 @@ describe("placeholder key position", () => {
       route: { jurisdiction: "PL", primarySkill: DR02, mode: "LAIK" },
       placeholderKey: key
     });
+    const call = adapter.calls[0]!;
+    const at = call.systemPromptCachePrefix ?? 0;
+    expect(call.systemPrompt.slice(at).startsWith("# LEGENDA: JAK ODPOWIADAĆ")).toBe(true);
+    expect(call.systemPrompt.slice(0, at)).not.toContain("[PII:");
+  });
+
+  it("opens the whole prompt when nothing is cached (local model)", async () => {
+    const { engine: lex, adapter } = capturingEngine(fixture());
+    await lex.executePolishLegalQuery({
+      query: "Czy [PII:PERSON:0001] musi zapłacić fakturę?",
+      provider: "openai",
+      model: "local/bielik-11b-v3-q4km",
+      route: { jurisdiction: "PL", primarySkill: DR02, mode: "LAIK" },
+      placeholderKey: key
+    });
+    expect(adapter.calls[0]!.systemPromptCachePrefix).toBeUndefined();
     expect(adapter.calls[0]!.systemPrompt.startsWith("# LEGENDA: JAK ODPOWIADAĆ")).toBe(true);
   });
 

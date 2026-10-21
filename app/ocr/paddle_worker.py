@@ -842,7 +842,10 @@ def predict_image(
     if original is not None:
         evidence_image = original[:, :, :3]
         for line in read_stamps(ocr, stamp_regions or []):
-            texts.append(f"{STAMP_MARK} {line['text']}")
+            # A stamp's line goes to the review list (the runtime's ocr-review), not into the
+            # page text; LEX_OCR_STAMP_TEXT=text keeps it in the text as before.
+            if os.environ.get("LEX_OCR_STAMP_TEXT") == "text":
+                texts.append(f"{STAMP_MARK} {line['text']}")
             if line["score"] is not None:
                 scores.append(line["score"])
             lines.append(line)

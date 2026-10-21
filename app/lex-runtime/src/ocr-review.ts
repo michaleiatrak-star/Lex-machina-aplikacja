@@ -1,4 +1,4 @@
-import { ocrLineText, type IngestedPage, type OcrReviewLine } from "./document-ingestion.js";
+import { ocrLineText, stampLinesInText, type IngestedPage, type OcrReviewLine } from "./document-ingestion.js";
 
 /**
  * Lines of an OCR page a person should check against the scan: handwriting, stamps and
@@ -67,6 +67,10 @@ export async function markOcrReview(page: IngestedPage, knownWords: KnownWords):
   const review = await ocrReviewLines(page, knownWords);
   if (!review.length) return page;
   const flagged = new Set(review.filter((item) => item.reason !== "STAMP").map((item) => item.line));
-  const text = page.lines!.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line))).join("\n");
+  // A stamp's line is only on the review list (ocrPageText), unless kept in the text.
+  const stamps = stampLinesInText();
+  const text = page.lines!
+    .flatMap((line, index) => (line.stamp && !stamps ? [] : [flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line)]))
+    .join("\n");
   return { ...page, text, review };
 }

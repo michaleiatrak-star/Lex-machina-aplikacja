@@ -111,6 +111,35 @@
   border-radius: 12px;
 }
 
+/* The anomaly journal folds like a section: counts in the summary, content on demand. */
+.maintenance-body details.anomaly-journal {
+  padding: 12px;
+  border: 1px solid rgba(120, 120, 120, 0.2);
+  border-radius: 12px;
+}
+
+.maintenance-body details.anomaly-journal[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.maintenance-body details.anomaly-journal > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.maintenance-body details.anomaly-journal > summary::-webkit-details-marker {
+  display: none;
+}
+
+.maintenance-body details.anomaly-journal > summary strong::before {
+  content: "▸ ";
+}
+
+.maintenance-body details.anomaly-journal[open] > summary strong::before {
+  content: "▾ ";
+}
+
 .maintenance-heading {
   display: flex;
   align-items: flex-start;

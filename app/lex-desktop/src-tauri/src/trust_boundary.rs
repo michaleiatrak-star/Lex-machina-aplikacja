@@ -39,7 +39,7 @@ const DOCUMENT_PROCESSING_PROXY_READ_TIMEOUT_SECS: u64 = 1_200;
 // Every non-safelisted header the web UI sends must be listed here, otherwise
 // the webview preflight fails and fetch() rejects with "Failed to fetch".
 const CORS_ALLOWED_REQUEST_HEADERS: &str =
-    "Accept, Content-Type, Cache-Control, X-Lex-Filename, X-Lex-Case-Id, X-Lex-Execution-Id, X-Lex-Progress, X-Lex-Processing";
+    "Accept, Content-Type, Cache-Control, X-Lex-Filename, X-Lex-Case-Id, X-Lex-Execution-Id, X-Lex-Progress, X-Lex-Processing, X-Lex-Keep-Alive";
 const MANAGED_LOGIN: &str = "local-admin";
 const MANAGED_KEYRING_SERVICE: &str = "LexMachina/Desktop";
 const PROVIDER_KEYRING_SERVICE: &str = "LexMachina/ProviderCredential";
@@ -1682,7 +1682,8 @@ fn is_document_processing_route(path: &str) -> bool {
     }
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     match segments.as_slice() {
-        ["api", "documents", document_id, "finalize"] => !document_id.is_empty(),
+        // detect: the local text model (Bielik) checks personal data page by page.
+        ["api", "documents", document_id, "finalize" | "detect"] => !document_id.is_empty(),
         ["api", "cases", case_id, "files", upload_id, "process"] => {
             !case_id.is_empty() && !upload_id.is_empty()
         }
@@ -2458,6 +2459,7 @@ mod tests {
             "/api/documents/review",
             "/api/documents/ingest",
             "/api/documents/doc_abc/finalize",
+            "/api/documents/doc_abc/detect",
             "/api/cases/case_1/files/up_1/process",
             "/api/cases/case_1/files/up_1/members/f_1/process",
         ] {

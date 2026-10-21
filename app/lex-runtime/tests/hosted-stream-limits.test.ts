@@ -97,12 +97,12 @@ describe("usage meter", () => {
   it("adds up the tokens of every call in a metered turn and counts calls without tokens", async () => {
     const { meterUsage, reportUsage } = await import("../src/providers/usage-meter.js");
     const { usage } = await meterUsage(async () => {
-      reportUsage({ inputTokens: 100, outputTokens: 20 });
+      reportUsage({ inputTokens: 100, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 5 });
       await Promise.resolve();
       reportUsage({ inputTokens: 50, outputTokens: 5 });
       reportUsage(null);
     });
-    expect(usage).toEqual({ inputTokens: 150, outputTokens: 25, modelCalls: 3, unmeteredCalls: 1 });
+    expect(usage).toEqual({ inputTokens: 150, outputTokens: 25, cacheReadTokens: 30, cacheWriteTokens: 5, modelCalls: 3, unmeteredCalls: 1 });
     reportUsage({ inputTokens: 1, outputTokens: 1 });
   });
 });

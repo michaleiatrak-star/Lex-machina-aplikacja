@@ -138,6 +138,24 @@ ograniczenie zmian warunków przyłączenia (art. 7 ust. 8i3) — zakres czasowy
 
 ---
 
+## ⏳ NOWELIZACJE `Dz.U. 2026 poz. 1347` (OZE) i `poz. 1348` (PE) — ogł. 16.10.2026
+
+✅ [VER] RZĄD 1 2026-10-20 — 1347: metadane ELI i text.pdf (art. 1–6, 41); 1348: tylko metadane ELI.
+
+| Akt | Co zmienia 1347 | Od kiedy (art. 41) |
+|---|---|---|
+| ustawa o OZE (t.j. `2026/68`) | art. 1 — m.in. biometan i aukcje biometanu, spółdzielnie energetyczne (art. 13–14 przejściowe) | 1.12.2026; pkt 48 lit. c–e: 17.10.2026; pkt 19, pkt 57 lit. e: 19.10.2026; pkt 3: 17.01.2027; aukcje biometanu: 17.02.2027 |
+| Prawo energetyczne (t.j. `2026/43`) | art. 4: art. 3 pkt 3a (paliwa gazowe obejmują biometan, biogaz, biogaz rolniczy), art. 7 (ust. 1e–1ef: odmowa przyłączenia instalacji biometanu, lokalizacja alternatywna, deklaracja zawarcia umowy; ust. 2a pkt 3–4: termin pierwszego dostarczenia biometanu do 60 mies.; ust. 8d⁵, 8d¹²: mikroinstalacja z magazynem — moc magazynu do 2,2× mocy mikroinstalacji nie wlicza się), art. 9g, art. 16 | 1.12.2026 |
+| Prawo energetyczne | art. 4 pkt 3, 4, 7, 8: art. 7a ust. 5–7, art. 7a¹, art. 23 ust. 2 pkt 18b lit. m, art. 56 (gazociągi bezpośrednie) | 17.10.2027 |
+| kogeneracja (t.j. `2025/602`) | art. 5: uchylenia w art. 2 pkt 40, art. 11 pkt 2 lit. b, art. 14 ust. 2 pkt 1 lit. c, art. 94 ust. 1 pkt 2 lit. b | 1.12.2026 |
+| Prawo budowlane | art. 3: art. 9a — art. 9 nie stosuje się do gazociągu bezpośredniego biogazu, biogazu rolniczego, biometanu | 17.10.2027 |
+
+Przepisy przejściowe 1347: art. 12–40 (m.in. wnioski o przyłączenie złożone przed wejściem w życie — art. 31–34; art. 9g PE — art. 35). `1348` (ustawa z 18.09.2026 o zmianie PE; w mocy 17.10.2026, art. 1 pkt 1, 4–6, 12, pkt 15 lit. a tiret pierwsze, lit. c i d oraz art. 7–9 od 31.10.2026) ✅ [VER: ELI DU/2026/1348 text.pdf, RZĄD 1, 2026-10-20]:
+- PE: art. 3 pkt 97–100 (nowe definicje), 4k, 7 ust. 3df, 9g ust. 4 pkt 5b–5c, 9j i nowe art. 9ja–9je (dane grafikowe), 11, 11t, 11y, 11zc, nowy 11zha, 28, 32d, 43c („organom administracji miar”), 56 (kary);
+- zmiana sprzedawcy energii (art. 15 ustawy): od 19.10.2026 do rozpoczęcia przez OSD zadań z rozdz. 2d PE (centralny system informacji rynku energii), najpóźniej do 19.04.2028 — OSP i OSD umożliwiają zmianę sprzedawcy najpóźniej w 21 dni od poinformowania o nowej umowie; art. 14 — postępowanie OSD, gdy dla punktu poboru nie jest realizowana umowa sprzedaży lub kompleksowa;
+- kary URE: art. 11 ustawy (niewszczynanie i umorzenie postępowań z art. 56 ust. 1 pkt 30d w związku z art. 11t ust. 3); art. 3 ustawy — nowe art. 20e–20f ustawy 2021/1093 (odstąpienie od kar dla OSD, który zawarł umowę przed 19.10.2026);
+- przy sprawie: odczytaj brzmienie PE w ELI na datę zdarzenia (nowelizacje po t.j. 2026/43: 516, 607, 900, 1347, 1348).
+
 ## PROSUMENT / PV
 
 Sprawdzaj: data zgłoszenia, system rozliczeń, moc instalacji, umowa kompleksowa, reklamacje faktur, błędy licznika, niedotrzymanie terminów.

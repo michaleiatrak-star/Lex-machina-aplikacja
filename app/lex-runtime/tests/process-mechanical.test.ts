@@ -65,8 +65,10 @@ describe("mechanical mode: pisma-procesowe-v3, one checkpoint per turn", () => {
       const prompt = call.systemPrompt;
       const tail = prompt.slice(call.systemPromptCachePrefix!);
       expect(call.promptCacheTtl).toBe("1h");
-      expect(tail).toMatch(/^# (?:MODUŁY ETAPU|CHECKPOINT CP-)/u);
-      expect(tail).toContain("# ACTIVE PROCESS PLEADING STATE");
+      // The turn's part: placeholder legend, recognitions, then the checkpoint, closed by its state.
+      expect(tail).toMatch(/# CHECKPOINT CP-/u);
+      expect(tail.lastIndexOf("# ACTIVE PROCESS PLEADING STATE")).toBeGreaterThan(tail.lastIndexOf("# CHECKPOINT CP-"));
+      expect(prompt.slice(0, call.systemPromptCachePrefix!)).not.toContain("[PII:");
       expect(prompt.slice(0, call.systemPromptCachePrefix!)).not.toMatch(/# CHECKPOINT CP-|# MODUŁY ETAPU|ACTIVE PROCESS PLEADING STATE/u);
     }
     expect(a.systemPrompt.slice(0, a.systemPromptCachePrefix!)).toBe(b.systemPrompt.slice(0, b.systemPromptCachePrefix!));

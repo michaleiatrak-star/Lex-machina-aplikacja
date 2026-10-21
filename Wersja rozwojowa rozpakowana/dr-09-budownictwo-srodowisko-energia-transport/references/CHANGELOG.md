@@ -1,5 +1,11 @@
 # CHANGELOG — dr-09-budownictwo-srodowisko-energia-transport
 
+- 3.55 (2026-10-20, AUDYT-2026-10-20g): SKILL.md: znacznik `lex:wykonuje-aplikacja: REJESTR-MODULOW` nad rejestrem modułów — w trybie mechanicznym aplikacja podaje modelowi indeks nazw (moduły aktów dobiera z MAPA-AKTOW), w AUTO rejestr w całości
+- 3.54 (2026-10-20, AUDYT-2026-10-20d): NOWE mod-ustawa-Krajowy-Zasob-Nieruchomosci (t.j. 1299) i mod-ustawa-obszary-morskie-administracja-morska (t.j. 1305); DU/2026/1358 odczytana — wyłącznie kąpieliska, treść modułów bez zmian; MAPA-AKTOW, SKILL.md (38 modułów)
+- 3.53 (2026-10-20, AUDYT-2026-10-20c): DU/2026/1348 odczytana (zmiana sprzedawcy w 21 dni do 19.04.2028, art. 9ja–9je PE, kary URE) w mod-PrEnergetyczne-URE-OZE i MAPA-AKTOW; DU/2026/1358 (zmiana Prawa wodnego po t.j. 1335, w mocy 3.11.2026) w MAPA-AKTOW i mod-PrWodne — tekst w ELI nieopublikowany.
+
+- 3.52 (2026-10-20, AUDYT-2026-10-20b): DU/2026/1347 (nowelizacja OZE, ogł. 16.10.2026) i DU/2026/1348 (PE, w mocy 17.10.2026) w MAPA-AKTOW (wiersze PE/URE/OZE i Prawo budowlane — art. 9a od 17.10.2027) oraz w mod-PrEnergetyczne-URE-OZE (tabela zmian i dat z art. 41); mod-POS i mod-POS-szczegoly: tekst t.j. KK 1342 opublikowany, art. 181–188a bez zmian.
+
 - 3.51 (2026-10-19a, AUDYT-2026-10-19a): mod-POS, mod-POS-szczegoly: KK — t.j. Dz.U. 2026 poz. 1342 (najnowszy; 0 zmian po t.j.; do publikacji tekstu 2025/383 + 4 nowelizacje).
 - 3.50 (2026-10-17a, AUDYT-2026-10-17a): KPW — nowy t.j. Dz.U. 2026 poz. 1336 (obwieszczenie z 2.10.2026, ogłoszone 15.10.2026; stan prawny na 27.09.2026; obejmuje Dz.U. 2025 poz. 1178, 1661, 1814, 1818, 1872 i 2026 poz. 473; brak zmian po t.j. — ELI 2026-10-17): mod-ustawa-transport-drogowy — znacznik VER art. 96 § 1a pkt 2 i § 1ad KPW na nowym t.j., kwoty bez zmian.
 - 3.49 (2026-10-15c, AUDYT-2026-10-15c): Nowe t.j.: transport kolejowy Dz.U. 2026 poz. 1324 (obejmuje 2026/41, 815, 912), Prawo wodne Dz.U. 2026 poz. 1335 (obejmuje 2025/1535, 2026/445, 605, 815, 1033, 1156 — 1156 od 1.01.2027), ustawa o odpadach Dz.U. 2026 poz. 1328 (12 ustaw zmieniających, w tym 2026/875 od 1.01.2027); brak zmian po t.j. — MAPA-AKTOW, mod-ustawa-transport, mod-PrWodne, mod-POS, mod-UE-PPWR. ELI 2026-10-15.

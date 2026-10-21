@@ -74,13 +74,14 @@ Mapa runtime zawiera wyłącznie bieżące przypisanie **akt / zakres → moduł
 | Pomoc publiczna na ratowanie / restrukturyzację | Dz.U. 2026 poz. 113 t.j. ze zm. | `mod-ustawa-pomoc-ratowanie-restrukturyzacja-przedsiebiorcow` | ✅ aktywny |
 | PrUp i PrRestr — zmiany po t.j. (jeszcze nie w życiu) | Dz.U. 2026 poz. 1206 (od 11.01.2027: PrUp art. 452 ust. 1, 456 ust. 1; PrRestr art. 4 ust. 2 pkt 4); Dz.U. 2026 poz. 176 (od 18.02.2027: PrRestr art. 156 ust. 5 pkt 4 uchylony) | `mod-PrUpad-zrodla-i-wersje`, `mod-PrRestr-zrodla-i-wersje` | ⏳ temporal gate: przed datą wejścia stosuj brzmienie z t.j.; ELI 2026-10-07 |
 | Doradca restrukturyzacyjny | Dz.U. 2022 poz. 1007 t.j. ze zm. | `mod-ustawa-doradca-restrukturyzacyjny-zawod` | ✅ aktywny |
+| Ustawa o zasadach uczestnictwa przedsiębiorców zagranicznych i innych osób zagranicznych w obrocie gospodarczym na terytorium RP (oddziały, przedstawicielstwa) | Dz.U. 2026 poz. 1313 t.j. ✅ [VER: ELI DU/2026/1313 text.pdf, RZĄD 1, 2026-10-20] | `mod-ustawa-przedsiebiorcy-zagraniczni-oddzialy-przedstawicielstwa` | ✅ NOWY 2026-10-20 |
 
 ### Konsument, nieruchomości, spółdzielczość i instrumenty
 
 | Akt / zakres | Bieżąca podstawa | Moduł / routing | Status runtime |
 |---|---|---|---|
 | Prawa konsumenta | Dz.U. 2026 poz. 1244 t.j. ze zm. | `mod-ustawa-prawa-konsumenta` | 🟢 B+/COV |
-| UOKiK | Dz.U. 2025 poz. 1714 t.j. ze zm. | `mod-ustawa-UOKIK-antymonopolowe` | 🟢 B+/COV |
+| UOKiK | Dz.U. 2025 poz. 1714 t.j. ze zm. (m.in. 2026/1296 art. 6 — Prezes UOKiK organem DSA, art. 29 ust. 2b, od 6.11.2026) | `mod-ustawa-UOKIK-antymonopolowe` | 🟢 B+/COV |
 | Kredyt konsumencki / SKD | Dz.U. 2025 poz. 1362 t.j. ze zm. | `mod-ustawa-kredyt-konsumencki-SKD` | ✅ aktywny; fresh gate |
 | Parabanki / lombardy / lichwa | KC/KK + ustawa lombardowa Dz.U. 2024 poz. 1111 t.j. ze zm. + akty szczególne | `mod-parabanki-chwilowki-lombardy-lichwa.md` | ✅ aktywny; fresh gate |
 | Reklama wobec nieletnich | UPNPR Dz.U. 2023 poz. 845 t.j. + ustawa o radiofonii i telewizji Dz.U. 2022 poz. 1722 t.j. ze zm. | `mod-reklama-wobec-nieletnich` | ✅ aktywny; fresh gate |

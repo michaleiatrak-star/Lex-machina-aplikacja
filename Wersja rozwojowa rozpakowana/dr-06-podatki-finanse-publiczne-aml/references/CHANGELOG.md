@@ -1,5 +1,12 @@
 # CHANGELOG — dr-06-podatki-finanse-publiczne-aml
 
+- 3.99.6 (2026-10-20, AUDYT-2026-10-20g): SKILL.md: znacznik `lex:wykonuje-aplikacja: REJESTR-MODULOW` nad rejestrem modułów — w trybie mechanicznym aplikacja podaje modelowi indeks nazw (moduły aktów dobiera z MAPA-AKTOW), w AUTO rejestr w całości
+- 3.99.5 (2026-10-20, AUDYT-2026-10-20f): MAPA-AKTOW: pełne nazwy aktów w etykietach — „Ustawa o podatku od czynności cywilnoprawnych (PCC)”, u.p.o.l. — opłata miejscowa / uzdrowiskowa / targowa; resolver aplikacji rozpoznaje akt z pytania (wcześniej brak modułu dla „podatku od czynności cywilnoprawnych” i „opłaty miejscowej”)
+- 3.99.4 (2026-10-20, AUDYT-2026-10-20d): KOREKTA part-01 VAT: rozp. 2023/2670 — 13 nowelizacji (było 9; brakowało 2026/418, 771, 1095, 1288), § 11b i § 11c (8% paliwa 3.10–31.12.2026); link ustawy o VAT na t.j. 2026/1263. DU/2026/1354 odczytana: PCC art. 9 pkt 6 — próg 3000 zł od 3.11.2026 (mod-PCC), nowa sekcja 6a opłata miejscowa/uzdrowiskowa od 1.01.2027 (mod-podatek-nieruchomosci-i-lokalne), PIT art. 14 ust. 2 pkt 10 lit. a; MAPA-AKTOW
+- 3.99.3 (2026-10-20, AUDYT-2026-10-20c): DU/2026/1287 (podatek od nadzwyczajnych zysków ze zbycia paliw ciekłych) — część F mod-podatki-sektorowe, wiersze PIT (art. 52zu) i CIT (art. 38zb); DU/2026/1354 (u.p.o.l., PIT, PCC od 1.01.2027 / 3.11.2026) z metadanych — tekst w ELI nieopublikowany.
+
+- 3.99.2 (2026-10-20, AUDYT-2026-10-20b): MAPA-AKTOW: PIT — DU/2026/1347 art. 2 (art. 14 ust. 2 pkt 14 lit. b uchylona) od 1.12.2026; DU/2026/1354 od 1.01.2027 odnotowana, treść nie badana.
+
 - 3.99.1 (2026-10-15c, AUDYT-2026-10-15c): ⛔ KOREKTA: zmiana VAT z Dz.U. 2026 poz. 507 (art. 6 — art. 96 ust. 3e–3f) wchodzi w życie 1.11.2028 (art. 31 pkt 4), nie 14.10.2026 — MAPA-AKTOW, part-01 VAT, mod-VAT-kursy-walut, mod-VAT-platnicy, mod-VAT-import, mod-VAT-rejestracja (metryka t.j. 2026/1263, nie „po t.j.”), BAZA-AKTOW-OKOLOPODATKOWYCH. ELI 2026-10-15.
 
 - 3.99 (2026-10-09g, AUDYT-2026-10-09g): VAT: nowa nowelizacja po t.j. 2026/1263 — Dz.U. 2026 poz. 1270 (od 1.12.2026/1.01.2027, dalsze etapy do 1.07.2028) w MAPA-AKTOW i 10 modułach VAT. ELI 2026-10-09.

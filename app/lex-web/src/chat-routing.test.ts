@@ -75,6 +75,27 @@ describe("chat routing", () => {
     );
   });
 
+  it.each([
+    ["Zbadaj zmianę treści w artykule 286 kodeksu karnego.", "dr-03-prawo-karne-wykroczenia-egzekucja"],
+    ["Przeanalizuj art. 86c Kodeksu wykroczeń.", "dr-03-prawo-karne-wykroczenia-egzekucja"],
+    ["Wyjaśnij przesłanki z art. 415 KC.", "dr-02-prawo-cywilne-rodzinne-gospodarcze"],
+    ["Analiza art. 299 KSH.", "dr-02-prawo-cywilne-rodzinne-gospodarcze"],
+    ["Art. 52 § 1 Kodeksu pracy — rozwiązanie umowy.", "dr-04-prawo-pracy-zus-swiadczenia"],
+    ["Terminy z art. 35 KPA.", "dr-05-prawo-administracyjne-sadowoadministracyjne"],
+    ["Kto płaci opłatę miejscową?", "dr-06-podatki-finanse-publiczne-aml"],
+    ["Art. 9 pkt 6 ustawy o podatku od czynności cywilnoprawnych.", "dr-06-podatki-finanse-publiczne-aml"]
+  ])("a code or act named in the question picks its domain (inflected too): %s", (query, expected) => {
+    const all = [
+      "dr-01-ustroj-konstytucyjny-i-zrodla-prawa",
+      "dr-02-prawo-cywilne-rodzinne-gospodarcze",
+      "dr-03-prawo-karne-wykroczenia-egzekucja",
+      "dr-04-prawo-pracy-zus-swiadczenia",
+      "dr-05-prawo-administracyjne-sadowoadministracyjne",
+      "dr-06-podatki-finanse-publiczne-aml"
+    ];
+    expect(choosePrimaryRoute(query, all, all.map((name) => ({ name, description: name })), [])).toBe(expected);
+  });
+
   it("lets a manually selected DR route take precedence", () => {
     expect(
       choosePrimaryRoute(

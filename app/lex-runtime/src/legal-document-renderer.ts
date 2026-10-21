@@ -14,10 +14,17 @@ export type LegalDocumentFormat =
   | "docx"
   | "odt";
 
+// Whether the firm's template (its letterhead: headers, footers with their images, page
+// setup) went into the file; a template that cannot be copied safely is named, not applied.
+export type LetterheadReport =
+  | { applied: true; headers: number; footers: number; images: number }
+  | { applied: false; reason: string };
+
 export type LegalDocumentPackage = {
   data: Buffer;
   text: string;
   replaced?: number;
+  template?: LetterheadReport;
 };
 
 export type LegalDocumentRendererOptions = {
@@ -38,6 +45,16 @@ function defaultWorkerPath():
     here,
     "../../storage/legal_document_worker.py"
   );
+}
+
+function letterheadReport(value: unknown): LetterheadReport | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  if (raw.applied === true) {
+    const count = (key: string) => (typeof raw[key] === "number" ? (raw[key] as number) : 0);
+    return { applied: true, headers: count("headers"), footers: count("footers"), images: count("images") };
+  }
+  return { applied: false, reason: typeof raw.reason === "string" ? raw.reason.slice(0, 120) : "TEMPLATE_NOT_APPLIED" };
 }
 
 export class LocalLegalDocumentRenderer {
@@ -71,7 +88,9 @@ export class LocalLegalDocumentRenderer {
     format:
       LegalDocumentFormat,
     ast:
-      LegalDocumentAst
+      LegalDocumentAst,
+    // The firm's template file (DOCX): its letterhead frames the generated body.
+    template?: Uint8Array
   ): Promise<
     LegalDocumentPackage
   > {
@@ -79,7 +98,8 @@ export class LocalLegalDocumentRenderer {
       operation:
         "render",
       format,
-      ast
+      ast,
+      ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {})
     });
   }
 
@@ -240,6 +260,7 @@ export class LocalLegalDocumentRenderer {
         "LEGAL_DOCUMENT_WORKER_SIZE_MISMATCH"
       );
     }
+    const template = letterheadReport(result.template);
     return {
       data,
       text:
@@ -250,7 +271,8 @@ export class LocalLegalDocumentRenderer {
             replaced:
               result.replaced
           }
-        : {})
+        : {}),
+      ...(template ? { template } : {})
     };
   }
 

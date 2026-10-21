@@ -25,7 +25,6 @@ import { CaseLawLibrarySection } from "./CaseLawLibrarySection.js";
 import { DomainFallbackSection } from "./DomainFallbackSection.js";
 import { CoreLawUpdatesSection } from "./CoreLawUpdatesSection.js";
 import { AnomalyJournalSection } from "./AnomalyJournalSection.js";
-import { QualityBenchmarkSection } from "./QualityBenchmarkSection.js";
 import "./maintenance.css";
 import { InfoTip } from "./InfoTip";
 
@@ -601,8 +600,6 @@ export function MaintenancePanel({
         <DomainFallbackSection />
 
         <AnomalyJournalSection user={user} />
-
-        <QualityBenchmarkSection user={user} />
 
         <button
           type="button"

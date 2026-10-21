@@ -1,5 +1,11 @@
 # CHANGELOG — prawo-polskie-v2
 
+- 6.70 (2026-10-20, AUDYT-2026-10-20e): ROUTING-MAP: KOREKTA dat 1872 (bez 03.06.2026) i zakres zmian (KPK 295 § 1a, KPW, u.w.r.n.); 1818 — pełny zakres i data 2.01.2026
+- 6.69 (2026-10-20, AUDYT-2026-10-20d): ROUTING-MAP: wiersze nowych modułów (KZN 1299, SIOZ 1304, obszary morskie 1305, przedsiębiorcy zagraniczni 1313, umowa PL–Japonia 1326), rozp. VAT 2023/2670 (13 nowelizacji, ostatnia 1288); 1354 odczytana (PCC 3000 zł od 3.11.2026, PIT, u.p.o.l.); 1358 odczytana (kąpieliska)
+- 6.68 (2026-10-20, AUDYT-2026-10-20c): ROUTING-MAP: DU/2026/1296 (u.ś.u.d.e. — KOREKTA: nowelizacja z 18.12.2025 nie weszła w życie, DSA wdraża 1296; PrAut, PWP, UOKiK), 1287 (podatki sektorowe, PIT, CIT), 1348 (MONITORING — treść), 1354 (u.p.o.l.), 1358 (Prawo wodne po t.j.).
+
+- 6.67 (2026-10-20, AUDYT-2026-10-20b): ROUTING-MAP: KK — tekst t.j. 1342 opublikowany w ELI; DU/2026/1347 w wierszach PE/URE/OZE, Prawo budowlane, Pzp, PIT; MONITORING: 1347 (etapy do 17.10.2027) i 1348.
+
 - 6.66 (2026-10-19a, AUDYT-2026-10-19a): ROUTING-MAP: KK — t.j. Dz.U. 2026 poz. 1342 (wiersze DR-03, tekst w ELI nieopublikowany — do publikacji 2025/383 + 4 nowelizacje); ⛔ KOREKTA: wiersz KK podawał „zm. 2026.638” — to nowelizacja KPK; Prawo o adwokaturze 1290: ⚡ WCHODZI → W MOCY od 17.10.2026; nowe wiersze ustawy o prawnikach zagranicznych (2020/823 + 1290 art. 2).
 - 6.65 (2026-10-17c, AUDYT-2026-10-17c): ROUTING-MAP: rozporządzenie MS w sprawie siedzib i obszarów właściwości sądów powszechnych (t.j. Dz.U. 2026 poz. 492) → DR-12 mod-wlasciwosc-miejscowa-sadow-powszechnych.
 - 6.64 (2026-10-17b, AUDYT-2026-10-17b): ROUTING-MAP: ZZ — ⏳ zm. 2026/1340 od 30.10.2026; nowy wiersz ustawy o informowaniu pracowników (2006/550 + 2026/1340); nowy wiersz ustawy o ochronie i pomocy dla pokrzywdzonego i świadka (t.j. 2026/1306). ELI 2026-10-17.

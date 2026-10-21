@@ -1,5 +1,5 @@
 import type { IngestedPage, OcrCorrection } from "./document-ingestion.js";
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 import { fixOcrAmounts } from "./ocr-amounts.js";
 
 /**
@@ -71,7 +71,7 @@ export function normalizeOcrPage(page: IngestedPage): IngestedPage {
   return {
     ...page,
     lines,
-    text: lines.map(ocrLineText).join("\n"),
+    text: ocrPageText(lines),
     corrections: [...(page.corrections ?? []), ...corrections]
   };
 }

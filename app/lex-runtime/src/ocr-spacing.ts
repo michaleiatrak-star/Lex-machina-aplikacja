@@ -1,5 +1,5 @@
 import type { IngestedPage, OcrCorrection } from "./document-ingestion.js";
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 
 /**
  * Spaces PaddleOCR drops (measured on two real 152 dpi scans: "ul.Pukowca15", "art.270",
@@ -195,7 +195,7 @@ export async function restoreOcrSpacing(page: IngestedPage, knownWords: KnownWor
   return {
     ...page,
     lines,
-    text: lines.map(ocrLineText).join("\n"),
+    text: ocrPageText(lines),
     corrections: [...(page.corrections ?? []), ...fixes]
   };
 }

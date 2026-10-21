@@ -73,6 +73,9 @@ export type ProviderStreamParams = {
   // parts go as separate system blocks with a cache breakpoint after the first, so the
   // next checkpoint reads it from the cache although its own part differs.
   systemPromptCachePrefix?: number;
+  // Same for every request sharing that prefix (a hash of it): OpenAI routes such requests
+  // to the same cache (prompt_cache_key), xAI by its conversation header (x-grok-conv-id).
+  promptCacheKey?: string;
   tools?: NormalizedToolSchema[];
   maxIterations?: number;
   callbacks?: StreamCallbacks;
@@ -108,7 +111,7 @@ export type NativeCorpusAccess = {
 export type ProviderStreamResult = {
   fullText: string;
   // Tokens of the whole call, when the adapter can tell (API keys).
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
 };
 
 export interface ProviderAdapter {

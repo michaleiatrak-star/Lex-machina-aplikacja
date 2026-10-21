@@ -577,6 +577,8 @@ export class LocalPrivateDocumentService
 implements DocumentService {
   private readonly documents =
     new Map<string, PrivateDocumentRecord>();
+  private readonly detecting =
+    new Map<string, Promise<PublicDocumentReview>>();
 
   constructor(
     private readonly pdfIngestor: CompleteDocumentIngestor,
@@ -841,7 +843,15 @@ implements DocumentService {
       record.localAi = true;
       record.aiFindings = new Map<string, PiiSpan[]>();
     }
-    return this.detectSuggestions(documentId, record.mediaType, record.source, security);
+    // A retry after a dropped connection joins the check still running for this document
+    // (the local model keeps working after the client is gone) instead of starting a second one.
+    const key = `${documentId}:${security?.localAi ? "ai" : "rules"}`;
+    const running = this.detecting.get(key);
+    if (running) return running;
+    const run = this.detectSuggestions(documentId, record.mediaType, record.source, security)
+      .finally(() => this.detecting.delete(key));
+    this.detecting.set(key, run);
+    return run;
   }
 
   private async detectSuggestions(
