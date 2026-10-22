@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences, UNVERIFIED_MARKER_TEXT } from "../src/finalization-gate.js";
+import { FinalizationGate, addMissingVerificationMarkers, expectedVerificationMarker, markUnverifiedReferences, UNVERIFIED_MARKER_TEXT } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 
 const MARKER = "✅ [VER: https://eli.gov.pl/a286, 2026-10-22]";
@@ -37,5 +37,23 @@ describe("a verified article covers its units, its quoted text and its penalties
       records
     );
     expect(report.findings.map((finding) => finding.status)).toEqual(["MISSING_LEDGER_RECORD", "MISSING_LEDGER_RECORD", "MISSING_LEDGER_RECORD"]);
+  });
+});
+
+describe("history of a provision's changes (statute analyzer widget)", () => {
+  it("accepts the marker of each verified version on its own line (art. 276 KK, VERIFICATION_MARKER_MISMATCH in line 3)", () => {
+    const records = new VerificationLedger();
+    const current = { claim: "art. 276 KK", kind: "statute" as const, status: "VERIFIED" as const, sourceUrl: "https://eli.gov.pl/kk-2026", sourceTier: "R1" as const, fetchedAt: "2026-10-22T10:00:00Z", toolCallId: "v1" };
+    const past = { ...current, sourceUrl: "https://eli.gov.pl/kk-2017", asOf: "2018-01-01", fetchedAt: "2026-10-22T10:01:00Z", toolCallId: "v2" };
+    records.add(current);
+    records.add(past);
+    const text = ["# Historia zmian", "", `Art. 276 KK (brzmienie obecne) ${expectedVerificationMarker(current)}`, `Brzmienie na 2018-01-01: art. 276 KK ${expectedVerificationMarker(past)}`].join("\n");
+    const gate = new FinalizationGate();
+    const report = gate.evaluate(text, records);
+    expect(report.findings.map((finding) => finding.status)).toEqual(["VERIFIED", "VERIFIED"]);
+    expect(addMissingVerificationMarkers(text, report)).toBe(text);
+    // A marker of no record of this claim still fails.
+    const forged = text.replace("https://eli.gov.pl/kk-2026", "https://eli.gov.pl/inny");
+    expect(gate.evaluate(forged, records).findings[0]!.status).toBe("VERIFICATION_MARKER_MISMATCH");
   });
 });

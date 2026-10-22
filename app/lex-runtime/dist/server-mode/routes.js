@@ -3,8 +3,7 @@ import { runInAccountScope } from "./account-scope.js";
 import { PROVIDERS, ServerModeError, accountPolicyResponse } from "./service.js";
 /**
  * Local-only features refused in server mode: they act on the machine the
- * runtime runs on (provider CLI logins, local model install/update, the
- * desktop updater, saving to the Downloads folder, opening a file in a local
+ * runtime runs on (provider CLI logins, the desktop updater, saving to the Downloads folder, opening a file in a local
  * program, writing the Claude Desktop config) and the process-memory API
  * keys of the desktop (the admin sets global keys under /api/server-mode/provider-keys).
  */
@@ -12,13 +11,16 @@ const LOCAL_ONLY = [
     { path: /^\/api\/provider-accounts(?:\/|$)/ },
     { path: /^\/api\/admin\/provider-accounts(?:\/|$)/ },
     { path: /^\/api\/admin\/providers\/[^/]+\/credential$/ },
-    { path: /^\/api\/local-models(?:\/|$)/ },
     { path: /^\/api\/update(?:\/|$)/ },
     { path: /^\/api\/downloads\/save$/ },
     { path: /^\/api\/auth\/bootstrap-managed$/ },
     { method: "POST", path: /^\/api\/cases\/[^/]+\/workspace\/items\/[^/]+\/open$/ },
     { method: "POST", path: /^\/api\/admin\/mcp-connectors\/[^/]+\/(?:install|uninstall)$/, when: (req) => req.body?.desktop === true }
 ];
+// The server's local model (llama.cpp on this machine or LEX_LOCAL_LLM_ENDPOINT) is shared by
+// all accounts: its install, update and removal are the admin's (requireAdmin in the route),
+// and so is stopping it, which would cut the other accounts' turns.
+const ADMIN_ONLY_IN_SERVER_MODE = [/^\/api\/local-models\/stop$/];
 export function localOnlyRoute(req) {
     return LOCAL_ONLY.some((rule) => (!rule.method || rule.method === req.method) && rule.path.test(req.path) && (!rule.when || rule.when(req)));
 }
@@ -113,6 +115,10 @@ export function registerServerModeRoutes(app, dependencies) {
         catch {
             // The route itself answers the missing or expired session.
             next();
+            return;
+        }
+        if (context.user.appRole !== "ADMIN" && ADMIN_ONLY_IN_SERVER_MODE.some((pattern) => pattern.test(req.path))) {
+            res.status(403).json({ error: "AUTHORIZATION_DENIED" });
             return;
         }
         const scope = { userId: context.user.userId, sessionId: context.session.sessionId };

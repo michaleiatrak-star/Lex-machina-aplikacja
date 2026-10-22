@@ -468,6 +468,33 @@ function normalizeModelId(id: string): string {
   return LEGACY_MODEL_ALIASES[id] ?? id;
 }
 
+/**
+ * A llama.cpp server (OpenAI-compatible, /v1) the runtime does not start itself: a Linux or
+ * GPU machine in server mode, where the packaged engine (Windows) cannot run.
+ * LEX_LOCAL_LLM_ENDPOINT=http://10.0.0.5:8080/v1, LEX_LOCAL_LLM_ENDPOINT_MODEL=local/bielik-11b-v3-q4km,
+ * LEX_LOCAL_LLM_ENDPOINT_CONTEXT=32768 (the server's --ctx-size).
+ */
+export type ExternalLocalEndpoint = { endpoint: string; modelId: LocalModelId; contextTokens: number | null };
+
+export function externalLocalEndpoint(env: NodeJS.ProcessEnv = process.env): ExternalLocalEndpoint | null {
+  const raw = env.LEX_LOCAL_LLM_ENDPOINT?.trim();
+  const model = env.LEX_LOCAL_LLM_ENDPOINT_MODEL?.trim();
+  if (!raw || !model) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("LOCAL_MODEL_ENDPOINT_INVALID");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("LOCAL_MODEL_ENDPOINT_INVALID");
+  const context = Number(env.LEX_LOCAL_LLM_ENDPOINT_CONTEXT ?? "");
+  return {
+    endpoint: url.toString().replace(/\/+$/u, "").replace(/(?<!\/v1)$/u, "/v1"),
+    modelId: normalizeModelId(model),
+    contextTokens: Number.isInteger(context) && context > 0 ? context : null
+  };
+}
+
 export type OptionalLocalLaunchSpec = {
   args: string[];
   env: NodeJS.ProcessEnv;
@@ -627,6 +654,9 @@ export class LocalModelRuntime {
   readonly runtimeRoot: string;
   readonly host = "127.0.0.1";
   readonly port: number;
+
+  // A server the runtime only connects to (externalLocalEndpoint), read once at start.
+  readonly external: ExternalLocalEndpoint | null = externalLocalEndpoint();
 
   private child: ChildProcess | null = null;
   private activeModelId: LocalModelId | null = null;
@@ -827,6 +857,7 @@ export class LocalModelRuntime {
   }
 
   configuredModelId(): LocalModelId | null {
+    if (this.external) return this.external.modelId;
     const config = this.readConfig();
     return config
       ? normalizeModelId(
@@ -1361,6 +1392,7 @@ export class LocalModelRuntime {
     progress: LocalProvisioningProgress | null;
     hardware: LocalHardwareProfile;
   } {
+    if (this.external) return this.externalStatus(this.external);
     const config = this.readConfig();
     const enginePresent = Boolean(config && fs.existsSync(config.engine.executable));
     const modelsPresent = Object.fromEntries(
@@ -1419,6 +1451,7 @@ export class LocalModelRuntime {
     contextTokens: number;
     configPath: string;
   }> {
+    if (this.external) throw new Error("LOCAL_MODEL_ENDPOINT_EXTERNAL");
     if (process.platform !== "win32") {
       throw new Error("LOCAL_MODEL_PROVISIONING_PLATFORM_UNSUPPORTED");
     }
@@ -2427,6 +2460,11 @@ export class LocalModelRuntime {
     const canonical = normalizeModelId(id);
     const spec = this.modelSpec(canonical);
     if (!spec) throw new Error("LOCAL_MODEL_UNKNOWN");
+    if (this.external) {
+      // The server serves one model; another one is not this machine's to start.
+      if (canonical !== this.external.modelId) throw new Error(`LOCAL_MODEL_ENDPOINT_SERVES_OTHER:${this.external.modelId}`);
+      return this.publicDescriptor(spec, null);
+    }
     let config = this.readConfig();
     if (
       !config ||
@@ -2568,6 +2606,7 @@ export class LocalModelRuntime {
   }
 
   async stop(): Promise<void> {
+    if (this.external) return;
     const child = this.child;
     this.child = null;
     this.startup = null;
@@ -3894,7 +3933,10 @@ export class LocalModelRuntime {
     const maximum =
       model.maximumRuntimeContext ??
       model.nativeContext;
+    const externalContext =
+      this.external?.modelId === canonical ? this.external.contextTokens : null;
     const contextWindow =
+      externalContext ??
       profile?.context.requestedTokens ??
       Math.min(
         maximum,
@@ -3920,7 +3962,32 @@ export class LocalModelRuntime {
       license: model.license ?? "UNKNOWN",
       source: model.sourceModel ?? model.id,
       localOnly: true,
-      installed: fs.existsSync(path.join(this.rootDir, "models", model.filename))
+      installed: this.external
+        ? this.external.modelId === canonical
+        : fs.existsSync(path.join(this.rootDir, "models", model.filename))
+    };
+  }
+
+  private externalStatus(external: ExternalLocalEndpoint): ReturnType<LocalModelRuntime["status"]> {
+    const spec = this.modelSpec(external.modelId);
+    const contextTokens = external.contextTokens ?? (spec ? this.publicDescriptor(spec, null).contextWindow : null);
+    return {
+      configured: Boolean(spec),
+      provisioning: false,
+      configPath: this.configPath(),
+      enginePresent: true,
+      modelsPresent: Object.fromEntries(this.models().map((model) => [model.id, normalizeModelId(model.id) === external.modelId])) as Record<LocalModelId, boolean>,
+      selectedModelId: external.modelId,
+      configuredContextTokens: contextTokens,
+      activeModelId: external.modelId,
+      // Reachability is the request's: a refused connection is LOCAL_MODEL_SERVER_UNREACHABLE.
+      state: "READY",
+      endpoint: external.endpoint,
+      contextPolicy: this.contextPolicy(),
+      backendPolicy: this.backendSelectionPolicy(),
+      qualification: null,
+      progress: null,
+      hardware: this.hardwareProfile()
     };
   }
 

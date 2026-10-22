@@ -29,3 +29,14 @@ describe("oś czasu sprawy w pamięci", () => {
     expect(chronologyBlock(saved, `Użytkownik: zrób chronologię\n\nAsystent: ${TIMELINE}`)).toBeNull();
   });
 });
+
+describe("case memory before the latest user turn (prompt cache)", () => {
+  it("keeps the earlier conversation first and unchanged", async () => {
+    const { queryWithChronology } = await import("../src/case-chronology.js");
+    const query = "Użytkownik: pierwsze pytanie\n\nAsystent: odpowiedź\n\nUżytkownik: drugie pytanie";
+    const withMemory = queryWithChronology(query, "[Rejestr]");
+    expect(withMemory.startsWith("Użytkownik: pierwsze pytanie\n\nAsystent: odpowiedź\n\n")).toBe(true);
+    expect(withMemory.endsWith("Asystent: [Rejestr]\n\nUżytkownik: drugie pytanie")).toBe(true);
+    expect(queryWithChronology("jedno pytanie", "[Rejestr]")).toBe("Asystent: [Rejestr]\n\nUżytkownik: jedno pytanie");
+  });
+});

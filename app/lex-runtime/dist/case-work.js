@@ -11,7 +11,7 @@ export function validCaseWork(value) {
         const item = raw;
         if (!item ||
             typeof item.key !== "string" || item.key.length > 200 ||
-            (item.kind !== "DOCUMENT_ANALYSIS" && item.kind !== "CHRONOLOGY" && item.kind !== "WORKFLOW" && item.kind !== "OPEN_ISSUE") ||
+            !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE"].includes(String(item.kind)) ||
             typeof item.label !== "string" || item.label.length > 300 ||
             (item.status !== "DONE" && item.status !== "OPEN") ||
             typeof item.at !== "string" || Number.isNaN(Date.parse(item.at)) ||
@@ -59,6 +59,10 @@ export function recordCaseWork(previous, turn) {
     }
     if (turn.chronologySaved) {
         items.set("CHRONOLOGY", { key: "CHRONOLOGY", kind: "CHRONOLOGY", label: "chronologia sprawy (oś czasu w pamięci sprawy)", status: "DONE", at: turn.now });
+    }
+    for (const file of turn.files ?? []) {
+        const key = `FILE:${file.artifactId}`;
+        items.set(key, { key, kind: "FILE", label: `plik „${file.filename}”${file.draft ? " (projekt)" : ""}`.slice(0, 300), status: "DONE", at: turn.now });
     }
     for (const workflow of turn.completedWorkflows ?? []) {
         const key = `WORKFLOW:${workflow}`;

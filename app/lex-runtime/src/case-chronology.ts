@@ -70,15 +70,18 @@ export function chronologyBlock(chronology: CaseChronology, conversation: string
 const ENVELOPE_PREFIX = "__LEX_SKILLS_V1__";
 
 /**
- * The query with the timeline before the conversation, as an earlier result of the assistant
- * (not the user's words: routing reads the user's turns). A first message without the
- * "Użytkownik:" label gets it, so the latest user turn stays the request alone.
+ * The query with the case memory (register, overview, timeline) right before the latest user
+ * turn, as an earlier result of the assistant (not the user's words: routing reads the user's
+ * turns). The earlier conversation stays first and unchanged from turn to turn, so the
+ * provider's prompt cache reads it although the memory block changes. A first message
+ * without the "Użytkownik:" label gets it, so the latest user turn stays the request alone.
  */
 export function queryWithChronology(query: string, block: string): string {
   const headerEnd = query.startsWith(ENVELOPE_PREFIX) ? query.indexOf("\n") + 1 : 0;
   const header = query.slice(0, headerEnd);
   const conversation = query.slice(headerEnd);
   const labelled = /(?:^|\n\n)Użytkownik: /u.test(conversation) ? conversation : `Użytkownik: ${conversation}`;
-  // A blank line after the envelope header: the timeline is a turn of its own.
-  return `${header}${header ? "\n" : ""}Asystent: ${block}\n\n${labelled}`;
+  const last = labelled.startsWith("Użytkownik: ") && !labelled.includes("\n\nUżytkownik: ") ? 0 : labelled.lastIndexOf("\n\nUżytkownik: ") + 2;
+  // A blank line after the envelope header: the memory is a turn of its own.
+  return `${header}${header ? "\n" : ""}${labelled.slice(0, last)}Asystent: ${block}\n\n${labelled.slice(last)}`;
 }

@@ -233,9 +233,6 @@ describe("local-only features", () => {
       ["get", "/api/provider-accounts", {}],
       ["post", "/api/provider-accounts/openai/login", {}],
       ["post", "/api/admin/provider-accounts/anthropic/oauth-token", {}],
-      ["get", "/api/local-models", {}],
-      ["post", "/api/local-models/remove", {}],
-      ["post", "/api/local-models/vision-ocr/install", {}],
       ["get", "/api/update/status", {}],
       ["post", "/api/downloads/save", {}],
       ["post", "/api/cases/case_x/workspace/items/item_x/open", {}],
@@ -246,6 +243,20 @@ describe("local-only features", () => {
     // An account-session (CLI) model is refused before the executor.
     await request(current.app).post("/api/sessions/execute").set(auth).send(execBody("account/openai")).expect(403, { error: "SERVER_MODE_LOCAL_ONLY" });
     expect(current.executor.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("the server's local model", () => {
+  it("is reachable in server mode; stopping it (shared by all accounts) is the admin's", async () => {
+    const current = fixture();
+    const adminToken = await bootstrapAdmin(current);
+    await enable(current, adminToken);
+    const user = await createUser(current, adminToken, "uzytkownik");
+    const listed = await request(current.app).get("/api/local-models").set({ Authorization: `Bearer ${user.token}` });
+    expect(listed.body?.error).not.toBe("SERVER_MODE_LOCAL_ONLY");
+    await request(current.app).post("/api/local-models/stop").set({ Authorization: `Bearer ${user.token}` }).send({}).expect(403, { error: "AUTHORIZATION_DENIED" });
+    const stopped = await request(current.app).post("/api/local-models/stop").set({ Authorization: `Bearer ${adminToken}` }).send({});
+    expect(stopped.status).not.toBe(403);
   });
 });
 

@@ -44,7 +44,8 @@ export default function App({
       onLock={onLock}
       onLogout={onLogout}
       settingsPanels={{
-        localAi: serverMode ? null : (
+        // W trybie serwerowym model lokalny serwera instaluje i zatrzymuje administrator.
+        localAi: serverMode && user.appRole !== "ADMIN" ? null : (
           <LocalAiSetupPanel
             user={user}
             embedded
