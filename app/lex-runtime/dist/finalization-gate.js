@@ -329,7 +329,9 @@ export class FinalizationGate {
                 coveringVerifiedRecord(ledger, reference, lineMarkers) ??
                 caseSignatureRecord(ledger, reference) ??
                 namedActRecord(ledger, reference) ??
-                articleRecord(ledger, reference);
+                articleRecord(ledger, reference) ??
+                // "art. 118" bez nazwy aktu, gdy w sesji zweryfikowano ten artykuł tylko jednego aktu ("art. 118 KC").
+                (OTHER_ACT.test(reference.lineText) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
             // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
             // unmarked claim. A marked claim without any record is shown marked.
             const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
@@ -416,6 +418,10 @@ export class FinalizationGate {
             let claims = claimsOf(index + 1, lineText);
             for (let above = index - 1; claims.length === 0 && above >= 0; above -= 1)
                 claims = claimsOf(above + 1, lines[above]);
+            // Nagłówek lub wstęp nad przepisem ("## Termin przedawnienia: 2 lata"): przepisy całej odpowiedzi;
+            // liczba nadal musi stać w brzmieniu jednego z nich.
+            if (claims.length === 0)
+                claims = references.filter((reference) => reference.kind === "statute").map((reference) => reference.claim);
             const lineRecords = claims.map(statuteRecord).filter((record) => Boolean(record));
             const marked = amountMarkerSpans(lineText);
             const facts = new Set(ledger.factAmountKeys());

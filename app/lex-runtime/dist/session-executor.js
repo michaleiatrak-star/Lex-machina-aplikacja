@@ -43,6 +43,7 @@ const COVERAGE_SKILLS = new Set([
 ]);
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandatoryPathModel, foreignJurisdiction, mandatoryPathInstructions, missingGateBlocks, pathProfile, analysisRequested, preloadForTurn, routingTrace } from "./mandatory-path.js";
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
@@ -2667,6 +2668,17 @@ export class SafeSessionExecutor {
         const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
         const statusConsistencyBlocked = statusConsistency.result ===
             "BLOCKED";
+        // Diagnostyka prób (LEX_DEBUG_FINALIZATION_DIR): etapy tekstu i rejestr weryfikacji tury.
+        if (process.env.LEX_DEBUG_FINALIZATION_DIR?.trim()) {
+            try {
+                const dir = process.env.LEX_DEBUG_FINALIZATION_DIR.trim();
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, `${Date.now()}-${randomUUID()}.json`), JSON.stringify({ automatic: automaticVerification.text, cited: citedAnswer.text, pre: preFinalization, marked: markedAnswer.text, final: processedDocumentCitations.text, consistency: statusConsistency, ledger: ledger.all() }, null, 1));
+            }
+            catch {
+                // Diagnostyka nie wpływa na turę.
+            }
+        }
         audit.record("gate", statusConsistency.gate, statusConsistencyBlocked
             ? "BLOCKED"
             : "OK", {
