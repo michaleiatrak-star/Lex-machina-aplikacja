@@ -43,6 +43,8 @@ export type CaseChatMessage = {
   widgets?: ChatWidget[];
   // Ramka weryfikacji sn.pl (tylko bieżąca odpowiedź; nie jest zapisywana w wątku).
   sourceVerification?: { source: "sn"; url: string };
+  // The same text for a lawyer when developer mode is off (an error without its codes; not stored).
+  plainContent?: string;
 };
 
 function persistedMessageId(id: string): string {

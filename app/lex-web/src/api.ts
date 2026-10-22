@@ -425,6 +425,13 @@ export type GeneratedDocumentResponse = {
   aliasesUsed: string[];
   deanonymizationKeyBound?: boolean;
   readyForDownload?: boolean;
+  // The document came back with the case's data at once (no password); the placeholder
+  // version stays in the case files.
+  deanonymized?: {
+    tokenizedArtifactId: string;
+    replacements: number;
+    restorations?: Array<{ status: string }>;
+  };
   // Fields left in square brackets, missing title or signature.
   warnings?: string[];
   // The firm's DOCX template (letterhead) put around the generated body, or why not.
@@ -2487,9 +2494,10 @@ export function createDeanonymizationIntent(
   );
 }
 
+// Without a password: the signed-in session's grant (the chat's answers show the data too).
 export function reauthorizeDeanonymization(
   intentId: string,
-  password: string
+  password = ""
 ): Promise<
   DeanonymizationReauthorizationResponse
 > {
@@ -2502,12 +2510,12 @@ export function reauthorizeDeanonymization(
       body:
         JSON.stringify({
           intentId,
-          // The password typed by the user is always forwarded verbatim.
+          // A password typed by the user is forwarded verbatim; none -> the session's grant.
           // The desktop bridge still substitutes __LEX_NATIVE_REAUTH__ when a
           // managed bootstrap secret exists, but that secret is absent once the
           // runtime seeds the first admin account, so a sentinel sent from here
           // would reach the runtime literally and fail reauthorization.
-          password
+          ...(password ? { password } : {})
         })
     }
   );
@@ -4421,4 +4429,195 @@ export function anonymizedDocx(
     method: "POST",
     body: JSON.stringify({ documentId })
   });
+}
+
+// ---- Tryb serwerowy (konta rejestrowane e-mailem, plany, globalne klucze API i limit, podgląd tur) ----
+
+export type ServerModeStatus = {
+  serverMode: boolean;
+  registration: boolean;
+};
+
+export type ServerSettings = {
+  serverMode: boolean;
+  forced: boolean;
+  publicBaseUrl: string;
+  defaultPlanId: string | null;
+  smtp: { host: string; port: number; secure: boolean; user: string; from: string; passwordSet: boolean } | null;
+  mailConfigured: boolean;
+  // Suma tokenów wszystkich kont w miesiącu (UTC); null: bez limitu globalnego.
+  globalMonthlyTokenLimit: number | null;
+  globalUsage: MonthlyTokenUsage;
+  month: string;
+};
+
+export type ServerSettingsInput = {
+  publicBaseUrl?: string;
+  defaultPlanId?: string | null;
+  // 0 albo null: bez limitu globalnego.
+  globalMonthlyTokenLimit?: number | null;
+  smtp?: { host: string; port: number; secure: boolean; user: string; from: string; password?: string; clearPassword?: boolean };
+};
+
+export type ServerPlan = {
+  planId: string;
+  name: string;
+  monthlyTokenLimit: number | null;
+  allowedProviders: ProviderId[];
+  externalSubscriptionId: string | null;
+};
+
+export type ServerPlanInput = Omit<ServerPlan, "planId">;
+
+export type MonthlyTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  modelCalls: number;
+};
+
+export type ServerAccount = AuthenticatedUser & {
+  emailVerified: boolean;
+  planId: string | null;
+  planName: string | null;
+  usage: MonthlyTokenUsage;
+  monthlyTokenLimit: number | null;
+};
+
+export type LiveTurn = {
+  turnId: string;
+  userId: string;
+  loginName: string;
+  caseId: string | null;
+  skill: string | null;
+  stage: string | null;
+  step: number;
+  totalSteps: number;
+  inputTokens: number;
+  outputTokens: number;
+  status: "RUNNING" | "DONE" | "FAILED";
+  startedAt: string;
+  finishedAt?: string;
+};
+
+export type MyServerAccount = {
+  plan: { name: string; monthlyTokenLimit: number | null } | null;
+  usage: MonthlyTokenUsage;
+  month: string;
+};
+
+// Tylko informacja, czy klucz jest ustawiony; sam klucz nie wraca z serwera.
+export type ServerProviderKey = {
+  provider: ProviderId;
+  configured: boolean;
+  updatedAt: string | null;
+};
+
+// Odpowiedź bez treści (204) albo błąd w formacie ApiFailure.
+async function send(pathname: string, init: RequestInit, authenticated = true): Promise<void> {
+  const response = await fetch(`${apiBase()}${pathname}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(authenticated ? authorizationHeaders() : {})
+    }
+  });
+  if (response.ok) return;
+  const failure = (await response.json().catch(() => ({}))) as Partial<ApiFailure>;
+  if (authenticated && response.status === 401) {
+    clearAuthSession();
+    authenticationFailureHandler?.();
+  }
+  throw new ApiError(failure.error || `HTTP_${response.status}`, response.status, response.headers.get("retry-after") ?? undefined);
+}
+
+export async function getServerModeStatus(): Promise<ServerModeStatus> {
+  try {
+    return await json<ServerModeStatus>("/api/server-mode/status", undefined, { authenticated: false });
+  } catch {
+    // Starszy runtime bez trybu serwerowego.
+    return { serverMode: false, registration: false };
+  }
+}
+
+export function registerAccount(input: { email: string; displayName: string; password: string }): Promise<void> {
+  return send("/api/server-mode/register", { method: "POST", body: JSON.stringify(input) }, false);
+}
+
+export function verifyEmail(token: string, password: string): Promise<void> {
+  return send("/api/server-mode/verify-email", { method: "POST", body: JSON.stringify({ token, password }) }, false);
+}
+
+export function requestPasswordReset(email: string): Promise<void> {
+  return send("/api/server-mode/password-reset/request", { method: "POST", body: JSON.stringify({ email }) }, false);
+}
+
+export function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  return send("/api/server-mode/password-reset/confirm", { method: "POST", body: JSON.stringify({ token, newPassword }) }, false);
+}
+
+export function getServerSettings(): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/settings");
+}
+
+export function updateServerSettings(input: ServerSettingsInput): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/settings", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export function setServerModeEnabled(enabled: boolean): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/enabled", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export function sendServerTestMail(to: string): Promise<void> {
+  return send("/api/server-mode/smtp/test", { method: "POST", body: JSON.stringify({ to }) });
+}
+
+export async function listServerPlans(): Promise<ServerPlan[]> {
+  return (await json<{ plans: ServerPlan[] }>("/api/server-mode/plans")).plans;
+}
+
+export async function saveServerPlan(planId: string | null, input: ServerPlanInput): Promise<ServerPlan> {
+  const result = await json<{ plan: ServerPlan }>(planId ? `/api/server-mode/plans/${encodeURIComponent(planId)}` : "/api/server-mode/plans", {
+    method: planId ? "PUT" : "POST",
+    body: JSON.stringify(input)
+  });
+  return result.plan;
+}
+
+export function deleteServerPlan(planId: string): Promise<void> {
+  return send(`/api/server-mode/plans/${encodeURIComponent(planId)}`, { method: "DELETE" });
+}
+
+export async function listServerAccounts(): Promise<ServerAccount[]> {
+  return (await json<{ accounts: ServerAccount[] }>("/api/server-mode/accounts")).accounts;
+}
+
+export function assignServerPlan(userId: string, planId: string | null): Promise<void> {
+  return send(`/api/server-mode/accounts/${encodeURIComponent(userId)}/plan`, { method: "PUT", body: JSON.stringify({ planId }) });
+}
+
+export function setServerAccountStatus(userId: string, status: "ACTIVE" | "DISABLED"): Promise<void> {
+  return send(`/api/server-mode/accounts/${encodeURIComponent(userId)}/status`, { method: "PUT", body: JSON.stringify({ status }) });
+}
+
+export async function listLiveTurns(): Promise<LiveTurn[]> {
+  return (await json<{ turns: LiveTurn[] }>("/api/server-mode/turns")).turns;
+}
+
+export function getMyServerAccount(): Promise<MyServerAccount> {
+  return json<MyServerAccount>("/api/server-mode/me");
+}
+
+export async function listServerProviderKeys(): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>("/api/server-mode/provider-keys")).providerKeys;
+}
+
+export async function setServerProviderKey(provider: ProviderId, apiKey: string): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>(`/api/server-mode/provider-keys/${provider}`, { method: "PUT", body: JSON.stringify({ apiKey }) })).providerKeys;
+}
+
+export async function clearServerProviderKey(provider: ProviderId): Promise<ServerProviderKey[]> {
+  return (await json<{ providerKeys: ServerProviderKey[] }>(`/api/server-mode/provider-keys/${provider}`, { method: "DELETE" })).providerKeys;
 }

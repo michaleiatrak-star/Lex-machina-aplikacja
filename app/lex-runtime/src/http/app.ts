@@ -84,6 +84,7 @@ import {
 import {
   ProviderGatewayError
 } from "../providers/gateway.js";
+import { accountPolicyResponse } from "../server-mode/service.js";
 import type { ProviderId } from "../providers/types.js";
 import type {
   AccountSessionManager
@@ -167,7 +168,7 @@ import type {
   LocalSharedTemplateStore
 } from "../shared-template-store.js";
 import { DOCX_MEDIA_TYPE } from "../shared-template-store.js";
-import { ExecutionSteps } from "../execution-steps.js";
+import { ExecutionSteps, type ExecutionPhase } from "../execution-steps.js";
 import {
   ContextBudgetError,
   estimateDocumentFit,
@@ -518,13 +519,23 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * Server mode behind the firm's reverse proxy: the public address of the web
+ * application (LEX_ALLOWED_ORIGINS, exact origins separated by commas).
+ * Unset (the desktop): only loopback origins, as before.
+ */
+export function allowedPublicOrigin(origin: string): boolean {
+  const allowed = process.env.LEX_ALLOWED_ORIGINS?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+  return allowed.includes(origin);
+}
+
 function loopbackOriginGuard(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
   const origin = req.get("origin");
-  if (!origin || isLoopbackOrigin(origin)) {
+  if (!origin || isLoopbackOrigin(origin) || allowedPublicOrigin(origin)) {
     next();
     return;
   }
@@ -676,7 +687,7 @@ export type LexHttpAppOptions = {
     Partial<
       Pick<
         DeanonymizationReauthorizationManager,
-        "previewGrant"
+        "previewGrant" | "authorizeIntentInSession"
       >
     >;
   sensitiveDownloadTickets?: Pick<
@@ -1064,6 +1075,19 @@ function sendAuthError(
       ? { retryAfter: error.retryAfter }
       : {})
   });
+  return true;
+}
+
+// Server mode: a model call refused by the account's plan or the global limit (see server-mode/service.ts).
+export function sendAccountPolicyError(
+  res: Response,
+  error: unknown
+): boolean {
+  if (!(error instanceof ProviderGatewayError) || error.code !== "ACCOUNT_POLICY") {
+    return false;
+  }
+  const refusal = accountPolicyResponse(error.message);
+  res.status(refusal.status).json(refusal.body);
   return true;
 }
 
@@ -2163,6 +2187,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               true;
           }
         } catch (error) {
+          if (sendAccountPolicyError(res, error)) {
+            return false;
+          }
           if (
             error instanceof Error &&
             error.message ===
@@ -7689,6 +7716,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         let processRenderOnly: { stage: ProcessPleadingStage } | undefined;
         let processDocumentStatus: "DRAFT" | "FINAL" | undefined;
         let pleadingSource: { version: number; text: string } | undefined;
+        // A contract drafted in its pipeline (AU-HYBRID, AU-STRIP closed): the file runs no AU step.
+        let contractRenderOnly = false;
         // The pleading's own file after a pipeline step ("Przygotuj plik .docx z pismem...")
         // names no pleading keyword; its document type does.
         // pisma-procesowe-v3 Test A (MOD-REDAKCJA): the user's own pleading corrected in the
@@ -7767,6 +7796,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             res.status(409).json({ error: "WORKFLOW_PIPELINE_REQUIRED", workflow: statefulWorkflow });
             return;
           }
+          contractRenderOnly = contractExportReady;
         }
 
         const generated =
@@ -7774,6 +7804,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             .documentAstGenerator
             .generate({
               ...(processRenderOnly ? { processRenderOnly } : {}),
+              ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
               ...(longDocumentSource
                 ? {
                     sourceText: {
@@ -7961,6 +7992,61 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       : {})
                   })
             );
+
+        // The user's own document comes back with the case's data at once, as the chat's answers
+        // do (no second password): the signed-in session's grant, the same restoration as
+        // /api/deanonymization/finalize. A role without REIDENTIFY, a pleading still in its
+        // pipeline or any failure: the placeholder version as before.
+        if (req.body?.deanonymize !== false && options.reauthorizationManager?.authorizeIntentInSession) {
+          try {
+            const manager = options.reauthorizationManager;
+            const intent = await manager.createIntent(context, caseId, tokenized.artifact.artifactId);
+            const { grant } = await manager.authorizeIntentInSession!(context, intent.intentId);
+            const target = await manager.consumeGrant(context, grant.grantId);
+            const final = await options.caseAccessService.withCaseDataKey(context, caseId, "REIDENTIFY", async (caseDataKey) => {
+              await assertDocumentWorkflowFinalizationAllowed(options, {
+                caseId,
+                artifactId: target.artifactId,
+                caseDataKey,
+                keyVersion: target.caseKeyVersion
+              });
+              return await options.documentAuthoringService!.deanonymizeConsumed({
+                target,
+                createdByUserId: context.user.userId,
+                caseDataKey,
+                keyVersion: target.caseKeyVersion,
+                ...(typeof req.body?.filename === "string" ? { filename: req.body.filename } : {})
+              });
+            });
+            // The file with the data is downloaded once, by a ticket (CLEAR_PII, as after /finalize).
+            const downloadTicket = options.sensitiveDownloadTickets?.issue(context, {
+              caseId,
+              artifactId: final.artifact.artifactId,
+              finalSha256: final.sha256
+            });
+            res.status(201).json({
+              ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
+              ...(tokenized.letterhead ? { letterhead: tokenized.letterhead } : {}),
+              sessionId: generated.sessionId,
+              artifact: final.artifact,
+              format: final.format,
+              sha256: final.sha256,
+              aliasesUsed: tokenized.aliasesUsed,
+              readyForDownload: true,
+              deanonymized: {
+                tokenizedArtifactId: tokenized.artifact.artifactId,
+                replacements: final.replacements,
+                ...(final.restorations ? { restorations: final.restorations } : {})
+              },
+              warnings: tokenized.warnings,
+              ...(templateProfile ? { templateProfile } : {}),
+              ...(downloadTicket ? { downloadTicket } : {})
+            });
+            return;
+          } catch (error) {
+            console.error("DIRECT_DEANONYMIZATION_SKIPPED", error instanceof Error ? error.message : String(error));
+          }
+        }
 
         res.status(201).json({
             ...(generationTemplate ? { firmTemplateApplied: generationTemplate } : {}),
@@ -8304,9 +8390,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         typeof req.body
           ?.intentId !==
           "string" ||
-        typeof req.body
-          ?.password !==
-          "string"
+        (req.body?.password !== undefined && typeof req.body?.password !== "string")
       ) {
         res.status(400).json({
           error:
@@ -8315,16 +8399,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         return;
       }
       try {
-        const result =
-          await options
-            .reauthorizationManager
-            .authorizeIntent(
-              responseAuthContext(
-                res
-              ),
-              req.body.intentId,
-              req.body.password
-            );
+        // Without a password: the signed-in session's grant (the chat restores the case's data
+        // in its answers the same way); a password still re-authenticates when given.
+        const manager = options.reauthorizationManager;
+        const context = responseAuthContext(res);
+        const result: { grant: Awaited<ReturnType<typeof manager.authorizeIntent>>["grant"]; session?: unknown } =
+          typeof req.body.password === "string" && req.body.password !== ""
+            ? await manager.authorizeIntent(context, req.body.intentId, req.body.password)
+            : manager.authorizeIntentInSession
+              ? await manager.authorizeIntentInSession(context, req.body.intentId)
+              : await manager.authorizeIntent(context, req.body.intentId, "");
         res.json({
           grant: {
             grantId:
@@ -8346,8 +8430,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               result.grant
                 .expiresAt
           },
-          session:
-            result.session
+          ...(result.session ? { session: result.session } : {})
         });
       } catch (error) {
         if (
@@ -9541,6 +9624,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           executionId
         );
       });
+    }
+
+    // Server mode: the admin's live view of turns gets the stage and the skill only.
+    const observeTurn = res.locals.lexTurnObserver as ((phase: ExecutionPhase, skill: string) => void) | undefined;
+    if (observeTurn) {
+      const reportStep = request.onStep;
+      request.onStep = (phase, detail) => {
+        observeTurn(phase, request.primarySkill);
+        reportStep?.(phase, detail);
+      };
     }
 
     // A part of a long letter asked for in a case ("Popraw część 3 z 3."): legal work of that
@@ -12572,6 +12665,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           error:
             "DOCUMENT_ATTACHMENT_RESOLUTION_FAILED"
         });
+        return;
+      }
+
+      if (sendAccountPolicyError(res, error)) {
         return;
       }
 

@@ -175,6 +175,11 @@ try {
     if (Test-Path -LiteralPath $diagnosticLog -PathType Leaf) {
       Write-Host "Installer bootstrap diagnostic follows:"
       Get-Content -LiteralPath $diagnosticLog | Out-Host
+      $fullLog = Join-Path $InstallRoot "bootstrap-install.log"
+      if (Test-Path -LiteralPath $fullLog -PathType Leaf) {
+        Write-Host "Full bootstrap log (last 80 lines):"
+        Get-Content -LiteralPath $fullLog -Tail 80 | Out-Host
+      }
     } else {
       $wrapperDiagnostic = Join-Path $env:TEMP "LexMachinaOfflineSelfExtract-error.log"
       if ($StandaloneOfflineExe -and (Test-Path -LiteralPath $wrapperDiagnostic -PathType Leaf)) {

@@ -115,6 +115,7 @@ $bootstrap = Join-Path $payload "bootstrap"
 New-Item $bootstrap -ItemType Directory | Out-Null
 foreach ($file in @(
   "windows-online-bootstrap.ps1",
+  "bootstrap-run.ps1",
   "app-update-transaction.ps1",
   "app-update-verification.ps1",
   "install-local-llm.ps1",
@@ -162,6 +163,7 @@ foreach ($required in @(
   "release-source.json",
   "release-requirements.txt",
   "bootstrap\windows-online-bootstrap.ps1",
+  "bootstrap\bootstrap-run.ps1",
   "bootstrap\app-update-transaction.ps1",
   "bootstrap\install-local-llm.ps1",
   "bootstrap\install-local-vision.ps1",

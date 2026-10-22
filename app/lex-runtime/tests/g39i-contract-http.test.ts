@@ -609,6 +609,8 @@ describe(
         const exported = await request(current.app).post(`/api/cases/${caseId}/artifacts/generate`).set("Authorization", authorization).send(body);
         expect(exported.status).not.toBe(409);
         expect(current.generate).toHaveBeenCalledTimes(1);
+        // The engine runs no AU checkpoint for the file (before: HTTP 422, no persisted context).
+        expect(current.generate.mock.calls[0]![0]).toMatchObject({ contractRenderOnly: true });
       } finally {
         spy.mockRestore();
         current.auth.close();

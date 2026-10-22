@@ -413,6 +413,31 @@ export class DeanonymizationReauthorizationManager {
           "DEANONYMIZE_AND_EXPORT"
         );
 
+    return { ...this.issueGrant(actor, intent, "deanonymization_reauth_success"), session };
+  }
+
+  /**
+   * A document the user generates in the chat comes back with the case's data at once, as the
+   * chat's answers do: the grant of the signed-in session (no second password), audited.
+   */
+  async authorizeIntentInSession(
+    actor: AuthenticatedContext,
+    intentId: string
+  ): Promise<{ intent: DeanonymizationIntent; grant: DeanonymizationGrant }> {
+    const intent = this.requirePendingIntent(actor, intentId);
+    this.cases.assertAccess(actor, intent.caseId, "REIDENTIFY");
+    const current = await this.resolver.resolve(intent.caseId, intent.artifactId);
+    if (!current || !exactTarget(intent, current)) {
+      throw new ReauthorizationError("REAUTH_TARGET_CHANGED");
+    }
+    return this.issueGrant(actor, intent, "deanonymization_session_grant");
+  }
+
+  private issueGrant(
+    actor: AuthenticatedContext,
+    intent: DeanonymizationIntent,
+    event: string
+  ): { intent: DeanonymizationIntent; grant: DeanonymizationGrant } {
     const now =
       this.clock.now();
     const grant:
@@ -467,7 +492,7 @@ export class DeanonymizationReauthorizationManager {
     );
     this.audit(
       actor.user.userId,
-      "deanonymization_reauth_success",
+      event,
       "PASS",
       {
         intentId:
@@ -486,8 +511,7 @@ export class DeanonymizationReauthorizationManager {
       },
       grant: {
         ...grant
-      },
-      session
+      }
     };
   }
 

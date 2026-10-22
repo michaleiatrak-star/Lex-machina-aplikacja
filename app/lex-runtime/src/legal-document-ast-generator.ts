@@ -38,6 +38,8 @@ export type LegalDocumentAstGenerationRequest = {
   privacySeed?: PseudonymizationVaultSnapshot;
   // The file of a pleading the case's process pipeline already wrote.
   processRenderOnly?: { stage: ProcessPleadingStage };
+  // The file of a contract the case's contract pipeline drafted (AU-HYBRID, AU-STRIP closed).
+  contractRenderOnly?: boolean;
   // The stored text the file renders (pipeline draft): carried over as written.
   sourceText?: { label: string; text: string };
   // The user chose a draft with the unverified references named (ZAKAZ-14, decision "a").
@@ -661,6 +663,7 @@ export class LegalDocumentAstGenerator {
         accountContinuity: "none",
         ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
         ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+        ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
         ...(request.attachments?.length
           ? { documentAttachments: request.attachments }
           : {})
@@ -795,6 +798,7 @@ export class LegalDocumentAstGenerator {
           accountContinuity: "none",
           ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
           ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+          ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
           ...(request.attachments?.length ? { documentAttachments: request.attachments } : {})
         });
         if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {

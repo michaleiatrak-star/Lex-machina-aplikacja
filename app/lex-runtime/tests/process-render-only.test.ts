@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ProviderGateway, ProviderRegistry } from "../src/providers/gateway.js";
 import { LexSkillRegistry } from "../src/registry.js";
-import { SafeSessionExecutor } from "../src/session-executor.js";
+import { SESSION_EXECUTION_INTERNAL, SafeSessionExecutor } from "../src/session-executor.js";
 
 const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 
@@ -45,4 +45,11 @@ describe("pleading file rendered from the case pipeline", () => {
     expect(current.calls.length).toBeGreaterThan(0);
     expect(JSON.stringify(result.audit)).not.toContain("PROCESS_STATE_CONTEXT_MISSING");
   });
+
+  it("binds the pipeline's state for gate I-J: the FINAL pleading file is not blocked (E2E PR1)", async () => {
+    const current = executor();
+    const result: any = await current.executor.execute({ ...request, processRenderOnly: { stage: "FINAL" } } as never);
+    const events: Array<{ target: string; status: string }> = result[SESSION_EXECUTION_INTERNAL]?.auditEvents ?? [];
+    expect(events.find((event) => event.target === "G39I_WORKFLOW_CONTRACT")?.status).toBe("OK");
+  }, 30_000);
 });

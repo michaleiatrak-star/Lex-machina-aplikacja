@@ -13,6 +13,14 @@ import type {
   SettingsRequest
 } from "./MatterChatApp.js";
 import { RecoveryAuthPanel } from "./RecoveryAuthPanel.js";
+import {
+  ForgotPasswordPanel,
+  RegisterPanel,
+  ResetPasswordPanel,
+  VerifyEmailPanel,
+  emailLinkFromHash,
+  type EmailLinkAction
+} from "./ServerAuthPanels.js";
 import { LEX_MACHINA_BRAND_ICON } from "./brand-icon.js";
 import {
   ApiError,
@@ -21,6 +29,7 @@ import {
   getAuthMe,
   getAuthStatus,
   getHealth,
+  getServerModeStatus,
   lockAuth,
   login,
   logoutAuth,
@@ -28,6 +37,7 @@ import {
   reportUserActivity,
   setAuthenticationFailureHandler,
   type AuthMeResponse,
+  type ServerModeStatus,
   desktopRuntimeStatus,
   repairDesktopRuntime,
   type DesktopRuntimeStatus
@@ -41,6 +51,9 @@ type AuthPhase =
   | "bootstrap"
   | "login"
   | "recover"
+  | "register"
+  | "forgot"
+  | "email-link"
   | "authenticated"
   | "locked";
 
@@ -52,7 +65,10 @@ function AuthPanel({
   onRecover,
   temporaryAdminCredentialsActive,
   runtimeUnreachable = false,
-  runtimeStatus = null
+  runtimeStatus = null,
+  serverMode = null,
+  onRegister,
+  onForgotPassword
 }: {
   phase: "bootstrap" | "login" | "locked";
   lastUser?: AuthMeResponse["user"];
@@ -64,7 +80,11 @@ function AuthPanel({
   temporaryAdminCredentialsActive: boolean;
   runtimeUnreachable?: boolean;
   runtimeStatus?: DesktopRuntimeStatus | null;
+  serverMode?: ServerModeStatus | null;
+  onRegister?: () => void;
+  onForgotPassword?: () => void;
 }) {
+  const serverLogin = serverMode?.serverMode === true;
   const [repairMessage, setRepairMessage] = useState("");
   const [loginName, setLoginName] =
     useState(
@@ -334,11 +354,11 @@ function AuthPanel({
         )}
 
         <label>
-          Login
+          {serverLogin ? "Adres e-mail lub login" : "Login"}
           <input
             value={loginName}
             autoComplete="username"
-            maxLength={64}
+            maxLength={serverLogin ? 254 : 64}
             disabled={
               phase === "locked" &&
               Boolean(lastUser)
@@ -427,6 +447,26 @@ function AuthPanel({
           </button>
         )}
 
+        {/* Tryb serwerowy: rejestracja i reset hasła przez e-mail. */}
+        {phase === "login" && serverLogin && serverMode?.registration && (
+          <>
+            <button
+              type="button"
+              className="secondary-button auth-change-user"
+              onClick={onForgotPassword}
+            >
+              Nie pamiętam hasła
+            </button>
+            <button
+              type="button"
+              className="secondary-button auth-change-user"
+              onClick={onRegister}
+            >
+              Załóż konto
+            </button>
+          </>
+        )}
+
         {phase === "locked" && (
           <button
             type="button"
@@ -496,18 +536,34 @@ export default function AuthenticatedApp() {
     useState(false);
   const [runtimeStatus, setRuntimeStatus] =
     useState<DesktopRuntimeStatus | null>(null);
+  const [serverMode, setServerMode] =
+    useState<ServerModeStatus | null>(null);
+  const [emailLink, setEmailLink] =
+    useState<EmailLinkAction | null>(null);
   useEffect(() => {
     let cancelled = false;
 
     const initialize =
       async () => {
         try {
-          const [, status] =
+          const [, status, server] =
             await Promise.all([
               getHealth(),
-              getAuthStatus()
+              getAuthStatus(),
+              getServerModeStatus()
             ]);
           if (cancelled) {
+            return;
+          }
+          setServerMode(server);
+          // A link from an e-mail (server mode): verification or password reset.
+          const link =
+            server.serverMode
+              ? emailLinkFromHash(window.location.hash)
+              : null;
+          if (link) {
+            setEmailLink(link);
+            setPhase("email-link");
             return;
           }
 
@@ -745,6 +801,24 @@ export default function AuthenticatedApp() {
       );
     }
 
+    if (phase === "register") {
+      return <RegisterPanel onBack={() => setPhase("login")} />;
+    }
+
+    if (phase === "forgot") {
+      return <ForgotPasswordPanel onBack={() => setPhase("login")} />;
+    }
+
+    if (phase === "email-link" && emailLink) {
+      const back = () => {
+        setEmailLink(null);
+        setPhase("login");
+      };
+      return emailLink.kind === "verify"
+        ? <VerifyEmailPanel token={emailLink.token} onBack={back} />
+        : <ResetPasswordPanel token={emailLink.token} onBack={back} />;
+    }
+
     if (phase === "recover") {
       return (
         <RecoveryAuthPanel
@@ -778,9 +852,9 @@ export default function AuthenticatedApp() {
     ) {
       const panelPhase:
         "bootstrap" | "login" | "locked" =
-          phase === "authenticated"
-            ? "login"
-            : phase;
+          phase === "bootstrap" || phase === "locked"
+            ? phase
+            : "login";
       return (
         <AuthPanel
           key={
@@ -814,6 +888,9 @@ export default function AuthenticatedApp() {
           runtimeStatus={
             runtimeStatus
           }
+          serverMode={serverMode}
+          onRegister={() => setPhase("register")}
+          onForgotPassword={() => setPhase("forgot")}
           onAuthenticated={(value) => {
             setAuth(value);
             setLastUser(value.user);
@@ -904,6 +981,13 @@ export default function AuthenticatedApp() {
               retained.key
             }
             user={retained.user}
+            serverMode={serverMode?.serverMode === true}
+            onServerModeChanged={(enabled) =>
+              setServerMode((current) => ({
+                serverMode: enabled,
+                registration: current?.registration ?? false
+              }))
+            }
             settingsRequest={
               settingsRequest
             }

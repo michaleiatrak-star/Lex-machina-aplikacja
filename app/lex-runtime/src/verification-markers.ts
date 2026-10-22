@@ -20,8 +20,13 @@ export const VERIFICATION_MARKER = new RegExp(MARKER_SOURCE, "u");
 /** Text without verification markers and without the spaces they leave. */
 export function stripVerificationMarkers(text: string): string {
   return text
+    // "art. 720 § 1 k.c. ✅ [VER: …]." ends the sentence with the abbreviation's own dot,
+    // not with "k.c.." once the marker is gone.
+    .replace(new RegExp(`\\.(?:[ \\t]*${MARKER_SOURCE})+[ \\t]*\\.`, "gu"), ".")
     .replace(new RegExp(`[ \\t]*${MARKER_SOURCE}`, "gu"), "")
     .replace(/[ \t]+([.,;:)\]])/gu, "$1")
+    // The chat moved the marker to the line's end ("k.c.. ✅ [VER: …]"): one dot, not an ellipsis.
+    .replace(/(\p{L})\.\.(?!\.)/gu, "$1.")
     .replace(/[ \t]{2,}/gu, " ")
     .replace(/[ \t]+$/gmu, "");
 }

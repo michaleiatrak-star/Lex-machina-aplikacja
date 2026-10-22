@@ -10,6 +10,7 @@ export type ProviderFailureCode =
   | "UNKNOWN_PROVIDER"
   | "TOOLS_UNSUPPORTED"
   | "REASONING_UNSUPPORTED"
+  | "ACCOUNT_POLICY"
   | "PROVIDER_ERROR";
 
 export class ProviderGatewayError extends Error {
@@ -43,8 +44,21 @@ export class ProviderRegistry {
   }
 }
 
+/**
+ * Server mode: checks an account's plan before each model call (throws with a
+ * reason code as message) and records the tokens after it. Without an account
+ * scope (desktop, background work) both are no-ops.
+ */
+export interface ModelCallGuard {
+  beforeCall(providerId: ProviderId, model: string): void;
+  afterCall(providerId: ProviderId, model: string, usage: ProviderStreamResult["usage"] | null): void;
+}
+
 export class ProviderGateway {
-  constructor(private readonly registry: ProviderRegistry) {}
+  constructor(
+    private readonly registry: ProviderRegistry,
+    private readonly guard?: ModelCallGuard
+  ) {}
 
   nativeCorpusAccess(providerId: ProviderId, model: string): boolean {
     return this.registry.get(providerId)?.nativeCorpusAccess?.(model) === true;
@@ -87,9 +101,23 @@ export class ProviderGateway {
       );
     }
 
+    if (this.guard) {
+      try {
+        this.guard.beforeCall(providerId, params.model);
+      } catch (error) {
+        throw new ProviderGatewayError(
+          "ACCOUNT_POLICY",
+          error instanceof Error ? error.message : String(error),
+          providerId,
+          error
+        );
+      }
+    }
+
     try {
       const result = await provider.stream(params);
       reportUsage(result.usage ?? null);
+      this.guard?.afterCall(providerId, params.model, result.usage ?? null);
       return result;
     } catch (error) {
       if (error instanceof ProviderGatewayError) throw error;

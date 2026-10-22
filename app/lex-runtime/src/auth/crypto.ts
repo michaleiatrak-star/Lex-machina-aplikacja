@@ -57,6 +57,16 @@ export function isValidLoginName(
     length >= 3 &&
     length <= 64 &&
     /^[\p{L}\p{N}._-]+$/u.test(normalized)
+  ) || isValidEmailLogin(normalized);
+}
+
+// Server mode: an e-mail address is the login of a self-registered account.
+export function isValidEmailLogin(
+  normalized: string
+): boolean {
+  return (
+    normalized.length <= 254 &&
+    /^[\p{L}\p{N}._%+-]{1,64}@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+$/u.test(normalized)
   );
 }
 

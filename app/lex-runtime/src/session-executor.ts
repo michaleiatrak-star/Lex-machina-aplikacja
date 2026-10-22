@@ -135,6 +135,7 @@ import {
   type AcceptedReportBlueprint,
   type ReportBlueprintKind
 } from "./report-blueprint-tool-runtime.js";
+import { blueprintFinalizationText } from "./report-blueprint-finalization.js";
 import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import {
   evaluateDeterministicWorkflowOutput,
@@ -387,6 +388,9 @@ export type SessionExecutionRequest = {
   documentAstOutput?: boolean;
   // The .docx of a pleading the case's pipeline already wrote (route checked the state).
   processRenderOnly?: { stage: ProcessPleadingStage };
+  // The .docx of a contract the case's contract pipeline drafted (route checked AU-HYBRID and
+  // AU-STRIP): rendered from the conversation, no AU checkpoint runs.
+  contractRenderOnly?: boolean;
   processWorkflowContext?: {
     stage: ProcessPleadingStage;
     checkpoint: ProcessPleadingCheckpoint;
@@ -2976,6 +2980,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(request.processRenderOnly && request.documentAstOutput
         ? { processRenderOnly: request.processRenderOnly }
         : {}),
+      ...(request.contractRenderOnly && request.documentAstOutput
+        ? { contractRenderOnly: true }
+        : {}),
       ...(protectedProcessContext
         ? {
             processWorkflowContext:
@@ -4120,14 +4127,7 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     const finalizationText =
       reportBlueprint
-        ? [
-            processedDocumentCitations.text,
-            "[STRUCTURED_REPORT_BLUEPRINT_DATA]",
-            JSON.stringify(
-              reportBlueprint.blueprint
-            ),
-            "[/STRUCTURED_REPORT_BLUEPRINT_DATA]"
-          ].join("\n")
+        ? blueprintFinalizationText(processedDocumentCitations.text, reportBlueprint.blueprint, ledger)
         : processedDocumentCitations.text;
 
     step("VERIFY", "przepisy, orzeczenia i cytaty w odpowiedzi");
@@ -4214,8 +4214,8 @@ export class SafeSessionExecutor implements SessionExecutor {
             (
               execution.workflowPlan.id ===
                 "PROCESS_PLEADING_V1" &&
-              request
-                .processWorkflowContext
+              // The file of the pipeline's pleading: its state bound by the route (render-only).
+              (request.processWorkflowContext || (request.processRenderOnly && request.documentAstOutput))
             ) ||
             (
               execution.workflowPlan.id ===
@@ -4232,8 +4232,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             (
               execution.workflowPlan.id ===
                 "CONTRACT_ANALYSIS_V1" &&
-              request
-                .contractWorkflowContext
+              (request.contractWorkflowContext || (request.contractRenderOnly && request.documentAstOutput))
             ) ||
             (
               (

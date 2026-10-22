@@ -435,6 +435,9 @@ export class LexExecutionEngine {
     // The .docx of a pleading the case's pipeline already wrote (state checked by the
     // route): the file is rendered from that text, no checkpoint runs.
     processRenderOnly?: { stage: ProcessPleadingStage };
+    // The .docx of a contract its pipeline drafted (AU-HYBRID and AU-STRIP closed, checked by
+    // the route): rendered from the conversation, no AU checkpoint runs.
+    contractRenderOnly?: boolean;
     provider: ProviderId;
     model: string;
     continuityKey?: string;
@@ -1621,7 +1624,9 @@ export class LexExecutionEngine {
         [...events]
       );
     }
-    if (
+    if (workflowPlan.id === "CONTRACT_ANALYSIS_V1" && !args.contractWorkflowContext && args.contractRenderOnly && args.documentAstOutput) {
+      emit("gate", "G39I_CONTRACT_STATE_BINDING", "OK", "render-only");
+    } else if (
       workflowPlan.id ===
         "CONTRACT_ANALYSIS_V1" &&
       !args.contractWorkflowContext
