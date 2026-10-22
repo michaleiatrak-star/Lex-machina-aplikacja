@@ -5,10 +5,10 @@
 **Lokalna aplikacja desktopowa — asystent prawny AI dla prawa polskiego, działający na komputerze użytkownika, z obowiązkową weryfikacją każdego przepisu u źródła i prywatnością danych sprawy z założenia.**
 
 [![Licencja: użytek osobisty, kod zastrzeżony](https://img.shields.io/badge/Licencja-u%C5%BCytek%20osobisty%20%C2%B7%20kod%20zastrze%C5%BCony-red.svg)](LICENSE)
-[![Wersja aplikacji](https://img.shields.io/badge/aplikacja-0.1.20-2A6F50.svg)](#wersjonowanie)
+[![Wersja aplikacji](https://img.shields.io/badge/aplikacja-0.1.45-2A6F50.svg)](#wersjonowanie)
 [![Platformy](https://img.shields.io/badge/platformy-Windows%20%C2%B7%20macOS-2A6F50.svg)](#instalacja)
 [![Stos](https://img.shields.io/badge/stos-Tauri%2FRust%20%C2%B7%20Node%2024%20%C2%B7%20React%20%C2%B7%20Python-D97757.svg)](#architektura)
-[![Modele](https://img.shields.io/badge/modele-Anthropic%20%C2%B7%20OpenAI%20%C2%B7%20xAI%20%C2%B7%20lokalne-8A2BE2.svg)](#modele-ai)
+[![Modele](https://img.shields.io/badge/modele-Anthropic%20%C2%B7%20OpenAI%20%C2%B7%20xAI%20%C2%B7%20Google%20%C2%B7%20lokalne-8A2BE2.svg)](#modele-ai)
 [![Język](https://img.shields.io/badge/j%C4%99zyk-polski-white.svg?labelColor=DC143C)](#)
 
 [Czym jest](#czym-jest-lex-machina) •
@@ -19,6 +19,7 @@
 [Źródła prawa](#%C5%BAr%C3%B3d%C5%82a-prawa) •
 [Bramki](#bramki-antyhalucynacyjne) •
 [Bezpieczeństwo](#bezpiecze%C5%84stwo) •
+[Tryb serwerowy](#tryb-serwerowy-i-przegl%C4%85darka) •
 [Instalacja](#instalacja) •
 [Budowa](#budowa-ze-%C5%BAr%C3%B3de%C5%82)
 
@@ -34,7 +35,7 @@ Trzy filary odróżniają ją od zwykłego czatu z LLM:
 
 1. **Prywatność z założenia** — dane spraw przetwarzane są lokalnie; do modeli zewnętrznych trafiają wyłącznie symbole zastępcze (`[PII:PERSON:0001|GEN]`), a klucz do nich jest zaszyfrowany na dysku użytkownika.
 2. **Weryfikacja u źródła** — każdy artykuł, każda pozycja Dz.U. i każda sygnatura są potwierdzane w urzędowym repozytorium (Sejm ELI) lub przez narzędzia w tej samej turze; przepis bez pokrycia nie wchodzi do odpowiedzi finalnej.
-3. **Lokalny runtime jako źródło prawdy** — logika (sprawy, szyfrowanie, anonimizacja, orkiestracja modeli, bramki) działa w procesie na `127.0.0.1`, nie w przeglądarce ani w chmurze.
+3. **Lokalny runtime jako źródło prawdy** — logika (sprawy, szyfrowanie, anonimizacja, orkiestracja modeli, bramki) działa w procesie na komputerze użytkownika, nie w chmurze. Ten sam interfejs jest dostępny w oknie aplikacji i w przeglądarce pod `https://127.0.0.1:4317`.
 
 > Niniejszy dokument opisuje **aplikację** — runtime, interfejs i mechanizmy. Metodyka prawna (router, dziedziny prawa, skille wykonawcze) jest **osobnym projektem**: żyje we własnym repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina), ma własną dokumentację i jest udostępniana na **licencji GPL-3.0**. Dla aplikacji skille są opcjonalnym dodatkiem, który wczytuje z katalogu `Wersja rozwojowa rozpakowana/`; aplikacja działa też z innym zestawem skilli lub bez korpusu. Aplikacja i korpus skilli mają różnych właścicieli licencyjnych — zob. [Kontakt i licencja](#kontakt-i-licencja).
 
@@ -50,10 +51,12 @@ Trzy filary odróżniają ją od zwykłego czatu z LLM:
 | **Anonimizacja** | Wielowarstwowe rozpoznawanie PII (słownik SGJP/Morfeusz2, Stanza NER, detektory identyfikatorów, opcjonalnie model lokalny) z odwracalnym, lokalnym kluczem. |
 | **Czat prawny** | Załączniki z miernikiem tokenów, obrazy jako dowód z maskowaniem PII, 6-etapowy potok z widocznym postępem, bramka złożoności. |
 | **Generowanie pism** | Pisma, opinie, umowy i raporty jako pliki `.docx`/`.odt` do pobrania; status DRAFT do akceptacji; automatyczna deanonimizacja wyników. |
-| **Modele AI** | API (Anthropic, OpenAI, xAI), konta CLI (Claude, Codex, Grok) oraz modele lokalne (llama.cpp, np. Bielik) — jeden spójny interfejs. |
+| **Modele AI** | API (Anthropic, OpenAI, xAI, Google), konta CLI (Claude, Codex, Gemini, Grok) oraz modele lokalne (llama.cpp, np. Bielik) — jeden spójny interfejs. |
 | **Źródła prawa** | Weryfikacja w Sejm ELI + 16 konektorów MCP (ISAP, EUR-Lex, SAOS, CBOSA, SN, KRS, WL, CEIDG, NBP, EUREKA, SUDOP, UODO, KIO, TK, sądy powszechne, ETPCz) i karta Wyszukiwanie. |
 | **Biblioteka kancelarii** | Wspólny, zaszyfrowany magazyn wzorów DOCX/ODT i dokumentów know-how z wyszukiwaniem semantycznym. |
 | **Konta i uprawnienia** | Lokalne konta (Argon2id), role per sprawa (OWNER/EDITOR/ANALYST/VIEWER), koperty kluczy per użytkownik, odzyskiwanie hasła, re-autoryzacja operacji wrażliwych. |
+| **Faktury** | Wystawianie i druk faktur z danymi sprzedawcy, numeracją i ustawieniami domyślnymi; wysyłka do KSeF niedostępna w tej wersji. |
+| **Tryb serwerowy** | Praca wielu osób przez przeglądarkę: rejestracja e-mailem, plany z limitem tokenów, globalne klucze API i limit, podgląd tur, dostęp lokalny albo z sieci (HTTPS). |
 
 ---
 
@@ -68,7 +71,9 @@ flowchart TB
         PY["workery Python<br/>privacy (Morfeusz2/SGJP, Stanza NER),<br/>ocr (PaddleOCR), storage (Office)"]
         MCP["lex-mcp.mjs<br/>serwery MCP źródeł prawa"]
         LLM["llama.cpp (llama-server)<br/>model lokalny, opcjonalnie"]
+        BR["przeglądarka<br/>https://127.0.0.1:4317"]
         WEB -->|"widok w oknie"| DESK
+        BR -->|"HTTPS, strona i API"| RT
         DESK -->|"proxy HTTP 127.0.0.1"| RT
         RT -->|"procesy potomne"| PY
         RT -->|"stdio"| MCP
@@ -83,13 +88,13 @@ flowchart TB
 | Warstwa | Katalog | Technologia | Rola |
 |---|---|---|---|
 | Desktop | `app/lex-desktop` | Tauri, Rust | Okno, uruchomienie runtime, granica zaufania (CORS, nagłówki, allowlista tras) |
-| Runtime | `app/lex-runtime` | TypeScript, Node ≥ 24.7 | API HTTP na loopbacku, sprawy, szyfrowanie, anonimizacja, modele, narzędzia, bramki |
+| Runtime | `app/lex-runtime` | TypeScript, Node ≥ 24.7 | API HTTP, strona aplikacji (HTTPS), sprawy, szyfrowanie, anonimizacja, modele, narzędzia, bramki |
 | Interfejs | `app/lex-web` | React | Czat, zakładka Sprawa, Kancelaria, Ustawienia |
 | Workery | `app/privacy`, `app/ocr`, `app/storage` | Python | NER i słowniki, OCR, odczyt/zapis Office |
 | Konektory | `…/audyt-systemu-v4/mcp-servers` | Node (MCP) | Federacja źródeł prawa |
 | Instalator | `app/installer`, `.github/workflows/` | NSIS, PowerShell | Instalator online Windows i macOS |
 
-Runtime jest źródłem prawdy; `app/lex-runtime/dist` jest budowany i wersjonowany w repozytorium (instalator kopiuje `dist`). Komunikacja desktop → runtime przechodzi wyłącznie dozwolone trasy (`DESKTOP_ROUTE_NOT_ALLOWED` przy odstępstwie) — API liczy ok. 90 tras HTTP.
+Runtime jest źródłem prawdy; `app/lex-runtime/dist` jest budowany i wersjonowany w repozytorium (instalator kopiuje `dist` i zbudowaną stronę `lex-web` do `app/web`). Komunikacja desktop → runtime przechodzi wyłącznie dozwolone trasy (`DESKTOP_ROUTE_NOT_ALLOWED` przy odstępstwie) — API liczy ok. 240 tras HTTP.
 
 ---
 
@@ -125,9 +130,9 @@ Audyt (`app/privacy/benchmarks`, 500 dokumentów): skuteczność 100%, 0 wyciek�
 
 | Rodzaj | Jak działa |
 |---|---|
-| **API** (Anthropic, OpenAI, xAI) | Klucz w pamięci procesu lub keyringu systemu; dwie najnowsze wersje każdej rodziny. |
+| **API** (Anthropic, OpenAI, xAI, Google) | Klucz w pamięci procesu lub keyringu systemu; dwie najnowsze wersje każdej rodziny. Pętla narzędzi w jednym strumieniu; stały prompt systemowy między turami (cache promptu i historii u dostawcy). |
 | **Konto Claude (CLI)** | Jeden proces `claude -p` w trybie `--restricted` (tylko `Read/Glob/Grep`, bez powłoki, internetu i zapisu); narzędzia Lex przez serwer MCP. |
-| **Konto Codex / Grok** | Tekstowy protokół narzędzi Lex (runda na narzędzie). |
+| **Konto Codex / Gemini / Grok (CLI)** | Jeden proces CLI na turę z narzędziami Lex przez serwer MCP; narzędzia hosta (powłoka, pliki, wyszukiwarka) wyłączone. Grok: profil agenta tylko z narzędziami `lex__*`. Wyłączniki: `LEX_CODEX_MCP=0`, `LEX_GEMINI_MCP=0`, `LEX_GROK_MCP=0`. |
 | **Lokalny** (llama.cpp, np. Bielik) | Kompaktowy routing, RAG z rdzenia aktów w prompcie, limit 4 plików; używany też do korekty OCR i wspomagania anonimizacji. |
 
 - **Bramka złożoności** (bez wywołania modelu): `TRIVIAL` / `SIMPLE` / `STANDARD` — steruje kosztem i wybiera szybką ścieżkę dla prostych pytań.
@@ -138,7 +143,7 @@ Audyt (`app/privacy/benchmarks`, 500 dokumentów): skuteczność 100%, 0 wyciek�
 
 ## Źródła prawa
 
-- **Weryfikacja przepisów:** modele w chmurze potwierdzają każdy akt (także KC/KPC/KK/KPK) w Sejm ELI z kontrolą aktualności (bieżący tekst jednolity, nowelizacje po nim). Lokalna kopia ELI (RAG) służy tylko przy awarii ELI — wtedy z jawną adnotacją.
+- **Weryfikacja przepisów:** każdy akt (także KC/KPC/KK/KPK) jest potwierdzany w Sejm ELI z kontrolą aktualności (bieżący tekst jednolity, nowelizacje po nim, vacatio legis per artykuł). Gdy ELI potwierdzi, że lokalna kopia tekstu jednolitego jest aktualna, brzmienie pochodzi z tej kopii (RAG) — znacznik `✅ [VER: …, ŹRÓDŁO: RAG (kopia t.j. z ELI)]`; bez potwierdzenia — pełna weryfikacja w ELI. Wyłącznik: `LEX_CLOUD_LOCAL_COPY=0`.
 - **16 konektorów MCP** (federacja w czacie, karta Wyszukiwanie): ISAP/ELI, EUR-Lex, SAOS, CBOSA (NSA/WSA), Sąd Najwyższy, KRS, Biała lista VAT, CEIDG (wymaga własnego klucza API), NBP, EUREKA (interpretacje podatkowe), SUDOP, UODO, KIO, Trybunał Konstytucyjny, sądy powszechne (orzeczenia.ms.gov.pl), ETPCz.
 - **Karta Wyszukiwanie:** wynik wprost z API źródła, bez modelu — materiał do odnalezienia źródła, nie weryfikacja. NSA/WSA to snapshot; brak trafień = `OUT_OF_SCOPE`.
 
@@ -158,12 +163,29 @@ Aplikacja egzekwuje serię bramek walidacyjnych (G0–G40) przed każdym wynikie
 
 ## Bezpieczeństwo
 
-- Runtime nasłuchuje wyłącznie na `127.0.0.1`; desktop przepuszcza tylko nagłówki `X-Lex-*` z listy i tylko trasy z allowlisty.
+- Okno aplikacji łączy się z runtime na losowym porcie `127.0.0.1` z tokenem okna; desktop przepuszcza tylko nagłówki `X-Lex-*` z listy i tylko trasy z allowlisty.
+- Strona w przeglądarce: domyślnie tylko `127.0.0.1` i HTTPS; dostęp z sieci tylko w trybie serwerowym — zob. [Tryb serwerowy i przeglądarka](#tryb-serwerowy-i-przegl%C4%85darka).
 - Magazyny spraw i klucze anonimizacji szyfrowane kluczem sprawy; rotacja przy odebraniu dostępu.
 - Konta lokalne: Argon2id (koperta UMK z hasła), trwałe metadane logowania, backoff po błędach, wygasanie sesji; role ACL per sprawa i oddzielne uprawnienie `canReidentify`.
 - Koperty kluczy: niezależny 256-bitowy klucz per sprawa (CDK), koperty UMK/X25519 per użytkownik, ścieżka rotacji przy odbieraniu dostępu.
-- Model Claude nie ma powłoki, internetu, zapisu ani serwerów MCP konta; odczyt ograniczony do korpusu skilli.
+- Modele kont CLI nie mają powłoki, internetu, zapisu ani serwerów MCP konta; dostają tylko narzędzia Lex.
 - Most narzędzi MCP: prywatny kanał (named pipe / socket 0600) z jednorazowym tokenem na turę.
+
+---
+
+## Tryb serwerowy i przeglądarka
+
+Po uruchomieniu aplikacja jest dostępna w przeglądarce pod **`https://127.0.0.1:4317`** (ten sam interfejs co okno; `http://` przechodzi na `https://`). Ustawienia → **Tryb serwerowy** (tylko administrator, tylko w przeglądarce):
+
+| Ustawienie | Opcje |
+|---|---|
+| Tryb serwerowy | Konta rejestrowane e-mailem (SMTP), plany z miesięcznym limitem tokenów i listą dostawców, globalne klucze API i globalny limit, podgląd tur. Funkcje komputera (konta CLI, aktualizacje, folder Pobrane) wyłączone. |
+| Dostęp przez przeglądarkę | **Lokalny (domyślny)** — tylko `127.0.0.1`. **Z sieci** — `https://<IP serwera>:4317`; wymaga trybu serwerowego, HTTPS i zmienionego hasła `admin`; zmiana tylko z komputera serwera. |
+| Protokół | **HTTPS (domyślny)** albo HTTP (tylko dostęp lokalny lub za serwerem pośredniczącym z HTTPS). |
+
+- **Certyfikat:** aplikacja wystawia własny (localhost, `127.0.0.1`, nazwa i adresy komputera); przeglądarka ostrzega, dopóki nie dodasz go do zaufanych (link „Pobierz certyfikat” w panelu, `/lex-certificate.crt`). Własny certyfikat kancelarii: `custom.crt` i `custom.key` w katalogu danych `server/tls` albo `LEX_TLS_CERT`/`LEX_TLS_KEY`.
+- **Zabezpieczenia dostępu z sieci:** tylko adresy IP serwera i nazwy z `LEX_ALLOWED_HOSTS` (ochrona przed DNS rebinding), żądania tylko z tej samej strony, bez funkcji komputera serwera i funkcji okna desktop, limit prób logowania.
+- **Role:** administrator nie podlega planom (tylko limitowi globalnemu); konto użytkownika nie widzi trybu dewelopera ani zakładek administracyjnych, a serwer odrzuca operacje administracyjne.
 
 ---
 
@@ -171,17 +193,17 @@ Aplikacja egzekwuje serię bramek walidacyjnych (G0–G40) przed każdym wynikie
 
 **Wymagania:** Windows 10/11 (x64) lub macOS (Apple silicon). Instalator online pobiera prywatny Node i Python przy pierwszym uruchomieniu (sumy SHA-256 z `app/installer/windows-release-source.json`).
 
-1. Pobierz instalator online (artefakt workflow `Lex Windows Online Installer`: `LexMachina-Windows-Online-Installer`, lub `.dmg` z workflow macOS).
-2. Instalator jest niepodpisany — przy SmartScreen wybierz „Więcej informacji" → „Uruchom mimo to".
-3. Instalacja odbywa się w profilu użytkownika; nie wymaga uprawnień administratora.
-4. Pierwsze logowanie: `admin` i hasło początkowe — aplikacja wymusza zmianę (min. 10 znaków).
+1. Pobierz instalator z [najnowszego wydania](https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/latest): `Lex-Machina-<wersja>-Online-x64-Setup.exe` (Windows) albo `Lex-Machina-<wersja>-macOS-arm64-Online.pkg` (macOS); sumy w `SHA256SUMS.txt`.
+2. Instalatory są niepodpisane — Windows: przy SmartScreen „Więcej informacji" → „Uruchom mimo to"; macOS: Ustawienia systemowe → Prywatność i ochrona → „Otwórz mimo to".
+3. Windows: instalacja w profilu użytkownika, bez uprawnień administratora.
+4. Pierwsze logowanie: `admin` / `admin` — aplikacja wymusza zmianę hasła (min. 10 znaków).
 
-Aktualizacje aplikacji są pre-release z instalatorem online i `SHA256SUMS.txt`. Skille można odświeżać w aplikacji (Ustawienia → Konserwacja → Skille, kanał Stabilna/Rozwojowa).
+Nowszą wersję instaluje się nowszym instalatorem (dane i ustawienia zostają); instalacja aktualizacji z aplikacji jest wyłączona do czasu podpisu Authenticode. Skille można odświeżać w aplikacji (Ustawienia → Aplikacja i utrzymanie, administrator).
 
 **Skille w Claude Code (marketplace):** dodawaj marketplace przypięty do tagu wydania, nie do `main` — wtyczki ze ścieżek względnych pochodzą z tej samej rewizji:
 
 ```
-/plugin marketplace add michaleiatrak-star/Lex-machina-aplikacja#v0.1.21
+/plugin marketplace add michaleiatrak-star/Lex-machina-aplikacja#v0.1.45
 ```
 
 Konektory MCP skilli działają z pakietu w repozytorium (`audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs`, suma w `CHECKSUMS.sha256`), bez pobierania z npm. Przykładowy `claude_desktop_config.json` z serwerem zewnętrznym przypina wersję (`@matematicsolutions/mcp-isap@1.3.0`).
@@ -203,13 +225,18 @@ python3 app/lex-desktop/scripts/check-route-allowlist.py
 python app/privacy/generate_generic_words.py
 ```
 
-Instalator buduje workflow `lex-installer.yml` (Windows, ~25 min; wyzwalacze: pull request, `workflow_dispatch`). Nie wymaga sekretów (instalator niepodpisany). Pełna dokumentacja: [użytkowa](docs/APLIKACJA-DOKUMENTACJA.md) · [techniczna](docs/DOKUMENTACJA-TECHNICZNA.md).
+Instalator buduje i sprawdza workflow `lex-installer.yml` (pull request, `workflow_dispatch`); wydanie (Windows online i macOS, tag `v<wersja>`) publikuje `publish-windows-installers.yml` po zmianie wersji na `main`. Nie wymaga sekretów (instalatory niepodpisane). Pełna dokumentacja: [użytkowa](docs/APLIKACJA-DOKUMENTACJA.md) · [techniczna](docs/DOKUMENTACJA-TECHNICZNA.md).
 
 ### Wybrane zmienne środowiskowe
 
 | Zmienna | Znaczenie |
 |---|---|
-| `LEX_HOST`, `LEX_PORT` | Adres runtime (tylko loopback). |
+| `LEX_HOST`, `LEX_PORT` | Adres runtime (tylko loopback; bez aplikacji desktop domyślnie port 4317). |
+| `LEX_BROWSER_PORT` | Port strony w przeglądarce przy aplikacji desktop (domyślnie 4317, `0` wyłącza). |
+| `LEX_ALLOWED_HOSTS`, `LEX_TLS_CERT`, `LEX_TLS_KEY` | Nazwy hostów dla dostępu z sieci; własny certyfikat HTTPS. |
+| `LEX_SERVER_MODE_FORCE`, `LEX_SERVER_SECRET_KEY`, `LEX_PUBLIC_BASE_URL`, `LEX_TRUST_PROXY` | Tryb serwerowy ustalony z zewnątrz, klucz szyfrowania sekretów, adres w wiadomościach, adres klienta zza serwera pośredniczącego. |
+| `LEX_CLOUD_LOCAL_COPY=0` | Modele w chmurze zawsze weryfikują w ELI zamiast z potwierdzonej kopii lokalnej. |
+| `LEX_LOCAL_LLM_ENDPOINT` | Zewnętrzny serwer modelu lokalnego (np. na serwerze). |
 | `LEX_CLAUDE_NATIVE_CORPUS=off` | Claude wraca do tekstowego protokołu narzędzi. |
 | `LEX_SKILLS_PATH`, `LEX_ACCOUNT_SKILL_DIRS` | Przypięty korpus / katalogi skilli z kont. |
 | `LEX_CORE_LAW_DIR`, `LEX_CORE_LAW_REFRESH=off` | Lokalna kopia ELI i jej odświeżanie w tle. |
@@ -220,7 +247,7 @@ Instalator buduje workflow `lex-installer.yml` (Windows, ~25 min; wyzwalacze: pu
 
 ## Wersjonowanie
 
-Wersja aplikacji: **0.1.20** (runtime, interfejs i desktop współdzielą numer).
+Wersja aplikacji: **0.1.45** (runtime, interfejs i desktop współdzielą numer).
 
 Korpus skilli (osobny projekt GPL-3.0 w repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina)) jest tu dołączony jako dodatek i ma własne wersjonowanie w dwóch kanałach — `Wersja stabilna rozpakowana <data>/` (codzienna praca) i `Wersja rozwojowa rozpakowana/` (nowe mechanizmy). Aplikację można zaktualizować niezależnie od skilli i odwrotnie.
 
@@ -230,10 +257,11 @@ Korpus skilli (osobny projekt GPL-3.0 w repozytorium [`michaleiatrak-star/Lex-Ma
 
 - Przyspieszenie trybu natywnego Claude i weryfikacja przez lokalne AI nie były mierzone na prawdziwym koncie/modelu (pokryte testami).
 - Strażnik źródeł porównuje numery artykułów, nie akty (finalizacja ELI nadal sprawdza akt).
-- Codex i Grok nie mają zamknięcia odczytu w jednym katalogu — pozostają przy protokole tekstowym.
 - Okna kontekstu modeli w hoście przyjęte ostrożnie (Claude 200 tys., OpenAI/Grok 128 tys. tokenów).
 - Jakości OCR/korekty na prawdziwych skanach i modelu lokalnym nie mierzono (testy na atrapie silnika).
-- Instalator offline wstrzymany do potwierdzenia instalatora online.
+- Instalator offline nie jest publikowany (`RELEASE_OFFLINE_INSTALLER`); instalatory Windows i macOS są niepodpisane.
+- Certyfikat HTTPS aplikacji jest wystawiony przez nią samą — przeglądarka ostrzega do czasu dodania go do zaufanych albo użycia certyfikatu kancelarii.
+- Integracja z kontem Google (Gmail, Dysk) jest w kodzie, ale ukryta w interfejsie.
 
 ---
 
