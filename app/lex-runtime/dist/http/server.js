@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
 import { BrowserAccess, DEFAULT_BROWSER_PORT, browserSameOrigin, registerWebApp, resolveWebRoot } from "./browser-access.js";
+import { certificateNames, ensureCertificate } from "./tls-certificate.js";
 import { localOnlyRoute } from "../server-mode/routes.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GoogleWorkspaceController } from "../google/workspace-controller.js";
@@ -417,7 +418,26 @@ export async function startLocalServer(options) {
     // 0 wyłącza); bez aplikacji desktop główny nasłuch serwera.
     const desktop = Boolean(process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim());
     const browserPortSetting = Number(process.env.LEX_BROWSER_PORT ?? DEFAULT_BROWSER_PORT);
-    const browserAccess = new BrowserAccess(app, desktop ? (Number.isInteger(browserPortSetting) && browserPortSetting > 0 && browserPortSetting <= 65535 ? browserPortSetting : 0) : port, () => process.env.LEX_PUBLIC_BASE_URL?.trim() ?? "", host);
+    const browserAccess = new BrowserAccess(app, desktop ? (Number.isInteger(browserPortSetting) && browserPortSetting > 0 && browserPortSetting <= 65535 ? browserPortSetting : 0) : port, () => process.env.LEX_PUBLIC_BASE_URL?.trim() ?? "", host, () => {
+        if (serverMode.browserProtocol() !== "HTTPS")
+            return undefined;
+        const extra = (process.env.LEX_ALLOWED_HOSTS ?? "").split(",");
+        try {
+            const base = process.env.LEX_PUBLIC_BASE_URL?.trim();
+            if (base)
+                extra.push(new URL(base).hostname);
+        }
+        catch {
+            // Niepoprawny adres nie trafia do certyfikatu.
+        }
+        try {
+            return ensureCertificate(path.join(serverModeDir, "tls"), certificateNames(extra));
+        }
+        catch (error) {
+            process.stderr.write(`BROWSER_TLS_UNAVAILABLE:${error instanceof Error ? error.message : String(error)}\n`);
+            return undefined;
+        }
+    });
     app.use(helmet());
     app.use(browserAccess.guard(localOnlyRoute));
     app.use((req, res, next) => {

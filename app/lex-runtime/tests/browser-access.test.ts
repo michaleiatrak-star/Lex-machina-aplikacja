@@ -1,11 +1,14 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 import express, { type Request, type Response } from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLexHttpApp, jsonErrorHandler } from "../src/http/app.js";
 import { BrowserAccess, isLoopbackAddress, registerWebApp } from "../src/http/browser-access.js";
+import { ensureCertificate } from "../src/http/tls-certificate.js";
 import { LexSkillRegistry } from "../src/registry.js";
 import { LocalAuthStore } from "../src/auth/store.js";
 import { LocalAuthService } from "../src/auth/service.js";
@@ -228,5 +231,58 @@ describe("aplikacja w przeglądarce", () => {
     expect(run("/api/provider-accounts/status").body).toEqual({ error: "NOT_AVAILABLE_IN_BROWSER" });
     expect(isLoopbackAddress("::ffff:127.0.0.1")).toBe(true);
     expect(isLoopbackAddress("192.168.1.20")).toBe(false);
+  });
+});
+
+describe("HTTPS strony aplikacji", () => {
+  function get(url: string, ca?: string): Promise<{ status: number; body: string; location?: string }> {
+    return new Promise((resolve, reject) => {
+      const target = new URL(url);
+      const client = target.protocol === "https:" ? https : http;
+      const req = client.request(
+        { host: target.hostname, port: target.port, path: target.pathname, method: "GET", agent: false, ...(ca ? { ca } : {}) },
+        (res) => {
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => (body += chunk));
+          res.on("end", () => resolve({ status: res.statusCode ?? 0, body, ...(res.headers.location ? { location: res.headers.location } : {}) }));
+        }
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  it("certyfikat aplikacji obejmuje localhost, 127.0.0.1 i nazwy od administratora; ponownie użyty, nowy przy nowej nazwie", () => {
+    const dir = tempDir("lex-tls-");
+    const first = ensureCertificate(dir, ["localhost", "127.0.0.1", "::1"]);
+    const certificate = new crypto.X509Certificate(first.cert);
+    expect(certificate.verify(certificate.publicKey)).toBe(true);
+    expect(certificate.checkIP("127.0.0.1")).toBe("127.0.0.1");
+    expect(certificate.checkHost("localhost")).toBe("localhost");
+    expect(first.custom).toBe(false);
+    expect(ensureCertificate(dir, ["localhost", "127.0.0.1"]).fingerprint256).toBe(first.fingerprint256);
+    const renamed = ensureCertificate(dir, ["localhost", "127.0.0.1", "serwer.kancelaria"]);
+    expect(renamed.fingerprint256).not.toBe(first.fingerprint256);
+    expect(new crypto.X509Certificate(renamed.cert).checkHost("serwer.kancelaria")).toBe("serwer.kancelaria");
+  });
+
+  it("HTTPS na tym samym porcie: strona przez https://, http:// przechodzi na https://, API lokalnie także po HTTP", async () => {
+    const dir = tempDir("lex-tls-");
+    const material = ensureCertificate(dir, ["localhost", "127.0.0.1"]);
+    const app = express();
+    app.get("/health", (_req, res) => res.json({ status: "ok" }));
+    app.get("/", (_req, res) => res.send("strona"));
+    const access = new BrowserAccess(app, 0, () => "", "127.0.0.1", () => material);
+    accesses.push(access);
+    await access.start();
+    const port = access.listeningPort;
+    expect(access.protocol).toBe("https");
+    expect(access.addresses()).toEqual([`https://127.0.0.1:${port}`]);
+    expect(await get(`https://127.0.0.1:${port}/`, material.cert)).toMatchObject({ status: 200, body: "strona" });
+    expect(await get(`http://127.0.0.1:${port}/`)).toMatchObject({ status: 308, location: `https://127.0.0.1:${port}/` });
+    expect((await get(`http://127.0.0.1:${port}/health`)).status).toBe(200);
+    await expect(get(`https://127.0.0.1:${port}/`)).rejects.toThrow(/self[- ]signed|certificate/i);
+    expect(access.certificate()).not.toHaveProperty("key");
   });
 });

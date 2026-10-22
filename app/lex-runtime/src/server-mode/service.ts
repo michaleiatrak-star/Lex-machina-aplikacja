@@ -80,11 +80,14 @@ export type SmtpSettingsView = {
 // Dostęp przez przeglądarkę: LOCAL — tylko z tego komputera (127.0.0.1, domyślnie),
 // NETWORK — także z sieci, z zabezpieczeniami (tylko w trybie serwerowym).
 export type NetworkAccess = "LOCAL" | "NETWORK";
+// Strona w przeglądarce: HTTPS (domyślnie) albo HTTP.
+export type BrowserProtocol = "HTTPS" | "HTTP";
 
 export type ServerSettingsView = {
   serverMode: boolean;
   forced: boolean;
   networkAccess: NetworkAccess;
+  browserProtocol: BrowserProtocol;
   publicBaseUrl: string;
   defaultPlanId: string | null;
   smtp: SmtpSettingsView | null;
@@ -186,6 +189,16 @@ export class ServerModeService implements ModelCallGuard {
     return this.isEnabled() && this.store.getSetting("network_access") === "NETWORK" ? "NETWORK" : "LOCAL";
   }
 
+  browserProtocol(): BrowserProtocol {
+    return this.store.getSetting("browser_protocol") === "HTTP" ? "HTTP" : "HTTPS";
+  }
+
+  setBrowserProtocol(actor: AuthenticatedContext, protocol: BrowserProtocol): ServerSettingsView {
+    requireAdmin(actor);
+    this.store.setSetting("browser_protocol", protocol);
+    return this.settings(actor);
+  }
+
   setNetworkAccess(actor: AuthenticatedContext, mode: NetworkAccess): ServerSettingsView {
     requireAdmin(actor);
     if (mode === "NETWORK" && !this.isEnabled()) throw new ServerModeError("SERVER_MODE_REQUIRED", 409);
@@ -217,6 +230,7 @@ export class ServerModeService implements ModelCallGuard {
       serverMode: this.isEnabled(),
       forced: this.forced !== null,
       networkAccess: this.networkAccess(),
+      browserProtocol: this.browserProtocol(),
       publicBaseUrl: this.publicBaseUrl(),
       defaultPlanId: this.store.getSetting("default_plan_id"),
       smtp: smtp ? { ...smtp, passwordSet: this.store.getSetting("smtp_password") !== null } : null,

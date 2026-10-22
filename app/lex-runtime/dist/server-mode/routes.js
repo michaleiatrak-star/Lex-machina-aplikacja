@@ -57,6 +57,8 @@ export function registerServerModeRoutes(app, dependencies) {
             ? {
                 state: browserAccess.state,
                 port: browserAccess.listeningPort,
+                protocol: browserAccess.protocol,
+                certificate: browserAccess.certificate() ?? null,
                 networkAccess: browserAccess.networkAccess,
                 addresses: browserAccess.addresses(),
                 ...(browserAccess.error ? { error: browserAccess.error } : {})
@@ -172,17 +174,49 @@ export function registerServerModeRoutes(app, dependencies) {
     app.get("/api/server-mode/settings", handle((req, res) => {
         res.json(withBrowser(serverMode.settings(admin(req))));
     }));
+    // Certyfikat HTTPS strony (publiczny) do dodania w przeglądarce albo systemie jako zaufany.
+    app.get("/lex-certificate.crt", (_req, res) => {
+        const certificate = browserAccess?.certificate();
+        if (!certificate) {
+            res.status(404).json({ error: "HTTPS_OFF" });
+            return;
+        }
+        res.set("Content-Type", "application/x-x509-ca-cert");
+        res.set("Content-Disposition", 'attachment; filename="lex-machina.crt"');
+        res.send(certificate.cert);
+    });
+    const fromThisComputer = (req) => isLoopbackAddress(req.socket.remoteAddress) && !req.get("x-forwarded-for");
+    // HTTPS albo HTTP strony: administrator, tylko z tego komputera.
+    app.put("/api/server-mode/browser-protocol", handle(async (req, res) => {
+        const context = admin(req);
+        const protocol = req.body?.protocol;
+        if (protocol !== "HTTPS" && protocol !== "HTTP")
+            throw new ServerModeError("INVALID_REQUEST", 400);
+        if (!fromThisComputer(req))
+            throw new ServerModeError("NETWORK_CHANGE_LOCAL_ONLY", 403);
+        if (!browserAccess || browserAccess.state === "OFF")
+            throw new ServerModeError("BROWSER_ACCESS_UNAVAILABLE", 409);
+        // Z sieci bez HTTPS tylko świadomie: najpierw dostęp lokalny.
+        if (protocol === "HTTP" && serverMode.networkAccess() === "NETWORK")
+            throw new ServerModeError("HTTPS_REQUIRED_FOR_NETWORK", 409);
+        const settings = serverMode.setBrowserProtocol(context, protocol);
+        res.on("finish", () => {
+            void browserAccess.restart();
+        });
+        res.json(withBrowser(settings));
+    }));
     // Dostęp z sieci: zmienia go administrator tylko z tego komputera (bez pośrednika).
     app.put("/api/server-mode/network", handle(async (req, res) => {
         const context = admin(req);
         const mode = req.body?.mode;
         if (mode !== "LOCAL" && mode !== "NETWORK")
             throw new ServerModeError("INVALID_REQUEST", 400);
-        if (!isLoopbackAddress(req.socket.remoteAddress) || req.get("x-forwarded-for")) {
+        if (!fromThisComputer(req))
             throw new ServerModeError("NETWORK_CHANGE_LOCAL_ONLY", 403);
-        }
         if (!browserAccess || browserAccess.state === "OFF")
             throw new ServerModeError("BROWSER_ACCESS_UNAVAILABLE", 409);
+        if (mode === "NETWORK" && serverMode.browserProtocol() === "HTTP")
+            throw new ServerModeError("HTTPS_REQUIRED_FOR_NETWORK", 409);
         // Hasło tymczasowe admin/admin nie może być dostępne z sieci.
         if (mode === "NETWORK" && authService.status?.().temporaryAdminCredentialsActive) {
             throw new ServerModeError("TEMPORARY_ADMIN_PASSWORD", 409);

@@ -1,11 +1,14 @@
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
+import net from "node:net";
 import type { Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import type { NetworkAccess } from "../server-mode/service.js";
+import type { TlsMaterial } from "./tls-certificate.js";
 
 /**
  * Aplikacja w przeglądarce: serwer podaje stronę (lex-web) i API pod jednym adresem.
@@ -95,10 +98,12 @@ export function registerWebApp(app: Express, webRoot: string | undefined): void 
 }
 
 export class BrowserAccess {
-  private server: http.Server | undefined;
+  private server: net.Server | undefined;
+  private readonly open = new Set<Socket>();
   private readonly sockets = new WeakSet<Socket>();
   private mode: NetworkAccess = "LOCAL";
   private port: number;
+  private tls: TlsMaterial | undefined;
   state: "OFF" | "LISTENING" | "UNAVAILABLE" = "OFF";
   error: string | undefined;
 
@@ -106,7 +111,9 @@ export class BrowserAccess {
     private readonly handler: http.RequestListener,
     port: number,
     private readonly publicBaseUrl: () => string = () => "",
-    private readonly localHost = "127.0.0.1"
+    private readonly localHost = "127.0.0.1",
+    // HTTPS (domyślnie w serwerze): certyfikat przy każdym uruchomieniu nasłuchu; brak: HTTP.
+    private readonly tlsProvider?: () => TlsMaterial | undefined
   ) {
     this.port = port;
   }
@@ -119,14 +126,68 @@ export class BrowserAccess {
     return this.port;
   }
 
+  get protocol(): "https" | "http" {
+    return this.tls ? "https" : "http";
+  }
+
+  certificate(): Omit<TlsMaterial, "key"> | undefined {
+    if (!this.tls) return undefined;
+    const { key: _key, ...publicPart } = this.tls;
+    return publicPart;
+  }
+
   isBrowserSocket(socket: Socket): boolean {
     return this.sockets.has(socket);
   }
 
-  private listen(host: string): Promise<http.Server> {
+  /**
+   * HTTP na porcie z HTTPS: strona przechodzi na https:// (ten sam adres i port); z tego komputera
+   * API i /health odpowiadają też po HTTP (narzędzia lokalne), z sieci tylko HTTPS.
+   */
+  private plainOverTls(serve: http.RequestListener): http.RequestListener {
+    return (req, res) => {
+      const pathname = (req.url ?? "/").split("?")[0] ?? "/";
+      const local = isLoopbackAddress(req.socket.remoteAddress);
+      if (local && (pathname === "/health" || pathname.startsWith("/api/") || pathname.startsWith("/oauth/"))) {
+        serve(req, res);
+        return;
+      }
+      const host = req.headers.host ?? "";
+      if ((req.method === "GET" || req.method === "HEAD") && /^[A-Za-z0-9.\-:[\]]+$/.test(host)) {
+        res.writeHead(308, { Location: `https://${host}${req.url ?? "/"}`, "Cache-Control": "no-store" });
+        res.end();
+        return;
+      }
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "HTTPS_REQUIRED" }));
+    };
+  }
+
+  private listen(host: string): Promise<net.Server> {
+    const material = this.tlsProvider?.();
+    this.tls = material;
+    const serve: http.RequestListener = (req, res) => {
+      this.sockets.add(req.socket);
+      this.handler(req, res);
+    };
+    const plain = http.createServer(material ? this.plainOverTls(serve) : serve);
+    const secure = material ? https.createServer({ key: material.key, cert: material.cert }, serve) : undefined;
     return new Promise((resolve, reject) => {
-      const server = http.createServer(this.handler);
-      server.on("connection", (socket) => this.sockets.add(socket));
+      const server = net.createServer((socket) => {
+        this.open.add(socket);
+        socket.once("close", () => this.open.delete(socket));
+        if (!secure) {
+          plain.emit("connection", socket);
+          return;
+        }
+        // Pierwszy bajt 0x16 to początek uzgadniania TLS; inaczej zwykłe HTTP.
+        socket.once("data", (chunk: Buffer) => {
+          socket.pause();
+          socket.unshift(chunk);
+          (chunk[0] === 0x16 ? secure : plain).emit("connection", socket);
+          process.nextTick(() => socket.resume());
+        });
+      });
       server.once("error", reject);
       server.listen(this.port, host, () => {
         server.off("error", reject);
@@ -143,7 +204,8 @@ export class BrowserAccess {
     if (!server) return;
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
-      server.closeAllConnections();
+      for (const socket of this.open) socket.destroy();
+      this.open.clear();
     });
   }
 
@@ -166,6 +228,11 @@ export class BrowserAccess {
   /** Zmiana dostępu: nasłuch od nowa na tym samym porcie (połączenia z sieci są zamykane). */
   async setMode(mode: NetworkAccess): Promise<void> {
     if (mode === this.mode && this.state === "LISTENING") return;
+    await this.restart(mode);
+  }
+
+  /** Nowy nasłuch (np. po zmianie HTTPS/HTTP albo certyfikatu). */
+  async restart(mode: NetworkAccess = this.mode): Promise<void> {
     await this.close();
     await this.start(mode);
   }
@@ -178,11 +245,11 @@ export class BrowserAccess {
   addresses(): string[] {
     if (this.state !== "LISTENING") return [];
     const loopback = this.localHost.includes(":") ? `[${this.localHost}]` : this.localHost;
-    const list = [`http://${loopback}:${this.port}`];
+    const list = [`${this.protocol}://${loopback}:${this.port}`];
     if (this.mode === "NETWORK") {
       for (const entries of Object.values(os.networkInterfaces())) {
         for (const entry of entries ?? []) {
-          if (entry.family === "IPv4" && !entry.internal) list.push(`http://${entry.address}:${this.port}`);
+          if (entry.family === "IPv4" && !entry.internal) list.push(`${this.protocol}://${entry.address}:${this.port}`);
         }
       }
     }

@@ -4466,14 +4466,18 @@ export type ServerModeStatus = {
 
 // Dostęp przez przeglądarkę: LOCAL — tylko ten komputer (127.0.0.1), NETWORK — także z sieci.
 export type NetworkAccess = "LOCAL" | "NETWORK";
+export type BrowserProtocol = "HTTPS" | "HTTP";
 
 export type ServerSettings = {
   serverMode: boolean;
   forced: boolean;
   networkAccess: NetworkAccess;
+  browserProtocol: BrowserProtocol;
   browser: {
     state: "OFF" | "LISTENING" | "UNAVAILABLE";
     port: number;
+    protocol: "https" | "http";
+    certificate: { fingerprint256: string; validTo: string; custom: boolean; names: string[] } | null;
     networkAccess: NetworkAccess;
     addresses: string[];
     error?: string;
@@ -4609,6 +4613,10 @@ export function setServerModeEnabled(enabled: boolean): Promise<ServerSettings> 
 
 export function setServerNetworkAccess(mode: NetworkAccess): Promise<ServerSettings> {
   return json<ServerSettings>("/api/server-mode/network", { method: "PUT", body: JSON.stringify({ mode }) });
+}
+
+export function setServerBrowserProtocol(protocol: BrowserProtocol): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/browser-protocol", { method: "PUT", body: JSON.stringify({ protocol }) });
 }
 
 export function sendServerTestMail(to: string): Promise<void> {

@@ -13,9 +13,11 @@ import {
   sendServerTestMail,
   setServerAccountStatus,
   setServerModeEnabled,
+  setServerBrowserProtocol,
   setServerNetworkAccess,
   setServerProviderKey,
   updateServerSettings,
+  type BrowserProtocol,
   type LiveTurn,
   type NetworkAccess,
   type ProviderId,
@@ -58,6 +60,7 @@ function failureText(failure: unknown): string {
     USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora.",
     SERVER_MODE_REQUIRED: "Dostęp z sieci wymaga włączonego trybu serwerowego.",
     NETWORK_CHANGE_LOCAL_ONLY: "Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1).",
+    HTTPS_REQUIRED_FOR_NETWORK: "Dostęp z sieci działa tylko z HTTPS.",
     TEMPORARY_ADMIN_PASSWORD: "Najpierw zmień tymczasowe hasło administratora (admin/admin).",
     BROWSER_ACCESS_UNAVAILABLE: "Strona aplikacji nie nasłuchuje (port zajęty albo wyłączony)."
   };
@@ -190,7 +193,7 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
               [
                 "NETWORK",
                 "Z sieci",
-                "Także z innych komputerów: tylko adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego; połączenie bez HTTPS nie jest szyfrowane — w internecie tylko za serwerem pośredniczącym z HTTPS."
+                "Także z innych komputerów, tylko przez HTTPS: adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego."
               ]
             ] as Array<[NetworkAccess, string, string]>
           ).map(([mode, label, help]) => (
@@ -214,6 +217,46 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
             </label>
           ))}
         </fieldset>
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+          {(
+            [
+              ["HTTPS", "HTTPS (domyślny)", "Połączenie szyfrowane. Wpisany adres http:// przechodzi na https://."],
+              ["HTTP", "HTTP", "Bez szyfrowania; tylko dostęp lokalny albo za serwerem pośredniczącym z HTTPS."]
+            ] as Array<[BrowserProtocol, string, string]>
+          ).map(([protocol, label, help]) => (
+            <label key={protocol} className="chat-settings-channel-option">
+              <input
+                type="radio"
+                name="lex-browser-protocol"
+                checked={settings.browserProtocol === protocol}
+                disabled={protocol === "HTTP" && settings.networkAccess === "NETWORK"}
+                onChange={() => {
+                  void run(async () => {
+                    await setServerBrowserProtocol(protocol);
+                    await new Promise((resolve) => window.setTimeout(resolve, 600));
+                    // Strona otwarta pod innym protokołem przechodzi na nowy adres.
+                    const target = protocol === "HTTPS" ? "https:" : "http:";
+                    if (window.location.protocol !== target) {
+                      window.location.href = `${target}//${window.location.host}${window.location.pathname}`;
+                    }
+                  }, protocol === "HTTPS" ? "HTTPS włączone." : "HTTP włączone.");
+                }}
+              />
+              <span>
+                <strong>{label}</strong> — {help}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        {settings.browser?.certificate && (
+          <p className="field-help">
+            Certyfikat {settings.browser.certificate.custom ? "kancelarii" : "aplikacji (przeglądarka ostrzega, dopóki nie dodasz go do zaufanych)"},
+            ważny do {settings.browser.certificate.validTo.slice(0, 10)}, dla: {settings.browser.certificate.names.join(", ")}.
+            Odcisk SHA-256: <code>{settings.browser.certificate.fingerprint256}</code>.{" "}
+            <a href="/lex-certificate.crt" download="lex-machina.crt">Pobierz certyfikat</a>. Własny certyfikat: pliki custom.crt i
+            custom.key w katalogu danych server/tls albo zmienne LEX_TLS_CERT i LEX_TLS_KEY.
+          </p>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

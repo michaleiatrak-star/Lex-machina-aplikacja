@@ -113,6 +113,14 @@ export class ServerModeService {
     networkAccess() {
         return this.isEnabled() && this.store.getSetting("network_access") === "NETWORK" ? "NETWORK" : "LOCAL";
     }
+    browserProtocol() {
+        return this.store.getSetting("browser_protocol") === "HTTP" ? "HTTP" : "HTTPS";
+    }
+    setBrowserProtocol(actor, protocol) {
+        requireAdmin(actor);
+        this.store.setSetting("browser_protocol", protocol);
+        return this.settings(actor);
+    }
     setNetworkAccess(actor, mode) {
         requireAdmin(actor);
         if (mode === "NETWORK" && !this.isEnabled())
@@ -140,6 +148,7 @@ export class ServerModeService {
             serverMode: this.isEnabled(),
             forced: this.forced !== null,
             networkAccess: this.networkAccess(),
+            browserProtocol: this.browserProtocol(),
             publicBaseUrl: this.publicBaseUrl(),
             defaultPlanId: this.store.getSetting("default_plan_id"),
             smtp: smtp ? { ...smtp, passwordSet: this.store.getSetting("smtp_password") !== null } : null,
