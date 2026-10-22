@@ -410,6 +410,12 @@ export function inspectLexMcpPackage(
   };
 }
 
+// sn.pl (LEX_SN_UPSTREAM: testy weryfikacji na lokalnej imitacji ochrony sn.pl).
+export function snUpstream(): string {
+  const configured = process.env.LEX_SN_UPSTREAM?.trim().replace(/\/+$/u, "");
+  return configured && /^https?:\/\/[^/\s]+$/u.test(configured) ? configured : "https://www.sn.pl";
+}
+
 export class LexMcpConnectorStore {
   private revisionValue = 0;
 
@@ -504,7 +510,7 @@ export class LexMcpConnectorStore {
       ? rawUserAgent
       : SN_PROBE_USER_AGENT;
     const url =
-      "https://www.sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json" +
+      `${snUpstream()}/pl/index.php?option=com_ajax&plugin=snproxy&format=json` +
       "&task=searchOrzeczenia&sygnatura=" +
       encodeURIComponent("III CZP 25/11");
     try {

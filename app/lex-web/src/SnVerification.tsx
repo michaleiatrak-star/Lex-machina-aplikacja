@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, attemptSnSessionOnServer, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
+import { ApiError, apiBase, attemptSnSessionOnServer, closeSnProxyWindow, isDesktopShell, openSnProxyWindow, probeSnSession, saveSnSession, snProxyWindowStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
 function desktopInvoke():
@@ -167,10 +167,75 @@ export const SN_SERVER_REASONS: Record<string, string> = {
 
 // Tryb serwerowy (przeglądarka, bez okna sn.pl aplikacji): próba serwera albo sesja wklejona
 // z przeglądarki w sieci serwera (sprawdzana zapytaniem do sn.pl przed zapisem).
+// The sn.pl window through the server: open, poll the ticket, close it when the session works
+// (as the desktop window: no "Gotowe" needed).
+export async function runSnProxyWindow(deps: {
+  open: () => Promise<{ ticket: string; url: string }>;
+  status: (ticket: string) => Promise<{ ready: boolean }>;
+  close: (ticket: string) => Promise<unknown>;
+  openWindow: (url: string) => { closed: boolean; close: () => void } | null;
+  wait: (ms: number) => Promise<void>;
+  base: string;
+  timeoutMs?: number;
+  // The user stopped waiting ("Anuluj"); popup.closed is not reliable across origins.
+  cancelled?: () => boolean;
+}): Promise<"ready" | "closed" | "blocked" | "timeout"> {
+  const { ticket, url } = await deps.open();
+  const popup = deps.openWindow(`${deps.base}${url}`);
+  if (!popup) {
+    await deps.close(ticket).catch(() => undefined);
+    return "blocked";
+  }
+  const until = Date.now() + (deps.timeoutMs ?? 10 * 60_000);
+  try {
+    while (Date.now() < until) {
+      await deps.wait(2_000);
+      const { ready } = await deps.status(ticket).catch(() => ({ ready: false }));
+      if (ready) {
+        // The window also closes itself; the handle may be cut off by the opener policy.
+        popup.close();
+        return "ready";
+      }
+      if (deps.cancelled?.()) return "closed";
+    }
+    popup.close();
+    return "timeout";
+  } finally {
+    await deps.close(ticket).catch(() => undefined);
+  }
+}
+
 function ServerSnVerification({ url, onVerified }: { url: string; onVerified: () => void }) {
-  const [stage, setStage] = useState<"idle" | "server" | "paste" | "saving">("idle");
+  const [stage, setStage] = useState<"idle" | "window" | "server" | "paste" | "saving">("idle");
   const [cookie, setCookie] = useState("");
   const [message, setMessage] = useState("");
+  const cancelRef = useRef(false);
+  async function openWindow() {
+    cancelRef.current = false;
+    setStage("window");
+    setMessage("Okno sn.pl otwarte przez serwer — rozwiąż captchę, jeśli się pojawi. Okno zamknie się samo.");
+    try {
+      const result = await runSnProxyWindow({
+        open: openSnProxyWindow,
+        status: snProxyWindowStatus,
+        close: closeSnProxyWindow,
+        openWindow: (target) => window.open(target, "lex-sn-verification", "popup,width=1100,height=820"),
+        wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        base: apiBase(),
+        cancelled: () => cancelRef.current
+      });
+      if (result === "ready") {
+        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        onVerified();
+      } else if (result === "blocked") setMessage("Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.");
+      else if (result === "closed") setMessage("Przerwano oczekiwanie na weryfikację w oknie sn.pl.");
+      else setMessage("Weryfikacja w oknie nie przeszła w 10 minut.");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? `Nie udało się otworzyć okna sn.pl (${error.code}).` : "Nie udało się otworzyć okna sn.pl.");
+    } finally {
+      setStage("idle");
+    }
+  }
   async function tryServer() {
     setStage("server");
     setMessage("Serwer próbuje przejść weryfikację sn.pl (do ok. minuty)…");
@@ -204,10 +269,19 @@ function ServerSnVerification({ url, onVerified }: { url: string; onVerified: ()
   return (
     <>
       <p className="field-help">
-        Weryfikację wykonuje serwer albo Ty — w przeglądarce w tej samej sieci co serwer.
+        Okno sn.pl otwiera się przez serwer Lex Machina, więc sesja należy do jego adresu; zamknie się samo po przejściu weryfikacji.
         <InfoTip>Sesja sn.pl działa tylko z adresu, z którego przeszła weryfikację. Wklejany jest wyłącznie nagłówek Cookie zapytania do sn.pl (narzędzia programisty → Sieć); aplikacja go nie wyświetla ani nie zapisuje w logach.</InfoTip>
       </p>
       <div className="chat-form-row compact">
+        {stage === "window" ? (
+          <button type="button" className="chat-secondary-action" onClick={() => (cancelRef.current = true)}>
+            Anuluj oczekiwanie
+          </button>
+        ) : (
+          <button type="button" className="chat-primary-action" disabled={stage !== "idle"} onClick={() => void openWindow()}>
+            Zweryfikuj w oknie sn.pl
+          </button>
+        )}
         <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => void tryServer()}>
           {stage === "server" ? "Serwer sprawdza…" : "Spróbuj na serwerze"}
         </button>
