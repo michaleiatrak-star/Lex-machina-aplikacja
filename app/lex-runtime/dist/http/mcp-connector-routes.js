@@ -181,6 +181,28 @@ export function registerMcpConnectorRoutes(app, dependencies) {
             sendConnectorError(res, error);
         }
     });
+    // Weryfikacja sn.pl wykonana przez serwer (tryb serwerowy, przeglądarka bez okna sn.pl aplikacji):
+    // narzędzie sn_captcha_auto konektora SN próbuje przejść ochronę bez okna. Gdy sn.pl odrzuca adres
+    // serwera, odpowiedź mówi to wprost; orzeczenia SN są wtedy sprawdzane zastępczo w SAOS.
+    app.post("/api/mcp-search/sn-session/server-attempt", async (req, res) => {
+        if (!requireUser(req, res, authService))
+            return;
+        const reply = await search.direct({ source: "sn", tool: "sn_captcha_auto", arguments: { headless: true } });
+        const result = (reply.result ?? {});
+        const ready = reply.ok && result.status === "OK";
+        res.json({
+            ready,
+            ...(ready
+                ? {}
+                : {
+                    reason: !reply.ok
+                        ? "SN_CONNECTOR_UNAVAILABLE"
+                        : Array.isArray(result.steps) && result.steps.some((step) => /Brak playwright/u.test(String(step)))
+                            ? "SN_SERVER_BROWSER_MISSING"
+                            : "SN_SERVER_REJECTED"
+                })
+        });
+    });
     app.delete("/api/mcp-search/sn-session", (req, res) => {
         if (!requireUser(req, res, authService))
             return;

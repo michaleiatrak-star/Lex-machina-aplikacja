@@ -3837,6 +3837,11 @@ export function saveSnSession(
   });
 }
 
+// Server mode: the server tries sn.pl's protection itself (no window); reason when it cannot.
+export function attemptSnSessionOnServer(): Promise<{ ready: boolean; reason?: "SN_CONNECTOR_UNAVAILABLE" | "SN_SERVER_BROWSER_MISSING" | "SN_SERVER_REJECTED" }> {
+  return json("/api/mcp-search/sn-session/server-attempt", { method: "POST", body: "{}" });
+}
+
 export function clearSnSession(): Promise<{ cleared: boolean }> {
   return json("/api/mcp-search/sn-session", { method: "DELETE" });
 }

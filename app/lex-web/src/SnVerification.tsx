@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
+import { ApiError, attemptSnSessionOnServer, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
 function desktopInvoke():
@@ -150,14 +150,89 @@ export function SnVerification({
           </div>
         </>
       ) : (
-        <p className="field-help">
-          {verification.instruction ?? "Weryfikacja jest dostępna w aplikacji Lex Machina na komputerze."}{" "}
-          <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(verification.url)}>
-            Otwórz sn.pl
-          </button>
-        </p>
+        <ServerSnVerification url={verification.url} onVerified={() => onVerifiedRef.current()} />
       )}
       {message ? <p className="field-help">{message}</p> : null}
     </div>
+  );
+}
+
+export const SN_SERVER_REASONS: Record<string, string> = {
+  SN_SERVER_REJECTED:
+    "sn.pl odrzuca zapytania z adresu serwera (ochrona Imperva; z adresów centrów danych często bez captchy do rozwiązania). Orzeczenia SN do ok. 2016 r. aplikacja sprawdza zastępczo w SAOS; nowsze — wklej sesję z przeglądarki w tej samej sieci co serwer albo użyj aplikacji na komputerze.",
+  SN_SERVER_BROWSER_MISSING:
+    "Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację.",
+  SN_CONNECTOR_UNAVAILABLE: "Konektor SN nie odpowiada na serwerze."
+};
+
+// Tryb serwerowy (przeglądarka, bez okna sn.pl aplikacji): próba serwera albo sesja wklejona
+// z przeglądarki w sieci serwera (sprawdzana zapytaniem do sn.pl przed zapisem).
+function ServerSnVerification({ url, onVerified }: { url: string; onVerified: () => void }) {
+  const [stage, setStage] = useState<"idle" | "server" | "paste" | "saving">("idle");
+  const [cookie, setCookie] = useState("");
+  const [message, setMessage] = useState("");
+  async function tryServer() {
+    setStage("server");
+    setMessage("Serwer próbuje przejść weryfikację sn.pl (do ok. minuty)…");
+    try {
+      const result = await attemptSnSessionOnServer();
+      if (result.ready) {
+        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        onVerified();
+      } else setMessage(SN_SERVER_REASONS[result.reason ?? ""] ?? "Weryfikacja na serwerze nie przeszła.");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? `Weryfikacja na serwerze nie powiodła się (${error.code}).` : "Weryfikacja na serwerze nie powiodła się.");
+    } finally {
+      setStage("idle");
+    }
+  }
+  async function savePasted() {
+    setStage("saving");
+    try {
+      const { ready } = await probeSnSession(cookie.replace(/^\s*cookie:\s*/iu, "").trim(), navigator.userAgent);
+      if (ready) {
+        setMessage("Sesja działa z serwera — zapisana, ponawiam zapytanie.");
+        setCookie("");
+        onVerified();
+      } else setMessage("sn.pl nie przyjął tej sesji z adresu serwera (sesja z innej sieci albo wygasła).");
+    } catch {
+      setMessage("Nie udało się sprawdzić sesji.");
+    } finally {
+      setStage("idle");
+    }
+  }
+  return (
+    <>
+      <p className="field-help">
+        Weryfikację wykonuje serwer albo Ty — w przeglądarce w tej samej sieci co serwer.
+        <InfoTip>Sesja sn.pl działa tylko z adresu, z którego przeszła weryfikację. Wklejany jest wyłącznie nagłówek Cookie zapytania do sn.pl (narzędzia programisty → Sieć); aplikacja go nie wyświetla ani nie zapisuje w logach.</InfoTip>
+      </p>
+      <div className="chat-form-row compact">
+        <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => void tryServer()}>
+          {stage === "server" ? "Serwer sprawdza…" : "Spróbuj na serwerze"}
+        </button>
+        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(url)}>
+          Otwórz sn.pl
+        </button>
+        <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => setStage("paste")}>
+          Wklej sesję
+        </button>
+      </div>
+      {stage === "paste" || stage === "saving" ? (
+        <div className="chat-form-row compact">
+          <input
+            type="password"
+            aria-label="Nagłówek Cookie z sn.pl"
+            placeholder="Cookie: visid_incap_…; incap_ses_…"
+            value={cookie}
+            onChange={(event) => setCookie(event.target.value)}
+          />
+          <button type="button" className="chat-primary-action" disabled={!cookie.trim() || stage === "saving"} onClick={() => void savePasted()}>
+            {stage === "saving" ? "Sprawdzam…" : "Sprawdź i zapisz"}
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="field-help">{message}</p> : null}
+    </>
   );
 }
