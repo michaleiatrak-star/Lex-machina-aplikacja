@@ -428,6 +428,19 @@ const LETTER = [
   "- Nie dodano nowych wątków."
 ].join("\n");
 
+const ANALYSIS = [
+  "## Analiza odpowiedzialności za zwłokę",
+  "",
+  "### Stan faktyczny",
+  "Dłużnik pozostaje w zwłoce ze spełnieniem świadczenia pieniężnego od kilku miesięcy, mimo wezwania do zapłaty doręczonego w terminie.",
+  "",
+  "### Wnioski",
+  "- Wierzyciel może żądać odsetek za opóźnienie bez wykazywania szkody.",
+  "- Warto ponowić wezwanie i wyznaczyć ostateczny termin zapłaty przed wniesieniem pozwu.",
+  "",
+  "⚖️ Ważna informacja: to nie jest porada prawna."
+].join("\n");
+
 describe("plik pisma z odpowiedzi, która sama jest pismem", () => {
   it("odpowiedź-pismo zostaje w sprawie ze śladem sesji; „Generuj dokument” tworzy plik mechanicznie, bez tury modelu", async () => {
     const current = fixture();
@@ -465,6 +478,32 @@ describe("plik pisma z odpowiedzi, która sama jest pismem", () => {
     expect(texts).toContain("W odpowiedzi na pismo z 3 grudnia 2024 r. kwestionuję roszczenie co do zasady i wysokości.");
     expect(texts.join("\n")).not.toMatch(/Przygotowałem|Status dokumentu|Nie dodano/u);
     expect(ready.ast.blocks.at(-1)!.type).toBe("signature");
+  });
+
+  it("odpowiedź-analiza (model lokalny) daje plik opinii mechanicznie, bez JSON AST modelu", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    const body = { provider: "openai", model: "gpt-test", primarySkill: DR, mode: "PRAWNIK" };
+    current.answers.push(ANALYSIS);
+    const turn = await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ ...body, query: "przeanalizuj zagadnienie", knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 } })
+      .expect(200);
+    expect(turn.body.answerDocument).toBeDefined();
+    const file = await request(current.app)
+      .post(`/api/cases/${caseId}/artifacts/generate`)
+      .set("Authorization", authorization)
+      .send({ ...body, query: "wygeneruj odpowiedź w postaci dokumentu docx", format: "docx", documentType: "letter", styleProfile: "lex-office-tnr-v1", source: "ANSWER", answerSessionId: turn.body.answerDocument.sessionId })
+      .expect(201);
+    expect(file.body).toMatchObject({ mechanical: true, readyForDownload: true });
+    expect(current.generate).not.toHaveBeenCalled();
+    const ready = (current.createReady.mock.calls as unknown as unknown[][])[0]![0] as { ast: { documentType: string; blocks: Array<{ type: string; content?: Array<{ text?: string }> }> } };
+    expect(ready.ast.documentType).toBe("opinion");
+    const texts = ready.ast.blocks.map((block) => (block.content ?? []).map((node) => node.text ?? "").join(""));
+    expect(texts).toContain("ANALIZA ODPOWIEDZIALNOŚCI ZA ZWŁOKĘ");
+    expect(texts.join("\n")).toContain("Dłużnik pozostaje w zwłoce");
+    expect(texts.join("\n")).not.toMatch(/Ważna informacja/u);
   });
 
   it("odpowiedź bez pisma (pytania) nie zostaje jako pismo", async () => {

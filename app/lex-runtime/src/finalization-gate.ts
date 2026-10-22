@@ -134,7 +134,7 @@ function collectMatches(
 const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
 const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
 // Another act named in words: an act-less article on such a line is not resolved.
-const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
+const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
 
 const actsIn = (value: string): Set<string> =>
   new Set([...compactActAbbreviations(value).matchAll(ACT_IN_TEXT)].map((match) => match[1]!));
@@ -239,6 +239,26 @@ function coveringVerifiedRecord(
   // "art. 233 KK" and "art. 233 § 1 KK" with one marker on the line: one source.
   const markers = new Set(covering.map((record) => expectedVerificationMarker(record)));
   return claims.size === 1 || markers.size === 1 ? covering.at(-1) : undefined;
+}
+
+// "art. 286 § 1 KK" mentioned, "art. 286 KK" verified: the article's fetched text covers the
+// units it holds (never the reverse, never a record without its text).
+const ARTICLE_UNIT = /^(art\.?\s*\d+[a-zA-Z⁰¹²³⁴⁵⁶⁷⁸⁹^]*)\s+(?:§|ust\.?|pkt|lit\.?|zd\.?)[^]*?\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/iu;
+
+function articleRecord(ledger: VerificationLedger, reference: DetectedLegalReference): VerificationRecord | undefined {
+  if (reference.kind !== "statute") return undefined;
+  const match = ARTICLE_UNIT.exec(reference.claim.trim());
+  if (!match) return undefined;
+  const record = ledger.latest(`${match[1]} ${match[2]}`);
+  if (record?.status !== "VERIFIED" || !record.evidence) return undefined;
+  // Only a unit the fetched text of the article has ("§ 9" of a three-paragraph article is not).
+  const units = [...reference.claim.slice(match[1]!.length).matchAll(/(§|ust\.?|pkt|lit\.?)\s*(\d+[a-z]*|[a-z])\b/giu)];
+  const present = units.every(([, kind, value]) => {
+    const unit = value!.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+    const pattern = kind === "§" ? `§\\s*${unit}(?![\\d\\p{L}])` : kind!.startsWith("ust") ? `(?:^|\\s)${unit}\\.\\s` : `(?:^|\\s)${unit}\\)`;
+    return new RegExp(pattern, "iu").test(record.evidence!);
+  });
+  return units.length > 0 && present ? record : undefined;
 }
 
 // Words of an act's title that tell no act from another (dates, "ustawy").
@@ -381,7 +401,7 @@ export class FinalizationGate {
 
     for (const reference of references) {
       if (options.markers === "removed") {
-        const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference) ?? caseSignatureRecord(ledger, reference);
+        const record = ledger.latest(reference.claim) ?? soleCoveringVerifiedRecord(ledger, reference) ?? caseSignatureRecord(ledger, reference) ?? articleRecord(ledger, reference);
         findings.push(
           record?.status === "VERIFIED"
             ? { reference, status: "VERIFIED", record }
@@ -413,7 +433,8 @@ export class FinalizationGate {
                   lineMarkers
                 ) ??
                 caseSignatureRecord(ledger, candidate) ??
-                namedActRecord(ledger, candidate)
+                namedActRecord(ledger, candidate) ??
+                articleRecord(ledger, candidate)
             )
             .filter(
               (
@@ -453,7 +474,8 @@ export class FinalizationGate {
         ledger.latest(reference.claim) ??
         coveringVerifiedRecord(ledger, reference, lineMarkers) ??
         caseSignatureRecord(ledger, reference) ??
-        namedActRecord(ledger, reference);
+        namedActRecord(ledger, reference) ??
+        articleRecord(ledger, reference);
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
@@ -524,16 +546,22 @@ export class FinalizationGate {
 
     const lines = text.split(/\r?\n/u);
 
-    // Stawka, termin, kara: potwierdzona brzmieniem przepisu VERIFIED z tego wiersza.
+    // Stawka, termin, kara: potwierdzona brzmieniem przepisu VERIFIED z tego wiersza; wiersz
+    // bez przepisu (cytat paragrafu, punkt "§ 3: … do lat 2") omawia ostatni przepis nad nim.
+    const statuteRecord = (claim: string): VerificationRecord | undefined => {
+      const record = ledger.latest(claim) ?? articleRecord(ledger, { claim, kind: "statute", line: 0, lineText: "" });
+      return record?.status === "VERIFIED" && record.evidence ? record : undefined;
+    };
     lines.forEach((lineText, index) => {
       const amounts = amountMatches(lineText);
       if (amounts.length === 0) return;
-      const lineRecords = [
-        ...references.filter((reference) => reference.line === index + 1 && reference.kind === "statute").map((reference) => reference.claim),
-        ...statuteClaimsInLine(lineText)
-      ]
-        .map((claim) => ledger.latest(claim))
-        .filter((record): record is VerificationRecord => record?.status === "VERIFIED" && Boolean(record.evidence));
+      const claimsOf = (line: number, text: string) => [
+        ...references.filter((reference) => reference.line === line && reference.kind === "statute").map((reference) => reference.claim),
+        ...statuteClaimsInLine(text)
+      ];
+      let claims = claimsOf(index + 1, lineText);
+      for (let above = index - 1; claims.length === 0 && above >= 0; above -= 1) claims = claimsOf(above + 1, lines[above]!);
+      const lineRecords = claims.map(statuteRecord).filter((record): record is VerificationRecord => Boolean(record));
       const marked = amountMarkerSpans(lineText);
       const facts = new Set(ledger.factAmountKeys());
       for (const amount of amounts) {
