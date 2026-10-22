@@ -9,7 +9,8 @@ export type CaseWorkItem = {
   // OPEN_ISSUE: a point left for later ("do weryfikacji w źródle", "do zbadania"), kept
   // with its label so a later turn (and an API model, which keeps nothing) takes it up.
   // FILE: a document file the application generated in the case (its name and format).
-  kind: "DOCUMENT_ANALYSIS" | "CHRONOLOGY" | "WORKFLOW" | "OPEN_ISSUE" | "FILE";
+  // CORRECTION: a fact the user corrected ("to ta sama firma, błąd OCR"), in the user's words.
+  kind: "DOCUMENT_ANALYSIS" | "CHRONOLOGY" | "WORKFLOW" | "OPEN_ISSUE" | "FILE" | "CORRECTION";
   label: string;
   status: "DONE" | "OPEN";
   at: string;
@@ -29,7 +30,7 @@ export function validCaseWork(value: unknown): CaseWorkItem[] | null {
     if (
       !item ||
       typeof item.key !== "string" || item.key.length > 200 ||
-      !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE"].includes(String(item.kind)) ||
+      !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE", "CORRECTION"].includes(String(item.kind)) ||
       typeof item.label !== "string" || item.label.length > 300 ||
       (item.status !== "DONE" && item.status !== "OPEN") ||
       typeof item.at !== "string" || Number.isNaN(Date.parse(item.at)) ||
@@ -66,6 +67,8 @@ export function recordCaseWork(
     coverage?: readonly DocumentCoverage[];
     chronologySaved?: boolean;
     completedWorkflows?: readonly string[];
+    // Facts the user corrected (their words).
+    corrections?: readonly string[];
     // Files generated in the case (artifacts/generate).
     files?: ReadonlyArray<{ artifactId: string; filename: string; draft?: boolean }>;
     // Points left open in this turn and points this turn settled (by issueKey).
@@ -97,6 +100,10 @@ export function recordCaseWork(
   }
   if (turn.chronologySaved) {
     items.set("CHRONOLOGY", { key: "CHRONOLOGY", kind: "CHRONOLOGY", label: "chronologia sprawy (oś czasu w pamięci sprawy)", status: "DONE", at: turn.now });
+  }
+  for (const correction of turn.corrections ?? []) {
+    const key = `CORRECTION:${issueKey(correction)}`.slice(0, 200);
+    items.set(key, { key, kind: "CORRECTION", label: correction.slice(0, 300), status: "DONE", at: turn.now });
   }
   for (const file of turn.files ?? []) {
     const key = `FILE:${file.artifactId}`;
@@ -137,6 +144,7 @@ export function caseWorkLine(item: CaseWorkItem): string {
       ? `ZAMKNIĘTE: analiza dokumentu „${item.label}” w całości (${item.totalPages} s.)${item.skill ? `, ${item.skill}` : ""}, ${date}`
       : `OTWARTE: analiza dokumentu „${item.label}” — przeczytane s. ${pages(item.pages ?? [])} z ${item.totalPages}, brakuje s. ${pages(missingPages(item.totalPages, item.pages ?? []))}`;
   }
+  if (item.kind === "CORRECTION") return `KOREKTA UŻYTKOWNIKA (obowiązuje): „${item.label}”, ${date}`;
   return `${item.status === "DONE" ? "ZAMKNIĘTE" : "OTWARTE"}: ${item.label}, ${date}`;
 }
 

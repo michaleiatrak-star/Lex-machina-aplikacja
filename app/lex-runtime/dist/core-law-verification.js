@@ -149,12 +149,20 @@ export function verifyFromCoreLaw(args) {
                 const from = futureDate(note);
                 return from !== null && from > today;
             });
-        if (!notes ||
-            !announced ||
-            !article ||
-            record.articles[article] === undefined ||
-            hasPendingWording(record.markedArticles?.[article] ?? record.articles[article], notes, today)) {
+        const known = Boolean(article) && record.articles[article] !== undefined;
+        // The article carries a wording that is not in force yet: never from the copy.
+        if (known && notes && hasPendingWording(record.markedArticles?.[article] ?? record.articles[article], notes, today)) {
             return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
+        }
+        if (!notes || !announced || !known) {
+            // No dated footnotes to tell the articles apart: the amending acts in vacatio legis are
+            // read as the amendments after the t.j. are (KC t.j. 2026/795 with the CEIDG act from
+            // 2028: art. 481 is not touched by it, so its copy wording is the one in force).
+            const impact = known
+                ? postConsolidationImpact(args.index, summary.notYetInForce.map((item) => item.eli), article, summary.title ?? undefined)
+                : null;
+            if (impact?.status !== "UNAFFECTED")
+                return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
         }
     }
     let evidence;

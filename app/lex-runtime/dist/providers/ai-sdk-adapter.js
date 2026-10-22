@@ -1007,7 +1007,7 @@ function providerCapabilities() {
 export async function streamModel(model, params, label) {
     const sdk = await import("ai");
     const tools = await toAiSdkTools(params);
-    const reasoning = (params.reasoning ?? "none");
+    const reasoning = reasoningForModel(model, (params.reasoning ?? "none"));
     let withImages = params.messages.some((message) => message.images?.length);
     let fullText = "";
     let first;
@@ -1141,6 +1141,21 @@ export function promptCacheRouting(model, params) {
     if (provider.startsWith("xai"))
         return { headers: { "x-grok-conv-id": key } };
     return {};
+}
+// Claude models whose thinking cannot be turned off over the API: {type: "disabled"} is a 400
+// (Fable 5/5.1, Mythos, Opus 5.5 at every effort; Sonnet 5.5 takes only its own
+// "between_tools", which the SDK does not send). Measured 2026-10-22 with the API.
+const THINKING_ALWAYS_ON = /claude-(?:fable-5|mythos-5|opus-5-5|sonnet-5-5)/u;
+/**
+ * "none" (no reasoning) for a model that cannot disable thinking: the least of it instead
+ * (adaptive thinking at effort low). Before, Fable answered every Lex turn with
+ * PROVIDER_UNCODED_FAILURE: "thinking.type.disabled" is not supported for this model.
+ */
+export function reasoningForModel(model, reasoning) {
+    if (reasoning !== "none" || !isAnthropicModel(model))
+        return reasoning;
+    const id = typeof model === "object" && model !== null ? String(model.modelId ?? "") : String(model);
+    return THINKING_ALWAYS_ON.test(id) ? "low" : reasoning;
 }
 /** A model served by the Anthropic API provider (not an account CLI or a local server). */
 export function isAnthropicModel(model) {

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
-import { startToolBridge } from "./lex-tool-bridge.js";
+import { startHttpToolServer, startToolBridge } from "./lex-tool-bridge.js";
 import type {
   LlmImage,
   NormalizedToolCall,
@@ -1321,6 +1321,74 @@ export function codexExecArgs(
   ];
 }
 
+/** TOML value of a string (a JSON string is a valid TOML basic string). */
+const tomlString = (value: string): string => JSON.stringify(value);
+
+/**
+ * codex exec with the Lex tools as its only MCP server ("lex"): no shell, no files of its
+ * own, never asks for approval (the tools are the application's, run by the application).
+ */
+export function codexToolArgs(
+  workDir: string,
+  outputPath: string,
+  model: string,
+  server: { command: string; args: string[]; env: Record<string, string> }
+): string[] {
+  const env = Object.entries(server.env).map(([key, value]) => `${key}=${tomlString(value)}`).join(",");
+  const lex = `{command=${tomlString(server.command)},args=[${server.args.map(tomlString).join(",")}],env={${env}},startup_timeout_sec=30,tool_timeout_sec=900,default_tools_approval_mode="approve"}`;
+  const args = codexExecArgs(workDir, outputPath, model, ["-"]);
+  const at = args.indexOf("mcp_servers={}");
+  args.splice(
+    at - 1,
+    2,
+    "--config",
+    `mcp_servers.lex=${lex}`,
+    "--config",
+    'approval_policy="never"',
+    // Only the Lex tools: no web search, patching, images or goals of the host.
+    "--config",
+    'web_search="disabled"',
+    "--config",
+    "include_apply_patch_tool=false",
+    "--disable",
+    "view_image",
+    "--disable",
+    "image_generation",
+    "--disable",
+    "goals"
+  );
+  return args;
+}
+
+/** The answer of a headless Gemini CLI run (JSON output), or its failure as a reason code. */
+function geminiAnswer(result: RunResult): string {
+  const parsed = parseGeminiResult(result.stdout);
+  if (parsed.error?.code === 41 || /auth method|login required|not logged in|oauth/i.test(parsed.error?.message ?? "")) {
+    throw new Error("ACCOUNT_SESSION_NOT_AUTHENTICATED:google");
+  }
+  if (parsed.error) {
+    throw normalizeCliFailure("google", { code: result.code === 0 ? 1 : result.code, stdout: "", stderr: parsed.error.message });
+  }
+  if (result.code !== 0 && !parsed.text) throw normalizeCliFailure("google", result);
+  if (!parsed.text?.trim()) throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:google");
+  return parsed.text.trim();
+}
+
+// Gemini CLI's own tools (files, shell, web, memory, agents): none of them in a Lex turn.
+const GEMINI_HOST_TOOLS = [
+  "list_directory", "read_file", "read_many_files", "grep_search", "glob", "replace", "write_file", "web_fetch",
+  "google_web_search", "run_shell_command", "save_memory", "write_todos", "invoke_agent", "update_topic",
+  "enter_plan_mode", "exit_plan_mode", "activate_skill"
+];
+
+/** Workspace settings of a Gemini CLI run with the Lex tools as its only MCP server. */
+export function geminiToolSettings(server: { command: string; args: string[]; env: Record<string, string> }): string {
+  return JSON.stringify({
+    mcpServers: { lex: { command: server.command, args: server.args, env: server.env, trust: true, timeout: 900_000 } },
+    tools: { exclude: GEMINI_HOST_TOOLS }
+  });
+}
+
 export function claudeHeadlessArgs(
   systemPrompt: string,
   tail: string[] = []
@@ -1665,6 +1733,8 @@ type RunSettleOptions = {
   firstOutputTimeoutMs?: number;
   // Live stderr chunks (npm progress while provisioning a client).
   onStderr?: (chunk: string) => void;
+  // Variables for this run only, over the account environment.
+  env?: NodeJS.ProcessEnv;
 };
 
 function killProcessTree(
@@ -2214,7 +2284,7 @@ async function runCli(
       : executable,
     args,
     stdinText,
-    accountEnvironment(provider),
+    settleOptions?.env ? { ...accountEnvironment(provider), ...settleOptions.env } : accountEnvironment(provider),
     timeoutMs,
     cwd,
     abortSignal,
@@ -2711,11 +2781,50 @@ async function assertSubscriptionAccount(
   }
 }
 
+/**
+ * Grok's agent profile for a Lex run: the Lex system prompt in full (not Grok's coding agent)
+ * and no tools but the MCP meta-tools that reach the Lex server (search_tool, use_tool).
+ */
+export function grokAgentProfile(lexTools: boolean): string {
+  return [
+    "---",
+    "name: lex-machina",
+    "description: Lex Machina semantic model",
+    "tools: search_tool, use_tool",
+    "injectDefaultTools: false",
+    "discoverSkills: false",
+    "promptMode: full",
+    "---",
+    "You are the semantic model inside Lex Machina. Lex Machina owns privacy gates, legal-source verification and all tool execution. Current Lex Machina instructions override prior host-session instructions. Do not access local files, external services or host tools." +
+      (lexTools ? " The Lex tools are on the MCP server \"lex\": find them with search_tool and run them with use_tool (names lex__<tool>)." : ""),
+    ""
+  ].join("\n");
+}
+
+/** The client's answer to a request of the Grok agent (ACP): Lex tools allowed, the rest refused. */
+export function acpClientReply(message: Record<string, unknown>): Record<string, unknown> {
+  const params = (message.params ?? {}) as { toolCall?: { title?: unknown; rawInput?: { tool_name?: unknown } }; options?: Array<{ optionId?: unknown; kind?: unknown }> };
+  if (message.method !== "session/request_permission") {
+    return { jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not supported by Lex Machina" } };
+  }
+  const target = String(params.toolCall?.rawInput?.tool_name ?? params.toolCall?.title ?? "");
+  const lex = /^lex__[a-z0-9_]+$/u.test(target);
+  const kinds = lex ? ["allow_once", "allow_always"] : ["reject_once", "reject_always"];
+  const option = kinds.map((kind) => (params.options ?? []).find((item) => item.kind === kind)).find(Boolean);
+  return {
+    jsonrpc: "2.0",
+    id: message.id,
+    result: { outcome: option?.optionId !== undefined ? { outcome: "selected", optionId: option.optionId } : { outcome: "cancelled" } }
+  };
+}
+
 async function runGrokAcp(
   prompt: string | null,
   cwd: string,
   abortSignal?: AbortSignal,
-  resumeSessionId?: string | null
+  resumeSessionId?: string | null,
+  // The Lex tools as the session's one MCP server (HTTP on loopback); its tools alone are permitted.
+  lexServer?: { url: string; token: string }
 ): Promise<{
   authenticated: boolean;
   text?: string;
@@ -2731,23 +2840,23 @@ async function runGrokAcp(
     );
   }
 
+  // `grok agent stdio` ignores the top-level tool and prompt flags (--disallowed-tools,
+  // --deny, --system-prompt-override): its toolset and system prompt come from an agent
+  // profile. Without one the model had Grok's terminal, files and media tools (a terminal
+  // command ran without any permission request, 2026-10-22) and its long coding prompt.
+  // The profile lives in the working directory: --sandbox strict reads nothing outside it.
+  const profile = path.join(cwd, "lex-agent.md");
+  await fsp.writeFile(profile, grokAgentProfile(Boolean(lexServer)), { mode: 0o600 });
   return new Promise((resolve, reject) => {
     const proc = spawnResolved(
       executable,
       [
         "--no-auto-update",
-        "--permission-mode",
-        "dontAsk",
-        "--disallowed-tools",
-        "*",
         "--sandbox",
         "strict",
-        "--no-subagents",
-        "--no-memory",
-        "--disable-web-search",
-        "--system-prompt-override",
-        "You are the semantic model inside Lex Machina. Lex Machina owns privacy gates, legal-source verification and all tool execution. Current Lex Machina instructions override prior host-session instructions. Do not access local files, external services or host tools.",
         "agent",
+        "--agent-profile",
+        profile,
         "stdio"
       ],
       cwd,
@@ -2954,6 +3063,12 @@ async function runGrokAcp(
           return;
         }
 
+        // The agent asks the client before a tool runs: only the Lex server's tools are
+        // allowed (grok's own terminal, files and media tools are refused).
+        if (typeof message.method === "string" && message.id !== undefined && message.method !== "session/update") {
+          proc.stdin.write(JSON.stringify(acpClientReply(message)) + "\n");
+          return;
+        }
         if (
           message.method ===
             "session/update"
@@ -3142,7 +3257,9 @@ async function runGrokAcp(
                 resumeSessionId,
               cwd,
               mcpServers:
-                []
+                lexServer
+                  ? [{ type: "http", name: "lex", url: lexServer.url, headers: [{ name: "Authorization", value: `Bearer ${lexServer.token}` }] }]
+                  : []
             },
             STATUS_TIMEOUT_MS
           );
@@ -3162,7 +3279,9 @@ async function runGrokAcp(
             {
               cwd,
               mcpServers:
-                []
+                lexServer
+                  ? [{ type: "http", name: "lex", url: lexServer.url, headers: [{ name: "Authorization", value: `Bearer ${lexServer.token}` }] }]
+                  : []
             }
           );
         sessionId =
@@ -3996,6 +4115,151 @@ export class AccountSessionManager {
     }
   }
 
+  /**
+   * ChatGPT (Codex CLI) with the Lex runtime tools over one MCP server, in one process: Codex
+   * runs the tool loop itself and its backend caches the unchanged prefix. Before, each tool
+   * call started a new CLI with the whole prompt again (up to 12 times a turn, ~120k tokens
+   * each: minutes). No shell, no files, no account MCP servers; LEX_CODEX_MCP=0 restores the
+   * text loop.
+   */
+  async runCodexWithTools(args: {
+    prompt: string;
+    tools: NormalizedToolSchema[];
+    runTools: (calls: NormalizedToolCall[]) => Promise<NormalizedToolResult[]>;
+    onToolCall?: (call: NormalizedToolCall) => void;
+    abortSignal?: AbortSignal;
+    clientModel?: string | null;
+  }): Promise<string> {
+    await assertSubscriptionAccount("openai", args.abortSignal);
+    const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-codex-"));
+    const bridge = await startToolBridge(args.runTools, args.onToolCall);
+    try {
+      const schemaFile = path.join(workDir, "tools.json");
+      await fsp.writeFile(
+        schemaFile,
+        JSON.stringify(args.tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters }))),
+        { mode: 0o600 }
+      );
+      const outputPath = path.join(workDir, "last-message.txt");
+      const preferred = args.clientModel ?? codexAccountModel();
+      const candidates = [preferred, "gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini"].filter((value, index, all) => all.indexOf(value) === index);
+      let lastFailure: Error | null = null;
+      for (const model of candidates) {
+        await fsp.rm(outputPath, { force: true }).catch(() => {});
+        const result = await runCli(
+          "openai",
+          codexToolArgs(workDir, outputPath, model, {
+            command: process.execPath,
+            args: [lexToolsMcpServerPath()],
+            env: { LEX_TOOL_PIPE: bridge.pipe, LEX_TOOL_TOKEN: bridge.token, LEX_TOOL_SCHEMAS: schemaFile }
+          }),
+          args.prompt,
+          COMMAND_TIMEOUT_MS,
+          workDir,
+          args.abortSignal
+        );
+        if (result.code !== 0) {
+          const failure = normalizeCliFailure("openai", result);
+          lastFailure = failure;
+          if (failure.message.startsWith("ACCOUNT_SESSION_MODEL_UNSUPPORTED:")) continue;
+          throw failure;
+        }
+        const written = await fsp.readFile(outputPath, "utf8").catch(() => "");
+        const text = written.trim() || parseCodexFinalText(result.stdout);
+        if (text) return text;
+        throw new Error(`ACCOUNT_SESSION_EMPTY_RESPONSE:openai:${codexRunSummary(result.stdout)}`);
+      }
+      throw lastFailure ?? new Error("ACCOUNT_SESSION_CLI_FAILED:openai:1");
+    } finally {
+      await bridge.close().catch(() => undefined);
+      await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  /**
+   * Gemini CLI with the Lex tools over one MCP server in one process (the same bridge as Claude
+   * and Codex): the trusted temporary workspace holds the server and excludes the CLI's own
+   * tools. Before, Gemini answered without the Lex tools or the app restarted it per tool call.
+   */
+  async runGeminiWithTools(args: {
+    prompt: string;
+    tools: NormalizedToolSchema[];
+    runTools: (calls: NormalizedToolCall[]) => Promise<NormalizedToolResult[]>;
+    onToolCall?: (call: NormalizedToolCall) => void;
+    abortSignal?: AbortSignal;
+    clientModel?: string | null;
+  }): Promise<string> {
+    const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-gemini-"));
+    const bridge = await startToolBridge(args.runTools, args.onToolCall);
+    try {
+      const schemaFile = path.join(workDir, "tools.json");
+      await fsp.writeFile(
+        schemaFile,
+        JSON.stringify(args.tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters }))),
+        { mode: 0o600 }
+      );
+      await fsp.mkdir(path.join(workDir, ".gemini"));
+      await fsp.writeFile(
+        path.join(workDir, ".gemini", "settings.json"),
+        geminiToolSettings({
+          command: process.execPath,
+          args: [lexToolsMcpServerPath()],
+          env: { LEX_TOOL_PIPE: bridge.pipe, LEX_TOOL_TOKEN: bridge.token, LEX_TOOL_SCHEMAS: schemaFile }
+        }),
+        { mode: 0o600 }
+      );
+      const result = await runCli(
+        "google",
+        ["-p", "", "-o", "json", "--approval-mode", "default", "--skip-trust", "--allowed-mcp-server-names", "lex", ...(args.clientModel ? ["-m", args.clientModel] : [])],
+        args.prompt,
+        COMMAND_TIMEOUT_MS,
+        workDir,
+        args.abortSignal,
+        // The temporary workspace is trusted for this run only (its MCP server loads).
+        { env: { GEMINI_CLI_TRUST_WORKSPACE: "true" } }
+      );
+      return geminiAnswer(result);
+    } finally {
+      await bridge.close().catch(() => undefined);
+      await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
+  /**
+   * Grok (ACP) with the Lex tools as the session's MCP server, in one agent process: the agent
+   * finds them (search_tool) and runs them (use_tool) with the client's permission, given to
+   * Lex tools only. A fresh session (the app sends the whole context).
+   */
+  async runGrokWithTools(args: {
+    prompt: string;
+    tools: NormalizedToolSchema[];
+    runTools: (calls: NormalizedToolCall[]) => Promise<NormalizedToolResult[]>;
+    onToolCall?: (call: NormalizedToolCall) => void;
+    abortSignal?: AbortSignal;
+  }): Promise<string> {
+    const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-account-grok-"));
+    // Over HTTP: under --sandbox strict a stdio server of the application cannot start.
+    const bridge = await startHttpToolServer(
+      args.tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters })),
+      args.runTools,
+      args.onToolCall
+    );
+    try {
+      let grok: Awaited<ReturnType<typeof runGrokAcp>>;
+      try {
+        grok = await runGrokAcp(args.prompt, workDir, args.abortSignal, null, { url: bridge.url, token: bridge.token });
+      } catch (error) {
+        throw codedGrokFailure(error);
+      }
+      if (!grok.authenticated) throw new Error("ACCOUNT_SESSION_NOT_AUTHENTICATED:xai");
+      if (!grok.text) throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:xai");
+      return grok.text;
+    } finally {
+      await bridge.close().catch(() => undefined);
+      await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+
   async runText(
     provider: ProviderId,
     prompt: string,
@@ -4443,34 +4707,7 @@ export class AccountSessionManager {
             workDir,
             abortSignal
           );
-        const parsed =
-          parseGeminiResult(
-            result.stdout
-          );
-        if (
-          parsed.error?.code === 41 ||
-          /auth method|login required|not logged in|oauth/i.test(parsed.error?.message ?? "")
-        ) {
-          throw new Error(
-            "ACCOUNT_SESSION_NOT_AUTHENTICATED:google"
-          );
-        }
-        if (parsed.error) {
-          throw normalizeCliFailure(provider, {
-            code: result.code === 0 ? 1 : result.code,
-            stdout: "",
-            stderr: parsed.error.message
-          });
-        }
-        if (result.code !== 0 && !parsed.text) {
-          throw normalizeCliFailure(provider, result);
-        }
-        if (!parsed.text?.trim()) {
-          throw new Error(
-            "ACCOUNT_SESSION_EMPTY_RESPONSE:google"
-          );
-        }
-        return parsed.text.trim();
+        return geminiAnswer(result);
       }
 
       const savedSessionId =
@@ -4558,6 +4795,42 @@ export async function streamAccountSession(
       fresh: params.accountContinuity === "none"
     });
     if (!text.trim()) throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:anthropic");
+    params.callbacks?.onContentDelta?.(text);
+    return { fullText: text };
+  }
+  if (provider === "xai" && params.runTools && params.tools?.length && process.env.LEX_GROK_MCP?.trim() !== "0") {
+    const text = await manager.runGrokWithTools({
+      prompt: buildCorpusPrompt(params),
+      tools: params.tools,
+      runTools: params.runTools,
+      ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
+      ...(params.abortSignal ? { abortSignal: params.abortSignal } : {})
+    });
+    params.callbacks?.onContentDelta?.(text);
+    return { fullText: text };
+  }
+  if (provider === "google" && params.runTools && params.tools?.length && process.env.LEX_GEMINI_MCP?.trim() !== "0") {
+    const text = await manager.runGeminiWithTools({
+      prompt: buildCorpusPrompt(params),
+      tools: params.tools,
+      runTools: params.runTools,
+      ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
+      ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      clientModel: accountSessionClientModel(provider, params.model)
+    });
+    params.callbacks?.onContentDelta?.(text);
+    return { fullText: text };
+  }
+  if (provider === "openai" && params.runTools && params.tools?.length && process.env.LEX_CODEX_MCP?.trim() !== "0") {
+    const text = await manager.runCodexWithTools({
+      prompt: buildCorpusPrompt(params),
+      tools: params.tools,
+      runTools: params.runTools,
+      ...(params.callbacks?.onToolCallStart ? { onToolCall: params.callbacks.onToolCallStart } : {}),
+      ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
+      clientModel: accountSessionClientModel(provider, params.model)
+    });
+    if (!text.trim()) throw new Error("ACCOUNT_SESSION_EMPTY_RESPONSE:openai");
     params.callbacks?.onContentDelta?.(text);
     return { fullText: text };
   }

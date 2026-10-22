@@ -1322,7 +1322,9 @@ export class LegalVerificationToolRuntime {
     async runTools(calls) {
         const key = (call) => `${call.name}:${stableJson(call.input)}`;
         const fresh = calls.filter((call, index) => !this.answered.has(key(call)) && calls.findIndex((other) => key(other) === key(call)) === index);
-        const ran = new Map((await this.runFresh(fresh)).map((result) => [result.tool_use_id, result.content]));
+        // The calls of one model step run side by side (each its own source requests); before,
+        // one after another: 3 provisions took 34–48 s.
+        const ran = new Map((await runConcurrently(fresh, VERIFICATION_CONCURRENCY, (call) => this.runFresh([call]))).flat().map((result) => [result.tool_use_id, result.content]));
         const now = new Map();
         for (const call of fresh) {
             const content = ran.get(call.id) ?? "";
@@ -1566,7 +1568,10 @@ export class LegalVerificationToolRuntime {
             }
             // Modele lokalne (Bielik, Mistral): najpierw lokalna kopia ELI (RAG), także KC/KPC/KK/KPK.
             // Gdy kopia nie może odpowiedzieć, próba w źródle i dołączenie aktu do kopii.
-            // Modele w chmurze: wyłącznie źródło (Sejm ELI), bez cichego przejścia na kopię.
+            // Modele w chmurze: kopia tylko wtedy, gdy ELI właśnie potwierdziło (metadane aktu, co
+            // najwyżej raz na 15 min), że to obowiązujący t.j. bez oczekujących zmian; reguły kopii
+            // (nowelizacje po t.j. nie dotykają przepisu, nie OCR, bez vacatio legis) jak dotąd.
+            // Każda inna sytuacja: pobranie z ELI. Pomiar 2026-10-22: 11–16 s na przepis z PDF ELI.
             let localCopy;
             if (this.localModel && this.coreLaw) {
                 const liveCheck = asOf ? undefined : await this.checkCopyInEli(actInput);
@@ -1576,6 +1581,16 @@ export class LegalVerificationToolRuntime {
                     continue;
                 }
                 localCopy = local.denied;
+            }
+            else if (this.coreLaw && !asOf && process.env.LEX_CLOUD_LOCAL_COPY?.trim() !== "0") {
+                const liveCheck = await this.checkCopyInEli(actInput);
+                if (liveCheck?.state === "CURRENT") {
+                    const local = this.verifyWithCoreLaw(call, actInput, asOf, liveCheck);
+                    if (!local.denied) {
+                        results.push({ tool_use_id: call.id, content: local.content });
+                        continue;
+                    }
+                }
             }
             const deny = (error, extra = {}) => JSON.stringify({
                 status: "DENIED",
@@ -1763,4 +1778,18 @@ function stableJson(value) {
         return `{${Object.keys(value).sort().map((name) => `${JSON.stringify(name)}:${stableJson(value[name])}`).join(",")}}`;
     }
     return JSON.stringify(value) ?? "null";
+}
+const VERIFICATION_CONCURRENCY = 4;
+/** Results in the order of the items, at most `limit` running at a time. */
+async function runConcurrently(items, limit, run) {
+    const results = new Array(items.length);
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const index = next++;
+            results[index] = await run(items[index]);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
 }

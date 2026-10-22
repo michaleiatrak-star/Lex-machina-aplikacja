@@ -1058,7 +1058,7 @@ export class CoreLawIndex {
     const entry = (this.state.adopted ?? []).find((item) => item.eli === eli && item.origin === "USER");
     if (!entry) return false;
     const state = this.state.acts[eli];
-    const files = new Set([eli, state?.currentEli ?? eli, ...(state?.amendmentsAfter ?? []).map((item) => item.eli)]);
+    const files = new Set([eli, state?.currentEli ?? eli, ...(state?.amendmentsAfter ?? []).map((item) => item.eli), ...(state?.notYetInForce ?? []).map((item) => item.eli)]);
     this.state.adopted = (this.state.adopted ?? []).filter((item) => item !== entry);
     this.refs = this.refs.filter((ref) => ref.eli !== eli);
     delete this.state.acts[eli];
@@ -1068,7 +1068,7 @@ export class CoreLawIndex {
       const other = this.state.acts[ref.eli];
       used.add(ref.eli);
       if (other?.currentEli) used.add(other.currentEli);
-      for (const item of other?.amendmentsAfter ?? []) used.add(item.eli);
+      for (const item of [...(other?.amendmentsAfter ?? []), ...(other?.notYetInForce ?? [])]) used.add(item.eli);
     }
     for (const file of files) {
       if (used.has(file)) continue;
@@ -1438,6 +1438,15 @@ export class CoreLawIndex {
             .filter((link) => link.date && link.date > today && link.promulgation && link.promulgation <= servedPromulgation)
             .map((link) => ({ eli: link.eli, title: link.title, from: link.date! }))
         : [];
+    }
+
+    // The amending acts in vacatio legis: their text in the copy too, as for the amendments
+    // after the t.j., so a provision none of them touches is verified from the copy
+    // (core-law-verification.ts) instead of a download of the whole code from ELI.
+    for (const item of state.notYetInForce ?? []) {
+      if (this.record(item.eli)) continue;
+      await this.pause();
+      await this.store(item.eli).catch(() => undefined);
     }
 
     if (!apply) {

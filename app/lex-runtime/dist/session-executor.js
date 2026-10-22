@@ -1854,7 +1854,8 @@ export class SafeSessionExecutor {
             ...(placeholderKey ? { placeholderKey } : {}),
             ...(request.conversationalOnly
                 ? {
-                    conversationalOnly: true
+                    conversationalOnly: true,
+                    ...(request.factCorrection ? { factCorrection: true } : {})
                 }
                 : {}),
             ...(request.modelSelectsSkills

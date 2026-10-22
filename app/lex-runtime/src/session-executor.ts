@@ -342,6 +342,8 @@ export type SessionExecutionRequest = {
   // Set only by the AUTO router (decision.legal === false): answer without
   // loading legal skills, modules or legal tools.
   conversationalOnly?: boolean;
+  // The message corrects a fact of the conversation (applyFactCorrectionGate).
+  factCorrection?: boolean;
   // AUTO for account/API models: the model picks skills itself.
   modelSelectsSkills?: boolean;
   // Runtime-only (never parsed from HTTP): result of the entry gate.
@@ -2918,7 +2920,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly
         ? {
-            conversationalOnly: true
+            conversationalOnly: true,
+            ...(request.factCorrection ? { factCorrection: true } : {})
           }
         : {}),
       ...(request.modelSelectsSkills

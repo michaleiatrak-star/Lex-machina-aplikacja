@@ -11,7 +11,7 @@ export function validCaseWork(value) {
         const item = raw;
         if (!item ||
             typeof item.key !== "string" || item.key.length > 200 ||
-            !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE"].includes(String(item.kind)) ||
+            !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE", "CORRECTION"].includes(String(item.kind)) ||
             typeof item.label !== "string" || item.label.length > 300 ||
             (item.status !== "DONE" && item.status !== "OPEN") ||
             typeof item.at !== "string" || Number.isNaN(Date.parse(item.at)) ||
@@ -60,6 +60,10 @@ export function recordCaseWork(previous, turn) {
     if (turn.chronologySaved) {
         items.set("CHRONOLOGY", { key: "CHRONOLOGY", kind: "CHRONOLOGY", label: "chronologia sprawy (oś czasu w pamięci sprawy)", status: "DONE", at: turn.now });
     }
+    for (const correction of turn.corrections ?? []) {
+        const key = `CORRECTION:${issueKey(correction)}`.slice(0, 200);
+        items.set(key, { key, kind: "CORRECTION", label: correction.slice(0, 300), status: "DONE", at: turn.now });
+    }
     for (const file of turn.files ?? []) {
         const key = `FILE:${file.artifactId}`;
         items.set(key, { key, kind: "FILE", label: `plik „${file.filename}”${file.draft ? " (projekt)" : ""}`.slice(0, 300), status: "DONE", at: turn.now });
@@ -100,6 +104,8 @@ export function caseWorkLine(item) {
             ? `ZAMKNIĘTE: analiza dokumentu „${item.label}” w całości (${item.totalPages} s.)${item.skill ? `, ${item.skill}` : ""}, ${date}`
             : `OTWARTE: analiza dokumentu „${item.label}” — przeczytane s. ${pages(item.pages ?? [])} z ${item.totalPages}, brakuje s. ${pages(missingPages(item.totalPages, item.pages ?? []))}`;
     }
+    if (item.kind === "CORRECTION")
+        return `KOREKTA UŻYTKOWNIKA (obowiązuje): „${item.label}”, ${date}`;
     return `${item.status === "DONE" ? "ZAMKNIĘTE" : "OTWARTE"}: ${item.label}, ${date}`;
 }
 /** The register for a later turn: use the results, do not repeat closed work, finish the open. */
