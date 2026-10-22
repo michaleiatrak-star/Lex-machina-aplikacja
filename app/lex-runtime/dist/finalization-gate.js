@@ -157,6 +157,13 @@ function articleRecord(ledger, reference) {
     });
     return units.length > 0 && present ? record : undefined;
 }
+function verifiedMarkersOf(ledger, claim) {
+    return ledger
+        .find(claim)
+        .filter((record) => record.status === "VERIFIED")
+        .map(expectedVerificationMarker)
+        .filter((marker) => Boolean(marker));
+}
 // Words of an act's title that tell no act from another (dates, "ustawy").
 const ACT_TITLE_NOISE = new Set([
     "ustawy", "ustawa", "ustawą", "ustawie", "dnia", "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
@@ -300,6 +307,14 @@ export class FinalizationGate {
                 "VERIFIED")
                 .map(expectedVerificationMarker)
                 .filter((marker) => Boolean(marker)));
+            // A provision verified in several versions (the history of its changes: the current text
+            // and the text on a past date): the marker of each of its VERIFIED records is its own.
+            for (const candidate of references) {
+                if (candidate.line !== reference.line)
+                    continue;
+                for (const marker of verifiedMarkersOf(ledger, candidate.claim))
+                    allowedLineMarkers.add(marker);
+            }
             // Wyliczenie "art. 233 i 234 KK": znacznik drugiego przepisu też należy do wiersza.
             for (const claim of statuteClaimsInLine(reference.lineText)) {
                 const enumerated = ledger.latest(claim);
@@ -333,6 +348,15 @@ export class FinalizationGate {
                 continue;
             }
             if (record.status === "VERIFIED") {
+                // The version the line's marker names, when it is another VERIFIED record of this claim.
+                const named = ledger.find(reference.claim).find((candidate) => {
+                    const marker = candidate.status === "VERIFIED" ? expectedVerificationMarker(candidate) : null;
+                    return Boolean(marker) && lineMarkers.includes(marker);
+                });
+                if (named && named !== record && !unexpectedLineMarker) {
+                    findings.push({ reference, status: "VERIFIED", record: named });
+                    continue;
+                }
                 const expectedMarker = expectedVerificationMarker(record);
                 if (!VERIFIED_MARKER.test(reference.lineText)) {
                     findings.push({

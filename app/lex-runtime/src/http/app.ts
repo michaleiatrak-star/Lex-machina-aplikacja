@@ -300,6 +300,11 @@ import {
   type OrderedCaseWorkflowState
 } from "../ordered-case-workflow-state.js";
 
+// A local model's share of the case memory (register, overview, timeline) and the thread text
+// it summarizes in one call: its window is 32k tokens and every character costs time on a CPU.
+const LOCAL_CASE_MEMORY_CHARS = 4_000;
+const LOCAL_SUMMARY_CHUNK_CHARS = 20_000;
+
 const PROVIDERS = new Set<ProviderId>([
   "openai",
   "anthropic",
@@ -7290,6 +7295,29 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     "/api/cases/:caseId/artifacts/generate",
     async (req, res) => {
       if (keepAliveRequested(req)) keepResponseAlive(res);
+      // A generated file goes into the case's work register: later turns know it exists.
+      const sendJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        const generated = body as { artifact?: { artifactId?: unknown; filename?: unknown }; warnings?: unknown[] } | null;
+        const artifactId = generated?.artifact?.artifactId;
+        const filename = generated?.artifact?.filename;
+        if (typeof artifactId === "string" && typeof filename === "string" && options.caseMemoryStore && options.caseAccessService) {
+          const actor = responseAuthContext(res);
+          const caseId = String(req.params.caseId);
+          void (async () => {
+            const caseView = options.caseAccessService!.openCase(actor, caseId);
+            await options.caseAccessService!.withCaseDataKey(actor, caseId, "WRITE", async (caseDataKey) => {
+              const key = { caseId, caseDataKey, keyVersion: caseView.keyVersion };
+              const current = await options.caseMemoryStore!.getCaseMemory(key);
+              await options.caseMemoryStore!.saveCaseMemory({
+                ...key,
+                work: recordCaseWork(current.work ?? [], { now: new Date().toISOString(), files: [{ artifactId, filename, draft: /PROJEKT|draft/iu.test(filename) }] })
+              });
+            });
+          })().catch((error: unknown) => process.stderr.write(`CASE_WORK_FILE_NOT_SAVED:${error instanceof Error ? error.message : String(error)}\n`));
+        }
+        return sendJson(body);
+      }) as typeof res.json;
       if (
         !options.caseAccessService ||
         !options.documentAuthoringService ||
@@ -10129,14 +10157,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
       if (caseCourt) request.caseCourt = caseCourt;
 
-      // Evidence memory of the matter's thread (hosted models; checked in ELI by the executor).
+      // Evidence memory of the matter's thread (checked in ELI by the executor). A local model
+      // gets it too, with the register and the summary shortened: without them it knew nothing
+      // of the earlier work past its 28k-character window.
       let threadEvidence: ThreadEvidence | null = null;
       let caseWork: CaseWorkItem[] = [];
       // The user asked for the case summary (button): the template goes with the request, the
       // answer is kept in the case memory.
       const overviewAsked = overviewRequested(request.query);
       if (overviewAsked) request.query = queryWithOverviewTemplate(request.query);
-      if (knowledge.caseId && !localModel && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
+      if (knowledge.caseId && !trivialChat && options.caseMemoryStore && options.caseAccessService) {
         try {
           const actor = responseAuthContext(res);
           const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);
@@ -10160,7 +10190,13 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           if (memory.chronology) request.caseTimelineDates = [...isoDates(memory.chronology.text)].slice(0, 500);
           const register = caseWorkBlock(caseWork);
           if (timeline || register || overview) {
-            request.query = queryWithChronology(request.query, [register, overview, timeline].filter(Boolean).join("\n\n"));
+            const block = [register, overview, timeline].filter(Boolean).join("\n\n");
+            request.query = queryWithChronology(
+              request.query,
+              localModel && block.length > LOCAL_CASE_MEMORY_CHARS
+                ? `${block.slice(0, LOCAL_CASE_MEMORY_CHARS)}\n[…dalsza część pamięci sprawy pominięta (model lokalny)]`
+                : block
+            );
             request.onStep?.(
               "PREPARE",
               [register ? `rejestr prac sprawy (${caseWork.length})` : "", timeline ? `oś czasu z ${memory.chronology!.updatedAt.slice(0, 10)}` : ""].filter(Boolean).join(", ")
@@ -10176,7 +10212,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 thread: memory.threadMessages,
                 dropped,
                 stored: memory.summary ?? null,
-                chunkChars: SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
+                chunkChars: localModel ? LOCAL_SUMMARY_CHUNK_CHARS : SUMMARY_CHUNK_CHARS[request.provider] ?? 120_000,
                 now: new Date().toISOString(),
                 summarize: (previousSummary, messages) =>
                   summarize({
@@ -12548,7 +12584,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           console.error("CASE_MEMORY_ANSWER_DOCUMENT_SAVE_FAILED", error instanceof Error ? error.message : String(error));
         }
       }
-      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !localModel && !trivialChat) {
+      if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && !trivialChat) {
         await rememberThreadEvidence({
           store: options.caseMemoryStore,
           caseAccessService: options.caseAccessService,

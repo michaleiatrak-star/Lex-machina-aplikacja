@@ -8,7 +8,8 @@ export type CaseWorkItem = {
   key: string;
   // OPEN_ISSUE: a point left for later ("do weryfikacji w źródle", "do zbadania"), kept
   // with its label so a later turn (and an API model, which keeps nothing) takes it up.
-  kind: "DOCUMENT_ANALYSIS" | "CHRONOLOGY" | "WORKFLOW" | "OPEN_ISSUE";
+  // FILE: a document file the application generated in the case (its name and format).
+  kind: "DOCUMENT_ANALYSIS" | "CHRONOLOGY" | "WORKFLOW" | "OPEN_ISSUE" | "FILE";
   label: string;
   status: "DONE" | "OPEN";
   at: string;
@@ -28,7 +29,7 @@ export function validCaseWork(value: unknown): CaseWorkItem[] | null {
     if (
       !item ||
       typeof item.key !== "string" || item.key.length > 200 ||
-      (item.kind !== "DOCUMENT_ANALYSIS" && item.kind !== "CHRONOLOGY" && item.kind !== "WORKFLOW" && item.kind !== "OPEN_ISSUE") ||
+      !["DOCUMENT_ANALYSIS", "CHRONOLOGY", "WORKFLOW", "OPEN_ISSUE", "FILE"].includes(String(item.kind)) ||
       typeof item.label !== "string" || item.label.length > 300 ||
       (item.status !== "DONE" && item.status !== "OPEN") ||
       typeof item.at !== "string" || Number.isNaN(Date.parse(item.at)) ||
@@ -65,6 +66,8 @@ export function recordCaseWork(
     coverage?: readonly DocumentCoverage[];
     chronologySaved?: boolean;
     completedWorkflows?: readonly string[];
+    // Files generated in the case (artifacts/generate).
+    files?: ReadonlyArray<{ artifactId: string; filename: string; draft?: boolean }>;
     // Points left open in this turn and points this turn settled (by issueKey).
     openIssues?: ReadonlyArray<{ key: string; label: string }>;
     resolvedIssues?: readonly string[];
@@ -94,6 +97,10 @@ export function recordCaseWork(
   }
   if (turn.chronologySaved) {
     items.set("CHRONOLOGY", { key: "CHRONOLOGY", kind: "CHRONOLOGY", label: "chronologia sprawy (oś czasu w pamięci sprawy)", status: "DONE", at: turn.now });
+  }
+  for (const file of turn.files ?? []) {
+    const key = `FILE:${file.artifactId}`;
+    items.set(key, { key, kind: "FILE", label: `plik „${file.filename}”${file.draft ? " (projekt)" : ""}`.slice(0, 300), status: "DONE", at: turn.now });
   }
   for (const workflow of turn.completedWorkflows ?? []) {
     const key = `WORKFLOW:${workflow}`;

@@ -65,7 +65,7 @@ function shortened(text: string, max: number, rest?: string): string {
 
 // Sections the application writes itself: the end of the preloaded modules' block.
 const APP_SECTION =
-  /^# (?:ACTIVE |AKTA SPRAWY|BRZMIENIE PRZEPISÓW|CORE LEGAL|DETERMINISTIC|DOSTĘPNE SKILLE|FEDERATED|LEX MACHINA|LOCAL |LOKALNE TEKSTY|MAPA-AKTOW:|MAPA WIEDZY|MATERIAŁY KANCELARII|MODEL TEJ SESJI|MODUŁ AKTU|MULTI-SKILL|OBRAZY JAKO|RDZEŃ PRAWA|ROZPOZNANIE APLIKACJI|SEMANTIC CONTRACT|SKILL \(DIGEST\)|SKILLE PRAWNE|STRUCTURED REPORT|SĄD WŁAŚCIWY|GATE I|DR-\d{2}\b|KROK CZEKAJĄCY|DŁUGIE PISMO|ZASADY|KORPUS)/u;
+  /^# (?:ACTIVE |AKTA SPRAWY|BRZMIENIE PRZEPISÓW|CORE LEGAL|DETERMINISTIC|DOSTĘPNE SKILLE|FEDERATED|LEX MACHINA|LOCAL |LOKALNE TEKSTY|MAPA-AKTOW:|MAPA WIEDZY|MATERIAŁY KANCELARII|MODEL TEJ SESJI|MODUŁ AKTU|MULTI-SKILL|OBRAZY JAKO|RDZEŃ PRAWA|ROZPOZNANIE APLIKACJI|SEMANTIC CONTRACT|SKILL \(DIGEST\)|SKILLE PRAWNE|STRUCTURED REPORT|SĄD WŁAŚCIWY|GATE I|DR-\d{2}\b|KROK CZEKAJĄCY|DŁUGIE PISMO|ZASADY|KORPUS|JUŻ USTALONE)/u;
 // A module of that block: its own header, or the criminal qualifier's nodes (kept whole).
 const MODULE_START = /^# (?:RUNTIME-PRELOADED SEMANTIC CONTEXT: |KWALIFIKATOR KARNOMATERIALNY)/u;
 
@@ -147,6 +147,11 @@ export function compactLocalPrompt(prompt: string, question = ""): string {
     if (/^# SKILL \(DIGEST\):/u.test(head)) {
       // The digest's own lines; the host adapter notes under it are for other hosts.
       out.push(part.split(/\n## ADAPTER RUNTIME\b/u)[0]!.trim());
+      continue;
+    }
+    if (/^# JUŻ USTALONE\b/u.test(head)) {
+      // What earlier turns verified: the model does not verify it again nor forget it.
+      out.push(shortened(part, 2_500));
       continue;
     }
     if (/^# DR-\d{2}\b/u.test(head)) {

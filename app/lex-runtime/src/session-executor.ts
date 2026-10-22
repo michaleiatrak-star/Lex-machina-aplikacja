@@ -1950,7 +1950,6 @@ export class SafeSessionExecutor implements SessionExecutor {
       memory &&
       // A conversational turn reads no provisions: no ELI round trip for them.
       !request.conversationalOnly &&
-      !request.model.startsWith("local/") &&
       (memory.provisions.length || memory.sources.length || memory.skills.length || memory.lastPath)
     ) {
       const reuse = this.actFreshness
