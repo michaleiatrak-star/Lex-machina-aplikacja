@@ -74,9 +74,8 @@ const WEB_CSP = "default-src 'self'; connect-src 'self'; img-src 'self' data: bl
 export function registerWebApp(app, webRoot) {
     if (!webRoot)
         return;
-    const index = fs
-        .readFileSync(path.join(webRoot, "index.html"), "utf8")
-        .replace("<head>", '<head>\n    <meta name="lex-api-base" content="same-origin" />');
+    // Czytany przy każdym żądaniu: po aktualizacji strona wskazuje nowe pliki.
+    const index = () => fs.readFileSync(path.join(webRoot, "index.html"), "utf8").replace("<head>", '<head>\n    <meta name="lex-api-base" content="same-origin" />');
     app.use(express.static(webRoot, { index: false, fallthrough: true, maxAge: "1h" }));
     app.get(/^\/(?!api(?:\/|$)|health$|oauth\/).*/, (req, res, next) => {
         if (path.extname(req.path)) {
@@ -85,7 +84,7 @@ export function registerWebApp(app, webRoot) {
         }
         res.set("Content-Security-Policy", WEB_CSP);
         res.set("Cache-Control", "no-store");
-        res.type("html").send(index);
+        res.type("html").send(index());
     });
 }
 export class BrowserAccess {

@@ -1458,7 +1458,10 @@ export default function MatterChatApp({
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("models");
   // Developer mode: journal, skills, gates, codes and traces; off for a lawyer's view.
-  const [developerMode, setDeveloperModeState] = useState(() => loadDeveloperMode(user.userId));
+  // Tryb dewelopera tylko dla administratora; konto użytkownika zawsze w widoku dla prawnika.
+  const developerAllowed = user.appRole === "ADMIN";
+  const [developerModeStored, setDeveloperModeState] = useState(() => loadDeveloperMode(user.userId));
+  const developerMode = developerAllowed && developerModeStored;
   useEffect(() => {
     setDeveloperModeState(loadDeveloperMode(user.userId));
   }, [user.userId]);
@@ -2565,7 +2568,8 @@ export default function MatterChatApp({
     }
     setActiveTab("settings");
     setSettingsSection(
-      settingsRequest.section
+      // Konto użytkownika nie ma zakładki „Aplikacja i utrzymanie”.
+      !developerAllowed && settingsRequest.section === "maintenance" ? "models" : settingsRequest.section
     );
   }, [
     settingsRequest?.nonce,
@@ -7369,6 +7373,12 @@ export default function MatterChatApp({
                 [SettingsSection, string]
               >)
                 .filter(([section]) => developerMode || section !== "skills")
+                // Konto użytkownika: bez zakładek administracyjnych i technicznych.
+                .filter(
+                  ([section]) =>
+                    developerAllowed ||
+                    (section !== "maintenance" && (section !== "mcp" || Boolean(settingsPanels?.integrations)))
+                )
                 .map(
                   ([section, label]) => (
                     <button
