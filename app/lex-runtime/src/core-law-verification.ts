@@ -302,6 +302,7 @@ export function verifyFromCoreLaw(args: {
         status: "VERIFIED",
         ...(sourceAnchorUrl ? { sourceAnchorUrl } : {}),
         fetchedAt: record.fetchedAt,
+        retrieval: "RAG",
         temporalFreshnessStatus: "CURRENT",
         freshnessCheckedAt: checkedAt,
         evidence: evidence.slice(0, 4_000)

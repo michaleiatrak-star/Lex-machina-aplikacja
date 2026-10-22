@@ -75,6 +75,8 @@ export type VerificationRecord = {
   actDescriptor?: LegalActDescriptor;
   // Interpretacja (EUREKA): status aktualności w dniu sprawdzenia, np. "Aktualna".
   interpretationStatus?: string;
+  // Brzmienie z lokalnej kopii t.j. pobranej z ELI (RAG aplikacji), aktualność sprawdzona w ELI.
+  retrieval?: "RAG";
 };
 
 function normalizeClaim(value: string): string {

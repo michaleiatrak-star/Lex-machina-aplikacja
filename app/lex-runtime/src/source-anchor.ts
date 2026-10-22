@@ -253,6 +253,7 @@ export function verificationMarker(record: {
   fetchedAt?: string;
   asOf?: string;
   interpretationStatus?: string;
+  retrieval?: string;
 }): string | null {
   const link = verificationSourceLink(record);
   if (record.status !== "VERIFIED" || !link || !record.fetchedAt?.trim()) return null;
@@ -266,6 +267,7 @@ export function verificationMarker(record: {
     record.interpretationStatus && record.interpretationStatus !== "Aktualna"
       ? `, EUREKA: ${record.interpretationStatus.toLocaleUpperCase("pl")}`
       : "",
+    record.retrieval === "RAG" ? ", ŹRÓDŁO: RAG (kopia t.j. z ELI)" : "",
     "]"
   ].join("");
 }

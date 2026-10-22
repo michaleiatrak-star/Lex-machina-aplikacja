@@ -329,7 +329,7 @@ describe("verifyFromCoreLaw", () => {
     const ledger = new VerificationLedger();
     ledger.add(outcome.record);
     const report = new FinalizationGate().evaluate(
-      `Zgodnie z art. 51 § 1 KW ✅ [VER: ${KW_URL}, 2026-09-20] wzywam.`,
+      `Zgodnie z art. 51 § 1 KW ✅ [VER: ${KW_URL}, 2026-09-20, ŹRÓDŁO: RAG (kopia t.j. z ELI)] wzywam.`,
       ledger
     );
     expect(report.result).toBe("PASS");
@@ -367,7 +367,7 @@ describe("verify_legal_reference with the core law index", () => {
     ]);
     const kwPayload = JSON.parse(kwResult!.content) as { status: string; marker: string };
     expect(kwPayload.status).toBe("VERIFIED");
-    expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20]`);
+    expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20, ŹRÓDŁO: RAG (kopia t.j. z ELI)]`);
     expect(JSON.parse(titleResult!.content).status).toBe("VERIFIED");
     expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", localCopy: "UNKNOWN_LEGAL_ACT" });
     expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("VERIFIED");

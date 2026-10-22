@@ -226,6 +226,7 @@ export function verificationMarker(record) {
         record.interpretationStatus && record.interpretationStatus !== "Aktualna"
             ? `, EUREKA: ${record.interpretationStatus.toLocaleUpperCase("pl")}`
             : "",
+        record.retrieval === "RAG" ? ", ŹRÓDŁO: RAG (kopia t.j. z ELI)" : "",
         "]"
     ].join("");
 }
