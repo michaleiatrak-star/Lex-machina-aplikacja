@@ -57,6 +57,7 @@ function failureText(failure: unknown): string {
     PLAN_IN_USE: "Plan jest przypisany do kont albo jest planem domyślnym.",
     INVALID_PROVIDER_API_KEY: "Nieprawidłowy klucz API.",
     INVALID_GLOBAL_TOKEN_LIMIT: "Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu).",
+    ADMIN_HAS_NO_PLAN: "Administrator nie podlega planom.",
     USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora.",
     SERVER_MODE_REQUIRED: "Dostęp z sieci wymaga włączonego trybu serwerowego.",
     NETWORK_CHANGE_LOCAL_ONLY: "Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1).",
@@ -539,12 +540,13 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                 <strong>{account.loginName}</strong>
                 <span>
                   {account.appRole} · {account.status === "ACTIVE" ? "aktywne" : "wyłączone"} ·{" "}
-                  {account.emailVerified ? "e-mail potwierdzony" : "konto lokalne"} · plan: {account.planName ?? "brak"} · w tym miesiącu:{" "}
+                  {account.emailVerified ? "e-mail potwierdzony" : "konto lokalne"} · plan: {account.appRole === "ADMIN" ? "bez ograniczeń planu" : account.planName ?? "brak"} · w tym miesiącu:{" "}
                   {tokens(account.usage.inputTokens + account.usage.outputTokens)}
                   {account.monthlyTokenLimit !== null ? ` / ${tokens(account.monthlyTokenLimit)}` : ""} tokenów
                 </span>
               </div>
               <div className="admin-user-actions">
+                {account.appRole !== "ADMIN" && (
                 <select
                   aria-label={`Plan konta ${account.loginName}`}
                   value={account.planId ?? ""}
@@ -558,6 +560,7 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                     </option>
                   ))}
                 </select>
+                )}
                 {account.appRole === "USER" && (
                   <button
                     type="button"

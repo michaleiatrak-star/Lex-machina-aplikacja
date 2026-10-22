@@ -624,13 +624,17 @@ export class ServerModeService implements ModelCallGuard {
 
   assignPlan(actor: AuthenticatedContext, userId: string, planId: string | null): void {
     requireAdmin(actor);
-    if (!this.auth.getUser(userId)) throw new ServerModeError("USER_NOT_FOUND", 404);
+    const user = this.auth.getUser(userId);
+    if (!user) throw new ServerModeError("USER_NOT_FOUND", 404);
+    // Administrator nie podlega planom.
+    if (user.appRole === "ADMIN" && planId) throw new ServerModeError("ADMIN_HAS_NO_PLAN", 409);
     if (planId && !this.store.getPlan(planId)) throw new ServerModeError("PLAN_NOT_FOUND", 404);
     this.store.setAccountPlan(userId, planId, new Date(this.now()).toISOString());
   }
 
-  /** The account's plan, else the default plan of new accounts; null: none. */
+  /** The account's plan, else the default plan of new accounts; null: none (always for the admin). */
   effectivePlan(userId: string): PlanRecord | null {
+    if (this.auth.getUser(userId)?.appRole === "ADMIN") return null;
     const assigned = this.store.getAccountPlanId(userId);
     const planId = assigned ?? this.store.getSetting("default_plan_id");
     return planId ? this.store.getPlan(planId) : null;
@@ -674,7 +678,7 @@ export class ServerModeService implements ModelCallGuard {
     if (!this.isEnabled()) return;
     if (providerId && model && isAccountSessionModel(providerId, model)) throw new Error("SERVER_MODE_LOCAL_ONLY");
     if (model.startsWith("account/")) throw new Error("SERVER_MODE_LOCAL_ONLY");
-    // Without a plan only the admin may call a model (still within the global limit).
+    // Without a plan only the admin may call a model; the admin has no plan (still within the global limit).
     const plan = this.effectivePlan(userId);
     if (!plan && this.auth.getUser(userId)?.appRole !== "ADMIN") throw new Error("PLAN_REQUIRED");
     if (plan && providerId && model && !model.startsWith("local/") && !plan.allowedProviders.includes(providerId)) {
