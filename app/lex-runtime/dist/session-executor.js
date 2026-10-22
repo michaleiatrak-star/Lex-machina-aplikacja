@@ -62,7 +62,7 @@ import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from 
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
-import { criminalMatter } from "./matter-signals.js";
+import { criminalDocument, criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
 import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
@@ -1250,7 +1250,9 @@ export class SafeSessionExecutor {
                 criminalMatter(withoutOutputContract(request.auxiliaryText ?? latestUserTurn(request.query))) ||
                 // A follow-up of a criminal matter ("a jaki termin?") stays one. The chat always
                 // sends the latest message apart (auxiliaryText), so the thread is read as well.
-                criminalMatter(withoutOutputContract(threadUserText(request.query))),
+                criminalMatter(withoutOutputContract(threadUserText(request.query))) ||
+                // An attached judgment, indictment or charges of a criminal case.
+                attachments.some((attachment) => criminalDocument(attachment.chunks.slice(0, 4).map((chunk) => chunk.text).join("\n"))),
             documents: attachments.length > 0,
             documentsTruncated: contextSelection.report.documents?.some((item) => item.status !== "FULL") ?? false,
             documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),

@@ -98,7 +98,22 @@ const LAY_CRIMINAL_WORDS = new RegExp("(?<![\\p{L}])(?:" +
         "wynosił\\p{L}*\\s+(?:gotówkę|pieniądze|towar)\\p{L}*",
         "zawyżan\\p{L}*\\s+faktur\\p{L}*",
         "zawiadomi\\p{L}*\\s+(?:na\\s+policję|policj\\p{L}*|do\\s+prokuratur\\p{L}*|o\\s+nękaniu)",
-        "km/h\\s+za\\s+szybko"
+        "km/h\\s+za\\s+szybko",
+        // Próba generalna 0.1.45: sprawy karne opisane bez słów powyżej.
+        "spraw\\p{L}*\\s+karn\\p{L}*",
+        "zgłosi\\p{L}*\\s+(?:go\\s+|ją\\s+|ich\\s+|to\\s+|sprawę\\s+)?na\\s+policj\\p{L}*",
+        "czynn\\p{L}*\\s+żal\\p{L}*",
+        // Zatrzymanie osoby, nie kontrola drogowa ("zatrzymała mnie do kontroli").
+        "(?:zatrzyma\\p{L}*\\s+(?:\\p{L}+\\s+){0,3}(?:przez\\s+)?policj\\p{L}*|policj\\p{L}*\\s+zatrzyma\\p{L}*)(?!\\s+(?:\\p{L}+\\s+){0,2}do\\s+kontroli)",
+        "(?:(?:stawić|zgłosić)\\s+się|się\\s+(?:stawić|zgłosić))\\s+do\\s+(?:więzienia|zakładu\\s+karnego)",
+        "(?:KPK|KKS|KKW)",
+        "odroczeni\\p{L}*\\s+(?:wykonania\\s+)?kary",
+        "spowodowa\\p{L}*\\s+(?:\\p{L}+\\s+)?wypad\\p{L}*",
+        "cisz\\p{L}*\\s+nocn\\p{L}*",
+        "zakaz\\p{L}*\\s+prowadzeni\\p{L}*",
+        "zabra\\p{L}*\\s+(?:mi\\s+|mu\\s+)?(?:prawo\\s+jazdy|prawko)",
+        "upozorow\\p{L}*",
+        "oszuk\\p{L}*"
     ].join("|") +
     ")(?![\\p{L}])", "iu");
 // Messages are often typed without Polish letters ("pobil mnie sasiad"): the same
@@ -108,6 +123,13 @@ const plain = (text) => text.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/gu,
 const plainPattern = (pattern) => new RegExp(plain(pattern.source), pattern.flags);
 const PLAIN_CRIMINAL_WORDS = plainPattern(CRIMINAL_WORDS);
 const PLAIN_LAY_CRIMINAL_WORDS = plainPattern(LAY_CRIMINAL_WORDS);
+// A document of a criminal case (judgment, indictment, charges): the matter is criminal whatever
+// the user writes ("Dostałem taki wyrok"). Narrower than the message words: a contract or
+// a regulation mentioning a fine is not one.
+const CRIMINAL_DOCUMENT = /(?<![\p{L}])(?:oskarżon\p{L}*|akt\p{L}*\s+oskarżenia|podejrzan\p{L}*\s+o|postanowieni\p{L}*\s+o\s+przedstawieniu\s+zarzut\p{L}*|k\.\s?k\.|k\.\s?p\.\s?k\.|k\.\s?k\.\s?s\.|k\.\s?w\.)(?![\p{L}])/iu;
+export function criminalDocument(text) {
+    return CRIMINAL_DOCUMENT.test(text) || CRIMINAL_ACT.test(provisionsForDetection(text));
+}
 export function criminalMatter(text) {
     if (CRIMINAL_ACT.test(provisionsForDetection(text)) || CRIMINAL_WORDS.test(text) || LAY_CRIMINAL_WORDS.test(text))
         return true;
