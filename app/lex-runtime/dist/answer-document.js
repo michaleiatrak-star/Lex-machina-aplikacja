@@ -185,3 +185,51 @@ export function answerLetterMarkup(answer) {
         out.push("@PODPIS:", ...signer);
     return out.join("\n").trimEnd();
 }
+const TABLE_RULE = /^\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?$/u;
+/**
+ * An analysis or report answer (no letter in it) in the same markup: its first heading is the
+ * title, its headings are sections, its paragraphs, quotes and lists stay as written. The file
+ * comes from the answer's text without a model turn (a local model writing the document's JSON
+ * again took minutes and failed: DOCUMENT_AST_JSON_INVALID). null for an answer without a body.
+ */
+export function answerReportMarkup(answer) {
+    const body = answer.replace(/\r\n?/gu, "\n").split(/⚖️|\bWażna informacja:/u)[0] ?? "";
+    const lines = body.split("\n").map(plainLine);
+    const metaAt = lines.findIndex((line, index) => index > 0 && line.text.length <= 60 && META_HEADING.test(line.text.replace(/[*_]/gu, "")));
+    const blocks = blocksOf(lines.slice(0, metaAt < 0 ? lines.length : metaAt));
+    const first = blocks[0];
+    if (!first)
+        return null;
+    const titled = first.heading || (first.lines.length === 1 && first.lines[0].length <= 120 && !LIST_ITEM.test(first.lines[0]));
+    const title = titled ? blocks.shift().lines.join(" ").replace(/[*_]{2}/gu, "").trim() : "ANALIZA PRAWNA";
+    // A short reply (a question for missing data, a one-line note) is no document.
+    if (blocks.reduce((sum, block) => sum + block.lines.join(" ").length, 0) < 200)
+        return null;
+    const out = [`@TYTUL: ${title.toLocaleUpperCase("pl")}`, ""];
+    for (const block of blocks) {
+        const [head] = block.lines;
+        if (block.heading || (block.lines.length === 1 && headingLike(head))) {
+            out.push(`@SEKCJA: ${block.lines.join(" ").replace(/[*_]{2}/gu, "").replace(/:$/u, "")}`, "");
+            continue;
+        }
+        for (const line of block.lines) {
+            if (TABLE_RULE.test(line))
+                continue;
+            const row = /^\|(.*)\|$/u.exec(line);
+            const text = row ? row[1].split("|").map((cell) => cell.trim()).filter(Boolean).join(" — ") : line.replace(/^[*•–]\s+/u, "- ");
+            // A heading inside a block ("**Kwalifikacja:**" alone on its line) opens a section.
+            const label = /^(\*\*|__)([^*_\n]{2,60}?):?\1:?$/u.exec(text);
+            out.push(label ? `\n@SEKCJA: ${label[2].trim()}\n` : text);
+        }
+        out.push("");
+    }
+    return out.join("\n").replace(/\n{3,}/gu, "\n\n").trimEnd();
+}
+/** The answer's file markup: its letter when it holds one, else the analysis as a report. */
+export function answerDocumentMarkup(answer) {
+    const letter = answerLetterMarkup(answer);
+    if (letter)
+        return { markup: letter, letter: true };
+    const report = answerReportMarkup(answer);
+    return report ? { markup: report, letter: false } : null;
+}

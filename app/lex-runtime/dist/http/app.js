@@ -1,5 +1,5 @@
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
-import { answerLetterMarkup, answerValidationContext } from "../answer-document.js";
+import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
 import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
@@ -4674,13 +4674,14 @@ export function createLexHttpApp(options) {
                     res.status(409).json({ error: "ANSWER_DOCUMENT_MISSING" });
                     return;
                 }
-                const markup = answerLetterMarkup(stored.text);
-                if (!markup) {
+                const answerMarkup = answerDocumentMarkup(stored.text);
+                if (!answerMarkup) {
                     res.status(409).json({ error: "ANSWER_DOCUMENT_MISSING" });
                     return;
                 }
-                const ast = letterMarkupAst(markup, {
-                    documentType: documentType === "pleading" ? "pleading" : "letter",
+                // An analysis answer is an opinion; its draft names what stayed unverified.
+                const ast = letterMarkupAst(answerMarkup.markup, {
+                    documentType: !answerMarkup.letter ? "opinion" : documentType === "pleading" ? "pleading" : "letter",
                     styleProfile: effectiveStyleProfile
                 });
                 const ready = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", (caseDataKey) => options.documentAuthoringService.createReady({
@@ -7800,19 +7801,21 @@ export function createLexHttpApp(options) {
                     };
                 }
             }
-            // An answer that is itself a letter: kept with its session's trail for its file.
+            // An answer (a letter, an analysis) kept with its session's trail for its file, made from
+            // its text without a model turn. A DEGRADED finalization (references left marked
+            // unverified) still makes a draft: the export gate names what was not verified.
             const internalState = result[SESSION_EXECUTION_INTERNAL];
             if (knowledge.caseId &&
                 options.caseMemoryStore &&
                 options.caseAccessService &&
                 internalState &&
                 result.status === "DRAFT_PRESENTABLE" &&
-                result.finalization === "PASS" &&
+                result.finalization !== "BLOCKED" &&
                 result.audit.result === "PASS" &&
                 result.answer &&
                 !result.waitingForUser &&
                 !result.longDocument &&
-                answerLetterMarkup(result.answer)) {
+                answerDocumentMarkup(result.answer)) {
                 try {
                     const actor = responseAuthContext(res);
                     const caseView = options.caseAccessService.openCase(actor, knowledge.caseId);

@@ -125,10 +125,10 @@ describe("szkic i gotowy dokument po cyklu pisma", () => {
 
 describe("plik z odpowiedzi, która sama jest pismem (bez tury modelu)", () => {
   it("„ok daj mi pismo” i „wygeneruj to w docx” to plik ostatniego pisma; nowe pismo nie", () => {
-    for (const text of ["ok daj mi pismo", "daj mi pismo", "wygeneruj to w pliku docx", "Pobierz gotowe pismo", "zapisz powyższe jako plik"]) {
+    for (const text of ["ok daj mi pismo", "daj mi pismo", "wygeneruj to w pliku docx", "Pobierz gotowe pismo", "zapisz powyższe jako plik", "wygeneruj odpowiedź w postaci dokumentu docx", "daj analizę w wordzie"]) {
       expect(refersToLastAnswer(text)).toBe(true);
     }
-    for (const text of ["Przygotuj pismo do pracodawcy", "Napisz wezwanie do zapłaty", "daj mi nowe pismo"]) {
+    for (const text of ["Przygotuj pismo do pracodawcy", "Napisz wezwanie do zapłaty", "daj mi nowe pismo", "napisz odpowiedź na pozew w docx"]) {
       expect(refersToLastAnswer(text)).toBe(false);
     }
   });

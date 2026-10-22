@@ -704,7 +704,9 @@ export function refersToLastAnswer(input: string): boolean {
 const GENERIC_FILE_WORDS = new Set([
   "ok", "okej", "dobrze", "tak", "prosze", "teraz", "juz", "a", "i", "mi", "mnie", "nam", "w", "we", "jako", "z", "do", "pobrania",
   "daj", "dawaj", "wygeneruj", "generuj", "przygotuj", "zrob", "stworz", "utworz", "zapisz", "pobierz", "wyeksportuj", "eksportuj",
-  "pismo", "pisma", "plik", "pliku", "dokument", "dokumentu", "docx", "doc", "word", "wordzie", "worda", "formie", "formacie", "wersji", "wersje"
+  "pismo", "pisma", "plik", "pliku", "dokument", "dokumentu", "docx", "doc", "word", "wordzie", "worda", "formie", "formacie", "wersji", "wersje",
+  // "wygeneruj odpowiedź w postaci dokumentu docx", "analizę jako plik": the answer itself.
+  "odpowiedz", "odpowiedzi", "postaci", "analiza", "analize", "analizy", "opinia", "opinie", "opinii", "raport", "jej", "ja"
 ]);
 
 export function directDocumentRequest(
