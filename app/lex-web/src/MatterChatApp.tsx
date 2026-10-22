@@ -1431,8 +1431,24 @@ export default function MatterChatApp({
   onLock?: () => void;
   onLogout?: () => void;
 }) {
-  // Tryb serwerowy: tylko kanał API (bez kont przez klienta CLI i bez modeli lokalnych).
-  const providerGroups = serverMode
+  // Tryb serwerowy: kanał API (bez kont przez klienta CLI); model lokalny tylko wtedy, gdy
+  // serwer go ma (llama.cpp na serwerze albo LEX_LOCAL_LLM_ENDPOINT). null: jeszcze nie wiadomo.
+  const [serverLocalModel, setServerLocalModel] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!serverMode) return;
+    let cancelled = false;
+    getLocalModels()
+      .then((response) => {
+        if (!cancelled) setServerLocalModel(response.models.some((item) => item.installed));
+      })
+      .catch(() => {
+        if (!cancelled) setServerLocalModel(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverMode]);
+  const providerGroups = serverMode && serverLocalModel !== true
     ? PROVIDER_GROUPS.filter((item) => item.id !== "local")
     : PROVIDER_GROUPS;
   const [activeTab, setActiveTab] = useState<TabId>("home");
@@ -1579,6 +1595,7 @@ export default function MatterChatApp({
     });
   }
   function sourceOfGroup(group: ProviderGroup): PrimaryModelSource {
+    if (serverMode && group === "local" && serverLocalModel === true) return "local";
     if (serverMode) return runtimeProviderForPrimarySource(group === "local" ? "openai" : sourceForGroup(group, "api"));
     if (group === "local") return "local";
     return preferredSourceForGroup(group, providerChannels[group], {
@@ -1586,12 +1603,12 @@ export default function MatterChatApp({
       apiConfigured: providerConfiguration[group] === true
     });
   }
-  // Tryb serwerowy: źródło konta (CLI) albo lokalne przechodzi na kanał API dostawcy.
+  // Tryb serwerowy: źródło konta (CLI) albo lokalne bez modelu na serwerze przechodzi na kanał API dostawcy.
   useEffect(() => {
-    if (serverMode && (provider === "local" || isAccountPrimarySource(provider))) {
+    if (serverMode && ((provider === "local" && serverLocalModel === false) || isAccountPrimarySource(provider))) {
       setProvider(runtimeProviderForPrimarySource(provider));
     }
-  }, [serverMode, provider]);
+  }, [serverMode, provider, serverLocalModel]);
   const [providerConfiguration, setProviderConfiguration] = useState<
     Record<ProviderId, boolean | undefined>
   >({ openai: undefined, anthropic: undefined, xai: undefined, google: undefined });
