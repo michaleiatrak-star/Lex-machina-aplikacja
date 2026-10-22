@@ -187,6 +187,30 @@ describe("LexMcpConnectorStore", () => {
     }
   });
 
+  it("passes the sn.pl verification settings to the connectors; no window on a server without a screen", () => {
+    const connectors = store();
+    const names = ["SN_CAPTCHA_AUTO", "SN_CAPTCHA_RECZNIE", "PLAYWRIGHT_BROWSERS_PATH", "DISPLAY", "WAYLAND_DISPLAY"] as const;
+    const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    try {
+      for (const name of names) delete process.env[name];
+      process.env.SN_CAPTCHA_AUTO = "1";
+      process.env.PLAYWRIGHT_BROWSERS_PATH = "/opt/pw-browsers";
+      expect(connectors.serverEnvironment()).toMatchObject({ SN_CAPTCHA_AUTO: "1", PLAYWRIGHT_BROWSERS_PATH: "/opt/pw-browsers" });
+      if (process.platform === "linux") {
+        expect(connectors.serverEnvironment().SN_CAPTCHA_RECZNIE).toBe("0");
+        process.env.DISPLAY = ":99";
+        expect(connectors.serverEnvironment().SN_CAPTCHA_RECZNIE).toBeUndefined();
+      }
+      process.env.SN_CAPTCHA_RECZNIE = "1";
+      expect(connectors.serverEnvironment().SN_CAPTCHA_RECZNIE).toBe("1");
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   it("inspects the JWT shape without echoing personal data", () => {
     expect(inspectCeidgKey(jwt({ pesel: "1", sub: "2" }))).toEqual({
       valid: true,

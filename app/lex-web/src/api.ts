@@ -3837,6 +3837,24 @@ export function saveSnSession(
   });
 }
 
+// Server mode: the server tries sn.pl's protection itself (no window); reason when it cannot.
+export function attemptSnSessionOnServer(): Promise<{ ready: boolean; reason?: "SN_CONNECTOR_UNAVAILABLE" | "SN_SERVER_BROWSER_MISSING" | "SN_SERVER_REJECTED" }> {
+  return json("/api/mcp-search/sn-session/server-attempt", { method: "POST", body: "{}" });
+}
+
+// Server mode: the sn.pl verification window through the server (a one-time ticket in its path).
+export function openSnProxyWindow(): Promise<{ ticket: string; url: string }> {
+  return json("/api/mcp-search/sn-proxy/ticket", { method: "POST", body: "{}" });
+}
+
+export function snProxyWindowStatus(ticket: string): Promise<{ ready: boolean }> {
+  return json(`/api/mcp-search/sn-proxy/ticket/${encodeURIComponent(ticket)}`);
+}
+
+export function closeSnProxyWindow(ticket: string): Promise<{ closed: boolean }> {
+  return json(`/api/mcp-search/sn-proxy/ticket/${encodeURIComponent(ticket)}`, { method: "DELETE" });
+}
+
 export function clearSnSession(): Promise<{ cleared: boolean }> {
   return json("/api/mcp-search/sn-session", { method: "DELETE" });
 }

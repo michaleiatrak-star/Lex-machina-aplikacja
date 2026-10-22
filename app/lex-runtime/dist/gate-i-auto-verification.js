@@ -117,6 +117,20 @@ export function releaseModelUnverifiedMarkers(text) {
     });
     return { text: lines.join("\n"), released };
 }
+/**
+ * The wording a line quotes ("w brzmieniu: „…”"), 20 characters or more; with an ellipsis
+ * its longest uninterrupted part (the verifier checks it as a literal fragment).
+ */
+export function lineQuote(lineText) {
+    const quoted = /[„"“]([^„"“”]{20,600})[”"“]/u.exec(lineText)?.[1];
+    if (!quoted)
+        return null;
+    const part = quoted
+        .split(/\s*(?:…|\.\.\.|\[\.\.\.\]|\(\.\.\.\))\s*/u)
+        .map((item) => item.trim())
+        .sort((a, b) => b.length - a.length)[0];
+    return part && part.length >= 20 ? part : null;
+}
 export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
     const references = detectLegalReferences(text);
     const globalAsOf = requestedAsOf ??
@@ -166,6 +180,9 @@ export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
                     claim: reference.claim,
                     kind: reference.kind,
                     act: alias,
+                    // The provision's wording quoted on its line is checked against the ELI text: a
+                    // matching article number alone gave ✅ to a made-up quotation.
+                    ...(lineQuote(reference.lineText) ? { quote: lineQuote(reference.lineText) } : {}),
                     ...(referenceAsOf
                         ? {
                             asOf: referenceAsOf

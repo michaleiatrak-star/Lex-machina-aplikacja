@@ -83,6 +83,15 @@ describe("MCP search tab routes", () => {
     expect(connectors.status().sn.sessionSavedAt).toBeNull();
   });
 
+  it("server mode: the server attempts sn.pl itself and says why it could not", async () => {
+    await request(app).post("/api/mcp-search/sn-session/server-attempt").expect(401);
+    const reply = await request(app).post("/api/mcp-search/sn-session/server-attempt").set("authorization", "Bearer user").send({}).expect(200);
+    // No browser in the MCP package here (and no screen): never a saved session, always a reason.
+    expect(reply.body.ready).toBe(false);
+    expect(["SN_SERVER_BROWSER_MISSING", "SN_SERVER_REJECTED"]).toContain(reply.body.reason);
+    expect(connectors.status().sn.sessionSavedAt).toBeNull();
+  }, 120_000);
+
   it("returns the native tool schemas of a source", async () => {
     const response = await request(app)
       .get("/api/mcp-search/sources/nbp/tools")

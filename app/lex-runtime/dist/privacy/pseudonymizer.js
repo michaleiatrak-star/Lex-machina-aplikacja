@@ -1038,10 +1038,17 @@ export class LocalPolishPseudonymizer {
         // person's surname ("Piotrowi i Marii Nowakom"). New mentions are added
         // only when the dictionary confirms them.
         const byFinding = new Map();
+        // A sole trader's firm named after the person ("pod firmą Jan Nowak Usługi Remontowe"): the
+        // name is the person named outside the firm too ("Powód Jan Nowak"), one token for both.
+        const namedAlone = new Set(findings
+            .filter((finding) => finding.kind === "PERSON" && !firmContext(text, finding.start, finding.end))
+            .map((finding) => finding.value));
         for (const finding of findings) {
             if (finding.kind !== "PERSON" || finding.source === "USER")
                 continue;
             const firm = firmContext(text, finding.start, finding.end);
+            if (firm && !firm.legalForm && namedAlone.has(finding.value))
+                continue;
             if (firm) {
                 const canonical = registryCanonical.get(finding.value)?.name ?? finding.canonical ?? finding.value;
                 byFinding.set(finding, organizationEntity(canonical, firm.legalForm));

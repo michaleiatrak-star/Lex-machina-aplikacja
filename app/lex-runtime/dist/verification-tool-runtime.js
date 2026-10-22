@@ -1,4 +1,5 @@
 import { todayWarsaw } from "./warsaw-date.js";
+import { MAX_EVIDENCE_CHARS } from "./legal-source-verifier.js";
 import { caseLawRepository } from "./case-law-store.js";
 import { caseLinkProblem, misroutedSignature, signatureRedirect } from "./court-of-signature.js";
 import { SupremeCourtCaseVerifier, propositionEvidenceHash, supremeCourtSearchUrl } from "./case-law-verifier.js";
@@ -886,7 +887,17 @@ export class LegalVerificationToolRuntime {
                     "SUPPORTED") {
                     throw new Error("STATUTE_VERIFIER_RETURNED_SUPPORTED");
                 }
-                const statutoryStatus = result.record.status;
+                // The quote the model (or the automatic check) gives must be in the provision's ELI
+                // text; the article's number alone is no proof of its wording. A cut evidence (a very
+                // long article) cannot disprove a quote.
+                const quote = typeof input.quote === "string" ? input.quote.trim() : "";
+                const comparableText = (value) => value.normalize("NFKC").toLocaleLowerCase("pl").replace(/[„”"«»]/gu, "").replace(/\s+/gu, " ").trim();
+                const quoteMismatch = result.record.status === "VERIFIED" &&
+                    quote.length > 0 &&
+                    typeof result.record.evidence === "string" &&
+                    result.record.evidence.length < MAX_EVIDENCE_CHARS - 500 &&
+                    !comparableText(result.record.evidence).includes(comparableText(quote));
+                const statutoryStatus = quoteMismatch ? "UNVERIFIED" : result.record.status;
                 const acceptedFreshnessStatus = freshness?.status ===
                     "CURRENT" ||
                     freshness?.status ===
@@ -933,6 +944,9 @@ export class LegalVerificationToolRuntime {
                             sourceUrl: statutoryRecord.sourceUrl
                         }
                         : {}),
+                    // The ledger's marker carries the page anchor (#page=N); the marker the model copies
+                    // must be the same, or the finalizer removes it as unbacked.
+                    ...(statutoryRecord.sourceAnchorUrl ? { sourceAnchorUrl: statutoryRecord.sourceAnchorUrl } : {}),
                     fetchedAt: statutoryRecord.fetchedAt,
                     temporalMode,
                     ...(asOf ? { asOf } : {}),
@@ -1688,6 +1702,7 @@ export class LegalVerificationToolRuntime {
                     url: sourceUrl,
                     expectedTitle: resolvedAct.title,
                     resolvedAct,
+                    ...(typeof call.input.quote === "string" && call.input.quote.trim() ? { quote: call.input.quote } : {}),
                     ...(freshness
                         ? { freshness }
                         : {}),

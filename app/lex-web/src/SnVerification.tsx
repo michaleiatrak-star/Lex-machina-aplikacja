@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, isDesktopShell, probeSnSession, saveSnSession } from "./api.js";
+import { ApiError, apiBase, attemptSnSessionOnServer, closeSnProxyWindow, isDesktopShell, openSnProxyWindow, probeSnSession, saveSnSession, snProxyWindowStatus } from "./api.js";
 import { InfoTip } from "./InfoTip";
 
 function desktopInvoke():
@@ -150,14 +150,163 @@ export function SnVerification({
           </div>
         </>
       ) : (
-        <p className="field-help">
-          {verification.instruction ?? "Weryfikacja jest dostępna w aplikacji Lex Machina na komputerze."}{" "}
-          <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(verification.url)}>
-            Otwórz sn.pl
-          </button>
-        </p>
+        <ServerSnVerification url={verification.url} onVerified={() => onVerifiedRef.current()} />
       )}
       {message ? <p className="field-help">{message}</p> : null}
     </div>
+  );
+}
+
+export const SN_SERVER_REASONS: Record<string, string> = {
+  SN_SERVER_REJECTED:
+    "sn.pl odrzuca zapytania z adresu serwera (ochrona Imperva; z adresów centrów danych często bez captchy do rozwiązania). Orzeczenia SN do ok. 2016 r. aplikacja sprawdza zastępczo w SAOS; nowsze — wklej sesję z przeglądarki w tej samej sieci co serwer albo użyj aplikacji na komputerze.",
+  SN_SERVER_BROWSER_MISSING:
+    "Na serwerze nie ma przeglądarki do weryfikacji (Playwright z Chromium w katalogu serwerów MCP). Wklej sesję z przeglądarki albo poproś administratora o instalację.",
+  SN_CONNECTOR_UNAVAILABLE: "Konektor SN nie odpowiada na serwerze."
+};
+
+// Tryb serwerowy (przeglądarka, bez okna sn.pl aplikacji): próba serwera albo sesja wklejona
+// z przeglądarki w sieci serwera (sprawdzana zapytaniem do sn.pl przed zapisem).
+// The sn.pl window through the server: open, poll the ticket, close it when the session works
+// (as the desktop window: no "Gotowe" needed).
+export async function runSnProxyWindow(deps: {
+  open: () => Promise<{ ticket: string; url: string }>;
+  status: (ticket: string) => Promise<{ ready: boolean }>;
+  close: (ticket: string) => Promise<unknown>;
+  openWindow: (url: string) => { closed: boolean; close: () => void } | null;
+  wait: (ms: number) => Promise<void>;
+  base: string;
+  timeoutMs?: number;
+  // The user stopped waiting ("Anuluj"); popup.closed is not reliable across origins.
+  cancelled?: () => boolean;
+}): Promise<"ready" | "closed" | "blocked" | "timeout"> {
+  const { ticket, url } = await deps.open();
+  const popup = deps.openWindow(`${deps.base}${url}`);
+  if (!popup) {
+    await deps.close(ticket).catch(() => undefined);
+    return "blocked";
+  }
+  const until = Date.now() + (deps.timeoutMs ?? 10 * 60_000);
+  try {
+    while (Date.now() < until) {
+      await deps.wait(2_000);
+      const { ready } = await deps.status(ticket).catch(() => ({ ready: false }));
+      if (ready) {
+        // The window also closes itself; the handle may be cut off by the opener policy.
+        popup.close();
+        return "ready";
+      }
+      if (deps.cancelled?.()) return "closed";
+    }
+    popup.close();
+    return "timeout";
+  } finally {
+    await deps.close(ticket).catch(() => undefined);
+  }
+}
+
+function ServerSnVerification({ url, onVerified }: { url: string; onVerified: () => void }) {
+  const [stage, setStage] = useState<"idle" | "window" | "server" | "paste" | "saving">("idle");
+  const [cookie, setCookie] = useState("");
+  const [message, setMessage] = useState("");
+  const cancelRef = useRef(false);
+  async function openWindow() {
+    cancelRef.current = false;
+    setStage("window");
+    setMessage("Okno sn.pl otwarte przez serwer — rozwiąż captchę, jeśli się pojawi. Okno zamknie się samo.");
+    try {
+      const result = await runSnProxyWindow({
+        open: openSnProxyWindow,
+        status: snProxyWindowStatus,
+        close: closeSnProxyWindow,
+        openWindow: (target) => window.open(target, "lex-sn-verification", "popup,width=1100,height=820"),
+        wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        base: apiBase(),
+        cancelled: () => cancelRef.current
+      });
+      if (result === "ready") {
+        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        onVerified();
+      } else if (result === "blocked") setMessage("Przeglądarka zablokowała okno — zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.");
+      else if (result === "closed") setMessage("Przerwano oczekiwanie na weryfikację w oknie sn.pl.");
+      else setMessage("Weryfikacja w oknie nie przeszła w 10 minut.");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? `Nie udało się otworzyć okna sn.pl (${error.code}).` : "Nie udało się otworzyć okna sn.pl.");
+    } finally {
+      setStage("idle");
+    }
+  }
+  async function tryServer() {
+    setStage("server");
+    setMessage("Serwer próbuje przejść weryfikację sn.pl (do ok. minuty)…");
+    try {
+      const result = await attemptSnSessionOnServer();
+      if (result.ready) {
+        setMessage("Sesja sn.pl zapisana na serwerze — ponawiam zapytanie.");
+        onVerified();
+      } else setMessage(SN_SERVER_REASONS[result.reason ?? ""] ?? "Weryfikacja na serwerze nie przeszła.");
+    } catch (error) {
+      setMessage(error instanceof ApiError ? `Weryfikacja na serwerze nie powiodła się (${error.code}).` : "Weryfikacja na serwerze nie powiodła się.");
+    } finally {
+      setStage("idle");
+    }
+  }
+  async function savePasted() {
+    setStage("saving");
+    try {
+      const { ready } = await probeSnSession(cookie.replace(/^\s*cookie:\s*/iu, "").trim(), navigator.userAgent);
+      if (ready) {
+        setMessage("Sesja działa z serwera — zapisana, ponawiam zapytanie.");
+        setCookie("");
+        onVerified();
+      } else setMessage("sn.pl nie przyjął tej sesji z adresu serwera (sesja z innej sieci albo wygasła).");
+    } catch {
+      setMessage("Nie udało się sprawdzić sesji.");
+    } finally {
+      setStage("idle");
+    }
+  }
+  return (
+    <>
+      <p className="field-help">
+        Okno sn.pl otwiera się przez serwer Lex Machina, więc sesja należy do jego adresu; zamknie się samo po przejściu weryfikacji.
+        <InfoTip>Sesja sn.pl działa tylko z adresu, z którego przeszła weryfikację. Wklejany jest wyłącznie nagłówek Cookie zapytania do sn.pl (narzędzia programisty → Sieć); aplikacja go nie wyświetla ani nie zapisuje w logach.</InfoTip>
+      </p>
+      <div className="chat-form-row compact">
+        {stage === "window" ? (
+          <button type="button" className="chat-secondary-action" onClick={() => (cancelRef.current = true)}>
+            Anuluj oczekiwanie
+          </button>
+        ) : (
+          <button type="button" className="chat-primary-action" disabled={stage !== "idle"} onClick={() => void openWindow()}>
+            Zweryfikuj w oknie sn.pl
+          </button>
+        )}
+        <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => void tryServer()}>
+          {stage === "server" ? "Serwer sprawdza…" : "Spróbuj na serwerze"}
+        </button>
+        <button type="button" className="chat-secondary-action" onClick={() => void openExternalUrl(url)}>
+          Otwórz sn.pl
+        </button>
+        <button type="button" className="chat-secondary-action" disabled={stage !== "idle"} onClick={() => setStage("paste")}>
+          Wklej sesję
+        </button>
+      </div>
+      {stage === "paste" || stage === "saving" ? (
+        <div className="chat-form-row compact">
+          <input
+            type="password"
+            aria-label="Nagłówek Cookie z sn.pl"
+            placeholder="Cookie: visid_incap_…; incap_ses_…"
+            value={cookie}
+            onChange={(event) => setCookie(event.target.value)}
+          />
+          <button type="button" className="chat-primary-action" disabled={!cookie.trim() || stage === "saving"} onClick={() => void savePasted()}>
+            {stage === "saving" ? "Sprawdzam…" : "Sprawdź i zapisz"}
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="field-help">{message}</p> : null}
+    </>
   );
 }

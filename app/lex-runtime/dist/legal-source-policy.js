@@ -8,6 +8,7 @@ const R1_HOSTS = new Set([
     "uodo.gov.pl",
     "www.uodo.gov.pl",
     "monitorpolski.gov.pl",
+    "www.monitorpolski.gov.pl",
     "dziennikustaw.gov.pl",
     "dziennikiurzedowe.gov.pl"
 ]);

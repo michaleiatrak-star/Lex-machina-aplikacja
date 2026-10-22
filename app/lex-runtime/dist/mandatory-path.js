@@ -355,7 +355,8 @@ export function evaluateMandatoryPath(model, facts) {
     }
     // SKILL: the skills called in the turn and their runtime-required reads.
     // A skill whose SKILL.md is already a core row (the router, R-1) is not repeated.
-    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => name && name !== "AUTO" && !reported.has(`${name}/SKILL.md`))) {
+    // shared is a library (its resources are the steps above), not a skill the model reads.
+    for (const skill of [...new Set([facts.primarySkill, ...facts.loadedSkills])].filter((name) => name && name !== "AUTO" && name !== "shared" && !reported.has(`${name}/SKILL.md`))) {
         const events = facts.events.filter((event) => event.type === "skill_read" && event.target === skill);
         const read = events.find((event) => event.status === "OK");
         const partial = events.find((event) => event.status === "DEGRADED");

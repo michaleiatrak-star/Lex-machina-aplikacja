@@ -451,6 +451,17 @@ function pickCurrentConsolidated(refs) {
         .sort((a, b) => a.year - b.year || a.pos - b.pos);
     return candidates.at(-1) ?? null;
 }
+// The t.j. published just before `eli` (any status): the newest whose text ELI still serves.
+function previousConsolidated(refs, eli) {
+    const all = list(refs, "Inf. o tekście jednolitym")
+        .map(unwrapAct)
+        .filter((act) => Boolean(act))
+        .map((act) => ({ eli: normalizeEli(act.ELI), year: numeric(act.year), pos: numeric(act.pos) }))
+        .filter((act) => Boolean(act.eli))
+        .sort((a, b) => a.year - b.year || a.pos - b.pos);
+    const index = all.findIndex((act) => act.eli === normalizeEli(eli));
+    return index > 0 ? all[index - 1] ?? null : null;
+}
 function amendmentFromAct(act) {
     const eli = normalizeEli(act.ELI);
     if (!eli)
@@ -808,11 +819,14 @@ export class TemporalSourceFreshnessChecker {
             .filter((act) => Boolean(act))
             .find((act) => normalizeEli(act.ELI) ===
             normalizeEli(descriptor.eli));
+        const current = pickCurrentConsolidated(baseRefs);
+        // A repealed pinned t.j. is only the registry lagging behind ELI when another t.j. of the
+        // same act is in force: that one is used (the act itself is still checked below).
         if (pinnedRelation &&
-            repealedStatus(pinnedRelation.status)) {
+            repealedStatus(pinnedRelation.status) &&
+            (!current || current.eli === normalizeEli(descriptor.eli))) {
             return fail("REPEALED_CONSOLIDATED_TEXT", "PINNED_CONSOLIDATED_TEXT_REPEALED");
         }
-        const current = pickCurrentConsolidated(baseRefs);
         if (!current) {
             return fail("NO_CURRENT_CONSOLIDATED_TEXT", "NO_IN_FORCE_CONSOLIDATED_TEXT");
         }
@@ -843,28 +857,54 @@ export class TemporalSourceFreshnessChecker {
         if (!promulgation) {
             return fail("SOURCE_METADATA_UNAVAILABLE", "CURRENT_PROMULGATION_MISSING", { currentEli: current.eli });
         }
-        const amendmentsAfter = mergeAmendments(amendmentsBetween(baseRefs, promulgation, todayWarsaw(checkedAt)), postTjByApi(currentRefs));
+        // The in-force t.j. without a text in ELI yet (announced days ago): the previous t.j.
+        // gives the wording, and every amendment after it is checked against the article as a
+        // post-t.j. amendment would be (KK: t.j. 2026/1342 announced 16.10.2026, no text).
+        let textEli = current.eli;
+        let textAct = act;
+        let textPromulgation = promulgation;
+        let textPendingEli;
+        if (act.textHTML !== true && act.textPDF !== true) {
+            const previous = previousConsolidated(baseRefs, current.eli);
+            const previousUrl = previous ? apiUrl(previous.eli) : null;
+            const previousAct = previousUrl
+                ? unwrapAct(await json(this.fetcher, previousUrl).catch(() => null))
+                : null;
+            const previousPromulgation = previousAct
+                ? dateOnly(previousAct.promulgation) || dateOnly(previousAct.announcementDate)
+                : "";
+            if (previous &&
+                previousAct &&
+                previousPromulgation &&
+                (previousAct.textHTML === true || previousAct.textPDF === true)) {
+                textEli = previous.eli;
+                textAct = previousAct;
+                textPromulgation = previousPromulgation;
+                textPendingEli = current.eli;
+            }
+        }
+        const amendmentsAfter = mergeAmendments(amendmentsBetween(baseRefs, textPromulgation, todayWarsaw(checkedAt)), postTjByApi(currentRefs));
         const amendmentApplicability = amendmentsAfter.length > 0
             ? await this.amendmentResolver.classify(amendmentsAfter, todayWarsaw(checkedAt))
             : [];
+        const pinnedSuperseded = normalizeEli(descriptor.eli) !== current.eli;
         const common = {
             currentEli: current.eli,
             currentPromulgation: promulgation,
             amendmentsAfter,
             ...(amendmentApplicability.length > 0
                 ? { amendmentApplicability }
-                : {})
+                : {}),
+            ...(pinnedSuperseded ? { pinnedSuperseded: true } : {}),
+            ...(textPendingEli ? { textPendingEli, textEli } : {})
         };
-        if (normalizeEli(descriptor.eli) !== current.eli) {
-            return fail("STALE_CONSOLIDATED_TEXT", "PINNED_ELI_DIFFERS_FROM_CURRENT", common);
-        }
         // A change the t.j. already contains but not in force yet: the verified wording must be
         // the one in force today, so an article such an amendment touches (or may touch) is not
         // verified from this text (DU/2026/507 amends KC from 2028-11-01; t.j. KC 2026/795).
         const article = articleTokenFromClaim(claim);
         let pendingWordingAmendments = [];
         if (article) {
-            const pending = amendmentsInTextNotInForce(baseRefs, promulgation, todayWarsaw(checkedAt));
+            const pending = amendmentsInTextNotInForce(baseRefs, textPromulgation, todayWarsaw(checkedAt));
             const touching = (await Promise.all(pending.map(async (amendment) => {
                 const body = await amendmentBody(this.fetcher, this.pdfTextExtractor, amendment.eli);
                 return body === null || amendmentMentionsArticle(amendmentPartFor(body, descriptor.title), article) !== false
@@ -895,16 +935,16 @@ export class TemporalSourceFreshnessChecker {
             // The act is in force, its change of this article only later (staged dates): the
             // consolidated text's wording stands; one the text already prints is chosen by footnotes.
             for (const decision of impact?.status === "UNAFFECTED" ? impact.notYet ?? [] : []) {
-                if (decision.promulgation && decision.promulgation <= promulgation)
+                if (decision.promulgation && decision.promulgation <= textPromulgation)
                     pendingWordingAmendments.push(decision.eli);
             }
             const notYetForArticle = impact?.status === "UNAFFECTED" ? (impact.notYet ?? []).map((decision) => decision.eli) : [];
             if (impact?.status ===
                 "UNAFFECTED") {
-                const sourceUrl = act.textHTML === true
-                    ? apiUrl(current.eli, "/text.html")
-                    : act.textPDF === true
-                        ? apiUrl(current.eli, "/text.pdf")
+                const sourceUrl = textAct.textHTML === true
+                    ? apiUrl(textEli, "/text.html")
+                    : textAct.textPDF === true
+                        ? apiUrl(textEli, "/text.pdf")
                         : null;
                 if (!sourceUrl) {
                     return fail("SOURCE_METADATA_UNAVAILABLE", "CURRENT_TEXT_FORMAT_UNAVAILABLE", common);
@@ -922,8 +962,12 @@ export class TemporalSourceFreshnessChecker {
                     amendmentApplicability,
                     ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {}),
                     ...(notYetForArticle.length ? { notYetForArticle } : {}),
+                    ...(pinnedSuperseded ? { pinnedSuperseded: true } : {}),
+                    ...(textPendingEli ? { textPendingEli, textEli } : {}),
                     ...(await this.transitionalOf([...notYetForArticle, ...pendingWordingAmendments]).then((found) => found.length ? { transitionalProvisions: found } : {})),
-                    reason: "POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
+                    reason: textPendingEli
+                        ? "CURRENT_TJ_TEXT_PENDING_PREVIOUS_TJ_AMENDMENTS_DO_NOT_TOUCH_ARTICLE"
+                        : "POST_TJ_AMENDMENTS_DO_NOT_TOUCH_REQUESTED_ARTICLE"
                 };
             }
             const transitional = impact?.status === "AFFECTED" ? await this.transitionalOf(impact.affected) : [];
@@ -935,13 +979,13 @@ export class TemporalSourceFreshnessChecker {
                     ? "POST_TJ_AMENDMENT_ARTICLE_IMPACT_UNKNOWN"
                     : "EFFECTIVE_AMENDMENTS_AFTER_CONSOLIDATED_TEXT", { ...common, ...(transitional.length ? { transitionalProvisions: transitional } : {}) });
         }
-        if (act.textHTML !== true &&
-            act.textPDF !== true) {
+        if (textAct.textHTML !== true &&
+            textAct.textPDF !== true) {
             return fail("SOURCE_METADATA_UNAVAILABLE", "CURRENT_TEXT_FORMAT_UNAVAILABLE", common);
         }
-        const sourceUrl = act.textHTML === true
-            ? apiUrl(current.eli, "/text.html")
-            : apiUrl(current.eli, "/text.pdf");
+        const sourceUrl = textAct.textHTML === true
+            ? apiUrl(textEli, "/text.html")
+            : apiUrl(textEli, "/text.pdf");
         if (!sourceUrl) {
             return fail("SOURCE_METADATA_UNAVAILABLE", "CURRENT_TEXT_URL_INVALID", common);
         }
@@ -958,7 +1002,9 @@ export class TemporalSourceFreshnessChecker {
             ...(amendmentApplicability.length > 0
                 ? { amendmentApplicability }
                 : {}),
-            ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {})
+            ...(pendingWordingAmendments.length ? { pendingWordingAmendments } : {}),
+            ...(pinnedSuperseded ? { pinnedSuperseded: true, reason: "PINNED_TJ_SUPERSEDED_CURRENT_TJ_USED" } : {}),
+            ...(textPendingEli ? { textPendingEli, textEli } : {})
         };
     }
 }

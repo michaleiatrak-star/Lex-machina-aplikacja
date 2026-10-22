@@ -458,8 +458,16 @@ export function evaluateDeterministicWorkflowOutput(plan, text, context) {
         .toLocaleUpperCase("pl");
     if (plan.id ===
         "PROCESS_PLEADING_V1") {
+        // CP-PEER, or the file rendered after the pipeline reached FINAL: "GOTOWE DO ZŁOŻENIA"
+        // is the pipeline's own status then, not a premature one.
         const finalCheckpoint = context?.processCheckpoint ===
-            "CP-PEER";
+            "CP-PEER" ||
+            (plan.documentAstOutput === true && context?.processRenderStage === "FINAL");
+        // The file itself after FINAL is the pleading for the court: the chat's RAPORT W3 →
+        // STATUS PISMA → REJESTR KROKÓW were required there and must not be in the document.
+        if (plan.documentAstOutput === true && context?.processRenderStage === "FINAL" && !context.processCheckpoint) {
+            return { workflow: plan.id, mode: "PROCESS_FINAL", required: [], observed: [], missing: [], orderValid: true, result: "PASS" };
+        }
         // The active checkpoint's report contract (process-checkpoint-contract).
         const contract = context?.processCheckpoint
             ? evaluateCheckpointOutput(context.processCheckpoint, text)

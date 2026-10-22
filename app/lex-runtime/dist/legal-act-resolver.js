@@ -45,9 +45,9 @@ const ACTS = [
     {
         id: "KK",
         title: "Kodeks karny",
-        eli: "DU/2025/383",
+        eli: "DU/2026/1342",
         baseEli: "DU/1997/553",
-        sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/383/text.html",
+        sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/1342/text.pdf",
         sourceKind: "consolidated_text",
         registryAsOf: REGISTRY_AS_OF,
         aliases: [

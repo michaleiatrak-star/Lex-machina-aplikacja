@@ -31,6 +31,12 @@ INTENTIONALLY_BLOCKED = {
     ("POST", "/api/google/recovery/link/start"),
     ("POST", "/api/google/recovery/link/result"),
     ("POST", "/api/google/recovery/unlink"),
+    # Okno sn.pl przez serwer (tryb serwerowy w przeglądarce); desktop ma własne okno sn.pl.
+    ("POST", "/api/mcp-search/sn-proxy/ticket"),
+    ("GET", "/api/mcp-search/sn-proxy/ticket/:ticket"),
+    ("DELETE", "/api/mcp-search/sn-proxy/ticket/:ticket"),
+    ("GET", "/api/mcp-search/sn-proxy/s/:ticket/__status"),
+    ("POST", "/api/mcp-search/sn-proxy/s/:ticket/__cookie"),
 }
 SAMPLE = {
     ":server": "nbp",

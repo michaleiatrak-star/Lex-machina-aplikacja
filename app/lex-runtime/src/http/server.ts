@@ -1,3 +1,4 @@
+import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
 import { configureCaseLawStore } from "../case-law-store.js";
@@ -251,6 +252,8 @@ function loopbackOriginGuard(
   const origin = req.get("origin");
   if (
     !origin ||
+    // The sandboxed sn.pl verification window (opaque origin): its ticket, never a login.
+    (origin === "null" && req.path.startsWith(`${SN_PROXY_PREFIX}/s/`)) ||
     isLoopbackOrigin(origin) ||
     allowedPublicOrigin(origin)
   ) {
@@ -845,6 +848,8 @@ export async function startLocalServer(options?: {
       ...(process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim() ? { desktopBootstrapToken: process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN.trim() } : {})
     })
   });
+  // sn.pl verification window through this server (server mode, browser): sn-proxy.ts.
+  registerSnProxyRoutes(app, { authService, proxy: new SnVerificationProxy(mcpConnectors) });
   registerMcpConnectorRoutes(
     app,
     {

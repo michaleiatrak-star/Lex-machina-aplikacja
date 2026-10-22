@@ -94,7 +94,18 @@ const PASSED_ENV = [
   "http_proxy",
   "no_proxy",
   "NODE_EXTRA_CA_CERTS",
-  "NODE_USE_ENV_PROXY"
+  "NODE_USE_ENV_PROXY",
+  // Weryfikacja sn.pl bez człowieka (sn-captcha-auto.mjs): automat, próba bez okna, okno widoczne,
+  // przeglądarka i jej pliki (Playwright), ekran. Bez nich serwer MCP nie widział ustawień administratora.
+  "SN_CAPTCHA_AUTO",
+  "SN_CAPTCHA_HEADLESS",
+  "SN_CAPTCHA_RECZNIE",
+  "SN_CAPTCHA_TIMEOUT_MS",
+  "SN_CAPTCHA_RECZNIE_MS",
+  "SN_PRZEGLADARKA",
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "DISPLAY",
+  "WAYLAND_DISPLAY"
 ];
 
 export function isLexMcpServerId(
@@ -399,6 +410,12 @@ export function inspectLexMcpPackage(
   };
 }
 
+// sn.pl (LEX_SN_UPSTREAM: testy weryfikacji na lokalnej imitacji ochrony sn.pl).
+export function snUpstream(): string {
+  const configured = process.env.LEX_SN_UPSTREAM?.trim().replace(/\/+$/u, "");
+  return configured && /^https?:\/\/[^/\s]+$/u.test(configured) ? configured : "https://www.sn.pl";
+}
+
 export class LexMcpConnectorStore {
   private revisionValue = 0;
 
@@ -493,7 +510,7 @@ export class LexMcpConnectorStore {
       ? rawUserAgent
       : SN_PROBE_USER_AGENT;
     const url =
-      "https://www.sn.pl/pl/index.php?option=com_ajax&plugin=snproxy&format=json" +
+      `${snUpstream()}/pl/index.php?option=com_ajax&plugin=snproxy&format=json` +
       "&task=searchOrzeczenia&sygnatura=" +
       encodeURIComponent("III CZP 25/11");
     try {
@@ -570,6 +587,11 @@ export class LexMcpConnectorStore {
     const key = this.ceidgKey();
     if (key) env.CEIDG_API_KEY = key;
     env.SN_SESSION_FILE = this.snSessionFile;
+    // Serwer bez ekranu (tryb serwerowy, kontener): okna weryfikacji sn.pl nie ma kto zobaczyć;
+    // zostaje próba bez okna i sesja wklejona przez użytkownika.
+    if (env.SN_CAPTCHA_RECZNIE === undefined && process.platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
+      env.SN_CAPTCHA_RECZNIE = "0";
+    }
     // Wbudowany fetch Node (>= 22.21) korzysta z HTTPS_PROXY tylko z tą flagą — bez niej konektory
     // za proxy firmowym łączyły się bezpośrednio i dostawały odmowę (pomiar 2026-10-06).
     if (!env.NODE_USE_ENV_PROXY && (env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy)) {

@@ -5,6 +5,16 @@ function defaultWorkerPath() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     return path.resolve(here, "../../storage/legal_document_worker.py");
 }
+function letterheadReport(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const raw = value;
+    if (raw.applied === true) {
+        const count = (key) => (typeof raw[key] === "number" ? raw[key] : 0);
+        return { applied: true, headers: count("headers"), footers: count("footers"), images: count("images") };
+    }
+    return { applied: false, reason: typeof raw.reason === "string" ? raw.reason.slice(0, 120) : "TEMPLATE_NOT_APPLIED" };
+}
 export class LocalLegalDocumentRenderer {
     python;
     workerPath;
@@ -24,11 +34,14 @@ export class LocalLegalDocumentRenderer {
             options.timeoutMs ??
                 60_000;
     }
-    async render(format, ast) {
+    async render(format, ast, 
+    // The firm's template file (DOCX): its letterhead frames the generated body.
+    template) {
         return await this.call({
             operation: "render",
             format,
-            ast
+            ast,
+            ...(template ? { templateBase64: Buffer.from(template).toString("base64") } : {})
         });
     }
     async validate(format, data) {
@@ -103,6 +116,7 @@ export class LocalLegalDocumentRenderer {
             data.fill(0);
             throw new Error("LEGAL_DOCUMENT_WORKER_SIZE_MISMATCH");
         }
+        const template = letterheadReport(result.template);
         return {
             data,
             text: result.text,
@@ -111,7 +125,8 @@ export class LocalLegalDocumentRenderer {
                 ? {
                     replaced: result.replaced
                 }
-                : {})
+                : {}),
+            ...(template ? { template } : {})
         };
     }
     async callRaw(input) {

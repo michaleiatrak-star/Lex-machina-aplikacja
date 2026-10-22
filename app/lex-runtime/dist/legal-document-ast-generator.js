@@ -576,6 +576,7 @@ export class LegalDocumentAstGenerator {
                 accountContinuity: "none",
                 ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
                 ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+                ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
                 ...(request.attachments?.length
                     ? { documentAttachments: request.attachments }
                     : {})
@@ -681,6 +682,7 @@ export class LegalDocumentAstGenerator {
                     accountContinuity: "none",
                     ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
                     ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
+                    ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
                     ...(request.attachments?.length ? { documentAttachments: request.attachments } : {})
                 });
                 if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {

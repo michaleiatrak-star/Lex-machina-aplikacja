@@ -5,6 +5,18 @@ export const STAMP_MARK = "[PIECZĘĆ lub kolorowy tusz]";
 export function ocrLineText(line) {
     return line.stamp ? `${STAMP_MARK} ${line.text}` : line.text;
 }
+// Lines of coloured stamps and ink (handwriting in colour) go to the review list
+// (ocr-review.ts, reason STAMP), not into the page text: read apart from their own layer they
+// are mostly noise a model would take as written (benchmark 2026-10-18: 10 such lines on a
+// 7-page scan raised its CER from 2.3% to 5.8%). LEX_OCR_STAMP_TEXT=text keeps them in the text.
+export function stampLinesInText(env = process.env) {
+    return env.LEX_OCR_STAMP_TEXT === "text";
+}
+/** The text of an OCR page from its lines. */
+export function ocrPageText(lines) {
+    const stamps = stampLinesInText();
+    return lines.filter((line) => stamps || !line.stamp).map(ocrLineText).join("\n");
+}
 export const DEFAULT_DOCUMENT_INGESTION_LIMITS = {
     maxBytes: 512 * 1024 * 1024,
     maxPages: 10_000,

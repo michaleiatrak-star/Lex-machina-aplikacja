@@ -1180,6 +1180,139 @@ export class LocalAuthService {
                 .delete(listener);
         };
     }
+    /**
+     * Server mode registration: the account (password envelope of a new UMK) is
+     * prepared but not stored until the e-mail is verified. The callback gets
+     * the UMK (e.g. to escrow it); the key is wiped afterwards.
+     */
+    async prepareAccount(input, withUserMasterKey) {
+        const normalizedLoginName = normalizeLoginName(input.loginName);
+        let password;
+        let displayName;
+        try {
+            if (!isValidLoginName(normalizedLoginName))
+                throw new Error("INVALID_LOGIN");
+            password = validateNewPassword(input.password);
+            displayName = validateDisplayName(input.displayName);
+        }
+        catch {
+            throw new AuthError("INVALID_USER_REQUEST", 400);
+        }
+        const now = new Date(this.clock.now()).toISOString();
+        const userId = "user_" + randomBytes(16).toString("hex");
+        const salt = randomKdfSalt();
+        const userMasterKey = randomUserMasterKey();
+        const keyEncryptionKey = await this.deriveKey(password, salt, this.kdf);
+        try {
+            const envelope = encryptUserMasterKey(keyEncryptionKey, userMasterKey, { userId, normalizedLoginName, keyVersion: 1 });
+            const user = {
+                userId,
+                loginName: input.loginName.normalize("NFKC").trim(),
+                normalizedLoginName,
+                displayName,
+                appRole: "USER",
+                status: "ACTIVE",
+                createdAt: now,
+                updatedAt: now,
+                authEpoch: 1,
+                kdf: { ...this.kdf },
+                kdfSalt: salt,
+                umkWrapNonce: envelope.nonce,
+                umkWrapCiphertext: envelope.ciphertext,
+                umkWrapTag: envelope.tag,
+                umkKeyVersion: 1
+            };
+            return { user, extra: withUserMasterKey(userId, userMasterKey) };
+        }
+        finally {
+            keyEncryptionKey.fill(0);
+            userMasterKey.fill(0);
+        }
+    }
+    /** Stores an account prepared by prepareAccount (after the e-mail was verified). */
+    insertPreparedAccount(user) {
+        if (this.store.getUserByNormalizedLogin(user.normalizedLoginName)) {
+            throw new AuthError("ACCOUNT_LOGIN_EXISTS", 409);
+        }
+        try {
+            this.store.createUser(user);
+        }
+        catch (error) {
+            if (error instanceof Error && /UNIQUE|normalized_login_name/i.test(error.message)) {
+                throw new AuthError("ACCOUNT_LOGIN_EXISTS", 409);
+            }
+            throw error;
+        }
+        this.store.recordSecurityEvent({
+            eventId: "event_" + randomBytes(16).toString("hex"),
+            userId: user.userId,
+            eventType: "account_created",
+            occurredAt: new Date(this.clock.now()).toISOString(),
+            result: "PASS",
+            metadata: { appRole: user.appRole, source: "email_registration" }
+        });
+        return publicUser(user);
+    }
+    findUserByLogin(loginName) {
+        const normalized = normalizeLoginName(loginName.slice(0, 256));
+        const user = isValidLoginName(normalized) ? this.store.getUserByNormalizedLogin(normalized) : null;
+        return user ? publicUser(user) : null;
+    }
+    getUser(userId) {
+        const user = this.store.getUserById(userId);
+        return user ? publicUser(user) : null;
+    }
+    /**
+     * Password reset by e-mail (server mode): the UMK comes from the server
+     * escrow, is wrapped with the new password, the auth epoch moves on and
+     * every session of the account ends.
+     */
+    async resetPasswordWithUserMasterKey(userId, newPasswordInput, userMasterKey) {
+        const user = this.store.getUserById(userId);
+        if (!user || user.status !== "ACTIVE")
+            throw new AuthError("USER_NOT_FOUND", 404);
+        let newPassword;
+        try {
+            newPassword = validateNewPassword(newPasswordInput);
+        }
+        catch {
+            throw new AuthError("INVALID_PASSWORD_CHANGE", 400);
+        }
+        const salt = randomKdfSalt();
+        const passwordKey = await this.deriveKey(newPassword, salt, this.kdf);
+        const now = new Date(this.clock.now()).toISOString();
+        const keyVersion = user.umkKeyVersion + 1;
+        try {
+            const envelope = encryptUserMasterKey(passwordKey, userMasterKey, {
+                userId,
+                normalizedLoginName: user.normalizedLoginName,
+                keyVersion
+            });
+            const authEpoch = this.store.updatePasswordEnvelopeAndIncrementEpoch({
+                userId,
+                updatedAt: now,
+                kdf: this.kdf,
+                kdfSalt: salt,
+                nonce: envelope.nonce,
+                ciphertext: envelope.ciphertext,
+                tag: envelope.tag,
+                keyVersion
+            });
+            this.sessions.revokeUser(userId, "AUTH_EPOCH");
+            this.store.recordSecurityEvent({
+                eventId: "event_" + randomBytes(16).toString("hex"),
+                userId,
+                eventType: "password_reset_by_email",
+                occurredAt: now,
+                result: "PASS",
+                metadata: { authEpoch, umkKeyVersion: keyVersion }
+            });
+        }
+        finally {
+            passwordKey.fill(0);
+            salt.fill(0);
+        }
+    }
     revokeUserSessions(userId) {
         this.sessions
             .revokeUser(userId, "USER_REVOKED");
