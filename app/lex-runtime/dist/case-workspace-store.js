@@ -4,6 +4,7 @@ import { validAnswerCorrections } from "./answer-corrections.js";
 import { validThreadEvidence } from "./thread-evidence.js";
 import { validThreadSummary } from "./thread-summary.js";
 import { validCaseChronology } from "./case-chronology.js";
+import { validCaseOverview } from "./case-overview.js";
 import { validCaseWork } from "./case-work.js";
 import { validLongDocument } from "./long-document.js";
 import { validAnswerDocument } from "./answer-document.js";
@@ -738,6 +739,7 @@ export class EncryptedCaseWorkspaceStore {
         const evidence = validThreadEvidence(index.memory?.evidence);
         const summary = validThreadSummary(index.memory?.summary);
         const chronology = validCaseChronology(index.memory?.chronology);
+        const overview = validCaseOverview(index.memory?.overview);
         const work = validCaseWork(index.memory?.work);
         const longDocument = validLongDocument(index.memory?.longDocument);
         const court = validCaseCourt(index.memory?.court);
@@ -750,6 +752,7 @@ export class EncryptedCaseWorkspaceStore {
             ...(evidence ? { evidence } : {}),
             ...(summary ? { summary } : {}),
             ...(chronology ? { chronology } : {}),
+            ...(overview ? { overview } : {}),
             threadMessages: index.thread.messages.map((message) => ({ ...message }))
         };
     }
@@ -783,6 +786,15 @@ export class EncryptedCaseWorkspaceStore {
                 memory.chronology = chronology;
             else
                 delete memory.chronology;
+        }
+        if (args.overview !== undefined) {
+            const overview = args.overview === null ? null : validCaseOverview(args.overview);
+            if (args.overview !== null && !overview)
+                throw new Error("CASE_MEMORY_OVERVIEW_INVALID");
+            if (overview)
+                memory.overview = overview;
+            else
+                delete memory.overview;
         }
         if (args.work !== undefined) {
             const work = args.work === null ? null : validCaseWork(args.work);

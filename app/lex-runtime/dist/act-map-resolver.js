@@ -165,6 +165,7 @@ function actRows(registry) {
     skills.forEach((skill, position) => {
         let moduleColumn = -1;
         let basisColumn = -1;
+        let previousBasis = "";
         for (const line of bodies[position].split("\n")) {
             if (!line.trim().startsWith("|")) {
                 moduleColumn = -1;
@@ -197,7 +198,14 @@ function actRows(registry) {
             rows.push({
                 skill: skill.name,
                 label,
-                basis: basisColumn >= 0 ? cells[basisColumn] ?? "" : "",
+                // "jw." repeats the act of the row above.
+                basis: (() => {
+                    const cell = basisColumn >= 0 ? cells[basisColumn] ?? "" : "";
+                    if (/^jw\.?/iu.test(cell))
+                        return previousBasis;
+                    previousBasis = cell;
+                    return cell;
+                })(),
                 resources,
                 codes: [...codes],
                 // The module's declared scope first; else the row's label and the module's name.
@@ -277,6 +285,19 @@ function distinctive(label) {
     const stem = folded.slice(0, Math.max(5, folded.length - 3));
     return new RegExp(`(?<![a-z])${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u");
 }
+/**
+ * The DR whose modules hold the resource: a row of one map may route to another DR's module
+ * (DR-04 „KPA — sprawy administracyjne świadczeń” → DR-05 mod-KPA-current-state-COV).
+ */
+function ownerOf(registry, skill, resource) {
+    const qualified = /^(dr-\d{2}-[a-z0-9-]+)\//u.exec(resource)?.[1];
+    if (qualified)
+        return qualified;
+    const file = `${path.basename(resource).replace(/\.md$/u, "")}.md`;
+    if (fs.existsSync(path.join(registry.root, skill, "modules", file)))
+        return skill;
+    return [...registry.skills.keys()].find((name) => name.startsWith("dr-") && fs.existsSync(path.join(registry.root, name, "modules", file))) ?? skill;
+}
 function moduleText(registry, resource) {
     try {
         const file = registry.resolveResource(resource.split("/")[0], resource);
@@ -307,7 +328,7 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
                 rejected.push({ skill: row.skill, resource, rule, why, reason: `moduł nie wymienia aktu z wiersza mapy („${row.label}”) — rozbieżność MAPA-AKTOW ${row.skill}` });
                 continue;
             }
-            found.push({ skill: row.skill, resource, rule, why });
+            found.push({ skill: ownerOf(registry, row.skill, resource), resource, rule, why, ...(row.basis ? { basis: row.basis } : {}) });
         }
     };
     // DZU: the basis column holds the same Dz.U. year and position.
@@ -335,7 +356,8 @@ export function resolveActModulesWithChecks(registry, text, limit = 4) {
         if (holding.length)
             continue;
         {
-            const index = ofCode.find((row) => row.index);
+            // No index row (KSH): the code's own row, named by the code itself.
+            const index = ofCode.find((row) => row.index) ?? ofCode.find((row) => CODES[code]?.test(row.label)) ?? ofCode[0];
             if (index)
                 add(index, "PRZEPIS", `art. ${match[1]} ${code} → ${index.label} (brak wiersza z tym artykułem)`);
         }

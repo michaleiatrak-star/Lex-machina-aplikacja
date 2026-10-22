@@ -1,3 +1,4 @@
+import { compactLocalPrompt } from "./local-prompt.js";
 import { createHash } from "node:crypto";
 import type { ProviderStreamResult } from "./providers/types.js";
 import { draftPrompt } from "./process-pleading-draft.js";
@@ -2178,11 +2179,13 @@ export class LexExecutionEngine {
     // (across domains); the checkpoints of a matter and the next questions read it from the cache.
     const cacheable = !localModel && stableText.length >= 4_096;
     // Without a cached prefix (local model, short prompt) the placeholder legend opens the prompt.
-    const systemPrompt = (
+    const fullSystemPrompt = (
       cacheable || !args.placeholderKey ? [stableText, ...promptParts] : [promptParts[0], stableText, ...promptParts.slice(1)]
     )
       .filter(Boolean)
       .join("\n\n");
+    // A local model reads the compact prompt (local-prompt.ts): minutes less per turn.
+    const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : fullSystemPrompt;
     const promptCache = {
       ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
       ...(cacheable

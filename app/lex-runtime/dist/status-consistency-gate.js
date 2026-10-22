@@ -388,3 +388,39 @@ export function stripUnbackedVerificationMarkers(text, ledger) {
         }));
     return { text: removed > 0 ? lines.join("\n") : text, removed };
 }
+/**
+ * A provision whose occurrences still carry both ✅ and ⚠️ after reconciliation, with no
+ * VERIFIED record to settle it: every occurrence is shown ⚠️ [NIEWERYFIKOWANE] (each
+ * reference of its group gets its own marker, ✅ from the registry or ⚠️). The answer stays
+ * presentable as a draft with the provision marked, instead of the whole turn being blocked.
+ */
+export function unifyConflictingProvisions(text, ledger) {
+    const report = evaluateStatusConsistency(text, ledger);
+    const unresolved = new Set(report.findings.filter((finding) => finding.code === "CONFLICTING_STATUS").map((finding) => finding.key));
+    if (unresolved.size === 0)
+        return { text, unified: [] };
+    const lines = parse(text);
+    const resolve = keyResolver(lines, text);
+    const output = lines.map((line) => {
+        const edits = [];
+        for (const group of line.groups) {
+            if (!group.references.some((reference) => unresolved.has(resolve(reference, line.line))))
+                continue;
+            for (const marker of group.markers) {
+                const start = line.text[marker.start - 1] === " " ? marker.start - 1 : marker.start;
+                edits.push({ start, end: marker.end, insert: "" });
+            }
+            for (const reference of group.references) {
+                const key = resolve(reference, line.line);
+                const record = unresolved.has(key) ? undefined : verifiedRecord(ledger, ledgerClaims(reference, key));
+                edits.push({ start: reference.end, end: reference.end, insert: ` ${record ? verificationMarker(record) : "⚠️ [NIEWERYFIKOWANE]"}` });
+            }
+        }
+        let next = line.text;
+        for (const edit of edits.sort((a, b) => b.start - a.start || b.end - a.end)) {
+            next = next.slice(0, edit.start) + edit.insert + next.slice(edit.end);
+        }
+        return next;
+    });
+    return { text: output.join("\n"), unified: [...unresolved] };
+}

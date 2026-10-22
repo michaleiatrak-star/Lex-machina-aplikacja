@@ -135,6 +135,72 @@ export function coreLawRetrievalPrompt(index, query) {
         ...blocks
     ].join("\n\n");
 }
+// An article the question cites, quoted whole up to this size (a code's long article in excerpt).
+const CITED_ARTICLE_CHARS = 6_000;
+const CITED_MAX_ARTICLES = 4;
+/**
+ * The articles a question cites, as an act the core law copy resolves and an article number:
+ * "art. 286 KK" (codes, also "artykule 286 kodeksu karnego"), else "art. 23" with the act
+ * the act maps resolved for the question (its Dz.U. basis). Mechanical, no model.
+ */
+export function citedArticles(text, actBases, normalize) {
+    const cites = [];
+    const add = (act, article) => {
+        if (cites.length < CITED_MAX_ARTICLES && !cites.some((cite) => cite.act === act && cite.article === article))
+            cites.push({ act, article });
+    };
+    const provisions = normalize(text);
+    // "art. 55^1 KP"; a list with one code: "art. 148 i 286 KK", "art. 415, 445 i 448 KC".
+    const number = "\\d+[a-z]*(?:\\^\\d+[a-z]*)?";
+    const coded = new RegExp(
+    // Units with their dots ("ust. 1 pkt 2", "lit. a") stay inside the citation.
+    `\\bart\\.?\\s*(${number}(?:\\s*(?:,|i|oraz)\\s*(?:art\\.?\\s*)?${number})*)(?=[\\s,§])(?:[^.;]|\\b(?:ust|lit|pkt|zd|par)\\.)*?\\s(KK|KW|KC|KP|KPC|KPK|KPA|KRO|KSH|KKS|KKW|KPW|OP|PPSA)\\b`, "gu");
+    for (const match of provisions.matchAll(coded)) {
+        for (const article of match[1].split(/\s*(?:,|\bi\b|\boraz\b)\s*/u).filter(Boolean))
+            add(match[2], article.replace(/^art\.?\s*/u, ""));
+    }
+    if (cites.length)
+        return cites;
+    // The map's basis cell: its first Dz.U. is the consolidated text (amendments follow it).
+    const journal = actBases.map((item) => /Dz\.\s?U\.\s*(?:z\s*)?(\d{4})\s*(?:r\.)?\s*,?\s*poz\.\s*(\d+)/u.exec(item)).find(Boolean);
+    if (!journal)
+        return cites;
+    const basis = `Dz.U. ${journal[1]} poz. ${journal[2]}`;
+    for (const match of provisions.matchAll(/\bart\.?\s*(\d+[a-z]*)\b/gu))
+        add(basis, match[1]);
+    return cites;
+}
+/** The cited articles' wording from the core law copy, in the prompt before the model answers. */
+export function citedArticlesPrompt(index, cites, 
+// A local model's small context: shorter excerpts.
+articleChars = CITED_ARTICLE_CHARS) {
+    const summaries = new Map((index.summaries?.() ?? []).flatMap((act) => [[act.currentEli, act], [act.eli, act]]));
+    const blocks = [];
+    const missing = [];
+    for (const cite of cites) {
+        const ref = index.resolve(cite.act);
+        const record = ref ? index.currentRecord(ref.eli) : null;
+        const id = normalizeArticleId(cite.article);
+        const body = record?.articles[id];
+        if (!ref || !record || !body) {
+            missing.push(`art. ${cite.article} (${cite.act})`);
+            continue;
+        }
+        const summary = summaries.get(record.eli) ?? summaries.get(ref.eli);
+        const caution = summary ? coreLawEliCaution(summary) : null;
+        const dated = record.fetchedAt ? `tekst z ELI z dnia ${record.fetchedAt.slice(0, 10)}` : "data tekstu nieznana";
+        const text = body.length > articleChars ? `${body.slice(0, articleChars)} […] (dalsza część: read_core_law_article)` : body;
+        blocks.push(`[${record.eli}] ${record.title} — art. ${id} (${dated}${caution ? `; UWAGA: ${caution} — brzmienie potwierdź w ELI przed powołaniem` : ""})\n${text}`);
+    }
+    if (blocks.length === 0 && missing.length === 0)
+        return null;
+    return [
+        "# BRZMIENIE PRZEPISÓW WSKAZANYCH W PYTANIU (lokalna kopia ELI; aplikacja)",
+        "Aplikacja odczytała te artykuły po numerze z lokalnej kopii tekstów jednolitych ELI, zanim zacząłeś. Analizę opieraj na tym brzmieniu; cytuj je z ELI, numerem artykułu i datą tekstu, nigdy z pamięci. Brzmienie na inną datę (historyczne, po nowelizacji) ustal w ELI.",
+        ...blocks,
+        ...(missing.length ? [`Brak w lokalnej kopii: ${missing.join("; ")} — odczytaj read_core_law_article (pobierze akt z ELI) albo verify_legal_reference.`] : [])
+    ].join("\n\n");
+}
 export class CoreLawToolRuntime {
     index;
     fetcher;

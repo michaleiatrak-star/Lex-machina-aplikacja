@@ -16,7 +16,8 @@ export function expectedVerificationMarker(record) {
     return verificationMarker(record);
 }
 // "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
-const ARTICLE_PATTERN = new RegExp(`${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`, "giu");
+// "art. 187 § 1 pkt 3 KPC": the point belongs to the provision, so a marker never splits it.
+const ARTICLE_PATTERN = new RegExp(`${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+pkt\\s*\\d+[a-z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`, "giu");
 const DZU_PATTERN = /\bDz\.?\s*U\.?\s*(?:(?:z\s+)?\d{4}\s*r?\.?\s*)?poz\.?\s*\d+/giu;
 const CASE_PATTERN = /\bsygn\.?\s*(?:akt\s*)?[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,12}){0,3}\s+\d+\/\d{2,4}\b/gu;
 function normalizeEvidenceText(value) {

@@ -1053,7 +1053,14 @@ function addUsage(left, right) {
         return right;
     if (!right)
         return left;
-    return { inputTokens: left.inputTokens + right.inputTokens, outputTokens: left.outputTokens + right.outputTokens };
+    const cacheRead = (left.cacheReadTokens ?? 0) + (right.cacheReadTokens ?? 0);
+    const cacheWrite = (left.cacheWriteTokens ?? 0) + (right.cacheWriteTokens ?? 0);
+    return {
+        inputTokens: left.inputTokens + right.inputTokens,
+        outputTokens: left.outputTokens + right.outputTokens,
+        ...(cacheRead ? { cacheReadTokens: cacheRead } : {}),
+        ...(cacheWrite ? { cacheWriteTokens: cacheWrite } : {})
+    };
 }
 /**
  * An answer cut at the output limit ("length") is continued from where it
@@ -1112,6 +1119,29 @@ export function anthropicSystem(model, params) {
         { role: "system", content: params.systemPrompt.slice(split) }
     ];
 }
+/** Tokens of one call, with the prompt cache reads and writes the provider reports. */
+export function modelUsage(usage) {
+    const read = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+    const write = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
+    return {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        ...(read ? { cacheReadTokens: read } : {}),
+        ...(write ? { cacheWriteTokens: write } : {})
+    };
+}
+/** Request settings that route a request with a known stable prefix to the provider's cache. */
+export function promptCacheRouting(model, params) {
+    const key = params.promptCacheKey;
+    const provider = typeof model === "object" && model !== null ? String(model.provider ?? "") : "";
+    if (!key)
+        return {};
+    if (provider.startsWith("openai"))
+        return { providerOptions: { openai: { promptCacheKey: key } } };
+    if (provider.startsWith("xai"))
+        return { headers: { "x-grok-conv-id": key } };
+    return {};
+}
 /** A model served by the Anthropic API provider (not an account CLI or a local server). */
 export function isAnthropicModel(model) {
     return typeof model === "object" && model !== null && String(model.provider ?? "").startsWith("anthropic");
@@ -1135,7 +1165,7 @@ extra = { messages: [] }) {
                     }
                 }
             }
-            : {}),
+            : promptCacheRouting(model, params)),
         messages: [...sdkMessages(params.messages, images), ...extra.messages],
         ...(tools ? { tools } : {}),
         ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),
@@ -1198,7 +1228,7 @@ extra = { messages: [] }) {
     return {
         fullText,
         finishReason,
-        ...(usage ? { usage: { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 } } : {}),
+        ...(usage ? { usage: modelUsage(usage) } : {}),
         ...(finishReason === "tool-calls" ? { responseMessages: await result.responseMessages } : {})
     };
 }

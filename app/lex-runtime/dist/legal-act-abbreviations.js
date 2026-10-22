@@ -62,7 +62,9 @@ export function canonicalArticleLead(text) {
 }
 // For a provision pattern: the dotted forms, longest first.
 export const DOTTED_ACT_ALTERNATIVES = "k\\.\\s?p\\.\\s?c\\.|k\\.\\s?p\\.\\s?k\\.|k\\.\\s?p\\.\\s?a\\.|k\\.\\s?r\\.\\s?o\\.|k\\.\\s?s\\.\\s?h\\.|k\\.\\s?p\\.\\s?w\\.|k\\.\\s?k\\.\\s?w\\.|k\\.\\s?k\\.\\s?s\\.|k\\.\\s?c\\.|k\\.\\s?k\\.|k\\.\\s?p\\.|k\\.\\s?w\\.";
-const BARE_PROVISION = /(?<!(?:\bart\.?|§|\d)\s*)\b(\d+[a-z]?)((?:\s*§\s*\d+[a-z]?)?)\s*(kpc|kpk|kpa|kro|ksh|kpw|kkw|kks|kc|kk|kp|kw)(?![\p{L}])/giu;
+const BARE_PROVISION = 
+// Not a number of a unit or a superscript of an article ("art. 55^1 KP", "pkt 2 KP").
+/(?<!(?:\bart\.?|§|\d|\^|\bpkt|\bust\.?|\blit\.?|\bpoz\.?|\bnr\.?)\s*)\b(\d+[a-z]?)((?:\s*§\s*\d+[a-z]?)?)\s*(kpc|kpk|kpa|kro|ksh|kpw|kkw|kks|kc|kk|kp|kw)(?![\p{L}])/giu;
 /**
  * A question's provisions in the form the detector reads: "233 kk" and
  * "art. 233 k.k." become "art. 233 KK", so the runtime verifies them before

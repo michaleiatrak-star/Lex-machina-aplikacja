@@ -1,3 +1,5 @@
+import { alignProtected, protectedPageText } from "./docx-anonymize.js";
+import { detectHealthData } from "./privacy/health-data.js";
 import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
 import { normalizeOcrPage } from "./ocr-correction.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
@@ -201,6 +203,7 @@ export class LocalPrivateDocumentService {
     stopTextModels;
     startTextModels;
     documents = new Map();
+    detecting = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
     // One token per person and inflected restore ([PII:PERSON:0001|GEN]).
     personMorphology, 
@@ -376,7 +379,16 @@ export class LocalPrivateDocumentService {
             record.localAi = true;
             record.aiFindings = new Map();
         }
-        return this.detectSuggestions(documentId, record.mediaType, record.source, security);
+        // A retry after a dropped connection joins the check still running for this document
+        // (the local model keeps working after the client is gone) instead of starting a second one.
+        const key = `${documentId}:${security?.localAi ? "ai" : "rules"}`;
+        const running = this.detecting.get(key);
+        if (running)
+            return running;
+        const run = this.detectSuggestions(documentId, record.mediaType, record.source, security)
+            .finally(() => this.detecting.delete(key));
+        this.detecting.set(key, run);
+        return run;
     }
     async detectSuggestions(documentId, mediaType, source, security) {
         const onProgress = security?.onProgress;
@@ -405,7 +417,14 @@ export class LocalPrivateDocumentService {
                 }
             }
         const down = degradedRecognizers();
-        return { ...this.publicReview(documentId, mediaType, source, suggestions), ...(down.length ? { recognizerWarnings: down } : {}) };
+        const health = source.pages.flatMap((page) => detectHealthData(page.text)
+            .filter((item) => !suggestions.some((suggestion) => suggestion.page === page.page && suggestion.start < item.end && item.start < suggestion.end))
+            .map((item) => ({ page: page.page, start: item.start, end: item.end })));
+        return {
+            ...this.publicReview(documentId, mediaType, source, suggestions),
+            ...(down.length ? { recognizerWarnings: down } : {}),
+            ...(health.length ? { healthData: health } : {})
+        };
     }
     publicReview(documentId, mediaType, source, suggestions) {
         return {
@@ -1049,6 +1068,26 @@ export class LocalPrivateDocumentService {
             ...(record.protectedIngestion.privacy.reviewed !== undefined ? { reviewed: record.protectedIngestion.privacy.reviewed } : {})
         };
     }
+    /** What the anonymized .docx needs: the read text, the anonymized one, where each token stands, the key's values. */
+    anonymizedDocxPlan(documentId) {
+        const record = this.editableRecord(documentId);
+        if (record.source.pages.length !== 1)
+            throw new Error("DOCX_ANONYMIZED_UNSUPPORTED");
+        const vault = record.vault;
+        const surfaces = (token) => {
+            const entity = vault.entity(token);
+            const value = vault.hasToken(token) ? vault.restore(token, null).text : "";
+            return [...new Set([value, ...(entity ? PERSON_CASES.map((personCase) => entity.forms[personCase].text) : [])])].filter(Boolean);
+        };
+        const source = record.source.pages[0].text;
+        const expected = protectedPageText(record.protectedIngestion.chunks);
+        return {
+            source,
+            expected,
+            replacements: alignProtected(source, expected, surfaces),
+            values: vault.snapshot().tokens.flatMap((item) => surfaces(item.token).map((value) => [value, item.token]))
+        };
+    }
     /** The user's confirmation of the anonymized version after its preview. */
     async markReviewed(documentId, security) {
         const record = this.editableRecord(documentId);
@@ -1109,6 +1148,33 @@ export class LocalPrivateDocumentService {
             return { token, replaced };
         });
         return { ...this.anonymizedVersion(documentId), token, replaced };
+    }
+    /**
+     * The user's correction of one fragment of the anonymized version (an OCR error, a
+     * value the detection missed and the user rewrote by hand). Every symbol in the new
+     * text must be one of this document's key: a symbol cannot be invented or mistyped,
+     * since the model would then see a value nobody can restore.
+     */
+    async editProtectedText(documentId, chunkIndex, text, security) {
+        const record = this.editableRecord(documentId);
+        if (text.length > 200_000 || !text.trim())
+            throw new Error("PRIVACY_EDIT_TEXT_INVALID");
+        if (!record.protectedIngestion.chunks.some((chunk) => chunk.index === chunkIndex)) {
+            throw new Error("PRIVACY_EDIT_CHUNK_NOT_FOUND");
+        }
+        await this.withKey(documentId, record, security, (vault) => {
+            for (const [token] of text.matchAll(/\[PII:[A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\]/g)) {
+                if (!vault.hasToken(token.replace(/\|[A-Z]{2,4}\]$/, "]")))
+                    throw new Error("PRIVACY_EDIT_UNKNOWN_TOKEN");
+            }
+            // A bracket that only looks like a symbol ("[PII:", "[PII:PERSON:12]") is a broken one.
+            if (/\[PII:(?![A-Z_]+:\d{4}(?:\|[A-Z]{2,4})?\])/.test(text))
+                throw new Error("PRIVACY_EDIT_UNKNOWN_TOKEN");
+            const chunks = record.protectedIngestion.chunks.map((chunk) => chunk.index === chunkIndex ? { ...chunk, text } : chunk);
+            const privacy = record.protectedIngestion.privacy;
+            this.replaceProtected(record, chunks, privacy);
+        });
+        return this.anonymizedVersion(documentId);
     }
     /**
      * Takes a value out of the anonymization: every occurrence of the token

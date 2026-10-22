@@ -15,13 +15,16 @@ export const OFFICIAL_LEGAL_SOURCE_HOSTS = [
     "nsa.gov.pl",
     "orzeczenia.nsa.gov.pl",
     "sn.pl",
-    "www.sn.pl"
+    "www.sn.pl",
+    // Monitor Polski: official journal, R1 like Dziennik Ustaw (ELI serves it as MP/...).
+    "monitorpolski.gov.pl",
+    "www.monitorpolski.gov.pl"
 ];
 const OFFICIAL_SOURCE_HOSTS = new Set([
     ...OFFICIAL_LEGAL_SOURCE_HOSTS
 ]);
 const MAX_SOURCE_CHARS = 2_000_000;
-const MAX_EVIDENCE_CHARS = 12_000;
+export const MAX_EVIDENCE_CHARS = 12_000;
 function decodeHtmlEntities(value) {
     const named = {
         nbsp: " ",

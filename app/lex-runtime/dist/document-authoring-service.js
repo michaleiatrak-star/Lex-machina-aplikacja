@@ -140,7 +140,7 @@ export class LocalDocumentAuthoringService {
         const stripped = stripAstVerificationMarkers(validated.ast).ast;
         const documentAst = draft ? draft.ast(stripped) : stripped;
         const rendered = await this.renderer
-            .render(args.format, documentAst);
+            .render(args.format, documentAst, args.template);
         try {
             const validation = await this.renderer
                 .validate(args.format, rendered.data);
@@ -240,7 +240,8 @@ export class LocalDocumentAuthoringService {
                     .aliasesUsed,
                 text: rendered.text,
                 deanonymizationKeyBound: true,
-                warnings: documentCompletenessWarnings(documentAst, rendered.text)
+                warnings: documentCompletenessWarnings(documentAst, rendered.text),
+                ...(rendered.template ? { letterhead: rendered.template } : {})
             };
         }
         finally {
@@ -262,7 +263,7 @@ export class LocalDocumentAuthoringService {
         const stripped = stripAstVerificationMarkers(validated.ast).ast;
         const documentAst = draft ? draft.ast(stripped) : stripped;
         const rendered = await this.renderer
-            .render(args.format, documentAst);
+            .render(args.format, documentAst, args.template);
         try {
             const validation = await this.renderer
                 .validate(args.format, rendered.data);
@@ -334,7 +335,8 @@ export class LocalDocumentAuthoringService {
                 format: args.format,
                 sha256,
                 text: validation.text,
-                warnings: documentCompletenessWarnings(documentAst, validation.text)
+                warnings: documentCompletenessWarnings(documentAst, validation.text),
+                ...(rendered.template ? { letterhead: rendered.template } : {})
             };
         }
         finally {

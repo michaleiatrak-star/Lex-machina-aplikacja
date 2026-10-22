@@ -1,17 +1,19 @@
 import { todayWarsaw } from "./warsaw-date.js";
-import { waitsForUser } from "./workflow-wait.js";
+import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
+import { detectHealthData } from "./privacy/health-data.js";
+import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer } from "./skill-switch.js";
-import { compactForModel, laterTurn, reachedStages } from "./skill-sections.js";
+import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
-import { evaluateStatusConsistency, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
+import { evaluateStatusConsistency, unifyConflictingProvisions, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
-import { compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { compactActAbbreviations, provisionsForDetection } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
 import { registryEnrichmentFor } from "./privacy/registry-enrichment.js";
 import { placeholderGrammar, partyGroups, placeholderKeyPrompt } from "./privacy/token-legend.js";
-import { coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
+import { citedArticles, citedArticlesPrompt, coreLawRetrievalPrompt } from "./core-law-tool-runtime.js";
 import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
@@ -45,6 +47,7 @@ import { ROUTER_SKILL, evaluateMandatoryPath, gateCorrectionPrompt, loadMandator
 import { queryModePrompt } from "./query-mode.js";
 import { meterUsage } from "./providers/usage-meter.js";
 import { ReportBlueprintToolRuntime } from "./report-blueprint-tool-runtime.js";
+import { blueprintFinalizationText } from "./report-blueprint-finalization.js";
 import { BLUEPRINT_REPAIR_REQUEST, blueprintRepairSchema } from "./report-blueprint-repair.js";
 import { evaluateDeterministicWorkflowOutput, evaluateDeterministicWorkflowReads } from "./deterministic-workflow.js";
 import { documentCitationSystemPrompt, processDocumentCitationMarkers } from "./document-citations.js";
@@ -111,6 +114,16 @@ const CRIMINAL_QUALIFIER_RESOURCE = "dr-03-prawo-karne-wykroczenia-egzekucja/mod
 // Host CLI thread per matter (Claude --resume, Codex resume): off unless LEX_ACCOUNT_RESUME=1.
 export function resumeHostThread(env = process.env) {
     return env.LEX_ACCOUNT_RESUME === "1";
+}
+// Mechanical mode: the user pinned an executive skill (envelope with auto:false from the
+// chat), not the model's own selection (AUTO) or the model-routed prepass.
+// Court names: the procedure a question names, not the domain of its matter.
+const COURT_NAME = /^(?:NSA|WSA|SN|SA|SO|SR|TK|TSUE|ETPC|ETPCz|Sąd(?:u|em|zie)?(?:\s+\S+)?|sąd\S*)$/u;
+export function mechanicalTurn(request) {
+    if (request.modelSelectsSkills)
+        return false;
+    const envelope = parseSkillSelectionEnvelope(request.query);
+    return !envelope.automatic && !envelope.modelRouted && envelope.manualSkills.length > 0;
 }
 function duplicateSkills(names) {
     const byBase = new Map();
@@ -395,6 +408,26 @@ export function privacyGateFailure(error) {
     const reason = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 400);
     return Object.assign(new Error("CHAT_PRIVACY_GATE_FAILED"), reason ? { reason } : {});
 }
+// A request to the user: a question, or a line opening with an asking verb.
+const ASKS = /\?|(?:^|\n)\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*)?(?:Podaj|Wskaż|Prześlij|Dołącz|Załącz|Wklej|Potwierdź|Wybierz|Określ|Uzupełnij|Doprecyzuj|Napisz,|Proszę)/u;
+/** The answer is the active checkpoint's report, the marker added after it without asking. */
+function reportOnly(answer, checkpoint) {
+    if (!checkpoint)
+        return false;
+    const report = answer.lastIndexOf(`[${checkpoint}`);
+    const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
+    return report >= 0 && marker > report && !ASKS.test(answer.slice(report, marker));
+}
+// Executive skills that work on the case's material, and what to ask for when there is none.
+const MATERIAL_SKILLS = {
+    "analizator-umow-v1": "umowa (plik albo pełny tekst)",
+    "analiza-sadowa-v6": "orzeczenie, pisma albo akta sprawy",
+    "analizator-dowodow-v3": "dowody (dokumenty, zeznania, korespondencja)",
+    "chronologia-sprawy-v1": "dokumenty sprawy, z których ma powstać oś czasu",
+    "przesluchanie-swiadkow-v2-min90": "akta sprawy (zeznania, protokoły, pisma) i dane o świadku"
+};
+// A message this long carries the material itself (a pasted contract or statement).
+const MATERIAL_PASTED_CHARS = 1_500;
 /**
  * Prefixes D01, D02... of own-key documents, in the order they reach the
  * model (context first, then case files read by tools). Shared-key documents
@@ -530,7 +563,8 @@ export const FIRM_MATERIAL_NOTE = [
     "Bloki oznaczone WZÓR KANCELARII i KNOW-HOW KANCELARII pochodzą z biblioteki kancelarii, nie z akt sprawy.",
     "- Wzór: przejmij jego układ, kolejność części, styl i stałe formuły; treść merytoryczną bierz z dokumentów sprawy i wiadomości użytkownika.",
     "- Nie przenoś do pisma danych przykładowych z wzoru (stron, sygnatur, kwot, dat, adresów); w miejsca bez danych wstaw neutralne pole w nawiasie kwadratowym, np. [Kwota], [Termin].",
-    "- Materiały kancelarii nie są dowodami ani faktami w sprawie; nie cytuj ich jako źródła faktów."
+    "- Materiały kancelarii nie są dowodami ani faktami w sprawie; nie cytuj ich jako źródła faktów.",
+    "- Papier firmowy wzoru (nagłówek, logo, stopka, marginesy) aplikacja wstawia do pliku .docx sama; nie powtarzaj go w treści pisma."
 ].join("\n");
 function transferExecutionEvents(events, audit) {
     for (const event of events) {
@@ -904,8 +938,21 @@ export class SafeSessionExecutor {
                 const exampleData = /(?:^|\n\n)Asystent: /.test(request.query)
                     ? exampleDataKeepDirectives(request.query, (await new LocalPolishPseudonymizer(new PseudonymizationVault(request.privacySeed), this.chatRecognizerFor(request.model), this.personMorphology).pseudonymize(request.query)).findings, request.auxiliaryText ?? "", request.threadEvidence?.realValueHashes ? new Set(request.threadEvidence.realValueHashes) : null)
                     : [];
-                const protectedPrimary = await chatPseudonymizer
-                    .pseudonymize(request.query, exampleData);
+                // The document generator's contract (the application's own instructions and its alias
+                // map, no personal data) follows the user's text: only that text is pseudonymized.
+                // Run through the recognizers, "PII ALIAS" and "I. Section" became PERSON symbols.
+                const contractAt = request.query.indexOf(DOCUMENT_OUTPUT_CONTRACT_HEADING);
+                const userText = contractAt >= 0 ? request.query.slice(0, contractAt) : request.query;
+                const contractText = contractAt >= 0 ? request.query.slice(contractAt) : "";
+                const pseudonymizedUser = await chatPseudonymizer
+                    .pseudonymize(userText, exampleData.filter((directive) => directive.end <= userText.length));
+                const protectedPrimary = { ...pseudonymizedUser, text: pseudonymizedUser.text + contractText };
+                // Health data (art. 9 RODO) goes as written (the injury is often the matter); the log says so.
+                const health = detectHealthData(latestMessage);
+                if (health.length) {
+                    step("PREPARE", `dane o zdrowiu w wiadomości (art. 9 RODO): ${health.length}, wysłane bez zakrycia; gdy analiza ich nie potrzebuje, pomiń je w wiadomości`);
+                    audit.record("gate", "HEALTH_DATA_SENT", "OK", { count: health.length });
+                }
                 // Leak test before sending: a replaced value left elsewhere in the text is sealed too.
                 const primarySeal = sealResidualValues(request.query, protectedPrimary.text, protectedPrimary.findings);
                 protectedQuery =
@@ -1209,6 +1256,13 @@ export class SafeSessionExecutor {
             documentGeneration: Boolean(request.documentAstOutput || request.processWorkflowContext),
             foreignJurisdiction: foreignJurisdiction(withoutOutputContract(request.query))
         };
+        // The wording of the articles the question cites, read by number from the core law copy
+        // before the model starts: no tool round trip (each one re-sends the whole prompt) and
+        // no quoting from memory. The act comes from the code ("art. 286 KK") or from the act
+        // maps ("art. 23 ustawy o obszarach morskich" -> its Dz.U.).
+        const citedLaw = this.coreLawIndex && legalTurn
+            ? citedArticlesPrompt(this.coreLawIndex, citedArticles(pathFacts.query, resolveActModulesWithChecks(this.registry, pathFacts.query).modules.flatMap((module) => (module.basis ? [module.basis] : [])), provisionsForDetection), request.model.startsWith("local/") ? 1_800 : undefined)
+            : null;
         // PROFIL-LEKKI forbids the light profile for router category [11] (someone else's material).
         // A message typed without Polish letters gets them back for the executive routing phrases.
         const taskQuery = legalTurn && !/[ąćęłńóśźż]/iu.test(pathFacts.query) ? restoreAccents(pathFacts.query, this.accentMap()) : pathFacts.query;
@@ -1294,10 +1348,16 @@ export class SafeSessionExecutor {
         // name, dr-01). A stateful workflow does not take the model-selected path, so the engine
         // read that placeholder as the matter's domain (constitutional law for an SMS evidence
         // report). The workflow gets the domain the routing phrases name, else DR-16.
+        const mechanicalEnvelope = parseSkillSelectionEnvelope(request.query);
         const workflowPrimarySkill = () => {
             const workflowContext = request.guideContext || request.processWorkflowContext || request.courtWorkflowContext ||
                 request.chronologyWorkflowContext || request.contractWorkflowContext || request.orderedCaseWorkflowContext;
-            if (!request.modelSelectsSkills || !workflowContext)
+            // Mechanical mode: the user pinned the skill, not the domain; the chat's guess at the
+            // domain (word overlap with skill descriptions — "art. 415 KC" read as DR-01) gives way
+            // to the act the question cites, then to a routing phrase. A domain the user picked
+            // (a DR in the selection, or the domain allow-list) stays.
+            const mechanical = mechanicalTurn(request) && !mechanicalEnvelope.manualSkills.some((name) => name.startsWith("dr-"));
+            if (!mechanical && (!request.modelSelectsSkills || !workflowContext))
                 return request.primarySkill;
             // An act the matter cites ("art. 233 k.p.c." in the appeal), then a routing phrase of
             // the matter or of its thread; two shared words of an act-map row ("wyrok", "apelacja")
@@ -1315,6 +1375,22 @@ export class SafeSessionExecutor {
                 return (ranked.find((domain) => domain.strong) ?? ranked.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
             };
             const procedural = [...this.registry.skills.keys()].find((name) => name.startsWith("dr-16-"));
+            if (mechanical) {
+                const allowed = (skill) => skill && (!mechanicalEnvelope.domainRestrictionActive || mechanicalEnvelope.domainAllowList.includes(skill)) ? skill : undefined;
+                // A court named in the question (NSA, SN, WSA) tells the procedure, not the matter:
+                // "wyrok NSA ... VAT" is a tax matter. The matter's domain wins when only the court
+                // name matched the other one.
+                const ofMatter = (text) => {
+                    const ranked = rankDomains(this.registry, this.flashRoutes(), text).filter((domain) => allowed(domain.skill));
+                    const courtOnly = (domain) => domain.matched.length > 0 && domain.matched.every((phrase) => COURT_NAME.test(phrase));
+                    // A domain the ranking only adds by the matter's kind (no phrase matched) names nothing here.
+                    const named = ranked.filter((domain) => domain.matched.length > 0 && !courtOnly(domain));
+                    return (named.find((domain) => domain.strong) ?? named.find((domain) => !/^mapa aktów:/u.test(domain.matched[0] ?? "")))?.skill;
+                };
+                // The documents of a workflow (a witness to question, an evidence file) name the
+                // matter when the question does not ("Przygotuj przesłuchanie świadka Jana Nowaka").
+                return allowed(cited) ?? allowed(ofMatter(caseText)) ?? allowed(ofMatter(threadUserText(request.query))) ?? allowed(documentText.trim() ? ofMatter(documentText) : undefined) ?? request.primarySkill;
+            }
             return cited ?? phrased(caseText) ?? phrased(threadUserText(request.query)) ?? procedural ?? request.primarySkill;
         };
         // MAPA-AKTOW resolved mechanically (Dz.U. number, article of a code, act or scope
@@ -1415,8 +1491,14 @@ export class SafeSessionExecutor {
         ]);
         // Stages of the skill reached in this thread (sections marked lex:wczytaj-gdy).
         const stages = reachedStages(request.query);
+        // Mechanical mode: the user chose the executive skill and the application the domain,
+        // so the router's routing sections (lex:wykonuje-aplikacja: ROUTING) go as a reference;
+        // its mandatory core, gates and self-check stay whole.
+        const optInComponents = new Set(mechanicalTurn(request) ? ["ROUTING", "REJESTR-MODULOW"] : []);
+        // Prompt cache: the stage sections of these resources go after the cached prefix.
+        const stageTail = { reached: stages, sections: [] };
         const forModel = (resource, content) => {
-            const result = compactForModel(content, undefined, inactiveComponents, stages);
+            const result = compactForModel(content, undefined, inactiveComponents, stages, optInComponents, stageTail);
             if (result.compacted.length) {
                 audit.record("gate", "SECTIONS_EXECUTED_BY_APP", "OK", {
                     resource,
@@ -1455,6 +1537,36 @@ export class SafeSessionExecutor {
         // AUTO: the task type from the router's table [1]–[11] names the executive skill
         // the router requires; the app loads it in full with its contract (mechanically,
         // as in the mechanical mode) instead of leaving the choice to the model.
+        // Mechanical mode: the user pinned the executive skill. A request the activation matrix
+        // gives to another skill ("napisz pozew" with the simple letter or the statute analysis
+        // pinned) is not dropped: a pleading asked of pisma-proste-v2 gets its M7 escalation
+        // (offered by the application even when the model writes the letter anyway), any other
+        // one a "next stage" choice under the answer. The pinned skill still answers this turn.
+        let mechanicalTask = null;
+        if (mechanicalTurn(request) && legalTurn) {
+            const pinned = parseSkillSelectionEnvelope(request.query).manualSkills.filter((name) => !name.startsWith("dr-"));
+            const letters = { skill: "pisma-proste-v2", entries: schemaCatalog(this.registry, "pisma-proste-v2") };
+            const decided = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [...recognisedDocuments], this.redactionTest(), letters);
+            // The request itself (without the delivered files' own rows) asks the pinned skill's work:
+            // a contract in the files of "przygotuj pozew" is the pleading's material, not a task.
+            const asked = decideTask(this.taskRoutes(), this.activationMatrix(), taskQuery, [], this.redactionTest(), letters);
+            if (decided && pinned.length && !pinned.includes(decided.primary) && !(asked && pinned.includes(asked.primary)) && this.registry.get(decided.primary)) {
+                mechanicalTask = decided;
+            }
+        }
+        const appEscalation = mechanicalTask?.primary === "pisma-procesowe-v3" && parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-proste-v2")
+            ? { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason: `rozpoznanie aplikacji — ${mechanicalTask.reason}` }
+            : null;
+        if (appEscalation) {
+            pathSections.push([
+                "# ROZPOZNANIE APLIKACJI: PISMO PROCESOWE (M7-eskalacja)",
+                `Aplikacja (macierz aktywacji) rozpoznała pismo procesowe: ${mechanicalTask.reason}.`,
+                "Nie pisz pisma w tym wątku. Napisz komunikat M7: „ESKALACJA DO pisma-procesowe-v3” i linię „Przyczyna: …”, a potem zapytaj, czy przełączyć wątek; aplikacja zaproponuje przełączenie."
+            ].join("\n"));
+        }
+        else if (mechanicalTask) {
+            pathSections.push(`# ROZPOZNANIE APLIKACJI: KOLEJNY ETAP\nCzęść prośby należy do ${mechanicalTask.primary} (${mechanicalTask.reason}). Odpowiedz w ramach przypiętego skilla; aplikacja zaproponuje użytkownikowi przejście do ${mechanicalTask.primary} pod odpowiedzią. Nie wykonuj tej części ani jej nie symuluj.`);
+        }
         let taskRoute = null;
         let routingMaterials = [];
         if (mandatoryModel &&
@@ -1517,7 +1629,7 @@ export class SafeSessionExecutor {
                         : []),
                     forModel(`${skill}/SKILL.md`, text)
                 ].join("\n\n"));
-                const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages).text);
+                const contract = executiveContract(this.registry, skill, (body) => compactForModel(body, undefined, inactiveComponents, stages, optInComponents).text);
                 if (contract) {
                     const loaded = loadContract(this.registry, contract, { inContext: contextResources, budget: CONTRACT_BUDGET_CHARS / 2 });
                     for (const item of loaded.loaded) {
@@ -1593,29 +1705,41 @@ export class SafeSessionExecutor {
                 (request.model.startsWith("account/") ? " Przy koncie konkretną wersję wybiera klient dostawcy; aplikacja jej nie zna." : ""),
             "Pytany, jakim jesteś modelem, podaj te dane; nie zgaduj nazwy ani wersji z pamięci."
         ].join("\n");
+        // Prompt cache: what is the same for every turn of this skill path (identity, the
+        // mandatory path and shared resources, tool contracts) goes first and is cached by
+        // the provider; what this turn adds (mode, recognitions, act modules, evidence,
+        // cited law, retrieval) goes after it.
+        const turnScoped = new Set([CRIMINAL_QUALIFIER_RESOURCE, CAUSAL_RESOURCE]);
+        const stablePath = (section) => {
+            const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
+            return Boolean(resource) && !turnScoped.has(resource);
+        };
         const toolPrompt = [
             identityPrompt,
-            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-            ...pathSections,
-            ...(evidencePrompt ? [evidencePrompt] : []),
+            ...pathSections.filter(stablePath),
             ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
-            ...(coreLawTools
-                ? [coreLawTools.systemPromptAppendix()]
-                : []),
+            ...(coreLawTools ? [coreLawTools.systemPromptAppendix()] : []),
             ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
             reportTools.systemPromptAppendix(),
             ...(courtTools ? [courtTools.systemPromptAppendix()] : []),
-            ...(request.caseCourt && !request.conversationalOnly ? [caseCourtPrompt(request.caseCourt)] : []),
             ...(widgetTools ? [widgetTools.systemPromptAppendix()] : []),
-            ...(federationTools
-                ? [federationTools.systemPromptAppendix()]
+            ...(federationTools ? [federationTools.systemPromptAppendix()] : []),
+            ...(verificationTools ? [verificationTools.systemPromptAppendix()] : [])
+        ].join("\n\n");
+        const toolPromptTurn = [
+            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+            ...[stageTailPrompt(stageTail.sections)].filter((block) => Boolean(block)),
+            ...pathSections.filter((section) => !stablePath(section)),
+            ...(evidencePrompt ? [evidencePrompt] : []),
+            ...(citedLaw ? [citedLaw] : []),
+            // Statute analysis pinned by the user, no article number in the question ("zasiedzenie"):
+            // the articles the core law search ranks first, as local models get them.
+            ...(!citedLaw && !coreLawRag && this.coreLawIndex && legalTurn && mechanicalTurn(request) &&
+                parseSkillSelectionEnvelope(request.query).manualSkills.includes("analizator-przepisow-v2")
+                ? [coreLawRetrievalPrompt(this.coreLawIndex, protectedQuery)].filter((block) => Boolean(block))
                 : []),
-            ...(verificationTools
-                ? [verificationTools.systemPromptAppendix()]
-                : []),
-            ...(attachments.length > 0
-                ? [documentCitationSystemPrompt(attachments)]
-                : []),
+            ...(request.caseCourt && !request.conversationalOnly ? [caseCourtPrompt(request.caseCourt)] : []),
+            ...(attachments.length > 0 ? [documentCitationSystemPrompt(attachments)] : []),
             ...(coreLawRag ? [coreLawRag] : [])
         ].join("\n\n");
         // Kind and gender of every placeholder the model will see: it inflects
@@ -1659,8 +1783,36 @@ export class SafeSessionExecutor {
                 }
                 : undefined)
             : undefined;
+        // Material gate: a pinned skill that works on documents, the first turn, no file in the
+        // message, none in the case and no pasted text - the application asks for the material
+        // itself (no model call, ~100k tokens saved; the checkpoint stays open until it comes).
+        const materialSkill = mechanicalTurn(request)
+            ? mechanicalEnvelope.manualSkills.find((name) => name in MATERIAL_SKILLS && !(name === "analizator-umow-v1" && request.contractWorkflowContext?.mode === "DRAFT"))
+            : undefined;
+        let caseDocuments = 0;
+        if (materialSkill && request.caseFiles) {
+            try {
+                caseDocuments = (await request.caseFiles.listDocuments()).length;
+            }
+            catch {
+                caseDocuments = 1;
+            }
+        }
+        // Only at the workflow's first step: a later checkpoint means the work is under way.
+        const firstStep = (!request.contractWorkflowContext || request.contractWorkflowContext.checkpoint === "AU-F0") &&
+            (!request.orderedCaseWorkflowContext || /INTAKE/u.test(request.orderedCaseWorkflowContext.checkpoint)) &&
+            (!request.chronologyWorkflowContext || request.chronologyWorkflowContext.stage === "INVENTORY") &&
+            (!request.courtWorkflowContext || request.courtWorkflowContext.stage === "EVIDENCE_SCAN");
+        const fixedAnswer = materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS
+            ? `Do tej pracy potrzebny jest materiał: ${MATERIAL_SKILLS[materialSkill]}. Dołącz plik do wiadomości albo wklej jego treść; dokumenty już zapisane w aktach wybierz w sprawie.\n\n${WAIT_FOR_USER_MARKER}`
+            : undefined;
+        if (fixedAnswer) {
+            step("MODEL", "brak materiału: pytanie aplikacji, bez wywołania modelu");
+            audit.record("gate", "MATERIAL_REQUIRED", "OK", { skill: materialSkill, waitingForUser: true });
+        }
         const execution = await this.engine.executePolishLegalQuery({
-            instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages] },
+            ...(fixedAnswer ? { fixedAnswer } : {}),
+            instructionCompaction: { inactive: [...inactiveComponents], stages: [...stages], optIn: [...optInComponents] },
             ...(this.coreLawIndex
                 ? {
                     coreLaw: this.coreLawIndex.distinctSummaries().map((act) => ({
@@ -1762,6 +1914,9 @@ export class SafeSessionExecutor {
             ...(request.processRenderOnly && request.documentAstOutput
                 ? { processRenderOnly: request.processRenderOnly }
                 : {}),
+            ...(request.contractRenderOnly && request.documentAstOutput
+                ? { contractRenderOnly: true }
+                : {}),
             ...(protectedProcessContext
                 ? {
                     processWorkflowContext: protectedProcessContext
@@ -1791,6 +1946,7 @@ export class SafeSessionExecutor {
                 : {}),
             tools: toolSchemas,
             toolSystemPromptAppendix: toolPrompt,
+            toolSystemPromptTurn: toolPromptTurn,
             // A SIMPLE matter (entry gate) on a local model takes the compact
             // lane: core-law texts in the prompt, core-law tools for the rest.
             ...(coreLawTools && request.model.startsWith("local/") && attachments.length === 0
@@ -1798,6 +1954,7 @@ export class SafeSessionExecutor {
                     quickLocalLegal: {
                         toolPrompt: [
                             coreLawTools.systemPromptAppendix(),
+                            ...(citedLaw ? [citedLaw] : []),
                             coreLawRag ??
                                 "# LOKALNE TEKSTY USTAW\nDla tego pytania nie dobrano automatycznie artykułów. Znajdź przepis search_core_law, a jego brzmienie weź z read_core_law_article; bez tego nie podawaj treści przepisu."
                         ].join("\n\n")
@@ -2485,10 +2642,13 @@ export class SafeSessionExecutor {
         // odpowiedzi. Sprzeczność z rejestrem VERIFIED jest naprawiana według rejestru;
         // sprzeczność, której rejestr nie rozstrzyga, blokuje prezentację.
         const statusReconciliation = reconcileStatusMarkers(markedAnswer.text, ledger);
-        const processedDocumentCitations = statusReconciliation.repaired > 0
+        // A conflict the registry does not settle: the provision is shown ⚠️ everywhere (a
+        // draft with it marked), never ✅ in one place and ⚠️ in another, and never a blocked turn.
+        const unifiedStatus = unifyConflictingProvisions(statusReconciliation.text, ledger);
+        const processedDocumentCitations = statusReconciliation.repaired > 0 || unifiedStatus.unified.length > 0
             ? {
                 ...markedAnswer,
-                text: statusReconciliation.text
+                text: unifiedStatus.text
             }
             : markedAnswer;
         const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
@@ -2498,6 +2658,7 @@ export class SafeSessionExecutor {
             ? "BLOCKED"
             : "OK", {
             repairedMarkers: statusReconciliation.repaired,
+            unifiedUnverified: unifiedStatus.unified,
             provisions: statusConsistency.provisions.length,
             findings: statusConsistency.findings,
             orphanUnverifiedLines: statusConsistency.orphanUnverifiedLines
@@ -2512,9 +2673,11 @@ export class SafeSessionExecutor {
             request.orderedCaseWorkflowContext ||
             request.contractWorkflowContext ||
             request.chronologyWorkflowContext ||
+            request.processRenderOnly ||
             execution.workflowPlan.executionSkill
             ? {
                 checkpointTurn: true,
+                ...(request.processRenderOnly ? { processRenderStage: request.processRenderOnly.stage } : {}),
                 ...(request.processWorkflowContext
                     ? {
                         processCheckpoint: request
@@ -2594,12 +2757,7 @@ export class SafeSessionExecutor {
             toolEvents: reportAudit.length
         });
         const finalizationText = reportBlueprint
-            ? [
-                processedDocumentCitations.text,
-                "[STRUCTURED_REPORT_BLUEPRINT_DATA]",
-                JSON.stringify(reportBlueprint.blueprint),
-                "[/STRUCTURED_REPORT_BLUEPRINT_DATA]"
-            ].join("\n")
+            ? blueprintFinalizationText(processedDocumentCitations.text, reportBlueprint.blueprint, ledger)
             : processedDocumentCitations.text;
         step("VERIFY", "przepisy, orzeczenia i cytaty w odpowiedzi");
         const finalization = this.finalizer.finalize({
@@ -2652,8 +2810,8 @@ export class SafeSessionExecutor {
             "DURABLE_CASE"
             ? ((execution.workflowPlan.id ===
                 "PROCESS_PLEADING_V1" &&
-                request
-                    .processWorkflowContext) ||
+                // The file of the pipeline's pleading: its state bound by the route (render-only).
+                (request.processWorkflowContext || (request.processRenderOnly && request.documentAstOutput))) ||
                 (execution.workflowPlan.id ===
                     "COURT_ANALYSIS_V1" &&
                     request
@@ -2664,8 +2822,7 @@ export class SafeSessionExecutor {
                         .chronologyWorkflowContext) ||
                 (execution.workflowPlan.id ===
                     "CONTRACT_ANALYSIS_V1" &&
-                    request
-                        .contractWorkflowContext) ||
+                    (request.contractWorkflowContext || (request.contractRenderOnly && request.documentAstOutput))) ||
                 ((execution.workflowPlan.id ===
                     "EVIDENCE_ANALYSIS_V1" ||
                     execution.workflowPlan.id ===
@@ -3063,17 +3220,43 @@ export class SafeSessionExecutor {
         const choicesShown = deferred
             ? [{ skill: resumeSkill, kind: "CONTINUE", reason: "odpowiedź zapowiada krok, którego nie wykonała" }, ...offered]
             : offered;
-        const next = choicesShown.length
-            ? { skill: choicesShown[0].skill, reason: choicesShown[0].reason, choices: choicesShown }
+        // A switch the answer offers (Test B reduction, M7 escalation) is the choice already.
+        const switchOffered = workflowOutput.mode === "REDUCTION_OFFERED" || workflowOutput.mode === "ESCALATION_REQUIRED";
+        // The mechanical turn's request for another skill (not an escalation, which is the offer below).
+        const mechanicalChoice = mechanicalTask && !appEscalation && !switchOffered && !choicesShown.some((choice) => choice.skill === mechanicalTask.primary)
+            ? { skill: mechanicalTask.primary, kind: /^pisma-/u.test(mechanicalTask.primary) ? "DOCUMENT" : "ANALYSIS", reason: `rozpoznanie aplikacji: ${mechanicalTask.reason}` }
+            : null;
+        // Several executive skills pinned, one workflow per turn: the others are not dropped
+        // silently but offered as the next stage (chronologia-sprawy-v1 next to a pleading).
+        const pinnedLater = mechanicalTurn(request) && !switchOffered
+            ? parseSkillSelectionEnvelope(request.query)
+                .manualSkills.filter((name) => !name.startsWith("dr-") && name !== execution.workflowPlan.executionSkill && this.registry.get(name))
+                // Both letter skills pinned: the stricter pleading workflow controls (no offer of the simple one).
+                .filter((name) => !(name === "pisma-proste-v2" && execution.workflowPlan.executionSkill === "pisma-procesowe-v3"))
+                .filter((name) => name !== mechanicalChoice?.skill && !choicesShown.some((choice) => choice.skill === name))
+                .map((name) => ({ skill: name, kind: /^pisma-/u.test(name) ? "DOCUMENT" : "ANALYSIS", reason: "skill przypięty przez użytkownika, nie wykonany w tej turze" }))
+            : [];
+        const shown = [...(mechanicalChoice ? [mechanicalChoice] : []), ...choicesShown, ...pinnedLater];
+        const next = shown.length
+            ? { skill: shown[0].skill, reason: shown[0].reason, choices: shown }
             : legacyNext;
         // A step that asks the user (WAIT_FOR_USER_MARKER): flagged; the marker stays for the chat.
         // Escalation / reduction between the letter skills: an offer to the user, nothing closed.
-        const skillSwitch = workflowOutput.mode === "ESCALATION_REQUIRED"
+        const skillSwitch = (workflowOutput.mode === "ESCALATION_REQUIRED"
             ? escalationOffer(restoredAnswer.text)
             : workflowOutput.mode === "REDUCTION_OFFERED"
                 ? reductionOffer(restoredAnswer.text)
-                : null;
-        const waitingForUser = waitsForUser(restoredAnswer.text) || skillSwitch !== null;
+                : null) ?? appEscalation;
+        // A checkpoint's report followed by the marker without a question or request after it
+        // (the skill's "STOP, czekaj na użytkownika") is a report to confirm: otherwise the
+        // checkpoint never reached confirmation and the chain asked for it again (E2E: 18 turns
+        // on CP-1a). A question or a request ("Podaj…") still waits for the user's reply.
+        const activeCheckpoint = request.processWorkflowContext?.checkpoint ??
+            request.contractWorkflowContext?.checkpoint ??
+            request.orderedCaseWorkflowContext?.checkpoint ??
+            request.chronologyWorkflowContext?.checkpoint ??
+            request.courtWorkflowContext?.checkpoint;
+        const waitingForUser = (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) || skillSwitch !== null;
         // A letter's addressee court: from court_for_address or the case's court (its regional and
         // appeal court too: an appeal goes through the district court), never from the model alone.
         const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);
@@ -3095,6 +3278,9 @@ export class SafeSessionExecutor {
             sessionId: audit.sessionId,
             status: safeToPresent ? "DRAFT_PRESENTABLE" : "BLOCKED",
             ...(next && safeToPresent ? { pipelineNext: next } : {}),
+            // The application's own escalation stands even when the answer was blocked (a simple
+            // letter written for a pleading): the user still gets the switch to pisma-procesowe-v3.
+            ...(appEscalation && !safeToPresent ? { skillSwitch: appEscalation } : {}),
             ...(taskRoute ? { taskSkill: taskRoute.primary } : {}),
             ...(courtTools?.courts().length ? { courtsFound: courtTools.courts() } : {}),
             ...(courtCheck ? { courtCheck } : {}),

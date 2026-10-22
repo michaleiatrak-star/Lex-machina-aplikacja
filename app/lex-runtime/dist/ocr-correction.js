@@ -1,4 +1,4 @@
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 import { fixOcrAmounts } from "./ocr-amounts.js";
 /**
  * Model-free cleanup of OCR lines: Unicode composition, ligatures, invisible characters, odd
@@ -70,7 +70,7 @@ export function normalizeOcrPage(page) {
     return {
         ...page,
         lines,
-        text: lines.map(ocrLineText).join("\n"),
+        text: ocrPageText(lines),
         corrections: [...(page.corrections ?? []), ...corrections]
     };
 }

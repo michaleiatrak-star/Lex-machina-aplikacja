@@ -15,6 +15,9 @@ const EXECUTION_SKILL_NAME_OVERRIDES = new Set([
     "przesluchanie-swiadkow-v2-min90",
     "raport-klienta-v1"
 ]);
+// The legal guide (type ux-guide) runs its LEGAL_GUIDE_V1 pipeline only when the user pins
+// it in the mechanical mode; in AUTO it stays the conversational fallback and pins nothing.
+const PINNED_WORKFLOW_SKILLS = new Set(["przewodnik-prawny-v2"]);
 const USER_TURN_MARKER = "\n\nUżytkownik: ";
 // The web UI sends earlier turns as "Użytkownik: ..."/"Asystent: ..."
 // history; only the newest user turn carries the current intent.
@@ -426,7 +429,7 @@ export function resolveAdditionalSkills(registry, query, primarySkill, automatic
         const skill = registry.get(name);
         if (!skill)
             continue;
-        if (isExecutionSkill(skill)) {
+        if (isExecutionSkill(skill) || (!automatic && PINNED_WORKFLOW_SKILLS.has(name))) {
             executionSkills.add(name);
             promoteWorkflowExecutionSkill(name);
         }

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 const scope = new AsyncLocalStorage();
 export async function meterUsage(work) {
-    const usage = { inputTokens: 0, outputTokens: 0, modelCalls: 0, unmeteredCalls: 0 };
+    const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, modelCalls: 0, unmeteredCalls: 0 };
     const result = await scope.run(usage, work);
     return { result, usage };
 }
@@ -16,4 +16,6 @@ export function reportUsage(tokens) {
     }
     usage.inputTokens += tokens.inputTokens ?? 0;
     usage.outputTokens += tokens.outputTokens ?? 0;
+    usage.cacheReadTokens += tokens.cacheReadTokens ?? 0;
+    usage.cacheWriteTokens += tokens.cacheWriteTokens ?? 0;
 }

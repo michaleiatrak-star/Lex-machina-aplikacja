@@ -58,7 +58,14 @@ export class VerificationLedger {
     }
     latest(claim) {
         const records = this.find(claim);
-        return records.at(-1);
+        if (records.length)
+            return records.at(-1);
+        // "art. 187 § 1 pkt 3 KPC" without its own record: the verified paragraph's text holds its points.
+        const paragraph = claim.replace(/\s+pkt\s*\d+[a-z]*/iu, "");
+        if (paragraph === claim)
+            return undefined;
+        const parent = this.find(paragraph).at(-1);
+        return parent?.status === "VERIFIED" ? parent : undefined;
     }
     all() {
         return [...this.records.values()].flatMap((records) => records);

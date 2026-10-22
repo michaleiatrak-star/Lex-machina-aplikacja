@@ -1,4 +1,4 @@
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrLineText, stampLinesInText } from "./document-ingestion.js";
 // Put before a flagged line in the text, so a model reading the document does not take it as written.
 export const REVIEW_MARK = "[OCR: odczyt niepewny, sprawdź w skanie]";
 export const REVIEW_SCORE = 0.85;
@@ -49,6 +49,10 @@ export async function markOcrReview(page, knownWords) {
     if (!review.length)
         return page;
     const flagged = new Set(review.filter((item) => item.reason !== "STAMP").map((item) => item.line));
-    const text = page.lines.map((line, index) => (flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line))).join("\n");
+    // A stamp's line is only on the review list (ocrPageText), unless kept in the text.
+    const stamps = stampLinesInText();
+    const text = page.lines
+        .flatMap((line, index) => (line.stamp && !stamps ? [] : [flagged.has(index) ? `${REVIEW_MARK} ${line.text}` : ocrLineText(line)]))
+        .join("\n");
     return { ...page, text, review };
 }

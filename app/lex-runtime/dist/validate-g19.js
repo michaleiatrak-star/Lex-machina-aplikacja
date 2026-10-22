@@ -281,11 +281,16 @@ const pass = issues.length === 0 &&
         "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.html") &&
     staleHttp.status === 200 &&
     stale.status === "DRAFT_PRESENTABLE" &&
-    // HARD GATE: shown only with the marker at the unverified claim.
-    stale.finalization === "DEGRADED" &&
+    // The registry's t.j. replaced in ELI: the in-force t.j. from ELI is the source (not the
+    // stale pinned one, and no refusal until the registry is repinned).
+    stale.finalization === "PASS" &&
     typeof stale.answer === "string" &&
-    staleVerification.records === 0 &&
-    staleFetches.length === 0 &&
+    typeof staleVerification.records === "number" &&
+    staleVerification.records >= 1 &&
+    staleVerification.verified === staleVerification.records &&
+    staleFetches.length >= 1 &&
+    staleFetches.every((url) => url ===
+        "https://api.sejm.gov.pl/eli/acts/DU/2027/10/text.html") &&
     historicalHttp.status === 200 &&
     historical.status ===
         "DRAFT_PRESENTABLE" &&

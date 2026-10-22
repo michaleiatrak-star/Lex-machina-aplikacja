@@ -1,4 +1,4 @@
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 // Short words a split may produce on its own ("i podlega", "siedzibą w", "do lat").
 const FUNCTION_WORDS = new Set([
     "i", "w", "z", "o", "a", "u", "do", "od", "na", "po", "ze", "we", "że", "za", "ich", "jej", "jego",
@@ -193,7 +193,7 @@ export async function restoreOcrSpacing(page, knownWords) {
     return {
         ...page,
         lines,
-        text: lines.map(ocrLineText).join("\n"),
+        text: ocrPageText(lines),
         corrections: [...(page.corrections ?? []), ...fixes]
     };
 }

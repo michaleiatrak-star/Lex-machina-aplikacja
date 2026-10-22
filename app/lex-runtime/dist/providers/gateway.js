@@ -28,8 +28,10 @@ export class ProviderRegistry {
 }
 export class ProviderGateway {
     registry;
-    constructor(registry) {
+    guard;
+    constructor(registry, guard) {
         this.registry = registry;
+        this.guard = guard;
     }
     nativeCorpusAccess(providerId, model) {
         return this.registry.get(providerId)?.nativeCorpusAccess?.(model) === true;
@@ -50,9 +52,18 @@ export class ProviderGateway {
             !provider.capabilities.reasoning) {
             throw new ProviderGatewayError("REASONING_UNSUPPORTED", `Provider ${providerId} does not support reasoning controls.`, providerId);
         }
+        if (this.guard) {
+            try {
+                this.guard.beforeCall(providerId, params.model);
+            }
+            catch (error) {
+                throw new ProviderGatewayError("ACCOUNT_POLICY", error instanceof Error ? error.message : String(error), providerId, error);
+            }
+        }
         try {
             const result = await provider.stream(params);
             reportUsage(result.usage ?? null);
+            this.guard?.afterCall(providerId, params.model, result.usage ?? null);
             return result;
         }
         catch (error) {

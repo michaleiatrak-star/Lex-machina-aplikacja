@@ -4,7 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { ocrLineText } from "./document-ingestion.js";
+import { ocrPageText } from "./document-ingestion.js";
 // Handwriting, stamps and signatures: manual review, never the model.
 const HANDWRITING_SCORE = 0.85;
 // A line read with less confidence than this is read again.
@@ -69,6 +69,19 @@ function keepEdges(was, read) {
     const trail = trailWas || (/^[.,;:]$/u.test(trailRead) ? trailRead : "");
     return `${leadWas}${core}${trail}`;
 }
+const capitalized = (word) => /^\p{Lu}/u.test(word);
+/**
+ * A capitalized word changed into another capitalized word that is no common word: a name
+ * (Juneyoung -> Joneyoung, Kowalski -> Kowalska). A name register knows both spellings,
+ * so only the scan can tell; the OCR reading stays. A common word written with a capital
+ * ("Pracodawey" -> "Pracodawcy") is known in lower case and is still taken.
+ */
+function anotherName(was, read, known) {
+    const before = was.match(WORD) ?? [];
+    const after = read.match(WORD) ?? [];
+    return before.some(capitalized) &&
+        after.some((word) => capitalized(word) && !known.has(word.toLocaleLowerCase("pl")) && !before.includes(word));
+}
 /**
  * The line with the changes the arbiter takes from the model's reading. `known` holds the
  * dictionary words among the words of both readings.
@@ -104,6 +117,7 @@ export function arbitrateLine(ocrText, visionText, known) {
             take =
                 anyUnknown(was) &&
                     allKnown(read) &&
+                    !anotherName(was, read, known) &&
                     editDistance(was.toLocaleLowerCase("pl"), read.toLocaleLowerCase("pl")) <= Math.max(2, Math.ceil(0.34 * was.length));
         }
         if (!take)
@@ -154,7 +168,10 @@ export async function correctWithVision(pages, readLine, knownWords, onProgress)
     // Words of the model's readings checked against the dictionary in one call.
     const newWords = [
         ...new Set([...readings.values()].flatMap((read) => [...read.values()].flatMap((text) => text.match(WORD) ?? [])))
-    ].filter((word) => !vocabulary.includes(word));
+    ]
+        // A capitalized word also in lower case: a common word, or a name (anotherName).
+        .flatMap((word) => (capitalized(word) ? [word, word.toLocaleLowerCase("pl")] : [word]))
+        .filter((word, index, all) => !vocabulary.includes(word) && all.indexOf(word) === index);
     const newFlags = newWords.length ? await knownWords(newWords) : [];
     newWords.forEach((word, index) => newFlags[index] && known.add(word));
     return pages.map((page) => {
@@ -172,7 +189,7 @@ export async function correctWithVision(pages, readLine, knownWords, onProgress)
         });
         if (corrections.length === (page.corrections ?? []).length)
             return page;
-        return { ...page, lines, text: lines.map(ocrLineText).join("\n"), corrections };
+        return { ...page, lines, text: ocrPageText(lines), corrections };
     });
 }
 /** The page without line images: they live only for the vision step, never stored. */

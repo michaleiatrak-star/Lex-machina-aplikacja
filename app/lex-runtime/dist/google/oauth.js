@@ -35,6 +35,9 @@ export function buildAuthorizationUrl(args) {
     if (args.loginHint) {
         url.searchParams.set("login_hint", args.loginHint);
     }
+    if (args.offline) {
+        url.searchParams.set("access_type", "offline");
+    }
     return url.toString();
 }
 export async function exchangeAuthorizationCode(args) {

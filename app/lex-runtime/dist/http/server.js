@@ -7,8 +7,9 @@ import helmet from "helmet";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
+import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
+import { GoogleWorkspaceController } from "../google/workspace-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
@@ -22,6 +23,11 @@ import { registerMcpConnectorRoutes } from "./mcp-connector-routes.js";
 import { registerInvoiceRoutes } from "./invoice-routes.js";
 import { registerWidgetRoutes } from "./widget-routes.js";
 import { WidgetFrameStore } from "../widget-runtime.js";
+import { ServerModeStore } from "../server-mode/store.js";
+import { ServerSecretBox } from "../server-mode/secret-box.js";
+import { ServerModeService } from "../server-mode/service.js";
+import { ServerModeCredentialResolver } from "../server-mode/credentials.js";
+import { registerServerModeRoutes } from "../server-mode/routes.js";
 import { EncryptedInvoiceStore } from "../invoice-store.js";
 import { LexMcpConnectorStore, lexMcpPackagePath } from "../lex-mcp-connectors.js";
 import { LexSkillRegistry } from "../registry.js";
@@ -136,7 +142,8 @@ function desktopBootstrapGuard(req, res, next) {
 function loopbackOriginGuard(req, res, next) {
     const origin = req.get("origin");
     if (!origin ||
-        isLoopbackOrigin(origin)) {
+        isLoopbackOrigin(origin) ||
+        allowedPublicOrigin(origin)) {
         next();
         return;
     }
@@ -278,10 +285,15 @@ export async function startLocalServer(options) {
     const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
     const localModels = new LocalModelRuntime();
-    const credentials = new MemoryOverlayCredentialResolver(new EnvironmentCredentialResolver());
+    // Server mode (off by default; LEX_SERVER_MODE_FORCE=on|off fixes it for a container).
+    const serverModeDir = path.join(caseFileStore.rootDir, "server");
+    const serverMode = new ServerModeService(new ServerModeStore(serverModeDir), new ServerSecretBox({ keyPath: path.join(serverModeDir, "secret.key"), envKey: process.env.LEX_SERVER_SECRET_KEY }), authService, { forceEnv: process.env.LEX_SERVER_MODE_FORCE });
+    // Server mode: the admin's global API keys for every account.
+    const environmentCredentials = new EnvironmentCredentialResolver();
+    const credentials = new ServerModeCredentialResolver(new MemoryOverlayCredentialResolver(environmentCredentials), environmentCredentials, serverMode);
     const accountSessions = new AccountSessionManager();
     const providerRegistry = createLiveProviderRegistry(credentials, localModels, accountSessions);
-    const providerGateway = new ProviderGateway(providerRegistry);
+    const providerGateway = new ProviderGateway(providerRegistry, serverMode);
     // Stanza NER plus the SGJP name dictionary and address patterns. The Stanza model
     // is loaded once, in the background now, not for every checked message.
     const stanzaRecognizer = new LocalStanzaNamedEntityRecognizer();
@@ -360,6 +372,7 @@ export async function startLocalServer(options) {
         registry,
         // Off until a Google OAuth client is configured (see google/config.ts).
         googleRecovery: new GoogleRecoveryController(authService),
+        googleWorkspace: new GoogleWorkspaceController(authService, caseFileStore.rootDir),
         personMorphology,
         modelCatalog,
         credentialResolver: credentials,
@@ -399,6 +412,7 @@ export async function startLocalServer(options) {
     app.use(loopbackOriginGuard);
     app.use(express.json({ limit: "2mb" }));
     app.use("/api", sessionActivityMiddleware(authService));
+    registerServerModeRoutes(app, { authService, serverMode });
     registerLegacyMigrationRoutes(app, {
         authService,
         securityEvents: authStore,
@@ -486,6 +500,7 @@ export async function startLocalServer(options) {
                         gazetteerRecognizer.close();
                         personMorphology.close();
                         credentials.close();
+                        serverMode.close();
                         supportService.close();
                         unsubscribeGuideRevocation();
                         guideSessionStore.clear();
