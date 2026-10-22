@@ -85,7 +85,7 @@ import type {
   LegalSourceCrossCheckStatus,
   LegalSourceTier
 } from "./legal-source-policy.js";
-import { WidgetToolRuntime, type WidgetSpec } from "./widget-runtime.js";
+import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
 import {
   revalidateThreadEvidence,
@@ -3809,6 +3809,19 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     // The model's own ⚠️ at a statute does not stop the application from
     // verifying it: status comes from the registry only.
+    // Asked for a widget, a model without show_widget (local) or one that did not call it
+    // (ChatGPT, 2026-10-22) writes the widget's code in the answer: shown as a widget, out of
+    // the text the gates mark (before, the markers landed inside the HTML).
+    let answerWidgets: WidgetSpec[] = [];
+    if (!widgetTools?.widgets().length && /widget|wizualizacj/iu.test(latestUserTurn(parseSkillSelectionEnvelope(request.query).query))) {
+      const extracted = widgetsFromAnswer(modelOutput);
+      if (extracted.widgets.length) {
+        modelOutput = extracted.text;
+        answerWidgets = extracted.widgets;
+        step("MODEL", `widget z kodu w odpowiedzi modelu (${extracted.widgets.length})`);
+      }
+    }
+    modelOutput = withOneClosingDisclaimer(modelOutput);
     // KROK 7: the model's closing disclaimer is the fixed text of shared/DISCLAIMER.md.
     // It is cut off before the gates and put back after them (the canonical text, or
     // the model's own when the application adds none).
@@ -4623,7 +4636,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       // The model's own closing disclaimer says the answer is legal content: the canonical text replaces it.
       (legalAnswer(processedDocumentCitations.text) || Boolean(modelDisclaimer.disclaimer)) && freeText && !request.model.startsWith("local/") ? parseDisclaimer(this.readCorpus("shared/DISCLAIMER.md") ?? "") : null;
     const disclaimed = disclaimerTexts
-      ? withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
+      ? (({ text, appended }) => ({ text: withOneClosingDisclaimer(text), appended }))(
+          withDisclaimer(processedDocumentCitations.text, disclaimerTexts, { mode, pleading: pathFacts.documentGeneration })
+        )
       : modelDisclaimer.disclaimer
         ? { text: `${processedDocumentCitations.text.trimEnd()}\n\n${modelDisclaimer.disclaimer}`, appended: false }
         : { text: processedDocumentCitations.text, appended: false };
@@ -4939,8 +4954,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       ...(snVerificationRequired
         ? { sourceVerification: { source: "sn" as const, url: "https://www.sn.pl/pl/wyszukiwarka-orzeczen" } }
         : {}),
-      ...(widgetTools && widgetTools.widgets().length > 0
-        ? { widgets: widgetTools.widgets() }
+      ...((widgetTools?.widgets().length ?? 0) + answerWidgets.length > 0
+        ? { widgets: [...(widgetTools?.widgets() ?? []), ...answerWidgets] }
         : {}),
       ...(() => {
         // Pages of the case's documents the model read this turn (sent chunks in full, and
@@ -5041,4 +5056,24 @@ export class SafeSessionExecutor implements SessionExecutor {
 
     return response;
   }
+}
+
+/**
+ * A local model writes the skill's closing note and the shared disclaimer one after the other
+ * ("⚖️ To wyjaśnienie…", "⚖️ Ważna informacja: …"): the last one, the full disclaimer, stays.
+ * A "⚖️" block runs to a blank line or the next "⚖️" line.
+ */
+export function withOneClosingDisclaimer(text: string): string {
+  const lines = text.split("\n");
+  const blocks: Array<[number, number]> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^\s*⚖️/u.test(lines[index]!)) continue;
+    let end = index + 1;
+    while (end < lines.length && lines[end]!.trim() && !/^\s*⚖️/u.test(lines[end]!)) end += 1;
+    blocks.push([index, end]);
+    index = end - 1;
+  }
+  if (blocks.length < 2) return text;
+  const dropped = new Set(blocks.slice(0, -1).flatMap(([from, to]) => Array.from({ length: to - from }, (_, offset) => from + offset)));
+  return lines.filter((_, index) => !dropped.has(index)).join("\n");
 }

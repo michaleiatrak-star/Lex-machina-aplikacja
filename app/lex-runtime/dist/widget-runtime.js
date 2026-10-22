@@ -383,3 +383,23 @@ export class WidgetToolRuntime {
         return validateWidgetSpec({ title, kind: input.kind, code: input.code });
     }
 }
+const ANSWER_WIDGET_BLOCK = /```(html|jsx|tsx)[ \t]*\n([\s\S]*?)```/gu;
+const WIDGET_MARKUP = /<(?:html|body|section|div|table|article|main|svg|style|script)\b/iu;
+const MARKER_TEXT = /\s*(?:✅\s*\[VER:[^\]\n]*(?:\[[^\]\n]*\]\([^)\n]*\)[^\]\n]*)?\]|⚠️\s*\[NIEWERYFIKOWANE\])/gu;
+/**
+ * A local model has no show_widget tool: asked for a widget, it writes the widget's code in
+ * the answer. The application shows that code as a widget (the same isolated frame) and the
+ * answer keeps a note in its place, so the gates' markers never land inside the code.
+ */
+export function widgetsFromAnswer(answer) {
+    const widgets = [];
+    const text = answer.replace(ANSWER_WIDGET_BLOCK, (block, language, code, offset) => {
+        if (widgets.length >= MAX_WIDGETS_PER_ANSWER || !WIDGET_MARKUP.test(code) || code.length > MAX_WIDGET_CODE)
+            return block;
+        const before = answer.slice(0, offset).trimEnd().split("\n").at(-1) ?? "";
+        const title = before.replace(MARKER_TEXT, "").replace(/^[#>*\s-]+|[*_:]+$/gu, "").trim().slice(0, MAX_TITLE) || "Widget";
+        widgets.push({ title, kind: language === "html" ? "html" : "jsx", code: code.replace(MARKER_TEXT, "") });
+        return `[Widget „${title}” — wyświetlony w oknie widgetu]`;
+    });
+    return { text, widgets };
+}
