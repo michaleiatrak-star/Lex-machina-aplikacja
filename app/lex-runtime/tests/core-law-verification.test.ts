@@ -275,6 +275,25 @@ describe("verifyFromCoreLaw", () => {
     expect(verify(index(pending), { claim: "art. 52 § 1 KW" })).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
   });
 
+  it("zmiana w vacatio legis bez odnośników w kopii: tekst ustawy zmieniającej rozstrzyga per artykuł (KC t.j. 2026/795 i ustawa o CEIDG)", () => {
+    const pending = (text: string | null) => {
+      const idx = index(kw({ notYetInForce: [{ eli: "DU/2026/507", title: null, from: "2028-11-01" }] }));
+      return {
+        ...idx,
+        record: (eli: string) =>
+          eli === "DU/2026/507" && text !== null
+            ? { ...act({ eli, title: "Ustawa zmieniająca", labels: [], url: KW_URL, articles: {} }).record, textSource: "html" as const, text }
+            : null
+      };
+    };
+    const untouched = verify(pending("Art. 2. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 52 dodaje się § 3 …"));
+    expect(untouched.decision === "RECORD" && untouched.record.status).toBe("VERIFIED");
+    expect(verify(pending("Art. 2. W ustawie z dnia 20 maja 1971 r. – Kodeks wykroczeń w art. 51 § 1 otrzymuje brzmienie: …")))
+      .toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    // Without the amending act's text the impact is unknown: the copy refuses as before.
+    expect(verify(pending(null))).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+  });
+
   it("kopia niesprawdzana w ELI dłużej niż 7 dni nie daje VERIFIED", () => {
     const stale = verifyFromCoreLaw({
       index: index(kw()),
@@ -310,7 +329,7 @@ describe("verifyFromCoreLaw", () => {
     const ledger = new VerificationLedger();
     ledger.add(outcome.record);
     const report = new FinalizationGate().evaluate(
-      `Zgodnie z art. 51 § 1 KW ✅ [VER: ${KW_URL}, 2026-09-20] wzywam.`,
+      `Zgodnie z art. 51 § 1 KW ✅ [VER: ${KW_URL}, 2026-09-20, ŹRÓDŁO: RAG (kopia t.j. z ELI)] wzywam.`,
       ledger
     );
     expect(report.result).toBe("PASS");
@@ -348,7 +367,7 @@ describe("verify_legal_reference with the core law index", () => {
     ]);
     const kwPayload = JSON.parse(kwResult!.content) as { status: string; marker: string };
     expect(kwPayload.status).toBe("VERIFIED");
-    expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20]`);
+    expect(kwPayload.marker).toBe(`✅ [VER: ${KW_URL}, 2026-09-20, ŹRÓDŁO: RAG (kopia t.j. z ELI)]`);
     expect(JSON.parse(titleResult!.content).status).toBe("VERIFIED");
     expect(JSON.parse(unknown!.content)).toMatchObject({ status: "DENIED", localCopy: "UNKNOWN_LEGAL_ACT" });
     expect(ledger.latest("art. 51 § 1 KW")?.status).toBe("VERIFIED");
@@ -576,6 +595,38 @@ describe("verify_legal_reference: akty spoza rejestru najpierw w źródle (ELI)"
     const payload = JSON.parse(amended[0]!.content);
     expect(payload).toMatchObject({ status: "DENIED", error: "TEMPORAL_POST_TJ_AMENDMENTS" });
     expect(payload.sourceNotice).toBeUndefined();
+  });
+
+  it("model w chmurze: kopia, gdy ELI właśnie potwierdziło aktualny t.j.; inaczej źródło ELI", async () => {
+    const withCheck = (state: "CURRENT" | "UPDATE_FOUND" | "UNREACHABLE") => {
+      const current = kw();
+      const checked: string[] = [];
+      const idx: CoreLawVerificationIndex = {
+        ...index(current),
+        confirmCurrent: async (eliValue: string) => {
+          checked.push(eliValue);
+          if (state === "UPDATE_FOUND") current.summary.pendingConsolidated = { eli: "DU/2026/77", title: null, promulgation: null };
+          return state === "UNREACHABLE" ? { state, checkedAt: null, error: "ELI_HTTP_503" } : { state, checkedAt: CHECKED };
+        }
+      };
+      return { idx, checked };
+    };
+    const call = { id: "c1", name: "verify_legal_reference", input: { claim: "art. 51 § 1 KW", kind: "statute", act: "KW" } };
+    const confirmed = withCheck("CURRENT");
+    const [fromCopy] = await runtime(new VerificationLedger(), eli(), [], { index: confirmed.idx }).runTools([call]);
+    expect(confirmed.checked).toEqual(["DU/2025/734"]);
+    expect(JSON.parse(fromCopy!.content)).toMatchObject({ status: "VERIFIED", act: { sourceKind: "local_eli_copy" }, freshness: { liveCheck: "CURRENT" } });
+    for (const state of ["UPDATE_FOUND", "UNREACHABLE"] as const) {
+      const [online] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck(state).idx }).runTools([call]);
+      expect(JSON.parse(online!.content).act?.sourceKind).not.toBe("local_eli_copy");
+    }
+    process.env.LEX_CLOUD_LOCAL_COPY = "0";
+    try {
+      const [off] = await runtime(new VerificationLedger(), eli(), [], { index: withCheck("CURRENT").idx }).runTools([call]);
+      expect(JSON.parse(off!.content).act?.sourceKind).not.toBe("local_eli_copy");
+    } finally {
+      delete process.env.LEX_CLOUD_LOCAL_COPY;
+    }
   });
 
   it("model lokalny: najpierw kopia (bez ELI); gdy kopia nie ma aktu, ELI i dołączenie do RAG", async () => {

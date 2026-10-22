@@ -13,9 +13,13 @@ import {
   sendServerTestMail,
   setServerAccountStatus,
   setServerModeEnabled,
+  setServerBrowserProtocol,
+  setServerNetworkAccess,
   setServerProviderKey,
   updateServerSettings,
+  type BrowserProtocol,
   type LiveTurn,
+  type NetworkAccess,
   type ProviderId,
   type ServerAccount,
   type ServerPlan,
@@ -53,7 +57,13 @@ function failureText(failure: unknown): string {
     PLAN_IN_USE: "Plan jest przypisany do kont albo jest planem domyślnym.",
     INVALID_PROVIDER_API_KEY: "Nieprawidłowy klucz API.",
     INVALID_GLOBAL_TOKEN_LIMIT: "Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu).",
-    USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora."
+    ADMIN_HAS_NO_PLAN: "Administrator nie podlega planom.",
+    USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora.",
+    SERVER_MODE_REQUIRED: "Dostęp z sieci wymaga włączonego trybu serwerowego.",
+    NETWORK_CHANGE_LOCAL_ONLY: "Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1).",
+    HTTPS_REQUIRED_FOR_NETWORK: "Dostęp z sieci działa tylko z HTTPS.",
+    TEMPORARY_ADMIN_PASSWORD: "Najpierw zmień tymczasowe hasło administratora (admin/admin).",
+    BROWSER_ACCESS_UNAVAILABLE: "Strona aplikacji nie nasłuchuje (port zajęty albo wyłączony)."
   };
   return known[failure.code] ?? failure.code;
 }
@@ -168,6 +178,86 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
           />
           Tryb serwerowy {settings.forced ? "(ustalony przez LEX_SERVER_MODE_FORCE)" : ""}
         </label>
+      </div>
+
+      <div>
+        <h3>Dostęp przez przeglądarkę</h3>
+        <p className="field-help">
+          {settings.browser?.state === "LISTENING"
+            ? `Aplikacja: ${settings.browser.addresses.join(", ")}.`
+            : `Strona aplikacji nie nasłuchuje${settings.browser?.error ? ` (${settings.browser.error})` : ""}.`}
+        </p>
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+          {(
+            [
+              ["LOCAL", "Lokalny (domyślny)", "Tylko z tego komputera (127.0.0.1). Połączenia z sieci są odrzucane."],
+              [
+                "NETWORK",
+                "Z sieci",
+                "Także z innych komputerów, tylko przez HTTPS: adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego."
+              ]
+            ] as Array<[NetworkAccess, string, string]>
+          ).map(([mode, label, help]) => (
+            <label key={mode} className="chat-settings-channel-option">
+              <input
+                type="radio"
+                name="lex-network-access"
+                checked={settings.networkAccess === mode}
+                disabled={mode === "NETWORK" && !settings.serverMode}
+                onChange={() => {
+                  void run(async () => {
+                    await setServerNetworkAccess(mode);
+                    // Serwer nasłuchuje od nowa; chwila na zamknięcie połączeń.
+                    await new Promise((resolve) => window.setTimeout(resolve, 600));
+                  }, mode === "NETWORK" ? "Dostęp z sieci włączony." : "Dostęp tylko z tego komputera.");
+                }}
+              />
+              <span>
+                <strong>{label}</strong> — {help}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+          {(
+            [
+              ["HTTPS", "HTTPS (domyślny)", "Połączenie szyfrowane. Wpisany adres http:// przechodzi na https://."],
+              ["HTTP", "HTTP", "Bez szyfrowania; tylko dostęp lokalny albo za serwerem pośredniczącym z HTTPS."]
+            ] as Array<[BrowserProtocol, string, string]>
+          ).map(([protocol, label, help]) => (
+            <label key={protocol} className="chat-settings-channel-option">
+              <input
+                type="radio"
+                name="lex-browser-protocol"
+                checked={settings.browserProtocol === protocol}
+                disabled={protocol === "HTTP" && settings.networkAccess === "NETWORK"}
+                onChange={() => {
+                  void run(async () => {
+                    await setServerBrowserProtocol(protocol);
+                    await new Promise((resolve) => window.setTimeout(resolve, 600));
+                    // Strona otwarta pod innym protokołem przechodzi na nowy adres.
+                    const target = protocol === "HTTPS" ? "https:" : "http:";
+                    if (window.location.protocol !== target) {
+                      window.location.href = `${target}//${window.location.host}${window.location.pathname}`;
+                    }
+                  }, protocol === "HTTPS" ? "HTTPS włączone." : "HTTP włączone.");
+                }}
+              />
+              <span>
+                <strong>{label}</strong> — {help}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        {settings.browser?.certificate && (
+          <p className="field-help">
+            Certyfikat {settings.browser.certificate.custom ? "kancelarii" : "aplikacji (przeglądarka ostrzega, dopóki nie dodasz go do zaufanych)"},
+            ważny do {settings.browser.certificate.validTo.slice(0, 10)}, dla: {settings.browser.certificate.names.join(", ")}.
+            Odcisk SHA-256: <code>{settings.browser.certificate.fingerprint256}</code>.{" "}
+            <a href="/lex-certificate.crt" download="lex-machina.crt">Pobierz certyfikat</a>. Własny certyfikat: pliki custom.crt i
+            custom.key w katalogu danych server/tls albo zmienne LEX_TLS_CERT i LEX_TLS_KEY.
+          </p>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -450,12 +540,13 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                 <strong>{account.loginName}</strong>
                 <span>
                   {account.appRole} · {account.status === "ACTIVE" ? "aktywne" : "wyłączone"} ·{" "}
-                  {account.emailVerified ? "e-mail potwierdzony" : "konto lokalne"} · plan: {account.planName ?? "brak"} · w tym miesiącu:{" "}
+                  {account.emailVerified ? "e-mail potwierdzony" : "konto lokalne"} · plan: {account.appRole === "ADMIN" ? "bez ograniczeń planu" : account.planName ?? "brak"} · w tym miesiącu:{" "}
                   {tokens(account.usage.inputTokens + account.usage.outputTokens)}
                   {account.monthlyTokenLimit !== null ? ` / ${tokens(account.monthlyTokenLimit)}` : ""} tokenów
                 </span>
               </div>
               <div className="admin-user-actions">
+                {account.appRole !== "ADMIN" && (
                 <select
                   aria-label={`Plan konta ${account.loginName}`}
                   value={account.planId ?? ""}
@@ -469,6 +560,7 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
                     </option>
                   ))}
                 </select>
+                )}
                 {account.appRole === "USER" && (
                   <button
                     type="button"

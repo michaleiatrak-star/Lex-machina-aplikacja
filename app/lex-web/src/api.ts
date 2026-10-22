@@ -1402,6 +1402,14 @@ export function apiBase(): string {
   if (isDesktopShell()) {
     return desktopApiBase(typeof navigator === "undefined" ? "" : navigator.userAgent);
   }
+  // Strona podana przez serwer Lex Machina: API pod tym samym adresem (także z sieci).
+  if (
+    typeof document !== "undefined" &&
+    typeof window !== "undefined" &&
+    document.querySelector('meta[name="lex-api-base"]')?.getAttribute("content") === "same-origin"
+  ) {
+    return window.location.origin;
+  }
   const configured = import.meta.env.VITE_LEX_API_BASE;
   return typeof configured === "string" && configured.trim()
     ? configured.trim().replace(/\/$/, "")
@@ -4456,9 +4464,24 @@ export type ServerModeStatus = {
   registration: boolean;
 };
 
+// Dostęp przez przeglądarkę: LOCAL — tylko ten komputer (127.0.0.1), NETWORK — także z sieci.
+export type NetworkAccess = "LOCAL" | "NETWORK";
+export type BrowserProtocol = "HTTPS" | "HTTP";
+
 export type ServerSettings = {
   serverMode: boolean;
   forced: boolean;
+  networkAccess: NetworkAccess;
+  browserProtocol: BrowserProtocol;
+  browser: {
+    state: "OFF" | "LISTENING" | "UNAVAILABLE";
+    port: number;
+    protocol: "https" | "http";
+    certificate: { fingerprint256: string; validTo: string; custom: boolean; names: string[] } | null;
+    networkAccess: NetworkAccess;
+    addresses: string[];
+    error?: string;
+  } | null;
   publicBaseUrl: string;
   defaultPlanId: string | null;
   smtp: { host: string; port: number; secure: boolean; user: string; from: string; passwordSet: boolean } | null;
@@ -4586,6 +4609,14 @@ export function updateServerSettings(input: ServerSettingsInput): Promise<Server
 
 export function setServerModeEnabled(enabled: boolean): Promise<ServerSettings> {
   return json<ServerSettings>("/api/server-mode/enabled", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+export function setServerNetworkAccess(mode: NetworkAccess): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/network", { method: "PUT", body: JSON.stringify({ mode }) });
+}
+
+export function setServerBrowserProtocol(protocol: BrowserProtocol): Promise<ServerSettings> {
+  return json<ServerSettings>("/api/server-mode/browser-protocol", { method: "PUT", body: JSON.stringify({ protocol }) });
 }
 
 export function sendServerTestMail(to: string): Promise<void> {

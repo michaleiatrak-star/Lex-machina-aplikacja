@@ -105,6 +105,27 @@ export class ServerModeService {
         if (this.forced !== null)
             throw new ServerModeError("SERVER_MODE_FORCED", 409);
         this.store.setSetting("server_mode", enabled ? "1" : "0");
+        // Bez trybu serwerowego dostęp z sieci się zamyka.
+        if (!enabled)
+            this.store.setSetting("network_access", "LOCAL");
+        return this.settings(actor);
+    }
+    networkAccess() {
+        return this.isEnabled() && this.store.getSetting("network_access") === "NETWORK" ? "NETWORK" : "LOCAL";
+    }
+    browserProtocol() {
+        return this.store.getSetting("browser_protocol") === "HTTP" ? "HTTP" : "HTTPS";
+    }
+    setBrowserProtocol(actor, protocol) {
+        requireAdmin(actor);
+        this.store.setSetting("browser_protocol", protocol);
+        return this.settings(actor);
+    }
+    setNetworkAccess(actor, mode) {
+        requireAdmin(actor);
+        if (mode === "NETWORK" && !this.isEnabled())
+            throw new ServerModeError("SERVER_MODE_REQUIRED", 409);
+        this.store.setSetting("network_access", mode);
         return this.settings(actor);
     }
     // ---- settings and SMTP ----
@@ -126,6 +147,8 @@ export class ServerModeService {
         return {
             serverMode: this.isEnabled(),
             forced: this.forced !== null,
+            networkAccess: this.networkAccess(),
+            browserProtocol: this.browserProtocol(),
             publicBaseUrl: this.publicBaseUrl(),
             defaultPlanId: this.store.getSetting("default_plan_id"),
             smtp: smtp ? { ...smtp, passwordSet: this.store.getSetting("smtp_password") !== null } : null,
@@ -506,14 +529,20 @@ export class ServerModeService {
     }
     assignPlan(actor, userId, planId) {
         requireAdmin(actor);
-        if (!this.auth.getUser(userId))
+        const user = this.auth.getUser(userId);
+        if (!user)
             throw new ServerModeError("USER_NOT_FOUND", 404);
+        // Administrator nie podlega planom.
+        if (user.appRole === "ADMIN" && planId)
+            throw new ServerModeError("ADMIN_HAS_NO_PLAN", 409);
         if (planId && !this.store.getPlan(planId))
             throw new ServerModeError("PLAN_NOT_FOUND", 404);
         this.store.setAccountPlan(userId, planId, new Date(this.now()).toISOString());
     }
-    /** The account's plan, else the default plan of new accounts; null: none. */
+    /** The account's plan, else the default plan of new accounts; null: none (always for the admin). */
     effectivePlan(userId) {
+        if (this.auth.getUser(userId)?.appRole === "ADMIN")
+            return null;
         const assigned = this.store.getAccountPlanId(userId);
         const planId = assigned ?? this.store.getSetting("default_plan_id");
         return planId ? this.store.getPlan(planId) : null;
@@ -552,7 +581,7 @@ export class ServerModeService {
             throw new Error("SERVER_MODE_LOCAL_ONLY");
         if (model.startsWith("account/"))
             throw new Error("SERVER_MODE_LOCAL_ONLY");
-        // Without a plan only the admin may call a model (still within the global limit).
+        // Without a plan only the admin may call a model; the admin has no plan (still within the global limit).
         const plan = this.effectivePlan(userId);
         if (!plan && this.auth.getUser(userId)?.appRole !== "ADMIN")
             throw new Error("PLAN_REQUIRED");

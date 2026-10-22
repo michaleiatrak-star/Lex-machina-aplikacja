@@ -38,6 +38,15 @@ $appStage = Join-Path $payload "app"
 New-Item $appStage -ItemType Directory | Out-Null
 Copy-Item (Join-Path $repo "app\lex-runtime\dist") $appStage -Recurse
 Copy-Item (Join-Path $repo "app\lex-runtime\package.json") $appStage
+# Strona aplikacji w przeglądarce (http://127.0.0.1:4317): ten sam interfejs co okno desktop.
+Push-Location (Join-Path $repo "app\lex-web")
+try {
+  npm install --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw "npm install web failed" }
+  npm run build
+  if ($LASTEXITCODE -ne 0) { throw "web build failed" }
+} finally { Pop-Location }
+Copy-Item (Join-Path $repo "app\lex-web\dist") (Join-Path $appStage "web") -Recurse
 # The publisher's Google OAuth client ("Zaloguj kontem Google" for every user, nothing to set up):
 # from the repository secret LEX_GOOGLE_OAUTH_CLIENT_JSON (Google Cloud Console, "Desktop app" JSON).
 $googleClient = Join-Path $appStage "config\google-oauth-client.json"
@@ -159,6 +168,7 @@ Copy-Item $sidecar (Join-Path $payload "lex-runtime-sidecar.exe")
 Write-Host "[4/4] Thin payload contract"
 foreach ($required in @(
   "app\dist\http\server.js",
+  "app\web\index.html",
   "lex-runtime-sidecar.exe",
   "release-source.json",
   "release-requirements.txt",

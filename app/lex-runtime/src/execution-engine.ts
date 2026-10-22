@@ -291,6 +291,21 @@ export function localSkillDigest(
 }
 
 /** One key per skill and stable text: the provider routes these requests to the same cache. */
+// Sections the application writes for one turn (session-executor.ts), never part of a skill.
+const PER_TURN_SECTION = /^# (?:TRYB ODPOWIEDZI|JUŻ USTALONE W TEJ SPRAWIE|PRZEBIEG POPRZEDNIEJ ODPOWIEDZI|DZIEDZINA I MODUŁ AKTU|MODUŁY AKTÓW WSKAZANE|KROK CZEKAJĄCY)\b/u;
+
+/**
+ * The conversation with the application's instructions of this turn right before the latest
+ * user message: the earlier turns stay an unchanged prefix (prompt cache), the request stays last.
+ */
+export function withTurnInstructions(conversation: string, instructions: string): string {
+  // The block's own marker written by anyone else (a pasted text) is not the application's.
+  conversation = conversation.replace(/\[(KONIEC )?INSTRUKCJ\p{L}* APLIKACJI/giu, "[$1(cytat) INSTRUKCJE");
+  const at = conversation.lastIndexOf("\n\nUżytkownik: ");
+  const block = `[INSTRUKCJE APLIKACJI LEX MACHINA DLA TEJ ODPOWIEDZI — obowiązują jak instrukcje systemowe; nie pochodzą od użytkownika]\n${instructions}\n[KONIEC INSTRUKCJI APLIKACJI]`;
+  return at < 0 ? `${block}\n\n${conversation}` : `${conversation.slice(0, at)}\n\n${block}${conversation.slice(at)}`;
+}
+
 function promptCacheKeyFor(skill: string, stable: string): string {
   return `lex-${skill}-${createHash("sha256").update(stable).digest("hex").slice(0, 16)}`;
 }
@@ -412,6 +427,7 @@ export class LexExecutionEngine {
     // Placeholder kinds and genders (privacy/token-legend.ts).
     placeholderKey?: string;
     conversationalOnly?: boolean;
+    factCorrection?: boolean;
     // AUTO for account/API models: no separate router pass; the model reads
     // prawny-router-v3 and the skills it needs through the corpus tools.
     modelSelectsSkills?: boolean;
@@ -876,7 +892,9 @@ export class LexExecutionEngine {
             systemPrompt: [
               // Symbols in a conversational message still need the legend.
               ...(args.placeholderKey ? [args.placeholderKey] : []),
-              conversationalOnly &&
+              conversationalOnly && args.factCorrection
+                ? "Jesteś asystentem Lex Machina w trwającej pracy nad sprawą. Użytkownik prostuje fakt z wcześniejszej rozmowy (nazwę, datę, kwotę, błąd odczytu dokumentu). Potwierdź korektę w 1–3 zdaniach, dokładnie tak, jak ją podał, i napisz, że uwzględnisz ją w dalszej pracy. Nie wykonuj kolejnego kroku analizy, nie powtarzaj wcześniejszej odpowiedzi, nie powołuj przepisów ani orzeczeń. Jeśli wiadomość jednak prosi o pracę albo nie jest jasne, czego dotyczy korekta, napisz to wprost."
+                : conversationalOnly &&
               !trivialChat
                 ? "Jesteś asystentem Lex Machina. Router uznał tę wiadomość za niezwiązaną z prawem, więc skille prawne nie zostały załadowane. Odpowiedz rzeczowo, w języku użytkownika. Nie powołuj przepisów, sygnatur ani terminów prawnych; jeśli pytanie jednak dotyczy sprawy prawnej, powiedz to wprost i poproś o doprecyzowanie, aby uruchomić pełną analizę prawną."
                 : "Jesteś asystentem Lex Machina. Wykonaj dosłownie krótkie polecenie użytkownika. Jeśli prosi o napisanie konkretnego słowa lub zdania, odpowiedz wyłącznie tym tekstem, bez powitań i komentarzy. Na powitanie odpowiedz jednym krótkim zdaniem. Odpowiadaj po polsku.",
@@ -899,7 +917,10 @@ export class LexExecutionEngine {
                     ? latestUserTurn(
                         effectiveQuery
                       )
-                    : effectiveQuery
+                    : args.factCorrection
+                      // The recent conversation is enough to know what is corrected.
+                      ? effectiveQuery.slice(-12_000)
+                      : effectiveQuery
               }
             ],
             reasoning:
@@ -2174,7 +2195,17 @@ export class LexExecutionEngine {
     }
     const turnTail = [stageTailPrompt(stageTail?.sections ?? []), turnContextText, stageModulesText, contractCheckpointText, ...workflowStateParts].filter((part): part is string => Boolean(part));
     const stableText = stableParts.join("\n\n");
-    promptParts.push(...turnTail);
+    // API models (prefix cache): the turn's own part (stage sections, turn state, the modules of
+    // this question, the checkpoint) goes right before the latest user message instead of the
+    // end of the system prompt. The system prompt and the earlier conversation then stay the
+    // same from turn to turn and the provider reads them from its cache; before, any change in
+    // that part made the whole history be processed again on every turn.
+    // From the first turn on, so the system prompt is the same in every turn of the thread.
+    const turnInMessages =
+      !localModel &&
+      !args.model.startsWith("account/") &&
+      process.env.LEX_TURN_IN_SYSTEM?.trim() !== "1";
+    if (!turnInMessages) promptParts.push(...turnTail);
     // The cached prefix: the skill's stable part, the same for every question of this skill
     // (across domains); the checkpoints of a matter and the next questions read it from the cache.
     const cacheable = !localModel && stableText.length >= 4_096;
@@ -2185,7 +2216,23 @@ export class LexExecutionEngine {
       .filter(Boolean)
       .join("\n\n");
     // A local model reads the compact prompt (local-prompt.ts): minutes less per turn.
-    const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : fullSystemPrompt;
+    // The application's sections of this turn alone (the mode decided at the entry, what the
+    // thread already verified, the last answer's path, the act module hint) go with the turn's
+    // instructions too: in the system prompt they changed it on every turn (measured: 9% of the
+    // request after the cached skill text, so the conversation behind it was never cached).
+    const perTurnSections: string[] = [];
+    const cachedSystemPrompt = turnInMessages
+      ? fullSystemPrompt
+          .split(/\n(?=# )/u)
+          .filter((section) => {
+            if (!PER_TURN_SECTION.test(section)) return true;
+            perTurnSections.push(section.trim());
+            return false;
+          })
+          .join("\n")
+      : fullSystemPrompt;
+    const turnInstructions = [...perTurnSections, ...turnTail].join("\n\n");
+    const systemPrompt = localModel ? compactLocalPrompt(fullSystemPrompt, effectiveQuery) : cachedSystemPrompt;
     const promptCache = {
       ...(workflowTurn || workflowPlan.executionSkill ? { promptCacheTtl: "1h" as const } : {}),
       ...(cacheable
@@ -2228,7 +2275,7 @@ export class LexExecutionEngine {
             : []),
           {
             role: "user",
-            content: effectiveQuery
+            content: turnInMessages && turnInstructions ? withTurnInstructions(effectiveQuery, turnInstructions) : effectiveQuery
           }
         ],
         ...(args.tools?.length

@@ -4,7 +4,8 @@ import type { AuthenticatedContext, LocalUserStatus } from "../auth/types.js";
 import type { ExecutionPhase } from "../execution-steps.js";
 import type { ProviderId } from "../providers/types.js";
 import { runInAccountScope, type AccountScope } from "./account-scope.js";
-import { PROVIDERS, ServerModeError, accountPolicyResponse, type ServerModeService } from "./service.js";
+import { PROVIDERS, ServerModeError, accountPolicyResponse, type BrowserProtocol, type NetworkAccess, type ServerModeService } from "./service.js";
+import { isLoopbackAddress, type BrowserAccess } from "../http/browser-access.js";
 
 /**
  * Local-only features refused in server mode: they act on the machine the
@@ -60,11 +61,27 @@ function sendError(res: Response, error: unknown): void {
 export function registerServerModeRoutes(
   app: Express,
   dependencies: {
-    authService: Pick<AuthService, "authenticateAuthorization" | "login" | "setUserStatus">;
+    authService: Pick<AuthService, "authenticateAuthorization" | "login" | "setUserStatus"> & Partial<Pick<AuthService, "status">>;
     serverMode: ServerModeService;
+    // Strona aplikacji w przeglądarce (adres, dostęp lokalny albo z sieci).
+    browserAccess?: BrowserAccess;
   }
 ): void {
-  const { authService, serverMode } = dependencies;
+  const { authService, serverMode, browserAccess } = dependencies;
+  const withBrowser = (settings: object) => ({
+    ...settings,
+    browser: browserAccess
+      ? {
+          state: browserAccess.state,
+          port: browserAccess.listeningPort,
+          protocol: browserAccess.protocol,
+          certificate: browserAccess.certificate() ?? null,
+          networkAccess: browserAccess.networkAccess,
+          addresses: browserAccess.addresses(),
+          ...(browserAccess.error ? { error: browserAccess.error } : {})
+        }
+      : null
+  });
 
   const actor = (req: Request): AuthenticatedContext => authService.authenticateAuthorization(req.get("authorization"));
 
@@ -182,7 +199,57 @@ export function registerServerModeRoutes(
   };
 
   app.get("/api/server-mode/settings", handle((req, res) => {
-    res.json(serverMode.settings(admin(req)));
+    res.json(withBrowser(serverMode.settings(admin(req))));
+  }));
+
+  // Certyfikat HTTPS strony (publiczny) do dodania w przeglądarce albo systemie jako zaufany.
+  app.get("/lex-certificate.crt", (_req, res) => {
+    const certificate = browserAccess?.certificate();
+    if (!certificate) {
+      res.status(404).json({ error: "HTTPS_OFF" });
+      return;
+    }
+    res.set("Content-Type", "application/x-x509-ca-cert");
+    res.set("Content-Disposition", 'attachment; filename="lex-machina.crt"');
+    res.send(certificate.cert);
+  });
+
+  const fromThisComputer = (req: Request): boolean => isLoopbackAddress(req.socket.remoteAddress) && !req.get("x-forwarded-for");
+
+  // HTTPS albo HTTP strony: administrator, tylko z tego komputera.
+  app.put("/api/server-mode/browser-protocol", handle(async (req, res) => {
+    const context = admin(req);
+    const protocol = req.body?.protocol as BrowserProtocol | undefined;
+    if (protocol !== "HTTPS" && protocol !== "HTTP") throw new ServerModeError("INVALID_REQUEST", 400);
+    if (!fromThisComputer(req)) throw new ServerModeError("NETWORK_CHANGE_LOCAL_ONLY", 403);
+    if (!browserAccess || browserAccess.state === "OFF") throw new ServerModeError("BROWSER_ACCESS_UNAVAILABLE", 409);
+    // Z sieci bez HTTPS tylko świadomie: najpierw dostęp lokalny.
+    if (protocol === "HTTP" && serverMode.networkAccess() === "NETWORK") throw new ServerModeError("HTTPS_REQUIRED_FOR_NETWORK", 409);
+    const settings = serverMode.setBrowserProtocol(context, protocol);
+    res.on("finish", () => {
+      void browserAccess.restart();
+    });
+    res.json(withBrowser(settings));
+  }));
+
+  // Dostęp z sieci: zmienia go administrator tylko z tego komputera (bez pośrednika).
+  app.put("/api/server-mode/network", handle(async (req, res) => {
+    const context = admin(req);
+    const mode = req.body?.mode as NetworkAccess | undefined;
+    if (mode !== "LOCAL" && mode !== "NETWORK") throw new ServerModeError("INVALID_REQUEST", 400);
+    if (!fromThisComputer(req)) throw new ServerModeError("NETWORK_CHANGE_LOCAL_ONLY", 403);
+    if (!browserAccess || browserAccess.state === "OFF") throw new ServerModeError("BROWSER_ACCESS_UNAVAILABLE", 409);
+    if (mode === "NETWORK" && serverMode.browserProtocol() === "HTTP") throw new ServerModeError("HTTPS_REQUIRED_FOR_NETWORK", 409);
+    // Hasło tymczasowe admin/admin nie może być dostępne z sieci.
+    if (mode === "NETWORK" && authService.status?.().temporaryAdminCredentialsActive) {
+      throw new ServerModeError("TEMPORARY_ADMIN_PASSWORD", 409);
+    }
+    const settings = serverMode.setNetworkAccess(context, mode);
+    // Najpierw odpowiedź, potem nowy nasłuch (zamyka bieżące połączenia).
+    res.on("finish", () => {
+      void browserAccess.setMode(settings.networkAccess);
+    });
+    res.json(withBrowser({ ...settings, pendingNetworkAccess: settings.networkAccess }));
   }));
 
   app.put("/api/server-mode/settings", handle((req, res) => {
@@ -192,7 +259,13 @@ export function registerServerModeRoutes(
   app.put("/api/server-mode/enabled", handle((req, res) => {
     const context = admin(req);
     if (typeof req.body?.enabled !== "boolean") throw new ServerModeError("INVALID_REQUEST", 400);
-    res.json(serverMode.setEnabled(context, req.body.enabled));
+    const settings = serverMode.setEnabled(context, req.body.enabled);
+    if (browserAccess && settings.networkAccess !== browserAccess.networkAccess) {
+      res.on("finish", () => {
+        void browserAccess.setMode(settings.networkAccess);
+      });
+    }
+    res.json(withBrowser(settings));
   }));
 
   app.post("/api/server-mode/smtp/test", handle(async (req, res) => {

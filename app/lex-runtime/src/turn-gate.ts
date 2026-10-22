@@ -154,3 +154,20 @@ export function registryFlashRoutes(registry: LexSkillRegistry): FlashRoute[] {
     return [];
   }
 }
+
+// A correction of a fact in a running matter ("to ta sama firma, tylko błąd OCR", "chodziło o
+// 2024", "nie Kowalski, tylko Kowalska"): no new task, no question.
+const CORRECTION =
+  /(?<![\p{L}])(?:to (?:jest )?(?:ta sama|ten sam|to samo|te same)|b[łl][ąa]d (?:ocr|w nazwie|w nazwisku|w dacie|w kwocie|pisowni|odczytu)|liter[óo]wk|pomy[łl]k|chodzi[łl]o (?:mi )?o|poprawka *:|korekta *:|powinno by[ćc]|ma by[ćc] |w[łl]a[śs]ciwie (?:to )?(?:jest|by[łl])|nie \S+,? (?:tylko|lecz|ale) )/iu;
+const TASK =
+  /(?<![\p{L}])(?:przygotuj|napisz|sporz[ąa]d[źz]|przeanalizuj|analizuj|sprawd[źz]|zr[óo]b|wygeneruj|generuj|kontynuuj|dalej|nast[ęe]pny|dokończ|popraw (?:pismo|umow|dokument|tekst)|oce[ńn]|zbadaj|wyja[śs]nij|policz|oblicz|stw[óo]rz|dodaj|usu[ńn])/iu;
+
+/**
+ * The latest message only corrects a fact of the conversation (not the first message, at
+ * most 400 characters, no question, no request for work): it is acknowledged and kept in the
+ * case's register without a legal turn (2 minutes and ~120k tokens of instructions before).
+ */
+export function isFactCorrection(query: string): boolean {
+  const latest = latestUserTurn(query).trim();
+  return laterTurn(query) && latest.length > 0 && latest.length <= 400 && !latest.includes("?") && CORRECTION.test(latest) && !TASK.test(latest);
+}

@@ -1,4 +1,5 @@
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
+import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
@@ -65,7 +66,7 @@ import { MAX_FIRM_TEMPLATES, templateChunks, templateText } from "../firm-templa
 import { assertStoredDocumentSignature, storedDocumentMediaType } from "../stored-document-source.js";
 import { parseSkillSelectionEnvelope, resolveAdditionalSkills, SKILL_SELECTION_ENVELOPE_PREFIX } from "../skill-selection.js";
 import { isTrivialChatCommand } from "../execution-engine.js";
-import { isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
+import { isFactCorrection, isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
 import { assessMatterComplexity, describeMatterComplexity } from "../matter-complexity.js";
 import { createDeterministicWorkflowPlan } from "../deterministic-workflow.js";
 import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../process-pleading-execution-gate.js";
@@ -242,7 +243,7 @@ function loopbackOriginGuard(req, res, next) {
     // The sandboxed sn.pl verification window (sn-proxy.ts) has an opaque origin ("null"); its
     // requests carry only the window's ticket, never the user's login.
     const snWindow = origin === "null" && req.path.startsWith(`${SN_PROXY_PREFIX}/s/`);
-    if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin)) {
+    if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin) || browserSameOrigin(req)) {
         next();
         return;
     }
@@ -807,6 +808,28 @@ export function applyTrivialChatGate(registry, request, attachmentCount) {
             "\n" +
             envelope.query;
     request.conversationalOnly = true;
+    delete request.modelSelectsSkills;
+    return true;
+}
+/**
+ * A correction of a fact in a running matter (turn-gate.ts isFactCorrection): acknowledged in
+ * the conversational lane with the recent conversation, the workflow step not run again; the
+ * correction goes into the case's work register. Documents of the matter may be attached
+ * (the client sends them with every message); the acknowledgement does not read them.
+ */
+export function applyFactCorrectionGate(registry, request) {
+    const envelope = parseSkillSelectionEnvelope(request.query);
+    if (envelope.manualSkills.length > 0 || !isFactCorrection(envelope.query))
+        return false;
+    const domain = request.primarySkill.startsWith("dr-") && registry.get(request.primarySkill)
+        ? request.primarySkill
+        : [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+    if (!domain)
+        return false;
+    request.primarySkill = domain;
+    request.query = SKILL_SELECTION_ENVELOPE_PREFIX + " " + JSON.stringify({ auto: false, manual: [], workflow: null }) + "\n" + envelope.query;
+    request.conversationalOnly = true;
+    request.factCorrection = true;
     delete request.modelSelectsSkills;
     return true;
 }
@@ -6040,6 +6063,7 @@ export function createLexHttpApp(options) {
         const partRequest = Boolean(knowledge.caseId) && namesDocumentPart(latestUserMessage(parseSkillSelectionEnvelope(request.query).query));
         const trivialChat = !partRequest &&
             (applyTrivialChatGate(options.registry, request, attachments.length + firmTemplates.length) ||
+                applyFactCorrectionGate(options.registry, request) ||
                 applyNonLegalChatGate(options.registry, request, attachments.length + firmTemplates.length, Boolean(knowledge.caseId && knowledge.includeCase)));
         // Entry gate: how much of the legal system this message needs.
         const entryEnvelope = parseSkillSelectionEnvelope(request.query);
@@ -7689,12 +7713,16 @@ export function createLexHttpApp(options) {
             const issues = result.status === "DRAFT_PRESENTABLE"
                 ? turnIssues({ blockedReferences: result.blockedReferences, evidence: result.evidence, announcedStep: announced, answer: result.answer ?? "" })
                 : { open: [], resolved: [], gapsListed: false };
-            const workChanged = result.status === "DRAFT_PRESENTABLE" &&
-                ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length ||
-                    issues.open.length ||
-                    caseWork.some((item) => item.kind === "OPEN_ISSUE" &&
-                        item.status === "OPEN" &&
-                        (issues.resolved.includes(item.key.slice("ISSUE:".length)) || (issues.gapsListed && item.key.startsWith("ISSUE:brak:")))));
+            // A fact the user corrected (applyFactCorrectionGate): kept in the register, so later
+            // turns of any thread use it although the conversation that said it is trimmed.
+            const correction = request.factCorrection && result.status === "DRAFT_PRESENTABLE" ? latestUserMessage(parseSkillSelectionEnvelope(request.query).query).trim() : "";
+            const workChanged = Boolean(correction) ||
+                result.status === "DRAFT_PRESENTABLE" &&
+                    ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length ||
+                        issues.open.length ||
+                        caseWork.some((item) => item.kind === "OPEN_ISSUE" &&
+                            item.status === "OPEN" &&
+                            (issues.resolved.includes(item.key.slice("ISSUE:".length)) || (issues.gapsListed && item.key.startsWith("ISSUE:brak:")))));
             if (knowledge.caseId && options.caseMemoryStore && options.caseAccessService && (timelineToKeep || overviewToKeep || workChanged)) {
                 try {
                     const actor = responseAuthContext(res);
@@ -7718,7 +7746,8 @@ export function createLexHttpApp(options) {
                                         completedWorkflows,
                                         openIssues: issues.open,
                                         resolvedIssues: issues.resolved,
-                                        gapsListed: issues.gapsListed
+                                        gapsListed: issues.gapsListed,
+                                        ...(correction ? { corrections: [correction] } : {})
                                     })
                                 }
                                 : {})

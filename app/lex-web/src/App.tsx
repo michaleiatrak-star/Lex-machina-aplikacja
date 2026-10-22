@@ -11,6 +11,7 @@ import { GOOGLE_INTEGRATION_VISIBLE, GoogleIntegrationPanel } from "./GoogleInte
 import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
 import { ServerAdminPanel } from "./ServerAdminPanel.js";
 import { MyServerAccountPanel } from "./MyServerAccountPanel.js";
+import { isDesktopShell } from "./api.js";
 import type {
   AuthMeResponse,
   AuthenticatedUser
@@ -51,8 +52,9 @@ export default function App({
             embedded
           />
         ),
+        // Tryb serwerowy dotyczy wdrożenia otwieranego przez przeglądarkę; w oknie aplikacji desktop panel jest ukryty.
         server:
-          user.appRole === "ADMIN" ? (
+          user.appRole === "ADMIN" && !isDesktopShell() ? (
             <ServerAdminPanel
               {...(onServerModeChanged
                 ? { onModeChanged: onServerModeChanged }

@@ -194,7 +194,14 @@ describe("thread evidence memory in a session", () => {
       return freshness();
     });
     expect(checked).toEqual(["DU/1997/553"]);
-    expect(params?.systemPrompt).toContain("# JUŻ USTALONE W TEJ SPRAWIE");
+    // An API model gets the thread's memory with the turn's instructions (prompt cache: the
+    // system prompt stays the same from turn to turn), right before the latest message.
+    expect(params?.systemPrompt).not.toContain("# JUŻ USTALONE W TEJ SPRAWIE");
+    const turnMessage = String(params?.messages.at(-1)?.content ?? "");
+    expect(turnMessage).toContain("# JUŻ USTALONE W TEJ SPRAWIE");
+    // The request itself stays last, after the application's block.
+    expect(turnMessage.indexOf("# JUŻ USTALONE W TEJ SPRAWIE")).toBeLessThan(turnMessage.indexOf("[KONIEC INSTRUKCJI APLIKACJI]"));
+    expect(turnMessage.trimEnd().endsWith("[KONIEC INSTRUKCJI APLIKACJI]")).toBe(false);
     expect(result.answer).toContain("https://eli.gov.pl/a233");
     expect(result.answer).not.toContain("NIEWERYFIKOWANE");
     expect(result[SESSION_EXECUTION_INTERNAL]?.verificationRecords.map((record) => record.claim)).toEqual(["art. 233 § 1 KK"]);

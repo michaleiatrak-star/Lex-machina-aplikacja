@@ -1,4 +1,5 @@
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
+import { browserSameOrigin } from "./browser-access.js";
 import type { LegalStyleProfile } from "../legal-document-ast.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
@@ -210,7 +211,7 @@ import {
   SKILL_SELECTION_ENVELOPE_PREFIX
 } from "../skill-selection.js";
 import { isTrivialChatCommand } from "../execution-engine.js";
-import { isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
+import { isFactCorrection, isNonLegalMessage, registryFlashRoutes } from "../turn-gate.js";
 import {
   assessMatterComplexity,
   describeMatterComplexity
@@ -544,7 +545,7 @@ function loopbackOriginGuard(
   // The sandboxed sn.pl verification window (sn-proxy.ts) has an opaque origin ("null"); its
   // requests carry only the window's ticket, never the user's login.
   const snWindow = origin === "null" && req.path.startsWith(`${SN_PROXY_PREFIX}/s/`);
-  if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin)) {
+  if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin) || browserSameOrigin(req)) {
     next();
     return;
   }
@@ -1577,6 +1578,28 @@ export function applyTrivialChatGate(
     "\n" +
     envelope.query;
   request.conversationalOnly = true;
+  delete request.modelSelectsSkills;
+  return true;
+}
+
+/**
+ * A correction of a fact in a running matter (turn-gate.ts isFactCorrection): acknowledged in
+ * the conversational lane with the recent conversation, the workflow step not run again; the
+ * correction goes into the case's work register. Documents of the matter may be attached
+ * (the client sends them with every message); the acknowledgement does not read them.
+ */
+export function applyFactCorrectionGate(registry: LexSkillRegistry, request: SessionExecutionRequest): boolean {
+  const envelope = parseSkillSelectionEnvelope(request.query);
+  if (envelope.manualSkills.length > 0 || !isFactCorrection(envelope.query)) return false;
+  const domain =
+    request.primarySkill.startsWith("dr-") && registry.get(request.primarySkill)
+      ? request.primarySkill
+      : [...registry.skills.keys()].filter((name) => name.startsWith("dr-")).sort()[0];
+  if (!domain) return false;
+  request.primarySkill = domain;
+  request.query = SKILL_SELECTION_ENVELOPE_PREFIX + " " + JSON.stringify({ auto: false, manual: [], workflow: null }) + "\n" + envelope.query;
+  request.conversationalOnly = true;
+  request.factCorrection = true;
   delete request.modelSelectsSkills;
   return true;
 }
@@ -9680,6 +9703,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         request,
         attachments.length + firmTemplates.length
       ) ||
+      applyFactCorrectionGate(options.registry, request) ||
       applyNonLegalChatGate(
         options.registry,
         request,
@@ -12396,7 +12420,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       const issues = result.status === "DRAFT_PRESENTABLE"
         ? turnIssues({ blockedReferences: result.blockedReferences, evidence: result.evidence, announcedStep: announced, answer: result.answer ?? "" })
         : { open: [], resolved: [], gapsListed: false };
+      // A fact the user corrected (applyFactCorrectionGate): kept in the register, so later
+      // turns of any thread use it although the conversation that said it is trimmed.
+      const correction = request.factCorrection && result.status === "DRAFT_PRESENTABLE" ? latestUserMessage(parseSkillSelectionEnvelope(request.query).query).trim() : "";
       const workChanged =
+        Boolean(correction) ||
         result.status === "DRAFT_PRESENTABLE" &&
         ((result.documentAnalysis && result.documentCoverage?.length) || timelineToKeep || completedWorkflows.length ||
           issues.open.length ||
@@ -12429,7 +12457,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       completedWorkflows,
                       openIssues: issues.open,
                       resolvedIssues: issues.resolved,
-                      gapsListed: issues.gapsListed
+                      gapsListed: issues.gapsListed,
+                      ...(correction ? { corrections: [correction] } : {})
                     })
                   }
                 : {})

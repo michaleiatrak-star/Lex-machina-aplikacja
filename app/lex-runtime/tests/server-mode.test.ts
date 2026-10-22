@@ -758,4 +758,26 @@ describe("live view of turns", () => {
     const settings = await request(current.app).get("/api/server-mode/settings").set(admin).expect(200);
     expect(settings.body.globalUsage.modelCalls).toBe(0);
   });
+  it("administrator nie podlega planom (także planowi domyślnemu), tylko limitowi globalnemu", async () => {
+    const current = fixture();
+    const adminToken = await bootstrapAdmin(current);
+    const user = await createUser(current, adminToken, "pracownik");
+    await enable(current, adminToken);
+    const admin = { Authorization: `Bearer ${adminToken}` };
+    const plan = await request(current.app).post("/api/server-mode/plans").set(admin).send({ name: "Mały", monthlyTokenLimit: 10, allowedProviders: ["google"] }).expect(201);
+    await request(current.app).put("/api/server-mode/settings").set(admin).send({ defaultPlanId: plan.body.plan.planId }).expect(200);
+    const adminId = current.auth.authenticateAuthorization(`Bearer ${adminToken}`).user.userId;
+
+    expect(() => current.serverMode.assertModelAllowed(user.userId, "openai", "gpt-test")).toThrow("PROVIDER_NOT_IN_PLAN");
+    runInAccountScope({ userId: adminId, sessionId: "s" }, () => current.serverMode.afterCall("openai", "gpt-test", { inputTokens: 40, outputTokens: 20 }));
+    expect(() => current.serverMode.assertModelAllowed(adminId, "openai", "gpt-test")).not.toThrow();
+    await request(current.app).put(`/api/server-mode/accounts/${adminId}/plan`).set(admin).send({ planId: plan.body.plan.planId }).expect(409, { error: "ADMIN_HAS_NO_PLAN" });
+    const accounts = await request(current.app).get("/api/server-mode/accounts").set(admin).expect(200);
+    expect(accounts.body.accounts.find((item: { userId: string }) => item.userId === adminId)).toMatchObject({ planName: null, monthlyTokenLimit: null });
+    const me = await request(current.app).get("/api/server-mode/me").set(admin).expect(200);
+    expect(me.body.plan).toBeNull();
+
+    await request(current.app).put("/api/server-mode/settings").set(admin).send({ globalMonthlyTokenLimit: 50 }).expect(200);
+    expect(() => current.serverMode.assertModelAllowed(adminId, "openai", "gpt-test")).toThrow("TOKEN_LIMIT_REACHED:GLOBAL");
+  });
 });

@@ -506,6 +506,23 @@ describe("plik pisma z odpowiedzi, która sama jest pismem", () => {
     expect(texts.join("\n")).not.toMatch(/Ważna informacja/u);
   });
 
+  it("korekta faktu w trwającej sprawie: lekka ścieżka bez skilli, korekta w rejestrze prac sprawy", async () => {
+    const current = fixture();
+    const { authorization, caseId } = await bootstrapCase(current);
+    current.answers.push("Przyjmuję korektę: to jedna spółka — Human Park Global.");
+    const query = "Użytkownik: Przeanalizuj porozumienie.\n\nAsystent: Strony: Human Park oraz Human Park Global.\n\nUżytkownik: to ta sama firma, tylko błąd ocr - to cały czas Human Park Global";
+    const turn = await request(current.app)
+      .post("/api/sessions/execute")
+      .set("Authorization", authorization)
+      .send({ query, provider: "openai", model: "gpt-test", primarySkill: "AUTO", mode: "PRAWNIK", knowledge: { caseId, includeCase: true, includeFirm: false, limit: 8 } })
+      .expect(200);
+    expect(turn.body.status).toBe("DRAFT_PRESENTABLE");
+    const input = current.execute.mock.calls.at(-1)![0] as { conversationalOnly?: boolean; factCorrection?: boolean };
+    expect(input).toMatchObject({ conversationalOnly: true, factCorrection: true });
+    const memory = await request(current.app).get(`/api/cases/${caseId}/memory`).set("Authorization", authorization).expect(200);
+    expect(JSON.stringify(memory.body.work)).toContain("KOREKTA UŻYTKOWNIKA (obowiązuje): „to ta sama firma, tylko błąd ocr - to cały czas Human Park Global”");
+  });
+
   it("odpowiedź bez pisma (pytania) nie zostaje jako pismo", async () => {
     const current = fixture();
     const { authorization, caseId } = await bootstrapCase(current);
