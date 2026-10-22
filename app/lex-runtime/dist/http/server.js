@@ -9,6 +9,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { allowedPublicOrigin, createLexHttpApp, jsonErrorHandler, sessionActivityMiddleware } from "./app.js";
+import { BrowserAccess, DEFAULT_BROWSER_PORT, browserSameOrigin, registerWebApp, resolveWebRoot } from "./browser-access.js";
+import { localOnlyRoute } from "../server-mode/routes.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GoogleWorkspaceController } from "../google/workspace-controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
@@ -146,7 +148,8 @@ function loopbackOriginGuard(req, res, next) {
         // The sandboxed sn.pl verification window (opaque origin): its ticket, never a login.
         (origin === "null" && req.path.startsWith(`${SN_PROXY_PREFIX}/s/`)) ||
         isLoopbackOrigin(origin) ||
-        allowedPublicOrigin(origin)) {
+        allowedPublicOrigin(origin) ||
+        browserSameOrigin(req)) {
         next();
         return;
     }
@@ -410,12 +413,23 @@ export async function startLocalServer(options) {
     });
     const app = express();
     app.disable("x-powered-by");
+    // Strona w przeglądarce: w aplikacji desktop osobny nasłuch (LEX_BROWSER_PORT, domyślnie 4317,
+    // 0 wyłącza); bez aplikacji desktop główny nasłuch serwera.
+    const desktop = Boolean(process.env.LEX_DESKTOP_BOOTSTRAP_TOKEN?.trim());
+    const browserPortSetting = Number(process.env.LEX_BROWSER_PORT ?? DEFAULT_BROWSER_PORT);
+    const browserAccess = new BrowserAccess(app, desktop ? (Number.isInteger(browserPortSetting) && browserPortSetting > 0 && browserPortSetting <= 65535 ? browserPortSetting : 0) : port, () => process.env.LEX_PUBLIC_BASE_URL?.trim() ?? "", host);
     app.use(helmet());
-    app.use(desktopBootstrapGuard);
+    app.use(browserAccess.guard(localOnlyRoute));
+    app.use((req, res, next) => {
+        if (browserAccess.isBrowserSocket(req.socket))
+            next();
+        else
+            desktopBootstrapGuard(req, res, next);
+    });
     app.use(loopbackOriginGuard);
     app.use(express.json({ limit: "2mb" }));
     app.use("/api", sessionActivityMiddleware(authService));
-    registerServerModeRoutes(app, { authService, serverMode });
+    registerServerModeRoutes(app, { authService, serverMode, browserAccess });
     registerLegacyMigrationRoutes(app, {
         authService,
         securityEvents: authStore,
@@ -471,8 +485,46 @@ export async function startLocalServer(options) {
         }),
         legalText: new LegalFederationToolRuntime(undefined, undefined, mcpConnectors)
     });
+    registerWebApp(app, resolveWebRoot());
     app.use(coreApp);
     app.use(jsonErrorHandler);
+    const networkAtStart = serverMode.networkAccess();
+    if (!desktop) {
+        // Bez aplikacji desktop: jeden nasłuch na stronę i API (127.0.0.1 albo z sieci).
+        await browserAccess.start(networkAtStart);
+        if (browserAccess.state !== "LISTENING") {
+            throw new Error(`LEX_PORT_UNAVAILABLE:${port}:${browserAccess.error ?? ""}`);
+        }
+        try {
+            commitSkillOverlayRuntimeHealth(baseRuntimeRoot);
+        }
+        catch (error) {
+            await browserAccess.stop();
+            gazetteerRecognizer.close();
+            personMorphology.close();
+            throw error;
+        }
+        selfBaseUrl = `http://127.0.0.1:${browserAccess.listeningPort}`;
+        return {
+            host: networkAtStart === "NETWORK" ? "0.0.0.0" : host,
+            port: browserAccess.listeningPort,
+            close: async () => {
+                await browserAccess.stop();
+                void localModels.stop();
+                stanzaRecognizer.close();
+                gazetteerRecognizer.close();
+                personMorphology.close();
+                credentials.close();
+                serverMode.close();
+                supportService.close();
+                unsubscribeGuideRevocation();
+                guideSessionStore.clear();
+                authService.close();
+            }
+        };
+    }
+    if (browserAccess.listeningPort > 0)
+        await browserAccess.start(networkAtStart);
     return new Promise((resolve, reject) => {
         const server = app.listen(port, host);
         server.once("error", reject);
@@ -499,6 +551,7 @@ export async function startLocalServer(options) {
                 host,
                 port: actualPort,
                 close: () => new Promise((closeResolve, closeReject) => {
+                    void browserAccess.stop();
                     server.close((error) => {
                         void localModels.stop();
                         stanzaRecognizer.close();

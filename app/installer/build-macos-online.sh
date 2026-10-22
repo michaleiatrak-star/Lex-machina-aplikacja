@@ -35,6 +35,9 @@ echo "[1/6] Runtime JS"
 rm -rf "$PAYLOAD" && mkdir -p "$PAYLOAD/app"
 cp -R "$REPO/app/lex-runtime/dist" "$PAYLOAD/app/dist"
 cp "$REPO/app/lex-runtime/package.json" "$PAYLOAD/app/"
+# Strona aplikacji w przeglądarce (http://127.0.0.1:4317): ten sam interfejs co okno desktop.
+(cd "$REPO/app/lex-web" && npm install --no-audit --no-fund && npm run build)
+cp -R "$REPO/app/lex-web/dist" "$PAYLOAD/app/web"
 # The publisher's Google OAuth client ("Zaloguj kontem Google" for every user, nothing to set up).
 if [ -n "${LEX_GOOGLE_OAUTH_CLIENT_JSON:-}" ]; then
   mkdir -p "$PAYLOAD/app/config" && printf '%s' "$LEX_GOOGLE_OAUTH_CLIENT_JSON" >"$PAYLOAD/app/config/google-oauth-client.json"
@@ -77,7 +80,7 @@ echo "[4/6] Tauri app bundle"
 APP="$TAURI/target/release/bundle/macos/Lex Machina.app"
 [ -d "$APP" ] || { echo "APP_BUNDLE_MISSING" >&2; exit 1; }
 RUNTIME="$APP/Contents/Resources/runtime"
-for required in app/dist/http/server.js lex-runtime-sidecar release-source.json release-requirements.txt \
+for required in app/dist/http/server.js app/web/index.html lex-runtime-sidecar release-source.json release-requirements.txt \
   bootstrap/macos-online-bootstrap.sh bootstrap/generate-component-lock.py corpus/prawny-router-v3/SKILL.md; do
   [ -e "$RUNTIME/$required" ] || { echo "PAYLOAD_REQUIRED_FILE_MISSING:$required" >&2; exit 1; }
 done

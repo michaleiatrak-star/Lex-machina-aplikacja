@@ -13,9 +13,11 @@ import {
   sendServerTestMail,
   setServerAccountStatus,
   setServerModeEnabled,
+  setServerNetworkAccess,
   setServerProviderKey,
   updateServerSettings,
   type LiveTurn,
+  type NetworkAccess,
   type ProviderId,
   type ServerAccount,
   type ServerPlan,
@@ -53,7 +55,11 @@ function failureText(failure: unknown): string {
     PLAN_IN_USE: "Plan jest przypisany do kont albo jest planem domyślnym.",
     INVALID_PROVIDER_API_KEY: "Nieprawidłowy klucz API.",
     INVALID_GLOBAL_TOKEN_LIMIT: "Limit globalny musi być liczbą całkowitą (0 lub puste: bez limitu).",
-    USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora."
+    USER_STATUS_CONFLICT: "Nie można zmienić statusu konta administratora.",
+    SERVER_MODE_REQUIRED: "Dostęp z sieci wymaga włączonego trybu serwerowego.",
+    NETWORK_CHANGE_LOCAL_ONLY: "Dostęp z sieci zmienia się tylko na komputerze serwera (http://127.0.0.1).",
+    TEMPORARY_ADMIN_PASSWORD: "Najpierw zmień tymczasowe hasło administratora (admin/admin).",
+    BROWSER_ACCESS_UNAVAILABLE: "Strona aplikacji nie nasłuchuje (port zajęty albo wyłączony)."
   };
   return known[failure.code] ?? failure.code;
 }
@@ -168,6 +174,46 @@ export function ServerAdminPanel({ onModeChanged }: { onModeChanged?: (enabled: 
           />
           Tryb serwerowy {settings.forced ? "(ustalony przez LEX_SERVER_MODE_FORCE)" : ""}
         </label>
+      </div>
+
+      <div>
+        <h3>Dostęp przez przeglądarkę</h3>
+        <p className="field-help">
+          {settings.browser?.state === "LISTENING"
+            ? `Aplikacja: ${settings.browser.addresses.join(", ")}.`
+            : `Strona aplikacji nie nasłuchuje${settings.browser?.error ? ` (${settings.browser.error})` : ""}.`}
+        </p>
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={busy || settings.browser?.state !== "LISTENING"}>
+          {(
+            [
+              ["LOCAL", "Lokalny (domyślny)", "Tylko z tego komputera (127.0.0.1). Połączenia z sieci są odrzucane."],
+              [
+                "NETWORK",
+                "Z sieci",
+                "Także z innych komputerów: tylko adresy IP serwera i nazwy wskazane przez administratora, ta sama strona, bez funkcji komputera serwera, limit logowań. Wymaga trybu serwerowego; połączenie bez HTTPS nie jest szyfrowane — w internecie tylko za serwerem pośredniczącym z HTTPS."
+              ]
+            ] as Array<[NetworkAccess, string, string]>
+          ).map(([mode, label, help]) => (
+            <label key={mode} className="chat-settings-channel-option">
+              <input
+                type="radio"
+                name="lex-network-access"
+                checked={settings.networkAccess === mode}
+                disabled={mode === "NETWORK" && !settings.serverMode}
+                onChange={() => {
+                  void run(async () => {
+                    await setServerNetworkAccess(mode);
+                    // Serwer nasłuchuje od nowa; chwila na zamknięcie połączeń.
+                    await new Promise((resolve) => window.setTimeout(resolve, 600));
+                  }, mode === "NETWORK" ? "Dostęp z sieci włączony." : "Dostęp tylko z tego komputera.");
+                }}
+              />
+              <span>
+                <strong>{label}</strong> — {help}
+              </span>
+            </label>
+          ))}
+        </fieldset>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

@@ -77,9 +77,14 @@ export type SmtpSettingsView = {
   passwordSet: boolean;
 };
 
+// Dostęp przez przeglądarkę: LOCAL — tylko z tego komputera (127.0.0.1, domyślnie),
+// NETWORK — także z sieci, z zabezpieczeniami (tylko w trybie serwerowym).
+export type NetworkAccess = "LOCAL" | "NETWORK";
+
 export type ServerSettingsView = {
   serverMode: boolean;
   forced: boolean;
+  networkAccess: NetworkAccess;
   publicBaseUrl: string;
   defaultPlanId: string | null;
   smtp: SmtpSettingsView | null;
@@ -172,6 +177,19 @@ export class ServerModeService implements ModelCallGuard {
     requireAdmin(actor);
     if (this.forced !== null) throw new ServerModeError("SERVER_MODE_FORCED", 409);
     this.store.setSetting("server_mode", enabled ? "1" : "0");
+    // Bez trybu serwerowego dostęp z sieci się zamyka.
+    if (!enabled) this.store.setSetting("network_access", "LOCAL");
+    return this.settings(actor);
+  }
+
+  networkAccess(): NetworkAccess {
+    return this.isEnabled() && this.store.getSetting("network_access") === "NETWORK" ? "NETWORK" : "LOCAL";
+  }
+
+  setNetworkAccess(actor: AuthenticatedContext, mode: NetworkAccess): ServerSettingsView {
+    requireAdmin(actor);
+    if (mode === "NETWORK" && !this.isEnabled()) throw new ServerModeError("SERVER_MODE_REQUIRED", 409);
+    this.store.setSetting("network_access", mode);
     return this.settings(actor);
   }
 
@@ -198,6 +216,7 @@ export class ServerModeService implements ModelCallGuard {
     return {
       serverMode: this.isEnabled(),
       forced: this.forced !== null,
+      networkAccess: this.networkAccess(),
       publicBaseUrl: this.publicBaseUrl(),
       defaultPlanId: this.store.getSetting("default_plan_id"),
       smtp: smtp ? { ...smtp, passwordSet: this.store.getSetting("smtp_password") !== null } : null,

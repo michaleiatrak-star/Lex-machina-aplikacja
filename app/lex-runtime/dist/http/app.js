@@ -1,4 +1,5 @@
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
+import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
@@ -242,7 +243,7 @@ function loopbackOriginGuard(req, res, next) {
     // The sandboxed sn.pl verification window (sn-proxy.ts) has an opaque origin ("null"); its
     // requests carry only the window's ticket, never the user's login.
     const snWindow = origin === "null" && req.path.startsWith(`${SN_PROXY_PREFIX}/s/`);
-    if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin)) {
+    if (!origin || snWindow || isLoopbackOrigin(origin) || allowedPublicOrigin(origin) || browserSameOrigin(req)) {
         next();
         return;
     }

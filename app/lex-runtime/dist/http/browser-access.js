@@ -1,0 +1,226 @@
+import fs from "node:fs";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
+/**
+ * Aplikacja w przeglądarce: serwer podaje stronę (lex-web) i API pod jednym adresem.
+ * Domyślnie tylko z tego komputera (127.0.0.1); dostęp z sieci włącza administrator w trybie
+ * serwerowym i tylko z tego komputera. Okno aplikacji desktop łączy się osobnym kanałem z tokenem.
+ */
+export const DEFAULT_BROWSER_PORT = 4317;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const BROWSER_SAME_ORIGIN = Symbol.for("lex.browserSameOrigin");
+// Funkcje okna aplikacji desktop (jego token, tożsamość wsparcia) nie są dostępne ze strony.
+const DESKTOP_WINDOW_ONLY = [/^\/api\/auth\/bootstrap-managed$/, /^\/api\/admin\/support(?:\/|$)/];
+export function isLoopbackAddress(address) {
+    if (!address)
+        return false;
+    const plain = address.startsWith("::ffff:") ? address.slice(7) : address;
+    return plain === "::1" || /^127\./.test(plain);
+}
+function hostName(hostHeader) {
+    if (!hostHeader)
+        return "";
+    try {
+        return new URL(`http://${hostHeader}`).hostname.toLowerCase();
+    }
+    catch {
+        return "";
+    }
+}
+function isIpLiteral(hostname) {
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || (hostname.startsWith("[") && hostname.endsWith("]"));
+}
+/** Nazwy hostów dopuszczone w dostępie z sieci poza adresami IP (np. nazwa serwera kancelarii). */
+function allowedHostNames(publicBaseUrl) {
+    const names = new Set();
+    for (const item of (process.env.LEX_ALLOWED_HOSTS ?? "").split(",")) {
+        const name = item.trim().toLowerCase();
+        if (name)
+            names.add(name);
+    }
+    const base = publicBaseUrl().trim();
+    if (base) {
+        try {
+            names.add(new URL(base).hostname.toLowerCase());
+        }
+        catch {
+            // Niepoprawny adres w ustawieniach nie poszerza listy.
+        }
+    }
+    names.add(os.hostname().toLowerCase());
+    return names;
+}
+export function resolveWebRoot() {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+        process.env.LEX_WEB_ROOT?.trim(),
+        // Instalacja: app/dist/http -> app/web.
+        path.resolve(here, "../../web"),
+        // Repozytorium: app/lex-runtime/dist/http -> app/lex-web/dist.
+        path.resolve(here, "../../../lex-web/dist")
+    ].filter((item) => Boolean(item));
+    return candidates.find((dir) => fs.existsSync(path.join(dir, "index.html")));
+}
+// Bez upgrade-insecure-requests: w sieci lokalnej strona działa także po HTTP.
+const WEB_CSP = "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; frame-src 'self' blob:; " +
+    "style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; " +
+    "base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+/** Strona aplikacji (pliki z lex-web/dist) i powrót do index.html dla ścieżek aplikacji. */
+export function registerWebApp(app, webRoot) {
+    if (!webRoot)
+        return;
+    const index = fs
+        .readFileSync(path.join(webRoot, "index.html"), "utf8")
+        .replace("<head>", '<head>\n    <meta name="lex-api-base" content="same-origin" />');
+    app.use(express.static(webRoot, { index: false, fallthrough: true, maxAge: "1h" }));
+    app.get(/^\/(?!api(?:\/|$)|health$|oauth\/).*/, (req, res, next) => {
+        if (path.extname(req.path)) {
+            next();
+            return;
+        }
+        res.set("Content-Security-Policy", WEB_CSP);
+        res.set("Cache-Control", "no-store");
+        res.type("html").send(index);
+    });
+}
+export class BrowserAccess {
+    handler;
+    publicBaseUrl;
+    localHost;
+    server;
+    sockets = new WeakSet();
+    mode = "LOCAL";
+    port;
+    state = "OFF";
+    error;
+    constructor(handler, port, publicBaseUrl = () => "", localHost = "127.0.0.1") {
+        this.handler = handler;
+        this.publicBaseUrl = publicBaseUrl;
+        this.localHost = localHost;
+        this.port = port;
+    }
+    get networkAccess() {
+        return this.mode;
+    }
+    get listeningPort() {
+        return this.port;
+    }
+    isBrowserSocket(socket) {
+        return this.sockets.has(socket);
+    }
+    listen(host) {
+        return new Promise((resolve, reject) => {
+            const server = http.createServer(this.handler);
+            server.on("connection", (socket) => this.sockets.add(socket));
+            server.once("error", reject);
+            server.listen(this.port, host, () => {
+                server.off("error", reject);
+                const address = server.address();
+                if (typeof address === "object" && address)
+                    this.port = address.port;
+                resolve(server);
+            });
+        });
+    }
+    async close() {
+        const server = this.server;
+        this.server = undefined;
+        if (!server)
+            return;
+        await new Promise((resolve) => {
+            server.close(() => resolve());
+            server.closeAllConnections();
+        });
+    }
+    async start(mode = "LOCAL") {
+        try {
+            this.server = await this.listen(mode === "NETWORK" ? "0.0.0.0" : this.localHost);
+            this.mode = mode;
+            this.state = "LISTENING";
+            this.error = undefined;
+        }
+        catch (error) {
+            if (mode === "NETWORK") {
+                await this.start("LOCAL");
+                return;
+            }
+            this.state = "UNAVAILABLE";
+            this.error = error instanceof Error ? error.code ?? error.message : String(error);
+        }
+    }
+    /** Zmiana dostępu: nasłuch od nowa na tym samym porcie (połączenia z sieci są zamykane). */
+    async setMode(mode) {
+        if (mode === this.mode && this.state === "LISTENING")
+            return;
+        await this.close();
+        await this.start(mode);
+    }
+    async stop() {
+        await this.close();
+        this.state = "OFF";
+    }
+    addresses() {
+        if (this.state !== "LISTENING")
+            return [];
+        const loopback = this.localHost.includes(":") ? `[${this.localHost}]` : this.localHost;
+        const list = [`http://${loopback}:${this.port}`];
+        if (this.mode === "NETWORK") {
+            for (const entries of Object.values(os.networkInterfaces())) {
+                for (const entry of entries ?? []) {
+                    if (entry.family === "IPv4" && !entry.internal)
+                        list.push(`http://${entry.address}:${this.port}`);
+                }
+            }
+        }
+        return list;
+    }
+    /**
+     * Zabezpieczenia kanału strony: w trybie lokalnym tylko adresy 127.0.0.1 i nazwy hostów
+     * pętli zwrotnej (ochrona przed DNS rebinding); w dostępie z sieci adresy IP i nazwy hostów
+     * wskazane przez administratora, ta sama strona (Origin = Host), bez funkcji komputera
+     * serwera dla połączeń z sieci.
+     */
+    guard(localOnlyRoute) {
+        return (req, res, next) => {
+            if (!this.isBrowserSocket(req.socket)) {
+                next();
+                return;
+            }
+            const local = isLoopbackAddress(req.socket.remoteAddress);
+            const host = hostName(req.get("host"));
+            if (!local && this.mode !== "NETWORK") {
+                res.status(403).json({ error: "NETWORK_ACCESS_DISABLED" });
+                return;
+            }
+            const hostAllowed = LOOPBACK_HOSTS.has(host) ||
+                (this.mode === "NETWORK" && (isIpLiteral(host) || allowedHostNames(this.publicBaseUrl).has(host)));
+            if (!hostAllowed) {
+                res.status(403).json({ error: "HOST_NOT_ALLOWED" });
+                return;
+            }
+            if (DESKTOP_WINDOW_ONLY.some((rule) => rule.test(req.path)) || (!local && localOnlyRoute(req))) {
+                res.status(403).json({ error: "NOT_AVAILABLE_IN_BROWSER" });
+                return;
+            }
+            const origin = req.get("origin");
+            if (origin) {
+                try {
+                    if (new URL(origin).host.toLowerCase() === (req.get("host") ?? "").toLowerCase()) {
+                        req[BROWSER_SAME_ORIGIN] = true;
+                    }
+                }
+                catch {
+                    // Niepoprawny Origin rozstrzyga dalsza kontrola pochodzenia.
+                }
+            }
+            next();
+        };
+    }
+}
+/** Żądanie strony aplikacji z tego samego adresu (Origin = Host) na kanale przeglądarki. */
+export function browserSameOrigin(req) {
+    return req[BROWSER_SAME_ORIGIN] === true;
+}

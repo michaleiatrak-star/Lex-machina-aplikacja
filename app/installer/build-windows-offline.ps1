@@ -42,6 +42,15 @@ $appStage = Join-Path $payload "app"
 New-Item $appStage -ItemType Directory | Out-Null
 Copy-Item (Join-Path $repo "app\lex-runtime\dist") $appStage -Recurse
 Copy-Item (Join-Path $repo "app\lex-runtime\package.json") $appStage
+# Strona aplikacji w przeglądarce (http://127.0.0.1:4317): ten sam interfejs co okno desktop.
+Push-Location (Join-Path $repo "app\lex-web")
+try {
+  npm install --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw "npm install web failed" }
+  npm run build
+  if ($LASTEXITCODE -ne 0) { throw "web build failed" }
+} finally { Pop-Location }
+Copy-Item (Join-Path $repo "app\lex-web\dist") (Join-Path $appStage "web") -Recurse
 Copy-Item (Join-Path $installer "windows-release-source.json") (Join-Path $payload "release-source.json")
 Copy-Item (Join-Path $installer "windows-release-requirements.txt") (Join-Path $payload "release-requirements.txt")
 Push-Location $appStage
