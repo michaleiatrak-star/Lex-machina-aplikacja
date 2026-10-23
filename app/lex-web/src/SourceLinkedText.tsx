@@ -21,6 +21,17 @@ export function verifiedClaimLabel(url: string, before: string, sources: SourceC
   const claims = [...new Set(sources.filter((item) => item.url === url).map((item) => item.claim))];
   if (claims.length <= 1) return claims[0] ?? null;
   const text = before.toLocaleLowerCase("pl");
+  // The whole provision first (article with its superscript, §, ust., pkt): "art. 477^9 § 3"
+  // is not "art. 477^9 § 1" from the same page (test 500, C03-016: the number alone matched both).
+  const written = provisionKey(text);
+  let exact: { claim: string; at: number; length: number } | null = null;
+  for (const claim of claims) {
+    const key = provisionKey(/art\.\s*\d+[^\n]*?(?=\s+(?:\p{Lu}|u\.|ustaw|kodeks)|$)/iu.exec(claim)?.[0] ?? "");
+    if (!key) continue;
+    const at = lastProvision(written, key);
+    if (at >= 0 && (!exact || at > exact.at || (at === exact.at && key.length > exact.length))) exact = { claim, at, length: key.length };
+  }
+  if (exact) return exact.claim;
   let best: { claim: string; at: number } | null = null;
   for (const claim of claims) {
     const number = articleNumber(claim);
@@ -31,6 +42,28 @@ export function verifiedClaimLabel(url: string, before: string, sources: SourceC
     if (at >= 0 && (!best || at > best.at)) best = { claim, at };
   }
   return best?.claim ?? claims.join(", ");
+}
+
+const SUPERSCRIPT: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+
+// "Art. 477⁹ §3" and "art. 477^9 § 3" alike: lower case, superscript as ^, one space.
+function provisionKey(value: string): string {
+  return value
+    .toLocaleLowerCase("pl")
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => "^" + [...digits].map((digit) => SUPERSCRIPT[digit]).join(""))
+    .replace(/\s*\^\s*/gu, "^")
+    .replace(/(art\.|§|ust\.|pkt|lit\.)\s*/gu, "$1 ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+// Last place the provision is written, not followed by more of its number ("§ 1" is not "§ 12").
+function lastProvision(text: string, key: string): number {
+  let at = -1;
+  for (let from = text.indexOf(key); from >= 0; from = text.indexOf(key, from + 1)) {
+    if (!/^[\d^a-z]/u.test(text.slice(from + key.length, from + key.length + 1))) at = from;
+  }
+  return at;
 }
 
 // Act abbreviation compared without dots and case: „k.k.” = „KK”.

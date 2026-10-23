@@ -197,7 +197,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents, type AccentMap } from "./accent-restoration.js";
-import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION, type AnswerCorrection } from "./answer-corrections.js";
+import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, type AnswerCorrection } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt, type RecognisedDocument } from "./document-kind.js";
 import {
@@ -3620,7 +3620,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? {
             ...reusable,
             ...(reusable.tools?.length ? { toolChoice: "none" as const } : {}),
-            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: instruction }]
+            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }]
           }
         : {
             systemPrompt:
@@ -3634,7 +3634,7 @@ export class SafeSessionExecutor implements SessionExecutor {
             messages: [
               { role: "user" as const, content: protectedQuery },
               { role: "assistant" as const, content: answer },
-              { role: "user" as const, content: instruction }
+              { role: "user" as const, content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }
             ]
           };
     const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];

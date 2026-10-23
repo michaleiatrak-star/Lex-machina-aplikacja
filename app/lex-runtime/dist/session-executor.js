@@ -64,7 +64,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
-import { answerCorrection, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
+import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger, replyRolesPrompt } from "./task-routing.js";
@@ -2408,7 +2408,7 @@ export class SafeSessionExecutor {
             ? {
                 ...reusable,
                 ...(reusable.tools?.length ? { toolChoice: "none" } : {}),
-                messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: instruction }]
+                messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }]
             }
             : {
                 systemPrompt: systemPrompt ??
@@ -2421,7 +2421,7 @@ export class SafeSessionExecutor {
                 messages: [
                     { role: "user", content: protectedQuery },
                     { role: "assistant", content: answer },
-                    { role: "user", content: instruction }
+                    { role: "user", content: `${instruction}\n\n${CORRECTED_ANSWER_FORM}` }
                 ]
             };
         const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
