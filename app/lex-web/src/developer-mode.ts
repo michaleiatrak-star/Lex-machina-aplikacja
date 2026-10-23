@@ -160,9 +160,49 @@ export function plainSystemText(content: string): string {
 const QUALITY_GATE_LINE =
   /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:(?:CN|WYJ|REM)-GATE\b|(?:CN|REM)-\d+\b|S[1-4](?:\s*[(–—:-]|\s+\p{L}+(?:\s+\p{L}+)?\s*[:)]|\s*\*\*)|→\s*WYNIK:|TRYB\s+ZDEGRADOWANY)/u;
 
+// Sekcje kontrolne pisane przez model (test 500, C12 na żywo: forma 0 we wszystkich przypadkach):
+// ślad routingu KROK 3A, „Kontrole przy tej odpowiedzi”, bloki z etykietą bramki (CN/OŚ/WYJ/REM-GATE).
+// Usuwane razem z treścią: listy, wcięcia, blok kodu i kolejne wiersze z etykietą do pierwszego
+// zwykłego akapitu, nagłówka albo zastrzeżenia.
+const CONTROL_SECTION =
+  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:Ślad routingu\b|Kontrol[ae](?: wykonane)? przy tej odpowiedzi|Kontrol[ae] techniczn|Ścieżka:(?:\*\*)?\s*tryb\b|[^*\n]{0,80}\b(?:CN|OŚ|WYJ|REM)-GATE\b)/iu;
+const HEADING_ONLY = /^\s*(?:#{1,6}\s+.+|(?:[-*]\s*)?\*\*[^*\n]+\*\*\s*:?)\s*$/u;
+const SECTION_BODY = /^\s*(?:$|[-*•]\s|\d{1,2}[.)]\s)|^\s{2,}\S/u;
+
+function withoutControlSections(lines: string[]): string[] {
+  const kept: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!CONTROL_SECTION.test(lines[index]!)) {
+      kept.push(lines[index]!);
+      continue;
+    }
+    let next = index + 1;
+    while (next < lines.length) {
+      const line = lines[next]!;
+      if (/^\s*```/u.test(line)) {
+        const close = lines.findIndex((other, at) => at > next && /^\s*```/u.test(other));
+        next = close < 0 ? lines.length : close + 1;
+        continue;
+      }
+      if (/^\s*⚖/u.test(line) || /^\s*#{1,6}\s/u.test(line) && !CONTROL_SECTION.test(line)) break;
+      // After a blank line only another control label continues; a list there is the answer's.
+      // A bare heading ("**Kontrole przy tej odpowiedzi**") keeps its list after a blank line;
+      // a label with its text on the line ("**WYJ-GATE.** Brak wyjątków.") is the whole block.
+      if (!line.trim() && !(next === index + 1 && HEADING_ONLY.test(lines[index]!))) {
+        const following = lines.slice(next + 1).find((other) => other.trim());
+        if (!following || !CONTROL_SECTION.test(following)) break;
+      }
+      if (!SECTION_BODY.test(line) && !CONTROL_SECTION.test(line)) break;
+      next += 1;
+    }
+    index = next - 1;
+  }
+  return kept;
+}
+
 export function withoutQualityGateLines(content: string): string {
   const lines = content.split("\n");
-  const kept = lines.filter((line) => !QUALITY_GATE_LINE.test(line));
+  const kept = withoutControlSections(lines).filter((line) => !QUALITY_GATE_LINE.test(line));
   if (kept.length === lines.length) return content;
   return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;
 }
