@@ -659,16 +659,29 @@ function polishWords(alternatives: string): RegExp {
   return new RegExp(`(?<![\\p{L}\\d])(?:${withoutPolishLetters(alternatives)})(?![\\p{L}\\d])`, "u");
 }
 
-// A contract is written in the contract workflow (its mode, analizator-umow), so a
-// contract becomes a file directly only when a file is named as the result.
+// A contract asked to be written ("napisz umowę") is a document request too: the server sends
+// it back to the contract workflow (WORKFLOW_PIPELINE_REQUIRED), which makes its file.
 const DOCUMENT_NOUN = polishWords(
-  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*|" +
+  "umow[aeyę]|umową|umowie|umowami|umowach|umowom|umów|aneks\\p{L}*|pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*|" +
     // Other letters and acts one writes: "zawiadomienie o przestępstwie", "skarga do WSA",
     // "odwołanie od decyzji", "petycja", "zgłoszenie", "wypowiedzenie", "procedura", "regulamin".
     "zawiadomieni\\p{L}*|skarg\\p{L}*|odwołani\\p{L}*|protest\\p{L}*|petycj\\p{L}*|zgłoszeni\\p{L}*|wypowiedzeni\\p{L}*|upoważnieni\\p{L}*|procedur\\p{L}*|polityk\\p{L}*|regulamin\\p{L}*|uchwał\\p{L}*|kwestionariusz\\p{L}*|ankiet\\p{L}*|korekt\\p{L}*|żądani\\p{L}*|zarzut\\p{L}*|wyjaśnieni\\p{L}*|powiadomieni\\p{L}*|czynn\\p{L}*\\s+żal\\p{L}*"
 );
 const GENERATION_VERB = polishWords(
   "wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj|zapisz|wyeksportuj|eksportuj|zrób|przerób|zamień|przekształć"
+);
+// "Proszę o odwołanie, docx", "Potrzebuję pozwu o zapłatę, w docx" (test 500: went to the chat
+// as a question): asking for a letter in a named file format is asking to write it. Without
+// the format "proszę o wyjaśnienie" stays a question.
+const REQUEST_VERB = polishWords("proszę\\s+o|poproszę|potrzebuję|potrzebny\\s+mi|potrzebna\\s+mi|potrzebne\\s+mi");
+// "Proszę o napisanie umowy", "poproszę o sporządzenie wezwania", "proszę o dokument", "proszę o
+// pismo do ZUS": asking for the writing of a named document, or for the document itself, is
+// a request to write it, with or without a file format.
+const REQUESTED_WRITING = new RegExp(
+  withoutPolishLetters(
+    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
+  ),
+  "u"
 );
 // A file named as the result: "do pobrania", "w postaci dokumentu", "jako plik".
 const FILE_RESULT = new RegExp(
@@ -730,7 +743,7 @@ export function directDocumentRequest(
   const fileResult = FILE_RESULT.test(normalized);
   const drafting =
     DOCUMENT_NOUN.test(normalized) &&
-    GENERATION_VERB.test(normalized) &&
+    (GENERATION_VERB.test(normalized) || REQUESTED_WRITING.test(normalized) || ((explicitFormat !== null || fileResult) && REQUEST_VERB.test(normalized))) &&
     !READING_INTENT.test(normalized.replace(GOVERNED_ACTIVITY, "$1"));
 
   if (!explicitFormat && !fileResult && !drafting) {

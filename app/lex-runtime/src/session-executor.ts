@@ -945,6 +945,20 @@ const MATERIAL_SKILLS: Record<string, string> = {
 };
 // A message this long carries the material itself (a pasted contract or statement).
 const MATERIAL_PASTED_CHARS = 1_500;
+// Test 500: "Zrób chronologię: 2.02.2026 umowa…, 5.02 zaliczka…, 15.04 brak montażu…" and a
+// described defence ("świadek A zeznał…, na rozprawie…, monitoring od 23:41") were answered
+// with a request for the material. Dated events or described evidence in the message are the
+// material of a timeline, a court or evidence analysis or a witness plan (a contract still
+// needs its text).
+const MATERIAL_IN_WORDS_SKILLS = new Set(["chronologia-sprawy-v1", "analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90"]);
+const EVENT_DATE = /(?<![\d.])\d{1,2}\.\d{1,2}(?:\.\d{2,4})?(?![\d.])|(?<![\p{L}])\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)(?![\p{L}])/giu;
+const EVIDENCE_WORDS = /(?<![\p{L}])(?:zezna\p{L}*|świad\p{L}*|monitoring\p{L}*|nagrani\p{L}*|protok\p{L}*|opini\p{L}*\s+biegł\p{L}*|dowod\p{L}*|dowód|faktur\p{L}*|korespondencj\p{L}*|wiadomoś\p{L}*|SMS\p{L}*|e-?mail\p{L}*)(?![\p{L}])/giu;
+export function materialInWords(skill: string, message: string): boolean {
+  if (!MATERIAL_IN_WORDS_SKILLS.has(skill)) return false;
+  const dates = message.match(EVENT_DATE)?.length ?? 0;
+  const evidence = new Set((message.match(EVIDENCE_WORDS) ?? []).map((word) => word.toLocaleLowerCase("pl").slice(0, 5))).size;
+  return dates >= 3 || (message.length >= 300 && evidence >= 2 && dates + evidence >= 3);
+}
 
 export type SessionExecutionResponse = {
   sessionId: string;
@@ -2884,7 +2898,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       (!request.chronologyWorkflowContext || request.chronologyWorkflowContext.stage === "INVENTORY") &&
       (!request.courtWorkflowContext || request.courtWorkflowContext.stage === "EVIDENCE_SCAN");
     const fixedAnswer =
-      materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS
+      materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS &&
+      !materialInWords(materialSkill, latestMessage)
         ? `Do tej pracy potrzebny jest materiał: ${MATERIAL_SKILLS[materialSkill]}. Dołącz plik do wiadomości albo wklej jego treść; dokumenty już zapisane w aktach wybierz w sprawie.\n\n${WAIT_FOR_USER_MARKER}`
         : undefined;
     if (fixedAnswer) {
