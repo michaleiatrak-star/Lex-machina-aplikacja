@@ -4,7 +4,9 @@ import { detectLegalReferences } from "./finalization-gate.js";
 import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
-const UNIT = "\\d+[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
+// "art. 110¹ KC" / "art. 110^1 KC" is its own article, not art. 110 (test 500: the superscript was
+// dropped and art. 110¹ ⚠️ conflicted with a verified art. 110).
+const UNIT = "\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
 // "art. 233", "art. 233 § 1 KK", "art. 233 i 234 KK", "art. 233, 234 oraz 235 KK", "art. 233–234 KK".
 const REFERENCE = new RegExp(`(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:\\s*(?:,|i|oraz|lub|albo|a także|–|-)\\s*(?:art\\.?\\s+)?${UNIT})*)(?:\\s+(${DOTTED_ACT_ALTERNATIVES}|${ACTS})(?![\\p{L}]))?`, "giu");
 const ENUMERATION_ITEM = new RegExp(UNIT, "gu");
@@ -13,8 +15,11 @@ const VERIFIED_MARKER = /✅\s*\[VER:[^\]\r\n]*\]/gu;
 // 🟨 [KOTWICA-URZĘDOWA: …] to status niezweryfikowany (nie ✅), jak ⚠️.
 const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu;
 const APPLICATION_HEDGE = /\b(?:potencjaln\p{L}*|ewentualn\p{L}*|prawdopodobn\p{L}*|hipotetyczn\p{L}*|mo(?:że|gą|głoby|głyby)\s+(?:mieć\s+zastosowanie|wypełni\p{L}*|stanowić|wchodzić\s+w\s+grę|znaleźć\s+zastosowanie)|w\s+zależności\s+od\s+okoliczności)/iu;
+const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
 function compact(value) {
     return value
+        // Before NFKC, which would make "110¹" into "1101".
+        .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/gu, (digits) => `^${[...digits].map((digit) => SUPERSCRIPT_DIGITS[digit]).join("")}`)
         .normalize("NFKC")
         .toLocaleLowerCase("pl")
         .replace(/\s+/gu, " ")
@@ -59,6 +64,18 @@ function lineTokens(lineText) {
         .filter((signature) => lineText.includes(signature))
         .map((signature) => lineText.indexOf(signature) + signature.length);
     const amountMarkers = [...amountMarkerSpans(lineText), ...markerSpansAfter(lineText, signatureEnds)];
+    // "zmiana z Dz.U. 2026 poz. 507 ⚠️ …, dla art. 418 …": the ⚠️ is the journal's. Before, a marker
+    // ahead of the line's first article was given to that article, so reconciling a verified
+    // art. 418 turned the journal's ⚠️ into ✅ (test 500).
+    const otherEnds = detectLegalReferences(lineText)
+        .filter((reference) => reference.kind === "journal" || reference.kind === "case")
+        .map((reference) => {
+        const written = reference.span ?? reference.claim;
+        const at = lineText.indexOf(written);
+        return at < 0 ? -1 : at + written.length;
+    })
+        .filter((end) => end >= 0);
+    const otherMarkers = markerSpansAfter(lineText, otherEnds);
     for (const [pattern, status] of [
         [VERIFIED_MARKER, "VERIFIED"],
         [UNVERIFIED_MARKER, "UNVERIFIED"]
@@ -71,7 +88,8 @@ function lineTokens(lineText) {
                 type: "marker",
                 start: match.index,
                 end: match.index + match[0].length,
-                status
+                status,
+                ...(otherMarkers.some((span) => span.start === match.index) ? { afterOther: true } : {})
             });
         }
     }
@@ -103,7 +121,9 @@ function lineGroups(tokens) {
             continue;
         }
         if (current.references.length === 0) {
-            leading.push(token);
+            // Not a marker opening the line: it belongs to the Dz.U. address or signature before it.
+            if (!token.afterOther)
+                leading.push(token);
         }
         else {
             current.markers.push(token);

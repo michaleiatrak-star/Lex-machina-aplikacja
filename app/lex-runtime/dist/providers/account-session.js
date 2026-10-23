@@ -55,7 +55,7 @@ const OPTIONAL_ACCOUNT_CLIENTS = {
     },
     anthropic: {
         packageName: "@anthropic-ai/claude-code",
-        version: "2.1.278",
+        version: "2.1.309",
         binary: "claude"
     },
     google: {

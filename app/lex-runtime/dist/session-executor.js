@@ -429,6 +429,21 @@ const MATERIAL_SKILLS = {
 };
 // A message this long carries the material itself (a pasted contract or statement).
 const MATERIAL_PASTED_CHARS = 1_500;
+// Test 500: "Zrób chronologię: 2.02.2026 umowa…, 5.02 zaliczka…, 15.04 brak montażu…" and a
+// described defence ("świadek A zeznał…, na rozprawie…, monitoring od 23:41") were answered
+// with a request for the material. Dated events or described evidence in the message are the
+// material of a timeline, a court or evidence analysis or a witness plan (a contract still
+// needs its text).
+const MATERIAL_IN_WORDS_SKILLS = new Set(["chronologia-sprawy-v1", "analiza-sadowa-v6", "analizator-dowodow-v3", "przesluchanie-swiadkow-v2-min90"]);
+const EVENT_DATE = /(?<![\d.])\d{1,2}\.\d{1,2}(?:\.\d{2,4})?(?![\d.])|(?<![\p{L}])\d{1,2}\s+(?:stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia)(?![\p{L}])/giu;
+const EVIDENCE_WORDS = /(?<![\p{L}])(?:zezna\p{L}*|świad\p{L}*|monitoring\p{L}*|nagrani\p{L}*|protok\p{L}*|opini\p{L}*\s+biegł\p{L}*|dowod\p{L}*|dowód|faktur\p{L}*|korespondencj\p{L}*|wiadomoś\p{L}*|SMS\p{L}*|e-?mail\p{L}*)(?![\p{L}])/giu;
+export function materialInWords(skill, message) {
+    if (!MATERIAL_IN_WORDS_SKILLS.has(skill))
+        return false;
+    const dates = message.match(EVENT_DATE)?.length ?? 0;
+    const evidence = new Set((message.match(EVIDENCE_WORDS) ?? []).map((word) => word.toLocaleLowerCase("pl").slice(0, 5))).size;
+    return dates >= 3 || (message.length >= 300 && evidence >= 2 && dates + evidence >= 3);
+}
 /**
  * Prefixes D01, D02... of own-key documents, in the order they reach the
  * model (context first, then case files read by tools). Shared-key documents
@@ -1716,9 +1731,14 @@ export class SafeSessionExecutor {
             const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
             return Boolean(resource) && !turnScoped.has(resource);
         };
+        // The head shared by every case on this path (identity, the mandatory path's modules): the
+        // provider caches the system prompt up to its end; skill-specific resources and the tools
+        // of this case follow it.
+        const sharedPath = (section) => stablePath(section) && section.startsWith("# MANDATORY PATH RESOURCE:");
+        const toolPromptStable = [identityPrompt, ...pathSections.filter(sharedPath)].join("\n\n");
         const toolPrompt = [
-            identityPrompt,
-            ...pathSections.filter(stablePath),
+            toolPromptStable,
+            ...pathSections.filter((section) => stablePath(section) && !sharedPath(section)),
             ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
             ...(coreLawTools ? [coreLawTools.systemPromptAppendix()] : []),
             ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
@@ -1805,7 +1825,8 @@ export class SafeSessionExecutor {
             (!request.orderedCaseWorkflowContext || /INTAKE/u.test(request.orderedCaseWorkflowContext.checkpoint)) &&
             (!request.chronologyWorkflowContext || request.chronologyWorkflowContext.stage === "INVENTORY") &&
             (!request.courtWorkflowContext || request.courtWorkflowContext.stage === "EVIDENCE_SCAN");
-        const fixedAnswer = materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS
+        const fixedAnswer = materialSkill && firstStep && attachments.length === 0 && caseDocuments === 0 && !laterTurn(request.query) && latestMessage.length < MATERIAL_PASTED_CHARS &&
+            !materialInWords(materialSkill, latestMessage)
             ? `Do tej pracy potrzebny jest materiał: ${MATERIAL_SKILLS[materialSkill]}. Dołącz plik do wiadomości albo wklej jego treść; dokumenty już zapisane w aktach wybierz w sprawie.\n\n${WAIT_FOR_USER_MARKER}`
             : undefined;
         if (fixedAnswer) {
@@ -1949,6 +1970,7 @@ export class SafeSessionExecutor {
                 : {}),
             tools: toolSchemas,
             toolSystemPromptAppendix: toolPrompt,
+            toolSystemPromptStableChars: toolPromptStable.length,
             toolSystemPromptTurn: toolPromptTurn,
             // A SIMPLE matter (entry gate) on a local model takes the compact
             // lane: core-law texts in the prompt, core-law tools for the rest.
@@ -2218,6 +2240,7 @@ export class SafeSessionExecutor {
         for (const event of caseFileTools?.auditEvents() ?? []) {
             audit.record(event.tool === "read_case_file" ? "resource_read" : "tool_decision", event.tool === "read_case_file" ? `local-document:${event.target}` : `case-files:${event.target}`, event.decision === "ALLOW" ? "OK" : "BLOCKED", { tool: event.tool, protectedOnly: true, ...(event.detail ?? {}) });
         }
+        const readCaseTexts = [];
         for (const read of caseFileTools?.readChunks() ?? []) {
             citationSources.push({
                 caseId: request.caseFiles.caseId,
@@ -2225,6 +2248,17 @@ export class SafeSessionExecutor {
                 sourceScope: "CASE_KNOWLEDGE",
                 chunks: read.chunks
             });
+            readCaseTexts.push(read.chunks.map((chunk) => chunk.text).join("\n"));
+        }
+        // Dokumenty sprawy czytane narzędziem w tej turze: ich sygnatury i kwoty to fakty sprawy
+        // (jak przy załącznikach), nie orzecznictwo ani stawki ustawowe do weryfikacji.
+        if (readCaseTexts.length > 0) {
+            for (const signature of ownCaseFileNumbers(readCaseTexts, ""))
+                ledger.addCaseFileNumber(signature);
+            for (const signature of mentionedCaseNumbers(readCaseTexts))
+                ledger.addCaseReference(signature);
+            for (const key of amountKeysIn(readCaseTexts.join("\n")))
+                ledger.addFactAmount(key);
         }
         for (const event of coreLawTools?.auditEvents() ?? []) {
             audit.record(event.tool === "read_core_law_article"
@@ -2364,35 +2398,48 @@ export class SafeSessionExecutor {
             readResources: readResources(),
             ...(request.caseTimelineDates?.length ? { timelineDates: request.caseTimelineDates } : {})
         });
+        // A correcting round over an API model: the main call's system prompt, tools and messages
+        // (the provider reads them from its cache; the system prompt already holds every path
+        // section) followed by the answer and the request, tools defined but not callable. Before,
+        // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
+        // and account clients keep the short prompt.
+        const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
+        const correctingRound = (answer, instruction, systemPrompt) => reusable
+            ? {
+                ...reusable,
+                ...(reusable.tools?.length ? { toolChoice: "none" } : {}),
+                messages: [...reusable.messages, { role: "assistant", content: answer }, { role: "user", content: instruction }]
+            }
+            : {
+                systemPrompt: systemPrompt ??
+                    [
+                        ...(placeholderKey ? [placeholderKey] : []),
+                        identityPrompt,
+                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                        ...pathSections
+                    ].join("\n\n"),
+                messages: [
+                    { role: "user", content: protectedQuery },
+                    { role: "assistant", content: answer },
+                    { role: "user", content: instruction }
+                ]
+            };
         const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
         if (missingGates.length || supervisedMissing.length) {
             step("MODEL", `ścieżka obowiązkowa: uzupełnienie ${[...missingGates.map((item) => item.block), ...supervisedMissing.map((check) => check.id)].join(", ")}`);
             try {
                 const corrected = await this.providers.stream(request.provider, {
                     model: request.model,
-                    systemPrompt: [
-                        ...(placeholderKey ? [placeholderKey] : []),
-                        identityPrompt,
-                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-                        ...pathSections
-                    ].join("\n\n"),
-                    messages: [
-                        { role: "user", content: protectedQuery },
-                        { role: "assistant", content: modelOutput },
-                        {
-                            role: "user",
-                            content: [
-                                ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
-                                ...(supervisedMissing.length
-                                    ? [
-                                        "Nadzór aplikacji nad treścią odpowiedzi — uzupełnij i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian):",
-                                        ...supervisedMissing.map((check) => `- ${check.correction}`),
-                                        ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
-                                    ]
-                                    : [])
-                            ].join("\n")
-                        }
-                    ],
+                    ...correctingRound(modelOutput, [
+                        ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
+                        ...(supervisedMissing.length
+                            ? [
+                                "Nadzór aplikacji nad treścią odpowiedzi — uzupełnij i zwróć PEŁNĄ poprawioną odpowiedź (nie opis zmian):",
+                                ...supervisedMissing.map((check) => `- ${check.correction}`),
+                                ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
+                            ]
+                            : [])
+                    ].join("\n")),
                     accountContinuity: "none",
                     reasoning: "none"
                 });
@@ -2436,17 +2483,7 @@ export class SafeSessionExecutor {
             try {
                 const corrected = await this.providers.stream(request.provider, {
                     model: request.model,
-                    systemPrompt: [
-                        ...(placeholderKey ? [placeholderKey] : []),
-                        identityPrompt,
-                        ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-                        ...pathSections
-                    ].join("\n\n"),
-                    messages: [
-                        { role: "user", content: protectedQuery },
-                        { role: "assistant", content: modelOutput },
-                        { role: "user", content: NO_ANSWER_CORRECTION }
-                    ],
+                    ...correctingRound(modelOutput, NO_ANSWER_CORRECTION),
                     accountContinuity: "none",
                     reasoning: "none"
                 });
@@ -2474,12 +2511,7 @@ export class SafeSessionExecutor {
                 try {
                     const corrected = await this.providers.stream(request.provider, {
                         model: request.model,
-                        systemPrompt: correctionPrompt,
-                        messages: [
-                            { role: "user", content: protectedQuery },
-                            { role: "assistant", content: modelOutput },
-                            { role: "user", content: instruction }
-                        ],
+                        ...correctingRound(modelOutput, instruction, correctionPrompt),
                         accountContinuity: "none",
                         reasoning: "none"
                     });
@@ -2661,12 +2693,30 @@ export class SafeSessionExecutor {
         // A conflict the registry does not settle: the provision is shown ⚠️ everywhere (a
         // draft with it marked), never ✅ in one place and ⚠️ in another, and never a blocked turn.
         const unifiedStatus = unifyConflictingProvisions(statusReconciliation.text, ledger);
-        const processedDocumentCitations = statusReconciliation.repaired > 0 || unifiedStatus.unified.length > 0
+        const reconciledAnswer = statusReconciliation.repaired > 0 || unifiedStatus.unified.length > 0
             ? {
                 ...markedAnswer,
                 text: unifiedStatus.text
             }
             : markedAnswer;
+        // Uzgodnienie statusów mogło zdjąć lub przesunąć znaczniki: jeszcze dwie rundy całego
+        // przebiegu (oznaczenie, uzgodnienie, ujednolicenie), zamiast blokować całą odpowiedź
+        // z powodu jednego powołania. Samo oznaczenie bez uzgodnienia zostawiało w wierszu ✅ obok
+        // ⚠️ i bramka spójności blokowała turę (zrzuty testu 500: 8 takich tur).
+        let remarkedText = reconciledAnswer.text;
+        for (let round = 0; round < 2; round += 1) {
+            const check = new FinalizationGate().evaluate(remarkedText, ledger);
+            if (check.result !== "BLOCKED")
+                break;
+            const marked = addMissingVerificationMarkers(markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), check);
+            const reconciled = reconcileStatusMarkers(marked, ledger);
+            const unified = unifyConflictingProvisions(reconciled.text, ledger);
+            const next = reconciled.repaired > 0 || unified.unified.length > 0 ? unified.text : marked;
+            if (next === remarkedText)
+                break;
+            remarkedText = next;
+        }
+        const processedDocumentCitations = remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
         const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
         const statusConsistencyBlocked = statusConsistency.result ===
             "BLOCKED";
