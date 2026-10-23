@@ -22,6 +22,43 @@ describe("rozpoznanie prośby o plik pisma", () => {
     });
   });
 
+  it("„proszę o …, docx” i „potrzebuję pozwu … w docx” to prośba o plik pisma (test 500)", () => {
+    expect(directDocumentRequest("ZUS odmówił mi zasiłku chorobowego. Decyzja doręczona 25.09.2026. Proszę o odwołanie, docx.")?.format).toBe("docx");
+    expect(directDocumentRequest("Doręczono mi nakaz zapłaty (doręczenie 15.10.2026). Proszę o sprzeciw — docx.")).toEqual({ format: "docx", documentType: "pleading" });
+    expect(directDocumentRequest("Potrzebuję pozwu o zapłatę do sądu, w docx. Dłużnik ma siedzibę w Krakowie.")).toEqual({ format: "docx", documentType: "pleading" });
+    expect(directDocumentRequest("Proszę o wyjaśnienie, co oznacza przedawnienie.")).toBeNull();
+    expect(directDocumentRequest("Potrzebuję porady, czy mogę odstąpić od umowy.")).toBeNull();
+  });
+
+  it("„proszę o napisanie umowy”, „napisz umowę”, „proszę o dokument” to prośba o dokument", () => {
+    for (const text of [
+      "Proszę o napisanie umowy najmu lokalu mieszkalnego.",
+      "Napisz umowę zlecenia dla grafika.",
+      // Before: the contract mode in the chat; now a document request the server sends back to
+      // the contract workflow (WORKFLOW_PIPELINE_REQUIRED) or renders when that workflow ended.
+      "Napisz umowę o dzieło dla grafika",
+      "Poproszę o sporządzenie wezwania do zapłaty.",
+      "Proszę o wygenerowanie pełnomocnictwa.",
+      "Proszę o dokument potwierdzający zwrot kaucji.",
+      "Proszę o pismo do ZUS w sprawie zasiłku.",
+      "Potrzebuję pozwu o zapłatę 14 500 zł."
+    ]) {
+      expect(directDocumentRequest(text), text).not.toBeNull();
+    }
+    expect(directDocumentRequest("Proszę o napisanie umowy najmu lokalu mieszkalnego.")?.documentType).toBe("contract");
+  });
+
+  it("prośba o wyjaśnienie, pozwolenie lub umówienie nie jest prośbą o dokument", () => {
+    for (const text of [
+      "Proszę o wyjaśnienie, co oznacza przedawnienie.",
+      "Proszę o umówienie spotkania.",
+      "Czy potrzebuję pozwolenia na budowę garażu?",
+      "Przeanalizuj tę umowę o pracę, reprezentuję pracownika."
+    ]) {
+      expect(directDocumentRequest(text), text).toBeNull();
+    }
+  });
+
   it("zwykłe pytanie nie uruchamia generowania pliku", () => {
     expect(directDocumentRequest("Jaki jest termin przedawnienia?")).toBeNull();
     expect(directDocumentRequest("co jest w tym pliku?")).toBeNull();
@@ -66,7 +103,6 @@ describe("żądanie dokumentu a analiza i weryfikacja dokumentu", () => {
     "Czy w pliku są błędy?",
     "Przygotuj analizę tego dokumentu",
     "Oceń pismo przeciwnika",
-    "Napisz umowę o dzieło dla grafika",
     "Zredaguj paragraf 5 tej umowy",
     "Jaki dokument muszę złożyć w urzędzie?"
   ])("nie generuje pliku (analiza, weryfikacja, pytanie, tryb umowy): %s", (text) => {

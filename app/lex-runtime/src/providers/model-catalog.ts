@@ -59,6 +59,12 @@ function capabilityNames(value: unknown): string[] | undefined {
   return supported.length > 0 ? supported : undefined;
 }
 
+// Listed by /v1beta/models but rejected for new accounts ("no longer available to new
+// users"): gemini-2.5-pro and gemini-2.5-flash with their dated/preview variants; lite stays.
+export function isGoogleRetiredForNewKeys(id: string): boolean {
+  return /^gemini-2\.5-(?:pro|flash)(?!-lite)(?:$|-)/i.test(id);
+}
+
 function openAiCompatibility(id: string): {
   selectable: boolean;
   reason?: string;
@@ -321,7 +327,8 @@ export class DynamicModelCatalog {
     return models;
   }
 
-  // Gemini API: only models that generate content (no embeddings, imagen, tts).
+  // Gemini API: only models that generate content (no embeddings, imagen, tts) and no
+  // models the API rejects for new keys.
   private async listGoogle(apiKey: string): Promise<ModelDescriptor[]> {
     const models: ModelDescriptor[] = [];
     let pageToken: string | null = null;
@@ -343,7 +350,7 @@ export class DynamicModelCatalog {
         const name = typeof model?.name === "string" ? model.name : "";
         const id = name.replace(/^models\//, "");
         const methods = strings(model?.supportedGenerationMethods) ?? [];
-        if (!id || !methods.includes("generateContent")) continue;
+        if (!id || !methods.includes("generateContent") || isGoogleRetiredForNewKeys(id)) continue;
         models.push({
           provider: "google",
           id,

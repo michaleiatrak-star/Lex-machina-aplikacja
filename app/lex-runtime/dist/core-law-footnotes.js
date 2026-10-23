@@ -136,6 +136,12 @@ export function futureDate(note) {
  * daty podanej w odnośniku 6 (najwyżej 3 odesłania).
  */
 export function noteDate(note, footnotes, depth = 0) {
+    // Przez odesłanie („ustawy, o której mowa w odnośniku 4”) liczy się data ustawy („która weszła
+    // w życie z dniem 13 kwietnia 2026 r.”), nie data jednostki odnośnika 4 dopisana po średniku
+    // („; wejdzie w życie z dniem 1 stycznia 2027 r.”; u.ś.p. t.j. 2026/854, art. 17 ust. 1a).
+    const act = depth > 0 ? /któr[aey] (?:weszł[ay]|wchodzi|wchodzą|wejdzie|wejdą) w życie z dniem (\d{1,2} \p{L}+ \d{4} r\.)/u.exec(note)?.[1] : undefined;
+    if (act)
+        return futureDate(`wejdzie w życie z dniem ${act}`);
     // „wejdzie w życie z dniem …” (zmiana przyszła w dniu t.j.) albo „weszła w życie z dniem …”.
     const direct = futureDate(note) ?? futureDate(note.replace(/weszł[ay] w życie/u, "wejdzie w życie"));
     if (direct || depth >= 3)

@@ -659,16 +659,29 @@ function polishWords(alternatives: string): RegExp {
   return new RegExp(`(?<![\\p{L}\\d])(?:${withoutPolishLetters(alternatives)})(?![\\p{L}\\d])`, "u");
 }
 
-// A contract is written in the contract workflow (its mode, analizator-umow), so a
-// contract becomes a file directly only when a file is named as the result.
+// A contract asked to be written ("napisz umowę") is a document request too: the server sends
+// it back to the contract workflow (WORKFLOW_PIPELINE_REQUIRED), which makes its file.
 const DOCUMENT_NOUN = polishWords(
-  "pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*|" +
+  "umow[aeyę]|umową|umowie|umowami|umowach|umowom|umów|aneks\\p{L}*|pism\\p{L}*|piśmie|dokument\\p{L}*|dokumencie|plik\\p{L}*|wezwani\\p{L}*|pozew|pozw\\p{L}*|wnios\\p{L}*|apelacj\\p{L}*|sprzeciw\\p{L}*|zażaleni\\p{L}*|opini\\p{L}*|raport\\p{L}*|oświadczeni\\p{L}*|reklamacj\\p{L}*|pełnomocnictw\\p{L}*|wz[oó]r\\p{L}*|" +
     // Other letters and acts one writes: "zawiadomienie o przestępstwie", "skarga do WSA",
     // "odwołanie od decyzji", "petycja", "zgłoszenie", "wypowiedzenie", "procedura", "regulamin".
     "zawiadomieni\\p{L}*|skarg\\p{L}*|odwołani\\p{L}*|protest\\p{L}*|petycj\\p{L}*|zgłoszeni\\p{L}*|wypowiedzeni\\p{L}*|upoważnieni\\p{L}*|procedur\\p{L}*|polityk\\p{L}*|regulamin\\p{L}*|uchwał\\p{L}*|kwestionariusz\\p{L}*|ankiet\\p{L}*|korekt\\p{L}*|żądani\\p{L}*|zarzut\\p{L}*|wyjaśnieni\\p{L}*|powiadomieni\\p{L}*|czynn\\p{L}*\\s+żal\\p{L}*"
 );
 const GENERATION_VERB = polishWords(
   "wygeneruj|przygotuj|stwórz|utwórz|sporządź|napisz|daj|opracuj|zapisz|wyeksportuj|eksportuj|zrób|przerób|zamień|przekształć"
+);
+// "Proszę o odwołanie, docx", "Potrzebuję pozwu o zapłatę, w docx" (test 500: went to the chat
+// as a question): asking for a letter in a named file format is asking to write it. Without
+// the format "proszę o wyjaśnienie" stays a question.
+const REQUEST_VERB = polishWords("proszę\\s+o|poproszę|potrzebuję|potrzebny\\s+mi|potrzebna\\s+mi|potrzebne\\s+mi");
+// "Proszę o napisanie umowy", "poproszę o sporządzenie wezwania", "proszę o dokument", "proszę o
+// pismo do ZUS": asking for the writing of a named document, or for the document itself, is
+// a request to write it, with or without a file format.
+const REQUESTED_WRITING = new RegExp(
+  withoutPolishLetters(
+    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
+  ),
+  "u"
 );
 // A file named as the result: "do pobrania", "w postaci dokumentu", "jako plik".
 const FILE_RESULT = new RegExp(
@@ -730,7 +743,7 @@ export function directDocumentRequest(
   const fileResult = FILE_RESULT.test(normalized);
   const drafting =
     DOCUMENT_NOUN.test(normalized) &&
-    GENERATION_VERB.test(normalized) &&
+    (GENERATION_VERB.test(normalized) || REQUESTED_WRITING.test(normalized) || ((explicitFormat !== null || fileResult) && REQUEST_VERB.test(normalized))) &&
     !READING_INTENT.test(normalized.replace(GOVERNED_ACTIVITY, "$1"));
 
   if (!explicitFormat && !fileResult && !drafting) {
@@ -3857,6 +3870,15 @@ export default function MatterChatApp({
       !runtimeOnline ||
       !model
     ) return;
+    // Plik w kolejce (przetwarzany, czeka na decyzję albo z błędem odczytu) nie trafiłby do
+    // wiadomości: model odpowiadałby bez niego ("nie widzę wyroku"). Najpierw decyzja o pliku.
+    if (documentDropQueue.files.length > 0 || documentStaging.items.length > 0) {
+      const pending = documentDropQueue.files[0]?.name ?? documentStaging.items[0]?.file?.name;
+      setExecutionError(
+        `${pending ? `Plik ${pending}` : "Dodany plik"} nie jest jeszcze przyjęty (przetwarzanie, decyzja o anonimizacji albo błąd odczytu). Zatwierdź go albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`
+      );
+      return;
+    }
     saveLastUsedModel(user.userId, { provider, model });
     const userCaseLaw = await attachUserCaseLaw(trimmed);
     const sendAttachments = userCaseLaw.reduce((list, item) => upsertAttachment(list, item), documentAttachments);
@@ -4077,8 +4099,11 @@ export default function MatterChatApp({
                 documentRequest.format
             }
           ).catch((error: unknown) => {
+            // The server's router decides that the letter is a court pleading ("odwołanie" from a
+            // ZUS decision goes to the labour court), whatever kind the words of the request named:
+            // the chat below offers the pleading pipeline. Before, a request typed "other" got
+            // "Nie udało się wykonać tego etapu pracy" (test 500, C03-016).
             if (
-              documentRequest.documentType === "pleading" &&
               error instanceof ApiError &&
               error.code === "PROCESS_PLEADING_PIPELINE_REQUIRED"
             ) {

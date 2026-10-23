@@ -76,6 +76,14 @@ describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
     expect(claimedUnitState(claim, wording.evidence, wording.pending).state).toBe(state);
   });
 
+  it("ust. 1 w wierszu nagłówka artykułu (Art. 83a. 1. …), ust. spoza artykułu brak", () => {
+    const evidence = "Art. 83a. 1. Prawo lub zobowiązanie stwierdzone decyzją ostateczną Zakładu ulega ponownemu ustaleniu.\n2. Decyzje ostateczne Zakładu mogą być uchylone.";
+    expect(claimedUnitState("art. 83a ust. 1 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
+    expect(claimedUnitState("art. 83a ust. 2 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
+    expect(claimedUnitState("art. 83a ust. 6 u.s.u.s.", evidence, []).state).toBe("MISSING");
+    expect(claimedUnitState("art. 477^9 ust. 1 KPC", "Art. 477 9 . 1. Odwołanie wnosi się.\n2. Organ przekazuje.", []).state).toBe("IN_FORCE");
+  });
+
   it("§ w artykule bez paragrafów i § z indeksem górnym", () => {
     expect(claimedUnitState("art. 5 § 2 KC", "Art. 5. Nie można czynić ze swego prawa użytku…", []).state).toBe("MISSING");
     expect(claimedUnitState("art. 22 § 1¹ KP", "Art. 22. § 1. Przez nawiązanie…\n§ 1^1. Zatrudnienie…", []).state).toBe("IN_FORCE");

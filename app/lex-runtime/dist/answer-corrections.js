@@ -102,6 +102,15 @@ export function emptyDeferral(text) {
     const items = body.split("\n").filter((line) => /^\s*(?:[-*•]|\d{1,2}[.)])\s+\S/u.test(line));
     return items.length < 2;
 }
+// Every correcting round: the user never saw the corrected draft nor the check; the application
+// lists its corrections next to the answer. Without this the answer opened with "Co poprawiłam
+// względem poprzedniej wersji" and withdrew claims the user had never read (test 500, live run).
+export const CORRECTED_ANSWER_FORM = [
+    "FORMA: zwróć całą odpowiedź dla użytkownika od nowa, tak jakby była pierwsza.",
+    "Użytkownik nie widział poprzedniej wersji ani tej kontroli: nie pisz o poprzedniej wersji, poprawkach, kontroli aplikacji,",
+    "wycofanych twierdzeniach ani o tym, co zmieniono (aplikacja pokazuje poprawki osobno).",
+    "Twierdzenie, którego nie potwierdza pobrany tekst, pomiń albo oznacz ⚠️ w treści, bez komentarza o zmianie."
+].join(" ");
 export const NO_ANSWER_CORRECTION = [
     "KONTROLA APLIKACJI — odpowiedź bez treści: poprzednia odpowiedź tylko zapowiada odpowiedź na później,",
     "nie daje użytkownikowi ani merytorycznej odpowiedzi na jego pytanie, ani pytania, na które mógłby odpowiedzieć.",

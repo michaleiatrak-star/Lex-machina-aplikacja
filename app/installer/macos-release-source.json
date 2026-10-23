@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "macos-arm64",
-  "applicationVersion": "0.1.45",
+  "applicationVersion": "0.1.46",
   "installerMode": "ONLINE_BOOTSTRAP_PKG_POSTINSTALL",
   "applicationUpdate": {
     "verification": "MANUAL_PKG_FROM_OFFICIAL_RELEASE",
@@ -341,7 +341,7 @@
     },
     "claude": {
       "package": "@anthropic-ai/claude-code",
-      "version": "2.1.278",
+      "version": "2.1.309",
       "delivery": "ON_DEMAND_AFTER_USER_SELECTS_CLAUDE_ACCOUNT",
       "auth": "CLAUDE_AI_SUBSCRIPTION",
       "installRoot": "~/.lex-machina/optional-tools/account-clients/anthropic",

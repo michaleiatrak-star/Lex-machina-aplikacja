@@ -2004,7 +2004,7 @@ function sdkMessages(messages: ProviderStreamParams["messages"], images: boolean
 }
 
 // Anthropic API: the workflow's unchanged part and the checkpoint's part as two system
-// blocks, a cache breakpoint after the first (ProviderStreamParams.systemPromptCachePrefix).
+// blocks, a cache breakpoint after each (ProviderStreamParams.systemPromptCachePrefix).
 // The text the model reads is the same as one block.
 export function anthropicSystem(model: LanguageModel, params: ProviderStreamParams): string | SystemModelMessage[] {
   const split = params.systemPromptCachePrefix ?? 0;
@@ -2017,7 +2017,16 @@ export function anthropicSystem(model: LanguageModel, params: ProviderStreamPara
         anthropic: { cacheControl: { type: "ephemeral", ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) } }
       }
     },
-    { role: "system", content: params.systemPrompt.slice(split) }
+    // A second breakpoint at the end of the system prompt: a correcting round over the same
+    // prompt (tools not callable, so its messages are cached apart) reads all of it. Five
+    // minutes: the case's part serves this turn; a 1-hour write costs twice the input price.
+    {
+      role: "system",
+      content: params.systemPrompt.slice(split),
+      providerOptions: {
+        anthropic: { cacheControl: { type: "ephemeral" } }
+      }
+    }
   ];
 }
 
@@ -2086,19 +2095,20 @@ async function streamModelOnce(
     // moves with the conversation), so each tool round of a turn reads the
     // unchanged system prompt and history from the cache instead of re-processing
     // ~30k tokens. The prompt itself is unchanged. OpenAI and Gemini cache a
-    // repeated prefix on their own.
+    // repeated prefix on their own. Five minutes (the turn's own rounds); only the shared
+    // system prefix takes promptCacheTtl "1h".
     ...(isAnthropicModel(model)
       ? {
           providerOptions: {
             anthropic: {
-              cacheControl: { type: "ephemeral" as const, ...(params.promptCacheTtl === "1h" ? { ttl: "1h" as const } : {}) }
+              cacheControl: { type: "ephemeral" as const }
             }
           }
         }
       : promptCacheRouting(model, params)),
     messages: [...(sdkMessages(params.messages, images) as ModelMessage[]), ...extra.messages],
     ...(tools ? { tools } : {}),
-    ...(tools && extra.toolChoice ? { toolChoice: extra.toolChoice } : {}),
+    ...(tools && (extra.toolChoice ?? params.toolChoice) ? { toolChoice: extra.toolChoice ?? params.toolChoice } : {}),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     stopWhen: sdk.stepCountIs(params.maxIterations ?? 10),
     ...(params.abortSignal

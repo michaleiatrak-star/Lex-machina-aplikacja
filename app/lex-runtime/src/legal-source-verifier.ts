@@ -406,7 +406,8 @@ export function claimedUnitState(claim: string, evidence: string, pending: Reado
     para
       ? new RegExp(`(?:^|\\n|\\.\\s)§\\s*${escapeUnit(value)}\\s*\\.`, "u")
       : ust
-        ? new RegExp(`(?:^|\\n)${escapeUnit(value)}\\s*\\.\\s`, "u")
+        ? // Ust. 1 stands on the article's heading line ("Art. 83a. 1. Prawo…"), the next ones open a line.
+          new RegExp(`(?:^|\\n|\\bArt\\.\\s*\\d+[\\d\\[\\]^a-z ]{0,12}?\\.\\s*)${escapeUnit(value)}\\s*\\.\\s`, "u")
         : new RegExp(`(?:^|\\n)${escapeUnit(value)}\\)\\s`, "u");
   const anyOfKind = para ? /(?:^|\n|\.\s)§\s*\d/u : ust ? /\n\d+[a-z]*\.\s/u : /\n\d+[a-z]*\)\s/u;
   const found = at(label).exec(evidence);

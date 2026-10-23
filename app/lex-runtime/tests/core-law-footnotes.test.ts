@@ -43,6 +43,22 @@ describe("odnośniki t.j. z PDF", () => {
     expect(noteDate(NOTES["26"], NOTES)).toBe("2026-11-05");
   });
 
+  it("przez odesłanie data ustawy, nie data jednostki dopisana po średniku (u.ś.p. t.j. 2026/854, art. 17)", () => {
+    const notes = {
+      "4": "Dodany przez art. 13 pkt 1 ustawy z dnia 18 grudnia 2025 r. o zmianie ustawy o systemie ubezpieczeń społecznych oraz niektórych innych ustaw (Dz. U. z 2026 r. poz. 26), która weszła w życie z dniem 13 kwietnia 2026 r.; wejdzie w życie z dniem 1 stycznia 2027 r.",
+      "6": "Dodany przez art. 13 pkt 2 lit. b ustawy, o której mowa w odnośniku 4.",
+      "7": "Dodany przez art. 13 pkt 2 lit. b ustawy, o której mowa w odnośniku 4 ; wejdzie w życie z dniem 1 stycznia 2027 r."
+    };
+    expect(noteDate(notes["4"], notes)).toBe("2027-01-01");
+    expect(noteDate(notes["6"], notes)).toBe("2026-04-13");
+    expect(noteDate(notes["7"], notes)).toBe("2027-01-01");
+    const article = "Art. 17. 1. Ubezpieczony traci prawo do zasiłku chorobowego.\n1a. 6 ) Pracą zarobkową jest każda czynność.\n1d. 7 ) Jeżeli jednak praca zarobkowa może być wykonywana.\n2. Zasiłek chorobowy nie przysługuje.";
+    const wording = articleWording(article, notes, "2026-10-23");
+    expect(wording.text).toContain("Pracą zarobkową");
+    expect(wording.text).not.toContain("Jeżeli jednak");
+    expect(wording.pending).toEqual([{ from: "2027-01-01", text: expect.stringContaining("Jeżeli jednak") }]);
+  });
+
   it("podaje brzmienie obowiązujące w danym dniu; nowe i dodane jednostki czekają w pending", () => {
     const now = articleWording(ART_94, NOTES, "2026-10-12");
     expect(now.unresolved).toBe(false);

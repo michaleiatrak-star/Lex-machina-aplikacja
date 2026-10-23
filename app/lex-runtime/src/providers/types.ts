@@ -64,9 +64,10 @@ export type ProviderStreamParams = {
   // neither resumes nor records a thread. For self-contained calls (skill router,
   // document generator) whose prompt already carries the whole context.
   accountContinuity?: "none";
-  // Anthropic API prompt cache lifetime. "1h" for checkpoint workflows: the next
-  // checkpoint of the same matter (often after more than five minutes) reads the
-  // unchanged prompt from the cache instead of writing it again.
+  // Anthropic API prompt cache lifetime of the shared system prefix (systemPromptCachePrefix).
+  // "1h" for checkpoint workflows: the next checkpoint of the same matter (often after more
+  // than five minutes) reads it from the cache. The rest of the prompt is cached for five
+  // minutes (a 1-hour write costs twice the input price).
   promptCacheTtl?: "5m" | "1h";
   // Length of the system prompt's part that is the same for every checkpoint of one
   // workflow (the rest is the checkpoint's own files and state). Anthropic API: the two
@@ -77,6 +78,9 @@ export type ProviderStreamParams = {
   // to the same cache (prompt_cache_key), xAI by its conversation header (x-grok-conv-id).
   promptCacheKey?: string;
   tools?: NormalizedToolSchema[];
+  // "none": the tools stay defined (the cached prefix of the main call matches) but cannot be
+  // called (a correcting round over the main call's prompt).
+  toolChoice?: "none";
   maxIterations?: number;
   callbacks?: StreamCallbacks;
   runTools?: (
