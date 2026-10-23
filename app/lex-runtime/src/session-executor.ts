@@ -57,6 +57,7 @@ import type {
   NormalizedToolCall,
   NormalizedToolResult,
   ProviderId,
+  ProviderStreamParams,
   StreamCallbacks
 } from "./providers/types.js";
 import { LexSkillRegistry } from "./registry.js";
@@ -2776,9 +2777,14 @@ export class SafeSessionExecutor implements SessionExecutor {
       const resource = /^# (?:MANDATORY PATH RESOURCE|ZASÓB SHARED WYMAGANY PRZEZ SKILL [^:]+): (\S+)/.exec(section)?.[1];
       return Boolean(resource) && !turnScoped.has(resource as string);
     };
+    // The head shared by every case on this path (identity, the mandatory path's modules): the
+    // provider caches the system prompt up to its end; skill-specific resources and the tools
+    // of this case follow it.
+    const sharedPath = (section: string): boolean => stablePath(section) && section.startsWith("# MANDATORY PATH RESOURCE:");
+    const toolPromptStable = [identityPrompt, ...pathSections.filter(sharedPath)].join("\n\n");
     const toolPrompt = [
-      identityPrompt,
-      ...pathSections.filter(stablePath),
+      toolPromptStable,
+      ...pathSections.filter((section) => stablePath(section) && !sharedPath(section)),
       ...(nativeCorpus ? [] : [corpusTools.systemPromptAppendix()]),
       ...(coreLawTools ? [coreLawTools.systemPromptAppendix()] : []),
       ...(caseFileTools ? [caseFileTools.systemPromptAppendix()] : []),
@@ -3022,6 +3028,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         : {}),
       tools: toolSchemas,
       toolSystemPromptAppendix: toolPrompt,
+      toolSystemPromptStableChars: toolPromptStable.length,
       toolSystemPromptTurn: toolPromptTurn,
       // A SIMPLE matter (entry gate) on a local model takes the compact
       // lane: core-law texts in the prompt, core-law tools for the rest.
@@ -3587,6 +3594,34 @@ export class SafeSessionExecutor implements SessionExecutor {
         readResources: readResources(),
         ...(request.caseTimelineDates?.length ? { timelineDates: request.caseTimelineDates } : {})
       });
+    // A correcting round over an API model: the main call's system prompt, tools and messages
+    // (the provider reads them from its cache; the system prompt already holds every path
+    // section) followed by the answer and the request, tools defined but not callable. Before,
+    // each round sent its own ~65k-token prompt and wrote it to the cache again. Local models
+    // and account clients keep the short prompt.
+    const reusable = execution.modelPrompt && !request.model.startsWith("local/") && !request.model.startsWith("account/") ? execution.modelPrompt : null;
+    const correctingRound = (answer: string, instruction: string, systemPrompt?: string): Partial<ProviderStreamParams> & Pick<ProviderStreamParams, "systemPrompt" | "messages"> =>
+      reusable
+        ? {
+            ...reusable,
+            ...(reusable.tools?.length ? { toolChoice: "none" as const } : {}),
+            messages: [...reusable.messages, { role: "assistant" as const, content: answer }, { role: "user" as const, content: instruction }]
+          }
+        : {
+            systemPrompt:
+              systemPrompt ??
+              [
+                ...(placeholderKey ? [placeholderKey] : []),
+                identityPrompt,
+                ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
+                ...pathSections
+              ].join("\n\n"),
+            messages: [
+              { role: "user" as const, content: protectedQuery },
+              { role: "assistant" as const, content: answer },
+              { role: "user" as const, content: instruction }
+            ]
+          };
     const supervisedMissing = correctionEligible ? supervisedFor(modelOutput).filter((check) => check.correction) : [];
 
     if (missingGates.length || supervisedMissing.length) {
@@ -3597,18 +3632,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       try {
         const corrected = await this.providers.stream(request.provider, {
           model: request.model,
-          systemPrompt: [
-            ...(placeholderKey ? [placeholderKey] : []),
-            identityPrompt,
-            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-            ...pathSections
-          ].join("\n\n"),
-          messages: [
-            { role: "user", content: protectedQuery },
-            { role: "assistant", content: modelOutput },
-            {
-              role: "user",
-              content: [
+          ...correctingRound(modelOutput, [
                 ...(missingGates.length ? [gateCorrectionPrompt(missingGates)] : []),
                 ...(supervisedMissing.length
                   ? [
@@ -3617,9 +3641,7 @@ export class SafeSessionExecutor implements SessionExecutor {
                       ...(missingGates.length ? [] : ["Nie dodawaj przepisów, sygnatur ani wartości liczbowych, których nie było w odpowiedzi; zachowaj bez zmian istniejące znaczniki ✅/🟨/⚠️."])
                     ]
                   : [])
-              ].join("\n")
-            }
-          ],
+              ].join("\n")),
           accountContinuity: "none",
           reasoning: "none"
         });
@@ -3671,17 +3693,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       try {
         const corrected = await this.providers.stream(request.provider, {
           model: request.model,
-          systemPrompt: [
-            ...(placeholderKey ? [placeholderKey] : []),
-            identityPrompt,
-            ...(request.modeDecision ? [queryModePrompt(request.modeDecision)] : []),
-            ...pathSections
-          ].join("\n\n"),
-          messages: [
-            { role: "user", content: protectedQuery },
-            { role: "assistant", content: modelOutput },
-            { role: "user", content: NO_ANSWER_CORRECTION }
-          ],
+          ...correctingRound(modelOutput, NO_ANSWER_CORRECTION),
           accountContinuity: "none",
           reasoning: "none"
         });
@@ -3709,12 +3721,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         try {
           const corrected = await this.providers.stream(request.provider, {
             model: request.model,
-            systemPrompt: correctionPrompt,
-            messages: [
-              { role: "user", content: protectedQuery },
-              { role: "assistant", content: modelOutput },
-              { role: "user", content: instruction }
-            ],
+            ...correctingRound(modelOutput, instruction, correctionPrompt),
             accountContinuity: "none",
             reasoning: "none"
           });

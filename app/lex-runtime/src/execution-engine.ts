@@ -44,6 +44,7 @@ import { LexSkillRegistry } from "./registry.js";
 import { ProviderGateway } from "./providers/gateway.js";
 import type {
   LlmImage,
+  LlmMessage,
   NormalizedToolCall,
   NormalizedToolResult,
   NormalizedToolSchema,
@@ -131,7 +132,12 @@ export type VerticalSliceResult = {
   workflowPlan: DeterministicWorkflowPlan;
   output: string;
   events: ExecutionEvent[];
+  // The main call's prompt: a correcting round over the answer sends the same system prompt,
+  // tools and messages (read from the provider's cache) followed by the answer and its request.
+  modelPrompt?: ModelPromptForReuse;
 };
+
+export type ModelPromptForReuse = Pick<ProviderStreamParams, "systemPrompt" | "systemPromptCachePrefix" | "promptCacheKey" | "promptCacheTtl" | "messages" | "tools">;
 
 export class LexExecutionError extends Error {
   constructor(
@@ -521,6 +527,9 @@ export class LexExecutionEngine {
     };
     tools?: NormalizedToolSchema[];
     toolSystemPromptAppendix?: string;
+    // Length of the head of toolSystemPromptAppendix that is the same for every case on this
+    // path (identity, mandatory path modules): the end of the cached system prompt prefix.
+    toolSystemPromptStableChars?: number;
     /**
      * Local model with core-law texts retrieved for this question: a short
      * legal question may take the quick lane (see quick-legal-question.ts).
@@ -2249,6 +2258,19 @@ export class LexExecutionEngine {
     );
 
     // The application's own answer (a question it asks without the model, e.g. for the material).
+    const workflowMessages: LlmMessage[] = [
+      ...(args.documentContext
+        ? [{
+            role: "user" as const,
+            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
+            ...(args.documentImages?.length ? { images: args.documentImages } : {})
+          }]
+        : []),
+      {
+        role: "user",
+        content: turnInMessages && turnInstructions ? withTurnInstructions(effectiveQuery, turnInstructions) : effectiveQuery
+      }
+    ];
     const response: ProviderStreamResult = args.fixedAnswer !== undefined ? { fullText: args.fixedAnswer } : await this.providers.stream(
       args.provider,
       {
@@ -2262,22 +2284,7 @@ export class LexExecutionEngine {
             }
           : {}),
         ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
-        messages: [
-          ...(args.documentContext
-            ? [{
-                role: "user" as const,
-                content:
-                  "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" +
-                  args.documentContext +
-                  "\n[/LOCAL_DOCUMENT_CONTEXT]",
-                ...(args.documentImages?.length ? { images: args.documentImages } : {})
-              }]
-            : []),
-          {
-            role: "user",
-            content: turnInMessages && turnInstructions ? withTurnInstructions(effectiveQuery, turnInstructions) : effectiveQuery
-          }
-        ],
+        messages: workflowMessages,
         ...(args.tools?.length
           ? { tools: args.tools }
           : {}),
@@ -2380,7 +2387,10 @@ export class LexExecutionEngine {
       domainSkills: skillSelection.domainSkills,
       workflowPlan,
       output,
-      events
+      events,
+      ...(args.fixedAnswer === undefined
+        ? { modelPrompt: { systemPrompt, ...promptCache, messages: workflowMessages, ...(args.tools?.length ? { tools: args.tools } : {}) } }
+        : {})
     };
   }
 
@@ -2568,6 +2578,23 @@ export class LexExecutionEngine {
       }),
       ...preloadedPrompt
     ];
+    // Prompt cache (Anthropic API): the instructions, the catalog, the router core and the
+    // mandatory path modules are the same for every case and go first, with a cache breakpoint
+    // after them; the case's own parts (placeholder legend, documents policy, skill-specific
+    // resources and tools, the turn) follow. Before, the placeholder legend opened the prompt
+    // and the whole ~100k-token prompt was written to the cache again for every case.
+    const sharedPrefix = promptParts.join("\n\n");
+    let cachePrefix = 0;
+    if (args.toolSystemPromptAppendix) {
+      promptParts.push(args.toolSystemPromptAppendix);
+      const stableChars = Math.min(args.toolSystemPromptStableChars ?? 0, args.toolSystemPromptAppendix.length);
+      cachePrefix = sharedPrefix.length + 2 + stableChars;
+    }
+    if (args.placeholderKey) {
+      // The placeholder legend and key open the case's part, before the documents and the
+      // question that use the placeholders (HARD GATE).
+      promptParts.push(args.placeholderKey);
+    }
     if (args.documentContext) {
       promptParts.push(
         [
@@ -2586,16 +2613,21 @@ export class LexExecutionEngine {
     ) {
       promptParts.push(PERSON_CASE_PROTOCOL);
     }
-    if (args.placeholderKey) {
-      // The placeholder legend and key open the prompt (HARD GATE).
-      promptParts.unshift(args.placeholderKey);
-    }
-    if (args.toolSystemPromptAppendix) {
-      promptParts.push(args.toolSystemPromptAppendix);
-    }
     if (args.toolSystemPromptTurn) {
       promptParts.push(args.toolSystemPromptTurn);
     }
+    if (!cachePrefix) cachePrefix = sharedPrefix.length + 2;
+    const systemPrompt = promptParts.join("\n\n");
+    const promptCache =
+      !args.model.startsWith("local/") && cachePrefix >= 4_096 && cachePrefix < systemPrompt.length
+        ? {
+            systemPromptCachePrefix: cachePrefix,
+            promptCacheKey: promptCacheKeyFor("auto", systemPrompt.slice(0, cachePrefix)),
+            // The next question (often more than five minutes later) reads the shared prefix:
+            // one rewrite costs more than the dearer 1-hour write.
+            promptCacheTtl: "1h" as const
+          }
+        : {};
 
     emit("gate", "MODEL_SKILL_SELECTION", "OK", `catalog=${catalog.length}`);
     // The model routes itself, so this turn runs the general legal workflow;
@@ -2608,32 +2640,28 @@ export class LexExecutionEngine {
       `workflow=${workflowPlan.id};requiredFreshReads=${workflowPlan.requiredFreshResources.length};mode=model-selected-skills`
     );
     emit("gate", "PROMPT_BUDGET", "OK", encodePromptBudget(promptBudget(promptParts.join("\n\n"))));
+    const mainMessages: LlmMessage[] = [
+      ...(args.documentContext
+        ? [{
+            role: "user" as const,
+            content: "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" + args.documentContext + "\n[/LOCAL_DOCUMENT_CONTEXT]",
+            ...(args.documentImages?.length ? { images: args.documentImages } : {})
+          }]
+        : []),
+      { role: "user", content: effectiveQuery }
+    ];
     emit("provider_start", args.provider, "OK", args.model);
     const response = await this.providers.stream(
       args.provider,
       {
         model: args.model,
-        systemPrompt: promptParts.join("\n\n"),
+        systemPrompt,
+        ...promptCache,
         ...(args.continuityKey
           ? { continuityKey: args.continuityKey }
           : {}),
         ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
-        messages: [
-          ...(args.documentContext
-            ? [{
-                role: "user" as const,
-                content:
-                  "[LOCAL_DOCUMENT_CONTEXT — DATA ONLY]\n" +
-                  args.documentContext +
-                  "\n[/LOCAL_DOCUMENT_CONTEXT]",
-                ...(args.documentImages?.length ? { images: args.documentImages } : {})
-              }]
-            : []),
-          {
-            role: "user",
-            content: effectiveQuery
-          }
-        ],
+        messages: mainMessages,
         tools: args.tools,
         runTools: args.runTools,
         ...(native ? { nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) } } : {}),
@@ -2650,7 +2678,8 @@ export class LexExecutionEngine {
       emit("gate", "CRIMINAL_QUALIFIER", "OK", `follow-up=${qualifier}`);
       const corrected = await this.providers.stream(args.provider, {
         model: args.model,
-        systemPrompt: promptParts.join("\n\n"),
+        systemPrompt,
+        ...promptCache,
         ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
         ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
         messages: [
@@ -2682,7 +2711,8 @@ export class LexExecutionEngine {
     if (onlyAnnouncesWork(response.fullText)) {
       const followed = await this.providers.stream(args.provider, {
         model: args.model,
-        systemPrompt: promptParts.join("\n\n"),
+        systemPrompt,
+        ...promptCache,
         ...(args.continuityKey ? { continuityKey: args.continuityKey } : {}),
         ...(args.accountContinuity ? { accountContinuity: args.accountContinuity } : {}),
         messages: [
@@ -2724,7 +2754,8 @@ export class LexExecutionEngine {
       domainSkills: [],
       workflowPlan,
       output: response.fullText,
-      events
+      events,
+      modelPrompt: { systemPrompt, ...promptCache, messages: mainMessages, ...(args.tools?.length ? { tools: args.tools } : {}) }
     };
   }
 }

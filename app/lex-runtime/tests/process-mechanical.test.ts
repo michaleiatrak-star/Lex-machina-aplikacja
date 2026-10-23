@@ -119,13 +119,13 @@ describe("text that selects modules", () => {
 describe("Anthropic API: the workflow's unchanged part as its own cached system block", () => {
   const model = { provider: "anthropic.messages", modelId: "claude" } as never;
   const systemPrompt = `${"A".repeat(5_000)}\n\n# ACTIVE STATE`;
-  it("splits at the prefix with a breakpoint on the first block", () => {
+  it("splits at the prefix: the shared block keeps the 1-hour breakpoint, the case's block a 5-minute one", () => {
     const system = anthropicSystem(model, { model: "m", systemPrompt, systemPromptCachePrefix: 5_002, promptCacheTtl: "1h", messages: [] });
     expect(Array.isArray(system)).toBe(true);
     const blocks = system as Array<{ content: string; providerOptions?: unknown }>;
     expect(blocks.map((block) => block.content).join("")).toBe(systemPrompt);
     expect(blocks[0]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral", ttl: "1h" } } });
-    expect(blocks[1]!.providerOptions).toBeUndefined();
+    expect(blocks[1]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral" } } });
   });
 
   it("one string for other providers, a short prefix or none", () => {
