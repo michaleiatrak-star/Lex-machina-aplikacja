@@ -4099,8 +4099,11 @@ export default function MatterChatApp({
                 documentRequest.format
             }
           ).catch((error: unknown) => {
+            // The server's router decides that the letter is a court pleading ("odwołanie" from a
+            // ZUS decision goes to the labour court), whatever kind the words of the request named:
+            // the chat below offers the pleading pipeline. Before, a request typed "other" got
+            // "Nie udało się wykonać tego etapu pracy" (test 500, C03-016).
             if (
-              documentRequest.documentType === "pleading" &&
               error instanceof ApiError &&
               error.code === "PROCESS_PLEADING_PIPELINE_REQUIRED"
             ) {

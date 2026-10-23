@@ -385,7 +385,7 @@
     },
     "claude": {
       "package": "@anthropic-ai/claude-code",
-      "version": "2.1.278",
+      "version": "2.1.309",
       "delivery": "ON_DEMAND_AFTER_USER_SELECTS_CLAUDE_ACCOUNT",
       "auth": "CLAUDE_AI_SUBSCRIPTION",
       "installRoot": "%LOCALAPPDATA%\\LexMachina\\optional-tools\\account-clients\\anthropic",

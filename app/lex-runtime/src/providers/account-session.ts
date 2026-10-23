@@ -87,7 +87,7 @@ const OPTIONAL_ACCOUNT_CLIENTS: Partial<Record<
   },
   anthropic: {
     packageName: "@anthropic-ai/claude-code",
-    version: "2.1.278",
+    version: "2.1.309",
     binary: "claude"
   },
   google: {

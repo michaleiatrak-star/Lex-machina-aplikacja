@@ -45,3 +45,21 @@ describe("rehearsal finalization blocks", () => {
     expect(gate.evaluate(marked, ledger).findings.filter((finding) => finding.status === "MISSING_LEDGER_RECORD").map((finding) => finding.reference.claim)).toEqual(["VI ACa 999/20"]);
   });
 });
+
+describe("status consistency on rehearsal answers", () => {
+  it("keeps art. 110¹ apart from a verified art. 110 and the ⚠️ after a Dz.U. address with that address", async () => {
+    const { reconcileStatusMarkers, evaluateStatusConsistency } = await import("../src/status-consistency-gate.js");
+    const ledger = new VerificationLedger();
+    ledger.add({ ...base, kind: "statute", claim: "art. 110 KC", toolCallId: "a", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf", currentEli: "DU/2026/795" });
+    ledger.add({ ...base, kind: "statute", claim: "art. 418 KC", toolCallId: "b", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf#page=43", currentEli: "DU/2026/795" });
+    const m110 = expectedVerificationMarker(ledger.latest("art. 110 KC")!)!;
+    const m418 = expectedVerificationMarker(ledger.latest("art. 418 KC")!)!;
+    const superscript = [`Przepis art. 110 KC ${m110} dotyczy czego innego.`, `Zapis art. 110¹ KC ${UNVERIFIED_MARKER_TEXT} nie został odczytany.`].join("\n");
+    expect(evaluateStatusConsistency(superscript, ledger).result).toBe("PASS");
+
+    const journal = `Tekst jednolity zawiera zmianę z Dz.U. 2026 poz. 507 ${UNVERIFIED_MARKER_TEXT}. Dla art. 418 KC ${UNVERIFIED_MARKER_TEXT} nie ma ona znaczenia.`;
+    const reconciled = reconcileStatusMarkers(journal, ledger).text;
+    expect(reconciled).toContain(`Dz.U. 2026 poz. 507 ${UNVERIFIED_MARKER_TEXT}`);
+    expect(reconciled).toContain(`art. 418 KC ${m418}`);
+  });
+});

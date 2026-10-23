@@ -3993,17 +3993,21 @@ export class SafeSessionExecutor implements SessionExecutor {
             text: unifiedStatus.text
           }
         : markedAnswer;
-    // Uzgodnienie statusów mogło zdjąć lub przesunąć znaczniki: jeszcze dwie rundy
-    // oznaczania (⚠️ dla niezweryfikowanych, znacznik rejestru dla zweryfikowanych), zamiast
-    // blokować całą odpowiedź z powodu jednego powołania.
+    // Uzgodnienie statusów mogło zdjąć lub przesunąć znaczniki: jeszcze dwie rundy całego
+    // przebiegu (oznaczenie, uzgodnienie, ujednolicenie), zamiast blokować całą odpowiedź
+    // z powodu jednego powołania. Samo oznaczenie bez uzgodnienia zostawiało w wierszu ✅ obok
+    // ⚠️ i bramka spójności blokowała turę (zrzuty testu 500: 8 takich tur).
     let remarkedText = reconciledAnswer.text;
     for (let round = 0; round < 2; round += 1) {
       const check = new FinalizationGate().evaluate(remarkedText, ledger);
       if (check.result !== "BLOCKED") break;
-      const next = addMissingVerificationMarkers(
+      const marked = addMissingVerificationMarkers(
         markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
         check
       );
+      const reconciled = reconcileStatusMarkers(marked, ledger);
+      const unified = unifyConflictingProvisions(reconciled.text, ledger);
+      const next = reconciled.repaired > 0 || unified.unified.length > 0 ? unified.text : marked;
       if (next === remarkedText) break;
       remarkedText = next;
     }
