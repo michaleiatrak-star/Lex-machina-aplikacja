@@ -337,6 +337,10 @@ export function evaluateStatusConsistency(
 
   const provisions: StatusConsistencyReport["provisions"] = [];
   const findings: StatusConsistencyFinding[] = [];
+  // A verified provision shown ⚠️ in every place (never ✅): understated, one status in the whole
+  // answer. Reported, not blocking — understating the source misleads no one (test 500, C07-001:
+  // the repealed art. 1088 KC read from ELI and marked ⚠️ throughout blocked the answer).
+  const understated = new Set<string>();
   for (const [key, list] of byKey) {
     const marked = list.filter((item) => item.status !== "UNMARKED");
     const statuses = [...new Set(marked.map((item) => item.status))];
@@ -360,6 +364,7 @@ export function evaluateStatusConsistency(
     const contradicted = marked.filter(
       (item) => item.status !== "VERIFIED" && verifiedRecord(ledger, item.claims)
     );
+    if (contradicted.length > 0 && !conflict && statuses.every((status) => status === "UNVERIFIED")) understated.add(key);
     if (contradicted.length > 0) {
       findings.push({
         key,
@@ -381,7 +386,7 @@ export function evaluateStatusConsistency(
 
   return {
     gate: "G39I_STATUS_CONSISTENCY",
-    result: findings.length > 0 ? "BLOCKED" : "PASS",
+    result: findings.some((finding) => !understated.has(finding.key)) ? "BLOCKED" : "PASS",
     provisions,
     findings,
     orphanUnverifiedLines: lines

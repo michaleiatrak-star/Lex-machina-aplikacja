@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FinalizationGate, expectedVerificationMarker, markUnverifiedReferences, UNVERIFIED_MARKER_TEXT } from "../src/finalization-gate.js";
+import { FinalizationGate, addMissingVerificationMarkers, expectedVerificationMarker, markUnverifiedReferences, UNVERIFIED_MARKER_TEXT } from "../src/finalization-gate.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 
 // Test 500: blokady całej odpowiedzi z powodu jednego powołania (zrzuty finalizacji).
@@ -61,5 +61,31 @@ describe("status consistency on rehearsal answers", () => {
     const reconciled = reconcileStatusMarkers(journal, ledger).text;
     expect(reconciled).toContain(`Dz.U. 2026 poz. 507 ${UNVERIFIED_MARKER_TEXT}`);
     expect(reconciled).toContain(`art. 418 KC ${m418}`);
+  });
+});
+
+describe("live rehearsal over the Claude account (C07-001, C03-016)", () => {
+  it("a verified provision shown ⚠️ in every place is understated, not blocking", async () => {
+    const { evaluateStatusConsistency } = await import("../src/status-consistency-gate.js");
+    const ledger = new VerificationLedger();
+    ledger.add({ ...base, kind: "statute", claim: "art. 1088 KC", toolCallId: "a", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf", currentEli: "DU/2026/795" });
+    const text = [`Art. 1088 KC ${UNVERIFIED_MARKER_TEXT} jest uchylony.`, `Zapis o uchyleniu art. 1088 KC ${UNVERIFIED_MARKER_TEXT} nie odpowiada na pytanie.`].join("\n");
+    expect(evaluateStatusConsistency(text, ledger).result).toBe("PASS");
+  });
+
+  it("drops another provision's real marker copied onto a line, keeps the line's own", () => {
+    const ledger = new VerificationLedger();
+    ledger.add({ ...base, kind: "statute", claim: "art. 477^9 § 1 KPC", toolCallId: "a", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/468/text.pdf#page=93" });
+    ledger.add({ ...base, kind: "statute", claim: "art. 477^9 § 3 KPC", toolCallId: "b", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/468/text.pdf#page=92" });
+    const m1 = expectedVerificationMarker(ledger.latest("art. 477^9 § 1 KPC")!)!;
+    const m3 = expectedVerificationMarker(ledger.latest("art. 477^9 § 3 KPC")!)!;
+    const text = [`Termin: art. 477^9 § 1 KPC ${m1}.`, `Odrzucenie spóźnionego odwołania: art. 477^9 § 3 KPC ${m1}.`].join("\n");
+    const gate = new FinalizationGate();
+    const report = gate.evaluate(text, ledger);
+    expect(report.result).toBe("BLOCKED");
+    const repaired = addMissingVerificationMarkers(text, report);
+    expect(repaired.split("\n")[1]).toContain(m3);
+    expect(repaired.split("\n")[1]).not.toContain(m1);
+    expect(gate.evaluate(repaired, ledger).result).toBe("PASS");
   });
 });

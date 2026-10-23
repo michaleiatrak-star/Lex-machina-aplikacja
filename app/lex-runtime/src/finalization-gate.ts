@@ -933,17 +933,39 @@ export function markUnverifiedReferences(
  */
 export function addMissingVerificationMarkers(
   text: string,
-  report: FinalizationReport
+  report: FinalizationReport,
+  // Markers of every verified record of the turn: a copied real marker can be told from a fabricated one.
+  ledgerMarkers: ReadonlySet<string> = new Set(
+    report.findings.flatMap((finding) => (finding.record?.status === "VERIFIED" ? [expectedVerificationMarker(finding.record)].filter((marker): marker is string => Boolean(marker)) : []))
+  )
 ): string {
   const byLine = new Map<number, Set<string>>();
+  const mismatched = new Set<number>();
   for (const finding of report.findings) {
     if (finding.status !== "MISSING_VERIFICATION_MARKER" && finding.status !== "VERIFICATION_MARKER_MISMATCH") continue;
     const marker = finding.record ? expectedVerificationMarker(finding.record) : null;
     if (!marker) continue;
     byLine.set(finding.reference.line, (byLine.get(finding.reference.line) ?? new Set()).add(marker));
+    if (finding.status === "VERIFICATION_MARKER_MISMATCH") mismatched.add(finding.reference.line);
   }
   if (byLine.size === 0) return text;
+  // A real ledger marker of another provision copied onto this line ("art. 477⁹ § 3 KPC ✅ [VER: …
+  // page=93]" holding § 1's marker; test 500, C03-016) stays a mismatch however many right
+  // markers are added: on such a line only the markers of the line's own verified provisions stay.
+  const owned = new Map<number, Set<string>>();
+  for (const finding of report.findings) {
+    if (!mismatched.has(finding.reference.line) || finding.record?.status !== "VERIFIED") continue;
+    const marker = expectedVerificationMarker(finding.record);
+    if (marker) owned.set(finding.reference.line, (owned.get(finding.reference.line) ?? new Set()).add(marker));
+  }
   const lines = text.split(/\r?\n/u);
+  for (const line of mismatched) {
+    const keep = owned.get(line) ?? new Set<string>();
+    // Only a ledger marker of another provision goes; a fabricated one stays and keeps blocking.
+    lines[line - 1] = (lines[line - 1] ?? "").replace(/ ?✅\s*\[VER:[^\]\r\n]*\]/gu, (match) =>
+      keep.has(match.trimStart()) || !ledgerMarkers.has(match.trimStart()) ? match : ""
+    );
+  }
   for (const [line, markers] of byLine) {
     const current = lines[line - 1] ?? "";
     const missing = [...markers].filter((marker) => !current.includes(marker));
