@@ -3857,6 +3857,15 @@ export default function MatterChatApp({
       !runtimeOnline ||
       !model
     ) return;
+    // Plik w kolejce (przetwarzany, czeka na decyzję albo z błędem odczytu) nie trafiłby do
+    // wiadomości: model odpowiadałby bez niego ("nie widzę wyroku"). Najpierw decyzja o pliku.
+    if (documentDropQueue.files.length > 0 || documentStaging.items.length > 0) {
+      const pending = documentDropQueue.files[0]?.name ?? documentStaging.items[0]?.file?.name;
+      setExecutionError(
+        `${pending ? `Plik ${pending}` : "Dodany plik"} nie jest jeszcze przyjęty (przetwarzanie, decyzja o anonimizacji albo błąd odczytu). Zatwierdź go albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`
+      );
+      return;
+    }
     saveLastUsedModel(user.userId, { provider, model });
     const userCaseLaw = await attachUserCaseLaw(trimmed);
     const sendAttachments = userCaseLaw.reduce((list, item) => upsertAttachment(list, item), documentAttachments);

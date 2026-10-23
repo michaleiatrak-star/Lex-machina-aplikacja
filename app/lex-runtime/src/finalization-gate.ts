@@ -134,7 +134,7 @@ function collectMatches(
 const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
 const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
 // Another act named in words: an act-less article on such a line is not resolved.
-const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
+const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|ordynacj\p{L}*|praw[aoe]?\s+(?:budowlan|bankow|upadłościow|restrukturyzacyjn|energetyczn|autorsk|wodn|geologiczn|lotnicz|pocztow|telekomunikacyjn|przedsiębiorc|o\s+notariacie|o\s+adwokaturze|ochrony\s+środowiska|zamówień|prywatn|spółdzielcz|łowieck|atomow|farmaceutyczn|oświatow|restrukturyz)\p{L}*|pr\.?\s?(?:up|bud|bank|rest|energ|aut|ochr\.?\s?śr|zam\.?\s?publ)\.?|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
 
 const actsIn = (value: string): Set<string> =>
   new Set([...compactActAbbreviations(value).matchAll(ACT_IN_TEXT)].map((match) => match[1]!));
@@ -385,6 +385,21 @@ function withoutAttachedMarkers(reference: DetectedLegalReference): string {
  */
 export type FinalizationMarkers = "in-text" | "removed";
 
+/** A Dz.U. address that is the ELI text a VERIFIED record of this session was read from. */
+function journalSourceRecord(ledger: VerificationLedger, reference: DetectedLegalReference): VerificationRecord | undefined {
+  if (reference.kind !== "journal") return undefined;
+  const match = /(\d{4})\D{1,12}?poz\.?\s*(\d+)/u.exec(reference.claim);
+  if (!match) return undefined;
+  const eli = `DU/${match[1]}/${match[2]}`;
+  return ledger
+    .all()
+    .find(
+      (record) =>
+        record.status === "VERIFIED" &&
+        (record.currentEli === eli || (record.sourceUrl ?? "").includes(`/eli/acts/${eli}/`))
+    );
+}
+
 // "art. 46" mentioned, "art. 46 ust. 2 ustawy o ..." verified: one such record covers it.
 function soleCoveringVerifiedRecord(
   ledger: VerificationLedger,
@@ -495,6 +510,13 @@ export class FinalizationGate {
       // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
       // unmarked claim. A marked claim without any record is shown marked.
       const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
+      // "t.j. Dz.U. 2019 poz. 1950" przy przepisie odczytanym z tego właśnie tekstu w ELI:
+      // adres publikacji jest potwierdzony tym samym odczytem.
+      const sourceText = !record ? journalSourceRecord(ledger, reference) : undefined;
+      if (sourceText) {
+        findings.push({ reference, status: "VERIFIED", record: sourceText });
+        continue;
+      }
       if (!record && ownUnverified) {
         findings.push({
           reference,
@@ -524,6 +546,13 @@ export class FinalizationGate {
           expectedVerificationMarker(
             record
           );
+
+        // Zweryfikowany przepis pokazany ostrożniej, z własnym ⚠️ (np. po ujednoliceniu
+        // sprzecznych statusów): zaniżenie statusu nie wprowadza w błąd, więc nie blokuje.
+        if (ownUnverified && (!VERIFIED_MARKER.test(reference.lineText) || !expectedMarker || !lineMarkers.includes(expectedMarker))) {
+          findings.push({ reference, status: "UNVERIFIED_MARKED", record });
+          continue;
+        }
 
         if (!VERIFIED_MARKER.test(reference.lineText)) {
           findings.push({
@@ -833,6 +862,11 @@ export class FinalizationGate {
 }
 
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
+
+// Wiersz sam mówi, że sygnatury nie potwierdzono ("baza zwróciła 503", "nie mogę potwierdzić",
+// "tylko metadane"): to jawny trop, pokazany z ⚠️, a nie powołanie podane jako pewne.
+const DISCLOSED_UNCONFIRMED =
+  /nie\s+(?:udało\s+(?:mi\s+)?się\s+)?(?:mogę\s+)?(?:potwierdzi|zweryfikowa|pobra|sprawdzi|odczyta|powołuj)|niepotwierdz|niezweryfikowan(?!\S*\])|wymaga\p{L}*\s+weryfikacji|do\s+weryfikacji|sprawdź|captcha|HTTP\s*\d{3}|tylko\s+metadane|bez\s+treści|według\s+mojej\s+wiedzy|prawdopodobnie/iu;
 export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
 
 /**
@@ -856,10 +890,16 @@ export function markUnverifiedReferences(
     "UNVERIFIED_NOT_MARKED"
   ]);
   const byLine = new Map<number, Array<{ claim: string; marker: string }>>();
+  // Sygnatura raz opisana jako niepotwierdzona (albo już z ⚠️) jest tym samym tropem w całej odpowiedzi.
+  const disclosed = new Set(
+    report.findings
+      .filter((finding) => finding.reference.kind === "case" && (finding.status === "UNVERIFIED_MARKED" || DISCLOSED_UNCONFIRMED.test(finding.reference.lineText)))
+      .map((finding) => caseFileKey(finding.reference.claim))
+  );
   for (const finding of report.findings) {
     if (!markable.has(finding.status)) continue;
     const key = finding.reference.kind === "case" ? caseFileKey(finding.reference.claim) : "";
-    if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key)) continue;
+    if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key) && !disclosed.has(key)) continue;
     // An official database's hit outranks the same number in the user's words or the files.
     const marker = finding.reference.kind === "case" && retrievedCases.has(key) ? OFFICIAL_ANCHOR_MARKER_TEXT : UNVERIFIED_MARKER_TEXT;
     byLine.set(finding.reference.line, [

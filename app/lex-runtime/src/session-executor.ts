@@ -3362,6 +3362,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         { tool: event.tool, protectedOnly: true, ...(event.detail ?? {}) }
       );
     }
+    const readCaseTexts: string[] = [];
     for (const read of caseFileTools?.readChunks() ?? []) {
       citationSources.push({
         caseId: request.caseFiles!.caseId,
@@ -3369,6 +3370,14 @@ export class SafeSessionExecutor implements SessionExecutor {
         sourceScope: "CASE_KNOWLEDGE",
         chunks: read.chunks
       });
+      readCaseTexts.push(read.chunks.map((chunk) => chunk.text).join("\n"));
+    }
+    // Dokumenty sprawy czytane narzędziem w tej turze: ich sygnatury i kwoty to fakty sprawy
+    // (jak przy załącznikach), nie orzecznictwo ani stawki ustawowe do weryfikacji.
+    if (readCaseTexts.length > 0) {
+      for (const signature of ownCaseFileNumbers(readCaseTexts, "")) ledger.addCaseFileNumber(signature);
+      for (const signature of mentionedCaseNumbers(readCaseTexts)) ledger.addCaseReference(signature);
+      for (const key of amountKeysIn(readCaseTexts.join("\n"))) ledger.addFactAmount(key);
     }
 
     for (const event of coreLawTools?.auditEvents() ?? []) {
@@ -3955,13 +3964,29 @@ export class SafeSessionExecutor implements SessionExecutor {
     // A conflict the registry does not settle: the provision is shown ⚠️ everywhere (a
     // draft with it marked), never ✅ in one place and ⚠️ in another, and never a blocked turn.
     const unifiedStatus = unifyConflictingProvisions(statusReconciliation.text, ledger);
-    const processedDocumentCitations =
+    const reconciledAnswer =
       statusReconciliation.repaired > 0 || unifiedStatus.unified.length > 0
         ? {
             ...markedAnswer,
             text: unifiedStatus.text
           }
         : markedAnswer;
+    // Uzgodnienie statusów mogło zdjąć lub przesunąć znaczniki: jeszcze dwie rundy
+    // oznaczania (⚠️ dla niezweryfikowanych, znacznik rejestru dla zweryfikowanych), zamiast
+    // blokować całą odpowiedź z powodu jednego powołania.
+    let remarkedText = reconciledAnswer.text;
+    for (let round = 0; round < 2; round += 1) {
+      const check = new FinalizationGate().evaluate(remarkedText, ledger);
+      if (check.result !== "BLOCKED") break;
+      const next = addMissingVerificationMarkers(
+        markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
+        check
+      );
+      if (next === remarkedText) break;
+      remarkedText = next;
+    }
+    const processedDocumentCitations =
+      remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
     const statusConsistency =
       evaluateStatusConsistency(
         processedDocumentCitations.text,

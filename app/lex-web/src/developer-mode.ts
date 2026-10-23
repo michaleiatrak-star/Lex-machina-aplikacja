@@ -155,8 +155,20 @@ export function plainSystemText(content: string): string {
  * An answer for a lawyer: checkpoint ids in headings and notices by their names
  * (the server joins automatic steps under "## CP-..."). The legal text is not touched.
  */
+// Wiersze kontrolne modułów (CN-GATE, WYJ-GATE S1-S4, REM-GATE, wynik bramki, tryb zdegradowany):
+// ślad wykonania dla audytu, nie treść dla prawnika ani laika. Widoczne w trybie dewelopera.
+const QUALITY_GATE_LINE =
+  /^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?(?:\*\*)?\s*(?:(?:CN|WYJ|REM)-GATE\b|(?:CN|REM)-\d+\b|S[1-4](?:\s*[(–—:-]|\s+\p{L}+(?:\s+\p{L}+)?\s*[:)]|\s*\*\*)|→\s*WYNIK:|TRYB\s+ZDEGRADOWANY)/u;
+
+export function withoutQualityGateLines(content: string): string {
+  const lines = content.split("\n");
+  const kept = lines.filter((line) => !QUALITY_GATE_LINE.test(line));
+  if (kept.length === lines.length) return content;
+  return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n\n_Kontrola jakości odpowiedzi (bramki modułów) została wykonana._`;
+}
+
 export function plainAnswerText(content: string): string {
-  return content
+  return withoutQualityGateLines(content)
     .replace("Weryfikacja źródeł lub śladu Gate I nie jest kompletna.", "Weryfikacja źródeł nie jest kompletna.")
     .replace(
       /^Etap nie został zamknięty: w tej turze odmówiono kroku \(.*?\)\. Odpowiedź poniżej jest robocza; powtórz etap, aby zamknąć go z pełnym śladem audytu\./mu,
