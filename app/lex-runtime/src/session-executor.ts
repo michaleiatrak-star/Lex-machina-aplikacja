@@ -4028,7 +4028,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(
           path.join(dir, `${Date.now()}-${randomUUID()}.json`),
-          JSON.stringify({ automatic: automaticVerification.text, cited: citedAnswer.text, pre: preFinalization, marked: markedAnswer.text, final: processedDocumentCitations.text, consistency: statusConsistency, ledger: ledger.all() }, null, 1)
+          JSON.stringify({ automatic: automaticVerification.text, cited: citedAnswer.text, pre: preFinalization, marked: markedAnswer.text, final: processedDocumentCitations.text, consistency: statusConsistency, ledger: ledger.all(), context: { caseFileNumbers: ledger.caseFileNumbers(), caseReferences: ledger.caseReferences(), retrievedCases: ledger.retrievedCases(), factAmounts: ledger.factAmountKeys() } }, null, 1)
         );
       } catch {
         // Diagnostyka nie wpływa na turę.

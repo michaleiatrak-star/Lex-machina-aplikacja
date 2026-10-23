@@ -45,7 +45,7 @@ describe("Google Gemini: klucz API", () => {
     expect(await factory.createModel({ apiKey: "test-key", model: "gemini-2.5-pro" })).toBeTruthy();
   });
 
-  it("lista modeli: tylko modele generujące treść, bez prefiksu models/", async () => {
+  it("lista modeli: tylko modele generujące treść, bez prefiksu models/ i bez 2.5-pro/flash odrzucanych dla nowych kont", async () => {
     const calls: string[] = [];
     const catalog = new DynamicModelCatalog(
       { getApiKey: async () => "g-key" },
@@ -54,7 +54,10 @@ describe("Google Gemini: klucz API", () => {
         expect((init?.headers as Record<string, string>)["x-goog-api-key"]).toBe("g-key");
         return Response.json({
           models: [
-            { name: "models/gemini-2.5-pro", displayName: "Gemini 2.5 Pro", inputTokenLimit: 1048576, supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-3.8-pro", displayName: "Gemini 3.8 Pro", inputTokenLimit: 1048576, supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-2.5-pro", displayName: "Gemini 2.5 Pro", supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-2.5-flash-preview-09-2025", supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-2.5-flash-lite", displayName: "Gemini 2.5 Flash-Lite", supportedGenerationMethods: ["generateContent"] },
             { name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"] }
           ]
         });
@@ -63,7 +66,8 @@ describe("Google Gemini: klucz API", () => {
     const models = await catalog.listAll("google");
     expect(calls[0]).toContain("generativelanguage.googleapis.com/v1beta/models");
     expect(models).toEqual([
-      expect.objectContaining({ provider: "google", id: "gemini-2.5-pro", displayName: "Gemini 2.5 Pro" })
+      expect.objectContaining({ provider: "google", id: "gemini-3.8-pro", displayName: "Gemini 3.8 Pro" }),
+      expect.objectContaining({ provider: "google", id: "gemini-2.5-flash-lite" })
     ]);
   });
 

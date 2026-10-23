@@ -23,6 +23,20 @@ import type { DocumentDropOutcome } from "./document-drop-queue.js";
 import { PrivacyPreview } from "./PrivacyPreview.js";
 import { InfoTip } from "./InfoTip";
 
+/**
+ * Whether a read file needs the preview: personal or health data found, a doubtful OCR line,
+ * or a recognizer down during detection. Without any, "Przetwórz" confirms it at once
+ * (nothing to decide; the test of 500 cases counted 3 clicks per such file).
+ */
+export function needsPrivacyReview(review: Pick<DocumentReviewResponse, "suggestions" | "healthData" | "recognizerWarnings" | "pages">): boolean {
+  return (
+    review.suggestions.length > 0 ||
+    (review.healthData?.length ?? 0) > 0 ||
+    (review.recognizerWarnings?.length ?? 0) > 0 ||
+    review.pages.some((page) => (page.review?.length ?? 0) > 0)
+  );
+}
+
 export type PrivacyDecisionMode =
   | "AUTO_PSEUDONYMIZE"
   | "MANUAL"
@@ -304,6 +318,17 @@ export function DocumentPrivacyPanel({
       const result = await prepare([file]).get(file)!.finally(() => prepared.current.delete(file));
       if (call !== openCall.current) return;
       reviewFiles.current.set(result.documentId, file);
+      if (!needsPrivacyReview(result)) {
+        // Nothing to decide: confirmed with "Przetwórz", no preview and no batch step.
+        const item = await finalizeDraft({ file, fileName: file.name || result.documentId, review: result, directives: [], privacyMode: "AUTO_PSEUDONYMIZE" });
+        if (call !== openCall.current) return;
+        setFinalizedBatch((current) => [...current.filter((next) => next.result.documentId !== item.result.documentId), item]);
+        activeFileRef.current = null;
+        setActiveFileName("");
+        onCaseFilesChange?.();
+        onIncomingFileConsumed?.("READY");
+        return;
+      }
       setReview(result);
       onCaseFilesChange?.();
       const ocrPages = result.pages.filter(
@@ -400,6 +425,40 @@ export function DocumentPrivacyPanel({
     onIncomingFileConsumed?.("READY");
   }
 
+  async function finalizeDraft(draft: DocumentPrivacyDraft): Promise<FinalizedBatchItem> {
+    const result = await finalizeDocument(
+      caseId,
+      draft.review.documentId,
+      draft.directives,
+      undefined,
+      true
+    );
+    const selectedChunkIndices = result.chunks
+      .slice(0, 32)
+      .map((chunk) => chunk.index);
+    if (selectedChunkIndices.length > 0) {
+      onAttachmentSelectionChange?.({
+        caseId,
+        documentId: result.documentId,
+        chunkIndices: selectedChunkIndices
+      });
+    }
+    onProcessingEvent?.({
+      fileName: draft.fileName,
+      stage: "FINALIZED",
+      documentId: result.documentId,
+      totalPages: result.totalPages,
+      ocrPages: result.ocrPages,
+      suggestions: result.privacy.findings,
+      privacyMode: draft.privacyMode
+    });
+    return {
+      fileName: draft.fileName,
+      result,
+      selectedChunkIndices
+    };
+  }
+
   async function finalizeBatch(): Promise<void> {
     if (
       batchFinalizing ||
@@ -416,37 +475,7 @@ export function DocumentPrivacyPanel({
     for (const draft of batchDrafts) {
       try {
         // The batch preview (detections, local AI hints, doubtful OCR lines) was confirmed.
-        const result = await finalizeDocument(
-          caseId,
-          draft.review.documentId,
-          draft.directives,
-          undefined,
-          true
-        );
-        const selectedChunkIndices = result.chunks
-          .slice(0, 32)
-          .map((chunk) => chunk.index);
-        successful.push({
-          fileName: draft.fileName,
-          result,
-          selectedChunkIndices
-        });
-        if (selectedChunkIndices.length > 0) {
-          onAttachmentSelectionChange?.({
-            caseId,
-            documentId: result.documentId,
-            chunkIndices: selectedChunkIndices
-          });
-        }
-        onProcessingEvent?.({
-          fileName: draft.fileName,
-          stage: "FINALIZED",
-          documentId: result.documentId,
-          totalPages: result.totalPages,
-          ocrPages: result.ocrPages,
-          suggestions: result.privacy.findings,
-          privacyMode: draft.privacyMode
-        });
+        successful.push(await finalizeDraft(draft));
       } catch (cause) {
         failed.push(draft);
         failures.push(
