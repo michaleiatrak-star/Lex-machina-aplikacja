@@ -29,6 +29,9 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Analiza sądowa",
     description:
       "Deterministyczna analiza akt i problemu procesowego.",
+    // The guiding question (message box placeholder) and what the user gets.
+    question: "Jaki jest etap postępowania i problem do oceny?",
+    result: "Analiza sytuacji procesowej i kwestii do rozstrzygnięcia.",
     skills: [
       "analiza-sadowa-v6"
     ]
@@ -38,6 +41,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Chronologia sprawy",
     description:
       "Porządkuje zdarzenia, daty, terminy i zależności czasowe.",
+    question: "Jakiego okresu lub zdarzeń dotyczy zadanie?",
+    result: "Chronologia z datami, źródłami i oznaczeniem niepewności.",
     skills: [
       "chronologia-sprawy-v1"
     ]
@@ -47,6 +52,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Analiza dowodów",
     description:
       "Ocena materiału dowodowego, luk, spójności i ryzyk.",
+    question: "Co mają wykazać te dowody?",
+    result: "Ocena dowodów, sprzeczności i brakującego materiału.",
     skills: [
       "analizator-dowodow-v3"
     ]
@@ -56,6 +63,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Analiza umowy",
     description:
       "Deterministyczna analiza postanowień, ryzyk i obowiązków.",
+    question: "Którą stronę reprezentujesz i co chcesz sprawdzić?",
+    result: "Lista ryzyk, obowiązków i zapisów wymagających uwagi.",
     skills: [
       "analizator-umow-v1"
     ]
@@ -65,6 +74,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Pismo procesowe",
     description:
       "Uruchamia checkpointowany pipeline przygotowania pisma procesowego.",
+    question: "Jakie pismo przygotować, do jakiego sądu i w jakim celu?",
+    result: "Projekt pisma, poprzedzony sprawdzeniem brakujących informacji.",
     skills: [
       "pisma-procesowe-v3"
     ]
@@ -74,6 +85,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Pismo proste",
     description:
       "Wezwania, wnioski i krótsze pisma z walidacją przed plikiem.",
+    question: "Do kogo kierujesz pismo i czego oczekujesz?",
+    result: "Projekt krótkiego pisma do sprawdzenia przed zapisaniem pliku.",
     skills: [
       "pisma-proste-v2"
     ]
@@ -83,6 +96,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Analiza przepisu",
     description:
       "Brzmienie aktualne i historyczne, przesłanki, wykładnia, nowelizacje.",
+    question: "Podaj przepis, zagadnienie i datę stanu prawnego.",
+    result: "Analiza przepisu i jego zastosowania we wskazanym stanie prawnym.",
     skills: [
       "analizator-przepisow-v2"
     ]
@@ -92,6 +107,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Research orzecznictwa",
     description:
       "Wyszukiwanie i weryfikacja sygnatur oraz tez orzeczeń.",
+    question: "Jakiego zagadnienia dotyczą poszukiwane orzeczenia?",
+    result: "Zestawienie orzeczeń, tez i statusu weryfikacji źródeł.",
     skills: [
       "orzeczenia-sadowe-v2"
     ]
@@ -101,6 +118,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Przesłuchanie świadków",
     description:
       "Cele dowodowe, sprzeczności i zestawy pytań do świadków.",
+    question: "Co świadek ma potwierdzić lub wyjaśnić?",
+    result: "Plan przesłuchania i pytania powiązane z celami dowodowymi.",
     skills: [
       "przesluchanie-swiadkow-v2-min90"
     ]
@@ -110,6 +129,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Raport sytuacyjny",
     description:
       "Fakty, ryzyka, dowody, terminy, warianty i priorytety sprawy.",
+    question: "Jaką decyzję ma ułatwić raport?",
+    result: "Raport o faktach, ryzykach, terminach i priorytetach.",
     skills: [
       "raport-sytuacyjny-v2"
     ]
@@ -119,6 +140,8 @@ export const DETERMINISTIC_ACTIONS = [
     label: "Raport dla klienta",
     description:
       "Stan sprawy, ryzyka i kolejne kroki zrozumiałym językiem.",
+    question: "O czym chcesz poinformować klienta?",
+    result: "Zrozumiały raport dla klienta do sprawdzenia przez prawnika.",
     skills: [
       "raport-klienta-v1"
     ]

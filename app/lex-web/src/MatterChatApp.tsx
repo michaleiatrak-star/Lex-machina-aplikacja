@@ -5814,6 +5814,11 @@ export default function MatterChatApp({
                     })}
                   </div>
                 ) : null}
+                {workMode === "MECHANICAL" && selectedDeterministicAction ? (
+                  <p className="field-help chat-action-result">
+                    <strong>{selectedDeterministicAction.question}</strong> Wynik: {selectedDeterministicAction.result}
+                  </p>
+                ) : null}
               </section>
             ) : null}
 
@@ -6309,7 +6314,9 @@ export default function MatterChatApp({
                 placeholder={
                   selectedCase?.archivedAt
                     ? "Sprawa archiwalna jest tylko do odczytu."
-                    : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
+                    : workMode === "MECHANICAL" && selectedDeterministicAction
+                      ? selectedDeterministicAction.question
+                      : "Napisz wiadomość. Jeśli nie ma sprawy, pierwszy wpis utworzy dla niego osobny katalog i wątek…"
                 }
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
