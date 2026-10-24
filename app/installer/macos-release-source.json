@@ -4,9 +4,9 @@
   "applicationVersion": "0.1.46",
   "installerMode": "ONLINE_BOOTSTRAP_PKG_POSTINSTALL",
   "applicationUpdate": {
-    "verification": "MANUAL_PKG_FROM_OFFICIAL_RELEASE",
-    "transaction": "USER_OPENS_NEW_PKG",
-    "policy": "NO_IN_APP_INSTALL_ON_MACOS_UNSIGNED_BUILD",
+    "verification": "SHA256_REQUIRED_PKG_FROM_OFFICIAL_RELEASE",
+    "transaction": "APP_OPENS_VERIFIED_PKG_IN_MACOS_INSTALLER",
+    "policy": "TEMPORARY_SHA256_ONLY_UNTIL_APPLE_DEVELOPER_ID",
     "temporaryUnsignedAllowed": true
   },
   "runtime": {

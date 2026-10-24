@@ -347,12 +347,59 @@ fn open_workspace_file(token: String) -> Result<(), String> {
     launch_default_handler(&target)
 }
 
+// macOS: the runtime staged a verified .pkg next to its receipt; the receipt names it and its
+// SHA-256 (from the GitHub release digest). The file is hashed again before it is opened.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn pkg_from_receipt(staging: &Path, receipt_token: &str) -> Result<PathBuf, String> {
+    use sha2::Digest;
+    if !valid_update_receipt_token(receipt_token) {
+        return Err("APPLICATION_UPDATE_RECEIPT_TOKEN_INVALID".to_string());
+    }
+    let receipt_path = staging.join(receipt_token);
+    let receipt: serde_json::Value = std::fs::read_to_string(&receipt_path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .ok_or_else(|| "APPLICATION_UPDATE_RECEIPT_MISSING".to_string())?;
+    let installer = receipt
+        .get("installerToken")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    let expected = receipt
+        .get("sha256")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    // The installer token is the receipt token with .pkg: nothing else in the folder is opened.
+    if installer != receipt_token.replace(".json", ".pkg") || expected.len() != 64 {
+        return Err("APPLICATION_UPDATE_RECEIPT_INVALID".to_string());
+    }
+    let package = staging.join(installer);
+    let bytes = std::fs::read(&package)
+        .map_err(|_| "APPLICATION_UPDATE_INSTALLER_MISSING".to_string())?;
+    let digest = sha2::Sha256::digest(&bytes);
+    let actual: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    if actual != expected {
+        return Err("APPLICATION_UPDATE_SHA256_MISMATCH".to_string());
+    }
+    Ok(package)
+}
+
 #[tauri::command]
 fn install_application_update(
     app: tauri::AppHandle,
     receipt_token: String,
 ) -> Result<(), String> {
-    #[cfg(not(target_os = "windows"))]
+    // macOS: the verified .pkg opens in the system Installer; the app closes so the installer
+    // can replace it (the user confirms the steps of the installer).
+    #[cfg(target_os = "macos")]
+    {
+        let package = pkg_from_receipt(&update_staging_root(env::var_os("TEMP")), &receipt_token)?;
+        launch_default_handler(&package)?;
+        app.exit(0);
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = app;
         let _ = receipt_token;
@@ -499,10 +546,40 @@ mod tests {
         cookie_header,
         is_allowed_external_url,
         is_sn_url,
+        pkg_from_receipt,
         update_staging_root,
         valid_update_receipt_token,
         valid_workspace_open_token,
     };
+
+    #[test]
+    fn pkg_from_receipt_opens_only_the_hashed_package_named_by_the_receipt() {
+        let staging = std::env::temp_dir().join(format!("lex-pkg-test-{}", std::process::id()));
+        std::fs::create_dir_all(&staging).unwrap();
+        let token = "update_0-1-47_0123456789abcdef.json";
+        std::fs::write(staging.join("update_0-1-47_0123456789abcdef.pkg"), b"pkg").unwrap();
+        // A digest other than the file's.
+        let sha = "2a3c4b3ad5c4ec8a6dc4ab8d3f1f2e2fcc4a8dd16b1a5d3ae2cbff1e6a63c8a7";
+        let receipt = |installer: &str, digest: &str| {
+            std::fs::write(
+                staging.join(token),
+                format!("{{\"installerToken\":\"{installer}\",\"sha256\":\"{digest}\"}}"),
+            )
+            .unwrap();
+        };
+        let real = {
+            use sha2::Digest;
+            sha2::Sha256::digest(b"pkg").iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        receipt("update_0-1-47_0123456789abcdef.pkg", &real);
+        assert!(pkg_from_receipt(&staging, token).unwrap().ends_with("update_0-1-47_0123456789abcdef.pkg"));
+        receipt("update_0-1-47_0123456789abcdef.pkg", sha);
+        assert_eq!(pkg_from_receipt(&staging, token).unwrap_err(), "APPLICATION_UPDATE_SHA256_MISMATCH");
+        receipt("../other.pkg", &real);
+        assert_eq!(pkg_from_receipt(&staging, token).unwrap_err(), "APPLICATION_UPDATE_RECEIPT_INVALID");
+        assert_eq!(pkg_from_receipt(&staging, "../x.json").unwrap_err(), "APPLICATION_UPDATE_RECEIPT_TOKEN_INVALID");
+        std::fs::remove_dir_all(&staging).unwrap();
+    }
 
     #[test]
     fn update_staging_root_prefers_temp_like_runtime_and_runner() {
