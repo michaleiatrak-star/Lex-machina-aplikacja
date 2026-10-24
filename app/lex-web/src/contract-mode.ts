@@ -26,9 +26,13 @@ export function suggestedContractMode(text: string): ContractAnalysisMode {
 
 // An unambiguous request to analyse or check a document (no drafting, editing or supplementing):
 // the mode is set without asking. Anything else waits for the user's choice.
+// A question about a document one received ("W załączniku wezwanie do zapłaty, które dostałem.
+// Co mi grozi?", C12-002): it asks for an assessment, not a new or edited document.
+const QUESTION_ABOUT_DOCUMENT = /(?<![\p{L}])(?:dostał\p{L}*|otrzymał\p{L}*|przyszł\p{L}*|co\s+mi\s+grozi|czy\s+(?:muszę|musze|mogę|moge|powinien\p{L}*|należy|to\s+jest|jest\s+zasadn\p{L}*)|zasadn\p{L}*|konsekwencj\p{L}*)/iu;
+
 export function automaticContractMode(text: string): ContractAnalysisMode | null {
   if (suggestedContractMode(text) !== "ANALYSIS") return null;
-  return ANALYSIS_VERB.test(text) &&
+  return (ANALYSIS_VERB.test(text) || QUESTION_ABOUT_DOCUMENT.test(text)) &&
     !/(?<![\p{L}])(?:napisz|sporządź|stwórz|zredaguj|przeredaguj|popraw(?!n)|dopisz|aneks\p{L}*\s+(?:do|dla))/iu.test(text)
     ? "ANALYSIS"
     : null;
