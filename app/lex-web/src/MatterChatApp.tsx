@@ -5064,12 +5064,11 @@ export default function MatterChatApp({
             type="button"
             onClick={() => {
               setActiveTab("settings");
-              setSettingsSection(
-                "security"
-              );
+              // The account's own settings; "Ustawienia" of the whole app is in the menu above.
+              setSettingsSection("security");
             }}
           >
-            Ustawienia
+            Moje konto
           </button>
           <div className="chat-account-actions">
             <button
