@@ -42,4 +42,17 @@ describe("a provision verified in the session is recognized however the answer w
     const out = marked("Zob. art. 1012 KP.", verified(["art. 101² KP"]));
     expect(out).toContain("NIEWERYFIKOWANE");
   });
+
+  it("the marker never splits a superscript paragraph or a range (C12-007: „§ 2 ⚠️¹”, „§ 2 ⚠️–3”)", () => {
+    const out = marked("Okres kończy się (art. 30 § 2¹ Kodeksu pracy).\nZob. art. 264 § 2–3 KP.", new VerificationLedger());
+    expect(out).toContain("art. 30 § 2¹ Kodeksu pracy ⚠️ [NIEWERYFIKOWANE]");
+    expect(out).toContain("art. 264 § 2–3 KP ⚠️ [NIEWERYFIKOWANE]");
+  });
+
+  it("a verified § 2¹ is its own paragraph, not § 2", () => {
+    const out = marked("Okres: art. 30 § 2¹ KP.", verified(["art. 30 § 2 KP"]));
+    expect(out).toContain("art. 30 § 2¹ KP ⚠️ [NIEWERYFIKOWANE]");
+    expect(marked("Okres: art. 30 § 2¹ KP.", verified(["art. 30 § 2¹ KP"]))).not.toContain("NIEWERYFIKOWANE");
+  });
 });
+

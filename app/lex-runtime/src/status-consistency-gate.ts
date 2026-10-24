@@ -56,7 +56,7 @@ const ACTS =
 // "art. 110¹ KC" / "art. 110^1 KC" is its own article, not art. 110 (test 500: the superscript was
 // dropped and art. 110¹ ⚠️ conflicted with a verified art. 110).
 const UNIT =
-  "\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
+  "\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?(?:\\s+ust\\.?\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?(?:\\s+pkt\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?";
 // "art. 233", "art. 233 § 1 KK", "art. 233 i 234 KK", "art. 233, 234 oraz 235 KK", "art. 233–234 KK".
 const REFERENCE = new RegExp(
   `(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:\\s*(?:,|i|oraz|lub|albo|a także|–|-)\\s*(?:art\\.?\\s+)?${UNIT})*)(?:\\s+(${DOTTED_ACT_ALTERNATIVES}|${ACTS})(?![\\p{L}]))?`,

@@ -90,8 +90,12 @@ export function expectedVerificationMarker(
 
 // "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
 // "art. 187 § 1 pkt 3 KPC": the point belongs to the provision, so a marker never splits it.
+// "§ 2¹" is its own paragraph (art. 30 § 2¹ KP), not § 2 with a stray digit after the marker;
+// "§ 2–3" is one reference with its act, the marker after the range (C12-007: "§ 2 ⚠️–3").
+const SUPERSCRIPT = "(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?";
+const UNIT_RANGE = `(?:[–—-]\\d+${SUPERSCRIPT}[a-z]?(?![\\d\\p{L}]))?`;
 const ARTICLE_PATTERN = new RegExp(
-  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+ust\\.?\\s*\\d+[a-z]*)?(?:\\s+pkt\\s*\\d+[a-z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+${SUPERSCRIPT}[a-zA-Z]*${UNIT_RANGE})?(?:\\s+ust\\.?\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+pkt\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
   "giu"
 );
 
