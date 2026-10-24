@@ -81,6 +81,15 @@ function uniqueActAlias(reference) {
         return eu.celex;
     if (OTHER_ACT_WORDS.test(own))
         return null;
+    // "sprzeczne z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.)": the k.c. is art. 58's, the
+    // art. 6 is the tenants' act of the line above (C12-018 verified it as art. 6 KC). The line's act
+    // is taken only in an enumeration ("art. 5 i art. 6 KC") or when it stands before the article.
+    const enumeration = /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own);
+    const before = found ? reference.lineText.slice(0, found.index) : "";
+    if (!enumeration &&
+        aliases(compactActAbbreviations(own)).length === 0 &&
+        aliases(compactActAbbreviations(before)).length === 0)
+        return null;
     const lineAliases = aliases(compactActAbbreviations(reference.lineText));
     return lineAliases.length === 1
         ? lineAliases[0]

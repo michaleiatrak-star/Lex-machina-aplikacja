@@ -17,7 +17,11 @@ export function expectedVerificationMarker(record) {
 }
 // "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
 // "art. 187 § 1 pkt 3 KPC": the point belongs to the provision, so a marker never splits it.
-const ARTICLE_PATTERN = new RegExp(`${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+ust\\.?\\s*\\d+[a-z]*)?(?:\\s+pkt\\s*\\d+[a-z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`, "giu");
+// "§ 2¹" is its own paragraph (art. 30 § 2¹ KP), not § 2 with a stray digit after the marker;
+// "§ 2–3" is one reference with its act, the marker after the range (C12-007: "§ 2 ⚠️–3").
+const SUPERSCRIPT = "(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?";
+const UNIT_RANGE = `(?:[–—-]\\d+${SUPERSCRIPT}[a-z]?(?![\\d\\p{L}]))?`;
+const ARTICLE_PATTERN = new RegExp(`${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+${SUPERSCRIPT}[a-zA-Z]*${UNIT_RANGE})?(?:\\s+ust\\.?\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+pkt\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`, "giu");
 const DZU_PATTERN = /\bDz\.?\s*U\.?\s*(?:(?:z\s+)?\d{4}\s*r?\.?\s*)?poz\.?\s*\d+/giu;
 const CASE_PATTERN = /\bsygn\.?\s*(?:akt\s*)?[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,8}(?:\s+[A-ZĄĆĘŁŃÓŚŹŻ0-9]{1,12}){0,3}\s+\d+\/\d{2,4}\b/gu;
 function normalizeEvidenceText(value) {
@@ -75,13 +79,19 @@ function resolveActs(references, text) {
         if (euAct(own))
             return reference;
         const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
-        const lineActs = actsIn(reference.lineText);
+        // "sprzeczne z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.)": the k.c. is art. 58's own
+        // (C12-018 verified art. 6 ust. 4 of the tenants' act as art. 6 KC). The line's act counts when
+        // it follows this article ("art. 23 i 24 KC"), in a bare enumeration, or stands before it.
+        const before = found ? reference.lineText.slice(0, found.index) : "";
+        const lineActOwned = actsIn(own).size > 0 || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own) || actsIn(before).size > 0;
+        const lineActs = lineActOwned ? actsIn(reference.lineText) : new Set();
+        const borrowedOnly = !lineActOwned && actsIn(reference.lineText).size > 0;
         const unitActs = actsByUnit.get(unit);
         const act = lineActs.size === 1
             ? [...lineActs][0]
             : lineActs.size === 0 && unitActs?.size === 1
                 ? [...unitActs][0]
-                : lineActs.size === 0 && answerActs.size === 1
+                : !borrowedOnly && lineActs.size === 0 && answerActs.size === 1
                     ? [...answerActs][0]
                     : undefined;
         return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;

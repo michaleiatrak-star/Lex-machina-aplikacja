@@ -2666,7 +2666,20 @@ export class SafeSessionExecutor {
                 });
             }
         }
-        const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources);
+        const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources, {
+            otherTexts: [
+                request.query,
+                ...officialCaseLawTexts,
+                ...leadCaseLawTexts,
+                // "Tekst dokumentu: „W transakcjach handlowych…”" quoted art. 7 of the act read in this
+                // turn (C12-011): the wording of a provision is checked by its own gates.
+                ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)
+            ]
+        });
+        const { autoLinked, mismatched, unsourced } = citedAnswer.quoteFindings;
+        if (autoLinked + mismatched + unsourced > 0) {
+            audit.record("gate", "DOCUMENT_QUOTE_FIDELITY", mismatched + unsourced > 0 ? "DEGRADED" : "OK", { autoLinked, mismatched, unsourced });
+        }
         // HARD GATE: an unverified statute or Dz.U. reference is shown only with
         // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
         // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
