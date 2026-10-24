@@ -154,6 +154,14 @@ export type CaseRole =
   | "ANALYST"
   | "VIEWER";
 
+// The user's role in a case as the interface names it.
+export const CASE_ROLE_LABEL: Record<CaseRole, string> = {
+  OWNER: "właściciel",
+  EDITOR: "edycja",
+  ANALYST: "analiza",
+  VIEWER: "podgląd"
+};
+
 export type CaseKind =
   | "MATTER"
   | "FIRM_KNOWLEDGE";

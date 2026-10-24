@@ -2,6 +2,7 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
+import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, saveChatTextSize, type ChatTextSize } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
 import {
@@ -4978,7 +4979,7 @@ export default function MatterChatApp({
                       {item.displayName || "Sprawa bez nazwy"}
                     </strong>
                     <small>
-                      {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                      {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
                     </small>
                   </button>
                   {item.role === "OWNER" ? (
@@ -5046,15 +5047,17 @@ export default function MatterChatApp({
           </small>
         </div>
 
-        <div className="chat-sidebar-foot">
-          <span>prawny-router-v3 ✓</span>
-          <span>shared ✓</span>
-          <span>
-            {selectedDeterministicAction
-              ? selectedDeterministicAction.label
-              : AUTO_CASE_TYPE}
-          </span>
-        </div>
+        {developerMode ? (
+          <div className="chat-sidebar-foot">
+            <span>prawny-router-v3 ✓</span>
+            <span>shared ✓</span>
+            <span>
+              {selectedDeterministicAction
+                ? selectedDeterministicAction.label
+                : AUTO_CASE_TYPE}
+            </span>
+          </div>
+        ) : null}
 
         <div className="chat-account-card">
           <div className="chat-account-identity">
@@ -5312,6 +5315,8 @@ export default function MatterChatApp({
             </h1>
           </div>
           <div className="chat-header-actions">
+            {/* Case filters belong to the list of cases (Start), not to every view. */}
+            {activeTab === "home" ? (
             <div className="chat-case-switcher">
               <label className="chat-case-search">
                 <span>Szukaj spraw</span>
@@ -5366,16 +5371,16 @@ export default function MatterChatApp({
                     Wszystkie
                   </option>
                   <option value="OWNER">
-                    Owner
+                    Właściciel
                   </option>
                   <option value="EDITOR">
-                    Editor
+                    Edycja
                   </option>
                   <option value="ANALYST">
-                    Analyst
+                    Analiza
                   </option>
                   <option value="VIEWER">
-                    Viewer
+                    Podgląd
                   </option>
                 </select>
               </label>
@@ -5470,31 +5475,18 @@ export default function MatterChatApp({
                   Wyczyść filtry
                 </button>
               ) : null}
+            </div>
+            ) : null}
+            {activeTab === "chat" || activeTab === "case" ? (
               <button
                 type="button"
                 className="chat-secondary-action"
-                disabled={
-                  caseBusy
-                }
-                onClick={() =>
-                  void createLocalCase(
-                    newCaseName
-                      .trim() ||
-                      "Nowa sprawa"
-                  )
-                }
+                disabled={Boolean(selectedCase?.archivedAt)}
+                onClick={() => fileInputRef.current?.click()}
               >
-                + Nowa sprawa
+                + Dodaj pliki
               </button>
-            </div>
-            <button
-              type="button"
-              className="chat-secondary-action"
-              disabled={Boolean(selectedCase?.archivedAt)}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              + Dodaj pliki
-            </button>
+            ) : null}
             <input
               ref={fileInputRef}
               className="chat-hidden-file-input"
@@ -7050,7 +7042,7 @@ export default function MatterChatApp({
               {selectedCase ? (
                 <div className="matter-case-meta">
                   <span>ID katalogu: {selectedCase.caseId}</span>
-                  <span>Rola: {selectedCase.role}</span>
+                  <span>Rola: {CASE_ROLE_LABEL[selectedCase.role]}</span>
                   <span>{selectedCase.archivedAt ? "ARCHIWALNA (tylko odczyt)" : "AKTYWNA"}</span>
                 </div>
               ) : null}

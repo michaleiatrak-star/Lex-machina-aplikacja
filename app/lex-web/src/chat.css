@@ -1904,6 +1904,9 @@
 /* New-conversation deterministic legal action picker */
 .chat-pipeline-picker {
   display: grid;
+  /* A tall chat area stretched the rows: empty space and 170 px cards. */
+  align-content: start;
+  align-self: start;
   gap: 12px;
   margin: 0 0 16px;
   padding: 16px 18px;

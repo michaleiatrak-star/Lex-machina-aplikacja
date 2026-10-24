@@ -1,4 +1,5 @@
 import { InfoTip } from "./InfoTip";
+import { CASE_ROLE_LABEL } from "./api";
 import { useEffect, useState } from "react";
 import {
   listUpcomingEvents,
@@ -146,7 +147,7 @@ export function HomeDashboard({
                     <small>
                       zmieniona {new Date(item.updatedAt || item.createdAt).toLocaleString("pl-PL")}
                       {" · "}
-                      {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                      {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
                     </small>
                   </span>
                 </button>
