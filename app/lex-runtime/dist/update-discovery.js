@@ -1,4 +1,4 @@
-export const CURRENT_APPLICATION_VERSION = "0.1.46";
+export const CURRENT_APPLICATION_VERSION = "0.1.47";
 function parseSemver(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
     if (!match)
