@@ -257,6 +257,15 @@ export function withAnomalyJournal(
     execute,
     ...(inner.resolveAutoRouting ? { resolveAutoRouting: (request) => inner.resolveAutoRouting!(request) } : {}),
     ...(inner.summarizeThread ? { summarizeThread: (request) => inner.summarizeThread!(request) } : {}),
-    ...(inner.executiveSkillFor ? { executiveSkillFor: (message) => inner.executiveSkillFor!(message) } : {})
+    ...(inner.executiveSkillFor ? { executiveSkillFor: (message) => inner.executiveSkillFor!(message) } : {}),
+    // Without these the server (always wrapped) routed a turn with delivered files by one
+    // keyword: "Dostałem ten pozew… Co mam zrobić?" + the pozew got the pleading pipeline and
+    // 409 PROCESS_PLEADING_STATE_REQUIRED (C12-008), and Test A redaction never ran.
+    ...(inner.executiveSkillsWithMaterials
+      ? { executiveSkillsWithMaterials: (message, attachments) => inner.executiveSkillsWithMaterials!(message, attachments) }
+      : {}),
+    ...(inner.pleadingRedactionFor
+      ? { pleadingRedactionFor: (message, attachments) => inner.pleadingRedactionFor!(message, attachments) }
+      : {})
   };
 }
