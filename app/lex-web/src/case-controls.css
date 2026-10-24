@@ -7,9 +7,9 @@
   gap: 14px;
   min-height: 66px;
   padding: 10px 22px;
-  border-bottom: 1px solid #d6dbd3;
-  background: rgba(250, 251, 247, 0.96);
-  color: #172018;
+  border-bottom: 1px solid var(--lm-l3);
+  background: rgb(var(--lm-s2-rgb) / 0.96);
+  color: var(--lm-t2);
   backdrop-filter: blur(10px);
 }
 
@@ -22,7 +22,7 @@
 }
 
 .case-controls-primary small {
-  color: #657067;
+  color: var(--lm-t4);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -53,9 +53,9 @@
   flex: 0 0 auto;
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid #c7cec5;
+  border: 1px solid var(--lm-l1);
   border-radius: 999px;
-  background: #fff;
+  background: var(--lm-s1);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -71,28 +71,28 @@
 
 .case-type-chip.selected,
 .case-controls .case-type-auto.selected {
-  border-color: #526b57;
-  background: #e5eee4;
-  color: #17331e;
+  border-color: var(--lm-l18);
+  background: var(--lm-s18);
+  color: var(--lm-t30);
 }
 
 .case-controls select,
 .case-controls input {
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid #c7cec5;
+  border: 1px solid var(--lm-l1);
   border-radius: 9px;
-  background: #fff;
-  color: #172018;
+  background: var(--lm-s1);
+  color: var(--lm-t2);
 }
 
 .case-controls button {
   min-height: 38px;
   padding: 0 12px;
-  border: 1px solid #b9c3b8;
+  border: 1px solid var(--lm-l19);
   border-radius: 9px;
-  background: #f8faf6;
-  color: #1e2b21;
+  background: var(--lm-s2);
+  color: var(--lm-t31);
   font-weight: 700;
   cursor: pointer;
 }
@@ -114,10 +114,10 @@
   gap: 12px;
   width: min(920px, calc(100vw - 36px));
   padding: 16px;
-  border: 1px solid #cbd2c8;
+  border: 1px solid var(--lm-l1);
   border-radius: 14px;
-  background: #fbfcf8;
-  box-shadow: 0 18px 45px rgba(30, 43, 33, 0.16);
+  background: var(--lm-s2);
+  box-shadow: 0 18px 45px rgb(var(--lm-o12-rgb) / 0.16);
 }
 
 .case-controls-row {
@@ -143,9 +143,9 @@
 
 .case-controls-danger {
   padding: 10px 12px;
-  border: 1px solid #e3c5c1;
+  border: 1px solid var(--lm-l20);
   border-radius: 10px;
-  background: #fff8f6;
+  background: var(--lm-s2);
 }
 
 .case-controls-danger summary {
@@ -155,18 +155,18 @@
 
 .case-controls-danger p {
   margin: 8px 0;
-  color: #744f49;
+  color: var(--lm-t32);
   font-size: 12px;
 }
 
 .case-controls .case-controls-delete {
-  border-color: #c79b95;
-  background: #fff1ef;
-  color: #742f27;
+  border-color: var(--lm-l21);
+  background: var(--lm-s5);
+  color: var(--lm-t16);
 }
 
 .case-controls-message {
-  color: #526158;
+  color: var(--lm-t17);
 }
 
 @media (max-width: 900px) {

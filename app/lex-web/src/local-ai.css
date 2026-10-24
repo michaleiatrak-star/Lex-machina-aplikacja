@@ -6,10 +6,10 @@
   width: min(430px, calc(100vw - 40px));
   max-height: min(78vh, 720px);
   overflow: auto;
-  border: 1px solid rgba(120, 120, 120, 0.28);
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.28);
   border-radius: 16px;
-  background: var(--panel-bg, #ffffff);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  background: var(--panel-bg, var(--lm-s1));
+  box-shadow: 0 18px 48px rgb(var(--lm-o6-rgb) / 0.18);
 }
 
 .local-ai-setup > summary {
@@ -47,8 +47,8 @@
 }
 
 .local-ai-setup-minimized .floating-icon-button {
-  border: 1px solid rgba(120, 120, 120, 0.24);
-  background: #fff;
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.24);
+  background: var(--lm-s1);
   color: inherit;
   cursor: pointer;
 }
@@ -59,9 +59,9 @@
   top: 4px;
   width: 8px;
   height: 8px;
-  border: 2px solid #fff;
+  border: 2px solid var(--lm-l13);
   border-radius: 50%;
-  background: #1c8550;
+  background: var(--lm-s35);
 }
 
 .local-ai-setup > summary > .floating-drag-handle {
@@ -71,9 +71,9 @@
 .local-ai-setup > summary > .floating-minimize-button {
   flex: none;
   height: 30px;
-  border: 1px solid rgba(120, 120, 120, 0.22);
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.22);
   border-radius: 9px;
-  background: #fff;
+  background: var(--lm-s1);
   color: inherit;
   cursor: pointer;
 }
@@ -85,11 +85,11 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  background: rgba(120, 120, 120, 0.14);
+  background: rgb(var(--lm-o2-rgb) / 0.14);
 }
 
 .local-ai-badge.ready {
-  background: rgba(28, 133, 80, 0.14);
+  background: rgb(var(--lm-o8-rgb) / 0.14);
 }
 
 .local-ai-body {
@@ -117,7 +117,7 @@
 
 .local-ai-body select {
   min-height: 40px;
-  border: 1px solid rgba(120, 120, 120, 0.3);
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.3);
   border-radius: 10px;
   padding: 0 10px;
   background: inherit;
@@ -134,7 +134,7 @@
 .local-ai-warning {
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(184, 119, 0, 0.12);
+  background: rgb(var(--lm-o3-rgb) / 0.12);
   font-size: 12px;
 }
 
@@ -142,7 +142,7 @@
   display: grid;
   gap: 7px;
   padding: 10px 12px;
-  border: 1px solid rgba(120, 120, 120, 0.22);
+  border: 1px solid rgb(var(--lm-o2-rgb) / 0.22);
   border-radius: 10px;
 }
 
@@ -183,7 +183,7 @@
 }
 
 .local-ai-error {
-  color: #b42318;
+  color: var(--lm-t5);
 }
 
 @media (max-width: 720px) {
@@ -216,8 +216,8 @@
 }
 
 .local-ai-danger {
-  border-color: rgba(180, 35, 24, 0.35);
-  color: #b42318;
+  border-color: rgb(var(--lm-o19-rgb) / 0.35);
+  color: var(--lm-t5);
 }
 
 .local-ai-setup-embedded {
@@ -227,8 +227,8 @@
   width: 100%;
   max-height: none;
   overflow: visible;
-  border-color: #d5ddd3;
-  background: #fafbf8;
+  border-color: var(--lm-l3);
+  background: var(--lm-s2);
   box-shadow: none;
 }
 

@@ -3,7 +3,7 @@ import {
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
 import { CASE_ROLE_LABEL } from "./api";
-import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, saveChatTextSize, type ChatTextSize } from "./text-size";
+import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
 import {
   canWriteCase,
@@ -1711,6 +1711,7 @@ export default function MatterChatApp({
 
   const [query, setQuery] = useState("");
   const [chatTextSize, setChatTextSize] = useState<ChatTextSize>(() => readChatTextSize());
+  const [theme, setTheme] = useState<Theme>(() => readTheme());
   useEffect(() => applyChatTextSize(chatTextSize), [chatTextSize]);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
@@ -7971,7 +7972,22 @@ export default function MatterChatApp({
                         ))}
                       </select>
                     </label>
-                    <p className="field-help">Zmienia tekst wiadomości i pola pisania. Ustawienie zostaje w tej przeglądarce.</p>
+                    <label>
+                      Motyw kolorów
+                      <select
+                        value={theme}
+                        onChange={(event) => {
+                          const next = event.target.value as Theme;
+                          setTheme(next);
+                          saveTheme(next);
+                        }}
+                      >
+                        {THEMES.map((option) => (
+                          <option key={option.theme} value={option.theme}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="field-help">Rozmiar zmienia tekst wiadomości i pola pisania. Ustawienia zostają w tej przeglądarce.</p>
                   </article>
                 </div>
               ) : settingsSection === "security" ? (
