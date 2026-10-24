@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  QUOTE_MISMATCH_MARKER,
+  QUOTE_UNSOURCED_MARKER,
   processDocumentCitationMarkers
 } from "./document-citations.js";
 
@@ -57,5 +59,103 @@ describe("local document citations", () => {
     expect(result.citations).toHaveLength(1);
     expect(result.citations[0]?.highlightStart).toBeUndefined();
     expect(result.citations[0]?.highlightEnd).toBeUndefined();
+  });
+
+  const pleading = {
+    caseId: "case_" + "a".repeat(32),
+    documentId: "document_" + "c".repeat(32),
+    sourceScope: "CASE_KNOWLEDGE" as const,
+    chunks: [
+      { index: 0, pageStart: 1, pageEnd: 1, text: "ODPOWIEDŹ NA POZEW\nPozwany wnosi o oddalenie powództwa w całości." },
+      {
+        index: 1,
+        pageStart: 2,
+        pageEnd: 2,
+        text: "Pozwany podnosi, że towar został dostarczony z opóźnieniem nieprzekraczają-\ncym trzech dni, a powód nie zgłosił reklamacji w terminie umownym."
+      }
+    ]
+  };
+  const pleadingRef = (chunk: number) => `[[LEXDOC:${pleading.documentId}:${chunk}]]`;
+
+  it("marks a linked quote whose wording is not in the document", () => {
+    const result = processDocumentCitationMarkers(
+      `Pozwany twierdzi: „towar dostarczono bez żadnego opóźnienia”${pleadingRef(1)}.`,
+      [pleading]
+    );
+
+    expect(result.citations[0]?.quoteFidelity).toBe("NOT_FOUND");
+    expect(result.text).toContain(`[[LEXDOCREF:docref_1]] ${QUOTE_MISMATCH_MARKER}`);
+    expect(result.quoteFindings.mismatched).toBe(1);
+  });
+
+  it("accepts a faithful quote across line-break hyphenation, case, typography and [...] elisions", () => {
+    const result = processDocumentCitationMarkers(
+      `W odpowiedzi na pozew: „towar został dostarczony z opóźnieniem nieprzekraczającym trzech dni [...] powód nie zgłosił reklamacji”${pleadingRef(1)}.`,
+      [pleading]
+    );
+
+    const citation = result.citations[0]!;
+    expect(citation.quoteFidelity).toBe("EXACT");
+    expect(result.text).not.toContain(QUOTE_MISMATCH_MARKER);
+    expect(citation.contextText.slice(citation.highlightStart, citation.highlightEnd))
+      .toMatch(/^towar .* powód nie zgłosił reklamacji$/s);
+  });
+
+  it("re-anchors a quote cited with the wrong chunk to the passage that holds it", () => {
+    const result = processDocumentCitationMarkers(
+      `„powód nie zgłosił reklamacji w terminie umownym”${pleadingRef(0)}`,
+      [pleading]
+    );
+
+    expect(result.citations[0]).toMatchObject({ chunkIndex: 1, pageStart: 2, quoteFidelity: "EXACT" });
+  });
+
+  it("links an unmarked quote found verbatim in a case document", () => {
+    const result = processDocumentCitationMarkers(
+      "Strona przeciwna pisze, że „pozwany wnosi o oddalenie powództwa w całości”.",
+      [pleading]
+    );
+
+    expect(result.quoteFindings.autoLinked).toBe(1);
+    expect(result.citations[0]).toMatchObject({ chunkIndex: 0, quoteFidelity: "EXACT" });
+    expect(result.text).toContain("”[[LEXDOCREF:docref_1]].");
+  });
+
+  it("flags an unmarked quote attributed to a pleading that no document contains", () => {
+    const result = processDocumentCitationMarkers(
+      "Pozwany w odpowiedzi na pozew przyznał: „dług istnieje i zostanie spłacony w całości”.",
+      [pleading]
+    );
+
+    expect(result.quoteFindings.unsourced).toBe(1);
+    expect(result.text).toContain(`spłacony w całości” ${QUOTE_UNSOURCED_MARKER}.`);
+  });
+
+  it("leaves statute wording, the user's own words and short terms alone", () => {
+    const text = [
+      "Pozwany powołuje art. 6 k.c., który stanowi: „ciężar udowodnienia faktu spoczywa na osobie, która z faktu tego wywodzi skutki prawne”.",
+      "Powód w wiadomości napisał: „chcę odzyskać całą zapłaconą kwotę za towar”.",
+      "Umowa używa pojęcia „siła wyższa”."
+    ].join("\n\n");
+    const result = processDocumentCitationMarkers(text, [pleading], {
+      otherTexts: ["Użytkownik: chcę odzyskać całą zapłaconą kwotę za towar"]
+    });
+
+    expect(result.text).toBe(text);
+    expect(result.quoteFindings).toEqual({ autoLinked: 0, mismatched: 0, unsourced: 0 });
+  });
+
+  it("does not claim a mismatch when only a digest of the passage was available", () => {
+    const digest = {
+      ...pleading,
+      chunks: [{ ...pleading.chunks[1]!, representation: "EXTRACTIVE_DIGEST" as const, text: "Pozwany podnosi opóźnienie dostawy." }]
+    };
+    const result = processDocumentCitationMarkers(
+      `„towar został dostarczony z opóźnieniem trzech dni”${pleadingRef(1)}`,
+      [digest]
+    );
+
+    expect(result.citations[0]?.quoteFidelity).toBe("DIGEST_UNCHECKED");
+    expect(result.text).not.toContain(QUOTE_MISMATCH_MARKER);
   });
 });

@@ -191,6 +191,7 @@ export function DocumentCitationContent({
             {citations.map((citation) => (
               <li key={citation.citationId}>
                 <strong>{citation.label}</strong>
+                {citation.quoteFidelity === "NOT_FOUND" ? <em className="document-citation-mismatch">cytat niezgodny z dokumentem</em> : null}
                 {citation.quote ? <span>„{citation.quote.length > 160 ? `${citation.quote.slice(0, 160)}…` : citation.quote}”</span> : null}
                 <button type="button" className="chat-secondary-action" onClick={() => { setSelected(citation); setWhole(false); }}>
                   Fragment
@@ -244,7 +245,17 @@ export function DocumentCitationContent({
               Strona {selected.pageStart}
               {selected.pageEnd !== selected.pageStart ? `–${selected.pageEnd}` : ""}
             </span>
-            {selected.highlightStart !== undefined && selected.highlightEnd !== undefined ? (
+            {selected.quoteFidelity === "NOT_FOUND" ? (
+              <strong className="document-citation-mismatch">
+                Cytat niezgodny z dokumentem
+                <InfoTip>Słów przytoczonych w odpowiedzi nie ma w tym dokumencie. Sprawdź brzmienie w źródle przed użyciem.</InfoTip>
+              </strong>
+            ) : selected.quoteFidelity === "DIGEST_UNCHECKED" ? (
+              <span>
+                Cytatu nie sprawdzono
+                <InfoTip>Model widział ten fragment w skrócie, więc dosłowności cytatu nie dało się porównać z pełnym tekstem.</InfoTip>
+              </span>
+            ) : selected.highlightStart !== undefined && selected.highlightEnd !== undefined ? (
               <strong>Dokładny cytat zaznaczony w źródle</strong>
             ) : (
               <span>

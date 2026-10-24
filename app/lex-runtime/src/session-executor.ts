@@ -3944,8 +3944,18 @@ export class SafeSessionExecutor implements SessionExecutor {
     const citedAnswer =
       processDocumentCitationMarkers(
         automaticVerification.text,
-        citationSources
+        citationSources,
+        { otherTexts: [request.query, ...officialCaseLawTexts, ...leadCaseLawTexts] }
       );
+    const { autoLinked, mismatched, unsourced } = citedAnswer.quoteFindings;
+    if (autoLinked + mismatched + unsourced > 0) {
+      audit.record(
+        "gate",
+        "DOCUMENT_QUOTE_FIDELITY",
+        mismatched + unsourced > 0 ? "DEGRADED" : "OK",
+        { autoLinked, mismatched, unsourced }
+      );
+    }
     // HARD GATE: an unverified statute or Dz.U. reference is shown only with
     // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
     // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,

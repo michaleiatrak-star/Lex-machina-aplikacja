@@ -1277,3 +1277,8 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.document-citation-mismatch {
+  color: #b42318;
+  font-style: normal;
+}
