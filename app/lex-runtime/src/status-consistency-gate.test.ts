@@ -279,3 +279,26 @@ describe("ChatGPT answer 233/234/238 KK (2026-10-05)", () => {
     ]);
   });
 });
+
+describe("a ⚠️ shared with a Dz.U. reference", () => {
+  it("stays with the unverified journal when the verified article in the line drops it", () => {
+    const text = `Fałszywe zeznania: art. 233 KK (t.j. Dz.U. 2025 poz. 9999) ${VER_233} ⚠️ [NIEWERYFIKOWANE]`;
+    const ledger = ledgerWithKk();
+    // The journal was checked and not found (as gate-i auto-verification records it).
+    ledger.add({
+      claim: "Dz.U. 2025 poz. 9999",
+      kind: "journal",
+      status: "UNVERIFIED",
+      sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2025/9999/text.html",
+      sourceTier: "R1",
+      fetchedAt: "2026-10-02T10:00:00.000Z",
+      verificationMethod: "web_fetch",
+      evidence: "Official source was fetched, but the requested reference was not found in the fetched text."
+    });
+    expect(new FinalizationGate().evaluate(text, ledger).result).not.toBe("BLOCKED");
+
+    const repaired = reconcileStatusMarkers(text, ledger).text;
+    expect(repaired).toBe(`Fałszywe zeznania: art. 233 KK (t.j. Dz.U. 2025 poz. 9999 ⚠️ [NIEWERYFIKOWANE]) ${VER_233}`);
+    expect(new FinalizationGate().evaluate(repaired, ledger).result).not.toBe("BLOCKED");
+  });
+});

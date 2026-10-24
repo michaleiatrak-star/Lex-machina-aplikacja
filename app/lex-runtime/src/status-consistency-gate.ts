@@ -1,6 +1,6 @@
 import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
-import { detectLegalReferences } from "./finalization-gate.js";
+import { detectLegalReferences, FinalizationGate, UNVERIFIED_MARKER_TEXT } from "./finalization-gate.js";
 import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 import {
@@ -494,9 +494,32 @@ export function reconcileStatusMarkers(
     for (const edit of edits.sort((a, b) => b.start - a.start)) {
       next = next.slice(0, edit.start) + edit.insert + next.slice(edit.end);
     }
-    return next;
+    return keepOtherReferencesMarked(line.text, next, ledger);
   });
   return { text: repaired > 0 ? output.join("\n") : text, repaired };
+}
+
+// "art. 156 § 2 KPA (t.j. Dz.U. 2025 poz. 1691) ✅ … ⚠️": the ⚠️ a verified article loses was
+// the journal's too (test 500). A Dz.U. or signature marked before the repair and unmarked
+// after it gets its own ⚠️, right after it.
+function keepOtherReferencesMarked(before: string, after: string, ledger: VerificationLedger): string {
+  const gate = new FinalizationGate();
+  const marked = new Set(
+    gate.evaluate(before, ledger).findings
+      .filter((finding) => finding.reference.kind !== "statute" && finding.status === "UNVERIFIED_MARKED")
+      .map((finding) => finding.reference.span ?? finding.reference.claim)
+  );
+  if (marked.size === 0) return after;
+  let next = after;
+  for (const finding of gate.evaluate(after, ledger).findings) {
+    const written = finding.reference.span ?? finding.reference.claim;
+    if (finding.status !== "UNVERIFIED_NOT_MARKED" || !marked.has(written)) continue;
+    const at = next.indexOf(written);
+    if (at < 0) continue;
+    const end = at + written.length;
+    next = `${next.slice(0, end)} ${UNVERIFIED_MARKER_TEXT}${next.slice(end)}`;
+  }
+  return next;
 }
 
 /**
