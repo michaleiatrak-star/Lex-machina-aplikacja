@@ -2,6 +2,7 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
+import { ChatStarters } from "./ChatStarters";
 import {
   canWriteCase,
   caseScheduleKindLabel,
@@ -6207,6 +6208,12 @@ export default function MatterChatApp({
                     </span>
                   </div>
                 </article>
+              ) : null}
+              {!threadLoading && !selectedCase?.archivedAt && messages.length === 1 && messages[0]?.id === "welcome" ? (
+                <ChatStarters onPick={(text) => {
+                  setQuery(text);
+                  document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
+                }} />
               ) : null}
               <div ref={chatEndRef} />
             </div>

@@ -3273,3 +3273,10 @@ mark.restored {
   margin: 0;
   padding: 0;
 }
+
+.chat-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
