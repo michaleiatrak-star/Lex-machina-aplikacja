@@ -115,15 +115,34 @@ function FullDocument({
   );
 }
 
+// The text the user marked in the viewer, else the quoted words, else the passage.
+export function askAboutText(citation: WorkspaceDocumentCitation, viewer: HTMLElement | null): string {
+  const selection = typeof window === "undefined" ? null : window.getSelection();
+  const marked =
+    selection && viewer && selection.rangeCount > 0 && viewer.contains(selection.anchorNode)
+      ? selection.toString().trim()
+      : "";
+  const highlighted =
+    citation.highlightStart !== undefined && citation.highlightEnd !== undefined
+      ? citation.contextText.slice(citation.highlightStart, citation.highlightEnd)
+      : "";
+  const passage = (marked || citation.quote || highlighted || citation.contextText).replace(/\s+/gu, " ").trim();
+  const shown = passage.length > 600 ? `${passage.slice(0, 600)}…` : passage;
+  return `Wyjaśnij ten fragment (${citation.label}): „${shown}”\n`;
+}
+
 export function DocumentCitationContent({
   content,
   citations = [],
   onOpenUrl,
   markdown = true,
   caseId,
-  sources
+  sources,
+  onAskAbout
 }: {
   content: string;
+  // "Zapytaj o ten fragment": puts the passage into the message box (nothing is sent).
+  onAskAbout?: (text: string) => void;
   citations?: WorkspaceDocumentCitation[];
   // Sprawa, z której akt można wczytać cały cytowany dokument.
   caseId?: string;
@@ -228,6 +247,11 @@ export function DocumentCitationContent({
               {caseId || selected.caseId ? (
                 <button type="button" onClick={() => setWhole((value) => !value)}>
                   {whole ? "Tylko fragment" : "Cały dokument"}
+                </button>
+              ) : null}
+              {onAskAbout ? (
+                <button type="button" onClick={() => onAskAbout(askAboutText(selected, viewerRef.current))}>
+                  Zapytaj o ten fragment
                 </button>
               ) : null}
               <button type="button" onClick={() => setSelected(null)}>

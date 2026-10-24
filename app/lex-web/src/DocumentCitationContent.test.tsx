@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DocumentCitationContent } from "./DocumentCitationContent";
+import { askAboutText, DocumentCitationContent } from "./DocumentCitationContent";
 
 const citation = {
   citationId: "docref_1",
@@ -33,4 +33,11 @@ describe("DocumentCitationContent", () => {
     );
     expect(html).not.toContain("niezgodny");
   });
+
+  it("asks about the quoted words with the citation's label", () => {
+    const text = askAboutText({ ...citation, quote: "towar   został dostarczony" }, null);
+    expect(text).toBe("Wyjaśnij ten fragment (Dokument 1, s. 2): „towar został dostarczony”\n");
+    expect(askAboutText(citation, null)).toContain("„Pozwany podnosi, że towar został dostarczony z opóźnieniem.”");
+  });
 });
+

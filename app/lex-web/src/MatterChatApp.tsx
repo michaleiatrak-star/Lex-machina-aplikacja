@@ -5842,6 +5842,14 @@ export default function MatterChatApp({
                     {...(selectedCase?.caseId ? { caseId: selectedCase.caseId } : {})}
                     {...(message.evidence?.length ? { sources: verifiedSources(message.evidence) } : {})}
                     markdown={message.role === "assistant"}
+                    {...(!selectedCase?.archivedAt
+                      ? {
+                          onAskAbout: (text: string) => {
+                            setQuery((current) => (current.trim() ? `${current.trimEnd()}\n\n${text}` : text));
+                            document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
+                          }
+                        }
+                      : {})}
                   />
                   {message.role === "assistant" &&
                   (message.restorations?.length ||
