@@ -167,14 +167,21 @@ function resolveActs(references: DetectedLegalReference[], text: string): Detect
     const own = found ? reference.lineText.slice(found.index + found[0].length).split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 160) : "";
     if (euAct(own)) return reference;
     const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
-    const lineActs = actsIn(reference.lineText);
+    // "sprzeczne z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.)": the k.c. is art. 58's own
+    // (C12-018 verified art. 6 ust. 4 of the tenants' act as art. 6 KC). The line's act counts when
+    // it follows this article ("art. 23 i 24 KC"), in a bare enumeration, or stands before it.
+    const before = found ? reference.lineText.slice(0, found.index) : "";
+    const lineActOwned =
+      actsIn(own).size > 0 || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own) || actsIn(before).size > 0;
+    const lineActs = lineActOwned ? actsIn(reference.lineText) : new Set<string>();
+    const borrowedOnly = !lineActOwned && actsIn(reference.lineText).size > 0;
     const unitActs = actsByUnit.get(unit);
     const act =
       lineActs.size === 1
         ? [...lineActs][0]
         : lineActs.size === 0 && unitActs?.size === 1
           ? [...unitActs][0]
-          : lineActs.size === 0 && answerActs.size === 1
+          : !borrowedOnly && lineActs.size === 0 && answerActs.size === 1
             ? [...answerActs][0]
             : undefined;
     return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;

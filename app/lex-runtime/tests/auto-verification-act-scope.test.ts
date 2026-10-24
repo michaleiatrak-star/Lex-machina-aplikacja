@@ -22,6 +22,14 @@ describe("akt powołanego artykułu w automatycznej weryfikacji", () => {
     const calls = planAutomaticLegalVerification("Zgodnie z art. 415 i art. 361 KC sprawca odpowiada.", new VerificationLedger()).calls.map((call) => call.input.act);
     expect(calls).toEqual(["KC", "KC"]);
   });
+
+  it("artykuł bez aktu nie przejmuje skrótu innego artykułu z dalszej części wiersza (C12-018)", () => {
+    const plan = (text: string) =>
+      planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => [call.input.claim, call.input.act]);
+    expect(plan("Zapis jest sprzeczny z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.).")).toEqual([["art. 58 § 1 KC", "KC"]]);
+    // Akt przed artykułem w tym samym wierszu nadal się liczy.
+    expect(plan("Według KC art. 58 § 1 dotyczy nieważności.").map(([, act]) => act)).toEqual(["KC"]);
+  });
 });
 
 describe("bramka końcowa: akt UE po artykule nie dostaje skrótu polskiego aktu z odpowiedzi", async () => {

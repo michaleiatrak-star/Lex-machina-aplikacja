@@ -80,6 +80,8 @@ describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
     const evidence = "Art. 83a. 1. Prawo lub zobowiązanie stwierdzone decyzją ostateczną Zakładu ulega ponownemu ustaleniu.\n2. Decyzje ostateczne Zakładu mogą być uchylone.";
     expect(claimedUnitState("art. 83a ust. 1 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
     expect(claimedUnitState("art. 83a ust. 2 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
+    // Art. 6 KC has no units at all: "ust. 3" of it does not exist (C12-018, VERIFIED before).
+    expect(claimedUnitState("art. 6 ust. 3 KC", "Art. 6. Ciężar udowodnienia faktu spoczywa na osobie, która z faktu tego wywodzi skutki prawne.", []).state).toBe("MISSING");
     expect(claimedUnitState("art. 83a ust. 6 u.s.u.s.", evidence, []).state).toBe("MISSING");
     expect(claimedUnitState("art. 477^9 ust. 1 KPC", "Art. 477 9 . 1. Odwołanie wnosi się.\n2. Organ przekazuje.", []).state).toBe("IN_FORCE");
   });
