@@ -632,7 +632,8 @@ function givenAsExample(reference) {
     const at = reference.lineText.indexOf(reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, ""));
     if (at < 0)
         return false;
-    return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
+    // "Podaj dane, na przykład „1: I C 1234/26, data nakazu…”": a numbered field before it (C12-008, live).
+    return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:\(?\d{1,2}\s*[.):]\s*)?(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
 }
 const DISCLOSED_UNCONFIRMED = /nie\s+(?:udało\s+(?:mi\s+)?się\s+)?(?:mogę\s+)?(?:potwierdzi|zweryfikowa|pobra|sprawdzi|odczyta|powołuj)|niepotwierdz|niezweryfikowan(?!\S*\])|wymaga\p{L}*\s+weryfikacji|do\s+weryfikacji|sprawdź|captcha|HTTP\s*\d{3}|tylko\s+metadane|bez\s+treści|według\s+mojej\s+wiedzy|prawdopodobnie/iu;
 export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
