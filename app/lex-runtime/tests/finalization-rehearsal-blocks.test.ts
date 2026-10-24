@@ -137,3 +137,17 @@ describe("sygnatura podana jako przykład a sygnatura sprawy użytkownika (test 
     expect(new FinalizationGate().evaluate("Sprzeciw od nakazu zapłaty w sprawie sygn. I Nc 123/26.", own).result).not.toBe("BLOCKED");
   });
 });
+
+describe("orzeczenie z materiałów sprawy (dokumenty użytkownika, kancelarii, równoległe postępowania)", () => {
+  it("dostaje ⚠️ ze wskazaniem źródła i nie blokuje; zwykła niepotwierdzona sygnatura dostaje samo ⚠️", async () => {
+    const { FinalizationGate, markUnverifiedReferences, addMissingVerificationMarkers, CASE_MATERIAL_MARKER_TEXT } = await import("../src/finalization-gate.js");
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const ledger = new VerificationLedger();
+    ledger.addCaseReference("II C 456/25");
+    const text = "W równoległej sprawie sygn. II C 456/25 sąd uznał roszczenie za zasadne.";
+    const report = new FinalizationGate().evaluate(text, ledger);
+    const marked = addMissingVerificationMarkers(markUnverifiedReferences(text, report, new Set(ledger.caseReferences()), new Set()), report);
+    expect(marked).toContain(`II C 456/25 ${CASE_MATERIAL_MARKER_TEXT}`);
+    expect(new FinalizationGate().evaluate(marked, ledger).result).not.toBe("BLOCKED");
+  });
+});

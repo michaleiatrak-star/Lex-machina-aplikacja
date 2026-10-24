@@ -187,7 +187,8 @@ describe("G8: the proceeding's own case number is not case law", () => {
     ledger.addCaseReference("II K 345/24");
     const marked = markUnverifiedReferences(answer, gate.evaluate(answer, ledger), new Set(ledger.caseReferences()), new Set(ledger.retrievedCases()));
     expect(marked).toContain("II SAB/Po 175/26 🟨 [KOTWICA-URZĘDOWA]");
-    expect(marked).toContain("II K 345/24 ⚠️ [NIEWERYFIKOWANE]");
+    // Z materiałów sprawy: ⚠️ ze wskazaniem źródła (nie zawsze da się je potwierdzić w bazie).
+    expect(marked).toContain("II K 345/24 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]");
     // The SN resolution came from no tool and no material: still blocking.
     expect(marked).not.toContain("III CZP 12/21 🟨");
     expect(gate.evaluate(marked, ledger).result).toBe("BLOCKED");

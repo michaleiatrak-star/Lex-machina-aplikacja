@@ -111,7 +111,7 @@ const RATE_TOPIC =
 const NUMERIC_RATE =
   /(?:\b\d{1,3}(?:[.,]\d{1,4})?\s*%(?![\p{L}\d])|\b\d{1,3}(?:[ .]\d{3})*(?:[.,]\d{1,2})?\s*(?:zł(?:ot\p{L}*)?|PLN)(?![\p{L}\d]))/iu;
 const VERIFIED_OR_GAP =
-  /(?:✅\s*\[VER:|⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA|⬛\s*\[(?:DO UZUPEŁNIENIA|UZUPEŁNIJ))/iu;
+  /(?:✅\s*\[VER:|⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA|⬛\s*\[(?:DO UZUPEŁNIENIA|UZUPEŁNIJ))/iu;
 const AGGREGATE =
   /(?<![\p{L}\d])(?:łącznie|suma|kwota\s+łączna|razem\s+do\s+zapłaty|należność\s+łącznie)(?![\p{L}\d])/iu;
 const EXPLICIT_INTERVAL =

@@ -76,7 +76,7 @@ const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN =
   /✅\s*\[VER:[^\]\r\n]+\]/giu;
 // 🟨 KOTWICA URZĘDOWA (kanon PRAWO-HARDGATE-BLOKADA) nie jest ✅: liczy się jak oznaczony ⚠️.
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
 const CASE_QUOTE_MARKER =
   /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER =
@@ -862,6 +862,10 @@ export class FinalizationGate {
 }
 
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
+// A judgment the case's materials name (the user's messages, attached documents, the firm's
+// documents): not in the judgment databases is no sign of a fabrication; the marker says where
+// it comes from (a parallel proceeding, a ruling the firm holds).
+export const CASE_MATERIAL_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]";
 
 // Wiersz sam mówi, że sygnatury nie potwierdzono ("baza zwróciła 503", "nie mogę potwierdzić",
 // "tylko metadane"): to jawny trop, pokazany z ⚠️, a nie powołanie podane jako pewne.
@@ -909,7 +913,12 @@ export function markUnverifiedReferences(
     const key = finding.reference.kind === "case" ? caseFileKey(finding.reference.claim) : "";
     if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key) && !disclosed.has(key)) continue;
     // An official database's hit outranks the same number in the user's words or the files.
-    const marker = finding.reference.kind === "case" && retrievedCases.has(key) ? OFFICIAL_ANCHOR_MARKER_TEXT : UNVERIFIED_MARKER_TEXT;
+    const marker =
+      finding.reference.kind === "case" && retrievedCases.has(key)
+        ? OFFICIAL_ANCHOR_MARKER_TEXT
+        : finding.reference.kind === "case" && caseReferences.has(key)
+          ? CASE_MATERIAL_MARKER_TEXT
+          : UNVERIFIED_MARKER_TEXT;
     byLine.set(finding.reference.line, [
       ...(byLine.get(finding.reference.line) ?? []),
       { claim: finding.reference.span ?? finding.reference.claim, marker }

@@ -385,7 +385,7 @@ export class WidgetToolRuntime {
 }
 const ANSWER_WIDGET_BLOCK = /```(html|jsx|tsx)[ \t]*\n([\s\S]*?)```/gu;
 const WIDGET_MARKUP = /<(?:html|body|section|div|table|article|main|svg|style|script)\b/iu;
-const MARKER_TEXT = /\s*(?:✅\s*\[VER:[^\]\n]*(?:\[[^\]\n]*\]\([^)\n]*\)[^\]\n]*)?\]|⚠️\s*\[NIEWERYFIKOWANE\])/gu;
+const MARKER_TEXT = /\s*(?:✅\s*\[VER:[^\]\n]*(?:\[[^\]\n]*\]\([^)\n]*\)[^\]\n]*)?\]|⚠️\s*\[NIEWERYFIKOWANE(?::[^\]\n]*)?\])/gu;
 /**
  * A local model has no show_widget tool: asked for a widget, it writes the widget's code in
  * the answer. The application shows that code as a widget (the same isolated frame) and the
