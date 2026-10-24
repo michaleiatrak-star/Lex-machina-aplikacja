@@ -6995,6 +6995,7 @@ export default function MatterChatApp({
 
         {activeTab === "invoices" ? (
           <InvoicesPanel
+            developerMode={developerMode}
             onOpenSettings={() => {
               setActiveTab("settings");
               setSettingsSection("invoices");
