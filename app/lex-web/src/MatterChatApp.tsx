@@ -2,6 +2,7 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
+import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, saveChatTextSize, type ChatTextSize } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
 import {
   canWriteCase,
@@ -258,7 +259,8 @@ export type SettingsSection =
   | "skills"
   | "maintenance"
   | "server"
-  | "account";
+  | "account"
+  | "display";
 
 export type SettingsRequest = {
   section: SettingsSection;
@@ -1707,6 +1709,8 @@ export default function MatterChatApp({
   const [skillFilter, setSkillFilter] = useState("");
 
   const [query, setQuery] = useState("");
+  const [chatTextSize, setChatTextSize] = useState<ChatTextSize>(() => readChatTextSize());
+  useEffect(() => applyChatTextSize(chatTextSize), [chatTextSize]);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   // The case whose answer is being generated: the thread list stays on it
@@ -7398,6 +7402,7 @@ export default function MatterChatApp({
                 ["invoices", "Faktury i KSeF"],
                 ["skills", "Skille i routing"],
                 ["maintenance", "Aplikacja i utrzymanie"],
+                ["display", "Wygląd i czytelność"],
                 ...(settingsPanels?.account ? [["account", "Plan i klucze API"]] : []),
                 ...(settingsPanels?.server ? [["server", "Tryb serwerowy"]] : [])
               ] as Array<
@@ -7938,6 +7943,28 @@ export default function MatterChatApp({
                       />
                     </article>
                   ) : null}
+                </div>
+              ) : settingsSection === "display" ? (
+                <div className="chat-settings-section-stack">
+                  <article className="chat-card">
+                    <h2>Wygląd i czytelność</h2>
+                    <label>
+                      Rozmiar tekstu rozmowy
+                      <select
+                        value={chatTextSize}
+                        onChange={(event) => {
+                          const size = event.target.value as ChatTextSize;
+                          setChatTextSize(size);
+                          saveChatTextSize(size);
+                        }}
+                      >
+                        {CHAT_TEXT_SIZES.map((option) => (
+                          <option key={option.size} value={option.size}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="field-help">Zmienia tekst wiadomości i pola pisania. Ustawienie zostaje w tej przeglądarce.</p>
+                  </article>
                 </div>
               ) : settingsSection === "security" ? (
                 <div className="chat-settings-section-stack">

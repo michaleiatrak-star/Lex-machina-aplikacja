@@ -3280,3 +3280,13 @@ mark.restored {
   gap: 8px;
   margin: 4px 0 12px;
 }
+
+:root[data-chat-text="large"] .chat-message-content,
+:root[data-chat-text="large"] .chat-composer textarea {
+  font-size: 1.12em;
+}
+
+:root[data-chat-text="larger"] .chat-message-content,
+:root[data-chat-text="larger"] .chat-composer textarea {
+  font-size: 1.25em;
+}
