@@ -12,6 +12,7 @@ import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
 import { ServerAdminPanel } from "./ServerAdminPanel.js";
 import { MyServerAccountPanel } from "./MyServerAccountPanel.js";
 import { isDesktopShell } from "./api.js";
+import { UpdatePrompt } from "./UpdatePrompt.js";
 import type {
   AuthMeResponse,
   AuthenticatedUser
@@ -38,6 +39,9 @@ export default function App({
   onLogout: () => void;
 }) {
   return (
+    <>
+    {/* Aktualizacja wykryta wcześniej: pytanie przy starcie (desktop, administrator, bez trybu serwerowego). */}
+    {isDesktopShell() && !serverMode && user.appRole === "ADMIN" ? <UpdatePrompt /> : null}
     <MatterChatApp
       user={user}
       serverMode={serverMode}
@@ -101,5 +105,6 @@ export default function App({
         )
       }}
     />
+    </>
   );
 }

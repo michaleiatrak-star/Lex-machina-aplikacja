@@ -1,4 +1,4 @@
-import { addMissingVerificationMarkers, FinalizationGate } from "./finalization-gate.js";
+import { addMissingVerificationMarkers, FinalizationGate, verifiedLedgerMarkers } from "./finalization-gate.js";
 // The report and its blueprint pass the finalization gate together. The blueprint is data:
 // its schema has plain fields ("przepis": "art. 286 § 1 k.k."), so a provision verified in
 // this turn stands there without its marker. The ledger's own marker is added for the gate,
@@ -8,7 +8,7 @@ export function blueprintFinalizationText(answer, blueprint, ledger) {
     return [
         answer,
         "[STRUCTURED_REPORT_BLUEPRINT_DATA]",
-        addMissingVerificationMarkers(data, new FinalizationGate().evaluate(data, ledger)),
+        addMissingVerificationMarkers(data, new FinalizationGate().evaluate(data, ledger), verifiedLedgerMarkers(ledger)),
         "[/STRUCTURED_REPORT_BLUEPRINT_DATA]"
     ].join("\n");
 }

@@ -165,6 +165,27 @@ describe("verifyFromCoreLaw", () => {
     new VerificationLedger().add(outcome.record);
   });
 
+  it("uchylony artykuł i jednostka, której artykuł nie ma, nie są VERIFIED z kopii (test 500: „art. 4 pkt 3 KC”)", () => {
+    const idx = index(
+      act({
+        eli: "DU/2025/734",
+        title: "Kodeks wykroczeń",
+        labels: ["KW"],
+        url: KW_URL,
+        articles: { "4": "Art. 4. (uchylony)", "51": KW_ART_51, "60": "Art. 60. 1. Pierwszy ustęp.\n2. Drugi ustęp." }
+      })
+    );
+    const status = (claim: string) => {
+      const outcome = verify(idx, { claim });
+      return outcome.decision === "RECORD" ? [outcome.record.status, outcome.record.evidence] : [outcome.decision];
+    };
+    expect(status("art. 4 KW")).toEqual(["UNVERIFIED", "Przepis jest w aktualnym tekście jednolitym uchylony."]);
+    expect(status("art. 4 pkt 3 KW")).toEqual(["UNVERIFIED", "Przepis jest w aktualnym tekście jednolitym uchylony."]);
+    expect(status("art. 60 ust. 3 KW")).toEqual(["UNVERIFIED", "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."]);
+    expect(status("art. 60 ust. 1 KW")[0]).toBe("VERIFIED");
+    expect(status("art. 60 ust. 2 KW")[0]).toBe("VERIFIED");
+  });
+
   it("sends an article flagged by the PDF extraction check to ELI instead of VERIFIED", () => {
     const flagged = kw();
     flagged.record.textSource = "pdf";

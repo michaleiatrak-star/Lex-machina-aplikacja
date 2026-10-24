@@ -377,3 +377,53 @@ describe(
     );
   }
 );
+
+describe("aktualizacja na macOS: zweryfikowany .pkg zamiast instrukcji ręcznej", () => {
+  it("pobiera .pkg, sprawdza SHA-256 i zapisuje paragon z nazwą pliku .pkg", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    try {
+      const bytes = Buffer.from("pkg-fixture", "utf8");
+      const digest = createHash("sha256").update(bytes).digest("hex");
+      const discovery: UpdateDiscovery = {
+        async check() {
+          return {
+            currentVersion: "0.1.46",
+            status: "AVAILABLE",
+            checkedAt: "2026-10-24T08:00:00.000Z",
+            latestVersion: "0.1.47",
+            installer: {
+              name: "Lex-Machina-0.1.47-macOS-arm64.pkg",
+              url: "https://github.com/michaleiatrak-star/Lex-machina-aplikacja/releases/download/v0.1.47/Lex-Machina-0.1.47-macOS-arm64.pkg",
+              sha256: digest,
+              bytes: bytes.byteLength
+            }
+          };
+        }
+      };
+      const verify = vi.fn();
+      const maintenance = new MaintenanceService(
+        discovery,
+        vi.fn(async () => new Response(bytes, { status: 200 })) as unknown as typeof fetch,
+        { verify, ready: () => false },
+        () => false,
+        () => {
+          throw new Error("UNUSED_SKILL_VERIFIER");
+        },
+        () => false,
+        () => {
+          throw new Error("UNUSED_MODEL_PACK_VERIFIER");
+        }
+      );
+      const result = await maintenance.downloadApplicationUpdate();
+      expect(result.token).toMatch(/^update_0-1-47_[a-f0-9]{16}\.pkg$/u);
+      expect(result.receiptToken).toBe(result.token.replace(/\.pkg$/u, ".json"));
+      expect(verify).not.toHaveBeenCalled();
+      const receipt = JSON.parse(fs.readFileSync(`${applicationUpdateStagingRoot()}/${result.receiptToken}`, "utf8"));
+      expect(receipt).toMatchObject({ installerToken: result.token, sha256: digest, version: "0.1.47" });
+      expect(fs.readFileSync(`${applicationUpdateStagingRoot()}/${result.token}`)).toEqual(bytes);
+    } finally {
+      Object.defineProperty(process, "platform", platform);
+    }
+  });
+});

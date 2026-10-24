@@ -1055,13 +1055,12 @@ export class MaintenanceService {
     if (!status.installer) {
       throw new Error("APPLICATION_UPDATE_INSTALLER_NOT_VERIFIED");
     }
-    // macOS: the update is installed by opening the new .pkg (no in-app runner).
-    // Windows: bez skonfigurowanego wydawcy Authenticode (instalatory bez podpisu)
-    // weryfikator odrzuci każdy plik - użytkownik pobiera instalator ze strony wydania.
-    if (
-      process.platform === "darwin" ||
-      this.installerVerifier.ready?.() === false
-    ) {
+    // macOS: the .pkg verified by its SHA-256 (GitHub release digest) is staged; the desktop
+    // hashes it again and opens it in the system Installer (unsigned build, no Apple notarization).
+    // Windows: bez polityki wydawcy w release-source.json weryfikator odrzuci każdy plik -
+    // użytkownik pobiera instalator ze strony wydania.
+    const macos = process.platform === "darwin";
+    if (macos ? !/\.pkg$/i.test(status.installer.name) : this.installerVerifier.ready?.() === false) {
       throw new Error("APPLICATION_UPDATE_MANUAL_INSTALL_REQUIRED");
     }
     const version = requireLatestVersion(status);
@@ -1069,8 +1068,8 @@ export class MaintenanceService {
     const root = applicationUpdateStagingRoot();
     fs.mkdirSync(root, { recursive: true });
     const nonce = randomBytes(8).toString("hex");
-    const token = `update_${version.replaceAll(".", "-")}_${nonce}.exe`;
-    const receiptToken = token.replace(/\.exe$/i, ".json");
+    const token = `update_${version.replaceAll(".", "-")}_${nonce}.${macos ? "pkg" : "exe"}`;
+    const receiptToken = token.replace(/\.(?:exe|pkg)$/i, ".json");
     const target = path.join(root, token);
     const temporary = `${target}.tmp`;
     const receiptPath = path.join(root, receiptToken);
@@ -1079,11 +1078,12 @@ export class MaintenanceService {
     try {
       fs.writeFileSync(temporary, bytes, { flag: "wx" });
       fs.renameSync(temporary, target);
-      const publisher =
-        this.installerVerifier.verify(
-          target,
-          version
-        );
+      const publisher: VerifiedApplicationPublisher = macos
+        ? { verification: "UNSIGNED_ALLOWED", subject: null, thumbprint: null, productVersion: version, warning: "TEMPORARY_UNSIGNED_UPDATE_ALLOWED" }
+        : this.installerVerifier.verify(
+            target,
+            version
+          );
       const stagedAt = new Date().toISOString();
       const receipt: ApplicationUpdateReceipt = {
         schemaVersion: 1,

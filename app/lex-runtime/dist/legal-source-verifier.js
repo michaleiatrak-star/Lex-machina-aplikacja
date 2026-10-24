@@ -141,6 +141,11 @@ function titleMatches(expectedTitle, body, kind) {
         return false;
     return normalize(body).includes(expected);
 }
+function journalAddressMatches(claim, url) {
+    const address = /^\/eli\/acts\/DU\/(\d{4})\/(\d+)(?:\/|$)/u.exec(url.pathname);
+    const tokens = journalTokens(claim);
+    return Boolean(address) && tokens.length === 2 && tokens[0] === address[1] && tokens[1] === address[2];
+}
 function matchesClaim(claim, kind, body) {
     const haystack = normalize(body);
     if (!haystack)
@@ -271,7 +276,11 @@ export function claimedUnitState(claim, evidence, pending) {
     // so a § the article does not have is missing; a "2." or "2)" only when the article shows such units.
     if (evidence.length >= MAX_EVIDENCE_CHARS - 500)
         return { state: "NOT_CHECKED" };
-    return para || anyOfKind.test(evidence) ? { state: "MISSING" } : { state: "NOT_CHECKED" };
+    // "art. 6 ust. 3 KC": art. 6 KC is one sentence with no units at all, so no ust. 3 either (C12-018,
+    // VERIFIED before). An article with units of another kind ("§ 1." for an "ust. 1" claim) or
+    // none shown is not proof the unit exists.
+    const noUnitsAtAll = !/(?:^|\n|\.\s)§\s*\d|\n\d+[a-z]*[.)]\s/u.test(evidence) && !/\bArt\.\s*\d+[\d^a-z]*\.\s*1\.\s/u.test(evidence);
+    return para || anyOfKind.test(evidence) || noUnitsAtAll ? { state: "MISSING" } : { state: "NOT_CHECKED" };
 }
 export class OfficialLegalSourceVerifier {
     fetcher;
@@ -379,7 +388,9 @@ export class OfficialLegalSourceVerifier {
             }
         }
         const titleMatched = titleMatches(request.expectedTitle, body, request.kind);
-        const referenceMatched = matchesClaim(request.claim, request.kind, body);
+        // A Dz.U. reference is confirmed by the address of the text read: ELI DU/2023/725 is
+        // "Dz.U. 2023 poz. 725" (the HTML of a consolidated text does not print its own position).
+        const referenceMatched = matchesClaim(request.claim, request.kind, body) || (request.kind === "journal" && journalAddressMatches(request.claim, url));
         const matched = titleMatched &&
             referenceMatched;
         const fetchedAt = this.now();

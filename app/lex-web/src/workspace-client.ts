@@ -39,6 +39,7 @@ export type WorkspaceDocumentCitation = {
   quote?: string;
   highlightStart?: number;
   highlightEnd?: number;
+  quoteFidelity?: "EXACT" | "NOT_FOUND" | "DIGEST_UNCHECKED";
 };
 
 // A document generated in a chat message: download, preview and deanonymization card.

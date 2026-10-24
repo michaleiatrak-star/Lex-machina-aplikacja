@@ -80,6 +80,8 @@ describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
     const evidence = "Art. 83a. 1. Prawo lub zobowiązanie stwierdzone decyzją ostateczną Zakładu ulega ponownemu ustaleniu.\n2. Decyzje ostateczne Zakładu mogą być uchylone.";
     expect(claimedUnitState("art. 83a ust. 1 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
     expect(claimedUnitState("art. 83a ust. 2 u.s.u.s.", evidence, []).state).toBe("IN_FORCE");
+    // Art. 6 KC has no units at all: "ust. 3" of it does not exist (C12-018, VERIFIED before).
+    expect(claimedUnitState("art. 6 ust. 3 KC", "Art. 6. Ciężar udowodnienia faktu spoczywa na osobie, która z faktu tego wywodzi skutki prawne.", []).state).toBe("MISSING");
     expect(claimedUnitState("art. 83a ust. 6 u.s.u.s.", evidence, []).state).toBe("MISSING");
     expect(claimedUnitState("art. 477^9 ust. 1 KPC", "Art. 477 9 . 1. Odwołanie wnosi się.\n2. Organ przekazuje.", []).state).toBe("IN_FORCE");
   });
@@ -88,5 +90,27 @@ describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
     expect(claimedUnitState("art. 5 § 2 KC", "Art. 5. Nie można czynić ze swego prawa użytku…", []).state).toBe("MISSING");
     expect(claimedUnitState("art. 22 § 1¹ KP", "Art. 22. § 1. Przez nawiązanie…\n§ 1^1. Zatrudnienie…", []).state).toBe("IN_FORCE");
     expect(claimedUnitState("art. 860 § 3 KC", "Art. 860. § 1. Przez umowę spółki…\n§ 2. Umowa…", [{ from: "2028-11-01", text: "§ 3. Jeżeli przepis ustawy tak stanowi…" }])).toEqual({ state: "PENDING", from: "2028-11-01" });
+  });
+});
+
+describe("oznaczenie Dz.U. potwierdzone adresem pobranego tekstu (test 500, C10-023)", () => {
+  const page = "<html><body><h1>Ustawa o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego</h1><p>Art. 6. 1. Zawarcie umowy najmu…</p></body></html>";
+  const verifier = new OfficialLegalSourceVerifier(
+    async () => new Response(page, { headers: { "content-type": "text/html" } }),
+    () => "2026-10-24T08:00:00.000Z"
+  );
+  const request = { kind: "journal" as const, url: "https://api.sejm.gov.pl/eli/acts/DU/2023/725/text.html", toolCallId: "t", expectedTitle: "o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego" };
+
+  it("tekst jednolity spod ELI DU/2023/725 potwierdza \"Dz. U. z 2023 r. poz. 725\", nie inną pozycję", async () => {
+    expect((await verifier.verify({ ...request, claim: "Dz. U. z 2023 r. poz. 725" })).record.status).toBe("VERIFIED");
+    expect((await verifier.verify({ ...request, claim: "Dz.U. 2020 poz. 611" })).record.status).toBe("UNVERIFIED");
+  });
+
+  it("plan weryfikacji: oznaczenie Dz.U. idzie pod swój adres ELI, nie do KC z tytułu ustawy", async () => {
+    const { planAutomaticLegalVerification } = await import("../src/gate-i-auto-verification.js");
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const text = "Zgodnie z art. 6 ust. 4 ustawy o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego (Dz. U. z 2023 r. poz. 725) kaucja podlega zwrotowi.";
+    const calls = planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => [call.input.claim, call.input.act]);
+    expect(calls).toContainEqual(["Dz. U. z 2023 r. poz. 725", "DU/2023/725"]);
   });
 });

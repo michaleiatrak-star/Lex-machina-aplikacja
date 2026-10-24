@@ -5,7 +5,7 @@ import { WAIT_FOR_USER_MARKER, waitsForUser } from "./workflow-wait.js";
 import { escalationOffer, reductionOffer } from "./skill-switch.js";
 import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./skill-sections.js";
 import { decodePromptBudget } from "./prompt-budget.js";
-import { FinalizationGate, addMissingVerificationMarkers, markUnverifiedReferences } from "./finalization-gate.js";
+import { FinalizationGate, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
 import { evaluateStatusConsistency, unifyConflictingProvisions, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
@@ -845,7 +845,7 @@ export class SafeSessionExecutor {
         });
         let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
         const gate = new FinalizationGate().evaluate(text, ledger);
-        text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate), ledger).text;
+        text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate, verifiedLedgerMarkers(ledger)), ledger).text;
         return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
     }
     // A local primary model keeps the text on this machine, so the chat does
@@ -2666,7 +2666,20 @@ export class SafeSessionExecutor {
                 });
             }
         }
-        const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources);
+        const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources, {
+            otherTexts: [
+                request.query,
+                ...officialCaseLawTexts,
+                ...leadCaseLawTexts,
+                // "Tekst dokumentu: „W transakcjach handlowych…”" quoted art. 7 of the act read in this
+                // turn (C12-011): the wording of a provision is checked by its own gates.
+                ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)
+            ]
+        });
+        const { autoLinked, mismatched, unsourced } = citedAnswer.quoteFindings;
+        if (autoLinked + mismatched + unsourced > 0) {
+            audit.record("gate", "DOCUMENT_QUOTE_FIDELITY", mismatched + unsourced > 0 ? "DEGRADED" : "OK", { autoLinked, mismatched, unsourced });
+        }
         // HARD GATE: an unverified statute or Dz.U. reference is shown only with
         // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
         // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
@@ -2683,7 +2696,7 @@ export class SafeSessionExecutor {
                 ...citedAnswer,
                 // Najpierw prawdziwe znaczniki z rejestru dla przepisów powtórzonych bez
                 // znacznika (np. tabela porównawcza), potem ⚠️ dla niezweryfikowanych.
-                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), preFinalization)
+                text: addMissingVerificationMarkers(markUnverifiedReferences(citedAnswer.text, preFinalization, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), preFinalization, verifiedLedgerMarkers(ledger))
             }
             : citedAnswer;
         // Końcowa kontrola spójności: jeden status źródła dla każdego przepisu w całej
@@ -2708,7 +2721,7 @@ export class SafeSessionExecutor {
             const check = new FinalizationGate().evaluate(remarkedText, ledger);
             if (check.result !== "BLOCKED")
                 break;
-            const marked = addMissingVerificationMarkers(markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), check);
+            const marked = addMissingVerificationMarkers(markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), check, verifiedLedgerMarkers(ledger));
             const reconciled = reconcileStatusMarkers(marked, ledger);
             const unified = unifyConflictingProvisions(reconciled.text, ledger);
             const next = reconciled.repaired > 0 || unified.unified.length > 0 ? unified.text : marked;

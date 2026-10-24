@@ -76,7 +76,7 @@ const VERIFIED_MARKER = /✅\s*\[VER:/iu;
 const VERIFIED_MARKER_TOKEN =
   /✅\s*\[VER:[^\]\r\n]+\]/giu;
 // 🟨 KOTWICA URZĘDOWA (kanon PRAWO-HARDGATE-BLOKADA) nie jest ✅: liczy się jak oznaczony ⚠️.
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA[:\]]/iu;
 const CASE_QUOTE_MARKER =
   /✅\s*\[CASE-QUOTE:([a-f0-9]{20})\]/giu;
 const CASE_SUPPORT_MARKER =
@@ -90,8 +90,12 @@ export function expectedVerificationMarker(
 
 // "art. 101² § 1 Kodeksu pracy" is one provision (KP), as "art. 101^2 § 1 KP".
 // "art. 187 § 1 pkt 3 KPC": the point belongs to the provision, so a marker never splits it.
+// "§ 2¹" is its own paragraph (art. 30 § 2¹ KP), not § 2 with a stray digit after the marker;
+// "§ 2–3" is one reference with its act, the marker after the range (C12-007: "§ 2 ⚠️–3").
+const SUPERSCRIPT = "(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?";
+const UNIT_RANGE = `(?:[–—-]\\d+${SUPERSCRIPT}[a-z]?(?![\\d\\p{L}]))?`;
 const ARTICLE_PATTERN = new RegExp(
-  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+[a-zA-Z]*)?(?:\\s+pkt\\s*\\d+[a-z]*)?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
+  `${ARTICLE_LEAD}\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]*(?:\\s*§\\s*\\d+${SUPERSCRIPT}[a-zA-Z]*${UNIT_RANGE})?(?:\\s+ust\\.?\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+pkt\\s*\\d+${SUPERSCRIPT}[a-z]*${UNIT_RANGE})?(?:\\s+(?:${SPELLED_ACT_ALTERNATIVES}|${DOTTED_ACT_ALTERNATIVES}|KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\\p{L}]))?`,
   "giu"
 );
 
@@ -163,14 +167,21 @@ function resolveActs(references: DetectedLegalReference[], text: string): Detect
     const own = found ? reference.lineText.slice(found.index + found[0].length).split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 160) : "";
     if (euAct(own)) return reference;
     const unit = reference.claim.replace(/\s+/g, " ").toLocaleLowerCase("pl");
-    const lineActs = actsIn(reference.lineText);
+    // "sprzeczne z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.)": the k.c. is art. 58's own
+    // (C12-018 verified art. 6 ust. 4 of the tenants' act as art. 6 KC). The line's act counts when
+    // it follows this article ("art. 23 i 24 KC"), in a bare enumeration, or stands before it.
+    const before = found ? reference.lineText.slice(0, found.index) : "";
+    const lineActOwned =
+      actsIn(own).size > 0 || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own) || actsIn(before).size > 0;
+    const lineActs = lineActOwned ? actsIn(reference.lineText) : new Set<string>();
+    const borrowedOnly = !lineActOwned && actsIn(reference.lineText).size > 0;
     const unitActs = actsByUnit.get(unit);
     const act =
       lineActs.size === 1
         ? [...lineActs][0]
         : lineActs.size === 0 && unitActs?.size === 1
           ? [...unitActs][0]
-          : lineActs.size === 0 && answerActs.size === 1
+          : !borrowedOnly && lineActs.size === 0 && answerActs.size === 1
             ? [...answerActs][0]
             : undefined;
     return act ? { ...reference, claim: `${reference.claim} ${act}`, span: reference.span ?? reference.claim } : reference;
@@ -862,9 +873,21 @@ export class FinalizationGate {
 }
 
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
+// A judgment the case's materials name (the user's messages, attached documents, the firm's
+// documents): not in the judgment databases is no sign of a fabrication; the marker says where
+// it comes from (a parallel proceeding, a ruling the firm holds).
+export const CASE_MATERIAL_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]";
 
 // Wiersz sam mówi, że sygnatury nie potwierdzono ("baza zwróciła 503", "nie mogę potwierdzić",
 // "tylko metadane"): to jawny trop, pokazany z ⚠️, a nie powołanie podane jako pewne.
+// A signature given as an example of what to fill in ("Podaj dane, np. „sygn. I Nc 123/26; …”",
+// test 500, C12-008): no citation, shown with ⚠️ instead of blocking the whole letter.
+function givenAsExample(reference: DetectedLegalReference): boolean {
+  const at = reference.lineText.indexOf(reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, ""));
+  if (at < 0) return false;
+  return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
+}
+
 const DISCLOSED_UNCONFIRMED =
   /nie\s+(?:udało\s+(?:mi\s+)?się\s+)?(?:mogę\s+)?(?:potwierdzi|zweryfikowa|pobra|sprawdzi|odczyta|powołuj)|niepotwierdz|niezweryfikowan(?!\S*\])|wymaga\p{L}*\s+weryfikacji|do\s+weryfikacji|sprawdź|captcha|HTTP\s*\d{3}|tylko\s+metadane|bez\s+treści|według\s+mojej\s+wiedzy|prawdopodobnie/iu;
 export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
@@ -893,7 +916,7 @@ export function markUnverifiedReferences(
   // Sygnatura raz opisana jako niepotwierdzona (albo już z ⚠️) jest tym samym tropem w całej odpowiedzi.
   const disclosed = new Set(
     report.findings
-      .filter((finding) => finding.reference.kind === "case" && (finding.status === "UNVERIFIED_MARKED" || DISCLOSED_UNCONFIRMED.test(finding.reference.lineText)))
+      .filter((finding) => finding.reference.kind === "case" && (finding.status === "UNVERIFIED_MARKED" || DISCLOSED_UNCONFIRMED.test(finding.reference.lineText) || givenAsExample(finding.reference)))
       .map((finding) => caseFileKey(finding.reference.claim))
   );
   for (const finding of report.findings) {
@@ -901,7 +924,12 @@ export function markUnverifiedReferences(
     const key = finding.reference.kind === "case" ? caseFileKey(finding.reference.claim) : "";
     if (finding.reference.kind === "case" && !caseReferences.has(key) && !retrievedCases.has(key) && !disclosed.has(key)) continue;
     // An official database's hit outranks the same number in the user's words or the files.
-    const marker = finding.reference.kind === "case" && retrievedCases.has(key) ? OFFICIAL_ANCHOR_MARKER_TEXT : UNVERIFIED_MARKER_TEXT;
+    const marker =
+      finding.reference.kind === "case" && retrievedCases.has(key)
+        ? OFFICIAL_ANCHOR_MARKER_TEXT
+        : finding.reference.kind === "case" && caseReferences.has(key)
+          ? CASE_MATERIAL_MARKER_TEXT
+          : UNVERIFIED_MARKER_TEXT;
     byLine.set(finding.reference.line, [
       ...(byLine.get(finding.reference.line) ?? []),
       { claim: finding.reference.span ?? finding.reference.claim, marker }
@@ -931,6 +959,18 @@ export function markUnverifiedReferences(
  * ledger. Only true ledger markers are added; a fabricated marker is not touched.
  * In a table row the markers go into the last cell, keeping the row valid.
  */
+/** Markers of every verified record of the turn, also of provisions no finding names (a copied
+ * marker of art. 35 KPA on a line about art. 35 ust. 3 Prawa budowlanego is a real one). */
+export function verifiedLedgerMarkers(ledger: VerificationLedger): Set<string> {
+  return new Set(
+    ledger
+      .all()
+      .filter((record) => record.status === "VERIFIED")
+      .map((record) => expectedVerificationMarker(record))
+      .filter((marker): marker is string => Boolean(marker))
+  );
+}
+
 export function addMissingVerificationMarkers(
   text: string,
   report: FinalizationReport,

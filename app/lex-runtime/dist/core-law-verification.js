@@ -4,6 +4,7 @@ import { articleWording, futureDate, hasPendingWording } from "./core-law-footno
 import { anchoredUrl, normalizeArticleId } from "./source-anchor.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { amendmentMentionsArticle, amendmentPartFor } from "./temporal-source-freshness.js";
+import { claimedUnitState } from "./legal-source-verifier.js";
 import { FRESHNESS_MAX_AGE_MS } from "./verification-ledger.js";
 // Nazwa podana przez model musi być w >= 75% pokryta rdzeniami tytułu aktu.
 const TITLE_MATCH_MIN = 0.75;
@@ -98,6 +99,7 @@ export function postConsolidationImpact(index, amendments, article, actTitle) {
         return { status: "UNKNOWN", reason: "TEMPORAL_POST_TJ_AMENDMENT_IMPACT_UNKNOWN", amendments: unknown };
     return { status: "UNAFFECTED", checked: amendments };
 }
+const REPEALED_ARTICLE = /^Art\.?\s*[^\s.]+\s*\.?\s*\((?:uchylony|uchylona|uchylone|skreślony|pominięty)\)/iu;
 export function verifyFromCoreLaw(args) {
     if (args.asOf) {
         return { decision: "DENY", reason: "CORE_LAW_CURRENT_STATE_ONLY" };
@@ -173,17 +175,39 @@ export function verifyFromCoreLaw(args) {
         anchor = article ? record.articleAnchors?.[article] : undefined;
         evidence = article ? record.articles[article] : undefined;
         // Artykuł z kilkoma brzmieniami: dowodem jest brzmienie obowiązujące w dniu weryfikacji.
+        let pending = [];
         if (article && record.footnotes && record.markedArticles?.[article]) {
             const wording = articleWording(record.markedArticles[article], record.footnotes, todayWarsaw(args.now ?? Date.now()));
             if (!wording.unresolved)
                 evidence = wording.text;
+            pending = wording.pending;
+        }
+        // Jak w odczycie ELI (legal-source-verifier): artykuł uchylony i jednostka, której artykuł nie
+        // ma, nie są VERIFIED. Test 500 na żywo: „art. 4 pkt 3 KC” VERIFIED z dowodem „Art. 4. (uchylony)”.
+        if (evidence && REPEALED_ARTICLE.test(evidence.trim())) {
+            evidence = undefined;
+            failure = "Przepis jest w aktualnym tekście jednolitym uchylony.";
+        }
+        else if (evidence) {
+            const unit = claimedUnitState(args.claim, evidence, pending);
+            const problem = unit.state === "REPEALED"
+                ? "Ta jednostka jest w aktualnym tekście jednolitym uchylona."
+                : unit.state === "MISSING"
+                    ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
+                    : unit.state === "PENDING"
+                        ? `Ta jednostka jeszcze nie obowiązuje: tekst jednolity drukuje ją z wejściem w życie${unit.from ? ` z dniem ${unit.from}` : " w późniejszym terminie"}.`
+                        : null;
+            if (problem) {
+                evidence = undefined;
+                failure = problem;
+            }
         }
         // Zgubiony nagłówek przy wyciąganiu z PDF: ten artykuł może zawierać tekst następnego.
         if (article && record.extractionCheck?.suspectArticles.includes(article)) {
             return { decision: "DENY", reason: "CORE_LAW_EXTRACTION_SUSPECT" };
         }
         if (!evidence) {
-            failure = "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
+            failure ||= "Tekst jednolity ELI nie zawiera wskazanej jednostki redakcyjnej.";
         }
         else if (args.quote?.trim() &&
             !comparable(evidence).includes(comparable(args.quote))) {

@@ -145,7 +145,7 @@ export function manualUpdateReleaseUrl(
   return url;
 }
 
-async function openReleasePage(url: string): Promise<void> {
+export async function openReleasePage(url: string): Promise<void> {
   const internals = (
     window as Window & {
       __TAURI_INTERNALS__?: {

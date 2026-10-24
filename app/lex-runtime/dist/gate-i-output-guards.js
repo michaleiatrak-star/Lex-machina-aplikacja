@@ -35,7 +35,7 @@ const RATE_TOPIC = /\b(?:odsetk\w*|waloryzac\w*|inflacj\w*|minimaln\w*\s+wynagro
 // Granice słowa przez \p{L}: JS-owe \b jest tylko ASCII, więc po "%" i "zł" oraz
 // przed "ł" nigdy nie pasowało.
 const NUMERIC_RATE = /(?:\b\d{1,3}(?:[.,]\d{1,4})?\s*%(?![\p{L}\d])|\b\d{1,3}(?:[ .]\d{3})*(?:[.,]\d{1,2})?\s*(?:zł(?:ot\p{L}*)?|PLN)(?![\p{L}\d]))/iu;
-const VERIFIED_OR_GAP = /(?:✅\s*\[VER:|⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA|⬛\s*\[(?:DO UZUPEŁNIENIA|UZUPEŁNIJ))/iu;
+const VERIFIED_OR_GAP = /(?:✅\s*\[VER:|⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA|⬛\s*\[(?:DO UZUPEŁNIENIA|UZUPEŁNIJ))/iu;
 const AGGREGATE = /(?<![\p{L}\d])(?:łącznie|suma|kwota\s+łączna|razem\s+do\s+zapłaty|należność\s+łącznie)(?![\p{L}\d])/iu;
 const EXPLICIT_INTERVAL = /\b(?:od\s+\d{1,4}[-./]\d{1,2}[-./]\d{1,4}\s+do\s+\d{1,4}[-./]\d{1,2}[-./]\d{1,4}|przedział\s*[:=-]\s*\d{1,4}[-./]\d{1,2}[-./]\d{1,4}\s*(?:–|-|do)\s*\d{1,4}[-./]\d{1,2}[-./]\d{1,4})\b/iu;
 const SERIES_HEADER = /\|\s*Od\s*\|\s*Do\s*\|\s*Stawka\s*\|/iu;

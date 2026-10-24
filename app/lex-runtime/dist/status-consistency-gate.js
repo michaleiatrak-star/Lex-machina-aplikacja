@@ -1,19 +1,19 @@
 import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
-import { detectLegalReferences } from "./finalization-gate.js";
+import { detectLegalReferences, FinalizationGate, UNVERIFIED_MARKER_TEXT } from "./finalization-gate.js";
 import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
 // "art. 110¹ KC" / "art. 110^1 KC" is its own article, not art. 110 (test 500: the superscript was
 // dropped and art. 110¹ ⚠️ conflicted with a verified art. 110).
-const UNIT = "\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+[a-z]?)?(?:\\s+ust\\.?\\s*\\d+[a-z]?)?(?:\\s+pkt\\s*\\d+[a-z]?)?";
+const UNIT = "\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]{0,3}(?:\\s*§\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?(?:\\s+ust\\.?\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?(?:\\s+pkt\\s*\\d+(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\\^\\d+)?[a-z]?)?";
 // "art. 233", "art. 233 § 1 KK", "art. 233 i 234 KK", "art. 233, 234 oraz 235 KK", "art. 233–234 KK".
 const REFERENCE = new RegExp(`(?<!\\p{L})art(?:\\.|ykuł\\p{L}*)?\\s+(${UNIT}(?:\\s*(?:,|i|oraz|lub|albo|a także|–|-)\\s*(?:art\\.?\\s+)?${UNIT})*)(?:\\s+(${DOTTED_ACT_ALTERNATIVES}|${ACTS})(?![\\p{L}]))?`, "giu");
 const ENUMERATION_ITEM = new RegExp(UNIT, "gu");
 const RANGE_SEPARATOR = /^\s*[–-]\s*$/u;
 const VERIFIED_MARKER = /✅\s*\[VER:[^\]\r\n]*\]/gu;
 // 🟨 [KOTWICA-URZĘDOWA: …] to status niezweryfikowany (nie ✅), jak ⚠️.
-const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu;
+const UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE(?::[^\]\r\n]*)?\]|🟨\s*\[KOTWICA-URZĘDOWA(?::[^\]\r\n]*)?\]/gu;
 const APPLICATION_HEDGE = /\b(?:potencjaln\p{L}*|ewentualn\p{L}*|prawdopodobn\p{L}*|hipotetyczn\p{L}*|mo(?:że|gą|głoby|głyby)\s+(?:mieć\s+zastosowanie|wypełni\p{L}*|stanowić|wchodzić\s+w\s+grę|znaleźć\s+zastosowanie)|w\s+zależności\s+od\s+okoliczności)/iu;
 const SUPERSCRIPT_DIGITS = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
 function compact(value) {
@@ -384,9 +384,32 @@ export function reconcileStatusMarkers(text, ledger) {
         for (const edit of edits.sort((a, b) => b.start - a.start)) {
             next = next.slice(0, edit.start) + edit.insert + next.slice(edit.end);
         }
-        return next;
+        return keepOtherReferencesMarked(line.text, next, ledger);
     });
     return { text: repaired > 0 ? output.join("\n") : text, repaired };
+}
+// "art. 156 § 2 KPA (t.j. Dz.U. 2025 poz. 1691) ✅ … ⚠️": the ⚠️ a verified article loses was
+// the journal's too (test 500). A Dz.U. or signature marked before the repair and unmarked
+// after it gets its own ⚠️, right after it.
+function keepOtherReferencesMarked(before, after, ledger) {
+    const gate = new FinalizationGate();
+    const marked = new Set(gate.evaluate(before, ledger).findings
+        .filter((finding) => finding.reference.kind !== "statute" && finding.status === "UNVERIFIED_MARKED")
+        .map((finding) => finding.reference.span ?? finding.reference.claim));
+    if (marked.size === 0)
+        return after;
+    let next = after;
+    for (const finding of gate.evaluate(after, ledger).findings) {
+        const written = finding.reference.span ?? finding.reference.claim;
+        if (finding.status !== "UNVERIFIED_NOT_MARKED" || !marked.has(written))
+            continue;
+        const at = next.indexOf(written);
+        if (at < 0)
+            continue;
+        const end = at + written.length;
+        next = `${next.slice(0, end)} ${UNVERIFIED_MARKER_TEXT}${next.slice(end)}`;
+    }
+    return next;
 }
 /**
  * Znacznik ✅ [VER: …] przy przepisie, którego nie da się odtworzyć z rekordu VERIFIED

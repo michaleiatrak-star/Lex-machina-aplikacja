@@ -285,7 +285,8 @@ describe("registration and password reset by e-mail", () => {
     const token = tokenFrom(current.mails[0], "weryfikacja");
 
     await request(current.app).post("/api/auth/login").send({ loginName: "nowy@example.pl", password: USER_PASSWORD }).expect(401, { error: "INVALID_CREDENTIALS" });
-    await request(current.app).post("/api/server-mode/verify-email").send({ token: "x" + token.slice(1), password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
+    // A changed first character (a token starting with "x" stayed the same: 1 run in 64 failed).
+    await request(current.app).post("/api/server-mode/verify-email").send({ token: (token.startsWith("x") ? "y" : "x") + token.slice(1), password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
     await request(current.app).post("/api/server-mode/verify-email").send({ token, password: USER_PASSWORD }).expect(200, { status: "VERIFIED" });
     await request(current.app).post("/api/server-mode/verify-email").send({ token, password: USER_PASSWORD }).expect(400, { error: "INVALID_OR_EXPIRED_TOKEN" });
     const login = await request(current.app).post("/api/auth/login").send({ loginName: "nowy@example.pl", password: USER_PASSWORD }).expect(200);

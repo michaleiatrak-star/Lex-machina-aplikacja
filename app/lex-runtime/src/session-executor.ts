@@ -9,6 +9,7 @@ import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   addMissingVerificationMarkers,
+  verifiedLedgerMarkers,
   markUnverifiedReferences
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
@@ -1670,7 +1671,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
     let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
     const gate = new FinalizationGate().evaluate(text, ledger);
-    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate), ledger).text;
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate, verifiedLedgerMarkers(ledger)), ledger).text;
     return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
@@ -3943,8 +3944,27 @@ export class SafeSessionExecutor implements SessionExecutor {
     const citedAnswer =
       processDocumentCitationMarkers(
         automaticVerification.text,
-        citationSources
+        citationSources,
+        {
+          otherTexts: [
+            request.query,
+            ...officialCaseLawTexts,
+            ...leadCaseLawTexts,
+            // "Tekst dokumentu: „W transakcjach handlowych…”" quoted art. 7 of the act read in this
+            // turn (C12-011): the wording of a provision is checked by its own gates.
+            ...ledger.all().map((record) => record.evidence ?? "").filter(Boolean)
+          ]
+        }
       );
+    const { autoLinked, mismatched, unsourced } = citedAnswer.quoteFindings;
+    if (autoLinked + mismatched + unsourced > 0) {
+      audit.record(
+        "gate",
+        "DOCUMENT_QUOTE_FIDELITY",
+        mismatched + unsourced > 0 ? "DEGRADED" : "OK",
+        { autoLinked, mismatched, unsourced }
+      );
+    }
     // HARD GATE: an unverified statute or Dz.U. reference is shown only with
     // its [NIEWERYFIKOWANE] marker, placed at the claim itself.
     // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
@@ -3971,7 +3991,8 @@ export class SafeSessionExecutor implements SessionExecutor {
                 new Set(ledger.caseReferences()),
                 new Set(ledger.retrievedCases())
               ),
-              preFinalization
+              preFinalization,
+              verifiedLedgerMarkers(ledger)
             )
           }
         : citedAnswer;
@@ -4003,7 +4024,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (check.result !== "BLOCKED") break;
       const marked = addMissingVerificationMarkers(
         markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
-        check
+        check,
+        verifiedLedgerMarkers(ledger)
       );
       const reconciled = reconcileStatusMarkers(marked, ledger);
       const unified = unifyConflictingProvisions(reconciled.text, ledger);

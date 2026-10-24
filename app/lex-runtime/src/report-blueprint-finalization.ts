@@ -1,4 +1,4 @@
-import { addMissingVerificationMarkers, FinalizationGate } from "./finalization-gate.js";
+import { addMissingVerificationMarkers, FinalizationGate, verifiedLedgerMarkers } from "./finalization-gate.js";
 import type { VerificationLedger } from "./verification-ledger.js";
 
 // The report and its blueprint pass the finalization gate together. The blueprint is data:
@@ -10,7 +10,7 @@ export function blueprintFinalizationText(answer: string, blueprint: Record<stri
   return [
     answer,
     "[STRUCTURED_REPORT_BLUEPRINT_DATA]",
-    addMissingVerificationMarkers(data, new FinalizationGate().evaluate(data, ledger)),
+    addMissingVerificationMarkers(data, new FinalizationGate().evaluate(data, ledger), verifiedLedgerMarkers(ledger)),
     "[/STRUCTURED_REPORT_BLUEPRINT_DATA]"
   ].join("\n");
 }
