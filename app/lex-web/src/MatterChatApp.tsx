@@ -2,6 +2,7 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
+import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
@@ -422,6 +423,7 @@ const CASE_OVERVIEW_REQUEST =
   "Utwórz podsumowanie sprawy (metryka, dokumenty, podmioty, oś czasu, finanse, fakty kluczowe, czynniki krytyczne, spory i braki, synteza) na podstawie dokumentów sprawy.";
 
 const MANDATORY_SKILLS = ["prawny-router-v3", "shared"] as const;
+const SWITCHER_CASES = 8;
 const KNOWN_EXECUTION_SKILLS = new Set([
   "analiza-sadowa-v6",
   "analizator-dowodow-v3",
@@ -1807,6 +1809,24 @@ export default function MatterChatApp({
     () => cases.filter((item) => item.caseKind === "MATTER"),
     [cases]
   );
+  // Sidebar case switcher: the current case, a search and the most recently changed cases.
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherQuery, setSwitcherQuery] = useState("");
+  const switcherRef = useRef<HTMLDivElement>(null);
+  const switcherCases = useMemo(() => {
+    const query = switcherQuery.trim().toLocaleLowerCase("pl");
+    return casesNewestFirst(matterCases)
+      .filter((item) => !query || `${item.displayName ?? ""} ${item.caseId}`.toLocaleLowerCase("pl").includes(query))
+      .slice(0, SWITCHER_CASES);
+  }, [matterCases, switcherQuery]);
+  useEffect(() => {
+    if (!switcherOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!switcherRef.current?.contains(event.target as Node)) setSwitcherOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [switcherOpen]);
   const matterSearchResult =
     useMemo(
       () =>
@@ -4901,9 +4921,9 @@ export default function MatterChatApp({
           </div>
         </div>
 
-        <div className="matter-thread-list" aria-label="Wątki spraw">
+        <div className="case-switcher" ref={switcherRef}>
           <div className="matter-thread-heading">
-            <strong>Sprawy</strong>
+            <strong>Sprawa</strong>
             <button
               type="button"
               disabled={caseBusy || executing}
@@ -4912,132 +4932,196 @@ export default function MatterChatApp({
               + Nowa sprawa
             </button>
           </div>
-          <input
-            value={newCaseName}
-            maxLength={160}
-            placeholder="Nazwa nowej sprawy"
-            onChange={(event) => setNewCaseName(event.target.value)}
-          />
-          <div className="matter-thread-items">
-            {matterCases.map((item) =>
-              sidebarRename?.caseId === item.caseId ? (
-                <form
-                  key={item.caseId}
-                  className="matter-thread-rename"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveSidebarRename();
-                  }}
-                >
-                  <input
-                    autoFocus
-                    value={sidebarRename.value}
-                    maxLength={160}
-                    disabled={caseBusy}
-                    aria-label="Nowa nazwa sprawy"
-                    onChange={(event) =>
-                      setSidebarRename({ ...sidebarRename, value: event.target.value, error: "" })
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") setSidebarRename(null);
-                    }}
-                  />
-                  <div className="matter-thread-rename-actions">
-                    <button type="submit" disabled={caseBusy || !sidebarRename.value.trim()}>
-                      Zapisz
-                    </button>
-                    <button type="button" disabled={caseBusy} onClick={() => setSidebarRename(null)}>
-                      Anuluj
-                    </button>
-                  </div>
-                  {sidebarRename.error ? (
-                    <small className="matter-thread-rename-error">{sidebarRename.error}</small>
-                  ) : null}
-                </form>
-              ) : (
-                <div key={item.caseId} className="matter-thread-row">
-                  <button
-                    type="button"
-                    disabled={caseBusy || executing}
-                    title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : undefined}
-                    aria-busy={item.caseId === executingCaseId}
-                    className={[
-                      "matter-thread",
-                      item.caseId === caseId ? "active" : "",
-                      item.caseId === executingCaseId ? "thinking" : ""
-                    ].filter(Boolean).join(" ")}
-                    onClick={() => {
-                      setPendingFirstMessage(null);
-                      setExecutionError("");
-                      setCaseId(item.caseId);
-                      setActiveTab("chat");
-                    }}
-                  >
-                    <strong>
-                      {item.caseId === executingCaseId ? (
-                        <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
-                      ) : null}
-                      {item.displayName || "Sprawa bez nazwy"}
-                    </strong>
-                    <small>
-                      {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
-                    </small>
-                  </button>
-                  {item.role === "OWNER" ? (
-                    <button
-                      type="button"
-                      className="matter-thread-edit"
-                      disabled={caseBusy}
-                      title="Zmień nazwę sprawy"
-                      aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
-                      onClick={() =>
-                        setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
-                      }
+          <button
+            type="button"
+            className="case-switcher-current"
+            aria-expanded={switcherOpen}
+            aria-controls="case-switcher-panel"
+            disabled={caseBusy || executing}
+            title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : "Zmień sprawę"}
+            onClick={() => setSwitcherOpen((open) => !open)}
+          >
+            <span>
+              <strong>{selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Wybierz albo utwórz sprawę"}</strong>
+              {selectedCase ? (
+                <small>{selectedCase.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[selectedCase.role]}</small>
+              ) : null}
+            </span>
+            <span aria-hidden="true" className="case-switcher-chevron">▾</span>
+          </button>
+          {switcherOpen ? (
+            <div
+              id="case-switcher-panel"
+              className="case-switcher-panel"
+              role="dialog"
+              aria-label="Wybór sprawy"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSwitcherOpen(false);
+              }}
+            >
+              <input
+                type="search"
+                autoFocus
+                value={switcherQuery}
+                placeholder="Szukaj sprawy…"
+                aria-label="Szukaj sprawy"
+                onChange={(event) => setSwitcherQuery(event.target.value)}
+              />
+              <small className="case-switcher-caption">
+                {switcherQuery.trim() ? `Wyniki (${switcherCases.length})` : "Ostatnio zmieniane"}
+              </small>
+              <div className="matter-thread-items">
+                {switcherCases.map((item) =>
+                  sidebarRename?.caseId === item.caseId ? (
+                    <form
+                      key={item.caseId}
+                      className="matter-thread-rename"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveSidebarRename();
+                      }}
                     >
-                      <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                        <path
-                          d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.3"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  ) : null}
-                </div>
-              )
-            )}
-          </div>
+                      <input
+                        autoFocus
+                        value={sidebarRename.value}
+                        maxLength={160}
+                        disabled={caseBusy}
+                        aria-label="Nowa nazwa sprawy"
+                        onChange={(event) =>
+                          setSidebarRename({ ...sidebarRename, value: event.target.value, error: "" })
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setSidebarRename(null);
+                        }}
+                      />
+                      <div className="matter-thread-rename-actions">
+                        <button type="submit" disabled={caseBusy || !sidebarRename.value.trim()}>
+                          Zapisz
+                        </button>
+                        <button type="button" disabled={caseBusy} onClick={() => setSidebarRename(null)}>
+                          Anuluj
+                        </button>
+                      </div>
+                      {sidebarRename.error ? (
+                        <small className="matter-thread-rename-error">{sidebarRename.error}</small>
+                      ) : null}
+                    </form>
+                  ) : (
+                    <div key={item.caseId} className="matter-thread-row">
+                      <button
+                        type="button"
+                        disabled={caseBusy || executing}
+                        title={executing ? "Trwa przygotowanie odpowiedzi — sprawę zmienisz po jej zakończeniu" : undefined}
+                        aria-busy={item.caseId === executingCaseId}
+                        className={[
+                          "matter-thread",
+                          item.caseId === caseId ? "active" : "",
+                          item.caseId === executingCaseId ? "thinking" : ""
+                        ].filter(Boolean).join(" ")}
+                        onClick={() => {
+                          setSwitcherOpen(false);
+                          setPendingFirstMessage(null);
+                          setExecutionError("");
+                          setCaseId(item.caseId);
+                          setActiveTab("chat");
+                        }}
+                      >
+                        <strong>
+                          {item.caseId === executingCaseId ? (
+                            <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                          ) : null}
+                          {item.displayName || "Sprawa bez nazwy"}
+                        </strong>
+                        <small>
+                          {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
+                        </small>
+                      </button>
+                      {item.role === "OWNER" ? (
+                        <button
+                          type="button"
+                          className="matter-thread-edit"
+                          disabled={caseBusy}
+                          title="Zmień nazwę sprawy"
+                          aria-label={`Zmień nazwę sprawy ${item.displayName || "bez nazwy"}`}
+                          onClick={() =>
+                            setSidebarRename({ caseId: item.caseId, value: item.displayName ?? "", error: "" })
+                          }
+                        >
+                          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                            <path
+                              d="M11.3 1.9a1.5 1.5 0 0 1 2.1 0l.7.7a1.5 1.5 0 0 1 0 2.1l-8 8-3.3.9.9-3.3 7.6-8.4zM10 4.3l1.7 1.7"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.3"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  )
+                )}
+              </div>
+              {switcherCases.length === 0 ? <small className="case-switcher-caption">Brak pasujących spraw.</small> : null}
+              <button
+                type="button"
+                className="case-switcher-all"
+                onClick={() => {
+                  setSwitcherOpen(false);
+                  setActiveTab("home");
+                }}
+              >
+                Wszystkie sprawy ({matterCases.length}) →
+              </button>
+              <form
+                className="case-switcher-create"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setSwitcherOpen(false);
+                  void createLocalCase(newCaseName.trim() || "Nowa sprawa");
+                }}
+              >
+                <input
+                  value={newCaseName}
+                  maxLength={160}
+                  placeholder="Nazwa nowej sprawy"
+                  onChange={(event) => setNewCaseName(event.target.value)}
+                />
+                <button type="submit" disabled={caseBusy || executing}>Utwórz</button>
+              </form>
+            </div>
+          ) : null}
         </div>
 
         <nav className="chat-tabs" aria-label="Sekcje aplikacji">
           {([
-            ["home", "Start"],
-            ["calendar", "Kalendarz"],
-            ["chat", "Czat"],
-            ["case", "Sprawa"],
-            ["firm", "Kancelaria"],
-            ["search", "Wyszukiwanie"],
-            ["invoices", "Faktury"],
-            ["settings", "Ustawienia"]
-          ] as Array<[TabId, string]>).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={activeTab === id ? "chat-tab chat-tab-active" : "chat-tab"}
-              onClick={() => setActiveTab(id)}
-            >
-              {label}
-              {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
-                <span title="Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)">
-                  {documentDropQueue.files.length + documentStaging.items.length}
-                </span>
-              ) : null}
-            </button>
+            ["Ta sprawa", [["chat", "Rozmowa"], ["case", "Akta i dokumenty"]]],
+            ["Kancelaria", [["home", "Start"], ["calendar", "Kalendarz"], ["firm", "Wzory i wiedza"], ["search", "Wyszukiwanie"], ["invoices", "Faktury"]]],
+            ["", [["settings", "Ustawienia"]]]
+          ] as Array<[string, Array<[TabId, string]>]>).map(([group, tabs]) => (
+            <div key={group || "app"} className="chat-tab-group" role="group" aria-label={group || "Aplikacja"}>
+              {group ? <small className="chat-tab-group-label">{group}</small> : null}
+              {tabs.map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={activeTab === id ? "chat-tab chat-tab-active" : "chat-tab"}
+                  onClick={() => setActiveTab(id)}
+                >
+                  {label}
+                  {id === "case" && documentDropQueue.files.length + documentStaging.items.length > 0 ? (
+                    <span title="Pliki czekające na odczyt lub zapis (nie dokumenty sprawy)">
+                      {documentDropQueue.files.length + documentStaging.items.length}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
 
+        {/* The case is named on the switcher; the card speaks up only when the runtime is down. */}
+        {developerMode || !runtimeOnline ? (
         <div className="chat-sidebar-card">
           <div className="chat-status-line">
             <span className={runtimeOnline ? "chat-dot online" : "chat-dot offline"} />
@@ -5047,6 +5131,7 @@ export default function MatterChatApp({
             {selectedCase?.displayName || "Nowy wątek utworzy własną sprawę"}
           </small>
         </div>
+        ) : null}
 
         {developerMode ? (
           <div className="chat-sidebar-foot">
@@ -5303,11 +5388,11 @@ export default function MatterChatApp({
                 : activeTab === "calendar"
                 ? "Kalendarz spraw"
                 : activeTab === "chat"
-                ? "Czat sprawy"
+                ? "Rozmowa"
                 : activeTab === "case"
-                    ? "Sprawa i dokumenty"
+                    ? "Akta i dokumenty"
                     : activeTab === "firm"
-                      ? "Know-how i wzory kancelarii"
+                      ? "Wzory i wiedza kancelarii"
                       : activeTab === "search"
                         ? "Wyszukiwanie w źródłach MCP"
                         : activeTab === "invoices"

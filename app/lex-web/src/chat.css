@@ -57,7 +57,8 @@
   font-size: 11px;
 }
 
-.matter-thread-list {
+.matter-thread-list,
+.case-switcher {
   display: grid;
   gap: 9px;
   min-height: 0;
@@ -3292,4 +3293,121 @@ mark.restored {
 :root[data-chat-text="larger"] .chat-message-content,
 :root[data-chat-text="larger"] .chat-composer textarea {
   font-size: 1.25em;
+}
+
+/* Sidebar case switcher: the current case; the panel unfolds in place (the sidebar scrolls). */
+.case-switcher-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid rgb(var(--lm-o1-rgb) / 0.14);
+  border-radius: 9px;
+  background: rgb(var(--lm-o1-rgb) / 0.08);
+  color: var(--lm-t1);
+  text-align: left;
+  font: inherit;
+}
+
+.case-switcher-current > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.case-switcher-current strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.case-switcher-current small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-switcher-current small,
+.case-switcher-caption {
+  color: var(--lm-t11);
+  font-size: 10px;
+}
+
+.case-switcher-current[aria-expanded="true"] .case-switcher-chevron {
+  transform: rotate(180deg);
+}
+
+.case-switcher-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.case-switcher-panel > input,
+.case-switcher-create input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgb(var(--lm-o1-rgb) / 0.14);
+  border-radius: 9px;
+  background: rgb(var(--lm-o1-rgb) / 0.08);
+  color: var(--lm-t1);
+}
+
+.case-switcher-panel input::placeholder {
+  color: var(--lm-t11);
+}
+
+.case-switcher-panel .matter-thread-items {
+  max-height: none;
+  overflow: visible;
+}
+
+.case-switcher-all {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--lm-t1);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.case-switcher-create {
+  display: flex;
+  gap: 6px;
+}
+
+.case-switcher-create button {
+  flex: none;
+  padding: 0 10px;
+  border: 1px solid rgb(var(--lm-o1-rgb) / 0.14);
+  border-radius: 9px;
+  background: rgb(var(--lm-o1-rgb) / 0.08);
+  color: var(--lm-t1);
+  font: inherit;
+  font-size: 11px;
+}
+
+.chat-tab-group {
+  display: grid;
+  gap: 4px;
+}
+
+.chat-tab-group + .chat-tab-group {
+  margin-top: 10px;
+}
+
+.chat-tab-group-label {
+  padding: 0 12px;
+  color: var(--lm-t11);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
