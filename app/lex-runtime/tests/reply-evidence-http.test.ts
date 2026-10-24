@@ -28,6 +28,8 @@ const CORPUS = path.resolve(__dirname, "../../../Wersja rozwojowa rozpakowana");
 const ANSWER = "W sprawie o sygn. akt I C 900/26 należy złożyć odpowiedź na pozew w terminie dwóch tygodni od doręczenia (art. 205^3 § 2 KPC ⚠️ [NIEWERYFIKOWANE]).";
 const SCEN: Array<[string, string[], number, { error?: string; workflow?: string; domain?: string; task?: string }?]> = [
   ["Dostałem pozew, co mam zrobić?", ["pozew"], 200],
+  // Test 500, C12-008 na żywo: "nakaz zapłaty" w pytaniu laika nie uruchamia pisma procesowego (409).
+  ["Dostałem ten pozew razem z nakazem zapłaty. Co mam zrobić?", ["pozew"], 200],
   ["Mam pozew, wyjaśnij mi o co chodzi.", ["pozew"], 200],
   ["Przygotuj odpowiedź na pozew.", ["pozew"], 409, { error: "PROCESS_PLEADING_STATE_REQUIRED" }],
   ["Napisz zarzuty od nakazu zapłaty.", ["nakaz"], 200],
