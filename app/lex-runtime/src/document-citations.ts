@@ -42,10 +42,11 @@ const MARKER = /\[\[LEXDOC:([^:\]\r\n]{1,180}):(\d{1,7})\]\]/g;
 const MAX_QUOTE_SCAN = 4_500;
 
 function quoteBefore(text: string, markerStart: number): string | undefined {
+  // "*„…”* [[LEXDOC…]]": emphasis around the quote and a space before the marker.
   const window = text.slice(
     Math.max(0, markerStart - MAX_QUOTE_SCAN),
     markerStart
-  ).trimEnd();
+  ).trimEnd().replace(/[*_]+$/u, "");
 
   const candidates = [
     /„([^„”]{2,4000})”\s*$/s,
@@ -200,7 +201,7 @@ function linkUnmarkedQuotes(
     const quote = (match[1] ?? match[2] ?? "").trim();
     const end = match.index + match[0].length;
     if (fences.some((fence) => match!.index >= fence.start && match!.index < fence.end)) continue;
-    if (/^\s*\[\[LEXDOC:/u.test(text.slice(end, end + 12))) continue;
+    if (/^[*_]*\s*\[\[LEXDOC:/u.test(text.slice(end, end + 16))) continue;
     if (quote.split(/\s+/u).length < 4) continue;
     const found = entries.length ? findQuoteChunk(entries, quote) : undefined;
     if (found) {
@@ -241,7 +242,7 @@ export function processDocumentCitationMarkers(
   attachments: SessionDocumentAttachment[],
   options: {
     // Texts a quote may legitimately come from without a case document link: the thread
-    // (the user's own words, earlier answers) and case law read in this turn.
+    // (the user's own words, earlier answers), case law and statute wording read in this turn.
     otherTexts?: string[];
   } = {}
 ): ProcessedDocumentCitations {

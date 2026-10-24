@@ -158,4 +158,25 @@ describe("local document citations", () => {
     expect(result.citations[0]?.quoteFidelity).toBe("DIGEST_UNCHECKED");
     expect(result.text).not.toContain(QUOTE_MISMATCH_MARKER);
   });
+
+  it("binds a marker set after italics to its quote, without a second link (C12-018)", () => {
+    const result = processDocumentCitationMarkers(
+      `Pozew: *„Pozwany wnosi o oddalenie powództwa w całości.”* ${pleadingRef(0)}`,
+      [pleading]
+    );
+
+    expect(result.citations).toHaveLength(1);
+    expect(result.citations[0]?.quoteFidelity).toBe("EXACT");
+    expect(result.quoteFindings.autoLinked).toBe(0);
+  });
+
+  it("leaves statute wording read in this turn alone, even when called a document's text (C12-011)", () => {
+    const text = "Tekst dokumentu: „W transakcjach handlowych - z wyłączeniem transakcji, w których dłużnikiem jest podmiot publiczny - wierzycielowi przysługują odsetki”.";
+    const result = processDocumentCitationMarkers(text, [pleading], {
+      otherTexts: ["Art. 7.\n\n1.\n\nW transakcjach handlowych - z wyłączeniem transakcji, w których dłużnikiem jest podmiot\npubliczny - wierzycielowi przysługują odsetki"]
+    });
+
+    expect(result.text).toBe(text);
+  });
 });
+
