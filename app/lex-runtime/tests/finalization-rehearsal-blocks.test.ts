@@ -89,3 +89,33 @@ describe("live rehearsal over the Claude account (C07-001, C03-016)", () => {
     expect(gate.evaluate(repaired, ledger).result).toBe("PASS");
   });
 });
+
+describe("powołanie z ustępem i cudzy znacznik z rejestru (test 500, C12 na żywo)", () => {
+  it("art. X ust. Y jest wykrywane z ustępem; znacznik art. 35 KPA przy art. 35 ust. 3 Prawa budowlanego nie przechodzi jako VERIFIED", async () => {
+    const { detectLegalReferences } = await import("../src/finalization-gate.js");
+    expect(detectLegalReferences("Podstawa: art. 6 ust. 4 ustawy o ochronie praw lokatorów.").filter((item) => item.kind === "statute").map((item) => item.claim)).toEqual(["art. 6 ust. 4"]);
+    expect(detectLegalReferences("Zob. art. 10 ust. 1 pkt 2 ustawy.").filter((item) => item.kind === "statute").map((item) => item.claim)).toEqual(["art. 10 ust. 1 pkt 2"]);
+  });
+});
+
+describe("cudzy znacznik z rejestru przy powołaniu z ustępem (test 500, zrzut 1792713885540)", () => {
+  it("znacznik art. 35 KPA zdjęty z wiersza o art. 35 ust. 3 Prawa budowlanego, właściwy dopisany", async () => {
+    const { FinalizationGate, addMissingVerificationMarkers, expectedVerificationMarker, verifiedLedgerMarkers } = await import("../src/finalization-gate.js");
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const ledger = new VerificationLedger();
+    // Daty rekordów na dziś: wynik nie zależy od dnia uruchomienia testu.
+    const now = new Date().toISOString();
+    for (const record of RECORDS_35) ledger.add({ ...record, fetchedAt: now, freshnessCheckedAt: now } as never);
+    const kpa = expectedVerificationMarker(ledger.all().find((record) => record.claim === "art. 35 KPA")!)!;
+    const own = expectedVerificationMarker(ledger.all().find((record) => record.claim.startsWith("art. 35 ust. 3"))!)!;
+    const text = `Treść: urząd nie wydał postanowienia z art. 35 ust. 3, więc odmowa była przedwczesna. ${kpa}`;
+    const report = new FinalizationGate().evaluate(text, ledger);
+    expect(report.result).toBe("BLOCKED");
+    const fixed = addMissingVerificationMarkers(text, report, verifiedLedgerMarkers(ledger));
+    expect(fixed).not.toContain(kpa);
+    expect(fixed).toContain(own);
+    expect(new FinalizationGate().evaluate(fixed, ledger).result).not.toBe("BLOCKED");
+  });
+});
+
+const RECORDS_35 = [{"claim": "art. 35 ust. 3 Prawa budowlanego", "kind": "statute", "sourceUrl": "https://api.sejm.gov.pl/eli/acts/DU/2026/524/text.pdf", "sourceTier": "R1", "toolCallId": "toolu_0159WdYu83ijgknGodwvqQEh", "verificationMethod": "file_read", "sourceFormat": "PDF", "temporalMode": "CURRENT", "currentEli": "DU/2026/524", "status": "VERIFIED", "sourceAnchorUrl": "https://api.sejm.gov.pl/eli/acts/DU/2026/524/text.pdf#page=38", "fetchedAt": "2026-10-22T20:32:42.484Z", "retrieval": "RAG", "temporalFreshnessStatus": "CURRENT", "freshnessCheckedAt": "2026-10-22T23:58:45.460Z", "evidence": "Art. 35. 1. Przed wydaniem decyzji o pozwoleniu na budowę lu"}, {"claim": "art. 35 KPA", "kind": "statute", "sourceUrl": "https://api.sejm.gov.pl/eli/acts/DU/2025/1691/text.pdf", "sourceTier": "R1", "toolCallId": "gate-i-auto-1", "verificationMethod": "file_read", "sourceFormat": "PDF", "temporalMode": "CURRENT", "currentEli": "DU/2025/1691", "status": "VERIFIED", "sourceAnchorUrl": "https://api.sejm.gov.pl/eli/acts/DU/2025/1691/text.pdf#page=8", "fetchedAt": "2026-10-22T20:19:42.721Z", "retrieval": "RAG", "temporalFreshnessStatus": "CURRENT", "freshnessCheckedAt": "2026-10-22T23:58:31.628Z", "evidence": "Art. 35. § 1. Organy administracji publicznej obowiązane są "}];

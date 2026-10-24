@@ -9,6 +9,7 @@ import type { CheckpointRegisterEntry } from "./process-checkpoint-contract.js";
 import {
   FinalizationGate,
   addMissingVerificationMarkers,
+  verifiedLedgerMarkers,
   markUnverifiedReferences
 } from "./finalization-gate.js";
 import type { MatterComplexity } from "./matter-complexity.js";
@@ -1670,7 +1671,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     });
     let text = stripUnbackedVerificationMarkers(response.fullText.trim(), ledger).text;
     const gate = new FinalizationGate().evaluate(text, ledger);
-    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate), ledger).text;
+    text = reconcileStatusMarkers(addMissingVerificationMarkers(markUnverifiedReferences(text, gate, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())), gate, verifiedLedgerMarkers(ledger)), ledger).text;
     return restoreWithReport(text, vault).text.slice(0, MAX_SUMMARY_CHARS);
   }
 
@@ -3971,7 +3972,8 @@ export class SafeSessionExecutor implements SessionExecutor {
                 new Set(ledger.caseReferences()),
                 new Set(ledger.retrievedCases())
               ),
-              preFinalization
+              preFinalization,
+              verifiedLedgerMarkers(ledger)
             )
           }
         : citedAnswer;
@@ -4003,7 +4005,8 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (check.result !== "BLOCKED") break;
       const marked = addMissingVerificationMarkers(
         markUnverifiedReferences(remarkedText, check, new Set(ledger.caseReferences()), new Set(ledger.retrievedCases())),
-        check
+        check,
+        verifiedLedgerMarkers(ledger)
       );
       const reconciled = reconcileStatusMarkers(marked, ledger);
       const unified = unifyConflictingProvisions(reconciled.text, ledger);

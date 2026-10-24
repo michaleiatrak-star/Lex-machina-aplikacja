@@ -8,10 +8,12 @@ describe("akt powołanego artykułu w automatycznej weryfikacji", () => {
   it("akt UE do weryfikacji UE, akt nazwany słownie bez cudzego skrótu z wiersza", () => {
     const text = "Podstawą jest art. 6 ust. 1 lit. f RODO, a także art. 5 AI Act oraz art. 10 ust. 2 dyrektywy 2008/48/WE i art. 415 KC, art. 4 ustawy o VAT.";
     const calls = planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => [call.input.claim, call.input.act]);
+    // Powołanie z ustępem (test 500: "art. 6 ust. 4 ustawy o ..." wykrywane jako samo "art. 6"):
+    // weryfikator UE sprawdza też ustęp (claimedUnitState).
     expect(calls).toEqual([
-      ["art. 6", "32016R0679"],
+      ["art. 6 ust. 1", "32016R0679"],
       ["art. 5", "32024R1689"],
-      ["art. 10", "32008L0048"],
+      ["art. 10 ust. 2", "32008L0048"],
       ["art. 415 KC", "KC"]
     ]);
   });
