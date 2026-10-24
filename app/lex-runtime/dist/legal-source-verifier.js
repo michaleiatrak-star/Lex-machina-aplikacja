@@ -141,6 +141,11 @@ function titleMatches(expectedTitle, body, kind) {
         return false;
     return normalize(body).includes(expected);
 }
+function journalAddressMatches(claim, url) {
+    const address = /^\/eli\/acts\/DU\/(\d{4})\/(\d+)(?:\/|$)/u.exec(url.pathname);
+    const tokens = journalTokens(claim);
+    return Boolean(address) && tokens.length === 2 && tokens[0] === address[1] && tokens[1] === address[2];
+}
 function matchesClaim(claim, kind, body) {
     const haystack = normalize(body);
     if (!haystack)
@@ -379,7 +384,9 @@ export class OfficialLegalSourceVerifier {
             }
         }
         const titleMatched = titleMatches(request.expectedTitle, body, request.kind);
-        const referenceMatched = matchesClaim(request.claim, request.kind, body);
+        // A Dz.U. reference is confirmed by the address of the text read: ELI DU/2023/725 is
+        // "Dz.U. 2023 poz. 725" (the HTML of a consolidated text does not print its own position).
+        const referenceMatched = matchesClaim(request.claim, request.kind, body) || (request.kind === "journal" && journalAddressMatches(request.claim, url));
         const matched = titleMatched &&
             referenceMatched;
         const fetchedAt = this.now();

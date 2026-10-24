@@ -55,6 +55,10 @@ function aliases(value) {
             .filter((item) => Boolean(item)))
     ];
 }
+function journalEli(claim) {
+    const match = /Dz\.?\s*U\.?\s*(?:z\s+)?(\d{4})\s*(?:r\.?)?\s*(?:nr\s*\d+\s*,?\s*)?poz\.?\s*(\d+)/iu.exec(claim);
+    return match ? `DU/${match[1]}/${match[2]}` : null;
+}
 function uniqueActAlias(reference) {
     const claimAliases = aliases(compactActAbbreviations(reference.claim));
     if (claimAliases.length === 1) {
@@ -165,7 +169,11 @@ export function planAutomaticLegalVerification(text, ledger, requestedAsOf) {
             "statute" ||
             reference.kind ===
                 "journal") {
-            const alias = uniqueActAlias(reference);
+            // A Dz.U. reference is its own address: "Dz.U. 2023 poz. 725" is ELI DU/2023/725. Before,
+            // the act came from the line, and a title "... i o zmianie Kodeksu cywilnego" sent it to KC.
+            const alias = reference.kind === "journal"
+                ? journalEli(reference.claim) ?? uniqueActAlias(reference)
+                : uniqueActAlias(reference);
             if (!alias) {
                 skipped.push({
                     claim: reference.claim,

@@ -90,3 +90,25 @@ describe("jednostka niższego rzędu w powołaniu (§, ust., pkt)", () => {
     expect(claimedUnitState("art. 860 § 3 KC", "Art. 860. § 1. Przez umowę spółki…\n§ 2. Umowa…", [{ from: "2028-11-01", text: "§ 3. Jeżeli przepis ustawy tak stanowi…" }])).toEqual({ state: "PENDING", from: "2028-11-01" });
   });
 });
+
+describe("oznaczenie Dz.U. potwierdzone adresem pobranego tekstu (test 500, C10-023)", () => {
+  const page = "<html><body><h1>Ustawa o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego</h1><p>Art. 6. 1. Zawarcie umowy najmu…</p></body></html>";
+  const verifier = new OfficialLegalSourceVerifier(
+    async () => new Response(page, { headers: { "content-type": "text/html" } }),
+    () => "2026-10-24T08:00:00.000Z"
+  );
+  const request = { kind: "journal" as const, url: "https://api.sejm.gov.pl/eli/acts/DU/2023/725/text.html", toolCallId: "t", expectedTitle: "o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego" };
+
+  it("tekst jednolity spod ELI DU/2023/725 potwierdza \"Dz. U. z 2023 r. poz. 725\", nie inną pozycję", async () => {
+    expect((await verifier.verify({ ...request, claim: "Dz. U. z 2023 r. poz. 725" })).record.status).toBe("VERIFIED");
+    expect((await verifier.verify({ ...request, claim: "Dz.U. 2020 poz. 611" })).record.status).toBe("UNVERIFIED");
+  });
+
+  it("plan weryfikacji: oznaczenie Dz.U. idzie pod swój adres ELI, nie do KC z tytułu ustawy", async () => {
+    const { planAutomaticLegalVerification } = await import("../src/gate-i-auto-verification.js");
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const text = "Zgodnie z art. 6 ust. 4 ustawy o ochronie praw lokatorów, mieszkaniowym zasobie gminy i o zmianie Kodeksu cywilnego (Dz. U. z 2023 r. poz. 725) kaucja podlega zwrotowi.";
+    const calls = planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => [call.input.claim, call.input.act]);
+    expect(calls).toContainEqual(["Dz. U. z 2023 r. poz. 725", "DU/2023/725"]);
+  });
+});
