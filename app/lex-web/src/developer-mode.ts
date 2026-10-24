@@ -169,9 +169,26 @@ const CONTROL_SECTION =
 const HEADING_ONLY = /^\s*(?:#{1,6}\s+.+|(?:[-*]\s*)?\*\*[^*\n]+\*\*\s*:?)\s*$/u;
 const SECTION_BODY = /^\s*(?:$|[-*•]\s|\d{1,2}[.)]\s)|^\s{2,}\S/u;
 
+// The routing trace also comes as a bare code block ("```\nTRYB: LAIK\nPRIMARY: …\n```",
+// test 500, C12-008): a fenced block of the router's own keys is the trace, heading or not.
+const TRACE_KEYS = /^\s*(?:[-*]\s*)?(?:TRYB|PRIMARY|SECONDARY|ODRZUCONE|PROFIL|ODROCZONE|WERSJA ROUTERA|ROUTER-WCZYTANY):/u;
+
+function routingTraceBlockEnd(lines: string[], start: number): number {
+  if (!/^\s*```\s*$/u.test(lines[start]!)) return -1;
+  const close = lines.findIndex((line, at) => at > start && /^\s*```/u.test(line));
+  if (close < 0) return -1;
+  const body = lines.slice(start + 1, close).filter((line) => line.trim());
+  return body.length > 0 && body.every((line) => TRACE_KEYS.test(line) || /^\s+\S/u.test(line)) && body.some((line) => /PRIMARY:/u.test(line)) ? close : -1;
+}
+
 function withoutControlSections(lines: string[]): string[] {
   const kept: string[] = [];
   for (let index = 0; index < lines.length; index += 1) {
+    const trace = routingTraceBlockEnd(lines, index);
+    if (trace >= 0) {
+      index = trace;
+      continue;
+    }
     if (!CONTROL_SECTION.test(lines[index]!)) {
       kept.push(lines[index]!);
       continue;

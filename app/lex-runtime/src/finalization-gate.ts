@@ -865,6 +865,14 @@ export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
 
 // Wiersz sam mówi, że sygnatury nie potwierdzono ("baza zwróciła 503", "nie mogę potwierdzić",
 // "tylko metadane"): to jawny trop, pokazany z ⚠️, a nie powołanie podane jako pewne.
+// A signature given as an example of what to fill in ("Podaj dane, np. „sygn. I Nc 123/26; …”",
+// test 500, C12-008): no citation, shown with ⚠️ instead of blocking the whole letter.
+function givenAsExample(reference: DetectedLegalReference): boolean {
+  const at = reference.lineText.indexOf(reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, ""));
+  if (at < 0) return false;
+  return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
+}
+
 const DISCLOSED_UNCONFIRMED =
   /nie\s+(?:udało\s+(?:mi\s+)?się\s+)?(?:mogę\s+)?(?:potwierdzi|zweryfikowa|pobra|sprawdzi|odczyta|powołuj)|niepotwierdz|niezweryfikowan(?!\S*\])|wymaga\p{L}*\s+weryfikacji|do\s+weryfikacji|sprawdź|captcha|HTTP\s*\d{3}|tylko\s+metadane|bez\s+treści|według\s+mojej\s+wiedzy|prawdopodobnie/iu;
 export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";
@@ -893,7 +901,7 @@ export function markUnverifiedReferences(
   // Sygnatura raz opisana jako niepotwierdzona (albo już z ⚠️) jest tym samym tropem w całej odpowiedzi.
   const disclosed = new Set(
     report.findings
-      .filter((finding) => finding.reference.kind === "case" && (finding.status === "UNVERIFIED_MARKED" || DISCLOSED_UNCONFIRMED.test(finding.reference.lineText)))
+      .filter((finding) => finding.reference.kind === "case" && (finding.status === "UNVERIFIED_MARKED" || DISCLOSED_UNCONFIRMED.test(finding.reference.lineText) || givenAsExample(finding.reference)))
       .map((finding) => caseFileKey(finding.reference.claim))
   );
   for (const finding of report.findings) {

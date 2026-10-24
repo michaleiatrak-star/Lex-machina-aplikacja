@@ -75,3 +75,13 @@ describe("control sections written by the model", () => {
     expect(plain).not.toContain("WYJ-GATE");
   });
 });
+
+describe("ślad routingu jako sam blok kodu (test 500, C12-008)", () => {
+  it("usuwa blok z kluczami routera, zostawia zwykły blok kodu", () => {
+    const text = "# Pozew z nakazem zapłaty\n\n```\nTRYB: LAIK\nPRIMARY: analiza-sadowa-v6 — ROUTER-WCZYTANY: TAK\nODRZUCONE: dr-12\nWERSJA ROUTERA: 3.73\n```\n\n**Co przeczytałem:** 1 dokument.\n\n```\nSĄD REJONOWY\nSprzeciw od nakazu zapłaty\n```";
+    const plain = withoutQualityGateLines(text);
+    expect(plain).not.toMatch(/PRIMARY|WERSJA ROUTERA|TRYB: LAIK/u);
+    expect(plain).toContain("**Co przeczytałem:** 1 dokument.");
+    expect(plain).toContain("Sprzeciw od nakazu zapłaty");
+  });
+});

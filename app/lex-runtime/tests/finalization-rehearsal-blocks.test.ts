@@ -119,3 +119,21 @@ describe("cudzy znacznik z rejestru przy powołaniu z ustępem (test 500, zrzut 
 });
 
 const RECORDS_35 = [{"claim": "art. 35 ust. 3 Prawa budowlanego", "kind": "statute", "sourceUrl": "https://api.sejm.gov.pl/eli/acts/DU/2026/524/text.pdf", "sourceTier": "R1", "toolCallId": "toolu_0159WdYu83ijgknGodwvqQEh", "verificationMethod": "file_read", "sourceFormat": "PDF", "temporalMode": "CURRENT", "currentEli": "DU/2026/524", "status": "VERIFIED", "sourceAnchorUrl": "https://api.sejm.gov.pl/eli/acts/DU/2026/524/text.pdf#page=38", "fetchedAt": "2026-10-22T20:32:42.484Z", "retrieval": "RAG", "temporalFreshnessStatus": "CURRENT", "freshnessCheckedAt": "2026-10-22T23:58:45.460Z", "evidence": "Art. 35. 1. Przed wydaniem decyzji o pozwoleniu na budowę lu"}, {"claim": "art. 35 KPA", "kind": "statute", "sourceUrl": "https://api.sejm.gov.pl/eli/acts/DU/2025/1691/text.pdf", "sourceTier": "R1", "toolCallId": "gate-i-auto-1", "verificationMethod": "file_read", "sourceFormat": "PDF", "temporalMode": "CURRENT", "currentEli": "DU/2025/1691", "status": "VERIFIED", "sourceAnchorUrl": "https://api.sejm.gov.pl/eli/acts/DU/2025/1691/text.pdf#page=8", "fetchedAt": "2026-10-22T20:19:42.721Z", "retrieval": "RAG", "temporalFreshnessStatus": "CURRENT", "freshnessCheckedAt": "2026-10-22T23:58:31.628Z", "evidence": "Art. 35. § 1. Organy administracji publicznej obowiązane są "}];
+
+describe("sygnatura podana jako przykład a sygnatura sprawy użytkownika (test 500, C12-008)", () => {
+  it("przykład po „np.” dostaje ⚠️ zamiast blokady; sygnatura akt użytkownika przechodzi bez oznaczeń", async () => {
+    const { FinalizationGate, markUnverifiedReferences, addMissingVerificationMarkers } = await import("../src/finalization-gate.js");
+    const { VerificationLedger } = await import("../src/verification-ledger.js");
+    const example = "**Pismo zawiera 19 pól do uzupełnienia.** Podaj dane, np. „sygn. I Nc 123/26; instalacja nie grzeje”, a wstawię je.";
+    const ledger = new VerificationLedger();
+    const report = new FinalizationGate().evaluate(example, ledger);
+    expect(report.result).toBe("BLOCKED");
+    const marked = addMissingVerificationMarkers(markUnverifiedReferences(example, report, new Set(), new Set()), report);
+    expect(marked).toMatch(/I Nc 123\/26[^\n]*⚠️/u);
+    expect(new FinalizationGate().evaluate(marked, ledger).result).not.toBe("BLOCKED");
+
+    const own = new VerificationLedger();
+    own.addCaseFileNumber("I Nc 123/26");
+    expect(new FinalizationGate().evaluate("Sprzeciw od nakazu zapłaty w sprawie sygn. I Nc 123/26.", own).result).not.toBe("BLOCKED");
+  });
+});
