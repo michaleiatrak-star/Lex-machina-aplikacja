@@ -181,9 +181,24 @@ function routingTraceBlockEnd(lines: string[], start: number): number {
   return body.length > 0 && body.every((line) => TRACE_KEYS.test(line) || /^\s+\S/u.test(line)) && body.some((line) => /PRIMARY:/u.test(line)) ? close : -1;
 }
 
+// "<details><summary>Dane techniczne (dla prawnika)</summary> … </details>": the model's own fold
+// for the trace (PRIMARY, router version, CN/WYJ-GATE, modules read; live C12-008).
+const TECHNICAL_DETAILS = /^\s*<details>\s*<summary>\s*(?:\*\*)?Dane techniczne\b/iu;
+
+function technicalDetailsEnd(lines: string[], start: number): number {
+  if (!TECHNICAL_DETAILS.test(lines[start]!)) return -1;
+  const close = lines.findIndex((line, at) => at >= start && /<\/details>/iu.test(line));
+  return close;
+}
+
 function withoutControlSections(lines: string[]): string[] {
   const kept: string[] = [];
   for (let index = 0; index < lines.length; index += 1) {
+    const details = technicalDetailsEnd(lines, index);
+    if (details >= 0) {
+      index = details;
+      continue;
+    }
     const trace = routingTraceBlockEnd(lines, index);
     if (trace >= 0) {
       index = trace;
