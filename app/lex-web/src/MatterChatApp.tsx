@@ -4972,7 +4972,16 @@ export default function MatterChatApp({
             onClick={() => setSwitcherOpen((open) => !open)}
           >
             <span>
-              <strong>{selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Wybierz albo utwórz sprawę"}</strong>
+              <strong>
+                {/* The case at work stays visible with the panel folded (the list is inside it). */}
+                {executingCaseId && executingCaseId === caseId ? (
+                  <span className="matter-thread-spinner" role="status" aria-label="Trwa przygotowanie odpowiedzi" />
+                ) : null}
+                {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Wybierz albo utwórz sprawę"}
+              </strong>
+              {executingCaseId && executingCaseId !== caseId && !switcherOpen ? (
+                <small role="status" aria-label="Trwa przygotowanie odpowiedzi">inna sprawa przygotowuje odpowiedź</small>
+              ) : null}
               {selectedCase ? (
                 <small>{selectedCase.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[selectedCase.role]}</small>
               ) : null}
