@@ -2,6 +2,7 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
+import { TaskMenu } from "./TaskMenu.js";
 import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
@@ -1924,6 +1925,34 @@ export default function MatterChatApp({
   }
 
   const [firmFileNames, setFirmFileNames] = useState<Record<string, string>>({});
+  const addMenuRef = useRef<HTMLDetailsElement>(null);
+  // A menu next to the message box ("+", "Zadanie") closes on a click elsewhere or Esc.
+  useEffect(() => {
+    const close = (event: Event) => {
+      for (const menu of document.querySelectorAll<HTMLDetailsElement>("details.chat-menu[open]")) {
+        if (event instanceof KeyboardEvent ? event.key === "Escape" : !menu.contains(event.target as Node)) menu.open = false;
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
+  // The list of case or firm files with their functions (status, anonymization, selection).
+  function openFilePicker(tab: "case" | "firm"): void {
+    if (addMenuRef.current) addMenuRef.current.open = false;
+    setPickerTab(tab);
+    setCaseFilePickerOpen(true);
+    setFirmPickerReload((value) => value + 1);
+    // Files added in the case view since the list was read.
+    if (caseId) {
+      setCaseFilesRetries(0);
+      setCaseFilesReload((value) => value + 1);
+    }
+  }
+
   function fileLabel(documentId: string, title?: string): string {
     return (
       title ??
@@ -5563,7 +5592,7 @@ export default function MatterChatApp({
               ) : null}
             </div>
             ) : null}
-            {activeTab === "chat" || activeTab === "case" ? (
+            {activeTab === "case" ? (
               <button
                 type="button"
                 className="chat-secondary-action"
@@ -5789,116 +5818,7 @@ export default function MatterChatApp({
                 );
               }}
             />
-            {conversationIsNew ? (
-              <section
-                className="chat-pipeline-picker"
-                aria-label="Tryb pracy dla nowej rozmowy"
-              >
-                <div>
-                  <p className="eyebrow">Tryb pracy</p>
-                  <h3>
-                    {workMode === "AUTO"
-                      ? developerMode ? "Automatyczny — prawny router" : "Automatyczny"
-                      : selectedDeterministicAction
-                        ? `Mechaniczny — ${selectedDeterministicAction.label}`
-                        : developerMode ? "Mechaniczny — wybierz skill wykonawczy" : "Mechaniczny — wybierz rodzaj pracy"}
-                    <InfoTip>
-                      {!developerMode
-                        ? workMode === "AUTO"
-                          ? "Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości."
-                          : "Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku."
-                        : workMode === "AUTO"
-                        ? "Router dobiera dziedziny DR, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych."
-                        : "Wybrany skill uruchamia stały pipeline; router nadal dobiera dziedzinę DR. Po pierwszej wiadomości wybór zostaje przypięty do wątku."}
-                    </InfoTip>
-                  </h3>
-                </div>
-                <div
-                  className="chat-work-mode"
-                  role="radiogroup"
-                  aria-label="Tryb pracy"
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={workMode === "AUTO"}
-                    className={
-                      workMode === "AUTO"
-                        ? "chat-pipeline-option selected"
-                        : "chat-pipeline-option"
-                    }
-                    onClick={() => {
-                      selectDeterministicAction("");
-                      setWorkMode("AUTO");
-                    }}
-                  >
-                    <strong>Automatyczny</strong>
-                    <small>{developerMode ? "Router sam dobiera skille i moduły." : "Aplikacja sama dobiera sposób pracy."}</small>
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={workMode === "MECHANICAL"}
-                    disabled={availableActions.length === 0}
-                    className={
-                      workMode === "MECHANICAL"
-                        ? "chat-pipeline-option selected"
-                        : "chat-pipeline-option"
-                    }
-                    onClick={() => setWorkMode("MECHANICAL")}
-                  >
-                    <strong>Mechaniczny</strong>
-                    <small>
-                      {availableActions.length > 0
-                        ? developerMode
-                          ? "Ty wybierasz skill wykonawczy i jego pipeline."
-                          : "Ty wybierasz rodzaj pracy (np. pismo, analiza umowy)."
-                        : developerMode
-                          ? "Brak skilli wykonawczych w korpusie."
-                          : "Brak dostępnych rodzajów pracy."}
-                    </small>
-                  </button>
-                </div>
-                {workMode === "MECHANICAL" ? (
-                  <div className="chat-pipeline-options">
-                    {availableActions.map((action) => {
-                      const checked =
-                        deterministicAction ===
-                        action.id;
-                      return (
-                        <button
-                          key={action.id}
-                          type="button"
-                          className={
-                            checked
-                              ? "chat-pipeline-option selected"
-                              : "chat-pipeline-option"
-                          }
-                          aria-pressed={checked}
-                          onClick={() =>
-                            selectDeterministicAction(
-                              action.id
-                            )
-                          }
-                        >
-                          <strong>
-                            {action.label}
-                          </strong>
-                          <small>
-                            {action.description}
-                          </small>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                {workMode === "MECHANICAL" && selectedDeterministicAction ? (
-                  <p className="field-help chat-action-result">
-                    <strong>{selectedDeterministicAction.question}</strong> Wynik: {selectedDeterministicAction.result}
-                  </p>
-                ) : null}
-              </section>
-            ) : null}
+
 
             <div className="chat-message-list" aria-live="polite">
               {threadLoading ? (
@@ -6338,6 +6258,45 @@ export default function MatterChatApp({
                   <span className="chat-clear-text-warning">Uwaga: część załączników to tekst jawny</span>
                 ) : null}
               </div>
+              {documentAttachments.length + firmTemplateIds.length > 0 ? (
+                <ul className="chat-attachment-chips" aria-label="Pliki w tej wiadomości">
+                  {documentAttachments.map((attachment) => (
+                    <li key={`${attachment.caseId}:${attachment.documentId}`}>
+                      <button type="button" className="chat-chip-name" title="Pokaż pliki i ich funkcje" onClick={() => openFilePicker(attachment.caseId === firmCaseId ? "firm" : "case")}>
+                        {fileLabel(attachment.documentId)}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-chip-remove"
+                        aria-label={`Odłącz ${fileLabel(attachment.documentId)}`}
+                        onClick={() => pickFiles([{ kind: "document", documentId: attachment.documentId, chunkIndices: attachment.chunkIndices }], false, attachment.caseId)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                  {firmTemplateIds.map((id) => (
+                    <li key={`template:${id}`}>
+                      <button type="button" className="chat-chip-name" title="Wzór kancelarii" onClick={() => openFilePicker("firm")}>
+                        {firmFileNames[id] ?? "wzór kancelarii"}
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-chip-remove"
+                        aria-label={`Odłącz ${firmFileNames[id] ?? "wzór kancelarii"}`}
+                        onClick={() => setFirmTemplateIds((current) => current.filter((item) => item !== id))}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {workMode === "MECHANICAL" && selectedDeterministicAction && conversationIsNew ? (
+                <p className="field-help chat-action-result">
+                  <strong>{selectedDeterministicAction.question}</strong> Wynik: {selectedDeterministicAction.result}
+                </p>
+              ) : null}
               <UnfinishedAnalysis
                 items={unfinishedDocuments(messages)}
                 label={(item) => fileLabel(item.documentId, item.title)}
@@ -6405,25 +6364,41 @@ export default function MatterChatApp({
                 }}
               />
               <div className="chat-composer-actions">
-                <button
-                  type="button"
-                  className="chat-secondary-action"
-                  aria-expanded={
-                    caseFilePickerOpen
-                  }
-                  onClick={() => {
-                    const opening = !caseFilePickerOpen;
-                    setCaseFilePickerOpen(opening);
-                    if (opening) setFirmPickerReload((value) => value + 1);
-                    // Files added in the Sprawa tab since the list was read.
-                    if (opening && caseId) {
-                      setCaseFilesRetries(0);
-                      setCaseFilesReload((value) => value + 1);
-                    }
+                <details ref={addMenuRef} className="chat-menu chat-add-menu">
+                  <summary aria-label="Dodaj pliki do wiadomości" title="Dodaj pliki">+</summary>
+                  <div className="chat-menu-panel" role="menu" aria-label="Dodaj">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={Boolean(selectedCase?.archivedAt)}
+                      onClick={() => {
+                        if (addMenuRef.current) addMenuRef.current.open = false;
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      <strong>Pliki z komputera</strong>
+                      <small>Trafią do akt tej sprawy i do wiadomości.</small>
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => openFilePicker("case")}>
+                      <strong>Dokumenty sprawy</strong>
+                      <small>Wybierz pliki z akt do tej wiadomości.</small>
+                    </button>
+                    <button type="button" role="menuitem" disabled={!firmCaseId} onClick={() => openFilePicker("firm")}>
+                      <strong>Wzory i wiedza kancelarii</strong>
+                      <small>{firmCaseId ? "Wzory pism i know-how kancelarii." : "Biblioteka kancelarii nie jest jeszcze utworzona."}</small>
+                    </button>
+                  </div>
+                </details>
+                <TaskMenu
+                  actions={availableActions}
+                  selected={workMode === "MECHANICAL" ? selectedDeterministicAction : null}
+                  pinned={!conversationIsNew}
+                  developerMode={developerMode}
+                  onSelect={(id) => {
+                    selectDeterministicAction(id);
+                    if (!id) setWorkMode("AUTO");
                   }}
-                >
-                  Pliki{selectedFileCount ? ` (${selectedFileCount})` : ""}
-                </button>
+                />
                 {developerMode ? (
                   <button
                     type="button"
@@ -6473,6 +6448,9 @@ export default function MatterChatApp({
                     <span className="chat-file-picker-count">
                       {selectedFileCount} z {documentLimit} plików
                     </span>
+                    <button type="button" className="chat-secondary-action" onClick={() => setCaseFilePickerOpen(false)}>
+                      Zamknij
+                    </button>
                   </div>
                   {pickerNotice ? <p className="chat-inline-error" role="status">{pickerNotice}</p> : null}
                   {documentFit?.estimate ? (

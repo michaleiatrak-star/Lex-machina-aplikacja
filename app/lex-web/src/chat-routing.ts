@@ -26,6 +26,8 @@ export const DETERMINISTIC_ACTION_META_PREFIX =
 export const DETERMINISTIC_ACTIONS = [
   {
     id: "COURT_ANALYSIS",
+    // Group in the task menu next to the message box.
+    group: "Dokumenty i fakty",
     label: "Analiza sądowa",
     description:
       "Deterministyczna analiza akt i problemu procesowego.",
@@ -38,6 +40,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "CHRONOLOGY",
+    group: "Dokumenty i fakty",
     label: "Chronologia sprawy",
     description:
       "Porządkuje zdarzenia, daty, terminy i zależności czasowe.",
@@ -49,6 +52,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "EVIDENCE_ANALYSIS",
+    group: "Dokumenty i fakty",
     label: "Analiza dowodów",
     description:
       "Ocena materiału dowodowego, luk, spójności i ryzyk.",
@@ -60,6 +64,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "CONTRACT_ANALYSIS",
+    group: "Dokumenty i fakty",
     label: "Analiza umowy",
     description:
       "Deterministyczna analiza postanowień, ryzyk i obowiązków.",
@@ -71,6 +76,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "PROCESS_PLEADING",
+    group: "Pisma i przygotowanie",
     label: "Pismo procesowe",
     description:
       "Uruchamia checkpointowany pipeline przygotowania pisma procesowego.",
@@ -82,6 +88,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "SIMPLE_LETTER",
+    group: "Pisma i przygotowanie",
     label: "Pismo proste",
     description:
       "Wezwania, wnioski i krótsze pisma z walidacją przed plikiem.",
@@ -93,6 +100,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "STATUTE_ANALYSIS",
+    group: "Przepisy i orzeczenia",
     label: "Analiza przepisu",
     description:
       "Brzmienie aktualne i historyczne, przesłanki, wykładnia, nowelizacje.",
@@ -104,6 +112,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "CASE_LAW_RESEARCH",
+    group: "Przepisy i orzeczenia",
     label: "Research orzecznictwa",
     description:
       "Wyszukiwanie i weryfikacja sygnatur oraz tez orzeczeń.",
@@ -115,6 +124,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "WITNESS_EXAMINATION",
+    group: "Pisma i przygotowanie",
     label: "Przesłuchanie świadków",
     description:
       "Cele dowodowe, sprzeczności i zestawy pytań do świadków.",
@@ -126,6 +136,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "SITUATION_REPORT",
+    group: "Podsumowania",
     label: "Raport sytuacyjny",
     description:
       "Fakty, ryzyka, dowody, terminy, warianty i priorytety sprawy.",
@@ -137,6 +148,7 @@ export const DETERMINISTIC_ACTIONS = [
   },
   {
     id: "CLIENT_REPORT",
+    group: "Podsumowania",
     label: "Raport dla klienta",
     description:
       "Stan sprawy, ryzyka i kolejne kroki zrozumiałym językiem.",
@@ -147,6 +159,8 @@ export const DETERMINISTIC_ACTIONS = [
     ]
   }
 ] as const;
+
+export const TASK_GROUPS = ["Dokumenty i fakty", "Pisma i przygotowanie", "Przepisy i orzeczenia", "Podsumowania"] as const;
 
 /** New-conversation work mode: router-driven AUTO or a pinned execution skill. */
 export type ChatWorkMode =

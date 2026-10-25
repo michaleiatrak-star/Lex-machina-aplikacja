@@ -3411,3 +3411,146 @@ mark.restored {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Menus next to the message box ("+", "Zadanie"): they open upwards, over the thread. */
+.chat-menu {
+  position: relative;
+}
+
+.chat-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--lm-l2);
+  border-radius: 10px;
+  background: var(--lm-s1);
+  color: var(--lm-t2);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chat-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-add-menu > summary {
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chat-task-menu > summary::after {
+  content: "▾";
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.chat-menu-panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  width: min(360px, 80vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--lm-l2);
+  border-radius: 12px;
+  background: var(--lm-s1);
+  box-shadow: 0 10px 30px rgb(var(--lm-o1-rgb) / 0.12);
+}
+
+.chat-menu-panel button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lm-t2);
+  text-align: left;
+  font: inherit;
+}
+
+.chat-menu-panel button:hover:not(:disabled),
+.chat-menu-panel button[aria-checked="true"] {
+  background: var(--lm-s2);
+}
+
+.chat-menu-panel button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-menu-panel strong {
+  font-size: 13px;
+}
+
+.chat-menu-panel small,
+.chat-menu-caption {
+  color: var(--lm-t11);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chat-menu-caption {
+  display: block;
+  padding: 8px 10px 2px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-task-pinned {
+  align-self: center;
+  color: var(--lm-t11);
+  font-size: 12px;
+}
+
+.chat-attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-attachment-chips li {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--lm-l2);
+  border-radius: 999px;
+  background: var(--lm-s2);
+}
+
+.chat-attachment-chips button {
+  border: 0;
+  background: transparent;
+  color: var(--lm-t2);
+  font: inherit;
+  font-size: 12px;
+}
+
+.chat-chip-name {
+  overflow: hidden;
+  max-width: 260px;
+  padding: 4px 4px 4px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-chip-remove {
+  padding: 4px 9px 4px 4px;
+  font-size: 14px;
+  line-height: 1;
+}
