@@ -22,4 +22,14 @@ describe("TaskMenu", () => {
     expect(html).toContain("Zadanie: Pismo procesowe");
     expect(html).not.toContain("<details");
   });
+
+  it("names the router and the executive skills in developer mode", () => {
+    const html = renderToStaticMarkup(
+      <TaskMenu actions={DETERMINISTIC_ACTIONS} selected={null} pinned={false} developerMode onSelect={() => undefined} />
+    );
+    expect(html).toContain("Zadanie: Automatyczny — prawny router");
+    expect(html).toContain("Mechaniczny — wybierz skill wykonawczy");
+    expect(html).toContain("analizator-umow-v1");
+  });
 });
+

@@ -22,7 +22,7 @@ export function TaskMenu({
     onSelect(id);
     if (menu.current) menu.current.open = false;
   };
-  const label = selected ? selected.label : "Automatycznie";
+  const label = selected ? selected.label : developerMode ? "Automatyczny — prawny router" : "Automatycznie";
   if (pinned) {
     return (
       <span className="chat-task-pinned" title="Rodzaj pracy jest przypięty do tej rozmowy od pierwszej wiadomości.">
@@ -38,6 +38,7 @@ export function TaskMenu({
           <strong>Automatycznie</strong>
           <small>{developerMode ? "Router sam dobiera skille i moduły." : "Aplikacja sama dobiera sposób pracy."}</small>
         </button>
+        {developerMode ? <small className="chat-menu-caption">Mechaniczny — wybierz skill wykonawczy</small> : null}
         {TASK_GROUPS.map((group) => {
           const items = actions.filter((action) => action.group === group);
           if (items.length === 0) return null;
