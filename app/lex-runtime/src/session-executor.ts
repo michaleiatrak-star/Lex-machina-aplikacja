@@ -17,6 +17,7 @@ import { verificationSourceLink } from "./source-anchor.js";
 import {
   evaluateStatusConsistency,
   unifyConflictingProvisions,
+  qualifyCompleteVerificationClaims,
   reconcileStatusMarkers,
   stripUnbackedVerificationMarkers
 } from "./status-consistency-gate.js";
@@ -4033,6 +4034,7 @@ export class SafeSessionExecutor implements SessionExecutor {
       if (next === remarkedText) break;
       remarkedText = next;
     }
+    remarkedText = qualifyCompleteVerificationClaims(remarkedText);
     const processedDocumentCitations =
       remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
     const statusConsistency =

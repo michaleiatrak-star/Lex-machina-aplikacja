@@ -7,7 +7,7 @@ import { compactForModel, laterTurn, reachedStages, stageTailPrompt } from "./sk
 import { decodePromptBudget } from "./prompt-budget.js";
 import { FinalizationGate, addMissingVerificationMarkers, verifiedLedgerMarkers, markUnverifiedReferences } from "./finalization-gate.js";
 import { verificationSourceLink } from "./source-anchor.js";
-import { evaluateStatusConsistency, unifyConflictingProvisions, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
+import { evaluateStatusConsistency, unifyConflictingProvisions, qualifyCompleteVerificationClaims, reconcileStatusMarkers, stripUnbackedVerificationMarkers } from "./status-consistency-gate.js";
 import { genericWords } from "./privacy/generic-words.js";
 import { compactActAbbreviations, provisionsForDetection } from "./legal-act-abbreviations.js";
 import { exampleDataKeepDirectives } from "./privacy/example-data.js";
@@ -2729,6 +2729,7 @@ export class SafeSessionExecutor {
                 break;
             remarkedText = next;
         }
+        remarkedText = qualifyCompleteVerificationClaims(remarkedText);
         const processedDocumentCitations = remarkedText === reconciledAnswer.text ? reconciledAnswer : { ...reconciledAnswer, text: remarkedText };
         const statusConsistency = evaluateStatusConsistency(processedDocumentCitations.text, ledger);
         const statusConsistencyBlocked = statusConsistency.result ===

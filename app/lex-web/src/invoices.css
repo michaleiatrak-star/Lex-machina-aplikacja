@@ -38,8 +38,8 @@
 
 .invoice-list li button.active,
 .invoice-list li button:hover {
-  border-color: #c9d3cb;
-  background: #f3f6f3;
+  border-color: var(--lm-l1);
+  background: var(--lm-s14);
 }
 
 .invoice-main {
@@ -75,7 +75,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid #dfe5e0;
+  border: 1px solid var(--lm-l2);
   border-radius: 10px;
   padding: 10px;
 }
@@ -110,9 +110,9 @@
 .invoice-confirm {
   margin: 10px 0;
   padding: 10px 12px;
-  border: 1px solid #d8c68a;
+  border: 1px solid var(--lm-l9);
   border-radius: 10px;
-  background: #fff9df;
+  background: var(--lm-s10);
 }
 
 .invoice-logo-preview {
@@ -139,10 +139,10 @@
 
 .invoice-document {
   padding: 28px;
-  border: 1px solid #dfe5e0;
+  border: 1px solid var(--lm-l2);
   border-radius: 12px;
-  background: #fff;
-  color: #111;
+  background: var(--lm-s1);
+  color: var(--lm-t69);
   font-size: 13px;
 }
 
@@ -162,7 +162,7 @@
 }
 
 .invoice-draft-mark {
-  color: #a33;
+  color: var(--lm-t13);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -183,7 +183,7 @@
 .invoice-document th,
 .invoice-document td {
   padding: 5px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--lm-l38);
   text-align: left;
 }
 
@@ -246,7 +246,7 @@
 }
 
 .company-nip-warning {
-  color: #9a3412;
+  color: var(--lm-t70);
 }
 
 .invoice-paid-mark {
@@ -260,7 +260,7 @@
   gap: 6px;
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid #dfe5e0;
+  border-top: 1px solid var(--lm-l2);
 }
 
 .invoice-templates h3 {
@@ -292,7 +292,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
-  border-bottom: 1px solid #edf0ed;
+  border-bottom: 1px solid var(--lm-l39);
 }
 
 .invoice-requirement em {
@@ -302,16 +302,16 @@
 }
 
 .invoice-requirement-unverified em {
-  color: #8a6d00;
+  color: var(--lm-t71);
 }
 
 .invoice-requirement-verified em {
-  color: #285132;
+  color: var(--lm-t6);
 }
 
 .invoice-requirement-mismatch em,
 .invoice-requirement-not_found em {
-  color: #a33;
+  color: var(--lm-t13);
 }
 
 .invoice-requirements-details {

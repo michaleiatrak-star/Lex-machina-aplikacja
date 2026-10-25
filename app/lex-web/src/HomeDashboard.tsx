@@ -1,11 +1,15 @@
 import { InfoTip } from "./InfoTip";
+import { CASE_ROLE_LABEL } from "./api";
 import { useEffect, useState } from "react";
 import {
+  listInvoices,
   listUpcomingEvents,
   type AuthenticatedUser,
   type CaseListItem,
+  type InvoiceView,
   type UpcomingCaseEvent
 } from "./api.js";
+import { greeting, homeAttention } from "./home-attention.js";
 import {
   casesNewestFirst,
   caseScheduleKindLabel,
@@ -26,6 +30,7 @@ export function HomeDashboard({
   onOpenCalendar,
   onOpenFirm,
   onOpenModels,
+  onOpenInvoices,
   onNewCase
 }: {
   user: AuthenticatedUser;
@@ -37,8 +42,22 @@ export function HomeDashboard({
   onOpenCalendar: () => void;
   onOpenFirm: () => void;
   onOpenModels: () => void;
+  onOpenInvoices?: () => void;
   onNewCase: () => void;
 }) {
+  const [invoices, setInvoices] = useState<InvoiceView[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    // Invoices are optional on Start (no access, no module): nothing to show then.
+    void listInvoices("", "date-desc")
+      .then((result) => {
+        if (!cancelled) setInvoices(result.invoices);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken]);
   const [events, setEvents] = useState<UpcomingCaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,11 +87,11 @@ export function HomeDashboard({
     <section className="chat-card-stack lex-home">
       <article className="chat-card lex-home-header">
         <div>
-          <p className="eyebrow">Zalogowany użytkownik</p>
-          <h2>{user.displayName}</h2>
-          <small>
-            @{user.loginName} · {user.appRole}
-          </small>
+          <p className="eyebrow">
+            {new Date().toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+          <h2>{greeting(new Date())}, {user.displayName}.</h2>
+          <small>Wróć do sprawy lub sprawdź, co wymaga uwagi. · @{user.loginName}</small>
         </div>
         <div>
           <p className="eyebrow">
@@ -85,6 +104,30 @@ export function HomeDashboard({
           </button>
         </div>
       </article>
+
+      {(() => {
+        const attention = loading ? [] : homeAttention(events, invoices, new Date());
+        return attention.length ? (
+          <article className="chat-card lex-home-attention" aria-label="Wymaga uwagi">
+            <div className="lex-home-card-head">
+              <h2>Wymaga uwagi</h2>
+            </div>
+            <ul>
+              {attention.map((item) => (
+                <li key={item.key}>
+                  {item.key === "events" ? (
+                    <button type="button" className="chat-secondary-action" onClick={onOpenCalendar}>{item.text}</button>
+                  ) : onOpenInvoices ? (
+                    <button type="button" className="chat-secondary-action" onClick={onOpenInvoices}>{item.text}</button>
+                  ) : (
+                    <span>{item.text}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ) : null;
+      })()}
 
       <div className="lex-home-columns">
         <article className="chat-card">
@@ -146,7 +189,7 @@ export function HomeDashboard({
                     <small>
                       zmieniona {new Date(item.updatedAt || item.createdAt).toLocaleString("pl-PL")}
                       {" · "}
-                      {item.archivedAt ? "archiwalna" : item.role.toLowerCase()}
+                      {item.archivedAt ? "archiwalna" : CASE_ROLE_LABEL[item.role]}
                     </small>
                   </span>
                 </button>

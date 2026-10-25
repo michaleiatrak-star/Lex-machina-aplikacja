@@ -69,7 +69,9 @@ function resolveActs(references, text) {
     return references.map((reference) => {
         if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim))
             return reference;
-        if (OTHER_ACT.test(reference.lineText))
+        // "art. 41¹ Kodeksu pracy" on the line is KP, not another act (live C13-019: art. 177 of the same
+        // answer stayed act-less and ⚠️ next to a verified art. 177 KP).
+        if (OTHER_ACT.test(compactActAbbreviations(reference.lineText)))
             return reference;
         // An EU act named after the article ("art. 5 AI Act", "art. 6 GDPR"): never a Polish act
         // borrowed from elsewhere in the answer (before, "art. 5 AI Act" became "art. 5 KC").
@@ -632,7 +634,8 @@ function givenAsExample(reference) {
     const at = reference.lineText.indexOf(reference.claim.replace(/^sygn\.?\s*(?:akt\s*)?/iu, ""));
     if (at < 0)
         return false;
-    return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
+    // "Podaj dane, na przykład „1: I C 1234/26, data nakazu…”": a numbered field before it (C12-008, live).
+    return /(?:\bnp\.|\bna\s+przykład|\bprzykładow\p{L}*)\s*[„"“']?\s*(?:\(?\d{1,2}\s*[.):]\s*)?(?:sygn\.?\s*(?:akt\s*)?:?\s*)?$/iu.test(reference.lineText.slice(Math.max(0, at - 40), at));
 }
 const DISCLOSED_UNCONFIRMED = /nie\s+(?:udało\s+(?:mi\s+)?się\s+)?(?:mogę\s+)?(?:potwierdzi|zweryfikowa|pobra|sprawdzi|odczyta|powołuj)|niepotwierdz|niezweryfikowan(?!\S*\])|wymaga\p{L}*\s+weryfikacji|do\s+weryfikacji|sprawdź|captcha|HTTP\s*\d{3}|tylko\s+metadane|bez\s+treści|według\s+mojej\s+wiedzy|prawdopodobnie/iu;
 export const OFFICIAL_ANCHOR_MARKER_TEXT = "🟨 [KOTWICA-URZĘDOWA]";

@@ -85,3 +85,42 @@ describe("ślad routingu jako sam blok kodu (test 500, C12-008)", () => {
     expect(plain).toContain("Sprzeciw od nakazu zapłaty");
   });
 });
+
+describe("ślad w zwiniętym bloku „Dane techniczne” (C12-008 na żywo)", () => {
+  it("usuwa blok poza trybem deweloperskim, zostawia go deweloperowi", () => {
+    const content = [
+      "Ostatni dzień na sprzeciw to 26.10.2026.",
+      "",
+      "<details><summary>Dane techniczne (dla prawnika)</summary>",
+      "",
+      "PRIMARY: pisma-proste-v2, schemat SPA. LAIK. CN-GATE: art. 480² § 2 pkt 1 TAK/TAK/TAK.",
+      "</details>",
+      "",
+      "⚖️ Ważna informacja: analiza ma charakter informacyjny."
+    ].join("\n");
+    const plain = visibleContent({ role: "assistant", content }, false);
+    expect(plain).not.toMatch(/Dane techniczne|PRIMARY|CN-GATE|<\/details>/u);
+    expect(plain).toContain("Ostatni dzień na sprzeciw to 26.10.2026.");
+    expect(plain).toContain("⚖️ Ważna informacja");
+    expect(visibleContent({ role: "assistant", content }, true)).toContain("PRIMARY");
+  });
+
+  it("usuwa też „Ślad routingu” z <summary> w osobnej linii (C13-013 na żywo)", () => {
+    const content = [
+      "Warto zapytać w niemieckiej Agentur für Arbeit.",
+      "",
+      "<details>",
+      "<summary>Ślad routingu (techniczny)</summary>",
+      "",
+      "TRYB: LAIK",
+      "PRIMARY: dr-04-prawo-pracy-zus-swiadczenia",
+      "</details>",
+      "",
+      "<details><summary>Pełny tekst umowy</summary>Treść dla użytkownika.</details>"
+    ].join("\n");
+    const plain = visibleContent({ role: "assistant", content }, false);
+    expect(plain).not.toMatch(/Ślad routingu|PRIMARY|TRYB: LAIK/u);
+    expect(plain).toContain("Agentur für Arbeit");
+    expect(plain).toContain("Pełny tekst umowy");
+  });
+});

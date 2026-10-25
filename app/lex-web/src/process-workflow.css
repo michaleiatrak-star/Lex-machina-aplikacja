@@ -3,9 +3,9 @@
   gap: 12px;
   margin: 14px 16px 0;
   padding: 14px;
-  border: 1px solid rgba(184, 119, 0, 0.3);
+  border: 1px solid rgb(var(--lm-o3-rgb) / 0.3);
   border-radius: 14px;
-  background: rgba(184, 119, 0, 0.07);
+  background: rgb(var(--lm-o3-rgb) / 0.07);
 }
 
 .process-workflow-heading {
@@ -27,11 +27,11 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
-  background: rgba(184, 119, 0, 0.16);
+  background: rgb(var(--lm-o3-rgb) / 0.16);
 }
 
 .process-workflow-status.final {
-  background: rgba(28, 133, 80, 0.16);
+  background: rgb(var(--lm-o8-rgb) / 0.16);
 }
 
 .process-workflow-stats {
@@ -44,7 +44,7 @@
 .process-workflow-stats span {
   padding: 4px 7px;
   border-radius: 8px;
-  background: rgba(120, 120, 120, 0.1);
+  background: rgb(var(--lm-o2-rgb) / 0.1);
 }
 
 .process-workflow-checkpoint {
@@ -69,11 +69,11 @@
 .process-workflow-final {
   padding: 10px;
   border-radius: 10px;
-  background: rgba(28, 133, 80, 0.12);
+  background: rgb(var(--lm-o8-rgb) / 0.12);
 }
 
 .process-workflow-error {
-  color: #b42318;
+  color: var(--lm-t5);
   font-size: 12px;
 }
 
@@ -82,7 +82,7 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgb(var(--lm-s1-rgb) / 0.6);
 }
 
 .process-workflow-draft-head {
@@ -106,8 +106,8 @@
   padding: 10px;
   white-space: pre-wrap;
   font: 13px/1.55 Georgia, "Times New Roman", serif;
-  background: #fff;
-  color: #1f2420;
+  background: var(--lm-s1);
+  color: var(--lm-t25);
   border-radius: 8px;
 }
 
@@ -118,9 +118,9 @@
   resize: vertical;
   padding: 10px;
   border-radius: 8px;
-  border: 1px solid rgba(184, 119, 0, 0.35);
-  background: #fff;
-  color: #1f2420;
+  border: 1px solid rgb(var(--lm-o3-rgb) / 0.35);
+  background: var(--lm-s1);
+  color: var(--lm-t25);
   font: 13px/1.55 Georgia, "Times New Roman", serif;
 }
 

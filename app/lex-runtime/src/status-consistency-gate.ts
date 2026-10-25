@@ -596,3 +596,19 @@ export function unifyConflictingProvisions(
   });
   return { text: output.join("\n"), unified: [...unresolved] };
 }
+
+// "Zweryfikowano 14/14 pozycji." in an answer with ⚠️ elsewhere (live C12-008, turn 4): the
+// count was the model's table, the reader takes it for the whole answer.
+const COMPLETE_VERIFICATION_CLAIM =
+  /Zweryfikowano\s+(\d+)\s*\/\s*\1(?:\s+pozycj\p{L}*)?|(?:Wszystkie|Wszystkich)\s+(?:powołane\s+)?przepis\p{L}*\s+(?:zostały\s+|są\s+)?(?:zweryfikowan|sprawdzon)\p{L}*|(?:Zweryfikowałem|Sprawdziłem)\s+wszystkie\s+(?:powołane\s+)?przepis\p{L}*/giu;
+const ANY_UNVERIFIED_MARKER = /⚠️?\s*\[NIEWERYFIKOWANE|🟨\s*\[KOTWICA-URZĘDOWA/u;
+
+/** A claim that everything was verified gets "(z wyjątkiem pozycji oznaczonych ⚠️)" when ⚠️ is shown. */
+export function qualifyCompleteVerificationClaims(text: string): string {
+  if (!ANY_UNVERIFIED_MARKER.test(text)) return text;
+  return text.replace(COMPLETE_VERIFICATION_CLAIM, (claim, _count, offset: number, whole: string) =>
+    /^\s*\(?\s*(?:z\s+wyjątkiem|poza)\b/iu.test(whole.slice(offset + claim.length, offset + claim.length + 20))
+      ? claim
+      : `${claim} (z wyjątkiem pozycji oznaczonych ⚠️)`
+  );
+}

@@ -181,9 +181,26 @@ function routingTraceBlockEnd(lines: string[], start: number): number {
   return body.length > 0 && body.every((line) => TRACE_KEYS.test(line) || /^\s+\S/u.test(line)) && body.some((line) => /PRIMARY:/u.test(line)) ? close : -1;
 }
 
+// "<details><summary>Dane techniczne (dla prawnika)</summary> … </details>" and "<details>" with
+// "<summary>Ślad routingu (techniczny)</summary>" on the next line: the model's own fold for the
+// trace (PRIMARY, router version, CN/WYJ-GATE, modules read; live C12-008, C13-013).
+const TECHNICAL_SUMMARY = /<summary>\s*(?:\*\*)?\s*(?:Dane techniczne|Ślad\b|Kontrol[ae]\b)/iu;
+
+function technicalDetailsEnd(lines: string[], start: number): number {
+  if (!/^\s*<details\b/iu.test(lines[start]!)) return -1;
+  const summaryLine = lines.slice(start, start + 3).find((line) => /<summary>/iu.test(line));
+  if (!summaryLine || !TECHNICAL_SUMMARY.test(summaryLine)) return -1;
+  return lines.findIndex((line, at) => at >= start && /<\/details>/iu.test(line));
+}
+
 function withoutControlSections(lines: string[]): string[] {
   const kept: string[] = [];
   for (let index = 0; index < lines.length; index += 1) {
+    const details = technicalDetailsEnd(lines, index);
+    if (details >= 0) {
+      index = details;
+      continue;
+    }
     const trace = routingTraceBlockEnd(lines, index);
     if (trace >= 0) {
       index = trace;

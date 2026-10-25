@@ -132,6 +132,12 @@ describe("sygnatura podana jako przykład a sygnatura sprawy użytkownika (test 
     expect(marked).toMatch(/I Nc 123\/26[^\n]*⚠️/u);
     expect(new FinalizationGate().evaluate(marked, ledger).result).not.toBe("BLOCKED");
 
+    // Live C12-008, turn 4: a numbered field between "na przykład" and the signature.
+    const numbered = "**Pismo zawiera ok. 20 pól ⬛ do uzupełnienia.** Podaj dane, na przykład „1: I C 1234/26, data nakazu 5.10.2026; 3: wariant A”.";
+    const numberedReport = new FinalizationGate().evaluate(numbered, ledger);
+    const numberedMarked = addMissingVerificationMarkers(markUnverifiedReferences(numbered, numberedReport, new Set(), new Set()), numberedReport);
+    expect(new FinalizationGate().evaluate(numberedMarked, ledger).result).not.toBe("BLOCKED");
+
     const own = new VerificationLedger();
     own.addCaseFileNumber("I Nc 123/26");
     expect(new FinalizationGate().evaluate("Sprzeciw od nakazu zapłaty w sprawie sygn. I Nc 123/26.", own).result).not.toBe("BLOCKED");

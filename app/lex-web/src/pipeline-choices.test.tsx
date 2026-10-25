@@ -86,3 +86,13 @@ describe("co dalej po wyniku: wybór użytkownika", () => {
     expect(pipelineChoiceMessage(next.choices[0]!)).toMatch(/^Kontynuuj: wykonaj teraz zapowiedzianą weryfikację/u);
   });
 });
+
+describe("work kinds guide the user", () => {
+  it("each has a guiding question and the result it gives", async () => {
+    const { DETERMINISTIC_ACTIONS } = await import("./chat-routing");
+    for (const action of DETERMINISTIC_ACTIONS) {
+      expect(action.question.endsWith("?") || action.question.endsWith(".")).toBe(true);
+      expect(action.result.length).toBeGreaterThan(20);
+    }
+  });
+});

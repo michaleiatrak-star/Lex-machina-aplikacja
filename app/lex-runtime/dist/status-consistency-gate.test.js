@@ -246,3 +246,15 @@ describe("a ⚠️ shared with a Dz.U. reference", () => {
         expect(new FinalizationGate().evaluate(repaired, ledger).result).not.toBe("BLOCKED");
     });
 });
+describe("a claim that everything was verified", () => {
+    it("is qualified when the answer shows ⚠️, left alone otherwise (live C12-008)", async () => {
+        const { qualifyCompleteVerificationClaims } = await import("./status-consistency-gate.js");
+        const marked = "art. 480² § 2 pkt 1 KPC ✅\nZweryfikowano 14/14 pozycji.\nart. 458⁵ KPC ⚠️ [NIEWERYFIKOWANE]";
+        expect(qualifyCompleteVerificationClaims(marked)).toContain("Zweryfikowano 14/14 pozycji (z wyjątkiem pozycji oznaczonych ⚠️).");
+        expect(qualifyCompleteVerificationClaims("Sprawdziłem wszystkie przepisy.\nart. 6 KC ⚠️ [NIEWERYFIKOWANE]")).toContain("Sprawdziłem wszystkie przepisy (z wyjątkiem pozycji oznaczonych ⚠️).");
+        expect(qualifyCompleteVerificationClaims("Zweryfikowano 3/3 pozycji.\nart. 6 KC ✅")).toBe("Zweryfikowano 3/3 pozycji.\nart. 6 KC ✅");
+        expect(qualifyCompleteVerificationClaims("Zweryfikowano 2/3 pozycji.\nart. 6 KC ⚠️ [NIEWERYFIKOWANE]")).not.toContain("z wyjątkiem");
+        const already = "Zweryfikowano 5/5 pozycji (poza art. 7 ⚠️ [NIEWERYFIKOWANE]).";
+        expect(qualifyCompleteVerificationClaims(already)).toBe(already);
+    });
+});

@@ -24,7 +24,10 @@ function keyOf(text) {
 }
 // Własne żądanie strony ("Wzywam do zapłaty ... w terminie 7 dni", "wnoszę o zasądzenie kwoty
 // 12 000 zł wraz z odsetkami", "wyznaczam termin 14 dni"): wartość ustala strona, nie przepis.
-const OWN_DEMAND = /(?<![\p{L}])(?:wzywam\p{L}*|wzywamy|wyznaczam\p{L}*|żądam\p{L}*|domagam\s+się|domagamy\s+się|proponuj\p{L}*|oferuj\p{L}*|zobowiązuję\s+się|wnosz\p{L}*\s+o\s+(?:zasądzenie|zapłatę|nakazanie|orzeczenie\s+nakazem)|wnosimy\s+o\s+(?:zasądzenie|zapłatę)|wnosi\s+o\s+(?:zasądzenie|zapłatę)|domaga\s+się|żąda\s+(?:zapłaty|zasądzenia|kwoty))(?![\p{L}])/iu;
+// Also the polite forms of a letter ("Proszę o zwrot kaucji w terminie 7 dni", "Oczekuję…",
+// "Zwracam się o…") and a time counted from this letter, which no statute does (live C12-018:
+// the letter to the landlord was not exported, "7 dni" unverified).
+const OWN_DEMAND = /(?<![\p{L}])(?:proszę\s+o|prosimy\s+o|oczekuję|oczekujemy|zwracam\s+się\s+(?:z\s+prośbą\s+)?o|od\s+(?:dnia\s+)?(?:otrzymania|doręczenia)\s+(?:niniejszego\s+|tego\s+)?(?:pisma|wezwania)|wzywam\p{L}*|wzywamy|wyznaczam\p{L}*|żądam\p{L}*|domagam\s+się|domagamy\s+się|proponuj\p{L}*|oferuj\p{L}*|zobowiązuję\s+się|wnosz\p{L}*\s+o\s+(?:zasądzenie|zapłatę|nakazanie|orzeczenie\s+nakazem)|wnosimy\s+o\s+(?:zasądzenie|zapłatę)|wnosi\s+o\s+(?:zasądzenie|zapłatę)|domaga\s+się|żąda\s+(?:zapłaty|zasądzenia|kwoty))(?![\p{L}])/iu;
 /** Wartości liczbowe norm w wierszu; pusty wynik, gdy wiersz nie mówi o normie. */
 export function amountMatches(lineText) {
     if (!NORMATIVE_CONTEXT.test(lineText) || OWN_DEMAND.test(lineText))

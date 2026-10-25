@@ -208,7 +208,14 @@ function InvoiceDocument({
 
 // Karta „Faktury”: wyszukiwarka (klient, numer), sortowanie, formularz,
 // wystawienie, nowa faktura na podstawie istniejącej i wydruk z logo.
-export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function InvoicesPanel({
+  onOpenSettings,
+  developerMode = false
+}: {
+  onOpenSettings?: () => void;
+  // The art. 106e checklist (secondary sources, ELI check) is a developer's tool.
+  developerMode?: boolean;
+}) {
   const [settings, setSettings] = useState<InvoiceSettingsResponse | null>(null);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   const [query, setQuery] = useState("");
@@ -614,10 +621,12 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
                 />
               </label>
             </fieldset>
-            <details className="invoice-requirements-details">
-              <summary>Sprawdź wymagane elementy faktury</summary>
-              <InvoiceRequirementsCard />
-            </details>
+            {developerMode ? (
+              <details className="invoice-requirements-details">
+                <summary>Sprawdź wymagane elementy faktury</summary>
+                <InvoiceRequirementsCard />
+              </details>
+            ) : null}
             <div className="chat-form-row">
               <button type="button" className="chat-primary-action" disabled={busy} onClick={save}>
                 Zapisz szkic
@@ -755,7 +764,7 @@ export function InvoicesPanel({ onOpenSettings }: { onOpenSettings?: () => void 
           <article className="chat-card invoice-no-print">
             <h2>Faktury</h2>
             <p>Wybierz fakturę z listy albo utwórz nową.</p>
-            <InvoiceRequirementsCard />
+            {developerMode ? <InvoiceRequirementsCard /> : null}
           </article>
         )}
       </div>

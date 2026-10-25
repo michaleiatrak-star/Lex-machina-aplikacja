@@ -126,9 +126,10 @@ const required = [
 // localStorage: dopuszczony wyłącznie dla niesekretnych wyborów per użytkownik: ostatni model
 // (lex.lastUsedModel.<userId>, src/last-used-model.ts) i tryb dewelopera
 // (lex.developerMode.<userId>, src/developer-mode.ts) oraz wykryta/pominięta wersja
-// aktualizacji (lex.update.detected, lex.update.skipped, src/update-prompt.ts). Każdy inny plik źródłowy
+// aktualizacji (lex.update.detected, lex.update.skipped, src/update-prompt.ts) i rozmiar tekstu
+// rozmowy (lex.chatTextSize, src/text-size.ts). Każdy inny plik źródłowy
 // z localStorage albo bundle bez tych kluczy blokuje bramkę.
-const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts"]);
+const LOCAL_STORAGE_ALLOWED_SOURCES = new Set(["last-used-model.ts", "developer-mode.ts", "update-prompt.ts", "text-size.ts"]);
 const sourceRoot = path.resolve(process.cwd(), "src");
 const localStorageSources = collect(sourceRoot)
   .filter((file) => /\.(?:ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx|mjs)$/.test(file))

@@ -15,6 +15,7 @@ import {
   type SessionExecutionResponse
 } from "../src/session-executor.js";
 import type { AuditEvent } from "../src/audit-trail.js";
+import type { SessionExecutor } from "../src/session-executor.js";
 
 const roots: string[] = [];
 function tempDir(): string {
@@ -100,6 +101,22 @@ describe("anomaly journal", () => {
     }, new AnomalyJournal(tempDir()));
     expect(executor.executiveSkillFor?.("Przeanalizuj umowę")).toBe("analizator-umow-v1");
     expect(executor.executiveSkillFor?.("Ile trwa wypowiedzenie?")).toBeNull();
+  });
+
+  it("passes every routing method through, as the server always wraps the executor (C12-008)", () => {
+    const pozew = [{ chunks: [{ text: "POZEW O ZAPŁATĘ" }] }];
+    const inner: SessionExecutor = {
+      execute: async () => { throw new Error("unused"); },
+      resolveAutoRouting: async () => { throw new Error("unused"); },
+      summarizeThread: async () => "summary",
+      executiveSkillFor: () => "przewodnik-prawny-v2",
+      executiveSkillsWithMaterials: (_message, attachments) => (attachments.length ? ["analiza-sadowa-v6"] : []),
+      pleadingRedactionFor: () => true
+    };
+    const executor = withAnomalyJournal(inner, new AnomalyJournal(tempDir()));
+    expect(Object.keys(executor).sort()).toEqual(Object.keys(inner).sort());
+    expect(executor.executiveSkillsWithMaterials?.("Dostałem ten pozew. Co mam zrobić?", pozew)).toEqual(["analiza-sadowa-v6"]);
+    expect(executor.pleadingRedactionFor?.("Popraw styl tego pozwu.", pozew)).toBe(true);
   });
 
   it("does not count a failed native Read as read", () => {
