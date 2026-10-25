@@ -5419,7 +5419,9 @@ export default function MatterChatApp({
         <header className="chat-page-header">
           <div>
             <p className="eyebrow">
-              {selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"}
+              {activeTab === "chat" || activeTab === "case"
+                ? selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"
+                : "Cała kancelaria"}
             </p>
             <h1>
               {activeTab === "home"
@@ -7054,6 +7056,7 @@ export default function MatterChatApp({
               setActiveTab("chat");
             }}
             onOpenCalendar={() => setActiveTab("calendar")}
+            onOpenInvoices={() => setActiveTab("invoices")}
             onOpenFirm={() => setActiveTab("firm")}
             onOpenModels={() => {
               setActiveTab("settings");
