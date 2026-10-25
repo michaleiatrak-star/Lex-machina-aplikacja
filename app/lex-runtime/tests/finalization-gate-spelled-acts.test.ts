@@ -54,5 +54,11 @@ describe("a provision verified in the session is recognized however the answer w
     expect(out).toContain("art. 30 § 2¹ KP ⚠️ [NIEWERYFIKOWANE]");
     expect(marked("Okres: art. 30 § 2¹ KP.", verified(["art. 30 § 2¹ KP"]))).not.toContain("NIEWERYFIKOWANE");
   });
+
+  it("a code named in words on the line is that code, not another act (live C13-019)", () => {
+    const text = "Chodzi o art. 177 Kodeksu pracy.\nWobec kobiet w ciąży (osób chronionych przez art. 177) ta reguła nie działa, z wyjątkiem przyczyn z art. 41¹ Kodeksu pracy.";
+    const out = marked(text, verified(["art. 177 KP", "art. 41^1 KP"]));
+    expect(out).not.toContain("NIEWERYFIKOWANE");
+  });
 });
 

@@ -8100,7 +8100,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             });
             return;
           } catch (error) {
-            console.error("DIRECT_DEANONYMIZATION_SKIPPED", error instanceof Error ? error.message : String(error));
+            // The blocking references (provision numbers and signatures, no case text) say why.
+            const blocked = error instanceof ExportGateBlockedError
+              ? error.references.map((reference) => `${reference.status}:${reference.claim}`).slice(0, 12).join("; ")
+              : "";
+            console.error("DIRECT_DEANONYMIZATION_SKIPPED", error instanceof Error ? error.message : String(error), blocked);
           }
         }
 

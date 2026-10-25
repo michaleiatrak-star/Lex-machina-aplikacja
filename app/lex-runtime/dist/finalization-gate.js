@@ -69,7 +69,9 @@ function resolveActs(references, text) {
     return references.map((reference) => {
         if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim))
             return reference;
-        if (OTHER_ACT.test(reference.lineText))
+        // "art. 41¹ Kodeksu pracy" on the line is KP, not another act (live C13-019: art. 177 of the same
+        // answer stayed act-less and ⚠️ next to a verified art. 177 KP).
+        if (OTHER_ACT.test(compactActAbbreviations(reference.lineText)))
             return reference;
         // An EU act named after the article ("art. 5 AI Act", "art. 6 GDPR"): never a Polish act
         // borrowed from elsewhere in the answer (before, "art. 5 AI Act" became "art. 5 KC").
