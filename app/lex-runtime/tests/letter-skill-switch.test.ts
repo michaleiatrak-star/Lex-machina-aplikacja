@@ -70,6 +70,12 @@ describe("offers between the letter skills", () => {
     expect(escalationOffer("TREŚĆ PISMA\nSprzeciw od nakazu zapłaty...")).toBeNull();
     expect(escalationOffer("TREŚĆ PISMA\nSprzeciw...\n\nUWAGI PRAKTYCZNE\nESKALACJA DO pisma-procesowe-v3 nie jest wymagana.\nPrzyczyna: jeden zarzut.")).toBeNull();
     expect(escalationOffer("⚠ ESKALACJA DO pisma-procesowe-v3")).toBeNull();
+    // In lay words (live C12-027): the question names the pleading skill and asks to switch.
+    expect(escalationOffer("Takie pismo lepiej przygotować w trybie pism złożonych (pisma-procesowe-v3).\n\nCzy przełączyć na pisma-procesowe-v3?")).toMatchObject({
+      to: "pisma-procesowe-v3",
+      direction: "ESCALATION"
+    });
+    expect(escalationOffer("Ten tryb (pisma-procesowe-v3) przygotowuje pełne pisma.")).toBeNull();
   });
 
   it("Test B proposal asked as a question; a passing mention of the skill is not an offer", () => {

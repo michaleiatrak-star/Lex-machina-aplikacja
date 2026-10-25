@@ -140,3 +140,13 @@ describe("HARD GATE: rates, deadlines and penalties", () => {
     expect(alone.after.result).toBe("DEGRADED");
   });
 });
+
+describe("HARD GATE: a deadline the letter sets itself", () => {
+  it("polite forms and a time counted from this letter are the sender's, not a statute's (live C12-018)", () => {
+    expect(amountMatches("Proszę o zwrot kaucji w terminie 7 dni na rachunek bankowy.")).toEqual([]);
+    expect(amountMatches("Oczekuję zwrotu kwoty 15 000 zł w terminie 14 dni.")).toEqual([]);
+    expect(amountMatches("Kaucję należy zwrócić w terminie 7 dni od dnia otrzymania niniejszego pisma.")).toEqual([]);
+    // A statutory term still needs its provision.
+    expect(amountMatches("Sprzeciw wnosi się w terminie 14 dni od doręczenia nakazu.").map((match) => match.key)).toEqual(["14D"]);
+  });
+});

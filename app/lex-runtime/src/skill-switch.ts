@@ -25,13 +25,19 @@ function reasonOf(text: string): string | null {
   return line ? line.slice(0, 300) : null;
 }
 
+const PROPOSES_PLEADING = /pisma-procesowe-v3/u;
+
 // The message with its reason and without a letter: a mention in the notes to a finished
-// letter ("ESKALACJA DO pisma-procesowe-v3 nie jest wymagana") is not an escalation.
+// letter ("ESKALACJA DO pisma-procesowe-v3 nie jest wymagana") is not an escalation. In lay
+// words ("Czy przełączyć na pisma-procesowe-v3?", live C12-027) the question is the offer too.
 export function escalationOffer(text: string): SkillSwitchOffer | null {
+  if (LETTER.test(text)) return null;
   const reason = reasonOf(text);
-  return ESCALATION.test(text) && reason && !LETTER.test(text)
-    ? { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason }
-    : null;
+  if (ESCALATION.test(text) && reason) return { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason };
+  const asked =
+    PROPOSES_PLEADING.test(text) &&
+    /przełącz\p{L}*\s+(?:wątek\s+)?na\s+[`*_]*pisma-procesowe-v3[^\n?]*\?/iu.test(text);
+  return asked ? { from: "pisma-proste-v2", to: "pisma-procesowe-v3", direction: "ESCALATION", reason } : null;
 }
 
 /** Test B: the pleading answer proposes the simple-letter skill and asks the user. */
