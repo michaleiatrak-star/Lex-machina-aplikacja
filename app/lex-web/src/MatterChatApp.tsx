@@ -41,6 +41,7 @@ import {
   saveLastUsedModel,
   shouldAutoStartLocalModel, loadProviderChannels, saveProviderChannels } from "./last-used-model.js";
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -7467,45 +7468,49 @@ export default function MatterChatApp({
               aria-label="Sekcje ustawień"
             >
               {([
-                ["models", "Modele i AI"],
-                ["users", "Użytkownicy i uprawnienia"],
-                ["security", "Hasło i bezpieczeństwo"],
-                ["mcp", "Integracje i konektory"],
-                ["invoices", "Faktury i KSeF"],
-                ["skills", "Skille i routing"],
-                ["maintenance", "Aplikacja i utrzymanie"],
-                ["display", "Wygląd i czytelność"],
-                ...(settingsPanels?.account ? [["account", "Plan i klucze API"]] : []),
-                ...(settingsPanels?.server ? [["server", "Tryb serwerowy"]] : [])
+                ["Konto", "security", "Hasło i bezpieczeństwo"],
+                ["Konto", "display", "Wygląd i czytelność"],
+                ...(settingsPanels?.account ? [["Konto", "account", "Plan i klucze API"]] : []),
+                ["Asystent AI", "models", "Modele i AI"],
+                ["Asystent AI", "skills", "Skille i routing"],
+                ["Kancelaria", "users", "Użytkownicy i uprawnienia"],
+                ["Kancelaria", "invoices", "Faktury i KSeF"],
+                ...(settingsPanels?.server ? [["Kancelaria", "server", "Tryb serwerowy"]] : []),
+                ["Źródła i integracje", "mcp", "Integracje i konektory"],
+                ["Aplikacja", "maintenance", "Aplikacja i utrzymanie"]
               ] as Array<
-                [SettingsSection, string]
+                [string, SettingsSection, string]
               >)
-                .filter(([section]) => developerMode || section !== "skills")
+                .filter(([, section]) => developerMode || section !== "skills")
                 // Konto użytkownika: bez zakładek administracyjnych i technicznych.
                 .filter(
-                  ([section]) =>
+                  ([, section]) =>
                     developerAllowed ||
                     (section !== "maintenance" && (section !== "mcp" || Boolean(settingsPanels?.integrations)))
                 )
                 .map(
-                  ([section, label]) => (
-                    <button
-                      key={section}
-                      type="button"
-                      className={
-                        settingsSection ===
-                        section
-                          ? "active"
-                          : ""
-                      }
-                      onClick={() =>
-                        setSettingsSection(
+                  ([group, section, label], index, shown) => (
+                    <Fragment key={section}>
+                      {index === 0 || shown[index - 1]![0] !== group ? (
+                        <small className="chat-settings-nav-group">{group}</small>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={
+                          settingsSection ===
                           section
-                        )
-                      }
-                    >
-                      {label}
-                    </button>
+                            ? "active"
+                            : ""
+                        }
+                        onClick={() =>
+                          setSettingsSection(
+                            section
+                          )
+                        }
+                      >
+                        {label}
+                      </button>
+                    </Fragment>
                   )
                 )}
             </nav>

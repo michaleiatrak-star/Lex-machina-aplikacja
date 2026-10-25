@@ -463,8 +463,9 @@
 
 .chat-page-header h1 {
   margin: 2px 0 0;
-  font-size: clamp(26px, 3vw, 36px);
-  letter-spacing: -0.04em;
+  /* Calmer, as in the UI demo: the content comes first. */
+  font-size: clamp(22px, 2.2vw, 28px);
+  letter-spacing: -0.02em;
 }
 
 .chat-header-actions {
@@ -3553,4 +3554,14 @@ mark.restored {
   padding: 4px 9px 4px 4px;
   font-size: 14px;
   line-height: 1;
+}
+
+.chat-settings-nav-group {
+  display: block;
+  padding: 10px 12px 2px;
+  color: var(--lm-t11);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
