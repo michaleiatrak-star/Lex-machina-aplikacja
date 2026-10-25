@@ -7094,29 +7094,10 @@ export default function MatterChatApp({
 
         {activeTab === "case" ? (
           <section className="chat-card-stack">
-            <article className="chat-card">
-              <p className="eyebrow">Wątek = sprawa</p>
-              <h2>
-                Nazwa sprawy
-                <InfoTip>Sygnatura nie jest wymagana. Nazwa jest niezależna od sygnatury i możesz ją zmienić w każdej chwili.</InfoTip>
-              </h2>
-              <div className="chat-form-row">
-                <input
-                  value={caseNameDraft}
-                  maxLength={160}
-                  disabled={!selectedCase || caseBusy}
-                  placeholder="np. Kowalski przeciwko ABC — odszkodowanie"
-                  onChange={(event) => setCaseNameDraft(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="chat-primary-action"
-                  disabled={!selectedCase || caseBusy || !caseNameDraft.trim()}
-                  onClick={() => void saveCaseName()}
-                >
-                  Zapisz nazwę
-                </button>
-              </div>
+            {/* Case overview first, as in the UI demo: documents, the next date, the conversation. */}
+            <article className="chat-card matter-overview">
+              <p className="eyebrow">Przegląd sprawy</p>
+              <h2>{selectedCase ? selectedCase.displayName || "Sprawa bez nazwy" : "Nowa sprawa"}</h2>
               {selectedCase ? (
                 <div className="matter-case-meta">
                   <span>ID katalogu: {selectedCase.caseId}</span>
@@ -7124,6 +7105,61 @@ export default function MatterChatApp({
                   <span>{selectedCase.archivedAt ? "ARCHIWALNA (tylko odczyt)" : "AKTYWNA"}</span>
                 </div>
               ) : null}
+              <div className="matter-overview-tiles">
+                <div>
+                  <small>Dokumenty</small>
+                  <strong>{caseFiles.length}</strong>
+                  <span>{caseFiles.slice(0, 3).map((file) => file.filename).join(", ") || "brak plików"}</span>
+                </div>
+                <div>
+                  <small>Najbliższy termin</small>
+                  {(() => {
+                    const next = [...caseSchedule]
+                      .filter((item) => Date.parse(item.startsAt) >= Date.now())
+                      .sort((left, right) => left.startsAt.localeCompare(right.startsAt))[0];
+                    return next ? (
+                      <>
+                        <strong>{caseScheduleStartLabel(next.startsAt)}</strong>
+                        <span>{next.title}</span>
+                      </>
+                    ) : (
+                      <>
+                        <strong>—</strong>
+                        <span>brak zaplanowanych terminów</span>
+                      </>
+                    );
+                  })()}
+                </div>
+                <div>
+                  <small>Rozmowa</small>
+                  <button type="button" className="chat-secondary-action" onClick={() => setActiveTab("chat")}>
+                    Otwórz rozmowę
+                  </button>
+                </div>
+              </div>
+              <details className="matter-rename">
+                <summary>
+                  Nazwa sprawy
+                  <InfoTip>Sygnatura nie jest wymagana. Nazwa jest niezależna od sygnatury i możesz ją zmienić w każdej chwili.</InfoTip>
+                </summary>
+                <div className="chat-form-row">
+                  <input
+                    value={caseNameDraft}
+                    maxLength={160}
+                    disabled={!selectedCase || caseBusy}
+                    placeholder="np. Kowalski przeciwko ABC — odszkodowanie"
+                    onChange={(event) => setCaseNameDraft(event.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="chat-primary-action"
+                    disabled={!selectedCase || caseBusy || !caseNameDraft.trim()}
+                    onClick={() => void saveCaseName()}
+                  >
+                    Zapisz nazwę
+                  </button>
+                </div>
+              </details>
             </article>
 
             <CollapsibleCaseSection
