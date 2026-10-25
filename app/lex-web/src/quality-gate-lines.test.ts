@@ -104,4 +104,23 @@ describe("ślad w zwiniętym bloku „Dane techniczne” (C12-008 na żywo)", ()
     expect(plain).toContain("⚖️ Ważna informacja");
     expect(visibleContent({ role: "assistant", content }, true)).toContain("PRIMARY");
   });
+
+  it("usuwa też „Ślad routingu” z <summary> w osobnej linii (C13-013 na żywo)", () => {
+    const content = [
+      "Warto zapytać w niemieckiej Agentur für Arbeit.",
+      "",
+      "<details>",
+      "<summary>Ślad routingu (techniczny)</summary>",
+      "",
+      "TRYB: LAIK",
+      "PRIMARY: dr-04-prawo-pracy-zus-swiadczenia",
+      "</details>",
+      "",
+      "<details><summary>Pełny tekst umowy</summary>Treść dla użytkownika.</details>"
+    ].join("\n");
+    const plain = visibleContent({ role: "assistant", content }, false);
+    expect(plain).not.toMatch(/Ślad routingu|PRIMARY|TRYB: LAIK/u);
+    expect(plain).toContain("Agentur für Arbeit");
+    expect(plain).toContain("Pełny tekst umowy");
+  });
 });
