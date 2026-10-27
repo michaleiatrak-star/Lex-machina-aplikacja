@@ -93,12 +93,12 @@ const required = [
   "Strony skanowane i zdjęcia przechodzą lokalny OCR",
   // Jeden przepływ (propozycja automatyczna, podgląd z decyzjami, zatwierdzenie pliku)
   // zamiast trybów "Przejrzyj ręcznie" / "Anonimizuj automatycznie" / "Pozostaw bez anonimizacji".
-  "Przed zatwierdzeniem",
+  "Niezatwierdzone",
   "Automatyczna anonimizacja / pseudonimizacja",
   "Wykrywanie automatyczne + Twoje decyzje w podglądzie",
   "Bez anonimizacji (tekst jawny)",
   "Zatwierdź plik",
-  "Zbiorczy podgląd anonimizacji",
+  "Pliki do ponownego zatwierdzenia",
   "Wykryte automatycznie",
   "Moje decyzje w podglądzie",
   "Końcowa decyzja dla pliku",
@@ -174,7 +174,7 @@ process.stdout.write(JSON.stringify({
     content.includes("Automatyczna anonimizacja / pseudonimizacja") &&
     content.includes("Mapy reidentyfikacji są osobne dla każdego pliku"),
   multiFilePrivacyBatchPreviewPresent:
-    content.includes("Zbiorczy podgląd anonimizacji") &&
+    content.includes("Pliki do ponownego zatwierdzenia") &&
     content.includes("Wykryte automatycznie") &&
     content.includes("Moje decyzje w podglądzie") &&
     content.includes("Końcowa decyzja dla pliku") &&

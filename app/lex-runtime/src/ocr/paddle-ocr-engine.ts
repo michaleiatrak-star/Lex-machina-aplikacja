@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { evidenceBudget, ocrWorkerFailure, readOcrPages, type EvidenceBudget } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
+import { documentWork } from "../document-work.js";
 import type {
   OcrEngine,
   OcrPageResult
@@ -21,6 +22,7 @@ export type LocalPaddleOcrOptions = {
 
 // Pages per worker pass (one pass = one process, one timeout).
 export const OCR_BATCH_PAGES = 30;
+const TIMEOUT_TICK_MS = 1_000;
 
 function defaultWorkerPath(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -82,6 +84,8 @@ implements OcrEngine {
       const results: OcrPageResult[] = [];
       for (let start = 0; start < pages.length; start += OCR_BATCH_PAGES) {
         const batch = pages.slice(start, start + OCR_BATCH_PAGES);
+        // Background OCR: no new pass while the user's own document is being worked on.
+        if (documentWork.inBackground()) await documentWork.idle();
         const parsed = await this.recognizeBatch(
           input,
           path.join(tempRoot, `batch-${start / OCR_BATCH_PAGES + 1}`),
@@ -158,6 +162,9 @@ implements OcrEngine {
       args.push("--line-crops");
     }
 
+    // Background OCR waits between pages while the user's own document is worked on; the
+    // time it waits does not count against the timeout.
+    const background = documentWork.inBackground();
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         this.python,
@@ -166,19 +173,24 @@ implements OcrEngine {
           stdio: ["ignore", "ignore", "pipe"],
           env: {
             ...process.env,
-            PYTHONUNBUFFERED: "1"
+            PYTHONUNBUFFERED: "1",
+            ...(background ? { LEX_OCR_PAUSE_FILE: documentWork.pauseFile } : {})
           }
         }
       );
       let stderr = "";
-      const timer = setTimeout(() => {
+      let active = 0;
+      const timer = setInterval(() => {
+        if (!background || !documentWork.paused()) active += TIMEOUT_TICK_MS;
+        if (active < this.timeoutMs) return;
+        clearInterval(timer);
         child.kill("SIGKILL");
         reject(
           new Error(
             `OCR_ENGINE_TIMEOUT: Local PaddleOCR worker exceeded the configured timeout (pages ${pages[0]}-${pages.at(-1)}).`
           )
         );
-      }, this.timeoutMs);
+      }, TIMEOUT_TICK_MS);
 
       let pagesDone = 0;
       child.stderr.on("data", (chunk: Buffer) => {
@@ -194,7 +206,7 @@ implements OcrEngine {
         }
       });
       child.once("error", (error) => {
-        clearTimeout(timer);
+        clearInterval(timer);
         reject(
           new Error(
             `OCR_ENGINE_START_FAILED: ${error.message}`
@@ -202,7 +214,7 @@ implements OcrEngine {
         );
       });
       child.once("exit", (code) => {
-        clearTimeout(timer);
+        clearInterval(timer);
         if (code === 0) resolve();
         else {
           reject(ocrWorkerFailure(stderr, code, "worker"));

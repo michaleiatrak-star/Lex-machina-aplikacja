@@ -880,7 +880,10 @@ export function documentProcessingOptions(header) {
         ...(flags.has("local-ai") ? { localAi: true } : {}),
         ...(flags.has("ocr-fix") ? { ocrFix: true } : {}),
         // "ocr-only": read the document now, detect personal data later (POST .../detect).
-        ...(flags.has("ocr-only") ? { detect: false } : {})
+        ...(flags.has("ocr-only") ? { detect: false } : {}),
+        // "background": a file added to the case, read before the user's decision; it yields to
+        // the user's own document work (see document-work.ts).
+        ...(flags.has("background") ? { background: true } : {})
     };
 }
 // Workflows the engine runs only with their persisted state (G39I state binding).
@@ -2872,6 +2875,25 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    // A file read before the user's decision, outside the case lock (see document-work.ts).
+    async function reviewInBackground(context, caseId, file, req) {
+        const access = options.caseAccessService;
+        const onProgress = processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")));
+        try {
+            return await options.documentService.review(file.data, file.mediaType, {
+                caseId,
+                ...(onProgress ? { onProgress } : {}),
+                ...(req.body?.localAi === true ? { localAi: true } : {}),
+                ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
+                ...(req.body?.detect === false ? { detect: false } : {}),
+                background: true,
+                storeUnderLock: (save) => access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => save({ caseDataKey, keyVersion: access.openCase(context, caseId).keyVersion }))
+            });
+        }
+        finally {
+            file.data.fill(0);
+        }
+    }
     async function processStoredCaseFile(req, res, fileId) {
         if (keepAliveRequested(req))
             keepResponseAlive(res);
@@ -2904,7 +2926,11 @@ export function createLexHttpApp(options) {
                 .assertAccess(context, caseId, "WRITE");
             const caseView = options.caseAccessService
                 .openCase(context, caseId);
-            const result = await options
+            // Background OCR: only reading the stored file and saving the read take the case lock;
+            // the OCR itself runs outside it, so the user's work in the case does not wait for it.
+            const background = req.body?.background === true;
+            let deferred;
+            const locked = await options
                 .caseAccessService
                 .withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => {
                 let data;
@@ -2992,6 +3018,10 @@ export function createLexHttpApp(options) {
                 }
                 try {
                     assertStoredDocumentSignature(data, mediaType);
+                    if (background) {
+                        deferred = { data: new Uint8Array(data), mediaType };
+                        return null;
+                    }
                     const onProgress = processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")));
                     return await options
                         .documentService
@@ -3010,6 +3040,7 @@ export function createLexHttpApp(options) {
                     data.fill(0);
                 }
             });
+            const result = locked ?? (await reviewInBackground(context, caseId, deferred, req));
             documentCaseIds.set(result.documentId, caseId);
             res.status(201).json({
                 ...result,
@@ -4149,7 +4180,23 @@ export function createLexHttpApp(options) {
                 }
             }
             let result;
+            const processing = documentProcessingOptions(req.get("x-lex-processing"));
             if (caseId &&
+                options.caseAccessService &&
+                processing.background) {
+                // Read ahead of the user's work: the OCR outside the case lock (see document-work.ts).
+                const context = responseAuthContext(res);
+                const access = options.caseAccessService;
+                const progressId = progressIdFrom(req.get("x-lex-progress"));
+                const backgroundCaseId = caseId;
+                result = await options.documentService.review(data, mediaType, {
+                    caseId: backgroundCaseId,
+                    ...processing,
+                    ...(progressId ? { onProgress: processingProgress.reporter(backgroundCaseId, progressId) } : {}),
+                    storeUnderLock: (save) => access.withCaseDataKey(context, backgroundCaseId, "WRITE", async (caseDataKey) => save({ caseDataKey, keyVersion: access.openCase(context, backgroundCaseId).keyVersion }))
+                });
+            }
+            else if (caseId &&
                 options.caseAccessService) {
                 const context = responseAuthContext(res);
                 const caseView = options.caseAccessService
@@ -4250,6 +4297,9 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/documents/:documentId/pages/:page/text", async (req, res) => {
+        // Waits for the document work before it (one at a time, see document-work.ts).
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
         const documentService = options.documentService;
         if (!documentService?.editPage) {
             res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
@@ -4295,6 +4345,46 @@ export function createLexHttpApp(options) {
                         : "DOCUMENT_PAGE_EDIT_FAILED"
                 });
             }
+        }
+    });
+    // The user's choice after a background read: the vision model reads the doubtful OCR lines
+    // again (only for a document read with line images and not corrected yet).
+    app.post("/api/documents/:documentId/correct", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
+        const documentId = String(req.params.documentId ?? "").trim();
+        const caseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+        const service = options.documentService;
+        if (!service?.correct || !options.caseAccessService) {
+            res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+            return;
+        }
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !/^case_[a-f0-9]{32}$/.test(caseId)) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PRIVACY_REQUEST" });
+            return;
+        }
+        try {
+            const context = responseAuthContext(res);
+            const caseView = options.caseAccessService.openCase(context, caseId);
+            const progressId = progressIdFrom(req.get("x-lex-progress"));
+            const result = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => service.correct(documentId, {
+                caseId,
+                caseDataKey,
+                keyVersion: caseView.keyVersion,
+                ...(progressId ? { onProgress: processingProgress.reporter(caseId, progressId) } : {})
+            }));
+            res.json(result);
+        }
+        catch (error) {
+            if (sendCaseAccessError(res, error))
+                return;
+            const code = error instanceof Error ? error.message : "";
+            if (code === "UNKNOWN_LOCAL_DOCUMENT") {
+                res.status(404).json({ error: code });
+                return;
+            }
+            console.error(`DOCUMENT_CORRECT_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+            res.status(500).json({ error: "DOCUMENT_CORRECT_FAILED" });
         }
     });
     // The second step after "ocr-only": personal data of a document already read (the text model,
@@ -4343,6 +4433,8 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/documents/:documentId/finalize", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
         if (!options.documentService) {
             res.status(503).json({
                 error: "DOCUMENT_INGESTION_UNAVAILABLE"

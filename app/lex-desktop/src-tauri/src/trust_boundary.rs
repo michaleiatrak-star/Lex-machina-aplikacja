@@ -1685,7 +1685,11 @@ fn is_document_processing_route(path: &str) -> bool {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     match segments.as_slice() {
         // detect: the local text model (Bielik) checks personal data page by page.
-        ["api", "documents", document_id, "finalize" | "detect"] => !document_id.is_empty(),
+        // correct: the vision model; all of them wait for the document work before them.
+        ["api", "documents", document_id, "finalize" | "detect" | "correct"] => !document_id.is_empty(),
+        ["api", "documents", document_id, "pages", page, "text"] => {
+            !document_id.is_empty() && !page.is_empty()
+        }
         ["api", "cases", case_id, "files", upload_id, "process"] => {
             !case_id.is_empty() && !upload_id.is_empty()
         }
@@ -2464,6 +2468,8 @@ mod tests {
             "/api/documents/ingest",
             "/api/documents/doc_abc/finalize",
             "/api/documents/doc_abc/detect",
+            "/api/documents/doc_abc/correct",
+            "/api/documents/doc_abc/pages/2/text",
             "/api/cases/case_1/files/up_1/process",
             "/api/cases/case_1/files/up_1/members/f_1/process",
         ] {

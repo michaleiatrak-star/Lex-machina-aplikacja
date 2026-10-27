@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import time
 import json
 import sys
 import unicodedata
@@ -920,6 +921,13 @@ def predict_image(
     return result
 
 
+def wait_while_paused() -> None:
+    """Background OCR: the runtime holds this file while the user's own document is worked on."""
+    pause_file = os.environ.get("LEX_OCR_PAUSE_FILE", "").strip()
+    while pause_file and os.path.exists(pause_file):
+        time.sleep(0.25)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -1021,6 +1029,7 @@ def main() -> None:
         doc = fitz.open(args.input)
         try:
             for page_number in pages:
+                wait_while_paused()
                 if page_number > doc.page_count:
                     raise ValueError(
                         f"requested page {page_number} exceeds document page count {doc.page_count}"
