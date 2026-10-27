@@ -3351,13 +3351,15 @@ export async function reviewDocument(
   caseId: string,
   // localAi: the local model also checks personal data; ocrFix: the vision model corrects OCR;
   // detect false: only read now (OCR), personal data later by detectDocument.
-  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean },
+  // background: read ahead of the user's work on another file; yields to it in the runtime.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean },
   progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
     ...(options?.localAi ? ["local-ai"] : []),
     ...(options?.ocrFix ? ["ocr-fix"] : []),
-    ...(options?.detect === false ? ["ocr-only"] : [])
+    ...(options?.detect === false ? ["ocr-only"] : []),
+    ...(options?.background ? ["background"] : [])
   ].join(",");
   const response = await fetch(
     `${apiBase()}/api/documents/review`,
@@ -3434,6 +3436,18 @@ export async function detectDocument(
 
 const DETECT_RESUME_ATTEMPTS = 4;
 
+/**
+ * The vision model's correction of a document read in the background, after the user chose
+ * "z korektą AI"; a document read without line images comes back as it was.
+ */
+export function correctDocument(caseId: string, documentId: string, progressId?: string): Promise<DocumentReviewResponse> {
+  return json<DocumentReviewResponse>(`/api/documents/${documentId}/correct`, {
+    method: "POST",
+    headers: { "X-Lex-Keep-Alive": "1", ...(progressId ? { "X-Lex-Progress": progressId } : {}) },
+    body: JSON.stringify({ caseId })
+  });
+}
+
 /** The desktop proxy lost the connection to the runtime (not an answer of the runtime). */
 export function connectionDropped(error: unknown): boolean {
   const code = error instanceof ApiError ? error.code : error instanceof Error ? error.message : "";
@@ -3451,8 +3465,9 @@ export async function processStoredCaseFile(
   uploadId: string,
   fileId?: string,
   progressId?: string,
-  // "z lokalnym AI": the local model also checks the document; detect false: OCR only now.
-  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean }
+  // "z lokalnym AI": the local model also checks the document; detect false: OCR only now;
+  // background: read before the user's decision, yields to the user's own document work.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean }
 ): Promise<DocumentReviewResponse> {
   const path = fileId
     ? `/api/cases/${caseId}/files/${uploadId}/members/${fileId}/process`
@@ -3462,7 +3477,7 @@ export async function processStoredCaseFile(
     {
       method: "POST",
       headers: { "X-Lex-Keep-Alive": "1", ...(progressId ? { "X-Lex-Progress": progressId } : {}) },
-      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false
+      ...(options?.localAi || typeof options?.ocrFix === "boolean" || options?.detect === false || options?.background
         ? {
             headers: {
               "X-Lex-Keep-Alive": "1",
@@ -3472,7 +3487,8 @@ export async function processStoredCaseFile(
             body: JSON.stringify({
               ...(options.localAi ? { localAi: true } : {}),
               ...(typeof options.ocrFix === "boolean" ? { ocrFix: options.ocrFix } : {}),
-              ...(options.detect === false ? { detect: false } : {})
+              ...(options.detect === false ? { detect: false } : {}),
+              ...(options.background ? { background: true } : {})
             })
           }
         : {})
@@ -3492,7 +3508,8 @@ export function finalizeDocument(
     `/api/documents/${documentId}/finalize`,
     {
       method: "POST",
-      ...(progressId ? { headers: { "X-Lex-Progress": progressId } } : {}),
+      // Waits for the document work before it (background OCR pauses, one confirmation at a time).
+      headers: { "X-Lex-Keep-Alive": "1", ...(progressId ? { "X-Lex-Progress": progressId } : {}) },
       body: JSON.stringify({
         caseId,
         directives,
@@ -3556,6 +3573,7 @@ export function editDocumentPage(
 }> {
   return json(`/api/documents/${documentId}/pages/${page}/text`, {
     method: "POST",
+    headers: { "X-Lex-Keep-Alive": "1" },
     body: JSON.stringify({ caseId, text })
   });
 }

@@ -880,7 +880,10 @@ export function documentProcessingOptions(header) {
         ...(flags.has("local-ai") ? { localAi: true } : {}),
         ...(flags.has("ocr-fix") ? { ocrFix: true } : {}),
         // "ocr-only": read the document now, detect personal data later (POST .../detect).
-        ...(flags.has("ocr-only") ? { detect: false } : {})
+        ...(flags.has("ocr-only") ? { detect: false } : {}),
+        // "background": a file added to the case, read before the user's decision; it yields to
+        // the user's own document work (see document-work.ts).
+        ...(flags.has("background") ? { background: true } : {})
     };
 }
 // Workflows the engine runs only with their persisted state (G39I state binding).
@@ -3003,7 +3006,8 @@ export function createLexHttpApp(options) {
                         ...(req.body?.localAi === true ? { localAi: true } : {}),
                         ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                         // OCR only now; personal data later (POST /api/documents/:id/detect).
-                        ...(req.body?.detect === false ? { detect: false } : {})
+                        ...(req.body?.detect === false ? { detect: false } : {}),
+                        ...(req.body?.background === true ? { background: true } : {})
                     });
                 }
                 finally {
@@ -4250,6 +4254,9 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/documents/:documentId/pages/:page/text", async (req, res) => {
+        // Waits for the document work before it (one at a time, see document-work.ts).
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
         const documentService = options.documentService;
         if (!documentService?.editPage) {
             res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
@@ -4295,6 +4302,46 @@ export function createLexHttpApp(options) {
                         : "DOCUMENT_PAGE_EDIT_FAILED"
                 });
             }
+        }
+    });
+    // The user's choice after a background read: the vision model reads the doubtful OCR lines
+    // again (only for a document read with line images and not corrected yet).
+    app.post("/api/documents/:documentId/correct", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
+        const documentId = String(req.params.documentId ?? "").trim();
+        const caseId = typeof req.body?.caseId === "string" ? req.body.caseId.trim() : "";
+        const service = options.documentService;
+        if (!service?.correct || !options.caseAccessService) {
+            res.status(503).json({ error: "DOCUMENT_INGESTION_UNAVAILABLE" });
+            return;
+        }
+        if (!/^doc_[a-f0-9]{24}$/.test(documentId) || !/^case_[a-f0-9]{32}$/.test(caseId)) {
+            res.status(400).json({ error: "INVALID_DOCUMENT_PRIVACY_REQUEST" });
+            return;
+        }
+        try {
+            const context = responseAuthContext(res);
+            const caseView = options.caseAccessService.openCase(context, caseId);
+            const progressId = progressIdFrom(req.get("x-lex-progress"));
+            const result = await options.caseAccessService.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => service.correct(documentId, {
+                caseId,
+                caseDataKey,
+                keyVersion: caseView.keyVersion,
+                ...(progressId ? { onProgress: processingProgress.reporter(caseId, progressId) } : {})
+            }));
+            res.json(result);
+        }
+        catch (error) {
+            if (sendCaseAccessError(res, error))
+                return;
+            const code = error instanceof Error ? error.message : "";
+            if (code === "UNKNOWN_LOCAL_DOCUMENT") {
+                res.status(404).json({ error: code });
+                return;
+            }
+            console.error(`DOCUMENT_CORRECT_FAILED:${/^[A-Z][A-Z0-9_]{2,80}/.exec(code)?.[0] ?? "UNKNOWN"}`);
+            res.status(500).json({ error: "DOCUMENT_CORRECT_FAILED" });
         }
     });
     // The second step after "ocr-only": personal data of a document already read (the text model,
@@ -4343,6 +4390,8 @@ export function createLexHttpApp(options) {
         }
     });
     app.post("/api/documents/:documentId/finalize", async (req, res) => {
+        if (keepAliveRequested(req))
+            keepResponseAlive(res);
         if (!options.documentService) {
             res.status(503).json({
                 error: "DOCUMENT_INGESTION_UNAVAILABLE"

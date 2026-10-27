@@ -2,6 +2,7 @@ import { alignProtected, protectedPageText } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
 import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
 import { normalizeOcrPage } from "./ocr-correction.js";
+import { documentWork } from "./document-work.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
 import { correctWithVision, enoughMemoryForVision, withoutLineCrops } from "./ocr-vision.js";
@@ -34,6 +35,9 @@ function normalizedOcr(source, maxChunkChars) {
         sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
         chunks: chunkDocumentPages(pages, maxChunkChars)
     };
+}
+function hasLineCrops(source) {
+    return source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop));
 }
 function withoutCrops(source) {
     const pages = source.pages.map(withoutLineCrops);
@@ -313,6 +317,11 @@ export class LocalPrivateDocumentService {
         return image;
     }
     async review(data, mediaType, security) {
+        return security?.background
+            ? documentWork.background(() => this.reviewNow(data, mediaType, security))
+            : this.reviewNow(data, mediaType, security);
+    }
+    async reviewNow(data, mediaType, security) {
         const onProgress = security?.onProgress;
         onProgress?.({ stage: "READING" });
         const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
@@ -321,8 +330,14 @@ export class LocalPrivateDocumentService {
         // each change kept in page.corrections), then, when asked for, the vision model on the
         // doubtful lines. Line images live only for that step; never kept with the document.
         const cleaned = normalizedOcr(spaced, this.maxChunkChars);
-        const read = withoutCrops(shouldCorrectOcr(security)
-            ? await this.readWithVision(cleaned, onProgress)
+        const correctNow = shouldCorrectOcr(security);
+        // Read now, decided later: the vision model may still be chosen (correct()).
+        const visionPending = !correctNow && security?.detect === false && hasLineCrops(cleaned) ? cleaned : undefined;
+        // The vision step stops the text model: in a background read it waits for the user's work.
+        const read = withoutCrops(correctNow
+            ? security?.background
+                ? await documentWork.foreground(() => this.readWithVision(cleaned, onProgress))
+                : await this.readWithVision(cleaned, onProgress)
             : cleaned);
         // Lines to check against the scan, marked after the corrections (which rebuild the text).
         const source = await this.markReview(read);
@@ -357,7 +372,8 @@ export class LocalPrivateDocumentService {
                 }
                 : {}),
             vault,
-            source
+            source,
+            ...(visionPending ? { visionPending } : {})
         });
         // Several files: the OCR of all of them first (text models stopped for the vision
         // model), then the detection of personal data (text model started once).
@@ -379,16 +395,61 @@ export class LocalPrivateDocumentService {
             record.localAi = true;
             record.aiFindings = new Map();
         }
-        // A retry after a dropped connection joins the check still running for this document
-        // (the local model keeps working after the client is gone) instead of starting a second one.
+        // A retry after a dropped connection joins the check still running (or waiting for its
+        // turn) for this document (the local model keeps working after the client is gone)
+        // instead of starting a second one.
         const key = `${documentId}:${security?.localAi ? "ai" : "rules"}`;
         const running = this.detecting.get(key);
         if (running)
             return running;
-        const run = this.detectSuggestions(documentId, record.mediaType, record.source, security)
+        const run = documentWork
+            .foreground(() => this.detectSuggestions(documentId, record.mediaType, record.source, security))
             .finally(() => this.detecting.delete(key));
         this.detecting.set(key, run);
         return run;
+    }
+    /**
+     * The vision model's correction of a document read in the background, chosen by the user
+     * afterwards ("z korektą AI"): the doubtful lines read again, then marked for the preview.
+     * Without line images kept (no vision model when it was read, or already corrected) the
+     * document stays as read.
+     */
+    async correct(documentId, security) {
+        return documentWork.foreground(async () => {
+            const record = this.documents.get(documentId);
+            if (!record)
+                throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+            if (record.caseId && security?.caseId !== record.caseId)
+                throw new Error("DOCUMENT_CASE_MISMATCH");
+            const pending = record.visionPending;
+            if (!pending)
+                return this.publicReview(documentId, record.mediaType, record.source, []);
+            const corrected = await this.markReview(withoutCrops(await this.readWithVision(pending, security?.onProgress)));
+            // A page the user already corrected by hand keeps the user's text.
+            const pages = corrected.pages.map((page) => record.source.pages.find((item) => item.page === page.page && item.editedByUser) ?? page);
+            const source = {
+                ...corrected,
+                pages,
+                sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+                chunks: chunkDocumentPages(pages, this.maxChunkChars)
+            };
+            if (this.secureDocumentStore && record.caseId) {
+                if (!security?.caseDataKey || !Number.isInteger(security.keyVersion) || (security.keyVersion ?? 0) < 1) {
+                    throw new Error("DOCUMENT_STORAGE_CONTEXT_REQUIRED");
+                }
+                await this.secureDocumentStore.saveSource({
+                    caseId: record.caseId,
+                    documentId,
+                    mediaType: record.mediaType,
+                    source,
+                    caseDataKey: security.caseDataKey,
+                    keyVersion: security.keyVersion
+                });
+            }
+            record.source = source;
+            delete record.visionPending;
+            return this.publicReview(documentId, record.mediaType, source, []);
+        });
     }
     async detectSuggestions(documentId, mediaType, source, security) {
         const onProgress = security?.onProgress;
@@ -499,6 +560,9 @@ export class LocalPrivateDocumentService {
         };
     }
     async editPage(documentId, pageNumber, text, security) {
+        return documentWork.foreground(() => this.editPageNow(documentId, pageNumber, text, security));
+    }
+    async editPageNow(documentId, pageNumber, text, security) {
         const record = this.documents.get(documentId);
         if (!record)
             throw new Error("UNKNOWN_LOCAL_DOCUMENT");
@@ -650,10 +714,18 @@ export class LocalPrivateDocumentService {
     async finalizeReview(documentId, directives, security, 
     // Confirmed by the user in the preview (see privacy.reviewed).
     reviewed = false) {
+        return documentWork.foreground(() => this.finalizeReviewNow(documentId, directives, security, reviewed));
+    }
+    async finalizeReviewNow(documentId, directives, security, reviewed = false) {
         const record = this.documents.get(documentId);
         if (!record) {
             throw new Error("UNKNOWN_LOCAL_DOCUMENT");
         }
+        // Confirmed as read: the line images are no longer needed.
+        delete record.visionPending;
+        // "z lokalnym AI": the vision step of another document may have stopped the text model.
+        if (record.localAi && this.startTextModels)
+            await this.startTextModels();
         for (const directive of directives) {
             if (!Number.isInteger(directive.page) ||
                 directive.page < 1 ||

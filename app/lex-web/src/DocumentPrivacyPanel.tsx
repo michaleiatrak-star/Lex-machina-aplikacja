@@ -5,6 +5,7 @@ import {
 } from "react";
 import {
   ApiError,
+  correctDocument,
   detectDocument,
   finalizeDocument,
   keepAllDirectives,
@@ -194,8 +195,9 @@ export function DocumentPrivacyPanel({
     useState<FinalizedBatchItem[]>([]);
   const [archiveUpload, setArchiveUpload] =
     useState<StoredUploadResponse | null>(null);
-  // Several files: all are read first (OCR, vision model, text models stopped), then their
-  // personal data detected (the text model starts once), then the preview of each.
+  // Several files: read (OCR) one after another in the background; the file opened goes on at
+  // once (correction, personal data, preview, confirmation) while the runtime pauses the OCR
+  // of the rest after the page it reads.
   const prepared =
     useRef(new Map<File, Promise<DocumentReviewResponse>>());
   const preparing =
@@ -226,44 +228,46 @@ export function DocumentPrivacyPanel({
     file.type === "application/zip" || file.name.toLowerCase().endsWith(".zip");
 
   /**
-   * Reads the files not read yet: the OCR of all of them first, then the detection of
-   * personal data of each. With the local AI the text model is stopped for the OCR (the
-   * vision model gets its memory) and started once, before the first detection.
+   * Reads the files not read yet, one after another: OCR only (in the background), nothing
+   * sent to a model. The correction and the personal data of a file run when it is opened.
    */
   function prepare(files: File[]): Map<File, Promise<DocumentReviewResponse>> {
     const fresh = files.filter((file) => !isArchive(file) && !prepared.current.has(file));
     if (fresh.length && caseId) {
-      const reads = new Map<File, Promise<DocumentReviewResponse>>();
       let chain = preparing.current.catch(() => undefined);
       for (const file of fresh) {
         const read = chain.then(() => {
-          const tracker = trackProgress(caseId, setProgress);
-          return reviewDocument(file, caseId, { ...processingOptionsFor?.(file), detect: false }, tracker.progressId).finally(() => {
+          // Progress shown for the file the user waits for, not for the ones read ahead.
+          const tracker = trackProgress(caseId, (next) => {
+            if (activeFileRef.current === file) setProgress(next);
+          });
+          return reviewDocument(file, caseId, { detect: false, background: true }, tracker.progressId).finally(() => {
             tracker.stop();
-            setProgress(null);
+            if (activeFileRef.current === file) setProgress(null);
           });
         });
-        reads.set(file, read);
+        prepared.current.set(file, read);
         chain = read.catch(() => undefined);
-      }
-      for (const file of fresh) {
-        const detected = chain.then(async () => {
-          const read = await reads.get(file)!;
-          const tracker = trackProgress(caseId, setProgress);
-          return detectDocument(caseId, read.documentId, { localAi: processingOptionsFor?.(file)?.localAi === true }, tracker.progressId).finally(() => {
-            tracker.stop();
-            setProgress(null);
-          });
-        });
-        prepared.current.set(file, detected);
-        chain = detected.catch(() => undefined);
       }
       preparing.current = chain;
     }
     return prepared.current;
   }
 
-  // The whole queue is read before the first preview.
+  /** The opened file after its OCR: the vision model's correction when chosen, then personal data. */
+  async function finishRead(file: File, read: DocumentReviewResponse): Promise<DocumentReviewResponse> {
+    const options = processingOptionsFor?.(file);
+    const tracker = trackProgress(caseId, setProgress);
+    try {
+      if (options?.ocrFix) await correctDocument(caseId, read.documentId, tracker.progressId);
+      return await detectDocument(caseId, read.documentId, { localAi: options?.localAi === true }, tracker.progressId);
+    } finally {
+      tracker.stop();
+      setProgress(null);
+    }
+  }
+
+  // The whole queue is read in the background, one file after another.
   useEffect(() => {
     if (queuedFiles?.length) prepare(queuedFiles);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,7 +319,9 @@ export function DocumentPrivacyPanel({
 
       // The next files of the queue are already read; their failures show when they come up.
       // Forgotten either way: a retry reads the file again.
-      const result = await prepare([file]).get(file)!.finally(() => prepared.current.delete(file));
+      const read = await prepare([file]).get(file)!.finally(() => prepared.current.delete(file));
+      if (call !== openCall.current) return;
+      const result = await finishRead(file, read);
       if (call !== openCall.current) return;
       reviewFiles.current.set(result.documentId, file);
       if (!needsPrivacyReview(result)) {
@@ -375,11 +381,13 @@ export function DocumentPrivacyPanel({
   }
 
 
-  function stageWith(
+  // "Zatwierdź plik": the file is saved at once (its anonymization finished) and the queue goes
+  // on; a file that failed to save waits in the batch list for another try.
+  async function stageWith(
     review: DocumentReviewResponse,
     decisions: PagePrivacyDirective[],
     mode: PrivacyDecisionMode
-  ): void {
+  ): Promise<void> {
     const file = reviewFiles.current.get(review.documentId) ?? activeFileRef.current;
     if (!file) {
       // Never a silent click: the preview stays and says what to do.
@@ -396,17 +404,6 @@ export function DocumentPrivacyPanel({
       directives: decisions,
       privacyMode: mode
     };
-    setBatchDrafts((current) => {
-      const existing = current.findIndex(
-        (item) => item.review.documentId === review.documentId
-      );
-      if (existing < 0) {
-        return [...current, draft];
-      }
-      return current.map((item, index) =>
-        index === existing ? draft : item
-      );
-    });
     onProcessingEvent?.({
       fileName: draft.fileName,
       stage: "PRIVACY_STAGED",
@@ -418,6 +415,19 @@ export function DocumentPrivacyPanel({
       suggestions: review.suggestions.length,
       privacyMode: mode
     });
+    setBatchFinalizing(true);
+    setError("");
+    try {
+      const item = await finalizeDraft(draft);
+      setFinalizedBatch((current) => [...current.filter((next) => next.result.documentId !== item.result.documentId), item]);
+      setBatchDrafts((current) => current.filter((next) => next.review.documentId !== review.documentId));
+      onCaseFilesChange?.();
+    } catch (cause) {
+      setBatchDrafts((current) => [...current.filter((next) => next.review.documentId !== review.documentId), draft]);
+      setError(`Nie zatwierdzono ${draft.fileName}: ${cause instanceof Error ? cause.message : "DOCUMENT_PRIVACY_FINALIZATION_FAILED"}. Plik czeka na liście poniżej.`);
+    } finally {
+      setBatchFinalizing(false);
+    }
     setReview(null);
     setDirectives([]);
     activeFileRef.current = null;
@@ -463,7 +473,6 @@ export function DocumentPrivacyPanel({
     if (
       batchFinalizing ||
       batchDrafts.length === 0 ||
-      incomingFile ||
       loading
     ) return;
     setBatchFinalizing(true);
@@ -704,7 +713,7 @@ export function DocumentPrivacyPanel({
           confirmError={error || undefined}
           busy={loading || batchFinalizing}
           onConfirm={(decisions, current) =>
-            stageWith(current, decisions, decisions.length ? "MANUAL" : "AUTO_PSEUDONYMIZE")
+            void stageWith(current, decisions, decisions.length ? "MANUAL" : "AUTO_PSEUDONYMIZE")
           }
           onKeepClear={(current) => {
             if (
@@ -712,7 +721,7 @@ export function DocumentPrivacyPanel({
                 `„${activeFileName || current.documentId}” bez anonimizacji: do modelu trafi tekst jawny z danymi osobowymi. Kontynuować?`
               )
             ) {
-              stageWith(current, keepAllDirectives(current), "KEEP_CLEAR");
+              void stageWith(current, keepAllDirectives(current), "KEEP_CLEAR");
             }
           }}
           onCancel={() => {
@@ -725,16 +734,16 @@ export function DocumentPrivacyPanel({
         />
       ) : null}
 
-      {batchDrafts.length > 0 && !review && !incomingFile && !loading ? (
+      {batchDrafts.length > 0 && !review && !loading ? (
         <div className="privacy-decisions privacy-batch-preview">
           <div className="privacy-decision-head">
             <div>
-              <p className="eyebrow">Przed zatwierdzeniem</p>
+              <p className="eyebrow">Niezatwierdzone</p>
               <h3>
-                Zbiorczy podgląd anonimizacji · {batchDrafts.length} plików
+                Pliki do ponownego zatwierdzenia · {batchDrafts.length}
                 <InfoTip>
-                  Wersja robocza. Każdy plik jest zatwierdzany osobno: jeśli jeden zgłosi błąd, wróci do
-                  podglądu, a pozostałe zostaną gotowe.
+                  Każdy plik jest zapisywany od razu po „Zatwierdź plik”. Tu zostają tylko te, których zapis
+                  się nie udał: decyzje z podglądu są zachowane, można je zatwierdzić ponownie.
                 </InfoTip>
               </h3>
             </div>

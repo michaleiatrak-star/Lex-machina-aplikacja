@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalPaddleOcrEngine, OCR_BATCH_PAGES } from "../src/ocr/paddle-ocr-engine.js";
 import { readOcrPages } from "../src/ocr/ocr-result.js";
+import { documentWork } from "../src/document-work.js";
 
 // Stand-in for paddle_worker.py: one JPEG-like evidence file and one boxed
 // line per requested page; logs each invocation's page list.
@@ -14,7 +15,7 @@ const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
 const pages = arg("--pages").split(",").map(Number);
 const evidence = arg("--evidence-dir");
 fs.mkdirSync(evidence, { recursive: true });
-fs.appendFileSync(process.env.FAKE_OCR_LOG, pages.join(",") + "\\n");
+fs.appendFileSync(process.env.FAKE_OCR_LOG, pages.join(",") + (process.env.LEX_OCR_PAUSE_FILE ? " pause" : "") + "\\n");
 const out = pages.map((page) => {
   fs.writeFileSync(path.join(evidence, "p" + page + ".jpg"), Buffer.alloc(30, page));
   process.stderr.write("LEX_OCR_PAGE " + page + "\\n");
@@ -72,5 +73,17 @@ describe("LocalPaddleOcrEngine: long scans", () => {
     expect(second[0]!.image).toBeUndefined();
     expect(second[0]!.text).toBe("x");
     expect(budget.bytesLeft).toBe(0);
+  });
+
+  it("only background OCR gets the pause file (it waits there while the user's document is worked on)", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-pause-test-"));
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(worker, FAKE_WORKER);
+    process.env.FAKE_OCR_LOG = path.join(dir, "calls.log");
+    const engine = new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker });
+    await engine.recognizePages(new Uint8Array([37, 80, 68, 70]), [1]);
+    await documentWork.background(() => engine.recognizePages(new Uint8Array([37, 80, 68, 70]), [2]));
+    const calls = (await readFile(process.env.FAKE_OCR_LOG, "utf8")).trim().split("\n");
+    expect(calls).toEqual(["1", "2 pause"]);
   });
 });

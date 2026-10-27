@@ -5,6 +5,7 @@ import type {
 } from "./privacy/person-morphology.js";
 import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
 import { normalizeOcrPage } from "./ocr-correction.js";
+import { documentWork } from "./document-work.js";
 import { restoreOcrSpacing } from "./ocr-spacing.js";
 import { markOcrReview } from "./ocr-review.js";
 import { correctWithVision, enoughMemoryForVision, withoutLineCrops, type ReadLine } from "./ocr-vision.js";
@@ -109,6 +110,8 @@ export type DocumentSecurityContext = {
   ocrFix?: boolean;
   // false: only read the document (OCR); personal data is detected later by detect().
   detect?: boolean;
+  // OCR of a file added to the case, before the user's decision: yields to the user's work.
+  background?: boolean;
 };
 
 /**
@@ -133,6 +136,10 @@ function normalizedOcr(source: DocumentIngestionResult, maxChunkChars: number): 
     sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
     chunks: chunkDocumentPages(pages, maxChunkChars)
   };
+}
+
+function hasLineCrops(source: DocumentIngestionResult): boolean {
+  return source.pages.some((page) => page.source === "OCR" && page.lines?.some((line) => line.crop));
 }
 
 function withoutCrops(source: DocumentIngestionResult): DocumentIngestionResult {
@@ -418,6 +425,7 @@ export interface DocumentService {
   ): Promise<PublicDocumentIngestion>;
   markReviewed?(documentId: string, security: DocumentSecurityContext): Promise<AnonymizedVersion>;
   detect?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
+  correct?(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview>;
   pageScan?(documentId: string, pageNumber: number, security?: DocumentSecurityContext): Promise<PageScan | null>;
   editPage?(
     documentId: string,
@@ -498,6 +506,9 @@ type PrivateDocumentRecord = {
   // review, so saving the document does not run the model a second time.
   localAi?: boolean;
   aiFindings?: Map<string, PiiSpan[]>;
+  // Read without the vision model: the OCR with its line images, before the doubtful lines
+  // were marked, kept in memory only until the user's choice (correct()) or confirmation.
+  visionPending?: DocumentIngestionResult;
 };
 
 /**
@@ -759,6 +770,16 @@ implements DocumentService {
     mediaType: SupportedDocumentMediaType,
     security?: DocumentSecurityContext
   ): Promise<PublicDocumentReview> {
+    return security?.background
+      ? documentWork.background(() => this.reviewNow(data, mediaType, security))
+      : this.reviewNow(data, mediaType, security);
+  }
+
+  private async reviewNow(
+    data: Uint8Array,
+    mediaType: SupportedDocumentMediaType,
+    security?: DocumentSecurityContext
+  ): Promise<PublicDocumentReview> {
     const onProgress = security?.onProgress;
     onProgress?.({ stage: "READING" });
     const extracted = nfcIngestion(await this.extract(
@@ -771,9 +792,15 @@ implements DocumentService {
     // each change kept in page.corrections), then, when asked for, the vision model on the
     // doubtful lines. Line images live only for that step; never kept with the document.
     const cleaned = normalizedOcr(spaced, this.maxChunkChars);
+    const correctNow = shouldCorrectOcr(security);
+    // Read now, decided later: the vision model may still be chosen (correct()).
+    const visionPending = !correctNow && security?.detect === false && hasLineCrops(cleaned) ? cleaned : undefined;
+    // The vision step stops the text model: in a background read it waits for the user's work.
     const read = withoutCrops(
-      shouldCorrectOcr(security)
-        ? await this.readWithVision(cleaned, onProgress)
+      correctNow
+        ? security?.background
+          ? await documentWork.foreground(() => this.readWithVision(cleaned, onProgress))
+          : await this.readWithVision(cleaned, onProgress)
         : cleaned
     );
     // Lines to check against the scan, marked after the corrections (which rebuild the text).
@@ -825,7 +852,8 @@ implements DocumentService {
           }
         : {}),
       vault,
-      source
+      source,
+      ...(visionPending ? { visionPending } : {})
     });
 
     // Several files: the OCR of all of them first (text models stopped for the vision
@@ -846,15 +874,58 @@ implements DocumentService {
       record.localAi = true;
       record.aiFindings = new Map<string, PiiSpan[]>();
     }
-    // A retry after a dropped connection joins the check still running for this document
-    // (the local model keeps working after the client is gone) instead of starting a second one.
+    // A retry after a dropped connection joins the check still running (or waiting for its
+    // turn) for this document (the local model keeps working after the client is gone)
+    // instead of starting a second one.
     const key = `${documentId}:${security?.localAi ? "ai" : "rules"}`;
     const running = this.detecting.get(key);
     if (running) return running;
-    const run = this.detectSuggestions(documentId, record.mediaType, record.source, security)
+    const run = documentWork
+      .foreground(() => this.detectSuggestions(documentId, record.mediaType, record.source, security))
       .finally(() => this.detecting.delete(key));
     this.detecting.set(key, run);
     return run;
+  }
+
+  /**
+   * The vision model's correction of a document read in the background, chosen by the user
+   * afterwards ("z korektą AI"): the doubtful lines read again, then marked for the preview.
+   * Without line images kept (no vision model when it was read, or already corrected) the
+   * document stays as read.
+   */
+  async correct(documentId: string, security?: DocumentSecurityContext): Promise<PublicDocumentReview> {
+    return documentWork.foreground(async () => {
+      const record = this.documents.get(documentId);
+      if (!record) throw new Error("UNKNOWN_LOCAL_DOCUMENT");
+      if (record.caseId && security?.caseId !== record.caseId) throw new Error("DOCUMENT_CASE_MISMATCH");
+      const pending = record.visionPending;
+      if (!pending) return this.publicReview(documentId, record.mediaType, record.source, []);
+      const corrected = await this.markReview(withoutCrops(await this.readWithVision(pending, security?.onProgress)));
+      // A page the user already corrected by hand keeps the user's text.
+      const pages = corrected.pages.map((page) => record.source.pages.find((item) => item.page === page.page && item.editedByUser) ?? page);
+      const source: DocumentIngestionResult = {
+        ...corrected,
+        pages,
+        sourceChars: pages.reduce((sum, page) => sum + page.text.length, 0),
+        chunks: chunkDocumentPages(pages, this.maxChunkChars)
+      };
+      if (this.secureDocumentStore && record.caseId) {
+        if (!security?.caseDataKey || !Number.isInteger(security.keyVersion) || (security.keyVersion ?? 0) < 1) {
+          throw new Error("DOCUMENT_STORAGE_CONTEXT_REQUIRED");
+        }
+        await this.secureDocumentStore.saveSource({
+          caseId: record.caseId,
+          documentId,
+          mediaType: record.mediaType,
+          source,
+          caseDataKey: security.caseDataKey,
+          keyVersion: security.keyVersion!
+        });
+      }
+      record.source = source;
+      delete record.visionPending;
+      return this.publicReview(documentId, record.mediaType, source, []);
+    });
   }
 
   private async detectSuggestions(
@@ -992,6 +1063,15 @@ implements DocumentService {
   }
 
   async editPage(
+    documentId: string,
+    pageNumber: number,
+    text: string,
+    security?: DocumentSecurityContext
+  ): Promise<{ page: PublicDocumentReview["pages"][number]; suggestions: PublicPrivacySuggestion[] }> {
+    return documentWork.foreground(() => this.editPageNow(documentId, pageNumber, text, security));
+  }
+
+  private async editPageNow(
     documentId: string,
     pageNumber: number,
     text: string,
@@ -1156,10 +1236,23 @@ implements DocumentService {
     // Confirmed by the user in the preview (see privacy.reviewed).
     reviewed = false
   ): Promise<PublicDocumentIngestion> {
+    return documentWork.foreground(() => this.finalizeReviewNow(documentId, directives, security, reviewed));
+  }
+
+  private async finalizeReviewNow(
+    documentId: string,
+    directives: PagePrivacyDirective[],
+    security?: DocumentSecurityContext,
+    reviewed = false
+  ): Promise<PublicDocumentIngestion> {
     const record = this.documents.get(documentId);
     if (!record) {
       throw new Error("UNKNOWN_LOCAL_DOCUMENT");
     }
+    // Confirmed as read: the line images are no longer needed.
+    delete record.visionPending;
+    // "z lokalnym AI": the vision step of another document may have stopped the text model.
+    if (record.localAi && this.startTextModels) await this.startTextModels();
 
     for (const directive of directives) {
       if (
