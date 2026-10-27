@@ -293,7 +293,7 @@ const PLAIN_ERRORS: Readonly<Record<string, string>> = {
   CONTRACT_ALREADY_COMPLETE: "Analiza umowy w tej sprawie jest już zakończona. Możesz rozpocząć nową poniżej.",
   PROCESS_PLEADING_STATE_REQUIRED: "Pismo procesowe powstaje etapami. Rozpocznij je poniżej — wiadomość zostanie wysłana ponownie.",
   PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED: "Pismo procesowe czeka na Twoją zgodę na rozpoczęcie. Zaakceptuj start poniżej.",
-  PROCESS_PLEADING_CONFIRMATION_REQUIRED: "Pismo procesowe czeka na potwierdzenie bieżącego etapu.",
+  PROCESS_PLEADING_CONFIRMATION_REQUIRED: "Pismo procesowe czeka na potwierdzenie bieżącego etapu: napisz „tak”, „daj mi dokument” albo co poprawić.",
   PROCESS_PLEADING_CASE_REQUIRED: "Pismo procesowe musi dotyczyć wybranej sprawy.",
   PROCESS_PLEADING_ALREADY_FINAL: "Pismo procesowe w tej sprawie jest już gotowe. Możesz rozpocząć nowe poniżej.",
   COURT_ANALYSIS_CASE_REQUIRED: "Analiza sądowa musi dotyczyć wybranej sprawy.",

@@ -50,7 +50,8 @@ export type ProcessPleadingStateEvent = {
     | "STAGE_ADVANCED"
     | "FINALIZED"
     | "CHECKPOINT_REVISION_REQUESTED"
-    | "DRAFT_REOPENED";
+    | "DRAFT_REOPENED"
+    | "MODE_SWITCHED";
   checkpoint?: ProcessPleadingCheckpoint;
   fromStage?: ProcessPleadingStage;
   toStage?: ProcessPleadingStage;
@@ -440,7 +441,7 @@ export function validateProcessPleadingState(
       event.sequence <= previousSequence ||
       !validIso(event.at) ||
       (
-        event.type === "CHECKPOINT_NA" || event.type === "DRAFT_REOPENED"
+        event.type === "CHECKPOINT_NA" || event.type === "DRAFT_REOPENED" || event.type === "MODE_SWITCHED"
           ? (
               typeof event.reason !== "string" ||
               event.reason.length < 3 ||
@@ -745,5 +746,24 @@ export function reopenProcessPleadingDraft(
     },
     at
   );
+  return validateProcessPleadingState(state);
+}
+
+/**
+ * Checkpoint mode → AUTO from the current point, as the chat's "daj mi dokument" after a
+ * checkpoint: the remaining checkpoints run without stops (each one still closes only on a
+ * passing answer; HYBRID-VAL before the file is unchanged). No pending confirmation allowed.
+ */
+export function switchProcessPleadingToAuto(
+  input: ProcessPleadingState,
+  reason: string,
+  at = new Date().toISOString()
+): ProcessPleadingState {
+  const state = validateProcessPleadingState(input);
+  if (state.mode !== "CHECKPOINT" || state.pendingCheckpoint !== null || state.stage === "CG_ACCEPTANCE" || state.stage === "FINAL") {
+    throw new Error("PROCESS_PLEADING_MODE_SWITCH_INVALID");
+  }
+  state.mode = "AUTO";
+  pushEvent(state, { type: "MODE_SWITCHED", reason }, at);
   return validateProcessPleadingState(state);
 }
