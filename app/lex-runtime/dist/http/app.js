@@ -3,7 +3,7 @@ import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
-import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
+import { evaluateCheckpointOutput, processStepDone } from "../process-checkpoint-contract.js";
 import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
 import { PERSON_CASES } from "../privacy/person-morphology.js";
 import { FORMAT_MEDIA_TYPE, LocalOfficeEditor, editableMediaType } from "../office-edit.js";
@@ -17,7 +17,7 @@ import helmet from "helmet";
 import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { latestUserTurn } from "../execution-engine.js";
-import { applyPleadingChatReply, pleadingChatReply } from "../process-pleading-chat-reply.js";
+import { applyPleadingChatReply, bareRefusal, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
 import { appendDraftVersion, emptyProcessPleadingDraft, withDraftRemarks, latestDraftVersion, PLEADING_CONTINUATIONS_MAX, PLEADING_END, PLEADING_START, pleadingContinuationPrompt, pleadingStepText, withoutDraftRemarks, writesPleading } from "../process-pleading-draft.js";
 // The citations that blocked a part of a long letter, as the corrections its rewrite needs.
@@ -6163,7 +6163,8 @@ export function createLexHttpApp(options) {
         // checkpoint frame, so the trivial gate would not see the assistant's question.
         const pleadingReply = Boolean(knowledge.caseId) &&
             parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-procesowe-v3") &&
-            pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null;
+            (pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null ||
+                bareRefusal(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)));
         const trivialChat = !partRequest &&
             !pleadingReply &&
             (applyTrivialChatGate(options.registry, request, attachments.length + firmTemplates.length) ||
@@ -6744,6 +6745,14 @@ export function createLexHttpApp(options) {
                     });
                 });
                 const permit = requireProcessExecutionPermit(state);
+                // A short reply to the step ("tak", "c", "B) …"): the step runs as from the panel's
+                // "Kontynuuj", with the reply quoted for the model.
+                // The thread's first message (the request itself, no "Użytkownik:" history) stays as is.
+                const replyText = latestUserTurn(parseSkillSelectionEnvelope(request.query).query).trim();
+                if (request.query.includes("\n\nUżytkownik: ") && replyText && replyText.length <= 300 && !replyText.startsWith(PLEADING_CONTINUATION)) {
+                    request.query = pleadingContinuationQuery(request.query, replyText);
+                    request.auxiliaryText = `${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «${replyText}»`;
+                }
                 request.processWorkflowContext = {
                     stage: permit.stage,
                     checkpoint: permit.checkpoint,
@@ -7156,9 +7165,7 @@ export function createLexHttpApp(options) {
                             nodeResult.workflow
                                 ?.id ===
                                 "PROCESS_PLEADING_V1" &&
-                            nodeResult.workflow
-                                .result ===
-                                "PASS";
+                            processStepDone(nodeResult.workflow, permit.checkpoint);
                         if (commit) {
                             const draftProblems = [];
                             pleadingDraftWritten = (await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, permit.checkpoint, permit.stage, nodeResult.answer ?? "", draftProblems)) ?? pleadingDraftWritten;
@@ -7750,8 +7757,7 @@ export function createLexHttpApp(options) {
                     "DRAFT_PRESENTABLE" &&
                     result.workflow?.id ===
                         "PROCESS_PLEADING_V1" &&
-                    result.workflow.result ===
-                        "PASS" &&
+                    processStepDone(result.workflow, processContext.permit.checkpoint) &&
                     // A checkpoint that asked the user stays open until the reply.
                     result.waitingForUser !== true) {
                     state =
@@ -7787,7 +7793,7 @@ export function createLexHttpApp(options) {
                 }
                 if (result.status === "DRAFT_PRESENTABLE" &&
                     result.workflow?.id === "PROCESS_PLEADING_V1" &&
-                    result.workflow.result === "PASS") {
+                    processStepDone(result.workflow, processContext.permit.checkpoint)) {
                     const draftProblems = [];
                     pleadingDraftWritten =
                         (await recordPleadingStep(actor, processContext.caseId, caseView.keyVersion, processContext.permit.checkpoint, processContext.permit.stage, result.answer ?? "", draftProblems)) ?? pleadingDraftWritten;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { workflowRecovery } from "./workflow-recovery.js";
+import { declinesProcessStart, workflowRecovery } from "./workflow-recovery.js";
 
 describe("workflow recovery in the chat", () => {
   it("offers to start the pleading pipeline instead of a dead error", () => {
@@ -20,5 +20,15 @@ describe("workflow recovery in the chat", () => {
     expect(workflowRecovery("ORDERED_WORKFLOW_ALREADY_COMPLETE")).toBeNull();
     expect(workflowRecovery("PROCESS_PLEADING_CONFIRMATION_REQUIRED")).toBeNull();
     expect(workflowRecovery("PROVIDER_EXECUTION_FAILED")).toBeNull();
+  });
+
+  it("does not restart the pipeline on a declined start", () => {
+    for (const text of ["b", "B) Nie — zakończ lub wyjaśnij wątpliwości", "nie", "NIE, mam pytanie"]) {
+      expect(declinesProcessStart("PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED", text), text).toBe(true);
+    }
+    for (const text of ["a", "Tak", "Napisz pozew", "bez zmian"]) {
+      expect(declinesProcessStart("PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED", text), text).toBe(false);
+    }
+    expect(declinesProcessStart("PROCESS_PLEADING_CONFIRMATION_REQUIRED", "b")).toBe(false);
   });
 });

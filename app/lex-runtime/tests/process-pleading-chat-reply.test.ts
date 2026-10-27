@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPleadingChatReply, pleadingChatReply } from "../src/process-pleading-chat-reply.js";
+import { applyPleadingChatReply, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../src/process-pleading-chat-reply.js";
 import { acceptProcessPleadingStart, createProcessPleadingState, markProcessCheckpointReady } from "../src/process-pleading-state.js";
 
 const CASE = `case_${"a".repeat(32)}`;
@@ -9,7 +9,7 @@ describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skil
     for (const text of ["a", "a)", "tak", "Tak, akceptuję", "ok", "zatwierdzam", "a — wczytaj checklistę i rozpocznij", "a) Tak, akceptuję — wczytaj checklistę i rozpocznij", "a) Akceptuję pismo jako DRAFT (bez tych kroków)"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
     for (const text of ["ok trzymaj to i daj mi dokument", "daj mi gotowy plik", "przygotuj od razu pismo", "wygeneruj teraz plik", "dokończ bez zatrzymywania", "resztę etapów automatycznie"]) expect(pleadingChatReply(text), text).toBe("FINISH");
     for (const text of ["popraw ścieżkę B", "porzuć ścieżkę D", "tak, ale dodaj zarzut przedawnienia", "modyfikuj: bez wątku D", "Modyfikuj: porzuć ścieżkę E", "Uwagi: brak zarzutu przedawnienia"]) expect(pleadingChatReply(text), text).toBe("REVISE");
-    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie.", "kontynuuj", "dalej", "b) Nie — zakończ lub wyjaśnij wątpliwości"]) expect(pleadingChatReply(text), text).toBeNull();
+    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie.", "kontynuuj", "dalej"]) expect(pleadingChatReply(text), text).toBeNull();
   });
 
   it("„a” akceptuje start, „tak” potwierdza etap, „daj mi dokument” potwierdza etap bez pomijania reszty (ZAKAZ-CP, ZAKAZ-12)", () => {
@@ -44,5 +44,37 @@ describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skil
     const unchanged = applyPleadingChatReply(state, "Jaki jest termin na zażalenie?");
     expect(unchanged.state.revision).toBe(state.revision);
     expect(unchanged.note).toBeNull();
+  });
+
+  it("wielkość liter i odpowiedzi „nie”, „b”, „C” jak w rozmowach ze skillem", () => {
+    for (const text of ["A", "A)", "TAK", "Tak", "OK", "A) Tak, akceptuję — wczytaj checklistę i rozpocznij"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
+    // An option other than a) or a refusal with its reason: the step runs again on it.
+    for (const text of ["b", "B", "B) Nie — zakończ lub wyjaśnij wątpliwości", "c", "C", "d) wstrzymaj", "Nie, wolę ścieżkę D", "NIE — najpierw reklamacja"]) {
+      expect(pleadingChatReply(text), text).toBe("REVISE");
+    }
+    // A bare "nie" says nothing to run on: the step waits (the app asks what to change).
+    for (const text of ["Nie", "NIE", "nie.", "bez zmian?", "Czy termin minął?"]) expect(pleadingChatReply(text), text).toBeNull();
+  });
+
+  it("wybór b/C przy etapie do potwierdzenia wraca do modelu jak w rozmowie ze skillem", () => {
+    const state = markProcessCheckpointReady(acceptProcessPleadingStart(createProcessPleadingState(CASE, "CHECKPOINT")), "CP-1a");
+    for (const text of ["C", "b) Nie — zakończ"]) {
+      const result = applyPleadingChatReply(state, text);
+      expect(result.revision, text).toEqual({ checkpoint: "CP-1a", remarks: text });
+      expect(result.note, text).toContain(`z Twoim wyborem «${text}»`);
+      expect(result.state.pendingCheckpoint).toBeNull();
+    }
+    expect(applyPleadingChatReply(state, "Nie, wolę ścieżkę D").note).toContain("z Twoimi uwagami");
+    // At the start the choice is not a step's revision (the start waits for "a").
+    const start = createProcessPleadingState(CASE, "CHECKPOINT");
+    expect(applyPleadingChatReply(start, "b").note).toBeNull();
+  });
+
+  it("krótka odpowiedź uruchamia etap jak „Kontynuuj” z panelu, z cytatem odpowiedzi", () => {
+    const envelope = '__LEX_SKILLS_V1__ {"auto":false}';
+    expect(pleadingContinuationQuery(`${envelope}\nPrzygotuj pismo.\n\nAsystent: Raport CP-1b?\n\nUżytkownik: tak`, "tak")).toBe(
+      `${envelope}\nPrzygotuj pismo.\n\nAsystent: Raport CP-1b?\n\nUżytkownik: ${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «tak»`
+    );
+    expect(pleadingContinuationQuery(`${envelope}\nc`, "c")).toBe(`${envelope}\n${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «c»`);
   });
 });

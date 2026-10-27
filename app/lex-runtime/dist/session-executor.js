@@ -411,13 +411,34 @@ export function privacyGateFailure(error) {
 }
 // A request to the user: a question, or a line opening with an asking verb.
 const ASKS = /\?|(?:^|\n)\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*)?(?:Podaj|Wskaż|Prześlij|Dołącz|Załącz|Wklej|Potwierdź|Wybierz|Określ|Uzupełnij|Doprecyzuj|Napisz,|Proszę)/u;
-/** The answer is the active checkpoint's report, the marker added after it without asking. */
-function reportOnly(answer, checkpoint) {
+// Gate I checks that a G8 DEGRADED answer (citations marked, none unmarked) fails by design.
+const MARKED_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION"]);
+// The report frame's header of a done step: "✅ CHECKPOINT [CP-1b] … — ZAKOŃCZONY".
+const FRAME_WAITS = /⛔\s*CHECKPOINT|CHECKPOINT[^\n]*WSTRZYMAN|czeka\p{L}*\s+na\s+(?:\p{L}+\s+)?(?:plik|dokument|materiał)\p{L}*|odpowie\p{L}*\s+na\s+(?:\d+\s+|wszystkie\s+|te\s+)?pytani\p{L}*/iu;
+const DONE_FRAME = /CHECKPOINT[^\n]*(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
+/**
+ * The answer is the active checkpoint's report, the marker added after it without asking.
+ * A done step's frame ends with its confirmation prompt (➡️ …?, AUTOMAT-STANOW "Odpowiedz:
+ * tak / ok / lub uwagi"): that question is the confirmation, not missing data, so only a
+ * request after the frame keeps the step open (E2E: CP-1b re-run on every reply).
+ */
+export function reportOnly(answer, checkpoint) {
     if (!checkpoint)
         return false;
     const report = answer.lastIndexOf(`[${checkpoint}`);
     const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
-    return report >= 0 && marker > report && !ASKS.test(answer.slice(report, marker));
+    if (report < 0 || marker <= report)
+        return false;
+    let tail = answer.slice(report, marker);
+    // The frame itself says the step waits ("⛔ … WSTRZYMANY", "czeka na pliki", "czeka na
+    // odpowiedź na 3 pytania", "➡️ Odpowiedz na pytania 1–3"): "ok" must not close it unanswered.
+    if (FRAME_WAITS.test(tail))
+        return false;
+    const header = answer.slice(answer.lastIndexOf("\n", report) + 1, report + (tail.indexOf("\n") + 1 || tail.length));
+    const frameEnd = tail.search(/└|\n```/u);
+    if (DONE_FRAME.test(header) && frameEnd >= 0)
+        tail = tail.slice(frameEnd).replace(/^[^\n]*/u, "");
+    return !ASKS.test(tail);
 }
 // Executive skills that work on the case's material, and what to ask for when there is none.
 const MATERIAL_SKILLS = {
@@ -3492,7 +3513,15 @@ export class SafeSessionExecutor {
                     ? "BLOCKED"
                     : "PASS",
                 requiredResources: workflowReads.required,
-                missingResources: workflowReads.missing
+                missingResources: workflowReads.missing,
+                ...(!workflowResourcesBlocked &&
+                    !workflowOutputBlocked &&
+                    !guideOutputBlocked &&
+                    !reportBlueprintBlocked &&
+                    finalization.result === "DEGRADED" &&
+                    gateI.checks.every((item) => item.result === "PASS" || MARKED_DRAFT_CHECKS.has(item.id))
+                    ? { markedDraftOnly: true }
+                    : {})
             },
             gateI,
             gateIWorkflowContract: gateIWorkflowContractReport,
