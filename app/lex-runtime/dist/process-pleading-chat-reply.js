@@ -1,6 +1,6 @@
-import { acceptProcessPleadingStart, confirmProcessCheckpoint, requestProcessCheckpointRevision, switchProcessPleadingToAuto, validateProcessPleadingState } from "./process-pleading-state.js";
+import { acceptProcessPleadingStart, confirmProcessCheckpoint, requestProcessCheckpointRevision, validateProcessPleadingState } from "./process-pleading-state.js";
 const FINISH = /(?<![\p{L}])(?:daj(?:cie)?\s+(?:mi\s+)?(?:gotow\p{L}*\s+)?(?:dokument|plik|pismo|docx)|(?:przygotuj|wygeneruj|zrób|zrob|napisz)\s+(?:od\s+razu|teraz|już|gotow\p{L}*)\s+(?:dokument|plik|pismo|docx|\.docx)|dokończ\p{L}*|do\s+końca|bez\s+(?:zatrzymywania|zatrzymań|przystanków|potwierdz\p{L}*|pytania|pytań)|resztę\s+(?:etapów\s+|kroków\s+)?(?:automatycznie|w\s+jednym|naraz|od\s+razu))(?![\p{L}])/iu;
-const ACCEPT = /^(?:a\)?|ad\s*a|tak|ok|okej|okay|dobrze|zgoda|jasne|akceptuj\p{L}*|zatwierdzam|potwierdzam|kontynuuj\p{L}*|dalej|zatwierdź|trzymaj\s+to|ok\s+trzymaj\s+to)(?:[\s,.!:;—–-]+(?:tak|ok|akceptuj\p{L}*|zatwierdzam|potwierdzam|kontynuuj\p{L}*|dalej|wczytaj\s+checklist\p{L}*(?:\s+i\s+rozpocznij)?|rozpocznij|zaczynaj|proszę|trzymaj\s+to))*[\s.!]*$/iu;
+const ACCEPT = /^(?:a\)?|ad\s*a|tak|ok|okej|okay|dobrze|zgoda|jasne|akceptuj\p{L}*|zatwierdzam|potwierdzam|zatwierdź|trzymaj\s+to|ok\s+trzymaj\s+to)(?:[\s,.!:;—–-]+(?:tak|ok|akceptuj\p{L}*|zatwierdzam|potwierdzam|wczytaj\s+checklist\p{L}*(?:\s+i\s+rozpocznij)?|rozpocznij|zaczynaj|proszę|trzymaj\s+to))*[\s.!]*$/iu;
 // A reply that changes the result is not a confirmation ("nie", "popraw", "porzuć ścieżkę D");
 // with what to change (REVISE) it sends the step back with remarks.
 const REVISE = /(?<![\p{L}])(?:popraw\p{L}*|zmie[nń]\p{L}*|modyfik\p{L}*|porzu\p{L}*|usuń|dodaj|uzupełnij\p{L}*)(?![\p{L}])/iu;
@@ -51,9 +51,13 @@ export function applyPleadingChatReply(input, message, at = new Date().toISOStri
     }
     else
         return { state, note: null };
-    if (reply === "FINISH" && state.mode === "CHECKPOINT" && state.stage !== "FINAL") {
-        state = switchProcessPleadingToAuto(state, "Odpowiedź w czacie: dokończ pismo bez zatrzymywania po etapach.", at);
-        done.push("pozostałe etapy przebiegną automatycznie, bez zatrzymywania; plik .docx powstanie po kontroli końcowej");
+    if (reply === "FINISH" && state.stage !== "FINAL") {
+        const open = Object.entries(state.checkpoints)
+            .filter(([, status]) => status === "OPEN")
+            .map(([checkpoint]) => checkpoint);
+        done.push(`plik .docx powstanie dopiero po zamknięciu wszystkich etapów z Twoim potwierdzeniem (pisma-procesowe-v3: ZAKAZ-CP, ZAKAZ-12)` +
+            (open.length ? `; zostało ${open.length}: ${open.join(", ")}` : "") +
+            `; projekt pisma po etapie W2 możesz pobrać wcześniej jako DRAFT — NIEZWERYFIKOWANY (INFORMACJA WARUNKOWA)`);
     }
     if (!done.length)
         return { state, note: null };

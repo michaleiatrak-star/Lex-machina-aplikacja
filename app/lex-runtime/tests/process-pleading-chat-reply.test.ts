@@ -6,13 +6,13 @@ const CASE = `case_${"a".repeat(32)}`;
 
 describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skillem)", () => {
   it("rozpoznaje akceptację, „daj mi dokument” i odpowiedzi zmieniające wynik", () => {
-    for (const text of ["a", "a)", "tak", "Tak, akceptuję", "ok", "zatwierdzam", "kontynuuj", "a — wczytaj checklistę i rozpocznij"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
+    for (const text of ["a", "a)", "tak", "Tak, akceptuję", "ok", "zatwierdzam", "a — wczytaj checklistę i rozpocznij"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
     for (const text of ["ok trzymaj to i daj mi dokument", "daj mi gotowy plik", "przygotuj od razu pismo", "wygeneruj teraz plik", "dokończ bez zatrzymywania", "resztę etapów automatycznie"]) expect(pleadingChatReply(text), text).toBe("FINISH");
     for (const text of ["popraw ścieżkę B", "porzuć ścieżkę D", "tak, ale dodaj zarzut przedawnienia", "modyfikuj: bez wątku D"]) expect(pleadingChatReply(text), text).toBe("REVISE");
-    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie."]) expect(pleadingChatReply(text), text).toBeNull();
+    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie.", "kontynuuj", "dalej"]) expect(pleadingChatReply(text), text).toBeNull();
   });
 
-  it("„a” akceptuje start, „tak” potwierdza etap, „daj mi dokument” potwierdza i przechodzi w AUTO", () => {
+  it("„a” akceptuje start, „tak” potwierdza etap, „daj mi dokument” potwierdza etap bez pomijania reszty (ZAKAZ-CP, ZAKAZ-12)", () => {
     let state = createProcessPleadingState(CASE, "CHECKPOINT");
     const start = applyPleadingChatReply(state, "a");
     expect(start.state.stage).toBe("W1");
@@ -25,13 +25,16 @@ describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skil
 
     const finish = applyPleadingChatReply(state, "ok trzymaj to i daj mi dokument");
     expect(finish.state.checkpoints["CP-1a"]).toBe("CLOSED");
-    expect(finish.state.mode).toBe("AUTO");
-    expect(finish.state.history.at(-1)).toMatchObject({ type: "MODE_SWITCHED" });
-    expect(finish.note).toContain("pozostałe etapy przebiegną automatycznie");
+    expect(finish.state.mode).toBe("CHECKPOINT");
+    expect(finish.state.pendingCheckpoint).toBeNull();
+    expect(finish.note).toContain("plik .docx powstanie dopiero po zamknięciu wszystkich etapów");
+    expect(finish.note).toContain("ZAKAZ-CP, ZAKAZ-12");
+    expect(finish.note).toMatch(/zostało \d+: CP-1b/);
+    expect(finish.note).toContain("DRAFT — NIEZWERYFIKOWANY");
 
     // "daj mi dokument" at the start or without a waiting step does not move the pipeline.
     expect(applyPleadingChatReply(createProcessPleadingState(CASE, "CHECKPOINT"), "daj mi dokument").state.stage).toBe("CG_ACCEPTANCE");
-    expect(applyPleadingChatReply(confirmed.state, "daj mi dokument").state.mode).toBe("CHECKPOINT");
+    expect(applyPleadingChatReply(confirmed.state, "daj mi dokument").state.revision).toBe(confirmed.state.revision);
 
     const revised = applyPleadingChatReply(state, "porzuć ścieżkę D");
     expect(revised.state.checkpoints["CP-1a"]).toBe("OPEN");

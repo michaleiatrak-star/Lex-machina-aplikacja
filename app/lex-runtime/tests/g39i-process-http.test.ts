@@ -1546,7 +1546,7 @@ describe(
       current.auth.close();
     });
 
-    it("moves the pipeline by typed replies as in the chat: \"a\" accepts the start, \"daj mi dokument\" confirms and runs the rest in AUTO", async () => {
+    it("moves the pipeline by typed replies as pisma-procesowe-v3 asks: \"a\", \"tak\", remarks; \"daj mi dokument\" confirms without skipping steps", async () => {
       const current = fixture();
       const bootstrap = await request(current.app)
         .post("/api/auth/bootstrap")
@@ -1594,14 +1594,20 @@ describe(
       // A question is not an answer to the step: the step still waits for confirmation.
       await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("Jaki jest termin na zażalenie?")).expect(409);
 
-      // "ok trzymaj to i daj mi dokument": the step is confirmed, the rest runs in AUTO.
+      // "Kontynuuj" is not a confirmation of a checkpoint (REGUŁA-KONTYNUACJA).
+      await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("kontynuuj")).expect(409);
+
+      // "ok trzymaj to i daj mi dokument": the step is confirmed like "ok", the next one runs and
+      // waits (ZAKAZ-CP); the answer says the file comes after all steps (ZAKAZ-12).
       current.execute.mockClear();
       const finish = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("ok trzymaj to i daj mi dokument")).expect(200);
       expect(finish.body.processWorkflow.checkpoints[second]).toBe("CLOSED");
-      expect(finish.body.processWorkflow.mode).toBe("AUTO");
-      expect(finish.body.processAuto.steps.length).toBeGreaterThan(0);
+      expect(finish.body.processWorkflow.mode).toBe("CHECKPOINT");
+      expect(current.execute).toHaveBeenCalledTimes(1);
+      expect(finish.body.processWorkflow.pendingCheckpoint).toBeTruthy();
+      expect(finish.body.processAuto).toBeUndefined();
       expect(String(finish.body.answer)).toContain(`etap ${second} potwierdzony`);
-      expect(String(finish.body.answer)).toContain("pozostałe etapy przebiegną automatycznie");
+      expect(String(finish.body.answer)).toContain("plik .docx powstanie dopiero po zamknięciu wszystkich etapów");
       current.auth.close();
     });
   }

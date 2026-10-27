@@ -4504,7 +4504,7 @@ export default function MatterChatApp({
                 : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
                   ? "Pipeline pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie."
                   : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"
-                    ? "Pismo czeka na potwierdzenie bieżącego etapu: napisz „tak”, „daj mi dokument” (reszta etapów bez zatrzymywania) albo co poprawić, albo użyj przycisku w panelu pisma."
+                    ? "Pismo czeka na potwierdzenie bieżącego etapu: napisz „tak” albo co poprawić, albo użyj przycisku w panelu pisma. Plik powstaje po zamknięciu wszystkich etapów."
                     : code === "PROCESS_PLEADING_CASE_REQUIRED"
                       ? "Pismo procesowe musi być powiązane z aktywną sprawą."
                       : code === "PROCESS_PLEADING_ALREADY_FINAL"
