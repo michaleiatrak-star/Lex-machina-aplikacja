@@ -3603,3 +3603,8 @@ mark.restored {
 .matter-rename .chat-form-row {
   margin-top: 8px;
 }
+
+.chat-reply-choices {
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -6,6 +6,7 @@ import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
+import { ReplyChoices } from "./ReplyChoices";
 import {
   canWriteCase,
   caseScheduleKindLabel,
@@ -5941,7 +5942,7 @@ export default function MatterChatApp({
                   Ładowanie zaszyfrowanego wątku sprawy…
                 </article>
               ) : null}
-              {messages.map((message) => (
+              {messages.map((message, _index, all) => (
                 <article
                   key={message.id}
                   className={`chat-message chat-message-${message.role}`}
@@ -6133,6 +6134,17 @@ export default function MatterChatApp({
                   {developerMode && message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
+                  ) : null}
+                  {message.role === "assistant" && message.id === [...all].reverse().find((item) => item.role === "assistant")?.id && !selectedCase?.archivedAt ? (
+                    <ReplyChoices
+                      answer={message.content}
+                      disabled={executing}
+                      onSend={(text) => void executeMessage(text)}
+                      onDraft={(text) => {
+                        setQuery(text);
+                        document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
+                      }}
+                    />
                   ) : null}
                   {message.pipelineNext ? (
                     <PipelineChoices

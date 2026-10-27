@@ -6,10 +6,10 @@ const CASE = `case_${"a".repeat(32)}`;
 
 describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skillem)", () => {
   it("rozpoznaje akceptację, „daj mi dokument” i odpowiedzi zmieniające wynik", () => {
-    for (const text of ["a", "a)", "tak", "Tak, akceptuję", "ok", "zatwierdzam", "a — wczytaj checklistę i rozpocznij"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
+    for (const text of ["a", "a)", "tak", "Tak, akceptuję", "ok", "zatwierdzam", "a — wczytaj checklistę i rozpocznij", "a) Tak, akceptuję — wczytaj checklistę i rozpocznij", "a) Akceptuję pismo jako DRAFT (bez tych kroków)"]) expect(pleadingChatReply(text), text).toBe("ACCEPT");
     for (const text of ["ok trzymaj to i daj mi dokument", "daj mi gotowy plik", "przygotuj od razu pismo", "wygeneruj teraz plik", "dokończ bez zatrzymywania", "resztę etapów automatycznie"]) expect(pleadingChatReply(text), text).toBe("FINISH");
-    for (const text of ["popraw ścieżkę B", "porzuć ścieżkę D", "tak, ale dodaj zarzut przedawnienia", "modyfikuj: bez wątku D"]) expect(pleadingChatReply(text), text).toBe("REVISE");
-    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie.", "kontynuuj", "dalej"]) expect(pleadingChatReply(text), text).toBeNull();
+    for (const text of ["popraw ścieżkę B", "porzuć ścieżkę D", "tak, ale dodaj zarzut przedawnienia", "modyfikuj: bez wątku D", "Modyfikuj: porzuć ścieżkę E", "Uwagi: brak zarzutu przedawnienia"]) expect(pleadingChatReply(text), text).toBe("REVISE");
+    for (const text of ["nie", "Jaki jest termin na zażalenie?", "czy dodać zarzut przedawnienia?", "zatrzymaj", "Przygotuj pismo procesowe w tej sprawie.", "kontynuuj", "dalej", "b) Nie — zakończ lub wyjaśnij wątpliwości"]) expect(pleadingChatReply(text), text).toBeNull();
   });
 
   it("„a” akceptuje start, „tak” potwierdza etap, „daj mi dokument” potwierdza etap bez pomijania reszty (ZAKAZ-CP, ZAKAZ-12)", () => {

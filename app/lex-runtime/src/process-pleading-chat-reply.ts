@@ -22,7 +22,7 @@ const ACCEPT =
   /^(?:a\)?|ad\s*a|tak|ok|okej|okay|dobrze|zgoda|jasne|akceptuj\p{L}*|zatwierdzam|potwierdzam|zatwierdź|trzymaj\s+to|ok\s+trzymaj\s+to)(?:[\s,.!:;—–-]+(?:tak|ok|akceptuj\p{L}*|zatwierdzam|potwierdzam|wczytaj\s+checklist\p{L}*(?:\s+i\s+rozpocznij)?|rozpocznij|zaczynaj|proszę|trzymaj\s+to))*[\s.!]*$/iu;
 // A reply that changes the result is not a confirmation ("nie", "popraw", "porzuć ścieżkę D");
 // with what to change (REVISE) it sends the step back with remarks.
-const REVISE = /(?<![\p{L}])(?:popraw\p{L}*|zmie[nń]\p{L}*|modyfik\p{L}*|porzu\p{L}*|usuń|dodaj|uzupełnij\p{L}*)(?![\p{L}])/iu;
+const REVISE = /(?<![\p{L}])(?:uwagi|popraw\p{L}*|zmie[nń]\p{L}*|modyfik\p{L}*|porzu\p{L}*|usuń|dodaj|uzupełnij\p{L}*)(?![\p{L}])/iu;
 const CHANGE = /(?<![\p{L}])(?:nie|popraw\p{L}*|zmie[nń]\p{L}*|modyfik\p{L}*|porzu\p{L}*|usuń|dodaj|uzupełnij\p{L}*|wstrzymaj|zatrzymaj|stop)(?![\p{L}])/iu;
 
 export function pleadingChatReply(message: string): PleadingChatReply | null {
@@ -33,6 +33,8 @@ export function pleadingChatReply(message: string): PleadingChatReply | null {
   if (REVISE.test(withoutFinish) && !/\?\s*$/u.test(text)) return "REVISE";
   if (CHANGE.test(withoutFinish)) return null;
   if (finish) return "FINISH";
+  // The chat's button for option a) sends its whole text ("a) Akceptuję pismo jako DRAFT …").
+  if (/^a\)\s/u.test(text) && /(?<![\p{L}])(?:tak|akceptuj\p{L}*|zatwierdzam|potwierdzam)(?![\p{L}])/iu.test(text)) return "ACCEPT";
   return ACCEPT.test(text) ? "ACCEPT" : null;
 }
 
