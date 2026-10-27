@@ -3,6 +3,7 @@ import {
   articleFootnotes,
   articleWording,
   extractPageFootnotes,
+  protectPointLabels,
   noteDate,
   stripTrailingHeadings
 } from "../src/core-law-footnotes.js";
@@ -125,5 +126,43 @@ describe("zapis pdf.js 4.x w przypisach i znacznikach", () => {
     expect(pages[0]).toContain("(uchylony) 9 )");
     expect(articleWording(pages[0]!, notes, "2026-10-12").text.trim()).toBe("Art. 10. (uchylony)");
     expect(articleWording(pages[0]!, notes, "2024-10-01").text).toContain("Zakazane jest przesyłanie");
+  });
+
+  it("§ 1 w wierszu nagłówka artykułu dostaje swój odnośnik (KPC t.j. 2026/468, art. 131[1a])", () => {
+    const notes = {
+      "28": "W tym brzmieniu obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 29.",
+      "29": "W brzmieniu ustalonym przez art. 1 pkt 11 lit. a ustawy, o której mowa w odnośniku 11 ; wejdzie w życie z dniem 1 czerwca 2026 r.",
+      "30": "Dodany przez art. 1 pkt 11 lit. b ustawy, o której mowa w odnośniku 11 ; wejdzie w życie z dniem 1 czerwca 2026 r."
+    };
+    const text = [
+      "Art. 131 [ 1a ] . § 1. 28 ) W razie niemożności doręczenia sąd doręcza pisma sądowe.",
+      "§ 1. 29 ) W razie niemożności doręczenia sąd doręcza pisma sądowe oraz odpisy pism.",
+      "§ 1 [ 1 ] . 30 ) Oświadczenie o wyborze sposobu doręczeń.",
+      "§ 2. Pismo uznaje się za doręczone."
+    ].join("\n");
+    const now = articleWording(text, notes, "2026-10-27");
+    expect(now.unresolved).toBe(false);
+    expect(now.text).toBe("Art. 131 [ 1a ] . § 1. W razie niemożności doręczenia sąd doręcza pisma sądowe oraz odpisy pism.\n§ 1 [ 1 ] . Oświadczenie o wyborze sposobu doręczeń.\n§ 2. Pismo uznaje się za doręczone.");
+    const before = articleWording(text, notes, "2026-05-01");
+    expect(before.text).toBe("Art. 131 [ 1a ] . § 1. W razie niemożności doręczenia sąd doręcza pisma sądowe.\n§ 2. Pismo uznaje się za doręczone.");
+    expect(before.pending.map((p) => p.from)).toEqual(["2026-06-01", "2026-06-01"]);
+  });
+
+  it("punkt „12 )” ze spacją nie jest znacznikiem odnośnika 12 (O.p. t.j. 2026/622, art. 3)", () => {
+    const notes = { "12": "Aktualną wysokość kwoty na dany rok ogłasza minister." };
+    const text = ["Art. 3. Ilekroć w ustawie jest mowa o:", "11) (uchylony)", "12 ) (uchylony)", "13) dokumencie elektronicznym – rozumie się dokument."].join("\n");
+    expect(protectPointLabels(text)).toContain("\n12) (uchylony)\n");
+    expect(articleFootnotes(text, notes).text).toContain("\n12) (uchylony)\n");
+    expect(articleWording(text, notes, "2026-10-27").text).toContain("\n12) (uchylony)\n");
+    expect(protectPointLabels("Art. 5. Kwota wynosi\n12 ) 100 zł.")).toContain("12 ) 100 zł.");
+  });
+
+  it("odnośnik zdania w środku paragrafu zostawia brzmienie nierozstrzygnięte (KPK t.j. 2026/490, art. 505)", () => {
+    const notes = {
+      "5": "Zdanie pierwsze w tym brzmieniu obowiązuje do wejścia w życie zmiany, o której mowa w odnośniku 6.",
+      "6": "Zdanie pierwsze ze zmianą wprowadzoną przez art. 82 pkt 1 ustawy; wejdzie w życie z dniem 1 października 2029 r."
+    };
+    const text = "Art. 505. § 1. 5 ) Odpis wyroku nakazowego doręcza się. 6 ) Kopię wyroku nakazowego doręcza się.\n§ 2. Pouczenie.";
+    expect(articleWording(text, notes, "2026-10-27").unresolved).toBe(true);
   });
 });

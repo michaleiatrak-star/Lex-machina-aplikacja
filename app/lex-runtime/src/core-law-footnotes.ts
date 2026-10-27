@@ -111,6 +111,30 @@ export function stripTrailingHeadings(text: string): string {
 // Znacznik przyklejony do numeru ustępu/paragrafu na początku wiersza („2. 2) W sprawach…”).
 const LABEL_MARKER = /(?<=^(?:§ \d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\])?|\d+[a-z]*|Art\.\s*\d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\][a-z]*|\s+\d{1,3}[a-z]*)?)\s*\.\s*)(\d{1,3})\)(?=\s+(?:\p{Lu}|\d+[a-z]*\.\s|§))/gmu;
 
+// Punkt drukowany ze spacją przed nawiasem („12 ) (uchylony)”, O.p. t.j. 2026/622 art. 3) ma postać
+// znacznika odnośnika; przy istniejącym odnośniku 12 numer punktu znikał z treści. Etykieta, gdy
+// sąsiedni punkt na początku wiersza ma numer o jeden mniejszy albo większy.
+const POINT_LINE = /^(\d{1,3})[a-z]*\)\s/u;
+const SPACED_POINT = /^(\d{1,3})([a-z]*) \)(?=\s)/u;
+export function protectPointLabels(text: string): string {
+  const lines = text.split("\n");
+  const number = (line: string | undefined) => {
+    const match = line === undefined ? null : POINT_LINE.exec(line) ?? SPACED_POINT.exec(line);
+    return match ? Number(match[1]) : null;
+  };
+  return lines
+    .map((line, index) => {
+      const spaced = SPACED_POINT.exec(line);
+      if (!spaced) return line;
+      const own = Number(spaced[1]);
+      const before = lines.slice(0, index).reverse().find((other) => number(other) !== null);
+      const after = lines.slice(index + 1).find((other) => number(other) !== null);
+      const neighbour = number(before) === own - 1 || number(after) === own + 1;
+      return neighbour ? line.replace(SPACED_POINT, "$1$2)") : line;
+    })
+    .join("\n");
+}
+
 /** Numery odnośników w treści artykułu i treść bez znaczników „25 )”. */
 export function articleFootnotes(
   text: string,
@@ -122,7 +146,7 @@ export function articleFootnotes(
     notes.push(number);
     return "";
   };
-  const cleaned = text
+  const cleaned = protectPointLabels(text)
     .replace(NOTE_MARKER, strip)
     // Przy ustępie tylko odnośnik o typowej treści („W brzmieniu…”), nie punkt „1) Skarb Państwa”.
     .replace(LABEL_MARKER, (marker, number: string) =>
@@ -177,6 +201,7 @@ export type ArticleWording = {
 const ARTICLE_LABEL = String.raw`Art\.\s*\d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\]\s*[a-z]*|\s+\d{1,3}[a-z]*(?=\s+\.))?\s*\.`;
 const UNIT_LABEL = new RegExp(String.raw`^(${ARTICLE_LABEL}|§ \d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\]|\s+\d{1,2}(?=\s*\.))?\s*\.|\d+[a-z]*\.(?=\s)|\d+[a-z]*\)|[a-z]{1,2}\))`, "u");
 const UNIT_LINE = new RegExp(String.raw`^(${ARTICLE_LABEL}|§ \d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\]|\s+\d{1,2}(?=\s*\.))?\s*\.|\d+[a-z]*\.(?=\s)|\d+[a-z]*\)|[a-z]{1,2}\))\s*(?:(\d{1,3}) \)|(?<=[.]\s*)(\d{1,3})\)(?=\s+\p{Lu}))`, "u");
+const FIRST_UNIT_IN_HEADING = new RegExp(String.raw`^(${ARTICLE_LABEL})\s+(?=§ \d+[a-z]*(?:\s*\[\s*\d+[a-z]*\s*\])?\s*\.|\d+[a-z]*\.\s)`, "u");
 // Poziom jednostki: wyższa (mniejszy numer) kończy zakres niższej.
 function unitLevel(label: string): number {
   if (label.startsWith("Art")) return -1;
@@ -198,9 +223,20 @@ export function articleWording(
   today: string
 ): ArticleWording {
   // Znacznik sklejony z etykietą („Art. 10. 8) 1.”, pdf.js 4.x) do postaci „8 )”, którą czyta UNIT_LINE.
-  const lines = markedText
-    .split("\n")
-    .map((line) => line.replace(LABEL_MARKER, (marker, number: string) => (footnotes[number] === undefined ? marker : `${number} )`)));
+  // Pierwsza jednostka w wierszu nagłówka („Art. 131 [ 1a ] . § 1. 28 ) …”, „Art. 1. 1. …”) dostaje
+  // własny wiersz: odnośnik należy do § 1, nie do artykułu (KPC t.j. 2026/468, art. 131[1a]).
+  const joinNext = new Set<number>();
+  const lines: string[] = [];
+  for (const raw of protectPointLabels(markedText).split("\n")) {
+    const line = raw.replace(LABEL_MARKER, (marker, number: string) => (footnotes[number] === undefined ? marker : `${number} )`));
+    const head = FIRST_UNIT_IN_HEADING.exec(line);
+    if (head) {
+      joinNext.add(lines.length);
+      lines.push(head[1]!, line.slice(head[0].length));
+    } else {
+      lines.push(line);
+    }
+  }
   const units: { label: string; level: number; note: string | null; start: number; end: number }[] = [];
   lines.forEach((line, index) => {
     const unit = UNIT_LINE.exec(line);
@@ -256,8 +292,26 @@ export function articleWording(
       unresolved = true;
     }
   });
-  const kept = lines
-    .filter((_, index) => !drop.has(index))
+  // Odnośnik zdania lub fragmentu („Zdanie pierwsze w tym brzmieniu obowiązuje do wejścia w życie
+  // zmiany…”, KPK t.j. 2026/490 art. 505) stoi w środku jednostki: brzmienia nie da się wybrać.
+  const unitNotes = new Set(units.map((unit) => unit.note).filter((note): note is string => note !== null));
+  lines.forEach((line, index) => {
+    if (drop.has(index)) return;
+    for (const match of line.matchAll(NOTE_MARKER)) {
+      const number = match[1]!;
+      if (!unitNotes.has(number) && /obowiązuje do wejścia w życie zmiany/u.test(footnotes[number] ?? "")) unresolved = true;
+    }
+  });
+  // Nagłówek rozdzielony wyżej wraca do wiersza swojej pierwszej zachowanej jednostki.
+  const keptLines: string[] = [];
+  let glue = false;
+  lines.forEach((line, index) => {
+    if (drop.has(index)) return;
+    if (glue && keptLines.length) keptLines[keptLines.length - 1] += ` ${line}`;
+    else keptLines.push(line);
+    glue = joinNext.has(index);
+  });
+  const kept = keptLines
     .map((line) => line.replace(LABEL_MARKER, (marker, number: string) => (footnotes[number] === undefined ? marker : "")))
     .join("\n");
   return {
