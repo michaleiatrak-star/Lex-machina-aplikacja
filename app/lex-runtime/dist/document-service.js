@@ -344,7 +344,10 @@ export class LocalPrivateDocumentService {
         const documentId = `doc_${source.sha256.slice(0, 24)}`;
         const persistentDocument = Boolean(this.secureDocumentStore &&
             security?.caseId);
-        if (persistentDocument) {
+        if (persistentDocument && security?.storeUnderLock) {
+            await security.storeUnderLock(async ({ caseDataKey, keyVersion }) => this.secureDocumentStore.saveSource({ caseId: security.caseId, documentId, mediaType, source, caseDataKey, keyVersion }));
+        }
+        else if (persistentDocument) {
             if (!security?.caseDataKey ||
                 !Number.isInteger(security.keyVersion) ||
                 (security.keyVersion ?? 0) <

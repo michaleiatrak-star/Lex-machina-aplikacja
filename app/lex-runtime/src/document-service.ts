@@ -112,6 +112,9 @@ export type DocumentSecurityContext = {
   detect?: boolean;
   // OCR of a file added to the case, before the user's decision: yields to the user's work.
   background?: boolean;
+  // Background OCR runs outside the case lock (a confirmation in the same case does not wait
+  // for it); only saving its result takes the lock and the case key, through this callback.
+  storeUnderLock?: <T>(save: (key: { caseDataKey: Buffer; keyVersion: number }) => Promise<T>) => Promise<T>;
 };
 
 /**
@@ -813,7 +816,11 @@ implements DocumentService {
         this.secureDocumentStore &&
         security?.caseId
       );
-    if (persistentDocument) {
+    if (persistentDocument && security?.storeUnderLock) {
+      await security.storeUnderLock(async ({ caseDataKey, keyVersion }) =>
+        this.secureDocumentStore!.saveSource({ caseId: security.caseId, documentId, mediaType, source, caseDataKey, keyVersion })
+      );
+    } else if (persistentDocument) {
       if (
         !security?.caseDataKey ||
         !Number.isInteger(

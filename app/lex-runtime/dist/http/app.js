@@ -2875,6 +2875,25 @@ export function createLexHttpApp(options) {
             }
         }
     });
+    // A file read before the user's decision, outside the case lock (see document-work.ts).
+    async function reviewInBackground(context, caseId, file, req) {
+        const access = options.caseAccessService;
+        const onProgress = processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")));
+        try {
+            return await options.documentService.review(file.data, file.mediaType, {
+                caseId,
+                ...(onProgress ? { onProgress } : {}),
+                ...(req.body?.localAi === true ? { localAi: true } : {}),
+                ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
+                ...(req.body?.detect === false ? { detect: false } : {}),
+                background: true,
+                storeUnderLock: (save) => access.withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => save({ caseDataKey, keyVersion: access.openCase(context, caseId).keyVersion }))
+            });
+        }
+        finally {
+            file.data.fill(0);
+        }
+    }
     async function processStoredCaseFile(req, res, fileId) {
         if (keepAliveRequested(req))
             keepResponseAlive(res);
@@ -2907,7 +2926,11 @@ export function createLexHttpApp(options) {
                 .assertAccess(context, caseId, "WRITE");
             const caseView = options.caseAccessService
                 .openCase(context, caseId);
-            const result = await options
+            // Background OCR: only reading the stored file and saving the read take the case lock;
+            // the OCR itself runs outside it, so the user's work in the case does not wait for it.
+            const background = req.body?.background === true;
+            let deferred;
+            const locked = await options
                 .caseAccessService
                 .withCaseDataKey(context, caseId, "WRITE", async (caseDataKey) => {
                 let data;
@@ -2995,6 +3018,10 @@ export function createLexHttpApp(options) {
                 }
                 try {
                     assertStoredDocumentSignature(data, mediaType);
+                    if (background) {
+                        deferred = { data: new Uint8Array(data), mediaType };
+                        return null;
+                    }
                     const onProgress = processingProgress.reporter(caseId, progressIdFrom(req.get("x-lex-progress")));
                     return await options
                         .documentService
@@ -3006,14 +3033,14 @@ export function createLexHttpApp(options) {
                         ...(req.body?.localAi === true ? { localAi: true } : {}),
                         ...(typeof req.body?.ocrFix === "boolean" ? { ocrFix: req.body.ocrFix } : {}),
                         // OCR only now; personal data later (POST /api/documents/:id/detect).
-                        ...(req.body?.detect === false ? { detect: false } : {}),
-                        ...(req.body?.background === true ? { background: true } : {})
+                        ...(req.body?.detect === false ? { detect: false } : {})
                     });
                 }
                 finally {
                     data.fill(0);
                 }
             });
+            const result = locked ?? (await reviewInBackground(context, caseId, deferred, req));
             documentCaseIds.set(result.documentId, caseId);
             res.status(201).json({
                 ...result,
@@ -4153,7 +4180,23 @@ export function createLexHttpApp(options) {
                 }
             }
             let result;
+            const processing = documentProcessingOptions(req.get("x-lex-processing"));
             if (caseId &&
+                options.caseAccessService &&
+                processing.background) {
+                // Read ahead of the user's work: the OCR outside the case lock (see document-work.ts).
+                const context = responseAuthContext(res);
+                const access = options.caseAccessService;
+                const progressId = progressIdFrom(req.get("x-lex-progress"));
+                const backgroundCaseId = caseId;
+                result = await options.documentService.review(data, mediaType, {
+                    caseId: backgroundCaseId,
+                    ...processing,
+                    ...(progressId ? { onProgress: processingProgress.reporter(backgroundCaseId, progressId) } : {}),
+                    storeUnderLock: (save) => access.withCaseDataKey(context, backgroundCaseId, "WRITE", async (caseDataKey) => save({ caseDataKey, keyVersion: access.openCase(context, backgroundCaseId).keyVersion }))
+                });
+            }
+            else if (caseId &&
                 options.caseAccessService) {
                 const context = responseAuthContext(res);
                 const caseView = options.caseAccessService

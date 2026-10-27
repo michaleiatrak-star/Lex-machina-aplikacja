@@ -86,4 +86,52 @@ describe("LocalPaddleOcrEngine: long scans", () => {
     const calls = (await readFile(process.env.FAKE_OCR_LOG, "utf8")).trim().split("\n");
     expect(calls).toEqual(["1", "2 pause"]);
   });
+
+  it("background OCR stops after the page it reads while the user's work runs; the pause is not timed out", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-pause-e2e-"));
+    const worker = path.join(dir, "worker.cjs");
+    // Like paddle_worker.py: before each page, waits while the pause file exists; ~150 ms a page.
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const path = require("node:path");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+const pages = arg("--pages").split(",").map(Number);
+const evidence = arg("--evidence-dir");
+fs.mkdirSync(evidence, { recursive: true });
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const out = [];
+for (const page of pages) {
+  while (process.env.LEX_OCR_PAUSE_FILE && fs.existsSync(process.env.LEX_OCR_PAUSE_FILE)) sleep(20);
+  sleep(150);
+  fs.appendFileSync(process.env.FAKE_OCR_LOG, page + " " + Date.now() + "\\n");
+  process.stderr.write("LEX_OCR_PAGE " + page + "\\n");
+  out.push({ page, text: "strona " + page, lines: [] });
+}
+fs.writeFileSync(arg("--output"), JSON.stringify(out));
+`
+    );
+    process.env.FAKE_OCR_LOG = path.join(dir, "pages.log");
+    // 1.5 s of OCR allowed; the user's work holds it for 2 s: only the paused time exceeds it.
+    const engine = new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, timeoutMs: 1_500 });
+    let firstPage!: () => void;
+    const pageOne = new Promise<void>((resolve) => (firstPage = resolve));
+    const reading = documentWork.background(() =>
+      engine.recognizePages(new Uint8Array([37, 80, 68, 70]), [1, 2, 3, 4], (done) => done === 1 && firstPage())
+    );
+    await pageOne;
+    let held: { start: number; end: number } = { start: 0, end: 0 };
+    await documentWork.foreground(async () => {
+      const start = Date.now();
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      held = { start, end: Date.now() };
+    });
+    const results = await reading;
+    expect(results.map((result) => result.page)).toEqual([1, 2, 3, 4]);
+    const finished = (await readFile(process.env.FAKE_OCR_LOG, "utf8")).trim().split("\n").map((line) => Number(line.split(" ")[1]));
+    // At most the page being read when the user's work started finishes during it.
+    expect(finished.filter((at) => at > held.start + 200 && at < held.end).length).toBe(0);
+    expect(finished.filter((at) => at >= held.end).length).toBeGreaterThanOrEqual(2);
+  }, 15_000);
 });
