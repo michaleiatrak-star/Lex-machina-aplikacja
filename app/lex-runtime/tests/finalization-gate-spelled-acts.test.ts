@@ -60,5 +60,17 @@ describe("a provision verified in the session is recognized however the answer w
     const out = marked(text, verified(["art. 177 KP", "art. 41^1 KP"]));
     expect(out).not.toContain("NIEWERYFIKOWANE");
   });
-});
 
+  it("a statute written as a dotted abbreviation is that statute, never the answer's only code (E2E W3: u.k.k. read as KC)", () => {
+    const ledger = verified(["art. 720^2 KC", "art. 36a ust. 1 ustawy o kredycie konsumenckim", "art. 5 pkt 7 ustawy o kredycie konsumenckim"]);
+    ledger.add({ claim: "art. 36a ust. 1 KC", kind: "statute", status: "UNVERIFIED", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf", fetchedAt: "2026-10-15T10:00:00.000Z", sourceTier: "R1", verificationMethod: "mcp_call" });
+    const text = "Do pożyczki nie stosuje się art. 720² KC.\nLimit kosztów: art. 36a ust. 1 u.k.k.\nKoszty: art. 5 pkt 7 u. k. k.";
+    const out = marked(text, ledger);
+    expect(out.split("\n")[1]).toContain("✅ [VER:");
+    expect(out.split("\n")[2]).toContain("✅ [VER:");
+    expect(out).not.toContain("NIEWERYFIKOWANE");
+    // An abbreviation without a known title: the article is not borrowed into KC.
+    const other = new FinalizationGate().evaluate("Zob. art. 720² KC.\nOraz art. 12 u.x.y.", verified(["art. 720^2 KC", "art. 12 KC"]));
+    expect(other.references.map((reference) => reference.claim)).not.toContain("art. 12 KC");
+  });
+});

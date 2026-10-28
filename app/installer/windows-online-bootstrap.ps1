@@ -225,13 +225,33 @@ function Get-VerifiedDownload(
     }
     Remove-Item -LiteralPath $Destination -Force
   }
-  Write-Host "Downloading $Label"
-  Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $Destination
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash.ToLowerInvariant()
-  if ($actual -ne $ExpectedSha256.ToLowerInvariant()) {
-    Remove-Item -LiteralPath $Destination -Force -ErrorAction SilentlyContinue
+  # A broken transfer (CI 0.1.50: node-runtime with a wrong hash after 53 min) is retried
+  # like curl --retry 4 on macOS; the file is used only once its SHA-256 matches.
+  $partial = "$Destination.part"
+  $actual = ""
+  $failure = ""
+  for ($attempt = 1; $attempt -le 4; $attempt++) {
+    Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+    Write-Host "Downloading $Label (attempt $attempt/4)"
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $partial
+      $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $partial).Hash.ToLowerInvariant()
+      if ($actual -eq $ExpectedSha256.ToLowerInvariant()) {
+        Move-Item -LiteralPath $partial -Destination $Destination -Force
+        return
+      }
+      $failure = "actual=$actual"
+    } catch {
+      $failure = $_.Exception.Message
+    }
+    Write-Host "Download of $Label failed ($failure)"
+    if ($attempt -lt 4) { Start-Sleep -Seconds (3 * $attempt) }
+  }
+  Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+  if ($actual) {
     throw "BOOTSTRAP_HASH_MISMATCH:$Label expected=$ExpectedSha256 actual=$actual"
   }
+  throw "BOOTSTRAP_DOWNLOAD_FAILED:$Label $failure"
 }
 
 function Get-CommandVersionText(

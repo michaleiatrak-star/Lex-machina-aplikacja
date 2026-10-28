@@ -18,6 +18,17 @@ function windowsPowerShellEnvironment() {
     }
     return env;
 }
+/**
+ * The installer path for the PowerShell probes. "-Command <script> <path>" does not give the
+ * script $args: PowerShell appends the path to the command text, so the first argument was null,
+ * Get-Item failed and every update ended in APPLICATION_UPDATE_PRODUCT_VERSION_INVALID.
+ */
+export function installerProbeEnvironment(installerPath) {
+    return {
+        ...windowsPowerShellEnvironment(),
+        LEX_UPDATE_INSTALLER: installerPath
+    };
+}
 export function normalizeApplicationProductVersion(value) {
     const match = /^(\d+)\.(\d+)\.(\d+)(?:\.0)?$/
         .exec(value.trim());
@@ -111,9 +122,9 @@ function probeWindowsAuthenticode(installerPath) {
     }
     const command = [
         "$ErrorActionPreference='Stop'",
-        "$signature=Get-AuthenticodeSignature -LiteralPath $args[0]",
+        "$signature=Get-AuthenticodeSignature -LiteralPath $env:LEX_UPDATE_INSTALLER",
         "if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) { exit 23 }",
-        "$version=(Get-Item -LiteralPath $args[0]).VersionInfo.ProductVersion",
+        "$version=(Get-Item -LiteralPath $env:LEX_UPDATE_INSTALLER).VersionInfo.ProductVersion",
         "if ([string]::IsNullOrWhiteSpace($version)) { exit 24 }",
         "$result=[ordered]@{subject=$signature.SignerCertificate.Subject;thumbprint=$signature.SignerCertificate.Thumbprint;productVersion=$version}",
         "$result | ConvertTo-Json -Compress"
@@ -124,13 +135,12 @@ function probeWindowsAuthenticode(installerPath) {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        command,
-        installerPath
+        command
     ], {
         encoding: "utf8",
         windowsHide: true,
         timeout: 30_000,
-        env: windowsPowerShellEnvironment()
+        env: installerProbeEnvironment(installerPath)
     });
     if (result.status !== 0) {
         throw new Error("APPLICATION_UPDATE_SIGNATURE_INVALID");
@@ -163,7 +173,7 @@ function probeWindowsProductVersion(installerPath) {
     }
     const command = [
         "$ErrorActionPreference='Stop'",
-        "$version=(Get-Item -LiteralPath $args[0]).VersionInfo.ProductVersion",
+        "$version=(Get-Item -LiteralPath $env:LEX_UPDATE_INSTALLER).VersionInfo.ProductVersion",
         "if ([string]::IsNullOrWhiteSpace($version)) { exit 24 }",
         "Write-Output $version"
     ].join("; ");
@@ -173,13 +183,12 @@ function probeWindowsProductVersion(installerPath) {
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        command,
-        installerPath
+        command
     ], {
         encoding: "utf8",
         windowsHide: true,
         timeout: 30_000,
-        env: windowsPowerShellEnvironment()
+        env: installerProbeEnvironment(installerPath)
     });
     if (result.status !== 0 ||
         !result.stdout.trim()) {

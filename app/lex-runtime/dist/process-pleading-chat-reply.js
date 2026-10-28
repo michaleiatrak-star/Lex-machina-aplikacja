@@ -1,4 +1,4 @@
-import { acceptProcessPleadingStart, confirmProcessCheckpoint, requestProcessCheckpointRevision, validateProcessPleadingState } from "./process-pleading-state.js";
+import { acceptProcessPleadingStart, confirmProcessCheckpoint, reopenProcessPleadingDraft, requestProcessCheckpointRevision, validateProcessPleadingState } from "./process-pleading-state.js";
 const FINISH = /(?<![\p{L}])(?:daj(?:cie)?\s+(?:mi\s+)?(?:gotow\p{L}*\s+)?(?:dokument|plik|pismo|docx)|(?:przygotuj|wygeneruj|zrób|zrob|napisz)\s+(?:od\s+razu|teraz|już|gotow\p{L}*)\s+(?:dokument|plik|pismo|docx|\.docx)|dokończ\p{L}*|do\s+końca|bez\s+(?:zatrzymywania|zatrzymań|przystanków|potwierdz\p{L}*|pytania|pytań)|resztę\s+(?:etapów\s+|kroków\s+)?(?:automatycznie|w\s+jednym|naraz|od\s+razu))(?![\p{L}])/iu;
 const ACCEPT = /^(?:a\)?|ad\s*a|tak|ok|okej|okay|dobrze|zgoda|jasne|akceptuj\p{L}*|zatwierdzam|potwierdzam|zatwierdź|trzymaj\s+to|ok\s+trzymaj\s+to)(?:[\s,.!:;—–-]+(?:tak|ok|akceptuj\p{L}*|zatwierdzam|potwierdzam|wczytaj\s+checklist\p{L}*(?:\s+i\s+rozpocznij)?|rozpocznij|zaczynaj|proszę|trzymaj\s+to))*[\s.!]*$/iu;
 // A reply that changes the result is not a confirmation ("nie", "popraw", "porzuć ścieżkę D");
@@ -33,10 +33,41 @@ export function pleadingChatReply(message) {
         return "ACCEPT";
     return ACCEPT.test(text) ? "ACCEPT" : null;
 }
+// pisma-procesowe-v3 §7.2: a change of facts after the draft runs the attack on the draft and W3
+// again. The user asks for it ("ponów atak"), or confirms the step whose frame proposes it
+// ("➡️ Kontynuować (ponowienie CP-ATAK → W3.1)?" + "tak"); before, the app went on to W3.
+const REOPEN_REQUEST = /(?<![\p{L}])(?:ponów|powtórz|wróć\s+do|otwórz\s+ponownie)\p{L}*\s+(?:etap\s+)?(?:CP-ATAK|atak\p{L}*|ATAK-NA-DRAFT)/iu;
+const REOPEN_PROPOSED = /(?:ponowi\p{L}*|powtórz\p{L}*|ponown\p{L}*)\s+(?:\p{L}+\s+){0,2}(?:\[?CP-ATAK|ATAK-NA-DRAFT)|(?:CP-ATAK|ATAK-NA-DRAFT)\]?\s*\(?\s*do\s+ponowienia/iu;
+const ASSISTANT_TURN = "\n\nAsystent: ";
+export function reopensDraft(message) {
+    return REOPEN_REQUEST.test(message);
+}
+/** The assistant's last answer in the web's history ("Asystent: …"), or "". */
+export function lastAssistantTurn(query) {
+    const at = query.lastIndexOf(ASSISTANT_TURN);
+    if (at < 0)
+        return "";
+    const text = query.slice(at + ASSISTANT_TURN.length);
+    const end = text.indexOf(USER_TURN);
+    return end >= 0 ? text.slice(0, end) : text;
+}
 /** The state after the reply, and a line for the answer saying what the reply did. */
-export function applyPleadingChatReply(input, message, at = new Date().toISOString()) {
+export function applyPleadingChatReply(input, message, at = new Date().toISOString(), previousAnswer = "") {
     let state = validateProcessPleadingState(input);
     const reply = pleadingChatReply(message);
+    const attackDone = state.checkpoints["CP-ATAK"] === "CLOSED" || state.checkpoints["CP-ATAK"] === "NA";
+    // The proposal is the frame's own prompt: the last lines of the previous answer.
+    const proposed = reply === "ACCEPT" && REOPEN_PROPOSED.test(previousAnswer.slice(-1500));
+    if (attackDone && ["W3", "FINAL"].includes(state.stage) && (REOPEN_REQUEST.test(message) || proposed)) {
+        const done = [];
+        if (proposed && state.pendingCheckpoint && state.mode === "CHECKPOINT") {
+            done.push(`etap ${state.pendingCheckpoint} potwierdzony`);
+            state = confirmProcessCheckpoint(state, state.pendingCheckpoint, at);
+        }
+        state = reopenProcessPleadingDraft(state, `ponowienie ataku na projekt po zmianie faktów (§7.2): ${message.trim().slice(0, 200)}`, at);
+        done.push("projekt wraca do W2: CP-ATAK, CP-QUALITY, CP-AUDYT i CP-PEER wykonuję ponownie (pisma-procesowe-v3 §7.2)");
+        return { state, note: `Twoja odpowiedź: ${done.join("; ")}.` };
+    }
     if (!reply || state.stage === "FINAL")
         return { state, note: null };
     const done = [];

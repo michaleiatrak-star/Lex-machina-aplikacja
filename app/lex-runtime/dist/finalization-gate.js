@@ -1,5 +1,5 @@
 import { euAct } from "./eu-law-verifier.js";
-import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations } from "./legal-act-abbreviations.js";
+import { ARTICLE_LEAD, DOTTED_ACT_ALTERNATIVES, DOTTED_STATUTE, SPELLED_ACT_ALTERNATIVES, canonicalArticleLead, compactActAbbreviations, withStatuteTitles } from "./legal-act-abbreviations.js";
 import { amountMarkerSpans, amountMatches, evidenceHasAmount, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
 import { verificationMarker } from "./source-anchor.js";
@@ -50,6 +50,8 @@ const ACT_SUFFIX = /\s(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)$/u;
 const ACT_IN_TEXT = /(?<![\p{L}])(KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP)(?![\p{L}])/gu;
 // Another act named in words: an act-less article on such a line is not resolved.
 const OTHER_ACT = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|ordynacj\p{L}*|praw[aoe]?\s+(?:budowlan|bankow|upadłościow|restrukturyzacyjn|energetyczn|autorsk|wodn|geologiczn|lotnicz|pocztow|telekomunikacyjn|przedsiębiorc|o\s+notariacie|o\s+adwokaturze|ochrony\s+środowiska|zamówień|prywatn|spółdzielcz|łowieck|atomow|farmaceutyczn|oświatow|restrukturyz)\p{L}*|pr\.?\s?(?:up|bud|bank|rest|energ|aut|ochr\.?\s?śr|zam\.?\s?publ)\.?|rozporządzeni\p{L}*(?=\s+(?:\(\s*(?:UE|WE|EWG)|Rady|Ministr|Prezesa|Parlamentu|Komisji|wykonawcz|delegowan|nr\b|w\s+sprawie))|dyrektyw\p{L}*|kodeks\p{L}*|p\.?\s?p\.?\s?s\.?\s?a\.?|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|umow\p{L}*|TFUE|TUE|RODO|EKPC)(?![\p{L}])/iu;
+// A line naming another act: in words, or as a dotted statute abbreviation ("u.k.k.").
+const namesOtherAct = (lineText) => OTHER_ACT.test(compactActAbbreviations(withStatuteTitles(lineText))) || DOTTED_STATUTE.test(lineText);
 const actsIn = (value) => new Set([...compactActAbbreviations(value).matchAll(ACT_IN_TEXT)].map((match) => match[1]));
 /**
  * The act of an act-less statute: the only act on its line, else the act this
@@ -71,7 +73,7 @@ function resolveActs(references, text) {
             return reference;
         // "art. 41¹ Kodeksu pracy" on the line is KP, not another act (live C13-019: art. 177 of the same
         // answer stayed act-less and ⚠️ next to a verified art. 177 KP).
-        if (OTHER_ACT.test(compactActAbbreviations(reference.lineText)))
+        if (namesOtherAct(reference.lineText))
             return reference;
         // An EU act named after the article ("art. 5 AI Act", "art. 6 GDPR"): never a Polish act
         // borrowed from elsewhere in the answer (before, "art. 5 AI Act" became "art. 5 KC").
@@ -187,10 +189,10 @@ const ACT_TITLE_NOISE = new Set([
  * line, is that provision (it is not marked unverified again). Only one such record.
  */
 function namedActRecord(ledger, reference) {
-    if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim) || !OTHER_ACT.test(reference.lineText))
+    if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim) || !namesOtherAct(reference.lineText))
         return undefined;
     const prefix = comparableClaim(reference.claim) + " ";
-    const line = comparableClaim(reference.lineText);
+    const line = comparableClaim(withStatuteTitles(reference.lineText));
     const matching = ledger.all().filter((record) => {
         if (record.status !== "VERIFIED" || record.kind !== "statute")
             return false;
@@ -356,7 +358,7 @@ export class FinalizationGate {
                 namedActRecord(ledger, reference) ??
                 articleRecord(ledger, reference) ??
                 // "art. 118" bez nazwy aktu, gdy w sesji zweryfikowano ten artykuł tylko jednego aktu ("art. 118 KC").
-                (OTHER_ACT.test(reference.lineText) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
+                (namesOtherAct(reference.lineText) ? undefined : soleCoveringVerifiedRecord(ledger, reference));
             // HARD GATE: no access to a source -> [NIEWERYFIKOWANE], never an
             // unmarked claim. A marked claim without any record is shown marked.
             const ownUnverified = UNVERIFIED_MARKER.test(withoutAttachedMarkers(reference));
