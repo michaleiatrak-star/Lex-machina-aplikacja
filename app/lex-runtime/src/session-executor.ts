@@ -935,6 +935,32 @@ const MARKED_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINA
 // The report frame's header of a done step: "✅ CHECKPOINT [CP-1b] … — ZAKOŃCZONY".
 const FRAME_WAITS =
   /⛔\s*CHECKPOINT|CHECKPOINT[^\n]*WSTRZYMAN|czeka\p{L}*\s+na\s+(?:\p{L}+\s+)?(?:plik|dokument|materiał)\p{L}*|odpowie\p{L}*\s+na\s+(?:\d+\s+|wszystkie\s+|te\s+)?pytani\p{L}*/iu;
+// The report frame's header of a step that stops ("⏸ CHECKPOINT [CP-1c-lancuch] — OTWARTY (czeka na decyzję)").
+const HELD_FRAME = /⏸|⛔|OTWART\p{L}*|WSTRZYMAN\p{L}*|W\s+TOKU|czeka\p{L}*\s+na/iu;
+
+/**
+ * The active checkpoint's frame header, with its wrapped continuation ("✅ CHECKPOINT [CP-PRE-W2] —
+ * PRE-W2-VERIFICATION-GATE —" / "ZAKOŃCZONY"), and where it starts; the last one before `end`.
+ */
+function frameHeader(answer: string, checkpoint: string, end = answer.length): { text: string; at: number } | null {
+  const lines = answer.slice(0, end).split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!;
+    if (!/CHECKPOINT/iu.test(line) || !line.includes(`[${checkpoint}`)) continue;
+    const next = (lines[index + 1] ?? "").replace(/[│|]/gu, " ").trim();
+    const wrapped = /[—–-]\s*[│|]?\s*$/u.test(line) && next && !/^\p{L}[\p{L} ]*:/u.test(next) ? ` ${next}` : "";
+    return { text: line + wrapped, at: lines.slice(0, index).join("\n").length + (index ? 1 : 0) };
+  }
+  return null;
+}
+
+/** The active checkpoint's frame says the step stops for the user, with or without the marker. */
+export function frameHeld(answer: string, checkpoint: string | undefined): boolean {
+  if (!checkpoint) return false;
+  const header = frameHeader(answer, checkpoint)?.text;
+  return header !== undefined && !DONE_FRAME.test(header) && HELD_FRAME.test(header);
+}
+
 const DONE_FRAME = /CHECKPOINT[^\n]*(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
 
 /**
@@ -945,14 +971,17 @@ const DONE_FRAME = /CHECKPOINT[^\n]*(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
  */
 export function reportOnly(answer: string, checkpoint: string | undefined): boolean {
   if (!checkpoint) return false;
-  const report = answer.lastIndexOf(`[${checkpoint}`);
   const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
+  // The report starts at its frame header ("✅ CHECKPOINT [CP-1d-anomalie] …"), not at a later
+  // mention of the id inside the frame ("Wyniki: [CP-1d-anomalie] N/A").
+  const found = frameHeader(answer, checkpoint, Math.max(0, marker));
+  const report = found ? found.at : answer.lastIndexOf(`[${checkpoint}`);
   if (report < 0 || marker <= report) return false;
   let tail = answer.slice(report, marker);
   // The frame itself says the step waits ("⛔ … WSTRZYMANY", "czeka na pliki", "czeka na
   // odpowiedź na 3 pytania", "➡️ Odpowiedz na pytania 1–3"): "ok" must not close it unanswered.
   if (FRAME_WAITS.test(tail)) return false;
-  const header = answer.slice(answer.lastIndexOf("\n", report) + 1, report + (tail.indexOf("\n") + 1 || tail.length));
+  const header = found?.text ?? tail.slice(0, tail.indexOf("\n") + 1 || tail.length);
   const frameEnd = tail.search(/└|\n```/u);
   if (DONE_FRAME.test(header) && frameEnd >= 0) tail = tail.slice(frameEnd).replace(/^[^\n]*/u, "");
   return !ASKS.test(tail);
@@ -4989,7 +5018,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       request.chronologyWorkflowContext?.checkpoint ??
       request.courtWorkflowContext?.checkpoint;
     const waitingForUser =
-      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) || skillSwitch !== null;
+      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) ||
+      frameHeld(restoredAnswer.text, activeCheckpoint) ||
+      skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);
