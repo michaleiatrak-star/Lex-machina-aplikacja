@@ -10,9 +10,11 @@ export type ReplyChoice =
   | { kind: "DRAFT"; label: string; draft: string };
 
 const FRAME = /[│┃|┌┐└┘├┤─━═╔╗╚╝║]+/gu;
-const LETTERED = /^([a-f])\)\s+(.{2,160})$/u;
+const LETTERED = /^([a-fA-F])\)\s+(.{2,160})$/u;
 const CHECKPOINT_PROMPT =
   /(?:Odpowiedz:\s*|➡️[^\n]*\n?\s*)["„“]tak["”"](?:\s*\/\s*(?:["„“]ok["”"]|modyfikuj|uwagi|lub uwagi|porzuć[^\n/]*))*/iu;
+
+const HELD_FRAME = /(?:⏸|⛔)\s*CHECKPOINT|CHECKPOINT[^\n]*(?:NIE[\s-]?(?:ZAMKNIĘT|ZAKOŃCZON|WYKONAN)|OTWART|WSTRZYMAN)/iu;
 
 function cleanLine(line: string): string {
   return line.replace(FRAME, " ").replace(/\s+/g, " ").trim();
@@ -28,7 +30,7 @@ export function replyChoices(answer: string): ReplyChoice[] {
     if (!line) continue;
     const match = LETTERED.exec(line);
     if (match) {
-      const letter = match[1]!;
+      const letter = match[1]!.toLowerCase();
       const expected = String.fromCharCode("a".charCodeAt(0) + run.length);
       if (letter === expected) run.push({ letter, label: match[2]!.trim() });
       else if (letter === "a") run = [{ letter, label: match[2]!.trim() }];
@@ -43,7 +45,11 @@ export function replyChoices(answer: string): ReplyChoice[] {
     return best.map(({ letter, label }) => ({ kind: "SEND", label: `${letter}) ${label}`, message: `${letter}) ${label}` }));
   }
   const tail = lines.slice(-15).join("\n");
-  const prompt = CHECKPOINT_PROMPT.exec(tail)?.[0];
+  // A held step (⛔/⏸, NIEZAMKNIĘTY, OTWARTY, WSTRZYMANY) waits for data, not for "tak".
+  if (answer.split("\n").some((line) => HELD_FRAME.test(line))) return [];
+  // A checkpoint frame ending in a question without the literal "tak" ("➡️ Zatwierdzasz układ…?").
+  const framed = /CHECKPOINT/u.test(tail) && /➡️[^\n]*\?/u.test(tail) ? "➡️ ?" : undefined;
+  const prompt = CHECKPOINT_PROMPT.exec(tail)?.[0] ?? framed;
   if (prompt) {
     const choices: ReplyChoice[] = [{ kind: "SEND", label: "Tak", message: "tak" }];
     const change = /porzuć/iu.test(prompt) ? "Modyfikuj / porzuć ścieżkę…" : "Uwagi…";

@@ -313,6 +313,11 @@ describe("verifyFromCoreLaw", () => {
       .toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
     // Without the amending act's text the impact is unknown: the copy refuses as before.
     expect(verify(pending(null))).toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    // An article the act does not have (u.k.k. art. 36a cited as KC, E2E W3): not "not yet in
+    // force", but the unit missing from the text, so the model sees it named the wrong act.
+    const wrongAct = verify(pending(null), { claim: "art. 36a ust. 1 KW" });
+    expect(wrongAct).not.toEqual({ decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" });
+    expect(wrongAct.decision === "RECORD" && wrongAct.record.status).not.toBe("VERIFIED");
   });
 
   it("kopia niesprawdzana w ELI dłużej niż 7 dni nie daje VERIFIED", () => {

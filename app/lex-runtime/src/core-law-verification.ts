@@ -227,7 +227,10 @@ export function verifyFromCoreLaw(args: {
     if (known && notes && hasPendingWording(record.markedArticles?.[article!] ?? record.articles[article!]!, notes, today)) {
       return { decision: "DENY", reason: "TEMPORAL_NOT_YET_IN_FORCE" };
     }
-    if (!notes || !announced || !known) {
+    // An article the act does not have (u.k.k. art. 36a cited as KC): no wording to be pending;
+    // the lookup below says the unit is not in the text, so the model sees the wrong act.
+    const missing = Boolean(article) && !known;
+    if (!missing && (!notes || !announced || !known)) {
       // No dated footnotes to tell the articles apart: the amending acts in vacatio legis are
       // read as the amendments after the t.j. are (KC t.j. 2026/795 with the CEIDG act from
       // 2028: art. 481 is not touched by it, so its copy wording is the one in force).

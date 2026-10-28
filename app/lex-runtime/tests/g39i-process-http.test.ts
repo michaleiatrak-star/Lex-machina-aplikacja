@@ -1563,7 +1563,7 @@ describe(
         .expect(201);
       const envelope = `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: ["pisma-procesowe-v3"], caseType: ["pisma-procesowe-v3"] })}`;
       const send = (text: string) => ({
-        query: `${envelope}\n${text}`,
+        query: `${envelope}\nPrzygotuj pismo procesowe w tej sprawie.\n\nAsystent: Raport etapu.\n\nUżytkownik: ${text}`,
         provider: "openai",
         model: "gpt-test",
         primarySkill: DR,
@@ -1582,6 +1582,8 @@ describe(
       const confirmed = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("tak")).expect(200);
       expect(confirmed.body.processWorkflow.checkpoints["CP-1a"]).toBe("CLOSED");
       expect(confirmed.body.processWorkflow.mode).toBe("CHECKPOINT");
+      // The next step gets the panel's "Kontynuuj" with the reply quoted, not the bare "tak".
+      expect(String(current.execute.mock.calls[0]?.[0].query)).toContain("Użytkownik: Kontynuuj pipeline pisma procesowego zgodnie z aktywnym checkpointem. Odpowiedź użytkownika na poprzedni etap: «tak»");
       const second = confirmed.body.processWorkflow.pendingCheckpoint;
       expect(second).toBeTruthy();
 
@@ -1596,6 +1598,15 @@ describe(
 
       // "Kontynuuj" is not a confirmation of a checkpoint (REGUŁA-KONTYNUACJA).
       await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("kontynuuj")).expect(409);
+      // A bare "NIE" is not small talk: the step's gate asks what to change.
+      current.execute.mockClear();
+      const refused = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("NIE")).expect(409);
+      expect(JSON.stringify(refused.body)).toContain("PROCESS_PLEADING_CONFIRMATION_REQUIRED");
+      expect(current.execute).not.toHaveBeenCalled();
+      // "C" (an option of the report's choice) runs the step again on that choice.
+      const chosen = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("C")).expect(200);
+      expect(current.execute.mock.calls[0]?.[0].processWorkflowContext).toMatchObject({ checkpoint: second, remarks: "C" });
+      expect(String(chosen.body.answer)).toContain("z Twoim wyborem «C»");
 
       // "ok trzymaj to i daj mi dokument": the step is confirmed like "ok", the next one runs and
       // waits (ZAKAZ-CP); the answer says the file comes after all steps (ZAKAZ-12).

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CHECKPOINT_RESOURCES, evaluateCheckpointOutput } from "../src/process-checkpoint-contract.js";
+import { CHECKPOINT_RESOURCES, evaluateCheckpointOutput, processStepDone, readAtOtherCheckpoint } from "../src/process-checkpoint-contract.js";
 import { PROCESS_PLEADING_CHECKPOINTS, createProcessPleadingState, acceptProcessPleadingStart } from "../src/process-pleading-state.js";
 import { completeProcessExecution, processCheckpointRegister, requireProcessExecutionPermit } from "../src/process-pleading-execution-gate.js";
 
@@ -48,5 +48,24 @@ describe("pisma-procesowe-v3 checkpoint contract", () => {
       state = completeProcessExecution(state, permit);
     }
     expect(processCheckpointRegister(state).find((entry) => entry.checkpoint === "CP-1b")).toMatchObject({ status: "NA", reason: expect.stringMatching(/jedna ścieżka/) });
+  });
+
+  it("defers modules owned by other checkpoints to their own turn", () => {
+    expect(readAtOtherCheckpoint("shared/MOD-MACIERZ-DOWOD-TEZA.md", "CP-1b")).toBe(true);
+    expect(readAtOtherCheckpoint("shared/MOD-MACIERZ-DOWOD-TEZA.md", "CP-1c-macierz")).toBe(false);
+    expect(readAtOtherCheckpoint("shared/MOD-RED-TEAM-WLASNY.md", "CP-1b")).toBe(true);
+    expect(readAtOtherCheckpoint("shared/MOD-RED-TEAM-WLASNY.md", "CP-W1")).toBe(false);
+    expect(readAtOtherCheckpoint("shared/MOD-GRAF-PRZYCZYNOWY.md", "CP-1c-lancuch")).toBe(false);
+    expect(readAtOtherCheckpoint("pisma-procesowe-v3/references/AUTOMAT-STANOW.md", "CP-1b")).toBe(false);
+  });
+
+  it("lets a step before W3 stand on citations marked as unverified", () => {
+    const marked = { result: "BLOCKED" as const, markedDraftOnly: true };
+    expect(processStepDone(marked, "CP-1b")).toBe(true);
+    expect(processStepDone(marked, "CP-ATAK")).toBe(true);
+    expect(processStepDone(marked, "CP-QUALITY")).toBe(false);
+    expect(processStepDone(marked, "CP-PEER")).toBe(false);
+    expect(processStepDone({ result: "BLOCKED" }, "CP-1b")).toBe(false);
+    expect(processStepDone({ result: "PASS" }, "CP-PEER")).toBe(true);
   });
 });

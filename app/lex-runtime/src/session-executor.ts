@@ -929,12 +929,62 @@ export function privacyGateFailure(error: unknown): Error & { reason?: string } 
 // A request to the user: a question, or a line opening with an asking verb.
 const ASKS = /\?|(?:^|\n)\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*)?(?:Podaj|Wskaż|Prześlij|Dołącz|Załącz|Wklej|Potwierdź|Wybierz|Określ|Uzupełnij|Doprecyzuj|Napisz,|Proszę)/u;
 
-/** The answer is the active checkpoint's report, the marker added after it without asking. */
-function reportOnly(answer: string, checkpoint: string | undefined): boolean {
+// Gate I checks that a G8 DEGRADED answer (citations marked, none unmarked) fails by design.
+const MARKED_DRAFT_CHECKS = new Set(["CITATION_LEDGER", "LEGAL_CITATIONS", "FINALIZATION"]);
+
+// The report frame's header of a done step: "✅ CHECKPOINT [CP-1b] … — ZAKOŃCZONY".
+const FRAME_WAITS =
+  /⛔\s*CHECKPOINT|CHECKPOINT[^\n]*WSTRZYMAN|czeka\p{L}*\s+na\s+(?:\p{L}+\s+)?(?:plik|dokument|materiał)\p{L}*|odpowie\p{L}*\s+na\s+(?:\d+\s+|wszystkie\s+|te\s+)?pytani\p{L}*/iu;
+// The report frame's header of a step that stops ("⏸ CHECKPOINT [CP-1c-lancuch] — OTWARTY (czeka na decyzję)").
+const HELD_FRAME = /⏸|⛔|OTWART\p{L}*|WSTRZYMAN\p{L}*|W\s+TOKU|czeka\p{L}*\s+na/iu;
+
+/**
+ * The active checkpoint's frame header, with its wrapped continuation ("✅ CHECKPOINT [CP-PRE-W2] —
+ * PRE-W2-VERIFICATION-GATE —" / "ZAKOŃCZONY"), and where it starts; the last one before `end`.
+ */
+function frameHeader(answer: string, checkpoint: string, end = answer.length): { text: string; at: number } | null {
+  const lines = answer.slice(0, end).split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!;
+    if (!/CHECKPOINT/iu.test(line) || !line.includes(`[${checkpoint}`)) continue;
+    const next = (lines[index + 1] ?? "").replace(/[│|]/gu, " ").trim();
+    const wrapped = /[—–-]\s*[│|]?\s*$/u.test(line) && next && !/^\p{L}[\p{L} ]*:/u.test(next) ? ` ${next}` : "";
+    return { text: line + wrapped, at: lines.slice(0, index).join("\n").length + (index ? 1 : 0) };
+  }
+  return null;
+}
+
+/** The active checkpoint's frame says the step stops for the user, with or without the marker. */
+export function frameHeld(answer: string, checkpoint: string | undefined): boolean {
   if (!checkpoint) return false;
-  const report = answer.lastIndexOf(`[${checkpoint}`);
+  const header = frameHeader(answer, checkpoint)?.text;
+  return header !== undefined && !DONE_FRAME.test(header) && HELD_FRAME.test(header);
+}
+
+const DONE_FRAME = /CHECKPOINT[^\n]*(?<!NIE[\s-]?)(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
+
+/**
+ * The answer is the active checkpoint's report, the marker added after it without asking.
+ * A done step's frame ends with its confirmation prompt (➡️ …?, AUTOMAT-STANOW "Odpowiedz:
+ * tak / ok / lub uwagi"): that question is the confirmation, not missing data, so only a
+ * request after the frame keeps the step open (E2E: CP-1b re-run on every reply).
+ */
+export function reportOnly(answer: string, checkpoint: string | undefined): boolean {
+  if (!checkpoint) return false;
   const marker = answer.lastIndexOf(WAIT_FOR_USER_MARKER);
-  return report >= 0 && marker > report && !ASKS.test(answer.slice(report, marker));
+  // The report starts at its frame header ("✅ CHECKPOINT [CP-1d-anomalie] …"), not at a later
+  // mention of the id inside the frame ("Wyniki: [CP-1d-anomalie] N/A").
+  const found = frameHeader(answer, checkpoint, Math.max(0, marker));
+  const report = found ? found.at : answer.lastIndexOf(`[${checkpoint}`);
+  if (report < 0 || marker <= report) return false;
+  let tail = answer.slice(report, marker);
+  // The frame itself says the step waits ("⛔ … WSTRZYMANY", "czeka na pliki", "czeka na
+  // odpowiedź na 3 pytania", "➡️ Odpowiedz na pytania 1–3"): "ok" must not close it unanswered.
+  if (FRAME_WAITS.test(tail)) return false;
+  const header = found?.text ?? tail.slice(0, tail.indexOf("\n") + 1 || tail.length);
+  const frameEnd = tail.search(/└|\n```/u);
+  if (DONE_FRAME.test(header) && frameEnd >= 0) tail = tail.slice(frameEnd).replace(/^[^\n]*/u, "");
+  return !ASKS.test(tail);
 }
 
 // Executive skills that work on the case's material, and what to ask for when there is none.
@@ -1048,6 +1098,8 @@ export type SessionExecutionResponse = {
     result: "PASS" | "BLOCKED";
     requiredResources: string[];
     missingResources: string[];
+    // BLOCKED only by citations marked ⚠️ [NIEWERYFIKOWANE] (G8 DEGRADED): a working draft.
+    markedDraftOnly?: boolean;
   };
   gateI?: GateIInvariantReport;
   gateIWorkflowContract?: GateIWorkflowContractReport;
@@ -4966,7 +5018,9 @@ export class SafeSessionExecutor implements SessionExecutor {
       request.chronologyWorkflowContext?.checkpoint ??
       request.courtWorkflowContext?.checkpoint;
     const waitingForUser =
-      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) || skillSwitch !== null;
+      (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) ||
+      frameHeld(restoredAnswer.text, activeCheckpoint) ||
+      skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);
@@ -5118,7 +5172,15 @@ export class SafeSessionExecutor implements SessionExecutor {
             ? "BLOCKED"
             : "PASS",
         requiredResources: workflowReads.required,
-        missingResources: workflowReads.missing
+        missingResources: workflowReads.missing,
+        ...(!workflowResourcesBlocked &&
+        !workflowOutputBlocked &&
+        !guideOutputBlocked &&
+        !reportBlueprintBlocked &&
+        finalization.result === "DEGRADED" &&
+        gateI.checks.every((item) => item.result === "PASS" || MARKED_DRAFT_CHECKS.has(item.id))
+          ? { markedDraftOnly: true }
+          : {})
       },
       gateI,
       gateIWorkflowContract:

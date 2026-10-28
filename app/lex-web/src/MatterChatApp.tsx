@@ -136,7 +136,7 @@ import {
   resetCaseWorkflow,
   type ContractAnalysisMode
 } from "./api.js";
-import { workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
+import { declinesProcessStart, workflowRecovery, type WorkflowRecovery } from "./workflow-recovery.js";
 import { CoverageLine, UnfinishedAnalysis, unfinishedDocuments } from "./document-coverage-view.js";
 import { CorrectionsDetails } from "./answer-corrections-view.js";
 import { CONTRACT_MODES, automaticContractMode, suggestedContractMode } from "./contract-mode.js";
@@ -4426,7 +4426,8 @@ export default function MatterChatApp({
       if (error instanceof ApiError && error.draftAvailable && exportBlockedMessage(error)) {
         setUnverifiedDraftRequest({ caseId: executionCaseId, text: trimmed, messageId: userMessage.id });
       }
-      const recovery = workflowRecovery(code, reason);
+      const startDeclined = declinesProcessStart(code, trimmed);
+      const recovery = startDeclined ? null : workflowRecovery(code, reason);
       if (recovery) {
         setWorkflowRecoveryRequest({
           caseId: executionCaseId,
@@ -4502,6 +4503,8 @@ export default function MatterChatApp({
                 ? "Analiza umowy w tej sprawie została już zakończona. Możesz rozpocząć nowy etap poniżej — wiadomość zostanie wysłana ponownie."
               : code === "PROCESS_PLEADING_STATE_REQUIRED"
                 ? "Pismo procesowe prowadzi pipeline sprawy (etapy, HYBRID-VAL przed plikiem .docx). Uruchom go poniżej — wiadomość zostanie wysłana ponownie."
+                : startDeclined
+                  ? "Pisma nie rozpoczynam — tak brzmi Twoja odpowiedź. Napisz, jakie masz wątpliwości albo czego brakuje; start zaakceptujesz odpowiedzią „a” albo „tak”."
                 : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
                   ? "Pipeline pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie."
                   : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"

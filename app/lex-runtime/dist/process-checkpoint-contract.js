@@ -22,6 +22,21 @@ export const CHECKPOINT_RESOURCES = {
     "CP-AUDYT": ["shared/AUDYT-KONCOWY.md"],
     "CP-PEER": ["shared/MOD-PEER-REVIEW.md", "shared/POST-VALIDATION.md"]
 };
+// Modules of a later W1 step that the module map lists for the whole stage W1 (MODULY-MAPA:
+// MOD-RED-TEAM-WLASNY at W1.6; SKILL.md W1.2c KROK PRZ: MOD-GRAF-PRZYCZYNOWY before W1.3).
+const LATER_STEP_RESOURCES = {
+    "CP-1c-lancuch": ["shared/MOD-GRAF-PRZYCZYNOWY.md"],
+    "CP-W1": ["shared/MOD-RED-TEAM-WLASNY.md", "shared/MOD-GRAF-PRZYCZYNOWY.md"]
+};
+/**
+ * A resource the skill reads at another checkpoint of the pipeline (CP-REJESTR of
+ * shared/CP-GATE.md, MODULY-MAPA.md), not at this one: the macierz D×T at CP-1c-macierz,
+ * the red team at W1.6. One checkpoint per turn reads its own files; the rest wait for theirs.
+ */
+export function readAtOtherCheckpoint(resource, checkpoint) {
+    const owners = Object.keys(CHECKPOINT_RESOURCES).filter((owner) => CHECKPOINT_RESOURCES[owner].includes(resource) || (LATER_STEP_RESOURCES[owner] ?? []).includes(resource));
+    return owners.length > 0 && !owners.includes(checkpoint);
+}
 // Conditional checkpoints (CP-REJESTR "warunkowy", "gdy ..."): N/A is allowed with a reason.
 export const CONDITIONAL_CHECKPOINTS = new Set([
     "CP-1b",
@@ -171,4 +186,15 @@ export function checkpointCorrectionPrompt(checkpoint, missing) {
         ...missing.map((item) => `- ${item}`),
         "Nie przechodź do następnego checkpointu."
     ].join("\n");
+}
+// W3 verifies the citations (CP-QUALITY: W3.1 ELI, W3.2 orzeczenia; then the audit and peer review).
+const VERIFYING_CHECKPOINTS = new Set(["CP-QUALITY", "CP-AUDYT", "CP-PEER"]);
+/**
+ * The step's work stands: the workflow passed, or before W3 it stopped only on citations marked
+ * ⚠️ [NIEWERYFIKOWANE] (hardgate: a marked citation in a DRAFT is the correct output until W3).
+ */
+export function processStepDone(workflow, checkpoint) {
+    if (workflow?.result === "PASS")
+        return true;
+    return workflow?.markedDraftOnly === true && !VERIFYING_CHECKPOINTS.has(checkpoint);
 }

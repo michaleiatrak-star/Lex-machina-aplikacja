@@ -4,7 +4,7 @@ import type { LegalStyleProfile } from "../legal-document-ast.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
 import { letterMarkupAst } from "../letter-markup.js";
 import { caseLawRepository } from "../case-law-store.js";
-import { evaluateCheckpointOutput } from "../process-checkpoint-contract.js";
+import { evaluateCheckpointOutput, processStepDone } from "../process-checkpoint-contract.js";
 import type { EvidencePolicy } from "../document-evidence.js";
 import { asksAbout, asksToDraft } from "../skill-schema-catalog.js";
 import {
@@ -34,7 +34,7 @@ import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
 import { latestUserTurn } from "../execution-engine.js";
-import { applyPleadingChatReply, pleadingChatReply } from "../process-pleading-chat-reply.js";
+import { applyPleadingChatReply, bareRefusal, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
 import {
   appendDraftVersion,
@@ -9810,7 +9810,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     const pleadingReply =
       Boolean(knowledge.caseId) &&
       parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-procesowe-v3") &&
-      pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null;
+      (pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null ||
+        bareRefusal(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)));
     const trivialChat =
       !partRequest &&
       !pleadingReply &&
@@ -10722,6 +10723,14 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           requireProcessExecutionPermit(
             state
           );
+        // A short reply to the step ("tak", "c", "B) …"): the step runs as from the panel's
+        // "Kontynuuj", with the reply quoted for the model.
+        // The thread's first message (the request itself, no "Użytkownik:" history) stays as is.
+        const replyText = latestUserTurn(parseSkillSelectionEnvelope(request.query).query).trim();
+        if (request.query.includes("\n\nUżytkownik: ") && replyText && replyText.length <= 300 && !replyText.startsWith(PLEADING_CONTINUATION)) {
+          request.query = pleadingContinuationQuery(request.query, replyText);
+          request.auxiliaryText = `${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «${replyText}»`;
+        }
         request.processWorkflowContext = {
           stage: permit.stage,
           checkpoint:
@@ -11517,9 +11526,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                   nodeResult.workflow
                     ?.id ===
                     "PROCESS_PLEADING_V1" &&
-                  nodeResult.workflow
-                    .result ===
-                    "PASS";
+                  processStepDone(nodeResult.workflow, permit.checkpoint);
                 if (commit) {
                   const draftProblems: string[] = [];
                   pleadingDraftWritten = (await recordPleadingStep(
@@ -12430,8 +12437,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             "DRAFT_PRESENTABLE" &&
           result.workflow?.id ===
             "PROCESS_PLEADING_V1" &&
-          result.workflow.result ===
-            "PASS" &&
+          processStepDone(result.workflow, processContext.permit.checkpoint) &&
           // A checkpoint that asked the user stays open until the reply.
           result.waitingForUser !== true
         ) {
@@ -12490,7 +12496,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
         if (
           result.status === "DRAFT_PRESENTABLE" &&
           result.workflow?.id === "PROCESS_PLEADING_V1" &&
-          result.workflow.result === "PASS"
+          processStepDone(result.workflow, processContext.permit.checkpoint)
         ) {
           const draftProblems: string[] = [];
           pleadingDraftWritten =

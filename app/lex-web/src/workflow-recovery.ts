@@ -29,3 +29,9 @@ export function workflowRecovery(code: string, reason?: string): WorkflowRecover
   }
   return null;
 }
+
+// "b) Nie — zakończ lub wyjaśnij wątpliwości" (or "nie") to INFORMACJA PRZED STARTEM: the pipeline
+// is not started and the message is not sent again with the start's acceptance.
+export function declinesProcessStart(code: string, text: string): boolean {
+  return code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED" && /^(?:b(?:\)|[.:,—–-]|\s|$)|nie(?![\p{L}]))/iu.test(text.trim());
+}

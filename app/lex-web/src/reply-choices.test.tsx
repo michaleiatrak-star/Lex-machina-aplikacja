@@ -48,4 +48,17 @@ describe("wybory z odpowiedzi jako przyciski", () => {
     expect(html).toContain("primary-button");
     expect(renderToStaticMarkup(<ReplyChoices answer="Brak pytań." disabled={false} onSend={() => undefined} onDraft={() => undefined} />)).toBe("");
   });
+
+  it("ramka z pytaniem bez dosłownego „tak” (model: „➡️ Zatwierdzasz układ…?”) i opcje wielką literą", () => {
+    const frame = "│ ✅ CHECKPOINT [CP-1b] MOD-STRATEGIA-WYBOR — ZAKOŃCZONY │\n│ ➡️ Zatwierdzasz układ z S4 i odpowiesz na pytania 1–3? │\n└──────┘";
+    expect(replyChoices(frame).map((c) => c.label)).toEqual(["Tak", "Uwagi…"]);
+    expect(replyChoices("A) Tak, akceptuję\nB) Nie — zakończ").map((c) => c.label)).toEqual(["a) Tak, akceptuję", "b) Nie — zakończ"]);
+  });
+
+  it("offers no confirmation for a held step", () => {
+    const held = "```\n│ ⛔ CHECKPOINT [CP-PODMIOT] — NIEZAMKNIĘTY (PODMIOT-CRIT) │\n│ ➡️ Podasz pełną firmę pożyczkodawcy? │\n└──┘\n```";
+    expect(replyChoices(held)).toEqual([]);
+    const done = "```\n│ ✅ CHECKPOINT [CP-ATAK] — ZAKOŃCZONY │\n│ ➡️ Kontynuować do W3.0? │\n└──┘\n```";
+    expect(replyChoices(done)[0]).toMatchObject({ kind: "SEND", message: "tak" });
+  });
 });

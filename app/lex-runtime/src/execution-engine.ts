@@ -23,7 +23,7 @@ import { contractPrompt, executiveContract, loadContract } from "./executive-ski
 import { loadModules, MODULE_BUDGET_CHARS, modulesPrompt, skillModules } from "./skill-module-map.js";
 import { domainHintPrompt, suggestDomainModules } from "./domain-module-map.js";
 import { actModulesPrompt, loadActModules, resolveActModulesWithChecks } from "./act-map-resolver.js";
-import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources } from "./process-checkpoint-contract.js";
+import { checkpointCorrectionPrompt, checkpointPrompt, evaluateCheckpointOutput, loadCheckpointResources, readAtOtherCheckpoint } from "./process-checkpoint-contract.js";
 import path from "node:path";
 import { knowledgeMapPrompt, type KnowledgeMapAct } from "./knowledge-map.js";
 import { CORE_LEGAL_RESOURCES, LegalSession } from "./legal-session.js";
@@ -1239,7 +1239,11 @@ export class LexExecutionEngine {
     // the turn's part, after the cached prefix.
     let turnContextText = "";
     if (workflowPlan.executionSkill && !args.model.startsWith("local/")) {
-      const contract = executiveContract(this.registry, workflowPlan.executionSkill);
+      const fullContract = executiveContract(this.registry, workflowPlan.executionSkill);
+      // A pleading checkpoint reads its own files; another checkpoint's wait for it.
+      const checkpoint = workflowPlan.executionSkill === "pisma-procesowe-v3" ? args.processWorkflowContext?.checkpoint : undefined;
+      const ownStep = (resource: string) => !checkpoint || !readAtOtherCheckpoint(resource, checkpoint);
+      const contract = fullContract && { ...fullContract, resources: fullContract.resources.filter(ownStep) };
       if (contract) {
         const inContext = new Set<string>([
           ...CORE_LEGAL_RESOURCES,
@@ -1308,7 +1312,7 @@ export class LexExecutionEngine {
             )
           ].join("\n"),
           stage: args.processWorkflowContext?.stage ?? null
-        });
+        }).filter((entry) => ownStep(entry.resource));
         const already = new Set([...inContext, ...loaded.loaded.map((item) => item.resource)]);
         const stageEntries = args.processWorkflowContext ? triggered.filter((entry) => entry.stage) : [];
         const stage = loadModules(this.registry, contract.skill, stageEntries, already);
