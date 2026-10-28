@@ -44,6 +44,7 @@ import {
 import type {
   SessionExecutor
 } from "../src/session-executor.js";
+import { SKILL_SELECTION_ENVELOPE_PREFIX } from "../src/skill-selection.js";
 
 const roots: string[] = [];
 const DR =
@@ -1544,5 +1545,71 @@ describe(
       expect(draft.body.draft?.remarks).toBeUndefined();
       current.auth.close();
     });
+
+    it("moves the pipeline by typed replies as pisma-procesowe-v3 asks: \"a\", \"tak\", remarks; \"daj mi dokument\" confirms without skipping steps", async () => {
+      const current = fixture();
+      const bootstrap = await request(current.app)
+        .post("/api/auth/bootstrap")
+        .send({ loginName: "owner-chat", displayName: "Owner Chat", password: "G39I chat replies strong password 2026" })
+        .expect(201);
+      const authorization = `Bearer ${String(bootstrap.body.sessionToken)}`;
+      const caseId = String(
+        (await request(current.app).post("/api/cases").set("Authorization", authorization).send({ displayName: "Chat replies" }).expect(201)).body.caseId
+      );
+      await request(current.app)
+        .post(`/api/cases/${caseId}/workflow/process-pleading/initialize`)
+        .set("Authorization", authorization)
+        .send({ mode: "CHECKPOINT" })
+        .expect(201);
+      const envelope = `${SKILL_SELECTION_ENVELOPE_PREFIX} ${JSON.stringify({ auto: false, manual: ["pisma-procesowe-v3"], caseType: ["pisma-procesowe-v3"] })}`;
+      const send = (text: string) => ({
+        query: `${envelope}\n${text}`,
+        provider: "openai",
+        model: "gpt-test",
+        primarySkill: DR,
+        mode: "PRAWNIK",
+        knowledge: { caseId, includeCase: false, includeFirm: false, limit: 8 }
+      });
+
+      // "a" to INFORMACJA PRZED STARTEM: the start is accepted and CP-1a runs in the same turn.
+      const accepted = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("a")).expect(200);
+      expect(current.execute.mock.calls.map((call) => call[0].processWorkflowContext?.checkpoint)).toEqual(["CP-1a"]);
+      expect(accepted.body.processWorkflow.pendingCheckpoint).toBe("CP-1a");
+      expect(String(accepted.body.answer)).toMatch(/^Twoja odpowiedź: start pisma zaakceptowany\./);
+
+      // "tak" confirms CP-1a and runs the next checkpoint (CHECKPOINT mode stays).
+      current.execute.mockClear();
+      const confirmed = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("tak")).expect(200);
+      expect(confirmed.body.processWorkflow.checkpoints["CP-1a"]).toBe("CLOSED");
+      expect(confirmed.body.processWorkflow.mode).toBe("CHECKPOINT");
+      const second = confirmed.body.processWorkflow.pendingCheckpoint;
+      expect(second).toBeTruthy();
+
+      // A reply that changes the result sends the step back and runs it again with the reply as remarks.
+      current.execute.mockClear();
+      const revised = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("porzuć ścieżkę D")).expect(200);
+      expect(current.execute.mock.calls[0]?.[0].processWorkflowContext).toMatchObject({ checkpoint: second, remarks: "porzuć ścieżkę D" });
+      expect(revised.body.processWorkflow.pendingCheckpoint).toBe(second);
+      expect(String(revised.body.answer)).toContain(`etap ${second} wykonuję ponownie`);
+      // A question is not an answer to the step: the step still waits for confirmation.
+      await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("Jaki jest termin na zażalenie?")).expect(409);
+
+      // "Kontynuuj" is not a confirmation of a checkpoint (REGUŁA-KONTYNUACJA).
+      await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("kontynuuj")).expect(409);
+
+      // "ok trzymaj to i daj mi dokument": the step is confirmed like "ok", the next one runs and
+      // waits (ZAKAZ-CP); the answer says the file comes after all steps (ZAKAZ-12).
+      current.execute.mockClear();
+      const finish = await request(current.app).post("/api/sessions/execute").set("Authorization", authorization).send(send("ok trzymaj to i daj mi dokument")).expect(200);
+      expect(finish.body.processWorkflow.checkpoints[second]).toBe("CLOSED");
+      expect(finish.body.processWorkflow.mode).toBe("CHECKPOINT");
+      expect(current.execute).toHaveBeenCalledTimes(1);
+      expect(finish.body.processWorkflow.pendingCheckpoint).toBeTruthy();
+      expect(finish.body.processAuto).toBeUndefined();
+      expect(String(finish.body.answer)).toContain(`etap ${second} potwierdzony`);
+      expect(String(finish.body.answer)).toContain("plik .docx powstanie dopiero po zamknięciu wszystkich etapów");
+      current.auth.close();
+    });
   }
 );
+

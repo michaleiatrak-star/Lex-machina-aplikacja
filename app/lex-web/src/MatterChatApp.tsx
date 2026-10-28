@@ -2,11 +2,11 @@ import {
   AccountConnectProgress,
   type AccountConnectPhase
 } from "./AccountConnectProgress.js";
-import { TaskMenu } from "./TaskMenu.js";
 import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
 import { ChatStarters } from "./ChatStarters";
+import { ReplyChoices } from "./ReplyChoices";
 import {
   canWriteCase,
   caseScheduleKindLabel,
@@ -4505,7 +4505,7 @@ export default function MatterChatApp({
                 : code === "PROCESS_PLEADING_START_ACCEPTANCE_REQUIRED"
                   ? "Pipeline pisma procesowego czeka na Twoją akceptację startu. Zaakceptuj go poniżej — wiadomość zostanie wysłana ponownie."
                   : code === "PROCESS_PLEADING_CONFIRMATION_REQUIRED"
-                    ? "Pipeline czeka na potwierdzenie bieżącego checkpointu."
+                    ? "Pismo czeka na potwierdzenie bieżącego etapu: napisz „tak” albo co poprawić, albo użyj przycisku w panelu pisma. Plik powstaje po zamknięciu wszystkich etapów."
                     : code === "PROCESS_PLEADING_CASE_REQUIRED"
                       ? "Pismo procesowe musi być powiązane z aktywną sprawą."
                       : code === "PROCESS_PLEADING_ALREADY_FINAL"
@@ -5830,7 +5830,111 @@ export default function MatterChatApp({
                 );
               }}
             />
-
+            {conversationIsNew ? (
+              <section
+                className="chat-pipeline-picker"
+                aria-label="Tryb pracy dla nowej rozmowy"
+              >
+                <div>
+                  <p className="eyebrow">Tryb pracy</p>
+                  <h3>
+                    {workMode === "AUTO"
+                      ? developerMode ? "Automatyczny — prawny router" : "Automatyczny"
+                      : selectedDeterministicAction
+                        ? `Mechaniczny — ${selectedDeterministicAction.label}`
+                        : developerMode ? "Mechaniczny — wybierz skill wykonawczy" : "Mechaniczny — wybierz rodzaj pracy"}
+                    <InfoTip>
+                      {!developerMode
+                        ? workMode === "AUTO"
+                          ? "Aplikacja sama rozpoznaje dziedzinę prawa i sposób pracy z treści wiadomości."
+                          : "Wybrany rodzaj pracy przebiega stałymi etapami. Po pierwszej wiadomości wybór zostaje przypięty do wątku."
+                        : workMode === "AUTO"
+                        ? "Router dobiera dziedziny DR, skille i moduły z treści wiadomości. Pytania bez kwestii prawnej nie ładują skilli prawnych."
+                        : "Wybrany skill uruchamia stały pipeline; router nadal dobiera dziedzinę DR. Po pierwszej wiadomości wybór zostaje przypięty do wątku."}
+                    </InfoTip>
+                  </h3>
+                </div>
+                <div
+                  className="chat-work-mode"
+                  role="radiogroup"
+                  aria-label="Tryb pracy"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={workMode === "AUTO"}
+                    className={
+                      workMode === "AUTO"
+                        ? "chat-pipeline-option selected"
+                        : "chat-pipeline-option"
+                    }
+                    onClick={() => {
+                      selectDeterministicAction("");
+                      setWorkMode("AUTO");
+                    }}
+                  >
+                    <strong>Automatyczny</strong>
+                    <small>{developerMode ? "Router sam dobiera skille i moduły." : "Aplikacja sama dobiera sposób pracy."}</small>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={workMode === "MECHANICAL"}
+                    disabled={availableActions.length === 0}
+                    className={
+                      workMode === "MECHANICAL"
+                        ? "chat-pipeline-option selected"
+                        : "chat-pipeline-option"
+                    }
+                    onClick={() => setWorkMode("MECHANICAL")}
+                  >
+                    <strong>Mechaniczny</strong>
+                    <small>
+                      {availableActions.length > 0
+                        ? developerMode
+                          ? "Ty wybierasz skill wykonawczy i jego pipeline."
+                          : "Ty wybierasz rodzaj pracy (np. pismo, analiza umowy)."
+                        : developerMode
+                          ? "Brak skilli wykonawczych w korpusie."
+                          : "Brak dostępnych rodzajów pracy."}
+                    </small>
+                  </button>
+                </div>
+                {workMode === "MECHANICAL" ? (
+                  <div className="chat-pipeline-options">
+                    {availableActions.map((action) => {
+                      const checked =
+                        deterministicAction ===
+                        action.id;
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          className={
+                            checked
+                              ? "chat-pipeline-option selected"
+                              : "chat-pipeline-option"
+                          }
+                          aria-pressed={checked}
+                          onClick={() =>
+                            selectDeterministicAction(
+                              action.id
+                            )
+                          }
+                        >
+                          <strong>
+                            {action.label}
+                          </strong>
+                          <small>
+                            {action.description}
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <div className="chat-message-list" aria-live="polite">
               {threadLoading ? (
@@ -5838,7 +5942,7 @@ export default function MatterChatApp({
                   Ładowanie zaszyfrowanego wątku sprawy…
                 </article>
               ) : null}
-              {messages.map((message) => (
+              {messages.map((message, _index, all) => (
                 <article
                   key={message.id}
                   className={`chat-message chat-message-${message.role}`}
@@ -6030,6 +6134,17 @@ export default function MatterChatApp({
                   {developerMode && message.corrections?.length ? <CorrectionsDetails corrections={message.corrections} /> : null}
                   {message.documentCoverage?.length ? (
                     <CoverageLine entries={message.documentCoverage} label={(entry) => fileLabel(entry.documentId, entry.title)} />
+                  ) : null}
+                  {message.role === "assistant" && message.id === [...all].reverse().find((item) => item.role === "assistant")?.id && !selectedCase?.archivedAt ? (
+                    <ReplyChoices
+                      answer={message.content}
+                      disabled={executing}
+                      onSend={(text) => void executeMessage(text)}
+                      onDraft={(text) => {
+                        setQuery(text);
+                        document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
+                      }}
+                    />
                   ) : null}
                   {message.pipelineNext ? (
                     <PipelineChoices
@@ -6401,16 +6516,6 @@ export default function MatterChatApp({
                     </button>
                   </div>
                 </details>
-                <TaskMenu
-                  actions={availableActions}
-                  selected={workMode === "MECHANICAL" ? selectedDeterministicAction : null}
-                  pinned={!conversationIsNew}
-                  developerMode={developerMode}
-                  onSelect={(id) => {
-                    selectDeterministicAction(id);
-                    if (!id) setWorkMode("AUTO");
-                  }}
-                />
                 {developerMode ? (
                   <button
                     type="button"

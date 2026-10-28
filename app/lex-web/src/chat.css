@@ -3445,12 +3445,6 @@ mark.restored {
   line-height: 1;
 }
 
-.chat-task-menu > summary::after {
-  content: "▾";
-  margin-left: 6px;
-  font-size: 11px;
-}
-
 .chat-menu-panel {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -3495,25 +3489,10 @@ mark.restored {
   font-size: 13px;
 }
 
-.chat-menu-panel small,
-.chat-menu-caption {
+.chat-menu-panel small {
   color: var(--lm-t11);
   font-size: 11px;
   line-height: 1.35;
-}
-
-.chat-menu-caption {
-  display: block;
-  padding: 8px 10px 2px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.chat-task-pinned {
-  align-self: center;
-  color: var(--lm-t11);
-  font-size: 12px;
 }
 
 .chat-attachment-chips {
@@ -3623,4 +3602,9 @@ mark.restored {
 
 .matter-rename .chat-form-row {
   margin-top: 8px;
+}
+
+.chat-reply-choices {
+  flex-wrap: wrap;
+  gap: 8px;
 }

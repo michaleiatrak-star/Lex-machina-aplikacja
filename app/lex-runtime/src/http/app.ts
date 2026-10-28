@@ -34,10 +34,12 @@ import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
 import { latestUserTurn } from "../execution-engine.js";
+import { applyPleadingChatReply, pleadingChatReply } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
 import {
   appendDraftVersion,
   emptyProcessPleadingDraft,
+  withDraftRemarks,
   latestDraftVersion,
   PLEADING_CONTINUATIONS_MAX,
   PLEADING_END,
@@ -9802,8 +9804,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     // letter, never the conversational lane (the router read the short message as non-legal).
     const partRequest =
       Boolean(knowledge.caseId) && namesDocumentPart(latestUserMessage(parseSkillSelectionEnvelope(request.query).query));
+    // "a" / "tak" / "ok" / "daj mi dokument" in a thread pinned to the pleading pipeline answers its
+    // question (start, a step's checkpoint box), not small talk: the step's answer ends with the
+    // checkpoint frame, so the trivial gate would not see the assistant's question.
+    const pleadingReply =
+      Boolean(knowledge.caseId) &&
+      parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-procesowe-v3") &&
+      pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null;
     const trivialChat =
       !partRequest &&
+      !pleadingReply &&
       (applyTrivialChatGate(
         options.registry,
         request,
@@ -10521,6 +10531,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             state: ProcessPleadingState;
           }
         | null = null;
+      // What the user's chat reply did to the pleading pipeline (accepted start, confirmed step, AUTO).
+      let pleadingReplyNote: string | null = null;
       let pleadingDraftWritten: { version: number; checkpoint: ProcessPleadingCheckpoint } | null = null;
 
       if (
@@ -10659,9 +10671,31 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                     current,
                     inventory
                   );
+                // A typed reply moves the pipeline as in the chat with the skill: "a"/"tak"
+                // accepts the start or the pending step, "daj mi dokument" also runs the rest in AUTO.
+                const reply = applyPleadingChatReply(
+                  applicability.state,
+                  latestUserTurn(parseSkillSelectionEnvelope(request.query).query)
+                );
+                pleadingReplyNote = reply.note;
+                // "porzuć ścieżkę D" as an answer to the step: its remarks for the step's next run.
+                if (reply.revision) {
+                  const store = options.processWorkflowStore!;
+                  if (!store.getProcessPleadingDraft || !store.saveProcessPleadingDraft) {
+                    throw new Error("PROCESS_PLEADING_DRAFT_STORE_UNAVAILABLE");
+                  }
+                  const draft = await store.getProcessPleadingDraft({ caseId: processCaseId, caseDataKey, keyVersion: caseView.keyVersion });
+                  await store.saveProcessPleadingDraft({
+                    caseId: processCaseId,
+                    caseDataKey,
+                    keyVersion: caseView.keyVersion,
+                    draft: withDraftRemarks(draft ?? emptyProcessPleadingDraft(processCaseId), reply.revision.checkpoint, reply.revision.remarks),
+                    expectedRevision: draft?.revision ?? 0
+                  });
+                }
 
                 if (
-                  applicability.state
+                  reply.state
                     .revision ===
                   current.revision
                 ) {
@@ -10678,7 +10712,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                       caseView
                         .keyVersion,
                     state:
-                      applicability.state,
+                      reply.state,
                     expectedRevision:
                       current.revision
                   });
@@ -11641,6 +11675,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               })
             )
         };
+        if (pleadingReplyNote) response.answer = `${pleadingReplyNote}\n\n${response.answer ?? ""}`.trimEnd();
         response.processWorkflow = {
           caseId:
             processContext.caseId,
@@ -12471,6 +12506,7 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           if (draftProblems.length) result.answer = `${result.answer ?? ""}\n\n${pleadingDraftNotice(processContext.permit.checkpoint, draftProblems)}`;
         }
 
+        if (pleadingReplyNote) result.answer = `${pleadingReplyNote}\n\n${result.answer ?? ""}`.trimEnd();
         result.processWorkflow = {
           caseId:
             processContext.caseId,
