@@ -34,7 +34,7 @@ import { saveToDownloads } from "../download-save.js";
 import fs from "node:fs";
 import { LexSkillRegistry } from "../registry.js";
 import { latestUserTurn } from "../execution-engine.js";
-import { applyPleadingChatReply, bareRefusal, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
+import { applyPleadingChatReply, bareRefusal, lastAssistantTurn, reopensDraft, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../process-pleading-chat-reply.js";
 import { threadUserText } from "../skill-selection.js";
 import {
   appendDraftVersion,
@@ -9811,7 +9811,8 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       Boolean(knowledge.caseId) &&
       parseSkillSelectionEnvelope(request.query).manualSkills.includes("pisma-procesowe-v3") &&
       (pleadingChatReply(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) !== null ||
-        bareRefusal(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)));
+        bareRefusal(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)) ||
+        reopensDraft(latestUserMessage(parseSkillSelectionEnvelope(request.query).query)));
     const trivialChat =
       !partRequest &&
       !pleadingReply &&
@@ -10676,7 +10677,9 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
                 // accepts the start or the pending step, "daj mi dokument" also runs the rest in AUTO.
                 const reply = applyPleadingChatReply(
                   applicability.state,
-                  latestUserTurn(parseSkillSelectionEnvelope(request.query).query)
+                  latestUserTurn(parseSkillSelectionEnvelope(request.query).query),
+                  undefined,
+                  lastAssistantTurn(parseSkillSelectionEnvelope(request.query).query)
                 );
                 pleadingReplyNote = reply.note;
                 // "porzuć ścieżkę D" as an answer to the step: its remarks for the step's next run.

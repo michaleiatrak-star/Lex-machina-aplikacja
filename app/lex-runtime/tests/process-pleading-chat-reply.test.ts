@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyPleadingChatReply, pleadingChatReply, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../src/process-pleading-chat-reply.js";
-import { acceptProcessPleadingStart, createProcessPleadingState, markProcessCheckpointReady } from "../src/process-pleading-state.js";
+import { applyPleadingChatReply, lastAssistantTurn, pleadingChatReply, reopensDraft, pleadingContinuationQuery, PLEADING_CONTINUATION } from "../src/process-pleading-chat-reply.js";
+import { acceptProcessPleadingStart, confirmProcessCheckpoint, createProcessPleadingState, markProcessCheckpointReady, nextRequiredProcessCheckpoint } from "../src/process-pleading-state.js";
 
 const CASE = `case_${"a".repeat(32)}`;
 
@@ -76,5 +76,30 @@ describe("odpowiedzi w czacie przesuwające pipeline pisma (jak w czacie ze skil
       `${envelope}\nPrzygotuj pismo.\n\nAsystent: Raport CP-1b?\n\nUżytkownik: ${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «tak»`
     );
     expect(pleadingContinuationQuery(`${envelope}\nc`, "c")).toBe(`${envelope}\n${PLEADING_CONTINUATION} Odpowiedź użytkownika na poprzedni etap: «c»`);
+  });
+
+  it("„tak” na ramkę z „ponowieniem CP-ATAK” i „ponów atak” cofają projekt do W2 (§7.2)", () => {
+    let state = acceptProcessPleadingStart(createProcessPleadingState(CASE, "CHECKPOINT"));
+    for (let next = nextRequiredProcessCheckpoint(state); next && next !== "CP-PODMIOT"; next = nextRequiredProcessCheckpoint(state)) {
+      state = confirmProcessCheckpoint(markProcessCheckpointReady(state, next), next);
+    }
+    state = markProcessCheckpointReady(state, "CP-PODMIOT");
+    expect(state.stage).toBe("W3");
+    const frame = "│ ✅ CHECKPOINT [CP-PODMIOT] — ZAKOŃCZONY │\n│ ➡️ Kontynuować (ponowienie CP-ATAK → W3.1)? \"tak\"/uwagi │";
+    const confirmed = applyPleadingChatReply(state, "tak", undefined, frame);
+    expect(confirmed.state.checkpoints["CP-PODMIOT"]).toBe("CLOSED");
+    expect(confirmed.state.checkpoints["CP-ATAK"]).toBe("OPEN");
+    expect(confirmed.state.stage).toBe("W2");
+    expect(confirmed.note).toContain("projekt wraca do W2");
+    // Without the proposal "tak" only confirms the step.
+    const plain = applyPleadingChatReply(state, "tak", undefined, "│ ✅ CHECKPOINT [CP-PODMIOT] — ZAKOŃCZONY │\n│ ➡️ Kontynuować do W3.1? │");
+    expect(plain.state.checkpoints["CP-ATAK"]).toBe("CLOSED");
+    expect(plain.state.stage).toBe("W3");
+    // Asked by the user: the attack runs again, the pending step goes back to OPEN.
+    expect(reopensDraft("Ponów atak na projekt — doszedł nowy fakt")).toBe(true);
+    const asked = applyPleadingChatReply(state, "Ponów atak na projekt — doszedł nowy fakt");
+    expect(asked.state.stage).toBe("W2");
+    expect(asked.state.checkpoints["CP-PODMIOT"]).toBe("OPEN");
+    expect(lastAssistantTurn("Użytkownik: x\n\nAsystent: raport\n\nUżytkownik: tak")).toBe("raport");
   });
 });

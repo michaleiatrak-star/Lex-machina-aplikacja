@@ -86,3 +86,31 @@ export function provisionsForDetection(text: string): string {
     .replace(BARE_PROVISION, (_match, number: string, paragraph: string, act: string) => `art. ${number}${paragraph} ${act.toUpperCase()}`)
     .replace(/(\bart\.?\s+\d+[a-z]?(?:\s*§\s*\d+[a-z]?)?\s+)(kpc|kpk|kpa|kro|ksh|kpw|kc|kk|kp|kw)(?![\p{L}])/giu, (_match, head: string, act: string) => `${head}${act.toUpperCase()}`);
 }
+
+// Statutes written as dotted abbreviations ("art. 36a u.k.k."): their titles, so an
+// article is matched to the statute it names, never to the only code of the answer
+// (E2E W3: "art. 36a ust. 1 u.k.k." became "art. 36a ust. 1 KC" next to "art. 720² KC").
+const STATUTE_TITLES: Array<[string, string]> = [
+  ["u.p.r.s.k.", "ustawy o pozasądowym rozwiązywaniu sporów konsumenckich"],
+  ["u.o.k.k.", "ustawy o ochronie konkurencji i konsumentów"],
+  ["u.o.d.o.", "ustawy o ochronie danych osobowych"],
+  ["u.d.i.p.", "ustawy o dostępie do informacji publicznej"],
+  ["u.p.z.p.", "ustawy o planowaniu i zagospodarowaniu przestrzennym"],
+  ["u.k.h.", "ustawy o kredycie hipotecznym"],
+  ["u.k.k.", "ustawy o kredycie konsumenckim"],
+  ["u.p.k.", "ustawy o prawach konsumenta"],
+  ["u.g.n.", "ustawy o gospodarce nieruchomościami"],
+  ["u.s.g.", "ustawy o samorządzie gminnym"],
+  ["u.o.l.", "ustawy o ochronie praw lokatorów"]
+];
+const STATUTE_TITLE_PATTERNS: Array<[RegExp, string]> = STATUTE_TITLES.map(([dotted, title]) => [
+  new RegExp(`(?<![\\p{L}.])${dotted.replace(/\./g, "\\.\\s?").replace(/\\s\?$/, "")}(?![\\p{L}])`, "giu"),
+  `${title} (${dotted})`
+]);
+// Any other "u.x.y." abbreviation: a statute, not one of the codes (KC, KK…).
+export const DOTTED_STATUTE = /(?<![\p{L}.])u\.\s?(?:\p{L}{1,5}\.\s?){1,6}/iu;
+
+/** "art. 36a u.k.k." -> "art. 36a ustawy o kredycie konsumenckim (u.k.k.)". */
+export function withStatuteTitles(text: string): string {
+  return STATUTE_TITLE_PATTERNS.reduce((value, [pattern, title]) => value.replace(pattern, title), text);
+}
