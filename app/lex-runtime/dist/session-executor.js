@@ -440,7 +440,7 @@ export function frameHeld(answer, checkpoint) {
     const header = frameHeader(answer, checkpoint)?.text;
     return header !== undefined && !DONE_FRAME.test(header) && HELD_FRAME.test(header);
 }
-const DONE_FRAME = /CHECKPOINT[^\n]*(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
+const DONE_FRAME = /CHECKPOINT[^\n]*(?<!NIE[\s-]?)(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
 /**
  * The answer is the active checkpoint's report, the marker added after it without asking.
  * A done step's frame ends with its confirmation prompt (➡️ …?, AUTOMAT-STANOW "Odpowiedz:

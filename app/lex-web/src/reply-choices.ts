@@ -14,6 +14,8 @@ const LETTERED = /^([a-fA-F])\)\s+(.{2,160})$/u;
 const CHECKPOINT_PROMPT =
   /(?:Odpowiedz:\s*|➡️[^\n]*\n?\s*)["„“]tak["”"](?:\s*\/\s*(?:["„“]ok["”"]|modyfikuj|uwagi|lub uwagi|porzuć[^\n/]*))*/iu;
 
+const HELD_FRAME = /(?:⏸|⛔)\s*CHECKPOINT|CHECKPOINT[^\n]*(?:NIE[\s-]?(?:ZAMKNIĘT|ZAKOŃCZON|WYKONAN)|OTWART|WSTRZYMAN)/iu;
+
 function cleanLine(line: string): string {
   return line.replace(FRAME, " ").replace(/\s+/g, " ").trim();
 }
@@ -43,6 +45,8 @@ export function replyChoices(answer: string): ReplyChoice[] {
     return best.map(({ letter, label }) => ({ kind: "SEND", label: `${letter}) ${label}`, message: `${letter}) ${label}` }));
   }
   const tail = lines.slice(-15).join("\n");
+  // A held step (⛔/⏸, NIEZAMKNIĘTY, OTWARTY, WSTRZYMANY) waits for data, not for "tak".
+  if (answer.split("\n").some((line) => HELD_FRAME.test(line))) return [];
   // A checkpoint frame ending in a question without the literal "tak" ("➡️ Zatwierdzasz układ…?").
   const framed = /CHECKPOINT/u.test(tail) && /➡️[^\n]*\?/u.test(tail) ? "➡️ ?" : undefined;
   const prompt = CHECKPOINT_PROMPT.exec(tail)?.[0] ?? framed;

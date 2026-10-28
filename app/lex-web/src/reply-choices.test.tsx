@@ -54,4 +54,11 @@ describe("wybory z odpowiedzi jako przyciski", () => {
     expect(replyChoices(frame).map((c) => c.label)).toEqual(["Tak", "Uwagi…"]);
     expect(replyChoices("A) Tak, akceptuję\nB) Nie — zakończ").map((c) => c.label)).toEqual(["a) Tak, akceptuję", "b) Nie — zakończ"]);
   });
+
+  it("offers no confirmation for a held step", () => {
+    const held = "```\n│ ⛔ CHECKPOINT [CP-PODMIOT] — NIEZAMKNIĘTY (PODMIOT-CRIT) │\n│ ➡️ Podasz pełną firmę pożyczkodawcy? │\n└──┘\n```";
+    expect(replyChoices(held)).toEqual([]);
+    const done = "```\n│ ✅ CHECKPOINT [CP-ATAK] — ZAKOŃCZONY │\n│ ➡️ Kontynuować do W3.0? │\n└──┘\n```";
+    expect(replyChoices(done)[0]).toMatchObject({ kind: "SEND", message: "tak" });
+  });
 });

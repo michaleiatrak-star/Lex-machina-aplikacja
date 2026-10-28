@@ -60,4 +60,12 @@ describe("checkpoint report waiting for the user", () => {
     expect(frameHeld(answer, "CP-PRE-W2")).toBe(false);
     expect(frameHeld("│ ⏸ CHECKPOINT [CP-W1] — RAMA W1 —   │\n│ OTWARTY │\n│ Wykonane: x │", "CP-W1")).toBe(true);
   });
+
+  it("reads a negated status as not done", () => {
+    for (const status of ["NIEZAMKNIĘTY (PODMIOT-CRIT)", "NIE ZAKOŃCZONY", "NIEWYKONANY"]) {
+      const answer = `│ ⛔ CHECKPOINT [CP-PODMIOT] — ${status} │\n│ ➡️ Podaj firmę i KRS pożyczkodawcy │\n└─┘`;
+      expect(frameHeld(answer, "CP-PODMIOT"), status).toBe(true);
+      expect(reportOnly(`${answer}\n\n[CZEKAM NA ODPOWIEDŹ]`, "CP-PODMIOT"), status).toBe(false);
+    }
+  });
 });

@@ -961,7 +961,7 @@ export function frameHeld(answer: string, checkpoint: string | undefined): boole
   return header !== undefined && !DONE_FRAME.test(header) && HELD_FRAME.test(header);
 }
 
-const DONE_FRAME = /CHECKPOINT[^\n]*(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
+const DONE_FRAME = /CHECKPOINT[^\n]*(?<!NIE[\s-]?)(?:ZAKOŃCZON|ZAMKNIĘT|WYKONAN)/iu;
 
 /**
  * The answer is the active checkpoint's report, the marker added after it without asking.
