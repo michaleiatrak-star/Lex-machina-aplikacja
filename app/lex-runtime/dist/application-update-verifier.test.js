@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { applicationUpdateSignatureMode, assertApplicationInstallerVersion, normalizeApplicationProductVersion, trustedUpdateSignerThumbprints, WindowsAuthenticodeInstallerVerifier } from "./application-update-verifier.js";
+import { applicationUpdateSignatureMode, assertApplicationInstallerVersion, installerProbeEnvironment, normalizeApplicationProductVersion, trustedUpdateSignerThumbprints, WindowsAuthenticodeInstallerVerifier } from "./application-update-verifier.js";
 const roots = [];
 function manifest(applicationUpdate) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "lex-app-update-trust-"));
@@ -112,5 +112,14 @@ describe("application update signer policy", () => {
             trustedSignerThumbprints: ["A".repeat(40)]
         });
         expect(new WindowsAuthenticodeInstallerVerifier(undefined, pinned).ready()).toBe(true);
+    });
+    it("passes the installer path to the PowerShell probes in the environment, not as -Command text", () => {
+        const env = installerProbeEnvironment("C:\\Users\\Michał\\Lex Machina\\setup.exe");
+        expect(env.LEX_UPDATE_INSTALLER).toBe("C:\\Users\\Michał\\Lex Machina\\setup.exe");
+        expect(Object.keys(env).some((key) => key.toLowerCase() === "psmodulepath")).toBe(false);
+        // "-Command <script> <path>" appends the path to the script text: $args[0] stays null.
+        const source = fs.readFileSync(path.join(__dirname, "application-update-verifier.ts"), "utf8");
+        expect(source).not.toContain("$args[0]");
+        expect(source.match(/\$env:LEX_UPDATE_INSTALLER/g)?.length).toBe(3);
     });
 });
