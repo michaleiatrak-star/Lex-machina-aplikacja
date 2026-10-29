@@ -196,6 +196,204 @@ function resolveActs(references: DetectedLegalReference[], text: string): Detect
 
 const APP_CONTROL_NOTE = /^\s*⚠️?\uFE0F?\s*Kontrola aplikacji:/u;
 
+// Units after the article number in a ledger claim ("art. 35 ust. 3 Prawa budowlanego" -> the act
+// "Prawa budowlanego").
+const CLAIM_UNITS = /^art\.\s*\d+[a-z]*(?:\^\d+)?(?:\s*(?:,|i|oraz)?\s+(?:§|ust\.?|pkt|lit\.?|zd\.?)\s*[\da-z]+(?:\^\d+)?)*\s*/iu;
+// Codes are divided into paragraphs: "ust." never is a code's unit.
+const CODE_ACT = /^(?:KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|KKS|KKW)$/u;
+const ARTICLE_NUMBER = /^art\.\s*(\d+[a-z]*(?:\^\d+)?)/iu;
+// Status markers after an article are no act ("✅ [VER: …/eli/acts/DU/…]").
+const STATUS_MARKERS = /✅\s*\[VER:[^\]\r\n]*\]|⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[^\]\r\n]*\]/gu;
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+
+export type CompletedArticleAct = { line: number; claim: string; act: string };
+
+/** Bare articles left after completion whose number this turn verified in several acts. */
+export type AmbiguousBareArticle = { line: number; claim: string; acts: string[] };
+
+export function ambiguousBareArticles(text: string, ledger: VerificationLedger): AmbiguousBareArticle[] {
+  const actsByNumber = verifiedActsByNumber(ledger);
+  const result: AmbiguousBareArticle[] = [];
+  for (const reference of detectLegalReferences(text)) {
+    if (reference.kind !== "statute") continue;
+    const guessed = Boolean(reference.span) && ACT_SUFFIX.test(reference.claim);
+    if (ACT_SUFFIX.test(reference.claim) && !guessed) continue;
+    const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
+    const acts = number ? actsByNumber.get(number) : undefined;
+    if (!acts || acts.size < 2) continue;
+    const written = reference.span ?? reference.claim;
+    const at = reference.lineText.indexOf(written);
+    const own = at < 0 ? "" : reference.lineText.slice(at + written.length).replace(STATUS_MARKERS, "").split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 120);
+    if (actsIn(own).size > 0 || namesOtherAct(own) || euAct(own)) continue;
+    result.push({ line: reference.line, claim: reference.span ?? reference.claim, acts: [...acts].map(actLabel) });
+  }
+  return result;
+}
+
+function verifiedActsByNumber(ledger: VerificationLedger): Map<string, Set<string>> {
+  const actsByNumber = new Map<string, Set<string>>();
+  for (const record of ledger.all()) {
+    if (record.status !== "VERIFIED" || record.kind !== "statute") continue;
+    const claim = canonicalArticleLead(compactActAbbreviations(record.claim));
+    const number = ARTICLE_NUMBER.exec(claim)?.[1]?.toLocaleLowerCase("pl");
+    const act = claim.replace(CLAIM_UNITS, "").trim();
+    if (!number || !act) continue;
+    actsByNumber.set(number, (actsByNumber.get(number) ?? new Set()).add(act));
+  }
+  return actsByNumber;
+}
+
+const DOTTED_CODE: Record<string, string> = { KC: "k.c.", KPC: "k.p.c.", KK: "k.k.", KPK: "k.p.k.", KPA: "k.p.a.", KP: "k.p.", KRO: "k.r.o.", KSH: "k.s.h.", KW: "k.w.", KPW: "k.p.w." };
+
+/**
+ * The Dz.U. address of the text each provision was read from in ELI, written once per act at
+ * its first citation ("art. 415 KC (Dz.U. 2026 poz. 795)"), when the answer gives that act no
+ * Dz.U. address of its own. From the ledger, never from the model's memory: of the Dz.U.
+ * addresses models wrote in test 500 only 48% were the text actually read.
+ */
+export function addVerifiedJournalAddresses(text: string, ledger: VerificationLedger): { text: string; added: string[] } {
+  const journalByAct = new Map<string, string>();
+  for (const record of ledger.all()) {
+    if (record.status !== "VERIFIED" || record.kind !== "statute") continue;
+    const eli = record.currentEli ?? /\/eli\/acts\/(DU\/\d{4}\/\d+)\//u.exec(record.sourceUrl ?? "")?.[1];
+    const match = eli ? /^DU\/(\d{4})\/(\d+)$/u.exec(eli) : null;
+    const act = canonicalArticleLead(compactActAbbreviations(record.claim)).replace(CLAIM_UNITS, "").trim();
+    if (!match || !act || journalByAct.has(act)) continue;
+    journalByAct.set(act, `Dz.U. ${match[1]} poz. ${match[2]}`);
+  }
+  if (journalByAct.size === 0) return { text, added: [] };
+  const lines = text.split("\n");
+  const added: string[] = [];
+  const done = new Set<string>();
+  for (const reference of detectLegalReferences(text)) {
+    if (reference.kind !== "statute" || reference.span) continue;
+    const code = ACT_SUFFIX.exec(reference.claim)?.[1];
+    const lineText = lines[reference.line - 1] ?? "";
+    let act: string | undefined;
+    let end = -1;
+    if (code) {
+      act = code;
+      const written = new RegExp(`${escapeRegExp(reference.claim.replace(ACT_SUFFIX, ""))}\\s+(?:${escapeRegExp(code)}|${escapeRegExp(DOTTED_CODE[code] ?? code)})(?![\\p{L}])`, "iu").exec(lineText);
+      if (written) end = written.index + written[0].length;
+    } else {
+      const at = lineText.indexOf(reference.claim);
+      const after = at < 0 ? "" : lineText.slice(at + reference.claim.length);
+      act = [...journalByAct.keys()].find((name) => !ACT_SUFFIX.test(` ${name}`) && after.toLocaleLowerCase("pl").startsWith(` ${actLabel(name).toLocaleLowerCase("pl")}`));
+      if (act) end = at + reference.claim.length + 1 + actLabel(act).length;
+    }
+    if (!act || end < 0 || done.has(act)) continue;
+    const journal = journalByAct.get(act);
+    if (!journal) continue;
+    done.add(act);
+    // The act already has an address in the answer: the model's own stays (G8 checks it).
+    if (/Dz\.\s?U\./u.test(lineText.slice(end, end + 80)) || text.includes(journal)) continue;
+    lines[reference.line - 1] = `${lineText.slice(0, end)} (${journal})${lineText.slice(end)}`;
+    added.push(`${act}: ${journal}`);
+  }
+  return added.length ? { text: lines.join("\n"), added } : { text, added };
+}
+
+/** The units of the reference ("art. 35 ust. 3") exist in a VERIFIED record of the act. */
+function unitInVerifiedAct(ledger: VerificationLedger, claim: string, act: string): boolean {
+  const canonical = canonicalArticleLead(compactActAbbreviations(claim));
+  const units = canonical.replace(ARTICLE_NUMBER, "").trim();
+  if (!units) return true;
+  if (CODE_ACT.test(act) && /(?<![\p{L}])ust\./iu.test(units)) return false;
+  const wanted = comparableClaim(`${canonical} ${act}`);
+  const article = ARTICLE_NUMBER.exec(canonical)?.[0] ?? "";
+  return ledger.all().some((record) => {
+    if (record.status !== "VERIFIED" || record.kind !== "statute") return false;
+    const recordClaim = comparableClaim(canonicalArticleLead(compactActAbbreviations(record.claim)));
+    if (recordClaim === wanted || recordClaim.startsWith(wanted.replace(comparableClaim(act), "").trim() + " ") && recordClaim.endsWith(comparableClaim(act))) return true;
+    // The whole article read: its text has the unit ("§ 3", "3." for ust. 3, "3)" for pkt 3).
+    if (recordClaim !== comparableClaim(`${article} ${act}`) || !record.evidence) return false;
+    return [...units.matchAll(/(§|ust\.?|pkt|lit\.?)\s*(\d+[a-z]*|[a-z])\b/giu)].every(([, kind, value]) => {
+      const unit = escapeRegExp(value!);
+      const pattern = kind === "§" ? `§\\s*${unit}(?![\\d\\p{L}])` : kind!.startsWith("ust") ? `(?<!§\\s*)(?:^|\\s)${unit}\\.\\s` : `(?:^|\\s)${unit}\\)`;
+      return new RegExp(pattern, "iu").test(record.evidence!);
+    });
+  });
+}
+
+/** "o Policji" read off a claim is "ustawy o Policji" in the text. */
+const actLabel = (act: string): string => (/^o\s/iu.test(act) ? `ustawy ${act}` : act);
+
+/**
+ * The act of an article the answer cites bare ("art. 36a"), written into the text when the turn
+ * verified that article number in exactly one act ("art. 36a u.k.s.c." read from ELI): the
+ * reader sees which act is meant and every gate reads the same provision. No model call.
+ * Test 500 dumps: 43% of answers cite articles bare; 61% of those have one verified act.
+ * An article verified in several acts, or in none, is left as written (G8 marks or asks).
+ */
+export function completeBareArticleActs(
+  text: string,
+  ledger: VerificationLedger
+): { text: string; completed: CompletedArticleAct[] } {
+  const actsByNumber = new Map<string, Set<string>>();
+  for (const record of ledger.all()) {
+    if (record.status !== "VERIFIED" || record.kind !== "statute") continue;
+    const claim = canonicalArticleLead(compactActAbbreviations(record.claim));
+    const number = ARTICLE_NUMBER.exec(claim)?.[1]?.toLocaleLowerCase("pl");
+    const act = claim.replace(CLAIM_UNITS, "").trim();
+    if (!number || !act) continue;
+    actsByNumber.set(number, (actsByNumber.get(number) ?? new Set()).add(act));
+  }
+  if (actsByNumber.size === 0) return { text, completed: [] };
+  const references = detectLegalReferences(text);
+  // The same number written with another act elsewhere in the answer: not completed (ambiguous).
+  const writtenActs = new Map<string, Set<string>>();
+  const ownText = (reference: DetectedLegalReference): string => {
+    const found = new RegExp(`${escapeRegExp(reference.span ?? reference.claim)}(?![\\d\\p{L}^¹²³⁴⁵⁶⁷⁸⁹⁰])`, "u").exec(reference.lineText);
+    return found ? reference.lineText.slice(found.index + found[0].length).replace(STATUS_MARKERS, "").split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 120) : "";
+  };
+  for (const reference of references) {
+    if (reference.kind !== "statute") continue;
+    const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
+    if (!number) continue;
+    // Written with a code ("art. 35 KPA") or with an act named in words after it ("art. 35 ust. 3
+    // Prawa budowlanego"): the act this number has in the answer's own words.
+    const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
+    const named = !act && namesOtherAct(ownText(reference)) ? "\u0000named" : undefined;
+    if (act || named) writtenActs.set(number, (writtenActs.get(number) ?? new Set()).add((act ?? named)!));
+  }
+  const lines = text.split("\n");
+  const completed: CompletedArticleAct[] = [];
+  const cursor = new Map<number, number>();
+  for (const reference of references) {
+    if (reference.kind !== "statute") continue;
+    // An act the gate borrowed from the line or the answer ("art. 7 KPA …, art. 49g" read as
+    // art. 49g KPA) is a guess: written as bare, unless that act has the article verified.
+    const guessed = Boolean(reference.span) && ACT_SUFFIX.exec(reference.claim)?.[1];
+    if (ACT_SUFFIX.test(reference.claim) && !guessed) continue;
+    const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
+    const acts = number ? actsByNumber.get(number) : undefined;
+    if (!number || !acts || acts.size !== 1) continue;
+    const act = [...acts][0]!;
+    if (guessed && act === guessed) continue;
+    const written = writtenActs.get(number);
+    if (written && [...written].some((other) => other !== act)) continue;
+    // "art. 35 ust. 3" with only art. 35 KPA verified: KPA has paragraphs, no ust. 3 — the
+    // article is Prawo budowlane's. The unit written has to be in the verified act.
+    if (!unitInVerifiedAct(ledger, guessed ? reference.span! : reference.claim, act)) continue;
+    const lineText = lines[reference.line - 1] ?? "";
+    const from = cursor.get(reference.line) ?? 0;
+    const found = new RegExp(`${escapeRegExp(reference.span ?? reference.claim)}(?![\\d\\p{L}^¹²³⁴⁵⁶⁷⁸⁹⁰])`, "u").exec(lineText.slice(from));
+    if (!found) continue;
+    const end = from + found.index + found[0].length;
+    // An act already written after the article ("art. 36a ustawy o …", "art. 5 AI Act", "art. 23 i 24 KC").
+    const own = lineText.slice(end).replace(STATUS_MARKERS, "").split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0]!.slice(0, 120);
+    if (actsIn(own).size > 0 || namesOtherAct(own) || euAct(own) || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])\s*\d/u.test(own)) {
+      cursor.set(reference.line, end);
+      continue;
+    }
+    const label = actLabel(act);
+    lines[reference.line - 1] = `${lineText.slice(0, end)} ${label}${lineText.slice(end)}`;
+    cursor.set(reference.line, end + label.length + 1);
+    completed.push({ line: reference.line, claim: reference.claim, act: label });
+  }
+  return completed.length ? { text: lines.join("\n"), completed } : { text, completed };
+}
+
 export function detectLegalReferences(text: string): DetectedLegalReference[] {
   const references: DetectedLegalReference[] = [];
   const lines = text.split(/\r?\n/);

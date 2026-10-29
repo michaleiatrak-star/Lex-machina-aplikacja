@@ -193,7 +193,7 @@ import {
   resolveReferencePreflightOwnership
 } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
-import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
+import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers, type LegalReferenceKind } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -988,6 +988,13 @@ export function reportOnly(answer: string, checkpoint: string | undefined): bool
 }
 
 // Executive skills that work on the case's material, and what to ask for when there is none.
+// Every citation carries its act: a bare "art. 36a" leaves the reader and the gates to guess the
+// act (test 500: 43% of answers cited articles bare).
+const CITATION_FORM_RULE = [
+  "# FORMA POWOŁANIA PRZEPISU (aplikacja)",
+  "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”."
+].join("\n");
+
 const MATERIAL_SKILLS: Record<string, string> = {
   "analizator-umow-v1": "umowa (plik albo pełny tekst)",
   "analiza-sadowa-v6": "orzeczenie, pisma albo akta sprawy",
@@ -2849,7 +2856,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // provider caches the system prompt up to its end; skill-specific resources and the tools
     // of this case follow it.
     const sharedPath = (section: string): boolean => stablePath(section) && section.startsWith("# MANDATORY PATH RESOURCE:");
-    const toolPromptStable = [identityPrompt, ...pathSections.filter(sharedPath)].join("\n\n");
+    const toolPromptStable = [identityPrompt, CITATION_FORM_RULE, ...pathSections.filter(sharedPath)].join("\n\n");
     const toolPrompt = [
       toolPromptStable,
       ...pathSections.filter((section) => stablePath(section) && !sharedPath(section)),
@@ -3746,6 +3753,44 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     }
 
+    // A bare article whose number this turn verified in several acts ("art. 11": KC and PrUp):
+    // the application cannot tell which is meant, so one correcting round asks the model to name
+    // the act at those citations only. Bare articles with one verified act are completed by the
+    // application (completeBareArticleActs); unverified ones are marked ⚠️, not asked about.
+    const ambiguous = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/") && !waitsForUser(modelOutput)
+      ? ambiguousBareArticles(modelOutput, ledger)
+      : [];
+    if (ambiguous.length > 0) {
+      step("MODEL", `nazwa aktu przy ${ambiguous.length} powołaniach: runda poprawcza`);
+      const instruction = [
+        "KONTROLA APLIKACJI — nazwa aktu: w odpowiedzi są powołania przepisów bez nazwy aktu, a ten sam numer artykułu zweryfikowano w tej turze w kilku aktach:",
+        ...ambiguous.map((item) => `- ${item.claim} (wiersz ${item.line}): ${item.acts.join(" albo ")}`),
+        "Przy każdym z tych powołań dopisz nazwę albo skrót właściwego aktu. Nie zmieniaj niczego innego (treści, układu, znaczników ✅/⚠️, ramek etapów). Zwróć PEŁNĄ odpowiedź."
+      ].join("\n");
+      try {
+        const corrected = await this.providers.stream(request.provider, {
+          model: request.model,
+          ...correctingRound(modelOutput, instruction),
+          accountContinuity: "none",
+          reasoning: "none"
+        });
+        const text = corrected.fullText.trim();
+        const remaining = text ? ambiguousBareArticles(text, ledger) : ambiguous;
+        // The same answer with the acts named: about the same length, fewer ambiguous citations.
+        const accepted = Boolean(text) && remaining.length < ambiguous.length && text.length >= modelOutput.length * 0.9 && text.length <= modelOutput.length * 1.2;
+        if (accepted) {
+          corrections.push(answerCorrection("ACT_NAME", ambiguous.map((item) => `${item.claim}: ${item.acts.join(" / ")}`), modelOutput, text));
+          modelOutput = text;
+        }
+        audit.record("gate", "ACT_NAME_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
+          ambiguous: ambiguous.map((item) => `${item.claim} -> ${item.acts.join("|")}`),
+          remaining: accepted ? remaining.map((item) => item.claim) : ambiguous.map((item) => item.claim)
+        });
+      } catch (error) {
+        audit.record("gate", "ACT_NAME_CORRECTION", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED" });
+      }
+    }
+
     // What the answer says a judgment or interpretation is about must come from the text read
     // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
     // 1) Semantic: the connected model, in a separate context with only the question, the
@@ -3994,9 +4039,23 @@ export class SafeSessionExecutor implements SessionExecutor {
       }
     }
 
+    // "art. 36a" with no act: written with the one act this turn verified that article (and its
+    // unit) in, before any gate reads it; an article verified in several acts, or none, stays
+    // as written. No model call (W3 and test 500: bare articles were half of the conflicts).
+    const actCompletion = completeBareArticleActs(automaticVerification.text, ledger);
+    if (actCompletion.completed.length > 0) {
+      audit.record("gate", "BARE_ARTICLE_ACT_COMPLETION", "OK", {
+        completed: actCompletion.completed.map((item) => `${item.claim} -> ${item.act}`)
+      });
+    }
+    // The Dz.U. address of the text each act was read from, once per act, from the ledger.
+    const journalAddresses = addVerifiedJournalAddresses(actCompletion.text, ledger);
+    if (journalAddresses.added.length > 0) {
+      audit.record("gate", "VERIFIED_JOURNAL_ADDRESSES", "OK", { added: journalAddresses.added });
+    }
     const citedAnswer =
       processDocumentCitationMarkers(
-        automaticVerification.text,
+        journalAddresses.text,
         citationSources,
         {
           otherTexts: [
