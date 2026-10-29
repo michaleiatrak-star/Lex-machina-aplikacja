@@ -285,6 +285,8 @@ function articleTokenFromClaim(
 const BODY_CACHE_MS = 10 * 60 * 1000;
 const bodyCache = new WeakMap<EliFetch, Map<string, { at: number; body: Promise<string | null> }>>();
 
+const AMENDMENT_RETRY_MS = 1500;
+
 function amendmentBody(
   fetcher: EliFetch,
   pdfTextExtractor: PdfTextExtractor,
@@ -294,7 +296,11 @@ function amendmentBody(
   if (!cache) bodyCache.set(fetcher, (cache = new Map()));
   const hit = cache.get(eli);
   if (hit && Date.now() - hit.at < BODY_CACHE_MS) return hit.body;
-  const body = fetchAmendmentBody(fetcher, pdfTextExtractor, eli);
+  // One more try after a pause: of a dozen checks run at once one read may fail (RD 121/26:
+  // art. 190a and 245 KK unverified in the turn, verified when checked again).
+  const body = fetchAmendmentBody(fetcher, pdfTextExtractor, eli).then(
+    (first) => first ?? new Promise<string | null>((resolve) => setTimeout(() => resolve(fetchAmendmentBody(fetcher, pdfTextExtractor, eli)), AMENDMENT_RETRY_MS))
+  );
   cache.set(eli, { at: Date.now(), body });
   // A failed read is not kept: the next check tries again.
   void body.then((value) => {

@@ -48,6 +48,14 @@ describe(
       }
     );
 
+    it("does not verify an article of an act named in words as the line's code (RD 121/26)", () => {
+      const plan = planAutomaticLegalVerification(
+        "Podstawa: art. 95n pkt 1 Prawa o adwokaturze i odpowiednio art. 306 § 1 KPK.",
+        new VerificationLedger()
+      );
+      expect(plan.calls.map((call) => [call.input.claim, call.input.act])).toEqual([["art. 306 § 1 KPK", "KPK"]]);
+    });
+
     it(
       "propagates an explicit historical legal-state date into deterministic verification",
       () => {

@@ -407,22 +407,42 @@ const ACT_TITLE_NOISE = new Set([
 function namedActRecord(ledger, reference) {
     if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim) || !namesOtherAct(reference.lineText))
         return undefined;
-    const prefix = comparableClaim(reference.claim) + " ";
     const line = comparableClaim(withStatuteTitles(reference.lineText));
-    const matching = ledger.all().filter((record) => {
-        if (record.status !== "VERIFIED" || record.kind !== "statute")
-            return false;
-        const claim = comparableClaim(record.claim);
-        if (!claim.startsWith(prefix))
-            return false;
-        const tail = claim.slice(prefix.length);
-        // The same unit only: "art. 11 ust. 2 ustawy …" is not the article mentioned as a whole.
-        if (!/^(?:ustaw|kodeks|rozporządz|konstytucj)/u.test(tail))
-            return false;
-        const words = tail.split(" ").filter((word) => word.length >= 5 && !/\d/u.test(word) && !ACT_TITLE_NOISE.has(word));
-        return words.length > 0 && words.every((word) => line.includes(word));
+    const recordsFor = (prefix) => {
+        const matching = ledger.all().filter((record) => {
+            if (record.status !== "VERIFIED" || record.kind !== "statute")
+                return false;
+            const claim = comparableClaim(record.claim);
+            if (!claim.startsWith(prefix))
+                return false;
+            const tail = claim.slice(prefix.length);
+            // The same unit only: "art. 11 ust. 2 ustawy …" is not the article mentioned as a whole.
+            if (!/^(?:ustaw|kodeks|rozporządz|konstytucj|praw[aoe]?\s)/u.test(tail))
+                return false;
+            const words = tail.split(" ").filter((word) => word.length >= 5 && !/\d/u.test(word) && !ACT_TITLE_NOISE.has(word));
+            return words.length > 0 && words.every((word) => line.includes(word));
+        });
+        return new Set(matching.map((record) => comparableClaim(record.claim))).size === 1 ? matching.at(-1) : undefined;
+    };
+    const exact = recordsFor(comparableClaim(reference.claim) + " ");
+    if (exact)
+        return exact;
+    // "art. 95n pkt 1 Prawa o adwokaturze" and the verified article "art. 95n Prawa o adwokaturze"
+    // (RD 121/26): the record of the whole article holds the unit when its fetched text has it.
+    const match = /^(art\.?\s*\d+[a-zA-Z⁰¹²³⁴⁵⁶⁷⁸⁹^]*)\s+(?=§|ust|pkt|lit)/iu.exec(reference.claim.trim());
+    if (!match)
+        return undefined;
+    const article = recordsFor(comparableClaim(match[1]) + " ");
+    return article?.evidence && unitsInEvidence(reference.claim.trim().slice(match[0].length), article.evidence) ? article : undefined;
+}
+// Every unit of a citation ("§ 2", "ust. 3", "pkt 1", "lit. e") stands in the article's fetched text.
+function unitsInEvidence(units, evidence) {
+    const found = [...units.matchAll(/(§|ust\.?|pkt|lit\.?)\s*(\d+[a-z]*|[a-z])\b/giu)];
+    return found.length > 0 && found.every(([, kind, value]) => {
+        const unit = value.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+        const pattern = kind === "§" ? `§\\s*${unit}(?![\\d\\p{L}])` : kind.startsWith("ust") ? `(?:^|\\s)${unit}\\.\\s` : `(?:^|\\s)${unit}\\)`;
+        return new RegExp(pattern, "iu").test(evidence);
     });
-    return new Set(matching.map((record) => comparableClaim(record.claim))).size === 1 ? matching.at(-1) : undefined;
 }
 // A pleading's header line holding only the case number ("Sygn. akt I C 900/26"): the
 // number of the proceeding the letter is filed in, wherever else the text repeats it.

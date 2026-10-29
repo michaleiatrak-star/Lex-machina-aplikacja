@@ -992,7 +992,11 @@ export function reportOnly(answer: string, checkpoint: string | undefined): bool
 // act (test 500: 43% of answers cited articles bare).
 const CITATION_FORM_RULE = [
   "# FORMA POWOŁANIA PRZEPISU (aplikacja)",
-  "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”."
+  "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”.",
+  "",
+  "# PLIK PISMA (aplikacja)",
+  // RD 121/26, live: "Pliku .docx nie mogę zapisać… wklej tekst do Worda" while the application makes it.
+  "Plik .docx (i PDF) tworzy aplikacja z treści pisma: etap pisma albo przycisk „Generuj dokument”. Krok skilla „generowanie pliku” jest więc wykonywany przez aplikację — nie pisz, że nie możesz utworzyć pliku, i nie odsyłaj do Worda ani do kopiowania tekstu."
 ].join("\n");
 
 const MATERIAL_SKILLS: Record<string, string> = {

@@ -14,6 +14,10 @@ describe("Gate I automatic statutory verification", () => {
         expect(plan.calls.every((call) => call.name ===
             "verify_legal_reference")).toBe(true);
     });
+    it("does not verify an article of an act named in words as the line's code (RD 121/26)", () => {
+        const plan = planAutomaticLegalVerification("Podstawa: art. 95n pkt 1 Prawa o adwokaturze i odpowiednio art. 306 § 1 KPK.", new VerificationLedger());
+        expect(plan.calls.map((call) => [call.input.claim, call.input.act])).toEqual([["art. 306 § 1 KPK", "KPK"]]);
+    });
     it("propagates an explicit historical legal-state date into deterministic verification", () => {
         const text = "Według stanu na 2020-06-01 znaczenie ma art. 5 KC.";
         const plan = planAutomaticLegalVerification(text, new VerificationLedger());
