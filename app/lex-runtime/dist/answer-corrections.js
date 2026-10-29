@@ -56,7 +56,7 @@ export function validAnswerCorrections(value) {
         value.length <= 4 &&
         value.every((item) => item &&
             typeof item === "object" &&
-            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER") &&
+            (item.round === "MANDATORY_PATH" || item.round === "CASE_GROUNDING" || item.round === "NO_ANSWER" || item.round === "ACT_NAME") &&
             Array.isArray(item.findings) &&
             item.findings.length <= MAX_FINDINGS &&
             item.findings.every((finding) => typeof finding === "string" && finding.length <= 500) &&

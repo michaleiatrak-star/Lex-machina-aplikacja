@@ -3,7 +3,8 @@ import type { AnswerCorrection } from "./api.js";
 const ROUND: Record<AnswerCorrection["round"], string> = {
   CASE_GROUNDING: "zgodność z tekstem dokumentów i orzeczeń",
   NO_ANSWER: "odpowiedź bez treści i bez pytania",
-  MANDATORY_PATH: "ścieżka obowiązkowa i nadzór treści"
+  MANDATORY_PATH: "ścieżka obowiązkowa i nadzór treści",
+  ACT_NAME: "nazwa aktu przy powołaniu przepisu"
 };
 
 /** What the application's correcting round changed in the answer: the findings and the removed sentences. */

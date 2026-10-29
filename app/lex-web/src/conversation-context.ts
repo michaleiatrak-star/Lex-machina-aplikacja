@@ -50,7 +50,7 @@ function corrections(item: CaseChatMessage): string {
       const removed = correction.removed.length
         ? `usunięte zdania pierwszej wersji: ${correction.removed.map((sentence) => `„${sentence}”`).join("; ")}`
         : "bez usuniętych zdań (tylko uzupełnienia)";
-      return `\n[Runda poprawcza aplikacji (${correction.round === "CASE_GROUNDING" ? "zgodność z tekstem dokumentów" : correction.round === "NO_ANSWER" ? "odpowiedź bez treści" : "ścieżka obowiązkowa"}): zarzuty: ${correction.findings.join("; ") || "brak"}; ${removed}]`;
+      return `\n[Runda poprawcza aplikacji (${correction.round === "CASE_GROUNDING" ? "zgodność z tekstem dokumentów" : correction.round === "NO_ANSWER" ? "odpowiedź bez treści" : correction.round === "ACT_NAME" ? "nazwa aktu przy powołaniu" : "ścieżka obowiązkowa"}): zarzuty: ${correction.findings.join("; ") || "brak"}; ${removed}]`;
     })
     .join("");
 }

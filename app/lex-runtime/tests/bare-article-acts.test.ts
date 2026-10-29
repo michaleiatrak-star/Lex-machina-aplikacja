@@ -46,3 +46,22 @@ describe("act of a bare article from the turn's verified records", () => {
     expect(new FinalizationGate().evaluate(completed.text, records).result).toBe("PASS");
   });
 });
+
+describe("Dz.U. of the text read in ELI and the act-name round", () => {
+  it("writes the Dz.U. address of the verified text once per act, never over the model's own", async () => {
+    const { addVerifiedJournalAddresses } = await import("../src/finalization-gate.js");
+    const records = new VerificationLedger();
+    records.add({ ...base, claim: "art. 415 KC", toolCallId: "a", sourceUrl: "https://api.sejm.gov.pl/eli/acts/DU/2026/795/text.pdf", currentEli: "DU/2026/795" });
+    const text = ["Odpowiedzialność: art. 415 KC.", "Szkoda: art. 415 KC raz jeszcze."].join("\n");
+    const out = addVerifiedJournalAddresses(text, records);
+    expect(out.text).toBe(["Odpowiedzialność: art. 415 KC (Dz.U. 2026 poz. 795).", "Szkoda: art. 415 KC raz jeszcze."].join("\n"));
+    expect(new FinalizationGate().evaluate(out.text, records).findings.find((finding) => finding.reference.kind === "journal")?.status).toBe("VERIFIED");
+    expect(addVerifiedJournalAddresses("Zob. art. 415 KC (t.j. Dz.U. 2025 poz. 1071).", records).added).toEqual([]);
+  });
+
+  it("lists a bare article verified in two acts for the act-name round, not one verified in one", async () => {
+    const { ambiguousBareArticles } = await import("../src/finalization-gate.js");
+    expect(ambiguousBareArticles("Zob. art. 11.", ledger({ claim: "art. 11 KC" }, { claim: "art. 11 Prawa upadłościowego" })).map((item) => item.acts)).toEqual([["KC", "Prawa upadłościowego"]]);
+    expect(ambiguousBareArticles("Zob. art. 11.", ledger({ claim: "art. 11 KC" }))).toEqual([]);
+  });
+});

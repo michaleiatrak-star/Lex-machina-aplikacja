@@ -111,6 +111,100 @@ const ARTICLE_NUMBER = /^art\.\s*(\d+[a-z]*(?:\^\d+)?)/iu;
 // Status markers after an article are no act ("✅ [VER: …/eli/acts/DU/…]").
 const STATUS_MARKERS = /✅\s*\[VER:[^\]\r\n]*\]|⚠️?\s*\[NIEWERYFIKOWANE\]|🟨\s*\[KOTWICA-URZĘDOWA[^\]\r\n]*\]/gu;
 const escapeRegExp = (value) => value.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&");
+export function ambiguousBareArticles(text, ledger) {
+    const actsByNumber = verifiedActsByNumber(ledger);
+    const result = [];
+    for (const reference of detectLegalReferences(text)) {
+        if (reference.kind !== "statute")
+            continue;
+        const guessed = Boolean(reference.span) && ACT_SUFFIX.test(reference.claim);
+        if (ACT_SUFFIX.test(reference.claim) && !guessed)
+            continue;
+        const number = ARTICLE_NUMBER.exec(reference.claim)?.[1]?.toLocaleLowerCase("pl");
+        const acts = number ? actsByNumber.get(number) : undefined;
+        if (!acts || acts.size < 2)
+            continue;
+        const written = reference.span ?? reference.claim;
+        const at = reference.lineText.indexOf(written);
+        const own = at < 0 ? "" : reference.lineText.slice(at + written.length).replace(STATUS_MARKERS, "").split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].slice(0, 120);
+        if (actsIn(own).size > 0 || namesOtherAct(own) || euAct(own))
+            continue;
+        result.push({ line: reference.line, claim: reference.span ?? reference.claim, acts: [...acts].map(actLabel) });
+    }
+    return result;
+}
+function verifiedActsByNumber(ledger) {
+    const actsByNumber = new Map();
+    for (const record of ledger.all()) {
+        if (record.status !== "VERIFIED" || record.kind !== "statute")
+            continue;
+        const claim = canonicalArticleLead(compactActAbbreviations(record.claim));
+        const number = ARTICLE_NUMBER.exec(claim)?.[1]?.toLocaleLowerCase("pl");
+        const act = claim.replace(CLAIM_UNITS, "").trim();
+        if (!number || !act)
+            continue;
+        actsByNumber.set(number, (actsByNumber.get(number) ?? new Set()).add(act));
+    }
+    return actsByNumber;
+}
+const DOTTED_CODE = { KC: "k.c.", KPC: "k.p.c.", KK: "k.k.", KPK: "k.p.k.", KPA: "k.p.a.", KP: "k.p.", KRO: "k.r.o.", KSH: "k.s.h.", KW: "k.w.", KPW: "k.p.w." };
+/**
+ * The Dz.U. address of the text each provision was read from in ELI, written once per act at
+ * its first citation ("art. 415 KC (Dz.U. 2026 poz. 795)"), when the answer gives that act no
+ * Dz.U. address of its own. From the ledger, never from the model's memory: of the Dz.U.
+ * addresses models wrote in test 500 only 48% were the text actually read.
+ */
+export function addVerifiedJournalAddresses(text, ledger) {
+    const journalByAct = new Map();
+    for (const record of ledger.all()) {
+        if (record.status !== "VERIFIED" || record.kind !== "statute")
+            continue;
+        const eli = record.currentEli ?? /\/eli\/acts\/(DU\/\d{4}\/\d+)\//u.exec(record.sourceUrl ?? "")?.[1];
+        const match = eli ? /^DU\/(\d{4})\/(\d+)$/u.exec(eli) : null;
+        const act = canonicalArticleLead(compactActAbbreviations(record.claim)).replace(CLAIM_UNITS, "").trim();
+        if (!match || !act || journalByAct.has(act))
+            continue;
+        journalByAct.set(act, `Dz.U. ${match[1]} poz. ${match[2]}`);
+    }
+    if (journalByAct.size === 0)
+        return { text, added: [] };
+    const lines = text.split("\n");
+    const added = [];
+    const done = new Set();
+    for (const reference of detectLegalReferences(text)) {
+        if (reference.kind !== "statute" || reference.span)
+            continue;
+        const code = ACT_SUFFIX.exec(reference.claim)?.[1];
+        const lineText = lines[reference.line - 1] ?? "";
+        let act;
+        let end = -1;
+        if (code) {
+            act = code;
+            const written = new RegExp(`${escapeRegExp(reference.claim.replace(ACT_SUFFIX, ""))}\\s+(?:${escapeRegExp(code)}|${escapeRegExp(DOTTED_CODE[code] ?? code)})(?![\\p{L}])`, "iu").exec(lineText);
+            if (written)
+                end = written.index + written[0].length;
+        }
+        else {
+            const at = lineText.indexOf(reference.claim);
+            const after = at < 0 ? "" : lineText.slice(at + reference.claim.length);
+            act = [...journalByAct.keys()].find((name) => !ACT_SUFFIX.test(` ${name}`) && after.toLocaleLowerCase("pl").startsWith(` ${actLabel(name).toLocaleLowerCase("pl")}`));
+            if (act)
+                end = at + reference.claim.length + 1 + actLabel(act).length;
+        }
+        if (!act || end < 0 || done.has(act))
+            continue;
+        const journal = journalByAct.get(act);
+        if (!journal)
+            continue;
+        done.add(act);
+        // The act already has an address in the answer: the model's own stays (G8 checks it).
+        if (/Dz\.\s?U\./u.test(lineText.slice(end, end + 80)) || text.includes(journal))
+            continue;
+        lines[reference.line - 1] = `${lineText.slice(0, end)} (${journal})${lineText.slice(end)}`;
+        added.push(`${act}: ${journal}`);
+    }
+    return added.length ? { text: lines.join("\n"), added } : { text, added };
+}
 /** The units of the reference ("art. 35 ust. 3") exist in a VERIFIED record of the act. */
 function unitInVerifiedAct(ledger, claim, act) {
     const canonical = canonicalArticleLead(compactActAbbreviations(claim));

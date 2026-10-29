@@ -58,7 +58,7 @@ import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
-import { completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
+import { addVerifiedJournalAddresses, ambiguousBareArticles, completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -2522,6 +2522,44 @@ export class SafeSessionExecutor {
                 });
             }
         }
+        // A bare article whose number this turn verified in several acts ("art. 11": KC and PrUp):
+        // the application cannot tell which is meant, so one correcting round asks the model to name
+        // the act at those citations only. Bare articles with one verified act are completed by the
+        // application (completeBareArticleActs); unverified ones are marked ⚠️, not asked about.
+        const ambiguous = legalTurn && !request.documentAstOutput && !request.model.startsWith("local/") && !waitsForUser(modelOutput)
+            ? ambiguousBareArticles(modelOutput, ledger)
+            : [];
+        if (ambiguous.length > 0) {
+            step("MODEL", `nazwa aktu przy ${ambiguous.length} powołaniach: runda poprawcza`);
+            const instruction = [
+                "KONTROLA APLIKACJI — nazwa aktu: w odpowiedzi są powołania przepisów bez nazwy aktu, a ten sam numer artykułu zweryfikowano w tej turze w kilku aktach:",
+                ...ambiguous.map((item) => `- ${item.claim} (wiersz ${item.line}): ${item.acts.join(" albo ")}`),
+                "Przy każdym z tych powołań dopisz nazwę albo skrót właściwego aktu. Nie zmieniaj niczego innego (treści, układu, znaczników ✅/⚠️, ramek etapów). Zwróć PEŁNĄ odpowiedź."
+            ].join("\n");
+            try {
+                const corrected = await this.providers.stream(request.provider, {
+                    model: request.model,
+                    ...correctingRound(modelOutput, instruction),
+                    accountContinuity: "none",
+                    reasoning: "none"
+                });
+                const text = corrected.fullText.trim();
+                const remaining = text ? ambiguousBareArticles(text, ledger) : ambiguous;
+                // The same answer with the acts named: about the same length, fewer ambiguous citations.
+                const accepted = Boolean(text) && remaining.length < ambiguous.length && text.length >= modelOutput.length * 0.9 && text.length <= modelOutput.length * 1.2;
+                if (accepted) {
+                    corrections.push(answerCorrection("ACT_NAME", ambiguous.map((item) => `${item.claim}: ${item.acts.join(" / ")}`), modelOutput, text));
+                    modelOutput = text;
+                }
+                audit.record("gate", "ACT_NAME_CORRECTION", accepted && remaining.length === 0 ? "OK" : "DEGRADED", {
+                    ambiguous: ambiguous.map((item) => `${item.claim} -> ${item.acts.join("|")}`),
+                    remaining: accepted ? remaining.map((item) => item.claim) : ambiguous.map((item) => item.claim)
+                });
+            }
+            catch (error) {
+                audit.record("gate", "ACT_NAME_CORRECTION", "DEGRADED", { error: error instanceof Error ? error.message.slice(0, 200) : "CORRECTION_FAILED" });
+            }
+        }
         // What the answer says a judgment or interpretation is about must come from the text read
         // from the source (0.1.27: II SAB/Po 175/26 presented as an AI-hallucination ruling).
         // 1) Semantic: the connected model, in a separate context with only the question, the
@@ -2730,7 +2768,12 @@ export class SafeSessionExecutor {
                 completed: actCompletion.completed.map((item) => `${item.claim} -> ${item.act}`)
             });
         }
-        const citedAnswer = processDocumentCitationMarkers(actCompletion.text, citationSources, {
+        // The Dz.U. address of the text each act was read from, once per act, from the ledger.
+        const journalAddresses = addVerifiedJournalAddresses(actCompletion.text, ledger);
+        if (journalAddresses.added.length > 0) {
+            audit.record("gate", "VERIFIED_JOURNAL_ADDRESSES", "OK", { added: journalAddresses.added });
+        }
+        const citedAnswer = processDocumentCitationMarkers(journalAddresses.text, citationSources, {
             otherTexts: [
                 request.query,
                 ...officialCaseLawTexts,

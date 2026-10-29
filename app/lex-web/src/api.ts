@@ -1061,7 +1061,7 @@ export type DocumentCoverageEntry = {
   status: "FULL" | "PARTIAL";
 };
 
-export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER"; findings: string[]; removed: string[] };
+export type AnswerCorrection = { round: "MANDATORY_PATH" | "CASE_GROUNDING" | "NO_ANSWER" | "ACT_NAME"; findings: string[]; removed: string[] };
 
 export type SessionExecutionResponse = {
   sessionId: string;
