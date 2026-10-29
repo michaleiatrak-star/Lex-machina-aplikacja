@@ -48,6 +48,13 @@ describe("a provision verified in the session is recognized however the answer w
     expect(out.split("\n")[1]).toContain("NIEWERYFIKOWANE");
   });
 
+  it("the ⚠️ goes after the act's short name, not inside the citation (RD 121/26)", () => {
+    const out = marked("Dane osobowe (art. 4 pkt 1 RODO). Podstawa: art. 95n pkt 1 Prawa o adwokaturze i art. 105 Prawa bankowego.", new VerificationLedger());
+    expect(out).toContain("art. 4 pkt 1 RODO ⚠️ [NIEWERYFIKOWANE])");
+    expect(out).toContain("art. 95n pkt 1 Prawa o adwokaturze ⚠️ [NIEWERYFIKOWANE]");
+    expect(out).toContain("art. 105 Prawa bankowego ⚠️ [NIEWERYFIKOWANE]");
+  });
+
   it("art. 101² is never art. 1012", () => {
     const out = marked("Zob. art. 1012 KP.", verified(["art. 101² KP"]));
     expect(out).toContain("NIEWERYFIKOWANE");

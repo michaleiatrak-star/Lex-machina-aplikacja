@@ -860,6 +860,7 @@ export class FinalizationGate {
     }
 }
 export const UNVERIFIED_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE]";
+const NAMED_ACT_AFTER = /^\s+(?:RODO|TFUE|TUE|EKPC|DSA|DMA|Prawa\s+o\s+\p{L}+|Prawa\s+\p{L}+(?:ego|ych))(?![\p{L}\d])/u;
 // A judgment the case's materials name (the user's messages, attached documents, the firm's
 // documents): not in the judgment databases is no sign of a fabrication; the marker says where
 // it comes from (a parallel proceeding, a ruling the firm holds).
@@ -929,7 +930,10 @@ retrievedCases = new Set()) {
             const at = lineText.indexOf(claim);
             if (at < 0)
                 continue;
-            const end = at + claim.length;
+            // After the act's short name, not inside the citation: "art. 4 pkt 1 RODO ⚠️", not
+            // "art. 4 pkt 1 ⚠️ RODO" (RD 121/26; also "art. 95n pkt 1 Prawa o adwokaturze").
+            const actName = NAMED_ACT_AFTER.exec(lineText.slice(at + claim.length))?.[0] ?? "";
+            const end = at + claim.length + actName.length;
             lineText = `${lineText.slice(0, end)} ${marker}${lineText.slice(end)}`;
         }
         lines[line - 1] = lineText;
