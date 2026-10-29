@@ -105,6 +105,9 @@ export class JsonLineWorker<T> {
       }
     });
     child.once("error", (error) => fail(error));
+    // A write to a worker that has just died (EPIPE) is that worker's failure, not the process's:
+    // unhandled, it stopped the whole runtime mid-turn (RD 121/26, live).
+    child.stdin.on("error", (error) => fail(error));
     child.once("exit", (code) => fail(new Error(`${this.name} worker exited with code ${code}: ${stderr.trim().slice(-2_000)}`)));
     this.worker = { child, ready, pending };
     return this.worker;
