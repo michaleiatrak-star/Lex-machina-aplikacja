@@ -454,7 +454,8 @@ class PersonMorphology:
             # Hyphenated surnames inflect part by part (Kowalska-Nowak).
             words.append(token.split("-"))
         flat = [part for word in words for part in word]
-        plans = [self._plan(part)[0] for part in flat]
+        # "Kowalska-" or "--": an empty part stays as written.
+        plans = [(self._plan(part) or [WordPlan(part, frozen=True)])[0] for part in flat]
 
         def reading(gender: str, case: str) -> tuple[float, list[Candidate | None]]:
             score = 0.0

@@ -64,7 +64,7 @@ import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
 import { criminalDocument, criminalMatter } from "./matter-signals.js";
 import { buildAccentMap, restoreAccents } from "./accent-restoration.js";
-import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION } from "./answer-corrections.js";
+import { answerCorrection, CORRECTED_ANSWER_FORM, emptyDeferral, NO_ANSWER_CORRECTION, removedSentences } from "./answer-corrections.js";
 import { executiveSkillTexts } from "./accent-restoration-corpus.js";
 import { classifyDocument, recognisedDocumentsPrompt } from "./document-kind.js";
 import { ANALYSIS_INTENT, classifyTask, decideTask, parseActivationMatrix, parseCombinations, parseRedactionTest, parseRoutingTable, nextChoices, pipelineNext, stepSummary, opponentPleadingTrigger, replyRolesPrompt } from "./task-routing.js";
@@ -473,7 +473,11 @@ export function reportOnly(answer, checkpoint) {
 // act (test 500: 43% of answers cited articles bare).
 const CITATION_FORM_RULE = [
     "# FORMA POWOŁANIA PRZEPISU (aplikacja)",
-    "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”."
+    "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”.",
+    "",
+    "# PLIK PISMA (aplikacja)",
+    // RD 121/26, live: "Pliku .docx nie mogę zapisać… wklej tekst do Worda" while the application makes it.
+    "Plik .docx (i PDF) tworzy aplikacja z treści pisma: etap pisma albo przycisk „Generuj dokument”. Krok skilla „generowanie pliku” jest więc wykonywany przez aplikację — nie pisz, że nie możesz utworzyć pliku, i nie odsyłaj do Worda ani do kopiowania tekstu."
 ].join("\n");
 const MATERIAL_SKILLS = {
     "analizator-umow-v1": "umowa (plik albo pełny tekst)",
@@ -2546,7 +2550,8 @@ export class SafeSessionExecutor {
                 const text = corrected.fullText.trim();
                 const remaining = text ? ambiguousBareArticles(text, ledger) : ambiguous;
                 // The same answer with the acts named: about the same length, fewer ambiguous citations.
-                const accepted = Boolean(text) && remaining.length < ambiguous.length && text.length >= modelOutput.length * 0.9 && text.length <= modelOutput.length * 1.2;
+                // Nothing of the answer may go: the round only names acts (a removed paragraph, RD 121/26).
+                const accepted = Boolean(text) && remaining.length < ambiguous.length && text.length >= modelOutput.length * 0.9 && text.length <= modelOutput.length * 1.2 && removedSentences(modelOutput, text).length === 0;
                 if (accepted) {
                     corrections.push(answerCorrection("ACT_NAME", ambiguous.map((item) => `${item.claim}: ${item.acts.join(" / ")}`), modelOutput, text));
                     modelOutput = text;

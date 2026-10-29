@@ -159,6 +159,16 @@ describe.skipIf(!python)("Morfeusz2 person morphology worker", () => {
     // A lone surname has no reliable gender: flagged, not guessed.
     expect(nowak!.status).toBe("gender_ambiguous");
   });
+
+  it("keeps an empty part of a hyphenated name instead of failing the batch", async () => {
+    const engine = new LocalPersonMorphology({
+      python: python!,
+      workerPath: path.resolve(__dirname, "../../privacy/polish_person_morphology.py")
+    });
+    const [anna, jan] = await engine.analyze(["Anna Kowalska-", "Janem Kowalskim"]);
+    expect(anna!.forms.NOM.text).toBe("Anna Kowalska-");
+    expect(jan).toMatchObject({ canonical: "Jan Kowalski", status: "ok" });
+  });
 });
 
 describe.skipIf(!python)("SGJP gazetteer and address morphology workers", () => {

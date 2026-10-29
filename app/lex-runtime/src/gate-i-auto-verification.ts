@@ -170,7 +170,9 @@ function uniqueActAlias(
     : null;
 }
 
-const OTHER_ACT_WORDS = /(?<![\p{L}])(?:ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|TFUE|TUE|EKPC|Karty)(?![\p{L}])/iu;
+// "art. 95n pkt 1 Prawa o adwokaturze i odpowiednio art. 306 KPK": an act "Prawo …" in words is
+// another act, not the line's KPK (RD 121/26 verified art. 95n as KPK and marked it ⚠️).
+const OTHER_ACT_WORDS = /(?<![\p{L}])(?:praw[aoe]?\s+(?:o\s+\p{L}+|budowlan|bankow|upadłościow|restrukturyzacyjn|energetyczn|autorsk|wodn|geologiczn|lotnicz|pocztow|telekomunikacyjn|przedsiębiorc|ochrony\s+środowiska|zamówień|spółdzielcz|łowieck|atomow|farmaceutyczn|oświatow)\p{L}*|ustaw\p{L}*|konstytucj\p{L}*|rozporządz\p{L}*|dyrektyw\p{L}*|kodeks\p{L}*|Dz\.?\s?U\.?|traktat\p{L}*|konwencj\p{L}*|regulamin\p{L}*|statut\p{L}*|TFUE|TUE|EKPC|Karty)(?![\p{L}])/iu;
 
 function caseSignature(
   reference: DetectedLegalReference
