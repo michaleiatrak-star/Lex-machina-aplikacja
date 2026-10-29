@@ -142,22 +142,26 @@ function lineTokens(lineText: string): Token[] {
   // "zmiana z Dz.U. 2026 poz. 507 ⚠️ …, dla art. 418 …": the ⚠️ is the journal's. Before, a marker
   // ahead of the line's first article was given to that article, so reconciling a verified
   // art. 418 turned the journal's ⚠️ into ✅ (test 500).
-  const otherEnds = detectLegalReferences(lineText)
-    .filter((reference) => reference.kind === "journal" || reference.kind === "case")
-    .map((reference) => {
-      const written = reference.span ?? reference.claim;
-      const at = lineText.indexOf(written);
-      return at < 0 ? -1 : at + written.length;
-    })
-    .filter((end) => end >= 0);
-  const otherMarkers = markerSpansAfter(lineText, otherEnds);
+  const endsOf = (kinds: string[]) =>
+    detectLegalReferences(lineText)
+      .filter((reference) => kinds.includes(reference.kind))
+      .map((reference) => {
+        const written = reference.span ?? reference.claim;
+        const at = lineText.indexOf(written);
+        return at < 0 ? -1 : at + written.length;
+      })
+      .filter((end) => end >= 0);
+  const otherMarkers = markerSpansAfter(lineText, endsOf(["journal", "case"]));
+  // A signature's own marker ("VII P 94/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]") is no
+  // article's, wherever the line's articles stand (RD 121/26: dropped with a verified art. 17 RODO).
+  const caseMarkers = markerSpansAfter(lineText, endsOf(["case"]));
   for (const [pattern, status] of [
     [VERIFIED_MARKER, "VERIFIED"],
     [UNVERIFIED_MARKER, "UNVERIFIED"]
   ] as const) {
     pattern.lastIndex = 0;
     for (const match of lineText.matchAll(pattern)) {
-      if (status === "UNVERIFIED" && amountMarkers.some((span) => span.start === match.index)) continue;
+      if (status === "UNVERIFIED" && [...amountMarkers, ...caseMarkers].some((span) => span.start === match.index)) continue;
       tokens.push({
         type: "marker",
         start: match.index!,

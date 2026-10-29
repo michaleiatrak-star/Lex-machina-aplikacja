@@ -51,4 +51,13 @@ describe("G8: verified provisions cited again (233/234/238 KK comparison)", () =
     expect(reconciled.text).toBe(line);
     expect(reconciled.repaired).toBe(0);
   });
+
+  it("keeps the case-material marker of a signature after a verified article of the line (RD 121/26)", () => {
+    const records = ledger();
+    const line = "Wbrew art. 233 § 1 KK ✅ [VER: https://eli.gov.pl/a233, 2026-10-03] toczy się sprawa VII P 94/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy], w której zeznawał.";
+    const reconciled = reconcileStatusMarkers(line, records);
+    expect(reconciled.text).toBe(line);
+    expect(new FinalizationGate().evaluate(reconciled.text, records).result).not.toBe("BLOCKED");
+  });
 });
+
