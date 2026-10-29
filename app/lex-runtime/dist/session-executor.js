@@ -58,7 +58,7 @@ import { evaluateGateIInvariants } from "./gate-i-invariants.js";
 import { blockGateITurn, createGateITurnState, passGateITurnPhase } from "./gate-i-turn-state.js";
 import { evaluateModelTaskOwnershipGate, resolveReferencePreflightOwnership } from "./model-task-ownership.js";
 import { officialCaseLawCall, signaturesIn } from "./court-of-signature.js";
-import { detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
+import { completeBareArticleActs, detectLegalReferences, mentionedCaseNumbers, ownCaseFileNumbers } from "./finalization-gate.js";
 import { amountKeysIn } from "./amount-references.js";
 import { checkProvisionsAtEventDates, eventDates } from "./event-date-check.js";
 import { parseDisclaimer, splitTrailingDisclaimer, withDisclaimer } from "./legal-disclaimer.js";
@@ -469,6 +469,12 @@ export function reportOnly(answer, checkpoint) {
     return !ASKS.test(tail);
 }
 // Executive skills that work on the case's material, and what to ask for when there is none.
+// Every citation carries its act: a bare "art. 36a" leaves the reader and the gates to guess the
+// act (test 500: 43% of answers cited articles bare).
+const CITATION_FORM_RULE = [
+    "# FORMA POWOŁANIA PRZEPISU (aplikacja)",
+    "Każde powołanie przepisu pisz z nazwą albo skrótem aktu, także przy kolejnym powołaniu tego samego przepisu: „art. 415 KC”, „art. 36a ustawy o kosztach sądowych w sprawach cywilnych”, „art. 35 ust. 3 Prawa budowlanego”. Nie pisz samego „art. 36a”."
+].join("\n");
 const MATERIAL_SKILLS = {
     "analizator-umow-v1": "umowa (plik albo pełny tekst)",
     "analiza-sadowa-v6": "orzeczenie, pisma albo akta sprawy",
@@ -1784,7 +1790,7 @@ export class SafeSessionExecutor {
         // provider caches the system prompt up to its end; skill-specific resources and the tools
         // of this case follow it.
         const sharedPath = (section) => stablePath(section) && section.startsWith("# MANDATORY PATH RESOURCE:");
-        const toolPromptStable = [identityPrompt, ...pathSections.filter(sharedPath)].join("\n\n");
+        const toolPromptStable = [identityPrompt, CITATION_FORM_RULE, ...pathSections.filter(sharedPath)].join("\n\n");
         const toolPrompt = [
             toolPromptStable,
             ...pathSections.filter((section) => stablePath(section) && !sharedPath(section)),
@@ -2715,7 +2721,16 @@ export class SafeSessionExecutor {
                 });
             }
         }
-        const citedAnswer = processDocumentCitationMarkers(automaticVerification.text, citationSources, {
+        // "art. 36a" with no act: written with the one act this turn verified that article (and its
+        // unit) in, before any gate reads it; an article verified in several acts, or none, stays
+        // as written. No model call (W3 and test 500: bare articles were half of the conflicts).
+        const actCompletion = completeBareArticleActs(automaticVerification.text, ledger);
+        if (actCompletion.completed.length > 0) {
+            audit.record("gate", "BARE_ARTICLE_ACT_COMPLETION", "OK", {
+                completed: actCompletion.completed.map((item) => `${item.claim} -> ${item.act}`)
+            });
+        }
+        const citedAnswer = processDocumentCitationMarkers(actCompletion.text, citationSources, {
             otherTexts: [
                 request.query,
                 ...officialCaseLawTexts,
