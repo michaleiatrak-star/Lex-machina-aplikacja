@@ -42,4 +42,13 @@ describe("G8: verified provisions cited again (233/234/238 KK comparison)", () =
     const text = "Art. 233 § 1 KK — fałszywe zeznania. ✅ [VER: https://example.com/zmyslone, 2026-10-03]";
     expect(finalize(text, ledger()).after.result).toBe("BLOCKED");
   });
+
+  it("keeps the case-material marker of a signature before a verified article (RD 121/26)", () => {
+    const records = ledger();
+    records.add({ claim: "art. 107 KW", kind: "statute", status: "VERIFIED", sourceUrl: "https://eli.gov.pl/kw107", sourceTier: "R1", fetchedAt: "2026-10-03T00:00:00Z", toolCallId: "v107" });
+    const line = "Wyrok w sprawie VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy] (art. 107 KW) ✅ [VER: https://eli.gov.pl/kw107, 2026-10-03]";
+    const reconciled = reconcileStatusMarkers(line, records);
+    expect(reconciled.text).toBe(line);
+    expect(reconciled.repaired).toBe(0);
+  });
 });

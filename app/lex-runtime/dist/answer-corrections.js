@@ -32,14 +32,29 @@ function sentences(text) {
         .map((part) => part.replace(/^\s*(?:[-*•]|\d{1,3}[.)])\s+/u, "").trim())
         .filter((part) => normalize(part).length >= 20);
 }
+// A sentence the round only added to ("art. 17 ust. 3 lit. e" -> "... lit. e RODO", RD 121/26)
+// is kept, not removed: every word stays, in order, with a few new ones.
+const MAX_INSERTED_WORDS = 6;
+function amended(words, candidates) {
+    return candidates.some((candidate) => {
+        if (candidate.length < words.length || candidate.length > words.length + MAX_INSERTED_WORDS)
+            return false;
+        let at = 0;
+        for (const word of candidate)
+            if (at < words.length && word === words[at])
+                at += 1;
+        return at === words.length;
+    });
+}
 /** Sentences of the first version the corrected one does not contain (in their order). */
 export function removedSentences(before, after) {
     const kept = normalize(after);
+    const afterWords = sentences(after).map((sentence) => normalize(sentence).split(" "));
     const seen = new Set();
     const removed = [];
     for (const sentence of sentences(before)) {
         const key = normalize(sentence);
-        if (seen.has(key) || kept.includes(key))
+        if (seen.has(key) || kept.includes(key) || amended(key.split(" "), afterWords))
             continue;
         seen.add(key);
         removed.push(sentence.length > MAX_SENTENCE ? `${sentence.slice(0, MAX_SENTENCE)}…` : sentence);

@@ -16,6 +16,12 @@ describe("record of a correcting round", () => {
     ]);
   });
 
+  it("a sentence the round only added an act name to is kept, not removed", () => {
+    const before = "Wyjątek z art. 17 ust. 3 lit. e chroni dane potrzebne do dochodzenia roszczeń.";
+    expect(removedSentences(before, "Wyjątek z art. 17 ust. 3 lit. e RODO chroni dane potrzebne do dochodzenia roszczeń.")).toEqual([]);
+    expect(removedSentences(before, "Wyjątek z art. 17 RODO nie ma tu zastosowania.")).toEqual([before]);
+  });
+
   it("an answer only supplemented removes nothing", () => {
     expect(removedSentences(corrected, `${corrected}\nDodatkowe zdanie o terminie przedawnienia roszczenia.`)).toEqual([]);
   });
