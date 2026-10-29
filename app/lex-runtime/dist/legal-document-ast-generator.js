@@ -111,6 +111,7 @@ function normalizeInline(node) {
     }
     return node;
 }
+const LIST_ITEM_WRAPPERS = new Set(["list_item", "listitem", "item", "li", "paragraph"]);
 const INLINE_BLOCKS = new Set(["paragraph", "heading", "quote", "signature"]);
 const BLOCK_ALIASES = {
     text: { type: "paragraph" },
@@ -153,9 +154,14 @@ function normalizeBlock(value, depth = 0) {
             block.ordered = block.ordered === "true" || block.style === "ordered" || block.numbered === true;
         }
         if (Array.isArray(block.items)) {
-            block.items = block.items.map((item) => isRecord(item) && item.type === undefined && (item.content ?? item.text) !== undefined
-                ? normalizeInlines(item.content ?? item.text)
-                : normalizeInlines(item));
+            // An item as {content|text|children|inlines} or a "list_item"/"paragraph" wrapper (RD 121/26:
+            // items {"children": […]} failed the whole file with AST_INLINE_TYPE_UNSUPPORTED).
+            block.items = block.items.map((item) => {
+                if (!isRecord(item) || !(item.type === undefined || LIST_ITEM_WRAPPERS.has(String(item.type).toLowerCase())))
+                    return normalizeInlines(item);
+                const inner = item.content ?? item.text ?? item.children ?? item.inlines;
+                return inner !== undefined ? normalizeInlines(inner) : normalizeInlines(item);
+            });
         }
     }
     else if (block.type === "table" && Array.isArray(block.rows)) {
