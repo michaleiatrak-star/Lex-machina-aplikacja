@@ -80,4 +80,13 @@ describe("disciplinary case law and ethics codes", () => {
     const calls = planAutomaticLegalVerification("Granice (art. 8 ust. 1 Prawa o adwokaturze). Te granice wyznaczają m.in. przepisy RODO.", new VerificationLedger()).calls;
     expect(calls.map((call) => call.input.act)).not.toContain("32016R0679");
   });
+
+  it("an act named in words goes to verification by its title", () => {
+    const acts = (text: string) => planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => call.input.act);
+    expect(acts("Granice (art. 8 ust. 1 Prawa o adwokaturze). Dalej tekst.")).toEqual(["Prawa o adwokaturze"]);
+    expect(acts("Zgodnie z art. 11 ustawy o zwalczaniu nieuczciwej konkurencji, który stanowi")).toEqual(["ustawy o zwalczaniu nieuczciwej konkurencji"]);
+    expect(acts("Na podstawie art. 95n pkt 1 Prawa o adwokaturze i odpowiednio art. 306 KPK.")).toEqual(["Prawa o adwokaturze", "KPK"]);
+    // The record is that act's provision, not a bare article.
+    expect(planAutomaticLegalVerification("Podstawa: art. 95n pkt 1 Prawa o adwokaturze.", new VerificationLedger()).calls[0]?.input.claim).toBe("art. 95n pkt 1 Prawa o adwokaturze");
+  });
 });

@@ -14,7 +14,9 @@ describe("akt powołanego artykułu w automatycznej weryfikacji", () => {
       ["art. 6 ust. 1", "32016R0679"],
       ["art. 5", "32024R1689"],
       ["art. 10 ust. 2", "32008L0048"],
-      ["art. 415 KC", "KC"]
+      ["art. 415 KC", "KC"],
+      // An act in words goes by its title (verify_legal_reference resolves it or denies it).
+      ["art. 4 ustawy o VAT", "ustawy o VAT"]
     ]);
   });
 
