@@ -105,6 +105,7 @@ import {
 } from "../session-executor.js";
 import type { CaseFileAccess } from "../case-file-tool-runtime.js";
 import { mergeThreadEvidence, type ThreadEvidence } from "../thread-evidence.js";
+import { caseMaterialSignatures } from "../finalization-gate.js";
 import { realValueHashes } from "../privacy/example-data.js";
 import { defaultTemplateFor, draftingTarget, validTemplateRole, type GenerationDocumentType } from "../template-roles.js";
 import { detectQueryMode, parseModeSignals, type ModeSignals } from "../query-mode.js";
@@ -7971,11 +7972,20 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
               .then((memory) => memory.evidence ?? null)
               .catch(() => null)
           : null;
+        // The stored pleading names its signatures from the case's materials with their marker:
+        // those count as such in the file too (a thread remembered before the memory kept them).
+        const sourceCaseReferences = pleadingSource ? caseMaterialSignatures(pleadingSource.text) : [];
+        const fileEvidence: ThreadEvidence | null = sourceCaseReferences.length
+          ? {
+              ...(threadEvidence ?? { schemaVersion: 1 as const, updatedAt: new Date().toISOString(), provisions: [], skills: [], sources: [] }),
+              caseReferences: [...new Set([...(threadEvidence?.caseReferences ?? []), ...sourceCaseReferences])]
+            }
+          : threadEvidence;
         const generated =
           await options
             .documentAstGenerator
             .generate({
-              ...(threadEvidence ? { threadEvidence } : {}),
+              ...(fileEvidence ? { threadEvidence: fileEvidence } : {}),
               ...(processRenderOnly ? { processRenderOnly } : {}),
               ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
               ...(longDocumentSource

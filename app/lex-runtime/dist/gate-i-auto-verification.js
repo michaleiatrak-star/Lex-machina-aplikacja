@@ -75,7 +75,9 @@ function uniqueActAlias(reference) {
     // The whole number only: "art. 4" is not the start of "art. 415".
     const found = new RegExp(`${written.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&")}(?![\\d\\p{L}^])`, "u").exec(reference.lineText);
     const after = found ? reference.lineText.slice(found.index + found[0].length) : "";
-    const own = after.split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].slice(0, 160);
+    // Up to the next article and the end of its sentence or brackets: "(art. 8 ust. 1 Prawa o
+    // adwokaturze). Te granice wyznaczają … przepisy RODO" is not RODO (RD 121/26).
+    const own = after.split(/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu)[0].split(/\)|;|\.\s+(?=\p{Lu})/u)[0].slice(0, 160);
     const eu = euAct(own);
     if (eu)
         return eu.celex;

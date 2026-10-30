@@ -908,6 +908,36 @@ export function publicEvidenceBundle(
   return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
 }
 
+/** The text of a document AST (JSON), one line per block; anything else as it is. */
+export function astBlockLines(text: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  } catch {
+    return text;
+  }
+  const texts = (node: unknown): string =>
+    typeof node === "string"
+      ? ""
+      : Array.isArray(node)
+        ? node.map(texts).join("")
+        : node && typeof node === "object"
+          ? Object.entries(node as Record<string, unknown>).map(([key, value]) => (key === "text" && typeof value === "string" ? value : texts(value))).join("")
+          : "";
+  const blocks = (parsed as { blocks?: unknown })?.blocks;
+  if (!Array.isArray(blocks)) return text;
+  const lines: string[] = [];
+  const walk = (block: unknown) => {
+    if (!block || typeof block !== "object") return;
+    const record = block as Record<string, unknown>;
+    if (Array.isArray(record.items)) for (const item of record.items) lines.push(texts(item));
+    else if (Array.isArray(record.rows)) for (const row of record.rows) lines.push(texts(row));
+    else lines.push(texts(record));
+  };
+  for (const block of blocks) walk(block);
+  return lines.filter((line) => line.trim()).join("\n");
+}
+
 export type SessionExecutionInternalState = {
   verificationRecords: VerificationRecord[];
   // The proceeding's own case numbers (not case law), for the file generated from this turn.
@@ -3978,7 +4008,10 @@ export class SafeSessionExecutor implements SessionExecutor {
     const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
-        releasedDraft.text,
+        // A document AST is one line of JSON: the act of a provision is read from its line, so
+        // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+        // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
+        request.documentAstOutput ? astBlockLines(releasedDraft.text) : releasedDraft.text,
         ledger,
         requestedHistoricalAsOf
       );

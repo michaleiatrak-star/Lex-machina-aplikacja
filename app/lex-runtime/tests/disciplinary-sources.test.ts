@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { courtOfSignature, officialCaseLawCall, signaturesIn } from "../src/court-of-signature.js";
-import { detectLegalReferences } from "../src/finalization-gate.js";
+import { caseMaterialSignatures, detectLegalReferences } from "../src/finalization-gate.js";
+import { astBlockLines } from "../src/session-executor.js";
+import { planAutomaticLegalVerification } from "../src/gate-i-auto-verification.js";
+import { VerificationLedger } from "../src/verification-ledger.js";
 import { legacyWordText } from "../src/auxiliary-source-fetcher.js";
 import { mergeThreadEvidence, validThreadEvidence } from "../src/thread-evidence.js";
 import { PublicWebSearch } from "../src/web-search.js";
@@ -54,5 +57,27 @@ describe("disciplinary case law and ethics codes", () => {
     const second = mergeThreadEvidence(first, [], [], "2026-10-30T11:00:00Z", { caseReferences: ["VII P 94/25", "VIII W 633/25"] });
     expect(second.caseReferences).toEqual(["VIII W 633/25", "VII P 94/25"]);
     expect(validThreadEvidence(JSON.parse(JSON.stringify(second)))?.caseReferences).toEqual(["VIII W 633/25", "VII P 94/25"]);
+  });
+
+  it("a stored pleading's case-material signatures are read from their markers", () => {
+    expect(caseMaterialSignatures("wyrok VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy] i sprawa VII P 94/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]; II CSK 1/20"))
+      .toEqual(["VIII W 633/25", "VII P 94/25"]);
+  });
+
+  it("a document AST is verified block by block, not as one line of JSON (RD 121/26)", () => {
+    const ast = JSON.stringify({ schemaVersion: "1", blocks: [
+      { type: "paragraph", content: [{ type: "text", text: "Podstawa: art. 7 KPK i art. 24 § 1 KC." }] },
+      { type: "paragraph", content: [{ type: "text", text: "Zob. art. 190a § 1 KK ⚠️ [NIEWERYFIKOWANE]." }] },
+      { type: "list", items: [[{ type: "text", text: "art. 245 KK" }]] }
+    ] });
+    expect(planAutomaticLegalVerification(ast, new VerificationLedger()).calls).toHaveLength(0);
+    const calls = planAutomaticLegalVerification(astBlockLines(ast), new VerificationLedger()).calls.map((call) => call.input.claim);
+    expect(calls).toEqual(expect.arrayContaining(["art. 7 KPK", "art. 24 § 1 KC", "art. 245 KK"]));
+    expect(calls).not.toContain("art. 190a § 1 KK");
+  });
+
+  it("an act named in words, then RODO later in the paragraph, is not RODO", () => {
+    const calls = planAutomaticLegalVerification("Granice (art. 8 ust. 1 Prawa o adwokaturze). Te granice wyznaczają m.in. przepisy RODO.", new VerificationLedger()).calls;
+    expect(calls.map((call) => call.input.act)).not.toContain("32016R0679");
   });
 });

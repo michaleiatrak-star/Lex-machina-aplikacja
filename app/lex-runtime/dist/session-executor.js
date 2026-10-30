@@ -403,6 +403,43 @@ export function publicEvidenceBundle(records, answer) {
     }));
     return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
 }
+/** The text of a document AST (JSON), one line per block; anything else as it is. */
+export function astBlockLines(text) {
+    let parsed;
+    try {
+        parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    }
+    catch {
+        return text;
+    }
+    const texts = (node) => typeof node === "string"
+        ? ""
+        : Array.isArray(node)
+            ? node.map(texts).join("")
+            : node && typeof node === "object"
+                ? Object.entries(node).map(([key, value]) => (key === "text" && typeof value === "string" ? value : texts(value))).join("")
+                : "";
+    const blocks = parsed?.blocks;
+    if (!Array.isArray(blocks))
+        return text;
+    const lines = [];
+    const walk = (block) => {
+        if (!block || typeof block !== "object")
+            return;
+        const record = block;
+        if (Array.isArray(record.items))
+            for (const item of record.items)
+                lines.push(texts(item));
+        else if (Array.isArray(record.rows))
+            for (const row of record.rows)
+                lines.push(texts(row));
+        else
+            lines.push(texts(record));
+    };
+    for (const block of blocks)
+        walk(block);
+    return lines.filter((line) => line.trim()).join("\n");
+}
 export const SESSION_EXECUTION_INTERNAL = Symbol("LEX_SESSION_EXECUTION_INTERNAL");
 /** CHAT_PRIVACY_GATE_FAILED with the cause (recognizer codes, never the text) for diagnostics. */
 export function privacyGateFailure(error) {
@@ -2735,7 +2772,11 @@ export class SafeSessionExecutor {
         if (modelDisclaimer.disclaimer)
             modelOutput = modelDisclaimer.body;
         const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
-        const automaticVerificationPlan = planAutomaticLegalVerification(releasedDraft.text, ledger, requestedHistoricalAsOf);
+        const automaticVerificationPlan = planAutomaticLegalVerification(
+        // A document AST is one line of JSON: the act of a provision is read from its line, so
+        // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+        // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
+        request.documentAstOutput ? astBlockLines(releasedDraft.text) : releasedDraft.text, ledger, requestedHistoricalAsOf);
         let automaticVerificationExecuted = 0;
         if (automaticVerificationPlan.calls.length > 0 &&
             verificationTools) {
