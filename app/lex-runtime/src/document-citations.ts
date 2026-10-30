@@ -159,6 +159,35 @@ function textContainsQuote(text: string, quote: string): boolean {
   return locateQuote(text, quote) !== undefined;
 }
 
+// Where a quote comes from, not whether it is verbatim: a passage put into the sentence's case
+// ("o pozwie „spełniającym przesłanki…”" from "od pozwu spełniającego przesłanki…", live C13-039)
+// is still that source's text. Each word keeps its stem; only the ending may differ.
+function words(text: string): string[] {
+  return text.toLocaleLowerCase("pl").match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function sameStem(left: string, right: string): boolean {
+  if (left === right) return true;
+  const shorter = Math.min(left.length, right.length);
+  if (shorter < 4 || Math.abs(left.length - right.length) > 3) return false;
+  let common = 0;
+  while (common < shorter && left[common] === right[common]) common += 1;
+  return common >= Math.max(3, Math.max(left.length, right.length) - 3);
+}
+
+function textContainsInflectedQuote(text: string, quote: string): boolean {
+  if (textContainsQuote(text, quote)) return true;
+  return quoteSegments(quote).every((segment) => {
+    const wanted = words(segment);
+    if (wanted.length < 4) return false;
+    const source = words(text);
+    for (let at = 0; at + wanted.length <= source.length; at += 1) {
+      if (wanted.every((word, index) => sameStem(word, source[at + index]!))) return true;
+    }
+    return false;
+  });
+}
+
 type ChunkEntry = {
   attachment: SessionDocumentAttachment;
   chunk: SessionDocumentAttachment["chunks"][number];
@@ -266,7 +295,7 @@ function linkUnmarkedQuotes(
     // user about a document's wording, not a quote from it (live C12-027). A quote given after
     // a colon ("pozwany napisał: „…”, prawda?") is still presented as the document's text.
     if (/^[^.!\n]*\?/u.test(text.slice(end, end + 200)) && !/:\s*[*_]*$/u.test(text.slice(Math.max(0, match.index - 4), match.index))) continue;
-    if (otherTexts.some((other) => textContainsQuote(other, quote))) continue;
+    if (otherTexts.some((other) => textContainsInflectedQuote(other, quote))) continue;
     // A digest shows the passage shortened: the quote may be in the full text.
     if (entries.some((entry) => entry.chunk.representation === "EXTRACTIVE_DIGEST")) continue;
     output += text.slice(cursor, end) + ` ${QUOTE_UNSOURCED_MARKER}`;

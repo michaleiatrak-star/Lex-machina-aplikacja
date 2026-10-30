@@ -170,6 +170,17 @@ describe("local document citations", () => {
     expect(asserted.quoteFindings.unsourced).toBe(1);
   });
 
+  it("a statute's passage put into the sentence's case is that statute's text, not the case files' (live C13-039)", () => {
+    const statute = "Art. 19. 2. Czwartą część opłaty pobiera się od pozwu: 1) spełniającego przesłanki do rozpoznania w postępowaniu nakazowym;";
+    const text = "Pozew w tym trybie też kosztuje jedną czwartą opłaty. Przepis mówi tylko o pozwie „spełniającym przesłanki do rozpoznania w postępowaniu nakazowym”.";
+
+    expect(processDocumentCitationMarkers(text, [pleading], { otherTexts: [statute] }).quoteFindings.unsourced).toBe(0);
+    // Other words with the same opening are not that text.
+    expect(
+      processDocumentCitationMarkers("Pozwany w odpowiedzi na pozew napisał: „spełniającym warunki do zapłaty całej kwoty”.", [pleading], { otherTexts: [statute] }).quoteFindings.unsourced
+    ).toBe(1);
+  });
+
   it("leaves statute wording, the user's own words and short terms alone", () => {
     const text = [
       "Pozwany powołuje art. 6 k.c., który stanowi: „ciężar udowodnienia faktu spoczywa na osobie, która z faktu tego wywodzi skutki prawne”.",
