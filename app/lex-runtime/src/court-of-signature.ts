@@ -149,7 +149,9 @@ export function caseLinkProblem(value: string): { kind: "BLOB" | "SN_LEGACY_PDF"
 // aggregator), LEX, Legalis and other legal portals, law firms' pages and blogs are leads.
 const OFFICIAL_CASE_LAW_SOURCES: ReadonlySet<string> = new Set(["sn", "cbosa", "sp", "tk", "kio", "eurlex", "etpcz", "uodo"]);
 const OFFICIAL_CASE_LAW_HOSTS =
-  /(?:^|\.)(?:sn\.pl|wsd\.adwokatura\.pl|wsd\.kirp\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
+  // Disciplinary courts of the professions publish their own rulings (bar, legal advisers,
+  // doctors, bailiffs, auditors, engineers): an official anchor, shown 🟨 without promotion.
+  /(?:^|\.)(?:sn\.pl|wsd\.adwokatura\.pl|wsd\.kirp\.pl|nil\.org\.pl|komornik\.pl|pibr\.org\.pl|piib\.org\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
 
 /** A tool call that reads an official case-law database (its signatures are an official anchor). */
 export function officialCaseLawCall(call: { name: string; input?: unknown }): boolean {

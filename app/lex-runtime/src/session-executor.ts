@@ -4091,9 +4091,13 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
     // TK, KIO, CURIA, ETPCz): real, though not verified in full; from nowhere stays blocking.
     for (const { signature } of signaturesIn(officialCaseLawTexts.join("\n"))) ledger.addRetrievedCase(signature);
+    // Any court's "sygn. …" on such a page (a disciplinary court's own numbering the repertory
+    // list does not know): the same anchor, never guessed from a format.
+    for (const reference of detectLegalReferences(officialCaseLawTexts.join("\n"))) if (reference.kind === "case") ledger.addRetrievedCase(reference.claim);
     // Found only in SAOS, a web search or a legal portal (LEX, Legalis, a law firm, a blog): a
     // lead, shown ⚠️ until verified in the court's own database.
     for (const { signature } of signaturesIn(leadCaseLawTexts.join("\n"))) ledger.addCaseReference(signature);
+    for (const reference of detectLegalReferences(leadCaseLawTexts.join("\n"))) if (reference.kind === "case") ledger.addCaseReference(reference.claim);
     const preFinalization =
       new FinalizationGate().evaluate(
         citedAnswer.text,

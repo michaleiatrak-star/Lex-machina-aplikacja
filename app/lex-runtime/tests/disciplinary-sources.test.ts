@@ -5,6 +5,7 @@ import { courtOfSignature, officialCaseLawCall, signaturesIn } from "../src/cour
 import { detectLegalReferences } from "../src/finalization-gate.js";
 import { legacyWordText } from "../src/auxiliary-source-fetcher.js";
 import { mergeThreadEvidence, validThreadEvidence } from "../src/thread-evidence.js";
+import { PublicWebSearch } from "../src/web-search.js";
 
 // RD 121/26: the bar's disciplinary case law and its code of ethics are outside the MCP
 // connectors; the reference letter cited WSD 113/22, 77/22, 128/17 and SDI 9/12.
@@ -15,6 +16,26 @@ describe("disciplinary case law and ethics codes", () => {
     expect(signaturesIn("WSD 77/22 i WSD 128/17").map((item) => item.signature)).toEqual(["WSD 77/22", "WSD 128/17"]);
     expect(detectLegalReferences("Tak też WSD 77/22 oraz SN, SDI 9/12.").filter((reference) => reference.kind === "case").map((reference) => reference.claim))
       .toEqual(["WSD 77/22", "SDI 9/12"]);
+  });
+
+  it("the other professions' disciplinary courts publish on their own sites: an official anchor", () => {
+    for (const url of ["https://nil.org.pl/orzeczenia/123", "https://www.komornik.pl/?page_id=212", "https://www.pibr.org.pl/pl/krajowy-sad-dyscyplinarny", "https://www.piib.org.pl/14-krajowy-sad-dyscyplinarny"]) {
+      expect(officialCaseLawCall({ name: "fetch_auxiliary_legal_source", input: { url } })).toBe(true);
+    }
+  });
+
+  it("a bot check of the search engine is tried once more before it counts as refused", async () => {
+    let calls = 0;
+    const page = '<div class="result"><a class="result__a" href="https://wsd.adwokatura.pl/x">WSD 113/22</a><a class="result__snippet">Orzeczenie WSD</a></div>';
+    const fetchImpl = (async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("anomaly detected", { status: 202, headers: { "content-type": "text/html" } })
+        : new Response(page, { status: 200, headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+    const result = await new PublicWebSearch({ LEX_WEB_SEARCH_PROVIDER: "duckduckgo" }, fetchImpl, 5_000, 1).search("WSD 113/22", 5).catch((error: unknown) => error);
+    expect(calls).toBe(2);
+    expect(result).not.toBeInstanceOf(Error);
   });
 
   it("a ruling read on the court's own portal is an official anchor; a law firm's page is a lead", () => {
