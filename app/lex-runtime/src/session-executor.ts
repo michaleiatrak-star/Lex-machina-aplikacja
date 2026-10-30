@@ -912,6 +912,8 @@ export type SessionExecutionInternalState = {
   verificationRecords: VerificationRecord[];
   // The proceeding's own case numbers (not case law), for the file generated from this turn.
   caseFileNumbers?: string[];
+  // Signatures the case's materials name (another proceeding): marked, never blocking, also in the file.
+  caseReferences?: string[];
   factAmounts?: string[];
   auditEvents: AuditEvent[];
   documentAliasDocumentIds?: string[];
@@ -5259,6 +5261,7 @@ export class SafeSessionExecutor implements SessionExecutor {
         value: {
           verificationRecords: verificationRecords.map((record) => ({ ...record })),
           caseFileNumbers: ledger.caseFileNumbers(),
+          caseReferences: ledger.caseReferences(),
           factAmounts: ledger.factAmountKeys(),
           auditEvents: audit.events.map((event) => ({
             ...event,

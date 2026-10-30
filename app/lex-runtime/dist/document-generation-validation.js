@@ -54,6 +54,8 @@ export function rebuildGenerationExportState(context) {
     }
     for (const signature of context.caseFileNumbers ?? [])
         ledger.addCaseFileNumber(signature);
+    for (const signature of context.caseReferences ?? [])
+        ledger.addCaseReference(signature);
     for (const key of context.factAmounts ?? [])
         ledger.addFactAmount(key);
     const audit = new AuditTrail(context.sourceSessionId + ":document-export");

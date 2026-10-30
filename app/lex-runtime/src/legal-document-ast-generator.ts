@@ -739,6 +739,7 @@ export class LegalDocumentAstGenerator {
               ?.length
           ),
         ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+        ...(internal.caseReferences?.length ? { caseReferences: [...internal.caseReferences] } : {}),
         ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
         verificationRecords:
           internal
@@ -846,6 +847,7 @@ export class LegalDocumentAstGenerator {
     const internals = results.map((result) => result[SESSION_EXECUTION_INTERNAL]).filter((value): value is NonNullable<typeof value> => Boolean(value));
     if (internals.length !== results.length) throw new Error("DOCUMENT_AST_INTERNAL_VALIDATION_MISSING");
     const caseFileNumbers = [...new Set(internals.flatMap((internal) => internal.caseFileNumbers ?? []))];
+    const caseReferences = [...new Set(internals.flatMap((internal) => internal.caseReferences ?? []))];
     const factAmounts = [...new Set(internals.flatMap((internal) => internal.factAmounts ?? []))];
     return {
       ast: validated.ast,
@@ -860,6 +862,7 @@ export class LegalDocumentAstGenerator {
         model: request.model,
         usedDocumentContext: Boolean(request.attachments?.length),
         ...(caseFileNumbers.length ? { caseFileNumbers } : {}),
+        ...(caseReferences.length ? { caseReferences } : {}),
         ...(factAmounts.length ? { factAmounts } : {}),
         verificationRecords: internals.flatMap((internal) => internal.verificationRecords.map((record) => ({ ...record }))),
         auditEvents: internals.flatMap((internal) => internal.auditEvents.map((event) => ({ ...event, ...(event.detail ? { detail: { ...event.detail } } : {}) })))

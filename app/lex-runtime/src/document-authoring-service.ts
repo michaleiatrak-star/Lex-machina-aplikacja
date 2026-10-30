@@ -46,7 +46,7 @@ import {
   ExportGate,
   type ExportGateReport
 } from "./export-gate.js";
-import { FinalizationGate, type FinalizationReport } from "./finalization-gate.js";
+import { FinalizationGate, markUnverifiedReferences, type FinalizationReport } from "./finalization-gate.js";
 import { stripAstVerificationMarkers } from "./verification-markers.js";
 import { documentCompletenessWarnings } from "./document-completeness.js";
 
@@ -95,6 +95,20 @@ function exportBlocked(code: string, report: ExportGateReport): ExportGateBlocke
     blockedReferences(report.finalization),
     report.reasons.length === 1 && report.reasons[0] === "UNVERIFIED_REFERENCE_REQUIRES_HUMAN_DECISION"
   );
+}
+
+/**
+ * A signature the case's materials name (VIII W 633/25 in RD 121/26) written in the file
+ * without its marker: marked "z materiałów sprawy" as in the chat, so it is an unverified
+ * reference the user may accept in a draft, not a blocking judgment of unknown origin.
+ */
+function markCaseMaterialSignatures(markedText: string, context: DocumentGenerationValidationContext): string {
+  const ledger = rebuildGenerationExportState(context).ledger;
+  const caseReferences = new Set(ledger.caseReferences());
+  if (caseReferences.size === 0) return markedText;
+  const report = new FinalizationGate().evaluate(markedText, ledger);
+  const cases = { ...report, findings: report.findings.filter((finding) => finding.reference.kind === "case") };
+  return markUnverifiedReferences(markedText, cases, caseReferences);
 }
 
 /**
@@ -551,8 +565,11 @@ export class LocalDocumentAuthoringService {
 
     // G8 reads the markers; the court gets the document without them.
     const markedText =
-      legalDocumentPlainText(
-        validated.ast
+      markCaseMaterialSignatures(
+        legalDocumentPlainText(
+          validated.ast
+        ),
+        args.validationContext
       );
     const draft =
       args.acceptUnverified
