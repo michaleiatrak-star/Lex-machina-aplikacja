@@ -154,6 +154,16 @@ describe("local document citations", () => {
     expect(result.text).toContain(`spłacony w całości” ${QUOTE_UNSOURCED_MARKER}.`);
   });
 
+  it("a quote inside a question to the user is not flagged (live C12-027)", () => {
+    const result = processDocumentCitationMarkers(
+      "Bez tego nie da się dobrze napisać części pisma o spóźnieniu. Ile decyzji Pani dostała? Jedną czy dwie (także decyzję, że „nie podlega Pani ubezpieczeniom”)?",
+      [pleading]
+    );
+
+    expect(result.quoteFindings.unsourced).toBe(0);
+    expect(result.text).not.toContain(QUOTE_UNSOURCED_MARKER);
+  });
+
   it("leaves statute wording, the user's own words and short terms alone", () => {
     const text = [
       "Pozwany powołuje art. 6 k.c., który stanowi: „ciężar udowodnienia faktu spoczywa na osobie, która z faktu tego wywodzi skutki prawne”.",

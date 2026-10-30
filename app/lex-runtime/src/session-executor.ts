@@ -5086,7 +5086,10 @@ export class SafeSessionExecutor implements SessionExecutor {
     const waitingForUser =
       (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) ||
       frameHeld(restoredAnswer.text, activeCheckpoint) ||
-      skillSwitch !== null;
+      skillSwitch !== null ||
+      // The offer asked outside the simple-letter plan (an automatic turn, live C12-027): the
+      // answer asks whether to switch, it is not a letter to save as a file.
+      escalationOffer(restoredAnswer.text) !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);

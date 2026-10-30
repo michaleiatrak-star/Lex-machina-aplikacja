@@ -262,6 +262,9 @@ function linkUnmarkedQuotes(
       continue;
     }
     if (!attributedToDocument(text, match.index)) continue;
+    // "Czy dostała Pani też decyzję, że „nie podlega Pani ubezpieczeniom”?": a question to the
+    // user about a document's wording, not a quote from it (live C12-027).
+    if (/^[^.!\n]*\?/u.test(text.slice(end, end + 200))) continue;
     if (otherTexts.some((other) => textContainsQuote(other, quote))) continue;
     // A digest shows the passage shortened: the quote may be in the full text.
     if (entries.some((entry) => entry.chunk.representation === "EXTRACTIVE_DIGEST")) continue;
