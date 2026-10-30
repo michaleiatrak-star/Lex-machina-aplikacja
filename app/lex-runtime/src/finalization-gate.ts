@@ -353,7 +353,16 @@ export function completeBareArticleActs(
     // Written with a code ("art. 35 KPA") or with an act named in words after it ("art. 35 ust. 3
     // Prawa budowlanego"): the act this number has in the answer's own words.
     const act = !reference.span ? ACT_SUFFIX.exec(reference.claim)?.[1] : undefined;
-    const named = !act && namesOtherAct(ownText(reference)) ? "\u0000named" : undefined;
+    // Named in words as the very act this number was verified in ("art. 6 ust. 1, 3 i 4 ustawy o
+    // ochronie praw lokatorów", live C12-018): that act, not another one.
+    const own = ownText(reference).replace(/^[\s,;:)(*_]+/u, "").toLocaleLowerCase("pl");
+    // The ledger keeps "o ochronie praw lokatorów" (no "ustawy", no date): its name right after the number.
+    const sameAct = [...(actsByNumber.get(number) ?? [])].find((verified) => verified.length > 8 && own.slice(0, 160).includes(verified.toLocaleLowerCase("pl")));
+    const named = !act && !sameAct && namesOtherAct(ownText(reference)) ? "\u0000named" : undefined;
+    if (sameAct) {
+      writtenActs.set(number, (writtenActs.get(number) ?? new Set()).add(sameAct));
+      continue;
+    }
     if (act || named) writtenActs.set(number, (writtenActs.get(number) ?? new Set()).add((act ?? named)!));
   }
   const lines = text.split("\n");

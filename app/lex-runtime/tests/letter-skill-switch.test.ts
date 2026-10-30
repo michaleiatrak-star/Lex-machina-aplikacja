@@ -103,6 +103,30 @@ describe("mechanical pisma-proste-v2: escalation", () => {
   }, 120_000);
 });
 
+describe("automatic turn: the switch asked in lay words", () => {
+  it("waits for the user, so the answer is not offered as a file (live C12-027)", async () => {
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "openai",
+      label: "mechanical",
+      capabilities: { streaming: true, tools: true, reasoning: true, modelDiscovery: false },
+      async stream() {
+        return { fullText: "Odwołanie od decyzji ZUS z wnioskiem o przywrócenie terminu przygotowuje moduł pism złożonych (pisma-procesowe-v3).\n\nCzy przełączyć na pisma-procesowe-v3? Wystarczy odpisać „tak”." };
+      }
+    });
+    const executor = new SafeSessionExecutor(registry, new ProviderGateway(providers), undefined, verification);
+    const result = await executor.execute({
+      query: "Przygotuj odwołanie.",
+      provider: "openai",
+      model: "account/openai/default",
+      primarySkill: "dr-04-prawo-pracy-zus-swiadczenia",
+      mode: "LAIK"
+    } as never);
+    expect(result.waitingForUser).toBe(true);
+    expect(result.skillSwitch).toMatchObject({ to: "pisma-procesowe-v3", direction: "ESCALATION" });
+  }, 120_000);
+});
+
 describe("mechanical pisma-procesowe-v3: reduction (Test B)", () => {
   it("at CP-1a the proposal is presented and the checkpoint is not corrected or committed", async () => {
     const { result, calls } = await turn("pisma-procesowe-v3", "Potrzebuję wniosku o nadanie klauzuli wykonalności wyrokowi zaocznemu.", REDUCTION, {

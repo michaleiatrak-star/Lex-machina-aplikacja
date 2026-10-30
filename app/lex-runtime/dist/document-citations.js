@@ -214,6 +214,11 @@ function linkUnmarkedQuotes(text, entries, otherTexts) {
         }
         if (!attributedToDocument(text, match.index))
             continue;
+        // "Czy dostała Pani też decyzję, że „nie podlega Pani ubezpieczeniom”?": a question to the
+        // user about a document's wording, not a quote from it (live C12-027). A quote given after
+        // a colon ("pozwany napisał: „…”, prawda?") is still presented as the document's text.
+        if (/^[^.!\n]*\?/u.test(text.slice(end, end + 200)) && !/:\s*[*_]*$/u.test(text.slice(Math.max(0, match.index - 4), match.index)))
+            continue;
         if (otherTexts.some((other) => textContainsQuote(other, quote)))
             continue;
         // A digest shows the passage shortened: the quote may be in the full text.

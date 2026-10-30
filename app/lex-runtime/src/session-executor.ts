@@ -5072,7 +5072,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? escalationOffer(restoredAnswer.text)
         : workflowOutput.mode === "REDUCTION_OFFERED"
           ? reductionOffer(restoredAnswer.text)
-          : null) ?? appEscalation;
+          : null) ??
+      appEscalation ??
+      // The same offer asked outside the simple-letter plan (an automatic turn, live C12-027):
+      // a question to switch, not a letter to save as a file; the chat offers the switch.
+      (!request.processWorkflowContext && execution.workflowPlan.id !== "PROCESS_PLEADING_V1" ? escalationOffer(restoredAnswer.text) : null);
     // A checkpoint's report followed by the marker without a question or request after it
     // (the skill's "STOP, czekaj na użytkownika") is a report to confirm: otherwise the
     // checkpoint never reached confirmation and the chain asked for it again (E2E: 18 turns
