@@ -90,6 +90,7 @@ import type {
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
   threadEvidencePrompt,
@@ -4022,13 +4023,17 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? splitTrailingDisclaimer(modelOutput)
         : { body: modelOutput, disclaimer: null };
     if (modelDisclaimer.disclaimer) modelOutput = modelDisclaimer.body;
+    // A document AST goes through the gates as lines, one per text node, and back to JSON at
+    // the end (ast-text-lines.ts): the act, the quote and the markers of a provision are its own.
+    const astLines = request.documentAstOutput ? astTextLines(modelOutput) : null;
+    if (astLines) modelOutput = astLines.text;
     const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
         // A document AST is one line of JSON: the act of a provision is read from its line, so
         // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
         // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
-        request.documentAstOutput ? astBlockLines(releasedDraft.text) : releasedDraft.text,
+        request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text,
         ledger,
         requestedHistoricalAsOf
       );
@@ -4972,9 +4977,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             : [])
         ]
       : [];
-    const presentedText = degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
-      ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
-      : disclaimed.text;
+    const presentedText = astLines
+      ? astLines.restore(disclaimed.text)
+      : degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
+        ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+        : disclaimed.text;
     if (mandatoryPath) {
       audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
         profile: mandatoryPath.profile,
