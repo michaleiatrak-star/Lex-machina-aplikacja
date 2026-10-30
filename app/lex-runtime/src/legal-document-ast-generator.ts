@@ -23,6 +23,7 @@ import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupEr
 import { splitSourceText, wordCoverage } from "./long-document.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
+import { caseFileKey } from "./verification-ledger.js";
 import type { CaseFileAccess } from "./case-file-tool-runtime.js";
 import type { ThreadEvidence } from "./thread-evidence.js";
 
@@ -398,6 +399,19 @@ export function unverifiedOnlySession(result: SessionResult): boolean {
   );
 }
 
+/**
+ * The references the draft's heading names as unverified in their source: provisions, Dz.U.
+ * and judgments. A signature of the case's own materials and an amount or term ("7 dni") are
+ * not such references (RD 121/26 listed VIII W 633/25 and "7 dni" there).
+ */
+function draftHeaderClaims(result: SessionResult): string[] {
+  const caseReferences = new Set(result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []);
+  return result.blockedReferences
+    .filter((reference) => reference.kind === "statute" || reference.kind === "journal" || reference.kind === "case")
+    .filter((reference) => !(reference.kind === "case" && caseReferences.has(caseFileKey(reference.claim))))
+    .map((reference) => reference.claim);
+}
+
 function blockedSessionDiagnostic(
   result: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>
 ): DocumentAstSessionBlockedError {
@@ -699,7 +713,7 @@ export class LegalDocumentAstGenerator {
             true
           );
         }
-        acceptedUnverified = [...new Set(result.blockedReferences.map((reference) => reference.claim))];
+        acceptedUnverified = [...new Set(draftHeaderClaims(result))];
       }
 
       try {
@@ -828,7 +842,7 @@ export class LegalDocumentAstGenerator {
               true
             );
           }
-          acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...result.blockedReferences.map((reference) => reference.claim)])];
+          acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...draftHeaderClaims(result)])];
         }
         const answer = (result.answer ?? "").trim();
         const markup = k === 1 ? answer : answer.replace(/^\s*@(?:MIEJSCE_DATA|NADAWCA|ADRESAT|STRONA|DOTYCZY|TYTUL|PODSTAWA):.*$/gmu, "").trim();
