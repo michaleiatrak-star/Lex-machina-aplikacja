@@ -991,7 +991,9 @@ export function classifyAccountCliFailureDetail(detail) {
     if (/401|unauthorized|not logged in|login required|authentication.*failed|credentials.*missing|oauth.{0,80}expired|token.{0,80}expired|invalid bearer token|could not be refreshed/.test(lower)) {
         return "ACCOUNT_SESSION_AUTH_EXPIRED";
     }
-    if (/rate limit|too many requests|at capacity|capacity|quota exceeded|usage limit/.test(lower)) {
+    if (
+    // "You've hit your 5-hour limit · resets 12:30am (UTC)" (Claude account, RD 121/26).
+    /rate limit|too many requests|at capacity|capacity|quota exceeded|usage limit|hit your [\w -]{0,20}limit|\d+-hour limit|weekly limit/.test(lower)) {
         return "ACCOUNT_SESSION_CAPACITY";
     }
     if (/usage policy|prompt was flagged|invalid prompt/.test(lower)) {
