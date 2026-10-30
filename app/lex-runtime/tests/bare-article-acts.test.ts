@@ -64,4 +64,19 @@ describe("Dz.U. of the text read in ELI and the act-name round", () => {
     expect(ambiguousBareArticles("Zob. art. 11.", ledger({ claim: "art. 11 KC" }, { claim: "art. 11 Prawa upadłościowego" })).map((item) => item.acts)).toEqual([["KC", "Prawa upadłościowego"]]);
     expect(ambiguousBareArticles("Zob. art. 11.", ledger({ claim: "art. 11 KC" }))).toEqual([]);
   });
+
+  it("the act named in words elsewhere is the verified act, not another one (live C12-018)", () => {
+    const records = ledger({
+      claim: "art. 6 ust. 4 ustawy o ochronie praw lokatorów",
+      evidence: "Art. 6. 1. Zawarcie umowy najmu może być uzależnione od wpłacenia kaucji. 4. Kaucja podlega zwrotowi w ciągu miesiąca."
+    });
+    const text = [
+      "Co mówi prawo: art. 6 ust. 1, 3 i 4 ustawy o ochronie praw lokatorów.",
+      "Wynajmujący ma miesiąc na zwrot (art. 6 ust. 4, oznaczenie jak wyżej)."
+    ].join("\n");
+    const { text: out, completed } = completeBareArticleActs(text, records);
+    expect(completed).toHaveLength(1);
+    expect(out).toContain("(art. 6 ust. 4 ustawy o ochronie praw lokatorów, oznaczenie jak wyżej)");
+  });
 });
+
