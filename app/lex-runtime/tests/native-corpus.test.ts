@@ -209,6 +209,45 @@ describe("AUTO with native corpus access", () => {
     expect(runtime.modelSkillSelection().loadedSkills).toEqual(["prawny-router-v3", "prawo-polskie-v2", DR03]);
   });
 
+  it("puts the qualifier itself in the correcting round; a model that does not read it does not fail the turn (C13-042)", async () => {
+    const registry = corpus();
+    const runtime = new LegalCorpusToolRuntime(registry, { modelSelectsSkills: true });
+    const seen: ProviderStreamParams[] = [];
+    const adapter: ProviderAdapter = {
+      id: "anthropic",
+      label: "test",
+      capabilities: { streaming: true, tools: true, reasoning: false, modelDiscovery: false },
+      nativeCorpusAccess: () => true,
+      stream: async (params) => {
+        seen.push(params);
+        if (seen.length === 1) params.nativeCorpus!.onRead!(`${DR03}/SKILL.md`);
+        // Neither round reads the qualifier with the tool.
+        return { fullText: seen.length === 1 ? "kwalifikacja bez kwalifikatora" : "poprawiona kwalifikacja" };
+      }
+    };
+    const providers = new ProviderRegistry();
+    providers.register(adapter);
+    const engine = new LexExecutionEngine(registry, new ProviderGateway(providers));
+    const result = await engine.executePolishLegalQuery({
+      query: "Pracownik jechał po alkoholu i potrącił pieszego.",
+      provider: "anthropic",
+      model: "account",
+      modelSelectsSkills: true,
+      nativeCorpus: {
+        root: registry.root,
+        onRead: (relativePath) => runtime.recordNativeRead(relativePath),
+        missingQualifier: () => runtime.missingCriminalQualifier()
+      },
+      tools: [{ type: "function", function: { name: "search_core_law", description: "rdzeń", parameters: {} } }],
+      runTools: async () => [],
+      route: { jurisdiction: "PL", primarySkill: DR02, mode: "PRAWNIK" }
+    });
+    expect(seen).toHaveLength(2);
+    expect(seen[1]!.messages.at(-1)!.content).toContain(`# ${DR03}/modules/mod-KK-kwalifikator-karnomaterialny.md`);
+    expect(result.output).toBe("poprawiona kwalifikacja");
+    expect(runtime.missingCriminalQualifier()).toBeNull();
+  });
+
   it("gives the router and the Polish-law facade up front also without native corpus access", async () => {
     const registry = corpus();
     const runtime = new LegalCorpusToolRuntime(registry, { modelSelectsSkills: true });

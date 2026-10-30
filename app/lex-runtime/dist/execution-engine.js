@@ -1589,6 +1589,17 @@ export class LexExecutionEngine {
         const qualifier = native?.missingQualifier() ?? null;
         if (native && qualifier) {
             emit("gate", "CRIMINAL_QUALIFIER", "OK", `follow-up=${qualifier}`);
+            // The qualifier itself in the correcting round: the model asked to read it did not always
+            // call the tool, and the whole turn failed (live C13-042, drunk driver's accident).
+            let qualifierText = "";
+            try {
+                qualifierText = fs.readFileSync(path.join(native.root, qualifier), "utf8");
+            }
+            catch {
+                qualifierText = "";
+            }
+            if (qualifierText)
+                native.onRead(qualifier);
             const corrected = await this.providers.stream(args.provider, {
                 model: args.model,
                 systemPrompt,
@@ -1600,8 +1611,12 @@ export class LexExecutionEngine {
                     { role: "assistant", content: response.fullText },
                     {
                         role: "user",
-                        content: `Sprawa karna: przeczytaj obowiązkowy kwalifikator karnomaterialny ${qualifier} i popraw odpowiedź zgodnie z nim. ` +
-                            "Zwróć pełną, poprawioną odpowiedź (nie opis zmian)."
+                        content: qualifierText
+                            ? `Sprawa karna: zastosuj obowiązkowy kwalifikator karnomaterialny (${qualifier}, treść poniżej) i popraw odpowiedź zgodnie z nim. ` +
+                                "Zwróć pełną, poprawioną odpowiedź (nie opis zmian).\n\n" +
+                                `# ${qualifier}\n\n${qualifierText}`
+                            : `Sprawa karna: przeczytaj obowiązkowy kwalifikator karnomaterialny ${qualifier} i popraw odpowiedź zgodnie z nim. ` +
+                                "Zwróć pełną, poprawioną odpowiedź (nie opis zmian)."
                     }
                 ],
                 tools: args.tools,
