@@ -162,6 +162,12 @@ describe("local document citations", () => {
 
     expect(result.quoteFindings.unsourced).toBe(0);
     expect(result.text).not.toContain(QUOTE_UNSOURCED_MARKER);
+
+    const asserted = processDocumentCitationMarkers(
+      "Pozwany w odpowiedzi na pozew napisał: „dług istnieje i zostanie spłacony w całości”, czy to nie jest uznanie długu?",
+      [pleading]
+    );
+    expect(asserted.quoteFindings.unsourced).toBe(1);
   });
 
   it("leaves statute wording, the user's own words and short terms alone", () => {

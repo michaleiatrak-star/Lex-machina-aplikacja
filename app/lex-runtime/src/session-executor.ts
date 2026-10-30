@@ -5072,7 +5072,11 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? escalationOffer(restoredAnswer.text)
         : workflowOutput.mode === "REDUCTION_OFFERED"
           ? reductionOffer(restoredAnswer.text)
-          : null) ?? appEscalation;
+          : null) ??
+      appEscalation ??
+      // The same offer asked outside the simple-letter plan (an automatic turn, live C12-027):
+      // a question to switch, not a letter to save as a file; the chat offers the switch.
+      (!request.processWorkflowContext && execution.workflowPlan.id !== "PROCESS_PLEADING_V1" ? escalationOffer(restoredAnswer.text) : null);
     // A checkpoint's report followed by the marker without a question or request after it
     // (the skill's "STOP, czekaj na użytkownika") is a report to confirm: otherwise the
     // checkpoint never reached confirmation and the chain asked for it again (E2E: 18 turns
@@ -5086,10 +5090,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     const waitingForUser =
       (waitsForUser(restoredAnswer.text) && !reportOnly(restoredAnswer.text, activeCheckpoint)) ||
       frameHeld(restoredAnswer.text, activeCheckpoint) ||
-      skillSwitch !== null ||
-      // The offer asked outside the simple-letter plan (an automatic turn, live C12-027): the
-      // answer asks whether to switch, it is not a letter to save as a file.
-      escalationOffer(restoredAnswer.text) !== null;
+      skillSwitch !== null;
     // A letter's addressee court: from court_for_address or the case's court (its regional and
     // appeal court too: an appeal goes through the district court), never from the model alone.
     const letterSkill = /^pisma-/u.test(taskRoute?.primary ?? execution.primarySkill ?? "") || /===\s*PISMO\s*===|^@TYTUL:/mu.test(restoredAnswer.text);

@@ -123,6 +123,7 @@ describe("automatic turn: the switch asked in lay words", () => {
       mode: "LAIK"
     } as never);
     expect(result.waitingForUser).toBe(true);
+    expect(result.skillSwitch).toMatchObject({ to: "pisma-procesowe-v3", direction: "ESCALATION" });
   }, 120_000);
 });
 
