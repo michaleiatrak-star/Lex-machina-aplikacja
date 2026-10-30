@@ -129,6 +129,8 @@ export class LocalOfficeEditor {
           reject(new Error(reason ?? `OFFICE_EDIT_FAILED:${code}`));
         }
       });
+      // EPIPE of a worker that exited early: its exit code rejects; unhandled, it stopped the runtime.
+      child.stdin.on("error", () => undefined);
       child.stdin.end(Buffer.from(input));
     });
   }

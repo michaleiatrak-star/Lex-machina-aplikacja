@@ -85,6 +85,8 @@ export async function anonymizeDocx(data, plan, options = {}) {
             else
                 reject(new Error(/(?:DOCX_ANONYMIZED|OFFICE_DOCUMENT)_[A-Z_]+(?::[\w/.\-]+)?/u.exec(stderr)?.[0] ?? `DOCX_ANONYMIZED_FAILED:${code}`));
         });
+        // EPIPE of a worker that exited early: its exit code rejects; unhandled, it stopped the runtime.
+        child.stdin.on("error", () => undefined);
         child.stdin.end(input);
     });
     input.fill(0);

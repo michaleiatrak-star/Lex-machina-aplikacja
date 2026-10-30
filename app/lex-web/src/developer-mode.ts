@@ -326,6 +326,9 @@ export function plainErrorMessage(code: string, technical: string, reason?: stri
     return "Nie udało się wykonać tego etapu pracy. Spróbuj ponownie; jeśli się powtórzy, rozpocznij nowy etap.";
   }
   if (code === "PROVIDER_EXECUTION_FAILED" || code === "LOCAL_MODEL_EXECUTION_FAILED") {
+    // The account's own limit says when it renews ("resets 12:30am (UTC)"): the lawyer gets that time.
+    const resets = reason === "ACCOUNT_SESSION_CAPACITY" ? /resets?\s+(?:at\s+)?([^·\n]{1,40}?)\s*(?:$|·|\n)/iu.exec(technical)?.[1] : undefined;
+    if (resets) return `Wyczerpany limit konta modelu. Odnowi się: ${resets.trim()}. Do tego czasu wybierz inny model albo klucz API.`;
     if (reason && PLAIN_MODEL_REASONS[reason]) return PLAIN_MODEL_REASONS[reason];
     return reason?.startsWith("LOCAL_MODEL_")
       ? "Lokalny model nie przygotował odpowiedzi. Spróbuj ponownie; aplikacja uruchomi go od nowa."

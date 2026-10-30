@@ -3667,7 +3667,13 @@ export default function MatterChatApp({
             if (!(error instanceof ApiError && error.code === "PROCESS_PLEADING_STATE_EXISTS")) throw error;
           }
         }
-        await acceptProcessPleadingWorkflowStart(pending.caseId);
+        try {
+          await acceptProcessPleadingWorkflowStart(pending.caseId);
+        } catch (error) {
+          // The case's pipeline is already started (RD 121/26): continue in it, as with an
+          // existing state, instead of offering a start that fails every time.
+          if (!(error instanceof ApiError && error.code === "PROCESS_PLEADING_START_TRANSITION_INVALID")) throw error;
+        }
         setProcessWorkflowRefresh((value) => value + 1);
       } else {
         await resetCaseWorkflow(pending.caseId, recovery.workflow);

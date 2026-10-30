@@ -1560,7 +1560,8 @@ export function classifyAccountCliFailureDetail(
     return "ACCOUNT_SESSION_AUTH_EXPIRED";
   }
   if (
-    /rate limit|too many requests|at capacity|capacity|quota exceeded|usage limit/.test(
+    // "You've hit your 5-hour limit · resets 12:30am (UTC)" (Claude account, RD 121/26).
+    /rate limit|too many requests|at capacity|capacity|quota exceeded|usage limit|hit your [\w -]{0,20}limit|\d+-hour limit|weekly limit/.test(
       lower
     )
   ) {

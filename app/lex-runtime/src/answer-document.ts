@@ -31,6 +31,7 @@ export function answerValidationContext(
     model: request.model,
     usedDocumentContext: Boolean(request.documentAttachments?.length),
     ...(internal.caseFileNumbers?.length ? { caseFileNumbers: [...internal.caseFileNumbers] } : {}),
+    ...(internal.caseReferences?.length ? { caseReferences: [...internal.caseReferences] } : {}),
     ...(internal.factAmounts?.length ? { factAmounts: [...internal.factAmounts] } : {}),
     verificationRecords: internal.verificationRecords.map((record) => ({ ...record })),
     auditEvents: internal.auditEvents.map((event) => ({ ...event, ...(event.detail ? { detail: { ...event.detail } } : {}) }))

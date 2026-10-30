@@ -1,3 +1,4 @@
+import { CASE_MATERIAL_MARKER_TEXT } from "./finalization-gate.js";
 export const QUOTE_MISMATCH_MARKER = "⚠️ [CYTAT NIEZGODNY Z DOKUMENTEM]";
 export const QUOTE_UNSOURCED_MARKER = "⚠️ [CYTAT NIEODNALEZIONY W AKTACH]";
 const MARKER = /\[\[LEXDOC:([^:\]\r\n]{1,180}):(\d{1,7})\]\]/g;
@@ -66,10 +67,38 @@ function quoteSegments(quote) {
         .map((segment) => fold(segment).text.trim().replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/gu, ""))
         .filter((segment) => segment.length >= 3);
 }
+// An editorial ending in brackets ("Członk[ów] Zarządu", "poczt[y] tradycyjn[ej]", RD 121/26):
+// that word may differ in its ending from the source; its stem and every other word may not.
+const ADAPTED_WORD = /(\p{L}*)\[(\p{L}{1,6})\](\p{L}*)/gu;
+function locateAdaptedQuote(contextText, quote) {
+    const words = fold(quote.replace(new RegExp(ELISION.source, "gu"), " ")).text.trim().split(" ").filter(Boolean);
+    let adapted = 0;
+    const pattern = words.map((word) => {
+        ADAPTED_WORD.lastIndex = 0;
+        const match = ADAPTED_WORD.exec(word);
+        if (!match)
+            return word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        adapted += 1;
+        const stem = match[1].slice(0, Math.max(3, match[1].length - 2));
+        const escape = (part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        return `${escape(word.slice(0, match.index))}${escape(stem)}\\p{L}*${escape(word.slice(match.index + match[0].length))}`;
+    });
+    // Only an adapted quote, and never one made mostly of adapted words.
+    if (adapted === 0 || words.length - adapted < 2)
+        return undefined;
+    const source = fold(contextText);
+    const found = new RegExp(pattern.join(" "), "u").exec(source.text);
+    return found ? { start: source.map[found.index], end: source.map[found.index + found[0].length - 1] + 1 } : undefined;
+}
 // Every segment of the quote ("a [...] b" is two) in the document, in order.
 function locateQuote(contextText, quote) {
     if (!quote)
         return undefined;
+    if (/\[\p{L}{1,6}\]/u.test(quote)) {
+        const adapted = locateAdaptedQuote(contextText, quote);
+        if (adapted)
+            return adapted;
+    }
     const segments = quoteSegments(quote);
     if (segments.length === 0)
         return undefined;
@@ -127,6 +156,31 @@ function attributedToDocument(text, quoteStart) {
         return false;
     // "pozwany powołuje art. 6 k.c., który stanowi: „…”": the nearer cue decides.
     return lastMatchEnd(NON_DOCUMENT_SOURCE, before) < attribution;
+}
+// "VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]": the signature is in the case's
+// documents, so the marker gets the passage that names it, shown and highlighted like a quote
+// (RD 121/26: the user saw "z materiałów sprawy" without which document or where).
+const SIGNATURE_BEFORE = /((?:sygn\.?\s*(?:akt\s*)?:?\s*)?(?:[A-ZĄĆĘŁŃÓŚŹŻ]{1,8}\s+){1,4}\d+\/\d{2,4})\s*$/u;
+function linkCaseMaterialSignatures(text, entries) {
+    if (!entries.length || !text.includes(CASE_MATERIAL_MARKER_TEXT))
+        return text;
+    let output = "";
+    let cursor = 0;
+    for (let at = text.indexOf(CASE_MATERIAL_MARKER_TEXT); at >= 0; at = text.indexOf(CASE_MATERIAL_MARKER_TEXT, at + 1)) {
+        const end = at + CASE_MATERIAL_MARKER_TEXT.length;
+        if (/^\s*\[\[LEXDOC:/u.test(text.slice(end, end + 12)))
+            continue;
+        const signature = SIGNATURE_BEFORE.exec(text.slice(Math.max(0, at - 60), at))?.[1]?.replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "");
+        if (!signature)
+            continue;
+        const pattern = new RegExp(`(?<![\\p{L}\\d])${signature.trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/\s+/gu, "\\s*")}(?![\\d])`, "iu");
+        const found = entries.find((entry) => pattern.test(entry.chunk.text));
+        if (!found)
+            continue;
+        output += text.slice(cursor, end) + ` [[LEXDOC:${found.attachment.documentId}:${found.chunk.index}]]`;
+        cursor = end;
+    }
+    return output + text.slice(cursor);
 }
 // Quotes without a marker: linked when found in a case document; flagged when attributed to
 // a document yet found neither there nor in the thread or the case law read in this turn.
@@ -196,7 +250,7 @@ export function processDocumentCitationMarkers(modelText, attachments, options =
         }
     }
     const entries = [...chunks.values()];
-    const linked = linkUnmarkedQuotes(modelText, entries, options.otherTexts ?? []);
+    const linked = linkUnmarkedQuotes(linkCaseMaterialSignatures(modelText, entries), entries, options.otherTexts ?? []);
     const text = linked.text;
     let mismatched = 0;
     const citations = [];
@@ -228,6 +282,13 @@ export function processDocumentCitationMarkers(modelText, attachments, options =
                 location = elsewhere.location;
             }
         }
+        // A case-material signature's link highlights the signature itself in the passage.
+        const before = text.slice(Math.max(0, match.index - 80), match.index).trimEnd();
+        const signature = !quote && before.endsWith(CASE_MATERIAL_MARKER_TEXT)
+            ? SIGNATURE_BEFORE.exec(before.slice(0, -CASE_MATERIAL_MARKER_TEXT.length).trimEnd())?.[1]?.replace(/^sygn\.?\s*(?:akt\s*)?:?\s*/iu, "")
+            : undefined;
+        if (signature && !location)
+            location = locateQuote(resolved.chunk.text, signature);
         const quoteFidelity = !quote
             ? undefined
             : location

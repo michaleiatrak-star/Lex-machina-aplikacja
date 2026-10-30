@@ -25,6 +25,24 @@ describe("local document citations", () => {
         expect(result.citations[0]?.highlightStart).toBeGreaterThanOrEqual(0);
         expect(result.citations[0]?.contextText.slice(result.citations[0]?.highlightStart, result.citations[0]?.highlightEnd)).toContain("Pozwany zobowiązał się zapłacić");
     });
+    it("a signature from the case's documents links to the passage that names it (RD 121/26)", () => {
+        const docs = [{ ...attachments[0], chunks: [{ index: 2, pageStart: 1, pageEnd: 1, text: "SENTENCJA\nSygn. akt VIII W 633/25\nWyrok w imieniu Rzeczypospolitej Polskiej" }] }];
+        const result = processDocumentCitationMarkers("Sąd uniewinnił skarżącego (sygn. akt VIII W 633/25 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]). Inna sprawa I C 1/26 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy].", docs);
+        expect(result.citations).toHaveLength(1);
+        expect(result.citations[0]).toMatchObject({ pageStart: 1, chunkIndex: 2 });
+        expect(result.citations[0]?.contextText.slice(result.citations[0]?.highlightStart, result.citations[0]?.highlightEnd)).toBe("VIII W 633/25");
+        expect(result.text).toContain("z materiałów sprawy] [[LEXDOCREF:docref_1]])");
+        // Not in any document: the marker stays without a link.
+        expect(result.text).toContain("I C 1/26 ⚠️ [NIEWERYFIKOWANE: z materiałów sprawy].");
+    });
+    it("a quote with editorial endings in brackets is found; a changed word is not (RD 121/26)", () => {
+        const docs = [{ ...attachments[0], chunks: [{ index: 4, pageStart: 2, pageEnd: 2, text: "Moi Mocodawcy oraz Wspólnicy, Członkowie Zarządu oraz kadra pracownicza Spółek nie życzą sobie kontaktu, także pocztą tradycyjną." }] }];
+        const found = processDocumentCitationMarkers("Pismo obejmuje „Wspólnik[ów], Członk[ów] Zarządu oraz kadr[ę] pracownicz[ą] Spółek” oraz „poczt[ę] tradycyjn[ą]” i inne drogi.", docs);
+        expect(found.text).not.toContain(QUOTE_UNSOURCED_MARKER);
+        expect(found.citations.length).toBeGreaterThanOrEqual(1);
+        const changed = processDocumentCitationMarkers("Pismo obejmuje „Wspólnik[ów], Członk[ów] Rady oraz kadr[ę] pracownicz[ą] Spółek”.", docs);
+        expect(changed.text).toContain(QUOTE_UNSOURCED_MARKER);
+    });
     it("drops an invented marker instead of exposing a fake deep link", () => {
         const result = processDocumentCitationMarkers("Rzekomy cytat. [[LEXDOC:document_ffffffffffffffffffffffffffffffff:99]]", attachments);
         expect(result.rejectedMarkers).toBe(1);

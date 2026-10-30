@@ -3624,6 +3624,7 @@ export class SafeSessionExecutor {
             value: {
                 verificationRecords: verificationRecords.map((record) => ({ ...record })),
                 caseFileNumbers: ledger.caseFileNumbers(),
+                caseReferences: ledger.caseReferences(),
                 factAmounts: ledger.factAmountKeys(),
                 auditEvents: audit.events.map((event) => ({
                     ...event,

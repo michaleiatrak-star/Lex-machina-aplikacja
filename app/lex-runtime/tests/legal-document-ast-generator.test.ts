@@ -155,6 +155,25 @@ describe("nagłówek AST uzupełniany przez runtime (AST_HEADER_INVALID)", () =>
     expect(mixed.blocks[2]).toMatchObject({ type: "table" });
   });
 
+  it("pozycje listy jako {children} albo list_item (RD 121/26, AST_INLINE_TYPE_UNSUPPORTED)", () => {
+    const ast = validateLegalDocumentAst(
+      normalizeAstBlocks(normalizeAstHeader({
+        title: "Zażalenie",
+        blocks: [{ type: "list", ordered: true, items: [
+          { children: [{ type: "text", text: "uchylenie postanowienia" }] },
+          { type: "list_item", content: [{ type: "text", text: "dowody" }] },
+          { inlines: "akta" }
+        ] }]
+      }, request)),
+      []
+    ).ast;
+    expect(ast.blocks[0]).toMatchObject({ type: "list", ordered: true, items: [
+      [{ type: "text", text: "uchylenie postanowienia" }],
+      [{ type: "text", text: "dowody" }],
+      [{ type: "text", text: "akta" }]
+    ] });
+  });
+
   it("typy inline innych formatów i blok z „content” i „inlines” naraz (AST_INLINE_TYPE_UNSUPPORTED) bez zmiany treści", () => {
     const ast = validateLegalDocumentAst(
       normalizeAstBlocks(normalizeAstHeader({

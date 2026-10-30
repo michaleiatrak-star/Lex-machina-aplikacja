@@ -321,6 +321,15 @@ describe("provider account-session transport", () => {
         expect(isAccountSessionModel("anthropic", "account/openai/default")).toBe(false);
     });
 });
+describe("Claude account plan limit", () => {
+    it("is the account's capacity, not an unknown CLI failure (RD 121/26)", async () => {
+        const { classifyAccountCliFailureDetail, isTransientRateLimit } = await import("./account-session.js");
+        expect(classifyAccountCliFailureDetail("You've hit your 5-hour limit · resets 12:30am (UTC)")).toBe("ACCOUNT_SESSION_CAPACITY");
+        expect(classifyAccountCliFailureDetail("You've hit your weekly limit · resets Mon 9am")).toBe("ACCOUNT_SESSION_CAPACITY");
+        // Not retried in the turn: it renews hours later.
+        expect(isTransientRateLimit(new Error("ACCOUNT_SESSION_CAPACITY:anthropic:1:You've hit your 5-hour limit · resets 12:30am (UTC)"))).toBe(false);
+    });
+});
 describe("Grok ACP failures", () => {
     it("codes a bare rate-limit message and keeps coded errors", async () => {
         const { codedGrokFailure, isTransientRateLimit } = await import("./account-session.js");
