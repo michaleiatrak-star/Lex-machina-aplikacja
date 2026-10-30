@@ -5,6 +5,7 @@ import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupEr
 import { splitSourceText, wordCoverage } from "./long-document.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
+import { caseFileKey } from "./verification-ledger.js";
 function extractJson(value) {
     const trimmed = value.trim();
     const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
@@ -320,6 +321,18 @@ export function unverifiedOnlySession(result) {
         result.blockedReferences.every((reference) => UNVERIFIED_STATUSES.has(reference.status)) &&
         events.every((event) => event.status !== "BLOCKED" || verificationOnlyBlock(event)));
 }
+/**
+ * The references the draft's heading names as unverified in their source: provisions, Dz.U.
+ * and judgments. A signature of the case's own materials and an amount or term ("7 dni") are
+ * not such references (RD 121/26 listed VIII W 633/25 and "7 dni" there).
+ */
+function draftHeaderClaims(result) {
+    const caseReferences = new Set(result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []);
+    return result.blockedReferences
+        .filter((reference) => reference.kind === "statute" || reference.kind === "journal" || reference.kind === "case")
+        .filter((reference) => !(reference.kind === "case" && caseReferences.has(caseFileKey(reference.claim))))
+        .map((reference) => reference.claim);
+}
 function blockedSessionDiagnostic(result) {
     const reason = [
         `status=${result.status}`,
@@ -601,7 +614,7 @@ export class LegalDocumentAstGenerator {
                         .filter((reference, index, all) => all.findIndex((other) => other.claim === reference.claim) === index)
                         .map((reference) => ({ claim: reference.claim, status: reference.status, line: reference.line })), true);
                 }
-                acceptedUnverified = [...new Set(result.blockedReferences.map((reference) => reference.claim))];
+                acceptedUnverified = [...new Set(draftHeaderClaims(result))];
             }
             try {
                 validated = parseValidatedAst(result.answer ?? "", request);
@@ -704,7 +717,7 @@ export class LegalDocumentAstGenerator {
                             .filter((reference, position, all) => all.findIndex((other) => other.claim === reference.claim) === position)
                             .map((reference) => ({ claim: reference.claim, status: reference.status, line: reference.line })), true);
                     }
-                    acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...result.blockedReferences.map((reference) => reference.claim)])];
+                    acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...draftHeaderClaims(result)])];
                 }
                 const answer = (result.answer ?? "").trim();
                 const markup = k === 1 ? answer : answer.replace(/^\s*@(?:MIEJSCE_DATA|NADAWCA|ADRESAT|STRONA|DOTYCZY|TYTUL|PODSTAWA):.*$/gmu, "").trim();
