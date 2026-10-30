@@ -2074,6 +2074,24 @@ function modeSignals(registry: LexSkillRegistry): ModeSignals | null {
 }
 
 /** The matter's files for the case file tools, on the caller's case access. */
+// The case's files searched for a signature the answer names (session-executor
+// registerCaseFileSignatures): no tool for the model, so also for a local model and the file.
+function createCaseSignatureSearch(args: {
+  caseId: string;
+  actor: AuthenticatedContext;
+  caseAccessService: Pick<LocalCaseAccessService, "openCase" | "withCaseDataKey">;
+  caseKnowledgeSearch: Pick<LocalCaseKnowledgeSearch, "search">;
+}): Pick<CaseFileAccess, "search"> {
+  return {
+    search: async (query, limit) => {
+      const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+      return await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "ANALYZE", (caseDataKey) =>
+        args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion: caseView.keyVersion, query, limit, reviewedOnly: true })
+      );
+    }
+  };
+}
+
 function createCaseFileAccess(args: {
   caseId: string;
   actor: AuthenticatedContext;
@@ -7986,6 +8004,16 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
             .documentAstGenerator
             .generate({
               ...(fileEvidence ? { threadEvidence: fileEvidence } : {}),
+              ...(options.caseAccessService && options.caseKnowledgeSearch
+                ? {
+                    caseSignatureSearch: createCaseSignatureSearch({
+                      caseId,
+                      actor: context,
+                      caseAccessService: options.caseAccessService,
+                      caseKnowledgeSearch: options.caseKnowledgeSearch as Pick<LocalCaseKnowledgeSearch, "search">
+                    })
+                  }
+                : {}),
               ...(processRenderOnly ? { processRenderOnly } : {}),
               ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
               ...(longDocumentSource
@@ -10452,6 +10480,15 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           documentService: options.documentService,
           sharedMembers:
             attachmentCases.length === 1 && attachmentCases[0] === knowledge.caseId ? sharedMembers : null
+        });
+      }
+
+      if (knowledge.includeCase && knowledge.caseId && options.caseAccessService && options.caseKnowledgeSearch) {
+        request.caseSignatureSearch = createCaseSignatureSearch({
+          caseId: knowledge.caseId,
+          actor: responseAuthContext(res),
+          caseAccessService: options.caseAccessService,
+          caseKnowledgeSearch: options.caseKnowledgeSearch as Pick<LocalCaseKnowledgeSearch, "search">
         });
       }
 

@@ -363,6 +363,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's full files for the
   // case file tools, bound to the caller's access.
   caseFiles?: CaseFileAccess;
+  // Runtime-only: the case's files searched for signatures the answer names (no model tool;
+  // also for a local model and the file's generation).
+  caseSignatureSearch?: Pick<CaseFileAccess, "search">;
   // Runtime-only (never parsed from HTTP): the court of the case from its memory (case-court.ts).
   caseCourt?: CaseCourt;
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
@@ -4148,7 +4151,7 @@ export class SafeSessionExecutor implements SessionExecutor {
     // A signature the answer names that the case's own files hold (a judgment or a proceeding of
     // the case's documents, not read again in this turn: a file written from the conversation) is
     // "z materiałów sprawy", not a judgment to verify (RD 121/26 blocked VIII W 633/25 so).
-    await registerCaseFileSignatures(citedAnswer.text, ledger, request.caseFiles);
+    await registerCaseFileSignatures(citedAnswer.text, ledger, request.caseFiles ?? request.caseSignatureSearch);
     const preFinalization =
       new FinalizationGate().evaluate(
         citedAnswer.text,

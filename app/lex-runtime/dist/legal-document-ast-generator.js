@@ -586,7 +586,8 @@ export class LegalDocumentAstGenerator {
                 ...(request.attachments?.length
                     ? { documentAttachments: request.attachments }
                     : {}),
-                ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {})
+                ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {}),
+                ...(request.caseSignatureSearch ? { caseSignatureSearch: request.caseSignatureSearch } : {})
             });
             if (result.status !== "DRAFT_PRESENTABLE" ||
                 result.finalization !== "PASS" ||
@@ -692,7 +693,8 @@ export class LegalDocumentAstGenerator {
                     ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
                     ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
                     ...(request.attachments?.length ? { documentAttachments: request.attachments } : {}),
-                    ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {})
+                    ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {}),
+                    ...(request.caseSignatureSearch ? { caseSignatureSearch: request.caseSignatureSearch } : {})
                 });
                 if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {
                     if (!unverifiedOnlySession(result))

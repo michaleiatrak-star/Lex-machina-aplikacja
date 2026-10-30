@@ -404,6 +404,17 @@ export function publicEvidenceBundle(records, answer) {
     return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
 }
 /** The text of a document AST (JSON), one line per block; anything else as it is. */
+/** Signatures of the text found literally in the case's files: case references of the ledger. */
+export async function registerCaseFileSignatures(text, ledger, caseFiles) {
+    if (!caseFiles)
+        return;
+    const known = new Set([...ledger.caseReferences(), ...ledger.caseFileNumbers(), ...ledger.retrievedCases()]);
+    for (const signature of mentionedCaseNumbers([text]).filter((key) => !known.has(key)).slice(0, 20)) {
+        const hits = await caseFiles.search(signature, 5).catch(() => []);
+        if (hits.some((hit) => mentionedCaseNumbers([hit.text]).includes(signature)))
+            ledger.addCaseReference(signature);
+    }
+}
 export function astBlockLines(text) {
     let parsed;
     try {
@@ -2854,6 +2865,10 @@ export class SafeSessionExecutor {
         for (const reference of detectLegalReferences(leadCaseLawTexts.join("\n")))
             if (reference.kind === "case")
                 ledger.addCaseReference(reference.claim);
+        // A signature the answer names that the case's own files hold (a judgment or a proceeding of
+        // the case's documents, not read again in this turn: a file written from the conversation) is
+        // "z materiałów sprawy", not a judgment to verify (RD 121/26 blocked VIII W 633/25 so).
+        await registerCaseFileSignatures(citedAnswer.text, ledger, request.caseFiles ?? request.caseSignatureSearch);
         const preFinalization = new FinalizationGate().evaluate(citedAnswer.text, ledger);
         const markedAnswer = preFinalization.result === "BLOCKED"
             ? {
