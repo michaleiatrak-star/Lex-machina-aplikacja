@@ -45,6 +45,13 @@ export function shortActTitle(title: string): string {
     .trim();
 }
 
+function sameStem(a: string, b: string): boolean {
+  if (a === b) return true;
+  let common = 0;
+  while (common < a.length && common < b.length && a[common] === b[common]) common += 1;
+  return common >= 4 && common >= Math.min(a.length, b.length) - 1;
+}
+
 function stems(value: string): Set<string> {
   return new Set(
     searchStems(value).filter(
@@ -54,25 +61,34 @@ function stems(value: string): Set<string> {
 }
 
 async function searchByTitle(fetcher: EliFetch, act: string): Promise<string | null> {
-  const query = act.replace(/^\s*ustaw[a-yąę]*\s+/iu, "").trim();
+  const query = shortActTitle(act.replace(/^\s*ustaw[a-yąę]*\s+/iu, "")).trim();
   if (query.length < 4) return null;
+  // ELI searches a substring of the title: the inflected name ("Prawa o adwokaturze") finds
+  // nothing, so the search goes by the stem of its longest word and the stems pick the act.
+  const longest = [...query.matchAll(/\p{L}{5,}/gu)].map((match) => match[0]).sort((a, b) => b.length - a.length)[0];
+  const term = longest ? longest.slice(0, Math.max(5, longest.length - 2)) : query;
   const found = (await eliJson(
     fetcher,
-    `search?publisher=DU&title=${encodeURIComponent(query)}&limit=100`
+    `search?publisher=DU&title=${encodeURIComponent(term)}&limit=500`
   )) as { items?: Array<Record<string, unknown>> };
   const wanted = stems(query);
   if (wanted.size === 0) return null;
+  // A statute named as one ("ustawy …", "Prawo …", "Kodeks …") is not an ordinance's title.
+  const statute = /^\s*(?:ustaw|praw[aoe]?\s|kodeks)/iu.test(act);
   const scored = (found.items ?? [])
     .filter(
       (item) =>
         typeof item.ELI === "string" &&
         typeof item.title === "string" &&
-        String(item.status ?? "").toLocaleLowerCase("pl").includes("obowiązując") &&
-        !/^obwieszczenie/iu.test(String(item.title))
+        // A base act with a consolidated text is in force ("akt posiada tekst jednolity").
+        /obowiązując|tekst jednolity/u.test(String(item.status ?? "").toLocaleLowerCase("pl")) &&
+        !/^obwieszczenie/iu.test(String(item.title)) &&
+        (!statute || /^ustawa/iu.test(String(item.title)))
     )
     .map((item) => {
       const title = stems(String(item.title));
-      const shared = [...wanted].filter((stem) => title.has(stem)).length;
+      // Inflection ("Prawa"/"Prawo", "adwokaturze"/"adwokatury"): a shared prefix of the stems.
+      const shared = [...wanted].filter((stem) => [...title].some((candidate) => sameStem(stem, candidate))).length;
       return { eli: String(item.ELI), query: shared / wanted.size, title: title.size ? shared / title.size : 0 };
     })
     .filter((item) => item.query >= TITLE_MATCH_MIN)
@@ -113,13 +129,22 @@ export async function describeEliAct(args: {
   fetcher: EliFetch;
   today: string;
 }): Promise<LegalActDescriptor | null> {
-  const eli =
-    args.index?.resolve(args.act)?.eli ??
-    (args.index ? resolveActByTitle(args.index, args.act) : null) ??
+  const offline = (act: string) =>
+    args.index?.resolve(act)?.eli ?? (args.index ? resolveActByTitle(args.index, act) : null) ?? codeEli(act);
+  // An act named in running text may carry the rest of its sentence ("Kodeks pracy pracownik jest
+  // …", "Prawa o adwokaturze przez stwierdzenie …"): shorter word prefixes of the name, down to two words.
+  const words = args.act.trim().split(/\s+/u);
+  const prefixes = words.length > 2 ? Array.from({ length: Math.min(words.length - 2, 6) }, (_, cut) => words.slice(0, words.length - 1 - cut).join(" ")) : [];
+  let eli =
+    offline(args.act) ??
     journalEli(args.act) ??
     journalEli(args.claim) ??
-    codeEli(args.act) ??
+    prefixes.map(offline).find(Boolean) ??
     (await searchByTitle(args.fetcher, args.act));
+  for (const prefix of prefixes) {
+    if (eli) break;
+    eli = await searchByTitle(args.fetcher, prefix);
+  }
   if (!eli) return null;
 
   // Pozycja z mapy bywa obwieszczeniem t.j.: aktem bazowym jest akt, dla którego ogłoszono tekst.

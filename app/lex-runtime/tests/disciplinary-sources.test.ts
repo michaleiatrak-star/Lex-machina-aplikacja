@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { courtOfSignature, officialCaseLawCall, signaturesIn } from "../src/court-of-signature.js";
 import { caseMaterialSignatures, detectLegalReferences } from "../src/finalization-gate.js";
-import { astBlockLines } from "../src/session-executor.js";
+import { registerCaseFileSignatures, astBlockLines } from "../src/session-executor.js";
 import { planAutomaticLegalVerification } from "../src/gate-i-auto-verification.js";
 import { VerificationLedger } from "../src/verification-ledger.js";
 import { legacyWordText } from "../src/auxiliary-source-fetcher.js";
@@ -88,5 +88,20 @@ describe("disciplinary case law and ethics codes", () => {
     expect(acts("Na podstawie art. 95n pkt 1 Prawa o adwokaturze i odpowiednio art. 306 KPK.")).toEqual(["Prawa o adwokaturze", "KPK"]);
     // The record is that act's provision, not a bare article.
     expect(planAutomaticLegalVerification("Podstawa: art. 95n pkt 1 Prawa o adwokaturze.", new VerificationLedger()).calls[0]?.input.claim).toBe("art. 95n pkt 1 Prawa o adwokaturze");
+  });
+
+  it("a quotation of a party's letter on the line is not the provision's wording", () => {
+    const quote = (text: string) => planAutomaticLegalVerification(text, new VerificationLedger()).calls.map((call) => call.input.quote ?? null);
+    expect(quote("Pismo zapowiada „wszelkich kroków prawnych wobec skarżącego” i wskazuje art. 245 KK.")).toEqual([null]);
+    expect(quote("Pismo wskazuje, że zachowanie „może wypełniać znamiona czynu z art. 190a § 1 KK” wobec świadka.")).toEqual([null]);
+    expect(quote("Zgodnie z art. 415 KC, który stanowi: „Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia”.")).toEqual(["Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia"]);
+    expect(quote("„Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia” (art. 415 KC).")).toEqual(["Kto z winy swej wyrządził drugiemu szkodę, obowiązany jest do jej naprawienia"]);
+  });
+
+  it("a signature the case's files hold is a case reference; one they do not hold is not", async () => {
+    const ledger = new VerificationLedger();
+    const files = { search: async (query: string) => (query === "VIII W 633/25" ? [{ caseId: "c", documentId: "d", chunkIndex: 0, pageStart: 1, pageEnd: 1, score: 1, text: "Wyrok … sygn. akt VIII W 633/25 …" }] : []) };
+    await registerCaseFileSignatures("Wyrok z 13 lutego 2026 r., sygn. akt VIII W 633/25, oraz uchwała SN, sygn. III CZP 1/99.", ledger, files);
+    expect(ledger.caseReferences()).toEqual(["VIII W 633/25"]);
   });
 });

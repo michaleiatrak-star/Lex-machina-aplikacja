@@ -156,7 +156,12 @@ function uniqueActAlias(
   // ustawy o zwalczaniu nieuczciwej konkurencji") goes by its title: verify_legal_reference resolves
   // a title in the act index and denies an unknown or ambiguous one (RD 121/26 skipped these).
   const named = NAMED_ACT_LEAD.exec(own)?.[1]?.split(/,|\s(?:i|oraz|lub|albo|w\s+zw\.?|w\s+związku|w\s+brzmieniu|któr\p{L}+|stanowi\p{L}*|nakład\p{L}*|przewiduj\p{L}*)(?![\p{L}])/u)[0]?.replace(/[\s.:]+$/u, "").trim();
-  if (named && named.length >= 8) return named;
+  // "ustawy z dnia 26 maja 1982 r. – Prawo o adwokaturze" is the act "Prawo o adwokaturze";
+  // "ustawy z dnia 16 kwietnia 1993 r. o zwalczaniu …" is "ustawy o zwalczaniu …".
+  const title = named
+    ?.replace(/^(ustaw\p{L}*)\s+z\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r\.?\s*(?:[–—-]\s*)?/iu, (_, word: string) => `${word} `)
+    .replace(/^ustaw\p{L}*\s+(?=\p{Lu})/u, "");
+  if (title && title.length >= 8) return title.split(/\s+/u).slice(0, 8).join(" ");
   if (OTHER_ACT_WORDS.test(own)) return null;
   // "sprzeczne z art. 6 ust. 4 i nie wiąże (art. 58 § 1 i § 3 k.c.)": the k.c. is art. 58's, the
   // art. 6 is the tenants' act of the line above (C12-018 verified it as art. 6 KC). The line's act
@@ -243,7 +248,38 @@ export function releaseModelUnverifiedMarkers(text: string): { text: string; rel
  */
 export function lineQuote(lineText: string): string | null {
   const quoted = /[„"“]([^„"“”]{20,600})[”"“]/u.exec(lineText)?.[1];
-  if (!quoted) return null;
+  return quoted ? quotedPart(quoted) : null;
+}
+
+/**
+ * The provision's wording quoted with it: a quotation introduced after the reference ("art. 415
+ * KC: „…”", "stanowi, że „…”", "w brzmieniu: „…”") or standing right before it („…” (art. 5 KC)).
+ * Another quotation on the line (a party's letter: „wszelkich kroków prawnych”) is not the
+ * provision's text; RD 121/26 checked it against art. 245 KK and marked the article unverified.
+ */
+export function provisionQuote(lineText: string, written: string): string | null {
+  const found = new RegExp(`${written.replace(/[.*+?^$()|[\]\\{}]/gu, "\\$&")}(?![\\d\\p{L}^])`, "u").exec(lineText);
+  if (!found) return null;
+  const start = found.index;
+  const end = start + found[0].length;
+  for (const match of lineText.matchAll(/[„"“]([^„"“”]{20,600})[”"“]/gu)) {
+    const quoteStart = match.index;
+    const quoteEnd = quoteStart + match[0].length;
+    if (quoteStart >= end) {
+      const gap = lineText.slice(end, quoteStart);
+      if (
+        gap.length <= 120 &&
+        !/(?<![\p{L}])art(?:ykuł\p{L}*|\.)\s*\d/iu.test(gap) &&
+        /(?:stanowi\p{L}*|brzmi\p{L}*|brzmieni\p{L}*|któr\p{L}+\s+(?:stanowi|brzmi)\p{L}*|zgodnie\s+z\s+którym|przewiduj\p{L}*|:)[\s,]*(?:że|iż)?\s*$/iu.test(gap)
+      ) return quotedPart(match[1]!);
+      return null;
+    }
+    if (quoteEnd <= start && /^[\s,;(–-]*$/u.test(lineText.slice(quoteEnd, start))) return quotedPart(match[1]!);
+  }
+  return null;
+}
+
+function quotedPart(quoted: string): string | null {
   const part = quoted
     .split(/\s*(?:…|\.\.\.|\[\.\.\.\]|\(\.\.\.\))\s*/u)
     .map((item) => item.trim())
@@ -358,7 +394,7 @@ export function planAutomaticLegalVerification(
             alias,
           // The provision's wording quoted on its line is checked against the ELI text: a
           // matching article number alone gave ✅ to a made-up quotation.
-          ...(lineQuote(reference.lineText) ? { quote: lineQuote(reference.lineText) } : {}),
+          ...(provisionQuote(reference.lineText, reference.span ?? reference.claim) ? { quote: provisionQuote(reference.lineText, reference.span ?? reference.claim) } : {}),
           ...(referenceAsOf
             ? {
                 asOf:
