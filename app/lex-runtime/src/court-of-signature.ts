@@ -4,7 +4,7 @@
  * CBOSA). Repertories of common courts are case-sensitive (II Cz is a common
  * court, III CZP is SN).
  */
-export type SignatureCourt = "SN" | "NSA_WSA" | "POWSZECHNY" | "KIO" | "TK";
+export type SignatureCourt = "SN" | "NSA_WSA" | "POWSZECHNY" | "KIO" | "TK" | "DYSCYPLINARNY";
 
 /** Repertories of Sąd Najwyższy (the sn.pl database). */
 export const SN_REPERTORIES: ReadonlySet<string> = new Set([
@@ -37,6 +37,8 @@ export function courtOfSignature(value: string): SignatureCourt | null {
   if (!match) return null;
   const [, roman, repertory, seat] = match as unknown as [string, string | undefined, string, string | undefined];
   if (repertory === "KIO") return "KIO";
+  // Wyższy Sąd Dyscyplinarny Adwokatury ("WSD 113/22"): its own portal, not sn.pl or SAOS (RD 121/26).
+  if (!roman && repertory === "WSD") return "DYSCYPLINARNY";
   if (seat) return /^SAB?$/.test(repertory) ? "NSA_WSA" : null;
   if (NSA.has(repertory)) return "NSA_WSA";
   if ((repertory === repertory.toUpperCase() || SN_MIXED_CASE.test(repertory)) && SN_REPERTORIES.has(repertory.toUpperCase())) return "SN";
@@ -73,7 +75,12 @@ const WHERE: Record<SignatureCourt, { label: string; use: string; card: string }
     card: "https://orzeczenia.ms.gov.pl"
   },
   KIO: { label: "Krajowa Izba Odwoławcza", use: "kio_sprawdz_sygnature (UZP)", card: "https://orzeczenia.uzp.gov.pl" },
-  TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature (karta sprawy IPO, OTK ZU; nie SAOS), a dokument sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" }
+  TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature (karta sprawy IPO, OTK ZU; nie SAOS), a dokument sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" },
+  DYSCYPLINARNY: {
+    label: "Wyższy Sąd Dyscyplinarny Adwokatury",
+    use: "web_search (site:wsd.adwokatura.pl) i fetch_auxiliary_legal_source na stronie orzeczenia w portalu WSD; dyscyplinarne orzeczenia SN (SDI, DSI) przez verify_case_reference",
+    card: "https://wsd.adwokatura.pl"
+  }
 };
 
 // Courts each search source publishes.
@@ -142,7 +149,7 @@ export function caseLinkProblem(value: string): { kind: "BLOB" | "SN_LEGACY_PDF"
 // aggregator), LEX, Legalis and other legal portals, law firms' pages and blogs are leads.
 const OFFICIAL_CASE_LAW_SOURCES: ReadonlySet<string> = new Set(["sn", "cbosa", "sp", "tk", "kio", "eurlex", "etpcz", "uodo"]);
 const OFFICIAL_CASE_LAW_HOSTS =
-  /(?:^|\.)(?:sn\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
+  /(?:^|\.)(?:sn\.pl|wsd\.adwokatura\.pl|wsd\.kirp\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
 
 /** A tool call that reads an official case-law database (its signatures are an official anchor). */
 export function officialCaseLawCall(call: { name: string; input?: unknown }): boolean {

@@ -1091,6 +1091,9 @@ export class SafeSessionExecutor {
         // when ELI still has the same consolidated text and no amendment after it.
         let evidencePrompt = null;
         const memory = request.threadEvidence;
+        // Signatures of the case's materials named in earlier turns: still from the case, here too.
+        for (const signature of memory?.caseReferences ?? [])
+            ledger.addCaseReference(signature);
         if (memory &&
             // A conversational turn reads no provisions: no ELI round trip for them.
             !request.conversationalOnly &&

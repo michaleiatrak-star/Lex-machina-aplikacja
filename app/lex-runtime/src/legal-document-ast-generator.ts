@@ -23,6 +23,7 @@ import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupEr
 import { splitSourceText, wordCoverage } from "./long-document.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
+import type { ThreadEvidence } from "./thread-evidence.js";
 
 export type LegalDocumentAstGenerationRequest = {
   query: string;
@@ -44,6 +45,9 @@ export type LegalDocumentAstGenerationRequest = {
   sourceText?: { label: string; text: string };
   // The user chose a draft with the unverified references named (ZAKAZ-14, decision "a").
   acceptUnverified?: boolean;
+  // Evidence memory of the case's thread: provisions verified in the conversation are checked
+  // again in ELI, the case's signatures stay "z materiałów sprawy" (RD 121/26).
+  threadEvidence?: ThreadEvidence;
 };
 
 function extractJson(value: string): unknown {
@@ -669,7 +673,8 @@ export class LegalDocumentAstGenerator {
         ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
         ...(request.attachments?.length
           ? { documentAttachments: request.attachments }
-          : {})
+          : {}),
+        ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {})
       });
 
       if (
@@ -803,7 +808,8 @@ export class LegalDocumentAstGenerator {
           ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
           ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
           ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
-          ...(request.attachments?.length ? { documentAttachments: request.attachments } : {})
+          ...(request.attachments?.length ? { documentAttachments: request.attachments } : {}),
+          ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {})
         });
         if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {
           if (!unverifiedOnlySession(result)) throw blockedSessionDiagnostic(result);

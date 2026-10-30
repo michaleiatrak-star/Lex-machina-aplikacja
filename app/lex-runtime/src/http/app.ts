@@ -2047,7 +2047,8 @@ async function rememberThreadEvidence(args: {
             ? { mode: args.result.modeDecision.mode }
             : {}),
           ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {}),
-          realValueHashes: realValueHashes(args.realValues ?? [])
+          realValueHashes: realValueHashes(args.realValues ?? []),
+          caseReferences: args.result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []
         })
       })
     );
@@ -7959,10 +7960,22 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
           contractRenderOnly = contractExportReady;
         }
 
+        // The thread's evidence memory, as in the chat: provisions verified in the conversation are
+        // checked again in ELI and the case's signatures stay "z materiałów sprawy". Without it the
+        // file's session started from an empty register and blocked them (RD 121/26).
+        const threadEvidence = options.caseMemoryStore
+          ? await options.caseAccessService
+              .withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) =>
+                options.caseMemoryStore!.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion })
+              )
+              .then((memory) => memory.evidence ?? null)
+              .catch(() => null)
+          : null;
         const generated =
           await options
             .documentAstGenerator
             .generate({
+              ...(threadEvidence ? { threadEvidence } : {}),
               ...(processRenderOnly ? { processRenderOnly } : {}),
               ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
               ...(longDocumentSource
