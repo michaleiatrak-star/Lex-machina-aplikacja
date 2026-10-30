@@ -29,6 +29,9 @@ export function courtOfSignature(value) {
     const [, roman, repertory, seat] = match;
     if (repertory === "KIO")
         return "KIO";
+    // Wyższy Sąd Dyscyplinarny Adwokatury ("WSD 113/22"): its own portal, not sn.pl or SAOS (RD 121/26).
+    if (!roman && repertory === "WSD")
+        return "DYSCYPLINARNY";
     if (seat)
         return /^SAB?$/.test(repertory) ? "NSA_WSA" : null;
     if (NSA.has(repertory))
@@ -69,7 +72,12 @@ const WHERE = {
         card: "https://orzeczenia.ms.gov.pl"
     },
     KIO: { label: "Krajowa Izba Odwoławcza", use: "kio_sprawdz_sygnature (UZP)", card: "https://orzeczenia.uzp.gov.pl" },
-    TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature (karta sprawy IPO, OTK ZU; nie SAOS), a dokument sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" }
+    TK: { label: "Trybunał Konstytucyjny", use: "tk_sprawdz_sygnature (karta sprawy IPO, OTK ZU; nie SAOS), a dokument sprawdź tk_pobierz", card: "https://ipo.trybunal.gov.pl" },
+    DYSCYPLINARNY: {
+        label: "Wyższy Sąd Dyscyplinarny Adwokatury",
+        use: "web_search (site:wsd.adwokatura.pl) i fetch_auxiliary_legal_source na stronie orzeczenia w portalu WSD; dyscyplinarne orzeczenia SN (SDI, DSI) przez verify_case_reference",
+        card: "https://wsd.adwokatura.pl"
+    }
 };
 // Courts each search source publishes.
 const COVERS = {
@@ -134,7 +142,10 @@ export function caseLinkProblem(value) {
 // portal, TK, KIO, CURIA/EUR-Lex, the MS database of ECHR judgments, UODO). SAOS (an
 // aggregator), LEX, Legalis and other legal portals, law firms' pages and blogs are leads.
 const OFFICIAL_CASE_LAW_SOURCES = new Set(["sn", "cbosa", "sp", "tk", "kio", "eurlex", "etpcz", "uodo"]);
-const OFFICIAL_CASE_LAW_HOSTS = /(?:^|\.)(?:sn\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
+const OFFICIAL_CASE_LAW_HOSTS = 
+// Disciplinary courts of the professions publish their own rulings (bar, legal advisers,
+// doctors, bailiffs, auditors, engineers): an official anchor, shown 🟨 without promotion.
+/(?:^|\.)(?:sn\.pl|wsd\.adwokatura\.pl|wsd\.kirp\.pl|nil\.org\.pl|komornik\.pl|pibr\.org\.pl|piib\.org\.pl|orzeczenia\.nsa\.gov\.pl|orzeczenia\.ms\.gov\.pl|orzeczenia\.[a-z-]+\.(?:so|sa|sr)\.gov\.pl|trybunal\.gov\.pl|ipo\.trybunal\.gov\.pl|orzeczenia\.uzp\.gov\.pl|curia\.europa\.eu|eur-lex\.europa\.eu|hudoc\.echr\.coe\.int|etpcz\.ms\.gov\.pl|uodo\.gov\.pl)$/iu;
 /** A tool call that reads an official case-law database (its signatures are an official anchor). */
 export function officialCaseLawCall(call) {
     const input = (call.input ?? {});

@@ -22,7 +22,12 @@ export type ThreadEvidence = {
   lastPath?: { at: string; report: MandatoryPathReport };
   // Hashes of real values restored into answers (privacy/example-data.ts).
   realValueHashes?: string[];
+  // Signatures the case's materials name (another proceeding): marked "z materiałów sprawy",
+  // also in a file rendered later from the thread (RD 121/26: the export blocked them).
+  caseReferences?: string[];
 };
+
+const MAX_CASE_REFERENCES = 200;
 
 const MAX_REAL_VALUE_HASHES = 4_000;
 
@@ -55,7 +60,7 @@ export function mergeThreadEvidence(
   records: VerificationRecord[],
   skills: string[],
   now: string,
-  turn: { mode?: QueryMode; path?: MandatoryPathReport; realValueHashes?: string[] } = {}
+  turn: { mode?: QueryMode; path?: MandatoryPathReport; realValueHashes?: string[]; caseReferences?: string[] } = {}
 ): ThreadEvidence {
   const provisions = new Map<string, VerificationRecord>();
   for (const record of [...(previous?.provisions ?? []), ...records.filter(reusableProvision)]) {
@@ -81,7 +86,10 @@ export function mergeThreadEvidence(
     sources: [...sources.values()].slice(-MAX_SOURCES),
     ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode)! } : {}),
     ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {}),
-    realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES)
+    realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES),
+    ...((previous?.caseReferences?.length || turn.caseReferences?.length)
+      ? { caseReferences: [...new Set([...(previous?.caseReferences ?? []), ...(turn.caseReferences ?? [])])].slice(-MAX_CASE_REFERENCES) }
+      : {})
   };
 }
 
@@ -112,6 +120,9 @@ export function validThreadEvidence(value: unknown): ThreadEvidence | null {
     ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {}),
     ...(Array.isArray(raw.realValueHashes)
       ? { realValueHashes: raw.realValueHashes.filter((value): value is string => typeof value === "string" && /^[0-9a-f]{16}$/.test(value)) }
+      : {}),
+    ...(Array.isArray(raw.caseReferences)
+      ? { caseReferences: raw.caseReferences.filter((value): value is string => typeof value === "string" && value.length <= 60).slice(-MAX_CASE_REFERENCES) }
       : {})
   };
 }

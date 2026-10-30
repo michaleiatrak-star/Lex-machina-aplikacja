@@ -325,6 +325,10 @@ export function plainErrorMessage(code: string, technical: string, reason?: stri
   if (/^(?:PROCESS_PLEADING_|COURT_ANALYSIS_|ORDERED_WORKFLOW_|LEGAL_WORKFLOW_)/.test(code)) {
     return "Nie udało się wykonać tego etapu pracy. Spróbuj ponownie; jeśli się powtórzy, rozpocznij nowy etap.";
   }
+  // The file's generation fails with the account's own code ("ACCOUNT_SESSION_CAPACITY:anthropic:1:…
+  // resets 3pm (UTC)"): the same sentence as a chat turn, not the generic error (RD 121/26).
+  const accountReason = /^(ACCOUNT_SESSION_[A-Z_]+)(?::|$)/.exec(code)?.[1];
+  if (accountReason && PLAIN_MODEL_REASONS[accountReason]) return plainErrorMessage("PROVIDER_EXECUTION_FAILED", `${code} ${technical}`, accountReason);
   if (code === "PROVIDER_EXECUTION_FAILED" || code === "LOCAL_MODEL_EXECUTION_FAILED") {
     // The account's own limit says when it renews ("resets 12:30am (UTC)"): the lawyer gets that time.
     const resets = reason === "ACCOUNT_SESSION_CAPACITY" ? /resets?\s+(?:at\s+)?([^·\n]{1,40}?)\s*(?:$|·|\n)/iu.exec(technical)?.[1] : undefined;

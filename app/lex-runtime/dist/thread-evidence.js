@@ -1,4 +1,5 @@
 import { mandatoryPathPrompt } from "./mandatory-path.js";
+const MAX_CASE_REFERENCES = 200;
 const MAX_REAL_VALUE_HASHES = 4_000;
 const MAX_PROVISIONS = 80;
 const MAX_SKILLS = 40;
@@ -44,7 +45,10 @@ export function mergeThreadEvidence(previous, records, skills, now, turn = {}) {
         sources: [...sources.values()].slice(-MAX_SOURCES),
         ...((turn.mode ?? previous?.mode) ? { mode: (turn.mode ?? previous?.mode) } : {}),
         ...(turn.path ? { lastPath: { at: now, report: turn.path } } : previous?.lastPath ? { lastPath: previous.lastPath } : {}),
-        realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES)
+        realValueHashes: [...new Set([...(previous?.realValueHashes ?? []), ...(turn.realValueHashes ?? [])])].slice(-MAX_REAL_VALUE_HASHES),
+        ...((previous?.caseReferences?.length || turn.caseReferences?.length)
+            ? { caseReferences: [...new Set([...(previous?.caseReferences ?? []), ...(turn.caseReferences ?? [])])].slice(-MAX_CASE_REFERENCES) }
+            : {})
     };
 }
 export function validThreadEvidence(value) {
@@ -68,6 +72,9 @@ export function validThreadEvidence(value) {
         ...(raw.lastPath && typeof raw.lastPath.at === "string" && Array.isArray(raw.lastPath.report?.steps) ? { lastPath: raw.lastPath } : {}),
         ...(Array.isArray(raw.realValueHashes)
             ? { realValueHashes: raw.realValueHashes.filter((value) => typeof value === "string" && /^[0-9a-f]{16}$/.test(value)) }
+            : {}),
+        ...(Array.isArray(raw.caseReferences)
+            ? { caseReferences: raw.caseReferences.filter((value) => typeof value === "string" && value.length <= 60).slice(-MAX_CASE_REFERENCES) }
             : {})
     };
 }

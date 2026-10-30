@@ -47,6 +47,7 @@ import { ProviderGatewayError } from "../providers/gateway.js";
 import { accountPolicyResponse } from "../server-mode/service.js";
 import { SESSION_EXECUTION_INTERNAL } from "../session-executor.js";
 import { mergeThreadEvidence } from "../thread-evidence.js";
+import { caseMaterialSignatures } from "../finalization-gate.js";
 import { realValueHashes } from "../privacy/example-data.js";
 import { defaultTemplateFor, draftingTarget, validTemplateRole } from "../template-roles.js";
 import { detectQueryMode, parseModeSignals } from "../query-mode.js";
@@ -1094,7 +1095,8 @@ async function rememberThreadEvidence(args) {
                     ? { mode: args.result.modeDecision.mode }
                     : {}),
                 ...(args.result.mandatoryPath ? { path: args.result.mandatoryPath } : {}),
-                realValueHashes: realValueHashes(args.realValues ?? [])
+                realValueHashes: realValueHashes(args.realValues ?? []),
+                caseReferences: args.result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []
             })
         }));
     }
@@ -1119,6 +1121,16 @@ function modeSignals(registry) {
     return signals;
 }
 /** The matter's files for the case file tools, on the caller's case access. */
+// The case's files searched for a signature the answer names (session-executor
+// registerCaseFileSignatures): no tool for the model, so also for a local model and the file.
+function createCaseSignatureSearch(args) {
+    return {
+        search: async (query, limit) => {
+            const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
+            return await args.caseAccessService.withCaseDataKey(args.actor, args.caseId, "ANALYZE", (caseDataKey) => args.caseKnowledgeSearch.search({ caseId: args.caseId, caseDataKey, keyVersion: caseView.keyVersion, query, limit, reviewedOnly: true }));
+        }
+    };
+}
 function createCaseFileAccess(args) {
     const withKey = async (work) => {
         const caseView = args.caseAccessService.openCase(args.actor, args.caseId);
@@ -4934,9 +4946,38 @@ export function createLexHttpApp(options) {
                 }
                 contractRenderOnly = contractExportReady;
             }
+            // The thread's evidence memory, as in the chat: provisions verified in the conversation are
+            // checked again in ELI and the case's signatures stay "z materiałów sprawy". Without it the
+            // file's session started from an empty register and blocked them (RD 121/26).
+            const threadEvidence = options.caseMemoryStore
+                ? await options.caseAccessService
+                    .withCaseDataKey(context, caseId, "ANALYZE", (caseDataKey) => options.caseMemoryStore.getCaseMemory({ caseId, caseDataKey, keyVersion: caseView.keyVersion }))
+                    .then((memory) => memory.evidence ?? null)
+                    .catch(() => null)
+                : null;
+            // The stored pleading names its signatures from the case's materials with their marker:
+            // those count as such in the file too (a thread remembered before the memory kept them).
+            const sourceCaseReferences = pleadingSource ? caseMaterialSignatures(pleadingSource.text) : [];
+            const fileEvidence = sourceCaseReferences.length
+                ? {
+                    ...(threadEvidence ?? { schemaVersion: 1, updatedAt: new Date().toISOString(), provisions: [], skills: [], sources: [] }),
+                    caseReferences: [...new Set([...(threadEvidence?.caseReferences ?? []), ...sourceCaseReferences])]
+                }
+                : threadEvidence;
             const generated = await options
                 .documentAstGenerator
                 .generate({
+                ...(fileEvidence ? { threadEvidence: fileEvidence } : {}),
+                ...(options.caseAccessService && options.caseKnowledgeSearch
+                    ? {
+                        caseSignatureSearch: createCaseSignatureSearch({
+                            caseId,
+                            actor: context,
+                            caseAccessService: options.caseAccessService,
+                            caseKnowledgeSearch: options.caseKnowledgeSearch
+                        })
+                    }
+                    : {}),
                 ...(processRenderOnly ? { processRenderOnly } : {}),
                 ...(contractRenderOnly ? { contractRenderOnly: true } : {}),
                 ...(longDocumentSource
@@ -6569,6 +6610,14 @@ export function createLexHttpApp(options) {
                     caseKnowledgeSearch: options.caseKnowledgeSearch,
                     documentService: options.documentService,
                     sharedMembers: attachmentCases.length === 1 && attachmentCases[0] === knowledge.caseId ? sharedMembers : null
+                });
+            }
+            if (knowledge.includeCase && knowledge.caseId && options.caseAccessService && options.caseKnowledgeSearch) {
+                request.caseSignatureSearch = createCaseSignatureSearch({
+                    caseId: knowledge.caseId,
+                    actor: responseAuthContext(res),
+                    caseAccessService: options.caseAccessService,
+                    caseKnowledgeSearch: options.caseKnowledgeSearch
                 });
             }
             const localContextWindow = options.modelCatalog
