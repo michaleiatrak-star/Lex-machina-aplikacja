@@ -1,3 +1,4 @@
+import { lastFailedApplicationUpdate } from "../application-update-journal.js";
 import { parseDirectImages } from "../direct-images.js";
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
 import { browserSameOrigin } from "./browser-access.js";
@@ -3700,9 +3701,9 @@ export function createLexHttpApp(options) {
             return;
         }
         try {
-            res.json(await options
-                .updateDiscovery
-                .check());
+            const status = await options.updateDiscovery.check();
+            const lastAttempt = lastFailedApplicationUpdate();
+            res.json(lastAttempt ? { ...status, lastAttempt } : status);
         }
         catch {
             res.status(503).json({

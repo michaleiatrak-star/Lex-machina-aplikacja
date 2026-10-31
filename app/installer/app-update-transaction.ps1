@@ -177,6 +177,42 @@ function Restore-Backup(
   Restore-UninstallRegistry $RegistryBackup
 }
 
+# Every attempt leaves its reason in the journal the application reads on its next start,
+# and a rejected update starts the unchanged application again: before, a check failing
+# here (receipt, manifest, signature, installer version) left the app closed with no trace,
+# and the next start offered the same update again.
+$journal = if ($env:LOCALAPPDATA) {
+  Join-Path $env:LOCALAPPDATA "LexMachina\update-transaction.json"
+} else {
+  Join-Path $env:TEMP "LexMachinaUpdate\update-transaction.json"
+}
+$runnerLog = Join-Path (Split-Path -Parent $journal) "update-runner.log"
+try { Start-Transcript -LiteralPath $runnerLog -Append -ErrorAction Stop | Out-Null } catch { }
+
+function Exit-Rejected([string]$Failure, [string]$TargetVersion) {
+  try {
+    Write-JsonAtomic $journal ([ordered]@{
+      schemaVersion = 1
+      state = "REJECTED"
+      startedAt = (Get-Date).ToUniversalTime().ToString("o")
+      targetVersion = $TargetVersion
+      lastError = $Failure
+    })
+  } catch { }
+  try { Wait-ParentExit $ParentPid } catch { }
+  try {
+    $root = Split-Path -Parent (Full-Path $AppExecutable)
+    if (-not (Test-LexRunning $root) -and (Test-Path -LiteralPath $AppExecutable -PathType Leaf)) {
+      Start-Process -FilePath $AppExecutable | Out-Null
+    }
+  } catch { }
+  [Console]::Error.WriteLine("LEX_APPLICATION_UPDATE_REJECTED:$Failure")
+  try { Stop-Transcript | Out-Null } catch { }
+  exit 29
+}
+
+$offeredVersion = $null
+try {
 $receipt = Full-Path $ReceiptPath
 $runtime = Full-Path $RuntimeRoot
 $install = Full-Path $InstallRoot
@@ -229,6 +265,7 @@ if (
 ) {
   throw "UPDATE_RECEIPT_PUBLISHER_INVALID"
 }
+$offeredVersion = [string]$receiptObject.version
 $targetVersion = try { [Version]([string]$receiptObject.version) } catch {
   throw "UPDATE_TARGET_VERSION_INVALID"
 }
@@ -255,6 +292,9 @@ if ($receiptVerification -eq "AUTHENTICODE") {
 } else {
   throw "UPDATE_RECEIPT_PUBLISHER_INVALID"
 }
+} catch {
+  Exit-Rejected $_.Exception.Message $offeredVersion
+}
 
 $backupBase = if ($env:LOCALAPPDATA) {
   Join-Path $env:LOCALAPPDATA "LexMachina\update-backups"
@@ -269,12 +309,6 @@ $backupRoot = Join-Path $backupBase (
 )
 $filesBackup = Join-Path $backupRoot "install"
 $registryBackup = Join-Path $backupRoot "registry"
-$journal = if ($env:LOCALAPPDATA) {
-  Join-Path $env:LOCALAPPDATA "LexMachina\update-transaction.json"
-} else {
-  Join-Path $env:TEMP "LexMachinaUpdate\update-transaction.json"
-}
-
 $journalState = [ordered]@{
   schemaVersion = 1
   state = "PREPARED"
@@ -405,14 +439,15 @@ try {
       if (Test-Path -LiteralPath $appExe -PathType Leaf) {
         Start-Process -FilePath $appExe | Out-Null
       }
-      Write-Error "LEX_APPLICATION_UPDATE_ROLLED_BACK:$failure"
+      # Write-Error would throw here ($ErrorActionPreference = Stop) and mark the rollback failed.
+      [Console]::Error.WriteLine("LEX_APPLICATION_UPDATE_ROLLED_BACK:$failure")
       exit 31
     } catch {
       $rollbackFailure = $_.Exception.Message
       $journalState.state = "ROLLBACK_FAILED"
       $journalState.rollbackError = $rollbackFailure
       Write-JsonAtomic $journal $journalState
-      Write-Error "LEX_APPLICATION_UPDATE_ROLLBACK_FAILED:update=$failure rollback=$rollbackFailure"
+      [Console]::Error.WriteLine("LEX_APPLICATION_UPDATE_ROLLBACK_FAILED:update=$failure rollback=$rollbackFailure")
       exit 32
     }
   }

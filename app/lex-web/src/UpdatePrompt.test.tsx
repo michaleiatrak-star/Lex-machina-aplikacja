@@ -19,3 +19,13 @@ describe("UpdatePrompt", () => {
     expect(html).toContain("Pomiń tę wersję");
   });
 });
+
+describe("nieudana poprzednia próba aktualizacji", () => {
+  it("podaje przyczynę dla tej samej wersji, a dla innej nic", async () => {
+    const { failedUpdateMessage } = await import("./update-prompt.js");
+    const attempt = { state: "REJECTED" as const, targetVersion: "0.1.52", lastError: "UPDATE_INSTALLER_PRODUCT_VERSION_MISMATCH:expected=0.1.52 actual=0.1.51", at: null };
+    expect(failedUpdateMessage(attempt, "0.1.52")).toContain("pobrany instalator ma inną wersję niż zapowiedziana");
+    expect(failedUpdateMessage(attempt, "0.1.53")).toBeNull();
+    expect(failedUpdateMessage({ ...attempt, state: "ROLLED_BACK", lastError: "UPDATE_POSTCHECK_FAILED:1" }, "0.1.52")).toContain("przywrócono poprzednią wersję");
+  });
+});

@@ -901,6 +901,13 @@ export type UpdateStatusResponse = {
   releaseUrl?: string;
   releaseName?: string;
   publishedAt?: string;
+  // The last update that did not install (Windows update runner's journal).
+  lastAttempt?: {
+    state: "REJECTED" | "ABORTED_BEFORE_INSTALL" | "ROLLED_BACK" | "ROLLBACK_FAILED";
+    targetVersion: string;
+    lastError: string;
+    at: string | null;
+  };
 };
 
 export type ApplicationUpdateDownloadResponse = {

@@ -161,6 +161,8 @@ import {
 } from "./document-staging.js";
 import {
   DOCUMENT_PROCESSING_MODES,
+  directImageType,
+  processingModesFor,
   processingModeKeepsClearText,
   processingModeOptions,
   type DocumentProcessingMode
@@ -736,12 +738,7 @@ export type DirectImageItem = { id: string; name: string; mediaType: "image/png"
 export const MAX_DIRECT_IMAGES = 4;
 export const MAX_DIRECT_IMAGE_BYTES = 5 * 1024 * 1024;
 
-/** PNG and JPEG can go to the model as they are; other files need processing. */
-export function directImageType(file: { name: string; type: string }): "image/png" | "image/jpeg" | null {
-  if (file.type === "image/png" || /\.png$/iu.test(file.name)) return "image/png";
-  if (file.type === "image/jpeg" || /\.jpe?g$/iu.test(file.name)) return "image/jpeg";
-  return null;
-}
+export { directImageType };
 
 function readDirectImage(file: File): Promise<DirectImageItem> {
   const mediaType = directImageType(file);
@@ -2869,9 +2866,14 @@ export default function MatterChatApp({
   }
 
   function processStagedDocuments(ids?: string[]): void {
-    const pending = documentStaging.items.filter(
+    const chosen = documentStaging.items.filter(
       (item) => item.status !== "SAVING" && (!ids || ids.includes(item.id))
     );
+    // Images the user chose to send as they are: no OCR, they go with the next message.
+    const direct = chosen.filter((item) => item.mode === "IMAGE_DIRECT");
+    if (direct.length) void sendStagedImagesToModel(direct.map((item) => item.id));
+    const pending = chosen.filter((item) => item.mode !== "IMAGE_DIRECT");
+    if (!pending.length) return;
     const clear = pending.filter((item) => processingModeKeepsClearText(item.mode));
     if (
       clear.length > 0 &&
@@ -3053,20 +3055,21 @@ export default function MatterChatApp({
     setDocumentStaging((current) => takeStagedDocuments(current, ids).state);
   }
 
-  // The image goes with the next message as it is; the file is not saved or read by OCR.
-  async function sendStagedImageToModel(id: string): Promise<void> {
-    const item = documentStaging.items.find((entry) => entry.id === id);
-    if (!item || !directImageType(item.file)) return;
-    if (directImages.length >= MAX_DIRECT_IMAGES || item.file.size > MAX_DIRECT_IMAGE_BYTES) {
+  // The images go with the next message as they are; the files are not saved or read by OCR.
+  async function sendStagedImagesToModel(ids: string[]): Promise<void> {
+    const items = documentStaging.items.filter((entry) => ids.includes(entry.id) && directImageType(entry.file));
+    if (directImages.length + items.length > MAX_DIRECT_IMAGES || items.some((item) => item.file.size > MAX_DIRECT_IMAGE_BYTES)) {
       setExecutionError(`Do jednej wiadomości można dołączyć najwyżej ${MAX_DIRECT_IMAGES} obrazy, każdy do 5 MB.`);
       return;
     }
-    try {
-      const image = await readDirectImage(item.file);
-      setDirectImages((current) => [...current, image]);
-      removeStagedDocuments([id]);
-    } catch {
-      setExecutionError(`Nie udało się odczytać pliku ${item.file.name}.`);
+    for (const item of items) {
+      try {
+        const image = await readDirectImage(item.file);
+        setDirectImages((current) => [...current, image]);
+        removeStagedDocuments([item.id]);
+      } catch {
+        setExecutionError(`Nie udało się odczytać pliku ${item.file.name}.`);
+      }
     }
   }
 
@@ -5760,14 +5763,14 @@ export default function MatterChatApp({
                         aria-label={`Sposób przetwarzania: ${item.file.name}`}
                         value={item.mode}
                         disabled={item.status === "SAVING"}
-                        title={DOCUMENT_PROCESSING_MODES.find((entry) => entry.mode === item.mode)?.title}
+                        title={processingModesFor(item.file).find((entry) => entry.mode === item.mode)?.title}
                         onChange={(event) =>
                           setDocumentStaging((current) =>
                             setStagedDocumentMode(current, item.id, event.target.value as DocumentProcessingMode)
                           )
                         }
                       >
-                        {DOCUMENT_PROCESSING_MODES.map((entry) => (
+                        {processingModesFor(item.file).map((entry) => (
                           <option key={entry.mode} value={entry.mode} title={entry.title}>
                             {entry.label}
                           </option>
@@ -5789,17 +5792,6 @@ export default function MatterChatApp({
                       >
                         Zapisz bez przetwarzania
                       </button>
-                      {directImageType(item.file) ? (
-                        <button
-                          type="button"
-                          className="chat-secondary-action"
-                          disabled={item.status === "SAVING"}
-                          title="Obraz trafi do modelu w oryginale z następną wiadomością: bez OCR i bez anonimizacji (dane osobowe na obrazie będą widoczne dla modelu). Plik nie jest zapisywany w sprawie."
-                          onClick={() => void sendStagedImageToModel(item.id)}
-                        >
-                          Wyślij obraz do modelu
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"

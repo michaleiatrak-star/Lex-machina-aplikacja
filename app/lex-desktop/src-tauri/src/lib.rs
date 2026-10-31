@@ -446,31 +446,66 @@ fn install_application_update(
             })
             .unwrap_or_else(|| PathBuf::from("powershell.exe"));
 
-        Command::new(powershell)
-            .arg("-NoProfile")
-            .arg("-NonInteractive")
-            .arg("-ExecutionPolicy")
-            .arg("Bypass")
-            .arg("-WindowStyle")
-            .arg("Hidden")
-            .arg("-File")
-            .arg(&runner)
-            .arg("-ReceiptPath")
-            .arg(&receipt)
-            .arg("-RuntimeRoot")
-            .arg(&runtime_root)
-            .arg("-InstallRoot")
-            .arg(&install_root)
-            .arg("-AppExecutable")
-            .arg(&executable)
-            .arg("-ParentPid")
-            .arg(std::process::id().to_string())
+        // The runner outlives this process (it waits for it to exit, installs and starts the
+        // new version): detached, in its own process group, out of any job the app runs in
+        // (a job closed with the app would end the runner too, and the update with it).
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+        let runner_command = |flags: u32| {
+            let mut command = Command::new(&powershell);
+            command
+                .creation_flags(flags)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            command
+        };
+        let detached = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+        let mut command = runner_command(detached | CREATE_BREAKAWAY_FROM_JOB);
+        let started = configure_runner(&mut command, &runner, &receipt, &runtime_root, &install_root, &executable)
             .spawn()
-            .map_err(|error| format!("APPLICATION_UPDATE_RUNNER_START_FAILED:{error}"))?;
+            // A job that forbids breakaway: start it detached all the same.
+            .or_else(|_| {
+                let mut fallback = runner_command(detached);
+                configure_runner(&mut fallback, &runner, &receipt, &runtime_root, &install_root, &executable).spawn()
+            });
+        started.map_err(|error| format!("APPLICATION_UPDATE_RUNNER_START_FAILED:{error}"))?;
 
         app.exit(0);
         Ok(())
     }
+}
+
+#[cfg(target_os = "windows")]
+fn configure_runner<'a>(
+    command: &'a mut Command,
+    runner: &Path,
+    receipt: &Path,
+    runtime_root: &Path,
+    install_root: &Path,
+    executable: &Path,
+) -> &'a mut Command {
+    command
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-WindowStyle")
+        .arg("Hidden")
+        .arg("-File")
+        .arg(runner)
+        .arg("-ReceiptPath")
+        .arg(receipt)
+        .arg("-RuntimeRoot")
+        .arg(runtime_root)
+        .arg("-InstallRoot")
+        .arg(install_root)
+        .arg("-AppExecutable")
+        .arg(executable)
+        .arg("-ParentPid")
+        .arg(std::process::id().to_string())
 }
 
 pub fn run() {
