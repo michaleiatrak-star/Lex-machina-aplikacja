@@ -687,7 +687,9 @@ const REQUEST_VERB = polishWords("proszę\\s+o|poproszę|potrzebuję|potrzebny\\
 // a request to write it, with or without a file format.
 const REQUESTED_WRITING = new RegExp(
   withoutPolishLetters(
-    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
+    // "Potrzebuję do pisma", "potrzebne na rozprawę": a preposition before the document names
+    // what the answer is for, not the document asked for (live C08-004).
+    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+(?!(?:do|na|dla|w|we|przy|pod|z|ze)\s)\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
   ),
   "u"
 );
@@ -729,6 +731,25 @@ const GENERIC_FILE_WORDS = new Set([
   // "wygeneruj odpowiedź w postaci dokumentu docx", "analizę jako plik": the answer itself.
   "odpowiedz", "odpowiedzi", "postaci", "analiza", "analize", "analizy", "opinia", "opinie", "opinii", "raport", "jej", "ja"
 ]);
+
+/**
+ * Why a file added in the chat holds the message back, by its own state (live C11-012: one
+ * sentence naming three possible causes left the user guessing which one it was).
+ */
+export function pendingFileMessage(
+  name: string | undefined,
+  status: "PROCESSING" | "PENDING" | "SAVING" | "FAILED",
+  error?: string
+): string {
+  const file = name ? `Plik ${name}` : "Dodany plik";
+  if (status === "FAILED") {
+    return `${file} nie został odczytany${error ? `: ${error}` : ""}. Kliknij „Pomiń ten plik” albo dodaj go ponownie, a potem wyślij wiadomość.`;
+  }
+  if (status === "PROCESSING" || status === "SAVING") {
+    return `${file} jest jeszcze przetwarzany. Poczekaj na koniec albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+  }
+  return `${file} czeka na Twoją decyzję (przetworzenie albo zapis bez przetwarzania). Wybierz ją albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`;
+}
 
 export function directDocumentRequest(
   input: string
@@ -3936,9 +3957,11 @@ export default function MatterChatApp({
     // Plik w kolejce (przetwarzany, czeka na decyzję albo z błędem odczytu) nie trafiłby do
     // wiadomości: model odpowiadałby bez niego ("nie widzę wyroku"). Najpierw decyzja o pliku.
     if (documentDropQueue.files.length > 0 || documentStaging.items.length > 0) {
-      const pending = documentDropQueue.files[0]?.name ?? documentStaging.items[0]?.file?.name;
+      const staged = documentStaging.items[0];
       setExecutionError(
-        `${pending ? `Plik ${pending}` : "Dodany plik"} nie jest jeszcze przyjęty (przetwarzanie, decyzja o anonimizacji albo błąd odczytu). Zatwierdź go albo kliknij „Pomiń ten plik”, a potem wyślij wiadomość.`
+        documentDropQueue.files.length > 0
+          ? pendingFileMessage(documentDropQueue.files[0]?.name, "PROCESSING")
+          : pendingFileMessage(staged?.file?.name, staged?.status ?? "PENDING", staged?.error)
       );
       return;
     }

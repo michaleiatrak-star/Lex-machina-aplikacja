@@ -51,6 +51,7 @@ import {
   LexExecutionEngine,
   latestUserTurn,
   isTrivialChatCommand,
+  withoutCorrectionPreface,
   type ExecutionEvent
 } from "./execution-engine.js";
 import { ProviderGateway } from "./providers/gateway.js";
@@ -3777,7 +3778,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           accountContinuity: "none",
           reasoning: "none"
         });
-        const text = corrected.fullText.trim();
+        const text = withoutCorrectionPreface(corrected.fullText).trim();
         const remaining = text ? missingGateBlocks(mandatoryModel!, effectiveProfile, text) : missingGates;
         const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
         const accepted =
