@@ -88,6 +88,30 @@ function normalizeClaim(value: string): string {
     .trim();
 }
 
+// The Dz.U. position of a source text (".../eli/acts/DU/2026/1372/text.pdf" -> [2026, 1372]).
+function journalPosition(url: string | undefined): [number, number] | null {
+  const match = /\/DU\/(\d{4})\/(\d+)\b/u.exec(url ?? "");
+  return match ? [Number(match[1]), Number(match[2])] : null;
+}
+
+/**
+ * A provision read in an older consolidated text after it was verified in a newer one
+ * (live B02-P01: art. 119 KW verified in t.j. 2026/1372, then read in the superseded
+ * t.j. 2023/2119, which prints the old and the new wording): the newer text's verification
+ * stands; the older text's doubt is about a past state, not today's wording.
+ */
+function newerVerifiedSource(records: VerificationRecord[]): VerificationRecord | undefined {
+  const last = records.at(-1);
+  if (!last || last.status === "VERIFIED") return undefined;
+  const lastPosition = journalPosition(last.sourceUrl);
+  if (!lastPosition) return undefined;
+  return [...records].reverse().find((record) => {
+    if (record.status !== "VERIFIED") return false;
+    const position = journalPosition(record.sourceUrl);
+    return Boolean(position) && (position![0] > lastPosition[0] || (position![0] === lastPosition[0] && position![1] > lastPosition[1]));
+  });
+}
+
 export class VerificationLedger {
   private readonly records = new Map<string, VerificationRecord[]>();
 
@@ -162,7 +186,7 @@ export class VerificationLedger {
 
   latest(claim: string): VerificationRecord | undefined {
     const records = this.find(claim);
-    if (records.length) return records.at(-1);
+    if (records.length) return newerVerifiedSource(records) ?? records.at(-1);
     // "art. 187 § 1 pkt 3 KPC" without its own record: the verified paragraph's text holds its points.
     const paragraph = claim.replace(/\s+pkt\s*\d+[a-z]*/iu, "");
     if (paragraph === claim) return undefined;
