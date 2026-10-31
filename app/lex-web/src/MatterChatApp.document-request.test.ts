@@ -53,6 +53,9 @@ describe("rozpoznanie prośby o plik pisma", () => {
       "Proszę o wyjaśnienie, co oznacza przedawnienie.",
       "Proszę o umówienie spotkania.",
       "Czy potrzebuję pozwolenia na budowę garażu?",
+      // The document is what the answer is for (live C08-004).
+      "W uchwale III CZP 11/20 SN przyjął teorię salda, prawda? Potrzebuję do pisma.",
+      "Potrzebuję tego na rozprawę, jaki jest termin na apelację?",
       "Przeanalizuj tę umowę o pracę, reprezentuję pracownika."
     ]) {
       expect(directDocumentRequest(text), text).toBeNull();

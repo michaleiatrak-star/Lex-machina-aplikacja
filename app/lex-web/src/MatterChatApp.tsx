@@ -687,7 +687,9 @@ const REQUEST_VERB = polishWords("proszę\\s+o|poproszę|potrzebuję|potrzebny\\
 // a request to write it, with or without a file format.
 const REQUESTED_WRITING = new RegExp(
   withoutPolishLetters(
-    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
+    // "Potrzebuję do pisma", "potrzebne na rozprawę": a preposition before the document names
+    // what the answer is for, not the document asked for (live C08-004).
+    /(?<![\p{L}])(?:proszę|poproszę|potrzebuję)(?:\s+(?!(?:do|na|dla|w|we|przy|pod|z|ze)\s)\p{L}+)?\s+(?:o\s+)?(?:(?:napisanie|sporządzenie|przygotowanie|wygenerowanie|opracowanie|zredagowanie|stworzenie|utworzenie)(?![\p{L}])|umow(?:a|y|e|ie|ami|ach|om)(?![\p{L}])|(?:pism|dokument|aneks|wezwani|wnios|apelacj|sprzeciw|odwołani|zażaleni|wypowiedzeni|reklamacj|pełnomocnictw|oświadczeni|skarg|zawiadomieni|regulamin|wzor|wzór)\p{L}*|(?:umów|pozew|pozwu|pozwem)(?![\p{L}]))/u.source
   ),
   "u"
 );
