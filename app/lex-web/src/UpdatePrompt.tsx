@@ -6,7 +6,7 @@ import {
   type UpdateStatusResponse
 } from "./api.js";
 import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl, openReleasePage } from "./MaintenancePanel.js";
-import { rememberUpdateStatus, skipUpdateVersion, startupUpdate, updateStore, APP_VERSION } from "./update-prompt.js";
+import { failedUpdateMessage, rememberUpdateStatus, skipUpdateVersion, startupUpdate, updateStore, APP_VERSION } from "./update-prompt.js";
 
 /**
  * Desktop, administrator: a newer version found earlier is offered when the application starts.
@@ -21,12 +21,15 @@ export function UpdatePrompt() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [lastAttempt, setLastAttempt] = useState<UpdateStatusResponse["lastAttempt"]>();
 
   useEffect(() => {
     let alive = true;
     getUpdateStatus()
       .then((status) => {
-        if (alive) rememberUpdateStatus(store, status);
+        if (!alive) return;
+        rememberUpdateStatus(store, status);
+        setLastAttempt(status.lastAttempt);
       })
       .catch(() => undefined);
     return () => {
@@ -77,6 +80,11 @@ export function UpdatePrompt() {
           Zainstalowana: <strong>{APP_VERSION}</strong> · nowa: <strong>{offer.version}</strong>
         </p>
         <p>Czy zaktualizować teraz? Dane, sprawy i ustawienia zostają.</p>
+        {failedUpdateMessage(lastAttempt, offer.version) && !message && !error ? (
+          <p className="update-prompt-error" role="alert" title={lastAttempt?.lastError}>
+            {failedUpdateMessage(lastAttempt, offer.version)}
+          </p>
+        ) : null}
         {message ? <p className="update-prompt-status" role="status">{message}</p> : null}
         {error ? <p className="update-prompt-error" role="alert">{error}</p> : null}
         <div className="update-prompt-actions">

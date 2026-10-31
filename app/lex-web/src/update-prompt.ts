@@ -86,3 +86,28 @@ export function updateStore(): Store | null {
     return null;
   }
 }
+
+/** Why the last update of this version did not install, in the user's words (null: no failure). */
+export function failedUpdateMessage(attempt: UpdateStatusResponse["lastAttempt"], version: string): string | null {
+  if (!attempt || attempt.targetVersion !== version) return null;
+  const code = attempt.lastError;
+  const reason =
+    attempt.state === "ROLLBACK_FAILED"
+      ? "instalacja nie powiodła się, a przywrócenie poprzedniej wersji też; zainstaluj aplikację ponownie instalatorem ze strony wydania"
+      : attempt.state === "ROLLED_BACK"
+        ? "instalacja nie powiodła się i przywrócono poprzednią wersję"
+        : /PRODUCT_VERSION/u.test(code)
+          ? "pobrany instalator ma inną wersję niż zapowiedziana"
+          : /SIGNATURE|SIGNER/u.test(code)
+            ? "podpis instalatora nie przeszedł weryfikacji"
+            : /HASH/u.test(code)
+              ? "suma kontrolna pobranego pliku się nie zgadza"
+              : /SPACE_INSUFFICIENT/u.test(code)
+                ? "za mało miejsca na dysku na kopię zapasową"
+                : /PARENT_EXIT_TIMEOUT/u.test(code)
+                  ? "aplikacja nie zamknęła się na czas"
+                  : /INSTALLER_FAILED/u.test(code)
+                    ? "instalator zakończył się błędem"
+                    : "instalacja została przerwana";
+  return `Poprzednia próba instalacji wersji ${attempt.targetVersion} nie powiodła się: ${reason}. Możesz spróbować ponownie albo pobrać instalator ze strony wydania.`;
+}
