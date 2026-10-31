@@ -139,6 +139,23 @@ export type VerticalSliceResult = {
 
 export type ModelPromptForReuse = Pick<ProviderStreamParams, "systemPrompt" | "systemPromptCachePrefix" | "promptCacheKey" | "promptCacheTtl" | "messages" | "tools">;
 
+// A correcting round returns the answer for the user, not a report on the round: a preface
+// such as "Sprawdziłam wszystkie przepisy i przeszłam przez kwalifikator karny. Poniżej pełna,
+// poprawiona odpowiedź." (live C02-011) is dropped, and the prompt asks for none.
+const CORRECTED_ANSWER_ONLY =
+  "Zwróć pełną, poprawioną odpowiedź dla użytkownika (nie opis zmian). Zacznij od razu od jej treści: bez zdań o poprawce, sprawdzaniu przepisów, narzędziach ani kwalifikatorze.";
+const CORRECTION_PREFACE =
+  /(?:poniżej\s+(?:\p{L}+[,\s]+){0,2}(?:poprawion\p{L}*|pełn\p{L}*)|poprawion\p{L}*\s+(?:wersj\p{L}*|odpowied\p{L}*)|przesz\p{L}*\s+przez\s+kwalifikator|zastosowa\p{L}*\s+kwalifikator)/iu;
+
+export function withoutCorrectionPreface(text: string): string {
+  const match = /^\s*([^\n]+)\n(?:\s*\n)?/u.exec(text);
+  if (!match) return text;
+  const first = match[1]!;
+  if (first.length > 300 || !CORRECTION_PREFACE.test(first)) return text;
+  const rest = text.slice(match[0].length);
+  return rest.trim() ? rest.replace(/^\s+/u, "") : text;
+}
+
 export class LexExecutionError extends Error {
   constructor(
     message: string,
@@ -1903,11 +1920,11 @@ export class LexExecutionEngine {
             content:
               `Odpowiedź zawiera odwołania bez źródła w tej rozmowie: ${missing.join("; ")}. ` +
               "Przepis: pobierz brzmienie read_core_law_article (akt i numer artykułu) albo usuń go. Pozycję Dz.U., adres URL lub datę nowelizacji podaj tylko z wyników narzędzi, inaczej usuń. Nie twierdź, że użyłeś narzędzia, którego nie wywołałeś. Nigdy nie podawaj prawa z pamięci. " +
-              "Zwróć pełną, poprawioną odpowiedź (nie opis zmian)."
+              CORRECTED_ANSWER_ONLY
           }
         ]);
         if (corrected.fullText.trim()) {
-          response.fullText = corrected.fullText;
+          response.fullText = withoutCorrectionPreface(corrected.fullText);
         }
         missing = sources.unsourced(response.fullText);
       }
@@ -2702,10 +2719,10 @@ export class LexExecutionEngine {
             role: "user",
             content: qualifierText
               ? `Sprawa karna: zastosuj obowiązkowy kwalifikator karnomaterialny (${qualifier}, treść poniżej) i popraw odpowiedź zgodnie z nim. ` +
-                "Zwróć pełną, poprawioną odpowiedź (nie opis zmian).\n\n" +
+                CORRECTED_ANSWER_ONLY + "\n\n" +
                 `# ${qualifier}\n\n${qualifierText}`
               : `Sprawa karna: przeczytaj obowiązkowy kwalifikator karnomaterialny ${qualifier} i popraw odpowiedź zgodnie z nim. ` +
-                "Zwróć pełną, poprawioną odpowiedź (nie opis zmian)."
+                CORRECTED_ANSWER_ONLY
           }
         ],
         tools: args.tools,
@@ -2713,7 +2730,7 @@ export class LexExecutionEngine {
         nativeCorpus: { root: native.root, onRead: native.onRead, ...(native.onMissing ? { onMissing: native.onMissing } : {}) },
         reasoning: "none"
       });
-      if (corrected.fullText.trim()) response.fullText = corrected.fullText;
+      if (corrected.fullText.trim()) response.fullText = withoutCorrectionPreface(corrected.fullText);
       if (native.missingQualifier()) {
         emit("gate", "CRIMINAL_QUALIFIER", "BLOCKED", "QUALIFIER_NOT_READ");
         throw new LexExecutionError(

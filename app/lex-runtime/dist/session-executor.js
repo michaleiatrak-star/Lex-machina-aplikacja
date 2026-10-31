@@ -18,7 +18,7 @@ import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
 import { discloseRegistryIdentifiers } from "./tool-broker-policy.js";
-import { LexExecutionEngine, latestUserTurn, isTrivialChatCommand } from "./execution-engine.js";
+import { LexExecutionEngine, latestUserTurn, isTrivialChatCommand, withoutCorrectionPreface } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
 import { coreLawEliCaution } from "./core-law-index.js";
 import { CoreLawToolRuntime } from "./core-law-tool-runtime.js";
@@ -2554,7 +2554,7 @@ export class SafeSessionExecutor {
                     accountContinuity: "none",
                     reasoning: "none"
                 });
-                const text = corrected.fullText.trim();
+                const text = withoutCorrectionPreface(corrected.fullText).trim();
                 const remaining = text ? missingGateBlocks(mandatoryModel, effectiveProfile, text) : missingGates;
                 const remainingSupervised = text ? supervisedFor(text).filter((check) => check.correction) : supervisedMissing;
                 const accepted = Boolean(text) && remaining.length + remainingSupervised.length < missingGates.length + supervisedMissing.length;

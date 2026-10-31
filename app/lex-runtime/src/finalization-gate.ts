@@ -177,10 +177,13 @@ function resolveActs(references: DetectedLegalReference[], text: string): Detect
     // (C12-018 verified art. 6 ust. 4 of the tenants' act as art. 6 KC). The line's act counts when
     // it follows this article ("art. 23 i 24 KC"), in a bare enumeration, or stands before it.
     const before = found ? reference.lineText.slice(0, found.index) : "";
+    // „Art. 300. W sprawach … stosuje się … przepisy Kodeksu cywilnego …”: the heading of a quoted
+    // provision; the act its content names is not its own (live C07-010 marked a KP quote as KC).
+    const quotedHeading = found !== null && /[„"“»]\s*$/u.test(before) && /^\.\s/u.test(reference.lineText.slice(found.index + found[0].length));
     const lineActOwned =
-      actsIn(own).size > 0 || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own) || actsIn(before).size > 0;
+      !quotedHeading && (actsIn(own).size > 0 || /^\s*(?:,|i|oraz|lub|albo|a także|[–-])?\s*$/u.test(own) || actsIn(before).size > 0);
     const lineActs = lineActOwned ? actsIn(reference.lineText) : new Set<string>();
-    const borrowedOnly = !lineActOwned && actsIn(reference.lineText).size > 0;
+    const borrowedOnly = !quotedHeading && !lineActOwned && actsIn(reference.lineText).size > 0;
     const unitActs = actsByUnit.get(unit);
     const act =
       lineActs.size === 1
