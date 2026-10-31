@@ -1,3 +1,4 @@
+import { parseDirectImages } from "../direct-images.js";
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
 import { browserSameOrigin } from "./browser-access.js";
 import { answerDocumentMarkup, answerValidationContext } from "../answer-document.js";
@@ -932,7 +933,9 @@ function parseSessionRequest(body) {
             .normalize("NFKC")
             .trim()
         : "";
-    if (query.length < 1 ||
+    const directImages = parseDirectImages(value.directImages);
+    if (directImages === null ||
+        query.length < 1 ||
         // Conversation history is sized to the model window by the client (Claude up to
         // ~300k characters); the envelope adds a little.
         query.length > MAX_SESSION_QUERY_CHARS ||
@@ -952,7 +955,8 @@ function parseSessionRequest(body) {
         mode,
         ...(auxiliaryText
             ? { auxiliaryText }
-            : {})
+            : {}),
+        ...(directImages.length ? { directImages } : {})
     };
 }
 // Returns the values restored from the documents' vaults (real data).
@@ -1309,7 +1313,9 @@ export function createLexHttpApp(options) {
     app.use(helmet());
     app.use(loopbackOriginGuard);
     // A long conversation (query up to MAX_SESSION_QUERY_CHARS, Polish UTF-8) fits.
-    app.use(express.json({ limit: "2mb" }));
+    const json2mb = express.json({ limit: "2mb" });
+    // A message with images sent as they are (direct-images.ts, up to 4 x ~5 MB) has its own limit.
+    app.use((req, res, next) => (req.path === "/api/sessions/execute" ? next() : json2mb(req, res, next)));
     app.get("/health", (_req, res) => {
         res.json({
             status: "ok",
@@ -6102,7 +6108,7 @@ export function createLexHttpApp(options) {
             }
         }
     });
-    app.post("/api/sessions/execute", async (req, res) => {
+    app.post("/api/sessions/execute", express.json({ limit: "32mb" }), async (req, res) => {
         if (keepAliveRequested(req))
             keepResponseAlive(res);
         if (!options.sessionExecutor) {
