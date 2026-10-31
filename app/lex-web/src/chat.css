@@ -3608,3 +3608,21 @@ mark.restored {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* An image sent to the model as it is (no OCR, no masking): visible until the message goes. */
+.chat-direct-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--warn-text, currentColor);
+  border-radius: 4px;
+}
+
+.chat-direct-image button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}

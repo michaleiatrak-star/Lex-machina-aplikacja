@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pendingFileMessage, directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded, refersToLastAnswer } from "./MatterChatApp.js";
+import { directImageType, pendingFileMessage, directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded, refersToLastAnswer } from "./MatterChatApp.js";
 
 describe("rozpoznanie prośby o plik pisma", () => {
   it("doc, docx, Word i „plik” z czasownikiem to generowanie .docx", () => {
@@ -191,5 +191,14 @@ describe("plik dodany w czacie wstrzymuje wiadomość", () => {
     expect(pendingFileMessage("wyrok-skan.png", "FAILED", "brak silnika OCR")).toContain("nie został odczytany: brak silnika OCR");
     expect(pendingFileMessage("wyrok-skan.png", "PROCESSING")).toContain("jest jeszcze przetwarzany");
     expect(pendingFileMessage(undefined, "PENDING")).toMatch(/^Dodany plik czeka na Twoją decyzję/u);
+  });
+});
+
+describe("obraz wysyłany do modelu w oryginale", () => {
+  it("tylko PNG i JPEG (po typie albo rozszerzeniu)", () => {
+    expect(directImageType({ name: "wyrok-skan.png", type: "" })).toBe("image/png");
+    expect(directImageType({ name: "zdjecie.JPG", type: "" })).toBe("image/jpeg");
+    expect(directImageType({ name: "x", type: "image/jpeg" })).toBe("image/jpeg");
+    expect(directImageType({ name: "pozew.pdf", type: "application/pdf" })).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+import type { LlmImage } from "./providers/types.js";
+import { directImageNote, type DirectImage } from "./direct-images.js";
 import { todayWarsaw } from "./warsaw-date.js";
 import { DOCUMENT_OUTPUT_CONTRACT_HEADING } from "./document-output-contract.js";
 import { detectHealthData } from "./privacy/health-data.js";
@@ -332,6 +334,8 @@ export type SessionExecutionRequest = {
   // The case's shared key: names in the message get the documents' symbols.
   privacySeed?: PseudonymizationVaultSnapshot;
   documentAttachments?: SessionDocumentAttachment[];
+  // Images sent as they are (base64, unmasked), chosen by the user per file (direct-images.ts).
+  directImages?: DirectImage[];
   provider: ProviderId;
   model: string;
   accountSessionKey?: string;
@@ -2287,13 +2291,31 @@ export class SafeSessionExecutor implements SessionExecutor {
         masked: evidence.reduce((sum, image) => sum + image.masked, 0)
       });
     }
-    const documentContext =
+    const direct = request.directImages ?? [];
+    const directDelivered = direct.length > 0 && this.providers.supportsImages(request.provider, request.model);
+    if (direct.length) {
+      step(
+        "PREPARE",
+        directDelivered
+          ? `obrazy wysłane bezpośrednio: ${direct.length} (bez OCR i bez anonimizacji)`
+          : `obrazy pominięte: model przyjmuje tylko tekst (${direct.length})`
+      );
+      audit.record("resource_read", "direct-images", "OK", { delivered: directDelivered, count: direct.length, unmasked: true });
+    }
+    const attachedContext =
       attachments.length > 0
         ? buildDocumentContext(
             attachments,
             imagesDelivered ? evidence : []
           )
         : undefined;
+    const documentContext = direct.length
+      ? [attachedContext, directImageNote(direct, directDelivered)].filter(Boolean).join("\n\n---\n\n")
+      : attachedContext;
+    const modelImages: LlmImage[] = [
+      ...(imagesDelivered ? evidence.map((image) => ({ mediaType: image.mediaType, data: image.data })) : []),
+      ...(directDelivered ? direct.map((image) => ({ mediaType: image.mediaType, data: image.data })) : [])
+    ];
 
     audit.record(
       "gate",
@@ -3056,9 +3078,7 @@ export class SafeSessionExecutor implements SessionExecutor {
           }
         : {}),
       ...(documentContext ? { documentContext } : {}),
-      ...(imagesDelivered
-        ? { documentImages: evidence.map((image) => ({ mediaType: image.mediaType, data: image.data })) }
-        : {}),
+      ...(modelImages.length ? { documentImages: modelImages } : {}),
       ...(placeholderKey ? { placeholderKey } : {}),
       ...(request.conversationalOnly
         ? {
