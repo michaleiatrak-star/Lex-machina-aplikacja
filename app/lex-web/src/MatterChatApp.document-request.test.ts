@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded, refersToLastAnswer } from "./MatterChatApp.js";
+import { pendingFileMessage, directDocumentRequest, letterDocumentPlan, pleadingPipelineNeeded, refersToLastAnswer } from "./MatterChatApp.js";
 
 describe("rozpoznanie prośby o plik pisma", () => {
   it("doc, docx, Word i „plik” z czasownikiem to generowanie .docx", () => {
@@ -183,5 +183,13 @@ describe("plik z odpowiedzi, która sama jest pismem (bez tury modelu)", () => {
     };
     expect(letterDocumentPlan(result as never)).toEqual({ documentType: "letter", stage: "FINAL", source: "ANSWER", answerSessionId: "session-1" });
     expect(letterDocumentPlan({ ...result, answer: result.answer + " [UZUPEŁNIJ]" } as never)).toMatchObject({ stage: "DRAFT", source: "ANSWER" });
+  });
+});
+
+describe("plik dodany w czacie wstrzymuje wiadomość", () => {
+  it("komunikat podaje stan tego pliku, nie trzy możliwe przyczyny (live C11-012)", () => {
+    expect(pendingFileMessage("wyrok-skan.png", "FAILED", "brak silnika OCR")).toContain("nie został odczytany: brak silnika OCR");
+    expect(pendingFileMessage("wyrok-skan.png", "PROCESSING")).toContain("jest jeszcze przetwarzany");
+    expect(pendingFileMessage(undefined, "PENDING")).toMatch(/^Dodany plik czeka na Twoją decyzję/u);
   });
 });
