@@ -595,6 +595,8 @@ describe("ready document with an unverified provision", () => {
     const draft = await current.service.createReady({ ...args, acceptUnverified: true });
     expect(draft.text).toContain("PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI.");
     expect(draft.text).toContain("sygn. akt VIII W 633/25.");
+    // The heading names unverified sources only, not the case's own signature.
+    expect(draft.text).not.toMatch(/niezweryfikowane w źródle: [^\n]*VIII W 633\/25/u);
     // Without the case's materials naming it, the same signature still blocks outright.
     const unknown = await current.service.createReady({ ...args, validationContext: validationContext(current.documentId) }).catch((error: unknown) => error);
     expect(unknown).toMatchObject({ draftAvailable: false });

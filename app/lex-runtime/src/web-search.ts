@@ -185,7 +185,8 @@ export class PublicWebSearch implements WebSearchProvider {
   constructor(
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly fetchImpl: typeof fetch = fetch,
-    private readonly timeoutMs = DEFAULT_TIMEOUT_MS
+    private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
+    private readonly botCheckPauseMs = 2_500
   ) {}
 
   async search(
@@ -230,16 +231,25 @@ export class PublicWebSearch implements WebSearchProvider {
       provider === "duckduckgo" ||
       provider === "ddg"
     ) {
-      try {
-        const hits =
-          await this.searchDuckDuckGo(query, maxResults);
-        if (hits.length > 0) {
-          return { provider: "duckduckgo", hits };
+      // A bot check passes after a short pause more often than not (seen while checking the
+      // disciplinary courts' portals): one more try before "refused".
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const hits =
+            await this.searchDuckDuckGo(query, maxResults);
+          if (hits.length > 0) {
+            return { provider: "duckduckgo", hits };
+          }
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message === "BOT_CHECK" && attempt === 1) {
+            await new Promise((resolve) => setTimeout(resolve, this.botCheckPauseMs));
+            continue;
+          }
+          errors.push(`duckduckgo:${message}`);
+          break;
         }
-      } catch (error) {
-        errors.push(
-          `duckduckgo:${error instanceof Error ? error.message : String(error)}`
-        );
       }
     }
 

@@ -16,7 +16,12 @@ const ALLOWED_CONTENT_TYPES = [
     "application/xml",
     "text/xml",
     // An opinion, a commentary or a court's PDF on a research page: text read locally.
-    "application/pdf"
+    "application/pdf",
+    // A bar's code of ethics or a disciplinary ruling published as a Word file (RD 121/26: the
+    // KEA from ora-warszawa.com.pl was refused as .doc).
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.text"
 ];
 const REDIRECT_STATUSES = new Set([
     301,
@@ -401,6 +406,35 @@ export function extractAuxiliarySourceDates(body, contentType) {
 }
 // A PDF research source as text, extracted locally (never sent anywhere); a scan without a
 // text layer gives no text (AUX_SOURCE_EMPTY).
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const ODT_TYPE = "application/vnd.oasis.opendocument.text";
+async function officeText(body, contentType, maxChars) {
+    const type = contentType.split(";")[0].trim().toLowerCase();
+    try {
+        if (type === DOCX_TYPE || type === ODT_TYPE) {
+            const { LocalOfficeDocumentTextExtractor } = await import("./office-document-extractor.js");
+            const text = await new LocalOfficeDocumentTextExtractor().extract(new Uint8Array(body), type);
+            return text.normalize("NFKC").replace(/[ \t]+/g, " ").trim().slice(0, maxChars);
+        }
+        return legacyWordText(body).slice(0, maxChars);
+    }
+    catch {
+        return "";
+    }
+}
+/**
+ * Text of a Word 97-2003 (.doc) file: its WordDocument stream keeps the text as UTF-16LE or as
+ * 8-bit cp1250 runs. Runs of readable words are kept; the binary structure around them is not.
+ * Auxiliary research text only (R3), never a verified source.
+ */
+export function legacyWordText(body) {
+    const readable = /[\p{L}\p{N}§][\p{L}\p{N}\p{P}\p{Zs}§\r\n\t]{30,}/gu;
+    const runs = (text) => [...text.matchAll(readable)].map((match) => match[0].replace(/\r/g, "\n").trim()).filter((run) => /\p{L}{3,}/u.test(run));
+    const wide = runs(new TextDecoder("utf-16le").decode(body));
+    const narrow = runs(new TextDecoder("windows-1250").decode(body));
+    const letters = (items) => items.join("").replace(/[^\p{L}]/gu, "").length;
+    return (letters(wide) >= letters(narrow) ? wide : narrow).join("\n").normalize("NFKC").trim();
+}
 async function pdfText(body, maxChars) {
     try {
         const { LocalPdfTextExtractor } = await import("./pdf-text-extractor.js");
@@ -506,8 +540,10 @@ export class SafeAuxiliarySourceFetcher {
             }
             const text = /application\/pdf/iu.test(contentType)
                 ? await pdfText(response.body, this.limits.maxTextChars)
-                : textFromBody(response.body, contentType, this.limits
-                    .maxTextChars);
+                : /msword|wordprocessingml|opendocument\.text/iu.test(contentType)
+                    ? await officeText(response.body, contentType, this.limits.maxTextChars)
+                    : textFromBody(response.body, contentType, this.limits
+                        .maxTextChars);
             if (!text) {
                 throw new AuxiliarySourceFetchError("Auxiliary source returned no readable text.", "AUX_SOURCE_EMPTY");
             }

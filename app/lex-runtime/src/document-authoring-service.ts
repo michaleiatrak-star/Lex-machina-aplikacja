@@ -46,7 +46,8 @@ import {
   ExportGate,
   type ExportGateReport
 } from "./export-gate.js";
-import { FinalizationGate, markUnverifiedReferences, type FinalizationReport } from "./finalization-gate.js";
+import { CASE_MATERIAL_MARKER_TEXT, FinalizationGate, markUnverifiedReferences, type FinalizationReport } from "./finalization-gate.js";
+import { astTextLines } from "./ast-text-lines.js";
 import { stripAstVerificationMarkers } from "./verification-markers.js";
 import { documentCompletenessWarnings } from "./document-completeness.js";
 
@@ -120,7 +121,8 @@ function unverifiedDraft(
   markedText: string,
   context: DocumentGenerationValidationContext
 ): { claims: string[]; ast: (ast: LegalDocumentAst) => LegalDocumentAst } | null {
-  const report = new FinalizationGate().evaluate(markedText, rebuildGenerationExportState(context).ledger);
+  // The document's text nodes as lines (ast-text-lines.ts): a provision's act and marker are its own.
+  const report = new FinalizationGate().evaluate(astTextLines(markedText)?.text ?? markedText, rebuildGenerationExportState(context).ledger);
   // The session that wrote the file named its unverified references; the file text may have
   // lost their markers, the heading never loses them.
   const fromSession = context.acceptedUnverifiedSource?.claims ?? [];
@@ -129,7 +131,11 @@ function unverifiedDraft(
     ...new Set([
       ...fromSession,
       ...(report.result === "DEGRADED"
-        ? report.findings.filter((finding) => finding.status === "UNVERIFIED_MARKED").map((finding) => finding.reference.claim)
+        ? report.findings
+            .filter((finding) => finding.status === "UNVERIFIED_MARKED" && finding.reference.kind !== "amount")
+            // A signature of the case's materials is marked as such, not unverified in a source.
+            .filter((finding) => !finding.reference.lineText.includes(CASE_MATERIAL_MARKER_TEXT))
+            .map((finding) => finding.reference.claim)
         : [])
     ])
   ];
@@ -142,7 +148,9 @@ function unverifiedDraft(
           type: "paragraph",
           content: [{
             type: "text",
-            text: `PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI. Powołania niezweryfikowane w źródle: ${claims.join("; ")}.`
+            text: claims.length
+              ? `PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI. Powołania niezweryfikowane w źródle: ${claims.join("; ")}.`
+              : "PROJEKT – NIE SKŁADAĆ BEZ WERYFIKACJI."
           }]
         },
         ...ast.blocks

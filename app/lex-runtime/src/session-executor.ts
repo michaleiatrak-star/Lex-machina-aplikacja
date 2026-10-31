@@ -90,6 +90,7 @@ import type {
 } from "./legal-source-policy.js";
 import { WidgetToolRuntime, widgetsFromAnswer, type WidgetSpec } from "./widget-runtime.js";
 import { CaseFileToolRuntime, type CaseFileAccess } from "./case-file-tool-runtime.js";
+import { astTextLines } from "./ast-text-lines.js";
 import {
   revalidateThreadEvidence,
   threadEvidencePrompt,
@@ -363,6 +364,9 @@ export type SessionExecutionRequest = {
   // Runtime-only (never parsed from HTTP): the matter's full files for the
   // case file tools, bound to the caller's access.
   caseFiles?: CaseFileAccess;
+  // Runtime-only: the case's files searched for signatures the answer names (no model tool;
+  // also for a local model and the file's generation).
+  caseSignatureSearch?: Pick<CaseFileAccess, "search">;
   // Runtime-only (never parsed from HTTP): the court of the case from its memory (case-court.ts).
   caseCourt?: CaseCourt;
   // Runtime-only (never parsed from HTTP): the matter's evidence memory from
@@ -906,6 +910,50 @@ export function publicEvidenceBundle(
         : {})
   }));
   return [...items.filter((item) => !item.role), ...items.filter((item) => item.role)];
+}
+
+/** The text of a document AST (JSON), one line per block; anything else as it is. */
+/** Signatures of the text found literally in the case's files: case references of the ledger. */
+export async function registerCaseFileSignatures(
+  text: string,
+  ledger: VerificationLedger,
+  caseFiles: Pick<CaseFileAccess, "search"> | undefined
+): Promise<void> {
+  if (!caseFiles) return;
+  const known = new Set([...ledger.caseReferences(), ...ledger.caseFileNumbers(), ...ledger.retrievedCases()]);
+  for (const signature of mentionedCaseNumbers([text]).filter((key) => !known.has(key)).slice(0, 20)) {
+    const hits = await caseFiles.search(signature, 5).catch(() => []);
+    if (hits.some((hit) => mentionedCaseNumbers([hit.text]).includes(signature))) ledger.addCaseReference(signature);
+  }
+}
+
+export function astBlockLines(text: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  } catch {
+    return text;
+  }
+  const texts = (node: unknown): string =>
+    typeof node === "string"
+      ? ""
+      : Array.isArray(node)
+        ? node.map(texts).join("")
+        : node && typeof node === "object"
+          ? Object.entries(node as Record<string, unknown>).map(([key, value]) => (key === "text" && typeof value === "string" ? value : texts(value))).join("")
+          : "";
+  const blocks = (parsed as { blocks?: unknown })?.blocks;
+  if (!Array.isArray(blocks)) return text;
+  const lines: string[] = [];
+  const walk = (block: unknown) => {
+    if (!block || typeof block !== "object") return;
+    const record = block as Record<string, unknown>;
+    if (Array.isArray(record.items)) for (const item of record.items) lines.push(texts(item));
+    else if (Array.isArray(record.rows)) for (const row of record.rows) lines.push(texts(row));
+    else lines.push(texts(record));
+  };
+  for (const block of blocks) walk(block);
+  return lines.filter((line) => line.trim()).join("\n");
 }
 
 export type SessionExecutionInternalState = {
@@ -2031,6 +2079,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // when ELI still has the same consolidated text and no amendment after it.
     let evidencePrompt: string | null = null;
     const memory = request.threadEvidence;
+    // Signatures of the case's materials named in earlier turns: still from the case, here too.
+    for (const signature of memory?.caseReferences ?? []) ledger.addCaseReference(signature);
     if (
       memory &&
       // A conversational turn reads no provisions: no ELI round trip for them.
@@ -3973,10 +4023,17 @@ export class SafeSessionExecutor implements SessionExecutor {
         ? splitTrailingDisclaimer(modelOutput)
         : { body: modelOutput, disclaimer: null };
     if (modelDisclaimer.disclaimer) modelOutput = modelDisclaimer.body;
+    // A document AST goes through the gates as lines, one per text node, and back to JSON at
+    // the end (ast-text-lines.ts): the act, the quote and the markers of a provision are its own.
+    const astLines = request.documentAstOutput ? astTextLines(modelOutput) : null;
+    if (astLines) modelOutput = astLines.text;
     const releasedDraft = releaseModelUnverifiedMarkers(modelOutput);
     const automaticVerificationPlan =
       planAutomaticLegalVerification(
-        releasedDraft.text,
+        // A document AST is one line of JSON: the act of a provision is read from its line, so
+        // every block is a line of its own (RD 121/26: 9 of 14 provisions of the file were left
+        // unverified, "art. 95n pkt 1" taken as KPK from the whole document).
+        request.documentAstOutput && !astLines ? astBlockLines(releasedDraft.text) : releasedDraft.text,
         ledger,
         requestedHistoricalAsOf
       );
@@ -4089,9 +4146,17 @@ export class SafeSessionExecutor implements SessionExecutor {
     // Signatures an official database returned in this turn (sn.pl, CBOSA, the courts' portal,
     // TK, KIO, CURIA, ETPCz): real, though not verified in full; from nowhere stays blocking.
     for (const { signature } of signaturesIn(officialCaseLawTexts.join("\n"))) ledger.addRetrievedCase(signature);
+    // Any court's "sygn. …" on such a page (a disciplinary court's own numbering the repertory
+    // list does not know): the same anchor, never guessed from a format.
+    for (const reference of detectLegalReferences(officialCaseLawTexts.join("\n"))) if (reference.kind === "case") ledger.addRetrievedCase(reference.claim);
     // Found only in SAOS, a web search or a legal portal (LEX, Legalis, a law firm, a blog): a
     // lead, shown ⚠️ until verified in the court's own database.
     for (const { signature } of signaturesIn(leadCaseLawTexts.join("\n"))) ledger.addCaseReference(signature);
+    for (const reference of detectLegalReferences(leadCaseLawTexts.join("\n"))) if (reference.kind === "case") ledger.addCaseReference(reference.claim);
+    // A signature the answer names that the case's own files hold (a judgment or a proceeding of
+    // the case's documents, not read again in this turn: a file written from the conversation) is
+    // "z materiałów sprawy", not a judgment to verify (RD 121/26 blocked VIII W 633/25 so).
+    await registerCaseFileSignatures(citedAnswer.text, ledger, request.caseFiles ?? request.caseSignatureSearch);
     const preFinalization =
       new FinalizationGate().evaluate(
         citedAnswer.text,
@@ -4912,9 +4977,11 @@ export class SafeSessionExecutor implements SessionExecutor {
             : [])
         ]
       : [];
-    const presentedText = degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
-      ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
-      : disclaimed.text;
+    const presentedText = astLines
+      ? astLines.restore(disclaimed.text)
+      : degradedReasons.length && freeText && legalAnswer(processedDocumentCitations.text)
+        ? `⛔ TRYB ZDEGRADOWANY — ${degradedReasons.join("; ")}\n\n${disclaimed.text}`
+        : disclaimed.text;
     if (mandatoryPath) {
       audit.record("gate", "MANDATORY_PATH", mandatoryPath.complete ? "OK" : "DEGRADED", {
         profile: mandatoryPath.profile,

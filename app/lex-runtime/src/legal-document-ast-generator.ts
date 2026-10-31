@@ -23,6 +23,9 @@ import { isLetterMarkup, LETTER_MARKUP_CONTRACT, letterMarkupAst, LetterMarkupEr
 import { splitSourceText, wordCoverage } from "./long-document.js";
 import { ExportGateBlockedError } from "./document-authoring-service.js";
 import { verificationOnlyBlock } from "./document-generation-validation.js";
+import { caseFileKey } from "./verification-ledger.js";
+import type { CaseFileAccess } from "./case-file-tool-runtime.js";
+import type { ThreadEvidence } from "./thread-evidence.js";
 
 export type LegalDocumentAstGenerationRequest = {
   query: string;
@@ -44,6 +47,11 @@ export type LegalDocumentAstGenerationRequest = {
   sourceText?: { label: string; text: string };
   // The user chose a draft with the unverified references named (ZAKAZ-14, decision "a").
   acceptUnverified?: boolean;
+  // Evidence memory of the case's thread: provisions verified in the conversation are checked
+  // again in ELI, the case's signatures stay "z materiałów sprawy" (RD 121/26).
+  threadEvidence?: ThreadEvidence;
+  // The case's files, searched for the signatures the document names (its own proceedings).
+  caseSignatureSearch?: Pick<CaseFileAccess, "search">;
 };
 
 function extractJson(value: string): unknown {
@@ -391,6 +399,19 @@ export function unverifiedOnlySession(result: SessionResult): boolean {
   );
 }
 
+/**
+ * The references the draft's heading names as unverified in their source: provisions, Dz.U.
+ * and judgments. A signature of the case's own materials and an amount or term ("7 dni") are
+ * not such references (RD 121/26 listed VIII W 633/25 and "7 dni" there).
+ */
+function draftHeaderClaims(result: SessionResult): string[] {
+  const caseReferences = new Set(result[SESSION_EXECUTION_INTERNAL]?.caseReferences ?? []);
+  return result.blockedReferences
+    .filter((reference) => reference.kind === "statute" || reference.kind === "journal" || reference.kind === "case")
+    .filter((reference) => !(reference.kind === "case" && caseReferences.has(caseFileKey(reference.claim))))
+    .map((reference) => reference.claim);
+}
+
 function blockedSessionDiagnostic(
   result: Awaited<ReturnType<Pick<SessionExecutor, "execute">["execute"]>>
 ): DocumentAstSessionBlockedError {
@@ -669,7 +690,9 @@ export class LegalDocumentAstGenerator {
         ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
         ...(request.attachments?.length
           ? { documentAttachments: request.attachments }
-          : {})
+          : {}),
+        ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {}),
+        ...(request.caseSignatureSearch ? { caseSignatureSearch: request.caseSignatureSearch } : {})
       });
 
       if (
@@ -690,7 +713,7 @@ export class LegalDocumentAstGenerator {
             true
           );
         }
-        acceptedUnverified = [...new Set(result.blockedReferences.map((reference) => reference.claim))];
+        acceptedUnverified = [...new Set(draftHeaderClaims(result))];
       }
 
       try {
@@ -803,7 +826,9 @@ export class LegalDocumentAstGenerator {
           ...(request.privacySeed ? { privacySeed: request.privacySeed } : {}),
           ...(request.processRenderOnly ? { processRenderOnly: request.processRenderOnly } : {}),
           ...(request.contractRenderOnly ? { contractRenderOnly: true } : {}),
-          ...(request.attachments?.length ? { documentAttachments: request.attachments } : {})
+          ...(request.attachments?.length ? { documentAttachments: request.attachments } : {}),
+          ...(request.threadEvidence ? { threadEvidence: request.threadEvidence } : {}),
+        ...(request.caseSignatureSearch ? { caseSignatureSearch: request.caseSignatureSearch } : {})
         });
         if (result.status !== "DRAFT_PRESENTABLE" || result.finalization !== "PASS" || result.audit.result !== "PASS" || !result.answer) {
           if (!unverifiedOnlySession(result)) throw blockedSessionDiagnostic(result);
@@ -817,7 +842,7 @@ export class LegalDocumentAstGenerator {
               true
             );
           }
-          acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...result.blockedReferences.map((reference) => reference.claim)])];
+          acceptedUnverified = [...new Set([...(acceptedUnverified ?? []), ...draftHeaderClaims(result)])];
         }
         const answer = (result.answer ?? "").trim();
         const markup = k === 1 ? answer : answer.replace(/^\s*@(?:MIEJSCE_DATA|NADAWCA|ADRESAT|STRONA|DOTYCZY|TYTUL|PODSTAWA):.*$/gmu, "").trim();

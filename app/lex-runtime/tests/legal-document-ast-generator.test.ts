@@ -211,11 +211,15 @@ describe("LegalDocumentAstGenerator", () => {
     let query = "";
     let documentAstOutput: boolean | undefined;
     let accountContinuity: string | undefined;
+    let threadEvidence: unknown;
+    let signatureSearch: unknown;
     const sessions: Pick<SessionExecutor, "execute"> = {
       execute: async (request) => {
         query = request.query;
         documentAstOutput = request.documentAstOutput;
         accountContinuity = request.accountContinuity;
+        threadEvidence = request.threadEvidence;
+        signatureSearch = request.caseSignatureSearch;
         return {
           sessionId: "session_test",
           status: "DRAFT_PRESENTABLE",
@@ -286,6 +290,9 @@ describe("LegalDocumentAstGenerator", () => {
       mode: "PRAWNIK",
       documentType: "letter",
       styleProfile: "lex-classic-clean-v1",
+      // The thread's evidence reaches the file's session (RD 121/26).
+      threadEvidence: { schemaVersion: 1, updatedAt: "2026-10-30T10:00:00Z", provisions: [], skills: [], sources: [], caseReferences: ["VIII W 633/25"] },
+      caseSignatureSearch: { search: async () => [] },
       aliases: {
         schemaVersion: 1,
         entries: [{
@@ -297,6 +304,8 @@ describe("LegalDocumentAstGenerator", () => {
       }
     });
 
+    expect(threadEvidence).toMatchObject({ caseReferences: ["VIII W 633/25"] });
+    expect(signatureSearch).toBeDefined();
     expect(query).toContain("[PII:PERSON:0001] -> [LMPII:D01:PERSON:0001]");
     expect(query).not.toContain("Jan Kowalski");
     // Sesja generatora: wynik to JSON AST, nie sekcje tekstowe workflow pisma.

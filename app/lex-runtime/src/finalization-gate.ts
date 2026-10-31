@@ -1111,6 +1111,17 @@ const NAMED_ACT_AFTER = /^\s+(?:RODO|TFUE|TUE|EKPC|DSA|DMA|Prawa\s+o\s+\p{L}+|Pr
 // it comes from (a parallel proceeding, a ruling the firm holds).
 export const CASE_MATERIAL_MARKER_TEXT = "⚠️ [NIEWERYFIKOWANE: z materiałów sprawy]";
 
+/** Signatures a text marks as coming from the case's materials ("VIII W 633/25 ⚠️ [… z materiałów sprawy]"). */
+export function caseMaterialSignatures(text: string): string[] {
+  const found = new Set<string>();
+  for (let at = text.indexOf(CASE_MATERIAL_MARKER_TEXT); at >= 0; at = text.indexOf(CASE_MATERIAL_MARKER_TEXT, at + 1)) {
+    const before = text.slice(Math.max(0, at - 60), at).trimEnd();
+    const signature = /((?:[A-ZĄĆĘŁŃÓŚŹŻ]{1,8}\s+){1,4}\d+\/\d{2,4})$/u.exec(before)?.[1];
+    if (signature) found.add(signature.replace(/\s+/g, " "));
+  }
+  return [...found];
+}
+
 // Wiersz sam mówi, że sygnatury nie potwierdzono ("baza zwróciła 503", "nie mogę potwierdzić",
 // "tylko metadane"): to jawny trop, pokazany z ⚠️, a nie powołanie podane jako pewne.
 // A signature given as an example of what to fill in ("Podaj dane, np. „sygn. I Nc 123/26; …”",
