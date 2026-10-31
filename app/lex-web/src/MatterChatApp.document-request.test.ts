@@ -211,3 +211,13 @@ describe("wybór dla obrazu: OCR albo obraz do modelu", () => {
     expect(DEFAULT_DOCUMENT_PROCESSING_MODE).toBe("ANONYMIZE");
   });
 });
+
+describe("obrazy przy wiadomości odrzuconej najpierw (live C02-004)", () => {
+  it("znikają z pola dopiero po wykonaniu wiadomości; dodane w międzyczasie zostają", async () => {
+    const { withoutSentImages } = await import("./MatterChatApp.js");
+    const scan = { id: "wyrok-skan.png-1-1" };
+    const later = { id: "zdjecie.jpg-2-2" };
+    expect(withoutSentImages([scan, later], [scan])).toEqual([later]);
+    expect(withoutSentImages([scan], [])).toEqual([scan]);
+  });
+});

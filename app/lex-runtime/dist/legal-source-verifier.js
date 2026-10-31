@@ -192,6 +192,11 @@ function isPdfResponse(url, contentType) {
     return (contentType.includes("application/pdf") ||
         url.pathname.toLowerCase().endsWith(".pdf"));
 }
+// " Dz.U. 2023 poz. 2119" for a message about the text that was read (which consolidated text).
+function sourceJournal(url) {
+    const match = /\/DU\/(\d{4})\/(\d+)\b/u.exec(url);
+    return match ? ` Dz.U. ${match[1]} poz. ${match[2]}` : "";
+}
 export class LegalSourceVerificationError extends Error {
     code;
     constructor(message, code, options) {
@@ -412,7 +417,7 @@ export class OfficialLegalSourceVerifier {
                     : unit?.state === "MISSING"
                         ? "Artykuł w aktualnym tekście jednolitym nie ma tej jednostki."
                         : wording.unresolved
-                            ? "Tekst jednolity drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś."
+                            ? `Tekst jednolity${sourceJournal(sourceUrl)} drukuje kilka brzmień tej jednostki i z odnośników nie da się ustalić, które obowiązuje dziś; jeżeli to nie jest aktualny tekst jednolity aktu, sprawdź brzmienie w aktualnym.`
                             : wording.repealed
                                 ? "Przepis jest w aktualnym tekście jednolitym uchylony."
                                 : request.requireFootnoteWording && !wording.pending.length

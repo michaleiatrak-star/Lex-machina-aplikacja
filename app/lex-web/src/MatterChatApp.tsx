@@ -757,6 +757,12 @@ function readDirectImage(file: File): Promise<DirectImageItem> {
   });
 }
 
+/** The composer's images after a message carried `sent`: the ones added meanwhile stay. */
+export function withoutSentImages<T extends { id: string }>(current: T[], sent: T[]): T[] {
+  const ids = new Set(sent.map((image) => image.id));
+  return current.filter((image) => !ids.has(image.id));
+}
+
 /**
  * Why a file added in the chat holds the message back, by its own state (live C11-012: one
  * sentence naming three possible causes left the user guessing which one it was).
@@ -4350,9 +4356,10 @@ export default function MatterChatApp({
           getSessionProgress,
           setExecutionSteps
         );
-      // The images go with this message only; the composer is cleared for the next one.
+      // The images go with this message only. They leave the composer once the message was
+      // executed: a turn refused first (live C02-004: the pleading pipeline had to be started,
+      // the message is sent again) keeps them for the retry instead of losing the scan.
       const sentImages = directImages;
-      setDirectImages([]);
       const result = await executeSession({
         query: buildSkillSelectionEnvelope(
           conversationForProvider(
@@ -4393,6 +4400,7 @@ export default function MatterChatApp({
       }, executionId).finally(
         stopDraftPolling
       ) as ExtendedExecution;
+      if (sentImages.length) setDirectImages((current) => withoutSentImages(current, sentImages));
       // The answer updated the matter's memory (provisions, summary).
       setMemoryRefresh((value) => value + 1);
 

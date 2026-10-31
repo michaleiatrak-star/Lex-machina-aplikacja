@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "windows-x86_64",
-  "applicationVersion": "0.1.52",
+  "applicationVersion": "0.1.53",
   "installerMode": "ONLINE_BOOTSTRAP_DEFAULT",
   "applicationUpdate": {
     "verification": "SHA256_REQUIRED_SIGNATURE_OPTIONAL",
