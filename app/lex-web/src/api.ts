@@ -3180,6 +3180,8 @@ export function executeSession(input: {
   evidenceImages?: "photos" | "all";
   // Firm templates (DOCX/ODT) sent as text with the message.
   firmTemplates?: string[];
+  // Scans and photos sent to the model as they are (base64): no OCR, no masking.
+  directImages?: Array<{ name: string; mediaType: "image/png" | "image/jpeg"; data: string }>;
   knowledge?: {
     caseId?: string;
     includeCase?: boolean;

@@ -732,6 +732,34 @@ const GENERIC_FILE_WORDS = new Set([
   "odpowiedz", "odpowiedzi", "postaci", "analiza", "analize", "analizy", "opinia", "opinie", "opinii", "raport", "jej", "ja"
 ]);
 
+export type DirectImageItem = { id: string; name: string; mediaType: "image/png" | "image/jpeg"; data: string };
+export const MAX_DIRECT_IMAGES = 4;
+export const MAX_DIRECT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** PNG and JPEG can go to the model as they are; other files need processing. */
+export function directImageType(file: { name: string; type: string }): "image/png" | "image/jpeg" | null {
+  if (file.type === "image/png" || /\.png$/iu.test(file.name)) return "image/png";
+  if (file.type === "image/jpeg" || /\.jpe?g$/iu.test(file.name)) return "image/jpeg";
+  return null;
+}
+
+function readDirectImage(file: File): Promise<DirectImageItem> {
+  const mediaType = directImageType(file);
+  return new Promise((resolve, reject) => {
+    if (!mediaType) {
+      reject(new Error("NOT_AN_IMAGE"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("READ_FAILED"));
+    reader.onload = () => {
+      const data = String(reader.result ?? "").replace(/^data:[^,]*,/u, "");
+      resolve({ id: `${file.name}-${file.size}-${file.lastModified}`, name: file.name, mediaType, data });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
  * Why a file added in the chat holds the message back, by its own state (live C11-012: one
  * sentence naming three possible causes left the user guessing which one it was).
@@ -1811,6 +1839,8 @@ export default function MatterChatApp({
   const [includeFirmKnowledge, setIncludeFirmKnowledge] = useState(false);
   // Photos go to image-capable models as evidence; pages with text only on request.
   const [imagesWithText, setImagesWithText] = useState(false);
+  // Scans and photos the user chose to send to the model as they are (no OCR, no masking).
+  const [directImages, setDirectImages] = useState<DirectImageItem[]>([]);
   // Added files wait for a per-file decision; nothing starts OCR on its own.
   const [documentStaging, setDocumentStaging] = useState(
     createDocumentStagingState
@@ -3021,6 +3051,23 @@ export default function MatterChatApp({
 
   function removeStagedDocuments(ids?: string[]): void {
     setDocumentStaging((current) => takeStagedDocuments(current, ids).state);
+  }
+
+  // The image goes with the next message as it is; the file is not saved or read by OCR.
+  async function sendStagedImageToModel(id: string): Promise<void> {
+    const item = documentStaging.items.find((entry) => entry.id === id);
+    if (!item || !directImageType(item.file)) return;
+    if (directImages.length >= MAX_DIRECT_IMAGES || item.file.size > MAX_DIRECT_IMAGE_BYTES) {
+      setExecutionError(`Do jednej wiadomości można dołączyć najwyżej ${MAX_DIRECT_IMAGES} obrazy, każdy do 5 MB.`);
+      return;
+    }
+    try {
+      const image = await readDirectImage(item.file);
+      setDirectImages((current) => [...current, image]);
+      removeStagedDocuments([id]);
+    } catch {
+      setExecutionError(`Nie udało się odczytać pliku ${item.file.name}.`);
+    }
   }
 
   function handleDrop(event: DragEvent<HTMLElement>): void {
@@ -4300,6 +4347,9 @@ export default function MatterChatApp({
           getSessionProgress,
           setExecutionSteps
         );
+      // The images go with this message only; the composer is cleared for the next one.
+      const sentImages = directImages;
+      setDirectImages([]);
       const result = await executeSession({
         query: buildSkillSelectionEnvelope(
           conversationForProvider(
@@ -4324,6 +4374,9 @@ export default function MatterChatApp({
               attachments: sendAttachments,
               evidenceImages: imagesWithText ? "all" as const : "photos" as const
             }
+          : {}),
+        ...(sentImages.length > 0
+          ? { directImages: sentImages.map(({ name, mediaType, data }) => ({ name, mediaType, data })) }
           : {}),
         ...(firmTemplateIds.length > 0
           ? { firmTemplates: firmTemplateIds }
@@ -5736,6 +5789,17 @@ export default function MatterChatApp({
                       >
                         Zapisz bez przetwarzania
                       </button>
+                      {directImageType(item.file) ? (
+                        <button
+                          type="button"
+                          className="chat-secondary-action"
+                          disabled={item.status === "SAVING"}
+                          title="Obraz trafi do modelu w oryginale z następną wiadomością: bez OCR i bez anonimizacji (dane osobowe na obrazie będą widoczne dla modelu). Plik nie jest zapisywany w sprawie."
+                          onClick={() => void sendStagedImageToModel(item.id)}
+                        >
+                          Wyślij obraz do modelu
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="chat-secondary-action"
@@ -6406,6 +6470,18 @@ export default function MatterChatApp({
                     : developerMode ? "AUTO · prawny router" : "automatycznie"}
                 </span>
                 <span>Załączniki: {selectedFileCount}</span>
+                {directImages.map((image) => (
+                  <span key={image.id} className="chat-direct-image" title="Wysyłany w oryginale: bez OCR i bez anonimizacji">
+                    Obraz do modelu: {image.name}{" "}
+                    <button
+                      type="button"
+                      aria-label={`Usuń obraz ${image.name}`}
+                      onClick={() => setDirectImages((current) => current.filter((entry) => entry.id !== image.id))}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
                 {firmTemplateIds.length > 0 ||
                 documentAttachments.some((attachment) =>
                   caseFiles.some(
