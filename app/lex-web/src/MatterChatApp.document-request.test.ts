@@ -202,3 +202,12 @@ describe("obraz wysyłany do modelu w oryginale", () => {
     expect(directImageType({ name: "pozew.pdf", type: "application/pdf" })).toBeNull();
   });
 });
+
+describe("wybór dla obrazu: OCR albo obraz do modelu", () => {
+  it("tylko obraz ma opcję wysłania bez OCR; domyślny tryb zostaje OCR z anonimizacją", async () => {
+    const { processingModesFor, DEFAULT_DOCUMENT_PROCESSING_MODE } = await import("./document-processing-mode.js");
+    expect(processingModesFor({ name: "wypadek.jpg", type: "image/jpeg" }).map((entry) => entry.mode)).toContain("IMAGE_DIRECT");
+    expect(processingModesFor({ name: "pozew.pdf", type: "application/pdf" }).map((entry) => entry.mode)).not.toContain("IMAGE_DIRECT");
+    expect(DEFAULT_DOCUMENT_PROCESSING_MODE).toBe("ANONYMIZE");
+  });
+});

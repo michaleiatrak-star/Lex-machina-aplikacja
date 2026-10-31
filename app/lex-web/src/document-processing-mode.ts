@@ -7,7 +7,9 @@ export type DocumentProcessingMode =
   | "OCR"
   | "OCR_AI"
   | "ANONYMIZE"
-  | "ANONYMIZE_AI";
+  | "ANONYMIZE_AI"
+  // A scan or photo sent to the model as it is (no OCR, no masking), with the next message.
+  | "IMAGE_DIRECT";
 
 export const DOCUMENT_PROCESSING_MODES: ReadonlyArray<{
   mode: DocumentProcessingMode;
@@ -35,6 +37,27 @@ export const DOCUMENT_PROCESSING_MODES: ReadonlyArray<{
     title: "Tekst i OCR, a model wizyjny ponownie czyta niepewne linie skanu; modele tekstowe są na ten czas zatrzymywane. Bez anonimizacji - tekst jawny. Wymaga zainstalowanego modelu wizyjnego."
   }
 ];
+
+// The user decides per image: a photo of a document reads best as OCR text (anonymized);
+// a photo of a scene (an accident, a road sign, damage) is worth only as an image.
+export const IMAGE_DIRECT_MODE = {
+  mode: "IMAGE_DIRECT" as const,
+  label: "Obraz do modelu (bez OCR)",
+  title:
+    "Obraz trafia do modelu w oryginale z następną wiadomością: bez OCR i bez anonimizacji (dane osobowe na obrazie będą widoczne dla modelu). Dla zdjęć sytuacji (wypadek, znak, uszkodzenie); zdjęcie dokumentu lepiej przetworzyć OCR. Plik nie jest zapisywany w sprawie."
+};
+
+/** PNG and JPEG can go to the model as they are; other files need processing. */
+export function directImageType(file: { name: string; type: string }): "image/png" | "image/jpeg" | null {
+  if (file.type === "image/png" || /\.png$/iu.test(file.name)) return "image/png";
+  if (file.type === "image/jpeg" || /\.jpe?g$/iu.test(file.name)) return "image/jpeg";
+  return null;
+}
+
+/** The ways one file can be handled: an image may also go to the model as it is. */
+export function processingModesFor(file: { name: string; type: string }): ReadonlyArray<{ mode: DocumentProcessingMode; label: string; title: string }> {
+  return directImageType(file) ? [...DOCUMENT_PROCESSING_MODES, IMAGE_DIRECT_MODE] : DOCUMENT_PROCESSING_MODES;
+}
 
 export const DEFAULT_DOCUMENT_PROCESSING_MODE: DocumentProcessingMode = "ANONYMIZE";
 
@@ -68,5 +91,5 @@ export function processingModeOptions(
 }
 
 export function processingModeLabel(mode: DocumentProcessingMode): string {
-  return DOCUMENT_PROCESSING_MODES.find((item) => item.mode === mode)?.label ?? mode;
+  return [...DOCUMENT_PROCESSING_MODES, IMAGE_DIRECT_MODE].find((item) => item.mode === mode)?.label ?? mode;
 }
