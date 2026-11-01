@@ -5,7 +5,7 @@
 **Lokalna aplikacja desktopowa — asystent prawny AI dla prawa polskiego, działający na komputerze użytkownika, z obowiązkową weryfikacją każdego przepisu u źródła i prywatnością danych sprawy z założenia.**
 
 [![Licencja: użytek osobisty, kod zastrzeżony](https://img.shields.io/badge/Licencja-u%C5%BCytek%20osobisty%20%C2%B7%20kod%20zastrze%C5%BCony-red.svg)](LICENSE)
-[![Wersja aplikacji](https://img.shields.io/badge/aplikacja-0.1.53-2A6F50.svg)](#wersjonowanie)
+[![Wersja aplikacji](https://img.shields.io/badge/aplikacja-0.1.54-2A6F50.svg)](#wersjonowanie)
 [![Platformy](https://img.shields.io/badge/platformy-Windows%20%C2%B7%20macOS-2A6F50.svg)](#instalacja)
 [![Stos](https://img.shields.io/badge/stos-Tauri%2FRust%20%C2%B7%20Node%2024%20%C2%B7%20React%20%C2%B7%20Python-D97757.svg)](#architektura)
 [![Modele](https://img.shields.io/badge/modele-Anthropic%20%C2%B7%20OpenAI%20%C2%B7%20xAI%20%C2%B7%20Google%20%C2%B7%20lokalne-8A2BE2.svg)](#modele-ai)
@@ -203,7 +203,7 @@ Nowszą wersję instaluje się nowszym instalatorem (dane i ustawienia zostają)
 **Skille w Claude Code (marketplace):** dodawaj marketplace przypięty do tagu wydania, nie do `main` — wtyczki ze ścieżek względnych pochodzą z tej samej rewizji:
 
 ```
-/plugin marketplace add michaleiatrak-star/Lex-machina-aplikacja#v0.1.53
+/plugin marketplace add michaleiatrak-star/Lex-machina-aplikacja#v0.1.54
 ```
 
 Konektory MCP skilli działają z pakietu w repozytorium (`audyt-systemu-v4/mcp-servers/dist/lex-mcp.mjs`, suma w `CHECKSUMS.sha256`), bez pobierania z npm. Przykładowy `claude_desktop_config.json` z serwerem zewnętrznym przypina wersję (`@matematicsolutions/mcp-isap@1.3.0`).
@@ -247,7 +247,7 @@ Instalator buduje i sprawdza workflow `lex-installer.yml` (pull request, `workfl
 
 ## Wersjonowanie
 
-Wersja aplikacji: **0.1.53** (runtime, interfejs i desktop współdzielą numer).
+Wersja aplikacji: **0.1.54** (runtime, interfejs i desktop współdzielą numer).
 
 Korpus skilli (osobny projekt GPL-3.0 w repozytorium [`michaleiatrak-star/Lex-Machina`](https://github.com/michaleiatrak-star/Lex-Machina)) jest tu dołączony jako dodatek i ma własne wersjonowanie w dwóch kanałach — `Wersja stabilna rozpakowana <data>/` (codzienna praca) i `Wersja rozwojowa rozpakowana/` (nowe mechanizmy). Aplikację można zaktualizować niezależnie od skilli i odwrotnie.
 

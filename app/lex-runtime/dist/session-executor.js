@@ -18,6 +18,7 @@ import { citedArticles, citedArticlesPrompt, coreLawRetrievalPrompt } from "./co
 import { restoreWithReport } from "./privacy/restoration-report.js";
 import { AuditTrail } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { withoutModelRoutingTrace } from "./routing-trace-leak.js";
 import { discloseRegistryIdentifiers } from "./tool-broker-policy.js";
 import { LexExecutionEngine, latestUserTurn, isTrivialChatCommand, withoutCorrectionPreface } from "./execution-engine.js";
 import { VerificationLedger } from "./verification-ledger.js";
@@ -2817,7 +2818,9 @@ export class SafeSessionExecutor {
         }
         // Model-written ✅ markers are claims, not verification: only the ledger
         // marker is shown, so a rewritten link or date cannot block the answer.
-        const ledgerBackedOutput = stripUnbackedVerificationMarkers(releasedDraft.text, ledger);
+        const ledgerBackedOutput = stripUnbackedVerificationMarkers(
+        // The KROK 3A trace is the application's (mandatoryPath.routingTrace), not the answer's.
+        withoutModelRoutingTrace(releasedDraft.text), ledger);
         const automaticVerification = applyAutomaticVerificationMarkers(ledgerBackedOutput.text, ledger, requestedHistoricalAsOf);
         audit.record("gate", "G39I_AUTO_POST_DRAFT_VERIFICATION", automaticVerificationPlan.calls.length > 0 &&
             !verificationTools
