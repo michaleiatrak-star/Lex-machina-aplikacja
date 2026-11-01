@@ -48,6 +48,7 @@ import {
   type AuditEvent
 } from "./audit-trail.js";
 import { AuditedFinalizer } from "./audited-finalizer.js";
+import { withoutModelRoutingTrace } from "./routing-trace-leak.js";
 import { discloseRegistryIdentifiers } from "./tool-broker-policy.js";
 import {
   LexExecutionEngine,
@@ -4076,7 +4077,8 @@ export class SafeSessionExecutor implements SessionExecutor {
     // marker is shown, so a rewritten link or date cannot block the answer.
     const ledgerBackedOutput =
       stripUnbackedVerificationMarkers(
-        releasedDraft.text,
+        // The KROK 3A trace is the application's (mandatoryPath.routingTrace), not the answer's.
+        withoutModelRoutingTrace(releasedDraft.text),
         ledger
       );
     const automaticVerification =
