@@ -502,13 +502,41 @@ const ACT_TITLE_NOISE = new Set([
   "sierpnia", "września", "października", "listopada", "grudnia"
 ]);
 
+// An act's acronym leaves out the short function words of its title ("Prawo o postępowaniu
+// przed sądami administracyjnymi" = PPSA, "ustawy o kredycie konsumenckim" = u.k.k.).
+const ACRONYM_SKIP = new Set(["o", "w", "we", "z", "ze", "na", "i", "oraz", "przed", "do", "od", "dla", "po", "r"]);
+
+function titleInitials(title: string): string {
+  return title
+    .split(" ")
+    .filter((word) => word && !/\d/u.test(word) && !ACRONYM_SKIP.has(word) && (!ACT_TITLE_NOISE.has(word) || word.startsWith("ustaw")))
+    .map((word) => word[0])
+    .join("");
+}
+
+// Acronyms written on the line ("PPSA", "p.p.s.a.", "u.k.k."), lower case without dots; three letters at least.
+function lineAcronyms(lineText: string): Set<string> {
+  const found = new Set<string>();
+  for (const match of lineText.matchAll(/(?<![\p{L}.])(?:\p{L}\.\s?){3,8}|(?<![\p{L}])\p{Lu}{3,8}(?![\p{L}])/gu)) {
+    found.add(match[0].replace(/[.\s]/gu, "").toLocaleLowerCase("pl"));
+  }
+  return found;
+}
+
+/** The verified record of an act-less article whose act the line names in words or by its acronym. */
+export function namedActRecordForClaim(ledger: VerificationLedger, claim: string, lineText: string): VerificationRecord | undefined {
+  return namedActRecord(ledger, { claim, kind: "statute", line: 0, lineText });
+}
+
 /**
  * "art. 11 ustawy o zwalczaniu nieuczciwej konkurencji": an act named in words. The
  * session's verified record of that very article, whose title words all stand on the
  * line, is that provision (it is not marked unverified again). Only one such record.
  */
 function namedActRecord(ledger: VerificationLedger, reference: DetectedLegalReference): VerificationRecord | undefined {
-  if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim) || !namesOtherAct(reference.lineText)) return undefined;
+  if (reference.kind !== "statute" || ACT_SUFFIX.test(reference.claim)) return undefined;
+  const acronyms = lineAcronyms(reference.lineText);
+  if (!namesOtherAct(reference.lineText) && acronyms.size === 0) return undefined;
   const line = comparableClaim(withStatuteTitles(reference.lineText));
   const recordsFor = (prefix: string) => {
     const matching = ledger.all().filter((record) => {
@@ -519,7 +547,9 @@ function namedActRecord(ledger: VerificationLedger, reference: DetectedLegalRefe
       // The same unit only: "art. 11 ust. 2 ustawy …" is not the article mentioned as a whole.
       if (!/^(?:ustaw|kodeks|rozporządz|konstytucj|praw[aoe]?\s)/u.test(tail)) return false;
       const words = tail.split(" ").filter((word) => word.length >= 5 && !/\d/u.test(word) && !ACT_TITLE_NOISE.has(word));
-      return words.length > 0 && words.every((word) => line.includes(word));
+      // "PPSA art. 52 § 3" with art. 52 § 3 Prawa o postępowaniu przed sądami administracyjnymi
+      // verified (live B02-P04): the acronym of the verified act's title names it.
+      return (words.length > 0 && words.every((word) => line.includes(word))) || acronyms.has(titleInitials(tail));
     });
     return new Set(matching.map((record) => comparableClaim(record.claim))).size === 1 ? matching.at(-1) : undefined;
   };
