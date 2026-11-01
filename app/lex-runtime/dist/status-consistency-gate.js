@@ -1,6 +1,6 @@
 import { amountMarkerSpans, markerSpansAfter } from "./amount-references.js";
 import { interpretationSignaturesInLine } from "./interpretation-verifier.js";
-import { detectLegalReferences, FinalizationGate, UNVERIFIED_MARKER_TEXT } from "./finalization-gate.js";
+import { detectLegalReferences, FinalizationGate, namedActRecordForClaim, UNVERIFIED_MARKER_TEXT } from "./finalization-gate.js";
 import { DOTTED_ACT_ALTERNATIVES, compactActAbbreviations } from "./legal-act-abbreviations.js";
 import { verificationMarker } from "./source-anchor.js";
 const ACTS = "KC|KPC|KK|KPK|KPA|KP|KRO|KSH|KW|KPW|PZP|KKS|KKW|PPSA|KSCU";
@@ -194,14 +194,17 @@ function keyResolver(lines, text) {
         return resolved ? `${unit} ${resolved.toLocaleLowerCase("pl")}` : unit;
     };
 }
-function verifiedRecord(ledger, claims) {
+function verifiedRecord(ledger, claims, lineText) {
     for (const claim of claims) {
         const record = ledger.latest(claim);
         if (record) {
             return record.status === "VERIFIED" && verificationMarker(record) ? record : undefined;
         }
     }
-    return undefined;
+    // "art. 52 § 3 Prawa o postępowaniu przed sądami administracyjnymi" / "PPSA art. 52 § 3": the act
+    // named on the line in words or by acronym (live B02-P04: unresolved, its ✅ was unified to ⚠️).
+    const named = lineText ? namedActRecordForClaim(ledger, claims.at(-1), lineText) : undefined;
+    return named && verificationMarker(named) ? named : undefined;
 }
 // Najpierw najdokładniejsze powołanie (ze skrótem aktu), potem zapis z odpowiedzi.
 function ledgerClaims(reference, key) {
@@ -261,7 +264,7 @@ export function evaluateStatusConsistency(text, ledger) {
                 statuses
             });
         }
-        const contradicted = marked.filter((item) => item.status !== "VERIFIED" && verifiedRecord(ledger, item.claims));
+        const contradicted = marked.filter((item) => item.status !== "VERIFIED" && verifiedRecord(ledger, item.claims, lines[item.line - 1]?.text));
         if (contradicted.length > 0 && !conflict && statuses.every((status) => status === "UNVERIFIED"))
             understated.add(key);
         if (contradicted.length > 0) {
@@ -312,7 +315,7 @@ export function reconcileStatusMarkers(text, ledger) {
             const status = groupStatus(group);
             if (status !== "UNVERIFIED" && status !== "CONFLICT")
                 continue;
-            const records = group.references.map((reference) => verifiedRecord(ledger, ledgerClaims(reference, resolve(reference, line.line))));
+            const records = group.references.map((reference) => verifiedRecord(ledger, ledgerClaims(reference, resolve(reference, line.line)), line.text));
             if (records.every((record) => !record)) {
                 // Nic w grupie nie jest zweryfikowane: ✅ bez rekordu VERIFIED w rejestrze jest
                 // zmyślony i znika, ⚠️ zostaje. Prawdziwy ✅ innego przepisu zostaje (blokada).
@@ -464,7 +467,7 @@ export function unifyConflictingProvisions(text, ledger) {
             }
             for (const reference of group.references) {
                 const key = resolve(reference, line.line);
-                const record = unresolved.has(key) ? undefined : verifiedRecord(ledger, ledgerClaims(reference, key));
+                const record = unresolved.has(key) ? undefined : verifiedRecord(ledger, ledgerClaims(reference, key), line.text);
                 edits.push({ start: reference.end, end: reference.end, insert: ` ${record ? verificationMarker(record) : "⚠️ [NIEWERYFIKOWANE]"}` });
             }
         }
