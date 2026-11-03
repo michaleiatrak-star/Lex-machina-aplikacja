@@ -49,7 +49,45 @@ function sendMaintenanceError(res, error) {
     res.status(status).json({ error: code });
 }
 export function registerMaintenanceRoutes(app, dependencies) {
-    const { authService, localModels, maintenance, anomalyJournal } = dependencies;
+    const { authService, localModels, maintenance, anomalyJournal, transcriptionModel } = dependencies;
+    // Speech-to-text model for recordings (see transcription.ts): downloaded on request.
+    if (transcriptionModel) {
+        app.get("/api/local-models/transcription", (req, res) => {
+            try {
+                authenticated(req, authService);
+                res.json(transcriptionModel.status());
+            }
+            catch (error) {
+                if (error instanceof AuthError) {
+                    res.status(error.httpStatus).json({ error: error.code });
+                    return;
+                }
+                throw error;
+            }
+        });
+        app.post("/api/local-models/transcription/install", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                void transcriptionModel.start();
+                res.status(202).json(transcriptionModel.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+        app.post("/api/local-models/transcription/remove", (req, res) => {
+            if (!requireAdmin(req, res, authService))
+                return;
+            try {
+                transcriptionModel.remove();
+                res.json(transcriptionModel.status());
+            }
+            catch (error) {
+                sendMaintenanceError(res, error);
+            }
+        });
+    }
     if (anomalyJournal) {
         const query = (value) => typeof value === "string" && value.trim() ? value.trim() : undefined;
         app.get("/api/diagnostics/anomalies", (req, res) => {

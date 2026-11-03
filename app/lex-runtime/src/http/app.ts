@@ -1,3 +1,4 @@
+import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
 import { parseDirectImages } from "../direct-images.js";
 import { SN_PROXY_PREFIX } from "./sn-proxy.js";
@@ -342,7 +343,9 @@ const DOCUMENT_MEDIA_TYPES =
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.oasis.opendocument.text",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-excel.sheet.macroenabled.12"
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    // Recordings: the local speech-to-text model writes the text (transcription.ts).
+    ...(Object.keys(RECORDING_MEDIA_TYPES) as SupportedDocumentMediaType[])
   ]);
 
 type ImageDocumentMediaType =
@@ -6561,8 +6564,11 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "application/vnd.oasis.opendocument.text",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel.sheet.macroenabled.12"
+      "application/vnd.ms-excel.sheet.macroenabled.12",
+      ...Object.keys(RECORDING_MEDIA_TYPES)
     ],
+    // A recording too: the body is held in memory, so the same bound as a scan (an hour of
+    // audio is about 60 MB; a long video above it is refused with 413).
     limit: "512mb"
   });
 

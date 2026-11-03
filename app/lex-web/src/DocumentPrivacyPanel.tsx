@@ -602,7 +602,7 @@ export function DocumentPrivacyPanel({
               : "Wybierz plik (PDF, DOCX, arkusz, zdjęcie, ZIP)"}
           <input
             type="file"
-            accept=".pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
+            accept=".mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.weba,.mp4,.m4v,.mov,.webm,.mkv,.avi,audio/*,video/*,.pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
             multiple={Boolean(onFilesChosen)}
             disabled={loading || batchFinalizing || !caseId}
             onChange={(event) => {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
   "target": "windows-x86_64",
-  "applicationVersion": "0.1.56",
+  "applicationVersion": "0.1.57",
   "installerMode": "ONLINE_BOOTSTRAP_DEFAULT",
   "applicationUpdate": {
     "verification": "SHA256_REQUIRED_SIGNATURE_OPTIONAL",
@@ -70,7 +70,13 @@
     "stanza": "1.14.0",
     "torch": "2.14.0",
     "uv": "0.12.17",
-    "morfeusz2": "1.99.15"
+    "morfeusz2": "1.99.15",
+    "faster-whisper": "1.2.1",
+    "ctranslate2": "4.8.5",
+    "av": "19.0.2",
+    "onnxruntime": "1.31.1",
+    "tokenizers": "0.23.3",
+    "huggingface_hub": "2.4.0"
   },
   "models": {
     "paddle": [

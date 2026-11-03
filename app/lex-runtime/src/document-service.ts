@@ -1,3 +1,4 @@
+import { isRecordingMediaType, transcriptPages, type RecordingMediaType, type RecordingTranscriber } from "./transcription.js";
 import { alignProtected, protectedPageText, type DocxAnonymizationPlan } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
 import type {
@@ -169,7 +170,8 @@ export type SupportedDocumentMediaType =
   | typeof XLSX_MEDIA_TYPE
   | typeof XLSM_MEDIA_TYPE
   | typeof CSV_MEDIA_TYPE
-  | typeof TSV_MEDIA_TYPE;
+  | typeof TSV_MEDIA_TYPE
+  | RecordingMediaType;
 
 export type PublicDocumentChunk = {
   index: number;
@@ -631,8 +633,39 @@ implements DocumentService {
     // The vision step: text models (Bielik) are stopped so the vision model has the memory.
     private readonly stopTextModels?: () => Promise<void>,
     // "z lokalnym AI": the text model is started right before the detection of personal data.
-    private readonly startTextModels?: () => Promise<void>
+    private readonly startTextModels?: () => Promise<void>,
+    // Recordings (audio, video): the local speech-to-text model writes the text.
+    private readonly transcriber?: RecordingTranscriber
   ) {}
+
+  /**
+   * A recording as a document: one page per 10 minutes, each line with the time it starts.
+   * The pages are DIGITAL text (no scan to compare), so the privacy review works as for a letter.
+   */
+  private async transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: ProgressReporter): Promise<DocumentIngestionResult> {
+    if (!this.transcriber) throw new Error("TRANSCRIPTION_UNAVAILABLE");
+    if (!this.transcriber.available()) throw new Error("TRANSCRIPTION_MODEL_MISSING");
+    onProgress?.({ stage: "TRANSCRIPTION", done: 0, total: 0 });
+    const transcript = await this.transcriber.transcribe(data, mediaType, (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }));
+    const pages: IngestedPage[] = transcriptPages(transcript).map((page) => ({
+      page: page.page,
+      text: page.text,
+      source: page.text.trim() ? ("DIGITAL" as const) : ("BLANK" as const)
+    }));
+    const sourceChars = pages.reduce((sum, page) => sum + page.text.length, 0);
+    return {
+      complete: true,
+      sha256: createHash("sha256").update(data).digest("hex"),
+      bytes: data.byteLength,
+      totalPages: pages.length,
+      digitalPages: pages.filter((page) => page.source === "DIGITAL").length,
+      ocrPages: 0,
+      blankPages: pages.filter((page) => page.source === "BLANK").length,
+      sourceChars,
+      pages,
+      chunks: chunkDocumentPages(pages, this.maxChunkChars)
+    };
+  }
 
   private digitalTextResult(
     data: Uint8Array,
@@ -698,6 +731,9 @@ implements DocumentService {
   ): Promise<DocumentIngestionResult> {
     if (mediaType === "application/pdf") {
       return this.pdfIngestor.ingest(data, onProgress);
+    }
+    if (isRecordingMediaType(mediaType)) {
+      return this.transcribe(data, mediaType, onProgress);
     }
     if (
       mediaType ===

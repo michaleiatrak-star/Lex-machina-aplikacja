@@ -1,3 +1,4 @@
+import { isRecordingMediaType, RECORDING_MEDIA_TYPES } from "./transcription.js";
 import { DOCX_MEDIA_TYPE, ODT_MEDIA_TYPE } from "./office-document-extractor.js";
 import { CSV_MEDIA_TYPE, TSV_MEDIA_TYPE, XLSM_MEDIA_TYPE, XLSX_MEDIA_TYPE } from "./spreadsheet-extractor.js";
 // ZIP containers (OOXML, ODF): only the archive signature is checked here;
@@ -20,7 +21,8 @@ const SUPPORTED = new Set([
     "image/png",
     "image/webp",
     "image/tiff",
-    ...[...ZIP_TYPES, ...TEXT_TYPES]
+    ...[...ZIP_TYPES, ...TEXT_TYPES],
+    ...Object.keys(RECORDING_MEDIA_TYPES)
 ]);
 export function storedDocumentMediaType(value) {
     const type = value?.split(";")[0].trim().toLowerCase();
@@ -73,6 +75,9 @@ export function hasStoredDocumentSignature(data, mediaType) {
     if (ZIP_TYPES.has(mediaType)) {
         return startsWithBytes(data, [0x50, 0x4b, 0x03, 0x04]);
     }
+    if (isRecordingMediaType(mediaType)) {
+        return hasRecordingSignature(data);
+    }
     if (TEXT_TYPES.has(mediaType)) {
         // Text has no signature; a NUL byte early on means binary content.
         return !data
@@ -85,4 +90,23 @@ export function assertStoredDocumentSignature(data, mediaType) {
     if (!hasStoredDocumentSignature(data, mediaType)) {
         throw new Error("STORED_DOCUMENT_SIGNATURE_MISMATCH");
     }
+}
+/** A recording container by its first bytes (the exact codec is checked by the decoder). */
+export function hasRecordingSignature(data) {
+    const ascii = (from, to) => Buffer.from(data.subarray(from, to)).toString("latin1");
+    if (data.byteLength < 12)
+        return false;
+    if (ascii(0, 3) === "ID3")
+        return true; // MP3 with tags
+    if (data[0] === 0xff && (data[1] & 0xe0) === 0xe0)
+        return true; // MPEG audio / ADTS AAC frame
+    if (ascii(0, 4) === "RIFF" && ["WAVE", "AVI "].includes(ascii(8, 12)))
+        return true;
+    if (ascii(0, 4) === "OggS" || ascii(0, 4) === "fLaC")
+        return true;
+    if (ascii(4, 8) === "ftyp")
+        return true; // MP4, M4A, MOV
+    if (data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3)
+        return true; // WebM, MKV
+    return ascii(4, 8) === "moov" || ascii(4, 8) === "wide" || ascii(4, 8) === "mdat"; // older QuickTime
 }

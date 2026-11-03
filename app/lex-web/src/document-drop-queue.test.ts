@@ -134,3 +134,10 @@ describe("document drop queue", () => {
     expect(documentStepLabel(new File(["x"], "pozew.pdf", { type: "application/pdf" }))).toMatch(/OCR tylko dla skanowanych/u);
   });
 });
+
+describe("nagrania w kolejce plików", () => {
+  it("nagranie audio i wideo idzie do transkrypcji na tym komputerze", () => {
+    expect(documentStepLabel(new File(["x"], "rozprawa.m4a", { type: "" }))).toBe("Transkrypcja nagrania na tym komputerze i ukrycie danych osobowych");
+    expect(documentStepLabel(new File(["x"], "spotkanie.mov", { type: "video/quicktime" }))).toBe("Transkrypcja nagrania na tym komputerze i ukrycie danych osobowych");
+  });
+});

@@ -1,3 +1,4 @@
+import { isRecordingMediaType, RECORDING_MEDIA_TYPES } from "./transcription.js";
 import type {
   SupportedDocumentMediaType
 } from "./document-service.js";
@@ -35,7 +36,8 @@ const SUPPORTED =
     "image/png",
     "image/webp",
     "image/tiff",
-    ...([...ZIP_TYPES, ...TEXT_TYPES] as SupportedDocumentMediaType[])
+    ...([...ZIP_TYPES, ...TEXT_TYPES] as SupportedDocumentMediaType[]),
+    ...(Object.keys(RECORDING_MEDIA_TYPES) as SupportedDocumentMediaType[])
   ]);
 
 export function storedDocumentMediaType(
@@ -164,6 +166,10 @@ export function hasStoredDocumentSignature(
     );
   }
 
+  if (isRecordingMediaType(mediaType)) {
+    return hasRecordingSignature(data);
+  }
+
   if (TEXT_TYPES.has(mediaType)) {
     // Text has no signature; a NUL byte early on means binary content.
     return !data
@@ -189,4 +195,17 @@ export function assertStoredDocumentSignature(
       "STORED_DOCUMENT_SIGNATURE_MISMATCH"
     );
   }
+}
+
+/** A recording container by its first bytes (the exact codec is checked by the decoder). */
+export function hasRecordingSignature(data: Uint8Array): boolean {
+  const ascii = (from: number, to: number) => Buffer.from(data.subarray(from, to)).toString("latin1");
+  if (data.byteLength < 12) return false;
+  if (ascii(0, 3) === "ID3") return true; // MP3 with tags
+  if (data[0] === 0xff && (data[1]! & 0xe0) === 0xe0) return true; // MPEG audio / ADTS AAC frame
+  if (ascii(0, 4) === "RIFF" && ["WAVE", "AVI "].includes(ascii(8, 12))) return true;
+  if (ascii(0, 4) === "OggS" || ascii(0, 4) === "fLaC") return true;
+  if (ascii(4, 8) === "ftyp") return true; // MP4, M4A, MOV
+  if (data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3) return true; // WebM, MKV
+  return ascii(4, 8) === "moov" || ascii(4, 8) === "wide" || ascii(4, 8) === "mdat"; // older QuickTime
 }

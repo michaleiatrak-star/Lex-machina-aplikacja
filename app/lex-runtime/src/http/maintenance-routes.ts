@@ -1,3 +1,4 @@
+import type { TranscriptionModelManager } from "../transcription.js";
 import type { Express, Request, Response } from "express";
 import {
   AuthError,
@@ -81,14 +82,50 @@ export function registerMaintenanceRoutes(
     localModels: LocalModelRuntime;
     maintenance: MaintenanceService;
     anomalyJournal?: AnomalyJournal;
+    transcriptionModel?: TranscriptionModelManager;
   }
 ): void {
   const {
     authService,
     localModels,
     maintenance,
-    anomalyJournal
+    anomalyJournal,
+    transcriptionModel
   } = dependencies;
+
+  // Speech-to-text model for recordings (see transcription.ts): downloaded on request.
+  if (transcriptionModel) {
+    app.get("/api/local-models/transcription", (req, res) => {
+      try {
+        authenticated(req, authService);
+        res.json(transcriptionModel.status());
+      } catch (error) {
+        if (error instanceof AuthError) {
+          res.status(error.httpStatus).json({ error: error.code });
+          return;
+        }
+        throw error;
+      }
+    });
+    app.post("/api/local-models/transcription/install", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        void transcriptionModel.start();
+        res.status(202).json(transcriptionModel.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+    app.post("/api/local-models/transcription/remove", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        transcriptionModel.remove();
+        res.json(transcriptionModel.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+  }
 
   if (anomalyJournal) {
     const query = (value: unknown) =>

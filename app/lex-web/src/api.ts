@@ -3247,7 +3247,36 @@ export async function getSessionProgress(
   }
 }
 
+// Recordings by extension: browsers name the same file differently (audio/x-m4a, audio/wave)
+// or not at all (.mkv, .opus); the runtime takes these names.
+const RECORDING_TYPES: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".ogg": "audio/ogg",
+  ".oga": "audio/ogg",
+  ".opus": "audio/opus",
+  ".flac": "audio/flac",
+  ".weba": "audio/webm",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo"
+};
+
+export function recordingMediaType(filename: string): string | null {
+  const dot = filename.lastIndexOf(".");
+  return dot < 0 ? null : RECORDING_TYPES[filename.slice(dot).toLowerCase()] ?? null;
+}
+
+export const RECORDING_FILE_ACCEPT = Object.keys(RECORDING_TYPES).join(",");
+
 function uploadMediaType(file: File): string {
+  const recording = recordingMediaType(file.name);
+  if (recording) return recording;
   if (file.type) return file.type;
   const lower =
     file.name.toLowerCase();
@@ -3588,7 +3617,7 @@ export function editDocumentPage(
 }
 
 export type ProcessingProgress = {
-  stage: "READING" | "OCR" | "DETECTING" | "AI_CHECK" | "PSEUDONYMIZING" | "SAVING";
+  stage: "READING" | "OCR" | "TRANSCRIPTION" | "DETECTING" | "AI_CHECK" | "PSEUDONYMIZING" | "SAVING";
   done?: number;
   total?: number;
   // The document page being processed now.
