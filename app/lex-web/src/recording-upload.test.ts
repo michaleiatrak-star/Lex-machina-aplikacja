@@ -21,3 +21,13 @@ describe("nagrania: typ pliku, błędy, postęp", () => {
     expect(progressLabel({ stage: "TRANSCRIPTION", done: 75, total: 600 })).toBe("Transkrypcja nagrania: 1:15 z 10:00");
   });
 });
+
+describe("plik chroniony hasłem", () => {
+  it("prośba o hasło i złe hasło: pole hasła zamiast ponawiania", () => {
+    const required = documentFailure(new ApiError("DOCUMENT_PASSWORD_REQUIRED", 422));
+    expect(required.password).toBe(true);
+    expect(required.retryable).toBe(false);
+    expect(required.message).toContain("hasło nie jest nigdzie zapisywane");
+    expect(documentFailure(new ApiError("DOCUMENT_PASSWORD_INVALID", 422)).message).toContain("Hasło nie pasuje");
+  });
+});

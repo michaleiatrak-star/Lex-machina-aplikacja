@@ -7,6 +7,8 @@ export type DocumentFailure = {
   code: string;
   // Trying the same file again can help (transport, timeout, busy engine).
   retryable: boolean;
+  // The file is password-protected: the preview asks for the password and reads it again.
+  password?: boolean;
 };
 
 const MESSAGES: Record<string, { message: string; retryable: boolean }> = {
@@ -59,6 +61,15 @@ export function documentFailure(cause: unknown): DocumentFailure {
         : String(cause || "DOCUMENT_REVIEW_FAILED");
   const known = MESSAGES[code];
   if (known) return { code, ...known };
+  if (code === "DOCUMENT_PASSWORD_REQUIRED") {
+    return { code, message: "Plik jest chroniony hasłem. Wpisz hasło: plik otworzy się na tym komputerze, hasło nie jest nigdzie zapisywane.", retryable: false, password: true };
+  }
+  if (code === "DOCUMENT_PASSWORD_INVALID") {
+    return { code, message: "Hasło nie pasuje do tego pliku. Wpisz je ponownie.", retryable: false, password: true };
+  }
+  if (code === "DOCUMENT_DECRYPT_UNSUPPORTED") {
+    return { code, message: "Tego rodzaju zabezpieczenia nie da się otworzyć w programie. Zapisz plik bez hasła i wgraj ponownie.", retryable: false };
+  }
   if (code.startsWith("DESKTOP_RUNTIME_PROXY_FAILED")) {
     return {
       code,

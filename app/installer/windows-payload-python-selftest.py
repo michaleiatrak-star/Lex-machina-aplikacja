@@ -35,6 +35,8 @@ def stt_import() -> int:
     # Speech-to-text of recordings: the native CTranslate2 and FFmpeg (PyAV) libraries load.
     import av
     import ctranslate2
+    # Password-protected DOCX/XLSX (storage/decrypt_worker.py).
+    import msoffcrypto  # noqa: F401
     from faster_whisper import WhisperModel  # noqa: F401
 
     print("PYTHON_STT_IMPORT_PASS", "ctranslate2", ctranslate2.__version__, "av", av.__version__)

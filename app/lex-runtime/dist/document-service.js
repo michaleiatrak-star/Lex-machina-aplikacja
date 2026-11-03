@@ -1,3 +1,4 @@
+import { EML_MEDIA_TYPE, RTF_MEDIA_TYPE } from "./office-document-extractor.js";
 import { isRecordingMediaType, transcriptPages } from "./transcription.js";
 import { alignProtected, protectedPageText } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
@@ -339,7 +340,9 @@ export class LocalPrivateDocumentService {
         if (mediaType ===
             DOCX_MEDIA_TYPE ||
             mediaType ===
-                ODT_MEDIA_TYPE) {
+                ODT_MEDIA_TYPE ||
+            mediaType === EML_MEDIA_TYPE ||
+            mediaType === RTF_MEDIA_TYPE) {
             if (!this.officeExtractor) {
                 throw new Error("OFFICE_DOCUMENT_EXTRACTOR_UNAVAILABLE");
             }

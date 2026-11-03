@@ -3277,6 +3277,10 @@ export const RECORDING_FILE_ACCEPT = Object.keys(RECORDING_TYPES).join(",");
 function uploadMediaType(file: File): string {
   const recording = recordingMediaType(file.name);
   if (recording) return recording;
+  const lowerName = file.name.toLowerCase();
+  // Browsers name these differently (text/rtf, application/msword, empty); the runtime takes one name.
+  if (lowerName.endsWith(".eml")) return "message/rfc822";
+  if (lowerName.endsWith(".rtf")) return "application/rtf";
   if (file.type) return file.type;
   const lower =
     file.name.toLowerCase();
@@ -3390,7 +3394,8 @@ export async function reviewDocument(
   // localAi: the local model also checks personal data; ocrFix: the vision model corrects OCR;
   // detect false: only read now (OCR), personal data later by detectDocument.
   // background: read ahead of the user's work on another file; yields to it in the runtime.
-  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean },
+  // password: a protected PDF/DOCX/XLSX, opened by the runtime for this request only.
+  options?: { localAi?: boolean; ocrFix?: boolean; detect?: boolean; background?: boolean; password?: string },
   progressId?: string
 ): Promise<DocumentReviewResponse> {
   const processing = [
@@ -3411,6 +3416,7 @@ export async function reviewDocument(
         ...(processing ? { "X-Lex-Processing": processing } : {}),
         ...(progressId ? { "X-Lex-Progress": progressId } : {}),
         "X-Lex-Keep-Alive": "1",
+        ...(options?.password ? { "X-Lex-Document-Password": encodeURIComponent(options.password) } : {}),
         "X-Lex-Filename":
           encodeURIComponent(file.name)
       },

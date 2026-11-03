@@ -1,3 +1,4 @@
+import { encryptedKind, passwordFromHeader } from "../document-decryption.js";
 import { RECORDING_MEDIA_TYPES } from "../transcription.js";
 import { lastFailedApplicationUpdate } from "../application-update-journal.js";
 import { parseDirectImages } from "../direct-images.js";
@@ -125,6 +126,9 @@ const DOCUMENT_MEDIA_TYPES = new Set([
     "application/vnd.oasis.opendocument.text",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel.sheet.macroenabled.12",
+    // E-mail and RTF: read as text by the office worker.
+    "message/rfc822",
+    "application/rtf",
     // Recordings: the local speech-to-text model writes the text (transcription.ts).
     ...Object.keys(RECORDING_MEDIA_TYPES)
 ]);
@@ -3985,6 +3989,8 @@ export function createLexHttpApp(options) {
             "application/vnd.oasis.opendocument.text",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel.sheet.macroenabled.12",
+            "message/rfc822",
+            "application/rtf",
             ...Object.keys(RECORDING_MEDIA_TYPES)
         ],
         // A recording too: the body is held in memory, so the same bound as a scan (an hour of
@@ -4142,7 +4148,27 @@ export function createLexHttpApp(options) {
             return;
         }
         try {
-            const data = new Uint8Array(req.body);
+            let data = new Uint8Array(req.body);
+            // A password-protected PDF or DOCX/XLSX: opened here with the password the user typed
+            // (X-Lex-Document-Password, this request only); without it the user is asked for one.
+            const encrypted = options.documentDecryptor ? encryptedKind(data, mediaType) : null;
+            if (encrypted && options.documentDecryptor) {
+                const password = passwordFromHeader(req.get("x-lex-document-password"));
+                try {
+                    data = await options.documentDecryptor.decrypt(data, encrypted, password ?? "");
+                }
+                catch (error) {
+                    const code = error instanceof Error ? error.message : String(error);
+                    if (!code.startsWith("DOCUMENT_NOT_ENCRYPTED")) {
+                        res.status(422).json({
+                            error: code.startsWith("DOCUMENT_PASSWORD_INVALID")
+                                ? password ? "DOCUMENT_PASSWORD_INVALID" : "DOCUMENT_PASSWORD_REQUIRED"
+                                : code.split(":", 1)[0]
+                        });
+                        return;
+                    }
+                }
+            }
             let stored;
             let caseId;
             if (options.caseFileStore) {

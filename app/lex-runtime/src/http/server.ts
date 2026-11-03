@@ -1,3 +1,4 @@
+import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
 import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
@@ -746,6 +747,7 @@ export async function startLocalServer(options?: {
 
   const coreApp = createLexHttpApp({
     registry,
+    documentDecryptor: new LocalDocumentDecryptor(),
     // Off until a Google OAuth client is configured (see google/config.ts).
     googleRecovery:
       new GoogleRecoveryController(authService),

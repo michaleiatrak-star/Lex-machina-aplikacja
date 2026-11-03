@@ -11,9 +11,15 @@ export const DOCX_MEDIA_TYPE =
 export const ODT_MEDIA_TYPE =
   "application/vnd.oasis.opendocument.text";
 
+// An e-mail (.eml) and an RTF document are read by the same worker (text, no layout).
+export const EML_MEDIA_TYPE = "message/rfc822";
+export const RTF_MEDIA_TYPE = "application/rtf";
+
 export type OfficeDocumentMediaType =
   | typeof DOCX_MEDIA_TYPE
-  | typeof ODT_MEDIA_TYPE;
+  | typeof ODT_MEDIA_TYPE
+  | typeof EML_MEDIA_TYPE
+  | typeof RTF_MEDIA_TYPE;
 
 export interface OfficeDocumentTextExtractor {
   extract(

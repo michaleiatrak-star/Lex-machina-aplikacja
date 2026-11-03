@@ -37,6 +37,8 @@ const SUPPORTED =
     "image/webp",
     "image/tiff",
     ...([...ZIP_TYPES, ...TEXT_TYPES] as SupportedDocumentMediaType[]),
+    "message/rfc822",
+    "application/rtf",
     ...(Object.keys(RECORDING_MEDIA_TYPES) as SupportedDocumentMediaType[])
   ]);
 
@@ -168,6 +170,15 @@ export function hasStoredDocumentSignature(
 
   if (isRecordingMediaType(mediaType)) {
     return hasRecordingSignature(data);
+  }
+
+  if (mediaType === "application/rtf") {
+    return Buffer.from(data.subarray(0, 16)).toString("latin1").trimStart().startsWith("{\\rtf");
+  }
+
+  if (mediaType === "message/rfc822") {
+    // Headers of an e-mail are text; a NUL byte early on means binary content.
+    return data.byteLength > 0 && !data.subarray(0, 8192).includes(0);
   }
 
   if (TEXT_TYPES.has(mediaType)) {

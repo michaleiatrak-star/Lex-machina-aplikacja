@@ -205,6 +205,9 @@ export function DocumentPrivacyPanel({
     useRef(new Map<File, Promise<DocumentReviewResponse>>());
   const preparing =
     useRef<Promise<unknown>>(Promise.resolve());
+  // Passwords of protected files, typed by the user: kept in memory for the next read only.
+  const passwords = useRef(new Map<File, string>());
+  const [password, setPassword] = useState("");
 
   // Before the effect below: a case change drops what was read for the previous case, and
   // the file at the head of the queue is read again for the new one (it no longer hangs).
@@ -244,7 +247,9 @@ export function DocumentPrivacyPanel({
           const tracker = trackProgress(caseId, (next) => {
             if (activeFileRef.current === file) setProgress(next);
           });
-          return reviewDocument(file, caseId, { detect: false, background: true }, tracker.progressId).finally(() => {
+          const typed = passwords.current.get(file);
+          passwords.current.delete(file);
+          return reviewDocument(file, caseId, { detect: false, background: true, ...(typed ? { password: typed } : {}) }, tracker.progressId).finally(() => {
             tracker.stop();
             if (activeFileRef.current === file) setProgress(null);
           });
@@ -602,7 +607,7 @@ export function DocumentPrivacyPanel({
               : "Wybierz plik (PDF, DOCX, arkusz, zdjęcie, ZIP)"}
           <input
             type="file"
-            accept=".mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.weba,.mp4,.m4v,.mov,.webm,.mkv,.avi,audio/*,video/*,.pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
+            accept=".eml,.rtf,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.weba,.mp4,.m4v,.mov,.webm,.mkv,.avi,audio/*,video/*,.pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff"
             multiple={Boolean(onFilesChosen)}
             disabled={loading || batchFinalizing || !caseId}
             onChange={(event) => {
@@ -638,6 +643,31 @@ export function DocumentPrivacyPanel({
               <summary>Szczegóły techniczne</summary>
               <code>{failure.code}</code>
             </details>
+          ) : null}
+          {failure?.password && (activeFileRef.current || incomingFile) ? (
+            <form
+              className="document-failure-actions"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const target = activeFileRef.current ?? incomingFile;
+                if (!target || !password) return;
+                passwords.current.set(target, password);
+                setPassword("");
+                void openFile(target);
+              }}
+            >
+              <input
+                type="password"
+                autoComplete="off"
+                aria-label="Hasło pliku"
+                placeholder="Hasło pliku"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button type="submit" disabled={loading || !password}>
+                Otwórz
+              </button>
+            </form>
           ) : null}
           {failure ? (
             <div className="document-failure-actions">
