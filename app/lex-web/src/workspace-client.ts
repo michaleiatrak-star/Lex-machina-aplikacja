@@ -297,3 +297,44 @@ export async function renderEditable(
   }
   return await response.blob();
 }
+
+export type PdfFormField = {
+  name: string;
+  type: "text" | "checkbox" | "radio" | "combo" | "list";
+  value: string | boolean | null;
+  options: string[];
+  page: number;
+  label: string;
+  readOnly: boolean;
+  maxLength?: number;
+};
+
+/** Fields of a PDF form in the case files (empty: not a form). */
+export function getPdfFormFields(caseId: string, itemId: string): Promise<{ filename: string; fields: PdfFormField[] }> {
+  return workspaceJson(`/api/cases/${caseId}/workspace/items/${itemId}/form`);
+}
+
+/** The form filled in as a new PDF (the caller stores it as a new case file). */
+export async function fillPdfForm(
+  caseId: string,
+  itemId: string,
+  request: { values: Record<string, string | boolean | null>; flatten: boolean }
+): Promise<Blob> {
+  const response = await fetch(`${apiBase()}/api/cases/${caseId}/workspace/items/${itemId}/form/fill`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", ...authorizationHeaders() },
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) {
+    let code = `HTTP_${response.status}`;
+    try {
+      const body = (await response.json()) as { error?: string; detail?: string };
+      code = body.detail || body.error || code;
+    } catch {
+      // Keep the HTTP code.
+    }
+    throw new Error(code);
+  }
+  return await response.blob();
+}

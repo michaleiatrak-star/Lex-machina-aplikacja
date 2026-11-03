@@ -1294,3 +1294,46 @@
   color: var(--lm-t5);
   font-style: normal;
 }
+
+.pdf-form-panel {
+  border: 1px solid var(--border, #d0d4da);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.pdf-form-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-form-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 12px;
+  margin: 8px 0;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.pdf-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdf-form-field.pdf-form-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdf-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
