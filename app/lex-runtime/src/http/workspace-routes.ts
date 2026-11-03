@@ -1,3 +1,4 @@
+import { LocalPdfFormFiller, pdfFormValues } from "../pdf-form.js";
 import {
   appendDraftVersion,
   emptyProcessPleadingDraft,
@@ -94,6 +95,10 @@ function caseIdFrom(req: Request): string {
   return String(req.params.caseId ?? "").trim();
 }
 
+function isPdf(mediaType: string, filename: string): boolean {
+  return mediaType.split(";")[0]!.trim().toLowerCase() === "application/pdf" || /\.pdf$/iu.test(filename);
+}
+
 function errorCode(error: unknown): string {
   return error instanceof Error ? error.message : "WORKSPACE_OPERATION_FAILED";
 }
@@ -140,7 +145,9 @@ function sendError(res: Response, error: unknown): void {
     code.includes("TOO_LARGE") ||
     code.includes("LIMIT_EXCEEDED") ||
     code.includes("TRANSITION") ||
-    (code.startsWith("OFFICE_EDIT_") && code.includes("UNSUPPORTED"))
+    (code.startsWith("OFFICE_EDIT_") && code.includes("UNSUPPORTED")) ||
+    // A form the user can correct: unknown field, value not allowed, encrypted or no fields.
+    (code.startsWith("PDF_FORM_") && !code.startsWith("PDF_FORM_FAILED") && code !== "PDF_FORM_TIMEOUT")
   ) {
     res.status(422).json({ error: code });
     return;
@@ -261,6 +268,7 @@ export function registerWorkspaceRoutes(
     workspace: EncryptedCaseWorkspaceStore;
     rootDir: string;
     officeEditor?: Pick<LocalOfficeEditor, "read" | "write">;
+    pdfForms?: Pick<LocalPdfFormFiller, "fields" | "fill">;
     // Documents made by a model (with placeholders or deanonymized).
     artifacts?: Pick<SecureCaseArtifactStore, "listArtifacts" | "readArtifact" | "renameArtifact">;
   }
@@ -2101,6 +2109,50 @@ export function registerWorkspaceRoutes(
     } catch (error) {
       sendError(res, error);
     } finally {
+      output?.fill(0);
+    }
+  });
+
+  // Fields of a PDF form in the case files.
+  app.get("/api/cases/:caseId/workspace/items/:itemId/form", async (req, res) => {
+    let payload: Buffer | undefined;
+    try {
+      if (!dependencies.pdfForms) throw new Error("PDF_FORM_UNAVAILABLE");
+      const actor = actorFor(req);
+      const item = await readItem(actor, caseIdFrom(req), String(req.params.itemId ?? ""), PREVIEW_MAX_BYTES);
+      payload = item.data;
+      if (!isPdf(item.mediaType, item.filename)) throw new Error("PDF_FORM_MEDIA_TYPE_UNSUPPORTED");
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ filename: item.filename, fields: await dependencies.pdfForms.fields(payload) });
+    } catch (error) {
+      sendError(res, error);
+    } finally {
+      payload?.fill(0);
+    }
+  });
+
+  // The form filled in as a new PDF; the client stores it as a new case file.
+  app.post("/api/cases/:caseId/workspace/items/:itemId/form/fill", async (req, res) => {
+    let payload: Buffer | undefined;
+    let output: Buffer | undefined;
+    try {
+      if (!dependencies.pdfForms) throw new Error("PDF_FORM_UNAVAILABLE");
+      const actor = actorFor(req);
+      const caseId = caseIdFrom(req);
+      dependencies.caseAccessService.assertAccess(actor, caseId, "WRITE");
+      const values = pdfFormValues(req.body?.values);
+      const item = await readItem(actor, caseId, String(req.params.itemId ?? ""), PREVIEW_MAX_BYTES);
+      payload = item.data;
+      if (!isPdf(item.mediaType, item.filename)) throw new Error("PDF_FORM_MEDIA_TYPE_UNSUPPORTED");
+      output = await dependencies.pdfForms.fill(payload, values, req.body?.flatten === true);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Cache-Control", "no-store");
+      sendAndWipe(res, output);
+      output = undefined;
+    } catch (error) {
+      sendError(res, error);
+    } finally {
+      payload?.fill(0);
       output?.fill(0);
     }
   });
