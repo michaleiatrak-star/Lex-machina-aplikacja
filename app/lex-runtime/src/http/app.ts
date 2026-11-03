@@ -281,6 +281,8 @@ import {
 } from "../contract-analysis-execution-gate.js";
 import type { GoogleRecoveryController } from "../google/recovery-controller.js";
 import type { GoogleWorkspaceController } from "../google/workspace-controller.js";
+import type { MicrosoftController } from "../microsoft/controller.js";
+import { registerMicrosoftPublicRoutes, registerMicrosoftRoutes } from "../microsoft/http-routes.js";
 import {
   registerGoogleAuthenticatedRoutes,
   registerGooglePublicRoutes,
@@ -658,6 +660,8 @@ export type LexHttpAppOptions = {
   authService?: AuthService;
   googleRecovery?: GoogleRecoveryController;
   googleWorkspace?: GoogleWorkspaceController;
+  // OneDrive and SharePoint (Microsoft Graph), read-only.
+  microsoft?: MicrosoftController;
   supportService?: Pick<
     LocalSupportService,
     | "status"
@@ -2721,6 +2725,10 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
     );
   }
 
+  if (options.microsoft) {
+    registerMicrosoftPublicRoutes(app, options.microsoft);
+  }
+
   if (options.googleRecovery) {
     registerGooglePublicRoutes(
       app,
@@ -2991,6 +2999,46 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       registerGoogleWorkspaceRoutes(
         app,
         options.googleWorkspace,
+        responseAuthContext,
+        async (context, caseId, files) => {
+          access.assertAccess(context, caseId, "WRITE");
+          const caseView = access.openCase(context, caseId);
+          return await access.withCaseDataKey(
+            context,
+            caseId,
+            "WRITE",
+            async (caseDataKey) => {
+              const stored: StoredUpload[] = [];
+              for (const file of files) {
+                stored.push(
+                  await store.saveUpload({
+                    caseId,
+                    filename: file.filename,
+                    mediaType: file.mediaType,
+                    data: file.data,
+                    caseDataKey,
+                    keyVersion: caseView.keyVersion
+                  })
+                );
+              }
+              return stored;
+            }
+          );
+        },
+        sendCaseAccessError
+      );
+    }
+
+    if (
+      options.microsoft &&
+      options.caseAccessService &&
+      options.secureCaseUploadStore
+    ) {
+      const access = options.caseAccessService;
+      const store = options.secureCaseUploadStore;
+      registerMicrosoftRoutes(
+        app,
+        options.microsoft,
         responseAuthContext,
         async (context, caseId, files) => {
           access.assertAccess(context, caseId, "WRITE");

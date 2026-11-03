@@ -8,6 +8,7 @@ import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleIntegrationPanel } from "./GoogleIntegrationPanel.js";
+import { MicrosoftIntegrationPanel } from "./MicrosoftIntegration.js";
 import { InvoiceSettingsPanel } from "./InvoiceSettingsPanel.js";
 import { ServerAdminPanel } from "./ServerAdminPanel.js";
 import { MyServerAccountPanel } from "./MyServerAccountPanel.js";
@@ -90,7 +91,12 @@ export default function App({
               />
             </>
           ) : null,
-        integrations: GOOGLE_INTEGRATION_VISIBLE ? <GoogleIntegrationPanel /> : null,
+        integrations: (
+          <>
+            {GOOGLE_INTEGRATION_VISIBLE ? <GoogleIntegrationPanel /> : null}
+            <MicrosoftIntegrationPanel />
+          </>
+        ),
         mcp:
           user.appRole ===
           "ADMIN" ? (
