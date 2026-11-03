@@ -7,6 +7,7 @@ import {
 } from "./api.js";
 import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl, openReleasePage } from "./MaintenancePanel.js";
 import {
+  clearUpdateHandoff,
   failedUpdateMessage,
   rememberUpdateHandoff,
   skipUpdateVersion,
@@ -101,6 +102,7 @@ export function UpdatePrompt() {
       rememberUpdateHandoff(store, staged.version || offer.version);
       await installStagedApplicationUpdate(staged.receiptToken);
     } catch (problem) {
+      clearUpdateHandoff(store);
       const status = { status: "AVAILABLE", currentVersion: APP_VERSION, checkedAt: offer.detectedAt, latestVersion: offer.version, ...(offer.releaseUrl ? { releaseUrl: offer.releaseUrl } : {}) } satisfies UpdateStatusResponse;
       const releaseUrl = manualUpdateReleaseUrl(problem, status);
       if (releaseUrl) {

@@ -77,3 +77,13 @@ describe("wynik aktualizacji przekazanej instalatorowi, przy następnym starcie"
     expect(updateHandoffOutcome(store, interrupted, "0.1.54", later)!.message).toContain("zatrzymał się w trakcie (etap INSTALLING)");
   });
 });
+
+describe("instalator aktualizacji zatrzymany przez Windows", () => {
+  it("komunikat z powodem i ścieżką logu startu", async () => {
+    const { friendlyError } = await import("./MaintenancePanel.js");
+    const text = friendlyError("APPLICATION_UPDATE_RUNNER_EXITED:1:File cannot be loaded because running scripts is disabled on this system.");
+    expect(text).toContain("Windows zatrzymał skrypt aktualizacji");
+    expect(text).toContain("update-runner-start.log");
+    expect(text).toContain("running scripts is disabled");
+  });
+});

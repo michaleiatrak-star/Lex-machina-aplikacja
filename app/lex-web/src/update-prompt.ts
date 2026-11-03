@@ -128,6 +128,11 @@ export function rememberUpdateHandoff(store: Store | null, version: string, now:
   write(store, HANDOFF, JSON.stringify({ version, at: now.toISOString() }));
 }
 
+/** The handover failed at once (the error is shown now): nothing to report at the next start. */
+export function clearUpdateHandoff(store: Store | null): void {
+  write(store, HANDOFF, null);
+}
+
 /**
  * What happened to the update handed over before this start (shown once): installed, failed
  * with the runner's reason, or no trace at all (the runner never ran or was stopped before its
