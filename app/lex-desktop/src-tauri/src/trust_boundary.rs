@@ -1487,6 +1487,7 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/update/status"
         | "/api/local-models/vision-ocr"
         | "/api/local-models/transcription"
+        | "/api/local-models/ocr-acceleration"
         | "/api/skills/update/status"
         | "/api/guide/state"
         | "/api/schedule/upcoming" => {
@@ -1506,6 +1507,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
         | "/api/local-models/vision-ocr/remove"
         | "/api/local-models/transcription/install"
         | "/api/local-models/transcription/remove"
+        | "/api/local-models/ocr-acceleration/install"
+        | "/api/local-models/ocr-acceleration/measure"
+        | "/api/local-models/ocr-acceleration/remove"
         | "/api/skills/update/apply"
         | "/api/guide/initialize"
         | "/api/guide/transition" => method == "POST",
@@ -1586,6 +1590,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/google/workspace/status"
         | "/api/google/gmail/threads"
         | "/api/google/drive/files" => method == "GET",
+        // OneDrive and SharePoint (Microsoft Graph), read-only.
+        "/api/microsoft/status" | "/api/microsoft/files" => method == "GET",
+        "/api/microsoft/connect"
+        | "/api/microsoft/connect/result"
+        | "/api/microsoft/disconnect" => method == "POST",
         "/api/google/workspace/connect"
         | "/api/google/workspace/connect/result"
         | "/api/google/workspace/disconnect" => method == "POST",
@@ -2186,6 +2195,11 @@ mod tests {
         assert!(route_allowed("GET", "/api/google/workspace/status"));
         assert!(route_allowed("POST", "/api/google/workspace/connect"));
         assert!(route_allowed("GET", "/api/google/drive/files"));
+        assert!(route_allowed("GET", "/api/microsoft/files"));
+        assert!(route_allowed("POST", "/api/microsoft/connect"));
+        assert!(route_allowed("POST", "/api/microsoft/connect/result"));
+        assert!(!route_allowed("POST", "/api/microsoft/files"));
+        assert!(route_allowed("POST", "/api/cases/case_1/microsoft/import"));
         assert!(route_allowed("POST", "/api/cases/case_abc/google/import"));
         assert!(!route_allowed("DELETE", "/api/google/workspace/status"));
         assert!(!route_allowed("POST", "/api/google/recovery/unlink"));
@@ -2258,6 +2272,11 @@ mod tests {
         assert!(route_allowed("POST", "/api/local-models/transcription/install"));
         assert!(route_allowed("POST", "/api/local-models/transcription/remove"));
         assert!(!route_allowed("GET", "/api/local-models/transcription/install"));
+        assert!(route_allowed("GET", "/api/local-models/ocr-acceleration"));
+        assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/install"));
+        assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/measure"));
+        assert!(route_allowed("POST", "/api/local-models/ocr-acceleration/remove"));
+        assert!(!route_allowed("GET", "/api/local-models/ocr-acceleration/measure"));
         assert!(route_allowed("GET", "/api/skills"));
         assert!(route_allowed("GET", "/api/skills/update/status"));
         // The auxiliary model role was removed: no routing preferences route.

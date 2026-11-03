@@ -5,6 +5,7 @@ import path from "node:path";
 import { evidenceBudget, ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 import { documentWork } from "../document-work.js";
+import type { OcrAccelEnvironment } from "./ocr-acceleration.js";
 import type {
   OcrEngine,
   OcrPageResult
@@ -21,7 +22,11 @@ export type LocalPaddleOcrOptions = {
   // Worker processes run at once on a long scan (each with its share of the CPU threads);
   // default from LEX_OCR_WORKERS or the machine (ocrWorkerCount).
   workers?: number;
+  // The graphics card (ocr-acceleration.ts): its worker environment while it is on.
+  acceleration?: () => OcrAccelEnvironment | null;
 };
+
+type AccelUsage = { used: boolean; failed: boolean };
 
 // One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
 // each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
@@ -71,6 +76,7 @@ implements OcrEngine {
   private readonly timeoutMs: number;
   private readonly lineCrops: () => boolean;
   private readonly workers: number | undefined;
+  private readonly acceleration: () => OcrAccelEnvironment | null;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -93,12 +99,39 @@ implements OcrEngine {
       options.timeoutMs ?? 30 * 60 * 1000;
     this.lineCrops = options.lineCrops ?? (() => false);
     this.workers = options.workers;
+    this.acceleration = options.acceleration ?? (() => null);
   }
 
   async recognizePages(
     data: Uint8Array,
     pages: number[],
     onPage?: (done: number) => void
+  ): Promise<OcrPageResult[]> {
+    return this.read(data, pages, onPage, this.acceleration(), { used: false, failed: false });
+  }
+
+  /** One reading with the card on or off, for the measurement of ocr-acceleration.ts. */
+  async benchmarkRead(
+    data: Uint8Array,
+    pages: number[],
+    acceleration: OcrAccelEnvironment | null
+  ): Promise<{ seconds: number; pages: string[]; used: boolean }> {
+    const usage: AccelUsage = { used: false, failed: false };
+    const started = performance.now();
+    const results = await this.read(data, pages, undefined, acceleration, usage);
+    return {
+      seconds: (performance.now() - started) / 1000,
+      pages: results.map((result) => result.text),
+      used: usage.used && !usage.failed
+    };
+  }
+
+  private async read(
+    data: Uint8Array,
+    pages: number[],
+    onPage: ((done: number) => void) | undefined,
+    acceleration: OcrAccelEnvironment | null,
+    usage: AccelUsage
   ): Promise<OcrPageResult[]> {
     if (pages.length === 0) return [];
 
@@ -115,7 +148,7 @@ implements OcrEngine {
       // leaves a gap.
       const budget = evidenceBudget();
       const background = documentWork.inBackground();
-      const workers = ocrWorkerCount({
+      const counted = ocrWorkerCount({
         pages: pages.length,
         cpus: os.availableParallelism?.() ?? os.cpus().length,
         freeMemory: os.freemem(),
@@ -123,6 +156,8 @@ implements OcrEngine {
         ...(this.workers !== undefined ? { requested: this.workers } : {}),
         background
       });
+      // Processes sharing one graphics card.
+      const workers = acceleration ? Math.min(counted, acceleration.maxWorkers) : counted;
       const size = workers > 1 ? Math.min(OCR_BATCH_PAGES, Math.ceil(pages.length / workers)) : OCR_BATCH_PAGES;
       const batches: number[][] = [];
       for (let start = 0; start < pages.length; start += size) batches.push(pages.slice(start, start + size));
@@ -172,7 +207,9 @@ implements OcrEngine {
                   report();
                 }
               : undefined,
-            threads
+            threads,
+            acceleration,
+            usage
           );
           draining = draining.then(drain);
           await draining;
@@ -216,7 +253,9 @@ implements OcrEngine {
     batchDir: string,
     pages: number[],
     onPage?: (done: number) => void,
-    threads?: string
+    threads?: string,
+    acceleration: OcrAccelEnvironment | null = null,
+    usage?: AccelUsage
   ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
@@ -255,6 +294,8 @@ implements OcrEngine {
             ...process.env,
             PYTHONUNBUFFERED: "1",
             ...(threads ? { LEX_OCR_THREADS: threads } : {}),
+            // The card only when it is on here; never the worker's own guess.
+            ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" }),
             ...(background ? { LEX_OCR_PAUSE_FILE: documentWork.pauseFile } : {})
           }
         }
@@ -280,6 +321,10 @@ implements OcrEngine {
         if (finished && onPage) {
           pagesDone += finished;
           onPage(Math.min(pagesDone, pages.length));
+        }
+        if (usage) {
+          if (/^LEX_OCR_ACCEL \S+ \d+$/mu.test(text)) usage.used = true;
+          if (/LEX_OCR_ACCEL_(?:RUN_)?FAILED/u.test(text)) usage.failed = true;
         }
         stderr += text;
         if (stderr.length > 32_000) {

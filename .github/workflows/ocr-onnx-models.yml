@@ -1,0 +1,115 @@
+name: OCR ONNX models (graphics card)
+
+# Converts the PaddleOCR models to ONNX (checked against the SHA-256 pinned in
+# app/lex-runtime/src/ocr/ocr-acceleration.ts), reads the benchmark page with DirectML on
+# Windows and CoreML on macOS against Paddle on the processor, and on request publishes the
+# models as the release the app downloads them from (ocr-onnx-v1).
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the converted models as release ocr-onnx-v1"
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - "app/ocr/onnx_accel.py"
+      - "app/ocr/paddle_worker.py"
+      - "app/ocr/fixtures/**"
+      - "app/installer/convert-ocr-onnx.py"
+      - "app/installer/ocr-accel-parity.py"
+      - "app/lex-runtime/src/ocr/ocr-acceleration.ts"
+      - ".github/workflows/ocr-onnx-models.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Converter
+        run: python -m pip install paddlepaddle==3.2.2 paddleocr==3.7.0 paddle2onnx==2.1.0 onnx==1.17.0 setuptools packaging
+      - name: Official models
+        run: python app/installer/convert-ocr-onnx.py --download "$RUNNER_TEMP/paddle"
+      - name: Convert and check the pinned SHA-256
+        run: python app/installer/convert-ocr-onnx.py "$RUNNER_TEMP/paddle/official_models" onnx app/lex-runtime/src/ocr/ocr-acceleration.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-onnx
+          path: onnx/
+          retention-days: 7
+
+  parity:
+    needs: convert
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            accel: dml
+          - os: macos-14
+            accel: coreml
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: OCR packages of the release
+        run: python -m pip install paddleocr==3.7.0 paddlepaddle==3.2.2 PyMuPDF==1.28.2 numpy==2.3.5 Pillow==12.3.0 onnxruntime==1.31.1
+      - name: Official models
+        run: python app/installer/convert-ocr-onnx.py --download "$RUNNER_TEMP/paddle"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ocr-onnx
+          path: onnx
+      - name: DirectML build of ONNX Runtime (as the app installs it)
+        if: matrix.accel == 'dml'
+        run: |
+          url=$(grep -o 'https://files.pythonhosted.org/[^"]*onnxruntime_directml[^"]*\.whl' app/lex-runtime/src/ocr/ocr-acceleration.ts)
+          sha=$(grep -A4 'DIRECTML_RUNTIME: VerifiedFile' app/lex-runtime/src/ocr/ocr-acceleration.ts | grep -o '[0-9a-f]\{64\}')
+          curl -sSfL -o ort.whl "$url"
+          echo "$sha  ort.whl" | sha256sum -c -
+          python -c "import zipfile; zipfile.ZipFile('ort.whl').extractall('ortdml')"
+          echo "LEX_OCR_ORT_DIR=$GITHUB_WORKSPACE/ortdml" >> "$GITHUB_ENV"
+      - name: Same text on the card as on the processor
+        env:
+          LEX_PADDLE_MODEL_DIR: ${{ runner.temp }}/paddle/official_models
+          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+        run: python app/installer/ocr-accel-parity.py python ${{ matrix.accel }} "$GITHUB_WORKSPACE/onnx" "$RUNNER_TEMP/parity"
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [convert, parity]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ocr-onnx
+          path: onnx
+      - name: Release ocr-onnx-v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd onnx
+          sha256sum -c SHA256SUMS
+          if gh release view ocr-onnx-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload ocr-onnx-v1 --repo "$GITHUB_REPOSITORY" --clobber *.onnx SHA256SUMS
+          else
+            gh release create ocr-onnx-v1 --repo "$GITHUB_REPOSITORY" --title "Modele OCR ONNX (karta graficzna) v1" \
+              --notes "PaddleOCR PP-OCRv6 medium (det, rec), latin PP-OCRv5 mobile rec, PP-LCNet doc_ori; paddle2onnx 2.1.0, opset 14. Licencja Apache-2.0." \
+              --latest=false *.onnx SHA256SUMS
+          fi

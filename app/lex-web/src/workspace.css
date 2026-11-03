@@ -663,6 +663,18 @@
   min-width: 16em;
 }
 
+.text-editor-save .text-editor-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.text-editor-save .text-editor-track input {
+  min-width: 0;
+}
+
 .text-editor-status {
   margin: 0;
   padding: 8px 12px;

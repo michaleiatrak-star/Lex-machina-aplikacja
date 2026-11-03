@@ -25,4 +25,15 @@ describe("the last application update attempt", () => {
     expect(lastFailedApplicationUpdate(journal({ state: "INSTALLING", targetVersion: "0.1.52" }))).toBeNull();
     expect(lastFailedApplicationUpdate(path.join(os.tmpdir(), "missing-lex-journal.json"))).toBeNull();
   });
+
+  it("a step in progress for over 30 minutes is an interrupted update (the runner was ended)", () => {
+    const now = new Date("2026-11-03T12:00:00Z");
+    expect(lastFailedApplicationUpdate(journal({ state: "INSTALLING", targetVersion: "0.1.55", startedAt: "2026-11-03T11:00:00Z" }), now)).toEqual({
+      state: "INTERRUPTED",
+      targetVersion: "0.1.55",
+      lastError: "INTERRUPTED_AT:INSTALLING",
+      at: "2026-11-03T11:00:00Z"
+    });
+    expect(lastFailedApplicationUpdate(journal({ state: "VERIFYING", targetVersion: "0.1.55", startedAt: "2026-11-03T11:50:00Z" }), now)).toBeNull();
+  });
 });

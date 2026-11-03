@@ -717,6 +717,7 @@ class OcrEngine:
             self.det_map = None
             print(f"LEX_OCR_DET_MAP_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
         if self.latin_dir is None:
+            self._accelerate()
             return
         try:
             from paddleocr import TextRecognition
@@ -731,6 +732,18 @@ class OcrEngine:
             pipeline.text_rec_model = MarksReading(pipeline.text_rec_model, second)
         except Exception as error:  # noqa: BLE001
             print(f"LEX_OCR_MARKS_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
+        self._accelerate()
+
+    def _accelerate(self) -> None:
+        """The networks on the graphics card (onnx_accel.py), when its models are installed."""
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from onnx_accel import accelerate
+
+            self.accel = accelerate(self.ocr)
+        except Exception as error:  # noqa: BLE001
+            self.accel = None
+            print(f"LEX_OCR_ACCEL_FAILED:{type(error).__name__}:{str(error)[:200]}", file=sys.stderr, flush=True)
 
     def _fallback(self, error: Exception) -> None:
         print(

@@ -903,7 +903,7 @@ export type UpdateStatusResponse = {
   publishedAt?: string;
   // The last update that did not install (Windows update runner's journal).
   lastAttempt?: {
-    state: "REJECTED" | "ABORTED_BEFORE_INSTALL" | "ROLLED_BACK" | "ROLLBACK_FAILED";
+    state: "REJECTED" | "ABORTED_BEFORE_INSTALL" | "ROLLED_BACK" | "ROLLBACK_FAILED" | "INTERRUPTED";
     targetVersion: string;
     lastError: string;
     at: string | null;
@@ -4513,6 +4513,38 @@ export function importFromGoogle(
   selection: { gmailThreadIds?: string[]; driveFileIds?: string[] }
 ): Promise<{ files: unknown[] }> {
   return json(`/api/cases/${encodeURIComponent(caseId)}/google/import`, { method: "POST", body: JSON.stringify(selection) });
+}
+
+export type MicrosoftStatus = { configured: boolean; connected: boolean; email?: string; sharepoint: boolean; connectedAt?: string };
+
+export type MicrosoftItem = { id: string; name: string; folder: boolean; kind: "file" | "folder" | "site" | "library"; size?: number; modified?: string };
+
+export function getMicrosoftStatus(): Promise<MicrosoftStatus> {
+  return json("/api/microsoft/status");
+}
+
+export function startMicrosoftConnect(): Promise<GoogleFlowStart> {
+  return json("/api/microsoft/connect", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function microsoftConnectResult(
+  flow: Pick<GoogleFlowStart, "flowId" | "flowToken">
+): Promise<{ status: "PENDING" | "DONE" | "FAILED"; result?: MicrosoftStatus; error?: string }> {
+  return json("/api/microsoft/connect/result", { method: "POST", body: JSON.stringify(flow) });
+}
+
+export function disconnectMicrosoft(): Promise<MicrosoftStatus> {
+  return json("/api/microsoft/disconnect", { method: "POST", body: JSON.stringify({}) });
+}
+
+export function listMicrosoftFiles(options: { place?: string; q?: string; next?: string }): Promise<{ items: MicrosoftItem[]; next?: string }> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) if (value) params.set(key, value);
+  return json(`/api/microsoft/files?${params}`);
+}
+
+export function importFromMicrosoft(caseId: string, itemIds: string[]): Promise<{ files: unknown[] }> {
+  return json(`/api/cases/${encodeURIComponent(caseId)}/microsoft/import`, { method: "POST", body: JSON.stringify({ itemIds }) });
 }
 
 // The anonymized version of a stored .docx as .docx (formatting kept, values as symbols).

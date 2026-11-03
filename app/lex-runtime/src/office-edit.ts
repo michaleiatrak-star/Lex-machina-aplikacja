@@ -16,7 +16,9 @@ export type EditableSheets = {
   delimiter?: string;
 };
 export type EditableModel = EditableDocument | EditableSheets;
-export type EditableFormat = "docx" | "odt" | "xlsx" | "csv" | "tsv";
+export type EditableFormat = "docx" | "odt" | "xlsx" | "csv" | "tsv" | "pdf";
+// DOCX only: the differences from `baseline` become Word tracked changes of `author`.
+export type TrackChanges = { baseline: EditableDocument; author: string; date: string };
 
 export const EDITABLE_MEDIA_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -32,7 +34,8 @@ export const FORMAT_MEDIA_TYPE: Record<EditableFormat, string> = {
   odt: "application/vnd.oasis.opendocument.text",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   csv: "text/csv",
-  tsv: "text/tab-separated-values"
+  tsv: "text/tab-separated-values",
+  pdf: "application/pdf"
 };
 
 const EXTENSION_MEDIA_TYPE: Record<string, string> = {
@@ -83,12 +86,17 @@ export class LocalOfficeEditor {
   async write(
     format: EditableFormat,
     model: EditableModel,
-    delimiter?: string
+    delimiter?: string,
+    track?: TrackChanges
   ): Promise<Buffer> {
     if (!(format in FORMAT_MEDIA_TYPE)) throw new Error("OFFICE_EDIT_FORMAT_UNSUPPORTED");
+    if (format === "pdf" && model.kind !== "document") throw new Error("OFFICE_EDIT_FORMAT_UNSUPPORTED");
     return await this.run(
       ["write"],
-      Buffer.from(JSON.stringify({ format, model, ...(delimiter ? { delimiter } : {}) }), "utf8")
+      Buffer.from(
+        JSON.stringify({ format, model, ...(delimiter ? { delimiter } : {}), ...(track && format === "docx" ? { track } : {}) }),
+        "utf8"
+      )
     );
   }
 
