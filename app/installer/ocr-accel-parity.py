@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Windows consoles default to cp1252: the Polish lines printed below would not encode.
+sys.stdout.reconfigure(encoding="utf-8")
 python, accel, onnx_dir, out = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4])
 out.mkdir(parents=True, exist_ok=True)
 
