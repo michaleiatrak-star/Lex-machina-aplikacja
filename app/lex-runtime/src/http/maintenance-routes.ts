@@ -1,4 +1,5 @@
 import type { TranscriptionModelManager } from "../transcription.js";
+import type { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
 import type { Express, Request, Response } from "express";
 import {
   AuthError,
@@ -83,6 +84,7 @@ export function registerMaintenanceRoutes(
     maintenance: MaintenanceService;
     anomalyJournal?: AnomalyJournal;
     transcriptionModel?: TranscriptionModelManager;
+    ocrAcceleration?: OcrAccelerationManager;
   }
 ): void {
   const {
@@ -90,8 +92,52 @@ export function registerMaintenanceRoutes(
     localModels,
     maintenance,
     anomalyJournal,
-    transcriptionModel
+    transcriptionModel,
+    ocrAcceleration
   } = dependencies;
+
+  // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.
+  if (ocrAcceleration) {
+    app.get("/api/local-models/ocr-acceleration", (req, res) => {
+      try {
+        authenticated(req, authService);
+        res.json(ocrAcceleration.status());
+      } catch (error) {
+        if (error instanceof AuthError) {
+          res.status(error.httpStatus).json({ error: error.code });
+          return;
+        }
+        throw error;
+      }
+    });
+    app.post("/api/local-models/ocr-acceleration/install", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        void ocrAcceleration.start();
+        res.status(202).json(ocrAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+    app.post("/api/local-models/ocr-acceleration/measure", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        void ocrAcceleration.measure();
+        res.status(202).json(ocrAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+    app.post("/api/local-models/ocr-acceleration/remove", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        ocrAcceleration.remove();
+        res.json(ocrAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+  }
 
   // Speech-to-text model for recordings (see transcription.ts): downloaded on request.
   if (transcriptionModel) {

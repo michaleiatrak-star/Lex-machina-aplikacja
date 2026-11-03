@@ -1,5 +1,6 @@
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
+import { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
 import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
@@ -550,6 +551,7 @@ export async function startLocalServer(options?: {
   const localModels =
     new LocalModelRuntime();
   const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
+  const ocrAcceleration = new OcrAccelerationManager(path.join(localModels.rootDir, "ocr-acceleration"));
 
   // Server mode (off by default; LEX_SERVER_MODE_FORCE=on|off fixes it for a container).
   const serverModeDir = path.join(caseFileStore.rootDir, "server");
@@ -711,11 +713,18 @@ export async function startLocalServer(options?: {
     new LegalDocumentAstGenerator(
       sessionExecutor
     );
+  const caseOcrEngine = new LocalPaddleOcrEngine({
+    lineCrops: () => localModels.visionOcr() !== null,
+    acceleration: () => ocrAcceleration.environment()
+  });
+  // The measurement reads without the vision model's line images, like any plain OCR.
+  const benchmarkOcr = new LocalPaddleOcrEngine();
+  ocrAcceleration.reader = (data, pages, acceleration) => benchmarkOcr.benchmarkRead(data, pages, acceleration);
   const documentService =
     new LocalPrivateDocumentService(
       new CompleteDocumentIngestor(
         new PdfJsDocumentPageSource(),
-        new LocalPaddleOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })
+        caseOcrEngine
       ),
       privacyNamedEntities,
       24_000,
@@ -871,7 +880,8 @@ export async function startLocalServer(options?: {
       localModels,
       maintenance,
       anomalyJournal,
-      transcriptionModel
+      transcriptionModel,
+      ocrAcceleration
     }
   );
   registerCoreLawRoutes(app, {

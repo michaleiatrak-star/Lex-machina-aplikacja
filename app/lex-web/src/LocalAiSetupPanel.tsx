@@ -393,6 +393,128 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   );
 }
 
+type OcrAccelStatus = {
+  supported: boolean;
+  provider: "dml" | "coreml" | null;
+  bytes: number;
+  installed: boolean;
+  active: boolean;
+  state: "IDLE" | "DOWNLOADING" | "MEASURING" | "FAILED";
+  progress: { file: string; received: number; total: number; percent: number } | null;
+  benchmark: {
+    cpuSeconds: number;
+    accelSeconds: number;
+    lines: number;
+    sameLines: number;
+    accepted: boolean;
+    reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
+  } | null;
+  error?: string;
+};
+
+const OCR_ACCEL_REASONS: Record<NonNullable<OcrAccelStatus["benchmark"]>["reason"], string> = {
+  FASTER_SAME_TEXT: "karta szybsza, ten sam tekst: OCR korzysta z karty",
+  NOT_FASTER: "karta nie była wyraźnie szybsza od procesora: OCR zostaje na procesorze",
+  TEXT_DIFFERS: "karta odczytała tekst inaczej niż procesor: OCR zostaje na procesorze",
+  ACCEL_NOT_USED: "nie udało się uruchomić OCR na karcie: OCR zostaje na procesorze"
+};
+
+/**
+ * OCR on the graphics card (any vendor: DirectML on Windows, CoreML on Apple Silicon): models
+ * downloaded once, then the same pages are read both ways here and the faster one with the
+ * same text is kept.
+ */
+function OcrAccelerationSection({ admin }: { admin: boolean }) {
+  const [status, setStatus] = useState<OcrAccelStatus | null>(null);
+  const [error, setError] = useState("");
+
+  async function refresh(): Promise<void> {
+    try {
+      setStatus(await request<OcrAccelStatus>("/api/local-models/ocr-acceleration"));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const working = status?.state === "DOWNLOADING" || status?.state === "MEASURING";
+  useEffect(() => {
+    if (!working) return;
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => window.clearInterval(timer);
+  }, [working]);
+
+  async function act(action: "install" | "measure" | "remove"): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<OcrAccelStatus>(`/api/local-models/ocr-acceleration/${action}`, { method: "POST" }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  if (!status || !status.supported) return null;
+  const progress = status.progress;
+  const bench = status.benchmark;
+  return (
+    <div className="local-ai-facts">
+      <strong>
+        OCR na karcie graficznej
+        <InfoTip>
+          Rozpoznawanie tekstu ze skanów na karcie graficznej dowolnego producenta ({status.provider === "dml" ? "DirectML: NVIDIA, AMD, Intel" : "CoreML: układ graficzny i Neural Engine Apple"}).
+          Po pobraniu aplikacja odczytuje te same strony na procesorze i na karcie i włącza kartę tylko wtedy, gdy jest szybsza i
+          daje ten sam tekst.
+        </InfoTip>
+      </strong>
+      <small>Modele OCR w formacie ONNX, {formatBytes(status.bytes)}</small>
+      {status.state === "DOWNLOADING" ? (
+        <div className="local-ai-progress">
+          <div>
+            <strong>Pobieranie i sprawdzanie SHA-256</strong>
+            {progress ? <small>{progress.file}</small> : null}
+          </div>
+          {progress ? <progress max={100} value={progress.percent} /> : <progress />}
+        </div>
+      ) : status.state === "MEASURING" ? (
+        <div className="local-ai-progress">
+          <div>
+            <strong>Pomiar: te same strony na procesorze i na karcie</strong>
+          </div>
+          <progress />
+        </div>
+      ) : status.installed && bench ? (
+        <small>
+          Procesor {bench.cpuSeconds} s, karta {bench.accelSeconds} s, zgodne linie {bench.sameLines}/{bench.lines}: {OCR_ACCEL_REASONS[bench.reason]}.
+        </small>
+      ) : status.installed ? (
+        <small>Zainstalowane, bez pomiaru: OCR zostaje na procesorze.</small>
+      ) : (
+        <small>Nie zainstalowane: OCR na procesorze.</small>
+      )}
+      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Nie powiodło się: {status.error}</small> : null}
+      {admin ? (
+        <div className="local-ai-actions">
+          <button type="button" disabled={status.installed || working} onClick={() => void act("install")}>
+            Pobierz i zmierz
+          </button>
+          <button type="button" disabled={!status.installed || working} onClick={() => void act("measure")}>
+            Zmierz ponownie
+          </button>
+          <button type="button" className="local-ai-danger" disabled={!status.installed || working} onClick={() => void act("remove")}>
+            Usuń
+          </button>
+        </div>
+      ) : (
+        <small>Przyspieszenie włącza administrator.</small>
+      )}
+      {error ? <small className="local-ai-error">{error}</small> : null}
+    </div>
+  );
+}
+
 type TranscriptionStatus = {
   modelId: string;
   label: string;
@@ -1319,6 +1441,8 @@ export function LocalAiSetupPanel({
         {data ? <VisionOcrSection admin={user.appRole === "ADMIN"} /> : null}
 
         <TranscriptionSection admin={user.appRole === "ADMIN"} />
+
+        <OcrAccelerationSection admin={user.appRole === "ADMIN"} />
 
         {message ? <p className="local-ai-message">{message}</p> : null}
 

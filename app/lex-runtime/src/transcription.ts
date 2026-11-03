@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { downloadVerified, sizeOf, type FetchLike } from "./verified-download.js";
 
 /**
  * Local speech-to-text of recordings (audio and video) uploaded to a case: faster-whisper
@@ -96,16 +96,6 @@ export type TranscriptionModelStatus = {
   error?: string;
 };
 
-type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; body: unknown }>;
-
-function sizeOf(file: string): number {
-  try {
-    return fs.statSync(file).size;
-  } catch {
-    return -1;
-  }
-}
-
 /** The model folder holds every file of the pinned revision and the record written after the check. */
 export function installedTranscriptionModel(dir: string, files: readonly TranscriptionModelFile[] = TRANSCRIPTION_MODEL.files): boolean {
   try {
@@ -127,32 +117,7 @@ export async function installTranscriptionModel(
   const record = path.join(dir, "transcription.json");
   fs.rmSync(record, { force: true });
   for (const file of files) {
-    const target = path.join(dir, file.filename);
-    if (sizeOf(target) === file.bytes) {
-      const hash = createHash("sha256").update(fs.readFileSync(target)).digest("hex");
-      if (hash === file.sha256) continue;
-    }
-    const partial = `${target}.part`;
-    const response = await fetchImpl(file.url);
-    if (!response.ok || !response.body) throw new Error(`TRANSCRIPTION_MODEL_DOWNLOAD_FAILED:${file.filename}:${response.status}`);
-    const hash = createHash("sha256");
-    const out = fs.createWriteStream(partial);
-    let received = 0;
-    try {
-      for await (const chunk of response.body as AsyncIterable<Uint8Array>) {
-        hash.update(chunk);
-        received += chunk.length;
-        if (!out.write(chunk)) await new Promise<void>((resolve) => out.once("drain", () => resolve()));
-        onProgress?.({ file: file.filename, received, total: file.bytes });
-      }
-    } finally {
-      await new Promise<void>((resolve) => out.end(() => resolve()));
-    }
-    if (hash.digest("hex") !== file.sha256 || received !== file.bytes) {
-      fs.rmSync(partial, { force: true });
-      throw new Error(`TRANSCRIPTION_MODEL_CHECKSUM_MISMATCH:${file.filename}`);
-    }
-    fs.renameSync(partial, target);
+    await downloadVerified(file, path.join(dir, file.filename), "TRANSCRIPTION_MODEL", onProgress, fetchImpl);
   }
   const content = {
     schemaVersion: 1,
