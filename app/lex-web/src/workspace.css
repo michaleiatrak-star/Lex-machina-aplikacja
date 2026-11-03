@@ -1337,3 +1337,23 @@
   align-items: center;
   gap: 12px;
 }
+
+.user-groups-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+}
+
+.user-groups-list small {
+  flex-basis: 100%;
+  color: var(--muted, #666);
+}
+
+.user-groups-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 12px;
+  max-height: 30vh;
+  overflow: auto;
+}

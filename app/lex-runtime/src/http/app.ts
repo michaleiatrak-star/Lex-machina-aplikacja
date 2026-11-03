@@ -282,6 +282,7 @@ import {
 import type { GoogleRecoveryController } from "../google/recovery-controller.js";
 import type { GoogleWorkspaceController } from "../google/workspace-controller.js";
 import type { MicrosoftController } from "../microsoft/controller.js";
+import { shareWithGroup, UserGroupError, type UserGroupStore } from "../user-groups.js";
 import { registerMicrosoftPublicRoutes, registerMicrosoftRoutes } from "../microsoft/http-routes.js";
 import {
   registerGoogleAuthenticatedRoutes,
@@ -660,6 +661,8 @@ export type LexHttpAppOptions = {
   authService?: AuthService;
   googleRecovery?: GoogleRecoveryController;
   googleWorkspace?: GoogleWorkspaceController;
+  // Named groups of users to share a case with at once (user-groups.ts).
+  userGroups?: UserGroupStore;
   // OneDrive and SharePoint (Microsoft Graph), read-only.
   microsoft?: MicrosoftController;
   supportService?: Pick<
@@ -4618,6 +4621,87 @@ export function createLexHttpApp(options: LexHttpAppOptions): Express {
       }
     }
   );
+
+  if (options.userGroups && options.caseAccessService) {
+    const groups = options.userGroups;
+    const access = options.caseAccessService;
+    const groupError = (res: Response, error: unknown): void => {
+      if (error instanceof UserGroupError) {
+        res.status(error.httpStatus).json({ error: error.code });
+        return;
+      }
+      if (!sendCaseAccessError(res, error)) res.status(500).json({ error: "USER_GROUP_FAILED" });
+    };
+    const admin = (res: Response): boolean => {
+      if (responseAuthContext(res).user.appRole === "ADMIN") return true;
+      res.status(403).json({ error: "AUTHORIZATION_DENIED" });
+      return false;
+    };
+    // Every signed-in user sees the groups (to share a case); only an administrator changes them.
+    app.get("/api/user-groups", async (_req, res) => {
+      try {
+        responseAuthContext(res);
+        res.json({ groups: await groups.list() });
+      } catch (error) {
+        groupError(res, error);
+      }
+    });
+    app.post("/api/user-groups", async (req, res) => {
+      if (!admin(res)) return;
+      try {
+        res.status(201).json(await groups.create({ name: req.body?.name, memberUserIds: req.body?.memberUserIds }));
+      } catch (error) {
+        groupError(res, error);
+      }
+    });
+    app.patch("/api/user-groups/:groupId", async (req, res) => {
+      if (!admin(res)) return;
+      try {
+        res.json(
+          await groups.update(String(req.params.groupId ?? ""), {
+            ...(req.body?.name !== undefined ? { name: req.body.name } : {}),
+            ...(req.body?.memberUserIds !== undefined ? { memberUserIds: req.body.memberUserIds } : {})
+          })
+        );
+      } catch (error) {
+        groupError(res, error);
+      }
+    });
+    app.delete("/api/user-groups/:groupId", async (req, res) => {
+      if (!admin(res)) return;
+      try {
+        await groups.remove(String(req.params.groupId ?? ""));
+        res.json({ deleted: true });
+      } catch (error) {
+        groupError(res, error);
+      }
+    });
+    // The case shared with each member of a group (the case owner's or manager's own grant).
+    app.post("/api/cases/:caseId/access/group", async (req, res) => {
+      const role = typeof req.body?.role === "string" ? req.body.role : "";
+      if (!["EDITOR", "ANALYST", "VIEWER"].includes(role) || typeof req.body?.canReidentify !== "boolean" || typeof req.body?.groupId !== "string") {
+        res.status(400).json({ error: "INVALID_CASE_ACCESS_REQUEST" });
+        return;
+      }
+      try {
+        const context = responseAuthContext(res);
+        const caseId = String(req.params.caseId ?? "");
+        const group = await groups.get(req.body.groupId);
+        const current = new Set(access.listAccess(context, caseId).map((entry) => entry.user.userId));
+        res.json(
+          await shareWithGroup({
+            group,
+            actorUserId: context.user.userId,
+            hasAccess: (userId) => current.has(userId),
+            grant: (userId) =>
+              access.grantAccess(context, caseId, { userId, role: role as "EDITOR" | "ANALYST" | "VIEWER", canReidentify: req.body.canReidentify })
+          })
+        );
+      } catch (error) {
+        groupError(res, error);
+      }
+    });
+  }
 
   app.get(
     "/api/cases/:caseId/access",

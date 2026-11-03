@@ -6,6 +6,7 @@ import { MaintenancePanel } from "./MaintenancePanel.js";
 import { AccountSecurityPanel } from "./AccountSecurityPanel.js";
 import { AdminUsersPanel } from "./AdminUsersPanel.js";
 import { CaseAccessAdminPanel } from "./CaseAccessAdminPanel.js";
+import { UserGroupsPanel } from "./UserGroupsPanel.js";
 import { McpConnectorsPanel } from "./McpConnectorsPanel.js";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleIntegrationPanel } from "./GoogleIntegrationPanel.js";
 import { MicrosoftIntegrationPanel } from "./MicrosoftIntegration.js";
@@ -89,6 +90,7 @@ export default function App({
                   user.userId
                 }
               />
+              <UserGroupsPanel />
             </>
           ) : null,
         integrations: (

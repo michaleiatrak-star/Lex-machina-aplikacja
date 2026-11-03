@@ -1576,6 +1576,9 @@ fn route_allowed(method: &str, path: &str) -> bool {
         _ if path.starts_with("/api/cases/") => {
             matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
         }
+        // Groups of users to share a case with (administrator manages, everyone lists).
+        "/api/user-groups" => matches!(method, "GET" | "POST"),
+        _ if path.starts_with("/api/user-groups/") => matches!(method, "PATCH" | "DELETE"),
         _ if path.starts_with("/api/documents/") => {
             matches!(method, "GET" | "POST")
         }
@@ -2196,6 +2199,9 @@ mod tests {
         assert!(route_allowed("POST", "/api/google/workspace/connect"));
         assert!(route_allowed("GET", "/api/google/drive/files"));
         assert!(route_allowed("GET", "/api/microsoft/files"));
+        assert!(route_allowed("GET", "/api/user-groups"));
+        assert!(route_allowed("PATCH", "/api/user-groups/grp_1"));
+        assert!(!route_allowed("PUT", "/api/user-groups"));
         assert!(route_allowed("POST", "/api/microsoft/connect"));
         assert!(route_allowed("POST", "/api/microsoft/connect/result"));
         assert!(!route_allowed("POST", "/api/microsoft/files"));
