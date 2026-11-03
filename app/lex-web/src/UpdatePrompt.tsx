@@ -6,7 +6,17 @@ import {
   type UpdateStatusResponse
 } from "./api.js";
 import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl, openReleasePage } from "./MaintenancePanel.js";
-import { failedUpdateMessage, skipUpdateVersion, startupUpdate, updateOfferAfterCheck, updateStore, APP_VERSION, UPDATE_CHECK_INTERVAL_MS } from "./update-prompt.js";
+import {
+  failedUpdateMessage,
+  rememberUpdateHandoff,
+  skipUpdateVersion,
+  startupUpdate,
+  updateHandoffOutcome,
+  updateOfferAfterCheck,
+  updateStore,
+  APP_VERSION,
+  UPDATE_CHECK_INTERVAL_MS
+} from "./update-prompt.js";
 
 /**
  * Desktop, administrator: a newer version is offered as soon as it is released: the check runs at
@@ -22,6 +32,9 @@ export function UpdatePrompt() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [lastAttempt, setLastAttempt] = useState<UpdateStatusResponse["lastAttempt"]>();
+  // The outcome of the update handed over before this start (installed or why not).
+  const [outcome, setOutcome] = useState<ReturnType<typeof updateHandoffOutcome>>(null);
+  const outcomeChecked = useRef(false);
 
   // "Później": not asked again about this version until the next start.
   const postponed = useRef<string | null>(null);
@@ -35,6 +48,10 @@ export function UpdatePrompt() {
         .then((status) => {
           if (!alive) return;
           setLastAttempt(status.lastAttempt);
+          if (!outcomeChecked.current) {
+            outcomeChecked.current = true;
+            setOutcome(updateHandoffOutcome(store, status.lastAttempt));
+          }
           const found = updateOfferAfterCheck(store, status, postponed.current);
           // A download in progress keeps its own offer.
           if (found && !busyRef.current) setOffer(found);
@@ -48,7 +65,25 @@ export function UpdatePrompt() {
     };
   }, [store]);
 
-  if (!offer) return null;
+  if (!offer) {
+    if (!outcome) return null;
+    return (
+      <div className="update-prompt-overlay">
+        <section className="update-prompt" role="dialog" aria-modal="true" aria-labelledby="update-outcome-title">
+          <h2 id="update-outcome-title">{outcome.kind === "INSTALLED" ? "Aktualizacja zainstalowana" : "Aktualizacja nie została zainstalowana"}</h2>
+          <p className={outcome.kind === "INSTALLED" ? "update-prompt-status" : "update-prompt-error"} role={outcome.kind === "INSTALLED" ? "status" : "alert"}>
+            {outcome.message}
+          </p>
+          <div className="update-prompt-actions">
+            <button type="button" className="update-prompt-primary" onClick={() => setOutcome(null)}>
+              OK
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+  const failure = failedUpdateMessage(lastAttempt, offer.version) ?? (outcome?.kind === "FAILED" && outcome.version === offer.version ? outcome.message : null);
   const macos = typeof navigator !== "undefined" && /Mac OS X|Macintosh/iu.test(navigator.userAgent);
 
   async function update(): Promise<void> {
@@ -63,6 +98,7 @@ export function UpdatePrompt() {
           ? "Otwieram instalator macOS. Lex Machina zamknie się teraz; przejdź kroki instalatora."
           : "Instaluję aktualizację. Lex Machina zamknie się, zaktualizuje i uruchomi ponownie."
       );
+      rememberUpdateHandoff(store, staged.version || offer.version);
       await installStagedApplicationUpdate(staged.receiptToken);
     } catch (problem) {
       const status = { status: "AVAILABLE", currentVersion: APP_VERSION, checkedAt: offer.detectedAt, latestVersion: offer.version, ...(offer.releaseUrl ? { releaseUrl: offer.releaseUrl } : {}) } satisfies UpdateStatusResponse;
@@ -91,9 +127,9 @@ export function UpdatePrompt() {
           Zainstalowana: <strong>{APP_VERSION}</strong> · nowa: <strong>{offer.version}</strong>
         </p>
         <p>Czy zaktualizować teraz? Dane, sprawy i ustawienia zostają.</p>
-        {failedUpdateMessage(lastAttempt, offer.version) && !message && !error ? (
+        {failure && !message && !error ? (
           <p className="update-prompt-error" role="alert" title={lastAttempt?.lastError}>
-            {failedUpdateMessage(lastAttempt, offer.version)}
+            {failure}
           </p>
         ) : null}
         {message ? <p className="update-prompt-status" role="status">{message}</p> : null}
