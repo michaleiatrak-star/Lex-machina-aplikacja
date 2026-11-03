@@ -28,6 +28,7 @@ import { registerWorkspaceRoutes } from "./workspace-routes.js";
 import { registerQualityBenchmarkRoutes } from "./quality-benchmark-routes.js";
 import { QualityBenchmarkService } from "../quality-benchmark-service.js";
 import { LocalOfficeEditor } from "../office-edit.js";
+import { LocalPdfFormFiller } from "../pdf-form.js";
 import { registerMaintenanceRoutes } from "./maintenance-routes.js";
 import { AnomalyJournal, withAnomalyJournal } from "../anomaly-journal.js";
 import { registerCoreLawRoutes } from "./core-law-routes.js";
@@ -871,6 +872,7 @@ export async function startLocalServer(options?: {
       rootDir:
         caseFileStore.rootDir,
       officeEditor,
+      pdfForms: new LocalPdfFormFiller(),
       artifacts:
         secureCaseArtifactStore
     }
