@@ -5,6 +5,7 @@ import json
 import sys
 import unicodedata
 import os
+import re
 from pathlib import Path
 
 import fitz
@@ -630,22 +631,56 @@ def _foreign_marks(text: str) -> int:
     return sum(1 for char in text if char.isalpha() and ord(char) > 127 and char not in POLISH_MARKS)
 
 
+# The second reading only where it can change the text: a doubtful line, or a long line with
+# almost no Polish marks (the serif prints where PP-OCRv6 drops them read "Michal", "Okregowa").
+# Also a line with '"' (Polish quotes read as ASCII) or a letter doubled with its marked form.
+# Measured on 4 serif pages (144 lines, 4 cores): 101 -> 87 s with the same text as reading
+# every line twice, except one line where the second reading had split "się do". LEX_OCR_MARKS=all: every line.
+MARKS_SCORE = 0.985
+MARKS_DENSITY = 0.02
+MARKS_MIN_LETTERS = 20
+
+
+# A letter next to its own marked form ("poczaął"): the two readings of one letter.
+DOUBLED_MARK = re.compile(r"aą|eę|cć|lł|nń|oó|sś|zź|zż|ąa|ęe|ćc|łl|ńn|óo|śs|źz|żz", re.IGNORECASE)
+
+
+def needs_second_reading(text: str, score: float) -> bool:
+    if score < MARKS_SCORE:
+        return True
+    # Polish quotation marks „…” come out of PP-OCRv6 as '"'; the latin model reads them.
+    if '"' in text or DOUBLED_MARK.search(text):
+        return True
+    letters = sum(1 for char in text if char.isalpha())
+    return letters >= MARKS_MIN_LETTERS and _polish_marks(text) / letters < MARKS_DENSITY
+
+
 class MarksReading:
     """The pipeline's recognizer with a second one for the Polish marks (see LATIN_REC)."""
 
     def __init__(self, primary, second) -> None:
         self.primary, self.second = primary, second
+        self.every_line = os.environ.get("LEX_OCR_MARKS", "on") == "all"
+
+    @staticmethod
+    def merge(first, other):
+        # Marks of other languages ("dó skłádania", "uwažane") are misreadings, never a gain.
+        if _foreign_marks(other["rec_text"]) > _foreign_marks(first["rec_text"]):
+            return first
+        if _bare(first["rec_text"]) == _bare(other["rec_text"]):
+            return other if _polish_marks(other["rec_text"]) > _polish_marks(first["rec_text"]) else first
+        return other if other["rec_score"] > first["rec_score"] else first
 
     def __call__(self, images, **kwargs):
         images = list(images)
-        for first, other in zip(self.primary(images, **kwargs), self.second(images, **kwargs)):
-            # Marks of other languages ("dó skłádania", "uwažane") are misreadings, never a gain.
-            if _foreign_marks(other["rec_text"]) > _foreign_marks(first["rec_text"]):
-                yield first
-            elif _bare(first["rec_text"]) == _bare(other["rec_text"]):
-                yield other if _polish_marks(other["rec_text"]) > _polish_marks(first["rec_text"]) else first
-            else:
-                yield other if other["rec_score"] > first["rec_score"] else first
+        firsts = list(self.primary(images, **kwargs))
+        chosen = [
+            index for index, first in enumerate(firsts)
+            if self.every_line or needs_second_reading(first["rec_text"], float(first["rec_score"]))
+        ]
+        others = dict(zip(chosen, self.second([images[index] for index in chosen], **kwargs))) if chosen else {}
+        for index, first in enumerate(firsts):
+            yield self.merge(first, others[index]) if index in others else first
 
     def __getattr__(self, name):
         return getattr(self.primary, name)

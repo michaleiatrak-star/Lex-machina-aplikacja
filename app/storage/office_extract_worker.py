@@ -17,6 +17,8 @@ MAX_TEXT_CHARS = 100_000_000
 
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ODT = "application/vnd.oasis.opendocument.text"
+EML = "message/rfc822"
+RTF = "application/rtf"
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 TEXT_NS = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
@@ -449,6 +451,124 @@ def odt_text(data: bytes) -> str:
             lines.append(value)
     return "\n\n".join(lines)
 
+
+# --- E-mail (.eml) ---------------------------------------------------------------------
+def html_to_text(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style|head)[^>]*>.*?</\1>", " ", html)
+    html = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</li>|</tr>|</h\d>", "\n", html)
+    text = re.sub(r"<[^>]+>", "", html)
+    import html as html_module
+    text = html_module.unescape(text)
+    return re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", text)).strip()
+
+def eml_text(data: bytes) -> str:
+    """Headers, the body (plain text, else the HTML as text) and the names of the
+    attachments. The attachments are listed, not read: they go to the case separately."""
+    from email import policy
+    from email.parser import BytesParser
+
+    message = BytesParser(policy=policy.default).parsebytes(data)
+    lines = []
+    for name, label in (("From", "Od"), ("To", "Do"), ("Cc", "DW"), ("Date", "Data"), ("Subject", "Temat")):
+        value = message.get(name)
+        if value:
+            lines.append("%s: %s" % (label, str(value).strip()))
+    body = message.get_body(preferencelist=("plain", "html"))
+    text = ""
+    if body is not None:
+        try:
+            content = body.get_content()
+        except (LookupError, UnicodeDecodeError):
+            content = (body.get_payload(decode=True) or b"").decode("utf-8", errors="replace")
+        text = html_to_text(content) if body.get_content_type() == "text/html" else content.strip()
+    attachments = [part.get_filename() or "(bez nazwy)" for part in message.iter_attachments()]
+    out = "\n".join(lines)
+    if text:
+        out += "\n\n" + text
+    if attachments:
+        out += "\n\nZałączniki: " + ", ".join(attachments)
+    return out.strip()
+
+# --- RTF ---------------------------------------------------------------------------------
+RTF_SKIP = {"fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "headerl", "headerr",
+            "footerl", "footerr", "object", "themedata", "datastore", "latentstyles", "listtable",
+            "listoverridetable", "rsidtbl", "generator", "xmlnstbl", "mmathPr", "fldinst"}
+RTF_TOKEN = re.compile(rb"\\([a-zA-Z]+)(-?\d+)? ?|\\'([0-9a-fA-F]{2})|\\(.)|([{}])|(\r\n|\r|\n)|([^\\{}\r\n]+)", re.S)
+
+def rtf_text(data: bytes) -> str:
+    """Text of an RTF document: paragraphs, tabs, Polish letters in the document's code page
+    (\\ansicpg, e.g. 1250) and Unicode (\\u). Pictures, fields' codes, headers and tables of
+    fonts/colours are skipped."""
+    if not data.lstrip().startswith(b"{\\rtf"):
+        fail("OFFICE_DOCUMENT_ARCHIVE_INVALID")
+    codepage = "cp1252"
+    match = re.search(rb"\\ansicpg(\d+)", data[:4096])
+    if match:
+        codepage = "cp%s" % match.group(1).decode()
+    out, stack = [], []
+    skip, uc, pending_skip = False, 1, 0
+    star = False
+    for token in RTF_TOKEN.finditer(data):
+        word, arg, hexa, symbol, brace, newline, text = token.groups()
+        if brace == b"{":
+            stack.append((skip, uc))
+            star = False
+            continue
+        if brace == b"}":
+            skip, uc = stack.pop() if stack else (False, 1)
+            continue
+        if newline:
+            continue
+        if word is not None:
+            name = word.decode()
+            if star or name in RTF_SKIP:
+                skip = True
+                star = False
+                continue
+            if skip:
+                continue
+            if name in ("par", "line", "row", "sect", "page"):
+                out.append("\n")
+            elif name == "tab" or name == "cell":
+                out.append("\t")
+            elif name == "uc" and arg is not None:
+                uc = int(arg)
+            elif name == "u" and arg is not None:
+                value = int(arg)
+                out.append(chr(value + 65536 if value < 0 else value))
+                pending_skip = uc
+            elif name in ("emdash", "endash"):
+                out.append("—" if name == "emdash" else "–")
+            elif name in ("lquote", "rquote"):
+                out.append("’")
+            elif name in ("ldblquote", "rdblquote"):
+                out.append("„" if name == "ldblquote" else "”")
+            continue
+        if symbol is not None:
+            if symbol == b"*":
+                star = True
+            elif not skip and symbol in (b"\\", b"{", b"}"):
+                out.append(symbol.decode())
+            elif not skip and symbol == b"~":
+                out.append("\u00a0")
+            continue
+        if skip:
+            continue
+        if hexa is not None:
+            if pending_skip:
+                pending_skip -= 1
+                continue
+            out.append(bytes([int(hexa, 16)]).decode(codepage, errors="replace"))
+            continue
+        if text:
+            chunk = text.decode(codepage, errors="replace")
+            if pending_skip:
+                drop = min(pending_skip, len(chunk))
+                chunk = chunk[drop:]
+                pending_skip -= drop
+            out.append(chunk)
+    return re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--media-type", required=True)
@@ -482,6 +602,10 @@ def main() -> None:
             text = docx_text(data)
         elif args.media_type == ODT:
             text = odt_text(data)
+        elif args.media_type == EML:
+            text = eml_text(data)
+        elif args.media_type == RTF:
+            text = rtf_text(data)
         else:
             fail("OFFICE_DOCUMENT_MEDIA_TYPE_UNSUPPORTED")
     except zipfile.BadZipFile:

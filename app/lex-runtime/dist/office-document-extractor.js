@@ -3,6 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 export const DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 export const ODT_MEDIA_TYPE = "application/vnd.oasis.opendocument.text";
+// An e-mail (.eml) and an RTF document are read by the same worker (text, no layout).
+export const EML_MEDIA_TYPE = "message/rfc822";
+export const RTF_MEDIA_TYPE = "application/rtf";
 function defaultWorkerPath() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     return path.resolve(here, "../../storage/office_extract_worker.py");
