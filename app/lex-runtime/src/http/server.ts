@@ -1,3 +1,4 @@
+import { UserGroupStore } from "../user-groups.js";
 import { LocalDocumentDecryptor } from "../document-decryption.js";
 import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
 import { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
@@ -765,6 +766,7 @@ export async function startLocalServer(options?: {
     googleWorkspace:
       new GoogleWorkspaceController(authService, caseFileStore.rootDir),
     microsoft: new MicrosoftController(authService, caseFileStore.rootDir),
+    userGroups: new UserGroupStore(caseFileStore.rootDir, (userId) => authStore.getUserById(userId) !== undefined),
     personMorphology,
     modelCatalog,
     credentialResolver: credentials,
