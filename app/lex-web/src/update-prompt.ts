@@ -13,6 +13,11 @@ type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const DETECTED = "lex.update.detected";
 const SKIPPED = "lex.update.skipped";
+// The update handed to the installer: the next start says whether it installed.
+const HANDOFF = "lex.update.handoff";
+// The runner writes its journal within seconds; no trace after this means it never ran.
+const HANDOFF_SILENT_MS = 2 * 60 * 1000;
+export const UPDATE_RUNNER_LOG = "%LOCALAPPDATA%\\LexMachina\\update-runner.log";
 
 // GitHub API without a token: 60 requests an hour per address; one check an hour.
 export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -100,6 +105,8 @@ export function failedUpdateMessage(attempt: UpdateStatusResponse["lastAttempt"]
       ? "instalacja nie powiodła się, a przywrócenie poprzedniej wersji też; zainstaluj aplikację ponownie instalatorem ze strony wydania"
       : attempt.state === "ROLLED_BACK"
         ? "instalacja nie powiodła się i przywrócono poprzednią wersję"
+        : attempt.state === "INTERRUPTED"
+          ? `instalator aktualizacji zatrzymał się w trakcie (${code.replace(/^INTERRUPTED_AT:/u, "etap ")}); poprzednia wersja działa`
         : /PRODUCT_VERSION/u.test(code)
           ? "pobrany instalator ma inną wersję niż zapowiedziana"
           : /SIGNATURE|SIGNER/u.test(code)
@@ -114,6 +121,54 @@ export function failedUpdateMessage(attempt: UpdateStatusResponse["lastAttempt"]
                     ? "instalator zakończył się błędem"
                     : "instalacja została przerwana";
   return `Poprzednia próba instalacji wersji ${attempt.targetVersion} nie powiodła się: ${reason}. Możesz spróbować ponownie albo pobrać instalator ze strony wydania.`;
+}
+
+/** Just before the installer takes over: remembered for the next start. */
+export function rememberUpdateHandoff(store: Store | null, version: string, now: Date = new Date()): void {
+  write(store, HANDOFF, JSON.stringify({ version, at: now.toISOString() }));
+}
+
+/**
+ * What happened to the update handed over before this start (shown once): installed, failed
+ * with the runner's reason, or no trace at all (the runner never ran or was stopped before its
+ * journal: before, that case showed nothing and the same update was offered again).
+ */
+export function updateHandoffOutcome(
+  store: Store | null,
+  attempt: UpdateStatusResponse["lastAttempt"],
+  current: string = APP_VERSION,
+  now: Date = new Date()
+): { kind: "INSTALLED" | "FAILED"; version: string; message: string } | null {
+  let handoff: { version?: unknown; at?: unknown } | null = null;
+  try {
+    handoff = JSON.parse(read(store, HANDOFF) ?? "null") as { version?: unknown; at?: unknown } | null;
+  } catch {
+    handoff = null;
+  }
+  if (!handoff || typeof handoff.version !== "string" || typeof handoff.at !== "string") return null;
+  const version = handoff.version;
+  if (!newerVersion(version, current)) {
+    write(store, HANDOFF, null);
+    return { kind: "INSTALLED", version, message: `Zaktualizowano Lex Machina do wersji ${current}.` };
+  }
+  const journal = failedUpdateMessage(attempt, version);
+  // The runner journals an attempt after it was handed over; an older entry is another attempt.
+  const fresh = attempt && attempt.targetVersion === version && (!attempt.at || Date.parse(attempt.at) >= Date.parse(handoff.at) - 60_000);
+  if (journal && fresh) {
+    write(store, HANDOFF, null);
+    return { kind: "FAILED", version, message: journal };
+  }
+  // Still within the runner's first seconds (e.g. this start is the runner's own restart).
+  if (now.getTime() - Date.parse(handoff.at) < HANDOFF_SILENT_MS) return null;
+  write(store, HANDOFF, null);
+  return {
+    kind: "FAILED",
+    version,
+    message:
+      `Aktualizacja do wersji ${version} nie została zainstalowana: instalator aktualizacji nie uruchomił się, został zatrzymany ` +
+      `albo przerwany przed rozpoczęciem (np. przez program antywirusowy lub zasady systemu). Spróbuj ponownie; jeśli się powtórzy, pobierz instalator ` +
+      `ze strony wydania. Dziennik (Windows): ${UPDATE_RUNNER_LOG}`
+  };
 }
 
 /**

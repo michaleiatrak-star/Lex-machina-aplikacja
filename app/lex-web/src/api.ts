@@ -903,7 +903,7 @@ export type UpdateStatusResponse = {
   publishedAt?: string;
   // The last update that did not install (Windows update runner's journal).
   lastAttempt?: {
-    state: "REJECTED" | "ABORTED_BEFORE_INSTALL" | "ROLLED_BACK" | "ROLLBACK_FAILED";
+    state: "REJECTED" | "ABORTED_BEFORE_INSTALL" | "ROLLED_BACK" | "ROLLBACK_FAILED" | "INTERRUPTED";
     targetVersion: string;
     lastError: string;
     at: string | null;
