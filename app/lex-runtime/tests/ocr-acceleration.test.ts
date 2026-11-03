@@ -141,3 +141,33 @@ describe("statystyka OCR z workera", () => {
     expect(lastOcrRunStats()).toMatchObject({ loadSeconds: 5.5, pageSeconds: [21, 19.5], threads: 28, mkldnn: true });
   });
 });
+
+describe("statystyka OCR: linia rozcięta na dwie porcje wyjścia", () => {
+  it("odczytana po zakończeniu procesu; dziennik przebiegu zapisany", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-split-"));
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+process.stderr.write('LEX_OCR_STATS {"loadSeconds": 7.5, "pageSec');
+setTimeout(() => {
+  process.stderr.write('onds": [61.0], "threads": 28, "mkldnn": false, "mkldnnError": "RuntimeError:x", "accel": null}\\n');
+  fs.writeFileSync(arg("--output"), JSON.stringify([{ page: 1, text: "x" }]));
+}, 50);
+`
+    );
+    const previous = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = dir;
+    try {
+      await new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, workers: 1 }).recognizePages(new Uint8Array([37]), [1]);
+      expect(lastOcrRunStats()).toMatchObject({ loadSeconds: 7.5, pageSeconds: [61], threads: 28, mkldnn: false, mkldnnError: "RuntimeError:x" });
+      expect(fs.readFileSync(path.join(dir, "LexMachina", "ocr-last-run.log"), "utf8")).toMatch(/pages 1-1 exit 0/u);
+    } finally {
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

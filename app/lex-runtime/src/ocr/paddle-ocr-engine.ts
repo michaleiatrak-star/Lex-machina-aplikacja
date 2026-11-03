@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -41,6 +42,26 @@ export type OcrRunStats = {
 };
 
 let lastOcrRun: OcrRunStats | null = null;
+
+/** Where the last OCR pass's worker output is kept (no page text: codes, timings, library logs). */
+export function ocrRunLogPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.LOCALAPPDATA
+    ? path.join(env.LOCALAPPDATA, "LexMachina", "ocr-last-run.log")
+    : path.join(os.tmpdir(), "LexMachina-ocr-last-run.log");
+}
+
+function writeOcrRunLog(pages: number[], code: number | null, stderr: string): void {
+  try {
+    const file = ocrRunLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      `${new Date().toISOString()} pages ${pages[0]}-${pages.at(-1)} exit ${code ?? "signal"}\n${stderr.slice(-16_000)}\n`
+    );
+  } catch {
+    // The log only helps diagnose; OCR goes on without it.
+  }
+}
 
 export function lastOcrRunStats(): OcrRunStats | null {
   return lastOcrRun ? { ...lastOcrRun, pageSeconds: [...lastOcrRun.pageSeconds] } : null;
@@ -363,8 +384,6 @@ implements OcrEngine {
           pagesDone += finished;
           onPage(Math.min(pagesDone, pages.length));
         }
-        const stats = parseOcrStats(text, workerCount ?? 1);
-        if (stats) lastOcrRun = stats;
         if (usage) {
           if (/^LEX_OCR_ACCEL \S+ \d+$/mu.test(text)) usage.used = true;
           if (/LEX_OCR_ACCEL_(?:RUN_)?FAILED/u.test(text)) usage.failed = true;
@@ -384,6 +403,10 @@ implements OcrEngine {
       });
       child.once("exit", (code) => {
         clearInterval(timer);
+        // From the whole output: a line can arrive split across two chunks.
+        const stats = parseOcrStats(stderr, workerCount ?? 1);
+        if (stats) lastOcrRun = stats;
+        writeOcrRunLog(pages, code, stderr);
         if (code === 0) resolve();
         else {
           reject(ocrWorkerFailure(stderr, code, "worker"));
