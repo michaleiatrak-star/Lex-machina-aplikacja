@@ -185,6 +185,9 @@ export function DocumentPrivacyPanel({
     useState<ProcessingProgress | null>(null);
   const [batchFinalizing, setBatchFinalizing] =
     useState(false);
+  // Files approved and being saved in the background (the next file is already on screen).
+  const [saving, setSaving] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState("");
   const [error, setError] = useState("");
   // The file that failed to read: plain message, code for the details, retry or not.
   const [failure, setFailure] = useState<DocumentFailure | null>(null);
@@ -381,8 +384,9 @@ export function DocumentPrivacyPanel({
   }
 
 
-  // "Zatwierdź plik": the file is saved at once (its anonymization finished) and the queue goes
-  // on; a file that failed to save waits in the batch list for another try.
+  // "Zatwierdź plik": the preview of this file closes at once and the next file of the queue
+  // opens, so further work (corrections, decisions) always concerns the file on screen. The file
+  // is saved in the background; a file that failed to save waits in the batch list for another try.
   async function stageWith(
     review: DocumentReviewResponse,
     decisions: PagePrivacyDirective[],
@@ -415,8 +419,18 @@ export function DocumentPrivacyPanel({
       suggestions: review.suggestions.length,
       privacyMode: mode
     });
-    setBatchFinalizing(true);
     setError("");
+    setSaveError("");
+    // Off the screen before anything is awaited: the next file of the queue loads now.
+    setReview(null);
+    setDirectives([]);
+    if (activeFileRef.current === file) {
+      activeFileRef.current = null;
+      setActiveFileName("");
+    }
+    reviewFiles.current.delete(review.documentId);
+    setSaving((current) => [...current, draft.fileName]);
+    onIncomingFileConsumed?.("READY");
     try {
       const item = await finalizeDraft(draft);
       setFinalizedBatch((current) => [...current.filter((next) => next.result.documentId !== item.result.documentId), item]);
@@ -424,15 +438,13 @@ export function DocumentPrivacyPanel({
       onCaseFilesChange?.();
     } catch (cause) {
       setBatchDrafts((current) => [...current.filter((next) => next.review.documentId !== review.documentId), draft]);
-      setError(`Nie zatwierdzono ${draft.fileName}: ${cause instanceof Error ? cause.message : "DOCUMENT_PRIVACY_FINALIZATION_FAILED"}. Plik czeka na liście poniżej.`);
+      setSaveError(`Nie zatwierdzono ${draft.fileName}: ${cause instanceof Error ? cause.message : "DOCUMENT_PRIVACY_FINALIZATION_FAILED"}. Plik czeka na liście poniżej.`);
     } finally {
-      setBatchFinalizing(false);
+      setSaving((current) => {
+        const at = current.indexOf(draft.fileName);
+        return at < 0 ? current : [...current.slice(0, at), ...current.slice(at + 1)];
+      });
     }
-    setReview(null);
-    setDirectives([]);
-    activeFileRef.current = null;
-    setActiveFileName("");
-    onIncomingFileConsumed?.("READY");
   }
 
   async function finalizeDraft(draft: DocumentPrivacyDraft): Promise<FinalizedBatchItem> {
@@ -700,6 +712,13 @@ export function DocumentPrivacyPanel({
           )}
         </div>
       )}
+
+      {saving.length > 0 || saveError ? (
+        <p className="field-help" role="status">
+          {saving.length > 0 ? `Zapisywanie w tle: ${saving.join(", ")}.` : ""}
+          {saveError ? ` ${saveError}` : ""}
+        </p>
+      ) : null}
 
       {review ? (
         <PrivacyPreview

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LocalPaddleOcrEngine, OCR_BATCH_PAGES } from "../src/ocr/paddle-ocr-engine.js";
+import { LocalPaddleOcrEngine, OCR_BATCH_PAGES, OCR_WORKER_MEMORY_BYTES, ocrWorkerCount } from "../src/ocr/paddle-ocr-engine.js";
 import { readOcrPages } from "../src/ocr/ocr-result.js";
 import { documentWork } from "../src/document-work.js";
 
@@ -15,7 +15,7 @@ const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
 const pages = arg("--pages").split(",").map(Number);
 const evidence = arg("--evidence-dir");
 fs.mkdirSync(evidence, { recursive: true });
-fs.appendFileSync(process.env.FAKE_OCR_LOG, pages.join(",") + (process.env.LEX_OCR_PAUSE_FILE ? " pause" : "") + "\\n");
+fs.appendFileSync(process.env.FAKE_OCR_LOG, pages.join(",") + (process.env.LEX_OCR_PAUSE_FILE ? " pause" : "") + (process.env.LEX_OCR_THREADS && process.env.FAKE_OCR_THREADS_LOG ? " t" + process.env.LEX_OCR_THREADS : "") + "\\n");
 const out = pages.map((page) => {
   fs.writeFileSync(path.join(evidence, "p" + page + ".jpg"), Buffer.alloc(30, page));
   process.stderr.write("LEX_OCR_PAGE " + page + "\\n");
@@ -41,7 +41,7 @@ describe("LocalPaddleOcrEngine: long scans", () => {
     const worker = path.join(dir, "worker.cjs");
     await writeFile(worker, FAKE_WORKER);
     process.env.FAKE_OCR_LOG = path.join(dir, "calls.log");
-    const engine = new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker });
+    const engine = new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, workers: 1 });
     const pages = Array.from({ length: 75 }, (_, index) => index + 1);
     const progress: number[] = [];
 
@@ -54,6 +54,40 @@ describe("LocalPaddleOcrEngine: long scans", () => {
     expect(results.every((result) => result.image?.jpeg)).toBe(true);
     expect(progress.at(-1)).toBe(75);
     expect(progress).toEqual([...progress].sort((a, b) => a - b));
+  });
+
+  it("several workers read a long scan at once, each with its share of the threads; pages and progress stay in order", async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-parallel-test-"));
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(worker, FAKE_WORKER);
+    process.env.FAKE_OCR_LOG = path.join(dir, "calls.log");
+    process.env.FAKE_OCR_THREADS_LOG = "1";
+    try {
+      const engine = new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, workers: 2 });
+      const pages = Array.from({ length: 10 }, (_, index) => index + 1);
+      const progress: number[] = [];
+      const results = await engine.recognizePages(new Uint8Array([37, 80, 68, 70]), pages, (done) => progress.push(done));
+      const calls = (await readFile(process.env.FAKE_OCR_LOG, "utf8")).trim().split("\n").sort();
+      expect(calls.map((line) => line.split(" ")[0]!.split(",").length)).toEqual([5, 5]);
+      if (!process.env.LEX_OCR_THREADS) expect(calls.every((line) => / t\d+$/u.test(line))).toBe(true);
+      expect(results.map((result) => result.page)).toEqual(pages);
+      expect(results.every((result) => result.image?.jpeg)).toBe(true);
+      expect(progress.at(-1)).toBe(10);
+    } finally {
+      delete process.env.FAKE_OCR_THREADS_LOG;
+    }
+  });
+
+  it("worker count: one for short or background reads, limited by cores and free memory", () => {
+    const plenty = 16 * 1024 ** 3;
+    expect(ocrWorkerCount({ pages: 3, cpus: 16, freeMemory: plenty })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty, background: true })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 4, freeMemory: plenty })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 8, freeMemory: plenty })).toBe(2);
+    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty })).toBe(3);
+    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: OCR_WORKER_MEMORY_BYTES * 1.5 })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty, env: "1" })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 32, freeMemory: plenty, env: "4" })).toBe(4);
   });
 
   it("stops attaching images once the byte budget is spent, without gaps", async () => {
