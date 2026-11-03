@@ -182,17 +182,17 @@ export function CaseWorkspacePanel({
         </p>
         <h3>
           Wzory kancelarii
-          <InfoTip>Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego.</InfoTip>
+          <InfoTip>Wzór jest dostępny w każdej sprawie, do której masz dostęp. Wzór domyślny dla rodzaju (np. pozew) jest używany, gdy nie wybierzesz innego. Papier firmowy (DOCX lub DOTX): nagłówek, stopka i układ strony trafiają do pisma; pola {"{{data}}"}, {"{{miejscowość}}"}, {"{{adresat}}"}, {"{{sygnatura}}"}, {"{{tytuł}}"} są wypełniane, a w osobnym wierszu {"{{treść}}"} wskazuje miejsce na treść pisma.</InfoTip>
         </h3>
 
         {isAdmin && caseId && (
           <label className="file-button workspace-template-upload">
             {loading
               ? "Zapisywanie…"
-              : "Dodaj wzór DOCX/ODT"}
+              : "Dodaj wzór DOCX/DOTX/ODT"}
             <input
               type="file"
-              accept=".docx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text"
+              accept=".docx,.dotx,.odt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.text"
               disabled={loading}
               onChange={(event) => {
                 void addTemplate(

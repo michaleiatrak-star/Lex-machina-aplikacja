@@ -94,3 +94,51 @@ describe("pismo we wzorze kancelarii (nagłówek, stopka, układ strony)", () =>
     expect((await renderer.render("docx", ast)).template).toBeUndefined();
   }, 60_000);
 });
+
+// A Word template (.dotx) with fields: {{data}} split by Word over two runs, {{adresat}} in the
+// body before {{treść}}, {{sygnatura}} and {{tytuł}} in the footer and header.
+function fieldTemplate(): Buffer {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lex-lh-f-"));
+  const out = path.join(dir, "wzor.dotx");
+  spawnSync("python3", ["-c", [
+    "import sys,zipfile",
+    "W='xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"w14\"'",
+    "doc='<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:document '+W+'><w:body><w:p><w:pPr><w:jc w:val=\"right\"/></w:pPr><w:r><w:t>Katowice, {{da</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>ta}}</w:t></w:r></w:p><w:p><w:r><w:t>{{adresat}}</w:t></w:r></w:p><w:p><w:r><w:t>{{treść}}</w:t></w:r></w:p><w:p><w:r><w:t>Z poważaniem</w:t></w:r></w:p><w:sectPr><w:headerReference w:type=\"default\" r:id=\"rIdH\"/><w:footerReference w:type=\"default\" r:id=\"rIdF\"/><w:pgSz w:w=\"11906\" w:h=\"16838\"/><w:pgMar w:top=\"1800\" w:right=\"1417\" w:bottom=\"1417\" w:left=\"1417\" w:header=\"700\" w:footer=\"500\"/></w:sectPr></w:body></w:document>'",
+    "hdr='<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:hdr '+W+'><w:p w14:paraId=\"1\"><w:r><w:t>Kancelaria · {{tytuł}}</w:t></w:r></w:p></w:hdr>'",
+    "ftr='<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:ftr '+W+'><w:p><w:r><w:t>Sygn. {{syg</w:t></w:r><w:r><w:t>natura}} · {{adresat}}</w:t></w:r></w:p></w:ftr>'",
+    "rels='<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rIdH\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/header\" Target=\"header1.xml\"/><Relationship Id=\"rIdF\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer\" Target=\"footer1.xml\"/></Relationships>'",
+    "z=zipfile.ZipFile(sys.argv[1],'w')",
+    "z.writestr('[Content_Types].xml','<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml\"/></Types>')",
+    "z.writestr('word/document.xml',doc); z.writestr('word/header1.xml',hdr); z.writestr('word/footer1.xml',ftr); z.writestr('word/_rels/document.xml.rels',rels); z.close()"
+  ].join("\n"), out]);
+  return fs.readFileSync(out);
+}
+
+describe("papier firmowy z polami ({{data}}, {{adresat}}, {{treść}} ...)", () => {
+  const renderer = new LocalLegalDocumentRenderer({ timeoutMs: 20_000 });
+
+  it("pola wypełnione z pisma, treść w miejscu {{treść}}, adresat z symbolem danych zostaje w treści", async () => {
+    const framed = await renderer.render("docx", ast, fieldTemplate());
+    expect(framed.template).toMatchObject({ applied: true, headers: 1, footers: 1, body: true });
+    expect((framed.template as { fields?: string[] }).fields).toEqual(expect.arrayContaining(["data", "adresat", "tytul"]));
+    const parts = zipParts(framed.data);
+    const doc = parts["word/document.xml"]!;
+    // Template paragraphs around the content, with their alignment and bold kept.
+    expect(doc).toMatch(/<w:jc w:val="right"\/>.*Katowice, .*<w:b\/>/su);
+    expect(doc.indexOf("Katowice")).toBeLessThan(doc.indexOf("Wzywam do zapłaty"));
+    expect(doc.indexOf("Wzywam do zapłaty")).toBeLessThan(doc.indexOf("Z poważaniem"));
+    expect(doc).not.toContain("{{");
+    // The addressee names a person (a privacy symbol): in the body it is restored later; the
+    // document's own addressee block stays (no symbol may be lost); the footer gets no symbol.
+    expect(doc).toContain("[LMPII:D01:PERSON:0001]");
+    expect(parts["word/footer101.xml"]).toContain("[UZUPEŁNIJ: adresat]");
+    expect(parts["word/footer101.xml"]).not.toContain("LMPII");
+    expect(parts["word/header100.xml"]).toContain("Kancelaria · Wezwanie do zapłaty");
+    // The document's own place and date give way to the template's (no privacy symbol in it).
+    expect(doc).not.toContain("Warszawa, 20 października 2026 r.");
+    // Nothing of the template package beyond plain formatting reaches the body.
+    expect(doc).not.toContain("w14:");
+    const final = await renderer.deanonymize("docx", framed.data, new Map([["[LMPII:D01:PERSON:0001]", "Jan Kowalski"]]));
+    expect(final.text).toContain("Jan Kowalski");
+  }, 60_000);
+});
