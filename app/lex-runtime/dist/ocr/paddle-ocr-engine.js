@@ -15,12 +15,13 @@ export function ocrWorkerCount(args) {
         return 1;
     const raw = args.requested ?? (args.env?.trim() && /^\d+$/u.test(args.env.trim()) ? Number(args.env.trim()) : undefined);
     const byMemory = Math.max(1, 1 + Math.floor(Math.max(0, args.freeMemory - OCR_WORKER_MEMORY_BYTES) / OCR_WORKER_MEMORY_BYTES));
-    const byCpu = Math.max(1, Math.floor(args.cpus / 4));
+    // Measured on 4 cores, 8 scanned pages: 1 process 160 s, 2 -> 127 s, 4 -> 107 s, same text.
+    const byCpu = Math.max(1, Math.floor(args.cpus / 2));
     const cap = Math.ceil(args.pages / 2);
     // Set by hand (LEX_OCR_WORKERS or the option): taken as it is, at most one worker per two pages.
     if (raw !== undefined)
         return Math.max(1, Math.min(raw, cap));
-    return Math.max(1, Math.min(3, byCpu, byMemory, cap));
+    return Math.max(1, Math.min(4, byCpu, byMemory, cap));
 }
 // Pages per worker pass (one pass = one process, one timeout).
 export const OCR_BATCH_PAGES = 30;

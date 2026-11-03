@@ -82,9 +82,11 @@ describe("LocalPaddleOcrEngine: long scans", () => {
     const plenty = 16 * 1024 ** 3;
     expect(ocrWorkerCount({ pages: 3, cpus: 16, freeMemory: plenty })).toBe(1);
     expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty, background: true })).toBe(1);
-    expect(ocrWorkerCount({ pages: 40, cpus: 4, freeMemory: plenty })).toBe(1);
-    expect(ocrWorkerCount({ pages: 40, cpus: 8, freeMemory: plenty })).toBe(2);
-    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty })).toBe(3);
+    expect(ocrWorkerCount({ pages: 40, cpus: 2, freeMemory: plenty })).toBe(1);
+    expect(ocrWorkerCount({ pages: 40, cpus: 4, freeMemory: plenty })).toBe(2);
+    expect(ocrWorkerCount({ pages: 40, cpus: 8, freeMemory: plenty })).toBe(4);
+    expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty })).toBe(4);
+    expect(ocrWorkerCount({ pages: 4, cpus: 16, freeMemory: plenty })).toBe(2);
     expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: OCR_WORKER_MEMORY_BYTES * 1.5 })).toBe(1);
     expect(ocrWorkerCount({ pages: 40, cpus: 16, freeMemory: plenty, env: "1" })).toBe(1);
     expect(ocrWorkerCount({ pages: 40, cpus: 32, freeMemory: plenty, env: "4" })).toBe(4);
