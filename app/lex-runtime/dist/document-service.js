@@ -362,9 +362,52 @@ export class LocalPrivateDocumentService {
             ? documentWork.background(() => this.reviewNow(data, mediaType, security))
             : this.reviewNow(data, mediaType, security);
     }
+    /**
+     * The reading stored for this exact file in this case (the document id comes from the file's
+     * SHA-256), or null. Not used when the vision model was asked to correct the OCR now.
+     */
+    async storedReading(data, security) {
+        if (!this.secureDocumentStore || !security?.caseId || shouldCorrectOcr(security))
+            return null;
+        const sha256 = createHash("sha256").update(data).digest("hex");
+        const documentId = `doc_${sha256.slice(0, 24)}`;
+        const load = (caseDataKey, keyVersion) => this.secureDocumentStore.loadSource({ caseId: security.caseId, documentId, caseDataKey, keyVersion });
+        try {
+            let stored;
+            if (security.caseDataKey && Number.isInteger(security.keyVersion)) {
+                stored = await load(security.caseDataKey, security.keyVersion);
+            }
+            else if (security.storeUnderLock) {
+                await security.storeUnderLock(async ({ caseDataKey, keyVersion }) => {
+                    stored = await load(caseDataKey, keyVersion);
+                });
+            }
+            return stored && stored.source.sha256 === sha256 && stored.source.complete ? { documentId, source: stored.source } : null;
+        }
+        catch {
+            // Not read before (or unreadable): read it now.
+            return null;
+        }
+    }
     async reviewNow(data, mediaType, security) {
         const onProgress = security?.onProgress;
         onProgress?.({ stage: "READING" });
+        // The same file read before in this case (a retry, the file added again, a password typed
+        // after the first attempt): its stored reading is used, no second OCR or transcription.
+        const cached = await this.storedReading(data, security);
+        if (cached) {
+            const vault = new PseudonymizationVault();
+            this.documents.set(cached.documentId, {
+                mediaType,
+                ...(security?.localAi ? { localAi: true, aiFindings: new Map() } : {}),
+                ...(security?.caseId ? { caseId: security.caseId } : {}),
+                vault,
+                source: cached.source
+            });
+            if (security?.detect === false)
+                return this.publicReview(cached.documentId, mediaType, cached.source, []);
+            return this.detectSuggestions(cached.documentId, mediaType, cached.source, security);
+        }
         const extracted = nfcIngestion(await this.extract(data, mediaType, onProgress));
         const spaced = await this.restoreSpacing(extracted);
         // Model-free cleanup on every OCR page (ligatures, look-alike letters, misread amounts;

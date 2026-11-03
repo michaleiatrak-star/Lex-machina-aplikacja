@@ -175,3 +175,52 @@ describe("nagranie w sprawie: dokument z transkrypcji", () => {
     await expect(missing.review(new Uint8Array([1]), "audio/mpeg")).rejects.toThrow("TRANSCRIPTION_UNAVAILABLE");
   });
 });
+
+describe("ten sam plik w sprawie: zapisany odczyt zamiast ponownego OCR", () => {
+  it("drugie wgranie tego samego pliku nie uruchamia odczytu; inny plik i korekta AI uruchamiają", async () => {
+    let reads = 0;
+    const transcriber: RecordingTranscriber = {
+      available: () => true,
+      async transcribe() {
+        reads += 1;
+        return { duration: 30, segments: [{ start: 1, end: 3, text: "Treść nagrania." }] };
+      }
+    };
+    const saved = new Map<string, unknown>();
+    const store = {
+      async saveSource(args: { documentId: string; source: unknown }) {
+        saved.set(args.documentId, args.source);
+      },
+      async loadSource(args: { documentId: string }) {
+        if (!saved.has(args.documentId)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return { mediaType: "audio/mpeg", source: saved.get(args.documentId) };
+      },
+      async saveProtected() {},
+      async loadProtected() {
+        throw new Error("unused");
+      }
+    };
+    const unused = { async extract() { throw new Error("unused"); } };
+    const ocr = { async recognizePages() { throw new Error("unused"); } };
+    const service = new LocalPrivateDocumentService(
+      new CompleteDocumentIngestor(unused, ocr),
+      { async recognize() { return []; } },
+      24_000,
+      undefined, undefined,
+      store as never,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      transcriber
+    );
+    const security = { caseId: "case_" + "a".repeat(32), caseDataKey: Buffer.alloc(32), keyVersion: 1 };
+    const file = new Uint8Array([0x49, 0x44, 0x33, 7, 7, 7]);
+    const first = await service.review(file, "audio/mpeg", security);
+    const again = await service.review(file, "audio/mpeg", security);
+    expect(reads).toBe(1);
+    expect(again.documentId).toBe(first.documentId);
+    expect(again.pages[0]!.text).toBe("[00:01] Treść nagrania.");
+    await service.review(new Uint8Array([0x49, 0x44, 0x33, 8]), "audio/mpeg", security);
+    expect(reads).toBe(2);
+    await service.review(file, "audio/mpeg", { ...security, ocrFix: true } as never);
+    expect(reads).toBe(3);
+  });
+});
