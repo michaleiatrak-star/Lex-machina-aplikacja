@@ -752,6 +752,7 @@ class OcrEngine:
             flush=True,
         )
         self.mkldnn = False
+        self.mkldnn_error = f"{type(error).__name__}:{str(error)[:160]}"
         self.verified = True
         self.ocr = PaddleOCR(**self.kwargs, enable_mkldnn=False)
         self._attach()
@@ -1001,6 +1002,8 @@ def main() -> None:
         default=os.environ.get("LEX_OCR_UNWARP", "auto"),
     )
     args = parser.parse_args()
+    started = time.perf_counter()
+    page_seconds: list[float] = []
 
     pages = parse_pages(args.pages)
     model_root_raw = os.environ.get("LEX_PADDLE_MODEL_DIR", "").strip()
@@ -1056,6 +1059,7 @@ def main() -> None:
     # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
     latin_dir = native_model_root / LATIN_REC
     ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
+    load_seconds = time.perf_counter() - started
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).
@@ -1083,6 +1087,7 @@ def main() -> None:
                         f"requested page {page_number} exceeds document page count {doc.page_count}"
                     )
 
+                page_started = time.perf_counter()
                 page = doc.load_page(page_number - 1)
                 pix = page.get_pixmap(
                     dpi=args.dpi,
@@ -1111,6 +1116,7 @@ def main() -> None:
                         fold=fold,
                     )
                 )
+                page_seconds.append(time.perf_counter() - page_started)
                 # Progress for the runtime (page number only, no content).
                 print(f"LEX_OCR_PAGE {page_number}", file=sys.stderr, flush=True)
         finally:
@@ -1120,6 +1126,18 @@ def main() -> None:
         json.dumps(results, ensure_ascii=False),
         encoding="utf-8",
     )
+    # Where the time went (no content): shown to the user next to the OCR settings.
+    stats = {
+        "loadSeconds": round(load_seconds, 2),
+        "pageSeconds": [round(value, 2) for value in page_seconds],
+        "threads": ocr_kwargs.get("cpu_threads"),
+        "mkldnn": bool(getattr(ocr, "mkldnn", False)),
+        # Why the plain (about 5x slower) path runs: oneDNN failed to start or to run.
+        "mkldnnError": getattr(ocr, "mkldnn_error", None),
+        "accel": getattr(ocr, "accel", None),
+        "marks": getattr(ocr, "latin_dir", None) is not None,
+    }
+    print("LEX_OCR_STATS " + json.dumps(stats), file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

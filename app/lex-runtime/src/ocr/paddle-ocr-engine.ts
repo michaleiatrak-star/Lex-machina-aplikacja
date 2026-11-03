@@ -28,6 +28,45 @@ export type LocalPaddleOcrOptions = {
 
 type AccelUsage = { used: boolean; failed: boolean };
 
+/** Where the last OCR pass spent its time (worker's LEX_OCR_STATS line; no content). */
+export type OcrRunStats = {
+  at: string;
+  loadSeconds: number;
+  pageSeconds: number[];
+  threads: number | null;
+  mkldnn: boolean;
+  mkldnnError: string | null;
+  accel: string | null;
+  workers: number;
+};
+
+let lastOcrRun: OcrRunStats | null = null;
+
+export function lastOcrRunStats(): OcrRunStats | null {
+  return lastOcrRun ? { ...lastOcrRun, pageSeconds: [...lastOcrRun.pageSeconds] } : null;
+}
+
+export function parseOcrStats(line: string, workers: number, now: Date = new Date()): OcrRunStats | null {
+  const match = /^LEX_OCR_STATS (\{.*\})$/mu.exec(line);
+  if (!match) return null;
+  try {
+    const raw = JSON.parse(match[1]!) as Record<string, unknown>;
+    const pages = Array.isArray(raw.pageSeconds) ? raw.pageSeconds.filter((value): value is number => typeof value === "number").slice(0, 500) : [];
+    return {
+      at: now.toISOString(),
+      loadSeconds: typeof raw.loadSeconds === "number" ? raw.loadSeconds : 0,
+      pageSeconds: pages,
+      threads: typeof raw.threads === "number" ? raw.threads : null,
+      mkldnn: raw.mkldnn === true,
+      mkldnnError: typeof raw.mkldnnError === "string" ? raw.mkldnnError.slice(0, 200) : null,
+      accel: typeof raw.accel === "string" ? raw.accel.slice(0, 60) : null,
+      workers
+    };
+  } catch {
+    return null;
+  }
+}
+
 // One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
 // each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
 // so an extra process needs free memory. Background OCR (files read ahead) stays at one process.
@@ -209,7 +248,8 @@ implements OcrEngine {
               : undefined,
             threads,
             acceleration,
-            usage
+            usage,
+            workers
           );
           draining = draining.then(drain);
           await draining;
@@ -255,7 +295,8 @@ implements OcrEngine {
     onPage?: (done: number) => void,
     threads?: string,
     acceleration: OcrAccelEnvironment | null = null,
-    usage?: AccelUsage
+    usage?: AccelUsage,
+    workerCount?: number
   ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
@@ -322,6 +363,8 @@ implements OcrEngine {
           pagesDone += finished;
           onPage(Math.min(pagesDone, pages.length));
         }
+        const stats = parseOcrStats(text, workerCount ?? 1);
+        if (stats) lastOcrRun = stats;
         if (usage) {
           if (/^LEX_OCR_ACCEL \S+ \d+$/mu.test(text)) usage.used = true;
           if (/LEX_OCR_ACCEL_(?:RUN_)?FAILED/u.test(text)) usage.failed = true;

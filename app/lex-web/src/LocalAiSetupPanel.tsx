@@ -409,8 +409,22 @@ type OcrAccelStatus = {
     accepted: boolean;
     reason: "FASTER_SAME_TEXT" | "NOT_FASTER" | "TEXT_DIFFERS" | "ACCEL_NOT_USED";
   } | null;
+  lastRun: { at: string; loadSeconds: number; pageSeconds: number[]; threads: number | null; mkldnn: boolean; mkldnnError?: string | null; accel: string | null; workers: number } | null;
   error?: string;
 };
+
+/** "Ostatni OCR: 3 str., 12,4 s/str. (wczytanie modeli 6,1 s), procesor: oneDNN, 28 wątków". */
+export function ocrRunSummary(run: NonNullable<OcrAccelStatus["lastRun"]>): string {
+  const number = (value: number) => value.toLocaleString("pl-PL", { maximumFractionDigits: 1 });
+  const pages = run.pageSeconds.length;
+  const average = pages ? run.pageSeconds.reduce((sum, value) => sum + value, 0) / pages : 0;
+  const engine = run.accel ? `karta (${run.accel.replace("ExecutionProvider", "")})` : `procesor${run.mkldnn ? " z oneDNN" : " BEZ oneDNN (wolny tryb)"}`;
+  return (
+    `Ostatni OCR: ${pages} str., ${number(average)} s/str. (wczytanie modeli ${number(run.loadSeconds)} s), ${engine}` +
+    `${run.threads ? `, ${run.threads} wątków` : ""}${run.workers > 1 ? `, ${run.workers} procesy` : ""}.` +
+    (!run.accel && !run.mkldnn && run.mkldnnError ? ` Powód wolnego trybu: ${run.mkldnnError}` : "")
+  );
+}
 
 const OCR_ACCEL_REASONS: Record<NonNullable<OcrAccelStatus["benchmark"]>["reason"], string> = {
   FASTER_SAME_TEXT: "karta szybsza, ten sam tekst: OCR korzysta z karty",
@@ -470,6 +484,7 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
         </InfoTip>
       </strong>
       <small>Modele OCR w formacie ONNX, {formatBytes(status.bytes)}</small>
+      {status.lastRun ? <small>{ocrRunSummary(status.lastRun)}</small> : null}
       {status.state === "DOWNLOADING" ? (
         <div className="local-ai-progress">
           <div>

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { lastOcrRunStats, type OcrRunStats } from "./paddle-ocr-engine.js";
 import { downloadVerified, sizeOf, type FetchLike, type VerifiedFile } from "../verified-download.js";
 
 /**
@@ -113,6 +114,8 @@ export type OcrAccelStatus = {
   state: "IDLE" | "DOWNLOADING" | "MEASURING" | "FAILED";
   progress: { file: string; received: number; total: number; percent: number } | null;
   benchmark: OcrAccelBenchmark | null;
+  // The last OCR pass of a document on this computer (time per page, oneDNN, threads).
+  lastRun: OcrRunStats | null;
   error?: string;
 };
 
@@ -219,6 +222,7 @@ export class OcrAccelerationManager {
       state: this.job.state,
       progress: this.job.progress ? { ...this.job.progress } : null,
       benchmark: installed ? (this.record()?.benchmark ?? null) : null,
+      lastRun: lastOcrRunStats(),
       ...(this.job.error ? { error: this.job.error } : {})
     };
   }
