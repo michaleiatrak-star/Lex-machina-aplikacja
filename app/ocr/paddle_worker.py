@@ -752,6 +752,7 @@ class OcrEngine:
             flush=True,
         )
         self.mkldnn = False
+        self.mkldnn_error = f"{type(error).__name__}:{str(error)[:160]}"
         self.verified = True
         self.ocr = PaddleOCR(**self.kwargs, enable_mkldnn=False)
         self._attach()
@@ -780,6 +781,8 @@ def predict_page(
     fold: "FoldMode | None" = None,
 ) -> dict:
     """The page; with coloured stamp ink, its text layer and its stamps read apart."""
+    if os.environ.get("LEX_OCR_BLANK", "on") != "off" and blank_page(image):
+        return blank_result(image, page_number, evidence_dir)
     split = split_stamp_ink(image) if stamps else None
     if split is None:
         return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
@@ -788,6 +791,45 @@ def predict_page(
     if result.pop("rotated", False):
         # The page was turned by the orientation step: stamp boxes would not match; as before.
         return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
+    return result
+
+
+# A page with less ink than one letter (the back of a sheet in a duplex scan, scanner specks)
+# is not read: the detector costs the same on an empty page as on a full one (11 s of 17 s
+# on 4 cores). Measured on a 54-page duplex scan at 110 dpi: the 20 empty backs have no grey
+# pixel off the punch holes (in the outer 8% left and right), one digit "1" 46, the page with
+# least text 385.
+BLANK_MAX_GREY = 0.00003
+
+
+def blank_page(image: np.ndarray) -> bool:
+    gray = image[::2, ::2, :3].mean(axis=2) if image.ndim == 3 else image[::2, ::2]
+    height, width = gray.shape[:2]
+    # Off the edges: scanner border, punch holes, staples.
+    inner = gray[int(height * 0.03): int(height * 0.97), int(width * 0.08): int(width * 0.92)]
+    # Any stroke counts, also a faint one (pencil, a pale stamp): grey below 170 of 255.
+    return inner.size > 0 and float((inner < 170).mean()) < BLANK_MAX_GREY
+
+
+def blank_result(image: np.ndarray, page_number: int, evidence_dir: Path | None) -> dict:
+    """An empty page: no text; its image still goes to the preview."""
+    result = {
+        "page": page_number,
+        "text": "",
+        "confidence": None,
+        "lineCount": 0,
+        "engine": "blank",
+        "lines": [],
+    }
+    if evidence_dir is not None:
+        height, width = image.shape[:2]
+        scale = min(1.0, EVIDENCE_MAX_SIDE / max(width, height))
+        picture = Image.fromarray(image[:, :, :3].astype(np.uint8))
+        if scale < 1.0:
+            picture = picture.resize((max(1, round(width * scale)), max(1, round(height * scale))))
+        name = f"page-{page_number}.jpg"
+        picture.save(evidence_dir / name, format="JPEG", quality=90)
+        result["evidence"] = {"file": name, "width": picture.width, "height": picture.height, "unread": []}
     return result
 
 
@@ -1001,6 +1043,8 @@ def main() -> None:
         default=os.environ.get("LEX_OCR_UNWARP", "auto"),
     )
     args = parser.parse_args()
+    started = time.perf_counter()
+    page_seconds: list[float] = []
 
     pages = parse_pages(args.pages)
     model_root_raw = os.environ.get("LEX_PADDLE_MODEL_DIR", "").strip()
@@ -1056,6 +1100,7 @@ def main() -> None:
     # Optional: installed by the bootstrap since 0.1.38; an older install reads as before.
     latin_dir = native_model_root / LATIN_REC
     ocr = OcrEngine(ocr_kwargs, latin_dir if model_complete(latin_dir) and os.environ.get("LEX_OCR_MARKS", "on") != "off" else None)
+    load_seconds = time.perf_counter() - started
     # Folded photographs read along their lines (LEX_OCR_FOLDS=off: as before).
     fold = FoldMode(ocr, required_models) if os.environ.get("LEX_OCR_FOLDS", "on") != "off" else None
     # Coloured stamps read apart from the text (LEX_OCR_STAMPS=off: the page as scanned).
@@ -1083,6 +1128,7 @@ def main() -> None:
                         f"requested page {page_number} exceeds document page count {doc.page_count}"
                     )
 
+                page_started = time.perf_counter()
                 page = doc.load_page(page_number - 1)
                 pix = page.get_pixmap(
                     dpi=args.dpi,
@@ -1111,6 +1157,7 @@ def main() -> None:
                         fold=fold,
                     )
                 )
+                page_seconds.append(time.perf_counter() - page_started)
                 # Progress for the runtime (page number only, no content).
                 print(f"LEX_OCR_PAGE {page_number}", file=sys.stderr, flush=True)
         finally:
@@ -1120,6 +1167,18 @@ def main() -> None:
         json.dumps(results, ensure_ascii=False),
         encoding="utf-8",
     )
+    # Where the time went (no content): shown to the user next to the OCR settings.
+    stats = {
+        "loadSeconds": round(load_seconds, 2),
+        "pageSeconds": [round(value, 2) for value in page_seconds],
+        "threads": ocr_kwargs.get("cpu_threads"),
+        "mkldnn": bool(getattr(ocr, "mkldnn", False)),
+        # Why the plain (about 5x slower) path runs: oneDNN failed to start or to run.
+        "mkldnnError": getattr(ocr, "mkldnn_error", None),
+        "accel": getattr(ocr, "accel", None),
+        "marks": getattr(ocr, "latin_dir", None) is not None,
+    }
+    print("LEX_OCR_STATS " + json.dumps(stats), file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

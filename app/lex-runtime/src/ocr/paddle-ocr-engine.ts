@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +28,65 @@ export type LocalPaddleOcrOptions = {
 };
 
 type AccelUsage = { used: boolean; failed: boolean };
+
+/** Where the last OCR pass spent its time (worker's LEX_OCR_STATS line; no content). */
+export type OcrRunStats = {
+  at: string;
+  loadSeconds: number;
+  pageSeconds: number[];
+  threads: number | null;
+  mkldnn: boolean;
+  mkldnnError: string | null;
+  accel: string | null;
+  workers: number;
+};
+
+let lastOcrRun: OcrRunStats | null = null;
+
+/** Where the last OCR pass's worker output is kept (no page text: codes, timings, library logs). */
+export function ocrRunLogPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.LOCALAPPDATA
+    ? path.join(env.LOCALAPPDATA, "LexMachina", "ocr-last-run.log")
+    : path.join(os.tmpdir(), "LexMachina-ocr-last-run.log");
+}
+
+function writeOcrRunLog(pages: number[], code: number | null, stderr: string): void {
+  try {
+    const file = ocrRunLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      `${new Date().toISOString()} pages ${pages[0]}-${pages.at(-1)} exit ${code ?? "signal"}\n${stderr.slice(-16_000)}\n`
+    );
+  } catch {
+    // The log only helps diagnose; OCR goes on without it.
+  }
+}
+
+export function lastOcrRunStats(): OcrRunStats | null {
+  return lastOcrRun ? { ...lastOcrRun, pageSeconds: [...lastOcrRun.pageSeconds] } : null;
+}
+
+export function parseOcrStats(line: string, workers: number, now: Date = new Date()): OcrRunStats | null {
+  const match = /^LEX_OCR_STATS (\{.*\})$/mu.exec(line);
+  if (!match) return null;
+  try {
+    const raw = JSON.parse(match[1]!) as Record<string, unknown>;
+    const pages = Array.isArray(raw.pageSeconds) ? raw.pageSeconds.filter((value): value is number => typeof value === "number").slice(0, 500) : [];
+    return {
+      at: now.toISOString(),
+      loadSeconds: typeof raw.loadSeconds === "number" ? raw.loadSeconds : 0,
+      pageSeconds: pages,
+      threads: typeof raw.threads === "number" ? raw.threads : null,
+      mkldnn: raw.mkldnn === true,
+      mkldnnError: typeof raw.mkldnnError === "string" ? raw.mkldnnError.slice(0, 200) : null,
+      accel: typeof raw.accel === "string" ? raw.accel.slice(0, 60) : null,
+      workers
+    };
+  } catch {
+    return null;
+  }
+}
 
 // One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
 // each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
@@ -209,7 +269,8 @@ implements OcrEngine {
               : undefined,
             threads,
             acceleration,
-            usage
+            usage,
+            workers
           );
           draining = draining.then(drain);
           await draining;
@@ -255,7 +316,8 @@ implements OcrEngine {
     onPage?: (done: number) => void,
     threads?: string,
     acceleration: OcrAccelEnvironment | null = null,
-    usage?: AccelUsage
+    usage?: AccelUsage,
+    workerCount?: number
   ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
@@ -341,6 +403,10 @@ implements OcrEngine {
       });
       child.once("exit", (code) => {
         clearInterval(timer);
+        // From the whole output: a line can arrive split across two chunks.
+        const stats = parseOcrStats(stderr, workerCount ?? 1);
+        if (stats) lastOcrRun = stats;
+        writeOcrRunLog(pages, code, stderr);
         if (code === 0) resolve();
         else {
           reject(ocrWorkerFailure(stderr, code, "worker"));

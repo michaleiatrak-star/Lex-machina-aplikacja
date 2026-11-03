@@ -29,6 +29,10 @@ def read(mode):
                           "--output", str(target), "--pages", "1,2,3,4"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
     seconds = time.perf_counter() - started
     accel_lines = [line for line in run.stderr.splitlines() if line.startswith("LEX_OCR_ACCEL")]
+    # Where the time went and whether oneDNN runs (LEX_OCR_MKLDNN_FALLBACK: the 5x slower path).
+    for line in run.stderr.splitlines():
+        if line.startswith(("LEX_OCR_STATS", "LEX_OCR_MKLDNN_FALLBACK")):
+            print(mode, line)
     if run.returncode != 0:
         print(run.stderr[-4000:], file=sys.stderr)
         raise SystemExit(f"OCR_WORKER_FAILED:{mode}")

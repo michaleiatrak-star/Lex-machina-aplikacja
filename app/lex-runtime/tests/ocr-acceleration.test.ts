@@ -12,7 +12,7 @@ import {
   ocrAccelProvider,
   type OcrAccelEnvironment
 } from "../src/ocr/ocr-acceleration.js";
-import { LocalPaddleOcrEngine } from "../src/ocr/paddle-ocr-engine.js";
+import { lastOcrRunStats, LocalPaddleOcrEngine, parseOcrStats } from "../src/ocr/paddle-ocr-engine.js";
 
 let dir = "";
 afterEach(async () => {
@@ -104,6 +104,7 @@ const fs = require("node:fs");
 const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
 const pages = arg("--pages").split(",").map(Number);
 if (process.env.LEX_OCR_ACCEL !== "off") process.stderr.write("LEX_OCR_ACCEL CoreMLExecutionProvider 4\\n");
+process.stderr.write('LEX_OCR_STATS {"loadSeconds": 5.5, "pageSeconds": [21.0, 19.5], "threads": 28, "mkldnn": true, "accel": null}\\n');
 fs.writeFileSync(arg("--output"), JSON.stringify(pages.map((page) => ({ page, text: process.env.LEX_OCR_ACCEL + " " + (process.env.LEX_OCR_ONNX_DIR || "-") }))));
 `
     );
@@ -121,5 +122,52 @@ fs.writeFileSync(arg("--output"), JSON.stringify(pages.map((page) => ({ page, te
       acceleration: () => ({ env: { LEX_OCR_ACCEL: "dml", LEX_OCR_ONNX_DIR: "/x" }, maxWorkers: 3 })
     });
     expect((await active.recognizePages(new Uint8Array([37]), [1]))[0]!.text).toBe("dml /x");
+  });
+});
+
+describe("statystyka OCR z workera", () => {
+  it("linia LEX_OCR_STATS: czasy, wątki, oneDNN; zapamiętana po odczycie", async () => {
+    expect(parseOcrStats('LEX_OCR_STATS {"loadSeconds": 1, "pageSeconds": [2, "x", 3], "threads": 8, "mkldnn": false, "accel": "DmlExecutionProvider"}', 2, new Date("2026-11-03T00:00:00Z"))).toEqual({
+      at: "2026-11-03T00:00:00.000Z",
+      loadSeconds: 1,
+      pageSeconds: [2, 3],
+      threads: 8,
+      mkldnn: false,
+      mkldnnError: null,
+      accel: "DmlExecutionProvider",
+      workers: 2
+    });
+    expect(parseOcrStats("LEX_OCR_PAGE 1", 1)).toBeNull();
+    expect(lastOcrRunStats()).toMatchObject({ loadSeconds: 5.5, pageSeconds: [21, 19.5], threads: 28, mkldnn: true });
+  });
+});
+
+describe("statystyka OCR: linia rozcięta na dwie porcje wyjścia", () => {
+  it("odczytana po zakończeniu procesu; dziennik przebiegu zapisany", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lex-ocr-split-"));
+    const worker = path.join(dir, "worker.cjs");
+    await writeFile(
+      worker,
+      `
+const fs = require("node:fs");
+const arg = (name) => process.argv[process.argv.indexOf(name) + 1];
+process.stderr.write('LEX_OCR_STATS {"loadSeconds": 7.5, "pageSec');
+setTimeout(() => {
+  process.stderr.write('onds": [61.0], "threads": 28, "mkldnn": false, "mkldnnError": "RuntimeError:x", "accel": null}\\n');
+  fs.writeFileSync(arg("--output"), JSON.stringify([{ page: 1, text: "x" }]));
+}, 50);
+`
+    );
+    const previous = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = dir;
+    try {
+      await new LocalPaddleOcrEngine({ python: process.execPath, workerPath: worker, workers: 1 }).recognizePages(new Uint8Array([37]), [1]);
+      expect(lastOcrRunStats()).toMatchObject({ loadSeconds: 7.5, pageSeconds: [61], threads: 28, mkldnn: false, mkldnnError: "RuntimeError:x" });
+      expect(fs.readFileSync(path.join(dir, "LexMachina", "ocr-last-run.log"), "utf8")).toMatch(/pages 1-1 exit 0/u);
+    } finally {
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
