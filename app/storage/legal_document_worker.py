@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import datetime
 import io
 import json
 import re
@@ -399,7 +400,184 @@ def read_template_entries(data):
             entries[info.filename] = zf.read(info.filename)
         return entries
 
-def template_letterhead(data):
+
+# --- Fields of a firm's template ("papier firmowy z polami") -------------------------------
+# {{data}}, {{miejscowość}}, {{adresat}}, {{sygnatura}}, {{tytuł}} in the template's headers,
+# footers and body are filled; {{treść}} on its own line marks where the generated content
+# goes. A field Word split over several runs (spell check, editing) is found across them.
+FIELD_RE = re.compile(r"\{\{\s*([0-9A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż_ .-]{1,40}?)\s*\}\}", re.UNICODE)
+FIELD_ALIASES = {
+    "data": "data", "date": "data",
+    "miejscowosc": "miejscowosc", "miejscowość": "miejscowosc", "miejsce": "miejscowosc",
+    "adresat": "adresat", "odbiorca": "adresat",
+    "sygnatura": "sygnatura", "sygn": "sygnatura", "sygnatura akt": "sygnatura",
+    "tytul": "tytul", "tytuł": "tytul",
+    "tresc": "tresc", "treść": "tresc", "content": "tresc",
+}
+POLISH_MONTHS = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia",
+                 "września", "października", "listopada", "grudnia"]
+SIGNATURE_RE = re.compile(r"Sygn(?:atura)?\.?\s*(?:akt)?\s*:?\s*([IVXLC]{1,6}\s+[A-Za-zĆŁŚŻŹ]{1,8}(?:\s+[A-Za-z]{1,4})?\s+\d{1,6}/\d{2,4})", re.UNICODE)
+T_RE = re.compile(r"(<w:t(?:\s[^>]*)?>)(.*?)(</w:t>)", re.S)
+P_RE = re.compile(r"<w:p[\s>].*?</w:p>", re.S)
+
+def field_key(name):
+    return FIELD_ALIASES.get(name.strip().lower())
+
+def polish_date(day):
+    return "%d %s %d r." % (day.day, POLISH_MONTHS[day.month - 1], day.year)
+
+def unescape_xml(text):
+    return text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&apos;", "'").replace("&amp;", "&")
+
+def safe_inline_text(nodes):
+    """Inline text for the fields only: a block of another shape gives no value, never an error."""
+    try:
+        return inline_text(nodes if isinstance(nodes, list) else [])
+    except (ValueError, AttributeError, TypeError):
+        return ""
+
+def field_values(ast, today):
+    """Values of the fields from the document itself; what it does not say stays to fill in."""
+    blocks = ast.get("blocks") or []
+    layout = block_layout(ast)
+    values = {"data": polish_date(today)}
+    title = safe_inline_text(ast.get("title")).strip()
+    if not title:
+        for block in blocks:
+            if block.get("type") == "heading" and int(block.get("level", 1)) == 1:
+                title = safe_inline_text(block.get("content")).strip()
+                break
+    if title:
+        values["tytul"] = title
+    for index, block in enumerate(blocks):
+        if block.get("type") != "paragraph":
+            continue
+        text = safe_inline_text(block.get("content")).strip()
+        where = layout.get(index)
+        if "adresat" not in values and where in ("half", "addressee"):
+            values["adresat"] = text
+        if "miejscowosc" not in values and where in ("right", "place_date"):
+            place = text.split(",", 1)[0].strip()
+            if place and not place.startswith("["):
+                values["miejscowosc"] = place
+    whole = "\n".join(safe_inline_text(block.get("content")) for block in blocks if block.get("content"))
+    match = SIGNATURE_RE.search(whole)
+    if match:
+        values["sygnatura"] = re.sub(r"\s+", " ", match.group(1))
+    return values
+
+def fill_fields(xml, values, used, allow_alias=True):
+    """Fields in each paragraph of a WordprocessingML part, also when Word split one over
+    several runs; everything else of the part stays byte for byte. A field the document does
+    not answer becomes "[UZUPEŁNIJ: …]" (named to the user with the file)."""
+    def value_for(name):
+        key = field_key(name)
+        value = values.get(key) if key else None
+        if value and (allow_alias or not ALIAS_RE.search(value)):
+            used.add(key)
+            return value
+        return "[UZUPEŁNIJ: %s]" % name.strip()
+    def paragraph(match):
+        part = match.group(0)
+        nodes = list(T_RE.finditer(part))
+        if not nodes:
+            return part
+        texts = [unescape_xml(node.group(2)) for node in nodes]
+        whole = "".join(texts)
+        if "{{" not in whole:
+            return part
+        found = list(FIELD_RE.finditer(whole))
+        if not found:
+            return part
+        # Each field's replacement goes to the node where it starts; its other characters
+        # are taken out of the nodes they stood in.
+        bounds, start = [], 0
+        for text in texts:
+            bounds.append((start, start + len(text)))
+            start += len(text)
+        new = list(texts)
+        offset_cut = [0] * len(texts)
+        for field in reversed(found):
+            replacement = value_for(field.group(1))
+            f_start, f_end = field.span()
+            for index, (b_start, b_end) in enumerate(bounds):
+                if b_end <= f_start or b_start >= f_end:
+                    continue
+                cut_from = max(f_start, b_start) - b_start
+                cut_to = min(f_end, b_end) - b_start
+                text = new[index]
+                insert = replacement if b_start <= f_start < b_end else ""
+                new[index] = text[:cut_from] + insert + text[cut_to:]
+        out, last = [], 0
+        for node, text in zip(nodes, new):
+            out.append(part[last:node.start()])
+            tag = node.group(1)
+            if "xml:space" not in tag:
+                tag = tag[:-1] + ' xml:space="preserve">'
+            out.append(tag + escape(text) + node.group(3))
+            last = node.end()
+        out.append(part[last:])
+        return "".join(out)
+    return P_RE.sub(paragraph, xml)
+
+PPR_KEEP = {"jc": ("val",), "ind": ("left", "right", "start", "end", "firstLine", "hanging"),
+            "spacing": ("before", "after", "line", "lineRule")}
+RPR_KEEP = {"b": (), "i": (), "u": ("val",), "caps": (), "sz": ("val",), "szCs": ("val",),
+            "color": ("val",), "rFonts": ("ascii", "hAnsi", "cs", "eastAsia")}
+
+def safe_props(node, keep):
+    out = []
+    if node is None:
+        return ""
+    for child in node:
+        name = child.tag.split("}")[-1]
+        if name not in keep:
+            continue
+        attrs = "".join(' w:%s="%s"' % (attr, escape(child.attrib["{%s}%s" % (W_NS, attr)], {'"': "&quot;"}))
+                        for attr in keep[name] if "{%s}%s" % (W_NS, attr) in child.attrib)
+        if name in ("b", "i", "caps") and child.attrib.get("{%s}val" % W_NS) in ("0", "false"):
+            continue
+        out.append("<w:%s%s/>" % (name, attrs))
+    return "".join(out)
+
+def safe_paragraph(p):
+    """A paragraph of the template rebuilt from its text and plain formatting only: no
+    pictures, fields, styles or namespaces of the template's package reach the document."""
+    ppr = safe_props(p.find("{%s}pPr" % W_NS), PPR_KEEP)
+    runs = []
+    for run in p.iter("{%s}r" % W_NS):
+        rpr = safe_props(run.find("{%s}rPr" % W_NS), RPR_KEEP)
+        pieces = []
+        for child in run:
+            name = child.tag.split("}")[-1]
+            if name == "t" and child.text:
+                pieces.append('<w:t xml:space="preserve">%s</w:t>' % escape(child.text))
+            elif name == "tab":
+                pieces.append("<w:tab/>")
+            elif name in ("br", "cr"):
+                pieces.append("<w:br/>")
+        if pieces:
+            runs.append("<w:r>%s%s</w:r>" % ("<w:rPr>%s</w:rPr>" % rpr if rpr else "", "".join(pieces)))
+    return "<w:p>%s%s</w:p>" % ("<w:pPr>%s</w:pPr>" % ppr if ppr else "", "".join(runs))
+
+def template_body(entries):
+    """The template's own paragraphs around the content marker {{treść}}: (before, after) as
+    safe paragraphs, or None when the template has no marker (letterhead only)."""
+    doc = ET.fromstring(entries["word/document.xml"])
+    body = doc.find("{%s}body" % W_NS)
+    paragraphs = [child for child in list(body) if child.tag == "{%s}p" % W_NS]
+    texts = ["".join(t.text or "" for t in p.iter("{%s}t" % W_NS)) for p in paragraphs]
+    marker = next((index for index, text in enumerate(texts)
+                   if FIELD_RE.fullmatch(text.strip() or "x") and field_key(FIELD_RE.fullmatch(text.strip()).group(1)) == "tresc"), None)
+    if marker is None:
+        return None
+    if len(paragraphs) > MAX_TEMPLATE_BODY_PARAGRAPHS:
+        raise ValueError("TEMPLATE_BODY_TOO_LONG")
+    return ([safe_paragraph(p) for p in paragraphs[:marker]], [safe_paragraph(p) for p in paragraphs[marker + 1:]])
+
+MAX_TEMPLATE_BODY_PARAGRAPHS = 200
+
+def template_letterhead(data, ast=None, today=None):
     """Headers, footers (with their images) and the page setup of the template's last
     section: what a firm's letterhead is. Fails closed (ValueError) on anything that would
     have to be copied blindly: an external link, a non-image relationship, a missing part."""
@@ -416,6 +594,8 @@ def template_letterhead(data):
         for rel in ET.fromstring(entries["word/_rels/document.xml.rels"]).iter("{%s}Relationship" % PKG_REL_NS):
             rels[rel.attrib.get("Id")] = rel.attrib
     parts, media, references = [], [], []
+    values = field_values(ast, today or datetime.date.today()) if ast is not None else {}
+    used = set()
     for ref in list(sect):
         kind = ref.tag.split("}")[1]
         if kind not in ("headerReference", "footerReference"):
@@ -434,6 +614,12 @@ def template_letterhead(data):
         part_kind = "header" if kind == "headerReference" else "footer"
         name = "%s%d.xml" % (part_kind, 100 + len(parts))
         ET.fromstring(entries[source])
+        part_xml = entries[source]
+        if ast is not None:
+            # Header and footer: no privacy symbols (only the body is restored), so a field whose
+            # value names a person is left to fill in.
+            part_xml = fill_fields(part_xml.decode("utf-8"), values, used, allow_alias=False).encode("utf-8")
+            ET.fromstring(part_xml)
         part_rels = None
         rels_source = "word/_rels/" + source.split("/", 1)[1] + ".rels"
         if rels_source in entries:
@@ -460,7 +646,7 @@ def template_letterhead(data):
                              '<Relationship Id="%s" Type="%simage" Target="%s"/>' % (escape(rid, {'"': "&quot;"}), REL_TYPE_BASE, target)
                              for rid, target in image_rels))).encode("utf-8")
         rid = "rIdT%d" % (len(parts) + 1)
-        parts.append((part_kind, name, entries[source], part_rels, rid))
+        parts.append((part_kind, name, part_xml, part_rels, rid))
         references.append('<w:%s w:type="%s" r:id="%s"/>' % (kind, escape(ref_type, {'"': "&quot;"}), rid))
     def first(tag):
         node = sect.find("{%s}%s" % (W_NS, tag))
@@ -472,15 +658,36 @@ def template_letterhead(data):
     page = (number(size, "w", 11906), number(size, "h", 16838))
     pg_mar = tuple(number(margins, key, default) for key, default in
                    (("top", 1417), ("right", 1417), ("bottom", 1417), ("left", 1417), ("header", 720), ("footer", 567)))
+    body_parts = template_body(entries) if ast is not None else None
+    before, after = body_parts if body_parts else ([], [])
+    if body_parts:
+        before = [fill_fields(p, values, used) for p in before]
+        after = [fill_fields(p, values, used) for p in after]
     return {"parts": parts, "media": media, "references": references, "page": page, "margins": pg_mar,
-            "titlePg": sect.find("{%s}titlePg" % W_NS) is not None}
+            "titlePg": sect.find("{%s}titlePg" % W_NS) is not None,
+            "before": before, "after": after, "body": body_parts is not None, "fields": sorted(used)}
 
 def render_docx(ast, letterhead=None):
     body = []
     if ast.get("title"):
         body.append(docx_paragraph(ast.get("title"), "Title"))
     layout = block_layout(ast)
-    body.extend(docx_block(block, layout.get(index), ast.get("styleProfile")) for index, block in enumerate(ast.get("blocks") or []))
+    skip = set()
+    if letterhead and letterhead.get("body"):
+        # The template's own place, date and addressee replace the document's (a block with a
+        # privacy symbol stays: the file must keep every symbol of the document).
+        fields = set(letterhead.get("fields") or [])
+        for index, block in enumerate(ast.get("blocks") or []):
+            where = layout.get(index)
+            text = safe_inline_text(block.get("content"))
+            if not text or ALIAS_RE.search(text) or "[LMPII:" in text:
+                continue
+            if (where in ("half", "addressee") and "adresat" in fields) or (where in ("right", "place_date") and ("data" in fields or "miejscowosc" in fields)):
+                skip.add(index)
+        body.extend(letterhead["before"])
+    body.extend(docx_block(block, layout.get(index), ast.get("styleProfile")) for index, block in enumerate(ast.get("blocks") or []) if index not in skip)
+    if letterhead and letterhead.get("body"):
+        body.extend(letterhead["after"])
     top, right, bottom, left = PAGE_MARGINS.get(ast.get("styleProfile"), (1417, 1417, 1417, 1417))
     sect = ('<w:sectPr><w:footerReference w:type="default" r:id="rId5"/><w:pgSz w:w="11906" w:h="16838"/>'
             '<w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" w:header="720" w:footer="567" w:gutter="0"/></w:sectPr>') % (top, right, bottom, left)
@@ -793,8 +1000,11 @@ def main():
                 template_report = {"applied": False, "reason": "TEMPLATE_FORMAT_UNSUPPORTED"}
             else:
                 try:
-                    letterhead = template_letterhead(base64.b64decode(template, validate=True))
+                    today = datetime.date.fromisoformat(request["date"]) if request.get("date") else None
+                    letterhead = template_letterhead(base64.b64decode(template, validate=True), ast, today)
                     template_report = {"applied": True,
+                                       "body": letterhead["body"],
+                                       "fields": letterhead["fields"],
                                        "headers": sum(1 for part in letterhead["parts"] if part[0] == "header"),
                                        "footers": sum(1 for part in letterhead["parts"] if part[0] == "footer"),
                                        "images": len(letterhead["media"])}

@@ -11,7 +11,15 @@ function letterheadReport(value) {
     const raw = value;
     if (raw.applied === true) {
         const count = (key) => (typeof raw[key] === "number" ? raw[key] : 0);
-        return { applied: true, headers: count("headers"), footers: count("footers"), images: count("images") };
+        const fields = Array.isArray(raw.fields) ? raw.fields.filter((item) => typeof item === "string").slice(0, 20) : [];
+        return {
+            applied: true,
+            headers: count("headers"),
+            footers: count("footers"),
+            images: count("images"),
+            ...(raw.body === true ? { body: true } : {}),
+            ...(fields.length ? { fields } : {})
+        };
     }
     return { applied: false, reason: typeof raw.reason === "string" ? raw.reason.slice(0, 120) : "TEMPLATE_NOT_APPLIED" };
 }

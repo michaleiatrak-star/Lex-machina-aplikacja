@@ -2375,7 +2375,7 @@ export async function uploadSharedTemplate(
   const mediaType =
     file.type ||
     (
-      lower.endsWith(".docx")
+      lower.endsWith(".docx") || lower.endsWith(".dotx")
         ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         : lower.endsWith(".odt")
           ? "application/vnd.oasis.opendocument.text"

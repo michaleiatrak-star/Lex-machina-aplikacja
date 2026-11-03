@@ -17,6 +17,8 @@ import path from "node:path";
 
 export const DOCX_MEDIA_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+export const DOTX_MEDIA_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.template";
 export const ODT_MEDIA_TYPE =
   "application/vnd.oasis.opendocument.text";
 
@@ -97,10 +99,13 @@ function validateMediaType(
 
   if (
     mediaType === DOCX_MEDIA_TYPE ||
+    // A Word template (.dotx) is a DOCX package: only its letterhead, fields and paragraphs
+    // around {{treść}} are read (legal_document_worker.py), never its main-part type.
+    mediaType === DOTX_MEDIA_TYPE ||
     (
       mediaType ===
         "application/octet-stream" &&
-      lower.endsWith(".docx")
+      (lower.endsWith(".docx") || lower.endsWith(".dotx"))
     )
   ) {
     return DOCX_MEDIA_TYPE;

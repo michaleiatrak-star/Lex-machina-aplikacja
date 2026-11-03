@@ -17,7 +17,9 @@ export type LegalDocumentFormat =
 // Whether the firm's template (its letterhead: headers, footers with their images, page
 // setup) went into the file; a template that cannot be copied safely is named, not applied.
 export type LetterheadReport =
-  | { applied: true; headers: number; footers: number; images: number }
+  // body: the template's paragraphs around {{treść}} framed the content; fields: the fields
+  // ({{data}}, {{adresat}} ...) filled from the document.
+  | { applied: true; headers: number; footers: number; images: number; body?: boolean; fields?: string[] }
   | { applied: false; reason: string };
 
 export type LegalDocumentPackage = {
@@ -52,7 +54,15 @@ function letterheadReport(value: unknown): LetterheadReport | undefined {
   const raw = value as Record<string, unknown>;
   if (raw.applied === true) {
     const count = (key: string) => (typeof raw[key] === "number" ? (raw[key] as number) : 0);
-    return { applied: true, headers: count("headers"), footers: count("footers"), images: count("images") };
+    const fields = Array.isArray(raw.fields) ? raw.fields.filter((item): item is string => typeof item === "string").slice(0, 20) : [];
+    return {
+      applied: true,
+      headers: count("headers"),
+      footers: count("footers"),
+      images: count("images"),
+      ...(raw.body === true ? { body: true } : {}),
+      ...(fields.length ? { fields } : {})
+    };
   }
   return { applied: false, reason: typeof raw.reason === "string" ? raw.reason.slice(0, 120) : "TEMPLATE_NOT_APPLIED" };
 }
