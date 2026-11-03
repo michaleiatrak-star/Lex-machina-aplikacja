@@ -4547,6 +4547,33 @@ export function importFromMicrosoft(caseId: string, itemIds: string[]): Promise<
   return json(`/api/cases/${encodeURIComponent(caseId)}/microsoft/import`, { method: "POST", body: JSON.stringify({ itemIds }) });
 }
 
+export type UserGroup = { groupId: string; name: string; memberUserIds: string[]; createdAt: string; updatedAt: string };
+
+export function listUserGroups(): Promise<{ groups: UserGroup[] }> {
+  return json("/api/user-groups");
+}
+
+export function createUserGroup(input: { name: string; memberUserIds: string[] }): Promise<UserGroup> {
+  return json("/api/user-groups", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateUserGroup(groupId: string, input: { name?: string; memberUserIds?: string[] }): Promise<UserGroup> {
+  return json(`/api/user-groups/${encodeURIComponent(groupId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deleteUserGroup(groupId: string): Promise<void> {
+  await json(`/api/user-groups/${encodeURIComponent(groupId)}`, { method: "DELETE" });
+}
+
+export type GroupShareResult = { granted: string[]; skipped: Array<{ userId: string; reason: string }> };
+
+export function shareCaseWithGroup(
+  caseId: string,
+  input: { groupId: string; role: "EDITOR" | "ANALYST" | "VIEWER"; canReidentify: boolean }
+): Promise<GroupShareResult> {
+  return json(`/api/cases/${encodeURIComponent(caseId)}/access/group`, { method: "POST", body: JSON.stringify(input) });
+}
+
 // The anonymized version of a stored .docx as .docx (formatting kept, values as symbols).
 export function anonymizedDocx(
   caseId: string,

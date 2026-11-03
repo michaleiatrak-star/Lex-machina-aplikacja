@@ -1,3 +1,5 @@
+import { listUserGroups, shareCaseWithGroup, type UserGroup } from "./api.js";
+import { groupErrorText, groupShareSummary } from "./UserGroupsPanel.js";
 import { InfoTip } from "./InfoTip";
 import {
   useEffect,
@@ -398,6 +400,40 @@ export function CaseCollaborationPanel({
     await onOwnershipTransferred?.();
   }
 
+  // Groups (Ustawienia -> Użytkownicy): each member gets the case like one added by hand.
+  const [groups, setGroups] = useState<UserGroup[]>([]);
+  const [groupId, setGroupId] = useState("");
+  useEffect(() => {
+    let alive = true;
+    listUserGroups().then(
+      (result) => {
+        if (!alive) return;
+        setGroups(result.groups);
+        setGroupId((current) => current || result.groups[0]?.groupId || "");
+      },
+      () => undefined
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function addGroup(): Promise<void> {
+    if (!groupId) return;
+    try {
+      const result = await shareCaseWithGroup(caseId, { groupId, role, canReidentify });
+      const names = new Map<string, string>([
+        ...candidates.map((user) => [user.userId, `@${user.loginName}`] as [string, string]),
+        ...access.map((entry) => [entry.user.userId, `@${entry.user.loginName}`] as [string, string])
+      ]);
+      setCanReidentify(false);
+      await refresh();
+      setMessage(groupShareSummary(result, names));
+    } catch (failure) {
+      throw new Error(groupErrorText(failure));
+    }
+  }
+
   async function add():
     Promise<void> {
     if (!selectedUserId) {
@@ -542,6 +578,32 @@ export function CaseCollaborationPanel({
           Dodaj do sprawy
         </button>
       </div>
+
+      {groups.length ? (
+        <div className="case-collaboration-add">
+          <label>
+            Grupa
+            <select value={groupId} disabled={busy} onChange={(event) => setGroupId(event.target.value)}>
+              {groups.map((group) => (
+                <option key={group.groupId} value={group.groupId}>
+                  {group.name} ({group.memberUserIds.length} os.)
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={busy || !groupId}
+            title="Rola i reidentyfikacja jak wyżej, dla każdego członka grupy"
+            onClick={() => {
+              void runChange(addGroup);
+            }}
+          >
+            Udostępnij grupie
+          </button>
+        </div>
+      ) : null}
 
       <div className="case-role-legend">
         <span>
