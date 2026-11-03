@@ -5,7 +5,6 @@ import {
 import { casesNewestFirst } from "./case-calendar.js";
 import { CASE_ROLE_LABEL } from "./api";
 import { applyChatTextSize, CHAT_TEXT_SIZES, readChatTextSize, readTheme, saveChatTextSize, saveTheme, THEMES, type ChatTextSize, type Theme } from "./text-size";
-import { ChatStarters } from "./ChatStarters";
 import { ReplyChoices } from "./ReplyChoices";
 import {
   canWriteCase,
@@ -6446,12 +6445,6 @@ export default function MatterChatApp({
                     </span>
                   </div>
                 </article>
-              ) : null}
-              {!threadLoading && !selectedCase?.archivedAt && messages.length === 1 && messages[0]?.id === "welcome" ? (
-                <ChatStarters onPick={(text) => {
-                  setQuery(text);
-                  document.querySelector<HTMLTextAreaElement>(".chat-composer textarea")?.focus();
-                }} />
               ) : null}
               <div ref={chatEndRef} />
             </div>

@@ -110,6 +110,7 @@ export function checkpointPrompt(checkpoint, resources, register) {
     return [
         `# CHECKPOINT ${checkpoint} — KONTRAKT (CP-REJESTR, shared/CP-GATE.md; AUTOMAT-STANOW)`,
         `- Zakończ odpowiedź raportem [${checkpoint}] w formacie skilla; aplikacja zamknie ${checkpoint} tylko z tym raportem.`,
+        "- Brak dokumentu (nie wgrany, „uzupełnię później”, pozycja rejestru bez treści) = BRAK-DOK (shared/CP-GATE.md §3B): wypisz brakujące pozycje w raporcie i zamknij checkpoint jako ZAMKNIĘTY Z BRAKAMI. Nie odmawiaj zamknięcia z powodu brakującego dokumentu i nie pytaj o niego ponownie, gdy użytkownik już odpowiedział.",
         ...(CONDITIONAL_CHECKPOINTS.has(checkpoint)
             ? [`- ${checkpoint} jest warunkowy: gdy warunek techniczny nie zachodzi, napisz wprost „[${checkpoint}] N/A — <powód>” (N/A wyłącznie per warunek techniczny, ZAKAZ-14).`]
             : [`- ${checkpoint} jest obowiązkowy: N/A niedozwolone.`]),

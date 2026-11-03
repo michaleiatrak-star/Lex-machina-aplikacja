@@ -1,7 +1,7 @@
 import type { SessionExecutionResponse } from "./api.js";
 
 // Checkpoint workflows (contract analysis, court analysis, chronology, evidence,
-// witness questioning, process pleading in AUTO mode) go on to the next step by
+// witness questioning, process pleading in AUTO and CHECKPOINT mode) go on to the next step by
 // themselves: after a closed step the chat sends the next one, named in the thread.
 // The chain stops on a blocked or empty answer, a step without progress, a step that
 // asks the user (WAIT_FOR_USER_MARKER), the end of the workflow or the user's "Zatrzymaj".
@@ -57,7 +57,15 @@ export type WorkflowProgress = {
   next: string | null;
   // The server already runs several steps per request (process pleading AUTO).
   serverBatch?: boolean;
+  // CHECKPOINT mode: `next` waits for the user's decision (waiting) or is confirmed by the chat (confirm).
+  waiting?: boolean;
+  confirm?: boolean;
 };
+
+// Process pleading checkpoints the user decides in CHECKPOINT mode (CP-GATE §3C): strategy,
+// batch plan, final review before the file. The rest are confirmed by the chat.
+export const CHECKPOINT_DECISIONS: ReadonlySet<string> = new Set(["CP-1b", "CP-PD", "CP-PEER"]);
+export const CHECKPOINT_CONFIRM_MESSAGE = "tak";
 
 /** Where the turn's checkpoint workflow stands, or null for a turn without one. */
 export function workflowProgress(result: SessionExecutionResponse): WorkflowProgress | null {
@@ -81,6 +89,20 @@ export function workflowProgress(result: SessionExecutionResponse): WorkflowProg
       closed: result.orderedCaseWorkflow.closedCheckpoints.length,
       next: result.orderedCaseWorkflow.nextCheckpoint
     };
+  }
+  // CHECKPOINT mode (pipeline, TRYB PIPELINE-SZYBKI of shared/CP-GATE.md §3C): an informational
+  // step waiting for confirmation is confirmed by the chat itself ("tak" confirms it and runs the
+  // next one); only a decision step or a step that asks the user waits for the user's reply.
+  if (result.processWorkflow && result.processWorkflow.mode === "CHECKPOINT") {
+    const pw = result.processWorkflow;
+    const closed = Object.values(pw.checkpoints).filter((status) => status === "CLOSED" || status === "NA" || status === "PENDING_CONFIRMATION").length;
+    if (pw.pendingCheckpoint) {
+      return CHECKPOINT_DECISIONS.has(pw.pendingCheckpoint)
+        ? { workflow: "Pismo procesowe", closed, next: pw.pendingCheckpoint, waiting: true }
+        : { workflow: "Pismo procesowe", closed, next: pw.pendingCheckpoint, confirm: true };
+    }
+    const next = pw.stage === "FINAL" ? null : (Object.entries(pw.checkpoints).find(([, status]) => status === "OPEN")?.[0] ?? null);
+    return { workflow: "Pismo procesowe", closed, next };
   }
   if (result.processWorkflow && result.processWorkflow.mode === "AUTO") {
     const closed = Object.values(result.processWorkflow.checkpoints).filter((status) => status === "CLOSED" || status === "NA").length;
@@ -124,6 +146,13 @@ export function autoAdvanceDecision(
     if (long.ok) return { advance: true, next: label, label, message: `Kontynuuj: napisz część ${long.next} z ${long.parts}.`, meta: `automatycznie · ${progress.workflow} · ${label}` };
     if (askedMeta?.endsWith(`poprawa: ${label}`)) return { advance: false, reason: "NO_PROGRESS" };
     return { advance: true, next: label, label, message: `Popraw część ${long.next} z ${long.parts}.`, meta: `automatycznie · ${progress.workflow} · poprawa: ${label}` };
+  }
+  if (progress.confirm || progress.waiting) {
+    // The server tells a real question from a report ending with the marker (waitingForUser).
+    if (progress.waiting || result.waitingForUser === true) return { advance: false, reason: "WAITING_FOR_USER" };
+    if (stepsSoFar >= AUTO_ADVANCE_MAX_STEPS) return { advance: false, reason: "LIMIT" };
+    const label = stepLabel(progress.next!);
+    return { advance: true, next: progress.next!, label: `potwierdzenie ${label}`, message: CHECKPOINT_CONFIRM_MESSAGE, meta: `automatycznie · ${progress.workflow} · potwierdzenie ${label}` };
   }
   if (result.answer?.includes(WAIT_FOR_USER_MARKER) || result.processAuto?.stopped === "WAITING_FOR_USER") {
     return { advance: false, reason: "WAITING_FOR_USER" };
