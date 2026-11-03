@@ -1586,6 +1586,11 @@ fn route_allowed(method: &str, path: &str) -> bool {
         "/api/google/workspace/status"
         | "/api/google/gmail/threads"
         | "/api/google/drive/files" => method == "GET",
+        // OneDrive and SharePoint (Microsoft Graph), read-only.
+        "/api/microsoft/status" | "/api/microsoft/files" => method == "GET",
+        "/api/microsoft/connect"
+        | "/api/microsoft/connect/result"
+        | "/api/microsoft/disconnect" => method == "POST",
         "/api/google/workspace/connect"
         | "/api/google/workspace/connect/result"
         | "/api/google/workspace/disconnect" => method == "POST",
@@ -2186,6 +2191,11 @@ mod tests {
         assert!(route_allowed("GET", "/api/google/workspace/status"));
         assert!(route_allowed("POST", "/api/google/workspace/connect"));
         assert!(route_allowed("GET", "/api/google/drive/files"));
+        assert!(route_allowed("GET", "/api/microsoft/files"));
+        assert!(route_allowed("POST", "/api/microsoft/connect"));
+        assert!(route_allowed("POST", "/api/microsoft/connect/result"));
+        assert!(!route_allowed("POST", "/api/microsoft/files"));
+        assert!(route_allowed("POST", "/api/cases/case_1/microsoft/import"));
         assert!(route_allowed("POST", "/api/cases/case_abc/google/import"));
         assert!(!route_allowed("DELETE", "/api/google/workspace/status"));
         assert!(!route_allowed("POST", "/api/google/recovery/unlink"));

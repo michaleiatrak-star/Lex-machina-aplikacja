@@ -20,6 +20,7 @@ import { certificateNames, ensureCertificate } from "./tls-certificate.js";
 import { localOnlyRoute } from "../server-mode/routes.js";
 import { GoogleRecoveryController } from "../google/recovery-controller.js";
 import { GoogleWorkspaceController } from "../google/workspace-controller.js";
+import { MicrosoftController } from "../microsoft/controller.js";
 import { GOOGLE_CALLBACK_PATH } from "../google/config.js";
 import { registerLegacyMigrationRoutes } from "./legacy-migration-routes.js";
 import { registerWorkspaceRoutes } from "./workspace-routes.js";
@@ -753,6 +754,7 @@ export async function startLocalServer(options?: {
       new GoogleRecoveryController(authService),
     googleWorkspace:
       new GoogleWorkspaceController(authService, caseFileStore.rootDir),
+    microsoft: new MicrosoftController(authService, caseFileStore.rootDir),
     personMorphology,
     modelCatalog,
     credentialResolver: credentials,

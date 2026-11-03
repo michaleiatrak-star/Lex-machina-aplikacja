@@ -1,5 +1,6 @@
 import { InfoTip } from "./InfoTip";
 import { GOOGLE_INTEGRATION_VISIBLE, GoogleImportDialog } from "./GoogleIntegrationPanel.js";
+import { MicrosoftImportDialog, useMicrosoftConnected } from "./MicrosoftIntegration.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
@@ -466,6 +467,8 @@ export function WorkspaceManager({
   // also go on in the default way, without the choice.
   const [autoQueue, setAutoQueue] = useState(false);
   const [googleImport, setGoogleImport] = useState(false);
+  const [microsoftImport, setMicrosoftImport] = useState(false);
+  const microsoftConnected = useMicrosoftConnected();
   const pendingAutoQueue = useRef(new Set<string>());
   const pendingBackgroundRead = useRef(new Set<string>());
   useEffect(() => {
@@ -524,7 +527,7 @@ export function WorkspaceManager({
       else pendingBackgroundRead.current.add(uploadId);
       if (selectedFolder) await moveWorkspaceItem(caseId, uploadId, selectedFolder);
     }
-    setNotice(`Dodano ${uploadIds.length} plik(ów) z Google do akt sprawy${autoQueue ? " i do kolejki przetwarzania" : ""}.`);
+    setNotice(`Dodano ${uploadIds.length} plik(ów) do akt sprawy${autoQueue ? " i do kolejki przetwarzania" : ""}.`);
     await refresh();
   }
 
@@ -1256,6 +1259,14 @@ export function WorkspaceManager({
           ) : null}
           {googleImport ? (
             <GoogleImportDialog caseId={caseId} onImported={addImported} onClose={() => setGoogleImport(false)} />
+          ) : null}
+          {canWrite && microsoftConnected ? (
+            <button type="button" className="chat-secondary-action" disabled={busy} onClick={() => setMicrosoftImport(true)}>
+              Importuj z OneDrive/SharePoint
+            </button>
+          ) : null}
+          {microsoftImport ? (
+            <MicrosoftImportDialog caseId={caseId} onImported={addImported} onClose={() => setMicrosoftImport(false)} />
           ) : null}
           {canWrite && unprocessed.length > 1 ? (
             <span>
