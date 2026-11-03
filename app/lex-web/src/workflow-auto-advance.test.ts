@@ -26,7 +26,7 @@ describe("automatic next step of a checkpoint workflow", () => {
     expect(autoAdvanceDecision({ status: "DRAFT_PRESENTABLE", answer: "x" } as SessionExecutionResponse, null, 0)).toEqual({ advance: false, reason: "NO_WORKFLOW" });
   });
 
-  it("process pleading: only AUTO mode, after the server's batch reached its limit", () => {
+  it("process pleading AUTO: after the server's batch reached its limit", () => {
     const checkpoints = { "CP-1a": "CLOSED", "CP-1b": "NA", "CP-1c-skan": "OPEN" };
     const pleading = (stopped: string, mode = "AUTO") =>
       ({
@@ -37,6 +37,19 @@ describe("automatic next step of a checkpoint workflow", () => {
       }) as unknown as SessionExecutionResponse;
     expect(autoAdvanceDecision(pleading("LIMIT_REACHED"), 0, 0)).toMatchObject({ advance: true, next: "CP-1c-skan" });
     expect(autoAdvanceDecision(pleading("WAITING_FOR_USER"), 0, 0)).toEqual({ advance: false, reason: "WAITING_FOR_USER" });
-    expect(autoAdvanceDecision(pleading("LIMIT_REACHED", "CHECKPOINT"), 0, 0)).toEqual({ advance: false, reason: "NO_WORKFLOW" });
+  });
+
+  it("process pleading CHECKPOINT: the chat confirms an informational step, waits at a decision step or a question", () => {
+    const view = (pendingCheckpoint: string | null, checkpoints: Record<string, string>, waitingForUser = false) =>
+      ({
+        status: "DRAFT_PRESENTABLE",
+        answer: "Raport CP. [CZEKAM NA ODPOWIEDŹ]",
+        waitingForUser,
+        processWorkflow: { caseId: "c", mode: "CHECKPOINT", revision: 4, stage: "W1", documentStatus: "DRAFT", pendingCheckpoint, checkpoints }
+      }) as unknown as SessionExecutionResponse;
+    expect(autoAdvanceDecision(view("CP-1a", { "CP-1a": "PENDING_CONFIRMATION", "CP-1b": "OPEN" }), null, 0)).toMatchObject({ advance: true, next: "CP-1a", message: "tak" });
+    expect(autoAdvanceDecision(view("CP-1a", { "CP-1a": "PENDING_CONFIRMATION" }, true), null, 0)).toEqual({ advance: false, reason: "WAITING_FOR_USER" });
+    expect(autoAdvanceDecision(view("CP-1b", { "CP-1a": "CLOSED", "CP-1b": "PENDING_CONFIRMATION" }), 1, 1)).toEqual({ advance: false, reason: "WAITING_FOR_USER" });
+    expect(autoAdvanceDecision(view(null, { "CP-1a": "CLOSED", "CP-1b": "OPEN" }), 1, 1)).toEqual({ advance: false, reason: "WAITING_FOR_USER" });
   });
 });
