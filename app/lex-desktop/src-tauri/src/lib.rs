@@ -477,10 +477,12 @@ fn install_application_update(
             .unwrap_or_else(|| PathBuf::from("powershell.exe"));
 
         // The runner outlives this process (it waits for it to exit, installs and starts the
-        // new version): detached, in its own process group, out of any job the app runs in
-        // (a job closed with the app would end the runner too, and the update with it).
+        // new version): its own hidden console, its own process group, out of any job the app
+        // runs in (a job closed with the app would end the runner too, and the update with it).
+        // Not DETACHED_PROCESS: powershell.exe without any console can end before the script's
+        // first line (0.1.54 -> 0.1.55 left neither journal nor log).
         use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
         // The runner's own output goes to a start log: a PowerShell stopped before the script's
@@ -524,7 +526,7 @@ fn install_application_update(
                 .stderr(stderr);
             command
         };
-        let detached = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+        let detached = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP;
         let (stdout, stderr) = output(&log)?;
         let mut command = runner_command(detached | CREATE_BREAKAWAY_FROM_JOB, stdout, stderr);
         let mut child = match configure_runner(&mut command, &runner, &receipt, &runtime_root, &install_root, &executable).spawn() {
