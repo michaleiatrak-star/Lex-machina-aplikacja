@@ -52,6 +52,7 @@ import {
   type WorkspaceResponse
 } from "./workspace-client.js";
 import { PdfPreview } from "./PdfPreview.js";
+import { PdfFormPanel } from "./PdfFormPanel.js";
 import { TextFileEditor } from "./TextFileEditor.js";
 import { DocumentEditor } from "./DocumentEditor.js";
 import { SheetEditor } from "./SheetEditor.js";
@@ -1027,6 +1028,14 @@ export function WorkspaceManager({
     await saveRendered(filename, format, model, format === "csv" ? model.delimiter : undefined);
   }
 
+  async function saveNewFile(file: File): Promise<void> {
+    const stored = await uploadCaseFile(caseId, file);
+    if (selectedFolder) {
+      await moveWorkspaceItem(caseId, stored.uploadId, selectedFolder);
+    }
+    await refresh();
+  }
+
   async function saveEditedText(
     filename: string,
     text: string
@@ -1795,11 +1804,21 @@ export function WorkspaceManager({
               onSave={saveEditedSheet}
             />
           ) : preview.pdf ? (
-            <PdfPreview
-              blob={preview.pdf}
-              filename={preview.item.filename}
-              {...(preview.page ? { initialPage: preview.page } : {})}
-            />
+            <>
+              <PdfFormPanel
+                key={`form-${preview.item.itemId}`}
+                caseId={caseId}
+                itemId={preview.item.itemId}
+                filename={preview.item.filename}
+                readOnly={!canWrite}
+                onSave={saveNewFile}
+              />
+              <PdfPreview
+                blob={preview.pdf}
+                filename={preview.item.filename}
+                {...(preview.page ? { initialPage: preview.page } : {})}
+              />
+            </>
           ) : preview.url ? (
             <img src={preview.url} alt={`Podgląd ${preview.item.filename}`} />
           ) : (
