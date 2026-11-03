@@ -47,6 +47,9 @@ const MESSAGES: Record<string, { message: string; retryable: boolean }> = {
 export const OCR_MODELS_INCOMPLETE =
   "Instalacja programu nie została dokończona: brakuje części modeli OCR. Uruchom instalator Lex Machina ponownie i poczekaj, aż się zakończy (pobierze tylko brakujące modele).";
 
+export const TRANSCRIPTION_MODEL_MISSING =
+  "Do transkrypcji nagrań potrzebny jest model mowy (ok. 1,6 GB). Administrator pobiera go raz: Ustawienia, Lokalna AI, „Pobierz model transkrypcji”. Nagranie zostaje na komputerze.";
+
 export function documentFailure(cause: unknown): DocumentFailure {
   const code =
     cause instanceof ApiError
@@ -71,6 +74,16 @@ export function documentFailure(cause: unknown): DocumentFailure {
   const description = cause instanceof ApiError ? cause.description ?? "" : "";
   if (code === "OCR_MODELS_INCOMPLETE" || description.includes("OCR_MODELS_INCOMPLETE")) {
     return { code, message: OCR_MODELS_INCOMPLETE, retryable: false };
+  }
+  // Recordings: the speech-to-text model is downloaded once by an administrator.
+  if (description.includes("TRANSCRIPTION_MODEL_MISSING") || description.includes("TRANSCRIPTION_UNAVAILABLE")) {
+    return { code, message: TRANSCRIPTION_MODEL_MISSING, retryable: false };
+  }
+  if (description.includes("TRANSCRIPTION_ENGINE_MISSING")) {
+    return { code, message: "Brakuje programu do transkrypcji nagrań. Zaktualizuj Lex Machina do najnowszej wersji instalatorem.", retryable: false };
+  }
+  if (description.includes("TRANSCRIPTION_DECODE_FAILED")) {
+    return { code, message: "Nie udało się odczytać dźwięku z tego pliku (uszkodzony albo nieobsługiwany format). Zapisz nagranie jako MP3, M4A albo WAV i wgraj ponownie.", retryable: false };
   }
   const detail = cause instanceof ApiError && cause.description ? ` ${cause.description}` : "";
   return {

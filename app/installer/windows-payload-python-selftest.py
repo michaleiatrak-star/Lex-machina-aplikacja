@@ -31,6 +31,16 @@ def ner_import() -> int:
     return 0
 
 
+def stt_import() -> int:
+    # Speech-to-text of recordings: the native CTranslate2 and FFmpeg (PyAV) libraries load.
+    import av
+    import ctranslate2
+    from faster_whisper import WhisperModel  # noqa: F401
+
+    print("PYTHON_STT_IMPORT_PASS", "ctranslate2", ctranslate2.__version__, "av", av.__version__)
+    return 0
+
+
 def make_ocr_fixture(output: str) -> int:
     from PIL import Image, ImageDraw
 
@@ -54,6 +64,8 @@ def main() -> int:
         return ocr_import()
     if command == "ner-import" and len(sys.argv) == 2:
         return ner_import()
+    if command == "stt-import" and len(sys.argv) == 2:
+        return stt_import()
     if command == "make-ocr-fixture" and len(sys.argv) == 3:
         return make_ocr_fixture(sys.argv[2])
 

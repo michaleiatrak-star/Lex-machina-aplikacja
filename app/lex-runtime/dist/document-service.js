@@ -1,3 +1,4 @@
+import { isRecordingMediaType, transcriptPages } from "./transcription.js";
 import { alignProtected, protectedPageText } from "./docx-anonymize.js";
 import { detectHealthData } from "./privacy/health-data.js";
 import { degradedRecognizers } from "./privacy/gazetteer-ner.js";
@@ -206,6 +207,7 @@ export class LocalPrivateDocumentService {
     visionReader;
     stopTextModels;
     startTextModels;
+    transcriber;
     documents = new Map();
     detecting = new Map();
     constructor(pdfIngestor, namedEntities, maxChunkChars = 24_000, imageIngestor, privacyVaultStore, secureDocumentStore, officeExtractor, spreadsheetExtractor, 
@@ -220,7 +222,9 @@ export class LocalPrivateDocumentService {
     // The vision step: text models (Bielik) are stopped so the vision model has the memory.
     stopTextModels, 
     // "z lokalnym AI": the text model is started right before the detection of personal data.
-    startTextModels) {
+    startTextModels, 
+    // Recordings (audio, video): the local speech-to-text model writes the text.
+    transcriber) {
         this.pdfIngestor = pdfIngestor;
         this.namedEntities = namedEntities;
         this.maxChunkChars = maxChunkChars;
@@ -235,6 +239,37 @@ export class LocalPrivateDocumentService {
         this.visionReader = visionReader;
         this.stopTextModels = stopTextModels;
         this.startTextModels = startTextModels;
+        this.transcriber = transcriber;
+    }
+    /**
+     * A recording as a document: one page per 10 minutes, each line with the time it starts.
+     * The pages are DIGITAL text (no scan to compare), so the privacy review works as for a letter.
+     */
+    async transcribe(data, mediaType, onProgress) {
+        if (!this.transcriber)
+            throw new Error("TRANSCRIPTION_UNAVAILABLE");
+        if (!this.transcriber.available())
+            throw new Error("TRANSCRIPTION_MODEL_MISSING");
+        onProgress?.({ stage: "TRANSCRIPTION", done: 0, total: 0 });
+        const transcript = await this.transcriber.transcribe(data, mediaType, (done, total) => onProgress?.({ stage: "TRANSCRIPTION", done, total }));
+        const pages = transcriptPages(transcript).map((page) => ({
+            page: page.page,
+            text: page.text,
+            source: page.text.trim() ? "DIGITAL" : "BLANK"
+        }));
+        const sourceChars = pages.reduce((sum, page) => sum + page.text.length, 0);
+        return {
+            complete: true,
+            sha256: createHash("sha256").update(data).digest("hex"),
+            bytes: data.byteLength,
+            totalPages: pages.length,
+            digitalPages: pages.filter((page) => page.source === "DIGITAL").length,
+            ocrPages: 0,
+            blankPages: pages.filter((page) => page.source === "BLANK").length,
+            sourceChars,
+            pages,
+            chunks: chunkDocumentPages(pages, this.maxChunkChars)
+        };
     }
     digitalTextResult(data, text) {
         if (data.byteLength >
@@ -277,6 +312,9 @@ export class LocalPrivateDocumentService {
     async extract(data, mediaType, onProgress) {
         if (mediaType === "application/pdf") {
             return this.pdfIngestor.ingest(data, onProgress);
+        }
+        if (isRecordingMediaType(mediaType)) {
+            return this.transcribe(data, mediaType, onProgress);
         }
         if (mediaType ===
             "text/plain" ||

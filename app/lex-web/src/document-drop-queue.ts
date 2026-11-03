@@ -1,7 +1,8 @@
 export const MAX_DOCUMENT_DROP_QUEUE = 20;
 
+// Recordings (.mp3, .m4a, .wav, .mp4, .mov ...) are transcribed locally (transcription model).
 export const DOCUMENT_FILE_ACCEPT =
-  ".pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff";
+  ".mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.weba,.mp4,.m4v,.mov,.webm,.mkv,.avi,audio/*,video/*,.pdf,.docx,.odt,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.zip,application/pdf,application/zip,text/plain,text/markdown,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroenabled.12,image/jpeg,image/png,image/webp,image/tiff";
 
 // What became of a file that left the queue. Disjoint: a skipped or failed file is
 // never counted as ready (before, every file leaving the queue was "zakończono").
@@ -184,6 +185,9 @@ export function documentStepLabel(file: File): string {
   const name = file.name.toLowerCase();
   if (/^image\//u.test(file.type) || /\.(?:jpe?g|png|webp|tiff?)$/u.test(name)) {
     return "Rozpoznanie tekstu ze zdjęcia (OCR) i ukrycie danych osobowych";
+  }
+  if (/^(?:audio|video)\//u.test(file.type) || /\.(?:mp3|wav|m4a|aac|ogg|oga|opus|flac|weba|mp4|m4v|mov|webm|mkv|avi)$/u.test(name)) {
+    return "Transkrypcja nagrania na tym komputerze i ukrycie danych osobowych";
   }
   if (file.type === "application/pdf" || name.endsWith(".pdf")) {
     return "Odczyt PDF (OCR tylko dla skanowanych stron) i ukrycie danych osobowych";

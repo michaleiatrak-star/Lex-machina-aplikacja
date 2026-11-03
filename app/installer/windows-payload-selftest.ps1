@@ -35,6 +35,8 @@ $llamaDocumentsMcp = Require-File "bootstrap\llama-local-documents-mcp.py"
 $llamaMistralTemplate = Require-File "bootstrap\mistral-nemo-web-grounded.jinja"
 $llamaBielikTemplate = Require-File "bootstrap\bielik-web-grounded.jinja"
 $ocrWorker = Require-File "ocr\paddle_worker.py"
+# Speech-to-text of recordings (model downloaded later, on the administrator's request).
+$sttWorker = Require-File "ocr\whisper_worker.py"
 $nerWorker = Require-File "privacy\stanza_ner_worker.py"
 # Morfeusz with the PESEL and TERYT registers: the anonymizer's gazetteer, run as the runtime runs it.
 $gazetteerWorker = Require-File "privacy\polish_pii_gazetteer.py"
@@ -177,6 +179,21 @@ if ($nerImportExit -ne 0) {
   # Stanza, torch and the Morfeusz dictionary: the Python error in the log the acceptance prints.
   Add-Content -LiteralPath (Join-Path $root "bootstrap\offline-payload-selftest.log") -Encoding UTF8 -Value ("SELFTEST_PYTHON_NER_IMPORT_FAILED`r`n" + $nerImport)
   throw "SELFTEST_PYTHON_NER_IMPORT_FAILED"
+}
+
+Write-Host "SELFTEST_STAGE:python-stt-import"
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  $sttImport = & $python $pythonSelftest stt-import 2>&1 | Out-String
+  $sttImportExit = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousPreference
+}
+Write-Host $sttImport
+if ($sttImportExit -ne 0) {
+  Add-Content -LiteralPath (Join-Path $root "bootstrap\offline-payload-selftest.log") -Encoding UTF8 -Value ("SELFTEST_PYTHON_STT_IMPORT_FAILED`r`n" + $sttImport)
+  throw "SELFTEST_PYTHON_STT_IMPORT_FAILED"
 }
 
 $requiredPaddle = @(

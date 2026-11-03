@@ -1,3 +1,4 @@
+import { LocalWhisperTranscriber, TranscriptionModelManager } from "../transcription.js";
 import { registerSnProxyRoutes, SN_PROXY_PREFIX, SnVerificationProxy } from "./sn-proxy.js";
 import { registryEnrichmentFor } from "../privacy/registry-enrichment.js";
 import { LocalPageImageMasker } from "../document-evidence.js";
@@ -292,6 +293,7 @@ export async function startLocalServer(options) {
     const updateDiscovery = applicationUpdateDiscovery();
     const maintenance = new MaintenanceService(updateDiscovery);
     const localModels = new LocalModelRuntime();
+    const transcriptionModel = new TranscriptionModelManager(path.join(localModels.rootDir, "transcription"));
     // Server mode (off by default; LEX_SERVER_MODE_FORCE=on|off fixes it for a container).
     const serverModeDir = path.join(caseFileStore.rootDir, "server");
     const serverMode = new ServerModeService(new ServerModeStore(serverModeDir), new ServerSecretBox({ keyPath: path.join(serverModeDir, "secret.key"), envKey: process.env.LEX_SERVER_SECRET_KEY }), authService, { forceEnv: process.env.LEX_SERVER_MODE_FORCE });
@@ -374,7 +376,7 @@ export async function startLocalServer(options) {
         const modelId = localModels.configuredModelId();
         if (modelId && localModels.status().state !== "READY")
             await localModels.ensureRunning(modelId);
-    });
+    }, new LocalWhisperTranscriber(() => transcriptionModel.dir));
     const coreApp = createLexHttpApp({
         registry,
         // Off until a Google OAuth client is configured (see google/config.ts).
@@ -473,7 +475,8 @@ export async function startLocalServer(options) {
         authService,
         localModels,
         maintenance,
-        anomalyJournal
+        anomalyJournal,
+        transcriptionModel
     });
     registerCoreLawRoutes(app, {
         authService,

@@ -393,6 +393,107 @@ function VisionOcrSection({ admin }: { admin: boolean }) {
   );
 }
 
+type TranscriptionStatus = {
+  modelId: string;
+  label: string;
+  license: string;
+  bytes: number;
+  installed: boolean;
+  state: "IDLE" | "DOWNLOADING" | "FAILED";
+  progress: { file: string; received: number; total: number; percent: number } | null;
+  error?: string;
+};
+
+/**
+ * Speech-to-text of recordings (audio, video) uploaded to a case: Whisper on this computer,
+ * downloaded once (about 1.6 GB, each file checked against its SHA-256).
+ */
+function TranscriptionSection({ admin }: { admin: boolean }) {
+  const [status, setStatus] = useState<TranscriptionStatus | null>(null);
+  const [error, setError] = useState("");
+
+  async function refresh(): Promise<void> {
+    try {
+      setStatus(await request<TranscriptionStatus>("/api/local-models/transcription"));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  useEffect(() => {
+    if (status?.state !== "DOWNLOADING") return;
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => window.clearInterval(timer);
+  }, [status?.state]);
+
+  async function act(action: "install" | "remove"): Promise<void> {
+    setError("");
+    try {
+      setStatus(await request<TranscriptionStatus>(`/api/local-models/transcription/${action}`, { method: "POST" }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  }
+
+  if (!status) return null;
+  const progress = status.progress;
+  return (
+    <div className="local-ai-facts">
+      <strong>
+        Transkrypcja nagrań
+        <InfoTip>
+          Nagrania audio i wideo (MP3, M4A, WAV, MP4, MOV i inne) wgrane do sprawy zamieniają się w tekst z oznaczeniem czasu,
+          na tym komputerze: nagranie nigdzie nie jest wysyłane. Potem tekst przechodzi anonimizację jak każdy dokument.
+        </InfoTip>
+      </strong>
+      <small>
+        {status.label}, {formatBytes(status.bytes)}, licencja {status.license}
+      </small>
+      {status.state === "DOWNLOADING" ? (
+        <div className="local-ai-progress">
+          <div>
+            <strong>Pobieranie i sprawdzanie SHA-256</strong>
+            {progress ? <small>{progress.file}</small> : null}
+          </div>
+          {progress ? <progress max={100} value={progress.percent} /> : <progress />}
+          {progress ? (
+            <small>
+              {formatBytes(progress.received)} / {formatBytes(progress.total)} · {progress.percent}%
+            </small>
+          ) : null}
+        </div>
+      ) : status.installed ? (
+        <small>Zainstalowany. Wgraj nagranie do sprawy, a powstanie z niego tekst.</small>
+      ) : (
+        <small>Nie zainstalowany.</small>
+      )}
+      {status.state === "FAILED" && status.error ? <small className="local-ai-error">Pobieranie nie powiodło się: {status.error}</small> : null}
+      {admin ? (
+        <div className="local-ai-actions">
+          <button type="button" disabled={status.installed || status.state === "DOWNLOADING"} onClick={() => void act("install")}>
+            Pobierz model transkrypcji
+          </button>
+          <button
+            type="button"
+            className="local-ai-danger"
+            disabled={!status.installed || status.state === "DOWNLOADING"}
+            onClick={() => void act("remove")}
+          >
+            Usuń model transkrypcji
+          </button>
+        </div>
+      ) : (
+        <small>Model pobiera administrator.</small>
+      )}
+      {error ? <small className="local-ai-error">{error}</small> : null}
+    </div>
+  );
+}
+
 export function LocalAiSetupPanel({
   user,
   embedded = false
@@ -1216,6 +1317,8 @@ export function LocalAiSetupPanel({
         ) : null}
 
         {data ? <VisionOcrSection admin={user.appRole === "ADMIN"} /> : null}
+
+        <TranscriptionSection admin={user.appRole === "ADMIN"} />
 
         {message ? <p className="local-ai-message">{message}</p> : null}
 

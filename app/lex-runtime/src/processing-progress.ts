@@ -8,6 +8,8 @@
 export type ProcessingStage =
   | "READING"
   | "OCR"
+  // A recording to text: done/total in seconds of the recording.
+  | "TRANSCRIPTION"
   | "DETECTING"
   | "AI_CHECK"
   | "PSEUDONYMIZING"

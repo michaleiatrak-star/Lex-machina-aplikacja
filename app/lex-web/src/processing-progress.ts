@@ -6,6 +6,7 @@ type Stage = ProcessingProgress["stage"];
 const RANGES: Record<Stage, [number, number]> = {
   READING: [0, 5],
   OCR: [5, 60],
+  TRANSCRIPTION: [5, 60],
   DETECTING: [60, 72],
   AI_CHECK: [72, 85],
   PSEUDONYMIZING: [85, 96],
@@ -15,6 +16,7 @@ const RANGES: Record<Stage, [number, number]> = {
 const LABELS: Record<Stage, string> = {
   READING: "Odczyt pliku",
   OCR: "OCR",
+  TRANSCRIPTION: "Transkrypcja nagrania",
   DETECTING: "Wykrywanie danych osobowych",
   AI_CHECK: "Lokalne AI sprawdza w kontekście zdania",
   PSEUDONYMIZING: "Anonimizacja",
@@ -35,6 +37,10 @@ export function progressLabel(progress: Pick<ProcessingProgress, "stage" | "done
     return progress.item ? `${label}: ${progress.item}${count}` : `${label}${count}`;
   }
   if (!progress.total || progress.stage === "SAVING" || progress.stage === "READING") return `${label}…`;
+  if (progress.stage === "TRANSCRIPTION") {
+    const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+    return `${label}: ${clock(Math.min(progress.total, progress.done ?? 0))} z ${clock(progress.total)}`;
+  }
   const current = Math.min(progress.total, (progress.done ?? 0) + (progress.stage === "OCR" ? 0 : 1));
   if (progress.stage === "OCR") {
     const done = Math.min(progress.total, progress.done ?? 0);
