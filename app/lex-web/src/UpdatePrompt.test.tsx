@@ -29,3 +29,27 @@ describe("nieudana poprzednia próba aktualizacji", () => {
     expect(failedUpdateMessage({ ...attempt, state: "ROLLED_BACK", lastError: "UPDATE_POSTCHECK_FAILED:1" }, "0.1.52")).toContain("przywrócono poprzednią wersję");
   });
 });
+
+describe("aktualizacja od razu po wydaniu", () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => void data.set(key, value), removeItem: (key: string) => void data.delete(key) };
+  };
+  const available = (version: string) => ({ status: "AVAILABLE", currentVersion: "0.1.55", checkedAt: "2026-11-03T12:00:00.000Z", latestVersion: version }) as never;
+
+  it("nowsza wersja znaleziona w trakcie pracy jest proponowana od razu, nie przy następnym starcie", async () => {
+    const { updateOfferAfterCheck } = await import("./update-prompt.js");
+    expect(updateOfferAfterCheck(memory(), available("0.1.56"), null, "0.1.55")?.version).toBe("0.1.56");
+    expect(updateOfferAfterCheck(null, available("0.1.56"), null, "0.1.55")?.version).toBe("0.1.56");
+  });
+
+  it("„Później” i „Pomiń tę wersję” są uszanowane; ta sama lub starsza wersja nie jest proponowana", async () => {
+    const { updateOfferAfterCheck, skipUpdateVersion } = await import("./update-prompt.js");
+    expect(updateOfferAfterCheck(memory(), available("0.1.56"), "0.1.56", "0.1.55")).toBeNull();
+    const store = memory();
+    skipUpdateVersion(store, "0.1.56");
+    expect(updateOfferAfterCheck(store, available("0.1.56"), null, "0.1.55")).toBeNull();
+    expect(updateOfferAfterCheck(store, available("0.1.57"), null, "0.1.55")?.version).toBe("0.1.57");
+    expect(updateOfferAfterCheck(memory(), available("0.1.55"), null, "0.1.55")).toBeNull();
+  });
+});
