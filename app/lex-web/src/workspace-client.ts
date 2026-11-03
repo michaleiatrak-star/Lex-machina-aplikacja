@@ -256,7 +256,7 @@ export type EditableSheets = {
   delimiter?: string;
 };
 export type EditableModel = EditableDocument | EditableSheets;
-export type EditableFormat = "docx" | "odt" | "xlsx" | "csv" | "tsv";
+export type EditableFormat = "docx" | "odt" | "xlsx" | "csv" | "tsv" | "pdf";
 
 export function getEditableItem(
   caseId: string,
@@ -268,7 +268,13 @@ export function getEditableItem(
 /** Renders an edited model to file bytes; the caller stores them as a new case file. */
 export async function renderEditable(
   caseId: string,
-  request: { format: EditableFormat; model: EditableModel; delimiter?: string }
+  request: {
+    format: EditableFormat;
+    model: EditableModel;
+    delimiter?: string;
+    // DOCX: differences from this document as Word tracked changes (author: the signed-in user).
+    trackChanges?: { baseline: EditableDocument };
+  }
 ): Promise<Blob> {
   const response = await fetch(`${apiBase()}/api/cases/${caseId}/workspace/render`, {
     method: "POST",

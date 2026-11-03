@@ -990,9 +990,15 @@ export function WorkspaceManager({
     filename: string,
     format: EditableFormat,
     model: EditableDocument | EditableSheets,
-    delimiter?: string
+    delimiter?: string,
+    trackChanges?: { baseline: EditableDocument }
   ): Promise<void> {
-    const blob = await renderEditable(caseId, { format, model, ...(delimiter ? { delimiter } : {}) });
+    const blob = await renderEditable(caseId, {
+      format,
+      model,
+      ...(delimiter ? { delimiter } : {}),
+      ...(trackChanges ? { trackChanges } : {})
+    });
     const stored = await uploadCaseFile(caseId, new File([blob], filename, { type: blob.type }));
     if (selectedFolder) {
       await moveWorkspaceItem(caseId, stored.uploadId, selectedFolder);
@@ -1002,10 +1008,12 @@ export function WorkspaceManager({
 
   async function saveEditedDocument(
     filename: string,
-    format: "docx" | "odt",
-    blocks: EditableBlock[]
+    format: "docx" | "odt" | "pdf",
+    blocks: EditableBlock[],
+    options: { trackChanges?: boolean } = {}
   ): Promise<void> {
-    await saveRendered(filename, format, { kind: "document", blocks });
+    const baseline = options.trackChanges && format === "docx" ? preview?.document : undefined;
+    await saveRendered(filename, format, { kind: "document", blocks }, undefined, baseline ? { baseline } : undefined);
   }
 
   async function saveEditedSheet(

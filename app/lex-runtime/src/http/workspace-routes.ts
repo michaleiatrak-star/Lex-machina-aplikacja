@@ -2093,7 +2093,13 @@ export function registerWorkspaceRoutes(
         throw new Error("OFFICE_EDIT_INVALID_REQUEST");
       }
       const delimiter = typeof req.body?.delimiter === "string" ? req.body.delimiter.slice(0, 1) : undefined;
-      output = await dependencies.officeEditor.write(format, model, delimiter);
+      // Tracked changes: the author is the signed-in user, never a name sent by the client.
+      const baseline = req.body?.trackChanges?.baseline as EditableModel | undefined;
+      const track =
+        format === "docx" && baseline && typeof baseline === "object" && baseline.kind === "document"
+          ? { baseline, author: actor.user.displayName, date: new Date().toISOString().replace(/\.\d{3}Z$/u, "Z") }
+          : undefined;
+      output = await dependencies.officeEditor.write(format, model, delimiter, track);
       res.setHeader("Content-Type", FORMAT_MEDIA_TYPE[format]);
       res.setHeader("Cache-Control", "no-store");
       sendAndWipe(res, output);

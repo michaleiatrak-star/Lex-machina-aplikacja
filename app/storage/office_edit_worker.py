@@ -18,12 +18,18 @@ The writer produces a simplified, clean file: text, headings, bold/italic/
 underline, lists and tables survive; page headers/footers, company styles,
 comments and tracked changes do not. Originals are never modified - the
 caller stores the result as a new file.
+
+DOCX with "track": {"baseline": <document model>, "author": str, "date": ISO}:
+the differences from the baseline are written as Word tracked changes (w:ins,
+w:del, w:rPrChange) of that author, word by word inside a changed paragraph.
+Format "pdf": the document model as an A4 PDF (PyMuPDF Story, fonts embedded).
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import difflib
 import io
 import json
 import re
@@ -434,10 +440,12 @@ DOCX_LIST_NUMBERING = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:numbering>"""
 
 
-def docx_write(model: dict) -> bytes:
+def docx_write(model: dict, track: dict | None = None) -> bytes:
     body = []
     ordered_lists = 0
-    for block in model.get("blocks") or []:
+    if track and isinstance(track.get("baseline"), dict):
+        body.append(tracked_body(track["baseline"], model, Tracker(track.get("author", ""), track.get("date", ""))))
+    for block in [] if body else model.get("blocks") or []:
         kind = block.get("type")
         if kind == "heading":
             level = min(max(int(block.get("level", 1)), 1), 3)
@@ -460,10 +468,8 @@ def docx_write(model: dict) -> bytes:
                     for cell in row
                 )
                 rows.append("<w:tr>%s</w:tr>" % cells)
-            body.append(
-                '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>%s</w:tbl>'
-                % "".join(rows)
-            )
+            columns = max([len(row) for row in block.get("rows") or []] or [1])
+            body.append("<w:tbl>%s%s%s</w:tbl>" % (TABLE_PROPS, table_grid(columns), "".join(rows)))
     sect = '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
     document = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -482,6 +488,288 @@ def docx_write(model: dict) -> bytes:
         ("word/_rels/document.xml.rels", DOCX_DOC_RELS),
     ]
     return zip_bytes([(n, d.encode("utf-8") if isinstance(d, str) else d) for n, d in entries])
+
+
+# --- DOCX tracked changes -------------------------------------------------------
+
+class Tracker:
+    """w:id counter and the author/date attributes of every change."""
+
+    def __init__(self, author: str, date: str):
+        self.next_id = 1
+        author = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(author or "")).strip()[:200] or "Lex Machina"
+        self.attrs = ' w:author="%s" w:date="%s"' % (escape(author, {'"': "&quot;"}), escape(str(date)[:40], {'"': "&quot;"}))
+
+    def mark(self) -> str:
+        value = self.next_id
+        self.next_id += 1
+        return ' w:id="%d"%s' % (value, self.attrs)
+
+
+def fmt_of(run: dict) -> tuple[bool, bool, bool]:
+    return (bool(run.get("b")), bool(run.get("i")), bool(run.get("u")))
+
+
+def rpr_props(fmt: tuple[bool, bool, bool]) -> str:
+    return ("<w:b/>" if fmt[0] else "") + ("<w:i/>" if fmt[1] else "") + ('<w:u w:val="single"/>' if fmt[2] else "")
+
+
+def run_xml(text: str, fmt: tuple[bool, bool, bool], deleted: bool = False, change: str = "") -> str:
+    props = rpr_props(fmt) + change
+    rpr = "<w:rPr>%s</w:rPr>" % props if props else ""
+    out = []
+    for part in re.split(r"(\n|\t)", text):
+        if part == "\n":
+            out.append("<w:r>%s<w:br/></w:r>" % rpr)
+        elif part == "\t":
+            out.append("<w:r>%s<w:tab/></w:r>" % rpr)
+        elif part:
+            tag = "w:delText" if deleted else "w:t"
+            out.append('<w:r>%s<%s xml:space="preserve">%s</%s></w:r>' % (rpr, tag, escape(part), tag))
+    return "".join(out)
+
+
+def tokens(runs: list[dict]) -> list[tuple[str, tuple[bool, bool, bool]]]:
+    out = []
+    for run in runs or []:
+        for token in re.findall(r"\s+|[^\s]+", str(run.get("text", ""))):
+            out.append((token, fmt_of(run)))
+    return out
+
+
+def merged_opcodes(opcodes, a):
+    """A change, only spaces, a change: one change ("10 000" -> "12 500" reads as one
+    replacement, not two interleaved)."""
+    out = []
+    for op in opcodes:
+        if (
+            len(out) >= 2
+            and op[0] != "equal"
+            and out[-1][0] == "equal"
+            and out[-2][0] != "equal"
+            and all(not t.strip() for t, _ in a[out[-1][1]:out[-1][2]])
+        ):
+            space = out.pop()
+            first = out.pop()
+            out.append(("replace", first[1], op[2], first[3], op[4]))
+            del space
+        elif out and op[0] != "equal" and out[-1][0] != "equal":
+            first = out.pop()
+            out.append(("replace", first[1], op[2], first[3], op[4]))
+        else:
+            out.append(op)
+    return out
+
+
+def tracked_runs(old: list[dict], new: list[dict], tracker: Tracker) -> str:
+    a, b = tokens(old), tokens(new)
+    out = []
+    matcher = difflib.SequenceMatcher(None, [t for t, _ in a], [t for t, _ in b], autojunk=False)
+    for op, i1, i2, j1, j2 in merged_opcodes(matcher.get_opcodes(), a):
+        if op == "equal":
+            pending = None  # [text, format] of unchanged words with the same formatting
+            for (text, before), (_, after) in zip(a[i1:i2], b[j1:j2]):
+                if before == after:
+                    if pending and pending[1] == after:
+                        pending[0] += text
+                    else:
+                        if pending:
+                            out.append(run_xml(*pending))
+                        pending = [text, after]
+                    continue
+                if pending:
+                    out.append(run_xml(*pending))
+                    pending = None
+                change = "<w:rPrChange%s><w:rPr>%s</w:rPr></w:rPrChange>" % (tracker.mark(), rpr_props(before))
+                out.append(run_xml(text, after, change=change))
+            if pending:
+                out.append(run_xml(*pending))
+            continue
+        if i2 > i1:
+            out.append("<w:del%s>%s</w:del>" % (tracker.mark(), "".join(run_xml(t, f, deleted=True) for t, f in grouped(a[i1:i2]))))
+        if j2 > j1:
+            out.append("<w:ins%s>%s</w:ins>" % (tracker.mark(), "".join(run_xml(t, f) for t, f in grouped(b[j1:j2]))))
+    return "".join(out)
+
+
+def grouped(items):
+    """Adjacent words with the same formatting as one run."""
+    out = []
+    for text, fmt in items:
+        if out and out[-1][1] == fmt:
+            out[-1] = (out[-1][0] + text, fmt)
+        else:
+            out.append((text, fmt))
+    return out
+
+
+def whole_runs(runs: list[dict], tracker: Tracker, kind: str) -> str:
+    content = "".join(run_xml(str(run.get("text", "")), fmt_of(run), deleted=kind == "del") for run in runs or [])
+    return "<w:%s%s>%s</w:%s>" % (kind, tracker.mark(), content, kind) if content else ""
+
+
+def units(blocks: list[dict]) -> list[dict]:
+    """Paragraph-like units: a heading, a paragraph, one list item, or a whole table."""
+    out = []
+    for block in blocks or []:
+        kind = block.get("type")
+        if kind == "heading":
+            level = min(max(int(block.get("level", 1)), 1), 3)
+            out.append({"key": "h%d" % level, "ppr": '<w:pStyle w:val="Heading%d"/>' % level, "runs": block.get("runs") or []})
+        elif kind == "paragraph":
+            out.append({"key": "p", "ppr": "", "runs": block.get("runs") or []})
+        elif kind == "list":
+            num = 2 if block.get("ordered") else 1
+            for item in block.get("items") or []:
+                out.append({"key": "l%d" % num, "ppr": '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="%d"/></w:numPr>' % num, "runs": item or []})
+        elif kind == "table":
+            out.append({"key": "t", "rows": [[str(cell) for cell in row] for row in block.get("rows") or []]})
+    return out
+
+
+def unit_text(unit: dict) -> str:
+    if unit["key"] == "t":
+        return "\x1e".join("\x1f".join(row) for row in unit["rows"])
+    return runs_text(unit["runs"])
+
+
+TABLE_PROPS = '<w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>'
+
+
+def table_grid(columns: int) -> str:
+    """w:tblGrid is required: without it LibreOffice draws one column."""
+    width = max(600, 9072 // max(1, columns))
+    return "<w:tblGrid>%s</w:tblGrid>" % (('<w:gridCol w:w="%d"/>' % width) * max(1, columns))
+
+
+def cell_xml(content: str) -> str:
+    return '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr><w:p>%s</w:p></w:tc>' % content
+
+
+def tracked_table(old: dict | None, new: dict | None, tracker: Tracker) -> str:
+    rows = []
+    if old and new and len(old["rows"]) == len(new["rows"]) and all(len(x) == len(y) for x, y in zip(old["rows"], new["rows"])):
+        for old_row, new_row in zip(old["rows"], new["rows"]):
+            rows.append("<w:tr>%s</w:tr>" % "".join(cell_xml(tracked_runs([{"text": x}], [{"text": y}], tracker)) for x, y in zip(old_row, new_row)))
+    else:
+        for unit, kind in ((old, "del"), (new, "ins")):
+            for row in (unit or {}).get("rows", []):
+                rows.append("<w:tr><w:trPr><w:%s%s/></w:trPr>%s</w:tr>" % (kind, tracker.mark(), "".join(cell_xml(whole_runs([{"text": c}], tracker, kind)) for c in row)))
+    width = max([len(row) for unit in (old, new) for row in (unit or {}).get("rows", [])] or [1])
+    return "<w:tbl>%s%s%s</w:tbl>" % (TABLE_PROPS, table_grid(width), "".join(rows))
+
+
+def tracked_paragraph(old: dict | None, new: dict | None, tracker: Tracker) -> str:
+    unit = new or old
+    if old and new:
+        content, mark = tracked_runs(old["runs"], new["runs"], tracker), ""
+    elif new:
+        content, mark = whole_runs(new["runs"], tracker, "ins"), "<w:rPr><w:ins%s/></w:rPr>" % tracker.mark()
+    else:
+        content, mark = whole_runs(old["runs"], tracker, "del"), "<w:rPr><w:del%s/></w:rPr>" % tracker.mark()
+    ppr = unit["ppr"] + mark
+    return "<w:p>%s%s</w:p>" % ("<w:pPr>%s</w:pPr>" % ppr if ppr else "", content)
+
+
+def similar(old: dict, new: dict) -> bool:
+    """The same paragraph edited (at least half of its words kept), not a different one."""
+    if old["key"] == "t":
+        return True
+    a, b = unit_text(old).split(), unit_text(new).split()
+    if not a or not b:
+        return not a and not b
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.5
+
+
+def tracked_body(baseline: dict, model: dict, tracker: Tracker) -> str:
+    old, new = units(baseline.get("blocks") or []), units(model.get("blocks") or [])
+    matcher = difflib.SequenceMatcher(None, [u["key"] + "\x00" + unit_text(u) for u in old], [u["key"] + "\x00" + unit_text(u) for u in new], autojunk=False)
+    body = []
+
+    def emit(a, b):
+        unit = b or a
+        body.append(tracked_table(a, b, tracker) if unit["key"] == "t" else tracked_paragraph(a, b, tracker))
+
+    for op, i1, i2, j1, j2 in matcher.get_opcodes():
+        if op == "equal":
+            for a, b in zip(old[i1:i2], new[j1:j2]):
+                emit(a, b)
+            continue
+        left, right = old[i1:i2], new[j1:j2]
+        # A changed unit is paired with the next new one of the same kind (edited in place).
+        while left or right:
+            if left and right and left[0]["key"] == right[0]["key"] and similar(left[0], right[0]):
+                emit(left.pop(0), right.pop(0))
+            elif left and (not right or not any(u["key"] == left[0]["key"] and similar(left[0], u) for u in right)):
+                emit(left.pop(0), None)
+            else:
+                emit(None, right.pop(0))
+    return "".join(body)
+
+
+# --- PDF ------------------------------------------------------------------------
+
+PDF_CSS = """
+body { font-family: serif; font-size: 12pt; line-height: 1.35; }
+h1 { font-size: 16pt; margin: 12pt 0 6pt 0; }
+h2 { font-size: 14pt; margin: 10pt 0 5pt 0; }
+h3 { font-size: 12.5pt; margin: 8pt 0 4pt 0; }
+p { margin: 0 0 6pt 0; text-align: justify; }
+table { border-collapse: collapse; margin: 6pt 0; }
+td { border: 0.5pt solid black; padding: 3pt; vertical-align: top; }
+"""
+
+
+def html_runs(runs: list[dict]) -> str:
+    out = []
+    for run in runs or []:
+        text = escape(str(run.get("text", ""))).replace("\n", "<br/>").replace("\t", "&#160;&#160;&#160;&#160;")
+        if run.get("u"):
+            text = "<u>%s</u>" % text
+        if run.get("i"):
+            text = "<i>%s</i>" % text
+        if run.get("b"):
+            text = "<b>%s</b>" % text
+        out.append(text)
+    return "".join(out)
+
+
+def pdf_write(model: dict) -> bytes:
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        fail("OFFICE_EDIT_PDF_UNAVAILABLE")
+    html = []
+    for block in model.get("blocks") or []:
+        kind = block.get("type")
+        if kind == "heading":
+            level = min(max(int(block.get("level", 1)), 1), 3)
+            html.append("<h%d>%s</h%d>" % (level, html_runs(block.get("runs") or []), level))
+        elif kind == "paragraph":
+            html.append("<p>%s</p>" % (html_runs(block.get("runs") or []) or "&#160;"))
+        elif kind == "list":
+            tag = "ol" if block.get("ordered") else "ul"
+            html.append("<%s>%s</%s>" % (tag, "".join("<li>%s</li>" % html_runs(item) for item in block.get("items") or []), tag))
+        elif kind == "table":
+            rows = "".join(
+                "<tr>%s</tr>" % "".join("<td>%s</td>" % escape(str(cell)).replace("\n", "<br/>") for cell in row)
+                for row in block.get("rows") or []
+            )
+            html.append("<table>%s</table>" % rows)
+    out = io.BytesIO()
+    writer = fitz.DocumentWriter(out)
+    story = fitz.Story(html="".join(html) or "<p>&#160;</p>", user_css=PDF_CSS)
+    page = fitz.paper_rect("a4")
+    margin = 70.9  # 2.5 cm, as the DOCX
+    where = page + (margin, margin, -margin, -margin)
+    more = 1
+    while more:
+        device = writer.begin_page(page)
+        more, _ = story.place(where)
+        story.draw(device)
+        writer.end_page()
+    writer.close()
+    return out.getvalue()
 
 
 def odt_style_name(run: dict) -> str:
@@ -725,7 +1013,10 @@ def main() -> None:
         fmt = request.get("format")
         model = request.get("model") or {}
         if fmt == "docx":
-            output = docx_write(model)
+            track = request.get("track")
+            output = docx_write(model, track if isinstance(track, dict) else None)
+        elif fmt == "pdf":
+            output = pdf_write(model)
         elif fmt == "odt":
             output = odt_write(model)
         elif fmt == "xlsx":
