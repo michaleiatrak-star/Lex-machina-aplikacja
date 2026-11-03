@@ -8,20 +8,22 @@ import { documentWork } from "../document-work.js";
 // One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
 // each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
 // so an extra process needs free memory. Background OCR (files read ahead) stays at one process.
-export const OCR_WORKER_MEMORY_BYTES = 2.5 * 1024 ** 3;
+// Measured peak of one worker (PP-OCRv6 medium, the latin recognizer, folds and stamps): 3.2 GB.
+export const OCR_WORKER_MEMORY_BYTES = 3.5 * 1024 ** 3;
 export const OCR_PARALLEL_MIN_PAGES = 4;
 export function ocrWorkerCount(args) {
     if (args.background || args.pages < OCR_PARALLEL_MIN_PAGES)
         return 1;
     const raw = args.requested ?? (args.env?.trim() && /^\d+$/u.test(args.env.trim()) ? Number(args.env.trim()) : undefined);
     const byMemory = Math.max(1, 1 + Math.floor(Math.max(0, args.freeMemory - OCR_WORKER_MEMORY_BYTES) / OCR_WORKER_MEMORY_BYTES));
-    // Measured on 4 cores, 8 scanned pages: 1 process 160 s, 2 -> 127 s, 4 -> 107 s, same text.
-    const byCpu = Math.max(1, Math.floor(args.cpus / 2));
+    // Measured on 4 cores, 8 scanned pages: 1 process 160 s, 2 -> 127 s, 4 -> 107 s; the text is the
+    // same with 1 or 4 threads a process. So one process a core, memory permitting.
+    const byCpu = Math.max(1, args.cpus);
     const cap = Math.ceil(args.pages / 2);
     // Set by hand (LEX_OCR_WORKERS or the option): taken as it is, at most one worker per two pages.
     if (raw !== undefined)
         return Math.max(1, Math.min(raw, cap));
-    return Math.max(1, Math.min(4, byCpu, byMemory, cap));
+    return Math.max(1, Math.min(6, byCpu, byMemory, cap));
 }
 // Pages per worker pass (one pass = one process, one timeout).
 export const OCR_BATCH_PAGES = 30;
