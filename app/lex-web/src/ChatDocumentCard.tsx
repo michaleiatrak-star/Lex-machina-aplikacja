@@ -47,10 +47,17 @@ export function ChatDocumentCard(props: {
   // files as a new file; the generated original stays unchanged.
   async function saveEdited(
     filename: string,
-    format: "docx" | "odt",
-    blocks: EditableBlock[]
+    format: "docx" | "odt" | "pdf",
+    blocks: EditableBlock[],
+    options: { trackChanges?: boolean } = {}
   ): Promise<void> {
-    const blob = await renderEditable(caseId, { format, model: { kind: "document", blocks } });
+    // Tracked changes against the generated document as it was opened.
+    const baseline = options.trackChanges && format === "docx" && preview ? { kind: "document" as const, blocks: preview } : undefined;
+    const blob = await renderEditable(caseId, {
+      format,
+      model: { kind: "document", blocks },
+      ...(baseline ? { trackChanges: { baseline } } : {})
+    });
     await uploadCaseFile(caseId, new File([blob], filename, { type: blob.type }));
     setEdited({ blob, filename });
     setStatus(`Wersja edytowana „${filename}” zapisana w aktach sprawy.`);

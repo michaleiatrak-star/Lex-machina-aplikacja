@@ -86,14 +86,16 @@ export function DocumentEditor(props: {
   format: "docx" | "odt";
   blocks: EditableBlock[];
   readOnly: boolean;
-  onSave: (filename: string, format: "docx" | "odt", blocks: EditableBlock[]) => Promise<void>;
+  onSave: (filename: string, format: "docx" | "odt" | "pdf", blocks: EditableBlock[], options: { trackChanges?: boolean }) => Promise<void>;
   // Other uses of the edited text (e.g. a pleading's draft in its pipeline); each
   // resolves to the status shown to the user.
   extraActions?: Array<{ label: string; title?: string; run: (blocks: EditableBlock[]) => Promise<string> }>;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"view" | "edit">("view");
-  const [format, setFormat] = useState(props.format);
+  const [format, setFormat] = useState<"docx" | "odt" | "pdf">(props.format);
+  // Word tracked changes against the opened document, with the signed-in user as their author.
+  const [trackChanges, setTrackChanges] = useState(false);
   const [saveAs, setSaveAs] = useState(editedFilename(props.filename));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -118,7 +120,7 @@ export function DocumentEditor(props: {
     setSaving(true);
     setStatus("");
     try {
-      await props.onSave(name, format, blocksFromDom(target as unknown as NodeLike));
+      await props.onSave(name, format, blocksFromDom(target as unknown as NodeLike), { trackChanges: trackChanges && format === "docx" });
       setDirty(false);
       setStatus(`Zapisano jako „${name}”. Oryginał pozostaje bez zmian.`);
       setSaveAs(editedFilename(name));
@@ -160,7 +162,8 @@ export function DocumentEditor(props: {
           Zapis tworzy nowy plik w uproszczonym układzie; oryginał pozostaje bez zmian.
           <InfoTip>
             Zostają akapity, nagłówki, listy, tabele, pogrubienie, kursywa i podkreślenie. Style, nagłówki i stopki
-            strony, komentarze oraz śledzone zmiany nie są przenoszone.
+            strony, komentarze oraz wcześniejsze śledzone zmiany nie są przenoszone. „Śledź zmiany” (DOCX) zapisuje
+            Twoje poprawki jako śledzone zmiany Worda, z Tobą jako autorem. PDF to wersja do wysłania lub druku.
           </InfoTip>
         </p>
       ) : null}
@@ -204,11 +207,18 @@ export function DocumentEditor(props: {
             <select
               aria-label="Format zapisu"
               value={format}
-              onChange={(event) => setFormat(event.target.value as "docx" | "odt")}
+              onChange={(event) => setFormat(event.target.value as "docx" | "odt" | "pdf")}
             >
               <option value="docx">DOCX</option>
               <option value="odt">ODT</option>
+              <option value="pdf">PDF</option>
             </select>
+            {format === "docx" ? (
+              <label className="text-editor-track" title="Zmiany względem otwartego dokumentu zapisane jako śledzone zmiany Worda, z Tobą jako autorem">
+                <input type="checkbox" checked={trackChanges} onChange={(event) => setTrackChanges(event.target.checked)} />
+                Śledź zmiany
+              </label>
+            ) : null}
             <button type="button" disabled={(!dirty && format === props.format) || saving || !saveAs.trim()} onClick={() => void save()}>
               {saving ? "Zapisywanie…" : "Zapisz jako nowy plik"}
             </button>
