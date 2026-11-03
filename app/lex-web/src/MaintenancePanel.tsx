@@ -67,6 +67,16 @@ export function friendlyError(error: unknown): string {
         ? error.message
         : String(error);
 
+  // The update runner (PowerShell) ended at once: it never ran the update script.
+  if (code.startsWith("APPLICATION_UPDATE_RUNNER_EXITED")) {
+    const detail = code.split(":").slice(2).join(":").trim();
+    return (
+      "Instalator aktualizacji nie mógł się uruchomić: Windows zatrzymał skrypt aktualizacji (najczęściej zasady wykonywania " +
+      "skryptów PowerShell ustawione przez administratora albo program antywirusowy). Aplikacja pozostaje bez zmian. " +
+      "Zainstaluj nową wersję instalatorem ze strony wydania; szczegóły: %LOCALAPPDATA%\\LexMachina\\update-runner-start.log" +
+      (detail ? ` (${detail.slice(0, 300)})` : "")
+    );
+  }
   if (code === "SKILL_CHANNEL_SIGNED_POLICY_BLOCKED") {
     return "Polityka bezpieczeństwa wymaga podpisanych skilli, a kanał repozytorium nie jest podpisany — odświeżenie z kanału jest zablokowane.";
   }

@@ -80,6 +80,36 @@ fn update_staging_root(temp: Option<std::ffi::OsString>) -> PathBuf {
         .join("LexMachinaUpdate")
 }
 
+// Where the update runner keeps its journal and log (app-update-transaction.ps1): the
+// start log of the runner's own process sits next to them.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn update_log_dir(
+    local_app_data: Option<std::ffi::OsString>,
+    temp: Option<std::ffi::OsString>,
+) -> PathBuf {
+    match local_app_data.filter(|value| !value.is_empty()) {
+        Some(root) => PathBuf::from(root).join("LexMachina"),
+        None => update_staging_root(temp),
+    }
+}
+
+/// The last bytes of the runner's start log, one line, for the error shown to the user.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn start_log_tail(text: &str) -> String {
+    let flat: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
+    let start = flat
+        .char_indices()
+        .rev()
+        .nth(399)
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    flat[start..].to_string()
+}
+
 fn valid_update_receipt_token(token: &str) -> bool {
     if token.len() < 16
         || token.len() > 180
@@ -453,25 +483,80 @@ fn install_application_update(
         const DETACHED_PROCESS: u32 = 0x0000_0008;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
-        let runner_command = |flags: u32| {
+        // The runner's own output goes to a start log: a PowerShell stopped before the script's
+        // first line (execution policy set by Group Policy, an antivirus) left no trace at all.
+        let log_dir = update_log_dir(env::var_os("LOCALAPPDATA"), env::var_os("TEMP"));
+        let _ = std::fs::create_dir_all(&log_dir);
+        let start_log = log_dir.join("update-runner-start.log");
+        let mut log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&start_log)
+            .map_err(|error| format!("APPLICATION_UPDATE_START_LOG_FAILED:{error}"))?;
+        {
+            use std::io::Write;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|value| value.as_secs())
+                .unwrap_or(0);
+            let _ = writeln!(
+                log,
+                "--- {now} start {} receipt {}",
+                runner.display(),
+                receipt_token
+            );
+        }
+        let output = |log: &std::fs::File| -> Result<(std::process::Stdio, std::process::Stdio), String> {
+            let out = log
+                .try_clone()
+                .map_err(|error| format!("APPLICATION_UPDATE_START_LOG_FAILED:{error}"))?;
+            let err = log
+                .try_clone()
+                .map_err(|error| format!("APPLICATION_UPDATE_START_LOG_FAILED:{error}"))?;
+            Ok((out.into(), err.into()))
+        };
+        let runner_command = |flags: u32, stdout: std::process::Stdio, stderr: std::process::Stdio| {
             let mut command = Command::new(&powershell);
             command
                 .creation_flags(flags)
                 .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null());
+                .stdout(stdout)
+                .stderr(stderr);
             command
         };
         let detached = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
-        let mut command = runner_command(detached | CREATE_BREAKAWAY_FROM_JOB);
-        let started = configure_runner(&mut command, &runner, &receipt, &runtime_root, &install_root, &executable)
-            .spawn()
+        let (stdout, stderr) = output(&log)?;
+        let mut command = runner_command(detached | CREATE_BREAKAWAY_FROM_JOB, stdout, stderr);
+        let mut child = match configure_runner(&mut command, &runner, &receipt, &runtime_root, &install_root, &executable).spawn() {
+            Ok(child) => child,
             // A job that forbids breakaway: start it detached all the same.
-            .or_else(|_| {
-                let mut fallback = runner_command(detached);
-                configure_runner(&mut fallback, &runner, &receipt, &runtime_root, &install_root, &executable).spawn()
-            });
-        started.map_err(|error| format!("APPLICATION_UPDATE_RUNNER_START_FAILED:{error}"))?;
+            Err(_) => {
+                let (stdout, stderr) = output(&log)?;
+                let mut fallback = runner_command(detached, stdout, stderr);
+                configure_runner(&mut fallback, &runner, &receipt, &runtime_root, &install_root, &executable)
+                    .spawn()
+                    .map_err(|error| format!("APPLICATION_UPDATE_RUNNER_START_FAILED:{error}"))?
+            }
+        };
+        drop(log);
+
+        // The runner waits for this process to exit before it does anything to the installation:
+        // one that ended within seconds never ran the script. The app then stays open and says why.
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            if let Ok(Some(status)) = child.try_wait() {
+                let text = std::fs::read(&start_log)
+                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                    .unwrap_or_default();
+                let last = text.rsplit("--- ").next().unwrap_or("");
+                let detail = last.split_once('\n').map(|(_, rest)| rest).unwrap_or("");
+                return Err(format!(
+                    "APPLICATION_UPDATE_RUNNER_EXITED:{}:{}",
+                    status.code().map(|code| code.to_string()).unwrap_or_else(|| "?".to_string()),
+                    start_log_tail(detail)
+                ));
+            }
+        }
 
         app.exit(0);
         Ok(())
@@ -582,6 +667,8 @@ mod tests {
         is_allowed_external_url,
         is_sn_url,
         pkg_from_receipt,
+        start_log_tail,
+        update_log_dir,
         update_staging_root,
         valid_update_receipt_token,
         valid_workspace_open_token,
@@ -614,6 +701,27 @@ mod tests {
         assert_eq!(pkg_from_receipt(&staging, token).unwrap_err(), "APPLICATION_UPDATE_RECEIPT_INVALID");
         assert_eq!(pkg_from_receipt(&staging, "../x.json").unwrap_err(), "APPLICATION_UPDATE_RECEIPT_TOKEN_INVALID");
         std::fs::remove_dir_all(&staging).unwrap();
+    }
+
+    #[test]
+    fn update_log_dir_matches_the_runner_journal() {
+        let local = std::env::temp_dir().join("lex-local-app-data");
+        assert_eq!(
+            update_log_dir(Some(local.clone().into_os_string()), None),
+            local.join("LexMachina")
+        );
+        let temp = std::env::temp_dir().join("lex-temp-variable");
+        assert_eq!(
+            update_log_dir(None, Some(temp.clone().into_os_string())),
+            temp.join("LexMachinaUpdate")
+        );
+    }
+
+    #[test]
+    fn start_log_tail_is_one_line_of_the_last_400_characters() {
+        assert_eq!(start_log_tail("a\r\nb\tc  "), "a b c");
+        let long = "ż".repeat(1000);
+        assert_eq!(start_log_tail(&long).chars().count(), 400);
     }
 
     #[test]
