@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   downloadApplicationUpdate,
   getUpdateStatus,
@@ -6,14 +6,14 @@ import {
   type UpdateStatusResponse
 } from "./api.js";
 import { friendlyError, manualUpdateInstruction, manualUpdateReleaseUrl, openReleasePage } from "./MaintenancePanel.js";
-import { failedUpdateMessage, rememberUpdateStatus, skipUpdateVersion, startupUpdate, updateStore, APP_VERSION } from "./update-prompt.js";
+import { failedUpdateMessage, skipUpdateVersion, startupUpdate, updateOfferAfterCheck, updateStore, APP_VERSION, UPDATE_CHECK_INTERVAL_MS } from "./update-prompt.js";
 
 /**
- * Desktop, administrator: a newer version found earlier is offered when the application starts.
+ * Desktop, administrator: a newer version is offered as soon as it is released: the check runs at
+ * the start and every hour while the application is open, and the question appears at once.
  * "Zaktualizuj teraz" downloads the installer (SHA-256 of the GitHub release, Windows also the
  * ProductVersion) and hands it over: Windows runs the update transaction (backup, health check,
- * rollback, restart), macOS opens the .pkg in the system Installer. Each start checks again in
- * the background for the next one.
+ * rollback, restart), macOS opens the .pkg in the system Installer.
  */
 export function UpdatePrompt() {
   const [store] = useState(updateStore);
@@ -23,17 +23,28 @@ export function UpdatePrompt() {
   const [error, setError] = useState("");
   const [lastAttempt, setLastAttempt] = useState<UpdateStatusResponse["lastAttempt"]>();
 
+  // "Później": not asked again about this version until the next start.
+  const postponed = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+
   useEffect(() => {
     let alive = true;
-    getUpdateStatus()
-      .then((status) => {
-        if (!alive) return;
-        rememberUpdateStatus(store, status);
-        setLastAttempt(status.lastAttempt);
-      })
-      .catch(() => undefined);
+    const check = () =>
+      getUpdateStatus()
+        .then((status) => {
+          if (!alive) return;
+          setLastAttempt(status.lastAttempt);
+          const found = updateOfferAfterCheck(store, status, postponed.current);
+          // A download in progress keeps its own offer.
+          if (found && !busyRef.current) setOffer(found);
+        })
+        .catch(() => undefined);
+    void check();
+    const timer = setInterval(() => void check(), UPDATE_CHECK_INTERVAL_MS);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, [store]);
 
@@ -91,7 +102,14 @@ export function UpdatePrompt() {
           <button type="button" className="update-prompt-primary" disabled={busy} onClick={() => void update()}>
             {busy ? "Aktualizuję…" : "Zaktualizuj teraz"}
           </button>
-          <button type="button" disabled={busy} onClick={() => setOffer(null)}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              postponed.current = offer.version;
+              setOffer(null);
+            }}
+          >
             Później
           </button>
           <button

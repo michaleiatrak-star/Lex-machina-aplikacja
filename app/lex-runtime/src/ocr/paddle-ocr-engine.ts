@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { evidenceBudget, ocrWorkerFailure, readOcrPages, type EvidenceBudget } from "./ocr-result.js";
+import { evidenceBudget, ocrWorkerFailure, readOcrPages } from "./ocr-result.js";
 import { fileURLToPath } from "node:url";
 import { documentWork } from "../document-work.js";
 import type {
@@ -18,7 +18,35 @@ export type LocalPaddleOcrOptions = {
   timeoutMs?: number;
   // Line images for the local vision model; asked for only when the model is installed.
   lineCrops?: () => boolean;
+  // Worker processes run at once on a long scan (each with its share of the CPU threads);
+  // default from LEX_OCR_WORKERS or the machine (ocrWorkerCount).
+  workers?: number;
 };
+
+// One PaddleOCR process scales poorly past a few CPU threads: on a long scan several processes,
+// each with a share of the cores, read pages at once. Each loads its own models (about 1.5 GB),
+// so an extra process needs free memory. Background OCR (files read ahead) stays at one process.
+export const OCR_WORKER_MEMORY_BYTES = 2.5 * 1024 ** 3;
+export const OCR_PARALLEL_MIN_PAGES = 4;
+
+export function ocrWorkerCount(args: {
+  pages: number;
+  cpus: number;
+  freeMemory: number;
+  env?: string | undefined;
+  requested?: number;
+  background?: boolean;
+}): number {
+  if (args.background || args.pages < OCR_PARALLEL_MIN_PAGES) return 1;
+  const raw = args.requested ?? (args.env?.trim() && /^\d+$/u.test(args.env.trim()) ? Number(args.env.trim()) : undefined);
+  const byMemory = Math.max(1, 1 + Math.floor(Math.max(0, args.freeMemory - OCR_WORKER_MEMORY_BYTES) / OCR_WORKER_MEMORY_BYTES));
+  // Measured on 4 cores, 8 scanned pages: 1 process 160 s, 2 -> 127 s, 4 -> 107 s, same text.
+  const byCpu = Math.max(1, Math.floor(args.cpus / 2));
+  const cap = Math.ceil(args.pages / 2);
+  // Set by hand (LEX_OCR_WORKERS or the option): taken as it is, at most one worker per two pages.
+  if (raw !== undefined) return Math.max(1, Math.min(raw, cap));
+  return Math.max(1, Math.min(4, byCpu, byMemory, cap));
+}
 
 // Pages per worker pass (one pass = one process, one timeout).
 export const OCR_BATCH_PAGES = 30;
@@ -40,6 +68,7 @@ implements OcrEngine {
   private readonly device: string | undefined;
   private readonly timeoutMs: number;
   private readonly lineCrops: () => boolean;
+  private readonly workers: number | undefined;
 
   constructor(options: LocalPaddleOcrOptions = {}) {
     this.python =
@@ -61,6 +90,7 @@ implements OcrEngine {
     this.timeoutMs =
       options.timeoutMs ?? 30 * 60 * 1000;
     this.lineCrops = options.lineCrops ?? (() => false);
+    this.workers = options.workers;
   }
 
   async recognizePages(
@@ -77,29 +107,77 @@ implements OcrEngine {
 
     try {
       await writeFile(input, data);
-      // Long scans run as consecutive worker passes of OCR_BATCH_PAGES pages:
-      // each pass has its own timeout and evidence directory, and page images
-      // share one byte budget for the whole document.
+      // Long scans run as worker passes of at most OCR_BATCH_PAGES pages: each pass has its own
+      // timeout and evidence directory. With several workers the passes run at once; page images
+      // are read into the result in page order afterwards, so the shared byte budget never
+      // leaves a gap.
       const budget = evidenceBudget();
+      const background = documentWork.inBackground();
+      const workers = ocrWorkerCount({
+        pages: pages.length,
+        cpus: os.availableParallelism?.() ?? os.cpus().length,
+        freeMemory: os.freemem(),
+        env: process.env.LEX_OCR_WORKERS,
+        ...(this.workers !== undefined ? { requested: this.workers } : {}),
+        background
+      });
+      const size = workers > 1 ? Math.min(OCR_BATCH_PAGES, Math.ceil(pages.length / workers)) : OCR_BATCH_PAGES;
+      const batches: number[][] = [];
+      for (let start = 0; start < pages.length; start += size) batches.push(pages.slice(start, start + size));
+      const threads =
+        workers > 1 && !process.env.LEX_OCR_THREADS?.trim()
+          ? String(Math.max(1, Math.floor((os.availableParallelism?.() ?? os.cpus().length) / workers)))
+          : undefined;
+      const done = batches.map(() => 0);
+      const report = onPage ? () => onPage(done.reduce((sum, value) => sum + value, 0)) : undefined;
+      const raw: unknown[][] = [];
       const results: OcrPageResult[] = [];
-      for (let start = 0; start < pages.length; start += OCR_BATCH_PAGES) {
-        const batch = pages.slice(start, start + OCR_BATCH_PAGES);
-        // Background OCR: no new pass while the user's own document is being worked on.
-        if (documentWork.inBackground()) await documentWork.idle();
-        const parsed = await this.recognizeBatch(
-          input,
-          path.join(tempRoot, `batch-${start / OCR_BATCH_PAGES + 1}`),
-          batch,
-          budget,
-          onPage ? (done) => onPage(start + done) : undefined
-        );
-        results.push(...parsed);
-        // Evidence files are read into the result; free the disk as we go.
-        await rm(path.join(tempRoot, `batch-${start / OCR_BATCH_PAGES + 1}`), {
-          recursive: true,
-          force: true
-        });
-      }
+      let next = 0;
+      let read = 0;
+      const dirOf = (index: number) => path.join(tempRoot, `batch-${index + 1}`);
+      // Batches finished out of order wait here; the images are read strictly in page order.
+      const drain = async () => {
+        while (read < batches.length && raw[read]) {
+          results.push(...(await readOcrPages(raw[read]!, path.join(dirOf(read), "evidence"), budget)));
+          // Evidence files are read into the result; free the disk as we go.
+          await rm(dirOf(read), { recursive: true, force: true });
+          raw[read] = [];
+          read += 1;
+        }
+      };
+      let draining = Promise.resolve();
+      const lane = async () => {
+        try {
+          await laneLoop();
+        } catch (error) {
+          // A failed pass: the other lanes start no new pass (the document fails closed).
+          next = batches.length;
+          throw error;
+        }
+      };
+      const laneLoop = async () => {
+        while (next < batches.length) {
+          const index = next++;
+          // Background OCR: no new pass while the user's own document is being worked on.
+          if (documentWork.inBackground()) await documentWork.idle();
+          raw[index] = await this.recognizeBatch(
+            input,
+            dirOf(index),
+            batches[index]!,
+            report
+              ? (count) => {
+                  done[index] = count;
+                  report();
+                }
+              : undefined,
+            threads
+          );
+          draining = draining.then(drain);
+          await draining;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(workers, batches.length) }, lane));
+      await draining;
 
       const requested = new Set(pages);
       const seen = new Set<number>();
@@ -135,9 +213,9 @@ implements OcrEngine {
     input: string,
     batchDir: string,
     pages: number[],
-    budget: EvidenceBudget,
-    onPage?: (done: number) => void
-  ): Promise<OcrPageResult[]> {
+    onPage?: (done: number) => void,
+    threads?: string
+  ): Promise<unknown[]> {
     await mkdir(batchDir, { recursive: true });
     const output = path.join(batchDir, "result.json");
     const args = [
@@ -174,6 +252,7 @@ implements OcrEngine {
           env: {
             ...process.env,
             PYTHONUNBUFFERED: "1",
+            ...(threads ? { LEX_OCR_THREADS: threads } : {}),
             ...(background ? { LEX_OCR_PAUSE_FILE: documentWork.pauseFile } : {})
           }
         }
@@ -222,10 +301,6 @@ implements OcrEngine {
       });
     });
 
-    return readOcrPages(
-      JSON.parse(await readFile(output, "utf8")) as unknown[],
-      path.join(batchDir, "evidence"),
-      budget
-    );
+    return JSON.parse(await readFile(output, "utf8")) as unknown[];
   }
 }

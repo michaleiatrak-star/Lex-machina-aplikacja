@@ -5,13 +5,17 @@ declare const __LEX_APP_VERSION__: string | undefined;
 /** Version of this build (vite.config.ts), "0.0.0" outside a Vite build. */
 export const APP_VERSION: string = typeof __LEX_APP_VERSION__ === "string" ? __LEX_APP_VERSION__ : "0.0.0";
 
-// A newer version found by a check in one session is offered at the next start (like Paint.NET):
-// no question in the middle of work, a direct one when the application opens.
+// A newer version is offered as soon as a check finds it: at the start and while the
+// application runs (UPDATE_CHECK_INTERVAL_MS). "Później" waits for the next start,
+// "Pomiń tę wersję" for a newer one.
 export type DetectedUpdate = { version: string; releaseUrl?: string; detectedAt: string };
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const DETECTED = "lex.update.detected";
 const SKIPPED = "lex.update.skipped";
+
+// GitHub API without a token: 60 requests an hour per address; one check an hour.
+export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 function semver(value: string): [number, number, number] | null {
   const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(value.trim());
@@ -110,4 +114,25 @@ export function failedUpdateMessage(attempt: UpdateStatusResponse["lastAttempt"]
                     ? "instalator zakończył się błędem"
                     : "instalacja została przerwana";
   return `Poprzednia próba instalacji wersji ${attempt.targetVersion} nie powiodła się: ${reason}. Możesz spróbować ponownie albo pobrać instalator ze strony wydania.`;
+}
+
+/**
+ * The update to offer right after a check: the check's result recorded, then the same rules as at
+ * the start (newer than this build, not skipped), and not a version put off with "Później".
+ */
+export function updateOfferAfterCheck(
+  store: Store | null,
+  status: UpdateStatusResponse,
+  postponed: string | null,
+  current: string = APP_VERSION,
+  now: Date = new Date()
+): DetectedUpdate | null {
+  rememberUpdateStatus(store, status, now);
+  const offer = startupUpdate(store, current);
+  if (offer) return offer.version === postponed ? null : offer;
+  // Without storage (private mode): the check itself decides.
+  if (status.status === "AVAILABLE" && status.latestVersion && newerVersion(status.latestVersion, current) && status.latestVersion !== postponed && read(store, SKIPPED) !== status.latestVersion) {
+    return { version: status.latestVersion, ...(status.releaseUrl ? { releaseUrl: status.releaseUrl } : {}), detectedAt: now.toISOString() };
+  }
+  return null;
 }
