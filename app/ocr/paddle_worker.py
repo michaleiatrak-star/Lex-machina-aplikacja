@@ -781,6 +781,8 @@ def predict_page(
     fold: "FoldMode | None" = None,
 ) -> dict:
     """The page; with coloured stamp ink, its text layer and its stamps read apart."""
+    if os.environ.get("LEX_OCR_BLANK", "on") != "off" and blank_page(image):
+        return blank_result(image, page_number, evidence_dir)
     split = split_stamp_ink(image) if stamps else None
     if split is None:
         return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
@@ -789,6 +791,45 @@ def predict_page(
     if result.pop("rotated", False):
         # The page was turned by the orientation step: stamp boxes would not match; as before.
         return predict_image(ocr, image, page_number, evidence_dir, line_crops, fold=fold)
+    return result
+
+
+# A page with less ink than one letter (the back of a sheet in a duplex scan, scanner specks)
+# is not read: the detector costs the same on an empty page as on a full one (11 s of 17 s
+# on 4 cores). Measured on a 54-page duplex scan at 110 dpi: the 20 empty backs have no grey
+# pixel off the punch holes (in the outer 8% left and right), one digit "1" 46, the page with
+# least text 385.
+BLANK_MAX_GREY = 0.00003
+
+
+def blank_page(image: np.ndarray) -> bool:
+    gray = image[::2, ::2, :3].mean(axis=2) if image.ndim == 3 else image[::2, ::2]
+    height, width = gray.shape[:2]
+    # Off the edges: scanner border, punch holes, staples.
+    inner = gray[int(height * 0.03): int(height * 0.97), int(width * 0.08): int(width * 0.92)]
+    # Any stroke counts, also a faint one (pencil, a pale stamp): grey below 170 of 255.
+    return inner.size > 0 and float((inner < 170).mean()) < BLANK_MAX_GREY
+
+
+def blank_result(image: np.ndarray, page_number: int, evidence_dir: Path | None) -> dict:
+    """An empty page: no text; its image still goes to the preview."""
+    result = {
+        "page": page_number,
+        "text": "",
+        "confidence": None,
+        "lineCount": 0,
+        "engine": "blank",
+        "lines": [],
+    }
+    if evidence_dir is not None:
+        height, width = image.shape[:2]
+        scale = min(1.0, EVIDENCE_MAX_SIDE / max(width, height))
+        picture = Image.fromarray(image[:, :, :3].astype(np.uint8))
+        if scale < 1.0:
+            picture = picture.resize((max(1, round(width * scale)), max(1, round(height * scale))))
+        name = f"page-{page_number}.jpg"
+        picture.save(evidence_dir / name, format="JPEG", quality=90)
+        result["evidence"] = {"file": name, "width": picture.width, "height": picture.height, "unread": []}
     return result
 
 
