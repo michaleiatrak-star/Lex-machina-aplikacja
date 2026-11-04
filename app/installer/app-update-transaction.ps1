@@ -9,7 +9,21 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$verificationHelper = Join-Path $PSScriptRoot "app-update-verification.ps1"
+# Paths may arrive in the verbatim form \\?\C:\... (Tauri's resource directory on Windows):
+# Join-Path, Split-Path and Test-Path of Windows PowerShell 5.1 reject it, which stopped the
+# update before its first journal line (0.1.54 -> 0.1.61). Plain form for every path.
+function ConvertTo-PlainPath([string]$Value) {
+  if ($Value.StartsWith('\\?\UNC\')) { return '\\' + $Value.Substring(8) }
+  if ($Value.StartsWith('\\?\')) { return $Value.Substring(4) }
+  return $Value
+}
+$ReceiptPath = ConvertTo-PlainPath $ReceiptPath
+$RuntimeRoot = ConvertTo-PlainPath $RuntimeRoot
+$InstallRoot = ConvertTo-PlainPath $InstallRoot
+$AppExecutable = ConvertTo-PlainPath $AppExecutable
+$scriptRoot = ConvertTo-PlainPath $PSScriptRoot
+
+$verificationHelper = Join-Path $scriptRoot "app-update-verification.ps1"
 if (-not (Test-Path -LiteralPath $verificationHelper -PathType Leaf)) {
   throw "UPDATE_VERIFICATION_HELPER_MISSING:$verificationHelper"
 }

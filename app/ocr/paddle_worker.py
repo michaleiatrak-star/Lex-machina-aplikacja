@@ -1044,6 +1044,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     started = time.perf_counter()
+    try:
+        # OpenCV's own pool (image steps around the networks) to the worker's share as well.
+        import cv2
+
+        cv2.setNumThreads(cpu_threads())
+    except Exception:  # noqa: BLE001
+        pass
     page_seconds: list[float] = []
 
     pages = parse_pages(args.pages)

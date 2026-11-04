@@ -7298,8 +7298,9 @@ export default function MatterChatApp({
           />
         ) : null}
 
-        {activeTab === "case" ? (
-          <section className="chat-card-stack">
+        {/* Kept mounted while another tab is open: the case files' processing queue (OCR,
+            detection, saving) lives in WorkspaceManager and stopped when the tab was left. */}
+          <section className="chat-card-stack" hidden={activeTab !== "case"} style={activeTab !== "case" ? { display: "none" } : undefined}>
             {/* Case overview first, as in the UI demo: documents, the next date, the conversation. */}
             <article className="chat-card matter-overview">
               <p className="eyebrow">Przegląd sprawy</p>
@@ -7689,7 +7690,6 @@ export default function MatterChatApp({
               </article>
             ) : null}
           </section>
-        ) : null}
 
         {activeTab === "firm" ? (
           <section className="chat-card-stack">

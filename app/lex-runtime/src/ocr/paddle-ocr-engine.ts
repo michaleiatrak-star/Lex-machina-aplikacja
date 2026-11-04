@@ -355,7 +355,10 @@ implements OcrEngine {
           env: {
             ...process.env,
             PYTHONUNBUFFERED: "1",
-            ...(threads ? { LEX_OCR_THREADS: threads } : {}),
+            // The worker's share of the cores also for the libraries around Paddle (OpenMP,
+            // MKL, OpenBLAS): without it each process starts its own threads on every core
+            // (3 processes on 4 cores: 45 -> 40 s a page).
+            ...(threads ? { LEX_OCR_THREADS: threads, OMP_NUM_THREADS: threads, MKL_NUM_THREADS: threads, OPENBLAS_NUM_THREADS: threads } : {}),
             // The card only when it is on here; never the worker's own guess.
             ...(acceleration ? acceleration.env : { LEX_OCR_ACCEL: "off" }),
             ...(background ? { LEX_OCR_PAUSE_FILE: documentWork.pauseFile } : {})
