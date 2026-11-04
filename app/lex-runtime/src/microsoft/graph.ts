@@ -33,7 +33,8 @@ async function call(fetchImpl: FetchLike, token: string, url: string): Promise<R
   if (!url.startsWith(`${GRAPH}/`)) throw new MicrosoftIntegrationError("MICROSOFT_URL_INVALID", 400);
   let response: Response;
   try {
-    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+    // A hung connection must not hold the chat turn that asked for the file (downloads included).
+    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(300_000) });
   } catch {
     throw new MicrosoftIntegrationError("MICROSOFT_NETWORK_ERROR", 502);
   }

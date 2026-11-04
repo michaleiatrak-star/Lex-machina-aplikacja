@@ -779,7 +779,8 @@ export async function startLocalServer(options?: {
         const modelId = localModels.configuredModelId();
         if (modelId && localModels.status().state !== "READY") await localModels.ensureRunning(modelId);
       },
-      recordingTranscriber
+      recordingTranscriber,
+      (fn, fallback) => localModels.withExclusiveModel(fn, fallback)
     );
 
   const coreApp = createLexHttpApp({

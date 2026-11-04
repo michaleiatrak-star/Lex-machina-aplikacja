@@ -253,7 +253,8 @@ implements UpdateDiscovery {
           headers: {
             Accept: "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28"
-          }
+          },
+          signal: AbortSignal.timeout(30_000)
         }
       );
       if (!response.ok) {

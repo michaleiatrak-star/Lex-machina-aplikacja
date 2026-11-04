@@ -2240,47 +2240,18 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
     return true;
   }
 
-  async stream(
+  /** A chat answer on the local model, inside the lease of withGeneration. */
+  private async streamLocal(
+    localModels: LocalModelRuntime,
     params: ProviderStreamParams
-  ): Promise<ProviderStreamResult> {
-    if (
-      isAccountSessionModel(
-        this.id,
-        params.model
-      )
-    ) {
-      if (
-        !accountSessionBackendAllowed(
-          this.id
-        )
-      ) {
-        throw new Error(
-          "ACCOUNT_SESSION_PROVIDER_POLICY_UNSUPPORTED:anthropic"
-        );
-      }
-      if (!this.accountSessions) {
-        throw new Error(
-          "ACCOUNT_SESSION_RUNTIME_UNAVAILABLE"
-        );
-      }
-      return streamAccountSession(
-        this.accountSessions,
-        this.id,
-        params
-      );
-    }
-
-    if (params.model.startsWith("local/")) {
-      if (this.id !== "openai" || !this.localModels) {
-        throw new Error("LOCAL_MODEL_RUNTIME_UNAVAILABLE");
-      }
+  ): Promise<Awaited<ReturnType<typeof streamModel>>> {
       const configuredModel =
-        await this.localModels
+        await localModels
           .ensureRunning(
             params.model
           );
       const localStatus =
-        this.localModels
+        localModels
           .status();
       const contextTokens =
         localStatus
@@ -2360,18 +2331,18 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
           throw error;
         }
 
-        await this.localModels
+        await localModels
           .reconfigureContext(
             configuredModel.id,
             minimumContextTokens
           );
         const recoveredModel =
-          await this.localModels
+          await localModels
             .ensureRunning(
               configuredModel.id
             );
         const recoveredStatus =
-          this.localModels
+          localModels
             .status();
         const recoveredContextTokens =
           recoveredStatus
@@ -2397,6 +2368,44 @@ export class AiSdkProviderAdapter implements ProviderAdapter {
           }
         );
       }
+  }
+
+  async stream(
+    params: ProviderStreamParams
+  ): Promise<ProviderStreamResult> {
+    if (
+      isAccountSessionModel(
+        this.id,
+        params.model
+      )
+    ) {
+      if (
+        !accountSessionBackendAllowed(
+          this.id
+        )
+      ) {
+        throw new Error(
+          "ACCOUNT_SESSION_PROVIDER_POLICY_UNSUPPORTED:anthropic"
+        );
+      }
+      if (!this.accountSessions) {
+        throw new Error(
+          "ACCOUNT_SESSION_RUNTIME_UNAVAILABLE"
+        );
+      }
+      return streamAccountSession(
+        this.accountSessions,
+        this.id,
+        params
+      );
+    }
+
+    if (params.model.startsWith("local/")) {
+      if (this.id !== "openai" || !this.localModels) {
+        throw new Error("LOCAL_MODEL_RUNTIME_UNAVAILABLE");
+      }
+      const localModels = this.localModels;
+      return localModels.withGeneration(() => this.streamLocal(localModels, params));
     }
 
     const apiKey = await this.credentials.getApiKey(this.id);
