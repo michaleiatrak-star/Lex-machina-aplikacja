@@ -2253,6 +2253,8 @@ export type CaseAccessOverviewItem = {
   caseKind: CaseKind;
   displayName?: string;
   archivedAt?: string;
+  // Older runtimes do not send it: sorted as the oldest.
+  createdAt?: string;
   updatedAt: string;
   viewerRole?: CaseRole;
   canManage: boolean;
