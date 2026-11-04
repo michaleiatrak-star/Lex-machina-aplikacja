@@ -1,3 +1,4 @@
+import { useDeveloperMode } from "./developer-mode.js";
 import {
   useEffect,
   useMemo,
@@ -454,6 +455,7 @@ const OCR_ACCEL_REASONS: Record<NonNullable<OcrAccelStatus["benchmark"]>["reason
  * same text is kept.
  */
 function OcrAccelerationSection({ admin }: { admin: boolean }) {
+  const developer = useDeveloperMode();
   const [status, setStatus] = useState<OcrAccelStatus | null>(null);
   const [error, setError] = useState("");
 
@@ -488,6 +490,7 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
   if (!status || !status.supported) return null;
   const progress = status.progress;
   const bench = status.benchmark;
+  // Measurement figures, the last pass and the buttons: developer mode only (the choice is automatic).
   return (
     <div className="local-ai-facts">
       <strong>
@@ -515,6 +518,7 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
           <progress />
         </div>
       ) : null}
+      {developer ? (
       <details className="local-ai-details">
         <summary>Szczegóły</summary>
         {bench ? (
@@ -538,6 +542,7 @@ function OcrAccelerationSection({ admin }: { admin: boolean }) {
           </div>
         ) : null}
       </details>
+      ) : null}
       {error ? <small className="local-ai-error">{error}</small> : null}
     </div>
   );
