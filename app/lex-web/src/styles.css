@@ -2454,6 +2454,21 @@ textarea:focus {
   gap: 6px;
 }
 
+/* A doubtful OCR line corrected straight in the list. */
+.privacy-preview-line-fix {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.privacy-preview-line-fix input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 3px 6px;
+}
+
 .page-scan {
   display: grid;
   gap: 8px;

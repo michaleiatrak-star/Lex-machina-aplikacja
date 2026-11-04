@@ -53,6 +53,15 @@ describe("preview before a document is finalized", () => {
     expect(html).toMatch(/class="privacy-preview-mark is-ai-hint"[^>]*>Wilk<\/mark>/);
   });
 
+  it("a doubtful line can be corrected right in the list (not a stamp)", () => {
+    const html = renderToStaticMarkup(
+      <PrivacyPreview caseId="case_1" review={review} fileName="pismo.pdf" keepClear onConfirm={() => undefined} onCancel={() => undefined} />
+    );
+    expect(html).toContain('aria-label="Poprawka linii: Data doręczenia 810.2024"');
+    expect(html).toContain('value="Data doręczenia 810.2024"');
+    expect(html).toContain("Zapisz");
+  });
+
   it("OCR only: no masks, the text and the doubtful lines to check", () => {
     const html = renderToStaticMarkup(
       <PrivacyPreview caseId="case_1" review={review} fileName="pismo.pdf" keepClear onConfirm={() => undefined} onCancel={() => undefined} />
