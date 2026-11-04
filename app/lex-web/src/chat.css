@@ -3619,3 +3619,9 @@ mark.restored {
   font: inherit;
   line-height: 1;
 }
+
+/* Start: a recent case with its rename button (owner). */
+.lex-home .matter-thread-row .lex-home-item {
+  flex: 1;
+  min-width: 0;
+}
