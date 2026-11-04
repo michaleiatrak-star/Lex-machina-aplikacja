@@ -757,7 +757,10 @@ export async function startLocalServer(options?: {
       privacyNamedEntities,
       24_000,
       new CompleteImageIngestor(
-        new LocalPaddleImageOcrEngine({ lineCrops: () => localModels.visionOcr() !== null })
+        new LocalPaddleImageOcrEngine({
+          lineCrops: () => localModels.visionOcr() !== null,
+          acceleration: () => ocrAcceleration.environment()
+        })
       ),
       privacyVaultStore,
       secureCaseDocumentStore,
