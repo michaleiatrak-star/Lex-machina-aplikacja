@@ -1,0 +1,26 @@
+name: Court base vs ELI
+
+# The court base (sądy powszechne: siedziby, obszary, zakres spraw) against the regulation of
+# the Minister of Justice in ELI: a newer consolidated text or an amending act the base does not
+# know fails this check (app/courts/check_court_act.py says what to do).
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/courts/**"
+      - "app/lex-runtime/src/courts/court-base*.ts"
+      - ".github/workflows/court-base-act.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Court regulation in ELI
+        run: python3 app/courts/check_court_act.py
