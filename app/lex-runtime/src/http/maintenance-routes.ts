@@ -1,5 +1,6 @@
 import type { TranscriptionModelManager } from "../transcription.js";
 import type { OcrAccelerationManager } from "../ocr/ocr-acceleration.js";
+import type { TranscriptionAccelerationManager } from "../transcription-acceleration.js";
 import type { Express, Request, Response } from "express";
 import {
   AuthError,
@@ -85,6 +86,7 @@ export function registerMaintenanceRoutes(
     anomalyJournal?: AnomalyJournal;
     transcriptionModel?: TranscriptionModelManager;
     ocrAcceleration?: OcrAccelerationManager;
+    transcriptionAcceleration?: TranscriptionAccelerationManager;
   }
 ): void {
   const {
@@ -93,7 +95,8 @@ export function registerMaintenanceRoutes(
     maintenance,
     anomalyJournal,
     transcriptionModel,
-    ocrAcceleration
+    ocrAcceleration,
+    transcriptionAcceleration
   } = dependencies;
 
   // OCR on the graphics card (see ocr/ocr-acceleration.ts): downloaded and measured on request.
@@ -133,6 +136,50 @@ export function registerMaintenanceRoutes(
       try {
         ocrAcceleration.remove();
         res.json(ocrAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+  }
+
+  // Transcription on an NVIDIA card (see transcription-acceleration.ts): set up by the app itself;
+  // the buttons are for an administrator (developer mode).
+  if (transcriptionAcceleration) {
+    app.get("/api/local-models/transcription-acceleration", (req, res) => {
+      try {
+        authenticated(req, authService);
+        res.json(transcriptionAcceleration.status());
+      } catch (error) {
+        if (error instanceof AuthError) {
+          res.status(error.httpStatus).json({ error: error.code });
+          return;
+        }
+        throw error;
+      }
+    });
+    app.post("/api/local-models/transcription-acceleration/install", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        void transcriptionAcceleration.start();
+        res.status(202).json(transcriptionAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+    app.post("/api/local-models/transcription-acceleration/measure", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        void transcriptionAcceleration.measure();
+        res.status(202).json(transcriptionAcceleration.status());
+      } catch (error) {
+        sendMaintenanceError(res, error);
+      }
+    });
+    app.post("/api/local-models/transcription-acceleration/remove", (req, res) => {
+      if (!requireAdmin(req, res, authService)) return;
+      try {
+        transcriptionAcceleration.remove();
+        res.json(transcriptionAcceleration.status());
       } catch (error) {
         sendMaintenanceError(res, error);
       }

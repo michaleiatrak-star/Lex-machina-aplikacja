@@ -231,19 +231,55 @@ export function transcriptionFailure(stderr: string, code: number | null): Error
   return new Error(`TRANSCRIPTION_FAILED:${code ?? "signal"}:${stderr.trim().split("\n").slice(-3).join(" | ").slice(0, 400)}`);
 }
 
+/** What the worker reports on its last stderr line: which device read and how long it took. */
+export type TranscriptionRunStats = {
+  device: "cpu" | "cuda";
+  seconds: number;
+  audioSeconds: number;
+  cudaError?: string;
+  at: string;
+};
+
+let lastRun: TranscriptionRunStats | null = null;
+
+/** The last transcription on this computer (for the panel of local models). */
+export function lastTranscriptionStats(): TranscriptionRunStats | null {
+  return lastRun ? { ...lastRun } : null;
+}
+
+export function parseTranscriptionStats(stderr: string, now: Date = new Date()): TranscriptionRunStats | null {
+  const line = stderr.split("\n").reverse().find((item) => item.startsWith("LEX_STT_STATS "));
+  if (!line) return null;
+  try {
+    const raw = JSON.parse(line.slice("LEX_STT_STATS ".length)) as Record<string, unknown>;
+    if ((raw.device !== "cpu" && raw.device !== "cuda") || typeof raw.seconds !== "number" || typeof raw.audioSeconds !== "number") return null;
+    return {
+      device: raw.device,
+      seconds: raw.seconds,
+      audioSeconds: raw.audioSeconds,
+      ...(typeof raw.cudaError === "string" && raw.cudaError ? { cudaError: raw.cudaError.slice(0, 300) } : {}),
+      at: now.toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
+
 export class LocalWhisperTranscriber implements RecordingTranscriber {
   private readonly python: string;
   private readonly workerPath: string;
   private readonly timeoutMs: number;
+  private readonly acceleration: () => Record<string, string> | null;
 
   constructor(
     private readonly modelDir: () => string,
-    options: { python?: string; workerPath?: string; timeoutMs?: number } = {}
+    options: { python?: string; workerPath?: string; timeoutMs?: number; acceleration?: () => Record<string, string> | null } = {}
   ) {
     this.python = options.python ?? process.env.LEX_OCR_PYTHON ?? "python3";
     this.workerPath = options.workerPath ?? process.env.LEX_STT_WORKER ?? defaultWorkerPath();
     // Hours of a hearing at about a third of real time; the limit only stops a hung worker.
     this.timeoutMs = options.timeoutMs ?? 6 * 60 * 60 * 1000;
+    this.acceleration = options.acceleration ?? (() => null);
   }
 
   available(): boolean {
@@ -251,16 +287,41 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
   }
 
   async transcribe(data: Uint8Array, mediaType: RecordingMediaType, onProgress?: (seconds: number, total: number) => void): Promise<Transcript> {
+    const { transcript, stats } = await this.run(data, mediaType, this.acceleration(), onProgress);
+    if (stats) lastRun = stats;
+    return transcript;
+  }
+
+  /** One reading for the processor-or-card measurement: the given environment, not the chosen one. */
+  async benchmark(data: Uint8Array, mediaType: RecordingMediaType, env: Record<string, string> | null): Promise<{ seconds: number; text: string; device: "cpu" | "cuda"; cudaError?: string }> {
+    const started = Date.now();
+    const { transcript, stats } = await this.run(data, mediaType, env);
+    return {
+      seconds: stats?.seconds ?? (Date.now() - started) / 1000,
+      text: transcript.segments.map((segment) => segment.text).join(" "),
+      device: stats?.device ?? "cpu",
+      ...(stats?.cudaError ? { cudaError: stats.cudaError } : {})
+    };
+  }
+
+  private async run(
+    data: Uint8Array,
+    mediaType: RecordingMediaType,
+    acceleration: Record<string, string> | null,
+    onProgress?: (seconds: number, total: number) => void
+  ): Promise<{ transcript: Transcript; stats: TranscriptionRunStats | null }> {
     if (!this.available()) throw new Error("TRANSCRIPTION_MODEL_MISSING");
     const dir = await mkdtemp(path.join(os.tmpdir(), "lex-stt-"));
     try {
       const input = path.join(dir, `recording${RECORDING_MEDIA_TYPES[mediaType]}`);
       const output = path.join(dir, "transcript.json");
       await writeFile(input, data);
-      await new Promise<void>((resolve, reject) => {
+      const stderrAll = await new Promise<string>((resolve, reject) => {
+        const env: NodeJS.ProcessEnv = { ...process.env, PYTHONUNBUFFERED: "1", ...(acceleration ?? {}) };
+        if (!acceleration) delete env.LEX_STT_DEVICE;
         const child = spawn(this.python, [this.workerPath, "--input", input, "--output", output, "--model-dir", this.modelDir()], {
           stdio: ["ignore", "ignore", "pipe"],
-          env: { ...process.env, PYTHONUNBUFFERED: "1" }
+          env
         });
         let stderr = "";
         const timer = setTimeout(() => {
@@ -278,7 +339,7 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
         });
         child.once("exit", (code) => {
           clearTimeout(timer);
-          if (code === 0) resolve();
+          if (code === 0) resolve(stderr);
           else reject(transcriptionFailure(stderr, code));
         });
       });
@@ -291,7 +352,10 @@ export class LocalWhisperTranscriber implements RecordingTranscriber {
               : [];
           })
         : [];
-      return { duration: typeof raw.duration === "number" ? raw.duration : 0, segments };
+      return {
+        transcript: { duration: typeof raw.duration === "number" ? raw.duration : 0, segments },
+        stats: parseTranscriptionStats(stderrAll)
+      };
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
