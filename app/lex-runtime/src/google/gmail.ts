@@ -33,7 +33,7 @@ type Message = { id: string; snippet?: string; internalDate?: string; payload?: 
 async function get(fetchImpl: FetchLike, token: string, url: string): Promise<Record<string, unknown>> {
   let response: Response;
   try {
-    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` } });
+    response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
   } catch {
     throw new GoogleIntegrationError("GOOGLE_NETWORK_ERROR", 502);
   }
