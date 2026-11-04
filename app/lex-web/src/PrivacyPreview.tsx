@@ -10,6 +10,7 @@ import { PageScanView } from "./PageScanView.js";
 import { InfoTip } from "./InfoTip";
 import { KIND_LABEL } from "./PrivacyKeyTable.js";
 import { addMark, visibleSuggestions } from "./privacy-marks.js";
+import { replaceOcrLine } from "./ocr-line-fix.js";
 
 /**
  * The preview every processed document passes before it is finalized: what to decide first
@@ -77,6 +78,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   const [markAction, setMarkAction] = useState<"PSEUDONYMIZE" | "LABEL">("PSEUDONYMIZE");
   const [markLabel, setMarkLabel] = useState("");
   const [editing, setEditing] = useState<{ page: number; text: string } | null>(null);
+  // Corrections typed straight in the "Niepewne" list, by page and line.
+  const [lineFixes, setLineFixes] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [selection, setSelection] = useState<{ page: number; start: number; end: number } | null>(null);
   const [kind, setKind] = useState<PiiKind>("PERSON");
@@ -223,20 +226,40 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
   }
 
 
+  /** One doubtful line corrected in the list: the page text changes there and is saved. */
+  async function saveLineFix(line: { page: number; line: number; text: string }, key: string): Promise<void> {
+    const corrected = (lineFixes[key] ?? line.text).trim();
+    const pageText = review.pages.find((page) => page.page === line.page)?.text ?? "";
+    const next = replaceOcrLine(pageText, line, corrected);
+    if (next === null) {
+      // Not found in the page text (or unchanged): the page editor at that line.
+      if (corrected !== line.text) {
+        if (scanned) showOnScan(line.page, { line: line.line });
+        setEditing({ page: line.page, text: pageText });
+        setEditLine(line.text);
+      }
+      return;
+    }
+    const saved = await savePage({ page: line.page, text: next });
+    if (saved) setLineFixes((current) => Object.fromEntries(Object.entries(current).filter(([name]) => name !== key)));
+  }
+
   // The review and decisions after the save; null when the page was not saved.
-  async function savePage(): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
-    if (!editing) return { review, directives };
+  async function savePage(
+    target: { page: number; text: string } | null = editing
+  ): Promise<{ review: DocumentReviewResponse; directives: PagePrivacyDirective[] } | null> {
+    if (!target) return { review, directives };
     setSaving(true);
     setError("");
     try {
-      const result = await editDocumentPage(props.caseId, review.documentId, editing.page, editing.text);
+      const result = await editDocumentPage(props.caseId, review.documentId, target.page, target.text);
       const nextReview = {
         ...review,
-        pages: review.pages.map((page) => (page.page === editing.page ? result.page : page)),
-        suggestions: [...review.suggestions.filter((item) => item.page !== editing.page), ...result.suggestions]
+        pages: review.pages.map((page) => (page.page === target.page ? result.page : page)),
+        suggestions: [...review.suggestions.filter((item) => item.page !== target.page), ...result.suggestions]
       };
       // Offsets of the old text no longer apply.
-      const nextDirectives = directives.filter((item) => item.page !== editing.page);
+      const nextDirectives = directives.filter((item) => item.page !== target.page);
       setReview(nextReview);
       setDirectives(nextDirectives);
       setEditing(null);
@@ -441,15 +464,41 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
             <details className="privacy-preview-group" open>
               <summary>Niepewne ({doubtful.length})</summary>
               <small>
-                Odczyt niepewny: porównaj z oryginałem i popraw tekst strony.
+                Odczyt niepewny: porównaj z oryginałem i popraw od razu w polu linii (Enter lub „Zapisz” zmienia tekst strony)
+                albo w całym tekście strony.
                 {doubtful.some((line) => line.stamp)
                   ? " Pieczęć lub kolorowy tusz (np. odręczny wpis) odczytane osobno i pominięte w tekście pisma: gdy niosą istotne dane (data wpływu, podpis, kwota), dopisz je przez „Popraw tekst strony”."
                   : ""}
               </small>
               <ul>
-                {doubtful.map((line, index) => (
+                {doubtful.map((line, index) => {
+                  const key = `${line.page}:${line.line}:${index}`;
+                  const value = lineFixes[key] ?? line.text;
+                  return (
                   <li key={`ocr-${line.page}-${index}`}>
                     <span>s. {line.page} · {line.stamp ? "pieczęć · " : ""}„{line.text}”</span>
+                    {line.stamp ? null : (
+                      <span className="privacy-preview-line-fix">
+                        <input
+                          type="text"
+                          lang="pl"
+                          aria-label={`Poprawka linii: ${line.text}`}
+                          value={value}
+                          disabled={saving}
+                          onFocus={() => (scanned ? showOnScan(line.page, { line: line.line }) : undefined)}
+                          onChange={(event) => setLineFixes((current) => ({ ...current, [key]: event.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void saveLineFix(line, key);
+                            }
+                          }}
+                        />
+                        <button type="button" disabled={saving || value.trim() === line.text} onClick={() => void saveLineFix(line, key)}>
+                          Zapisz
+                        </button>
+                      </span>
+                    )}
                     <span className="privacy-preview-todo-actions">
                       {scanned ? (
                         <button type="button" onClick={() => showOnScan(line.page, { line: line.line }, true)}>
@@ -468,7 +517,8 @@ export function PrivacyPreview(props: PrivacyPreviewRequest & {
                       </button>
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </details>
           ) : null}

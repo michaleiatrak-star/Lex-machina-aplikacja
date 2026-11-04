@@ -268,14 +268,43 @@ fn run_runtime(root: &Path) -> Result<i32, String> {
         let error = command.exec();
         Err(format!("SIDECAR_NODE_START_FAILED:{error}"))
     }
-    // Windows: taskkill /T ends the whole tree, so the sidecar may wait for node.
+    // Windows: taskkill /T ends the whole tree, so the sidecar may wait for node. A runtime
+    // that ended by itself with an error (a crash, exit 70 after an uncaught exception) is
+    // started again, at most RESTART_LIMIT times in RESTART_WINDOW: before, the app stayed
+    // open with no server until the user restarted it. Exit 0 is a deliberate stop.
     #[cfg(not(unix))]
     {
-        let status = command
-            .status()
-            .map_err(|error| format!("SIDECAR_NODE_START_FAILED:{error}"))?;
-        Ok(status.code().unwrap_or(1))
+        let mut restarts: Vec<std::time::Instant> = Vec::new();
+        loop {
+            let status = command
+                .status()
+                .map_err(|error| format!("SIDECAR_NODE_START_FAILED:{error}"))?;
+            let code = status.code().unwrap_or(1);
+            if !should_restart(code, &mut restarts, std::time::Instant::now()) {
+                return Ok(code);
+            }
+            eprintln!("SIDECAR_RUNTIME_RESTART:exit={code}:attempt={}", restarts.len());
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
     }
+}
+
+const RESTART_LIMIT: usize = 5;
+const RESTART_WINDOW: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// A non-zero exit restarts the runtime unless it already restarted RESTART_LIMIT times in
+/// the last RESTART_WINDOW (a runtime that cannot start must not loop for ever).
+#[cfg_attr(unix, allow(dead_code))]
+fn should_restart(code: i32, restarts: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
+    if code == 0 {
+        return false;
+    }
+    restarts.retain(|at| now.duration_since(*at) < RESTART_WINDOW);
+    if restarts.len() >= RESTART_LIMIT {
+        return false;
+    }
+    restarts.push(now);
+    true
 }
 
 fn run() -> Result<i32, String> {
@@ -294,5 +323,24 @@ fn main() -> ExitCode {
             let _ = writeln!(std::io::stderr(), "{error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod restart_tests {
+    use super::{should_restart, RESTART_LIMIT, RESTART_WINDOW};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn restarts_a_crashed_runtime_but_not_a_deliberate_stop_or_a_crash_loop() {
+        let start = Instant::now();
+        let mut restarts = Vec::new();
+        assert!(!should_restart(0, &mut restarts, start));
+        for attempt in 0..RESTART_LIMIT {
+            assert!(should_restart(70, &mut restarts, start + Duration::from_secs(attempt as u64)));
+        }
+        assert!(!should_restart(1, &mut restarts, start + Duration::from_secs(10)));
+        // After the window the old attempts no longer count.
+        assert!(should_restart(1, &mut restarts, start + RESTART_WINDOW + Duration::from_secs(10)));
     }
 }
