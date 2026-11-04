@@ -721,7 +721,8 @@ export async function startLocalServer(options?: {
     );
   const caseOcrEngine = new LocalPaddleOcrEngine({
     lineCrops: () => localModels.visionOcr() !== null,
-    acceleration: () => ocrAcceleration.environment()
+    acceleration: () => ocrAcceleration.environment(),
+    persistent: true
   });
   // The measurement reads without the vision model's line images, like any plain OCR.
   const benchmarkOcr = new LocalPaddleOcrEngine();
@@ -759,7 +760,8 @@ export async function startLocalServer(options?: {
       new CompleteImageIngestor(
         new LocalPaddleImageOcrEngine({
           lineCrops: () => localModels.visionOcr() !== null,
-          acceleration: () => ocrAcceleration.environment()
+          acceleration: () => ocrAcceleration.environment(),
+          persistent: true
         })
       ),
       privacyVaultStore,
